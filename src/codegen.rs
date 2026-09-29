@@ -7346,6 +7346,110 @@ impl<'a> Backend<'a> {
         Ok(Expr::Lambda { params, body: Box::new(body), span })
     }
 
+    /// `(&g a) b` finished where it is written, lowered to the call `g a b`.
+    /// The held arguments are evaluated first, and a failure among them is the
+    /// answer without entering `g`, as the interpreter answers it at the `&`.
+    /// Entering `g` with it let an arm that ignores the argument answer in its
+    /// place: inference never sees a held argument reach `g`'s parameters, so
+    /// `g` carried no guard for one.
+    #[allow(clippy::too_many_arguments)]
+    fn emit_finished_partial(
+        &mut self,
+        f: &mut FnEmit,
+        name: &Name,
+        nspan: Span,
+        held: &[Expr],
+        rest: &[Expr],
+        piped: bool,
+        span: Span,
+    ) -> Result<String, String> {
+        let mut all = Vec::new();
+        let mut asked = Vec::new();
+        for a in held {
+            let t = self.emit_expr(f, a)?;
+            let n = format!("k#held{}", f.tmp().trim_start_matches('%'));
+            f.bind(&n, &t);
+            all.push(Expr::Ident(Name::new(&n), span, crate::ast::Resolution::default()));
+            if !t.starts_with('{') {
+                asked.push(t);
+            }
+        }
+        all.extend(rest.iter().cloned());
+        let callee = Box::new(Expr::Ident(name.clone(), nspan, crate::ast::Resolution::default()));
+        let Some(last) = asked.last().cloned() else {
+            return self.emit_call_full(f, &callee, &all, piped, span);
+        };
+        let (mut first, mut bad) = (last, "false".to_string());
+        for t in asked.iter().rev() {
+            let ok = inline_not_failure(f, t);
+            let pick = f.tmp();
+            f.line(&format!("{pick} = select i1 {ok}, %KValue {first}, %KValue {t}"));
+            let worse = f.tmp();
+            f.line(&format!("{worse} = select i1 {ok}, i1 {bad}, i1 true"));
+            (first, bad) = (pick, worse);
+        }
+        let (go, skip, join) = (f.label(), f.label(), f.label());
+        f.line(&format!("br i1 {bad}, label %{skip}, label %{go}"));
+        f.start_block(&go);
+        let called = self.emit_call_full(f, &callee, &all, piped, span)?;
+        let called = match f.is_parsed(&called) {
+            true => f.box_parsed(&called),
+            false => called,
+        };
+        let called_from = f.cur_label.clone();
+        f.line(&format!("br label %{join}"));
+        f.start_block(&skip);
+        f.line(&format!("br label %{join}"));
+        f.start_block(&join);
+        let answer = f.tmp();
+        f.line(&format!(
+            "{answer} = phi %KValue [ {called}, %{called_from} ], [ {first}, %{skip} ]"
+        ));
+        let set = f.set_of(&called) | FAIL;
+        f.record(&answer, set);
+        Ok(answer)
+    }
+
+    /// `&g a b` over a declared group. The held arguments are evaluated once,
+    /// at the `&`, as the interpreter evaluates them, and the lambda closes over
+    /// what they came to. A held failure is the partial's answer, as it is for
+    /// a partial over a value in `k_partialN`. Until 2026-09-29 the lambda held
+    /// the argument expressions and ran them at each call, so `&g p v` with `v`
+    /// an err built a function, and an arm that ignored its argument answered
+    /// where the interpreter answered the err.
+    fn emit_declared_partial(
+        &mut self,
+        f: &mut FnEmit,
+        name: &str,
+        supplied: &[Expr],
+        span: Span,
+    ) -> Result<String, String> {
+        let mut held = Vec::new();
+        let mut names = Vec::new();
+        for a in supplied {
+            let t = self.emit_expr(f, a)?;
+            let n = format!("k#held{}", f.tmp().trim_start_matches('%'));
+            f.bind(&n, &t);
+            names.push(Expr::Ident(Name::new(&n), span, crate::ast::Resolution::default()));
+            held.push(t);
+        }
+        let lambda = self.partial_lambda(name, &names, span)?;
+        let mut answer = self.emit_expr(f, &lambda)?;
+        // A literal is written in place and cannot fail. Anything else is asked,
+        // whatever set it was recorded with: `text/to_bytes` answers an err
+        // its recorded set leaves out.
+        let asked: Vec<String> = held.into_iter().rev().filter(|t| !t.starts_with('{')).collect();
+        for t in &asked {
+            let ok = inline_not_failure(f, t);
+            let pick = f.tmp();
+            f.line(&format!("{pick} = select i1 {ok}, %KValue {answer}, %KValue {t}"));
+            let set = f.set_of(&answer) | (f.set_of(t) & FAIL);
+            f.record(&pick, set);
+            answer = pick;
+        }
+        Ok(answer)
+    }
+
     /// Whether a name is a declared group, which is what decides how `&` over
     /// it lowers: a group's arities are known here, a value's are not.
     fn declared(&self, name: &str) -> bool {
@@ -7666,14 +7770,8 @@ impl<'a> Backend<'a> {
                 if let Expr::App { head: inner, args: held, .. } = head.as_ref() {
                     if let Expr::Partial(name, nspan) = inner.as_ref() {
                         if self.declared(name) {
-                            let mut all = held.clone();
-                            all.extend(args.iter().cloned());
-                            let callee = Expr::Ident(
-                                name.clone(),
-                                *nspan,
-                                crate::ast::Resolution::default(),
-                            );
-                            return self.emit_call_full(f, &Box::new(callee), &all, *piped, *span);
+                            return self
+                                .emit_finished_partial(f, name, *nspan, held, args, *piped, *span);
                         }
                     }
                 }
@@ -7681,8 +7779,7 @@ impl<'a> Backend<'a> {
                     if !self.declared(name) {
                         return self.emit_partial_value(f, name, args, *span);
                     }
-                    let lambda = self.partial_lambda(name, args, *span)?;
-                    return self.emit_expr(f, &lambda);
+                    return self.emit_declared_partial(f, name, args, *span);
                 }
                 self.emit_call_full(f, head, args, *piped, *span)
             }

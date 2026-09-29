@@ -1,0 +1,14 @@
+# `(&g p v) 1` is finished where it is written, and native lowers it to the
+# call `g p v 1`. The interpreter answers the held err at the `&`, before g
+# runs. Native entered g with it, so an err that g's arms ignore came back as
+# 14. A g that guarded its entry would have named itself in the trace.
+import "std/text"
+
+fn g _ _ _
+  14
+
+fn finished p
+  v = text/to_bytes [999 19]
+  (&g p v) 1
+
+pub play = print "{finished 2}"
