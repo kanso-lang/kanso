@@ -4406,13 +4406,29 @@ fn check_bare_ambiguity(program: &Program, diags: &mut Vec<Diagnostic>) {
     }
 }
 
+/// What an arm can learn about a value from an annotation. Every effect is one
+/// kind, and a list or a map is asked only whether it is one, whatever the
+/// annotation says it holds, so `_:[]int` and `_:[]string` take the same
+/// values. Any other annotation names what it tests.
+fn tested_as(ty: &str) -> &str {
+    if crate::ast::is_effect_type(ty) {
+        "an effect"
+    } else if ty.ends_with("[]") {
+        "a list"
+    } else if ty.contains('[') {
+        "a map"
+    } else {
+        ty
+    }
+}
+
 fn same_shape(a: &[Pattern], b: &[Pattern]) -> bool {
     a.iter().zip(b.iter()).all(|(pa, pb)| match (pa, pb) {
         (Pattern::IntLit(x, _), Pattern::IntLit(y, _)) => x == y,
         (Pattern::StrLit(x, _), Pattern::StrLit(y, _)) => x == y,
         (Pattern::Nullary(x, _), Pattern::Nullary(y, _)) => x == y,
         (Pattern::Annotated { ty: x, .. }, Pattern::Annotated { ty: y, .. }) => {
-            x == y || (crate::ast::is_effect_type(x) && crate::ast::is_effect_type(y))
+            x == y || tested_as(x) == tested_as(y)
         }
         (Pattern::Ctor { ty: x, fields: fa, .. }, Pattern::Ctor { ty: y, fields: fb, .. }) => {
             x == y && fa.len() == fb.len() && same_shape(fa, fb)

@@ -3827,7 +3827,19 @@ answered_first = row
 
 rows_c1zzzk = text/concat rows_c1zzzj [answered_first]
 
-rows_c = text/concat rows_c1zzzk [itself]
+# A list arm asks only whether its argument is a list. Compared by element
+# type, `_:[]int` beside `_:[]string` passes `kanso check` and one never runs.
+list_kind = row
+  "a list arm read by its element type"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_list_arm_read_by_its_element_type")
+  no_setup
+
+rows_c1zzzl = text/concat rows_c1zzzk [list_kind]
+
+rows_c = text/concat rows_c1zzzl [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

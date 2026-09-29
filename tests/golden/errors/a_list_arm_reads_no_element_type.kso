@@ -1,0 +1,24 @@
+# A list arm asks whether its argument is a list and a map arm whether it is a
+# map, whatever the annotation says they hold, as the micro fixture
+# a_group_told_apart_by_kind_alone pins. So `_:[]int` and `_:[]string` take the
+# same values, and every engine sent `["a"]` to the first. Found on 2026-09-29
+# while probing the overlap check.
+fn sum _:[]int
+  "ints"
+
+fn sum _:[]string
+  "strings"
+
+fn sum _
+  "other"
+
+fn count _:map[string int]
+  "ints"
+
+fn count _:map[string string]
+  "strings"
+
+fn count _
+  "other"
+
+pub play = print "{sum ["a"]} {count { "a":"b" }}"

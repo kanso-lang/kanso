@@ -18571,3 +18571,17 @@ main, `kanso check` of the entry corpus fell from 87,978,846 instructions to
 85,651,929 and of the compile corpus from 26,801,090 to 26,571,307, with
 `compile_allocs` unchanged at 14,308. Those are this machine's readings of the
 two corpora, not CI's rows.
+
+## 2026-09-29 — a list arm reads no element type
+
+A list arm asks only whether its argument is a list, and a map arm whether it
+is a map, whatever the annotation says they hold. The micro fixture
+`a_group_told_apart_by_kind_alone` pins that, and it is how every engine
+dispatches. The overlap check compared two list annotations by their spelling,
+so `_:[]int` beside `_:[]string` passed `kanso check`, and all three engines
+sent `["a"]` to the first. The check now compares two annotations by what an
+arm can test: an effect, a list, a map, or the type named. Effects were already
+read that way. The error fixture `a_list_arm_reads_no_element_type` holds a
+list pair and a map pair and reported nothing on the old checker, and the row
+"a list arm read by its element type" turns it red. No program in lib, kq, vse
+or kanso-json changes its verdict.
