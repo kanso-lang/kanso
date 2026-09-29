@@ -1,0 +1,11 @@
+# A partial is a function, so asking whether it equals something is refused
+# the way it is for a lambda. The interpreter left partials off the list of
+# values equality refuses and answered false, where native refused.
+fn f _ _
+  1
+
+fn go n
+  k = &f n
+  "{k == 3}"
+
+pub play = print (go 1)

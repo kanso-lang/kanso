@@ -18940,6 +18940,31 @@ Emitting fell 335 and every benchmark's text shrank 480 bytes. The meta welfare
 fell by 0.00006, and the floor comes down by that much under the 2026-09-13
 rule, because this is the language answering the same on every engine.
 
+## 2026-09-29 — equality refuses a function wherever it meets one
+
+`==` refuses to compare a function, because asking which function you were
+handed is the question dispatch answers. The interpreter asked that of the two
+operands and nothing else, and its list of functions left out partials. So
+`(&f n) == 3` answered false, and so did `[k] == [k]` with `k` a lambda.
+Native refused both, at any depth. The interpreter's list now includes
+partials, and its equality walk refuses on reaching a function inside a list,
+a map or a record, as it does at the top. The browser's host keeps a lazy
+value as a table function too, so its table functions stay off the list. The
+walk forces cells before it asks, and past that point a table function is a
+function, so the walk refuses it there.
+
+The generated-program differential found it in batch 106, at seed 327553,
+where native refused a comparison of a partial and the interpreter answered
+false. The runtime samples `equality_is_not_defined_on_a_partial` and
+`equality_is_not_defined_on_a_function_in_a_list` printed false on the old
+interpreter. The rows "a partial compared" and "a function in a list
+compared" each put one half back and turn the runtime corpus red.
+CI read `interp_instructions` at 591,118,143, up 198,180, which is the
+interpreter's equality walk asking each element it compares whether it is a
+function. The meta welfare fell by that much and the floor comes down under
+the 2026-09-13 rule, since this is the interpreter keeping the rule native
+already kept.
+
 ## 2026-09-29 — the runtime calls a closure in words
 
 A partial over a lambda of three or four parameters is finished by the

@@ -4074,6 +4074,27 @@ partial_nests = [partial_nest partial_nest_native partial_nest_browser]
 
 rows_c1zzzz = text/concat rows_c1zzzze partial_nests
 
+# Equality refuses a function wherever the walk meets one, a partial among
+# them. The interpreter answered false for a partial and for a function in a
+# list, where native refused.
+eq_partial = row
+  "a partial compared"
+  true
+  "cargo test --release --test golden runtime_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_partial_compared")
+  no_setup
+
+eq_nested = row
+  "a function in a list compared"
+  true
+  "cargo test --release --test golden runtime_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_function_in_a_list_compared")
+  no_setup
+
+rows_c1zzzzf = text/concat rows_c1zzzz [eq_partial eq_nested]
+
 # The runtime calls a closure of three or four arguments in words, so a
 # partial over such a lambda hands it the arguments it was given.
 closure_words = row
@@ -4084,7 +4105,7 @@ closure_words = row
   (breaking "a_closure_called_with_its_arguments_as_structs")
   release
 
-rows_c1zzzzi = text/concat rows_c1zzzz [closure_words]
+rows_c1zzzzi = text/concat rows_c1zzzzf [closure_words]
 
 rows_c = text/concat rows_c1zzzzi [itself]
 
