@@ -336,6 +336,9 @@ struct DeclState<'a> {
     /// it was about — the list that decides whether the bound-name set is
     /// worth building for this declaration. Cleared per declaration.
     shadowable: Vec<(usize, usize, &'a str)>,
+    /// The file the declaration in hand came from, for a diagnostic that
+    /// would otherwise be placed in whichever file is being rendered.
+    file: Option<&'a std::sync::Arc<str>>,
 }
 
 /// Answers `check_named_per_node`'s three questions in its own vector, which
@@ -430,6 +433,7 @@ fn check_per_node<'a>(
         own: false,
         named_diags: Vec::new(),
         shadowable: Vec::new(),
+        file: None,
     };
     // THE SHADOW SET IS BUILT ONLY WHEN THERE IS SOMETHING TO SHADOW.
     //
@@ -456,6 +460,7 @@ fn check_per_node<'a>(
         state.open.clear();
         state.shadowable.clear();
         state.own = !crate::ast::has_slash(&decl.name);
+        state.file = Some(&decl.file);
         for p in &decl.params {
             collect_pattern_names(p, &mut state.bound);
         }
@@ -542,7 +547,7 @@ fn per_node_walk<'a>(
         err_as_value_at(expr, diags);
     }
     call_shaped_at(expr, &tables.arities, &state.bound, diags);
-    literal_argument_at(expr, tables, &state.bound, diags);
+    literal_argument_at(expr, tables, &state.bound, state.file, diags);
     field_read_at(expr, &tables.scan, &state.local, &mut state.open, flags.certain, diags);
     named_at(expr, &tables.named, state.own, &mut state.named_diags, &mut state.shadowable);
     // Every child of every arm below is exactly what `for_each_child` yields
@@ -3078,6 +3083,7 @@ fn literal_argument_at(
     e: &Expr,
     tables: &PerNode,
     bound: &crate::hash::Set<&str>,
+    file: Option<&std::sync::Arc<str>>,
     diags: &mut Vec<Diagnostic>,
 ) {
     let Expr::App { head, args, .. } = e else { return };
@@ -3141,15 +3147,33 @@ fn literal_argument_at(
                     .filter_map(|a| a.params.get(i))
                     .map(describe_pattern)
                     .collect();
-                diags.push(Diagnostic::new(
-                    "type",
-                    format!(
-                        "no arm of `{name}` takes {} here (arms take {})",
-                        describe_literal(kind),
-                        dedup_join(wanted)
+                // A field read is a call on the field's reader, and the
+                // reader's name is the compiler's. Say it the way the
+                // runtime does, in the file the read is in: the reader only
+                // exists once the module is merged, so the check that finds
+                // it is rendering some other file.
+                match (getter_field(name), file) {
+                    (Some(field), Some(file)) => diags.push(
+                        Diagnostic::new(
+                            "type",
+                            format!(
+                                "`.{field}` reads a field of a record, not {}",
+                                describe_literal(kind)
+                            ),
+                            arg.span(),
+                        )
+                        .about(file),
                     ),
-                    arg.span(),
-                ));
+                    _ => diags.push(Diagnostic::new(
+                        "type",
+                        format!(
+                            "no arm of `{name}` takes {} here (arms take {})",
+                            describe_literal(kind),
+                            dedup_join(wanted)
+                        ),
+                        arg.span(),
+                    )),
+                }
             }
         }
     }

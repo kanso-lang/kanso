@@ -1,0 +1,8 @@
+# A field read is a call on a reader the compiler writes for the field, and a
+# literal the reader cannot take was refused in the reader's name: `[1 2].a`
+# said no arm of `Get_a` takes a list. The runtime says a field is read from a
+# record, and the check now says the same. Found on 2026-09-29.
+type pt
+  a
+
+pub play = print "{[1 2].a}"

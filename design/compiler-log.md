@@ -18637,3 +18637,14 @@ fixture `a_record_and_a_subtype_share_a_name` reported both lines on the old
 checker, and the row "a field reader checked as a written arm" puts the reader
 back into the walk. No program in lib, kq, vse or kanso-json changes its
 verdict.
+
+A field read handed a literal the field's reader cannot take was the third.
+`[1 2].a` was refused as no arm of `Get_a` taking a list, and because the
+reader exists only once the module is merged, the check that finds it is
+rendering another file: through an import the location named line 8 of the
+three-line entry. The check now says that `.a` reads a field of a record, not
+a list, the runtime's sentence with the field named, and places it in the file
+the read is in. `kanso check` of the library alone still passes it, since that
+path has no readers yet; the corpus stages every fixture as an import, which
+is where the refusal is made. The fixture `a_field_read_of_a_list` and the row
+"a field read named by its reader" pin it.

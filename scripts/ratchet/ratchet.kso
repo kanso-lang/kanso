@@ -3886,7 +3886,19 @@ reader_checked = row
 
 rows_c1zzzp = text/concat rows_c1zzzo [reader_checked]
 
-rows_c = text/concat rows_c1zzzp [itself]
+# A literal handed to a field read, refused in the name of the field's reader
+# and placed in whatever file was being rendered.
+read_named = row
+  "a field read named by its reader"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_field_read_named_by_its_reader")
+  no_setup
+
+rows_c1zzzq = text/concat rows_c1zzzp [read_named]
+
+rows_c = text/concat rows_c1zzzq [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

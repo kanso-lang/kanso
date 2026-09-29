@@ -1,0 +1,2 @@
+error[type]: `.a` reads a field of a record, not a list
+  --> a_field_read_of_a_list.kso:8:20
