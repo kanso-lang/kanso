@@ -1,8 +1,22 @@
 pub fn random n
   builtin_random n
 
+# A float rounds to the nearest integer, half away from zero. NaN and the
+# infinities have no integer to round to, and ordinary arithmetic makes them,
+# so `round` answers `none` for them; an int is already whole and answers
+# itself. `round!` is the caller insisting the float is finite: it answers a
+# box, and a non-finite argument is a failure inside it (ruled 2026-09-29).
 pub fn round x
   builtin_round x
+
+pub fn round! x
+  effect (finite x (builtin_round x))
+
+fn finite x none
+  err "round! takes a finite number, got {x}"
+
+fn finite _ n
+  n
 
 pub fn sqrt x
   builtin_sqrt x

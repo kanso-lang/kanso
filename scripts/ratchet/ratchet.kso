@@ -4116,6 +4116,55 @@ ctor_partial = row
 
 rows_c1zzzzj = text/concat rows_c1zzzzf [partial_of_builtin ctor_partial]
 
+# `math/round` answers `none` for NaN and the infinities on every engine,
+# `math/round!` answers a failure in its box, and a call passing an int is
+# typed int alone (ruled 2026-09-29). Each row puts one of the five back.
+nonfinite_native = row
+  "a non-finite float rounded to zero natively"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_non_finite_float_rounded_to_zero_natively")
+  release
+
+nonfinite_oracle = row
+  "a non-finite float rounded to zero"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_non_finite_float_rounded_to_zero")
+  release
+
+nonfinite_typed = row
+  "a rounded float typed as never none"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_rounded_float_typed_as_never_none")
+  no_setup
+
+nonfinite_per_call = row
+  "a rounded int typed by every caller"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_rounded_int_typed_by_every_caller")
+  no_setup
+
+nonfinite_insisted = row
+  "an insisted round answering zero"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "an_insisted_round_answering_zero")
+  release
+
+rounds_a = [nonfinite_native nonfinite_oracle nonfinite_typed]
+
+rounds_b = [nonfinite_per_call nonfinite_insisted]
+
+rows_c1zzzzm = text/concat rows_c1zzzzj (text/concat rounds_a rounds_b)
+
 # A sigil with no name after it is left to the parser, whose refusal says
 # what `&` wants. The spacing check asked for a space, which then failed to
 # parse.
@@ -4127,7 +4176,7 @@ sigil_paren = row
   (breaking "a_nameless_sigil_asked_for_a_space")
   no_setup
 
-rows_c1zzzzc = text/concat rows_c1zzzzj [sigil_paren]
+rows_c1zzzzc = text/concat rows_c1zzzzm [sigil_paren]
 
 # The runtime calls a closure of three or four arguments in words, so a
 # partial over such a lambda hands it the arguments it was given.

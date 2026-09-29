@@ -3998,13 +3998,16 @@ impl<'a> Interp<'a> {
                     // Every finite float rounds to an integer, and an int is
                     // arbitrary precision, so 1e30 rounds to a thirty-one
                     // digit number. `as i64` saturated it at int64's edge.
-                    // A non-finite one keeps the saturating answer for now.
                     Value::Float(v) if v.is_finite() => {
                         let whole = <BigInt as num_traits::FromPrimitive>::from_f64(v.round())
                             .expect("a finite float is a whole number once rounded");
                         Ok(Value::int(whole))
                     }
-                    Value::Float(v) => Ok(Value::int(v.round() as i64)),
+                    // NaN and the infinities have no integer to round to, and
+                    // ordinary arithmetic makes them, so the answer is `none`
+                    // for an arm to handle (ruled 2026-09-29). `math/round!`
+                    // is the caller insisting the float is finite.
+                    Value::Float(_) => Ok(Value::NoneV),
                     other if is_failure(&other) => Ok(other),
                     other => Err(RuntimeError {
                         message: format!(

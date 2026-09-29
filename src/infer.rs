@@ -62,6 +62,11 @@ pub struct Inference {
     /// ERR when some list or map literal holds a failure as an element, which
     /// every read of an item then has to admit. See `Ctx::stored_fails`.
     pub stored_fails: Set,
+    /// The calls, by the span of the name called, that reach an arm typed
+    /// per call (see `per_call_builtin`) and cannot answer `none` for the
+    /// arguments they pass: `math/round 7`, where the group's own set holds
+    /// the `none` a float caller gets. The checker's none question reads it.
+    pub none_free: crate::hash::Set<crate::diag::Span>,
 }
 
 impl Inference {
@@ -163,6 +168,10 @@ struct Ctx<'a> {
     facts: Vec<Fact<'a>>,
     /// The plain index reads the facts prove in range, by span.
     proven: crate::hash::Set<crate::diag::Span>,
+    /// Per call typed by its own arguments, by the called name's span: true
+    /// once any visit found it could answer `none`. The sets only grow, so
+    /// the flag only goes from false to true.
+    per_call_none: crate::hash::Map<crate::diag::Span, bool>,
 }
 
 /// What compiling actually did, as opposed to what it wrote. Emitted text
@@ -460,6 +469,7 @@ pub fn infer(program: &Program) -> Inference {
         changed: true,
         facts: Vec::new(),
         proven: Default::default(),
+        per_call_none: Default::default(),
     };
     // seed: entry points (main, constants, tests) run with no arguments;
     // anything used as a function value gets TOP params.
@@ -573,6 +583,11 @@ pub fn infer(program: &Program) -> Inference {
         type_fields: ctx.type_fields,
         proven: ctx.proven,
         stored_fails: ctx.stored_fails,
+        none_free: ctx
+            .per_call_none
+            .into_iter()
+            .filter_map(|(span, none)| (!none).then_some(span))
+            .collect(),
     }
 }
 
@@ -1535,7 +1550,7 @@ fn eval_call<'a>(
         let fails: Set = arg_sets.iter().fold(0, |acc, s| acc | (s & FAIL));
         return eval_expr(ctx, body, &mut inner) | fails | piped_bits;
     }
-    let Expr::Ident(name, _, _) = head else {
+    let Expr::Ident(name, name_span, _) = head else {
         let _ = eval_expr(ctx, head, env);
         return TOP | piped_bits;
     };
@@ -1601,7 +1616,14 @@ fn eval_call<'a>(
                 widen_param(ctx, i, p, *set);
             }
             mark_reader(ctx, i);
-            out |= ctx.returns[i];
+            out |= match per_call_builtin(&ctx.program.fns[i]) {
+                Some(builtin) => {
+                    let here = ctx.returns[i] & builtin_set(builtin, arg_sets);
+                    *ctx.per_call_none.entry(*name_span).or_insert(false) |= here & NONE != 0;
+                    here
+                }
+                None => ctx.returns[i],
+            };
         }
         return out | piped_bits;
     }
@@ -1763,6 +1785,28 @@ fn desc_yield<'a>(ctx: &mut Ctx<'a>, e: &'a Expr) -> Set {
     }
 }
 
+/// The builtin an arm hands its parameters to unchanged, when the builtin's
+/// answer depends on what it is handed. Such an arm answers, at each call,
+/// what the builtin answers for that call's arguments, where any other arm
+/// answers the union over every caller. `math/round` is the one: a float
+/// may round to `none` and an int rounds to itself (ruled 2026-09-29), and
+/// the union would hand one float caller's `none` to every int caller.
+fn per_call_builtin(decl: &FnDecl) -> Option<&str> {
+    let [Stmt::Expr(Expr::App { head, args, piped: false, .. })] = decl.body.as_slice() else {
+        return None;
+    };
+    let Expr::Ident(name, _, _) = head.as_ref() else { return None };
+    let builtin = name.strip_prefix("builtin_")?;
+    if builtin != "round" || args.len() != decl.params.len() {
+        return None;
+    }
+    let passed = args
+        .iter()
+        .zip(&decl.params)
+        .all(|(a, p)| matches!((a, p), (Expr::Ident(n, _, _), Pattern::Var(v, _)) if n == v));
+    passed.then_some(builtin)
+}
+
 /// A divisor the source spells as a number other than zero.
 fn nonzero_literal(e: &Expr) -> bool {
     match e {
@@ -1815,7 +1859,12 @@ pub fn builtin_set(name: &str, args: &[Set]) -> Set {
         "sum" => INT | fails,
         "bit_and" | "bit_or" | "bit_xor" | "bit_not" | "bit_shl" | "bit_shr" => INT | fails,
         "sqrt" => FLOAT | fails,
-        "round" => INT | fails,
+        // a float may be NaN or infinite, which rounds to `none`; an int
+        // passes through as itself
+        "round" => match args[0] & FLOAT != 0 {
+            true => INT | NONE | fails,
+            false => INT | fails,
+        },
         // a worded chain step answers a description when its subject is one,
         // and whatever its callback answers when the subject has settled
         "bind" | "rescue" | "annotate" => TOP,

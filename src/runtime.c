@@ -10414,19 +10414,14 @@ KValue k_b_round(KValue v) {
     if (v.tag == K_INT) return v;
     if (v.tag == K_FLOAT) {
         double x = k_as_f(v);
-        /* A finite float past int64 rounds to an integer this build cannot
-           hold, the same refusal arithmetic makes. llround answered LLONG_MIN
-           for all of them. A non-finite one answers what the interpreter's
-           saturating cast does: NaN 0, and the sign's end of the range. */
-        if (x != x) return k_int(0);
-        if (x >= 9223372036854775807.0) {
-            if (isinf(x)) return k_int(9223372036854775807LL);
+        /* NaN and the infinities have no integer to round to and answer
+           none, as the interpreter does (ruled 2026-09-29). A finite float
+           past int64 rounds to an integer this build cannot hold, the same
+           refusal arithmetic makes. llround answered LLONG_MIN for all of
+           them. */
+        if (x != x || isinf(x)) return k_none();
+        if (x >= 9223372036854775807.0 || x < -9223372036854775808.0)
             k_die("integer overflow (int64 native build; spec int is arbitrary precision)");
-        }
-        if (x < -9223372036854775808.0) {
-            if (isinf(x)) return k_int(-9223372036854775807LL - 1);
-            k_die("integer overflow (int64 native build; spec int is arbitrary precision)");
-        }
         double r = round(x);
         if (r >= 9223372036854775807.0 || r < -9223372036854775808.0)
             k_die("integer overflow (int64 native build; spec int is arbitrary precision)");
