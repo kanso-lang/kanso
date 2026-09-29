@@ -5,8 +5,8 @@
 # `fine` holds nothing that fails and answers through g on every engine.
 # A partial over a group this narrow is held over the group's value, and a
 # group named in a partial guards its arms, so `wide` holds one over a group
-# of nine, which native still builds as a closure, and prints the partial
-# itself: the err, where a closure printed as a function.
+# of nine and prints the partial itself: the err, where a closure over the
+# group printed as a function.
 import "std/list"
 import "std/text"
 
