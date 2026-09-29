@@ -19629,7 +19629,7 @@ CI's rows for the change. `k_b_adopt` adds 352 bytes of text to each of the
 fourteen benchmark binaries, and `text` rose to 3,539,536 (runbench 402,888
 to 403,240). `codegen_instructions_release` rose 85,343 to 408,226,171 and
 `codegen_instructions_dev` fell 11,928 to 124,468,828. `emit_instructions`
-fell 1,606 from the figure kanso#1733 left, to 29,997,073. The change also
+fell 1,606 from the figure kanso#1734 left, to 29,997,064. The change also
 drops the `k_unsub` the first join emitted before the seed, and that fall
 arrived with it; no mechanism was isolated. `work_runbench` fell 1,342 to
 1,088,404,203 and `work_oneshot` fell 714 to 12,743,727. `work_encodebench`
