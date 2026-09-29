@@ -1,1 +1,4 @@
 error[naming]: `ready?` asks a question: a `?` function answers true or false (err may ride along) (module a_query_name_that_does_not_answer_bool)
+  --> a_query_name_that_does_not_answer_bool.kso:4:4
+   4 | fn ready? x
+          ^

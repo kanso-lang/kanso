@@ -51,3 +51,27 @@ fn a_knot_ties_through_a_record_the_next_file_declares() {
         );
     }
 }
+
+/// A cycle through two files is refused in each file, at each constant. The
+/// module is checked as one program, and until 2026-09-29 the refusal named
+/// the module and no location, so a reader had to search every file for two
+/// names.
+#[test]
+fn a_cycle_across_files_is_refused_where_each_constant_is() {
+    for engine in ENGINES {
+        let (out, err) = run("cycle", engine);
+        assert_eq!(out, "", "{engine:?} ran a program with no value");
+        assert_eq!(
+            err,
+            "error[name]: `second` is defined in terms of itself, so it has no value \
+             (module tests/golden/sibling_types/cycle/ring)\n  \
+             --> tests/golden/sibling_types/cycle/ring/cycle.kso:1:1\n   \
+             1 | second = first\n       ^\n\
+             error[name]: `first` is defined in terms of itself, so it has no value \
+             (module tests/golden/sibling_types/cycle/ring)\n  \
+             --> tests/golden/sibling_types/cycle/ring/decls.kso:1:1\n   \
+             1 | first = second\n       ^\n",
+            "{engine:?} did not place the refusals"
+        );
+    }
+}

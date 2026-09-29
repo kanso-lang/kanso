@@ -18681,17 +18681,23 @@ red.
 A module is checked as one merged program, and a diagnostic raised there is
 printed with the module's name. Where the check knew which file the
 declaration came from, it said so, and the location and source line followed.
-The walk that reads each declaration's statements did not say, so what it
-raised printed `(module m)` and nothing else. That walk raises the build
-block's refusals and a share of the arity, name, none and type diagnostics. The
-same program run as one file with `kanso play` printed the file, line and
-column, so the location was lost only on the way through a module. The
-differential found it when a generated build block was refused and the report
-gave no place to look. Every diagnostic the walk raises for a declaration is now
-placed in that declaration's file, unless the check that raised it already
-named one. Through an import, 47 fixtures of the error corpus gain their
-location and quoted line, and nothing else in any of them changes. The row "a
-module diagnostic left without its file" takes the file away again and turns
-the corpus red. The checks that run after the walk are untouched: through an
-import, 26 of the corpus's diagnostics still carry no location, most of them
-effect, naming and exhaustiveness refusals.
+Most checks did not say, so what they raised printed `(module m)` and nothing
+else: every build block refusal, the effect and exhaustiveness refusals, the
+naming rules, a constant defined in terms of itself, and a share of the arity,
+name, none and type diagnostics. The same program run as one file with `kanso
+play` printed the file, line and column, so the location was lost only on the
+way through a module. The differential found it when a generated build block
+was refused and the report gave no place to look.
+
+Two walks read each declaration's statements, one before inference and one
+after it, and each now places what it raised in that declaration's file
+unless the check had already named one. The naming check keeps the file of the
+first declaration of each group beside its span, and the tie, unused-value and
+constant-cycle checks name the declaration they hold. Through an import, 63
+fixtures of the error corpus gain their location and quoted line, 317 lines in
+all, and no line in any of them is removed or changed. `tests/sibling_types.rs`
+adds a cycle through two files, whose refusals now point into each file. One
+diagnostic in the corpus still has no location: a subtype of `none` is refused
+at its type declaration, and a type declaration does not record its file. The
+row "a module diagnostic left without its file" takes every placement away
+again and turns both the corpus and the cycle spec red.

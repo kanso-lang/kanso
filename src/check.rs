@@ -514,11 +514,8 @@ fn check_per_node<'a>(
         // declaration in hand, so it is placed in that declaration's file.
         // Until 2026-09-29 a build block's refusal in a module said which
         // module and nothing else.
-        for d in diags[first..].iter_mut().chain(&mut state.named_diags[first_named..]) {
-            if d.file.is_none() {
-                d.file = Some(std::sync::Arc::clone(&decl.file));
-            }
-        }
+        place_in(&mut diags[first..], &decl.file);
+        place_in(&mut state.named_diags[first_named..], &decl.file);
         if state.shadowable.is_empty() {
             continue;
         }
@@ -1597,6 +1594,7 @@ fn check_after_infer<'p>(
         // the set behind it is filled on the first ask — so the closure has to
         // be rebuilt per declaration even though nothing else here is.
         let shadow = |n: &str| shadows(i, n);
+        let marks = (effect_diags.len(), box_diags.len(), none_diags.len());
         for stmt in &decl.body {
             let e = match stmt {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expr,
@@ -1610,6 +1608,21 @@ fn check_after_infer<'p>(
                 site(cur, &shadow, box_diags);
                 crate::for_each_child(cur, |c| stack.push(c));
             }
+        }
+        // All three are about this declaration's statements, and in a module
+        // the program holds every file's, so each is placed in its file.
+        place_in(&mut effect_diags[marks.0..], &decl.file);
+        place_in(&mut box_diags[marks.1..], &decl.file);
+        place_in(&mut none_diags[marks.2..], &decl.file);
+    }
+}
+
+/// Places diagnostics in the file of the declaration they were raised for,
+/// unless the check that raised one already named a file.
+fn place_in(diags: &mut [Diagnostic], file: &std::sync::Arc<str>) {
+    for d in diags {
+        if d.file.is_none() {
+            d.file = Some(std::sync::Arc::clone(file));
         }
     }
 }
@@ -1933,15 +1946,18 @@ pub fn check_arm_ties(program: &Program, diags: &mut Vec<Diagnostic>) {
                         k != i && k != j && covers(c, a, &compare) && covers(c, b, &compare)
                     });
                 if conflicting && !settled {
-                    diags.push(Diagnostic::new(
-                        "dispatch",
-                        format!(
-                            "these `{name}` arms tie: each is the more specific \
+                    diags.push(
+                        Diagnostic::new(
+                            "dispatch",
+                            format!(
+                                "these `{name}` arms tie: each is the more specific \
                              one somewhere, and a call could match both — write \
                              the arm that is most specific in every position"
-                        ),
-                        b.span,
-                    ));
+                            ),
+                            b.span,
+                        )
+                        .about(&b.file),
+                    );
                 }
             }
         }
@@ -2192,8 +2208,10 @@ fn check_predicates(
 ) {
     use crate::infer::{ERR, FALSE, TRUE};
     // inference is handed in: one pass serves every check that reads it
-    let mut groups: crate::hash::Map<&str, (crate::infer::Set, crate::diag::Span)> =
-        crate::hash::Map::default();
+    // The file travels with the span: in a module the groups come from every
+    // file, and a span alone does not say which one it is in.
+    type At<'a> = (crate::infer::Set, crate::diag::Span, &'a std::sync::Arc<str>);
+    let mut groups: crate::hash::Map<&str, At> = crate::hash::Map::default();
     for (i, decl) in program.fns.iter().enumerate() {
         // test functions are assertions the test verb consumes — their own
         // convention, not questions
@@ -2211,14 +2229,14 @@ fn check_predicates(
         {
             continue;
         }
-        let entry = groups.entry(decl.name.as_str()).or_insert((0, decl.span));
+        let entry = groups.entry(decl.name.as_str()).or_insert((0, decl.span, &decl.file));
         entry.0 |= inference.returns[i];
     }
     // a HashMap hands these back in a different order every run, which makes
     // a multi-diagnostic file's output unstable; report in source order
     let mut groups: Vec<_> = groups.into_iter().collect();
-    groups.sort_by_key(|(name, (_, span))| (span.line, span.col, *name));
-    for (name, (set, span)) in groups {
+    groups.sort_by_key(|(name, (_, span, _))| (span.line, span.col, *name));
+    for (name, (set, span, file)) in groups {
         let short = crate::ast::split_qual(name).map(|(_, s)| s).unwrap_or(name);
         let is_question = short.ends_with('?');
         // only err rides along (a predicate over fallible work is still a
@@ -2231,21 +2249,27 @@ fn check_predicates(
         // whose set cannot contain a boolean at all. generic drivers widen
         // honest predicates to TOP, and TOP still holds bool.
         if is_question && set != 0 && set & (TRUE | FALSE) == 0 {
-            diags.push(Diagnostic::new(
-                "naming",
-                format!(
-                    "`{short}` asks a question: a `?` function answers \
+            diags.push(
+                Diagnostic::new(
+                    "naming",
+                    format!(
+                        "`{short}` asks a question: a `?` function answers \
                      true or false (err may ride along)"
-                ),
-                span,
-            ));
+                    ),
+                    span,
+                )
+                .about(file),
+            );
         }
         if !is_question && boolish {
-            diags.push(Diagnostic::new(
-                "naming",
-                format!("`{short}` answers only true or false: name it `{short}?`"),
-                span,
-            ));
+            diags.push(
+                Diagnostic::new(
+                    "naming",
+                    format!("`{short}` answers only true or false: name it `{short}?`"),
+                    span,
+                )
+                .about(file),
+            );
         }
         // The other suffix, ruled in July and again on 2026-09-03: a `!` name's
         // answer typeset must include an err type. A bang that cannot fail is a
@@ -2257,14 +2281,17 @@ fn check_predicates(
         // takes: an empty set means inference learned nothing, and TOP (what a
         // generic driver widens to) still holds ERR, so neither is accused.
         if short.ends_with('!') && set != 0 && set & crate::infer::DESC == 0 {
-            diags.push(Diagnostic::new(
-                "naming",
-                format!(
-                    "`{short}` wears a bang: a `!` function answers an effect, \
+            diags.push(
+                Diagnostic::new(
+                    "naming",
+                    format!(
+                        "`{short}` wears a bang: a `!` function answers an effect, \
                      the box a failure bubbles through"
-                ),
-                span,
-            ));
+                    ),
+                    span,
+                )
+                .about(file),
+            );
         }
     }
 }
@@ -4131,11 +4158,17 @@ fn check_constant_cycles(
         let mut stack: Vec<&str> = refs.get(decl.name.as_str()).cloned().unwrap_or_default();
         while let Some(cur) = stack.pop() {
             if cur == decl.name {
-                diags.push(Diagnostic::new(
-                    "name",
-                    format!("`{}` is defined in terms of itself, so it has no value", decl.name),
-                    decl.span,
-                ));
+                diags.push(
+                    Diagnostic::new(
+                        "name",
+                        format!(
+                            "`{}` is defined in terms of itself, so it has no value",
+                            decl.name
+                        ),
+                        decl.span,
+                    )
+                    .about(&decl.file),
+                );
                 break;
             }
             if seen.insert(cur) {
@@ -5137,13 +5170,16 @@ fn check_discarded_value(
             };
             for leaf in &leaves[..keep] {
                 if refused(leaf) {
-                    diags.push(Diagnostic::new(
-                        "unused",
-                        "this value is never used: a non-final line binds a name, or \
+                    diags.push(
+                        Diagnostic::new(
+                            "unused",
+                            "this value is never used: a non-final line binds a name, or \
                          is an effect joining the group"
-                            .to_string(),
-                        leaf.span(),
-                    ));
+                                .to_string(),
+                            leaf.span(),
+                        )
+                        .about(&decl.file),
+                    );
                 }
             }
         }

@@ -1,9 +1,36 @@
 error[effect]: this is an effect — a box the words open — and `length` takes a value; open it with `.>` (module a_box_where_a_value_is_expected)
+  --> a_box_where_a_value_is_expected.kso:24:26
+  24 | pub play = print (length os/args)
+                                ^
 error[effect]: this is an effect — a box the words open — and `+` takes a value; open it with `.>` (module a_box_where_a_value_is_expected)
+  --> a_box_where_a_value_is_expected.kso:25:19
+  25 |   .> (_ -> print (math/random 6 + 1))
+                         ^
 error[effect]: this is an effect — a box the words open — and `told` takes a value; open it with `.>` (module a_box_where_a_value_is_expected)
+  --> a_box_where_a_value_is_expected.kso:26:25
+  26 |   .> (_ -> print (told (math/random 2)))
+                               ^
 error[effect]: this is an effect — a box the words open — and `if` takes a value; open it with `.>` (module a_box_where_a_value_is_expected)
+  --> a_box_where_a_value_is_expected.kso:27:22
+  27 |   .> (_ -> print (if os/args 1 2))
+                            ^
 error[effect]: this is an effect — a box the words open — and an index takes a value; open it with `.>` (module a_box_where_a_value_is_expected)
+  --> a_box_where_a_value_is_expected.kso:28:18
+  28 |   .> (_ -> print os/args[1])
+                        ^
 error[effect]: this is an effect — a box the words open — and `==` takes a value; open it with `.>` (module a_box_where_a_value_is_expected)
+  --> a_box_where_a_value_is_expected.kso:29:19
+  29 |   .> (_ -> print (math/random 6 == 3))
+                         ^
 error[effect]: this is an effect — a box the words open — and `length` takes a value; open it with `.>` (module a_box_where_a_value_is_expected)
+  --> a_box_where_a_value_is_expected.kso:32:27
+  32 |   .> (_ -> print (length (os/read_file "flavors.txt")))
+                                 ^
 error[effect]: this is an effect — a box the words open — and `length` takes a value; open it with `.>` (module a_box_where_a_value_is_expected)
+  --> a_box_where_a_value_is_expected.kso:33:27
+  33 |   .> (_ -> print (length (load "flavors.txt")))
+                                 ^
 error[effect]: this is an effect — a box the words open — and `length` takes a value; open it with `.>` (module a_box_where_a_value_is_expected)
+  --> a_box_where_a_value_is_expected.kso:34:26
+  34 |   .> (_ -> print (length loaded))
+                                ^
