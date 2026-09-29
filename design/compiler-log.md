@@ -19537,3 +19537,55 @@ None of those paths asks `handed_over_pushes`, which only the browser backend
 calls, and no mechanism for any of the five was isolated. Welfare fell by less
 than 0.01, and the floor comes down by that much under the 2026-09-13 rule,
 because this is the browser engine answering what the other two answer.
+
+## 2026-09-29 — the browser engine leaves a lazy binding unrun until it is read
+
+The wasm fuzz found a program that died on the browser engine and printed on
+the other two. Reduced, it is nine lines:
+
+    fn nope 1
+      1
+
+    fn f4 0 x
+      x
+
+    fn f4 _ _
+      7
+
+    fn shown z
+      v = nope 2
+      f4 z v
+
+`shown 1` prints 7 on native and the interpreter. `demand::analyze` marks
+`v` lazy, because its one use hands it to a parameter the second arm of `f4`
+ignores. Both engines thunk it, and the arm that wins never forces it. The
+browser backend never asked the demand analysis. It ran every binding where
+it stood, so `nope 2` failed before `f4` was called.
+
+It asks now. In a declaration's own body, a binding `demand` marks lazy is
+emitted as a closure over what it reads, with a new arity marker, `LAZY`.
+`slot` in the runtime runs such a closure the first time a handle to it is
+read and writes the answer over it. Every runtime operation reads its
+arguments through `slot`, so any read forces the binding. Handing the handle
+to a call reads nothing, so an arm that ignores the parameter never runs it.
+Two readers had to see the unrun closure rather than run it. The first is
+`rt_is_failure`, which a dispatcher asks of every argument before it picks an
+arm; the interpreter's check passes a thunk by in the same way. The second is
+`rt_rehandle` from the previous entry, which only moves a handle.
+
+`a_lazy_binding_nobody_reads_never_runs` runs `shown 1` and wants 7. It also
+runs `shown 0`, where the first arm returns the binding and the print reads
+it, and wants the failure all three engines report. Three mutations turned it
+red, and each is a ratchet row:
+
+- "a lazy binding run where it stands in wasm" asks `demand` about no binding.
+  `shown 1` died on `nope`.
+- "a failure check that runs a lazy binding in wasm" has `rt_is_failure` read
+  through `slot`. `shown 1` died the same way.
+- "a lazy binding read as its closure in wasm" stops `slot` running the
+  closure. `shown 0` printed `<fn>`.
+
+CI measured two rows moved: `interp_instructions` fell 979,398 to 590,224,412
+and `emit_instructions` fell 9 to 29,998,670. Neither path runs the browser
+backend, and no mechanism for either was isolated. Welfare reports neither a
+fall nor a rise, and the floor is unchanged.

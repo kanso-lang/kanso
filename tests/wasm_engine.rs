@@ -778,6 +778,33 @@ fn a_loop_seeded_with_a_list_its_caller_reads_copies_it_once() {
     assert!(matches!(&answer, Answer::Ran(0, text) if text == want), "{answer:?}");
 }
 
+/// A binding the demand analysis made lazy runs when something reads it, and
+/// not before. `v = nope 2` fails if it runs, and its one use hands it to a
+/// parameter the second arm of `f4` ignores. The interpreter and native
+/// thunk it and print 7. The browser engine ran every binding where it stood
+/// and died on `nope`. When the first arm returns the binding instead, the
+/// print reads it, and all three engines fail on it.
+#[test]
+fn a_lazy_binding_nobody_reads_never_runs() {
+    let defs = "fn nope 1\n  1\n\nfn f4 0 x\n  x\n\nfn f4 _ _\n  7\n\n\
+                fn shown z\n  v = nope 2\n  f4 z v\n\n";
+    for (name, call, want) in [
+        ("ignored.kso", "print (shown 1)\n", Answer::Ran(0, "7\n".to_string())),
+        (
+            "read.kso",
+            "print (shown 0)\n",
+            Answer::Ran(
+                1,
+                "error[runtime]: no overload of `nope` matches these arguments\n".to_string(),
+            ),
+        ),
+    ] {
+        let mut toolchain = Toolchain::load();
+        let answer = toolchain.run(name, &format!("{defs}{call}"));
+        assert_eq!(format!("{answer:?}"), format!("{want:?}"), "{name}");
+    }
+}
+
 impl Toolchain {
     /// One line at the playground's prompt, the way the page sends it.
     fn prompt(&mut self, line: &str) -> (i32, String) {
