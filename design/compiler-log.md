@@ -19797,6 +19797,15 @@ boxed that could have gone by value. The names are collected once per program
 rather than once per record type. None of the twelve cost veins or the lazy
 tier moved.
 
+CI measured the compile side on both versions. Walked once per record type,
+`emit_instructions` rose 395,653; walked once per program it rose 98,975, to
+30,097,646. `compile_instructions` rose 42,086 to 25,363,553,
+`entry_instructions` 71,784 to 83,772,881 and `library_instructions` 71,597 to
+84,310,711, the same three figures on both versions, so the walk's cost is not
+what moved them. `interp_instructions` fell 28,282 to 590,196,130. No
+mechanism for the three check rows was isolated. Welfare reports no fall
+larger than the display's two places, and the floor is unchanged.
+
 `a_function_value_keeps_its_record_boxed` in the micro corpus holds `mk` both
 ways; main's compiler refused it with the message above. The mutation "a
 function value returned in registers" turns the check off, and the micro
