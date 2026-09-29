@@ -4490,7 +4490,19 @@ fn_value_boxed = row
 
 rows_c1zzzzy = text/concat rows_c1zzzzx [fn_value_boxed]
 
-rows_c = text/concat rows_c1zzzzy [itself]
+# A held `if` takes the condition and both branches, so three arguments call
+# it on the interpreter instead of growing the partial.
+held_if = row
+  "a held if counted as nothing"
+  true
+  "cargo test --release --test a_held_if_picks_its_branch"
+  "specs (unit, golden, differential)"
+  (breaking "a_held_if_counted_as_nothing")
+  release
+
+rows_c1zzzzz = text/concat rows_c1zzzzy [held_if]
+
+rows_c = text/concat rows_c1zzzzz [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

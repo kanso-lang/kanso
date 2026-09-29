@@ -2407,6 +2407,10 @@ impl<'a> Interp<'a> {
                 Callee::Constructor(_) => Vec::new(),
                 Callee::EntryType => vec![self.entry_decl.fields.len()],
                 Callee::Err => vec![1],
+                // `if` is the one builtin the checker's table leaves out, since
+                // its count is checked where its branches are; held, it takes
+                // the condition and both branches like any call of it.
+                Callee::Builtin if &**name == "if" => vec![3],
                 Callee::Builtin => crate::check::builtin_arity(name).into_iter().collect(),
             },
             Value::Closure(c) => vec![c.params.len()],
