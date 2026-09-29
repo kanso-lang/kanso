@@ -4963,7 +4963,7 @@ impl<'a> Backend<'a> {
                 // tells them apart, and the first join adopts the second.
                 let t = f.tmp();
                 f.line(&format!("{t} = call %KValue @k_b_str_builder(%KValue {e})"));
-                f.record(&t, f.set_of(&e));
+                f.record(&t, f.set_of(e));
                 seeded = t;
                 seeded.as_str()
             }
