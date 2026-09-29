@@ -653,6 +653,76 @@ fn an_answer_above_two_gibibytes_reads_back() {
     assert!(text.ends_with("abab\n"), "the answer came back wrong");
 }
 
+/// An accumulator the linearity analysis proves nobody else reads is extended
+/// where it stands, on this engine as on the other two. The registry holds
+/// every handle a run makes, so a `push` handed the list by handle found a
+/// second holder, copied the list, and kept the copy it was handed: sixteen
+/// thousand pushes held 31,290 pages, and thirty-two thousand filled the four
+/// gibibytes a wasm32 memory can address and died reporting a stack overflow.
+/// The random programs found it at seventy thousand. A map built by `put` to
+/// the same size failed too, answering 1 and printing nothing.
+#[test]
+fn an_accumulator_grows_where_it_stands() {
+    let pushes = "fn fill acc 0\n  acc\n\nfn fill acc n\n  fill (push acc n) (n - 1)\n\n\
+                  pub play = print (length (fill [] 32000))\n";
+    let puts = "fn fill m 0\n  m\n\nfn fill m n\n  fill (put m n n) (n - 1)\n\n\
+                pub play = print (length (entries (fill {} 32000)))\n";
+    for (name, source) in [("pushes.kso", pushes), ("puts.kso", puts)] {
+        let mut toolchain = Toolchain::load();
+        let answer = toolchain.run(name, source);
+        assert!(
+            matches!(&answer, Answer::Ran(0, text) if text == "32000\n"),
+            "{name} answered {answer:?}"
+        );
+    }
+}
+
+/// A program that runs out of memory says so. The allocator aborts on an
+/// allocation the page cannot grow for, and that trap records nothing, so it
+/// read as a stack overflow: the accumulator above, before it was fixed,
+/// reported that recursion had gone too deep. Growing the page to sixteen
+/// mebibytes short of what a wasm32 memory can address leaves the allocator
+/// that much, and a sixty-four mebibyte answer needs more.
+#[test]
+fn a_program_that_runs_out_of_memory_says_so() {
+    let source = "import \"std/text\"\n\nfn doubled s 0\n  s\n\nfn doubled s n\n  \
+                  doubled (text/join [s s] \"\") (n - 1)\n\npub play = print (doubled \"ab\" 25)\n";
+    let mut toolchain = Toolchain::load();
+    let pages = toolchain.memory().size(&toolchain.store);
+    let short = (1u64 << 32) / 65536 - 256;
+    toolchain.memory().grow(&mut toolchain.store, short - pages).expect("the memory grows");
+    let answer = toolchain.run("full.kso", source);
+    assert!(
+        matches!(&answer, Answer::Ran(1, text) if text == "error[runtime]: the program ran out of memory\n"),
+        "the program answered {answer:?}"
+    );
+}
+
+/// And the program after it runs. A run's values stayed in the registry until
+/// the next `load`, which comes after the next compile, so the compile after a
+/// run that filled the page had nowhere to allocate and trapped, and so did
+/// every compile after that. The random programs found it: an accumulator that
+/// filled the page, then a harness panic on a program that ran fine alone.
+#[test]
+fn the_program_after_one_that_ran_out_of_memory_runs() {
+    // a seed the caller reads again is copied on every lap, so the page fills
+    // in steps of one list and is left with less than a list free
+    let source = "fn fill acc 0\n  acc\n\nfn fill acc n\n  fill (push acc n) (n - 1)\n\n\
+                  seed = [0]\n\npub play = print \"{length (fill seed 100000)} {seed}\"\n";
+    let mut toolchain = Toolchain::load();
+    let pages = toolchain.memory().size(&toolchain.store);
+    let short = (1u64 << 32) / 65536 - 256;
+    toolchain.memory().grow(&mut toolchain.store, short - pages).expect("the memory grows");
+    let _ = toolchain.run("full.kso", source);
+    let after = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        toolchain.run("after.kso", "print \"{1 + 2}\"\n")
+    }));
+    assert!(
+        matches!(&after, Ok(Answer::Ran(0, text)) if text == "3\n"),
+        "the program after it answered {after:?}"
+    );
+}
+
 impl Toolchain {
     /// One line at the playground's prompt, the way the page sends it.
     fn prompt(&mut self, line: &str) -> (i32, String) {

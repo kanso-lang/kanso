@@ -97,6 +97,16 @@ thread_local! {
 
 const SPAN0: Span = Span::at(0, 0);
 
+/// Drop what the last run made. Its values are dead once it has answered, and
+/// until now they stayed until the next `load`, which comes after the next
+/// compile: a run that filled the page left the compile after it with nowhere
+/// to allocate, and the engine trapped on every program that followed.
+pub fn release() {
+    REG.with(|r| r.renew(Vec::new()));
+    ARGS.with(|a| a.renew(Vec::new()));
+    CONSTS.with(|c| c.renew(std::collections::HashMap::new()));
+}
+
 pub fn load(program: Program, lits: &[Lit], types: Vec<(String, Vec<String>)>) {
     let parents: Vec<(String, String)> = program
         .types
@@ -1120,6 +1130,23 @@ pub extern "C" fn rt_truthy(h: u32) -> u32 {
 
 #[no_mangle]
 pub extern "C" fn rt_builtin(name_lit: u32, n: u32) -> u32 {
+    builtin_call(name_lit, n, false)
+}
+
+/// `push`, `put` or `append` at a site whose container nobody reads again.
+///
+/// The container is moved out of its handle and an empty one of the same kind
+/// is left behind, which is what the interpreter leaves in a binding it takes
+/// the same way. The builtin then finds itself the only holder and extends the
+/// container instead of copying it, and the registry stops holding the old
+/// one until the next load. A container another handle also holds still has a
+/// second owner, so that write copies, exactly as `rt_builtin` would.
+#[no_mangle]
+pub extern "C" fn rt_builtin_mut(name_lit: u32, n: u32) -> u32 {
+    builtin_call(name_lit, n, true)
+}
+
+fn builtin_call(name_lit: u32, n: u32, moves: bool) -> u32 {
     let name = match val(name_lit) {
         Value::Str(s) => s,
         _ => die("builtin name must be a string".to_string()),
@@ -1132,7 +1159,12 @@ pub extern "C" fn rt_builtin(name_lit: u32, n: u32) -> u32 {
         }
     }
     let mut args = Vec::with_capacity(handles.len());
-    for h in handles {
+    if let (true, Some(&h)) = (moves, handles.first()) {
+        if let Some(container) = moved_out(h) {
+            args.push(container);
+        }
+    }
+    for &h in &handles[args.len()..] {
         // A builtin takes a description like any other argument â `push [] d`
         // hands back a list still holding it. See
         // a_description_rides_through_a_builtin.
@@ -1143,6 +1175,17 @@ pub extern "C" fn rt_builtin(name_lit: u32, n: u32) -> u32 {
         Ok(v) => push(Slot::V(v)),
         Err(rt) => die(rt.message),
     }
+}
+
+/// The container a handle holds, taken out of it, or nothing where the handle
+/// holds anything else.
+fn moved_out(h: u32) -> Option<Value> {
+    REG.with(|r| match &mut r.borrow_mut()[h as usize] {
+        Slot::V(v @ Value::List(_)) => Some(std::mem::replace(v, Value::List(Rc::default()))),
+        Slot::V(v @ Value::Map(_)) => Some(std::mem::replace(v, Value::Map(Rc::default()))),
+        Slot::V(v @ Value::Bytes(_)) => Some(std::mem::replace(v, Value::Bytes(Rc::default()))),
+        _ => None,
+    })
 }
 
 fn map_or_filter(name: &str, list_h: u32, closure_h: u32) -> u32 {

@@ -157,7 +157,15 @@ unsafe impl std::alloc::GlobalAlloc for Counting {
         if layout.align() <= 8 {
             return unsafe { libmimalloc_sys::mi_malloc(layout.size()) }.cast();
         }
-        unsafe { UNDER.alloc(layout) }
+        let block = unsafe { UNDER.alloc(layout) };
+        // A page that cannot grow answers null here and the abort that
+        // follows is a trap with nothing recorded, which the playground would
+        // otherwise report as a stack overflow.
+        #[cfg(target_arch = "wasm32")]
+        if block.is_null() {
+            kanso::wasm::note_out_of_memory();
+        }
+        block
     }
     unsafe fn dealloc(&self, ptr: *mut u8, layout: std::alloc::Layout) {
         LIVE_BYTES.fetch_sub(layout.size() as u64, Ordering::Relaxed);

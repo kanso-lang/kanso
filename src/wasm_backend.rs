@@ -89,6 +89,10 @@ const RT_ERR_READ: u32 = 42;
 /// `&f 2` over a VALUE: the callee and the held arguments go to the host,
 /// which settles the count when the rest arrive.
 const RT_PARTIAL: u32 = 43;
+/// `push`, `put` or `append` at a site `linear::in_place_pushes` proved: the
+/// container is moved out of its handle, so the write extends it rather than
+/// copying it.
+const RT_BUILTIN_MUT: u32 = 44;
 /// A group handed out as a value carries every count its arms take, as bits
 /// below this base: `MASKED - mask`. Paired with `MASKED` in wasm_rt.
 const MASKED_ARITY: i64 = -1000;
@@ -139,6 +143,7 @@ fn imports() -> Vec<Import> {
         Import { name: "rt_annotate", params: 3, returns: true },
         Import { name: "rt_err_read", params: 2, returns: true },
         Import { name: "rt_partial", params: 2, returns: true },
+        Import { name: "rt_builtin_mut", params: 2, returns: true },
     ]
 }
 
@@ -155,6 +160,9 @@ struct Ctx {
     /// element mentioning it has to wait rather than read a cell that is
     /// still being filled.
     group: String,
+    /// The file the declaration being emitted came from, which is half of
+    /// the key `in_place` is read by.
+    file: std::sync::Arc<str>,
 }
 
 pub struct WasmBackend<'a> {
@@ -168,6 +176,10 @@ pub struct WasmBackend<'a> {
     /// Zero-arity names that reach themselves through other constants.
     knotted: crate::hash::Set<String>,
     tailcalls: bool,
+    /// The write sites whose container nobody reads again, keyed `(file,
+    /// line, col)`: the same answer the native emitter and the interpreter
+    /// read.
+    in_place: crate::hash::Set<(std::sync::Arc<str>, usize, usize)>,
 }
 
 /// A partial application, as the lambda it is equivalent to: `&add 2` becomes
@@ -248,6 +260,7 @@ pub fn compile(program: &Program, tailcalls: bool) -> Result<Compiled, String> {
         wrappers: HashMap::default(),
         knotted: crate::codegen::knotted_constants(program),
         tailcalls,
+        in_place: crate::linear::in_place_pushes(program),
     };
     backend.run()
 }
@@ -397,6 +410,7 @@ impl<'a> WasmBackend<'a> {
                 0 => name.to_string(),
                 _ => String::new(),
             },
+            file: std::sync::Arc::from(""),
         };
         // The second hole in an err's infectiousness: a reader's getter answers
         // the piece before any arm is tried. The other two engines do the same
@@ -418,6 +432,7 @@ impl<'a> WasmBackend<'a> {
             ctx.scope.clear();
             ctx.prefix = format!("{} at {}", crate::ast::frame_name(&decl.name), decl.file);
             ctx.hako = crate::provenance::package_of(&decl.file).to_string();
+            ctx.file = decl.file.clone();
             ctx.body.block_void();
             for (i, pattern) in decl.params.iter().enumerate() {
                 self.emit_pattern(&mut ctx, i as u32, pattern)?;
@@ -1244,6 +1259,7 @@ impl<'a> WasmBackend<'a> {
             prefix: ctx.prefix.clone(),
             hako: ctx.hako.clone(),
             group: String::new(),
+            file: ctx.file.clone(),
         };
         self.emit_expr(&mut inner, item, true)?;
         self.module.define(fn_idx, inner.body);
@@ -1299,6 +1315,7 @@ impl<'a> WasmBackend<'a> {
             prefix: ctx.prefix.clone(),
             hako: ctx.hako.clone(),
             group: String::new(),
+            file: ctx.file.clone(),
         };
         for (i, p) in param_names.iter().enumerate() {
             let local = inner.body.local();
@@ -1474,7 +1491,7 @@ impl<'a> WasmBackend<'a> {
                 let lit = self.str_lit(stripped);
                 ctx.body.i32_const(lit as i64);
                 ctx.body.i32_const(args.len() as i64);
-                ctx.body.call(RT_BUILTIN);
+                ctx.body.call(self.builtin_door(ctx, stripped, span));
                 self.stamp_fallible(ctx, stripped, span);
                 return Ok(());
             }
@@ -1497,7 +1514,7 @@ impl<'a> WasmBackend<'a> {
             let lit = self.str_lit(name);
             ctx.body.i32_const(lit as i64);
             ctx.body.i32_const(args.len() as i64);
-            ctx.body.call(RT_BUILTIN);
+            ctx.body.call(self.builtin_door(ctx, name, span));
             self.stamp_fallible(ctx, name, span);
             return Ok(());
         }
@@ -1559,6 +1576,23 @@ impl<'a> WasmBackend<'a> {
     /// evaluated arguments, mirroring the native emitter.
     /// Builtins that can give birth to an err get the site's origin stamped
     /// onto the fresh (still unstamped) err they return.
+    /// Which runtime entry a builtin call goes through. A write the linearity
+    /// analysis proved is the last reader of its container takes the
+    /// container out of its handle; every other call borrows it.
+    ///
+    /// Borrowing is what made an accumulator quadratic here. The registry
+    /// holds every handle a run makes, so the list a `push` was handed still
+    /// had a second holder, the interpreter's builtin copied it, and every
+    /// copy stayed in the registry: 16,000 pushes held 31,290 pages, and
+    /// 32,000 filled all four gibibytes a wasm32 memory can address.
+    fn builtin_door(&self, ctx: &Ctx, name: &str, span: crate::diag::Span) -> u32 {
+        let site = (ctx.file.clone(), span.line as usize, span.col as usize);
+        match matches!(name, "push" | "put" | "append") && self.in_place.contains(&site) {
+            true => RT_BUILTIN_MUT,
+            false => RT_BUILTIN,
+        }
+    }
+
     fn stamp_fallible(&mut self, ctx: &mut Ctx, name: &str, span: crate::diag::Span) {
         // wrap_err mints an err too — through the generic builtin bridge,
         // where no frame exists, so the site's origin is stamped here

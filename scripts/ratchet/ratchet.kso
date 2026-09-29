@@ -4304,7 +4304,48 @@ high_pointers = row
 
 rows_c1zzzzn = text/concat rows_c1zzzzg [high_pointers]
 
-rows_c = text/concat rows_c1zzzzn [itself]
+# The wasm engine extends an accumulator the linearity analysis proves nobody
+# else reads. Copying it instead leaves every small answer right and fills the
+# memory on a large one.
+copied_accumulator = row
+  "an accumulator copied on every write in wasm"
+  true
+  "cargo test --release --test wasm_engine an_accumulator_grows_where_it_stands"
+  "specs (unit, golden, differential)"
+  (breaking "an_accumulator_copied_on_every_write_in_wasm")
+  with_blob
+
+rows_c1zzzzo = text/concat rows_c1zzzzn [copied_accumulator]
+
+# An exhausted page and an exhausted stack both trap with nothing recorded, and
+# the allocator's note is what tells them apart.
+memory_as_stack = row
+  "a page out of memory reported as a stack overflow"
+  true
+  "cargo test --release --test wasm_engine {out_of_memory}"
+  "specs (unit, golden, differential)"
+  (breaking "a_page_out_of_memory_reported_as_a_stack_overflow")
+  with_blob
+
+out_of_memory = "a_program_that_runs_out_of_memory_says_so"
+
+rows_c1zzzzp = text/concat rows_c1zzzzo [memory_as_stack]
+
+# A run that filled the page leaves the next compile room only if the registry
+# lets go of the dead run's values before that compile begins.
+dead_run_held = row
+  "a dead run holding the page"
+  true
+  "cargo test --release --test wasm_engine {after_full}"
+  "specs (unit, golden, differential)"
+  (breaking "a_dead_run_holding_the_page")
+  with_blob
+
+after_full = "the_program_after_one_that_ran_out_of_memory_runs"
+
+rows_c1zzzzq = text/concat rows_c1zzzzp [dead_run_held]
+
+rows_c = text/concat rows_c1zzzzq [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
