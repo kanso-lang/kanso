@@ -18531,3 +18531,27 @@ order, and a one-member `type short id` is a subtype, which ranks the same
 way. The error fixture `a_typeset_arm_behind_a_wider_one` reported nothing on
 the old checker, and the row "a typeset arm left behind a wider one" turns it
 red. No program in lib, kq, vse or kanso-json changes its verdict.
+
+## 2026-09-29 — an arm other arms answer first is refused
+
+An arm can also never run when no single arm matches it and several together
+take everything it would. A literal and a member type rank above `bool` and
+above a typeset, so arms for `true` and `false` leave nothing for `_:bool`, and
+arms for `id` and `word` leave nothing for `_:both` when `both` holds those
+two. Both passed `kanso check`, in either order, on every engine. The overlap
+check now asks, of a `bool` or typeset parameter, whether each of its values
+is taken first by another arm whose other parameters are the same shape: a
+literal, an arm naming the member or binding every field of it, or an earlier
+typeset arm holding it. `none` joined the same family from the other side. It
+is the one value of its type, so `none` and `_:none` take the same thing, and
+the literal ranks first. The error fixture `an_arm_other_arms_answer_first`
+holds the three shapes and reported nothing on the old checker. The rows "a
+literal and its annotation read as two shapes" and "an arm other arms answer
+first left unchecked" each turn it red.
+
+The overlap check runs over the whole module after the files are merged, and
+its diagnostics named no file, so on the imported path they printed with the
+module suffix and no location. They name the arm's file now. An existing
+diagnostic reads the same with the location added under it, and the two new
+fixtures carry `.imported.stderr` goldens for that path. No program in lib,
+kq, vse or kanso-json changes its verdict.

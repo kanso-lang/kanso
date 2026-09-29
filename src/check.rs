@@ -4129,11 +4129,14 @@ fn check_overlapping_arms(program: &Program, diags: &mut Vec<Diagnostic>) {
                 && same_shape(&earlier.params, &later.params)
         });
         if clashes {
-            diags.push(Diagnostic::new(
-                "dispatch",
-                format!("overlapping overloads of `{}` are illegal", later.name),
-                later.span,
-            ));
+            diags.push(
+                Diagnostic::new(
+                    "dispatch",
+                    format!("overlapping overloads of `{}` are illegal", later.name),
+                    later.span,
+                )
+                .about(&later.file),
+            );
             continue;
         }
         let covered = real[..i].iter().find_map(|earlier| {
@@ -4153,9 +4156,88 @@ fn check_overlapping_arms(program: &Program, diags: &mut Vec<Diagnostic>) {
                      `{wide}` comes first, so this arm can never run; put it above that one"
                 ),
             };
-            diags.push(Diagnostic::new("dispatch", why, later.span));
+            diags.push(Diagnostic::new("dispatch", why, later.span).about(&later.file));
+            continue;
+        }
+        if let Some(ty) = members_each_answered(program, &mut flat, &real, i) {
+            diags.push(
+                Diagnostic::new(
+                    "dispatch",
+                    format!(
+                        "every value a `{ty}` can be has an arm that takes it before this one, so \
+                     this arm can never run"
+                    ),
+                    later.span,
+                )
+                .about(&later.file),
+            );
         }
     }
+}
+
+/// Whether each value a later arm's `bool` or typeset parameter admits is
+/// taken by another arm first, the other parameters being the same shape. A
+/// literal and a member type rank above a typeset or `bool`, so an arm for each
+/// of them takes its values whatever the order; an earlier typeset arm takes the
+/// members it holds because it comes first. Answers the type left with nothing.
+fn members_each_answered<'a>(
+    program: &Program,
+    flat: &mut Option<crate::hash::Map<String, Vec<String>>>,
+    real: &[&'a FnDecl],
+    at: usize,
+) -> Option<&'a str> {
+    let later = real[at];
+    let siblings = || {
+        real.iter().enumerate().filter(move |(j, a)| {
+            *j != at && a.name == later.name && a.params.len() == later.params.len()
+        })
+    };
+    siblings().next()?;
+    let is_set = |ty: &str| program.types.iter().any(|t| t.name == ty && !t.members.is_empty());
+    for (p, param) in later.params.iter().enumerate() {
+        let Pattern::Annotated { ty, .. } = param else { continue };
+        let rest_alike = |a: &FnDecl| {
+            a.params.iter().zip(&later.params).enumerate().all(|(q, (x, y))| {
+                q == p || same_shape(std::slice::from_ref(x), std::slice::from_ref(y))
+            })
+        };
+        let answered = if ty == "bool" {
+            ["true", "false"].iter().all(|lit| {
+                siblings().any(|(_, a)| {
+                    rest_alike(a) && matches!(&a.params[p], Pattern::Nullary(n, _) if n == lit)
+                })
+            })
+        } else if is_set(ty) {
+            let sets = flat.get_or_insert_with(|| program.flat_typesets());
+            let Some(members) = sets.get(ty.as_str()) else { continue };
+            members.iter().all(|m| {
+                siblings().any(|(j, a)| {
+                    rest_alike(a)
+                        && match &a.params[p] {
+                            Pattern::Annotated { ty: t, .. } => {
+                                t == m
+                                    || (j < at
+                                        && sets.get(t.as_str()).is_some_and(|s| s.contains(m)))
+                            }
+                            Pattern::Ctor { ty: t, fields, .. } => {
+                                t == m
+                                    && fields.iter().all(|f| {
+                                        matches!(f, Pattern::Var(..) | Pattern::Wildcard(..))
+                                    })
+                            }
+                            Pattern::Nullary(n, _) => n == m,
+                            _ => false,
+                        }
+                })
+            })
+        } else {
+            continue;
+        };
+        if answered {
+            return Some(ty.as_str());
+        }
+    }
+    None
 }
 
 /// Whether an earlier arm takes every value a later one does because a typeset
@@ -4352,6 +4434,10 @@ fn same_shape(a: &[Pattern], b: &[Pattern]) -> bool {
         | (Pattern::Ctor { ty: y, fields, .. }, Pattern::Annotated { ty: x, .. }) => {
             x == y && fields.iter().all(|f| matches!(f, Pattern::Var(..) | Pattern::Wildcard(..)))
         }
+        // `none` and `done` are each the one value of their type, so the
+        // literal and the annotation take the same thing.
+        (Pattern::Nullary(x, _), Pattern::Annotated { ty: y, .. })
+        | (Pattern::Annotated { ty: y, .. }, Pattern::Nullary(x, _)) => x == y,
         (Pattern::Var(..) | Pattern::Wildcard(..), Pattern::Var(..) | Pattern::Wildcard(..)) => {
             true
         }

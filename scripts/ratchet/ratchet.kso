@@ -3803,7 +3803,31 @@ typeset_behind = row
 
 rows_c1zzzi = text/concat rows_c1zzzh [typeset_behind]
 
-rows_c = text/concat rows_c1zzzi [itself]
+# `none` is the one value of its type. Read apart from `_:none`, a group
+# holding both passes `kanso check` and the annotated arm never runs.
+literal_overlap = row
+  "a literal and its annotation read as two shapes"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_literal_and_its_annotation_read_apart")
+  no_setup
+
+rows_c1zzzj = text/concat rows_c1zzzi [literal_overlap]
+
+# Literals and member types rank above `bool` and a typeset. Left unchecked,
+# an arm whose every value another arm takes first passes `kanso check`.
+answered_first = row
+  "an arm other arms answer first left unchecked"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "an_arm_other_arms_answer_left_unchecked")
+  no_setup
+
+rows_c1zzzk = text/concat rows_c1zzzj [answered_first]
+
+rows_c = text/concat rows_c1zzzk [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

@@ -1,0 +1,12 @@
+error[dispatch]: overlapping overloads of `gone` are illegal
+  --> an_arm_other_arms_answer_first.kso:17:4
+  17 | fn gone _:none
+          ^
+error[dispatch]: every value a `bool` can be has an arm that takes it before this one, so this arm can never run
+  --> an_arm_other_arms_answer_first.kso:29:4
+  29 | fn truth _:bool
+          ^
+error[dispatch]: every value a `both` can be has an arm that takes it before this one, so this arm can never run
+  --> an_arm_other_arms_answer_first.kso:35:4
+  35 | fn kind _:both
+          ^
