@@ -18959,3 +18959,9 @@ false. The runtime samples `equality_is_not_defined_on_a_partial` and
 `equality_is_not_defined_on_a_function_in_a_list` printed false on the old
 interpreter. The rows "a partial compared" and "a function in a list
 compared" each put one half back and turn the runtime corpus red.
+CI read `interp_instructions` at 591,118,143, up 198,180, which is the
+interpreter's equality walk asking each element it compares whether it is a
+function. The meta welfare fell by that much and the floor comes down under
+the 2026-09-13 rule, since this is the interpreter keeping the rule native
+already kept.
+
