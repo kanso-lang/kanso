@@ -2401,6 +2401,16 @@ impl<'a> Interp<'a> {
                 found
             }
             Value::Closure(c) => vec![c.params.len()],
+            // A partial answers what its callee answers, less what it holds.
+            // Answering nothing left `(&h 3) 1` over `h = &g p` wrapped in a
+            // third partial where native ran `g p 3 1`, and `h 3 1` beside it
+            // ran here too.
+            Value::Partial(inner, held) => self
+                .arities_of(inner)
+                .into_iter()
+                .filter(|a| *a >= held.len())
+                .map(|a| a - held.len())
+                .collect(),
             _ => Vec::new(),
         }
     }

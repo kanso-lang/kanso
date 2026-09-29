@@ -4042,6 +4042,38 @@ partial_widens = row
 
 rows_c1zzzze = text/concat rows_c1zzzy [partial_widens]
 
+# A partial answers its callee's arities less what it holds. Answering none,
+# the interpreter wrapped `(&h 3) 1` in a third partial where native ran g.
+partial_nest = row
+  "a partial over a partial taking nothing"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_partial_over_a_partial_taking_nothing")
+  release
+
+# The native and browser runtimes ask the same question of a partial when
+# one wraps another, and answering none, `s = &k` grew at `s 1`.
+partial_nest_native = row
+  "a native partial answering nothing"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_native_partial_answering_nothing")
+  release
+
+partial_nest_browser = row
+  "a browser partial answering nothing"
+  true
+  "cargo test --release --test wasm_engine {wasm_corpus}"
+  "specs (unit, golden, differential)"
+  (breaking "a_browser_partial_answering_nothing")
+  with_blob
+
+partial_nests = [partial_nest partial_nest_native partial_nest_browser]
+
+rows_c1zzzz = text/concat rows_c1zzzze partial_nests
+
 # Equality refuses a function wherever the walk meets one, a partial among
 # them. The interpreter answered false for a partial and for a function in a
 # list, where native refused.
@@ -4061,7 +4093,7 @@ eq_nested = row
   (breaking "a_function_in_a_list_compared")
   no_setup
 
-rows_c1zzzzf = text/concat rows_c1zzzze [eq_partial eq_nested]
+rows_c1zzzzf = text/concat rows_c1zzzz [eq_partial eq_nested]
 
 rows_c = text/concat rows_c1zzzzf [itself]
 
