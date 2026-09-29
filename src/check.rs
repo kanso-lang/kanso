@@ -4162,11 +4162,54 @@ fn check_overlapping_arms(program: &Program, diags: &mut Vec<Diagnostic>) {
                      this arm can never run"
                 );
                 found.push((at, Diagnostic::new("dispatch", why, later.span).about(&later.file)));
+                continue;
+            }
+            let shadowed = earlier()
+                .any(|e| e.params.iter().zip(&later.params).all(|(p, q)| covers(p, q, true)));
+            if shadowed {
+                let why = "an arm of this group written above takes every value this one does, \
+                           so this arm can never run; put it above that one"
+                    .to_string();
+                found.push((at, Diagnostic::new("dispatch", why, later.span).about(&later.file)));
             }
         }
     }
     found.sort_by_key(|&(at, _)| at);
     diags.extend(found.into_iter().map(|(_, d)| d));
+}
+
+/// Whether a pattern takes every value another does, where the two rank alike
+/// and so the one written first wins. Two constructor patterns of one type rank
+/// alike, and so do an annotation and a constructor pattern of its type, so
+/// `(pt n _)` above `(pt 1 _)` leaves the second nothing. Inside a constructor
+/// a binder takes any field, since a field never holds an err, and an
+/// annotation takes a literal of its type. At the top a binder ranks below
+/// every type and a literal above it, so neither is compared there.
+fn covers(e: &Pattern, l: &Pattern, top: bool) -> bool {
+    if same_shape(std::slice::from_ref(e), std::slice::from_ref(l)) {
+        return true;
+    }
+    match (e, l) {
+        (Pattern::Var(..) | Pattern::Wildcard(..), _) => !top,
+        (Pattern::Annotated { ty, .. }, Pattern::Ctor { ty: t, .. }) => ty == t,
+        (Pattern::Annotated { ty, .. }, Pattern::IntLit(..)) => !top && ty == "int",
+        (Pattern::Annotated { ty, .. }, Pattern::StrLit(..)) => !top && ty == "string",
+        (Pattern::Annotated { ty, .. }, Pattern::Nullary(n, _)) => {
+            !top && ty == "bool" && (n == "true" || n == "false")
+        }
+        // A bare reason ranks below every named one, so `(err _)` written
+        // first still leaves `(err (woe a))` its errs.
+        (Pattern::Ctor { ty: a, fields: fa, .. }, Pattern::Ctor { .. })
+            if a == "err"
+                && matches!(fa.as_slice(), [Pattern::Var(..) | Pattern::Wildcard(..)]) =>
+        {
+            false
+        }
+        (Pattern::Ctor { ty: a, fields: fa, .. }, Pattern::Ctor { ty: b, fields: fb, .. }) => {
+            a == b && fa.len() == fb.len() && fa.iter().zip(fb).all(|(x, y)| covers(x, y, false))
+        }
+        _ => false,
+    }
 }
 
 /// Whether each value a later arm's `bool` or typeset parameter admits is

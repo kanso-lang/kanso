@@ -18585,3 +18585,22 @@ read that way. The error fixture `a_list_arm_reads_no_element_type` holds a
 list pair and a map pair and reported nothing on the old checker, and the row
 "a list arm read by its element type" turns it red. No program in lib, kq, vse
 or kanso-json changes its verdict.
+
+## 2026-09-29 — an arm below one that takes its values is refused
+
+Two constructor patterns of one type rank alike, and so do an annotation and a
+constructor pattern of its type, so wherever both match, every engine runs the
+one written first. `(pt n _)` above `(pt 1 _)` sends `pt 1 2` to the first, and
+the second never runs. `_:pt` above `(pt 1 _)`, `(pt _:int _)` above
+`(pt 3 _)`, and `_:err` above `(err (woe a))` do the same. Written the other
+way round, both arms run. The overlap check now asks whether an earlier arm
+takes every value a later one does, position by position. Inside a constructor
+a binder takes any field, since a field never holds an err, and an annotation
+takes a literal of its type. At the top a binder ranks below every type and a
+literal above it, so those pairs are left to the ranking rule. One exception:
+`(err _)` ranks below every named reason, so written first it still leaves
+`(err (woe a))` its errs. The error fixture
+`an_arm_written_below_one_that_takes_it` holds three dead arms beside one live
+one and reported nothing on the old checker. The row "an arm below one that
+takes it left unchecked" turns it red. No program in lib, kq, vse or
+kanso-json changes its verdict.

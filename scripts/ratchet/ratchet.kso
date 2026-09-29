@@ -3839,7 +3839,19 @@ list_kind = row
 
 rows_c1zzzl = text/concat rows_c1zzzk [list_kind]
 
-rows_c = text/concat rows_c1zzzl [itself]
+# Constructor patterns of one type rank alike and the first written wins. Left
+# unchecked, `(pt 1 _)` below `(pt n _)` passes `kanso check` and never runs.
+below_wider = row
+  "an arm below one that takes it left unchecked"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "an_arm_below_one_that_takes_it_left_unchecked")
+  no_setup
+
+rows_c1zzzm = text/concat rows_c1zzzl [below_wider]
+
+rows_c = text/concat rows_c1zzzm [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
