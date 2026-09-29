@@ -1,0 +1,13 @@
+# `&length` holds nothing and `&push [5 6]` holds one of push's two, so a
+# call with one more argument runs each. The interpreter asked the callee how
+# many arguments it takes, and a builtin had no answer, so each call grew the
+# partial and printed `<fn>`. Native ran both.
+fn size n
+  k = &length
+  k [1 2 n]
+
+fn pick n
+  k = &push [5 6]
+  k n
+
+pub play = print "{size 3} {pick 7}"
