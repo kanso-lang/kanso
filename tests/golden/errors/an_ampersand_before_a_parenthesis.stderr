@@ -1,0 +1,4 @@
+error[syntax]: `&` marks a partial application: `&name arg`
+  --> an_ampersand_before_a_parenthesis.kso:5:8
+   5 |   k = &(g 1)
+              ^

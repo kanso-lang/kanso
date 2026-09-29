@@ -18789,3 +18789,19 @@ program the checker does, but that has not been isolated from the other two
 changes. Welfare fell from 90.40592 to 90.4057, and the floor follows it under
 the 2026-09-13 rule, since all three close gaps in the checker for the
 language as ruled.
+
+## 2026-09-29 — a sigil before a parenthesis is refused by the parser
+
+`k = &(g 1)` got a formatting error asking for a space after `&`. The lexer's
+spacing check reads `&` before `(` as the bitwise operator, which takes a
+space on each side. Written `k = & (g 1)`, the line then failed to parse with
+"`&` marks a partial application: `&name arg`". So following the first
+diagnostic led straight to the second. The check now leaves a `&` alone when
+nothing a value ends with comes before it and no name comes after it, and the
+parser's refusal is the one printed. `k &(g)` still asks for a space, because
+there `&` follows a value and is the operator. Probing partials by hand found
+it.
+
+The error fixture `an_ampersand_before_a_parenthesis` printed the formatting
+error on the old lexer. The row "a nameless sigil asked for a space" puts the
+spacing check back and turns the error corpus red.
