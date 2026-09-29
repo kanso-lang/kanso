@@ -4098,7 +4098,7 @@ rows_c1zzzzf = text/concat rows_c1zzzz [eq_partial eq_nested]
 # A builtin or a record's constructor handed to `&` answers the interpreter's
 # question of how many arguments it takes. Each row puts one of the two
 # answers back to nothing.
-builtin_partial = row
+partial_of_builtin = row
   "a builtin partial answering nothing"
   true
   "cargo test --release --test golden micro_corpus_agrees_across_engines"
@@ -4109,12 +4109,12 @@ builtin_partial = row
 ctor_partial = row
   "a constructor partial answering nothing"
   true
-  "cargo test --release --test partial a_partial_over_a_constructor_builds_the_record"
+  "cargo test --release --test partial a_partial_over_a_constructor"
   "specs (unit, golden, differential)"
   (breaking "a_constructor_partial_answering_nothing")
   no_setup
 
-rows_c1zzzzj = text/concat rows_c1zzzzf [builtin_partial ctor_partial]
+rows_c1zzzzj = text/concat rows_c1zzzzf [partial_of_builtin ctor_partial]
 
 rows_c = text/concat rows_c1zzzzj [itself]
 

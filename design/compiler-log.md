@@ -18965,3 +18965,26 @@ function. The meta welfare fell by that much and the floor comes down under
 the 2026-09-13 rule, since this is the interpreter keeping the rule native
 already kept.
 
+
+## 2026-09-29 — a partial over a builtin or a constructor runs when it is full
+
+Since kanso#1718 the interpreter finishes a partial by asking its callee how
+many arguments it takes, and only a declared group answered. A builtin, a
+record's constructor and a subtype's constructor answered nothing, so a call
+that brought the rest grew the partial again: `k = &length; k [1 2 3]`,
+`k = &push [5 6]; k 7` and `(&pt 2) "y"` each printed `<fn>`. Native ran
+`length` and `push` and printed `3` and `[5 6 7]`; it refuses a constructor
+as a value when the program is built, which the differential law allows.
+
+A reference now answers by what it calls. A group answers its arms' counts
+as before, a record's constructor its field count, a subtype's constructor
+one, `entry` its fields, and a builtin the count `check::builtin_arity`
+holds for it. A builtin the table leaves out still answers nothing.
+
+Found by hand while probing partials over other callees after the wide-group
+fix. The micro sample `a_partial_over_a_builtin_runs` finishes `&length` and
+`&push [5 6]` on every engine, and `a_partial_over_a_constructor_builds_the_record`
+in tests/partial.rs builds a record and a subtype through a partial on the
+interpreter. The old interpreter failed both. The rows "a builtin partial
+answering nothing" and "a constructor partial answering nothing" put each
+answer back to nothing and turn their spec red.
