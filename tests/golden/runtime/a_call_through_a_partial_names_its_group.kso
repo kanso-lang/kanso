@@ -1,0 +1,15 @@
+# `k = &f1 0` holds one of f1's two arguments, and `k bad` hands it the
+# second, an err. f1 turns it down and the trace names f1, as it does for
+# `f1 0 bad`. Native held the partial as a closure over f1, whose dispatcher
+# answered the err before f1 ran, and the trace named nothing.
+import "std/text"
+
+fn f1 _ p
+  if (p < "b") 1 0
+
+fn go n
+  bad = text/from_code n
+  k = &f1 0
+  k bad
+
+pub play = print "{go 55296}"

@@ -4007,7 +4007,47 @@ part_browser = row
 
 rows_c1zzzx = text/concat rows_c1zzzw [part_closure part_entered part_browser]
 
-rows_c = text/concat rows_c1zzzx [itself]
+# A call through a group value, or a partial over a group, that turns down a
+# failing argument names the group in the trace, as a direct call does.
+# Native and the browser answered the failure before entering the group and
+# named nothing.
+hop_value = row
+  "a group value naming nothing"
+  true
+  "cargo test --release --test golden runtime_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_group_value_naming_nothing")
+  release
+
+hop_partial = row
+  "a partial held in a nameless closure"
+  true
+  "cargo test --release --test golden runtime_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_partial_held_in_a_nameless_closure")
+  release
+
+hop_browser = row
+  "a browser group value naming nothing"
+  true
+  "cargo test --release --test wasm_engine {wasm_corpus}"
+  "specs (unit, golden, differential)"
+  (breaking "a_browser_group_value_naming_nothing")
+  with_blob
+
+hop_browser_partial = row
+  "a browser partial held in a nameless closure"
+  true
+  "cargo test --release --test wasm_engine {wasm_corpus}"
+  "specs (unit, golden, differential)"
+  (breaking "a_browser_partial_held_in_a_nameless_closure")
+  with_blob
+
+hops = [hop_value hop_partial hop_browser hop_browser_partial]
+
+rows_c1zzzzd = text/concat rows_c1zzzx hops
+
+rows_c = text/concat rows_c1zzzzd [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

@@ -7045,6 +7045,15 @@ KValue k_fnref(void* described) {
 
 KValue k_env_get(void* env, long long i) { return ((KValue*)env)[i]; }
 
+/* A group handed out as a value turns down a failing argument the way a
+   direct call does, and a direct call's guard names the group in the trace.
+   The dispatchers answer the failure before entering the group, so they name
+   it here; a builtin is not a group and names nothing. `k_call1` enters the
+   group, whose own guard does it. */
+static KValue k_ref_hop(KFnref* r, KValue failure) {
+    return r->builtin ? failure : k_err_hop(failure, r->name);
+}
+
 /* `foo()` runs a value that was waiting to be called — what `&` leaves when it
    has supplied every argument an arm takes. No arguments arrive, so there is
    nothing to propagate but the callable itself. */
@@ -7112,7 +7121,7 @@ KValue k_call2(KValue f, KValue a, KValue b) {
     if (f.tag == K_FNREF) {
         KFnref* r = (KFnref*)(intptr_t)f.payload;
         if (r->arity != 2) k_die_ref_arity(r, 2);
-        if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
+        if (!k_not_failure(a) || !k_not_failure(b)) return k_ref_hop(r, k_both_or_either(a, b));
         return ((KValue(*)(KValue, KValue))r->fn)(a, b);
     }
     k_die_not_callable(f);
@@ -7132,8 +7141,8 @@ KValue k_call3(KValue f, KValue a, KValue b, KValue c) {
     if (f.tag == K_FNREF) {
         KFnref* r = (KFnref*)(intptr_t)f.payload;
         if (r->arity != 3) k_die_ref_arity(r, 3);
-        if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
-        if (!k_not_failure(c)) return c;
+        if (!k_not_failure(a) || !k_not_failure(b)) return k_ref_hop(r, k_both_or_either(a, b));
+        if (!k_not_failure(c)) return k_ref_hop(r, c);
         return ((KValue(*)(KValue, KValue, KValue))r->fn)(a, b, c);
     }
     k_die_not_callable(f);
@@ -7154,9 +7163,9 @@ KValue k_call4(KValue f, KValue a, KValue b, KValue c, KValue d) {
     if (f.tag == K_FNREF) {
         KFnref* r = (KFnref*)(intptr_t)f.payload;
         if (r->arity != 4) k_die_ref_arity(r, 4);
-        if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
-        if (!k_not_failure(c)) return c;
-        if (!k_not_failure(d)) return d;
+        if (!k_not_failure(a) || !k_not_failure(b)) return k_ref_hop(r, k_both_or_either(a, b));
+        if (!k_not_failure(c)) return k_ref_hop(r, c);
+        if (!k_not_failure(d)) return k_ref_hop(r, d);
         return ((KValue(*)(KValue, KValue, KValue, KValue))r->fn)(a, b, c, d);
     }
     k_die_not_callable(f);

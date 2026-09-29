@@ -18820,3 +18820,33 @@ pins the trace, which names no frame for `g`. On the old compiler all three err
 cases answered through `g` natively. The rows "a partial's held err built into
 a closure", "a finished partial entering with its err" and "a browser partial
 ignoring its held err" put each lowering back and turn their corpus red.
+
+## 2026-09-29 — a call through a group value names the group in the trace
+
+When a group turns down a failing argument, the interpreter adds the group's
+name to the err's trace, and a direct call `f1 0 bad` prints `passed through
+f1` on every engine. Called through a value, it did not. `f = f1; f 0 bad`
+and `k = &f1 0; k bad` printed `passed through f1` on the interpreter and no
+hop on native or in the browser, because each backend's dispatcher answers a
+failing argument before it enters the callee. `k_call1` hands its argument to
+the group's wrapper, whose guard adds the hop, so a call with one argument
+agreed. The generated-program differential found it in batch 105, at seed
+323931, the first batch whose generator binds partials over partials.
+
+The native dispatchers now name the group when they answer a failure for a
+group value; a builtin value names nothing, as on the interpreter. A partial
+over a declared group is held over the group's value, which carries the name,
+where it was a closure that answered the failure before the group ran. The
+browser's wrapper for a group now carries the group's name as its one
+capture, which its body never read, and its partials are held the same way.
+A group whose arm takes more than four arguments keeps the closure, because
+the native dispatchers stop at four, and a call through a partial over one
+still drops the hop. lib and the benchmarks hold no partials, so no runtime
+row can move.
+
+The runtime samples `a_call_through_a_partial_names_its_group` and
+`a_call_through_a_group_value_names_its_group` pin the trace. The old native
+builds printed no hop for either. The rows "a group value naming nothing", "a
+partial held in a nameless closure", "a browser group value naming nothing"
+and "a browser partial held in a nameless closure" each put one change back
+and turn their corpus red.
