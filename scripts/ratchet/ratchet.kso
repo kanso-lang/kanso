@@ -3790,7 +3790,20 @@ constructor_overlap = row
 
 rows_c1zzzh = text/concat rows_c1zzzg [constructor_overlap]
 
-rows_c = text/concat rows_c1zzzh [itself]
+# Typeset arms rank alike, so the first written wins. Left unchecked, one whose
+# members all sit in an earlier arm's typeset passes `kanso check` and never
+# runs.
+typeset_behind = row
+  "a typeset arm left behind a wider one"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_typeset_arm_left_behind_a_wider_one")
+  no_setup
+
+rows_c1zzzi = text/concat rows_c1zzzh [typeset_behind]
+
+rows_c = text/concat rows_c1zzzi [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

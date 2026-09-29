@@ -4121,6 +4121,7 @@ fn check_constants(program: &Program, diags: &mut Vec<Diagnostic>) {
 /// is the later arm and the order of the reports is the order of the source.
 fn check_overlapping_arms(program: &Program, diags: &mut Vec<Diagnostic>) {
     let real: Vec<&FnDecl> = program.fns.iter().filter(|d| !d.synthetic).collect();
+    let mut flat = None;
     for (i, later) in real.iter().enumerate() {
         let clashes = real[..i].iter().any(|earlier| {
             earlier.name == later.name
@@ -4133,8 +4134,65 @@ fn check_overlapping_arms(program: &Program, diags: &mut Vec<Diagnostic>) {
                 format!("overlapping overloads of `{}` are illegal", later.name),
                 later.span,
             ));
+            continue;
+        }
+        let covered = real[..i].iter().find_map(|earlier| {
+            if earlier.name != later.name || earlier.params.len() != later.params.len() {
+                return None;
+            }
+            typeset_covers(program, &mut flat, &earlier.params, &later.params)
+        });
+        if let Some((narrow, wide, same)) = covered {
+            let why = match same {
+                true => format!(
+                    "`{narrow}` and `{wide}` hold the same types, and the arm for `{wide}` \
+                     comes first, so this arm can never run"
+                ),
+                false => format!(
+                    "every member of `{narrow}` is a member of `{wide}`, and the arm for \
+                     `{wide}` comes first, so this arm can never run; put it above that one"
+                ),
+            };
+            diags.push(Diagnostic::new("dispatch", why, later.span));
         }
     }
+}
+
+/// Whether an earlier arm takes every value a later one does because a typeset
+/// it names holds every member of the later arm's typeset, the other parameters
+/// being the same shape. Two typeset arms rank alike, so the one written first
+/// wins wherever both match. An arm naming a member type is not caught here: it
+/// ranks above any typeset and runs whatever the order. Answers the later and
+/// earlier typeset names, and whether the two hold the same members.
+fn typeset_covers<'a>(
+    program: &Program,
+    flat: &mut Option<crate::hash::Map<String, Vec<String>>>,
+    earlier: &'a [Pattern],
+    later: &'a [Pattern],
+) -> Option<(&'a str, &'a str, bool)> {
+    let is_set = |ty: &str| program.types.iter().any(|t| t.name == ty && !t.members.is_empty());
+    let mut found = None;
+    for (e, l) in earlier.iter().zip(later) {
+        if same_shape(std::slice::from_ref(e), std::slice::from_ref(l)) {
+            continue;
+        }
+        let (Pattern::Annotated { ty: wide, .. }, Pattern::Annotated { ty: narrow, .. }) = (e, l)
+        else {
+            return None;
+        };
+        if found.is_some() || !is_set(wide) || !is_set(narrow) {
+            return None;
+        }
+        let sets = flat.get_or_insert_with(|| program.flat_typesets());
+        let (Some(w), Some(n)) = (sets.get(wide.as_str()), sets.get(narrow.as_str())) else {
+            return None;
+        };
+        if !n.iter().all(|m| w.contains(m)) {
+            return None;
+        }
+        found = Some((narrow.as_str(), wide.as_str(), w.iter().all(|m| n.contains(m))));
+    }
+    found
 }
 
 fn check_overload_ranks(program: &Program, diags: &mut Vec<Diagnostic>) {

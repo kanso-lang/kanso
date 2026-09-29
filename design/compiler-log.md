@@ -18513,3 +18513,21 @@ all binders as the annotation of its type. The error fixture
 nothing on the old checker. The row "an annotation and its constructor read as
 two shapes" puts the old reading back and turns it red. No program in lib, kq,
 vse or kanso-json changes its verdict.
+
+## 2026-09-28 — a typeset arm behind a wider one is refused
+
+Two arms that name typesets rank alike, so wherever both match, every engine
+runs the one written first. When every member of the later arm's typeset is a
+member of the earlier one's, the later arm can never run, and nothing said so.
+With `type wide id tag word` and `type narrow id word`, an arm for `wide`
+above an arm for `narrow` passed `kanso check`, and all three engines sent an
+`id` to `wide`. Written the other way round, both arms run. The overlap check
+now asks, of two arms whose other parameters are the same shape, whether the
+earlier typeset holds every member of the later one, reading both through
+their nested typesets. When the two hold the same members the message says
+so; otherwise it says to put the narrower arm first. An arm naming a member
+type is left alone: `_:id` ranks above any typeset and runs whatever the
+order, and a one-member `type short id` is a subtype, which ranks the same
+way. The error fixture `a_typeset_arm_behind_a_wider_one` reported nothing on
+the old checker, and the row "a typeset arm left behind a wider one" turns it
+red. No program in lib, kq, vse or kanso-json changes its verdict.
