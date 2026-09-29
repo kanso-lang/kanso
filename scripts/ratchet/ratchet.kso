@@ -4095,7 +4095,54 @@ eq_nested = row
 
 rows_c1zzzzf = text/concat rows_c1zzzz [eq_partial eq_nested]
 
-rows_c = text/concat rows_c1zzzzf [itself]
+# `math/round` answers `none` for NaN and the infinities on every engine,
+# `math/round!` answers a failure in its box, and a call passing an int is
+# typed int alone (ruled 2026-09-29). Each row puts one of the five back.
+round_native = row
+  "a non-finite float rounded to zero natively"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_non_finite_float_rounded_to_zero_natively")
+  release
+
+round_oracle = row
+  "a non-finite float rounded to zero"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_non_finite_float_rounded_to_zero")
+  release
+
+round_typed = row
+  "a rounded float typed as never none"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_rounded_float_typed_as_never_none")
+  no_setup
+
+round_per_call = row
+  "a rounded int typed by every caller"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_rounded_int_typed_by_every_caller")
+  no_setup
+
+round_insisted = row
+  "an insisted round answering zero"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "an_insisted_round_answering_zero")
+  release
+
+rounds = [round_native round_oracle round_typed round_per_call round_insisted]
+
+rows_c1zzzzm = text/concat rows_c1zzzzf rounds
+
+rows_c = text/concat rows_c1zzzzm [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

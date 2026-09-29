@@ -68,6 +68,7 @@ extra_css: /book/book.css
 <a href="#b-read_file"><code>os/read_file</code></a>
 <a href="#b-read_file-bang"><code>os/read_file!</code></a>
 <a href="#b-round"><code>math/round</code></a>
+<a href="#b-round-bang"><code>math/round!</code></a>
 <a href="#b-slice"><code>text/slice</code></a>
 <a href="#b-sleep"><code>time/sleep</code></a>
 <a href="#b-sqrt"><code>math/sqrt</code></a>
@@ -87,8 +88,12 @@ extra_css: /book/book.css
 <p>the numeric helpers live in <code>std/math</code>; the two parsers live in <code>std/text</code>, beside the rest of the string-to-value work.</p>
 
 <h3 id="b-round"><code>math/round</code></h3>
-<p class="builtin-sig"><code>math/round number → int</code></p>
-<p>rounds a float to the nearest integer, ties away from zero (<code>2.5</code> becomes <code>3</code>). an <code>int</code> passes through unchanged, so <code>math/round</code> is safe to call on a value you already believe is whole. a non-number argument is a runtime error.</p>
+<p class="builtin-sig"><code>math/round number → int | none</code></p>
+<p>rounds a float to the nearest integer, ties away from zero (<code>2.5</code> becomes <code>3</code>). NaN and the two infinities have no integer to round to, and ordinary arithmetic produces them, so for those three the answer is <code>none</code> and the caller's arm decides what it means. an <code>int</code> passes through unchanged and the checker types the call as <code>int</code> alone, so rounding a value you already know is whole owes no <code>none</code> arm. a non-number argument is a runtime error.</p>
+
+<h3 id="b-round-bang"><code>math/round!</code></h3>
+<p class="builtin-sig"><code>math/round! number → int effect</code></p>
+<p>the caller insisting the float is finite. the same rounding, answered in a box: <code>.&gt;</code> opens it, and a NaN or an infinity is a failure inside it, <code>round! takes a finite number</code>, rather than a <code>none</code>. it is the choice <code>xs[i]</code> and <code>xs[i]!</code> make over a missing position, made over a float with no integer.</p>
 
 <h3 id="b-sqrt"><code>math/sqrt</code></h3>
 <p class="builtin-sig"><code>math/sqrt number → float64</code></p>

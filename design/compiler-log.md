@@ -18965,3 +18965,68 @@ function. The meta welfare fell by that much and the floor comes down under
 the 2026-09-13 rule, since this is the interpreter keeping the rule native
 already kept.
 
+
+## 2026-09-29 — gavel: `math/round` answers `none` for NaN and the infinities, and `math/round!` insists
+
+Clay, on the ledger entry "What does `math/round` answer for NaN and the
+infinities?": neither listed option. The 2026-09-03 gavel "failures are for
+the exceptional; the bang chooses the channel" already decides it. NaN and
+the infinities are ordinary float values that ordinary arithmetic produces,
+so "there is no integer to round to" is an outcome a caller can anticipate,
+and an anticipated outcome is data. The entry's first option, an err on
+every engine, and the chat's advice both missed that ruling. Ruled:
+
+- `math/round x` answers `none` for NaN, `inf` and `-inf`, and the rounded
+  int otherwise. `none` rather than a named marker, because appendix B
+  already answers `none` where a question has no answer (the maximum of an
+  empty list), and the caller holds the input if it wants to know which of
+  the three it was.
+- `math/round! x` is the insisting form. It answers a box, as every bang
+  name does since the 2026-09-16 reversal, and a non-finite argument is a
+  failure inside it.
+- An int argument still passes through unchanged, and inference types a
+  call that passes one as `int` alone, so only calls on floats owe an arm
+  for the `none`.
+- Every engine answers the same. The saturating int64 answers and the 0
+  for NaN are gone.
+
+**Built the same day.** The interpreter's `round` answers `none` for a
+non-finite float, and so does `k_b_round`; the browser engine calls the
+interpreter's builtin. lib/math gains `round!`, `effect` over the rounded
+value, with an arm that turns the `none` into `err "round! takes a finite
+number, got nan"`.
+
+Typing the int case took a new piece of inference. `math/round` is a
+wrapper, `builtin_round x`, and a group's answer is the union over every
+caller, so one float caller handed its `none` to every int caller and
+`plus (math/round 7)` was refused beside `plus (math/round (x * 0.5))`. An
+arm whose body hands its parameters unchanged to `builtin_round` is now
+typed at each call by what that call passes, and inference records the
+calls whose own arguments rule out a `none`. The checker's none question
+reads that set before the group's table. `round` is the only builtin with
+the treatment, since it is the only one whose answer changes with what it
+is handed in a way the checker acts on.
+
+What the ruling's cost estimate expected and what the tree showed differ.
+The checker refuses a `none` handed to a group with no `none` arm; it does
+not refuse one at an operator, and a list literal may hold a `none`. So no
+call site in lib, the scripts, the benchmarks, the book's samples, kq or
+vse stops compiling: every `math/round` there feeds an operator, `sum`, a
+comparison or an interpolation. They now fail at run time on a non-finite
+float where they used to compute with an int64 end, and none of them can
+be handed one: the welfare scripts round finite products, kq's
+`two_places` rounds a timing ratio, and vse's `score_ballot` divides by
+`hi - lo`, which is the text "division by zero" before `round` sees it
+when the two are equal.
+
+The micro sample `round_answers_none_past_the_finite` pins both forms on
+the three inputs and on 2.5 and 7 across all three engines, and
+tests/a_float_past_int64_rounds_exactly.rs now expects `<none>` where it
+pinned the saturating answers. The error sample
+`a_rounded_float_handed_to_a_group_without_none` refuses the float call
+and accepts the int call beside it. Appendix B's `math/round` entry says
+`int | none` and gains a `math/round!` entry. Five ratchet rows, each
+watched red: "a non-finite float rounded to zero natively", "a non-finite
+float rounded to zero" (the interpreter), "a rounded float typed as never
+none", "a rounded int typed by every caller" and "an insisted round
+answering zero".
