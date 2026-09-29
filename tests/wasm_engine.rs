@@ -131,20 +131,22 @@ impl Toolchain {
         }
     }
 
-    /// Copy a string into the toolchain's heap, the way the page does.
+    /// Copy a string into the toolchain's heap, the way the page does. Every
+    /// pointer and length the engine answers is an i32 on the wire and an
+    /// unsigned address in memory, so each is read through `u32`.
     fn write(&mut self, text: &str) -> (i32, i32) {
         let len = text.len() as i32;
         let ptr = self.i32_call("kanso_alloc", &[Val::I32(len)]);
         let memory = self.memory();
         memory
-            .write(&mut self.store, ptr as usize, text.as_bytes())
+            .write(&mut self.store, ptr as u32 as usize, text.as_bytes())
             .expect("the allocation is writable");
         (ptr, len)
     }
 
     fn output(&mut self) -> String {
-        let ptr = self.i32_call("kanso_out_ptr", &[]) as usize;
-        let len = self.i32_call("kanso_out_len", &[]) as usize;
+        let ptr = self.i32_call("kanso_out_ptr", &[]) as u32 as usize;
+        let len = self.i32_call("kanso_out_len", &[]) as u32 as usize;
         let mut bytes = vec![0u8; len];
         self.memory().read(&self.store, ptr, &mut bytes).expect("the output buffer reads");
         String::from_utf8_lossy(&bytes).into_owned()
@@ -214,8 +216,8 @@ impl Toolchain {
         if status == 1 {
             return Answer::Declined(self.output());
         }
-        let ptr = self.i32_call("kanso_wasm_ptr", &[]) as usize;
-        let len = self.i32_call("kanso_wasm_len", &[]) as usize;
+        let ptr = self.i32_call("kanso_wasm_ptr", &[]) as u32 as usize;
+        let len = self.i32_call("kanso_wasm_len", &[]) as u32 as usize;
         let mut emitted = vec![0u8; len];
         self.memory().read(&self.store, ptr, &mut emitted).expect("the emitted module reads");
 
@@ -625,6 +627,30 @@ fn the_wasm_engine_complains_the_way_the_others_do() {
     }
     assert!(asked > 0, "no std function was asked for the wrong thing");
     println!("wasm: {asked} std complaints match native, {declined} declined by the backend");
+}
+
+/// A pointer the engine hands back is a wasm i32, and past two gibibytes its
+/// top bit is set. Read as signed, the output buffer of a program that ran
+/// fine lands at a negative offset and the page reads nothing. The random
+/// programs found it: the playground keeps every value a run makes until the
+/// next run, so one accumulator loop of twenty thousand pushes took memory to
+/// 3.2 GB, and the NEXT program's answer was the one that could not be read.
+/// Growing the memory first puts the allocator's next pages above the line
+/// without that cost, and a sixteen-megabyte answer has to be put there.
+#[test]
+fn an_answer_above_two_gibibytes_reads_back() {
+    let source = "import \"std/text\"\n\nfn doubled s 0\n  s\n\nfn doubled s n\n  \
+                  doubled (text/join [s s] \"\") (n - 1)\n\npub play = print (doubled \"ab\" 23)\n";
+    let mut toolchain = Toolchain::load();
+    let pages = toolchain.memory().size(&toolchain.store);
+    let above = (1u64 << 31) / 65536 + 16;
+    toolchain.memory().grow(&mut toolchain.store, above - pages).expect("the memory grows");
+    let Answer::Ran(code, text) = toolchain.run("above.kso", source) else {
+        panic!("the program did not run on wasm");
+    };
+    assert_eq!(code, 0, "{}", &text[..text.len().min(200)]);
+    assert_eq!(text.len(), 2 * (1 << 23) + 1, "the answer came back cut");
+    assert!(text.ends_with("abab\n"), "the answer came back wrong");
 }
 
 impl Toolchain {

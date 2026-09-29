@@ -168,13 +168,13 @@ async function loadWasm() {
 
 function writeInput(text) {
   const bytes = new TextEncoder().encode(text);
-  const ptr = wasm.kanso_alloc(bytes.length);
+  const ptr = wasm.kanso_alloc(bytes.length) >>> 0;
   new Uint8Array(wasm.memory.buffer, ptr, bytes.length).set(bytes);
   return { ptr, len: bytes.length };
 }
 
 function readOut() {
-  const out = new Uint8Array(wasm.memory.buffer, wasm.kanso_out_ptr(), wasm.kanso_out_len());
+  const out = new Uint8Array(wasm.memory.buffer, wasm.kanso_out_ptr() >>> 0, wasm.kanso_out_len() >>> 0);
   return new TextDecoder().decode(out);
 }
 
@@ -200,7 +200,7 @@ async function runCompiled(src, compileFn) {
   const status = compileFn(ptr, len, tailCalls ? 1 : 0);
   if (status === 2) return { code: 1, text: readOut(), engine: 'error' };
   if (status === 1) return null;
-  const bytes = new Uint8Array(wasm.memory.buffer, wasm.kanso_wasm_ptr(), wasm.kanso_wasm_len()).slice();
+  const bytes = new Uint8Array(wasm.memory.buffer, wasm.kanso_wasm_ptr() >>> 0, wasm.kanso_wasm_len() >>> 0).slice();
   let instance;
   try {
     ({ instance } = await WebAssembly.instantiate(bytes, { env: rtImports() }));
