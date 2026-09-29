@@ -4007,6 +4007,28 @@ part_browser = row
 
 rows_c1zzzx = text/concat rows_c1zzzw [part_closure part_entered part_browser]
 
+# A record of an int and a value crosses a call in two words, the int above
+# the value's tag. Until 2026-09-29 the int came back through a logical shift
+# and every int was packed, so a negative one read as 2^56 plus it and one
+# past 56 bits lost its top byte.
+packed_sign = row
+  "a packed int read back unsigned"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_packed_int_read_back_unsigned")
+  release
+
+packed_wide = row
+  "a wide int packed anyway"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_wide_int_packed_anyway")
+  release
+
+rows_c1zzzy = text/concat rows_c1zzzx [packed_sign packed_wide]
+
 # Equality refuses a function wherever the walk meets one, a partial among
 # them. The interpreter answered false for a partial and for a function in a
 # list, where native refused.
@@ -4026,7 +4048,7 @@ eq_nested = row
   (breaking "a_function_in_a_list_compared")
   no_setup
 
-rows_c1zzzzf = text/concat rows_c1zzzx [eq_partial eq_nested]
+rows_c1zzzzf = text/concat rows_c1zzzy [eq_partial eq_nested]
 
 rows_c = text/concat rows_c1zzzzf [itself]
 

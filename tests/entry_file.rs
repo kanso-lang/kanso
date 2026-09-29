@@ -342,3 +342,38 @@ fn a_subtype_survives_being_stored_across_the_entry() {
     );
     assert_eq!(interp, native, "the engines disagree on a stored subtype");
 }
+
+/// A record of an int and one other value crosses a call in two words, and the
+/// entry is where it is built back into an ordinary record. The shift that
+/// reads the int back was logical and an int has 64 bits where 56 are left
+/// above the tag, so `at 0` read as 2^56 - 8 and the least int read as 0. The
+/// middle record sits on the first int that does not fit.
+#[test]
+fn a_packed_record_keeps_its_int_across_the_entry() {
+    let fixture = "tests/golden/entryfile/a_packed_record_across_the_entry";
+    let answer = |engine: &[&str]| {
+        let done = Command::new(env!("CARGO_BIN_EXE_kanso"))
+            .arg("run")
+            .arg(fixture)
+            .args(engine)
+            .current_dir(env!("CARGO_MANIFEST_DIR"))
+            .output()
+            .expect("kanso runs");
+        (
+            String::from_utf8_lossy(&done.stdout).into_owned(),
+            String::from_utf8_lossy(&done.stderr).into_owned(),
+        )
+    };
+
+    let (native, complaint) = answer(&[]);
+    let (interp, _) = answer(&["--interp"]);
+
+    assert_eq!(complaint, "", "native refused a packed record");
+    assert_eq!(
+        native,
+        "spot/pt -8 \"a\" spot/pt 36028797018963968 \"a\" spot/pt -9223372036854775808 \"a\"\n\
+         -7 0 -9223372036854775808\n\
+         [spot/pt -8 \"a\" spot/pt 36028797018963968 \"a\" spot/pt -9223372036854775808 \"a\"]\n"
+    );
+    assert_eq!(interp, native, "the engines disagree on a packed record");
+}

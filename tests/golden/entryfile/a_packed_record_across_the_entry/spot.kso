@@ -1,0 +1,15 @@
+# A record of an int and one other value can cross a call in two words: the
+# int shifted above the value's tag in the first, the value's payload in the
+# second. `pt` qualifies because nothing here does anything with one but
+# build it in tail position and take it apart in a pattern.
+#
+# The entry holds the records, and that is where each is built back into an
+# ordinary record from its two words. Until 2026-09-29 the shift back was
+# logical, so `at 0` came out as 2^56 - 8, and an int past 56 bits lost its
+# top byte.
+pub type pt
+  n
+  s
+
+pub fn at x:int
+  pt (x - 8) "a"

@@ -1266,6 +1266,9 @@ declare %KValue @k_pair_failure(%KValue, %KValue)
 declare %KValue @k_rec_reuse(i64, i64, ptr, %KValue)
 declare %KValue @k_parsed_box(i64, i64, i64)
 declare %KValue @k_parsed_words(%KValue)
+declare %KValue @k_parsed_spill(i64, i64, i64, i64)
+declare i64 @k_parsed_wide_int(i64)
+declare %KValue @k_parsed_wide_value(i64)
 declare %KValue @k_concat_arr_mut(i64, ptr)
 declare %KValue @k_b_str_builder(%KValue)
 declare %KValue @k_field(%KValue, i64)
@@ -4757,6 +4760,79 @@ fn assume_length(f: &mut FnEmit, len: &str) {
     f.line(&format!("call void @llvm.assume(i1 {ok})"));
 }
 
+/// The low byte of a `%parsed` first word that holds no value's tag: the int
+/// did not fit above the tag, and the second word is the record on the heap.
+/// `K_PARSED_WIDE` in the runtime.
+const PARSED_WIDE: i64 = 255;
+
+/// Pack an int and a value into a `%parsed`'s two words: the int above the
+/// value's tag in the first, the value's payload in the second. An int that
+/// does not survive the shift and back is spilled, so the record is built on
+/// the heap and crosses as `PARSED_WIDE` over its pointer.
+fn pack_words(f: &mut FnEmit, id: i64, pos: &str, value: &str) -> (String, String) {
+    let n = f.tmp();
+    f.line(&format!("{n} = extractvalue %KValue {pos}, 1"));
+    let shifted = f.tmp();
+    f.line(&format!("{shifted} = shl i64 {n}, 8"));
+    let back = f.tmp();
+    f.line(&format!("{back} = ashr i64 {shifted}, 8"));
+    let fits = f.tmp();
+    f.line(&format!("{fits} = icmp eq i64 {back}, {n}"));
+    let vtag = f.tmp();
+    f.line(&format!("{vtag} = extractvalue %KValue {value}, 0"));
+    let vpay = f.tmp();
+    f.line(&format!("{vpay} = extractvalue %KValue {value}, 1"));
+    let packed = f.tmp();
+    f.line(&format!("{packed} = or i64 {shifted}, {vtag}"));
+    let from = f.cur_label.clone();
+    let (wide, join) = (f.label(), f.label());
+    f.line(&format!("br i1 {fits}, label %{join}, label %{wide}"));
+    f.start_block(&wide);
+    let spilled = f.tmp();
+    f.line(&format!(
+        "{spilled} = call %KValue @k_parsed_spill(i64 {id}, i64 {n}, i64 {vtag}, i64 {vpay})"
+    ));
+    let (s0, s1) = (f.tmp(), f.tmp());
+    f.line(&format!("{s0} = extractvalue %KValue {spilled}, 0"));
+    f.line(&format!("{s1} = extractvalue %KValue {spilled}, 1"));
+    f.line(&format!("br label %{join}"));
+    f.start_block(&join);
+    let (w0, w1) = (f.tmp(), f.tmp());
+    f.line(&format!("{w0} = phi i64 [ {packed}, %{from} ], [ {s0}, %{wide} ]"));
+    f.line(&format!("{w1} = phi i64 [ {vpay}, %{from} ], [ {s1}, %{wide} ]"));
+    (w0, w1)
+}
+
+/// Read a `%parsed`'s two words back as the int, the value's tag and the
+/// value's payload. The shift is arithmetic, so a negative int keeps its sign,
+/// and a spilled record is read off the heap.
+fn unpack_words(f: &mut FnEmit, w0: &str, w1: &str) -> (String, String, String) {
+    let low = f.tmp();
+    f.line(&format!("{low} = and i64 {w0}, 255"));
+    let spilled = f.tmp();
+    f.line(&format!("{spilled} = icmp eq i64 {low}, {PARSED_WIDE}"));
+    let n = f.tmp();
+    f.line(&format!("{n} = ashr i64 {w0}, 8"));
+    let from = f.cur_label.clone();
+    let (wide, join) = (f.label(), f.label());
+    f.line(&format!("br i1 {spilled}, label %{wide}, label %{join}"));
+    f.start_block(&wide);
+    let wn = f.tmp();
+    f.line(&format!("{wn} = call i64 @k_parsed_wide_int(i64 {w1})"));
+    let wv = f.tmp();
+    f.line(&format!("{wv} = call %KValue @k_parsed_wide_value(i64 {w1})"));
+    let (wt, wp) = (f.tmp(), f.tmp());
+    f.line(&format!("{wt} = extractvalue %KValue {wv}, 0"));
+    f.line(&format!("{wp} = extractvalue %KValue {wv}, 1"));
+    f.line(&format!("br label %{join}"));
+    f.start_block(&join);
+    let (pn, pt, pp) = (f.tmp(), f.tmp(), f.tmp());
+    f.line(&format!("{pn} = phi i64 [ {n}, %{from} ], [ {wn}, %{wide} ]"));
+    f.line(&format!("{pt} = phi i64 [ {low}, %{from} ], [ {wt}, %{wide} ]"));
+    f.line(&format!("{pp} = phi i64 [ {w1}, %{from} ], [ {wp}, %{wide} ]"));
+    (pn, pt, pp)
+}
+
 /// Whether a value is not a failure, as one compare of its tag against the
 /// err tag.
 fn inline_not_failure(f: &mut FnEmit, value: &str) -> String {
@@ -6668,9 +6744,7 @@ impl<'a> Backend<'a> {
                 f.line(&format!("{w0} = extractvalue %KValue {status}, 0"));
                 let w1 = f.tmp();
                 f.line(&format!("{w1} = extractvalue %KValue {status}, 1"));
-                // field 0: the position, unshifted out of the tag word.
-                let posp = f.tmp();
-                f.line(&format!("{posp} = lshr i64 {w0}, 8"));
+                let (posp, vtag, w1) = unpack_words(f, &w0, &w1);
                 let posa = f.tmp();
                 f.line(&format!("{posa} = insertvalue %KValue undef, i64 0, 0"));
                 let poskv = f.tmp();
@@ -6678,9 +6752,6 @@ impl<'a> Backend<'a> {
                 // The position is an int whatever the word held, so its
                 // pattern has no failure to refuse.
                 self.emit_pattern_known(f, &poskv, &fields[0], fail, TOP & !FAIL)?;
-                // field 1: the value, its tag masked back out of the low byte.
-                let vtag = f.tmp();
-                f.line(&format!("{vtag} = and i64 {w0}, 255"));
                 let va = f.tmp();
                 f.line(&format!("{va} = insertvalue %KValue undef, i64 {vtag}, 0"));
                 let vkv = f.tmp();
@@ -6773,21 +6844,12 @@ impl<'a> Backend<'a> {
         self.bail_on_failure(f, &pos);
         let value = self.emit_expr(f, &args[1])?;
         self.bail_on_failure(f, &value);
-        let pos_payload = f.tmp();
-        f.line(&format!("{pos_payload} = extractvalue %KValue {pos}, 1"));
-        let shifted = f.tmp();
-        f.line(&format!("{shifted} = shl i64 {pos_payload}, 8"));
-        let vtag = f.tmp();
-        f.line(&format!("{vtag} = extractvalue %KValue {value}, 0"));
-        let w0 = f.tmp();
-        f.line(&format!("{w0} = or i64 {shifted}, {vtag}"));
-        let w1 = f.tmp();
-        f.line(&format!("{w1} = extractvalue %KValue {value}, 1"));
+        let pid = self.type_ids[ty];
+        let (w0, w1) = pack_words(f, pid, &pos, &value);
         let a = f.tmp();
         f.line(&format!("{a} = insertvalue %parsed undef, i64 {w0}, 0"));
         let p = f.tmp();
         f.line(&format!("{p} = insertvalue %parsed {a}, i64 {w1}, 1"));
-        let pid = self.type_ids[ty];
         f.record_parsed(&p, ty, pid);
         Ok(p)
     }
@@ -6800,20 +6862,16 @@ impl<'a> Backend<'a> {
     /// evaluated and two failures merge, the way two failing operands of an
     /// operator do. Bailing on the first one skipped the second field
     /// entirely and handed back one reason where the oracle carried two.
-    fn emit_parsed_construction(&mut self, f: &mut FnEmit, args: &[Expr]) -> Result<(), String> {
+    fn emit_parsed_construction(
+        &mut self,
+        f: &mut FnEmit,
+        ty: &str,
+        args: &[Expr],
+    ) -> Result<(), String> {
         let pos = self.emit_expr(f, &args[0])?;
         let value = self.emit_expr(f, &args[1])?;
         self.bail_on_pair_failure(f, &pos, &value);
-        let pos_payload = f.tmp();
-        f.line(&format!("{pos_payload} = extractvalue %KValue {pos}, 1"));
-        let shifted = f.tmp();
-        f.line(&format!("{shifted} = shl i64 {pos_payload}, 8"));
-        let vtag = f.tmp();
-        f.line(&format!("{vtag} = extractvalue %KValue {value}, 0"));
-        let w0 = f.tmp();
-        f.line(&format!("{w0} = or i64 {shifted}, {vtag}"));
-        let w1 = f.tmp();
-        f.line(&format!("{w1} = extractvalue %KValue {value}, 1"));
+        let (w0, w1) = pack_words(f, self.type_ids[ty], &pos, &value);
         let a = f.tmp();
         f.line(&format!("{a} = insertvalue %parsed undef, i64 {w0}, 0"));
         let p = f.tmp();
@@ -7984,7 +8042,7 @@ impl<'a> Backend<'a> {
                 // by-value %parsed result directly — no heap allocation.
                 if let Some(&nfields) = self.escape.field_count.get(name.as_str()) {
                     if f.ret_ty == "%parsed" && args.len() == nfields {
-                        return self.emit_parsed_construction(f, args);
+                        return self.emit_parsed_construction(f, name, args);
                     }
                 }
                 // A demoted tail entry: emitted as a plain call so the
