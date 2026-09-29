@@ -1,0 +1,17 @@
+# A record that names a field twice was refused only as two overlapping arms
+# of `Get_a`, the reader the compiler writes for the field, which is a name no
+# program can spell. A typeset that names a member twice passed in silence.
+# Found on 2026-09-29 while probing declarations.
+type pt
+  a
+  a
+
+type both int int
+
+fn size (pt x y)
+  "{x} {y}"
+
+fn size _
+  "other"
+
+pub play = print (size (pt 1 2))

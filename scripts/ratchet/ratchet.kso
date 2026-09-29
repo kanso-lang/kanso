@@ -3851,7 +3851,30 @@ below_wider = row
 
 rows_c1zzzm = text/concat rows_c1zzzl [below_wider]
 
-rows_c = text/concat rows_c1zzzm [itself]
+# A record naming a field twice. Unchecked, the only report left is about the
+# field's internal reader, and the overlap check keeps quiet about readers.
+field_twice = row
+  "a field declared twice left to its reader"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_field_declared_twice_left_to_its_reader")
+  no_setup
+
+rows_c1zzzn = text/concat rows_c1zzzm [field_twice]
+
+# A typeset naming a member twice passes `kanso check` when nothing asks.
+member_twice = row
+  "a typeset member named twice left unchecked"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_typeset_member_named_twice_left_unchecked")
+  no_setup
+
+rows_c1zzzo = text/concat rows_c1zzzn [member_twice]
+
+rows_c = text/concat rows_c1zzzo [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

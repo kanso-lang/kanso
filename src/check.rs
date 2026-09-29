@@ -3912,6 +3912,31 @@ fn check_annotation_names(program: &Program, declared: TypeNames, diags: &mut Ve
         }
     }
 
+    // A record that names a field twice has two readers of one name, and the
+    // only thing that ever said so was the overlap check, about two arms of a
+    // reader whose name no program can spell. A typeset that names a member
+    // twice was passed over in silence.
+    for ty in &program.types {
+        for (at, (field, _, span)) in ty.fields.iter().enumerate() {
+            if ty.fields[..at].iter().any(|(earlier, _, _)| earlier == field) {
+                diags.push(Diagnostic::new(
+                    "type",
+                    format!("`{}` declares the field `{field}` twice", ty.name),
+                    *span,
+                ));
+            }
+        }
+        for (at, member) in ty.members.iter().enumerate() {
+            if ty.members[..at].contains(member) {
+                diags.push(Diagnostic::new(
+                    "type",
+                    format!("`{}` names `{member}` twice", ty.name),
+                    ty.span,
+                ));
+            }
+        }
+    }
+
     // A typeset may hold another typeset, and every engine reads the inner
     // one's members through it. One that reaches itself that way names no
     // set at all: the interpreter asked its members forever and overflowed
@@ -4132,7 +4157,9 @@ fn check_overlapping_arms(program: &Program, diags: &mut Vec<Diagnostic>) {
     let mut found: Vec<(usize, Diagnostic)> = Vec::new();
     let groups =
         real.chunk_by(|(_, a), (_, b)| a.name == b.name && a.params.len() == b.params.len());
-    for group in groups.filter(|g| g.len() > 1) {
+    // A field's reader overlaps itself only when a record names the field
+    // twice, which the type check reports in the reader's own words.
+    for group in groups.filter(|g| g.len() > 1 && getter_field(&g[0].1.name).is_none()) {
         for (g, &(at, later)) in group.iter().enumerate() {
             let earlier = || group[..g].iter().map(|&(_, d)| d);
             if earlier().any(|e| same_shape(&e.params, &later.params)) {
@@ -4313,7 +4340,10 @@ fn typeset_covers<'a>(
 
 fn check_overload_ranks(program: &Program, diags: &mut Vec<Diagnostic>) {
     for pair in program.fns.windows(2) {
-        if pair[0].name != pair[1].name || pair[0].params.len() != pair[1].params.len() {
+        if pair[0].name != pair[1].name
+            || pair[0].params.len() != pair[1].params.len()
+            || getter_field(&pair[0].name).is_some()
+        {
             continue;
         }
         let prev: Vec<u8> = pair[0].params.iter().map(Pattern::rank).collect();

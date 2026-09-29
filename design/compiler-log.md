@@ -18613,3 +18613,18 @@ literal above it, so those pairs are left to the ranking rule. One exception:
 one and reported nothing on the old checker. The row "an arm below one that
 takes it left unchecked" turns it red. No program in lib, kq, vse or
 kanso-json changes its verdict.
+
+## 2026-09-29 — a type that names something twice is refused in its own words
+
+A record that names a field twice was refused, but only by the overlap check,
+which reported overlapping overloads of `Get_a`. `Get_a` is
+the reader the compiler writes for the field `a`, and no program can spell it.
+A typeset that names a member twice, `type both int int`, passed in silence.
+The type check now says that `pt` declares the field `a` twice, at the second
+field, and that `both` names `int` twice, at the typeset. The overlap checks
+leave the field readers alone, since a record naming a field twice is the only
+way two of them can overlap. The error fixture
+`a_name_declared_twice_in_a_type` holds both and reported only the reader's
+overlap on the old checker. The rows "a field declared twice left to its
+reader" and "a typeset member named twice left unchecked" each turn it red.
+No program in lib, kq, vse or kanso-json changes its verdict.
