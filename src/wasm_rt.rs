@@ -187,12 +187,18 @@ const MASKED: i32 = -1000;
 
 /// Every count a callee answers to, smallest first â the interpreter's
 /// `arities_of`. A lambda answers its one count, a wrapper the mask it was
-/// handed, and anything else â a partial, a cell, a value that is not
-/// callable â nothing, which is what makes a partial over it grow.
+/// handed, a partial its callee's counts less what it holds, and anything
+/// else â a cell, a value that is not callable â nothing, which is what
+/// makes a partial over it grow.
 fn arities_of(callee: u32) -> Vec<usize> {
-    let Slot::C { arity, .. } = closure_slot(callee) else { return Vec::new() };
+    let Slot::C { arity, env, .. } = closure_slot(callee) else { return Vec::new() };
     if arity >= 0 {
         return vec![arity as usize];
+    }
+    if arity == PARTIAL {
+        let Slot::E(held) = slot(env) else { return Vec::new() };
+        let n = held.len() - 1;
+        return arities_of(held[0]).into_iter().filter(|a| *a >= n).map(|a| a - n).collect();
     }
     if arity > MASKED {
         return Vec::new();

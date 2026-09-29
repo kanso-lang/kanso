@@ -18905,3 +18905,38 @@ lib and the benchmarks hold no partials, so no runtime row can move. The micro
 sample `a_partial_widens_its_group` printed the address on the old compiler.
 The row "a partial leaving its group narrow" takes the widening back out and
 turns the micro corpus red on both native builds.
+
+## 2026-09-29 — a partial over a partial runs when it is full
+
+`h = &g p` holds one of `g`'s three arguments and `&h 3` holds one more, so
+`(&h 3) 1` has all three. The interpreter decides whether a partial is full by
+asking its callee how many arguments it takes, and a partial answered nothing,
+so it wrapped the three in a third partial and printed `<fn>`. Native ran
+`g p 3 1` and printed 6, and `h 3 1` printed 6 on both. A partial now answers
+its callee's arities less what it holds. Probing partials by hand after the
+held-err fix found it, and it predates that fix.
+
+The native and browser runtimes keep a partial over a value as a closure with
+no body, and they ask its callee the same question. Their comments said a
+partial over a partial answers nothing because the interpreter's `arities_of`
+did. So once the interpreter answered, `s = &k` over `k = &h 3` printed 6 at
+`s 1` on the interpreter and `<fn>` on both native builds. `k_callee_arity` in
+the runtime and `arities_of` in the browser's host now answer a partial the
+same way.
+
+The micro sample `a_partial_over_a_partial_runs_when_full` finishes one bound,
+one written in place and one wrapped in a partial holding nothing, and keeps a
+partial of two in three as a function. The old interpreter printed `<fn>` for
+all four, and old native printed `<fn>` for the wrapped one. The rows "a
+partial over a partial taking nothing", "a native partial answering nothing"
+and "a browser partial answering nothing" each put one engine's answer back,
+and each turns its corpus red.
+
+CI measured what the native runtime's extra branch costs. Release codegen rose
+114,479 to 408,187,514 in `codegen_instructions_release`, and dev codegen rose
+3,832 to 124,465,602 in `codegen_instructions_dev`, since `k_callee_arity` is
+runtime C that every build compiles. `work_runbench` rose 201 to 1,088,404,896.
+Emitting fell 335 and every benchmark's text shrank 480 bytes. The meta welfare
+fell by 0.00006, and the floor comes down by that much under the 2026-09-13
+rule, because this is the language answering the same on every engine.
+
