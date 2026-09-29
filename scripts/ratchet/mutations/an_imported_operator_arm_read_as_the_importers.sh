@@ -9,7 +9,7 @@
 # sibling_types' arm fixtures both stop at the check.
 set -e
 f=src/check.rs
-grep -q "fn imported_arm" "$f"
+grep -q "fn imported_arm" src/check.rs
 line='    qualified && !local'
 [ "$(grep -cxF "$line" "$f")" -eq 1 ] || {
   echo "the imported-arm pattern test moved; this mutation needs rewriting" >&2
