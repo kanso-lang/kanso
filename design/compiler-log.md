@@ -18648,3 +18648,11 @@ the read is in. `kanso check` of the library alone still passes it, since that
 path has no readers yet; the corpus stages every fixture as an import, which
 is where the refusal is made. The fixture `a_field_read_of_a_list` and the row
 "a field read named by its reader" pin it.
+
+CI measured the head. `compile_instructions` rose to 25,068,833 (+4,869), the
+cost of asking each type for a repeated name. `entry_instructions` fell to
+82,812,480 (-8,414) and `library_instructions` to 83,306,236 (-8,331), and
+`compile_allocs` fell to 14,306 and `interp_allocs` to 895,189, two each.
+Which of the three changes the falls came from has not been isolated. The run
+rows and the text did not move. Welfare rose from 90.40601 to 90.40603 and the
+floor holds it.
