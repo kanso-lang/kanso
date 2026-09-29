@@ -5230,7 +5230,10 @@ fn values_equal_seen(
     // one outside it, and it is refused the same way rather than answered
     // false. Until 2026-09-29 only the operands themselves were asked, so
     // `[k] == [k]` answered false on the interpreter where native refused.
-    if opaque_to_equality(a) || opaque_to_equality(b) {
+    // A browser table function is a function by this point: a lazy one is a
+    // cell, and the cell was forced above.
+    let host_fn = |v: &Value| matches!(v, Value::TableFn(_));
+    if opaque_to_equality(a) || opaque_to_equality(b) || host_fn(a) || host_fn(b) {
         return Err(RuntimeError { message: EQUALITY_REFUSED.to_string(), span });
     }
     let answer = match (a, b) {

@@ -18830,8 +18830,9 @@ operands and nothing else, and its list of functions left out partials. So
 Native refused both, at any depth. The interpreter's list now includes
 partials, and its equality walk refuses on reaching a function inside a list,
 a map or a record, as it does at the top. The browser's host keeps a lazy
-value as a table function too, so its table functions stay off the list and
-are left for the walk to force first.
+value as a table function too, so its table functions stay off the list. The
+walk forces cells before it asks, and past that point a table function is a
+function, so the walk refuses it there.
 
 The generated-program differential found it in batch 106, at seed 327553,
 where native refused a comparison of a partial and the interpreter answered
