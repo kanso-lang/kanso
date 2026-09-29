@@ -4,12 +4,24 @@
 use crate::eval::{render, Executor, Interp, Value};
 use crate::repl::{Outcome, Session};
 use std::cell::RefCell;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 thread_local! {
     static SESSION: RefCell<Session> = RefCell::new(Session::new());
     static OUT: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
     static FILE: RefCell<String> = RefCell::new("playground".to_string());
     static RNG: RefCell<crate::eval::Rng> = RefCell::new(crate::eval::Rng::seeded());
+}
+
+/// Set by the allocator when the page could not grow for an allocation. The
+/// abort that follows is a trap like a stack overflow, and without this the
+/// two read the same: thirty-two thousand pushes that filled four gibibytes
+/// reported that recursion had gone too deep.
+static OUT_OF_MEMORY: AtomicBool = AtomicBool::new(false);
+
+/// Called by the allocator on an allocation it could not make.
+pub fn note_out_of_memory() {
+    OUT_OF_MEMORY.store(true, Ordering::Relaxed);
 }
 
 fn current_file() -> String {
@@ -254,10 +266,15 @@ pub extern "C" fn kanso_exec_main(h: u32) -> i32 {
 pub extern "C" fn kanso_take_rt_error() {
     let message = crate::wasm_rt::take_error();
     if message.is_empty() {
-        // a trap nothing recorded: the stack is the one resource compiled
-        // code exhausts without a chance to say so — the same translation
-        // native's parent makes from the child's SIGSEGV
-        set_out(&format!("{}\n", crate::stack_exhausted()));
+        // a trap nothing recorded. Two resources run out without a chance
+        // to say so: the stack, the same translation native's parent makes
+        // from the child's SIGSEGV, and memory, where an allocation the page
+        // could not grow for aborts after the allocator has noted it.
+        let said = match OUT_OF_MEMORY.swap(false, Ordering::Relaxed) {
+            true => "error[runtime]: the program ran out of memory".to_string(),
+            false => crate::stack_exhausted(),
+        };
+        set_out(&format!("{said}\n"));
         return;
     }
     set_out(&format!("error[runtime]: {message}\n"));

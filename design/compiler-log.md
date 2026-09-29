@@ -19346,3 +19346,72 @@ accumulator loop on the browser engine holds every list it built, so memory
 grows with the square of the loop where native grows with the loop. That is the
 wasm runtime having no collection inside a run, and it bounds how large a
 program the playground can take.
+
+## 2026-09-29 — the browser engine extends an accumulator where it stands
+
+The previous entry left the registry's cost standing: an accumulator loop on the
+browser engine held every list it built. The random programs then found where
+that ends. Eight of two hundred programs answered `error[runtime]: the program
+ran out of stack` on wasm and ran to completion on native, and all eight built a
+list by `push` in a loop of seventy thousand or more. Tail calls were not the
+cause. The loop reaches itself through `return_call`, and a loop that adds ints
+seventy thousand times ran fine.
+
+Measured on the toolchain in `tests/`, the pages a `push` loop left behind:
+
+    pushes    before     after
+     2,000       510        24
+     4,000     1,977        27
+     8,000     7,842        35
+    16,000    31,290        49
+    32,000    65,534        76
+
+Doubling the loop quadrupled the memory. At thirty-two thousand it reached the
+four gibibytes a wasm32 memory can address, and the program failed there.
+
+`rt_builtin` hands a builtin its arguments by value out of the handle registry,
+and the registry keeps its own copy until the next run. So a `push` always found
+a second holder, `taken_to_grow` copied the list, and the copy it was handed
+stayed in the registry. The interpreter and native avoid the copy at the sites
+`linear::in_place_pushes` proves nobody reads again, and the browser backend
+never asked that question. It asks now. At a proven `push`, `put` or `append`
+the call goes to `rt_builtin_mut`, which moves the container out of its handle
+and leaves an empty one of the same kind, as the interpreter leaves one in a
+binding it takes. The builtin is then the only holder and extends the container
+in place. A container another handle also holds still has a second owner and
+still copies.
+
+The failure's wording was a second defect. An unrecorded trap was always
+reported as a stack overflow, because the stack was assumed to be the only
+resource compiled code exhausts without a chance to say so. Memory is the other:
+the allocator gets null from a page that cannot grow, and the abort that follows
+records nothing. The allocator in `src/main.rs`, which is the one the
+playground's module carries, now sets a flag on wasm32 when it hands back null,
+and `kanso_take_rt_error` answers `error[runtime]: the program ran out of
+memory` when the flag is set.
+
+`an_accumulator_grows_where_it_stands` runs thirty-two thousand pushes and
+thirty-two thousand puts and asks for the right count from each.
+`a_program_that_runs_out_of_memory_says_so` grows the page to sixteen mebibytes
+short of the ceiling and doubles a string to sixty-four. Each was watched red.
+The first failed on the pushes with the stack sentence when `builtin_door`
+always chose `rt_builtin`. The second answered the stack sentence when the
+allocator's note was taken out. Those two mutations are the ratchet rows "an
+accumulator copied on every write in wasm" and "a page out of memory reported as
+a stack overflow".
+
+The ninth program the wasm fuzz flagged was not a defect. It decodes
+`12345678901234567890` as JSON. Native refuses it with the int64 diagnostic the
+differential law allows, and wasm answers what the interpreter answers, because
+the browser engine uses the interpreter's arbitrary-precision ints.
+
+Rerun on the fixed toolchain, seven of the eight agree with native. The eighth
+seeds its loop with a list the caller reads again afterwards, so
+`in_place_pushes` cannot prove the site, and it now fails with the memory
+sentence at seventy thousand. The interpreter handles that shape with
+`linear::moved_writes` and a reference count: a count of two at the write says
+the argument and the moved name are the only holders, so the loop copies once
+on its first lap. The registry passes handles by number and counts nothing,
+and on the first lap the loop's handle is the caller's own, so moving out of it
+would empty the caller's list. Covering that site needs a count per handle,
+which the registry does not keep.
