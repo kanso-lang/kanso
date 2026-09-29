@@ -4390,6 +4390,38 @@ seeded_once = "a_loop_seeded_with_a_list_its_caller_reads_copies_it_once"
 
 rows_c1zzzzt = text/concat rows_c1zzzzr [seed_copied seed_written_through]
 
+# A binding the demand analysis made lazy runs on the wasm engine when
+# something reads it: a call that ignores it leaves it unrun.
+lazy_run_early = row
+  "a lazy binding run where it stands in wasm"
+  true
+  "cargo test --release --test wasm_engine {lazy_unread}"
+  "specs (unit, golden, differential)"
+  (breaking "a_lazy_binding_run_where_it_stands_in_wasm")
+  with_blob
+
+lazy_failure_check = row
+  "a failure check that runs a lazy binding in wasm"
+  true
+  "cargo test --release --test wasm_engine {lazy_unread}"
+  "specs (unit, golden, differential)"
+  (breaking "a_failure_check_that_runs_a_lazy_binding_in_wasm")
+  with_blob
+
+lazy_read_as_closure = row
+  "a lazy binding read as its closure in wasm"
+  true
+  "cargo test --release --test wasm_engine {lazy_unread}"
+  "specs (unit, golden, differential)"
+  (breaking "a_lazy_binding_read_as_its_closure_in_wasm")
+  with_blob
+
+lazy_unread = "a_lazy_binding_nobody_reads_never_runs"
+
+lazy_rows = [lazy_run_early lazy_failure_check lazy_read_as_closure]
+
+rows_c1zzzzu = text/concat rows_c1zzzzt lazy_rows
+
 # A string builder may be seeded with any value, since a join renders what it
 # joins onto. Native used to refuse the seed, and the first join adopts it.
 seed_refused = row
@@ -4408,7 +4440,7 @@ seed_unadopted = row
   (breaking "a_join_that_never_adopts_its_seed")
   release
 
-rows_c1zzzzs = text/concat rows_c1zzzzt [seed_refused seed_unadopted]
+rows_c1zzzzs = text/concat rows_c1zzzzu [seed_refused seed_unadopted]
 
 rows_c = text/concat rows_c1zzzzs [itself]
 

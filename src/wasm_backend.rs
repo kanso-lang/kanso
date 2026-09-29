@@ -103,6 +103,9 @@ const RT_REHANDLE: u32 = 46;
 /// A group handed out as a value carries every count its arms take, as bits
 /// below this base: `MASKED - mask`. Paired with `MASKED` in wasm_rt.
 const MASKED_ARITY: i64 = -1000;
+/// A binding `demand` marked lazy: its first read runs it. Paired with
+/// `LAZY` in wasm_rt.
+const LAZY_ARITY: i64 = -5;
 
 fn imports() -> Vec<Import> {
     vec![
@@ -195,6 +198,9 @@ pub struct WasmBackend<'a> {
     /// The call arguments that go over under a handle of their own, so that
     /// the parameter receiving them can write in place.
     rehandles: crate::linear::Edges,
+    /// Which bindings wait until something reads them: the answer the
+    /// interpreter and native read from the same analysis.
+    demand: crate::demand::DemandInfo<'a>,
     /// `linear::string_builders`' join sites and accumulating parameters.
     builder_joins: crate::hash::Set<(std::sync::Arc<str>, usize, usize)>,
     builder_params: crate::hash::Set<(String, usize, usize)>,
@@ -280,6 +286,7 @@ pub fn compile(program: &Program, tailcalls: bool) -> Result<Compiled, String> {
         tailcalls,
         in_place: Default::default(),
         rehandles: Default::default(),
+        demand: crate::demand::analyze(program),
         builder_joins: Default::default(),
         builder_params: Default::default(),
     };
@@ -468,7 +475,7 @@ impl<'a> WasmBackend<'a> {
             for (i, pattern) in decl.params.iter().enumerate() {
                 self.emit_pattern(&mut ctx, i as u32, pattern)?;
             }
-            self.emit_body(&mut ctx, &decl.body, true)?;
+            self.emit_decl_body(&mut ctx, decl)?;
             ctx.body.ret();
             ctx.body.end();
         }
@@ -651,6 +658,38 @@ impl<'a> WasmBackend<'a> {
                 100 + tid
             }
         })
+    }
+
+    /// A declaration's own body, where `demand` may have marked a binding
+    /// lazy. Such a binding is a closure over what it reads, marked so that
+    /// the first read of its handle runs it; handing the handle to a call
+    /// reads nothing, so an arm that ignores the parameter never runs it.
+    fn emit_decl_body(&mut self, ctx: &mut Ctx, decl: &FnDecl) -> Result<(), String> {
+        let arity = decl.params.len();
+        let lazy = |i: usize| self.demand.is_lazy_bind(&decl.name, arity, i);
+        if !(0..decl.body.len()).any(lazy) {
+            return self.emit_body(ctx, &decl.body, true);
+        }
+        let last = decl.body.len() - 1;
+        for (i, stmt) in decl.body.iter().enumerate() {
+            match stmt {
+                Stmt::Bind { pattern: pattern @ Pattern::Var(..), expr }
+                    if self.demand.is_lazy_bind(&decl.name, arity, i) =>
+                {
+                    let span = expr.span();
+                    let wrapped =
+                        Expr::Lambda { params: Vec::new(), body: Box::new(expr.clone()), span };
+                    self.emit_closure(ctx, &wrapped, LAZY_ARITY)?;
+                    self.emit_binding(ctx, pattern)?;
+                }
+                Stmt::Expr(_) if i != last => {
+                    self.emit_body(ctx, std::slice::from_ref(stmt), false)?;
+                    ctx.body.drop_();
+                }
+                _ => self.emit_body(ctx, std::slice::from_ref(stmt), i == last)?,
+            }
+        }
+        Ok(())
     }
 
     fn emit_body(&mut self, ctx: &mut Ctx, body: &[Stmt], tail: bool) -> Result<(), String> {
@@ -1371,6 +1410,14 @@ impl<'a> WasmBackend<'a> {
     }
 
     fn emit_lambda(&mut self, ctx: &mut Ctx, expr: &Expr) -> Result<(), String> {
+        let Expr::Lambda { params, .. } = expr else {
+            return Err("not a lambda".to_string());
+        };
+        self.emit_closure(ctx, expr, params.len() as i64)
+    }
+
+    /// A lambda's closure, with the arity the runtime reads from its slot.
+    fn emit_closure(&mut self, ctx: &mut Ctx, expr: &Expr, arity: i64) -> Result<(), String> {
         let Expr::Lambda { params, body, .. } = expr else {
             return Err("not a lambda".to_string());
         };
@@ -1420,7 +1467,7 @@ impl<'a> WasmBackend<'a> {
         }
         ctx.body.i32_const(tidx as i64);
         ctx.body.i32_const(captures.len() as i64);
-        ctx.body.i32_const(params.len() as i64);
+        ctx.body.i32_const(arity);
         ctx.body.call(RT_MKCLOSURE);
         Ok(())
     }
