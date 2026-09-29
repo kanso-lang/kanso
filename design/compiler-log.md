@@ -18971,3 +18971,9 @@ where; the old runtime failed it. The row "a closure called with its
 arguments as structs" puts `k_call3`'s struct call back and turns the micro
 corpus red.
 
+
+CI priced it. Passing words moves the runtime's layout and nothing the
+benchmarks call: `work_runbench` lands on 1,088,405,358 (+462),
+`work_livebench` on 1,537,391,389 (+511), and `text` on 3,505,264 (+224, 16
+bytes a benchmark). `work_encodebench`, `work_oneshot` and both codegen tiers
+fall. The floor moves by what it costs, under the rule for the language.
