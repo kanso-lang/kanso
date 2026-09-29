@@ -2,10 +2,8 @@
 # removal, so byte data stays writable, and it refuses loudly outside 0-255
 # rather than keeping the low byte the way `append` does for a single number.
 #
-# A builtin's failure is attributed to the code that CALLED it — both engines
-# say "born in play" here, not "born in std/text" — so under gavel 24 this
-# module cannot match these errs itself. `when_failed` is std's and foreign,
-# and reads the reason out.
+# The err is born in std/text, where the builtin is called, so under gavel 24
+# this module may match it. `when_failed` reads the reason out.
 import "std/testing"
 import "std/text"
 

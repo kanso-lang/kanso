@@ -250,7 +250,7 @@
 #
 # CI measured keys and values over maps (the encoder writes a map from its two
 # columns). interp_allocs 899,769 -> 895,156, a FALL of 4,613 (-0.5127%).
-interp_allocs=895202
+interp_allocs=895187
 #
 # 2026-09-18, kanso#1518 against main at kanso#1517, CI's sitting.
 # 951,438 -> 961,165, a RISE of

@@ -19038,6 +19038,38 @@ bench/text_golden.txt, came to 3,545,808 bytes, up 40,768 across fourteen
 binaries, which is the runtime's dispatchers naming the group on each failure
 path. The meta welfare rose and the floor is banked there.
 
+## 2026-09-29 — text/to_bytes keeps its frame
+
+A rescue hands on a failure its own module raised and calls its callback on
+one from elsewhere. `text/to_int`, `text/to_float`, `text/utf8` and
+`text/from_code` are one-line wrappers over builtins that can birth an err,
+and the inlining pass keeps each of them, so the err is born in std/text and
+a rescue in the caller reaches it. `text/to_bytes` has refused a number
+outside 0-255 with an err since kanso#993, which added it to both backends'
+lists of builtins that take the calling site's origin and left it off the
+inlining pass's list, whose comment asks for the two to be kept in step. So
+the wrapper was inlined, its err said it was born in the caller, and
+`rescue (text/to_bytes [n]) f` in a user's module handed the err on to the
+entry where `rescue (text/utf8 [n]) f` called `f`. Every engine agreed. A
+probe of std/text by hand found it.
+
+`BIRTHS_ERR` in src/inline.rs now names `builtin_to_bytes`. lib and the
+benchmarks do not call `text/to_bytes`, so no runtime row can move. The micro
+sample `a_rescue_catches_what_to_bytes_refused` rescues both refusals in one
+module; the old compiler let the first reach the entry. The runtime sample
+`a_finished_partial_answers_its_held_err` now names `text/to_bytes` as where
+its err was born, and the comment in
+`to_bytes_refuses_a_number_that_is_not_a_byte` no longer says that module
+cannot match the err. The row "a to_bytes wrapper inlined" takes the name
+back out and turns the micro corpus red.
+
+Keeping the wrapper costs nothing CI measures and saves a little: with one
+fewer rename to undo, `compile_instructions` fell 5,666 to 24,992,812,
+`entry_instructions` 28,590 to 82,584,070, `library_instructions` 18,370 to
+83,077,115, `compile_allocs` 12 to 14,307 and the interpreted run's
+`interp_allocs` 15 to 895,187. The meta welfare rose and the floor is banked
+there.
+
 ## 2026-09-29 — a partial over a wide group names the group too
 
 The entry above left a gap open: past four parameters, a partial over a

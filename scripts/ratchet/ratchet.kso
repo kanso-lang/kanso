@@ -4156,6 +4156,18 @@ hops = [hop_value hop_partial hop_browser hop_browser_partial]
 
 rows_c1zzzzd = text/concat rows_c1zzzzj hops
 
+# text/to_bytes keeps its frame like the other wrappers whose builtin can
+# birth an err, so a rescue in the caller's module reaches its callback.
+bytes_frame = row
+  "a to_bytes wrapper inlined"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_to_bytes_wrapper_inlined")
+  release
+
+rows_c1zzzzh = text/concat rows_c1zzzzd [bytes_frame]
+
 # A partial over a group of more than four parameters is held over the group's
 # value on both native and the browser, native's dispatcher calls a group value
 # with five or more arguments, a native partial holding more than four is a
@@ -4203,7 +4215,7 @@ nine_value = row
 
 wides = [hop_wide wide_call hop_browser_wide wide_held nine_value]
 
-rows_c1zzzzg = text/concat rows_c1zzzzd wides
+rows_c1zzzzg = text/concat rows_c1zzzzh wides
 
 rows_c = text/concat rows_c1zzzzg [itself]
 
