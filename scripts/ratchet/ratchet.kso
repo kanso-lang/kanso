@@ -4007,6 +4007,28 @@ part_browser = row
 
 rows_c1zzzx = text/concat rows_c1zzzw [part_closure part_entered part_browser]
 
+# A record of an int and a value crosses a call in two words, the int above
+# the value's tag. Until 2026-09-29 the int came back through a logical shift
+# and every int was packed, so a negative one read as 2^56 plus it and one
+# past 56 bits lost its top byte.
+packed_sign = row
+  "a packed int read back unsigned"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_packed_int_read_back_unsigned")
+  release
+
+packed_wide = row
+  "a wide int packed anyway"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_wide_int_packed_anyway")
+  release
+
+rows_c1zzzy = text/concat rows_c1zzzx [packed_sign packed_wide]
+
 # A partial answers its callee's arities less what it holds. Answering none,
 # the interpreter wrapped `(&h 3) 1` in a third partial where native ran g.
 partial_nest = row
@@ -4037,7 +4059,7 @@ partial_nest_browser = row
 
 partial_nests = [partial_nest partial_nest_native partial_nest_browser]
 
-rows_c1zzzz = text/concat rows_c1zzzx partial_nests
+rows_c1zzzz = text/concat rows_c1zzzy partial_nests
 
 # A call through a group value, or a partial over a group, that turns down a
 # failing argument names the group in the trace, as a direct call does.
