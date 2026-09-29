@@ -18723,6 +18723,17 @@ it, and with the first fix alone it pointed at 0:0. The rows "a wrapper over a
 sibling record left unchecked" and "a nested constructor placed at the top"
 put each back and turn it red.
 
+CI measured the head with all three changes in it. Three rows fell and four
+rose. `compile_instructions` lands on 24,987,861 (-80,972), `entry_instructions`
+on 82,578,277 (-234,203) and `library_instructions` on 83,068,949 (-237,287).
+`emit_instructions` lands on 29,868,444 (+14,084), `interp_instructions` on
+590,922,138 (+979,398), `compile_allocs` on 14,319 (+13) and `interp_allocs` on
+895,201 (+12). `interp_peak_bytes`, the run rows, the codegen rows and the text
+did not move. Which of the three changes each row came from has not been
+isolated. Welfare fell from 90.40603 to 90.40592, and the floor follows it under
+the 2026-09-13 rule, since all three are gaps in the checker for the language as
+ruled.
+
 ## 2026-09-29 — a subtype is built from the one value it wraps
 
 `type tall rect` makes `tall` a constructor that takes one `rect`. The arity
