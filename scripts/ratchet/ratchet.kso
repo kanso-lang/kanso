@@ -4029,6 +4029,19 @@ packed_wide = row
 
 rows_c1zzzy = text/concat rows_c1zzzx [packed_sign packed_wide]
 
+# A partial over a group hands the group out as a value, so its parameters
+# go TOP as they do for a bare mention. Left narrow, a held subtype of int
+# came back out of an arm compiled for an int as its box's address.
+partial_widens = row
+  "a partial leaving its group narrow"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_partial_leaving_its_group_narrow")
+  release
+
+rows_c1zzzze = text/concat rows_c1zzzy [partial_widens]
+
 # A partial answers its callee's arities less what it holds. Answering none,
 # the interpreter wrapped `(&h 3) 1` in a third partial where native ran g.
 partial_nest = row
@@ -4059,7 +4072,7 @@ partial_nest_browser = row
 
 partial_nests = [partial_nest partial_nest_native partial_nest_browser]
 
-rows_c1zzzz = text/concat rows_c1zzzy partial_nests
+rows_c1zzzz = text/concat rows_c1zzzze partial_nests
 
 rows_c = text/concat rows_c1zzzz [itself]
 

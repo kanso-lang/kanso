@@ -1038,7 +1038,24 @@ fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut Env<'a>) -> Set {
         // A hole is filled with a real value before its block freezes, so what
         // readers see is that value: anything but a failure, and not a none.
         Expr::Hole(..) => TOP & !FAIL & !NONE,
-        Expr::Partial(..) => TOP,
+        // A partial over a group hands the group out as a value, as a bare
+        // mention does, and whatever it holds or is later handed reaches the
+        // group's parameters where nothing here can see it. So the parameters
+        // go TOP, as they do for a mention. Until 2026-09-29 they kept only
+        // what the direct calls passed, and a subtype held by `&f1 (id 11)`
+        // came back out of an arm compiled for an int as its box's address.
+        Expr::Partial(name, _) => {
+            if env.get(name).is_none() {
+                for (i, decl) in ctx.program.fns.iter().enumerate() {
+                    if decl.name == *name {
+                        for p in 0..decl.params.len() {
+                            widen_param(ctx, i, p, TOP);
+                        }
+                    }
+                }
+            }
+            TOP
+        }
         Expr::Upcast { expr: inner, .. } => eval_expr(ctx, inner, env),
         Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
             // a child scope: block binds stay local to the branch
