@@ -18962,7 +18962,8 @@ a match on `&`, and CI read it at +77,906 instructions on
 `compile_instructions`. Asking only when the token is `&` puts the work back
 where it was. CI then read `compile_instructions` at 25,000,311, up 1,833,
 and `entry_instructions` at 82,619,124 and `library_instructions` at
-83,101,949, each up 6,464. The meta welfare fell by what those cost, and the
+83,101,949, each up 6,464, and after main moved it read `emit_instructions`
+at 29,896,572, up 335, which arrived with the change. The meta welfare fell by what those cost, and the
 floor comes down by that much under the 2026-09-13 rule, since this is the
 diagnostic the language owes for `&(`.
 
