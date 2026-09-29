@@ -4029,6 +4029,19 @@ packed_wide = row
 
 rows_c1zzzy = text/concat rows_c1zzzx [packed_sign packed_wide]
 
+# A partial over a group hands the group out as a value, so its parameters
+# go TOP as they do for a bare mention. Left narrow, a held subtype of int
+# came back out of an arm compiled for an int as its box's address.
+partial_widens = row
+  "a partial leaving its group narrow"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_partial_leaving_its_group_narrow")
+  release
+
+rows_c1zzzze = text/concat rows_c1zzzy [partial_widens]
+
 # A sigil with no name after it is left to the parser, whose refusal says
 # what `&` wants. The spacing check asked for a space, which then failed to
 # parse.
@@ -4040,7 +4053,7 @@ sigil_paren = row
   (breaking "a_nameless_sigil_asked_for_a_space")
   no_setup
 
-rows_c1zzzzc = text/concat rows_c1zzzy [sigil_paren]
+rows_c1zzzzc = text/concat rows_c1zzzze [sigil_paren]
 
 rows_c = text/concat rows_c1zzzzc [itself]
 
