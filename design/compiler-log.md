@@ -19023,3 +19023,12 @@ closure", "a wide group value left uncalled", "a browser wide partial held in
 a closure" and "a partial holding five refused" each put one change back and
 turn their corpus red.
 
+CI measured what the wider dispatcher costs to build and run. The worsened
+rows are `codegen_instructions_release` at 408,206,896, up 40,187;
+`codegen_instructions_dev` at 124,469,445, up 2,832; `work_oneshot` at
+12,744,077, up 483; `work_encodebench` at 2,333,703,806, up 14; and
+`work_jsonbench` at 758,833,558, up 4. `work_runbench` fell 847, and the
+benchmarks' machine code, `text` in bench/text_golden.txt, fell 8,736 bytes
+to 3,537,072. The meta welfare fell by a few
+millionths and the floor comes down by that much under the 2026-09-13 rule.
+
