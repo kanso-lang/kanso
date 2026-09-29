@@ -1800,9 +1800,10 @@ fn per_call_builtin(decl: &FnDecl) -> Option<&str> {
     if builtin != "round" || args.len() != decl.params.len() {
         return None;
     }
-    let passed = args.iter().zip(&decl.params).all(|(a, p)| {
-        matches!((a, p), (Expr::Ident(n, _, _), Pattern::Var(v, _)) if n == v)
-    });
+    let passed = args
+        .iter()
+        .zip(&decl.params)
+        .all(|(a, p)| matches!((a, p), (Expr::Ident(n, _, _), Pattern::Var(v, _)) if n == v));
     passed.then_some(builtin)
 }
 

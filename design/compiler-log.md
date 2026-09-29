@@ -19053,3 +19053,15 @@ watched red: "a non-finite float rounded to zero natively", "a non-finite
 float rounded to zero" (the interpreter), "a rounded float typed as never
 none", "a rounded int typed by every caller" and "an insisted round
 answering zero".
+
+CI priced the build. The compile rows carry `round!` and its two `finite`
+arms in lib/math, which every checked program compiles, and the per-call
+typing inference now does at each call to the wrapper:
+`compile_instructions` lands on 25,194,200 (+195,722), `entry_instructions`
+on 83,292,095 (+679,435), `library_instructions` on 83,815,139 (+719,654) and
+`emit_instructions` on 29,936,226 (+39,989). The runtime rows moved by
+layout: `work_livebench` on 1,537,391,599 (+721), `work_oneshot` on
+12,744,427 (+294) and `work_runbench` on 1,088,404,987 (+91), while
+`work_encodebench`, both codegen tiers and every benchmark's `text` (48 bytes
+smaller) fell. The floor moves by what the ruling costs, under the rule for
+the language.
