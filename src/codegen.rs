@@ -1271,6 +1271,7 @@ declare i64 @k_parsed_wide_int(i64)
 declare %KValue @k_parsed_wide_value(i64)
 declare %KValue @k_concat_arr_mut(i64, ptr)
 declare %KValue @k_b_str_builder(%KValue)
+declare %KValue @k_b_adopt(%KValue, %KValue)
 declare %KValue @k_field(%KValue, i64)
 declare %KValue @k_keyed_check(%KValue, i64)
 declare %KValue @k_keyed_field(%KValue, ptr)
@@ -4957,16 +4958,9 @@ impl<'a> Backend<'a> {
         let seeded;
         let e = match entering {
             true => {
-                // A builder seeded with a subtype of string builds from the
-                // string, which only a program declaring a subtype can hand it.
-                let e = match self.sub_parents.is_empty() {
-                    true => e.to_string(),
-                    false => {
-                        let u = f.tmp();
-                        f.line(&format!("{u} = call %KValue @k_unsub(%KValue {e})"));
-                        u
-                    }
-                };
+                // A subtype of string builds from the string it wraps, and a
+                // seed that is not a string is handed on as it is; the runtime
+                // tells them apart, and the first join adopts the second.
                 let t = f.tmp();
                 f.line(&format!("{t} = call %KValue @k_b_str_builder(%KValue {e})"));
                 f.record(&t, f.set_of(&e));
@@ -7572,7 +7566,7 @@ impl<'a> Backend<'a> {
                 ));
                 let mut acc: Option<Vec<String>> = None;
                 let mut fails: Set = 0;
-                for part in parts {
+                for (i, part) in parts.iter().enumerate() {
                     let piece = match part {
                         TemplatePart::Lit(s) => self.str_const(f, s),
                         TemplatePart::Interp(inner) => {
@@ -7580,7 +7574,19 @@ impl<'a> Backend<'a> {
                             let value = self.maybe_force(f, value);
                             let (t, failed) = self.render_interp(f, &value);
                             fails |= failed;
-                            t
+                            // the builder, which a seed that was not a string
+                            // becomes only here, rendered; a value the sets
+                            // prove is a string is the builder already
+                            match joins_builder && i == 0 && f.set_of(&value) & !STR != 0 {
+                                true => {
+                                    let adopted = f.tmp();
+                                    f.line(&format!(
+                                        "{adopted} = call %KValue @k_b_adopt(%KValue {value}, %KValue {t})"
+                                    ));
+                                    adopted
+                                }
+                                false => t,
+                            }
                         }
                     };
                     match acc {

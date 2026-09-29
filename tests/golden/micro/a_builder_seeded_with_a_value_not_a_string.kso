@@ -1,0 +1,42 @@
+# A group that joins onto its own parameter is a string builder, and its
+# callers may hand it any value: `"{s}x"` renders whatever `s` holds. Native
+# converted the seed at the call and died on anything that was not a string,
+# printing `a string builder starts from a string` where the interpreter
+# rendered it. The seed is now left as it came and the first join adopts its
+# rendering, so a base arm that answers the seed untouched answers `id 13`.
+# The long loop takes the beat's carry with a builder seeded mid-loop. Found
+# by a generated program on 2026-09-29.
+import "std/os"
+
+type id int
+
+type word string
+
+type pt
+  n
+  s
+
+fn build s 0
+  s
+
+fn build s n
+  build "{s}x" (n - 1)
+
+fn kind _:id
+  "id"
+
+fn kind _:string
+  "string"
+
+fn kind _
+  "other"
+
+fn show z
+  a = build (id 13) z
+  b = build (id 13) (5 + z)
+  c = build (pt 1 "a") (2 + z)
+  d = build (word "ab") (3 + z)
+  e = build (id 7) (20000 + z)
+  "{kind a} {a} {b} {c} {d} {length e}"
+
+pub play = os/args .> (args -> print (show (length args)))

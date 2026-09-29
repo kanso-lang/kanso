@@ -4345,7 +4345,27 @@ after_full = "the_program_after_one_that_ran_out_of_memory_runs"
 
 rows_c1zzzzq = text/concat rows_c1zzzzp [dead_run_held]
 
-rows_c = text/concat rows_c1zzzzq [itself]
+# A string builder may be seeded with any value, since a join renders what it
+# joins onto. Native used to refuse the seed, and the first join adopts it.
+seed_refused = row
+  "a builder seed refusing what is not a string"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_builder_seed_refusing_what_is_not_a_string")
+  release
+
+seed_unadopted = row
+  "a join that never adopts its seed"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_join_that_never_adopts_its_seed")
+  release
+
+rows_c1zzzzs = text/concat rows_c1zzzzq [seed_refused seed_unadopted]
+
+rows_c = text/concat rows_c1zzzzs [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
