@@ -1,0 +1,12 @@
+error[dispatch]: overlapping overloads of `size` are illegal
+  --> an_annotation_and_its_constructor_overlap.kso:17:4
+  17 | fn size (pt a b)
+          ^
+error[dispatch]: overlapping overloads of `inner` are illegal
+  --> an_annotation_and_its_constructor_overlap.kso:26:4
+  26 | fn inner (pt _:pt _)
+          ^
+error[dispatch]: overlapping overloads of `why` are illegal
+  --> an_annotation_and_its_constructor_overlap.kso:35:4
+  35 | fn why _:err
+          ^

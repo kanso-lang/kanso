@@ -1,0 +1,41 @@
+# `_:pt` takes every `pt`, and so does a constructor pattern that names each
+# field and tests none. Two such arms in one group overlap, and every engine
+# ran one of them and never the other: the first written for a record, and
+# the annotation for an err whichever came first. Found on 2026-09-28 while
+# probing the overlap check with the shapes the dead-pattern check had just
+# learned.
+type pt
+  a
+  b
+
+type woe
+  at
+
+fn size _:pt
+  "pt"
+
+fn size (pt a b)
+  "pair {a} {b}"
+
+fn size _
+  "other"
+
+fn inner (pt (pt a b) _)
+  "pair {a} {b}"
+
+fn inner (pt _:pt _)
+  "pt"
+
+fn inner _
+  "other"
+
+fn why (err _)
+  "reason"
+
+fn why _:err
+  "err"
+
+fn why _
+  "other"
+
+pub play = print "{size (pt 1 2)} {inner (pt (pt 1 2) 3)} {why (err (woe 1))}"

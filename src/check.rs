@@ -4286,6 +4286,14 @@ fn same_shape(a: &[Pattern], b: &[Pattern]) -> bool {
         (Pattern::Ctor { ty: x, fields: fa, .. }, Pattern::Ctor { ty: y, fields: fb, .. }) => {
             x == y && fa.len() == fb.len() && same_shape(fa, fb)
         }
+        // A constructor pattern that names every field and tests none takes
+        // what the annotation takes: `(pt a b)` is every `pt`, and so is
+        // `_:pt`. The engines choose between the two by rank or by order, and
+        // whichever they choose, the other arm never runs.
+        (Pattern::Annotated { ty: x, .. }, Pattern::Ctor { ty: y, fields, .. })
+        | (Pattern::Ctor { ty: y, fields, .. }, Pattern::Annotated { ty: x, .. }) => {
+            x == y && fields.iter().all(|f| matches!(f, Pattern::Var(..) | Pattern::Wildcard(..)))
+        }
         (Pattern::Var(..) | Pattern::Wildcard(..), Pattern::Var(..) | Pattern::Wildcard(..)) => {
             true
         }

@@ -18496,3 +18496,20 @@ rows, the text and the lazy tier did not move. Which of the two checks the
 instruction rows paid for has not been isolated. Welfare fell from 90.40233 to
 90.40222, and the floor follows it under the 2026-09-13 rule, since both are
 gaps in the checker for the language as ruled.
+
+## 2026-09-28 — an annotation and its constructor are one shape
+
+Two arms of one group that take the same values are refused as overlapping,
+and the check compared them shape by shape: two annotations, two constructor
+patterns, two binders. `_:pt` and `(pt a b)` fell between those cases. The
+constructor pattern names every field and tests none, so it takes every `pt`,
+as the annotation does, and a group holding both passed `kanso check` with one
+arm that could never run. For a record, every engine ran whichever came first.
+For an err, `_:err` ranks above `(err _)`, so the annotation ran whichever came
+first. The same held one level down, with `(pt _:pt _)` beside
+`(pt (pt a b) _)`. The check now reads a constructor pattern whose fields are
+all binders as the annotation of its type. The error fixture
+`an_annotation_and_its_constructor_overlap` holds the three shapes and reported
+nothing on the old checker. The row "an annotation and its constructor read as
+two shapes" puts the old reading back and turns it red. No program in lib, kq,
+vse or kanso-json changes its verdict.

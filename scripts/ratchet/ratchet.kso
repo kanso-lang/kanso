@@ -3778,7 +3778,19 @@ sibling_types = row
 
 rows_c1zzzg = text/concat rows_c1zzzf [sibling_types]
 
-rows_c = text/concat rows_c1zzzg [itself]
+# `_:pt` and `(pt a b)` take the same values. Read as two shapes, a group
+# holding both passes `kanso check` and one of its arms never runs.
+constructor_overlap = row
+  "an annotation and its constructor read as two shapes"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "an_annotation_and_its_constructor_read_apart")
+  no_setup
+
+rows_c1zzzh = text/concat rows_c1zzzg [constructor_overlap]
+
+rows_c = text/concat rows_c1zzzh [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
