@@ -1,0 +1,4 @@
+error[type]: `tall` wraps `rect`, which has 2 fields and this arm takes 1, so it can never match
+  --> tests/golden/errors_module/a_wrapper_arm_over_a_sibling_files_record/shapes/arms.kso:6:22
+   6 | fn kinds (tall (rect _ _))
+                            ^

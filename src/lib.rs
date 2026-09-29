@@ -155,6 +155,7 @@ fn compile_parsed_entry(
         &extern_globals,
         &shadowable,
         &Default::default(),
+        &[],
     ));
     diags.sort_by_key(|d| (d.span.line, d.span.col));
     if !diags.is_empty() {
@@ -368,6 +369,7 @@ fn compile_one(file: &str, source: &str, drop_unused: bool) -> Result<ast::Progr
         &extern_globals,
         &shadowable,
         &Default::default(),
+        &[],
     ));
     if drop_unused {
         diags.retain(|d| d.kind != "unused");
@@ -470,6 +472,7 @@ pub fn compile_library(file: &str, source: &str) -> Result<ast::Program, String>
         &extern_globals,
         &shadowable,
         &Default::default(),
+        &[],
     ));
     diags.sort_by_key(|d| (d.span.line, d.span.col));
     if !diags.is_empty() {
@@ -3805,7 +3808,18 @@ fn compile_module_loaded(
         .map(|d| d.name.clone())
         .chain(dep_program.types.iter().filter(|t| t.synthetic).map(|t| t.name.clone()))
         .collect();
-    for (file, source, program) in &mut parsed {
+    // Markers are resolved in every file before any file is checked, so the
+    // checks can read the module's type declarations while they read one
+    // file. A pattern names a record the next file declares as readily as
+    // one declared above it, and until 2026-09-29 the check that a
+    // constructor pattern can match at all asked only the file's own types.
+    let marker_diags: Vec<Vec<diag::Diagnostic>> = parsed
+        .iter_mut()
+        .map(|(_, _, program)| check::resolve_markers(program, &all_markers))
+        .collect();
+    let module_decls: Vec<&ast::TypeDecl> =
+        parsed.iter().flat_map(|(_, _, program)| &program.types).collect();
+    for ((file, source, program), mut diags) in parsed.iter().zip(marker_diags) {
         // Every name in the build except this file's own, as references into
         // `all_names`. This used to clone the whole set per file and then
         // remove from the copy — a `String` per name per file, for a set the
@@ -3814,13 +3828,13 @@ fn compile_module_loaded(
             let own = check::declared_names(program);
             all_names.iter().map(Name::as_str).filter(|n| !own.contains(n)).collect()
         };
-        let mut diags = check::resolve_markers(program, &all_markers);
         diags.extend(check::check_typesets(program, &module_types, &dep_types));
         diags.extend(check::check_file_shadow(
             program,
             &extern_globals,
             &shadowable,
             &module_types,
+            &module_decls,
         ));
         diags.sort_by_key(|d| (d.span.line, d.span.col));
         if !diags.is_empty() {

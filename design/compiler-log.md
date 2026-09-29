@@ -18703,3 +18703,22 @@ diagnostic in the corpus still has no location: a subtype of `none` is refused
 at its type declaration, and a type declaration does not record its file. The
 row "a module diagnostic left without its file" takes every placement away
 again and turns both the corpus and the cycle spec red.
+
+## 2026-09-29 — a wrapper arm over a sibling file's record is checked
+
+`type tall rect` makes a `tall` destructure as the two fields of `rect`, so the
+arm `fn kinds (tall (rect _ _))` hands it one field and can never match.
+kanso#1711 refuses that arm, and two things kept the refusal from reaching a
+reader. In a module whose records are declared in another file, the check
+looked the record up among the file's own types, found nothing, and said
+nothing: the program passed `kanso check` and ran with the dead arm. Where it
+did fire, it pointed at the first field of the pattern, and a constructor
+pattern carries no place of its own, so a pattern whose first field is another
+constructor was reported at line 0, column 0. The module's per-file checks now
+read every file's type declarations, with the file's own read last so that a
+name both declare is this file's. A constructor pattern answers with the place
+of its first field that has one. The module-error case
+`a_wrapper_arm_over_a_sibling_files_record` holds both: the old checker passed
+it, and with the first fix alone it pointed at 0:0. The rows "a wrapper over a
+sibling record left unchecked" and "a nested constructor placed at the top"
+put each back and turn it red.

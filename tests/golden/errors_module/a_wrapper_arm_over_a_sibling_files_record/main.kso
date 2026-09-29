@@ -1,0 +1,3 @@
+import "./shapes"
+
+print (shapes/kind 1)

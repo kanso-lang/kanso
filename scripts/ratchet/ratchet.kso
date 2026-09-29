@@ -3923,7 +3923,32 @@ module_file = row
 
 rows_c1zzzs = text/concat rows_c1zzzr [module_file]
 
-rows_c = text/concat rows_c1zzzs [itself]
+# A constructor pattern over a record the next file declares is checked
+# against the module's types. Given only the file's own, a wrapper arm that
+# can never match passes `kanso check`.
+sibling_wrapper = row
+  "a wrapper over a sibling record left unchecked"
+  true
+  "cargo test --release --test errors_module"
+  "specs (unit, golden, differential)"
+  (breaking "a_wrapper_over_a_sibling_record_left_unchecked")
+  no_setup
+
+rows_c1zzzt = text/concat rows_c1zzzs [sibling_wrapper]
+
+# A constructor pattern answers with its first field's place. Answering 0:0,
+# a refusal of a constructor nested first in another points at nothing.
+nested_place = row
+  "a nested constructor placed at the top"
+  true
+  "cargo test --release --test errors_module"
+  "specs (unit, golden, differential)"
+  (breaking "a_nested_constructor_placed_at_the_top")
+  no_setup
+
+rows_c1zzzu = text/concat rows_c1zzzt [nested_place]
+
+rows_c = text/concat rows_c1zzzu [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

@@ -2141,7 +2141,7 @@ pub fn declared_names(program: &Program) -> HashSet<&str> {
 /// Per-file checks: canonical order plus name resolution against this file's
 /// globals extended with the rest of the module.
 pub fn check_file(program: &Program, extern_globals: &HashSet<&str>) -> Vec<Diagnostic> {
-    check_file_shadow(program, extern_globals, &HashSet::default(), &HashSet::default())
+    check_file_shadow(program, extern_globals, &HashSet::default(), &HashSet::default(), &[])
 }
 
 /// Bare-enrolled imports (synthetic clones) are shadowable: a local binding
@@ -2152,6 +2152,7 @@ pub fn check_file_shadow(
     extern_globals: &HashSet<&str>,
     shadowable: &HashSet<String>,
     sibling_types: &HashSet<String>,
+    sibling_decls: &[&crate::ast::TypeDecl],
 ) -> Vec<Diagnostic> {
     let mut diags = Vec::new();
     check_type_order(program, &mut diags);
@@ -2169,7 +2170,7 @@ pub fn check_file_shadow(
     // counted, and `p:pt` with `pt` declared beside it was refused. Asked of
     // both sets in turn rather than merged, which cost an allocation per name.
     let declared_type_names = TypeNames { own: &own_type_names, siblings: sibling_types };
-    check_annotation_names(program, declared_type_names, &mut diags);
+    check_annotation_names(program, declared_type_names, sibling_decls, &mut diags);
     let mut globals = collect_globals(program, &mut diags);
     globals.extend(extern_globals.iter().copied());
     let fn_arities = Arities::of(program);
@@ -3891,7 +3892,12 @@ fn undeclared_in(ty: &str, declared: TypeNames) -> Vec<String> {
         .collect()
 }
 
-fn check_annotation_names(program: &Program, declared: TypeNames, diags: &mut Vec<Diagnostic>) {
+fn check_annotation_names(
+    program: &Program,
+    declared: TypeNames,
+    sibling_decls: &[&crate::ast::TypeDecl],
+    diags: &mut Vec<Diagnostic>,
+) {
     fn patterns(
         p: &Pattern,
         declared: TypeNames,
@@ -4032,9 +4038,11 @@ fn check_annotation_names(program: &Program, declared: TypeNames, diags: &mut Ve
         }
     }
 
-    // The typesets, borrowed from the list `declared` was built from.
+    // The typesets, borrowed from the list `declared` was built from. In a
+    // module the other files' declarations come first and this file's own
+    // after them, so a name both declare reads as this file's.
     let types: crate::hash::Map<&str, &crate::ast::TypeDecl> =
-        program.types.iter().map(|t| (t.name.as_str(), t)).collect();
+        sibling_decls.iter().copied().chain(&program.types).map(|t| (t.name.as_str(), t)).collect();
     // A field's reader is the compiler's own arm, written from the record it
     // reads. When a program declares a second type of that name, the reader
     // is checked against the wrong declaration and reported as an arm the
@@ -4627,7 +4635,13 @@ fn other_span(pattern: &Pattern) -> Span {
         Pattern::Annotated { span, .. } | Pattern::Keyed { span, .. } => *span,
         Pattern::Var(_, s) => *s,
         Pattern::Wildcard(s) => *s,
-        Pattern::Ctor { .. } => Span::at(0, 0),
+        // A constructor pattern has no span of its own, so it answers with
+        // its first field that has one. Until 2026-09-29 it answered 0:0,
+        // and a refusal pointed at a constructor nested first in another
+        // was printed at the top of the file.
+        Pattern::Ctor { fields, .. } => {
+            fields.iter().map(other_span).find(|s| s.line != 0).unwrap_or(Span::at(0, 0))
+        }
     }
 }
 
