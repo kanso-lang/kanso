@@ -18930,3 +18930,10 @@ its err was born, and the comment in
 cannot match the err. The row "a to_bytes wrapper inlined" takes the name
 back out and turns the micro corpus red.
 
+Keeping the wrapper costs nothing CI measures and saves a little: with one
+fewer rename to undo, `compile_instructions` fell 5,666 to 24,992,812,
+`entry_instructions` 28,590 to 82,584,070, `library_instructions` 18,370 to
+83,077,115, `compile_allocs` 12 to 14,307 and the interpreted run's
+`interp_allocs` 15 to 895,187. The meta welfare rose and the floor is banked
+there.
+
