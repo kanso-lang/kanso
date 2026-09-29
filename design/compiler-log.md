@@ -18555,3 +18555,19 @@ module suffix and no location. They name the arm's file now. An existing
 diagnostic reads the same with the location added under it, and the two new
 fixtures carry `.imported.stderr` goldens for that path. No program in lib,
 kq, vse or kanso-json changes its verdict.
+
+## 2026-09-29 — the overlap check compares an arm with its own group
+
+The first head of this change measured on CI with `compile_instructions` at
+27,111,795 (+1,864,809), `entry_instructions` at 96,068,317 (+11,007,934) and
+`library_instructions` at 96,836,451 (+11,249,605). The new question about
+members looked at every declaration in the module for each arm, so it compared
+each pair of declarations, and the entry and library rows check a module that
+merges the standard library. The overlap check already did the same through its
+look back over every earlier declaration. It now sorts the declarations once by
+name, arity and place in the source, walks each group of two or more arms, and
+puts its reports back in source order. On this container, against a build of
+main, `kanso check` of the entry corpus fell from 87,978,846 instructions to
+85,651,929 and of the compile corpus from 26,801,090 to 26,571,307, with
+`compile_allocs` unchanged at 14,308. Those are this machine's readings of the
+two corpora, not CI's rows.

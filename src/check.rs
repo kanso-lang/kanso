@@ -4117,82 +4117,73 @@ fn check_constants(program: &Program, diags: &mut Vec<Diagnostic>) {
 /// group need not sit next to each other or even in the same file. So the
 /// unreachable-arm half runs here, over the whole module at once.
 ///
-/// Declarations are walked in order and each looks back, so what is reported
-/// is the later arm and the order of the reports is the order of the source.
+/// The declarations are sorted once so that each group's arms sit together,
+/// in source order, and an arm is compared only with its own group. Looking
+/// back over every declaration for every arm compared each pair in the module,
+/// which the entry corpus paid for in millions of instructions. What is
+/// reported is the later arm, and the reports are put back in source order.
 fn check_overlapping_arms(program: &Program, diags: &mut Vec<Diagnostic>) {
-    let real: Vec<&FnDecl> = program.fns.iter().filter(|d| !d.synthetic).collect();
+    let mut real: Vec<(usize, &FnDecl)> =
+        program.fns.iter().filter(|d| !d.synthetic).enumerate().collect();
+    real.sort_unstable_by(|(i, a), (j, b)| {
+        (a.name.as_str(), a.params.len(), i).cmp(&(b.name.as_str(), b.params.len(), j))
+    });
     let mut flat = None;
-    for (i, later) in real.iter().enumerate() {
-        let clashes = real[..i].iter().any(|earlier| {
-            earlier.name == later.name
-                && earlier.params.len() == later.params.len()
-                && same_shape(&earlier.params, &later.params)
-        });
-        if clashes {
-            diags.push(
-                Diagnostic::new(
-                    "dispatch",
-                    format!("overlapping overloads of `{}` are illegal", later.name),
-                    later.span,
-                )
-                .about(&later.file),
-            );
-            continue;
-        }
-        let covered = real[..i].iter().find_map(|earlier| {
-            if earlier.name != later.name || earlier.params.len() != later.params.len() {
-                return None;
+    let mut found: Vec<(usize, Diagnostic)> = Vec::new();
+    let groups =
+        real.chunk_by(|(_, a), (_, b)| a.name == b.name && a.params.len() == b.params.len());
+    for group in groups.filter(|g| g.len() > 1) {
+        for (g, &(at, later)) in group.iter().enumerate() {
+            let earlier = || group[..g].iter().map(|&(_, d)| d);
+            if earlier().any(|e| same_shape(&e.params, &later.params)) {
+                let why = format!("overlapping overloads of `{}` are illegal", later.name);
+                found.push((at, Diagnostic::new("dispatch", why, later.span).about(&later.file)));
+                continue;
             }
-            typeset_covers(program, &mut flat, &earlier.params, &later.params)
-        });
-        if let Some((narrow, wide, same)) = covered {
-            let why = match same {
-                true => format!(
-                    "`{narrow}` and `{wide}` hold the same types, and the arm for `{wide}` \
-                     comes first, so this arm can never run"
-                ),
-                false => format!(
-                    "every member of `{narrow}` is a member of `{wide}`, and the arm for \
-                     `{wide}` comes first, so this arm can never run; put it above that one"
-                ),
-            };
-            diags.push(Diagnostic::new("dispatch", why, later.span).about(&later.file));
-            continue;
-        }
-        if let Some(ty) = members_each_answered(program, &mut flat, &real, i) {
-            diags.push(
-                Diagnostic::new(
-                    "dispatch",
-                    format!(
-                        "every value a `{ty}` can be has an arm that takes it before this one, so \
-                     this arm can never run"
+            let covered = earlier()
+                .find_map(|e| typeset_covers(program, &mut flat, &e.params, &later.params));
+            if let Some((narrow, wide, same)) = covered {
+                let why = match same {
+                    true => format!(
+                        "`{narrow}` and `{wide}` hold the same types, and the arm for `{wide}` \
+                         comes first, so this arm can never run"
                     ),
-                    later.span,
-                )
-                .about(&later.file),
-            );
+                    false => format!(
+                        "every member of `{narrow}` is a member of `{wide}`, and the arm for \
+                         `{wide}` comes first, so this arm can never run; put it above that one"
+                    ),
+                };
+                found.push((at, Diagnostic::new("dispatch", why, later.span).about(&later.file)));
+                continue;
+            }
+            if let Some(ty) = members_each_answered(program, &mut flat, group, g) {
+                let why = format!(
+                    "every value a `{ty}` can be has an arm that takes it before this one, so \
+                     this arm can never run"
+                );
+                found.push((at, Diagnostic::new("dispatch", why, later.span).about(&later.file)));
+            }
         }
     }
+    found.sort_by_key(|&(at, _)| at);
+    diags.extend(found.into_iter().map(|(_, d)| d));
 }
 
 /// Whether each value a later arm's `bool` or typeset parameter admits is
 /// taken by another arm first, the other parameters being the same shape. A
 /// literal and a member type rank above a typeset or `bool`, so an arm for each
 /// of them takes its values whatever the order; an earlier typeset arm takes the
-/// members it holds because it comes first. Answers the type left with nothing.
+/// members it holds because it comes first. `group` is the arms of one group in
+/// source order and `at` is the later arm's place in it. Answers the type left
+/// with nothing.
 fn members_each_answered<'a>(
     program: &Program,
     flat: &mut Option<crate::hash::Map<String, Vec<String>>>,
-    real: &[&'a FnDecl],
+    group: &[(usize, &'a FnDecl)],
     at: usize,
 ) -> Option<&'a str> {
-    let later = real[at];
-    let siblings = || {
-        real.iter().enumerate().filter(move |(j, a)| {
-            *j != at && a.name == later.name && a.params.len() == later.params.len()
-        })
-    };
-    siblings().next()?;
+    let later = group[at].1;
+    let siblings = || group.iter().enumerate().filter(move |&(j, _)| j != at);
     let is_set = |ty: &str| program.types.iter().any(|t| t.name == ty && !t.members.is_empty());
     for (p, param) in later.params.iter().enumerate() {
         let Pattern::Annotated { ty, .. } = param else { continue };
@@ -4203,7 +4194,7 @@ fn members_each_answered<'a>(
         };
         let answered = if ty == "bool" {
             ["true", "false"].iter().all(|lit| {
-                siblings().any(|(_, a)| {
+                siblings().any(|(_, &(_, a))| {
                     rest_alike(a) && matches!(&a.params[p], Pattern::Nullary(n, _) if n == lit)
                 })
             })
@@ -4211,7 +4202,7 @@ fn members_each_answered<'a>(
             let sets = flat.get_or_insert_with(|| program.flat_typesets());
             let Some(members) = sets.get(ty.as_str()) else { continue };
             members.iter().all(|m| {
-                siblings().any(|(j, a)| {
+                siblings().any(|(j, &(_, a))| {
                     rest_alike(a)
                         && match &a.params[p] {
                             Pattern::Annotated { ty: t, .. } => {
