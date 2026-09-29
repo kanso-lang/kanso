@@ -4042,6 +4042,38 @@ partial_widens = row
 
 rows_c1zzzze = text/concat rows_c1zzzy [partial_widens]
 
+# A partial answers its callee's arities less what it holds. Answering none,
+# the interpreter wrapped `(&h 3) 1` in a third partial where native ran g.
+partial_nest = row
+  "a partial over a partial taking nothing"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_partial_over_a_partial_taking_nothing")
+  release
+
+# The native and browser runtimes ask the same question of a partial when
+# one wraps another, and answering none, `s = &k` grew at `s 1`.
+partial_nest_native = row
+  "a native partial answering nothing"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_native_partial_answering_nothing")
+  release
+
+partial_nest_browser = row
+  "a browser partial answering nothing"
+  true
+  "cargo test --release --test wasm_engine {wasm_corpus}"
+  "specs (unit, golden, differential)"
+  (breaking "a_browser_partial_answering_nothing")
+  with_blob
+
+partial_nests = [partial_nest partial_nest_native partial_nest_browser]
+
+rows_c1zzzz = text/concat rows_c1zzzze partial_nests
+
 # A sigil with no name after it is left to the parser, whose refusal says
 # what `&` wants. The spacing check asked for a space, which then failed to
 # parse.
@@ -4053,7 +4085,7 @@ sigil_paren = row
   (breaking "a_nameless_sigil_asked_for_a_space")
   no_setup
 
-rows_c1zzzzc = text/concat rows_c1zzzze [sigil_paren]
+rows_c1zzzzc = text/concat rows_c1zzzz [sigil_paren]
 
 rows_c = text/concat rows_c1zzzzc [itself]
 
