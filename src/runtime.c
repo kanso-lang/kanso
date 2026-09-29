@@ -7080,6 +7080,15 @@ KValue k_fnref(void* described) {
 
 KValue k_env_get(void* env, long long i) { return ((KValue*)env)[i]; }
 
+/* A group handed out as a value turns down a failing argument the way a
+   direct call does, and a direct call's guard names the group in the trace.
+   The dispatchers answer the failure before entering the group, so they name
+   it here; a builtin is not a group and names nothing. `k_call1` enters the
+   group, whose own guard does it. */
+static KValue k_ref_hop(KFnref* r, KValue failure) {
+    return r->builtin ? failure : k_err_hop(failure, r->name);
+}
+
 /* `foo()` runs a value that was waiting to be called — what `&` leaves when it
    has supplied every argument an arm takes. No arguments arrive, so there is
    nothing to propagate but the callable itself. */
@@ -7147,7 +7156,7 @@ KValue k_call2(KValue f, KValue a, KValue b) {
     if (f.tag == K_FNREF) {
         KFnref* r = (KFnref*)(intptr_t)f.payload;
         if (r->arity != 2) k_die_ref_arity(r, 2);
-        if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
+        if (!k_not_failure(a) || !k_not_failure(b)) return k_ref_hop(r, k_both_or_either(a, b));
         return ((KValue(*)(KValue, KValue))r->fn)(a, b);
     }
     k_die_not_callable(f);
@@ -7167,8 +7176,8 @@ KValue k_call3(KValue f, KValue a, KValue b, KValue c) {
     if (f.tag == K_FNREF) {
         KFnref* r = (KFnref*)(intptr_t)f.payload;
         if (r->arity != 3) k_die_ref_arity(r, 3);
-        if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
-        if (!k_not_failure(c)) return c;
+        if (!k_not_failure(a) || !k_not_failure(b)) return k_ref_hop(r, k_both_or_either(a, b));
+        if (!k_not_failure(c)) return k_ref_hop(r, c);
         return ((KValue(*)(KValue, KValue, KValue))r->fn)(a, b, c);
     }
     k_die_not_callable(f);
@@ -7189,9 +7198,9 @@ KValue k_call4(KValue f, KValue a, KValue b, KValue c, KValue d) {
     if (f.tag == K_FNREF) {
         KFnref* r = (KFnref*)(intptr_t)f.payload;
         if (r->arity != 4) k_die_ref_arity(r, 4);
-        if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
-        if (!k_not_failure(c)) return c;
-        if (!k_not_failure(d)) return d;
+        if (!k_not_failure(a) || !k_not_failure(b)) return k_ref_hop(r, k_both_or_either(a, b));
+        if (!k_not_failure(c)) return k_ref_hop(r, c);
+        if (!k_not_failure(d)) return k_ref_hop(r, d);
         return ((KValue(*)(KValue, KValue, KValue, KValue))r->fn)(a, b, c, d);
     }
     k_die_not_callable(f);
@@ -7209,8 +7218,8 @@ KValue k_call4(KValue f, KValue a, KValue b, KValue c, KValue d) {
    reaches a call through the fast arm the emitter inlines; it arrives here.
 
    A new call gathers held and fresh arguments and asks the callee's arity: a
-   closure's is its field, a fnref's its field, anything else — a partial
-   over a partial, a value that is not callable — answers nothing, which is
+   closure's is its field, a fnref's its field, a partial's its callee's less
+   what it holds, and a value that is not callable answers nothing, which is
    what the interpreter's arities_of answers, and the partial grows. Equal
    dispatches through k_callN, which orders the failure tests the way the
    oracle does; short grows; past it dies naming the arity, in the oracle's
@@ -7259,10 +7268,18 @@ KValue k_partial4(KValue f, KValue a, KValue b, KValue c, KValue d) {
     return k_partial_build(f, 4, args);
 }
 
-/* The count a callee answers to, or -1 when it answers none: a partial
-   itself (arity -1 already), or a value that is not callable at all. */
+/* The count a callee answers to, or -1 when it answers none. A partial
+   answers its own callee's count less what it holds, as the interpreter's
+   arities_of does, so `&m` over `m = &k 2` runs when one more arrives rather
+   than growing. A value that is not callable answers none. */
 static long long k_callee_arity(KValue callee) {
-    if (callee.tag == K_CLOSURE) return ((KClosure*)(intptr_t)callee.payload)->arity;
+    if (callee.tag == K_CLOSURE) {
+        KClosure* c = (KClosure*)(intptr_t)callee.payload;
+        if (c->arity >= 0 || c->fn) return c->arity;
+        long long inner = k_callee_arity(((KValue*)c->env)[0]);
+        long long held = c->ncaps - 1;
+        return inner >= held ? inner - held : -1;
+    }
     if (callee.tag == K_FNREF) return ((KFnref*)(intptr_t)callee.payload)->arity;
     return -1;
 }

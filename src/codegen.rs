@@ -7424,6 +7424,19 @@ impl<'a> Backend<'a> {
         supplied: &[Expr],
         span: Span,
     ) -> Result<String, String> {
+        // A group whose one arm takes four or fewer is held over the value it
+        // is handed out as, which names the group: a call that turns down a
+        // failing argument then says so in the trace, as a direct call does.
+        // A closure over the group answered the failure before entering it,
+        // and the trace lost the group. `partial_lambda` still refuses what
+        // it refuses, and past four the lambda stays, because the runtime's
+        // dispatchers stop at four.
+        let lambda = self.partial_lambda(name, supplied, span)?;
+        if let Expr::Lambda { params, .. } = &lambda {
+            if params.len() + supplied.len() <= 4 {
+                return self.emit_partial_value(f, &Name::new(name), supplied, span);
+            }
+        }
         let mut held = Vec::new();
         let mut names = Vec::new();
         for a in supplied {
@@ -7496,8 +7509,7 @@ impl<'a> Backend<'a> {
                 if !self.declared(name) {
                     return self.emit_partial_value(f, name, &[], *span);
                 }
-                let lambda = self.partial_lambda(name, &[], *span)?;
-                self.emit_expr(f, &lambda)
+                self.emit_declared_partial(f, name, &[], *span)
             }
             Expr::Upcast { expr: inner, ty, .. } => {
                 let v = self.emit_expr(f, inner)?;

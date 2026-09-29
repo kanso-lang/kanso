@@ -728,6 +728,9 @@ impl<'a> WasmBackend<'a> {
                     return self.emit_partial_value(ctx, name, &[], *span);
                 }
                 let lambda = partial_lambda(self.program, name, &[], *span)?;
+                if held_over_value(&lambda, 0) {
+                    return self.emit_partial_value(ctx, name, &[], *span);
+                }
                 return self.emit_expr(ctx, &lambda, false);
             }
             Expr::Upcast { expr: inner, ty, .. } => {
@@ -924,6 +927,9 @@ impl<'a> WasmBackend<'a> {
                 if !self.program.fns.iter().any(|d| d.name == *name) {
                     return self.emit_partial_value(ctx, name, args, *span);
                 }
+                if held_over_value(&partial_lambda(self.program, name, args, *span)?, args.len()) {
+                    return self.emit_partial_value(ctx, name, args, *span);
+                }
                 return self.emit_held(ctx, args, *span, |this, ctx, held| {
                     let lambda = partial_lambda(this.program, name, &held, *span)?;
                     this.emit_expr(ctx, &lambda, false)
@@ -1098,8 +1104,15 @@ impl<'a> WasmBackend<'a> {
                     .iter()
                     .filter(|d| d.name == name)
                     .fold(0i64, |m, d| m | (1i64 << d.params.len().min(30)));
+                // The wrapper never reads its environment, so the group's
+                // name rides there: a call that turns down a failing argument
+                // names the group in the trace, as a direct call does. A
+                // builtin's wrapper carries nothing and names nothing.
+                let named = self.str_lit(name);
+                ctx.body.i32_const(named as i64);
+                ctx.body.call(RT_ARG);
                 ctx.body.i32_const(widx as i64);
-                ctx.body.i32_const(0);
+                ctx.body.i32_const(1);
                 ctx.body.i32_const(MASKED_ARITY - mask);
                 ctx.body.call(RT_MKCLOSURE);
             }
@@ -1723,4 +1736,12 @@ fn free_idents(expr: &Expr, visit: &mut dyn FnMut(&str)) {
             }
         }
     }
+}
+
+/// Whether a partial over a declared group is held over the value the group
+/// is handed out as, which carries its name: a call that turns down a failing
+/// argument then names the group in the trace, as a direct call does. Past
+/// four the native dispatchers stop, so both backends keep the lambda there.
+fn held_over_value(lambda: &Expr, held: usize) -> bool {
+    matches!(lambda, Expr::Lambda { params, .. } if params.len() + held <= 4)
 }

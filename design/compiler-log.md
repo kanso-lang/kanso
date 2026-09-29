@@ -18905,6 +18905,115 @@ lib and the benchmarks hold no partials, so no runtime row can move. The micro
 sample `a_partial_widens_its_group` printed the address on the old compiler.
 The row "a partial leaving its group narrow" takes the widening back out and
 turns the micro corpus red on both native builds.
+
+## 2026-09-29 — a partial over a partial runs when it is full
+
+`h = &g p` holds one of `g`'s three arguments and `&h 3` holds one more, so
+`(&h 3) 1` has all three. The interpreter decides whether a partial is full by
+asking its callee how many arguments it takes, and a partial answered nothing,
+so it wrapped the three in a third partial and printed `<fn>`. Native ran
+`g p 3 1` and printed 6, and `h 3 1` printed 6 on both. A partial now answers
+its callee's arities less what it holds. Probing partials by hand after the
+held-err fix found it, and it predates that fix.
+
+The native and browser runtimes keep a partial over a value as a closure with
+no body, and they ask its callee the same question. Their comments said a
+partial over a partial answers nothing because the interpreter's `arities_of`
+did. So once the interpreter answered, `s = &k` over `k = &h 3` printed 6 at
+`s 1` on the interpreter and `<fn>` on both native builds. `k_callee_arity` in
+the runtime and `arities_of` in the browser's host now answer a partial the
+same way.
+
+The micro sample `a_partial_over_a_partial_runs_when_full` finishes one bound,
+one written in place and one wrapped in a partial holding nothing, and keeps a
+partial of two in three as a function. The old interpreter printed `<fn>` for
+all four, and old native printed `<fn>` for the wrapped one. The rows "a
+partial over a partial taking nothing", "a native partial answering nothing"
+and "a browser partial answering nothing" each put one engine's answer back,
+and each turns its corpus red.
+
+CI measured what the native runtime's extra branch costs. Release codegen rose
+114,479 to 408,187,514 in `codegen_instructions_release`, and dev codegen rose
+3,832 to 124,465,602 in `codegen_instructions_dev`, since `k_callee_arity` is
+runtime C that every build compiles. `work_runbench` rose 201 to 1,088,404,896.
+Emitting fell 335 and every benchmark's text shrank 480 bytes. The meta welfare
+fell by 0.00006, and the floor comes down by that much under the 2026-09-13
+rule, because this is the language answering the same on every engine.
+
+## 2026-09-29 — equality refuses a function wherever it meets one
+
+`==` refuses to compare a function, because asking which function you were
+handed is the question dispatch answers. The interpreter asked that of the two
+operands and nothing else, and its list of functions left out partials. So
+`(&f n) == 3` answered false, and so did `[k] == [k]` with `k` a lambda.
+Native refused both, at any depth. The interpreter's list now includes
+partials, and its equality walk refuses on reaching a function inside a list,
+a map or a record, as it does at the top. The browser's host keeps a lazy
+value as a table function too, so its table functions stay off the list. The
+walk forces cells before it asks, and past that point a table function is a
+function, so the walk refuses it there.
+
+The generated-program differential found it in batch 106, at seed 327553,
+where native refused a comparison of a partial and the interpreter answered
+false. The runtime samples `equality_is_not_defined_on_a_partial` and
+`equality_is_not_defined_on_a_function_in_a_list` printed false on the old
+interpreter. The rows "a partial compared" and "a function in a list
+compared" each put one half back and turn the runtime corpus red.
+CI read `interp_instructions` at 591,118,143, up 198,180, which is the
+interpreter's equality walk asking each element it compares whether it is a
+function. The meta welfare fell by that much and the floor comes down under
+the 2026-09-13 rule, since this is the interpreter keeping the rule native
+already kept.
+
+## 2026-09-29 — a call through a group value names the group in the trace
+
+When a group turns down a failing argument, the interpreter adds the group's
+name to the err's trace, and a direct call `f1 0 bad` prints `passed through
+f1` on every engine. Called through a value, it did not. `f = f1; f 0 bad`
+and `k = &f1 0; k bad` printed `passed through f1` on the interpreter and no
+hop on native or in the browser, because each backend's dispatcher answers a
+failing argument before it enters the callee. `k_call1` hands its argument to
+the group's wrapper, whose guard adds the hop, so a call with one argument
+agreed. The generated-program differential found it in batch 105, at seed
+323931, the first batch whose generator binds partials over partials.
+
+The native dispatchers now name the group when they answer a failure for a
+group value; a builtin value names nothing, as on the interpreter. A partial
+over a declared group is held over the group's value, which carries the name,
+where it was a closure that answered the failure before the group ran. The
+browser's wrapper for a group now carries the group's name as its one
+capture, which its body never read, and its partials are held the same way.
+A group whose arm takes more than four arguments keeps the closure, because
+the native dispatchers stop at four, and a call through a partial over one
+still drops the hop. lib and the benchmarks hold no partials, so no runtime
+row can move.
+
+The runtime samples `a_call_through_a_partial_names_its_group` and
+`a_call_through_a_group_value_names_its_group` pin the trace. The old native
+builds printed no hop for either. The rows "a group value naming nothing", "a
+partial held in a nameless closure", "a browser group value naming nothing"
+and "a browser partial held in a nameless closure" each put one change back
+and turn their corpus red.
+
+Holding these partials over the group's value took the micro sample
+`a_partial_holding_an_err_answers_it` off the closure path whose held-err
+check the row "a partial's held err built into a closure" takes out, and
+kanso#1721's widening gives every group named in a partial a guard that
+answers the err anyway, so the row went blind. The sample now prints a
+partial over a group of nine, which native still builds as a closure: the
+err, where the mutated closure printed `<fn>`.
+
+CI read `interp_instructions` at 589,940,341, down 979,622, and
+`codegen_instructions_release` at 408,166,709, down 20,805. The worsened
+rows are `codegen_instructions_dev` at 124,466,613, up 1,011;
+`compile_instructions` at 24,998,507, up 29; `entry_instructions` at
+82,612,989, up 329; `library_instructions` at 83,095,823, up 338;
+`work_livebench` at 1,537,391,550, up 672; and `work_runbench` at
+1,088,405,694, up 798. The benchmarks' machine code, `text` in
+bench/text_golden.txt, came to 3,545,808 bytes, up 40,768 across fourteen
+binaries, which is the runtime's dispatchers naming the group on each failure
+path. The meta welfare rose and the floor is banked there.
+
 ## 2026-09-29 — text/to_bytes keeps its frame
 
 A rescue hands on a failure its own module raised and calls its callback on

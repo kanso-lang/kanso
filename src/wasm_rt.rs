@@ -187,12 +187,18 @@ const MASKED: i32 = -1000;
 
 /// Every count a callee answers to, smallest first â the interpreter's
 /// `arities_of`. A lambda answers its one count, a wrapper the mask it was
-/// handed, and anything else â a partial, a cell, a value that is not
-/// callable â nothing, which is what makes a partial over it grow.
+/// handed, a partial its callee's counts less what it holds, and anything
+/// else â a cell, a value that is not callable â nothing, which is what
+/// makes a partial over it grow.
 fn arities_of(callee: u32) -> Vec<usize> {
-    let Slot::C { arity, .. } = closure_slot(callee) else { return Vec::new() };
+    let Slot::C { arity, env, .. } = closure_slot(callee) else { return Vec::new() };
     if arity >= 0 {
         return vec![arity as usize];
+    }
+    if arity == PARTIAL {
+        let Slot::E(held) = slot(env) else { return Vec::new() };
+        let n = held.len() - 1;
+        return arities_of(held[0]).into_iter().filter(|a| *a >= n).map(|a| a - n).collect();
     }
     if arity > MASKED {
         return Vec::new();
@@ -383,20 +389,36 @@ fn call_closure(c_h: u32, arg_handles: Vec<u32>) -> u32 {
             }
         }
     }
-    match failing.len() {
-        0 => {}
-        1 => return failing[0].0,
+    let answer = match failing.len() {
+        0 => None,
+        1 => Some(failing[0].0),
         _ => {
             let merged = failing
                 .into_iter()
                 .map(|(_, v)| v)
                 .reduce(crate::eval::accumulate_failures)
                 .expect("more than one failure");
-            return push(Slot::V(merged));
+            Some(push(Slot::V(merged)))
         }
+    };
+    if let Some(failure) = answer {
+        return group_hop(arity, env, failure);
     }
     let args = push(Slot::E(Rc::new(arg_handles)));
     unsafe { k_callback(tidx, env, args) }
+}
+
+/// A group handed out as a value turns down a failing argument the way a
+/// direct call does, and a direct call names the group in the trace. Its
+/// wrapper carries the name as its one capture; a builtin's carries none.
+fn group_hop(arity: i32, env: u32, failure: u32) -> u32 {
+    if arity > MASKED {
+        return failure;
+    }
+    match slot(env) {
+        Slot::E(held) if held.len() == 1 => rt_err_hop(failure, held[0]),
+        _ => failure,
+    }
 }
 
 /// `call_closure` without its argument guard, for the callers that have

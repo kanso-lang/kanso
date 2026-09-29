@@ -1,0 +1,8 @@
+# A function inside a list is the same question as one outside it. The
+# interpreter asked only about the two operands themselves, so `[k] == [k]`
+# answered false, where native refused.
+fn go n
+  k = (x -> x + n)
+  "{[k] == [k]}"
+
+pub play = print (go 1)
