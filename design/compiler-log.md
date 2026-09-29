@@ -19470,3 +19470,11 @@ has a ratchet row:
 - "a builder seed refusing what is not a string" puts the refusal back.
 - "a join that never adopts its seed" stops emitting `k_b_adopt`, and the join
   answers nothing.
+
+CI's rows for the change: `k_b_adopt` adds 352 bytes of text to every
+benchmark binary (runbench 402,888 to 403,240). Release-tier codegen rose
+85,343 instructions to 408,226,171 and dev-tier codegen fell 11,928 to
+124,468,828. Emitting fell 1,606 to 29,938,500, since the first join no longer
+emits a `k_unsub` before the seed. Runbench fell 1,342 instructions to
+1,088,404,203 and oneshot fell 714; encodebench rose 210 and livebench 133.
+Welfare holds at the floor, 90.32.
