@@ -705,15 +705,22 @@ fn a_program_that_runs_out_of_memory_says_so() {
 /// filled the page, then a harness panic on a program that ran fine alone.
 #[test]
 fn the_program_after_one_that_ran_out_of_memory_runs() {
-    // a seed the caller reads again is copied on every lap, so the page fills
-    // in steps of one list and is left with less than a list free
-    let source = "fn fill acc 0\n  acc\n\nfn fill acc n\n  fill (push acc n) (n - 1)\n\n\
+    // the loop reads its list on a line of its own, so every lap copies the
+    // list and the page fills. Seeded from a literal instead of a constant,
+    // the same loop leaves the next compile room even with the registry kept,
+    // and this spec stays green without the fix it pins.
+    let source =
+        "fn fill acc 0\n  acc\n\nfn fill acc n\n  k = length acc\n  fill (push acc k) (n - 1)\n\n\
                   seed = [0]\n\npub play = print \"{length (fill seed 100000)} {seed}\"\n";
     let mut toolchain = Toolchain::load();
     let pages = toolchain.memory().size(&toolchain.store);
     let short = (1u64 << 32) / 65536 - 256;
     toolchain.memory().grow(&mut toolchain.store, short - pages).expect("the memory grows");
-    let _ = toolchain.run("full.kso", source);
+    let full = toolchain.run("full.kso", source);
+    assert!(
+        matches!(&full, Answer::Ran(1, text) if text.contains("ran out of memory")),
+        "the first program answered {full:?}"
+    );
     let after = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         toolchain.run("after.kso", "print \"{1 + 2}\"\n")
     }));
@@ -746,6 +753,29 @@ fn a_string_built_onto_itself_grows_where_it_stands() {
             "{name} answered {answer:?}"
         );
     }
+}
+
+/// A loop seeded with a list its caller reads again copies the seed once. The
+/// seed's handle is the caller's, and writing through it would change what
+/// the caller reads, so the loop copied on every lap and the registry kept
+/// every copy: seventy thousand pushes filled the page. The call now hands the
+/// seed over under a handle of its own. The first write copies the list
+/// behind it and every write after that extends the copy, and the caller's
+/// `seed` still reads `[0]`. A map written with `put` goes the same way, and
+/// a loop that returns its seed untouched hands back a list the next push
+/// copies rather than writes.
+#[test]
+fn a_loop_seeded_with_a_list_its_caller_reads_copies_it_once() {
+    let source = "fn fill acc 0\n  acc\n\nfn fill acc n\n  fill (push acc n) (n - 1)\n\n\
+                  fn keyed m 0\n  m\n\nfn keyed m n\n  keyed (put m \"k{n}\" n) (n - 1)\n\n\
+                  seed = [0]\n\nbase = { \"a\":1 }\n\nkept = fill seed 0\n\n\
+                  print \"{length (fill seed 70000)} {seed}\"\n\
+                  print \"{length (keyed base 30000)} {base}\"\n\
+                  print \"{push kept 9} {seed}\"\n";
+    let mut toolchain = Toolchain::load();
+    let answer = toolchain.run("seeded.kso", source);
+    let want = "70001 [0]\n30001 { \"a\":1 }\n[0 9] [0]\n";
+    assert!(matches!(&answer, Answer::Ran(0, text) if text == want), "{answer:?}");
 }
 
 impl Toolchain {

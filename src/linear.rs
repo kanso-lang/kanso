@@ -58,6 +58,40 @@ fn in_place_pushes_with(
     out
 }
 
+/// Call arguments, keyed `(file, line, col, index)`: the call's span and the
+/// argument's position in it.
+pub type Edges = HashSet<(std::sync::Arc<str>, usize, usize, usize)>;
+
+/// The browser engine's in-place writes, and the calls that make them sound.
+///
+/// `in_place_pushes` refuses a parameter when one caller keeps reading the
+/// value it hands in: a loop seeded with a list its caller prints afterwards.
+/// Native and the interpreter count holders at run time and copy once, on the
+/// first lap. The browser engine's values sit behind handles that nothing
+/// counts, so it copied on every lap and kept every copy, and 70,000 pushes
+/// onto such a seed ran the page out of memory.
+///
+/// That engine can give a call a handle of its own. Here no caller refuses,
+/// and each call whose argument would have refused is returned, so the engine
+/// hands that argument over under a new handle. Nothing else holds the new
+/// handle, which is what the parameter was promised. The container behind it
+/// is still shared, so the first write copies it and every write after that
+/// extends the copy.
+pub fn handed_over_pushes(program: &Program) -> (Sites, Edges) {
+    let analysis = Analysis::build(program, Some(Default::default()));
+    let in_place = in_place_pushes_with(&analysis, program);
+    // The fixpoint also wrote down calls to parameters it went on to drop, so
+    // the calls are read again for the parameters that stood.
+    if let Some(edges) = &analysis.handles {
+        edges.borrow_mut().clear();
+    }
+    for (name, arity, i) in &analysis.linear_params {
+        analysis.callers_hand_over(name, *arity, *i);
+    }
+    let edges = analysis.handles.map(|e| e.into_inner()).unwrap_or_default();
+    (in_place, edges)
+}
+
 /// Write sites whose container argument is a name read once, on every path,
 /// in the declaration that holds it: a parameter or a local that the write
 /// moves. `in_place_pushes` proves more, that every caller hands that name a
@@ -168,6 +202,10 @@ struct Analysis<'a> {
     /// Every name the program mentions as a VALUE rather than calls, read off
     /// the program in one walk instead of once per question.
     mentions: Mentions<'a>,
+    /// Set for the browser engine, which can give a call a handle of its own:
+    /// a caller that does not hand its value over is not a refusal, and the
+    /// call is written down here instead, keyed `(file, line, col, index)`.
+    handles: Option<std::cell::RefCell<Edges>>,
 }
 
 /// Where a name occurs, gathered once, so `escapes_as_value` stops re-walking
@@ -268,6 +306,10 @@ impl<'a> Mentions<'a> {
 
 impl<'a> Analysis<'a> {
     fn new(program: &'a Program) -> Self {
+        Self::build(program, None)
+    }
+
+    fn build(program: &'a Program, handles: Option<std::cell::RefCell<Edges>>) -> Self {
         // Linearity is cyclically self-supporting (the accumulator's uniqueness
         // rests on the next hop's, which rests back on it), so this is a
         // *greatest* fixpoint: assume every parameter is linear and every group
@@ -294,6 +336,7 @@ impl<'a> Analysis<'a> {
             returns_unique: HashSet::default(),
             folds,
             mentions,
+            handles,
         };
         for decl in real_fns(program) {
             a.returns_unique.insert((decl.name.clone(), decl.params.len()));
@@ -448,13 +491,19 @@ impl<'a> Analysis<'a> {
         lambda_bound: Option<&HashSet<String>>,
     ) -> bool {
         let Handover { name, arity, i } = *q;
-        if let Expr::App { head, args, .. } = e {
+        if let Expr::App { head, args, span, .. } = e {
             if matches!(head.as_ref(), Expr::Ident(n, _, _) if n == name)
                 && args.len() == arity
                 && (!self.unique_in(&args[i], ctx, scoped)
                     || !hands_over_fresh(&args[i], lambda_bound))
             {
-                return false;
+                let Some(edges) = &self.handles else { return false };
+                edges.borrow_mut().insert((
+                    ctx.file.clone(),
+                    span.line as usize,
+                    span.col as usize,
+                    i,
+                ));
             }
             // a fold's own lambda is where an accumulator legitimately arrives
             // as a parameter; check the lambda in that light, and everything

@@ -96,6 +96,10 @@ const RT_BUILTIN_MUT: u32 = 44;
 /// A string built by joining onto itself, the way `linear::string_builders`
 /// finds it: the join appends to the builder when the builder is its own.
 const RT_TEMPLATE_MUT: u32 = 45;
+/// An argument handed over under a handle of its own, at a call
+/// `linear::handed_over_pushes` returned: the caller still reads the value,
+/// and the parameter it goes to writes it in place.
+const RT_REHANDLE: u32 = 46;
 /// A group handed out as a value carries every count its arms take, as bits
 /// below this base: `MASKED - mask`. Paired with `MASKED` in wasm_rt.
 const MASKED_ARITY: i64 = -1000;
@@ -148,6 +152,7 @@ fn imports() -> Vec<Import> {
         Import { name: "rt_partial", params: 2, returns: true },
         Import { name: "rt_builtin_mut", params: 2, returns: true },
         Import { name: "rt_template_mut", params: 2, returns: true },
+        Import { name: "rt_rehandle", params: 1, returns: true },
     ]
 }
 
@@ -187,6 +192,9 @@ pub struct WasmBackend<'a> {
     /// line, col)`: the same answer the native emitter and the interpreter
     /// read.
     in_place: crate::hash::Set<(std::sync::Arc<str>, usize, usize)>,
+    /// The call arguments that go over under a handle of their own, so that
+    /// the parameter receiving them can write in place.
+    rehandles: crate::linear::Edges,
     /// `linear::string_builders`' join sites and accumulating parameters.
     builder_joins: crate::hash::Set<(std::sync::Arc<str>, usize, usize)>,
     builder_params: crate::hash::Set<(String, usize, usize)>,
@@ -271,11 +279,14 @@ pub fn compile(program: &Program, tailcalls: bool) -> Result<Compiled, String> {
         knotted: crate::codegen::knotted_constants(program),
         tailcalls,
         in_place: Default::default(),
+        rehandles: Default::default(),
         builder_joins: Default::default(),
         builder_params: Default::default(),
     };
-    let (in_place, _, (joins, params, _)) = crate::linear::for_the_emitter(program);
+    let (_, _, (joins, params, _)) = crate::linear::for_the_emitter(program);
+    let (in_place, rehandles) = crate::linear::handed_over_pushes(program);
     backend.in_place = in_place;
+    backend.rehandles = rehandles;
     backend.builder_joins = joins;
     backend.builder_params = params;
     backend.run()
@@ -1565,8 +1576,12 @@ impl<'a> WasmBackend<'a> {
             }
         }
         if let Some(idx) = self.dispatchers.get(&(name.to_string(), args.len())).copied() {
-            for arg in args {
+            for (i, arg) in args.iter().enumerate() {
                 self.emit_call_arg(ctx, arg)?;
+                let edge = (ctx.file.clone(), span.line as usize, span.col as usize, i);
+                if self.rehandles.contains(&edge) {
+                    ctx.body.call(RT_REHANDLE);
+                }
             }
             match tail && self.tailcalls {
                 true => ctx.body.return_call(idx),

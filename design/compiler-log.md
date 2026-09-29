@@ -19479,3 +19479,50 @@ CI measured five rows moved. `compile_instructions` rose to 25,273,256
 29,924,532 (-15,574) and `interp_instructions` to 590,139,166 (-978,977). No
 mechanism for any of the five was isolated. Welfare reports neither a fall
 nor a rise, and the floor is unchanged.
+
+## 2026-09-29 — the browser engine copies a shared seed once
+
+An earlier entry today left one shape out of memory on the browser engine: a
+loop seeded with a list its caller reads again, such as `fill seed 70000`
+followed by a read of `seed`. `in_place_pushes` refuses the loop's parameter
+because one caller does not hand its value over, so every lap copied the list
+and the registry kept every copy. That entry said covering the site needed a
+count per handle. Giving the seed a handle of its own at the call is enough.
+
+`linear::handed_over_pushes` runs the same fixpoint with the caller half
+relaxed. A call whose argument would have refused the parameter no longer
+refuses it. It is written down instead, keyed by the call's position and the
+argument's index. The browser backend asks this question in place of
+`in_place_pushes`, and after emitting a written-down argument it calls
+`rt_rehandle`. That puts the same container in a new registry slot. Nothing
+else holds the new handle, which is what the parameter was promised. The
+caller's handle and the new one share the container, so the first write
+through `rt_builtin_mut` finds a second owner and copies. Every lap after
+that extends the copy. A value that is not a list, map or bytes keeps its
+handle, because no write takes it. The native emitter and the interpreter
+still ask `in_place_pushes` and `moved_writes`, and their output is unchanged.
+
+`a_loop_seeded_with_a_list_its_caller_reads_copies_it_once` pushes seventy
+thousand times onto a constant seed and puts thirty thousand keys into a
+constant map, and then reads both constants. It also takes a loop that hands
+its seed back untouched and pushes onto the result. Native and the
+interpreter give the same three lines. Two mutations turned it red, and each is
+a ratchet row:
+
+- "a seed copied every lap in wasm" asks `in_place_pushes` again. The run
+  ran out of memory.
+- "a seed written through its caller's handle in wasm" skips `rt_rehandle`.
+  The write emptied the caller's handle, and the answer read `70001 []`,
+  `30001 {}` and `[9] []`.
+
+The fix took away the filler `the_program_after_one_that_ran_out_of_memory_runs`
+relied on, since that seeded loop no longer fills the page. Its replacement
+reads the list on a line of its own inside the loop, which no proof covers,
+and it now asserts that the first program ran out of memory. A literal seed
+`[0]` in the same loop also ran out of memory, but the compile after it fit
+even with the release taken out, so the spec stayed green without the fix it
+pins. Seeded from a constant, it went red under "a dead run holding the page".
+Why the two seeds differ was not isolated.
+
+The two wasm fuzz programs that ran out of memory on this shape,
+`w361235` and `w361521`, now agree with native.
