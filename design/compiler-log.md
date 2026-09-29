@@ -18567,10 +18567,11 @@ merges the standard library. The overlap check already did the same through its
 look back over every earlier declaration. It now sorts the declarations once by
 name, arity and place in the source, walks each group of two or more arms, and
 puts its reports back in source order. On this container, against a build of
-main, `kanso check` of the entry corpus fell from 87,978,846 instructions to
-85,651,929 and of the compile corpus from 26,801,090 to 26,571,307, with
-`compile_allocs` unchanged at 14,308. Those are this machine's readings of the
-two corpora, not CI's rows.
+main, and with the list and constructor questions below included, `kanso
+check` of the entry corpus fell from 87,978,846 instructions to 85,815,077, of
+the library corpus from 88,474,145 to 86,280,224 and of the compile corpus from
+26,801,090 to 26,646,425, with `compile_allocs` unchanged at 14,308. Those are
+this machine's readings of the three corpora, not CI's rows.
 
 ## 2026-09-29 — a list arm reads no element type
 
