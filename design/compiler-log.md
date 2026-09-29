@@ -19620,3 +19620,8 @@ subtype reaches the loop at all.
 the micro corpus. The mutation "a lazy subtype unwrapped before it is forced"
 hands the unforced value to the unwrap again, and the micro corpus went red
 on it with the native run printing nothing. It is a ratchet row.
+
+CI measured one row moved: `emit_instructions` fell 49 to 29,998,621. The
+benchmarks declare no subtype, so the loop this changes emits nothing for
+them, and no mechanism for the fall was isolated. Welfare reports neither a
+fall nor a rise, and the floor is unchanged.
