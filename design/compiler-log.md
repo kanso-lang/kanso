@@ -19415,3 +19415,9 @@ on its first lap. The registry passes handles by number and counts nothing,
 and on the first lap the loop's handle is the caller's own, so moving out of it
 would empty the caller's list. Covering that site needs a count per handle,
 which the registry does not keep.
+
+CI measured four compile-side rows moved, all layout: `compile_instructions`
+25,210,642 (+20,275), `entry_instructions` 83,316,655 (+51,786),
+`library_instructions` 83,855,020 (+51,887) and `emit_instructions` 29,940,106
+(-420). None of them runs the browser backend. Welfare reports neither a fall
+nor a rise, and the floor is unchanged.
