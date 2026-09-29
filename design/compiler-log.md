@@ -19515,11 +19515,14 @@ has a ratchet row:
 - "a join that never adopts its seed" stops emitting `k_b_adopt`, and the join
   answers nothing.
 
-CI's rows for the change: `k_b_adopt` adds 352 bytes of text to every
-benchmark binary (runbench 402,888 to 403,240). Release-tier codegen rose
-85,343 instructions to 408,226,171 and dev-tier codegen fell 11,928 to
-124,468,828. Emitting fell 1,606 from the figure kanso#1731 left, to
-29,922,926. The change also drops the `k_unsub` the first join emitted before
-the seed, and the fall arrived with it; no mechanism was isolated. Runbench fell 1,342 instructions to 1,088,404,203 and oneshot fell 714;
-encodebench rose 210 and livebench 133.
+CI's rows for the change. `k_b_adopt` adds 352 bytes of text to each of the
+fourteen benchmark binaries, and `text` rose to 3,539,536 (runbench 402,888
+to 403,240). `codegen_instructions_release` rose 85,343 to 408,226,171 and
+`codegen_instructions_dev` fell 11,928 to 124,468,828. `emit_instructions`
+fell 1,606 from the figure kanso#1731 left, to 29,922,926. The change also
+drops the `k_unsub` the first join emitted before the seed, and that fall
+arrived with it; no mechanism was isolated. `work_runbench` fell 1,342 to
+1,088,404,203 and `work_oneshot` fell 714 to 12,743,727. `work_encodebench`
+rose 210 to 2,333,703,939, `work_livebench` 133 to 1,537,391,116,
+`work_jsonbench` 4 to 758,833,558 and `work_basket` 1 to 29,464,216.
 Welfare holds at the floor, 90.32.
