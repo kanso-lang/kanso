@@ -448,12 +448,6 @@ this function takes {} argument(s), got 1
 `{}` takes whole numbers that fit 64 bits
 {} takes whole numbers that fit 64 bits
 
-# The same shape again. `age 1 2` for `type age int` reaches the interpreter's
-# construction check, and native refuses it at compile time as its own limit:
-# "native backend: `age` wraps one value". Both refuse, which the differential
-# law allows; the runtime corpus asks for more than that.
-`{}` wraps one {} value
-
 # A field annotated with two or more types is refused at the front door on
 # both engines — "a record field carries no type — write `v` and let the
 # compiler infer what it holds" — so construction never runs and the member

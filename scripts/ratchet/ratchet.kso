@@ -3948,6 +3948,36 @@ nested_place = row
 
 rows_c1zzzu = text/concat rows_c1zzzt [nested_place]
 
+# A subtype is built from the one value it wraps. Built from any count,
+# `tall 1 2` passes `kanso check` and each engine refuses it its own way.
+subtype_count = row
+  "a subtype built from any count"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_subtype_built_from_any_count")
+  no_setup
+
+rows_c1zzzv = text/concat rows_c1zzzu [subtype_count]
+
+typeset_parent = row
+  "a typeset taken as a parent"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_typeset_taken_as_a_parent")
+  no_setup
+
+type_file = row
+  "a type refusal left without its file"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_type_refusal_left_without_its_file")
+  no_setup
+
+rows_c1zzzw = text/concat rows_c1zzzv [typeset_parent type_file]
+
 # A record of an int and a value crosses a call in two words, the int above
 # the value's tag. Until 2026-09-29 the int came back through a logical shift
 # and every int was packed, so a negative one read as 2^56 plus it and one
@@ -3968,9 +3998,9 @@ packed_wide = row
   (breaking "a_wide_int_packed_anyway")
   release
 
-rows_c1zzzv = text/concat rows_c1zzzu [packed_sign packed_wide]
+rows_c1zzzy = text/concat rows_c1zzzw [packed_sign packed_wide]
 
-rows_c = text/concat rows_c1zzzv [itself]
+rows_c = text/concat rows_c1zzzy [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
