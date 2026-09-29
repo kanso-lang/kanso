@@ -4074,6 +4074,27 @@ partial_nests = [partial_nest partial_nest_native partial_nest_browser]
 
 rows_c1zzzz = text/concat rows_c1zzzze partial_nests
 
+# Equality refuses a function wherever the walk meets one, a partial among
+# them. The interpreter answered false for a partial and for a function in a
+# list, where native refused.
+eq_partial = row
+  "a partial compared"
+  true
+  "cargo test --release --test golden runtime_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_partial_compared")
+  no_setup
+
+eq_nested = row
+  "a function in a list compared"
+  true
+  "cargo test --release --test golden runtime_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_function_in_a_list_compared")
+  no_setup
+
+rows_c1zzzzf = text/concat rows_c1zzzz [eq_partial eq_nested]
+
 # A call through a group value, or a partial over a group, that turns down a
 # failing argument names the group in the trace, as a direct call does.
 # Native and the browser answered the failure before entering the group and
@@ -4112,7 +4133,7 @@ hop_browser_partial = row
 
 hops = [hop_value hop_partial hop_browser hop_browser_partial]
 
-rows_c1zzzzd = text/concat rows_c1zzzz hops
+rows_c1zzzzd = text/concat rows_c1zzzzf hops
 
 # A partial over a group of more than four parameters is held over the group's
 # value on both native and the browser, native's dispatcher calls a group value
