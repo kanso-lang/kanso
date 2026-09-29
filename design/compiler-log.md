@@ -19421,3 +19421,17 @@ CI measured four compile-side rows moved, all layout: `compile_instructions`
 `library_instructions` 83,855,020 (+51,887) and `emit_instructions` 29,940,106
 (-420). None of them runs the browser backend. Welfare reports neither a fall
 nor a rise, and the floor is unchanged.
+
+The next fuzz batch found what happens after such a run. A nested-generator
+program filled the page, and the program two after it panicked the harness,
+although it ran fine alone. The registry kept the dead run's values until the
+next `load`, and `load` comes after the next compile. So the compile after a
+full page had nowhere to allocate and trapped, and so did every compile after
+it. In the playground the compile call is not wrapped in a `try`, so the page
+would have stopped running programs until it was reloaded.
+`kanso_compile_wasm` and `kanso_play_wasm` now call `wasm_rt::release` before
+they compile, which drops the registry, the pending arguments and the constant
+cells. `the_program_after_one_that_ran_out_of_memory_runs` fills the page with
+a seeded loop, which copies on every lap and leaves less than one list free,
+then asks for `print "{1 + 2}"`. With the release taken out, the second compile
+trapped. The ratchet row is "a dead run holding the page".

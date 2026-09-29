@@ -698,6 +698,31 @@ fn a_program_that_runs_out_of_memory_says_so() {
     );
 }
 
+/// And the program after it runs. A run's values stayed in the registry until
+/// the next `load`, which comes after the next compile, so the compile after a
+/// run that filled the page had nowhere to allocate and trapped, and so did
+/// every compile after that. The random programs found it: an accumulator that
+/// filled the page, then a harness panic on a program that ran fine alone.
+#[test]
+fn the_program_after_one_that_ran_out_of_memory_runs() {
+    // a seed the caller reads again is copied on every lap, so the page fills
+    // in steps of one list and is left with less than a list free
+    let source = "fn fill acc 0\n  acc\n\nfn fill acc n\n  fill (push acc n) (n - 1)\n\n\
+                  seed = [0]\n\npub play = print \"{length (fill seed 100000)} {seed}\"\n";
+    let mut toolchain = Toolchain::load();
+    let pages = toolchain.memory().size(&toolchain.store);
+    let short = (1u64 << 32) / 65536 - 256;
+    toolchain.memory().grow(&mut toolchain.store, short - pages).expect("the memory grows");
+    let _ = toolchain.run("full.kso", source);
+    let after = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        toolchain.run("after.kso", "print \"{1 + 2}\"\n")
+    }));
+    assert!(
+        matches!(&after, Ok(Answer::Ran(0, text)) if text == "3\n"),
+        "the program after it answered {after:?}"
+    );
+}
+
 impl Toolchain {
     /// One line at the playground's prompt, the way the page sends it.
     fn prompt(&mut self, line: &str) -> (i32, String) {

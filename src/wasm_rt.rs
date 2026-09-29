@@ -97,6 +97,16 @@ thread_local! {
 
 const SPAN0: Span = Span::at(0, 0);
 
+/// Drop what the last run made. Its values are dead once it has answered, and
+/// until now they stayed until the next `load`, which comes after the next
+/// compile: a run that filled the page left the compile after it with nowhere
+/// to allocate, and the engine trapped on every program that followed.
+pub fn release() {
+    REG.with(|r| r.renew(Vec::new()));
+    ARGS.with(|a| a.renew(Vec::new()));
+    CONSTS.with(|c| c.renew(std::collections::HashMap::new()));
+}
+
 pub fn load(program: Program, lits: &[Lit], types: Vec<(String, Vec<String>)>) {
     let parents: Vec<(String, String)> = program
         .types

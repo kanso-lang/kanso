@@ -195,6 +195,7 @@ thread_local! {
 #[cfg(target_arch = "wasm32")]
 #[no_mangle]
 pub extern "C" fn kanso_compile_wasm(ptr: *const u8, len: usize, tailcalls: i32) -> i32 {
+    crate::wasm_rt::release();
     let source = take_input(ptr, len);
     let program = match crate::compile_source("run", &current_file(), &source) {
         Ok(program) => program,
@@ -212,6 +213,7 @@ pub extern "C" fn kanso_compile_wasm(ptr: *const u8, len: usize, tailcalls: i32)
 #[cfg(target_arch = "wasm32")]
 #[no_mangle]
 pub extern "C" fn kanso_play_wasm(ptr: *const u8, len: usize, tailcalls: i32) -> i32 {
+    crate::wasm_rt::release();
     let source = take_input(ptr, len);
     let program = match crate::compile_play_file(&current_file(), &source) {
         Ok(program) => program,
