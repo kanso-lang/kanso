@@ -4422,7 +4422,19 @@ lazy_rows = [lazy_run_early lazy_failure_check lazy_read_as_closure]
 
 rows_c1zzzzu = text/concat rows_c1zzzzt lazy_rows
 
-rows_c = text/concat rows_c1zzzzu [itself]
+# A builtin in a program that declares a subtype unwraps its arguments, and
+# a lazy one is forced before the unwrap looks at it.
+lazy_sub = row
+  "a lazy subtype unwrapped before it is forced"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_lazy_subtype_unwrapped_before_it_is_forced")
+  release
+
+rows_c1zzzzv = text/concat rows_c1zzzzu [lazy_sub]
+
+rows_c = text/concat rows_c1zzzzv [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

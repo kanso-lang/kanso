@@ -1,0 +1,19 @@
+# A binding that only one arm of the next call reads is lazy, and a lazy
+# binding holding a subtype of string is a thunk until something forces it.
+# The native engine unwrapped a builtin's subtype arguments before it forced
+# them, so the thunk went through the unwrap untouched and `split` met the
+# subtype after its own force: "split takes two strings" where the oracle
+# splits the string.
+import "std/text"
+
+type word string
+
+fn made _
+  word "a b"
+
+fn shown z
+  w = made z
+  parts = text/split w " "
+  "{parts}"
+
+pub play = print (shown 0)

@@ -9666,10 +9666,16 @@ impl<'a> Backend<'a> {
         // declares a subtype can hand one over, so only that program pays.
         // A type's constructor comes through here too and must see the value
         // it wraps, so only a real builtin's arguments are unwrapped.
+        // A lazy binding holding a subtype's value is a thunk until forced,
+        // and a thunk is not a K_SUB, so the unwrap would pass it through and
+        // the builtin would meet the subtype after its own force. Forcing
+        // first is what the later force would do anyway; the gated force
+        // emits nothing when the set proves the value cannot be a thunk.
         if !shadows && !self.sub_parents.is_empty() && crate::check::builtin_arity(name).is_some() {
             for e in emitted.iter_mut() {
+                let forced = self.maybe_force(f, e.clone());
                 let t = f.tmp();
-                f.line(&format!("{t} = call %KValue @k_unsub(%KValue {e})"));
+                f.line(&format!("{t} = call %KValue @k_unsub(%KValue {forced})"));
                 *e = t;
             }
         }
