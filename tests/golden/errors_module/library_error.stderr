@@ -1,2 +1,8 @@
 error[naming]: `silly` answers only true or false: name it `silly?` (module tests/golden/errors_module/library_error/inner)
+  --> tests/golden/errors_module/library_error/inner/core.kso:4:8
+   4 | pub fn silly b
+              ^
 error[name]: comparing to `true` asks a question the value already answers — write the value itself (module tests/golden/errors_module/library_error/inner)
+  --> tests/golden/errors_module/library_error/inner/core.kso:5:5
+   5 |   b == true
+           ^

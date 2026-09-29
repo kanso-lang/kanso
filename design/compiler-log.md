@@ -18695,7 +18695,9 @@ unless the check had already named one. The naming check keeps the file of the
 first declaration of each group beside its span, and the tie, unused-value and
 constant-cycle checks name the declaration they hold. Through an import, 63
 fixtures of the error corpus gain their location and quoted line, 317 lines in
-all, and no line in any of them is removed or changed. `tests/sibling_types.rs`
+all, and no line in any of them is removed or changed. The module-error
+corpus, which checks a library through the program that imports it, gains the
+same lines in three of its nine cases, 15 in all. `tests/sibling_types.rs`
 adds a cycle through two files, whose refusals now point into each file. One
 diagnostic in the corpus still has no location: a subtype of `none` is refused
 at its type declaration, and a type declaration does not record its file. The
