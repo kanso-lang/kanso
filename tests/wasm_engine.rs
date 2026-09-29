@@ -805,6 +805,36 @@ fn a_lazy_binding_nobody_reads_never_runs() {
     }
 }
 
+/// Two errs meeting in one operation merge, and a merged err was born
+/// nowhere: the interpreter gives it no origin, so its report has no `born in`
+/// line. The browser engine stamped the operation's site on any err that came
+/// back without an origin, which gave the merge one. An err with a single
+/// birth keeps the site it was born at.
+#[test]
+fn a_merged_err_reports_no_birth_site() {
+    let defs = "import \"std/text\"\n\nfn shown z\n  v = text/to_float \"{z}x\"\n";
+    let reason = "\"\"0x\" is not a number\"";
+    for (name, body, want) in [
+        (
+            "merged.kso",
+            "  v / v\n",
+            format!("error[endpoint]: unhandled err reached the entry: [{reason} {reason}]\n"),
+        ),
+        (
+            "single.kso",
+            "  v + 1\n",
+            format!(
+                "error[endpoint]: unhandled err reached the entry: {reason}\n  \
+                 born in text/to_float at std/text/text.kso:89\n"
+            ),
+        ),
+    ] {
+        let mut toolchain = Toolchain::load();
+        let answer = toolchain.run(name, &format!("{defs}{body}\nprint (shown 0)\n"));
+        assert_eq!(format!("{answer:?}"), format!("{:?}", Answer::Ran(1, want)), "{name}");
+    }
+}
+
 impl Toolchain {
     /// One line at the playground's prompt, the way the page sends it.
     fn prompt(&mut self, line: &str) -> (i32, String) {

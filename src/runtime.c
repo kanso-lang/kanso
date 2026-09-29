@@ -3534,10 +3534,18 @@ KValue k_concat_arr(long long n, const KValue* parts);
    arena's rewinds cannot reach. Every later join writes into this same header,
    which is what lets the fold-state shelf carry it across a beat by identity
    instead of copying it. */
+KValue k_sub_base(KValue v);
+
+/* A seed that is not a string stays what it is. `"{p}!"` renders whatever `p`
+   holds, so the group is a builder whatever its callers hand in, and a seed of
+   `id 13` is legal; answered unjoined by a base arm, it has to come back as
+   `id 13`. The first join seeds from what it renders instead, in
+   `k_b_adopt`. A subtype of string builds from the string it wraps. */
 KValue k_b_str_builder(KValue sv) {
     if (!k_not_failure(sv)) return sv;
-    if (sv.tag != K_STR) k_die("a string builder starts from a string");
-    KStr* src = k_as_str(sv);
+    KValue wrapped = sv.tag == K_SUB ? k_sub_base(sv) : sv;
+    if (wrapped.tag != K_STR) return sv;
+    KStr* src = k_as_str(wrapped);
     long long cap = (long long)src->len * 2 + 32;
     char* base = malloc((size_t)(K_STR_HEAD + cap + 1));
     if (!base) { fputs("out of memory\n", stderr); exit(1); }
@@ -3559,6 +3567,16 @@ KValue k_b_str_builder(KValue sv) {
     return v;
 }
 
+
+/* The first piece of a join, where the builder is the value it rendered. A
+   builder that was a string all along is handed on, and `k_concat_arr_mut`
+   still refuses one that was never converted. A seed that was not a string
+   was left as it came by `k_b_str_builder`, and its rendering becomes the
+   builder here, on the first join. */
+KValue k_b_adopt(KValue raw, KValue rendered) {
+    if (raw.tag == K_STR || !k_not_failure(rendered)) return rendered;
+    return k_b_str_builder(rendered);
+}
 
 /* Joining into a builder. This only ever writes into the header it was given
    and never makes a new one, because the shelf carries that header across a
