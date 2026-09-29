@@ -7688,10 +7688,7 @@ impl<'a> Backend<'a> {
                     }
                     seen
                 };
-                if arities.len() == 1
-                    && arities[0] >= 1
-                    && self.simple_fn_value(name, arities[0])
-                {
+                if arities.len() == 1 && arities[0] >= 1 && self.simple_fn_value(name, arities[0]) {
                     let arity = arities[0];
                     self.fn_value_wrappers.push((name.to_string(), arity));
                     let t = f.tmp();
