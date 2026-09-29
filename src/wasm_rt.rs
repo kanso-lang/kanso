@@ -863,11 +863,13 @@ pub extern "C" fn rt_err_read(h: u32, name_lit: u32) -> u32 {
 }
 
 /// Origin for errs born inside an rt call (division, indexing, fallible
-/// builtins): the compiled site stamps the fresh err it gets back.
+/// builtins): the compiled site stamps the fresh err it gets back. A merge of
+/// two errs also comes back without an origin, and it keeps none: it was born
+/// nowhere, and the interpreter's report says so by printing no site.
 #[no_mangle]
 pub extern "C" fn rt_err_stamp(h: u32, origin_lit: u32) -> u32 {
     match slot(h) {
-        Slot::V(Value::ErrV(info)) if info.origin.is_none() => {
+        Slot::V(Value::ErrV(info)) if info.origin.is_none() && !info.merged => {
             let raised = raised_at(origin_lit);
             push(Slot::V(Value::ErrV(Rc::new(ErrInfo {
                 reason: info.reason.clone(),

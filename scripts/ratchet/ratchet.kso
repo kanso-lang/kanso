@@ -4442,7 +4442,19 @@ seed_unadopted = row
 
 rows_c1zzzzs = text/concat rows_c1zzzzu [seed_refused seed_unadopted]
 
-rows_c = text/concat rows_c1zzzzs [itself]
+# A merged err keeps no birth site on the wasm engine, as it has none on the
+# interpreter.
+merged_stamp = row
+  "a merged err stamped with a site in wasm"
+  true
+  "cargo test --release --test wasm_engine a_merged_err_reports_no_birth_site"
+  "specs (unit, golden, differential)"
+  (breaking "a_merged_err_stamped_with_a_site_in_wasm")
+  with_blob
+
+rows_c1zzzzw = text/concat rows_c1zzzzs [merged_stamp]
+
+rows_c = text/concat rows_c1zzzzw [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
