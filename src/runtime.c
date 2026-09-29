@@ -7162,7 +7162,14 @@ KValue k_call3(KValue f, KValue a, KValue b, KValue c) {
         if (cl->arity != 3) k_die_arity(cl->arity, 3);
         if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
         if (!k_not_failure(c)) return c;
-        return ((KValue(K_CLOSCC *)(void*, KValue, KValue, KValue))cl->fn)(cl->env, a, b, c);
+        /* In words, not as three KValues. C hands a struct that no longer
+           fits the argument registers to the stack whole, and the emitted
+           body, which takes its arguments as words, reads the first half of
+           that struct from the last register: env and two KValues fill five
+           of six, so c arrived torn. A word is a word on both sides. */
+        typedef long long W;
+        return ((KValue(K_CLOSCC *)(void*, W, W, W, W, W, W))cl->fn)(
+            cl->env, a.tag, a.payload, b.tag, b.payload, c.tag, c.payload);
     }
     if (f.tag == K_FNREF) {
         KFnref* r = (KFnref*)(intptr_t)f.payload;
@@ -7184,7 +7191,9 @@ KValue k_call4(KValue f, KValue a, KValue b, KValue c, KValue d) {
         if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
         if (!k_not_failure(c)) return c;
         if (!k_not_failure(d)) return d;
-        return ((KValue(K_CLOSCC *)(void*, KValue, KValue, KValue, KValue))cl->fn)(cl->env, a, b, c, d);
+        typedef long long W;
+        return ((KValue(K_CLOSCC *)(void*, W, W, W, W, W, W, W, W))cl->fn)(
+            cl->env, a.tag, a.payload, b.tag, b.payload, c.tag, c.payload, d.tag, d.payload);
     }
     if (f.tag == K_FNREF) {
         KFnref* r = (KFnref*)(intptr_t)f.payload;

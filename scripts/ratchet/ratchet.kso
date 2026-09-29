@@ -4074,7 +4074,19 @@ partial_nests = [partial_nest partial_nest_native partial_nest_browser]
 
 rows_c1zzzz = text/concat rows_c1zzzze partial_nests
 
-rows_c = text/concat rows_c1zzzz [itself]
+# The runtime calls a closure of three or four arguments in words, so a
+# partial over such a lambda hands it the arguments it was given.
+closure_words = row
+  "a closure called with its arguments as structs"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_closure_called_with_its_arguments_as_structs")
+  release
+
+rows_c1zzzzi = text/concat rows_c1zzzz [closure_words]
+
+rows_c = text/concat rows_c1zzzzi [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
