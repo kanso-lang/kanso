@@ -19525,4 +19525,15 @@ pins. Seeded from a constant, it went red under "a dead run holding the page".
 Why the two seeds differ was not isolated.
 
 The two wasm fuzz programs that ran out of memory on this shape,
-`w361235` and `w361521`, now agree with native.
+`w361235` and `w361521`, now agree with native. So does `w362336`, a third
+seeded loop found on the kanso#1731 build. Two further batches of four hundred
+programs on this build found no divergence.
+
+CI measured five rows moved: `compile_instructions` rose to 25,321,467
+(+48,211), `entry_instructions` to 83,701,097 (+159,802),
+`library_instructions` to 84,239,114 (+158,559), `emit_instructions` to
+29,998,679 (+74,147) and `interp_instructions` to 591,203,810 (+1,064,644).
+None of those paths asks `handed_over_pushes`, which only the browser backend
+calls, and no mechanism for any of the five was isolated. Welfare fell by less
+than 0.01, and the floor comes down by that much under the 2026-09-13 rule,
+because this is the browser engine answering what the other two answer.
