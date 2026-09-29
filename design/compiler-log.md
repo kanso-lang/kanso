@@ -18820,3 +18820,67 @@ pins the trace, which names no frame for `g`. On the old compiler all three err
 cases answered through `g` natively. The rows "a partial's held err built into
 a closure", "a finished partial entering with its err" and "a browser partial
 ignoring its held err" put each lowering back and turn their corpus red.
+
+## 2026-09-29 — a packed record keeps its int
+
+A record of an int and one other value crosses a call in two words when
+nothing in the program does anything with it but build it in tail position
+and take it apart in a pattern. The int is shifted eight bits up and the
+value's tag fills the low byte of the first word, and the value's payload is
+the second. The convention was written for the scanner's `_parsed`, whose int
+is a byte position, but the analysis admits any record whose first field is an
+int. Two things were wrong for every other int. The shift back was logical, so
+a negative int came back as 2^56 plus it: `fn at x` answering `pt (x - 8) "a"`
+printed `pt 72057594037927928 "a"` for `at 0` on both native builds and
+`pt -8 "a"` on the interpreter. And 56 bits are left above the tag, so an int
+past them lost its top byte: the least int read back as 0. The generated-
+program differential found the first in batch 102, at two seeds of 2,000, and
+every binary back to 2026-09-25 carries it.
+
+The shift back is arithmetic now, in the pattern that takes a record apart and
+in the runtime that boxes one. An int that does not survive the shift and back
+is not packed: the record is built on the heap and crosses with 255 in the low
+byte, which no value's tag is, and its pointer in the second word. The pattern
+and the box both look for that byte and read the heap record when they find
+it. A position always fits, so the scanner takes the packed side of the new
+branch every time. `k_parsed_words`, which turns a boxed record back into two
+words for a beat carry, spills the same way. No program written for this
+reached it: each of the three tried handed a record to something other than a
+pattern, and that takes the type out of the convention. So that change is held
+by reading rather than by a spec.
+
+The micro sample `a_record_returned_in_two_words_keeps_its_int` runs nine
+ints either side of each boundary through a construction, a record passed in
+and returned, and two patterns; the old compiler got six of them wrong. The
+entry fixture `a_packed_record_across_the_entry` holds three records in the
+entry, where they are boxed, and reads them rendered, by field and in a list;
+the old compiler got two wrong. The rows "a packed int read back unsigned" and
+"a wide int packed anyway" put each half back and turn the corpus red.
+
+The pack's fit check is emitted code. The module compile golden moves on it:
+`module_lines` lands on 1,105 (+12), `module_calls` on 110 (+1) and
+`module_branches` on 86 (+1), with `defines`, `rounds` and `visits` unchanged.
+
+CI measured the rest. The run rows rose: `work_jsonbench` lands on
+758,833,554 (+29,590,350, +4.06%), `work_runbench` on 1,088,404,695
+(+18,006,138, +1.68%), `work_livebench` on 1,537,390,927 (+196,864),
+`work_encodebench` on 2,333,704,275 (+195,251), `work_oneshot` on 12,744,686
+(+197,564) and `work_widebench` on 27,311,129 (+128,007). `text` lands on
+3,511,760 (+13,440): every benchmark's text grew by 288 to 2,000 bytes. The
+decoder's emitted code grew by 150 lines, 17 calls and 26 branches, so
+`emitted_lines` lands on 5,873, `emitted_calls` on 591 and `emitted_branches`
+on 567; across the other programs `emitted_other_lines` lands on 86,077 (+728),
+`emitted_other_calls` on 10,761 (+83) and `emitted_other_branches` on 8,246
+(+126).
+`codegen_instructions_dev` lands on 124,461,770 (+15,181),
+`codegen_instructions_release` on 408,073,035 (-26,819) and
+`emit_instructions` on 29,896,572 (+27,694). No allocation counter moved, and
+the compile, entry and library rows did not move. Built here and counted under
+callgrind, the two halves of the fix cost about the same: with the unpack's
+branch taken out, `jsonbench` rose 14,977,350; with the pack's check taken out,
+it rose 13,601,100. A byte position always fits, so both halves take their fast
+side on every record the scanner returns, and what they cost is the two tests.
+Reading an int back losslessly from two words it shares with a tagged value
+needs both: whether it fitted on the way in, and whether it was spilled on the
+way out. The floor falls by what the fix costs, under the rule for building
+the language as ruled.

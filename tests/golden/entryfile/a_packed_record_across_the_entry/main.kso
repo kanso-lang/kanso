@@ -1,0 +1,13 @@
+import "./spot"
+
+top = 36028797018963968
+
+low = spot/at 0
+
+high = spot/at (top + 8)
+
+least = spot/at (0 - 9223372036854775800)
+
+print "{low} {high} {least}"
+print "{low.n + 1} {high.n - top} {least.n}"
+print "{[low high least]}"

@@ -1,0 +1,48 @@
+# A record of an int and one other value crosses a call in two words when
+# nothing does anything with it but build it in tail position and take it
+# apart in a pattern: the int shifted above the value's tag in the first word,
+# the value's payload in the second. `at` returns one, `bump` takes one and
+# returns one, and `read` and `show` take one apart.
+#
+# The convention was built for a byte position and read the int back with a
+# logical shift, so a negative int came back as 2^56 plus it: `at 0` read as
+# 72057594037927928. And an int needs 64 bits where 56 are left above the
+# tag, so one past 2^55 lost its top byte: `at most` read as 2^56 - 9. The
+# edges are the ints either side of each boundary. An int that does not fit is
+# now built on the heap and crosses marked, and the shift back is arithmetic.
+import "std/list"
+import "std/text"
+
+type pt
+  n
+  s
+
+fn at x:int
+  pt (x - 8) "a"
+
+fn bump (pt n s)
+  pt (n + 1) s
+
+fn read (pt n _)
+  n
+
+fn show (pt n s)
+  "{n} {s}"
+
+fn hand x:int
+  show (pt x "b")
+
+fn line x
+  "{show (at x)} {show (bump (at x))} {read (at x)} {hand x}"
+
+top = 36028797018963968
+
+most = 9223372036854775807
+
+least = 0 - 9223372036854775800
+
+edges = [8 7 0 (top + 7) (top + 8) (15 - top) (14 - top) most least]
+
+shown = text/join (list/to_list (list/map edges line)) "\n"
+
+pub play = print shown

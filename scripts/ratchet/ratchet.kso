@@ -4007,7 +4007,29 @@ part_browser = row
 
 rows_c1zzzx = text/concat rows_c1zzzw [part_closure part_entered part_browser]
 
-rows_c = text/concat rows_c1zzzx [itself]
+# A record of an int and a value crosses a call in two words, the int above
+# the value's tag. Until 2026-09-29 the int came back through a logical shift
+# and every int was packed, so a negative one read as 2^56 plus it and one
+# past 56 bits lost its top byte.
+packed_sign = row
+  "a packed int read back unsigned"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_packed_int_read_back_unsigned")
+  release
+
+packed_wide = row
+  "a wide int packed anyway"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_wide_int_packed_anyway")
+  release
+
+rows_c1zzzy = text/concat rows_c1zzzx [packed_sign packed_wide]
+
+rows_c = text/concat rows_c1zzzy [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
