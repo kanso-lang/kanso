@@ -1,0 +1,23 @@
+# `h = &g p` holds one of g's three arguments, and `&h 3` holds one more, so
+# `(&h 3) 1` has all three and runs `g p 3 1`, as `h 3 1` does. The
+# interpreter asked the inner partial how many arguments it takes, got no
+# answer, and wrapped the three in a third partial, which printed `<fn>`.
+# Native ran g. `still` holds two of three and stays a function everywhere.
+fn g a b c
+  a + b + c
+
+fn full p
+  h = &g p
+  k = &h 3
+  k 1
+
+fn finished p
+  h = &g p
+  (&h 3) 1
+
+fn still p
+  h = &g p
+  k = &h 3
+  "{k}"
+
+pub play = print "{full 2} {finished 2} {still 2}"

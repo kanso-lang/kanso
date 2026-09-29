@@ -18789,3 +18789,18 @@ program the checker does, but that has not been isolated from the other two
 changes. Welfare fell from 90.40592 to 90.4057, and the floor follows it under
 the 2026-09-13 rule, since all three close gaps in the checker for the
 language as ruled.
+
+## 2026-09-29 — a partial over a partial runs when it is full
+
+`h = &g p` holds one of `g`'s three arguments and `&h 3` holds one more, so
+`(&h 3) 1` has all three. The interpreter decides whether a partial is full by
+asking its callee how many arguments it takes, and a partial answered nothing,
+so it wrapped the three in a third partial and printed `<fn>`. Native ran
+`g p 3 1` and printed 6, and `h 3 1` printed 6 on both. A partial now answers
+its callee's arities less what it holds. Probing partials by hand after the
+held-err fix found it, and it predates that fix.
+
+The micro sample `a_partial_over_a_partial_runs_when_full` finishes one bound
+and one written in place, and keeps a partial of two in three as a function.
+The old interpreter printed `<fn>` for all three. The row "a partial over a
+partial taking nothing" answers no arity again and turns the corpus red.

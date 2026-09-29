@@ -3978,7 +3978,19 @@ type_file = row
 
 rows_c1zzzw = text/concat rows_c1zzzv [typeset_parent type_file]
 
-rows_c = text/concat rows_c1zzzw [itself]
+# A partial answers its callee's arities less what it holds. Answering none,
+# the interpreter wrapped `(&h 3) 1` in a third partial where native ran g.
+partial_nest = row
+  "a partial over a partial taking nothing"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_partial_over_a_partial_taking_nothing")
+  release
+
+rows_c1zzzz = text/concat rows_c1zzzw [partial_nest]
+
+rows_c = text/concat rows_c1zzzz [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
