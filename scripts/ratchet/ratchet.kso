@@ -4291,7 +4291,20 @@ wides = [hop_wide wide_call hop_browser_wide wide_held nine_value]
 
 rows_c1zzzzg = text/concat rows_c1zzzzh wides
 
-rows_c = text/concat rows_c1zzzzg [itself]
+# The playground builds its views on the engine's memory from pointers the
+# engine answers as wasm i32s. Past two gibibytes those read negative unless the
+# page turns them unsigned, and the answer a program produced cannot be read.
+high_pointers = row
+  "a playground reading a pointer past two gibibytes as negative"
+  true
+  "./target/release/kanso run scripts/site_smoke"
+  "site (landing sample and playground run in a browser)"
+  (breaking "a_playground_reading_high_pointers_as_negative")
+  with_blob
+
+rows_c1zzzzn = text/concat rows_c1zzzzg [high_pointers]
+
+rows_c = text/concat rows_c1zzzzn [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

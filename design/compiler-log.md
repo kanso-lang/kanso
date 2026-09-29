@@ -19310,3 +19310,39 @@ and which of them the bytes came with was not isolated.
 `interp_allocs` fell. Every change carried is language correctness, and the
 round ruling is the language itself, so the floor moves to what the tree
 scores, 90.32455.
+
+## 2026-09-29 — the playground reads its answers past two gibibytes
+
+The random-program differential compared the interpreter with the two native
+tiers and never the browser engine. A harness that feeds the generated programs
+to the wasm engine, one after another in one toolchain as the playground does,
+found a program that answered correctly alone and could not be read after a
+program that allocated a lot. The first program pushed twenty thousand ints onto
+a list. The wasm runtime keeps every value a run makes in its handle registry
+until the next run, so each intermediate list stayed alive and memory reached
+48,881 pages, 3.2 GB. The next program's answer was put above two gibibytes.
+
+Every pointer and length the engine answers is a wasm i32, and past two
+gibibytes the top bit is set. `docs/kanso-engine.js` passed them straight to
+`new Uint8Array(buffer, ptr, len)`, which throws a RangeError on a negative
+offset, so a program that ran fine printed nothing. The page now turns each one
+unsigned with `>>> 0` before it builds a view: the input it writes, the answer
+it reads and the module bytes it instantiates. The browser differential's page
+carries the same three lines and the Rust harness in `tests/wasm_engine.rs`
+made the same mistake with `as usize`; both read through `u32` now.
+
+Two specs reach the line without a 3 GB program. Each grows the toolchain's
+memory past two gibibytes first, so the allocator's next pages sit above it,
+and runs a program whose sixteen-megabyte answer has to be put there.
+`an_answer_above_two_gibibytes_reads_back` is the Rust harness's, and the
+site smoke's paint page does the same through `KansoEngine.playSource` in a
+real browser. Both were watched red: the harness on an out-of-bounds write, the
+page on `RangeError: Start offset -2146435064 is outside the bounds of the
+buffer`. The ratchet row "a playground reading a pointer past two gibibytes as
+negative" takes the `>>> 0` back out of `readOut` and the site smoke goes red.
+
+The registry that got there is its own cost and is not changed here. An
+accumulator loop on the browser engine holds every list it built, so memory
+grows with the square of the loop where native grows with the loop. That is the
+wasm runtime having no collection inside a run, and it bounds how large a
+program the playground can take.

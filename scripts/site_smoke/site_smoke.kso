@@ -319,8 +319,30 @@ paint = """
   window.PAGE_PROBE = async () => \{
     const lines = ['type person', '  name:string', 'type post_body:string',
                    '# who they are', 'x = "hi" "yo"', '  shout s . print'];
-    return \{painted: lines.map((l) => window.KansoEngine.highlight(l))};
+    const painted = lines.map((l) => window.KansoEngine.highlight(l));
+    return \{painted, above: await above()};
   };
+  // The engine answers pointers as wasm i32s, and past two gibibytes the top
+  // bit is set: read as signed, an answer the program produced lands at a
+  // negative offset and the page throws. The playground keeps what a run
+  // makes until the next run, so an accumulator loop reaches that line.
+  // Growing the memory first sends the next large allocation above it, and a
+  // sixteen-megabyte answer is one.
+  async function above() \{
+    await window.KansoEngine.ready();
+    const memory = window.KansoEngine.wasm.memory;
+    const pages = memory.buffer.byteLength / 65536;
+    memory.grow(32768 + 16 - pages);
+    const source = 'import "std/text"\\n\\nfn doubled s 0\\n  s\\n\\n' +
+      'fn doubled s n\\n  doubled (text/join [s s] "") (n - 1)\\n\\n' +
+      'print (doubled "ab" 23)\\n';
+    try \{
+      const ran = await window.KansoEngine.playSource(source);
+      return \{length: ran.text.length, tail: ran.text.slice(-5)};
+    } catch (e) \{
+      return \{error: String(e)};
+    }
+  }
   </script>
 """
 
@@ -599,7 +621,19 @@ fn missing_reader read acc
   noted acc why said
 
 fn missing_paint read acc
-  paint_faults read["painted"] acc 1
+  faults = paint_faults read["painted"] acc 1
+  missing_above read faults
+
+# 2 * 2^23 characters and the newline print adds.
+fn missing_above read acc
+  why = "an answer above two gibibytes did not read back: {read["above"]}"
+  noted acc why (read_back read["above"] == 16777217)
+
+fn read_back none
+  0
+
+fn read_back above
+  above["length"]
 
 fn paint_faults none acc _
   text/concat acc ["the paint page reported no painting at all"]
