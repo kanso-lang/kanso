@@ -19032,3 +19032,24 @@ benchmarks' machine code, `text` in bench/text_golden.txt, fell 8,736 bytes
 to 3,537,072. The meta welfare fell by a few
 millionths and the floor comes down by that much under the 2026-09-13 rule.
 
+
+Past eight the gap stayed, and the generated-program differential found it
+the same day at seed 340570: `h = &g9 1 2 3 4 5; h 6 bad 8 9` printed
+`passed through g9` on the interpreter and no hop natively. The cap was there
+because `k_call_ref_wide` casts the wrapper to a signature per width, and C
+cannot name every width. A group of more than eight now gets a wrapper that
+takes its arguments as one array and loads each one, and `k_call_ref_wide`
+calls it that way past eight. With that, every group with one arm is handed
+out as a value at any width, every partial over one is held over that value,
+`k_dispatch_n` has no ceiling, and the closure the emitter built for a
+partial past eight is gone, along with the diagnostic for a function value
+past eight arguments. The browser's host had no ceiling, and its cap was
+there to agree with native's, so it went too.
+
+`a_partial_over_a_wide_group_runs` now also finishes a partial holding nine
+of ten and one over a nine-wide group handed out as a value, which the old
+compiler refused to build. `a_call_through_a_partial_over_nine_names_it`
+pins the trace. The row "a wide partial held in a closure" now puts the
+closure back for every partial over a group, since the width test it used to
+flip is gone, and "a nine-wide group refused as a value" restores the eight
+cap on group values.

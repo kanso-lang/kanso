@@ -4116,8 +4116,9 @@ rows_c1zzzzd = text/concat rows_c1zzzz hops
 
 # A partial over a group of more than four parameters is held over the group's
 # value on both native and the browser, native's dispatcher calls a group value
-# with five to eight arguments, and a native partial holding more than four is
-# a partial over a partial. Each row puts one of the four back.
+# with five or more arguments, a native partial holding more than four is a
+# partial over a partial, and a group of more than eight is a value whose
+# wrapper takes its arguments as one array. Each row puts one of the five back.
 hop_wide = row
   "a wide partial held in a closure"
   true
@@ -4150,7 +4151,15 @@ wide_held = row
   (breaking "a_partial_holding_five_refused")
   release
 
-wides = [hop_wide wide_call hop_browser_wide wide_held]
+nine_value = row
+  "a nine-wide group refused as a value"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_nine_wide_group_refused_as_a_value")
+  release
+
+wides = [hop_wide wide_call hop_browser_wide wide_held nine_value]
 
 rows_c1zzzzg = text/concat rows_c1zzzzd wides
 

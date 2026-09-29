@@ -728,7 +728,7 @@ impl<'a> WasmBackend<'a> {
                     return self.emit_partial_value(ctx, name, &[], *span);
                 }
                 let lambda = partial_lambda(self.program, name, &[], *span)?;
-                if held_over_value(&lambda, 0) {
+                if held_over_value(&lambda) {
                     return self.emit_partial_value(ctx, name, &[], *span);
                 }
                 return self.emit_expr(ctx, &lambda, false);
@@ -927,7 +927,7 @@ impl<'a> WasmBackend<'a> {
                 if !self.program.fns.iter().any(|d| d.name == *name) {
                     return self.emit_partial_value(ctx, name, args, *span);
                 }
-                if held_over_value(&partial_lambda(self.program, name, args, *span)?, args.len()) {
+                if held_over_value(&partial_lambda(self.program, name, args, *span)?) {
                     return self.emit_partial_value(ctx, name, args, *span);
                 }
                 return self.emit_held(ctx, args, *span, |this, ctx, held| {
@@ -1740,9 +1740,7 @@ fn free_idents(expr: &Expr, visit: &mut dyn FnMut(&str)) {
 
 /// Whether a partial over a declared group is held over the value the group
 /// is handed out as, which carries its name: a call that turns down a failing
-/// argument then names the group in the trace, as a direct call does. The
-/// native dispatcher stops at eight arguments in all, so both backends keep
-/// the lambda past that.
-fn held_over_value(lambda: &Expr, held: usize) -> bool {
-    matches!(lambda, Expr::Lambda { params, .. } if params.len() + held <= 8)
+/// argument then names the group in the trace, as a direct call does.
+fn held_over_value(lambda: &Expr) -> bool {
+    matches!(lambda, Expr::Lambda { .. })
 }

@@ -7284,9 +7284,10 @@ static long long k_callee_arity(KValue callee) {
     return -1;
 }
 
-/* A group value called with five to eight arguments, which only a partial
+/* A group value called with five or more arguments, which only a partial
    reaches. The order is k_call4's: the count, then the first two arguments
-   together, then each in turn. */
+   together, then each in turn. Past eight the wrapper takes the arguments as
+   one array, since no cast here can name every width. */
 static KValue k_call_ref_wide(KFnref* r, long long n, KValue* a) {
     typedef KValue V;
     if (r->arity != n) k_die_ref_arity(r, n);
@@ -7298,8 +7299,8 @@ static KValue k_call_ref_wide(KFnref* r, long long n, KValue* a) {
         case 5: return ((V(*)(V, V, V, V, V))r->fn)(a[0], a[1], a[2], a[3], a[4]);
         case 6: return ((V(*)(V, V, V, V, V, V))r->fn)(a[0], a[1], a[2], a[3], a[4], a[5]);
         case 7: return ((V(*)(V, V, V, V, V, V, V))r->fn)(a[0], a[1], a[2], a[3], a[4], a[5], a[6]);
-        default:
-            return ((V(*)(V, V, V, V, V, V, V, V))r->fn)(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7]);
+        case 8: return ((V(*)(V, V, V, V, V, V, V, V))r->fn)(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7]);
+        default: return ((V(*)(V*))r->fn)(a);
     }
 }
 
@@ -7316,17 +7317,14 @@ static KValue k_dispatch_n(KValue callee, long long n, KValue* args) {
        its fresh ones together. A partial over a declared group of five or
        more is held over the group's value, which names the group when it
        turns down a failure, as k_call4 does. */
-    if (n <= 8) {
-        if (!k_not_failure(callee)) return callee;
-        if (callee.tag == K_CLOSURE) {
-            KClosure* c = (KClosure*)(intptr_t)callee.payload;
-            if (c->arity < 0) return k_partial_apply(c, n, args);
-            k_die_arity(c->arity, n);
-        }
-        if (callee.tag == K_FNREF) return k_call_ref_wide((KFnref*)(intptr_t)callee.payload, n, args);
-        k_die_not_callable(callee);
+    if (!k_not_failure(callee)) return callee;
+    if (callee.tag == K_CLOSURE) {
+        KClosure* c = (KClosure*)(intptr_t)callee.payload;
+        if (c->arity < 0) return k_partial_apply(c, n, args);
+        k_die_arity(c->arity, n);
     }
-    k_die("native backend: a function value takes at most 8 arguments");
+    if (callee.tag == K_FNREF) return k_call_ref_wide((KFnref*)(intptr_t)callee.payload, n, args);
+    k_die_not_callable(callee);
     return k_none();
 }
 

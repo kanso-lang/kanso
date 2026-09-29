@@ -1,0 +1,16 @@
+# `h = &g9 1 2 3 4 5` holds five of g9's nine arguments, and `h 6 bad 8 9`
+# hands it the other four, the second an err. g9 turns it down and the trace
+# names g9, as it does for a group of eight or fewer. Past eight native held
+# the partial as a closure over g9, whose call answered the err before g9
+# ran, and the trace named nothing.
+import "std/text"
+
+fn g9 _ _ _ _ _ _ _ _ _
+  14
+
+fn go n
+  bad = text/from_code n
+  h = &g9 1 2 3 4 5
+  h 6 bad 8 9
+
+pub play = print "{go 55296}"

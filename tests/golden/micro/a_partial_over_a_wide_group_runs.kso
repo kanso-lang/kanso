@@ -4,7 +4,9 @@
 # of f8's eight and a call with the other four runs it; `&(&f5 1) 2 3` holds
 # a partial and two more, and a call with two finishes f5. `&f6 1 2 3 4 5`
 # holds five, one more than native builds a partial of, and `&g 1 2 3 4 5`
-# holds five over f6 handed out as a value.
+# holds five over f6 handed out as a value. Past eight the group's value
+# takes its arguments as one array: `&f10 1 ... 9` holds nine of ten, and
+# `g = f9` hands out a nine-wide group native could not name as a value.
 fn f5 a b c d e
   a + b + c + d + e
 
@@ -13,6 +15,12 @@ fn f6 a b c d e f
 
 fn f8 a b c d e f g h
   a + b + c + d + e + f + g + h
+
+fn f9 a b c d e f g h i
+  a + b + c + d + e + f + g + h + i
+
+fn f10 a b c d e f g h i j
+  a + b + c + d + e + f + g + h + i + j
 
 fn five n
   k = &f5 n 2
@@ -36,8 +44,20 @@ fn value n
   k = &g n 2 3 4 5
   k 6
 
+fn nine n
+  k = &f10 n 2 3 4 5 6 7 8 9
+  k 10
+
+fn wide n
+  g = f9
+  k = &g n 2 3 4 5
+  k 6 7 8 9
+
 fn still n
   k = &f8 n 2 3 4
   "{k}"
 
-pub play = print "{five 1} {eight 1} {nested 1} {held 1} {value 1} {still 1}"
+fn past n
+  "{nine n} {wide n} {still n}"
+
+pub play = print "{five 1} {eight 1} {nested 1} {held 1} {value 1} {past 1}"
