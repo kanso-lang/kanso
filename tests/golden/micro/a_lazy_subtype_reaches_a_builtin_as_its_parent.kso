@@ -11,9 +11,16 @@ type word string
 fn made _
   word "a b"
 
+fn kept _ 0
+  "zero"
+
+fn kept s _
+  s
+
 fn shown z
   w = made z
   parts = text/split w " "
-  "{parts}"
+  m = made z
+  "{parts} {length (kept m 1)}"
 
 pub play = print (shown 0)

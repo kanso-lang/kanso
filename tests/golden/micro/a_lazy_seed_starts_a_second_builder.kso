@@ -1,0 +1,26 @@
+# `grow`'s first arm ignores its accumulator, so a seed handed to it is bound
+# lazily. The loop's entry leaves a lazy seed as it came, and the native
+# engine's first join treated what it forced to as a builder already: a
+# string another loop had finished, with no room to write into, so the join
+# died with "a string builder was expected here". The first join now asks
+# about the seed as it arrived and copies a lazy one into a builder of its
+# own.
+fn grow _ 98
+  "far"
+
+fn grow acc 0
+  acc
+
+fn grow acc n
+  grow "{acc}{n % 3}" (n - 1)
+
+fn nope 1
+  "one"
+
+fn shown z
+  first = grow [] 3
+  second = grow first 4
+  skipped = nope z
+  "{second} {grow skipped 98}"
+
+pub play = print (shown 2)
