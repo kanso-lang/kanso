@@ -19696,10 +19696,12 @@ the micro corpus. The mutation "a lazy subtype unwrapped before it is forced"
 hands the unforced value to the unwrap again, and the micro corpus went red
 on it with the native run printing nothing. It is a ratchet row.
 
-CI measured one row moved: `emit_instructions` fell 49 to 29,998,621. The
-benchmarks declare no subtype, so the loop this changes emits nothing for
-them, and no mechanism for the fall was isolated. Welfare reports neither a
-fall nor a rise, and the floor is unchanged.
+CI measured this change and the next entry's together, on a tree carrying
+kanso#1732. One row moved: `emit_instructions` rose 1,607 from the figure
+kanso#1732 leaves, to 29,998,671. The benchmarks declare no subtype, so the
+loop this entry changes emits nothing for them, and no mechanism for the rise
+was isolated. Welfare reports neither a fall nor a rise, and the floor is
+unchanged.
 
 ## 2026-09-29 — a builder's first join asks about a lazy seed as it arrived
 
