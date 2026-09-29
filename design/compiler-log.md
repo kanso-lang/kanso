@@ -19584,3 +19584,8 @@ red, and each is a ratchet row:
   through `slot`. `shown 1` died the same way.
 - "a lazy binding read as its closure in wasm" stops `slot` running the
   closure. `shown 0` printed `<fn>`.
+
+CI measured two rows moved: `interp_instructions` fell 979,398 to 590,224,412
+and `emit_instructions` fell 9 to 29,998,670. Neither path runs the browser
+backend, and no mechanism for either was isolated. Welfare reports neither a
+fall nor a rise, and the floor is unchanged.
