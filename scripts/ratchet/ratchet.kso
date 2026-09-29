@@ -3960,7 +3960,25 @@ subtype_count = row
 
 rows_c1zzzv = text/concat rows_c1zzzu [subtype_count]
 
-rows_c = text/concat rows_c1zzzv [itself]
+typeset_parent = row
+  "a typeset taken as a parent"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_typeset_taken_as_a_parent")
+  no_setup
+
+type_file = row
+  "a type refusal left without its file"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_type_refusal_left_without_its_file")
+  no_setup
+
+rows_c1zzzw = text/concat rows_c1zzzv [typeset_parent type_file]
+
+rows_c = text/concat rows_c1zzzw [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

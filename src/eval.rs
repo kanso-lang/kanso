@@ -1468,6 +1468,7 @@ impl<'a> Interp<'a> {
                 ("key".to_string(), vec!["some".to_string()], origin),
                 ("value".to_string(), vec!["some".to_string()], origin),
             ],
+            file: crate::ast::unstamped(),
         };
         let demand = crate::demand::analyze(program);
         Interp {

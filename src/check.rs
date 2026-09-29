@@ -1814,8 +1814,27 @@ fn demand_conflicts(
 /// The engines carry `none` as a tag rather than a declared type, so nothing
 /// can derive from it yet. Rejecting here keeps all three engines identical
 /// instead of one erroring and another silently dropping the subtype.
+///
+/// A typeset is refused as a parent for the same reason. It only annotates, so
+/// nothing is ever built as one, and the engines disagreed about what wrapping
+/// it means: the interpreter took any member, and the native backend looked
+/// for the typeset in the value's own chain and refused a member at run time.
 fn check_sub_parents(program: &Program, diags: &mut Vec<Diagnostic>) {
+    let typeset =
+        |name: &str| program.types.iter().any(|t| t.name == name && !t.members.is_empty());
     for ty in &program.types {
+        let first = diags.len();
+        if let Some(parent) = ty.parent.as_deref().filter(|p| typeset(p)) {
+            diags.push(Diagnostic::new(
+                "type",
+                format!(
+                    "`{}` cannot wrap the typeset `{parent}` yet — a typeset only \
+                     annotates, so wrap one of its members",
+                    ty.name
+                ),
+                ty.span,
+            ));
+        }
         if ty.parent.as_deref() == Some("none") {
             diags.push(Diagnostic::new(
                 "type",
@@ -1826,6 +1845,9 @@ fn check_sub_parents(program: &Program, diags: &mut Vec<Diagnostic>) {
                 ),
                 ty.span,
             ));
+        }
+        if !ty.file.is_empty() {
+            place_in(&mut diags[first..], &ty.file);
         }
     }
 }

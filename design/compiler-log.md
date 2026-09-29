@@ -18749,3 +18749,29 @@ one `rect` value, got 2". A subtype of `int` is held to the same count. The
 error fixture `a_subtype_built_from_two_values` passed the old checker. The row
 "a subtype built from any count" lets any count through again and turns the
 corpus red.
+
+## 2026-09-29 — a subtype wraps a type it can build
+
+`type shape circle square` declares a typeset, which only annotates: nothing is
+ever built as a `shape`. `type blob shape` then made `blob` a subtype of it, and
+the engines disagreed about what that meant. The interpreter let `blob` wrap any
+member and printed `blob (circle 1)` as `circle 1`. The native backend looked
+for `shape` in the member's own chain, did not find it, and refused at run time
+with "`blob` wraps a shape". The checker now refuses a typeset as a parent at
+the declaration, in the words "`blob` cannot wrap the typeset `shape` yet — a
+typeset only annotates, so wrap one of its members". It follows the refusal of
+`none` as a parent, and the "yet" is the same: whether a subtype of a typeset
+should mean anything is a question for the language, and refusing it ends the
+disagreement without answering that. Nothing in lib, the goldens, kq, vse, the
+examples or the book declared one. The error fixture `a_subtype_of_a_typeset`
+passed the old checker, and the row "a typeset taken as a parent" lets it
+through again and turns the corpus red.
+
+Both refusals are raised at a type declaration, and a type declaration did not
+record its file, so through an import each printed the module's name and no
+place. The previous entry named the `none` refusal as the last diagnostic in the
+corpus without a location. A type declaration now carries its file, stamped
+with the function declarations', and the two refusals are placed in it. The
+imported golden for `sub_of_none` gains its location and quoted line, and no
+imported golden in the error corpus is now without one. The row "a type refusal
+left without its file" takes the placement away and turns the corpus red.
