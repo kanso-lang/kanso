@@ -161,7 +161,27 @@ fn die(msg: String) -> ! {
 }
 
 fn slot(h: u32) -> Slot {
+    match raw_slot(h) {
+        Slot::C { tidx, env, arity: LAZY } => demanded_binding(h, tidx, env),
+        held => held,
+    }
+}
+
+/// What the registry holds, without running a lazy binding. A call hands a
+/// handle on without reading it, and so does anything here that only moves
+/// handles about.
+fn raw_slot(h: u32) -> Slot {
     REG.with(|r| r.borrow()[h as usize].clone())
+}
+
+/// A lazy binding's first read. The closure runs once and its answer is
+/// written over it, so every later read of the handle finds the value.
+fn demanded_binding(h: u32, tidx: u32, env: u32) -> Slot {
+    REG.with(|r| r.borrow_mut()[h as usize] = Slot::C { tidx, env, arity: RUNNING });
+    let answer = call_closure(h, Vec::new());
+    let settled = slot(answer);
+    REG.with(|r| r.borrow_mut()[h as usize] = settled.clone());
+    settled
 }
 
 fn push(s: Slot) -> u32 {
@@ -195,6 +215,9 @@ const RUNNING: i32 = -3;
 /// arguments held so far after it, and the count is settled when the rest
 /// arrive. Built by `rt_partial`, read by `call_closure`.
 const PARTIAL: i32 = -4;
+/// A binding the demand analysis made lazy, not yet read. `slot` runs it on
+/// the first read. The backend's LAZY_ARITY.
+const LAZY: i32 = -5;
 /// A group or builtin handed out as a value carries the counts its arms take
 /// as bits below this base (`MASKED - mask`), so a partial over it can tell
 /// when it is finished. The backend's MASKED_ARITY.
@@ -511,7 +534,10 @@ fn with_interp<T>(f: impl FnOnce(&Interp<'static>) -> T) -> T {
 
 #[no_mangle]
 pub extern "C" fn rt_is_failure(h: u32) -> u32 {
-    match slot(h) {
+    // A lazy binding nobody has read is not a failure yet, as a thunk is not
+    // one to the interpreter: asking would run it, and the arm that ignores
+    // the parameter must not.
+    match raw_slot(h) {
         Slot::V(v) => is_failure(&v) as u32,
         _ => 0,
     }
@@ -1230,7 +1256,7 @@ fn map_or_filter(name: &str, list_h: u32, closure_h: u32) -> u32 {
 /// handle, since no write takes it.
 #[no_mangle]
 pub extern "C" fn rt_rehandle(h: u32) -> u32 {
-    match slot(h) {
+    match raw_slot(h) {
         Slot::V(v @ (Value::List(_) | Value::Map(_) | Value::Bytes(_))) => push(Slot::V(v)),
         _ => h,
     }
