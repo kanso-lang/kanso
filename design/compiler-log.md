@@ -19589,3 +19589,31 @@ CI measured two rows moved: `interp_instructions` fell 979,398 to 590,224,412
 and `emit_instructions` fell 9 to 29,998,670. Neither path runs the browser
 backend, and no mechanism for either was isolated. Welfare reports neither a
 fall nor a rise, and the floor is unchanged.
+
+## 2026-09-29 — the browser engine leaves a merged err without a birth site
+
+Wasm fuzz program w379612 ended on an unhandled err on both engines. The
+browser engine's report carried one more line than native's, `born in
+w379612/shown at w379612.kso:106`. Reduced:
+
+    fn shown z
+      v = text/to_float "{z}x"
+      v / v
+
+Both operands of `/` are errs, so the operation answers the two merged into
+one err whose reason is the list of both reasons. The interpreter gives a
+merge no origin, since no single site raised it, and its report prints no
+birth line; native does the same. The browser backend calls `rt_err_stamp`
+after every runtime operation that can raise, and the stamp gave the
+operation's site to any err that came back without an origin. A merge is
+one of those, so it was stamped with line 5.
+
+The stamp now passes a merged err through untouched. An err born inside the
+operation still has no origin and still gets the site.
+
+`a_merged_err_reports_no_birth_site` in `tests/wasm_engine.rs` runs the
+reduced program and wants the report with no birth line. It also runs
+`v + 1` on the single err, which keeps the site `text/to_float` gave it. The
+mutation "a merged err stamped with a site in wasm" drops the merged test
+from the stamp, and the spec went red on it with the line-5 site in the
+report. It is a ratchet row.
