@@ -7,6 +7,7 @@
 # the caller reads `[]` where it put `[0]`.
 set -e
 f=src/wasm_backend.rs
+grep -q "RT_REHANDLE" src/wasm_backend.rs
 grep -qF '                if self.rehandles.contains(&edge) {' "$f" || {
   echo "the rehandle at a call moved; this mutation needs rewriting" >&2
   exit 1

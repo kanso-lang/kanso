@@ -7,6 +7,7 @@
 # the list and the registry keeps each copy until the page is full.
 set -e
 f=src/wasm_backend.rs
+grep -q "handed_over_pushes" src/wasm_backend.rs
 grep -qF '    let (in_place, rehandles) = crate::linear::handed_over_pushes(program);' "$f" || {
   echo "the wasm backend's in-place question moved; this mutation needs rewriting" >&2
   exit 1
