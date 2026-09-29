@@ -18905,3 +18905,28 @@ lib and the benchmarks hold no partials, so no runtime row can move. The micro
 sample `a_partial_widens_its_group` printed the address on the old compiler.
 The row "a partial leaving its group narrow" takes the widening back out and
 turns the micro corpus red on both native builds.
+## 2026-09-29 — text/to_bytes keeps its frame
+
+A rescue hands on a failure its own module raised and calls its callback on
+one from elsewhere. `text/to_int`, `text/to_float`, `text/utf8` and
+`text/from_code` are one-line wrappers over builtins that can birth an err,
+and the inlining pass keeps each of them, so the err is born in std/text and
+a rescue in the caller reaches it. `text/to_bytes` has refused a number
+outside 0-255 with an err since kanso#993, which added it to both backends'
+lists of builtins that take the calling site's origin and left it off the
+inlining pass's list, whose comment asks for the two to be kept in step. So
+the wrapper was inlined, its err said it was born in the caller, and
+`rescue (text/to_bytes [n]) f` in a user's module handed the err on to the
+entry where `rescue (text/utf8 [n]) f` called `f`. Every engine agreed. A
+probe of std/text by hand found it.
+
+`BIRTHS_ERR` in src/inline.rs now names `builtin_to_bytes`. lib and the
+benchmarks do not call `text/to_bytes`, so no runtime row can move. The micro
+sample `a_rescue_catches_what_to_bytes_refused` rescues both refusals in one
+module; the old compiler let the first reach the entry. The runtime sample
+`a_finished_partial_answers_its_held_err` now names `text/to_bytes` as where
+its err was born, and the comment in
+`to_bytes_refuses_a_number_that_is_not_a_byte` no longer says that module
+cannot match the err. The row "a to_bytes wrapper inlined" takes the name
+back out and turns the micro corpus red.
+

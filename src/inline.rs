@@ -17,8 +17,13 @@ use crate::ast::*;
 
 /// Builtins that can produce an err, which therefore carry the origin of the
 /// site that called them. Kept in step with codegen's origin-passing list.
-const BIRTHS_ERR: [&str; 4] =
-    ["builtin_to_int", "builtin_to_float", "builtin_utf8", "builtin_from_code"];
+const BIRTHS_ERR: &[&str] = &[
+    "builtin_to_int",
+    "builtin_to_float",
+    "builtin_utf8",
+    "builtin_from_code",
+    "builtin_to_bytes",
+];
 use crate::hash::Map as HashMap;
 
 /// Wrapper name and arity, mapped to the builtin it stands for. An arm

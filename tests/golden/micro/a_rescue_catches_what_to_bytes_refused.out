@@ -1,0 +1,3 @@
+rescued: to_bytes takes byte values (0-255)
+rescued: utf8 takes byte values (0-255)
+[104]

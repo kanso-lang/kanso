@@ -4042,7 +4042,19 @@ partial_widens = row
 
 rows_c1zzzze = text/concat rows_c1zzzy [partial_widens]
 
-rows_c = text/concat rows_c1zzzze [itself]
+# text/to_bytes keeps its frame like the other wrappers whose builtin can
+# birth an err, so a rescue in the caller's module reaches its callback.
+bytes_frame = row
+  "a to_bytes wrapper inlined"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_to_bytes_wrapper_inlined")
+  release
+
+rows_c1zzzzh = text/concat rows_c1zzzze [bytes_frame]
+
+rows_c = text/concat rows_c1zzzzh [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
