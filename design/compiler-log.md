@@ -18829,4 +18829,27 @@ the old compiler got two wrong. The rows "a packed int read back unsigned" and
 The pack's fit check is emitted code. The module compile golden moves on it:
 `module_lines` lands on 1,105 (+12), `module_calls` on 110 (+1) and
 `module_branches` on 86 (+1), with `defines`, `rounds` and `visits` unchanged.
-CI will measure the rest.
+
+CI measured the rest. The run rows rose: `work_jsonbench` lands on
+758,833,554 (+29,590,350, +4.06%), `work_runbench` on 1,088,404,695
+(+18,006,138, +1.68%), `work_livebench` on 1,537,390,927 (+196,864),
+`work_encodebench` on 2,333,704,275 (+195,251), `work_oneshot` on 12,744,686
+(+197,564) and `work_widebench` on 27,311,129 (+128,007). `text` lands on
+3,511,760 (+13,440): every benchmark's text grew by 288 to 2,000 bytes. The
+decoder's emitted code grew by 150 lines, 17 calls and 26 branches, so
+`emitted_lines` lands on 5,873, `emitted_calls` on 591 and `emitted_branches`
+on 567; across the other programs `emitted_other_lines` lands on 86,077 (+728),
+`emitted_other_calls` on 10,761 (+83) and `emitted_other_branches` on 8,246
+(+126).
+`codegen_instructions_dev` lands on 124,461,770 (+15,181),
+`codegen_instructions_release` on 408,073,035 (-26,819) and
+`emit_instructions` on 29,896,572 (+27,694). No allocation counter moved, and
+the compile, entry and library rows did not move. Built here and counted under
+callgrind, the two halves of the fix cost about the same: with the unpack's
+branch taken out, `jsonbench` rose 14,977,350; with the pack's check taken out,
+it rose 13,601,100. A byte position always fits, so both halves take their fast
+side on every record the scanner returns, and what they cost is the two tests.
+Reading an int back losslessly from two words it shares with a tagged value
+needs both: whether it fitted on the way in, and whether it was spilled on the
+way out. The floor falls by what the fix costs, under the rule for building
+the language as ruled.
