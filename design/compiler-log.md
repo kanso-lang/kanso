@@ -19435,3 +19435,40 @@ cells. `the_program_after_one_that_ran_out_of_memory_runs` fills the page with
 a seeded loop, which copies on every lap and leaves less than one list free,
 then asks for `print "{1 + 2}"`. With the release taken out, the second compile
 trapped. The ratchet row is "a dead run holding the page".
+
+## 2026-09-29 — the browser engine appends to a string it builds onto itself
+
+The next wasm fuzz batch after kanso#1730 found the same retention in a
+different shape. A program built a string with `"{acc}{t48 % 10}"` seventy
+thousand times, and wasm answered `the program ran out of memory` where native
+printed the string. Every intermediate string stayed in the handle registry,
+and the lengths sum to about 2.4 GB. Native avoids it with
+`linear::string_builders`: at a join that analysis proves, the builder is
+extended in place.
+
+The browser backend now reads the same analysis. At a proven join whose first
+part is the group's accumulating parameter, it calls `rt_template_mut` instead
+of `rt_template`. That entry takes the builder out of its handle and appends
+the rest, but only when the handle is marked owned. A handle is marked owned
+when a join's result was handed straight to a call, so the callee's parameter
+is the only thing holding it. A seed is never owned. A literal like `"ab"` lives
+in one handle that every mention of it shares, so the first join copies the
+seed once, which matches the one copy native makes where the seed enters.
+
+Seventy thousand joins now answer on wasm. Two specs pin it:
+`a_string_built_onto_itself_grows_where_it_stands` runs that loop, and it
+seeds three loops with the same literal and asks for all three answers.
+
+- **Loop not taken in place:** with the join sent to the ordinary template, the
+  loop ran out of memory. That is the ratchet row "a string join copied every
+  lap in wasm".
+- **Ownership check ignored:** with the check skipped, the literal was emptied
+  and the answer read `abxx xxx x`. That is the row "a seed taken by a string
+  join in wasm".
+
+An earlier draft also cleared the mark wherever the builder was read outside
+its join. No program was found where that mattered. The analysis refuses a
+group whose caller reads the builder again after handing it in, so the second
+program shaped that way built nothing in place, and the draft's spec passed
+with the clearing removed. It was taken out rather than kept without a program
+that needs it.

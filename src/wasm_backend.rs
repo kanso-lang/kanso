@@ -93,6 +93,9 @@ const RT_PARTIAL: u32 = 43;
 /// container is moved out of its handle, so the write extends it rather than
 /// copying it.
 const RT_BUILTIN_MUT: u32 = 44;
+/// A string built by joining onto itself, the way `linear::string_builders`
+/// finds it: the join appends to the builder when the builder is its own.
+const RT_TEMPLATE_MUT: u32 = 45;
 /// A group handed out as a value carries every count its arms take, as bits
 /// below this base: `MASKED - mask`. Paired with `MASKED` in wasm_rt.
 const MASKED_ARITY: i64 = -1000;
@@ -144,6 +147,7 @@ fn imports() -> Vec<Import> {
         Import { name: "rt_err_read", params: 2, returns: true },
         Import { name: "rt_partial", params: 2, returns: true },
         Import { name: "rt_builtin_mut", params: 2, returns: true },
+        Import { name: "rt_template_mut", params: 2, returns: true },
     ]
 }
 
@@ -163,6 +167,9 @@ struct Ctx {
     /// The file the declaration being emitted came from, which is half of
     /// the key `in_place` is read by.
     file: std::sync::Arc<str>,
+    /// Which of this group's parameters hold a string it builds by joining
+    /// onto itself.
+    builders: crate::hash::Set<u32>,
 }
 
 pub struct WasmBackend<'a> {
@@ -180,6 +187,9 @@ pub struct WasmBackend<'a> {
     /// line, col)`: the same answer the native emitter and the interpreter
     /// read.
     in_place: crate::hash::Set<(std::sync::Arc<str>, usize, usize)>,
+    /// `linear::string_builders`' join sites and accumulating parameters.
+    builder_joins: crate::hash::Set<(std::sync::Arc<str>, usize, usize)>,
+    builder_params: crate::hash::Set<(String, usize, usize)>,
 }
 
 /// A partial application, as the lambda it is equivalent to: `&add 2` becomes
@@ -260,8 +270,14 @@ pub fn compile(program: &Program, tailcalls: bool) -> Result<Compiled, String> {
         wrappers: HashMap::default(),
         knotted: crate::codegen::knotted_constants(program),
         tailcalls,
-        in_place: crate::linear::in_place_pushes(program),
+        in_place: Default::default(),
+        builder_joins: Default::default(),
+        builder_params: Default::default(),
     };
+    let (in_place, _, (joins, params, _)) = crate::linear::for_the_emitter(program);
+    backend.in_place = in_place;
+    backend.builder_joins = joins;
+    backend.builder_params = params;
     backend.run()
 }
 
@@ -411,6 +427,10 @@ impl<'a> WasmBackend<'a> {
                 _ => String::new(),
             },
             file: std::sync::Arc::from(""),
+            builders: (0..arity)
+                .filter(|i| self.builder_params.contains(&(name.to_string(), arity, *i)))
+                .map(|i| i as u32)
+                .collect(),
         };
         // The second hole in an err's infectiousness: a reader's getter answers
         // the piece before any arm is tried. The other two engines do the same
@@ -787,7 +807,7 @@ impl<'a> WasmBackend<'a> {
                 let lit = self.lit(LitKey::FloatBits(x.to_bits()), || Lit::Float(*x));
                 ctx.body.i32_const(lit as i64);
             }
-            Expr::Str(parts, _) => self.emit_template(ctx, parts)?,
+            Expr::Str(parts, span) => self.emit_join(ctx, parts, *span, false)?,
             Expr::Ident(name, _, _) => self.emit_ident(ctx, name, tail)?,
             Expr::List(items, _) => {
                 for item in items {
@@ -1013,6 +1033,57 @@ impl<'a> WasmBackend<'a> {
             "^" => Ok(22),
             other => Err(format!("unsupported operator `{other}`")),
         }
+    }
+
+    /// One argument of a call to a group. A join handed straight to the call
+    /// gives the callee's parameter the only claim on the string it makes.
+    fn emit_call_arg(&mut self, ctx: &mut Ctx, arg: &Expr) -> Result<(), String> {
+        match arg {
+            Expr::Str(parts, span) => self.emit_join(ctx, parts, *span, true),
+            _ => self.emit_expr(ctx, arg, false),
+        }
+    }
+
+    /// A template, which at a join `linear::string_builders` found appends to
+    /// the builder it starts with when the builder is its own to write.
+    fn emit_join(
+        &mut self,
+        ctx: &mut Ctx,
+        parts: &[TemplatePart],
+        span: crate::diag::Span,
+        as_arg: bool,
+    ) -> Result<(), String> {
+        let site = (ctx.file.clone(), span.line as usize, span.col as usize);
+        let builder = match parts.first() {
+            Some(TemplatePart::Interp(inner)) => match inner {
+                Expr::Ident(name, _, _) => ctx
+                    .scope
+                    .get(name.as_str())
+                    .copied()
+                    .filter(|local| ctx.builders.contains(local)),
+                _ => None,
+            },
+            _ => None,
+        };
+        let Some(local) = builder.filter(|_| self.builder_joins.contains(&site)) else {
+            return self.emit_template(ctx, parts);
+        };
+        ctx.body.local_get(local);
+        ctx.body.call(RT_ARG);
+        for part in &parts[1..] {
+            match part {
+                TemplatePart::Lit(s) => {
+                    let lit = self.str_lit(s);
+                    ctx.body.i32_const(lit as i64);
+                }
+                TemplatePart::Interp(inner) => self.emit_expr(ctx, inner, false)?,
+            }
+            ctx.body.call(RT_ARG);
+        }
+        ctx.body.i32_const(parts.len() as i64);
+        ctx.body.i32_const(i64::from(as_arg));
+        ctx.body.call(RT_TEMPLATE_MUT);
+        Ok(())
     }
 
     fn emit_template(&mut self, ctx: &mut Ctx, parts: &[TemplatePart]) -> Result<(), String> {
@@ -1260,6 +1331,7 @@ impl<'a> WasmBackend<'a> {
             hako: ctx.hako.clone(),
             group: String::new(),
             file: ctx.file.clone(),
+            builders: Default::default(),
         };
         self.emit_expr(&mut inner, item, true)?;
         self.module.define(fn_idx, inner.body);
@@ -1316,6 +1388,7 @@ impl<'a> WasmBackend<'a> {
             hako: ctx.hako.clone(),
             group: String::new(),
             file: ctx.file.clone(),
+            builders: Default::default(),
         };
         for (i, p) in param_names.iter().enumerate() {
             let local = inner.body.local();
@@ -1498,7 +1571,7 @@ impl<'a> WasmBackend<'a> {
         }
         if let Some(idx) = self.dispatchers.get(&(name.to_string(), args.len())).copied() {
             for arg in args {
-                self.emit_expr(ctx, arg, false)?;
+                self.emit_call_arg(ctx, arg)?;
             }
             match tail && self.tailcalls {
                 true => ctx.body.return_call(idx),
