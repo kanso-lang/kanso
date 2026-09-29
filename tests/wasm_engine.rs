@@ -723,6 +723,31 @@ fn the_program_after_one_that_ran_out_of_memory_runs() {
     );
 }
 
+/// A string built by joining onto itself grows where it stands. The registry
+/// kept every string the loop made, so seventy thousand one-letter joins held
+/// the sum of every length on the way, about 2.4 GB, and filled the page. The
+/// join now takes the builder out of its handle when a previous join handed it
+/// straight to the call, and appends. A seed is not taken: a literal lives in
+/// one handle every mention of it shares, so the second program seeds three
+/// loops with the same `"ab"`.
+#[test]
+fn a_string_built_onto_itself_grows_where_it_stands() {
+    let long = "fn build s 0\n  s\n\nfn build s n\n  build \"{s}x\" (n - 1)\n\n\
+                pub play = print (length (build \"\" 70000))\n";
+    let seeded = "fn build s 0\n  s\n\nfn build s n\n  build \"{s}x\" (n - 1)\n\n\
+                  pub play = print \"{build \"ab\" 2} {build \"ab\" 3} {build \"ab\" 1}\"\n";
+    for (name, source, want) in
+        [("long.kso", long, "70000\n"), ("seeded.kso", seeded, "abxx abxxx abx\n")]
+    {
+        let mut toolchain = Toolchain::load();
+        let answer = toolchain.run(name, source);
+        assert!(
+            matches!(&answer, Answer::Ran(0, text) if text == want),
+            "{name} answered {answer:?}"
+        );
+    }
+}
+
 impl Toolchain {
     /// One line at the playground's prompt, the way the page sends it.
     fn prompt(&mut self, line: &str) -> (i32, String) {

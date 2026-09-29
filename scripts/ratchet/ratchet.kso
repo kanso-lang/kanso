@@ -4345,6 +4345,28 @@ after_full = "the_program_after_one_that_ran_out_of_memory_runs"
 
 rows_c1zzzzq = text/concat rows_c1zzzzp [dead_run_held]
 
+# A string built onto itself grows where it stands on the wasm engine, and only
+# a builder a previous join handed over is taken: a literal seed is shared.
+string_join_copied = row
+  "a string join copied every lap in wasm"
+  true
+  "cargo test --release --test wasm_engine {built_onto_itself}"
+  "specs (unit, golden, differential)"
+  (breaking "a_string_join_copied_every_lap_in_wasm")
+  with_blob
+
+seed_taken = row
+  "a seed taken by a string join in wasm"
+  true
+  "cargo test --release --test wasm_engine {built_onto_itself}"
+  "specs (unit, golden, differential)"
+  (breaking "a_seed_taken_by_a_string_join_in_wasm")
+  with_blob
+
+built_onto_itself = "a_string_built_onto_itself_grows_where_it_stands"
+
+rows_c1zzzzr = text/concat rows_c1zzzzq [string_join_copied seed_taken]
+
 # A string builder may be seeded with any value, since a join renders what it
 # joins onto. Native used to refuse the seed, and the first join adopts it.
 seed_refused = row
@@ -4363,7 +4385,7 @@ seed_unadopted = row
   (breaking "a_join_that_never_adopts_its_seed")
   release
 
-rows_c1zzzzs = text/concat rows_c1zzzzq [seed_refused seed_unadopted]
+rows_c1zzzzs = text/concat rows_c1zzzzr [seed_refused seed_unadopted]
 
 rows_c = text/concat rows_c1zzzzs [itself]
 
