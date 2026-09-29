@@ -1,0 +1,31 @@
+# `&g p v` holds p and v for g, and the interpreter evaluates them at the `&`:
+# a held err is the partial's answer. Native built a closure over the held
+# expressions instead, so a partial holding an err was a function, and `g`,
+# whose arms ignore every argument, answered 14 through it.
+# `fine` holds nothing that fails and answers through g on every engine.
+import "std/list"
+import "std/text"
+
+fn g _ _ _
+  14
+
+fn said (err q)
+  "err {q}"
+
+fn said n
+  "{n}"
+
+fn held p
+  v = text/to_bytes [999 19]
+  h = &g p v
+  said (h 1)
+
+fn over p
+  v = text/to_bytes [999 19]
+  said (list/to_list (list/map [1 2] (&g p v)))
+
+fn fine p
+  v = text/to_bytes [9 19]
+  said (list/to_list (list/map [1 2] (&g p v)))
+
+pub play = print "{held 2}\n{over 2}\n{fine 2}"
