@@ -1,1 +1,4 @@
 error[name]: no record type has a field `name` (module field_missing)
+  --> field_missing.kso:6:12
+   6 |   print "{u.name}"
+                  ^

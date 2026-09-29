@@ -1,0 +1,4 @@
+error[name]: `point` has no field `name` (module field_of_the_wrong_record)
+  --> field_of_the_wrong_record.kso:21:12
+  21 |   print "{p.name}"
+                  ^

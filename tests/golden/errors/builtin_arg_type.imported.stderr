@@ -1,1 +1,4 @@
 error[type]: `length` takes a list, a map, or a string here, not an int (module builtin_arg_type)
+  --> builtin_arg_type.kso:1:27
+   1 | pub play = print "{length 5}"
+                                 ^

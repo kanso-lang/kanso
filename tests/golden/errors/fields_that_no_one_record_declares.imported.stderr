@@ -1,0 +1,8 @@
+error[name]: `m` is read for `to` and `wanted`, and no record type has both (module fields_that_no_one_record_declares)
+  --> fields_that_no_one_record_declares.kso:18:11
+  18 |   m.to - m.wanted
+                 ^
+error[name]: `n` is read for `kind`, `from` and `to`, and no record type has all of them (module fields_that_no_one_record_declares)
+  --> fields_that_no_one_record_declares.kso:21:4
+  21 |   n.kind + n.from + n.to
+          ^

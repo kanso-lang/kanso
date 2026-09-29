@@ -1,0 +1,4 @@
+error[name]: `m` is read for `to` and `wanted`, and no record type has both (module uncertain_reads_are_not_counted)
+  --> uncertain_reads_are_not_counted.kso:38:11
+  38 |   m.to + m.wanted
+                 ^

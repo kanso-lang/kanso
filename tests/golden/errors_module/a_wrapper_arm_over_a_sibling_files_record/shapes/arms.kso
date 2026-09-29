@@ -1,0 +1,10 @@
+# `tall` destructures as the two fields of `rect`, so an arm that hands it
+# one field can never match.
+fn kinds (rect _ _)
+  "rect"
+
+fn kinds (tall (rect _ _))
+  "tall"
+
+pub fn kind n
+  kinds (tall (rect n n))

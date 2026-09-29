@@ -461,6 +461,7 @@ fn check_per_node<'a>(
         state.shadowable.clear();
         state.own = !crate::ast::has_slash(&decl.name);
         state.file = Some(&decl.file);
+        let (first, first_named) = (diags.len(), state.named_diags.len());
         for p in &decl.params {
             collect_pattern_names(p, &mut state.bound);
         }
@@ -507,6 +508,14 @@ fn check_per_node<'a>(
         for (base, seen) in &state.open {
             judge_cooccurrence(base, seen, program, diags);
         }
+        // This walk reads the merged program, which holds every file of a
+        // module, and a diagnostic that names no file is printed with the
+        // module's name and no location. Everything said here is about the
+        // declaration in hand, so it is placed in that declaration's file.
+        // Until 2026-09-29 a build block's refusal in a module said which
+        // module and nothing else.
+        place_in(&mut diags[first..], &decl.file);
+        place_in(&mut state.named_diags[first_named..], &decl.file);
         if state.shadowable.is_empty() {
             continue;
         }
@@ -1585,6 +1594,7 @@ fn check_after_infer<'p>(
         // the set behind it is filled on the first ask — so the closure has to
         // be rebuilt per declaration even though nothing else here is.
         let shadow = |n: &str| shadows(i, n);
+        let marks = (effect_diags.len(), box_diags.len(), none_diags.len());
         for stmt in &decl.body {
             let e = match stmt {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expr,
@@ -1598,6 +1608,21 @@ fn check_after_infer<'p>(
                 site(cur, &shadow, box_diags);
                 crate::for_each_child(cur, |c| stack.push(c));
             }
+        }
+        // All three are about this declaration's statements, and in a module
+        // the program holds every file's, so each is placed in its file.
+        place_in(&mut effect_diags[marks.0..], &decl.file);
+        place_in(&mut box_diags[marks.1..], &decl.file);
+        place_in(&mut none_diags[marks.2..], &decl.file);
+    }
+}
+
+/// Places diagnostics in the file of the declaration they were raised for,
+/// unless the check that raised one already named a file.
+fn place_in(diags: &mut [Diagnostic], file: &std::sync::Arc<str>) {
+    for d in diags {
+        if d.file.is_none() {
+            d.file = Some(std::sync::Arc::clone(file));
         }
     }
 }
@@ -1921,15 +1946,18 @@ pub fn check_arm_ties(program: &Program, diags: &mut Vec<Diagnostic>) {
                         k != i && k != j && covers(c, a, &compare) && covers(c, b, &compare)
                     });
                 if conflicting && !settled {
-                    diags.push(Diagnostic::new(
-                        "dispatch",
-                        format!(
-                            "these `{name}` arms tie: each is the more specific \
+                    diags.push(
+                        Diagnostic::new(
+                            "dispatch",
+                            format!(
+                                "these `{name}` arms tie: each is the more specific \
                              one somewhere, and a call could match both — write \
                              the arm that is most specific in every position"
-                        ),
-                        b.span,
-                    ));
+                            ),
+                            b.span,
+                        )
+                        .about(&b.file),
+                    );
                 }
             }
         }
@@ -2113,7 +2141,7 @@ pub fn declared_names(program: &Program) -> HashSet<&str> {
 /// Per-file checks: canonical order plus name resolution against this file's
 /// globals extended with the rest of the module.
 pub fn check_file(program: &Program, extern_globals: &HashSet<&str>) -> Vec<Diagnostic> {
-    check_file_shadow(program, extern_globals, &HashSet::default(), &HashSet::default())
+    check_file_shadow(program, extern_globals, &HashSet::default(), &HashSet::default(), &[])
 }
 
 /// Bare-enrolled imports (synthetic clones) are shadowable: a local binding
@@ -2124,12 +2152,13 @@ pub fn check_file_shadow(
     extern_globals: &HashSet<&str>,
     shadowable: &HashSet<String>,
     sibling_types: &HashSet<String>,
+    sibling_decls: &[&crate::ast::TypeDecl],
 ) -> Vec<Diagnostic> {
     let mut diags = Vec::new();
     check_type_order(program, &mut diags);
     check_fn_order(program, &mut diags);
     check_constants(program, &mut diags);
-    check_constant_cycles(program, &mut diags);
+    check_constant_cycles(program, sibling_types, &mut diags);
     check_retired_any(program, &mut diags);
     check_field_annotations(program, &mut diags);
     check_field_conflicts(program, &mut diags);
@@ -2141,7 +2170,7 @@ pub fn check_file_shadow(
     // counted, and `p:pt` with `pt` declared beside it was refused. Asked of
     // both sets in turn rather than merged, which cost an allocation per name.
     let declared_type_names = TypeNames { own: &own_type_names, siblings: sibling_types };
-    check_annotation_names(program, declared_type_names, &mut diags);
+    check_annotation_names(program, declared_type_names, sibling_decls, &mut diags);
     let mut globals = collect_globals(program, &mut diags);
     globals.extend(extern_globals.iter().copied());
     let fn_arities = Arities::of(program);
@@ -2180,8 +2209,10 @@ fn check_predicates(
 ) {
     use crate::infer::{ERR, FALSE, TRUE};
     // inference is handed in: one pass serves every check that reads it
-    let mut groups: crate::hash::Map<&str, (crate::infer::Set, crate::diag::Span)> =
-        crate::hash::Map::default();
+    // The file travels with the span: in a module the groups come from every
+    // file, and a span alone does not say which one it is in.
+    type At<'a> = (crate::infer::Set, crate::diag::Span, &'a std::sync::Arc<str>);
+    let mut groups: crate::hash::Map<&str, At> = crate::hash::Map::default();
     for (i, decl) in program.fns.iter().enumerate() {
         // test functions are assertions the test verb consumes — their own
         // convention, not questions
@@ -2199,14 +2230,14 @@ fn check_predicates(
         {
             continue;
         }
-        let entry = groups.entry(decl.name.as_str()).or_insert((0, decl.span));
+        let entry = groups.entry(decl.name.as_str()).or_insert((0, decl.span, &decl.file));
         entry.0 |= inference.returns[i];
     }
     // a HashMap hands these back in a different order every run, which makes
     // a multi-diagnostic file's output unstable; report in source order
     let mut groups: Vec<_> = groups.into_iter().collect();
-    groups.sort_by_key(|(name, (_, span))| (span.line, span.col, *name));
-    for (name, (set, span)) in groups {
+    groups.sort_by_key(|(name, (_, span, _))| (span.line, span.col, *name));
+    for (name, (set, span, file)) in groups {
         let short = crate::ast::split_qual(name).map(|(_, s)| s).unwrap_or(name);
         let is_question = short.ends_with('?');
         // only err rides along (a predicate over fallible work is still a
@@ -2219,21 +2250,27 @@ fn check_predicates(
         // whose set cannot contain a boolean at all. generic drivers widen
         // honest predicates to TOP, and TOP still holds bool.
         if is_question && set != 0 && set & (TRUE | FALSE) == 0 {
-            diags.push(Diagnostic::new(
-                "naming",
-                format!(
-                    "`{short}` asks a question: a `?` function answers \
+            diags.push(
+                Diagnostic::new(
+                    "naming",
+                    format!(
+                        "`{short}` asks a question: a `?` function answers \
                      true or false (err may ride along)"
-                ),
-                span,
-            ));
+                    ),
+                    span,
+                )
+                .about(file),
+            );
         }
         if !is_question && boolish {
-            diags.push(Diagnostic::new(
-                "naming",
-                format!("`{short}` answers only true or false: name it `{short}?`"),
-                span,
-            ));
+            diags.push(
+                Diagnostic::new(
+                    "naming",
+                    format!("`{short}` answers only true or false: name it `{short}?`"),
+                    span,
+                )
+                .about(file),
+            );
         }
         // The other suffix, ruled in July and again on 2026-09-03: a `!` name's
         // answer typeset must include an err type. A bang that cannot fail is a
@@ -2245,14 +2282,17 @@ fn check_predicates(
         // takes: an empty set means inference learned nothing, and TOP (what a
         // generic driver widens to) still holds ERR, so neither is accused.
         if short.ends_with('!') && set != 0 && set & crate::infer::DESC == 0 {
-            diags.push(Diagnostic::new(
-                "naming",
-                format!(
-                    "`{short}` wears a bang: a `!` function answers an effect, \
+            diags.push(
+                Diagnostic::new(
+                    "naming",
+                    format!(
+                        "`{short}` wears a bang: a `!` function answers an effect, \
                      the box a failure bubbles through"
-                ),
-                span,
-            ));
+                    ),
+                    span,
+                )
+                .about(file),
+            );
         }
     }
 }
@@ -2516,7 +2556,7 @@ pub fn check_merged_after_aliases_with<'a>(
     }
     let returns = returns;
     check_constants(program, &mut diags);
-    check_constant_cycles(program, &mut diags);
+    check_constant_cycles(program, &HashSet::default(), &mut diags);
     check_predicates(program, &inference, &mut diags);
     check_arm_ties(program, &mut diags);
     check_sub_parents(program, &mut diags);
@@ -3729,7 +3769,7 @@ fn check_fn_order(program: &Program, diags: &mut Vec<Diagnostic>) {
 fn demanded_refs<'a>(
     expr: &'a Expr,
     known: &HashSet<&str>,
-    types: &HashSet<&str>,
+    types: TypeNames,
     out: &mut Vec<&'a str>,
 ) {
     if let Expr::Ident(name, _, _) | Expr::Partial(name, _) = expr {
@@ -3743,7 +3783,7 @@ fn demanded_refs<'a>(
     }
     if let Expr::App { head, args, .. } = expr {
         if let Expr::Ident(name, _, _) = head.as_ref() {
-            if types.contains(name.as_str()) {
+            if types.contains(name) {
                 // a constructor's arguments are stored, so only the head is a
                 // demand, and the head is a type rather than a constant
                 let _ = args;
@@ -3852,7 +3892,12 @@ fn undeclared_in(ty: &str, declared: TypeNames) -> Vec<String> {
         .collect()
 }
 
-fn check_annotation_names(program: &Program, declared: TypeNames, diags: &mut Vec<Diagnostic>) {
+fn check_annotation_names(
+    program: &Program,
+    declared: TypeNames,
+    sibling_decls: &[&crate::ast::TypeDecl],
+    diags: &mut Vec<Diagnostic>,
+) {
     fn patterns(
         p: &Pattern,
         declared: TypeNames,
@@ -3993,9 +4038,11 @@ fn check_annotation_names(program: &Program, declared: TypeNames, diags: &mut Ve
         }
     }
 
-    // The typesets, borrowed from the list `declared` was built from.
+    // The typesets, borrowed from the list `declared` was built from. In a
+    // module the other files' declarations come first and this file's own
+    // after them, so a name both declare reads as this file's.
     let types: crate::hash::Map<&str, &crate::ast::TypeDecl> =
-        program.types.iter().map(|t| (t.name.as_str(), t)).collect();
+        sibling_decls.iter().copied().chain(&program.types).map(|t| (t.name.as_str(), t)).collect();
     // A field's reader is the compiler's own arm, written from the record it
     // reads. When a program declares a second type of that name, the reader
     // is checked against the wrong declaration and reported as an arm the
@@ -4089,10 +4136,19 @@ fn annotation_names(ty: &str) -> Vec<&str> {
     vec![inner]
 }
 
-fn check_constant_cycles(program: &Program, diags: &mut Vec<Diagnostic>) {
+/// A record declared in the next file of a module constructs as surely as one
+/// declared here. Until 2026-09-29 only this file's types counted, so
+/// `ring = node 1 ring` was refused as defined in terms of itself whenever
+/// `node` was declared beside it rather than above it.
+fn check_constant_cycles(
+    program: &Program,
+    sibling_types: &HashSet<String>,
+    diags: &mut Vec<Diagnostic>,
+) {
     let constants: Vec<&FnDecl> = program.fns.iter().filter(|d| d.params.is_empty()).collect();
     let names: HashSet<&str> = constants.iter().map(|d| d.name.as_str()).collect();
-    let types: HashSet<&str> = program.types.iter().map(|t| t.name.as_str()).collect();
+    let own: HashSet<&str> = program.types.iter().map(|t| t.name.as_str()).collect();
+    let types = TypeNames { own: &own, siblings: sibling_types };
     let mut refs: HashMap<&str, Vec<&str>> =
         HashMap::with_capacity_and_hasher(program.fns.len(), Default::default());
     for decl in &constants {
@@ -4102,7 +4158,7 @@ fn check_constant_cycles(program: &Program, diags: &mut Vec<Diagnostic>) {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
                 Stmt::Set { value, .. } => value,
             };
-            demanded_refs(expr, &names, &types, out);
+            demanded_refs(expr, &names, types, out);
         }
     }
     for decl in &constants {
@@ -4110,11 +4166,17 @@ fn check_constant_cycles(program: &Program, diags: &mut Vec<Diagnostic>) {
         let mut stack: Vec<&str> = refs.get(decl.name.as_str()).cloned().unwrap_or_default();
         while let Some(cur) = stack.pop() {
             if cur == decl.name {
-                diags.push(Diagnostic::new(
-                    "name",
-                    format!("`{}` is defined in terms of itself, so it has no value", decl.name),
-                    decl.span,
-                ));
+                diags.push(
+                    Diagnostic::new(
+                        "name",
+                        format!(
+                            "`{}` is defined in terms of itself, so it has no value",
+                            decl.name
+                        ),
+                        decl.span,
+                    )
+                    .about(&decl.file),
+                );
                 break;
             }
             if seen.insert(cur) {
@@ -4573,7 +4635,13 @@ fn other_span(pattern: &Pattern) -> Span {
         Pattern::Annotated { span, .. } | Pattern::Keyed { span, .. } => *span,
         Pattern::Var(_, s) => *s,
         Pattern::Wildcard(s) => *s,
-        Pattern::Ctor { .. } => Span::at(0, 0),
+        // A constructor pattern has no span of its own, so it answers with
+        // its first field that has one. Until 2026-09-29 it answered 0:0,
+        // and a refusal pointed at a constructor nested first in another
+        // was printed at the top of the file.
+        Pattern::Ctor { fields, .. } => {
+            fields.iter().map(other_span).find(|s| s.line != 0).unwrap_or(Span::at(0, 0))
+        }
     }
 }
 
@@ -5116,13 +5184,16 @@ fn check_discarded_value(
             };
             for leaf in &leaves[..keep] {
                 if refused(leaf) {
-                    diags.push(Diagnostic::new(
-                        "unused",
-                        "this value is never used: a non-final line binds a name, or \
+                    diags.push(
+                        Diagnostic::new(
+                            "unused",
+                            "this value is never used: a non-final line binds a name, or \
                          is an effect joining the group"
-                            .to_string(),
-                        leaf.span(),
-                    ));
+                                .to_string(),
+                            leaf.span(),
+                        )
+                        .about(&decl.file),
+                    );
                 }
             }
         }

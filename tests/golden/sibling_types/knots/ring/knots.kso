@@ -1,0 +1,7 @@
+ring = node 1 mate
+
+mate = node 2 ring
+
+alone = node 3 alone
+
+pub ends = "{ring.peer.id} {ring.peer.peer.id} {alone.peer.peer.id} {ring}"

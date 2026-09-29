@@ -1,0 +1,6 @@
+# The record and its subtype, declared apart from the arms that read them.
+type rect
+  w
+  h
+
+type tall rect

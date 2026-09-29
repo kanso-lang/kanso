@@ -42,7 +42,9 @@ fn laundering_an_own_err_through_a_foreign_reason_is_refused() {
         said,
         "error[opacity]: `json/parse_failure` is foreign — only `json` builds a \
          `parse_failure`; ask it for one through a pub function (module \
-         tests/golden/advisory/laundered)\n"
+         tests/golden/advisory/laundered)\n  \
+         --> tests/golden/advisory/laundered/laundered.kso:7:8\n   \
+         7 |   err (json/parse_failure 1 \"raised here, not by json\")\n              ^\n"
     );
 }
 

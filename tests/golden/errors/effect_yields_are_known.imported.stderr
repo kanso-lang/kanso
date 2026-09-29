@@ -1,3 +1,12 @@
 error[naming]: `answer` answers only true or false: name it `answer?` (module effect_yields_are_known)
+  --> effect_yields_are_known.kso:7:4
+   7 | fn answer b
+          ^
 error[naming]: `named?` asks a question: a `?` function answers true or false (err may ride along) (module effect_yields_are_known)
+  --> effect_yields_are_known.kso:10:4
+  10 | fn named? v
+          ^
 error[naming]: `listed?` asks a question: a `?` function answers true or false (err may ride along) (module effect_yields_are_known)
+  --> effect_yields_are_known.kso:13:4
+  13 | fn listed? v
+          ^

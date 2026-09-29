@@ -1,1 +1,4 @@
 error[naming]: `ready` answers only true or false: name it `ready?` (module predicate_name)
+  --> predicate_name.kso:3:4
+   3 | fn ready n
+          ^

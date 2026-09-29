@@ -1,1 +1,4 @@
 error[naming]: `shout!` wears a bang: a `!` function answers an effect, the box a failure bubbles through (module a_bang_name_that_cannot_fail)
+  --> a_bang_name_that_cannot_fail.kso:8:4
+   8 | fn shout! x
+          ^
