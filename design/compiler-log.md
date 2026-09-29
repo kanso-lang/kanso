@@ -18988,3 +18988,31 @@ in tests/partial.rs builds a record and a subtype through a partial on the
 interpreter. The old interpreter failed both. The rows "a builtin partial
 answering nothing" and "a constructor partial answering nothing" put each
 answer back to nothing and turn their spec red.
+
+## 2026-09-29 — a sigil before a parenthesis is refused by the parser
+
+`k = &(g 1)` got a formatting error asking for a space after `&`. The lexer's
+spacing check reads `&` before `(` as the bitwise operator, which takes a
+space on each side. Written `k = & (g 1)`, the line then failed to parse with
+"`&` marks a partial application: `&name arg`". So following the first
+diagnostic led straight to the second. The check now leaves a `&` alone when
+nothing a value ends with comes before it and no name comes after it, and the
+parser's refusal is the one printed. `k &(g)` still asks for a space, because
+there `&` follows a value and is the operator. Probing partials by hand found
+it.
+
+The error fixture `an_ampersand_before_a_parenthesis` printed the formatting
+error on the old lexer. The row "a nameless sigil asked for a space" puts the
+spacing check back and turns the error corpus red.
+
+The first version computed whether a value precedes the token for every pair
+the spacing check reads, where the old test reached that question only behind
+a match on `&`, and CI read it at +77,906 instructions on
+`compile_instructions`. Asking only when the token is `&` puts the work back
+where it was. CI then read `compile_instructions` at 25,000,311, up 1,833,
+and `entry_instructions` at 82,619,124 and `library_instructions` at
+83,101,949, each up 6,464, and after main moved it read `emit_instructions`
+at 29,896,572, up 335, which arrived with the change. The meta welfare fell by what those cost, and the
+floor comes down by that much under the 2026-09-13 rule, since this is the
+diagnostic the language owes for `&(`.
+

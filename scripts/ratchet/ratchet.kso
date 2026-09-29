@@ -4116,7 +4116,20 @@ ctor_partial = row
 
 rows_c1zzzzj = text/concat rows_c1zzzzf [partial_of_builtin ctor_partial]
 
-rows_c = text/concat rows_c1zzzzj [itself]
+# A sigil with no name after it is left to the parser, whose refusal says
+# what `&` wants. The spacing check asked for a space, which then failed to
+# parse.
+sigil_paren = row
+  "a nameless sigil asked for a space"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_nameless_sigil_asked_for_a_space")
+  no_setup
+
+rows_c1zzzzc = text/concat rows_c1zzzzj [sigil_paren]
+
+rows_c = text/concat rows_c1zzzzc [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

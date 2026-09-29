@@ -1,0 +1,8 @@
+fn g a b
+  a + b
+
+fn h x
+  k = &(g 1)
+  k x
+
+pub play = print "{h 2}"
