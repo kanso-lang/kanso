@@ -1,0 +1,23 @@
+import "std/math"
+import "std/text"
+
+# NaN and the infinities have no integer to round to, and arithmetic makes
+# them, so `math/round` answers `none` for all three and the caller's arm
+# decides. A finite float rounds half away from zero and an int answers
+# itself. `math/round!` is the caller insisting the float is finite: it
+# answers a box, `.>` opens it, and a non-finite argument is a failure inside
+# it that `.?` reaches. Until 2026-09-29 every engine answered 0 for NaN and
+# the ends of int64 for the infinities.
+big = text/to_float "inf"
+
+fn show x
+  "{math/round x}"
+
+fn insist x
+  math/round! x .> (n -> "{n + 1}") .? (e -> e.reason)
+
+shown = "{show (0.0 - big)} {show big} {show (big - big)} {show 2.5} {show 7}"
+
+pub play = print shown
+  .> (_ -> insist 2.5 .> print)
+  .> (_ -> insist (big - big) .> print)
