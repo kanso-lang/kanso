@@ -18931,3 +18931,12 @@ all four, and old native printed `<fn>` for the wrapped one. The rows "a
 partial over a partial taking nothing", "a native partial answering nothing"
 and "a browser partial answering nothing" each put one engine's answer back,
 and each turns its corpus red.
+
+CI measured what the native runtime's extra branch costs. Release codegen rose
+114,479 to 408,187,514 in `codegen_instructions_release`, and dev codegen rose
+3,832 to 124,465,602 in `codegen_instructions_dev`, since `k_callee_arity` is
+runtime C that every build compiles. `work_runbench` rose 201 to 1,088,404,896.
+Emitting fell 335 and every benchmark's text shrank 480 bytes. The meta welfare
+fell by 0.00006, and the floor comes down by that much under the 2026-09-13
+rule, because this is the language answering the same on every engine.
+
