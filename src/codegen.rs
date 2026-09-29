@@ -1834,7 +1834,6 @@ static HELPERS_RELEASE: [Helper; HELPERS] = index_helpers(DECLARES);
 /// DECLARES as a module wants it: joined by newlines with no newline after the
 /// last, keeping a `declare` only when `referenced` says the program calls its
 /// symbol, and folding each stats gate to its fast branch unless `counting`.
-
 #[cfg(test)]
 fn declares_for(referenced: impl Fn(&str) -> bool, counting: bool, inline: bool) -> String {
     declares_for_program(referenced, |_| true, counting, inline, false)

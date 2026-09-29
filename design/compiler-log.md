@@ -18769,3 +18769,8 @@ entry fixture `a_packed_record_across_the_entry` holds three records in the
 entry, where they are boxed, and reads them rendered, by field and in a list;
 the old compiler got two wrong. The rows "a packed int read back unsigned" and
 "a wide int packed anyway" put each half back and turn the corpus red.
+
+The pack's fit check is emitted code. The module compile golden moves on it:
+`module_lines` lands on 1,105 (+12), `module_calls` on 110 (+1) and
+`module_branches` on 86 (+1), with `defines`, `rounds` and `visits` unchanged.
+CI will measure the rest.
