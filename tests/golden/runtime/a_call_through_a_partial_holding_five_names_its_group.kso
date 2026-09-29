@@ -1,0 +1,16 @@
+# `k = &f6 0 0 0 0 0` holds five of f6's six arguments, one more than native
+# builds a partial of, and `k bad` hands it the sixth, an err. f6 turns it
+# down and the trace names f6. Native held the partial as a closure over f6,
+# whose dispatcher answered the err before f6 ran, and the trace named
+# nothing.
+import "std/text"
+
+fn f6 _ _ _ _ _ p
+  if (p < "b") 1 0
+
+fn go n
+  bad = text/from_code n
+  k = &f6 0 0 0 0 0
+  k bad
+
+pub play = print "{go 55296}"

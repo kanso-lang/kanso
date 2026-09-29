@@ -7424,16 +7424,16 @@ impl<'a> Backend<'a> {
         supplied: &[Expr],
         span: Span,
     ) -> Result<String, String> {
-        // A group whose one arm takes four or fewer is held over the value it
+        // A group whose one arm takes eight or fewer is held over the value it
         // is handed out as, which names the group: a call that turns down a
         // failing argument then says so in the trace, as a direct call does.
         // A closure over the group answered the failure before entering it,
         // and the trace lost the group. `partial_lambda` still refuses what
-        // it refuses, and past four the lambda stays, because the runtime's
-        // dispatchers stop at four.
+        // it refuses, and past eight in all the lambda stays, because
+        // `k_dispatch_n` stops at eight.
         let lambda = self.partial_lambda(name, supplied, span)?;
         if let Expr::Lambda { params, .. } = &lambda {
-            if params.len() + supplied.len() <= 4 {
+            if params.len() + supplied.len() <= 8 {
                 return self.emit_partial_value(f, &Name::new(name), supplied, span);
             }
         }
@@ -7489,16 +7489,29 @@ impl<'a> Backend<'a> {
             held.push(self.emit_expr(f, a)?);
         }
         let n = held.len();
-        if n > 4 {
+        if n > 8 {
             return Err(format!(
-                "native backend: a partial over a value holds at most 4 arguments, got {n}"
+                "native backend: a partial over a value holds at most 8 arguments, got {n}"
             ));
         }
-        let arg_ir: String = held.iter().map(|v| format!(", %KValue {v}")).collect();
-        let t = f.tmp();
-        f.line(&format!("{t} = call %KValue @k_partial{n}(%KValue {callee}{arg_ir})"));
-        f.record(&t, TOP);
-        Ok(t)
+        // Past four the runtime's builders stop, so the rest are held by a
+        // partial over the first: the runtime settles a partial over a
+        // partial by the count its callee still wants, and a failing
+        // argument answers in the order it was written either way.
+        let mut callee = callee;
+        let mut rest: &[String] = &held;
+        loop {
+            let take = rest.len().min(4);
+            let arg_ir: String = rest[..take].iter().map(|v| format!(", %KValue {v}")).collect();
+            let t = f.tmp();
+            f.line(&format!("{t} = call %KValue @k_partial{take}(%KValue {callee}{arg_ir})"));
+            f.record(&t, TOP);
+            callee = t;
+            rest = &rest[take..];
+            if rest.is_empty() {
+                return Ok(callee);
+            }
+        }
     }
 
     fn emit_expr(&mut self, f: &mut FnEmit, expr: &Expr) -> Result<String, String> {
@@ -7699,7 +7712,7 @@ impl<'a> Backend<'a> {
                     seen
                 };
                 if arities.len() == 1
-                    && (1..=4).contains(&arities[0])
+                    && (1..=8).contains(&arities[0])
                     && self.simple_fn_value(name, arities[0])
                 {
                     let arity = arities[0];
@@ -7711,7 +7724,7 @@ impl<'a> Backend<'a> {
                 if !arities.is_empty() {
                     return Err(format!(
                         "native backend: `{name}` cannot be used as a function value \
-                         (only 1-4 argument functions over plain values are supported)"
+                         (only 1-8 argument functions over plain values are supported)"
                     ));
                 }
                 let bare = name.strip_prefix("builtin_").unwrap_or(name.as_str());

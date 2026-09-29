@@ -18970,3 +18970,37 @@ partial held in a nameless closure", "a browser group value naming nothing"
 and "a browser partial held in a nameless closure" each put one change back
 and turn their corpus red.
 
+## 2026-09-29 — a partial over a wide group names the group too
+
+The entry above left a gap open: past four parameters, a partial over a
+declared group stayed a closure, because native's dispatchers stop at four,
+and a call through it that turned down a failing argument dropped the group
+from the trace. `k = &f5 0 0; k 0 0 bad` printed `passed through f5` on the
+interpreter and no hop on native or in the browser.
+
+A call site still hands a value at most four arguments, so past four the
+arguments reaching a group value come from a partial. `k_dispatch_n` now
+takes up to eight, calling a group value through `k_call_ref_wide`, which
+checks the count and the failures in `k_call4`'s order and names the group as
+it does. The runtime builds a partial of at most four, so the emitter holds
+five to eight as a partial over a partial, which the runtime already settles
+by the count its callee still wants. A partial over a group of up to eight in
+all is now held over the group's value, and a group of up to eight is handed
+out as a value; past eight the lambda stays, and a group past eight is
+refused as a value at compile time as one past four was. The browser's host
+already called a group wrapper with any number of arguments and built a
+partial of any size, and it now holds the same partials over the value. lib
+and the benchmarks hold no partial over a group that wide, so no runtime row
+can move.
+
+The micro sample `a_partial_over_a_wide_group_runs` finishes partials over
+groups of five, six and eight, one over another partial, one holding five and
+one holding five over a group value, and keeps a partial of four in eight as
+a function. The runtime samples
+`a_call_through_a_partial_over_a_wide_group_names_it` and
+`a_call_through_a_partial_holding_five_names_its_group` pin the trace. Native
+and the browser printed no hop for either. The rows "a wide partial held in a
+closure", "a wide group value left uncalled", "a browser wide partial held in
+a closure" and "a partial holding five refused" each put one change back and
+turn their corpus red.
+

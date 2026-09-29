@@ -1740,8 +1740,9 @@ fn free_idents(expr: &Expr, visit: &mut dyn FnMut(&str)) {
 
 /// Whether a partial over a declared group is held over the value the group
 /// is handed out as, which carries its name: a call that turns down a failing
-/// argument then names the group in the trace, as a direct call does. Past
-/// four the native dispatchers stop, so both backends keep the lambda there.
+/// argument then names the group in the trace, as a direct call does. The
+/// native dispatcher stops at eight arguments in all, so both backends keep
+/// the lambda past that.
 fn held_over_value(lambda: &Expr, held: usize) -> bool {
-    matches!(lambda, Expr::Lambda { params, .. } if params.len() + held <= 4)
+    matches!(lambda, Expr::Lambda { params, .. } if params.len() + held <= 8)
 }

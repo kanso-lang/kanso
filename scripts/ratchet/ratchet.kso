@@ -4114,7 +4114,47 @@ hops = [hop_value hop_partial hop_browser hop_browser_partial]
 
 rows_c1zzzzd = text/concat rows_c1zzzz hops
 
-rows_c = text/concat rows_c1zzzzd [itself]
+# A partial over a group of more than four parameters is held over the group's
+# value on both native and the browser, native's dispatcher calls a group value
+# with five to eight arguments, and a native partial holding more than four is
+# a partial over a partial. Each row puts one of the four back.
+hop_wide = row
+  "a wide partial held in a closure"
+  true
+  "cargo test --release --test golden runtime_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_wide_partial_held_in_a_closure")
+  release
+
+wide_call = row
+  "a wide group value left uncalled"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_wide_group_value_left_uncalled")
+  release
+
+hop_browser_wide = row
+  "a browser wide partial held in a closure"
+  true
+  "cargo test --release --test wasm_engine {wasm_corpus}"
+  "specs (unit, golden, differential)"
+  (breaking "a_browser_wide_partial_held_in_a_closure")
+  with_blob
+
+wide_held = row
+  "a partial holding five refused"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_partial_holding_five_refused")
+  release
+
+wides = [hop_wide wide_call hop_browser_wide wide_held]
+
+rows_c1zzzzg = text/concat rows_c1zzzzd wides
+
+rows_c = text/concat rows_c1zzzzg [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
