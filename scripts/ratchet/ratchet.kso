@@ -3948,7 +3948,36 @@ nested_place = row
 
 rows_c1zzzu = text/concat rows_c1zzzt [nested_place]
 
-rows_c = text/concat rows_c1zzzu [itself]
+# `&g p v` holds p and v, and the interpreter answers a held err at the `&`.
+# Until 2026-09-29 native built a closure over the held expressions and
+# entered g with a finished partial's held err, and the browser did both too.
+partial_closure = row
+  "a partial's held err built into a closure"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_partial_held_err_built_into_a_closure")
+  release
+
+partial_entered = row
+  "a finished partial entering with its err"
+  true
+  "cargo test --release --test golden runtime_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_finished_partial_entering_with_its_err")
+  release
+
+partial_browser = row
+  "a browser partial ignoring its held err"
+  true
+  "cargo test --release --test wasm_engine {wasm_corpus}"
+  "specs (unit, golden, differential)"
+  (breaking "a_browser_partial_ignoring_its_held_err")
+  with_blob
+
+rows_c1zzzv = text/concat rows_c1zzzu [partial_closure partial_entered partial_browser]
+
+rows_c = text/concat rows_c1zzzv [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

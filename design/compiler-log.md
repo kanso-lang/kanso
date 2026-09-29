@@ -18733,3 +18733,34 @@ did not move. Which of the three changes each row came from has not been
 isolated. Welfare fell from 90.40603 to 90.40592, and the floor follows it under
 the 2026-09-13 rule, since all three are gaps in the checker for the language as
 ruled.
+
+## 2026-09-29 — a partial answers the err it holds
+
+`&g p v` holds `p` and `v` for `g`, and the interpreter evaluates them at the
+`&`: if one is an err, the partial is that err. Native lowered a partial over
+a declared group to the lambda `(x -> g p v x)`, which evaluated `p` and `v`
+again at each call and built a function whether they had failed or not. With
+`g` written `fn g _ _ _` and `v` an err from `text/to_bytes [999 19]`,
+`list/map [1 2] (&g p v)` printed `[14 14]` natively and the err on the
+interpreter. The generated-program differential found it in batch 102, at
+seed 318132. A partial finished where it is written, `(&g p v) 1`, lowers to
+the call `g p v 1`, and that entered `g` with the err: `g`'s arms ignore their
+arguments and inference never sees a held argument reach `g`'s parameters, so
+`g` carried no guard and answered 14. The browser backend did both the same
+way.
+
+Both lowerings now evaluate the held arguments once, at the `&`, bind them to
+names, and answer the first that failed: the lambda closes over the names, and
+the finished call branches past `g` when one failed. An inference change that
+let held arguments reach `g`'s parameters was tried first and dropped. With
+both lowerings answering the err before `g`, it bought nothing, and it would
+have added a guard to every group a partial names.
+
+The micro sample `a_partial_holding_an_err_answers_it` holds an err in a bound
+partial and in one handed to `list/map`, and beside them a partial holding
+nothing that fails. The runtime sample
+`a_finished_partial_answers_its_held_err` finishes one where it is written and
+pins the trace, which names no frame for `g`. On the old compiler all three err
+cases answered through `g` natively. The rows "a partial's held err built into
+a closure", "a finished partial entering with its err" and "a browser partial
+ignoring its held err" put each lowering back and turn their corpus red.
