@@ -1,0 +1,15 @@
+# `f = f1` hands out the group as a value, and `f 0 bad` calls it with an err.
+# f1 turns it down and the trace names f1, as it does for `f1 0 bad`. Native's
+# dispatcher answered the err before entering f1 whenever it was handed two
+# arguments or more, and the trace named nothing.
+import "std/text"
+
+fn f1 _ p
+  if (p < "b") 1 0
+
+fn go n
+  bad = text/from_code n
+  f = f1
+  f 0 bad
+
+pub play = print "{go 55296}"

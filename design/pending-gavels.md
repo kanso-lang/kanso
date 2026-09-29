@@ -52,33 +52,6 @@ went to the log rather than here.
 
 ## Open, not blocking
 
-### What does `math/round` answer for NaN and the infinities?
-
-**Cited:** the search of design/compiler-log.md, design/log/compiler-log-archive.md
-and design/*.md found no ruling on a non-finite argument to `math/round`. The
-archive's 2026-08 canary entry chose `math/round` for its tie rule (`2.5` is
-`3`) and says nothing about NaN. `docs/book/appb.html` says round "rounds a
-float to the nearest integer" and that a non-number is a runtime error; a NaN
-is a number with no nearest integer, so the book does not decide it. The log
-entry "a large float rounds to the integer it is" (2026-09-28) settles every
-finite float and leaves these three open.
-
-**The question.** NaN, `inf` and `-inf` are floats, and none of them has an
-integer to round to. Today every engine answers 0 for NaN and the ends of int64
-for the infinities, 9223372036854775807 and -9223372036854775808. That was the
-interpreter's saturating `as i64` cast, kept so the engines would agree once
-the runtime stopped answering LLONG_MIN for all three. The int64 ends are
-arbitrary for a language whose ints have no width: on the interpreter, round
-of `1e308` is a 309-digit int and round of `inf` is smaller.
-
-1. **An err, "round takes a finite number", on every engine.** The call
-   answers a failure the program can test for with the err readers, the way a
-   parse that cannot answer does. Nothing is made up. This is the
-   recommendation.
-2. **Keep the saturating answers on every engine.** They agree today and cost
-   nothing, but they are numbers the program did not ask for, and on the
-   interpreter they are smaller than round of a large finite float.
-
 ### Is a NaN equal to itself, and is -0.0 equal to 0.0?
 
 **Cited:** the search of design/compiler-log.md, design/log/compiler-log-archive.md

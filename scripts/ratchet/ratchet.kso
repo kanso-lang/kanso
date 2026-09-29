@@ -4116,6 +4116,55 @@ ctor_partial = row
 
 rows_c1zzzzj = text/concat rows_c1zzzzf [partial_of_builtin ctor_partial]
 
+# `math/round` answers `none` for NaN and the infinities on every engine,
+# `math/round!` answers a failure in its box, and a call passing an int is
+# typed int alone (ruled 2026-09-29). Each row puts one of the five back.
+nonfinite_native = row
+  "a non-finite float rounded to zero natively"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_non_finite_float_rounded_to_zero_natively")
+  release
+
+nonfinite_oracle = row
+  "a non-finite float rounded to zero"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_non_finite_float_rounded_to_zero")
+  release
+
+nonfinite_typed = row
+  "a rounded float typed as never none"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_rounded_float_typed_as_never_none")
+  no_setup
+
+nonfinite_per_call = row
+  "a rounded int typed by every caller"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_rounded_int_typed_by_every_caller")
+  no_setup
+
+nonfinite_insisted = row
+  "an insisted round answering zero"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "an_insisted_round_answering_zero")
+  release
+
+rounds_a = [nonfinite_native nonfinite_oracle nonfinite_typed]
+
+rounds_b = [nonfinite_per_call nonfinite_insisted]
+
+rows_c1zzzzm = text/concat rows_c1zzzzj (text/concat rounds_a rounds_b)
+
 # A sigil with no name after it is left to the parser, whose refusal says
 # what `&` wants. The spacing check asked for a space, which then failed to
 # parse.
@@ -4127,9 +4176,122 @@ sigil_paren = row
   (breaking "a_nameless_sigil_asked_for_a_space")
   no_setup
 
-rows_c1zzzzc = text/concat rows_c1zzzzj [sigil_paren]
+rows_c1zzzzc = text/concat rows_c1zzzzm [sigil_paren]
 
-rows_c = text/concat rows_c1zzzzc [itself]
+# The runtime calls a closure of three or four arguments in words, so a
+# partial over such a lambda hands it the arguments it was given.
+closure_words = row
+  "a closure called with its arguments as structs"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_closure_called_with_its_arguments_as_structs")
+  release
+
+rows_c1zzzzi = text/concat rows_c1zzzzc [closure_words]
+
+# A call through a group value, or a partial over a group, that turns down a
+# failing argument names the group in the trace, as a direct call does.
+# Native and the browser answered the failure before entering the group and
+# named nothing.
+hop_value = row
+  "a group value naming nothing"
+  true
+  "cargo test --release --test golden runtime_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_group_value_naming_nothing")
+  release
+
+hop_partial = row
+  "a partial held in a nameless closure"
+  true
+  "cargo test --release --test golden runtime_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_partial_held_in_a_nameless_closure")
+  release
+
+hop_browser = row
+  "a browser group value naming nothing"
+  true
+  "cargo test --release --test wasm_engine {wasm_corpus}"
+  "specs (unit, golden, differential)"
+  (breaking "a_browser_group_value_naming_nothing")
+  with_blob
+
+hop_browser_partial = row
+  "a browser partial held in a nameless closure"
+  true
+  "cargo test --release --test wasm_engine {wasm_corpus}"
+  "specs (unit, golden, differential)"
+  (breaking "a_browser_partial_held_in_a_nameless_closure")
+  with_blob
+
+hops = [hop_value hop_partial hop_browser hop_browser_partial]
+
+rows_c1zzzzd = text/concat rows_c1zzzzi hops
+
+# text/to_bytes keeps its frame like the other wrappers whose builtin can
+# birth an err, so a rescue in the caller's module reaches its callback.
+bytes_frame = row
+  "a to_bytes wrapper inlined"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_to_bytes_wrapper_inlined")
+  release
+
+rows_c1zzzzh = text/concat rows_c1zzzzd [bytes_frame]
+
+# A partial over a group of more than four parameters is held over the group's
+# value on both native and the browser, native's dispatcher calls a group value
+# with five or more arguments, a native partial holding more than four is a
+# partial over a partial, and a group of more than eight is a value whose
+# wrapper takes its arguments as one array. Each row puts one of the five back.
+hop_wide = row
+  "a wide partial held in a closure"
+  true
+  "cargo test --release --test golden runtime_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_wide_partial_held_in_a_closure")
+  release
+
+wide_call = row
+  "a wide group value left uncalled"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_wide_group_value_left_uncalled")
+  release
+
+hop_browser_wide = row
+  "a browser wide partial held in a closure"
+  true
+  "cargo test --release --test wasm_engine {wasm_corpus}"
+  "specs (unit, golden, differential)"
+  (breaking "a_browser_wide_partial_held_in_a_closure")
+  with_blob
+
+wide_held = row
+  "a partial holding five refused"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_partial_holding_five_refused")
+  release
+
+nine_value = row
+  "a nine-wide group refused as a value"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_nine_wide_group_refused_as_a_value")
+  release
+
+wides = [hop_wide wide_call hop_browser_wide wide_held nine_value]
+
+rows_c1zzzzg = text/concat rows_c1zzzzh wides
+
+rows_c = text/concat rows_c1zzzzg [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

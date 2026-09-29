@@ -884,6 +884,9 @@ struct AfterInfer<'a, 'r> {
     /// its `if`s bound cannot miss, so it is not a none the caller owes an
     /// arm for.
     proven: &'r crate::hash::Set<crate::diag::Span>,
+    /// The calls inference typed by their own arguments and found cannot
+    /// answer `none`, by the called name's span: `math/round 7`.
+    none_free: &'r crate::hash::Set<crate::diag::Span>,
 }
 
 /// An effect handed to a position every arm throws away never happens.
@@ -1056,6 +1059,7 @@ fn none_exhaustive_at(e: &Expr, tables: &AfterInfer, owner: &str, diags: &mut Ve
             Expr::Index { strict: false, span, .. } => !tables.proven.contains(span),
             Expr::Ident(name, _, _) => name == "none",
             Expr::App { head, args, piped: false, .. } => match head.as_ref() {
+                Expr::Ident(_, span, _) if tables.none_free.contains(span) => false,
                 Expr::Ident(name, _, _) => tables
                     .nones
                     .get(&(name.as_str(), args.len()))
@@ -1201,7 +1205,13 @@ fn check_after_infer<'p>(
     }
     // The module's constants that are one string literal, for the same test.
     let consts = crate::infer::literal_consts(program);
-    let tables = AfterInfer { discarded, nones, returns, proven: &inference.proven };
+    let tables = AfterInfer {
+        discarded,
+        nones,
+        returns,
+        proven: &inference.proven,
+        none_free: &inference.none_free,
+    };
 
     use crate::infer::{Set, DESC, FAIL, THUNK, TOP};
     // ONE MAP, NOT TWO. Both keys began with the declaration's name, so the

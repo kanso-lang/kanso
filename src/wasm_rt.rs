@@ -389,20 +389,36 @@ fn call_closure(c_h: u32, arg_handles: Vec<u32>) -> u32 {
             }
         }
     }
-    match failing.len() {
-        0 => {}
-        1 => return failing[0].0,
+    let answer = match failing.len() {
+        0 => None,
+        1 => Some(failing[0].0),
         _ => {
             let merged = failing
                 .into_iter()
                 .map(|(_, v)| v)
                 .reduce(crate::eval::accumulate_failures)
                 .expect("more than one failure");
-            return push(Slot::V(merged));
+            Some(push(Slot::V(merged)))
         }
+    };
+    if let Some(failure) = answer {
+        return group_hop(arity, env, failure);
     }
     let args = push(Slot::E(Rc::new(arg_handles)));
     unsafe { k_callback(tidx, env, args) }
+}
+
+/// A group handed out as a value turns down a failing argument the way a
+/// direct call does, and a direct call names the group in the trace. Its
+/// wrapper carries the name as its one capture; a builtin's carries none.
+fn group_hop(arity: i32, env: u32, failure: u32) -> u32 {
+    if arity > MASKED {
+        return failure;
+    }
+    match slot(env) {
+        Slot::E(held) if held.len() == 1 => rt_err_hop(failure, held[0]),
+        _ => failure,
+    }
 }
 
 /// `call_closure` without its argument guard, for the callers that have

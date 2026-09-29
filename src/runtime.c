@@ -7080,6 +7080,15 @@ KValue k_fnref(void* described) {
 
 KValue k_env_get(void* env, long long i) { return ((KValue*)env)[i]; }
 
+/* A group handed out as a value turns down a failing argument the way a
+   direct call does, and a direct call's guard names the group in the trace.
+   The dispatchers answer the failure before entering the group, so they name
+   it here; a builtin is not a group and names nothing. `k_call1` enters the
+   group, whose own guard does it. */
+static KValue k_ref_hop(KFnref* r, KValue failure) {
+    return r->builtin ? failure : k_err_hop(failure, r->name);
+}
+
 /* `foo()` runs a value that was waiting to be called — what `&` leaves when it
    has supplied every argument an arm takes. No arguments arrive, so there is
    nothing to propagate but the callable itself. */
@@ -7147,7 +7156,7 @@ KValue k_call2(KValue f, KValue a, KValue b) {
     if (f.tag == K_FNREF) {
         KFnref* r = (KFnref*)(intptr_t)f.payload;
         if (r->arity != 2) k_die_ref_arity(r, 2);
-        if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
+        if (!k_not_failure(a) || !k_not_failure(b)) return k_ref_hop(r, k_both_or_either(a, b));
         return ((KValue(*)(KValue, KValue))r->fn)(a, b);
     }
     k_die_not_callable(f);
@@ -7162,13 +7171,20 @@ KValue k_call3(KValue f, KValue a, KValue b, KValue c) {
         if (cl->arity != 3) k_die_arity(cl->arity, 3);
         if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
         if (!k_not_failure(c)) return c;
-        return ((KValue(K_CLOSCC *)(void*, KValue, KValue, KValue))cl->fn)(cl->env, a, b, c);
+        /* In words, not as three KValues. C hands a struct that no longer
+           fits the argument registers to the stack whole, and the emitted
+           body, which takes its arguments as words, reads the first half of
+           that struct from the last register: env and two KValues fill five
+           of six, so c arrived torn. A word is a word on both sides. */
+        typedef long long W;
+        return ((KValue(K_CLOSCC *)(void*, W, W, W, W, W, W))cl->fn)(
+            cl->env, a.tag, a.payload, b.tag, b.payload, c.tag, c.payload);
     }
     if (f.tag == K_FNREF) {
         KFnref* r = (KFnref*)(intptr_t)f.payload;
         if (r->arity != 3) k_die_ref_arity(r, 3);
-        if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
-        if (!k_not_failure(c)) return c;
+        if (!k_not_failure(a) || !k_not_failure(b)) return k_ref_hop(r, k_both_or_either(a, b));
+        if (!k_not_failure(c)) return k_ref_hop(r, c);
         return ((KValue(*)(KValue, KValue, KValue))r->fn)(a, b, c);
     }
     k_die_not_callable(f);
@@ -7184,14 +7200,16 @@ KValue k_call4(KValue f, KValue a, KValue b, KValue c, KValue d) {
         if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
         if (!k_not_failure(c)) return c;
         if (!k_not_failure(d)) return d;
-        return ((KValue(K_CLOSCC *)(void*, KValue, KValue, KValue, KValue))cl->fn)(cl->env, a, b, c, d);
+        typedef long long W;
+        return ((KValue(K_CLOSCC *)(void*, W, W, W, W, W, W, W, W))cl->fn)(
+            cl->env, a.tag, a.payload, b.tag, b.payload, c.tag, c.payload, d.tag, d.payload);
     }
     if (f.tag == K_FNREF) {
         KFnref* r = (KFnref*)(intptr_t)f.payload;
         if (r->arity != 4) k_die_ref_arity(r, 4);
-        if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
-        if (!k_not_failure(c)) return c;
-        if (!k_not_failure(d)) return d;
+        if (!k_not_failure(a) || !k_not_failure(b)) return k_ref_hop(r, k_both_or_either(a, b));
+        if (!k_not_failure(c)) return k_ref_hop(r, c);
+        if (!k_not_failure(d)) return k_ref_hop(r, d);
         return ((KValue(*)(KValue, KValue, KValue, KValue))r->fn)(a, b, c, d);
     }
     k_die_not_callable(f);
@@ -7275,6 +7293,26 @@ static long long k_callee_arity(KValue callee) {
     return -1;
 }
 
+/* A group value called with five or more arguments, which only a partial
+   reaches. The order is k_call4's: the count, then the first two arguments
+   together, then each in turn. Past eight the wrapper takes the arguments as
+   one array, since no cast here can name every width. */
+static KValue k_call_ref_wide(KFnref* r, long long n, KValue* a) {
+    typedef KValue V;
+    if (r->arity != n) k_die_ref_arity(r, n);
+    if (!k_not_failure(a[0]) || !k_not_failure(a[1])) return k_ref_hop(r, k_both_or_either(a[0], a[1]));
+    for (long long i = 2; i < n; i++) {
+        if (!k_not_failure(a[i])) return k_ref_hop(r, a[i]);
+    }
+    switch (n) {
+        case 5: return ((V(*)(V, V, V, V, V))r->fn)(a[0], a[1], a[2], a[3], a[4]);
+        case 6: return ((V(*)(V, V, V, V, V, V))r->fn)(a[0], a[1], a[2], a[3], a[4], a[5]);
+        case 7: return ((V(*)(V, V, V, V, V, V, V))r->fn)(a[0], a[1], a[2], a[3], a[4], a[5], a[6]);
+        case 8: return ((V(*)(V, V, V, V, V, V, V, V))r->fn)(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7]);
+        default: return ((V(*)(V*))r->fn)(a);
+    }
+}
+
 static KValue k_dispatch_n(KValue callee, long long n, KValue* args) {
     switch (n) {
         case 0: return k_call0(callee);
@@ -7283,7 +7321,19 @@ static KValue k_dispatch_n(KValue callee, long long n, KValue* args) {
         case 3: return k_call3(callee, args[0], args[1], args[2]);
         case 4: return k_call4(callee, args[0], args[1], args[2], args[3]);
     }
-    k_die("native backend: a function value takes at most 4 arguments");
+    /* Past four the arguments come from a partial: a call site hands a value
+       at most four, so a count this high is a partial's held arguments and
+       its fresh ones together. A partial over a declared group of five or
+       more is held over the group's value, which names the group when it
+       turns down a failure, as k_call4 does. */
+    if (!k_not_failure(callee)) return callee;
+    if (callee.tag == K_CLOSURE) {
+        KClosure* c = (KClosure*)(intptr_t)callee.payload;
+        if (c->arity < 0) return k_partial_apply(c, n, args);
+        k_die_arity(c->arity, n);
+    }
+    if (callee.tag == K_FNREF) return k_call_ref_wide((KFnref*)(intptr_t)callee.payload, n, args);
+    k_die_not_callable(callee);
     return k_none();
 }
 
@@ -10364,19 +10414,14 @@ KValue k_b_round(KValue v) {
     if (v.tag == K_INT) return v;
     if (v.tag == K_FLOAT) {
         double x = k_as_f(v);
-        /* A finite float past int64 rounds to an integer this build cannot
-           hold, the same refusal arithmetic makes. llround answered LLONG_MIN
-           for all of them. A non-finite one answers what the interpreter's
-           saturating cast does: NaN 0, and the sign's end of the range. */
-        if (x != x) return k_int(0);
-        if (x >= 9223372036854775807.0) {
-            if (isinf(x)) return k_int(9223372036854775807LL);
+        /* NaN and the infinities have no integer to round to and answer
+           none, as the interpreter does (ruled 2026-09-29). A finite float
+           past int64 rounds to an integer this build cannot hold, the same
+           refusal arithmetic makes. llround answered LLONG_MIN for all of
+           them. */
+        if (x != x || isinf(x)) return k_none();
+        if (x >= 9223372036854775807.0 || x < -9223372036854775808.0)
             k_die("integer overflow (int64 native build; spec int is arbitrary precision)");
-        }
-        if (x < -9223372036854775808.0) {
-            if (isinf(x)) return k_int(-9223372036854775807LL - 1);
-            k_die("integer overflow (int64 native build; spec int is arbitrary precision)");
-        }
         double r = round(x);
         if (r >= 9223372036854775807.0 || r < -9223372036854775808.0)
             k_die("integer overflow (int64 native build; spec int is arbitrary precision)");

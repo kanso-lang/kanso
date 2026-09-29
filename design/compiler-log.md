@@ -18989,6 +18989,98 @@ interpreter. The old interpreter failed both. The rows "a builtin partial
 answering nothing" and "a constructor partial answering nothing" put each
 answer back to nothing and turn their spec red.
 
+## 2026-09-29 — gavel: `math/round` answers `none` for NaN and the infinities, and `math/round!` insists
+
+Clay, on the ledger entry "What does `math/round` answer for NaN and the
+infinities?": neither listed option. The 2026-09-03 gavel "failures are for
+the exceptional; the bang chooses the channel" already decides it. NaN and
+the infinities are ordinary float values that ordinary arithmetic produces,
+so "there is no integer to round to" is an outcome a caller can anticipate,
+and an anticipated outcome is data. The entry's first option, an err on
+every engine, and the chat's advice both missed that ruling. Ruled:
+
+- `math/round x` answers `none` for NaN, `inf` and `-inf`, and the rounded
+  int otherwise. `none` rather than a named marker, because appendix B
+  already answers `none` where a question has no answer (the maximum of an
+  empty list), and the caller holds the input if it wants to know which of
+  the three it was.
+- `math/round! x` is the insisting form. It answers a box, as every bang
+  name does since the 2026-09-16 reversal, and a non-finite argument is a
+  failure inside it.
+- An int argument still passes through unchanged, and inference types a
+  call that passes one as `int` alone, so only calls on floats owe an arm
+  for the `none`.
+- Every engine answers the same. The saturating int64 answers and the 0
+  for NaN are gone.
+
+**Built the same day.** The interpreter's `round` answers `none` for a
+non-finite float, and so does `k_b_round`; the browser engine calls the
+interpreter's builtin. lib/math gains `round!`, `effect` over the rounded
+value, with an arm that turns the `none` into `err "round! takes a finite
+number, got nan"`.
+
+Typing the int case took a new piece of inference. `math/round` is a
+wrapper, `builtin_round x`, and a group's answer is the union over every
+caller, so one float caller handed its `none` to every int caller and
+`plus (math/round 7)` was refused beside `plus (math/round (x * 0.5))`. An
+arm whose body hands its parameters unchanged to `builtin_round` is now
+typed at each call by what that call passes, and inference records the
+calls whose own arguments rule out a `none`. The checker's none question
+reads that set before the group's table. `round` is the only builtin with
+the treatment, since it is the only one whose answer changes with what it
+is handed in a way the checker acts on.
+
+What the ruling's cost estimate expected and what the tree showed differ.
+The checker refuses a `none` handed to a group with no `none` arm; it does
+not refuse one at an operator, and a list literal may hold a `none`. So no
+call site in lib, the scripts, the benchmarks, the book's samples, kq or
+vse stops compiling: every `math/round` there feeds an operator, `sum`, a
+comparison or an interpolation. They now fail at run time on a non-finite
+float where they used to compute with an int64 end, and none of them can
+be handed one: the welfare scripts round finite products, kq's
+`two_places` rounds a timing ratio, and vse's `score_ballot` divides by
+`hi - lo`, which is the text "division by zero" before `round` sees it
+when the two are equal.
+
+The micro sample `round_answers_none_past_the_finite` pins both forms on
+the three inputs and on 2.5 and 7 across all three engines, and
+tests/a_float_past_int64_rounds_exactly.rs now expects `<none>` where it
+pinned the saturating answers. The error sample
+`a_rounded_float_handed_to_a_group_without_none` refuses the float call
+and accepts the int call beside it. Appendix B's `math/round` entry says
+`int | none` and gains a `math/round!` entry. Five ratchet rows, each
+watched red: "a non-finite float rounded to zero natively", "a non-finite
+float rounded to zero" (the interpreter), "a rounded float typed as never
+none", "a rounded int typed by every caller" and "an insisted round
+answering zero".
+
+CI priced the build. The compile rows carry `round!` and its two `finite`
+arms in lib/math, which every checked program compiles, and the per-call
+typing inference now does at each call to the wrapper:
+`compile_instructions` lands on 25,194,200 (+195,722), `entry_instructions`
+on 83,292,095 (+679,435), `library_instructions` on 83,815,139 (+719,654) and
+`emit_instructions` on 29,936,226 (+39,989). The runtime rows moved by
+layout: `work_livebench` on 1,537,391,599 (+721), `work_oneshot` on
+12,744,427 (+294) and `work_runbench` on 1,088,404,987 (+91), while
+`work_encodebench`, both codegen tiers and every benchmark's `text` (48 bytes
+smaller) fell. The floor moves by what the ruling costs, under the rule for
+the language.
+
+The per-call typing reaches only calls inference can see. A group reached as
+a value, handed to `list/map` or held in a partial or a record field, has its
+parameters typed as whatever any caller could pass, because inference does
+not follow a value to the calls made through it. So `each x` rounding the
+ints of `[1 2]` through `list/map [1 2] each` is typed as rounding any number
+and answers `int | none`, and handing that to a group with no `none` arm is
+refused. The same body called directly as `each 3` is typed by its int. Probed
+by hand on the carrier; every float that reached `round` through a lambda, a
+returned partial or a record field was refused, so the limit costs precision
+and never lets a `none` through. The error sample
+`a_group_reached_as_a_value_rounds_to_int_or_none` pins the refusal, and it
+goes red when the call is made direct. Lifting the limit means inference
+following values into the calls made through them, which is a larger change
+than this ruling asked for.
+
 ## 2026-09-29 — a sigil before a parenthesis is refused by the parser
 
 `k = &(g 1)` got a formatting error asking for a space after `&`. The lexer's
@@ -19016,3 +19108,205 @@ at 29,896,572, up 335, which arrived with the change. The meta welfare fell by w
 floor comes down by that much under the 2026-09-13 rule, since this is the
 diagnostic the language owes for `&(`.
 
+## 2026-09-29 — the runtime calls a closure in words
+
+A partial over a lambda of three or four parameters is finished by the
+runtime: `k_partial_apply` hands the held and fresh arguments to `k_call3` or
+`k_call4`, which call the lambda from C. With `f = (a b c -> a + b + c + n)`
+and `k = &f 1 2`, `k 4` printed 8 on the interpreter and "`+` is not defined
+for these values" on both native builds. A lambda called directly takes the
+emitted fast path, which calls it from IR, and agreed.
+
+C and the emitted body disagreed about where the third argument was. A KValue
+is two words, and x86-64 C hands a struct to the stack whole once it no
+longer fits the argument registers that are left. The environment and two
+KValues fill five of the six, so C put the third on the stack. The lambda is
+defined in IR taking KValues, which LLVM splits into words and assigns one at
+a time, so it read the first half of the third argument from the sixth
+register. The same split happens under `preserve_none` and under the plain C
+convention, and on arm64 it reaches the fourth argument. `k_call3` and
+`k_call4` now pass each argument as its two words, which both sides lay out
+the same way. A group handed out as a value takes no environment, fills its
+registers two words at a time, and was never torn.
+
+The generated-program differential found it in batch 110, at seed 340100, on
+a generator that writes groups of up to nine parameters; the partial there is
+over the closure native builds for a partial over a group of nine. It
+predates this week. The micro sample
+`a_lambda_finished_through_a_partial_keeps_its_arguments` finishes lambdas of
+three and four through a partial and says by its digits which argument landed
+where; the old runtime failed it. The row "a closure called with its
+arguments as structs" puts `k_call3`'s struct call back and turns the micro
+corpus red.
+
+
+CI priced it. Passing words moves the runtime's layout and nothing the
+benchmarks call: `work_runbench` lands on 1,088,405,358 (+462),
+`work_livebench` on 1,537,391,389 (+511), and `text` on 3,505,264 (+224, 16
+bytes a benchmark). `work_encodebench`, `work_oneshot` and both codegen tiers
+fall. The floor moves by what it costs, under the rule for the language.
+
+## 2026-09-29 — a call through a group value names the group in the trace
+
+When a group turns down a failing argument, the interpreter adds the group's
+name to the err's trace, and a direct call `f1 0 bad` prints `passed through
+f1` on every engine. Called through a value, it did not. `f = f1; f 0 bad`
+and `k = &f1 0; k bad` printed `passed through f1` on the interpreter and no
+hop on native or in the browser, because each backend's dispatcher answers a
+failing argument before it enters the callee. `k_call1` hands its argument to
+the group's wrapper, whose guard adds the hop, so a call with one argument
+agreed. The generated-program differential found it in batch 105, at seed
+323931, the first batch whose generator binds partials over partials.
+
+The native dispatchers now name the group when they answer a failure for a
+group value; a builtin value names nothing, as on the interpreter. A partial
+over a declared group is held over the group's value, which carries the name,
+where it was a closure that answered the failure before the group ran. The
+browser's wrapper for a group now carries the group's name as its one
+capture, which its body never read, and its partials are held the same way.
+A group whose arm takes more than four arguments keeps the closure, because
+the native dispatchers stop at four, and a call through a partial over one
+still drops the hop. lib and the benchmarks hold no partials, so no runtime
+row can move.
+
+The runtime samples `a_call_through_a_partial_names_its_group` and
+`a_call_through_a_group_value_names_its_group` pin the trace. The old native
+builds printed no hop for either. The rows "a group value naming nothing", "a
+partial held in a nameless closure", "a browser group value naming nothing"
+and "a browser partial held in a nameless closure" each put one change back
+and turn their corpus red.
+
+Holding these partials over the group's value took the micro sample
+`a_partial_holding_an_err_answers_it` off the closure path whose held-err
+check the row "a partial's held err built into a closure" takes out, and
+kanso#1721's widening gives every group named in a partial a guard that
+answers the err anyway, so the row went blind. The sample now prints a
+partial over a group of nine, which native still builds as a closure: the
+err, where the mutated closure printed `<fn>`.
+
+CI read `interp_instructions` at 589,940,341, down 979,622, and
+`codegen_instructions_release` at 408,166,709, down 20,805. The worsened
+rows are `codegen_instructions_dev` at 124,466,613, up 1,011;
+`compile_instructions` at 24,998,507, up 29; `entry_instructions` at
+82,612,989, up 329; `library_instructions` at 83,095,823, up 338;
+`work_livebench` at 1,537,391,550, up 672; and `work_runbench` at
+1,088,405,694, up 798. The benchmarks' machine code, `text` in
+bench/text_golden.txt, came to 3,545,808 bytes, up 40,768 across fourteen
+binaries, which is the runtime's dispatchers naming the group on each failure
+path. The meta welfare rose and the floor is banked there.
+
+## 2026-09-29 — text/to_bytes keeps its frame
+
+A rescue hands on a failure its own module raised and calls its callback on
+one from elsewhere. `text/to_int`, `text/to_float`, `text/utf8` and
+`text/from_code` are one-line wrappers over builtins that can birth an err,
+and the inlining pass keeps each of them, so the err is born in std/text and
+a rescue in the caller reaches it. `text/to_bytes` has refused a number
+outside 0-255 with an err since kanso#993, which added it to both backends'
+lists of builtins that take the calling site's origin and left it off the
+inlining pass's list, whose comment asks for the two to be kept in step. So
+the wrapper was inlined, its err said it was born in the caller, and
+`rescue (text/to_bytes [n]) f` in a user's module handed the err on to the
+entry where `rescue (text/utf8 [n]) f` called `f`. Every engine agreed. A
+probe of std/text by hand found it.
+
+`BIRTHS_ERR` in src/inline.rs now names `builtin_to_bytes`. lib and the
+benchmarks do not call `text/to_bytes`, so no runtime row can move. The micro
+sample `a_rescue_catches_what_to_bytes_refused` rescues both refusals in one
+module; the old compiler let the first reach the entry. The runtime sample
+`a_finished_partial_answers_its_held_err` now names `text/to_bytes` as where
+its err was born, and the comment in
+`to_bytes_refuses_a_number_that_is_not_a_byte` no longer says that module
+cannot match the err. The row "a to_bytes wrapper inlined" takes the name
+back out and turns the micro corpus red.
+
+Keeping the wrapper costs nothing CI measures and saves a little: with one
+fewer rename to undo, `compile_instructions` fell 5,666 to 24,992,812,
+`entry_instructions` 28,590 to 82,584,070, `library_instructions` 18,370 to
+83,077,115, `compile_allocs` 12 to 14,307 and the interpreted run's
+`interp_allocs` 15 to 895,187. The meta welfare rose and the floor is banked
+there.
+
+## 2026-09-29 — a partial over a wide group names the group too
+
+The entry above left a gap open: past four parameters, a partial over a
+declared group stayed a closure, because native's dispatchers stop at four,
+and a call through it that turned down a failing argument dropped the group
+from the trace. `k = &f5 0 0; k 0 0 bad` printed `passed through f5` on the
+interpreter and no hop on native or in the browser.
+
+A call site still hands a value at most four arguments, so past four the
+arguments reaching a group value come from a partial. `k_dispatch_n` now
+takes up to eight, calling a group value through `k_call_ref_wide`, which
+checks the count and the failures in `k_call4`'s order and names the group as
+it does. The runtime builds a partial of at most four, so the emitter holds
+five to eight as a partial over a partial, which the runtime already settles
+by the count its callee still wants. A partial over a group of up to eight in
+all is now held over the group's value, and a group of up to eight is handed
+out as a value; past eight the lambda stays, and a group past eight is
+refused as a value at compile time as one past four was. The browser's host
+already called a group wrapper with any number of arguments and built a
+partial of any size, and it now holds the same partials over the value. lib
+and the benchmarks hold no partial over a group that wide, so no runtime row
+can move.
+
+The micro sample `a_partial_over_a_wide_group_runs` finishes partials over
+groups of five, six and eight, one over another partial, one holding five and
+one holding five over a group value, and keeps a partial of four in eight as
+a function. The runtime samples
+`a_call_through_a_partial_over_a_wide_group_names_it` and
+`a_call_through_a_partial_holding_five_names_its_group` pin the trace. Native
+and the browser printed no hop for either. The rows "a wide partial held in a
+closure", "a wide group value left uncalled", "a browser wide partial held in
+a closure" and "a partial holding five refused" each put one change back and
+turn their corpus red.
+
+CI measured what the wider dispatcher costs to build and run. The worsened
+rows are `codegen_instructions_release` at 408,206,896, up 40,187;
+`codegen_instructions_dev` at 124,469,445, up 2,832; `work_oneshot` at
+12,744,077, up 483; `work_encodebench` at 2,333,703,806, up 14; and
+`work_jsonbench` at 758,833,558, up 4. `work_runbench` fell 847, and the
+benchmarks' machine code, `text` in bench/text_golden.txt, fell 8,736 bytes
+to 3,537,072. The meta welfare fell by a few
+millionths and the floor comes down by that much under the 2026-09-13 rule.
+
+
+Past eight the gap stayed, and the generated-program differential found it
+the same day at seed 340570: `h = &g9 1 2 3 4 5; h 6 bad 8 9` printed
+`passed through g9` on the interpreter and no hop natively. The cap was there
+because `k_call_ref_wide` casts the wrapper to a signature per width, and C
+cannot name every width. A group of more than eight now gets a wrapper that
+takes its arguments as one array and loads each one, and `k_call_ref_wide`
+calls it that way past eight. With that, every group with one arm is handed
+out as a value at any width, every partial over one is held over that value,
+`k_dispatch_n` has no ceiling, and the closure the emitter built for a
+partial past eight is gone, along with the diagnostic for a function value
+past eight arguments. The browser's host had no ceiling, and its cap was
+there to agree with native's, so it went too.
+
+`a_partial_over_a_wide_group_runs` now also finishes a partial holding nine
+of ten and one over a nine-wide group handed out as a value, which the old
+compiler refused to build. `a_call_through_a_partial_over_nine_names_it`
+pins the trace. The row "a wide partial held in a closure" now puts the
+closure back for every partial over a group, since the width test it used to
+flip is gone, and "a nine-wide group refused as a value" restores the eight
+cap on group values.
+
+## 2026-09-29 — five changes land together in kanso#1728
+
+kanso#1720, #1723, #1724, #1725 and #1727 each chained their ratchet rows off
+the same link, so they were merged onto one branch and CI measured the
+combined tree once. Against main after kanso#1719 the compile rows land on
+`compile_instructions` 25,190,367, `entry_instructions` 83,264,869 and
+`library_instructions` 83,803,133. The round ruling measured alone on its own
+branch put +195,722 on the first of those, which is about all of the
+combined rise of 190,056. `codegen_instructions_dev` lands on 124,480,756 and
+`emit_instructions` on 29,940,526. The runtime rows moved by layout:
+`work_livebench` 1,537,390,983, `work_oneshot` 12,744,441 and `work_runbench`
+1,088,405,545. `text` lands on 3,534,608, 2,160 bytes more in every
+benchmark; #1723 and #1725 are the two carried changes that edit the runtime,
+and which of them the bytes came with was not isolated.
+`codegen_instructions_release`, `work_encodebench`, `compile_allocs` and
+`interp_allocs` fell. Every change carried is language correctness, and the
+round ruling is the language itself, so the floor moves to what the tree
+scores, 90.32455.

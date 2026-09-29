@@ -1,0 +1,16 @@
+# `k = &f5 0 0` holds two of f5's five arguments, and `k 0 0 bad` hands it
+# the other three, the last an err. f5 turns it down and the trace names f5,
+# as it does for a narrower group. Past four parameters native held the
+# partial as a closure over f5, whose dispatcher answered the err before f5
+# ran, and the trace named nothing.
+import "std/text"
+
+fn f5 _ _ _ _ p
+  if (p < "b") 1 0
+
+fn go n
+  bad = text/from_code n
+  k = &f5 0 0
+  k 0 0 bad
+
+pub play = print "{go 55296}"

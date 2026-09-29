@@ -5532,8 +5532,21 @@ impl<'a> Backend<'a> {
         let wrappers = self.fn_value_wrappers.clone();
         for (name, arity) in &wrappers {
             let arity = *arity;
-            let params: Vec<String> = (0..arity).map(|i| format!("%KValue %a{i}")).collect();
+            // Past eight a C caller cannot name the signature for every width,
+            // so the wrapper takes the arguments as one array and spreads them;
+            // `k_call_ref_wide` calls it that way.
+            let spread = arity > 8;
+            let params: Vec<String> = match spread {
+                true => vec!["ptr %args".to_string()],
+                false => (0..arity).map(|i| format!("%KValue %a{i}")).collect(),
+            };
             let mut conv = String::new();
+            if spread {
+                for i in 0..arity {
+                    let _ = writeln!(conv, "  %at{i} = getelementptr %KValue, ptr %args, i64 {i}");
+                    let _ = writeln!(conv, "  %a{i} = load %KValue, ptr %at{i}");
+                }
+            }
             let call_args: Vec<String> = (0..arity)
                 .map(|i| {
                     if self.unboxed_param(name, arity, i) {
@@ -7410,11 +7423,11 @@ impl<'a> Backend<'a> {
         Ok(answer)
     }
 
-    /// `&g a b` over a declared group. The held arguments are evaluated once,
-    /// at the `&`, as the interpreter evaluates them, and the lambda closes over
-    /// what they came to. A held failure is the partial's answer, as it is for
-    /// a partial over a value in `k_partialN`. Until 2026-09-29 the lambda held
-    /// the argument expressions and ran them at each call, so `&g p v` with `v`
+    /// `&g a b` over a declared group, held by `k_partial{n}` over the value
+    /// the group is handed out as. The held arguments are evaluated once, at
+    /// the `&`, as the interpreter evaluates them, and a held failure is the
+    /// partial's answer. Until 2026-09-29 a lambda over the group held the
+    /// argument expressions and ran them at each call, so `&g p v` with `v`
     /// an err built a function, and an arm that ignored its argument answered
     /// where the interpreter answered the err.
     fn emit_declared_partial(
@@ -7424,30 +7437,13 @@ impl<'a> Backend<'a> {
         supplied: &[Expr],
         span: Span,
     ) -> Result<String, String> {
-        let mut held = Vec::new();
-        let mut names = Vec::new();
-        for a in supplied {
-            let t = self.emit_expr(f, a)?;
-            let n = format!("k#held{}", f.tmp().trim_start_matches('%'));
-            f.bind(&n, &t);
-            names.push(Expr::Ident(Name::new(&n), span, crate::ast::Resolution::default()));
-            held.push(t);
-        }
-        let lambda = self.partial_lambda(name, &names, span)?;
-        let mut answer = self.emit_expr(f, &lambda)?;
-        // A literal is written in place and cannot fail. Anything else is asked,
-        // whatever set it was recorded with: `text/to_bytes` answers an err
-        // its recorded set leaves out.
-        let asked: Vec<String> = held.into_iter().rev().filter(|t| !t.starts_with('{')).collect();
-        for t in &asked {
-            let ok = inline_not_failure(f, t);
-            let pick = f.tmp();
-            f.line(&format!("{pick} = select i1 {ok}, %KValue {answer}, %KValue {t}"));
-            let set = f.set_of(&answer) | (f.set_of(t) & FAIL);
-            f.record(&pick, set);
-            answer = pick;
-        }
-        Ok(answer)
+        // The group's value names the group: a call that turns down a
+        // failing argument says so in the trace, as a direct call does. A
+        // closure over the group answered the failure before entering it,
+        // and the trace lost the group. `partial_lambda` still refuses what
+        // it refuses: several arms, or more arguments than any arm takes.
+        self.partial_lambda(name, supplied, span)?;
+        self.emit_partial_value(f, &Name::new(name), supplied, span)
     }
 
     /// Whether a name is a declared group, which is what decides how `&` over
@@ -7475,17 +7471,24 @@ impl<'a> Backend<'a> {
         for a in supplied {
             held.push(self.emit_expr(f, a)?);
         }
-        let n = held.len();
-        if n > 4 {
-            return Err(format!(
-                "native backend: a partial over a value holds at most 4 arguments, got {n}"
-            ));
+        // Past four the runtime's builders stop, so the rest are held by a
+        // partial over the first: the runtime settles a partial over a
+        // partial by the count its callee still wants, and a failing
+        // argument answers in the order it was written either way.
+        let mut callee = callee;
+        let mut rest: &[String] = &held;
+        loop {
+            let take = rest.len().min(4);
+            let arg_ir: String = rest[..take].iter().map(|v| format!(", %KValue {v}")).collect();
+            let t = f.tmp();
+            f.line(&format!("{t} = call %KValue @k_partial{take}(%KValue {callee}{arg_ir})"));
+            f.record(&t, TOP);
+            callee = t;
+            rest = &rest[take..];
+            if rest.is_empty() {
+                return Ok(callee);
+            }
         }
-        let arg_ir: String = held.iter().map(|v| format!(", %KValue {v}")).collect();
-        let t = f.tmp();
-        f.line(&format!("{t} = call %KValue @k_partial{n}(%KValue {callee}{arg_ir})"));
-        f.record(&t, TOP);
-        Ok(t)
     }
 
     fn emit_expr(&mut self, f: &mut FnEmit, expr: &Expr) -> Result<String, String> {
@@ -7496,8 +7499,7 @@ impl<'a> Backend<'a> {
                 if !self.declared(name) {
                     return self.emit_partial_value(f, name, &[], *span);
                 }
-                let lambda = self.partial_lambda(name, &[], *span)?;
-                self.emit_expr(f, &lambda)
+                self.emit_declared_partial(f, name, &[], *span)
             }
             Expr::Upcast { expr: inner, ty, .. } => {
                 let v = self.emit_expr(f, inner)?;
@@ -7686,10 +7688,7 @@ impl<'a> Backend<'a> {
                     }
                     seen
                 };
-                if arities.len() == 1
-                    && (1..=4).contains(&arities[0])
-                    && self.simple_fn_value(name, arities[0])
-                {
+                if arities.len() == 1 && arities[0] >= 1 && self.simple_fn_value(name, arities[0]) {
                     let arity = arities[0];
                     self.fn_value_wrappers.push((name.to_string(), arity));
                     let t = f.tmp();
@@ -7699,7 +7698,7 @@ impl<'a> Backend<'a> {
                 if !arities.is_empty() {
                     return Err(format!(
                         "native backend: `{name}` cannot be used as a function value \
-                         (only 1-4 argument functions over plain values are supported)"
+                         (only functions of one or more arguments over plain values are supported)"
                     ));
                 }
                 let bare = name.strip_prefix("builtin_").unwrap_or(name.as_str());

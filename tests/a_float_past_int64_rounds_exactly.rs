@@ -10,8 +10,10 @@
 //! The interpreter now answers the exact integer. A compiled build holds an
 //! int in 64 bits, and past that it refuses with the diagnostic its
 //! arithmetic already gives, which is how the differential law lets an
-//! engine that cannot represent a value decline it. Inside the range, and
-//! for the three non-finite floats, the engines agree to the byte.
+//! engine that cannot represent a value decline it. Inside the range the
+//! engines agree to the byte. NaN and the infinities round to `none` on
+//! every engine (ruled 2026-09-29); until then they answered 0 and the ends
+//! of int64.
 //!
 //! The float is parsed from text built at run time, so no engine can fold
 //! the call away before it runs.
@@ -92,9 +94,9 @@ fn inside_the_range_and_past_it_the_engines_agree() {
     for (tag, literal, want) in [
         ("edge", "9.2e18", "9200000000000000000\n"),
         ("half", "-2.5", "-3\n"),
-        ("inf", "inf", "9223372036854775807\n"),
-        ("ninf", "-inf", "-9223372036854775808\n"),
-        ("nan", "nan", "0\n"),
+        ("inf", "inf", "<none>\n"),
+        ("ninf", "-inf", "<none>\n"),
+        ("nan", "nan", "<none>\n"),
     ] {
         assert_eq!(interpreted(tag, literal), want, "interpreted round of {literal}");
         assert_eq!(compiled(tag, literal), want, "compiled round of {literal}");

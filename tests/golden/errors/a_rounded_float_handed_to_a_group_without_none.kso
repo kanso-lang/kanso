@@ -1,0 +1,13 @@
+import "std/math"
+
+# `math/round` of a float answers `none` for NaN and the infinities (ruled
+# 2026-09-29), so a group that takes the answer needs an arm for it. An int
+# rounds to itself and carries no `none`, which is why `plus (math/round 7)`
+# beside it is accepted.
+fn plus n
+  n + 1
+
+fn half x
+  plus (math/round (x * 0.5))
+
+pub play = print "{half 3.0} {plus (math/round 7)}"

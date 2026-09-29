@@ -1,0 +1,4 @@
+error[exhaustive]: this can be a none and `plus` has no arm for it — resolve it here, or give `plus` a `none` arm (in a_rounded_float_handed_to_a_group_without_none.kso) (module a_rounded_float_handed_to_a_group_without_none)
+  --> a_rounded_float_handed_to_a_group_without_none.kso:11:9
+  11 |   plus (math/round (x * 0.5))
+               ^

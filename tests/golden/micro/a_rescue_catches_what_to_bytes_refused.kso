@@ -1,0 +1,16 @@
+# `text/to_bytes` refuses a number that is not a byte, and the err is born in
+# std/text, as one from `text/utf8` is. So a rescue in this module, which did
+# not raise it, reaches its callback. The wrapper was inlined into its caller
+# while utf8's was kept, the err said it was born here, and the rescue handed
+# it on to the entry as this module's own.
+import "std/text"
+
+fn bytes_rescued n
+  rescue (text/to_bytes [n]) (e -> "rescued: {e.reason}")
+
+fn utf8_rescued n
+  rescue (text/utf8 [n]) (e -> "rescued: {e.reason}")
+
+pub play = print "{bytes_rescued 300}"
+  .> (_ -> print "{utf8_rescued 300}")
+  .> (_ -> print "{bytes_rescued 104}")
