@@ -19700,3 +19700,46 @@ CI measured one row moved: `emit_instructions` fell 49 to 29,998,621. The
 benchmarks declare no subtype, so the loop this changes emits nothing for
 them, and no mechanism for the fall was isolated. Welfare reports neither a
 fall nor a rise, and the floor is unchanged.
+
+## 2026-09-29 — a builder's first join asks about a lazy seed as it arrived
+
+The generator gained a string-join loop whose first arm ignores its
+accumulator, and native fuzz seed 522907 died with "a string builder was
+expected here" where the interpreter printed the string. Reduced:
+
+    fn grow _ 98
+      "far"
+
+    fn grow acc 0
+      acc
+
+    fn grow acc n
+      grow "{acc}{n % 3}" (n - 1)
+
+    fn shown _
+      first = grow [] 3
+      second = grow first 4
+      "{second}"
+
+The first arm makes `first` lazy, so it reaches the second loop as a thunk.
+The loop's entry converts a string seed into a builder, and since kanso#1732
+it leaves any other seed as it came, a thunk included. The first join then
+forced the thunk and asked about the forced value. The first loop's list seed
+had put more than strings in the parameter's set, so the join called
+`k_b_adopt` with the forced value, a finished string. `k_b_adopt` passes a
+string through as the builder, and the append refused it for having no room.
+
+The join now hands `k_b_adopt` the seed as it arrived, and asks whether that
+may be something other than a string. A lazy seed is not a string, so its
+rendering is copied into a builder of its own. The first loop's string is not
+written through, and a seed the first arm ignores is still never run.
+
+`a_lazy_seed_starts_a_second_builder` in the micro corpus runs the reduced
+program and `grow skipped 98` on a binding that would fail if it ran. The
+mutation "a lazy seed taken for a builder" hands `k_b_adopt` the forced value
+again, and the micro corpus went red on it with the native run printing
+nothing. A first attempt mutated only the question the join asks, and the
+corpus stayed green, because the set already reached past strings here; the
+row pins the argument instead. The lazy subtype fixture from the previous
+entry also reads `length` through a lazy binding now, which died on the old
+code with "length takes a list, string, or map".
