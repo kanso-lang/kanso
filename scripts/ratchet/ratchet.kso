@@ -3978,6 +3978,57 @@ type_file = row
 
 rows_c1zzzw = text/concat rows_c1zzzv [typeset_parent type_file]
 
+# `&g p v` holds p and v, and the interpreter answers a held err at the `&`.
+# Until 2026-09-29 native built a closure over the held expressions and
+# entered g with a finished partial's held err, and the browser did both too.
+part_closure = row
+  "a partial's held err built into a closure"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_partial_held_err_built_into_a_closure")
+  release
+
+part_entered = row
+  "a finished partial entering with its err"
+  true
+  "cargo test --release --test golden runtime_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_finished_partial_entering_with_its_err")
+  release
+
+part_browser = row
+  "a browser partial ignoring its held err"
+  true
+  "cargo test --release --test wasm_engine {wasm_corpus}"
+  "specs (unit, golden, differential)"
+  (breaking "a_browser_partial_ignoring_its_held_err")
+  with_blob
+
+rows_c1zzzx = text/concat rows_c1zzzw [part_closure part_entered part_browser]
+
+# A record of an int and a value crosses a call in two words, the int above
+# the value's tag. Until 2026-09-29 the int came back through a logical shift
+# and every int was packed, so a negative one read as 2^56 plus it and one
+# past 56 bits lost its top byte.
+packed_sign = row
+  "a packed int read back unsigned"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_packed_int_read_back_unsigned")
+  release
+
+packed_wide = row
+  "a wide int packed anyway"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_wide_int_packed_anyway")
+  release
+
+rows_c1zzzy = text/concat rows_c1zzzx [packed_sign packed_wide]
+
 # A sigil with no name after it is left to the parser, whose refusal says
 # what `&` wants. The spacing check asked for a space, which then failed to
 # parse.
@@ -3989,7 +4040,7 @@ sigil_paren = row
   (breaking "a_nameless_sigil_asked_for_a_space")
   no_setup
 
-rows_c1zzzzc = text/concat rows_c1zzzw [sigil_paren]
+rows_c1zzzzc = text/concat rows_c1zzzy [sigil_paren]
 
 rows_c = text/concat rows_c1zzzzc [itself]
 
