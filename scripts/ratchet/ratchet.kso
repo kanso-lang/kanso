@@ -4422,6 +4422,26 @@ lazy_rows = [lazy_run_early lazy_failure_check lazy_read_as_closure]
 
 rows_c1zzzzu = text/concat rows_c1zzzzt lazy_rows
 
+# A string builder may be seeded with any value, since a join renders what it
+# joins onto. Native used to refuse the seed, and the first join adopts it.
+seed_refused = row
+  "a builder seed refusing what is not a string"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_builder_seed_refusing_what_is_not_a_string")
+  release
+
+seed_unadopted = row
+  "a join that never adopts its seed"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_join_that_never_adopts_its_seed")
+  release
+
+rows_c1zzzzs = text/concat rows_c1zzzzu [seed_refused seed_unadopted]
+
 # A merged err keeps no birth site on the wasm engine, as it has none on the
 # interpreter.
 merged_stamp = row
@@ -4432,7 +4452,7 @@ merged_stamp = row
   (breaking "a_merged_err_stamped_with_a_site_in_wasm")
   with_blob
 
-rows_c1zzzzw = text/concat rows_c1zzzzu [merged_stamp]
+rows_c1zzzzw = text/concat rows_c1zzzzs [merged_stamp]
 
 rows_c = text/concat rows_c1zzzzw [itself]
 

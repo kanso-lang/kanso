@@ -19617,3 +19617,50 @@ reduced program and wants the report with no birth line. It also runs
 mutation "a merged err stamped with a site in wasm" drops the merged test
 from the stamp, and the spec went red on it with the line-5 site in the
 report. It is a ratchet row.
+
+## 2026-09-29 — a string builder seeded with a value that is not a string
+
+A generated program called `fn f1 _ p3 = "{p3}:{"é e"}"` with `(id 13)`, where
+`id` is a subtype of int. The interpreter printed `13:é e`. Native died with
+`a string builder starts from a string`.
+
+`linear::string_builders` makes `f1` a builder, because its only parameter
+mention is the first part of a join, and a constructor call counts as handing
+a fresh value over. Where a caller enters from outside the group, native
+converts the seed with `k_b_str_builder`, and that refused anything that was
+not a string. A plain int seed never got that far, because an int is not
+handed over. `"{s}x"` renders whatever `s` holds, so the refusal was wrong for
+every non-string a caller can hand in: a subtype of int, a record, a subtype
+of a record.
+
+`k_b_str_builder` now unwraps a subtype itself and builds from a string. It
+hands any other seed on unchanged, so a base arm that answers the seed
+untouched answers `id 13` as the interpreter does. At the first join, a first
+part whose sets say it may not be a string goes through `k_b_adopt`, which
+makes the rendering the builder. A string that reaches the join without being
+converted still dies with `a string builder was expected here`, so that check
+keeps its meaning. A builder seeded at the first join is carried across a beat
+the way an entering seed is: `k_carry_stage_kept` moves a header above the
+mark to malloc.
+
+The micro golden `a_builder_seeded_with_a_value_not_a_string` seeds the same
+loop with a subtype of int, a record, a subtype of string, and a subtype of
+int over twenty thousand laps, and the loop's base arm answers the untouched
+seed. All three engines agree. Two mutations turned the corpus red, and each
+has a ratchet row:
+
+- "a builder seed refusing what is not a string" puts the refusal back.
+- "a join that never adopts its seed" stops emitting `k_b_adopt`, and the join
+  answers nothing.
+
+CI's rows for the change. `k_b_adopt` adds 352 bytes of text to each of the
+fourteen benchmark binaries, and `text` rose to 3,539,536 (runbench 402,888
+to 403,240). `codegen_instructions_release` rose 85,343 to 408,226,171 and
+`codegen_instructions_dev` fell 11,928 to 124,468,828. `emit_instructions`
+fell 1,606 from the figure kanso#1734 left, to 29,997,064. The change also
+drops the `k_unsub` the first join emitted before the seed, and that fall
+arrived with it; no mechanism was isolated. `work_runbench` fell 1,342 to
+1,088,404,203 and `work_oneshot` fell 714 to 12,743,727. `work_encodebench`
+rose 210 to 2,333,703,939, `work_livebench` 133 to 1,537,391,116,
+`work_jsonbench` 4 to 758,833,558 and `work_basket` 1 to 29,464,216.
+Welfare holds at the floor, 90.32.
