@@ -18656,3 +18656,22 @@ cost of asking each type for a repeated name. `entry_instructions` fell to
 Which of the three changes the falls came from has not been isolated. The run
 rows and the text did not move. Welfare rose from 90.40601 to 90.40603 and the
 floor holds it.
+
+## 2026-09-29 — a knot may tie through a record the next file declares
+
+A constant whose constructor stores its own name is a knot: `ring = node 1
+ring` stores a place for `ring` rather than asking for its value, and the cycle
+check lets it through for that reason. The check decides which heads are
+constructors by asking which names are types, and it asked only the file's own
+types. With `node` declared in the file beside the constant, `node` was not a
+constructor to the check, the call demanded `ring`, and the constant was refused
+as defined in terms of itself on every engine. The annotation check had the same
+gap until kanso#1711, and the cycle check was not changed with it. The
+generated-program differential found this once it began writing build blocks
+and knots, since it declares the record in one file of its module and the knots
+in the other. The cycle check now counts every file's types, as the annotation
+check does. `tests/sibling_types.rs` ties a two-constant ring and a one-constant
+loop through a record declared in the other file and reads them back on both
+engines; all three constants were refused on the old checker. The row "a knot
+of a sibling file's type refused" puts the file's own types back and turns it
+red.

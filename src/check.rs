@@ -2129,7 +2129,7 @@ pub fn check_file_shadow(
     check_type_order(program, &mut diags);
     check_fn_order(program, &mut diags);
     check_constants(program, &mut diags);
-    check_constant_cycles(program, &mut diags);
+    check_constant_cycles(program, sibling_types, &mut diags);
     check_retired_any(program, &mut diags);
     check_field_annotations(program, &mut diags);
     check_field_conflicts(program, &mut diags);
@@ -2516,7 +2516,7 @@ pub fn check_merged_after_aliases_with<'a>(
     }
     let returns = returns;
     check_constants(program, &mut diags);
-    check_constant_cycles(program, &mut diags);
+    check_constant_cycles(program, &HashSet::default(), &mut diags);
     check_predicates(program, &inference, &mut diags);
     check_arm_ties(program, &mut diags);
     check_sub_parents(program, &mut diags);
@@ -3729,7 +3729,7 @@ fn check_fn_order(program: &Program, diags: &mut Vec<Diagnostic>) {
 fn demanded_refs<'a>(
     expr: &'a Expr,
     known: &HashSet<&str>,
-    types: &HashSet<&str>,
+    types: TypeNames,
     out: &mut Vec<&'a str>,
 ) {
     if let Expr::Ident(name, _, _) | Expr::Partial(name, _) = expr {
@@ -3743,7 +3743,7 @@ fn demanded_refs<'a>(
     }
     if let Expr::App { head, args, .. } = expr {
         if let Expr::Ident(name, _, _) = head.as_ref() {
-            if types.contains(name.as_str()) {
+            if types.contains(name) {
                 // a constructor's arguments are stored, so only the head is a
                 // demand, and the head is a type rather than a constant
                 let _ = args;
@@ -4089,10 +4089,19 @@ fn annotation_names(ty: &str) -> Vec<&str> {
     vec![inner]
 }
 
-fn check_constant_cycles(program: &Program, diags: &mut Vec<Diagnostic>) {
+/// A record declared in the next file of a module constructs as surely as one
+/// declared here. Until 2026-09-29 only this file's types counted, so
+/// `ring = node 1 ring` was refused as defined in terms of itself whenever
+/// `node` was declared beside it rather than above it.
+fn check_constant_cycles(
+    program: &Program,
+    sibling_types: &HashSet<String>,
+    diags: &mut Vec<Diagnostic>,
+) {
     let constants: Vec<&FnDecl> = program.fns.iter().filter(|d| d.params.is_empty()).collect();
     let names: HashSet<&str> = constants.iter().map(|d| d.name.as_str()).collect();
-    let types: HashSet<&str> = program.types.iter().map(|t| t.name.as_str()).collect();
+    let own: HashSet<&str> = program.types.iter().map(|t| t.name.as_str()).collect();
+    let types = TypeNames { own: &own, siblings: sibling_types };
     let mut refs: HashMap<&str, Vec<&str>> =
         HashMap::with_capacity_and_hasher(program.fns.len(), Default::default());
     for decl in &constants {
@@ -4102,7 +4111,7 @@ fn check_constant_cycles(program: &Program, diags: &mut Vec<Diagnostic>) {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
                 Stmt::Set { value, .. } => value,
             };
-            demanded_refs(expr, &names, &types, out);
+            demanded_refs(expr, &names, types, out);
         }
     }
     for decl in &constants {

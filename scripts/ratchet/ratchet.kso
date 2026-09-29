@@ -3898,7 +3898,20 @@ read_named = row
 
 rows_c1zzzq = text/concat rows_c1zzzp [read_named]
 
-rows_c = text/concat rows_c1zzzq [itself]
+# A record the next file declares constructs as well as one declared here.
+# Counting only the file's own types, a knot through it is refused as defined
+# in terms of itself.
+sibling_knot = row
+  "a knot of a sibling file's type refused"
+  true
+  "cargo test --release --test sibling_types"
+  "specs (unit, golden, differential)"
+  (breaking "a_knot_of_a_sibling_type_refused")
+  no_setup
+
+rows_c1zzzr = text/concat rows_c1zzzq [sibling_knot]
+
+rows_c = text/concat rows_c1zzzr [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

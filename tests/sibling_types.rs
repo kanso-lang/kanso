@@ -36,3 +36,18 @@ fn an_annotation_names_a_type_the_next_file_declares() {
         );
     }
 }
+
+/// A knot is a constant whose constructor stores its own name, and a record
+/// the next file declares constructs as well as one declared above it. Until
+/// 2026-09-29 the cycle check asked only the file's own types, so all three
+/// constants here were refused as defined in terms of themselves.
+#[test]
+fn a_knot_ties_through_a_record_the_next_file_declares() {
+    for engine in ENGINES {
+        let (out, err) = run("knots", engine);
+        assert_eq!(
+            out, "2 1 3 ring/node 1 ring/node 2 <cycle>\n",
+            "{engine:?} did not tie the knots: {err}"
+        );
+    }
+}
