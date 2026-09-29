@@ -1,0 +1,18 @@
+# `k = &f1 (id 11)` hands f1 out as a value holding a subtype of int, and
+# `f1 16 (id 19)` is the only direct call. Inference read f1's first
+# parameter from the direct call alone, so f1 was compiled for an int there,
+# and the held subtype came back out as its box's address. A partial now
+# widens its group's parameters, as a bare mention of the group does.
+type id int
+
+fn f1 p2 p3
+  return p2 if 20 > p3
+  p3 + 1
+
+fn go z
+  k = &f1 (id 11)
+  a = k (z - z)
+  b = f1 16 (id 19)
+  "{a} {b}"
+
+pub play = print "{go 5}"
