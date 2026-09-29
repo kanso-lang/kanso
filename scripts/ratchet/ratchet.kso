@@ -4490,7 +4490,19 @@ fn_value_boxed = row
 
 rows_c1zzzzy = text/concat rows_c1zzzzx [fn_value_boxed]
 
-rows_c = text/concat rows_c1zzzzy [itself]
+# An operator arm a module declares may build that module's records once the
+# module is imported, as any of its named functions may.
+arm_builds_own = row
+  "an imported operator arm read as the importer's"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "an_imported_operator_arm_read_as_the_importers")
+  release
+
+rows_c1zzzzz = text/concat rows_c1zzzzy [arm_builds_own]
+
+rows_c = text/concat rows_c1zzzzz [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

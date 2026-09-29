@@ -75,3 +75,19 @@ fn a_cycle_across_files_is_refused_where_each_constant_is() {
         );
     }
 }
+
+/// An operator's arm keeps its bare name when its module is imported, so the
+/// checker cannot tell it from the importer's own code by a slash in the name.
+/// Until 2026-09-29 it could not tell at all, and refused the arm building its
+/// own module's record as a construction across the import. Two shapes: the
+/// arm sharing a file with a function the import prefixed, and the arm alone
+/// in its file with the record declared in the other.
+#[test]
+fn an_operator_arm_builds_the_record_its_module_declares() {
+    for fixture in ["arms", "arm_alone"] {
+        for engine in ENGINES {
+            let (out, err) = run(fixture, engine);
+            assert_eq!(out, "sums/pt 4 \"ab\"\n", "{fixture} {engine:?} refused the arm: {err}");
+        }
+    }
+}
