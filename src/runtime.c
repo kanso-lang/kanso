@@ -7174,8 +7174,8 @@ KValue k_call4(KValue f, KValue a, KValue b, KValue c, KValue d) {
    reaches a call through the fast arm the emitter inlines; it arrives here.
 
    A new call gathers held and fresh arguments and asks the callee's arity: a
-   closure's is its field, a fnref's its field, anything else — a partial
-   over a partial, a value that is not callable — answers nothing, which is
+   closure's is its field, a fnref's its field, a partial's its callee's less
+   what it holds, and a value that is not callable answers nothing, which is
    what the interpreter's arities_of answers, and the partial grows. Equal
    dispatches through k_callN, which orders the failure tests the way the
    oracle does; short grows; past it dies naming the arity, in the oracle's
@@ -7224,10 +7224,18 @@ KValue k_partial4(KValue f, KValue a, KValue b, KValue c, KValue d) {
     return k_partial_build(f, 4, args);
 }
 
-/* The count a callee answers to, or -1 when it answers none: a partial
-   itself (arity -1 already), or a value that is not callable at all. */
+/* The count a callee answers to, or -1 when it answers none. A partial
+   answers its own callee's count less what it holds, as the interpreter's
+   arities_of does, so `&m` over `m = &k 2` runs when one more arrives rather
+   than growing. A value that is not callable answers none. */
 static long long k_callee_arity(KValue callee) {
-    if (callee.tag == K_CLOSURE) return ((KClosure*)(intptr_t)callee.payload)->arity;
+    if (callee.tag == K_CLOSURE) {
+        KClosure* c = (KClosure*)(intptr_t)callee.payload;
+        if (c->arity >= 0 || c->fn) return c->arity;
+        long long inner = k_callee_arity(((KValue*)c->env)[0]);
+        long long held = c->ncaps - 1;
+        return inner >= held ? inner - held : -1;
+    }
     if (callee.tag == K_FNREF) return ((KFnref*)(intptr_t)callee.payload)->arity;
     return -1;
 }

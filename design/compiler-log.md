@@ -18800,7 +18800,18 @@ so it wrapped the three in a third partial and printed `<fn>`. Native ran
 its callee's arities less what it holds. Probing partials by hand after the
 held-err fix found it, and it predates that fix.
 
-The micro sample `a_partial_over_a_partial_runs_when_full` finishes one bound
-and one written in place, and keeps a partial of two in three as a function.
-The old interpreter printed `<fn>` for all three. The row "a partial over a
-partial taking nothing" answers no arity again and turns the corpus red.
+The native and browser runtimes keep a partial over a value as a closure with
+no body, and they ask its callee the same question. Their comments said a
+partial over a partial answers nothing because the interpreter's `arities_of`
+did. So once the interpreter answered, `s = &k` over `k = &h 3` printed 6 at
+`s 1` on the interpreter and `<fn>` on both native builds. `k_callee_arity` in
+the runtime and `arities_of` in the browser's host now answer a partial the
+same way.
+
+The micro sample `a_partial_over_a_partial_runs_when_full` finishes one bound,
+one written in place and one wrapped in a partial holding nothing, and keeps a
+partial of two in three as a function. The old interpreter printed `<fn>` for
+all four, and old native printed `<fn>` for the wrapped one. The rows "a
+partial over a partial taking nothing", "a native partial answering nothing"
+and "a browser partial answering nothing" each put one engine's answer back,
+and each turns its corpus red.

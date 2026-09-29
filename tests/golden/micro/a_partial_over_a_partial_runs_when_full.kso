@@ -2,7 +2,10 @@
 # `(&h 3) 1` has all three and runs `g p 3 1`, as `h 3 1` does. The
 # interpreter asked the inner partial how many arguments it takes, got no
 # answer, and wrapped the three in a third partial, which printed `<fn>`.
-# Native ran g. `still` holds two of three and stays a function everywhere.
+# Native ran g. `bare` wraps `k` in a partial that holds nothing, and the
+# native runtimes asked `k` the same question, got no answer, and printed
+# `<fn>` for `s 1`. `still` holds two of three and stays a function
+# everywhere.
 fn g a b c
   a + b + c
 
@@ -15,9 +18,15 @@ fn finished p
   h = &g p
   (&h 3) 1
 
+fn bare p
+  h = &g p
+  k = &h 3
+  s = &k
+  s 1
+
 fn still p
   h = &g p
   k = &h 3
   "{k}"
 
-pub play = print "{full 2} {finished 2} {still 2}"
+pub play = print "{full 2} {finished 2} {bare 2} {still 2}"
