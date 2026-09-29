@@ -4367,6 +4367,29 @@ built_onto_itself = "a_string_built_onto_itself_grows_where_it_stands"
 
 rows_c1zzzzr = text/concat rows_c1zzzzq [string_join_copied seed_taken]
 
+# A list seed its caller reads again is copied once on the wasm engine: the call
+# hands it over under a handle of its own, so the loop writes a copy in place
+# and the caller's handle keeps the seed.
+seed_copied = row
+  "a seed copied every lap in wasm"
+  true
+  "cargo test --release --test wasm_engine {seeded_once}"
+  "specs (unit, golden, differential)"
+  (breaking "a_seed_copied_every_lap_in_wasm")
+  with_blob
+
+seed_written_through = row
+  "a seed written through its caller's handle in wasm"
+  true
+  "cargo test --release --test wasm_engine {seeded_once}"
+  "specs (unit, golden, differential)"
+  (breaking "a_seed_written_through_its_callers_handle_in_wasm")
+  with_blob
+
+seeded_once = "a_loop_seeded_with_a_list_its_caller_reads_copies_it_once"
+
+rows_c1zzzzt = text/concat rows_c1zzzzr [seed_copied seed_written_through]
+
 # A string builder may be seeded with any value, since a join renders what it
 # joins onto. Native used to refuse the seed, and the first join adopts it.
 seed_refused = row
@@ -4385,7 +4408,7 @@ seed_unadopted = row
   (breaking "a_join_that_never_adopts_its_seed")
   release
 
-rows_c1zzzzs = text/concat rows_c1zzzzr [seed_refused seed_unadopted]
+rows_c1zzzzs = text/concat rows_c1zzzzt [seed_refused seed_unadopted]
 
 rows_c = text/concat rows_c1zzzzs [itself]
 

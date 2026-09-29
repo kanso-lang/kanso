@@ -1223,6 +1223,19 @@ fn map_or_filter(name: &str, list_h: u32, closure_h: u32) -> u32 {
     push(Slot::V(Value::List(Rc::new(out))))
 }
 
+/// The same container under a new handle, for a call whose parameter writes
+/// in place while the caller goes on reading the old handle. The two handles
+/// share the container, so the first write through the new one copies it and
+/// the old one never sees the change. Anything but a container keeps its
+/// handle, since no write takes it.
+#[no_mangle]
+pub extern "C" fn rt_rehandle(h: u32) -> u32 {
+    match slot(h) {
+        Slot::V(v @ (Value::List(_) | Value::Map(_) | Value::Bytes(_))) => push(Slot::V(v)),
+        _ => h,
+    }
+}
+
 /// A template at a builder join: its first part is the builder. An owned
 /// builder is taken out of its handle and the rest is appended to it, which is
 /// what keeps a string built one piece a lap from being copied every lap and
