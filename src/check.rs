@@ -3972,7 +3972,11 @@ fn check_annotation_names(program: &Program, declared: TypeNames, diags: &mut Ve
     // The typesets, borrowed from the list `declared` was built from.
     let types: crate::hash::Map<&str, &crate::ast::TypeDecl> =
         program.types.iter().map(|t| (t.name.as_str(), t)).collect();
-    for decl in &program.fns {
+    // A field's reader is the compiler's own arm, written from the record it
+    // reads. When a program declares a second type of that name, the reader
+    // is checked against the wrong declaration and reported as an arm the
+    // program never wrote, beside the report that the name is taken.
+    for decl in program.fns.iter().filter(|d| getter_field(&d.name).is_none()) {
         for param in &decl.params {
             patterns(param, declared, &types, diags);
         }

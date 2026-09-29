@@ -3874,7 +3874,19 @@ member_twice = row
 
 rows_c1zzzo = text/concat rows_c1zzzn [member_twice]
 
-rows_c = text/concat rows_c1zzzo [itself]
+# A field's reader is the compiler's own arm. Checked like a written one, it is
+# reported as dead when a second type takes the record's name.
+reader_checked = row
+  "a field reader checked as a written arm"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_field_reader_checked_as_a_written_arm")
+  no_setup
+
+rows_c1zzzp = text/concat rows_c1zzzo [reader_checked]
+
+rows_c = text/concat rows_c1zzzp [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

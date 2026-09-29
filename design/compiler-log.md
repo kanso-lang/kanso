@@ -18627,4 +18627,13 @@ way two of them can overlap. The error fixture
 `a_name_declared_twice_in_a_type` holds both and reported only the reader's
 overlap on the old checker. The rows "a field declared twice left to its
 reader" and "a typeset member named twice left unchecked" each turn it red.
-No program in lib, kq, vse or kanso-json changes its verdict.
+
+The same probing found one more report about an arm nobody wrote. With a
+record `pt` and then `type pt int`, the name was refused as taken, and the
+dead-pattern check of kanso#1711 also read the record's field reader against
+the subtype and called it an arm that could never match, at the field. The
+readers are the compiler's own arms and that walk now leaves them out. The
+fixture `a_record_and_a_subtype_share_a_name` reported both lines on the old
+checker, and the row "a field reader checked as a written arm" puts the reader
+back into the walk. No program in lib, kq, vse or kanso-json changes its
+verdict.
