@@ -1,0 +1,12 @@
+error[type]: `id` wraps `int`, which has no fields, so this arm can never match; write `x:id` to take one
+  --> a_wrapper_pattern_never_matches.kso:14:13
+  14 | fn size (id n)
+                   ^
+error[type]: `pt` has 2 fields and this arm takes 1, so it can never match
+  --> a_wrapper_pattern_never_matches.kso:17:13
+  17 | fn size (pt n)
+                   ^
+error[type]: `tag` wraps `pt`, which has 2 fields and this arm takes 1, so it can never match
+  --> a_wrapper_pattern_never_matches.kso:20:14
+  20 | fn size (tag p)
+                    ^

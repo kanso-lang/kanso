@@ -1,0 +1,26 @@
+# A pattern that takes a value apart can never match when the value has a
+# different number of fields, and a wrapper is taken apart through the record
+# it wraps. Every engine passed each of these arms over in silence, so the
+# value fell to the next arm. Found on 2026-09-28 while teaching the
+# generated-program differential subtypes; `n:id` is the arm that takes one.
+type id int
+
+type pt
+  n
+  s
+
+type tag pt
+
+fn size (id n)
+  "id {n}"
+
+fn size (pt n)
+  "pt {n}"
+
+fn size (tag p)
+  "tag {p}"
+
+fn size _
+  "other"
+
+pub play = print "{size (id 3)} {size (pt 4 "a")} {size (tag (pt 5 "b"))}"

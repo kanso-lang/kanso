@@ -1,0 +1,11 @@
+pub fn kind q:tag
+  "tag {q.n}"
+
+pub fn kind p:pt
+  "pt {p.n}"
+
+pub fn kind _
+  "other"
+
+pub fn sample n
+  [(kind (tag (pt n))) (kind (pt (n + 1))) (kind n)]

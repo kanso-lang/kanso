@@ -18435,3 +18435,64 @@ lands on 25,234,727 (-23,789), `entry_instructions` on 85,008,062 (-67,783),
 rows, the text and the allocation counters did not move. What in the change
 moved the interpreter's row has not been isolated. The sum rose, and the floor
 holds it.
+
+## 2026-09-28 — a pattern that can never match is refused
+
+A pattern that takes a value apart never matched when the value had a
+different number of fields, and every engine passed the arm over in silence,
+so the value fell to the next arm. Three shapes, all agreeing on all three
+engines, which is why the generated-program differential never saw them:
+
+    (id n)     for `type id int`          int has no fields to take
+    (pt n)     for a two-field `pt`       one field of two
+    (tag p)    for `type tag pt`          the same, through the wrapper
+
+The generator had declared the first and third since it learned subtypes, so
+each of those arms had been dead in every program that held one. A wrapper is
+taken apart through the record it wraps: `(sale_price c)` binds the one field
+of the `money` a sale price wraps, and a_child_arm_beats_its_parent pins that.
+So the check follows a wrapper to the bottom of its chain and asks there. A
+chain that ends at `int`, `string` or a typeset has no fields, and the checker
+says so and names `x:id` as the arm that takes one. A record, reached directly
+or through wrappers, answers with its field count. The typeset case was already
+refused and keeps its words. An enrolled clone and a chain that runs in a circle
+are left alone. No such pattern appears in lib, kq or vse.
+
+The error fixture `a_wrapper_pattern_never_matches` holds all three shapes and
+reported nothing on the old checker. The row "a pattern that can never match
+left unchecked" takes the new question out and leaves the typeset's, and turns
+that fixture red. CI will measure the instruction rows.
+
+## 2026-09-28 — an annotation may name a type the next file declares
+
+A module's files share their declarations: a function one file declares is
+called from the next, and a record one file declares is built there. An
+annotation was the exception. The checker asked only the annotating file's own
+types, so `p:pt` with `pt` declared in the file beside it was refused as naming
+no type, and since every engine runs the same checker, every engine refused it.
+It had been so since the check arrived in kanso#716 on 2026-08-02. The generated-
+program differential splits each program across two files of one module, and
+found it the first time it wrote `q:tg` in one file with `tg` declared in the
+other. Each file's check now counts the types every file of the module
+declares. An import's types are not added, so a bare name from another module
+is refused as before. `tests/sibling_types.rs` runs a two-file module on both
+engines, and the row "a sibling file's type left undeclared" puts the old set
+back.
+
+The first way of doing it merged the module's type names into each file's set,
+and CI read `compile_allocs` 14,306 -> 14,337 on that head: a copy of every name
+for the module, then a set per file grown by all of them. Each file now asks its
+own set and then the module's, which is never copied, and the imports' names
+sit in a set of their own for the typeset check that reads both. On this
+container, where main reads the golden's 14,306, that reads 14,308. The two
+left are the second set's table.
+
+CI measured the head with both changes in it. Five rows rose and none fell.
+`compile_instructions` lands on 25,246,986 (+12,259), `entry_instructions` on
+85,060,383 (+52,321) and `library_instructions` on 85,586,846 (+51,880).
+`compile_allocs` lands on 14,308 (+2) and `interp_allocs` on 895,191 (+2), the
+interpreter's run passing through the same check. The run rows, the codegen
+rows, the text and the lazy tier did not move. Which of the two checks the
+instruction rows paid for has not been isolated. Welfare fell from 90.40233 to
+90.40222, and the floor follows it under the 2026-09-13 rule, since both are
+gaps in the checker for the language as ruled.
