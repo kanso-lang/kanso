@@ -4490,7 +4490,19 @@ fn_value_boxed = row
 
 rows_c1zzzzy = text/concat rows_c1zzzzx [fn_value_boxed]
 
-rows_c = text/concat rows_c1zzzzy [itself]
+# A subtype of int meets `&`, `|` and `^` as the int it wraps, on native as on
+# the interpreter and the page.
+bits_unwrap = row
+  "a subtype refused at a bitwise operator"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_subtype_refused_at_a_bitwise_operator")
+  release
+
+rows_c1zzzzz = text/concat rows_c1zzzzy [bits_unwrap]
+
+rows_c = text/concat rows_c1zzzzz [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
