@@ -3948,7 +3948,37 @@ nested_place = row
 
 rows_c1zzzu = text/concat rows_c1zzzt [nested_place]
 
-rows_c = text/concat rows_c1zzzu [itself]
+# A subtype is built from the one value it wraps. Built from any count,
+# `tall 1 2` passes `kanso check` and each engine refuses it its own way.
+subtype_count = row
+  "a subtype built from any count"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_subtype_built_from_any_count")
+  no_setup
+
+rows_c1zzzv = text/concat rows_c1zzzu [subtype_count]
+
+typeset_parent = row
+  "a typeset taken as a parent"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_typeset_taken_as_a_parent")
+  no_setup
+
+type_file = row
+  "a type refusal left without its file"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_type_refusal_left_without_its_file")
+  no_setup
+
+rows_c1zzzw = text/concat rows_c1zzzv [typeset_parent type_file]
+
+rows_c = text/concat rows_c1zzzw [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

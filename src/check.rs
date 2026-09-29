@@ -377,13 +377,15 @@ fn check_per_node<'a>(
             // Construction is positional and complete, and the same seam hid
             // it: a type declared in one file of a module and built in another
             // was checked by nobody, and a foreign type never was. A typeset
-            // does not construct and a subtype takes the one value it wraps,
-            // so neither is entered.
+            // does not construct, so it is not entered. A subtype takes the
+            // one value it wraps and is entered with its parent's name.
             fields: program
                 .types
                 .iter()
-                .filter(|ty| ty.members.is_empty() && ty.parent.is_none() && !ty.fields.is_empty())
-                .map(|ty| (ty.name.as_str(), ty.fields.len()))
+                .filter(|ty| {
+                    ty.members.is_empty() && (ty.parent.is_some() || !ty.fields.is_empty())
+                })
+                .map(|ty| (ty.name.as_str(), (ty.fields.len(), ty.parent.as_deref())))
                 .collect(),
             arities: Arities::of(program),
             foreign: program
@@ -1812,8 +1814,27 @@ fn demand_conflicts(
 /// The engines carry `none` as a tag rather than a declared type, so nothing
 /// can derive from it yet. Rejecting here keeps all three engines identical
 /// instead of one erroring and another silently dropping the subtype.
+///
+/// A typeset is refused as a parent for the same reason. It only annotates, so
+/// nothing is ever built as one, and the engines disagreed about what wrapping
+/// it means: the interpreter took any member, and the native backend looked
+/// for the typeset in the value's own chain and refused a member at run time.
 fn check_sub_parents(program: &Program, diags: &mut Vec<Diagnostic>) {
+    let typeset =
+        |name: &str| program.types.iter().any(|t| t.name == name && !t.members.is_empty());
     for ty in &program.types {
+        let first = diags.len();
+        if let Some(parent) = ty.parent.as_deref().filter(|p| typeset(p)) {
+            diags.push(Diagnostic::new(
+                "type",
+                format!(
+                    "`{}` cannot wrap the typeset `{parent}` yet — a typeset only \
+                     annotates, so wrap one of its members",
+                    ty.name
+                ),
+                ty.span,
+            ));
+        }
         if ty.parent.as_deref() == Some("none") {
             diags.push(Diagnostic::new(
                 "type",
@@ -1824,6 +1845,9 @@ fn check_sub_parents(program: &Program, diags: &mut Vec<Diagnostic>) {
                 ),
                 ty.span,
             ));
+        }
+        if !ty.file.is_empty() {
+            place_in(&mut diags[first..], &ty.file);
         }
     }
 }
@@ -2179,11 +2203,11 @@ pub fn check_file_shadow(
     // function with one, and the compiler knows both counts. A typeset never
     // constructs and a subtype takes the one value it wraps, so neither is
     // entered here.
-    let type_arity: crate::hash::Map<&str, usize> = program
+    let type_arity: crate::hash::Map<&str, (usize, Option<&str>)> = program
         .types
         .iter()
-        .filter(|t| t.members.is_empty() && t.parent.is_none() && !t.fields.is_empty())
-        .map(|t| (t.name.as_str(), t.fields.len()))
+        .filter(|t| t.members.is_empty() && (t.parent.is_some() || !t.fields.is_empty()))
+        .map(|t| (t.name.as_str(), (t.fields.len(), t.parent.as_deref())))
         .collect();
     let declared =
         Declared { fn_arities: &fn_arities, type_arity: &type_arity, types: declared_type_names };
@@ -2771,7 +2795,9 @@ impl<'a> Arities<'a> {
 /// What the three share: four tables built once over the whole program, and
 /// the record of what the alias pass rewrote.
 struct Named<'a> {
-    fields: HashMap<&'a str, usize>,
+    /// How many values each constructor takes: a record's field count, or
+    /// one for a subtype, beside the name of the parent it wraps.
+    fields: HashMap<&'a str, (usize, Option<&'a str>)>,
     arities: Arities<'a>,
     foreign: HashSet<&'a str>,
     annotating: HashSet<&'a str>,
@@ -2884,7 +2910,30 @@ fn bound_in_expr<'a>(e: &'a Expr, out: &mut HashSet<&'a str>) {
     crate::for_each_child(e, |child| bound_in_expr(child, out));
 }
 
-/// A call's argument count against the arms that could answer it.
+/// A construction's argument count against its type. A record takes one value
+/// per field. A subtype takes the one value it wraps: `tall 1 2` for a
+/// subtype of a two-field record passed `kanso check` until 2026-09-29, and
+/// then the interpreter refused it at run time while the native backend
+/// refused the build, each in its own words.
+fn construction_arity(
+    name: &str,
+    fields: usize,
+    wraps: Option<&str>,
+    argc: usize,
+) -> Option<String> {
+    match wraps {
+        Some(parent) if argc != 1 => Some(format!(
+            "`{name}` wraps one `{parent}` value, got {argc} \
+             (a subtype is built from the one value it wraps)"
+        )),
+        None if argc != fields => Some(format!(
+            "`{name}` has {fields} field(s), got {argc} \
+             (construction is positional, fields alphabetical)"
+        )),
+        _ => None,
+    }
+}
+
 /// A call's argument count against the arms that could answer it.
 fn arity_at(name: &str, span: Span, argc: usize, named: &Named<'_>, diags: &mut Vec<Diagnostic>) {
     // Bare names count too. No binding may shadow a declaration —
@@ -2893,16 +2942,9 @@ fn arity_at(name: &str, span: Span, argc: usize, named: &Named<'_>, diags: &mut 
     // pass sees only one file of a module, which leaves every call
     // to a sibling file unchecked.
     let known = named.arities.get(name);
-    if let Some(count) = named.fields.get(name) {
-        if argc != *count {
-            diags.push(Diagnostic::new(
-                "arity",
-                format!(
-                    "`{name}` has {count} field(s), got {argc} \
-                     (construction is positional, fields alphabetical)"
-                ),
-                span,
-            ));
+    if let Some(&(count, wraps)) = named.fields.get(name) {
+        if let Some(message) = construction_arity(name, count, wraps, argc) {
+            diags.push(Diagnostic::new("arity", message, span));
         }
     }
     if known.is_none() {
@@ -4664,7 +4706,7 @@ struct Declared<'a> {
     fn_arities: &'a Arities<'a>,
     /// How many fields each record type declares. Construction is positional,
     /// so an application of a type name has to hand over all of them.
-    type_arity: &'a crate::hash::Map<&'a str, usize>,
+    type_arity: &'a crate::hash::Map<&'a str, (usize, Option<&'a str>)>,
     /// Every declared type name, records and subtypes and typesets alike.
     /// An upcast's target is a name this walk already reaches, so asking
     /// whether a type answers to it costs the lookup and no traversal.
@@ -4964,17 +5006,12 @@ impl<'a> Resolver<'a> {
                 if let Expr::Ident(name, span, _) = &**head {
                     let local = self.locals.iter().any(|l| l.name == name.as_str());
                     if !local {
-                        if let Some(fields) = self.declared.type_arity.get(name.as_str()) {
-                            if args.len() != *fields {
-                                self.diags.push(Diagnostic::new(
-                                    "arity",
-                                    format!(
-                                        "`{name}` has {fields} field(s), got {} \
-                                         (construction is positional, fields alphabetical)",
-                                        args.len()
-                                    ),
-                                    *span,
-                                ));
+                        if let Some(&(fields, wraps)) = self.declared.type_arity.get(name.as_str())
+                        {
+                            if let Some(message) =
+                                construction_arity(name, fields, wraps, args.len())
+                            {
+                                self.diags.push(Diagnostic::new("arity", message, *span));
                             }
                         }
                         if let Some(arities) = self.declared.fn_arities.get(name) {
