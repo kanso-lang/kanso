@@ -1122,7 +1122,8 @@ fn validate_spacing(lexed_line: &LexedLine, line: usize, diags: &mut Vec<Diagnos
         // bitwise operator, and the pair alone cannot tell them apart: what
         // decides is whether something precedes it that a value can end with.
         // `x & y` is an operator; `apply &y` is a sigil.
-        let infix_amp = matches!((prev, next), (Tok::Op("&"), Tok::Ident(_)))
+        let amp = matches!(prev, Tok::Op("&"));
+        let value_before = amp
             && at > 0
             && matches!(
                 lexed_line.tokens.get(at - 1).map(|(t, _, _)| t),
@@ -1137,6 +1138,13 @@ fn validate_spacing(lexed_line: &LexedLine, line: usize, diags: &mut Vec<Diagnos
                         | Tok::Bang
                 )
             );
+        let infix_amp = amp && matches!(next, Tok::Ident(_)) && value_before;
+        // A sigil with no name after it is a mistake no spacing fixes: `&(f 1)`
+        // asked for a space here, and `& (f 1)` then failed to parse. The
+        // parser says what `&` wants, so this check leaves it alone.
+        if amp && !value_before && !matches!(next, Tok::Ident(_)) {
+            continue;
+        }
         // The ratified slice is prefix — `[]int`, not `int[]` — so an empty
         // bracket pair hugs the type it slices. The pair alone cannot say so:
         // `merge [] left right` passes an empty list and then an argument.
