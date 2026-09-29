@@ -19848,3 +19848,10 @@ module and its record in another, with the arm sharing a file with the
 module's functions or alone in its own; main refused both. The mutation "an imported operator arm read as the importer's"
 takes the new test out, and the micro corpus went red on it naming the
 fixture. It is a ratchet row.
+
+CI measured the check's cost. `compile_instructions` rose 1,013, to
+25,364,566; `entry_instructions` rose 2,821, to 83,775,702; and
+`library_instructions` rose 2,829, to 84,313,540. The rows arrived with the
+new test; no mechanism was isolated. Welfare fell by less than a thousandth and the floor was lowered under
+the rule that a change making the language work as specified pays what it
+costs.
