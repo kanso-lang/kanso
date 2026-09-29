@@ -336,6 +336,9 @@ struct DeclState<'a> {
     /// it was about — the list that decides whether the bound-name set is
     /// worth building for this declaration. Cleared per declaration.
     shadowable: Vec<(usize, usize, &'a str)>,
+    /// The file the declaration in hand came from, for a diagnostic that
+    /// would otherwise be placed in whichever file is being rendered.
+    file: Option<&'a std::sync::Arc<str>>,
 }
 
 /// Answers `check_named_per_node`'s three questions in its own vector, which
@@ -430,6 +433,7 @@ fn check_per_node<'a>(
         own: false,
         named_diags: Vec::new(),
         shadowable: Vec::new(),
+        file: None,
     };
     // THE SHADOW SET IS BUILT ONLY WHEN THERE IS SOMETHING TO SHADOW.
     //
@@ -456,6 +460,7 @@ fn check_per_node<'a>(
         state.open.clear();
         state.shadowable.clear();
         state.own = !crate::ast::has_slash(&decl.name);
+        state.file = Some(&decl.file);
         for p in &decl.params {
             collect_pattern_names(p, &mut state.bound);
         }
@@ -542,7 +547,7 @@ fn per_node_walk<'a>(
         err_as_value_at(expr, diags);
     }
     call_shaped_at(expr, &tables.arities, &state.bound, diags);
-    literal_argument_at(expr, tables, &state.bound, diags);
+    literal_argument_at(expr, tables, &state.bound, state.file, diags);
     field_read_at(expr, &tables.scan, &state.local, &mut state.open, flags.certain, diags);
     named_at(expr, &tables.named, state.own, &mut state.named_diags, &mut state.shadowable);
     // Every child of every arm below is exactly what `for_each_child` yields
@@ -3078,6 +3083,7 @@ fn literal_argument_at(
     e: &Expr,
     tables: &PerNode,
     bound: &crate::hash::Set<&str>,
+    file: Option<&std::sync::Arc<str>>,
     diags: &mut Vec<Diagnostic>,
 ) {
     let Expr::App { head, args, .. } = e else { return };
@@ -3141,15 +3147,33 @@ fn literal_argument_at(
                     .filter_map(|a| a.params.get(i))
                     .map(describe_pattern)
                     .collect();
-                diags.push(Diagnostic::new(
-                    "type",
-                    format!(
-                        "no arm of `{name}` takes {} here (arms take {})",
-                        describe_literal(kind),
-                        dedup_join(wanted)
+                // A field read is a call on the field's reader, and the
+                // reader's name is the compiler's. Say it the way the
+                // runtime does, in the file the read is in: the reader only
+                // exists once the module is merged, so the check that finds
+                // it is rendering some other file.
+                match (getter_field(name), file) {
+                    (Some(field), Some(file)) => diags.push(
+                        Diagnostic::new(
+                            "type",
+                            format!(
+                                "`.{field}` reads a field of a record, not {}",
+                                describe_literal(kind)
+                            ),
+                            arg.span(),
+                        )
+                        .about(file),
                     ),
-                    arg.span(),
-                ));
+                    _ => diags.push(Diagnostic::new(
+                        "type",
+                        format!(
+                            "no arm of `{name}` takes {} here (arms take {})",
+                            describe_literal(kind),
+                            dedup_join(wanted)
+                        ),
+                        arg.span(),
+                    )),
+                }
             }
         }
     }
@@ -3912,6 +3936,31 @@ fn check_annotation_names(program: &Program, declared: TypeNames, diags: &mut Ve
         }
     }
 
+    // A record that names a field twice has two readers of one name, and the
+    // only thing that ever said so was the overlap check, about two arms of a
+    // reader whose name no program can spell. A typeset that names a member
+    // twice was passed over in silence.
+    for ty in &program.types {
+        for (at, (field, _, span)) in ty.fields.iter().enumerate() {
+            if ty.fields[..at].iter().any(|(earlier, _, _)| earlier == field) {
+                diags.push(Diagnostic::new(
+                    "type",
+                    format!("`{}` declares the field `{field}` twice", ty.name),
+                    *span,
+                ));
+            }
+        }
+        for (at, member) in ty.members.iter().enumerate() {
+            if ty.members[..at].contains(member) {
+                diags.push(Diagnostic::new(
+                    "type",
+                    format!("`{}` names `{member}` twice", ty.name),
+                    ty.span,
+                ));
+            }
+        }
+    }
+
     // A typeset may hold another typeset, and every engine reads the inner
     // one's members through it. One that reaches itself that way names no
     // set at all: the interpreter asked its members forever and overflowed
@@ -3947,7 +3996,11 @@ fn check_annotation_names(program: &Program, declared: TypeNames, diags: &mut Ve
     // The typesets, borrowed from the list `declared` was built from.
     let types: crate::hash::Map<&str, &crate::ast::TypeDecl> =
         program.types.iter().map(|t| (t.name.as_str(), t)).collect();
-    for decl in &program.fns {
+    // A field's reader is the compiler's own arm, written from the record it
+    // reads. When a program declares a second type of that name, the reader
+    // is checked against the wrong declaration and reported as an arm the
+    // program never wrote, beside the report that the name is taken.
+    for decl in program.fns.iter().filter(|d| getter_field(&d.name).is_none()) {
         for param in &decl.params {
             patterns(param, declared, &types, diags);
         }
@@ -4132,7 +4185,9 @@ fn check_overlapping_arms(program: &Program, diags: &mut Vec<Diagnostic>) {
     let mut found: Vec<(usize, Diagnostic)> = Vec::new();
     let groups =
         real.chunk_by(|(_, a), (_, b)| a.name == b.name && a.params.len() == b.params.len());
-    for group in groups.filter(|g| g.len() > 1) {
+    // A field's reader overlaps itself only when a record names the field
+    // twice, which the type check reports in the reader's own words.
+    for group in groups.filter(|g| g.len() > 1 && getter_field(&g[0].1.name).is_none()) {
         for (g, &(at, later)) in group.iter().enumerate() {
             let earlier = || group[..g].iter().map(|&(_, d)| d);
             if earlier().any(|e| same_shape(&e.params, &later.params)) {
@@ -4313,7 +4368,10 @@ fn typeset_covers<'a>(
 
 fn check_overload_ranks(program: &Program, diags: &mut Vec<Diagnostic>) {
     for pair in program.fns.windows(2) {
-        if pair[0].name != pair[1].name || pair[0].params.len() != pair[1].params.len() {
+        if pair[0].name != pair[1].name
+            || pair[0].params.len() != pair[1].params.len()
+            || getter_field(&pair[0].name).is_some()
+        {
             continue;
         }
         let prev: Vec<u8> = pair[0].params.iter().map(Pattern::rank).collect();

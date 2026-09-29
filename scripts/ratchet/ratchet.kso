@@ -3851,7 +3851,54 @@ below_wider = row
 
 rows_c1zzzm = text/concat rows_c1zzzl [below_wider]
 
-rows_c = text/concat rows_c1zzzm [itself]
+# A record naming a field twice. Unchecked, the only report left is about the
+# field's internal reader, and the overlap check keeps quiet about readers.
+field_twice = row
+  "a field declared twice left to its reader"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_field_declared_twice_left_to_its_reader")
+  no_setup
+
+rows_c1zzzn = text/concat rows_c1zzzm [field_twice]
+
+# A typeset naming a member twice passes `kanso check` when nothing asks.
+member_twice = row
+  "a typeset member named twice left unchecked"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_typeset_member_named_twice_left_unchecked")
+  no_setup
+
+rows_c1zzzo = text/concat rows_c1zzzn [member_twice]
+
+# A field's reader is the compiler's own arm. Checked like a written one, it is
+# reported as dead when a second type takes the record's name.
+reader_checked = row
+  "a field reader checked as a written arm"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_field_reader_checked_as_a_written_arm")
+  no_setup
+
+rows_c1zzzp = text/concat rows_c1zzzo [reader_checked]
+
+# A literal handed to a field read, refused in the name of the field's reader
+# and placed in whatever file was being rendered.
+read_named = row
+  "a field read named by its reader"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_field_read_named_by_its_reader")
+  no_setup
+
+rows_c1zzzq = text/concat rows_c1zzzp [read_named]
+
+rows_c = text/concat rows_c1zzzq [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

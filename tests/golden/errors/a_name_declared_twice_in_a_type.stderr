@@ -1,0 +1,8 @@
+error[type]: `pt` declares the field `a` twice
+  --> a_name_declared_twice_in_a_type.kso:7:3
+   7 |   a
+         ^
+error[type]: `both` names `int` twice
+  --> a_name_declared_twice_in_a_type.kso:9:6
+   9 | type both int int
+            ^

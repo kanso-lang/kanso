@@ -18613,3 +18613,46 @@ literal above it, so those pairs are left to the ranking rule. One exception:
 one and reported nothing on the old checker. The row "an arm below one that
 takes it left unchecked" turns it red. No program in lib, kq, vse or
 kanso-json changes its verdict.
+
+## 2026-09-29 — a type that names something twice is refused in its own words
+
+A record that names a field twice was refused, but only by the overlap check,
+which reported overlapping overloads of `Get_a`. `Get_a` is
+the reader the compiler writes for the field `a`, and no program can spell it.
+A typeset that names a member twice, `type both int int`, passed in silence.
+The type check now says that `pt` declares the field `a` twice, at the second
+field, and that `both` names `int` twice, at the typeset. The overlap checks
+leave the field readers alone, since a record naming a field twice is the only
+way two of them can overlap. The error fixture
+`a_name_declared_twice_in_a_type` holds both and reported only the reader's
+overlap on the old checker. The rows "a field declared twice left to its
+reader" and "a typeset member named twice left unchecked" each turn it red.
+
+The same probing found one more report about an arm nobody wrote. With a
+record `pt` and then `type pt int`, the name was refused as taken, and the
+dead-pattern check of kanso#1711 also read the record's field reader against
+the subtype and called it an arm that could never match, at the field. The
+readers are the compiler's own arms and that walk now leaves them out. The
+fixture `a_record_and_a_subtype_share_a_name` reported both lines on the old
+checker, and the row "a field reader checked as a written arm" puts the reader
+back into the walk. No program in lib, kq, vse or kanso-json changes its
+verdict.
+
+A field read handed a literal the field's reader cannot take was the third.
+`[1 2].a` was refused as no arm of `Get_a` taking a list, and because the
+reader exists only once the module is merged, the check that finds it is
+rendering another file: through an import the location named line 8 of the
+three-line entry. The check now says that `.a` reads a field of a record, not
+a list, the runtime's sentence with the field named, and places it in the file
+the read is in. `kanso check` of the library alone still passes it, since that
+path has no readers yet; the corpus stages every fixture as an import, which
+is where the refusal is made. The fixture `a_field_read_of_a_list` and the row
+"a field read named by its reader" pin it.
+
+CI measured the head. `compile_instructions` rose to 25,068,833 (+4,869), the
+cost of asking each type for a repeated name. `entry_instructions` fell to
+82,812,480 (-8,414) and `library_instructions` to 83,306,236 (-8,331), and
+`compile_allocs` fell to 14,306 and `interp_allocs` to 895,189, two each.
+Which of the three changes the falls came from has not been isolated. The run
+rows and the text did not move. Welfare rose from 90.40601 to 90.40603 and the
+floor holds it.

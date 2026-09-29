@@ -505,4 +505,4 @@
 #
 # CI measured keys and values over maps: two more builtins and the encoder's
 # longer walk. compile_allocs 14,272 -> 14,288, a RISE of 16 (+0.1121%).
-compile_allocs=14308
+compile_allocs=14306

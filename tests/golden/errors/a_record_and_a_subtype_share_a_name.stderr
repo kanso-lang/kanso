@@ -1,0 +1,4 @@
+error[name]: the name `pt` is already taken
+  --> a_record_and_a_subtype_share_a_name.kso:9:6
+   9 | type pt int
+            ^

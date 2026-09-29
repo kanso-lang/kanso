@@ -1,0 +1,11 @@
+# A type declared twice is refused because the name is taken. When the first
+# declaration was a record and the second a subtype, the checker also read the
+# record's field reader, an arm the compiler writes, against the subtype, and
+# reported it as an arm that could never match. The program has no such arm.
+# Found on 2026-09-29.
+type pt
+  a
+
+type pt int
+
+pub play = print "pt"
