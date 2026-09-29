@@ -627,6 +627,9 @@ fn stamp_file(program: &mut ast::Program, file: &str) {
     for decl in &mut program.fns {
         decl.file = std::sync::Arc::clone(&file);
     }
+    for decl in &mut program.types {
+        decl.file = std::sync::Arc::clone(&file);
+    }
 }
 
 /// A field is read by applying its name, so every field declares an arm:
@@ -715,6 +718,7 @@ fn install_prelude(program: &mut ast::Program) {
             parent: Some(parent.to_string()),
             members: Vec::new(),
             fields: Vec::new(),
+            file: ast::unstamped(),
         });
     }
 }

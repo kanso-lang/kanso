@@ -1,0 +1,8 @@
+error[arity]: `tall` wraps one `rect` value, got 2 (a subtype is built from the one value it wraps)
+  --> a_subtype_built_from_two_values.kso:13:20
+  13 | pub play = print "{tall 1 2} {id 3 4} {tall (rect 1 2)}"
+                          ^
+error[arity]: `id` wraps one `int` value, got 2 (a subtype is built from the one value it wraps)
+  --> a_subtype_built_from_two_values.kso:13:31
+  13 | pub play = print "{tall 1 2} {id 3 4} {tall (rect 1 2)}"
+                                     ^

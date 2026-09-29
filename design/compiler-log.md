@@ -18734,6 +18734,62 @@ isolated. Welfare fell from 90.40603 to 90.40592, and the floor follows it under
 the 2026-09-13 rule, since all three are gaps in the checker for the language as
 ruled.
 
+## 2026-09-29 — a subtype is built from the one value it wraps
+
+`type tall rect` makes `tall` a constructor that takes one `rect`. The arity
+check counted a record's fields and left subtypes out, noting that a subtype
+takes the one value it wraps, and nothing then checked that it got one. So
+`tall 1 2` passed `kanso check`. The interpreter refused it at run time with
+"`tall` wraps one rect value" and exit 1, and the native backend refused the
+build with "native backend: `tall` wraps one value" and exit 2: every engine
+refused, each at a different time and in its own words. The two arity checks,
+the one over each file and the one over the merged module, now enter a subtype
+with its parent's name and refuse any count but one, in the words "`tall` wraps
+one `rect` value, got 2". A subtype of `int` is held to the same count. The
+error fixture `a_subtype_built_from_two_values` passed the old checker. The row
+"a subtype built from any count" lets any count through again and turns the
+corpus red.
+
+## 2026-09-29 — a subtype wraps a type it can build
+
+`type shape circle square` declares a typeset, which only annotates: nothing is
+ever built as a `shape`. `type blob shape` then made `blob` a subtype of it, and
+the engines disagreed about what that meant. The interpreter let `blob` wrap any
+member and printed `blob (circle 1)` as `circle 1`. The native backend looked
+for `shape` in the member's own chain, did not find it, and refused at run time
+with "`blob` wraps a shape". The checker now refuses a typeset as a parent at
+the declaration, in the words "`blob` cannot wrap the typeset `shape` yet — a
+typeset only annotates, so wrap one of its members". It follows the refusal of
+`none` as a parent, and the "yet" is the same: whether a subtype of a typeset
+should mean anything is a question for the language, and refusing it ends the
+disagreement without answering that. Nothing in lib, the goldens, kq, vse, the
+examples or the book declared one. The error fixture `a_subtype_of_a_typeset`
+passed the old checker, and the row "a typeset taken as a parent" lets it
+through again and turns the corpus red.
+
+Both refusals are raised at a type declaration, and a type declaration did not
+record its file, so through an import each printed the module's name and no
+place. The previous entry named the `none` refusal as the last diagnostic in the
+corpus without a location. A type declaration now carries its file, stamped
+with the function declarations', and the two refusals are placed in it. The
+imported golden for `sub_of_none` gains its location and quoted line, and no
+imported golden in the error corpus is now without one. The row "a type refusal
+left without its file" takes the placement away and turns the corpus red.
+
+CI measured the head with the subtype count, the typeset parent and the type
+declaration's file in it. `compile_instructions` lands on 24,998,479
+(+10,618), `entry_instructions` on 82,612,661 (+34,384),
+`library_instructions` on 83,095,485 (+26,536), `emit_instructions` on
+29,868,878 (+434), `compile_peak_bytes` on 711,716 (+320),
+`interp_allocs` on 895,202 (+1) and `interp_peak_bytes` on 721,852 (+320).
+`interp_instructions` lands on 590,919,963 (-2,175). `compile_allocs`, the run
+rows and the codegen rows did not move. The 320 bytes in both peaks match what
+a file on every type declaration adds, since the interpreter parses the same
+program the checker does, but that has not been isolated from the other two
+changes. Welfare fell from 90.40592 to 90.4057, and the floor follows it under
+the 2026-09-13 rule, since all three close gaps in the checker for the
+language as ruled.
+
 ## 2026-09-29 — a partial answers the err it holds
 
 `&g p v` holds `p` and `v` for `g`, and the interpreter evaluates them at the

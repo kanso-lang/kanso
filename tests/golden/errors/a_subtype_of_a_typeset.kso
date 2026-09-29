@@ -1,0 +1,15 @@
+# A typeset only annotates, so nothing is ever built as one. Taken as a
+# subtype's parent, the interpreter let `blob` wrap any member and printed
+# it, while the native backend looked for `shape` in the member's own chain
+# and refused at run time. The checker refuses the parent before either runs.
+type circle
+  r
+
+type square
+  s
+
+type shape circle square
+
+type blob shape
+
+pub play = print "{blob (circle 1)}"

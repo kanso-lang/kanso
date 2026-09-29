@@ -722,6 +722,7 @@ fn parse_type(header: &Line, body: &[Line]) -> Result<TypeDecl, Diagnostic> {
                 parent: None,
                 members,
                 fields: Vec::new(),
+                file: crate::ast::unstamped(),
             });
         }
         return Ok(TypeDecl {
@@ -733,6 +734,7 @@ fn parse_type(header: &Line, body: &[Line]) -> Result<TypeDecl, Diagnostic> {
             parent: Some(parent),
             members: Vec::new(),
             fields: Vec::new(),
+            file: crate::ast::unstamped(),
         });
     }
     p.expect_done()?;
@@ -746,6 +748,7 @@ fn parse_type(header: &Line, body: &[Line]) -> Result<TypeDecl, Diagnostic> {
         parent: None,
         members: Vec::new(),
         fields,
+        file: crate::ast::unstamped(),
     })
 }
 

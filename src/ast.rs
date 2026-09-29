@@ -462,6 +462,9 @@ pub struct TypeDecl {
     pub members: Vec<String>,
     /// Field name, permitted types (a typeset: one or more members), span.
     pub fields: Vec<(String, Vec<String>, Span)>,
+    /// The file that declared it, stamped as `FnDecl::file` is, so a module
+    /// checked as one merged program can say where a type was refused.
+    pub file: std::sync::Arc<str>,
 }
 
 #[derive(Debug)]
