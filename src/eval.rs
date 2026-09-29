@@ -5062,14 +5062,9 @@ pub fn eval_binop(
         // an arm names it. So the question is refused rather than answered
         // falsely — the way `<` already refuses it on the same values.
         if opaque_to_equality(&left) || opaque_to_equality(&right) {
-            return Err(RuntimeError {
-                message: "equality is not defined on a function or an effect — \
-                          write an arm for the case you mean"
-                    .to_string(),
-                span,
-            });
+            return Err(RuntimeError { message: EQUALITY_REFUSED.to_string(), span });
         }
-        let equal = values_equal(&left, &right, cells)?;
+        let equal = values_equal(&left, &right, cells, span)?;
         return Ok(bool_value(match op {
             "==" => equal,
             _ => !equal,
@@ -5169,16 +5164,24 @@ fn thunk_identity(v: &Value) -> Option<usize> {
     }
 }
 
+/// The refusal `==` gives a function or an effect, wherever in its operands
+/// the walk meets one.
+const EQUALITY_REFUSED: &str =
+    "equality is not defined on a function or an effect — write an arm for the case you mean";
+
+/// A partial is a function as much as a lambda is. Until 2026-09-29 it was
+/// not listed, and `(&f 1) == 3` answered false on the interpreter where
+/// native refused.
 fn opaque_to_equality(v: &Value) -> bool {
     match v {
-        Value::FnRef(_) | Value::Closure(_) | Value::Desc(_) => true,
+        Value::FnRef(_) | Value::Closure(_) | Value::Desc(_) | Value::Partial(..) => true,
         Value::Sub { inner, .. } => opaque_to_equality(inner),
         _ => false,
     }
 }
 
-fn values_equal(a: &Value, b: &Value, cells: &Cells<'_>) -> Result<bool, RuntimeError> {
-    values_equal_seen(a, b, &mut Set::default(), cells)
+fn values_equal(a: &Value, b: &Value, cells: &Cells<'_>, span: Span) -> Result<bool, RuntimeError> {
+    values_equal_seen(a, b, &mut Set::default(), cells, span)
 }
 
 /// Two cyclic graphs would compare forever, so a pair of cells is assumed
@@ -5199,12 +5202,13 @@ fn values_equal_seen(
     b: &Value,
     seen: &mut Seen,
     cells: &Cells<'_>,
+    span: Span,
 ) -> Result<bool, RuntimeError> {
     if let Value::Sub { inner, .. } = a {
-        return values_equal_seen(inner, b, seen, cells);
+        return values_equal_seen(inner, b, seen, cells, span);
     }
     if let Value::Sub { inner, .. } = b {
-        return values_equal_seen(a, inner, seen, cells);
+        return values_equal_seen(a, inner, seen, cells, span);
     }
     // A cell is forced the way any demand forces it, so an ordinary lazy
     // operand compares as its value. A cell keeps its identity across the
@@ -5220,17 +5224,27 @@ fn values_equal_seen(
             }
             let fa = (cells.force)(a.clone())?;
             let fb = (cells.force)(b.clone())?;
-            return values_equal_seen(&fa, &fb, seen, cells);
+            return values_equal_seen(&fa, &fb, seen, cells, span);
         }
         (Some(_), None) => {
             let fa = (cells.force)(a.clone())?;
-            return values_equal_seen(&fa, b, seen, cells);
+            return values_equal_seen(&fa, b, seen, cells, span);
         }
         (None, Some(_)) => {
             let fb = (cells.force)(b.clone())?;
-            return values_equal_seen(a, &fb, seen, cells);
+            return values_equal_seen(a, &fb, seen, cells, span);
         }
         (None, None) => {}
+    }
+    // A function inside a list, a map or a record is the same question as
+    // one outside it, and it is refused the same way rather than answered
+    // false. Until 2026-09-29 only the operands themselves were asked, so
+    // `[k] == [k]` answered false on the interpreter where native refused.
+    // A browser table function is a function by this point: a lazy one is a
+    // cell, and the cell was forced above.
+    let host_fn = |v: &Value| matches!(v, Value::TableFn(_));
+    if opaque_to_equality(a) || opaque_to_equality(b) || host_fn(a) || host_fn(b) {
+        return Err(RuntimeError { message: EQUALITY_REFUSED.to_string(), span });
     }
     let answer = match (a, b) {
         (Value::Int(x), Value::Int(y)) => x == y,
@@ -5247,7 +5261,7 @@ fn values_equal_seen(
                 return Ok(false);
             }
             for ((ka, va), (kb, vb)) in x.iter().zip(y.iter()) {
-                if ka != kb || !values_equal_seen(va, vb, seen, cells)? {
+                if ka != kb || !values_equal_seen(va, vb, seen, cells, span)? {
                     return Ok(false);
                 }
             }
@@ -5262,7 +5276,7 @@ fn values_equal_seen(
                 return Ok(false);
             }
             for (a, b) in x.iter().zip(y.iter()) {
-                if !values_equal_seen(a, b, seen, cells)? {
+                if !values_equal_seen(a, b, seen, cells, span)? {
                     return Ok(false);
                 }
             }
@@ -5297,7 +5311,7 @@ fn values_equal_seen(
             let pairs: Vec<(Value, Value)> =
                 fx.borrow().iter().cloned().zip(fy.borrow().iter().cloned()).collect();
             for (a, b) in &pairs {
-                if !values_equal_seen(a, b, seen, cells)? {
+                if !values_equal_seen(a, b, seen, cells, span)? {
                     return Ok(false);
                 }
             }

@@ -4074,6 +4074,27 @@ partial_nests = [partial_nest partial_nest_native partial_nest_browser]
 
 rows_c1zzzz = text/concat rows_c1zzzze partial_nests
 
+# Equality refuses a function wherever the walk meets one, a partial among
+# them. The interpreter answered false for a partial and for a function in a
+# list, where native refused.
+eq_partial = row
+  "a partial compared"
+  true
+  "cargo test --release --test golden runtime_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_partial_compared")
+  no_setup
+
+eq_nested = row
+  "a function in a list compared"
+  true
+  "cargo test --release --test golden runtime_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_function_in_a_list_compared")
+  no_setup
+
+rows_c1zzzzf = text/concat rows_c1zzzz [eq_partial eq_nested]
+
 # A sigil with no name after it is left to the parser, whose refusal says
 # what `&` wants. The spacing check asked for a space, which then failed to
 # parse.
@@ -4085,7 +4106,7 @@ sigil_paren = row
   (breaking "a_nameless_sigil_asked_for_a_space")
   no_setup
 
-rows_c1zzzzc = text/concat rows_c1zzzz [sigil_paren]
+rows_c1zzzzc = text/concat rows_c1zzzzf [sigil_paren]
 
 rows_c = text/concat rows_c1zzzzc [itself]
 
