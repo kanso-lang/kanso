@@ -1,0 +1,4 @@
+error[exhaustive]: this can be a none and `name` has no arm for it — resolve it here, or give `name` a `none` arm (in a_group_reached_as_a_value_rounds_to_int_or_none.kso)
+  --> tests/golden/errors/a_group_reached_as_a_value_rounds_to_int_or_none.kso:16:9
+  16 |   name (math/round x)
+               ^

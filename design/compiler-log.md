@@ -19066,6 +19066,21 @@ layout: `work_livebench` on 1,537,391,599 (+721), `work_oneshot` on
 smaller) fell. The floor moves by what the ruling costs, under the rule for
 the language.
 
+The per-call typing reaches only calls inference can see. A group reached as
+a value, handed to `list/map` or held in a partial or a record field, has its
+parameters typed as whatever any caller could pass, because inference does
+not follow a value to the calls made through it. So `each x` rounding the
+ints of `[1 2]` through `list/map [1 2] each` is typed as rounding any number
+and answers `int | none`, and handing that to a group with no `none` arm is
+refused. The same body called directly as `each 3` is typed by its int. Probed
+by hand on the carrier; every float that reached `round` through a lambda, a
+returned partial or a record field was refused, so the limit costs precision
+and never lets a `none` through. The error sample
+`a_group_reached_as_a_value_rounds_to_int_or_none` pins the refusal, and it
+goes red when the call is made direct. Lifting the limit means inference
+following values into the calls made through them, which is a larger change
+than this ruling asked for.
+
 ## 2026-09-29 — a sigil before a parenthesis is refused by the parser
 
 `k = &(g 1)` got a formatting error asking for a space after `&`. The lexer's

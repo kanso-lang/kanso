@@ -1,0 +1,18 @@
+import "std/list"
+import "std/math"
+
+# Inference types a group reached as a value by what any caller could pass,
+# since it cannot see which values the caller holds. `each` below only ever
+# rounds the ints in `[1 2]`, but it is handed to `list/map` as a value, so
+# `math/round x` is typed as rounding any number and answers `int | none`
+# (ruled 2026-09-29). A direct call `each 3` alone is typed by its int.
+fn name 0
+  "zero"
+
+fn name n
+  "n{n}"
+
+fn each x
+  name (math/round x)
+
+pub play = print "{list/to_list (list/map [1 2] each)}"
