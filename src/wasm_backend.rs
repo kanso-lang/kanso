@@ -911,24 +911,65 @@ impl<'a> WasmBackend<'a> {
                     ctx.body.call(RT_CALL);
                     return Ok(());
                 }
-                let mut all = held.clone();
-                all.extend(args.iter().cloned());
                 let callee = Expr::Ident(name.clone(), *nspan, crate::ast::Resolution::default());
-                let call =
-                    Expr::App { head: Box::new(callee), args: all, piped: *piped, span: *span };
-                return self.emit_expr(ctx, &call, false);
+                return self.emit_held(ctx, held, *span, |this, ctx, mut all| {
+                    all.extend(args.iter().cloned());
+                    let call =
+                        Expr::App { head: Box::new(callee), args: all, piped: *piped, span: *span };
+                    this.emit_expr(ctx, &call, false)
+                });
             }
             Expr::App { head, args, span, .. } if matches!(head.as_ref(), Expr::Partial(..)) => {
                 let Expr::Partial(name, _) = head.as_ref() else { unreachable!() };
                 if !self.program.fns.iter().any(|d| d.name == *name) {
                     return self.emit_partial_value(ctx, name, args, *span);
                 }
-                let lambda = partial_lambda(self.program, name, args, *span)?;
-                return self.emit_expr(ctx, &lambda, false);
+                return self.emit_held(ctx, args, *span, |this, ctx, held| {
+                    let lambda = partial_lambda(this.program, name, &held, *span)?;
+                    this.emit_expr(ctx, &lambda, false)
+                });
             }
             Expr::App { head, args, piped, span } => {
                 self.emit_app(ctx, head, args, *piped, tail, *span)?
             }
+        }
+        Ok(())
+    }
+
+    /// A partial's held arguments, evaluated once at the `&` as the interpreter
+    /// evaluates them. Each is bound to a name `then` can hand on, and the first
+    /// that failed is the answer, before `then` builds the lambda or makes the
+    /// call. Until 2026-09-29 the lambda held the argument expressions and the
+    /// finished call entered the group with a failure the interpreter answered
+    /// at the `&`.
+    fn emit_held(
+        &mut self,
+        ctx: &mut Ctx,
+        held: &[Expr],
+        span: crate::diag::Span,
+        then: impl FnOnce(&mut Self, &mut Ctx, Vec<Expr>) -> Result<(), String>,
+    ) -> Result<(), String> {
+        let mut names = Vec::new();
+        let mut locals = Vec::new();
+        for a in held {
+            self.emit_expr(ctx, a, false)?;
+            let local = ctx.body.local();
+            ctx.body.local_set(local);
+            let name = format!("k#held{local}");
+            ctx.scope.insert(name.clone(), local);
+            names.push(Expr::Ident(Name::new(&name), span, crate::ast::Resolution::default()));
+            locals.push(local);
+        }
+        for &local in &locals {
+            ctx.body.local_get(local);
+            ctx.body.call(RT_IS_FAILURE);
+            ctx.body.if_i32();
+            ctx.body.local_get(local);
+            ctx.body.else_();
+        }
+        then(self, ctx, names)?;
+        for _ in &locals {
+            ctx.body.end();
         }
         Ok(())
     }
