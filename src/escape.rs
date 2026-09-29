@@ -179,12 +179,44 @@ pub fn register_returnable(
         program.types.iter().filter(|t| !t.fields.is_empty()).map(|t| t.name.as_str()).collect();
 
     let analysis = Analysis { program, returns_ty: HashSet::default() };
+    let values = value_names(program);
 
     ctors
         .iter()
-        .filter(|ty| analysis.clone().returnable(ty, inference))
+        .filter(|ty| analysis.clone().returnable(ty, inference, &values))
         .map(|ty| ty.to_string())
         .collect()
+}
+
+/// Every name handed out as a value rather than called: `&f` anywhere, and a
+/// bare `f` that is not the head of a call. A local shares the spelling of a
+/// function only by accident, and counting it keeps a record boxed that could
+/// have gone by value, which costs time and never correctness.
+fn value_names(program: &Program) -> HashSet<String> {
+    fn walk(e: &Expr, out: &mut HashSet<String>) {
+        match e {
+            Expr::Partial(name, _) | Expr::Ident(name, _, _) => {
+                out.insert(name.as_str().to_string());
+            }
+            Expr::App { head, args, .. } if matches!(head.as_ref(), Expr::Ident(..)) => {
+                for a in args {
+                    walk(a, out);
+                }
+            }
+            _ => crate::for_each_child(e, |c| walk(c, out)),
+        }
+    }
+    let mut out = HashSet::default();
+    for f in &program.fns {
+        for st in &f.body {
+            match st {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
+                    walk(expr, &mut out)
+                }
+            }
+        }
+    }
+    out
 }
 
 #[derive(Clone)]
@@ -195,7 +227,12 @@ struct Analysis<'a> {
 }
 
 impl<'a> Analysis<'a> {
-    fn returnable(mut self, ty: &str, inference: &crate::infer::Inference) -> bool {
+    fn returnable(
+        mut self,
+        ty: &str,
+        inference: &crate::infer::Inference,
+        values: &HashSet<String>,
+    ) -> bool {
         // The packed convention shifts field 0's payload into the tag word,
         // which is only sound for an int: a pointer payload would lose its
         // tag and overflow the shift. Fields carry no written types, so the
@@ -221,6 +258,14 @@ impl<'a> Analysis<'a> {
             }
         }
         self.compute_returns_ty(ty);
+        // A function handed out as a value is called through a wrapper that
+        // answers one boxed word, so no group returning ty may be one. A
+        // constant named bare is evaluated where it is named, and codegen
+        // boxes its answer there, so a group of no arguments is not one.
+        if self.returns_ty.iter().any(|(name, arity)| *arity > 0 && values.contains(name.as_str()))
+        {
+            return false;
+        }
         self.program.fns.iter().all(|f| self.body_is_safe(ty, &f.body))
     }
 

@@ -19753,3 +19753,61 @@ never adopts its seed" matched the adoption's test on `value` where it now
 reads `raw`. A dry run of all 370 mutation scripts against this tree found
 those two and no others. Both are respelled for the new lines, and each turned
 the micro corpus red again on a release build.
+
+## 2026-09-29 — a function handed out as a value keeps its record boxed
+
+A coverage build of the compiler, run over 300 generated programs, showed that
+the fuzzer almost never wrote a partial application: `apply_partial` and
+`run_partial` in the interpreter and `partial_lambda` in native codegen never
+ran. One program in a hundred held a partial. The generator now binds partials
+short of their arity, extends them, runs them with `()` and renders them, and
+its first batch of 2,000 programs found two native builds refused where the
+interpreter ran. Reduced:
+
+    type pt
+      n
+      s
+
+    fn mk _
+      pt 3 "a"
+
+    fn via_partial k
+      v = &mk
+      "{v k}"
+
+The interpreter prints `pt 3 "a"`. Native refused the build: `mk` cannot be
+used as a function value. The escape analysis lets a group hand its record
+back in two registers when the record's first field is an int and every use
+of it is safe, and it counted `&mk` as safe because nothing there takes the
+record apart. A function value is called through a wrapper that answers one
+boxed word, and codegen refuses to build that wrapper over a group returning
+in registers. The same happens when `mk` is passed by name to a function
+that calls it. In the two fuzz programs the group was a user function whose
+body was `list/drop`, which returns a `list/skipped` record.
+
+The analysis now collects every name the program hands out as a value, `&f`
+anywhere and a bare `f` outside a call's head, and a record type whose
+returning groups of one or more arguments include one of them stays boxed. A
+constant is the exception: naming it bare evaluates it there, and codegen
+already boxes its answer at that point, so `a_constant_naming_a_record_constant`
+still carries its record in registers. The first version counted constants
+too, and `the_carried_samples_still_carry_in_registers` caught it. A local that
+happens to share a function's name also counts, which can only keep a record
+boxed that could have gone by value. The names are collected once per program
+rather than once per record type. None of the twelve cost veins or the lazy
+tier moved.
+
+CI measured the compile side on both versions. Walked once per record type,
+`emit_instructions` rose 395,653; walked once per program it rose 98,975, to
+30,097,646. `compile_instructions` rose 42,086 to 25,363,553,
+`entry_instructions` 71,784 to 83,772,881 and `library_instructions` 71,597 to
+84,310,711, the same three figures on both versions, so the walk's cost is not
+what moved them. `interp_instructions` fell 28,282 to 590,196,130. No
+mechanism for the three check rows was isolated. Welfare reports no fall
+larger than the display's two places, and the floor is unchanged.
+
+`a_function_value_keeps_its_record_boxed` in the micro corpus holds `mk` both
+ways; main's compiler refused it with the message above. The mutation "a
+function value returned in registers" turns the check off, and the micro
+corpus went red on it with the native run printing nothing. It is a ratchet
+row.

@@ -4478,7 +4478,19 @@ lazy_seed = row
 
 rows_c1zzzzx = text/concat rows_c1zzzzv [lazy_seed]
 
-rows_c = text/concat rows_c1zzzzx [itself]
+# A group handed out as a function value keeps its record boxed, because the
+# wrapper a function value is called through answers one boxed word.
+fn_value_boxed = row
+  "a function value returned in registers"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_function_value_returned_in_registers")
+  release
+
+rows_c1zzzzy = text/concat rows_c1zzzzx [fn_value_boxed]
+
+rows_c = text/concat rows_c1zzzzy [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
