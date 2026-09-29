@@ -736,10 +736,9 @@ fn a_string_built_onto_itself_grows_where_it_stands() {
                 pub play = print (length (build \"\" 70000))\n";
     let seeded = "fn build s 0\n  s\n\nfn build s n\n  build \"{s}x\" (n - 1)\n\n\
                   pub play = print \"{build \"ab\" 2} {build \"ab\" 3} {build \"ab\" 1}\"\n";
-    for (name, source, want) in [
-        ("long.kso", long, "70000\n"),
-        ("seeded.kso", seeded, "abxx abxxx abx\n"),
-    ] {
+    for (name, source, want) in
+        [("long.kso", long, "70000\n"), ("seeded.kso", seeded, "abxx abxxx abx\n")]
+    {
         let mut toolchain = Toolchain::load();
         let answer = toolchain.run(name, source);
         assert!(

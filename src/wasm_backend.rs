@@ -1055,14 +1055,9 @@ impl<'a> WasmBackend<'a> {
     ) -> Result<(), String> {
         let site = (ctx.file.clone(), span.line as usize, span.col as usize);
         let builder = match parts.first() {
-            Some(TemplatePart::Interp(inner)) => match inner {
-                Expr::Ident(name, _, _) => ctx
-                    .scope
-                    .get(name.as_str())
-                    .copied()
-                    .filter(|local| ctx.builders.contains(local)),
-                _ => None,
-            },
+            Some(TemplatePart::Interp(Expr::Ident(name, _, _))) => {
+                ctx.scope.get(name.as_str()).copied().filter(|local| ctx.builders.contains(local))
+            }
             _ => None,
         };
         let Some(local) = builder.filter(|_| self.builder_joins.contains(&site)) else {
