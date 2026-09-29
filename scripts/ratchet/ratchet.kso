@@ -4007,7 +4007,28 @@ part_browser = row
 
 rows_c1zzzx = text/concat rows_c1zzzw [part_closure part_entered part_browser]
 
-rows_c = text/concat rows_c1zzzx [itself]
+# Equality refuses a function wherever the walk meets one, a partial among
+# them. The interpreter answered false for a partial and for a function in a
+# list, where native refused.
+eq_partial = row
+  "a partial compared"
+  true
+  "cargo test --release --test golden runtime_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_partial_compared")
+  no_setup
+
+eq_nested = row
+  "a function in a list compared"
+  true
+  "cargo test --release --test golden runtime_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_function_in_a_list_compared")
+  no_setup
+
+rows_c1zzzzf = text/concat rows_c1zzzx [eq_partial eq_nested]
+
+rows_c = text/concat rows_c1zzzzf [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

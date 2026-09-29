@@ -1,0 +1,1 @@
+error[runtime]: equality is not defined on a function or an effect — write an arm for the case you mean

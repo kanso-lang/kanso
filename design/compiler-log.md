@@ -18820,3 +18820,22 @@ pins the trace, which names no frame for `g`. On the old compiler all three err
 cases answered through `g` natively. The rows "a partial's held err built into
 a closure", "a finished partial entering with its err" and "a browser partial
 ignoring its held err" put each lowering back and turn their corpus red.
+
+## 2026-09-29 — equality refuses a function wherever it meets one
+
+`==` refuses to compare a function, because asking which function you were
+handed is the question dispatch answers. The interpreter asked that of the two
+operands and nothing else, and its list of functions left out partials. So
+`(&f n) == 3` answered false, and so did `[k] == [k]` with `k` a lambda.
+Native refused both, at any depth. The interpreter's list now includes
+partials, and its equality walk refuses on reaching a function inside a list,
+a map or a record, as it does at the top. The browser's host keeps a lazy
+value as a table function too, so its table functions stay off the list and
+are left for the walk to force first.
+
+The generated-program differential found it in batch 106, at seed 327553,
+where native refused a comparison of a partial and the interpreter answered
+false. The runtime samples `equality_is_not_defined_on_a_partial` and
+`equality_is_not_defined_on_a_function_in_a_list` printed false on the old
+interpreter. The rows "a partial compared" and "a function in a list
+compared" each put one half back and turn the runtime corpus red.
