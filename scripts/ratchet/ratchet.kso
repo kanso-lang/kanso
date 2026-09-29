@@ -4095,6 +4095,27 @@ eq_nested = row
 
 rows_c1zzzzf = text/concat rows_c1zzzz [eq_partial eq_nested]
 
+# A builtin or a record's constructor handed to `&` answers the interpreter's
+# question of how many arguments it takes. Each row puts one of the two
+# answers back to nothing.
+partial_of_builtin = row
+  "a builtin partial answering nothing"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_builtin_partial_answering_nothing")
+  release
+
+ctor_partial = row
+  "a constructor partial answering nothing"
+  true
+  "cargo test --release --test partial a_partial_over_a_constructor"
+  "specs (unit, golden, differential)"
+  (breaking "a_constructor_partial_answering_nothing")
+  no_setup
+
+rows_c1zzzzj = text/concat rows_c1zzzzf [partial_of_builtin ctor_partial]
+
 # `math/round` answers `none` for NaN and the infinities on every engine,
 # `math/round!` answers a failure in its box, and a call passing an int is
 # typed int alone (ruled 2026-09-29). Each row puts one of the five back.
@@ -4142,7 +4163,7 @@ rounds_a = [nonfinite_native nonfinite_oracle nonfinite_typed]
 
 rounds_b = [nonfinite_per_call nonfinite_insisted]
 
-rows_c1zzzzm = text/concat rows_c1zzzzf (text/concat rounds_a rounds_b)
+rows_c1zzzzm = text/concat rows_c1zzzzj (text/concat rounds_a rounds_b)
 
 rows_c = text/concat rows_c1zzzzm [itself]
 
