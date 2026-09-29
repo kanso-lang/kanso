@@ -18722,3 +18722,19 @@ of its first field that has one. The module-error case
 it, and with the first fix alone it pointed at 0:0. The rows "a wrapper over a
 sibling record left unchecked" and "a nested constructor placed at the top"
 put each back and turn it red.
+
+## 2026-09-29 — a subtype is built from the one value it wraps
+
+`type tall rect` makes `tall` a constructor that takes one `rect`. The arity
+check counted a record's fields and left subtypes out, noting that a subtype
+takes the one value it wraps, and nothing then checked that it got one. So
+`tall 1 2` passed `kanso check`. The interpreter refused it at run time with
+"`tall` wraps one rect value" and exit 1, and the native backend refused the
+build with "native backend: `tall` wraps one value" and exit 2: every engine
+refused, each at a different time and in its own words. The two arity checks,
+the one over each file and the one over the merged module, now enter a subtype
+with its parent's name and refuse any count but one, in the words "`tall` wraps
+one `rect` value, got 2". A subtype of `int` is held to the same count. The
+error fixture `a_subtype_built_from_two_values` passed the old checker. The row
+"a subtype built from any count" lets any count through again and turns the
+corpus red.

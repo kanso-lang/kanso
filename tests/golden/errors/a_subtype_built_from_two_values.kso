@@ -1,0 +1,13 @@
+# A subtype is built from the one value it wraps, so `tall` takes a `rect` and
+# `id` takes an int. Given two values, the interpreter refused the program at
+# run time while the native backend refused the build, each in its own words.
+# The compiler knows the count, so it says so before anything runs.
+type rect
+  w
+  h
+
+type tall rect
+
+type id int
+
+pub play = print "{tall 1 2} {id 3 4} {tall (rect 1 2)}"
