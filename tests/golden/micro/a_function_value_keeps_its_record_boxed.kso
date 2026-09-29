@@ -1,0 +1,25 @@
+# `mk` builds a record whose first field is an int, and nothing takes the
+# record apart, so the escape analysis let `mk` hand it back in two registers.
+# `&mk`, and a bare `mk` passed to `apply`, make it a function value, which is
+# called through a wrapper that answers one boxed word. Native refused the
+# build, saying `mk` cannot be used as a function value, and the interpreter
+# printed the records. A group handed out as a value now keeps its record
+# boxed.
+type pt
+  n
+  s
+
+fn mk _
+  pt 3 "a"
+
+fn apply f x
+  f x
+
+fn via_partial k
+  v = &mk
+  "{v k}"
+
+fn via_value k
+  apply mk k
+
+pub play = print "{via_partial 7} {via_value 8}"
