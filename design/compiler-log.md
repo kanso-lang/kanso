@@ -18573,6 +18573,14 @@ the library corpus from 88,474,145 to 86,280,224 and of the compile corpus from
 26,801,090 to 26,646,425, with `compile_allocs` unchanged at 14,308. Those are
 this machine's readings of the three corpora, not CI's rows.
 
+CI then measured the head with all of it in. `compile_instructions` lands on
+25,063,964 (-183,022), `entry_instructions` on 82,820,894 (-2,239,489),
+`library_instructions` on 83,314,567 (-2,272,279) and `interp_instructions` on
+589,942,740 (-1,965). One row rose: `emit_instructions` lands on 29,854,360
+(+4,665). The emitter did not change, and what moved the row has not been
+isolated. The allocation rows did not move. Welfare rose from 90.40222 to
+90.40601 and the floor holds it.
+
 ## 2026-09-29 — a list arm reads no element type
 
 A list arm asks only whether its argument is a list, and a map arm whether it
