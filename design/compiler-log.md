@@ -18775,3 +18775,17 @@ with the function declarations', and the two refusals are placed in it. The
 imported golden for `sub_of_none` gains its location and quoted line, and no
 imported golden in the error corpus is now without one. The row "a type refusal
 left without its file" takes the placement away and turns the corpus red.
+
+CI measured the head with the subtype count, the typeset parent and the type
+declaration's file in it. `compile_instructions` lands on 24,998,479
+(+10,618), `entry_instructions` on 82,612,661 (+34,384),
+`library_instructions` on 83,095,485 (+26,536), `emit_instructions` on
+29,868,878 (+434), `compile_peak_bytes` on 711,716 (+320),
+`interp_allocs` on 895,202 (+1) and `interp_peak_bytes` on 721,852 (+320).
+`interp_instructions` lands on 590,919,963 (-2,175). `compile_allocs`, the run
+rows and the codegen rows did not move. The 320 bytes in both peaks match what
+a file on every type declaration adds, since the interpreter parses the same
+program the checker does, but that has not been isolated from the other two
+changes. Welfare fell from 90.40592 to 90.4057, and the floor follows it under
+the 2026-09-13 rule, since all three close gaps in the checker for the
+language as ruled.
