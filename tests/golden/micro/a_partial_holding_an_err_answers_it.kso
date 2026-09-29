@@ -3,10 +3,17 @@
 # expressions instead, so a partial holding an err was a function, and `g`,
 # whose arms ignore every argument, answered 14 through it.
 # `fine` holds nothing that fails and answers through g on every engine.
+# A partial over a group this narrow is held over the group's value, and a
+# group named in a partial guards its arms, so `wide` holds one over a group
+# of nine, which native still builds as a closure, and prints the partial
+# itself: the err, where a closure printed as a function.
 import "std/list"
 import "std/text"
 
 fn g _ _ _
+  14
+
+fn g9 _ _ _ _ _ _ _ _ _
   14
 
 fn said (err q)
@@ -28,4 +35,8 @@ fn fine p
   v = text/to_bytes [9 19]
   said (list/to_list (list/map [1 2] (&g p v)))
 
-pub play = print "{held 2}\n{over 2}\n{fine 2}"
+fn wide p
+  v = text/to_bytes [999 19]
+  said (&g9 p v 1 2 3)
+
+pub play = print "{held 2}\n{over 2}\n{fine 2}\n{wide 2}"

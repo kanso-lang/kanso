@@ -18970,6 +18970,25 @@ partial held in a nameless closure", "a browser group value naming nothing"
 and "a browser partial held in a nameless closure" each put one change back
 and turn their corpus red.
 
+Holding these partials over the group's value took the micro sample
+`a_partial_holding_an_err_answers_it` off the closure path whose held-err
+check the row "a partial's held err built into a closure" takes out, and
+kanso#1721's widening gives every group named in a partial a guard that
+answers the err anyway, so the row went blind. The sample now prints a
+partial over a group of nine, which native still builds as a closure: the
+err, where the mutated closure printed `<fn>`.
+
+CI read `interp_instructions` at 589,940,341, down 979,622, and
+`codegen_instructions_release` at 408,166,709, down 20,805. The worsened
+rows are `codegen_instructions_dev` at 124,466,613, up 1,011;
+`compile_instructions` at 24,998,507, up 29; `entry_instructions` at
+82,612,989, up 329; `library_instructions` at 83,095,823, up 338;
+`work_livebench` at 1,537,391,550, up 672; and `work_runbench` at
+1,088,405,694, up 798. The benchmarks' machine code, `text` in
+bench/text_golden.txt, came to 3,545,808 bytes, up 40,768 across fourteen
+binaries, which is the runtime's dispatchers naming the group on each failure
+path. The meta welfare rose and the floor is banked there.
+
 ## 2026-09-29 — a partial over a wide group names the group too
 
 The entry above left a gap open: past four parameters, a partial over a
