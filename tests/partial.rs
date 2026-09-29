@@ -185,3 +185,19 @@ fn holding_more_arguments_than_any_arm_takes_is_refused() {
 
     assert!(!out.status.success(), "a partial past every arity was accepted");
 }
+
+/// A constructor handed to `&` takes its fields, and a subtype's takes the one
+/// value it wraps, so a call bringing the rest builds the record. The
+/// interpreter asked the constructor how many arguments it takes, got no
+/// answer, and grew the partial instead; both printed `<fn>`. Native refuses a
+/// constructor as a value when the program is built.
+#[test]
+fn a_partial_over_a_constructor_builds_the_record() {
+    let out = interp(
+        "constructor",
+        "type pt\n  n\n  s\n\ntype id int\n\nfn wrap n\n  k = &id\n  k n\n\n\
+         print \"{((&pt 2) \"y\").s} {wrap 4}\"\n",
+    );
+
+    assert_eq!(stdout(&out), "y 4");
+}

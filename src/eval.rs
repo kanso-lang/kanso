@@ -2390,16 +2390,25 @@ impl<'a> Interp<'a> {
     /// Every argument count the callee answers, smallest first.
     fn arities_of(&self, callee: &Value) -> Vec<usize> {
         match callee {
-            Value::FnRef(name) => {
-                let mut found: Vec<usize> = self
-                    .fns
-                    .get(name.as_ref())
-                    .map(|decls| decls.iter().map(|d| d.params.len()).collect())
-                    .unwrap_or_default();
-                found.sort_unstable();
-                found.dedup();
-                found
-            }
+            // A reference answers by what it calls. A constructor takes its
+            // fields, a subtype's takes the one value it wraps, and a builtin
+            // takes the count the checker holds for it. Answering only for
+            // groups left `(&pt 2) "y"` and `(&length) [1 2]` growing into
+            // partials that printed `<fn>` where native ran `length`.
+            Value::FnRef(name) => match self.callee_of_ref(name) {
+                Callee::Group(decls) => {
+                    let mut found: Vec<usize> = decls.iter().map(|d| d.params.len()).collect();
+                    found.sort_unstable();
+                    found.dedup();
+                    found
+                }
+                Callee::Constructor(ty) if ty.parent.is_some() => vec![1],
+                Callee::Constructor(ty) if ty.members.is_empty() => vec![ty.fields.len()],
+                Callee::Constructor(_) => Vec::new(),
+                Callee::EntryType => vec![self.entry_decl.fields.len()],
+                Callee::Err => vec![1],
+                Callee::Builtin => crate::check::builtin_arity(name).into_iter().collect(),
+            },
             Value::Closure(c) => vec![c.params.len()],
             // A partial answers what its callee answers, less what it holds.
             // Answering nothing left `(&h 3) 1` over `h = &g p` wrapped in a

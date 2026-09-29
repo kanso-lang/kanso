@@ -4095,6 +4095,27 @@ eq_nested = row
 
 rows_c1zzzzf = text/concat rows_c1zzzz [eq_partial eq_nested]
 
+# A builtin or a record's constructor handed to `&` answers the interpreter's
+# question of how many arguments it takes. Each row puts one of the two
+# answers back to nothing.
+partial_of_builtin = row
+  "a builtin partial answering nothing"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_builtin_partial_answering_nothing")
+  release
+
+ctor_partial = row
+  "a constructor partial answering nothing"
+  true
+  "cargo test --release --test partial a_partial_over_a_constructor"
+  "specs (unit, golden, differential)"
+  (breaking "a_constructor_partial_answering_nothing")
+  no_setup
+
+rows_c1zzzzj = text/concat rows_c1zzzzf [partial_of_builtin ctor_partial]
+
 # A sigil with no name after it is left to the parser, whose refusal says
 # what `&` wants. The spacing check asked for a space, which then failed to
 # parse.
@@ -4106,7 +4127,7 @@ sigil_paren = row
   (breaking "a_nameless_sigil_asked_for_a_space")
   no_setup
 
-rows_c1zzzzc = text/concat rows_c1zzzzf [sigil_paren]
+rows_c1zzzzc = text/concat rows_c1zzzzj [sigil_paren]
 
 rows_c = text/concat rows_c1zzzzc [itself]
 
