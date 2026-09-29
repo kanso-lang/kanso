@@ -4007,6 +4007,38 @@ part_browser = row
 
 rows_c1zzzx = text/concat rows_c1zzzw [part_closure part_entered part_browser]
 
+# A partial answers its callee's arities less what it holds. Answering none,
+# the interpreter wrapped `(&h 3) 1` in a third partial where native ran g.
+partial_nest = row
+  "a partial over a partial taking nothing"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_partial_over_a_partial_taking_nothing")
+  release
+
+# The native and browser runtimes ask the same question of a partial when
+# one wraps another, and answering none, `s = &k` grew at `s 1`.
+partial_nest_native = row
+  "a native partial answering nothing"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_native_partial_answering_nothing")
+  release
+
+partial_nest_browser = row
+  "a browser partial answering nothing"
+  true
+  "cargo test --release --test wasm_engine {wasm_corpus}"
+  "specs (unit, golden, differential)"
+  (breaking "a_browser_partial_answering_nothing")
+  with_blob
+
+partial_nests = [partial_nest partial_nest_native partial_nest_browser]
+
+rows_c1zzzz = text/concat rows_c1zzzx partial_nests
+
 # A call through a group value, or a partial over a group, that turns down a
 # failing argument names the group in the trace, as a direct call does.
 # Native and the browser answered the failure before entering the group and
@@ -4045,7 +4077,7 @@ hop_browser_partial = row
 
 hops = [hop_value hop_partial hop_browser hop_browser_partial]
 
-rows_c1zzzzd = text/concat rows_c1zzzx hops
+rows_c1zzzzd = text/concat rows_c1zzzz hops
 
 rows_c = text/concat rows_c1zzzzd [itself]
 
