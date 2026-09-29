@@ -4007,7 +4007,20 @@ part_browser = row
 
 rows_c1zzzx = text/concat rows_c1zzzw [part_closure part_entered part_browser]
 
-rows_c = text/concat rows_c1zzzx [itself]
+# A partial over a group hands the group out as a value, so its parameters
+# go TOP as they do for a bare mention. Left narrow, a held subtype of int
+# came back out of an arm compiled for an int as its box's address.
+partial_widens = row
+  "a partial leaving its group narrow"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_partial_leaving_its_group_narrow")
+  release
+
+rows_c1zzzze = text/concat rows_c1zzzx [partial_widens]
+
+rows_c = text/concat rows_c1zzzze [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
