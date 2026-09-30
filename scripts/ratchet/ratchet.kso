@@ -4526,7 +4526,19 @@ held_if = row
 
 rows_c1zzzzzzz = text/concat rows_c1zzzzzz [held_if]
 
-rows_c = text/concat rows_c1zzzzzzz [itself]
+# An operator's arms take records boxed, because the operator hands them the
+# boxed values it holds.
+arm_boxed = row
+  "an operator arm handed words"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "an_operator_arm_handed_words")
+  release
+
+rows_c1zzzzzzzz = text/concat rows_c1zzzzzzz [arm_boxed]
+
+rows_c = text/concat rows_c1zzzzzzzz [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
