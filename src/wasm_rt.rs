@@ -414,6 +414,17 @@ fn call_closure(c_h: u32, arg_handles: Vec<u32>) -> u32 {
     if arity >= 0 && arity as usize != arg_handles.len() {
         die(format!("this function takes {arity} argument(s), got {}", arg_handles.len()));
     }
+    // A group handed out as a value is entered with its failing arguments, as
+    // a direct call is: the group's own guard answers the leftmost failure and
+    // names the group, and an `(err _)` arm takes the failure it was written
+    // for. Answering here merged two failures a direct call reports one of,
+    // and never reached the arm. Its wrapper carries the group's name as its
+    // one capture; a builtin's carries none and merges below, as the builtin
+    // does.
+    if arity <= MASKED && matches!(slot(env), Slot::E(held) if held.len() == 1) {
+        let args = push(Slot::E(Rc::new(arg_handles)));
+        return unsafe { k_callback(tidx, env, args) };
+    }
     // Two failing arguments are two facts, and the one that lost the race to
     // be first is not less true. `rt_mkrec` reads a record's fields that way
     // and says so; a call whose head is a VALUE reaches the oracle's
@@ -440,23 +451,10 @@ fn call_closure(c_h: u32, arg_handles: Vec<u32>) -> u32 {
         }
     };
     if let Some(failure) = answer {
-        return group_hop(arity, env, failure);
+        return failure;
     }
     let args = push(Slot::E(Rc::new(arg_handles)));
     unsafe { k_callback(tidx, env, args) }
-}
-
-/// A group handed out as a value turns down a failing argument the way a
-/// direct call does, and a direct call names the group in the trace. Its
-/// wrapper carries the name as its one capture; a builtin's carries none.
-fn group_hop(arity: i32, env: u32, failure: u32) -> u32 {
-    if arity > MASKED {
-        return failure;
-    }
-    match slot(env) {
-        Slot::E(held) if held.len() == 1 => rt_err_hop(failure, held[0]),
-        _ => failure,
-    }
 }
 
 /// `call_closure` without its argument guard, for the callers that have

@@ -188,6 +188,7 @@ pub fn rewrite(program: &mut Program) {
         }
     }
     let mut new_fns: Vec<FnDecl> = Vec::new();
+    let mut in_place: Vec<(usize, Vec<Pattern>, Vec<Stmt>)> = Vec::new();
     for ((name, arity), (first, rest)) in &groups {
         if crate::ast::has_slash(name) || *arity == 0 {
             continue;
@@ -326,24 +327,65 @@ pub fn rewrite(program: &mut Program) {
             })
             .collect();
         wrapper_args.push(Expr::Int(identity, span));
+        let entry = vec![Stmt::Expr(Expr::App {
+            head: Box::new(Expr::Ident(
+                Name::new(&helper),
+                span,
+                crate::ast::Resolution::default(),
+            )),
+            args: wrapper_args,
+            span,
+            piped: false,
+        })];
+        // An arm that already writes `int` at every counter position ties
+        // with the wrapper, and a tie goes to the arm the program wrote, so
+        // the wrapper never ran and `fn count n:int` kept a frame per call.
+        // Such an arm only ever sees integers where the wrapper ascribes them,
+        // so it becomes the entry itself: its own patterns, renamed to the
+        // wrapper's parameters, calling the helper with the identity.
+        let indices = std::iter::once(*first).chain(rest.iter().copied());
+        for ((index, decl), arm) in indices.zip(&decls).zip(&arms) {
+            if matches!(arm, Arm::Base(_)) {
+                continue;
+            }
+            let int_at_every_counter = counter.iter().enumerate().all(|(i, is_counter)| {
+                !is_counter
+                    || matches!(decl.params.get(i), Some(Pattern::Annotated { ty, .. }) if ty == "int")
+            });
+            let params: Option<Vec<Pattern>> = decl
+                .params
+                .iter()
+                .enumerate()
+                .map(|(i, p)| {
+                    let renamed = Name::new(&format!("trmcp{i}"));
+                    match p {
+                        Pattern::Var(_, span) | Pattern::Wildcard(span) => {
+                            Some(Pattern::Var(renamed, *span))
+                        }
+                        Pattern::Annotated { ty, span, .. } => {
+                            Some(Pattern::Annotated { name: renamed, ty: ty.clone(), span: *span })
+                        }
+                        _ => None,
+                    }
+                })
+                .collect();
+            if let (true, Some(params)) = (int_at_every_counter, params) {
+                in_place.push((index, params, entry.clone()));
+            }
+        }
         new_fns.push(FnDecl {
             name: name.to_string(),
             is_pub: decls.iter().any(|d| d.is_pub),
             span,
             params: wrapper_params,
-            body: vec![Stmt::Expr(Expr::App {
-                head: Box::new(Expr::Ident(
-                    Name::new(&helper),
-                    span,
-                    crate::ast::Resolution::default(),
-                )),
-                args: wrapper_args,
-                span,
-                piped: false,
-            })],
+            body: entry,
             file: decls[0].file.clone(),
             synthetic: true,
         });
+    }
+    for (index, params, body) in in_place {
+        program.fns[index].params = params;
+        program.fns[index].body = body;
     }
     program.fns.extend(new_fns);
 }

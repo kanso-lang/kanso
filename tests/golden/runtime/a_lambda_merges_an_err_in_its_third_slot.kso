@@ -1,0 +1,12 @@
+# A lambda handed errs in its first and third slots answers one err whose
+# reason lists both, as it does for two errs in its first two. Native merged
+# the first two slots and answered the first failure it found after them.
+import "std/text"
+
+fn go n
+  bad = text/from_code n
+  worse = text/to_int "x{n}"
+  f = (p q r -> "{p}{q}{r}")
+  f bad 1 worse
+
+pub play = print "{go 55296}"

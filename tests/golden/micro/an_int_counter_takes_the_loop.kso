@@ -1,0 +1,10 @@
+# a counter written `n:int` is the counter the loop ascribes, so its
+# accumulating recursion runs as a loop exactly as a bare `n` does: a
+# million frames of `1 + count …` owe no stack, on every engine
+fn count 0
+  0
+
+fn count n:int
+  1 + count (n - 1)
+
+pub play = print "sum {count 1000000}"
