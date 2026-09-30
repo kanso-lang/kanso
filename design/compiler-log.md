@@ -20948,6 +20948,13 @@ plus the 98 play-shaped files with `kanso play`, against main at 72949009:
   circle r` and the fixture calls it; the spec's expected output is unchanged.
 - `hako` moved on the first build, before the shadowing fix, and is back to
   unchanged.
+- `scripts/module_differential` writes its modules at run time, so the sweep
+  over files on disk could not see them, and CI found two: "a field of a type
+  from a sibling file" and "a getter of a sibling's type, as a value" each had
+  `main.kso` build m's `point` by its short name. `point_src` gained `pub fn
+  at x y` and both cases call it; the harness reads 36 modules, 0 wrong, on
+  this build and on main's. The other seven differential harnesses that CI
+  runs agree on this build.
 - kq, vse, kanso-json: nothing. `examples/concurrency.kso` prints random
   rolls and differs between any two runs.
 
