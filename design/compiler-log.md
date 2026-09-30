@@ -19855,3 +19855,39 @@ CI measured the check's cost. `compile_instructions` rose 1,013, to
 new test; no mechanism was isolated. Welfare fell by less than a thousandth and the floor was lowered under
 the rule that a change making the language work as specified pays what it
 costs.
+
+## 2026-09-29 — a subtype of int meets a bitwise operator as its int
+
+Random-program seed 593346 printed on the interpreter and stopped both native
+builds with `and takes whole numbers, got 1`. The line was `id 1 & v`, where
+the program declares `type id int`. Reduced:
+
+    type id int
+
+    fn mask v
+      "{id 1 & v} {id 6 | v} {id 5 ^ v} {v & id 7}"
+
+The interpreter prints `1 7 6 3`, and so does the page, whose `rt_binop` takes
+the subtype off both operands before any operator sees them. Native's `+`,
+`-` and `*` do the same inside `k_add` and its neighbours, and a call to
+`bits/xor` arrives already unwrapped, because the emitter routes a builtin's
+arguments through `k_unsub` in a program that declares a subtype. The infix
+`&`, `|` and `^` go to `k_b_bit_and` and its two siblings instead, whose
+operand reader `k_bits_of` accepted an int tag and nothing else. It now takes
+a subtype's wrapper off first. The fast paths are untouched; they already
+fall to the C entry for anything whose tag is not int.
+
+The generator gained the three operators the same day, which is why this is
+the first program to reach the case. `a_subtype_meets_a_bitwise_operator` in
+the micro corpus holds all three with the subtype on either side. The
+mutation "a subtype refused at a bitwise operator" takes the unwrap out, and
+the micro corpus went red on it naming the fixture. It is a ratchet row.
+
+CI measured the cost. The unwrap adds 368 bytes to every benchmark's runtime,
+so `text`, the sum over the fourteen binaries, rose 5,152 to 3,544,688.
+`work_runbench` rose 861, to 1,088,405,064, and
+`codegen_instructions_release` rose 875, to 408,227,046;
+`codegen_instructions_dev` fell 202, to 124,468,626. No mechanism for the
+instruction rows was isolated beyond the text growth. Welfare fell by less
+than a thousandth, and the floor was lowered to 90.32374 under the rule that
+a change making the engines agree pays what it costs.
