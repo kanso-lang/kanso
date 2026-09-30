@@ -20896,3 +20896,14 @@ and the micro corpus goes red; mutation
 the error corpus goes red. Ratchet rows `spaced_minus` and
 `number_heads_minus`. The editor grammar already coloured a `-` after a space or
 an opening bracket as part of the number, so it needed nothing.
+
+What it costs, from CI's rows. The lexer now asks whether a space came before
+every `-` touching a digit, and the spacing check asks about a minus beside
+every gap, so the front end does a little more on every file.
+`compile_instructions` rose from 25,494,301 to 25,598,514 (+0.41%),
+`entry_instructions` from 84,316,551 to 84,665,188 (+0.41%),
+`library_instructions` from 84,851,189 to 85,199,000 (+0.41%), and
+`emit_instructions` from 30,142,341 to 30,155,267 (+0.04%). No runtime row
+moved. The floor is lowered by what this costs, under the rule that a ruled
+part of the language may do so.
+
