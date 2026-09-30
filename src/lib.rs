@@ -1885,6 +1885,20 @@ fn qualify(
     // WHICH OF THESE NAMES IS A TYPE, recorded beside the spelling rather than
     // asked for later, because `declared_names` merges the two namespaces and
     // a caller downstream cannot tell them apart from the name alone.
+    //
+    // A function this module declares beside the bare twin of a type an import
+    // exports takes the bare name, as a type the module declares does. The two
+    // cannot share one spelling: a call there reached the constructor whenever
+    // the counts agreed, so `fn sorted x` beside `import "std/list"` built the
+    // import's record. The twin goes, and a type position that names it reads
+    // the declaration the twin was cloned from.
+    let beaten_twins: crate::hash::Map<String, String> = dep
+        .types
+        .iter()
+        .filter(|t| t.synthetic && !ast::has_slash(&t.name) && own_bare.contains(t.name.as_str()))
+        .filter_map(|t| t.origin.clone().map(|o| (t.name.clone(), o)))
+        .collect();
+    dep.types.retain(|t| !beaten_twins.contains_key(&t.name));
     let type_names: crate::hash::Set<&str> = dep.types.iter().map(|t| t.name.as_str()).collect();
     let owned: crate::hash::Map<Name, Owned> = check::declared_names(dep)
         .into_iter()
@@ -1896,7 +1910,12 @@ fn qualify(
                 true => ast::bare_space(qual, n),
                 false => ast::qualified(qual, n),
             };
-            (Name::new(n), Owned { spelling, a_type: type_names.contains(n) })
+            let ty_spelling = match beaten_twins.get(n) {
+                Some(origin) => origin.clone(),
+                None => spelling.clone(),
+            };
+            let a_type = type_names.contains(n) || beaten_twins.contains_key(n);
+            (Name::new(n), Owned { spelling, ty_spelling, a_type })
         })
         .collect();
     // The prelude's own declarations go, rather than travelling under this
@@ -1945,7 +1964,7 @@ fn qualify(
         for (_, members, _) in &mut ty.fields {
             for member in members {
                 if let Some(o) = owned.get(member.as_str()).filter(|o| o.a_type) {
-                    *member = o.spelling.clone();
+                    *member = o.ty_spelling.clone();
                 }
             }
         }
@@ -2308,6 +2327,9 @@ fn pattern_binds(p: &ast::Pattern, out: &mut Vec<Name>) {
 #[derive(Clone)]
 struct Owned {
     spelling: String,
+    /// Where a type position goes: the spelling, unless a function of this
+    /// module took the name from an import's type twin.
+    ty_spelling: String,
     a_type: bool,
 }
 
@@ -2315,14 +2337,14 @@ fn rewrite_pattern(p: &mut ast::Pattern, owned: &crate::hash::Map<Name, Owned>) 
     match p {
         ast::Pattern::Ctor { ty, fields, .. } => {
             if let Some(o) = owned.get(ty.as_str()).filter(|o| o.a_type) {
-                *ty = Name::new(&o.spelling);
+                *ty = Name::new(&o.ty_spelling);
             }
             for f in fields {
                 rewrite_pattern(f, owned);
             }
         }
         ast::Pattern::Annotated { ty, .. } if owned.get(ty.as_str()).is_some_and(|o| o.a_type) => {
-            *ty = Name::new(&owned[ty.as_str()].spelling);
+            *ty = Name::new(&owned[ty.as_str()].ty_spelling);
         }
         _ => {}
     }
@@ -2379,7 +2401,7 @@ fn rewrite_expr(e: &mut ast::Expr, owned: &crate::hash::Map<Name, Owned>, bound:
         // while holding one, and both backends refuse the module outright.
         ast::Expr::Upcast { expr, ty, .. } => {
             if let Some(o) = owned.get(ty.as_str()).filter(|o| o.a_type) {
-                *ty = o.spelling.clone();
+                *ty = o.ty_spelling.clone();
             }
             rewrite_expr(expr, owned, bound);
         }

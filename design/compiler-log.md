@@ -19916,3 +19916,37 @@ the one the language gives, and it is now the branch: `1 3` and `2 4`.
 `a_held_if_picks_its_branch` holds both halves: the interpreter's answer, and
 native naming its limit. The mutation "a held if counted as nothing" takes the
 count out and the spec goes red printing `<fn>`. It is a ratchet row.
+
+## 2026-09-30 — a function named for an imported type is called
+
+Reducing a generated program turned up a module whose own function could not
+be reached by its own name:
+
+    import "std/list"
+
+    fn step acc x
+      acc + x
+
+`list/fold [1 7] 0 step` printed `8` on native and folded with std/list's
+`step` constructor on the interpreter. A direct call, `step a x`, built the
+record on both engines. `fn sorted x` beside the same import did the same:
+`sorted 1` printed a `sorted` record.
+
+Every pub name an import exports also exists under its short name, so std/list's
+types `step` and `sorted` have short-named twins in any module that imports
+it. A function the module declares under one of those names took the module's
+spelling, and so did the twin, and a call reaching that spelling built the
+record whenever its argument count matched the type's fields. The 2026-09-16
+fix for `fn entry` beside std/json's `entry` kept patterns on the type and
+said a call belongs to the function; its fixture passed because `entry 1`
+never matched the two-field type.
+
+The module's function now takes the short name, as a type the module declares
+already does. The twin goes, and a pattern or annotation that names the type
+reads the declaration the twin was cloned from, so `(step e _)` still matches
+std/list's record.
+
+`a_function_named_for_an_imported_type_is_called` in the micro corpus holds
+both names and the pattern. The mutation "an imported type twin beside a
+function" keeps every twin, and the micro corpus went red printing the record.
+It is a ratchet row.
