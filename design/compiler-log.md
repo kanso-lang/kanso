@@ -20345,3 +20345,91 @@ answer and turns `a_lazy_list_answers_where_a_dropped_arm_read_it` red.
 
 CI measured it at b8fb95af: emit_instructions 30,225,570 -> 30,212,843, a FALL
 of 12,727 (-0.0421%). No other row moved.
+
+## 2026-09-30 — gavel: every NaN is one value ranked last, and zero is one value
+
+Clay, on the ledger entry "Is a NaN equal to itself, and is -0.0 equal to
+0.0?": option 1, on every engine.
+
+- Every NaN equals every NaN and ranks above `inf`, whatever its sign bit and
+  however it was made.
+- `-0.0` equals `0.0`, ranks with it, and still prints `-0.0`.
+- This is the builtin float order. `list/sort` calls `<`, and a type a module
+  owns can take its own `<` arm, so a program that wants another order for
+  NaN wraps its floats in a type of its own.
+- Goldens pin the sort of `[inf - inf, nan, 1.0, -inf]`, `list/min [nan 1.0]`,
+  `[x] == [x]` for a NaN `x`, and transitivity across `0`, `0.0` and `-0.0`.
+
+Both engines change. The interpreter orders floats by `f64::total_cmp`, which
+ranks bit patterns, and the native runtime compares with C's `==`. Unbuilt;
+STATUS.md carries the row.
+
+## 2026-09-30 — gavel: a parameter bound to a box carries the box into the body
+
+Clay, on "How far does a binding position carry a box?": closed on two
+citations. The 2026-07-25 gavel says type relationships in function
+signatures are derived by inference from usage. The 2026-08-29 gavel made the
+box a type, `<t>effect`, and that type was built on 2026-09-10. So inference
+carries a box through an unannotated parameter the way it carries any other
+type, and the refusal that fires when a box reaches a call with no arm for it
+fires at the call inside the body.
+
+The ten fixtures that pin today's answer stay green. A description reaching a
+dispatch still lands on the bare arm, and `held e` still hands its box back;
+neither is a call that has no arm for a box. Unbuilt; STATUS.md carries the
+row.
+
+## 2026-09-30 — gavel: the box constructor is `effect`
+
+Clay, on "The box constructor's spelling": `effect`, as the entry
+recommended. `effect 5` answers `<int>effect` holding 5, and
+`effect (err "bad")` answers a box holding the failure. The suggestion of
+2026-09-03 to rename the box `result` is declined: a box can hold an io
+description that has not run yet, and "result" says it already happened.
+
+Nothing is owed. The constructor was built with the explicit box and probed on
+main today: `effect 5` and `effect (err "bad")` each render as a box on the
+interpreter and on a native build, and
+`tests/golden/micro/the_box_built_by_hand.kso` pins it.
+
+## 2026-09-30 — directive: a golden may pin the interpreter's answer where native refuses
+
+Clay, on "Where does a golden live that pins ONE engine's answer where another
+refuses?": option 1. It is the differential law as written: a feature may
+land on fewer engines only if the others refuse it with a clear diagnostic.
+A fixture kind asserts that the interpreter answers X and native refuses with
+Y, and the small-integer change is then built against it.
+
+That change is already on main. `src/int.rs` holds an interpreted integer in a
+machine word and promotes to `BigInt` on overflow; it arrived as kanso#1654
+with the carrier kanso#1655 on 2026-09-25. So what is owed is the fixture kind
+and fixtures at the int64 boundary that watch the one defect that change can
+introduce, a promotion one step late that prints a wrapped number. Unbuilt;
+STATUS.md carries the row.
+
+## 2026-09-30 — directive: the escape path's byte scan stays inside lib/json
+
+Clay, on "A byte-position scan on a string, for the escape path": build it
+under a `builtin_` name that only lib/json calls, with no public `text/`
+function. Every `text` position a program can reach stays a codepoint, so
+this is implementation with no language surface.
+
+The entry's measurement, −1.2193% on runbench, was taken on 2026-09-15
+against a run of 1.82 billion instructions. The escape path has changed since
+then, so the build measures it again. Unbuilt; STATUS.md carries the row.
+
+## 2026-09-30 — directive: `.rodata` is not pinned, and the heap start is measured
+
+Clay, on "Pinning `.rodata` to a fixed page": the section pin is declined. The
+measurement the entry names is taken: kanso#1480's commit pair, read with the
+heap starting at the same address every run. A heap that starts in a known
+place every run is external state put into a known initial state, which the
+2026-09-15 normalization rule asks for, so if the measurement holds, the fixed
+heap start is built into the gates. Unbuilt; STATUS.md carries the row.
+
+## 2026-09-30 — directive: escapebench grows until the bracket's benefit is inside it
+
+Clay, on "Raising escapebench's size": the 2026-09-05 corpus-first ruling
+covers it. The benchmark is sized so the escape bracket's benefit falls inside
+it, the term that reads it is re-based forward in the same change, and the log
+says which way it moved. Unbuilt; STATUS.md carries the row.
