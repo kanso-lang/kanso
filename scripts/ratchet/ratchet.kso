@@ -4526,6 +4526,18 @@ held_if = row
 
 rows_c1zzzzzzz = text/concat rows_c1zzzzzz [held_if]
 
+# An operator's arms take records boxed, because the operator hands them the
+# boxed values it holds.
+arm_boxed = row
+  "an operator arm handed words"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "an_operator_arm_handed_words")
+  release
+
+rows_c1zzzzzzzz = text/concat rows_c1zzzzzzz [arm_boxed]
+
 # An import's type built by its short name is the import's type: it prints
 # under that type's name and matches that type's patterns.
 origin_once = row
@@ -4536,7 +4548,7 @@ origin_once = row
   (breaking "an_imported_origin_prefixed_twice")
   release
 
-rows_c1zzzzzzzv = text/concat rows_c1zzzzzzz [origin_once]
+rows_c1zzzzzzzv = text/concat rows_c1zzzzzzzz [origin_once]
 
 rows_c = text/concat rows_c1zzzzzzzv [itself]
 

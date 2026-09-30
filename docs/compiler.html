@@ -3691,6 +3691,12 @@ welfare                      77.37         82.09</code></pre>
 
 <p>Each of these has a reduced program in a spec and a mutation in the ratchet that turns it red. The generator was then given a builder loop that ignores its seed on one arm, which is how the last of these was found.</p>
 
+<h2 id="importedrecords"><span class="sec-num">175</span>an imported record's printed name</h2>
+
+<p>The copy of an imported type that a module reaches by its short name remembers the declaration it came from. For std/list's <code>step</code> that is <code>list/step</code>, a name already qualified. The loader qualified it a second time with the importing module's name, so the copy pointed at <code>defs/list/step</code>, which nothing declares. A module that built <code>step 1 [5]</code> saw the interpreter print <code>defs/list/step 1 [5]</code> and native print <code>record 1 [5]</code>. A pattern on <code>(step e _)</code> in the same module matched it on neither engine. A qualified name is the name of one declaration wherever it is read, and the remembered origin now follows that rule too.</p>
+
+<p>Whether a module should be able to build an import's record by the short name at all is still open. The check that keeps one module from building another's records refuses <code>list/step 1 [5]</code> and accepts <code>step 1 [5]</code>, and one of the examples depends on the second spelling. That is a question about the language and it waits on a ruling.</p>
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>

@@ -19917,6 +19917,41 @@ the one the language gives, and it is now the branch: `1 3` and `2 4`.
 native naming its limit. The mutation "a held if counted as nothing" takes the
 count out and the spec goes red printing `<fn>`. It is a ratchet row.
 
+## 2026-09-30 — an operator arm takes its records boxed
+
+A generated program declared `fn + (pt a s) (pt b t)` and added two `pt`s
+inside a step of a chained effect. The interpreter printed `defs/pt 2 "ab"`.
+Both native builds printed the two records side by side, `defs/pt 1 "a"defs/pt
+1 "b"`, which is what the builtin `+` makes of two values it can only render.
+Forty-six of the forty-nine programs that differed in that batch reduced to
+this.
+
+`pt` holds an int and one other value, which is the shape a record may be
+passed in two registers instead of on the heap. Escape analysis lets a group
+take its records that way when every arm at a position names the same record,
+and every arm of this `+` did. But nothing calls an operator's arms by name.
+`a + b` reaches them through the operator's own dispatch, which asks at run
+time whether either side is a record and then calls the group with the two
+boxed values it holds, reading a boxed answer back. So the arm received a
+record's tag and pointer and read them as a packed int and a value. The same
+arm with the addition in a plain `play`, outside a chained step, was compiled
+boxed and printed the sum; which retained condition tells the two apart was not
+isolated.
+
+An operator's groups now stay on the boxed convention, beside the union groups
+that were already kept there for the same reason. No library or benchmark
+declares an operator arm, so no runtime vein can move. CI measured one compile-side
+row: `emit_instructions` rose 853, to 30,098,499. The mechanism was not
+isolated; the row arrived with the change, and welfare held at its floor.
+
+`an_operator_arm_takes_its_records_boxed` in the micro corpus is the reduced
+program. The mutation "an operator arm handed words" lets operators through
+again, and the micro corpus went red naming the fixture. It is a ratchet row.
+
+The other three programs in the batch differ in the words of a refusal, not in
+an answer, and have a different cause: a zero divisor meeting a user `+`. That
+is open.
+
 ## 2026-09-30 — an imported record keeps its name
 
 `step 1 [5]` in a module that imports std/list printed `defs/list/step 1 [5]`
