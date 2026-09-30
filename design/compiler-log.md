@@ -20050,6 +20050,7 @@ arithmetic as a third field of the value every operator builds cost 2,194,323
 on its own, with the division path untouched, so the cost was on the path
 every sum takes and not in the lookup. The unwrap now sits inside the branch
 that has already found a subtype on one side, and the row reads 585,933,148
-on this host, what main reads. CI, on main with #1741 and #1743 in it, read the
-row at 590,295,705 (+59,867), which this host does not reproduce. The
-emitter's row landed on 30,114,220 (+277) with native's record bit.
+on this host, what main reads. CI, on main with #1741 and #1743 in it, read
+interp_instructions at 590,295,705 (+59,867), which this host does not
+reproduce. emit_instructions landed on 30,114,220 (+277) with native's record
+bit.
