@@ -4731,7 +4731,19 @@ slice_slot = row
 
 rows_c1zzzzzzzk = text/concat rows_c1zzzzzzzm [slice_slot]
 
-rows_c = text/concat rows_c1zzzzzzzk [itself]
+# `print` answers a box the same as `effect`, and the check counts it before
+# the short circuit that skips a program where no group answers one.
+printed_box = row
+  "print forgotten as a box"
+  true
+  "cargo test --release --test golden {box_error_golden}"
+  "specs (unit, golden, differential)"
+  (breaking "print_answers_no_box")
+  release
+
+rows_c1zzzzzzzj = text/concat rows_c1zzzzzzzk [printed_box]
+
+rows_c = text/concat rows_c1zzzzzzzj [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

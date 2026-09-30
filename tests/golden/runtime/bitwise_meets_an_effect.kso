@@ -1,3 +1,9 @@
+# `&` wants whole numbers and is handed two descriptions. The check refuses a
+# provable box here now, `print` among them (the errors corpus pins that
+# sentence), so each box travels through a list, where nothing can prove it.
+pub fn opaque v
+  (push [] v)[1]
+
 pub play =
-  a = print "x" & print "y"
+  a = opaque (print "x") & opaque (print "y")
   a

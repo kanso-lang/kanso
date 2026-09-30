@@ -1290,12 +1290,16 @@ fn check_after_infer<'p>(
             // name in every expression to short-circuit the locals, and the
             // locals are the common case only in the arms this pass walks past.
             // the box built by hand answers one whatever else the program
-            // holds, so it is asked before the short circuit below
+            // holds, so it is asked before the short circuit below, and so
+            // does `print`: it is the one effect a program names without an
+            // import, so no group's set need carry the bit that opens the
+            // short circuit, and `is_effect_builtin` does not list it
             Expr::App { head, args, piped: false, .. }
                 if args.len() == 1
-                    && matches!(head.as_ref(), Expr::Ident(name, _, _) if name == "effect") =>
+                    && matches!(head.as_ref(), Expr::Ident(name, _, _)
+                        if name == "effect" || name == "print") =>
             {
-                !shadows("effect")
+                matches!(head.as_ref(), Expr::Ident(name, _, _) if !shadows(name.as_str()))
             }
             // `xs[i]!` is the box a miss bubbles through (ruled 2026-09-16)
             Expr::Index { strict: true, .. } => true,
