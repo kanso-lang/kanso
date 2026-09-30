@@ -1,0 +1,8 @@
+error[effect]: `x` holds an effect — `run` hands `step` one — and `seen` takes a value; open it with `.>` where `run` calls `step` (module a_box_carried_through_a_parameter)
+  --> a_box_carried_through_a_parameter.kso:16:8
+  16 |   seen x
+              ^
+error[effect]: `x` holds an effect — `play` hands `twice` one — and `+` takes a value; open it with `.>` where `play` calls `twice` (module a_box_carried_through_a_parameter)
+  --> a_box_carried_through_a_parameter.kso:19:3
+  19 |   x + 1
+         ^
