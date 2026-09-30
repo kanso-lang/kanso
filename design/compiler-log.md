@@ -20958,3 +20958,9 @@ that was lenient is `an_err_raised_beside_a_map_value`. Mutation
 `a_raise_hidden_behind_any_value` restores the DESC-only test and turns the
 error corpus red on that fixture; ratchet row `any_value_raises`.
 
+What it costs, from CI's rows: `compile_instructions` 25,598,514 to 25,598,656
+(+142), `entry_instructions` 84,665,188 to 84,665,441 (+253) and
+`library_instructions` 85,199,000 to 85,199,255 (+255), the price of one more
+comparison per group when the raisers are collected. No other row moved. The
+floor comes down by that, as a ruled part of the language may.
+
