@@ -1,0 +1,5 @@
+fn + (pt a s) (pt b t)
+  pt (a + b) "{s}{t}"
+
+pub fn joined n
+  pt 1 "a" + pt n "b"

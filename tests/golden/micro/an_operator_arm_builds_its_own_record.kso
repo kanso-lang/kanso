@@ -1,0 +1,11 @@
+# an operator's arms keep their bare name when the module is imported, so a
+# check that tells a module's own code by the slash in its name read this `+`
+# as the importer's and refused its `pt` as a foreign construction
+type pt
+  n
+  s
+
+fn + (pt a s) (pt b t)
+  pt (a + b) "{s}{t}"
+
+pub play = print "{pt 1 "a" + pt 3 "b"}"

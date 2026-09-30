@@ -1,0 +1,6 @@
+type pt
+  n
+  s
+
+pub fn joined n
+  pt 1 "a" + pt n "b"

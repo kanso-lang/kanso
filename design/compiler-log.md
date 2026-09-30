@@ -19812,6 +19812,50 @@ function value returned in registers" turns the check off, and the micro
 corpus went red on it with the native run printing nothing. It is a ratchet
 row.
 
+## 2026-09-29 — an imported operator arm may build its own module's records
+
+Extending the random-program generator with operator arms on its record type
+turned up a refusal before any engine ran:
+
+    type pt
+      n
+      s
+
+    fn + (pt a s) (pt b t)
+      pt (a + b) "{s}{t}"
+
+Imported, this module is refused with ``defs/pt` is foreign — only `defs`
+builds a `pt``, pointing at the arm's own body. The same body in `fn add`
+passes. An import prefixes every name the module declares except an
+operator's, because `a + b` asks for the bare group, and the checker decided
+whether a declaration was the importer's own code by looking for a slash in
+its name. The operator arm has none, so its body was checked as though the
+importer had written it, and building `defs/pt` there is a construction across
+the import.
+
+The checker now also reads the types an operator arm names. The ownership rule
+already makes every operator arm name a type of its own module, and the import
+qualified that type, so an arm whose named types are all qualified came in
+with the module that owns them and is checked as that module's code. An
+importer's own arm on its own type still names a bare type and is checked as
+before. `to_string` arms are not affected: the ambient merge renames them to
+`render/to_string`, which carries a slash.
+
+`an_operator_arm_builds_its_own_record` in the micro corpus, which runs each
+fixture as a library, holds the case; main's checker refused it with the
+message above. `sibling_types` holds two more shapes, the arm in one file of a
+module and its record in another, with the arm sharing a file with the
+module's functions or alone in its own; main refused both. The mutation "an imported operator arm read as the importer's"
+takes the new test out, and the micro corpus went red on it naming the
+fixture. It is a ratchet row.
+
+CI measured the check's cost. `compile_instructions` rose 1,013, to
+25,364,566; `entry_instructions` rose 2,821, to 83,775,702; and
+`library_instructions` rose 2,829, to 84,313,540. The rows arrived with the
+new test; no mechanism was isolated. Welfare fell by less than a thousandth and the floor was lowered under
+the rule that a change making the language work as specified pays what it
+costs.
+
 ## 2026-09-29 — a subtype of int meets a bitwise operator as its int
 
 Random-program seed 593346 printed on the interpreter and stopped both native
@@ -19845,5 +19889,5 @@ so `text`, the sum over the fourteen binaries, rose 5,152 to 3,544,688.
 `codegen_instructions_release` rose 875, to 408,227,046;
 `codegen_instructions_dev` fell 202, to 124,468,626. No mechanism for the
 instruction rows was isolated beyond the text growth. Welfare fell by less
-than a thousandth, and the floor was lowered to 90.32375 under the rule that
+than a thousandth, and the floor was lowered to 90.32374 under the rule that
 a change making the engines agree pays what it costs.

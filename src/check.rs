@@ -461,7 +461,7 @@ fn check_per_node<'a>(
         state.local.clear();
         state.open.clear();
         state.shadowable.clear();
-        state.own = !crate::ast::has_slash(&decl.name);
+        state.own = !crate::ast::has_slash(&decl.name) && !imported_arm(decl);
         state.file = Some(&decl.file);
         let (first, first_named) = (diags.len(), state.named_diags.len());
         for p in &decl.params {
@@ -2725,6 +2725,29 @@ fn typeset_at(e: &Expr, annotating: &HashSet<&str>, diags: &mut Vec<Diagnostic>)
             ));
         }
     }
+}
+
+/// Whether an operator's arm came in through an import. The import prefixes
+/// every name a module declares except an operator's, because `a + b` asks for
+/// the bare group, so the slash that marks an imported function is missing
+/// here. The type the arm names still carries it: the ownership rule makes
+/// every operator arm name a type of its own module, and the import qualified
+/// that type. An arm whose named types are all qualified was written by the
+/// module that owns them, and building them is that module's own business.
+fn imported_arm(decl: &FnDecl) -> bool {
+    if !crate::is_operator(&decl.name) {
+        return false;
+    }
+    let (mut local, mut qualified) = (false, false);
+    for p in &decl.params {
+        if let Pattern::Ctor { ty, .. } | Pattern::Annotated { ty, .. } = p {
+            match crate::ast::has_slash(ty) {
+                true => qualified = true,
+                false => local = true,
+            }
+        }
+    }
+    qualified && !local
 }
 
 /// type's name was built by its owner. Reading one is free — naming it,
