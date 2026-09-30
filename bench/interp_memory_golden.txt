@@ -250,7 +250,10 @@
 #
 # CI measured keys and values over maps (the encoder writes a map from its two
 # columns). interp_allocs 899,769 -> 895,156, a FALL of 4,613 (-0.5127%).
-interp_allocs=895172
+#
+# CI measured a lazy cell answering at the group that reads it at 86a9b9b5:
+# interp_allocs 895,172 -> 895,178, a RISE of 6 (+0.0007%).
+interp_allocs=895178
 #
 # 2026-09-18, kanso#1518 against main at kanso#1517, CI's sitting.
 # 951,438 -> 961,165, a RISE of

@@ -20317,3 +20317,12 @@ back to 403,128 bytes.
 two traces. The mutations "a pruned arm leaving its cell unforced" and "a bound
 cell losing its errs" each undo one change and turn their own fixture red; both
 are new ratchet rows.
+
+CI measured the fix at 86a9b9b5. Three rows rose: emit_instructions
+30,114,063 -> 30,225,570 (+111,507, +0.3703%), interp_instructions
+591,275,103 -> 591,334,106 (+59,003, +0.0100%), and interp_allocs 895,172 ->
+895,178 (+6). The first cut of the inference walk built a group map and a list
+of calls for every declaration and cost the interpreted run 1,049 allocations;
+it now reads inference's own group table and walks only the declarations that
+hold a cell. compile_instructions fell 2,115 to 25,386,552, entry_instructions
+981 to 84,055,537 and library_instructions 953 to 84,589,516.
