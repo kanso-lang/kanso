@@ -4673,6 +4673,26 @@ pruned_mask = row
 
 rows_c1zzzzzzzp = text/concat rows_c1zzzzzzzq [pruned_mask]
 
+# Every NaN equals every NaN and ranks last, and -0.0 ranks with 0.0, on every
+# engine (ruled 2026-09-30). One row per engine, since each could slip alone.
+nan_level = row
+  "a NaN ranked level with everything"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_nan_ranked_level_with_everything")
+  release
+
+float_bits = row
+  "a float ranked by its bits"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_float_ranked_by_its_bits")
+  release
+
+rows_c1zzzzzzzo = text/concat rows_c1zzzzzzzp [nan_level float_bits]
+
 # A box handed to a parameter is a box inside the body, and the refusal fires
 # at the call there that takes a value.
 held_box = row
@@ -4683,7 +4703,7 @@ held_box = row
   (breaking "a_box_lost_at_the_parameter")
   release
 
-rows_c1zzzzzzzm = text/concat rows_c1zzzzzzzp [held_box]
+rows_c1zzzzzzzm = text/concat rows_c1zzzzzzzo [held_box]
 
 rows_c = text/concat rows_c1zzzzzzzm [itself]
 

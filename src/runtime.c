@@ -5341,13 +5341,24 @@ static int k_opaque_to_equality(KValue v) {
    integer whole, and the fraction breaks the tie. Answers -1, 0 or 1 with the
    integer on the left. */
 static int k_order_int_float(long long i, double d) {
-    if (d != d) return 1;                       /* nothing orders against NaN */
+    if (d != d) return -1;                      /* every NaN ranks last */
     if (d >= 9223372036854775808.0) return -1;  /* past every int64 */
     if (d < -9223372036854775808.0) return 1;
     double fl = floor(d);
     long long whole = (long long)fl;
     if (i != whole) return (i > whole) - (i < whole);
     return d > fl ? -1 : 0;
+}
+
+/* The builtin float order, ruled 2026-09-30. Every NaN equals every NaN and
+   ranks above inf, whatever its sign bit and however it was made, and -0.0
+   equals and ranks with 0.0, which C's comparisons already do. Until then
+   equality was C's ==, so nan == nan was false, while the ordering answered
+   "equal" for any pair holding a NaN. */
+static int k_order_float(double x, double y) {
+    int xn = x != x, yn = y != y;
+    if (xn || yn) return xn - yn;
+    return (x > y) - (x < y);
 }
 
 static long long k_eq_rec(KValue a, KValue b) {
@@ -5383,7 +5394,7 @@ static long long k_eq_rec(KValue a, KValue b) {
     if (a.tag != b.tag) return 0;
     switch (a.tag) {
         case K_INT: return a.payload == b.payload;
-        case K_FLOAT: return k_as_f(a) == k_as_f(b);
+        case K_FLOAT: return k_order_float(k_as_f(a), k_as_f(b)) == 0;
         case K_TRUE: case K_FALSE: case K_NONE: case K_DONE: return 1;
         case K_STR: {
             KStr* sa = k_as_str(a);
@@ -5557,11 +5568,7 @@ KValue k_mod(KValue a, KValue b, const char* origin) {
 
 static int k_order(KValue a, KValue b) {
     if (a.tag == K_INT && b.tag == K_INT) return (a.payload > b.payload) - (a.payload < b.payload);
-    if (a.tag == K_FLOAT && b.tag == K_FLOAT) {
-        double x = k_as_f(a);
-        double y = k_as_f(b);
-        return (x > y) - (x < y);
-    }
+    if (a.tag == K_FLOAT && b.tag == K_FLOAT) return k_order_float(k_as_f(a), k_as_f(b));
     if (a.tag == K_INT && b.tag == K_FLOAT) return k_order_int_float(a.payload, k_as_f(b));
     if (a.tag == K_FLOAT && b.tag == K_INT) return -k_order_int_float(b.payload, k_as_f(a));
     if (a.tag == K_STR && b.tag == K_STR) {
