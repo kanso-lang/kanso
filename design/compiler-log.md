@@ -20910,3 +20910,8 @@ the error corpus red on the first; `a_local_named_for_an_imported_record_is_refu
 drops the shadowable push and turns the micro corpus red on the second. Ratchet
 rows `short_record` and `short_record_local`.
 
+The module compile golden moves by the new declaration: `visits` goes from
+2,674 to 2,677 in `bench/compile_golden_modules.txt`, everything else in that
+row unchanged. `lib/list` is compiled into the compiler, so the instruction
+rows will move too; they are CI's to report.
+
