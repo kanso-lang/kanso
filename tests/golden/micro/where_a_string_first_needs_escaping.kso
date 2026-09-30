@@ -1,0 +1,19 @@
+# The JSON writer finds the first byte a string needs escaped with a
+# sixteen-byte step and copies the clean run in front of it whole. Each string
+# here puts that byte somewhere a step could miss it: the first byte, the last,
+# past sixteen bytes where the wide step ends, behind characters of more than
+# one byte, and nowhere at all.
+import "std/io"
+import "std/json"
+import "std/text"
+
+edges = ["" "plain" "\"first" "last\\" "0123456789abcdefg\n"]
+
+wide = ["0123456789abcdef\"" "é\tè" "日本\"語" (text/from_code 1)]
+
+clean = ["long clean string of more than sixteen bytes" "ünïcödé only"]
+
+fn line xs
+  "{json/encode xs}\n"
+
+pub play = io/write "{line edges}{line wide}{line clean}"

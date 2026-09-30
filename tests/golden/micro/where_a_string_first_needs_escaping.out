@@ -1,0 +1,3 @@
+["","plain","\"first","last\\","0123456789abcdefg\n"]
+["0123456789abcdef\"","é\tè","日本\"語","\u0001"]
+["long clean string of more than sixteen bytes","ünïcödé only"]
