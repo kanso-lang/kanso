@@ -4673,6 +4673,26 @@ pruned_mask = row
 
 rows_c1zzzzzzzp = text/concat rows_c1zzzzzzzq [pruned_mask]
 
+# Every NaN equals every NaN and ranks last, and -0.0 ranks with 0.0, on every
+# engine (ruled 2026-09-30). One row per engine, since each could slip alone.
+nan_level = row
+  "a NaN ranked level with everything"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_nan_ranked_level_with_everything")
+  release
+
+float_bits = row
+  "a float ranked by its bits"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_float_ranked_by_its_bits")
+  release
+
+rows_c1zzzzzzzo = text/concat rows_c1zzzzzzzp [nan_level float_bits]
+
 # The interpreter promotes an int past int64 rather than wrapping it, and
 # native refuses the same program; only the one-engine corpus sees both.
 int_widens = row
@@ -4683,7 +4703,7 @@ int_widens = row
   (breaking "an_int_that_wraps_where_it_should_widen")
   release
 
-rows_c1zzzzzzzn = text/concat rows_c1zzzzzzzp [int_widens]
+rows_c1zzzzzzzn = text/concat rows_c1zzzzzzzo [int_widens]
 
 rows_c = text/concat rows_c1zzzzzzzn [itself]
 
