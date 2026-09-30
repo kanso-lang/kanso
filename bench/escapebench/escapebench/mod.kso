@@ -20,8 +20,9 @@
 # stylistic choice: a call in this position removes the beat bracket
 # altogether, so the loop stops sweeping and this benchmark measures nothing.
 # See task #225.
-span = 400
-
+#
+# `span` is each program's own and lives in size.kso beside this file, so this
+# file stays the same program in escapebench and in the run program.
 fn filled acc _ 0
   acc
 

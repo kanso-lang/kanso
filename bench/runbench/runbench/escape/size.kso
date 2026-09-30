@@ -1,0 +1,4 @@
+# The run program's escape phase is sized for its share of the program, not for
+# the bracket: see size.kso under bench/escapebench for why the diagnostic is
+# longer, and design/compiler-log.md of 2026-09-30 for why this one is not.
+span = 400
