@@ -20079,14 +20079,15 @@ both names and the pattern. The mutation "an imported type twin beside a
 function" keeps every twin, and the micro corpus went red printing the record.
 It is a ratchet row.
 
-CI measured four instruction rows rising with the change. compile_instructions
-landed on 25,386,513 (+21,947), entry_instructions on 83,857,497 (+81,795),
-library_instructions on 84,393,371 (+79,831) and, on main with #1743 in it,
-interp_instructions on 591,215,236 (+979,398, 0.17%). The emitter's row fell
-3,354 to 30,110,589. The fix adds a map from each beaten twin to its origin and
-a lookup at every type position, and all four rows load std modules through
-that path, but no build has isolated the lookup as the cause. The interpreted
-run is the odd one: the counted frame starts after loading, and this host,
-whose rustc is older than CI's, reads the change at +36,900 there. The rest of
-CI's reading is not reproduced here. compile_allocs is unchanged at 14,307,
-because the type spelling is held only where it differs from the short one.
+CI measured four instruction rows rising with the change. On main with #1745 in
+it, compile_instructions landed on 25,386,598 (+21,964), entry_instructions on
+83,854,099 (+81,883), library_instructions on 84,389,190 (+79,919) and, with
+#1743, interp_instructions on 591,215,236 (+979,398, 0.17%). The emitter's row
+fell 3,342 to 30,113,426. The fix adds a map from each beaten twin to its
+origin and a lookup at every type position, and all four rows load std modules
+through that path, but no build has isolated the lookup as the cause. The
+interpreted run is the odd one: the counted frame starts after loading, and
+this host, whose rustc is older than CI's, reads the change at +36,900 there.
+The rest of CI's reading is not reproduced here. compile_allocs is unchanged at
+14,307, because the type spelling is held only where it differs from the short
+one.
