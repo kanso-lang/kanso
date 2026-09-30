@@ -2297,6 +2297,9 @@ pub fn emit_ir_dev(program: &Program, convention: ClosureConvention) -> Result<S
     emit_ir_for(program, convention, false)
 }
 
+/// A group's name and arity, and a position in it.
+type UnreadPositions = Vec<(String, usize, usize)>;
+
 /// The work both tiers share, and the frame `emit_instructions` anchors on.
 /// Kept out of line so the anchor exists whichever entry point reached it.
 #[inline(never)]
@@ -2319,7 +2322,7 @@ pub fn emit_ir_dev(program: &Program, convention: ClosureConvention) -> Result<S
 /// every one of them would go, so a call that reaches it still fails the way
 /// it did. The interpreter is untouched and the differential corpus is the
 /// check that the two still agree.
-fn without_unbuilt_arms(program: &Program) -> Option<(Program, Vec<(String, usize, usize)>)> {
+fn without_unbuilt_arms(program: &Program) -> Option<(Program, UnreadPositions)> {
     use crate::ast::{Expr, Pattern, Stmt, TemplatePart};
     let mut ids: HashMap<&str, i64> = HashMap::default();
     ids.insert("entry", 0);
@@ -2489,7 +2492,7 @@ fn without_unbuilt_arms(program: &Program) -> Option<(Program, Vec<(String, usiz
             n.1 |= reads(d);
         }
     }
-    let mut unread: Vec<(String, usize, usize)> = Vec::new();
+    let mut unread: UnreadPositions = Vec::new();
     for (d, gone) in program.fns.iter().zip(&dead) {
         let (live, kept) = live_arms[&(d.name.as_str(), d.params.len())];
         if !gone || live == 0 {
