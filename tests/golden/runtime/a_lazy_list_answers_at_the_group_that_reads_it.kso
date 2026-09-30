@@ -1,0 +1,25 @@
+# `v` is a cell nobody forces until `list/first` hands it to `list/iter`,
+# because `pick`'s first arm never reads it. The err inside the cell answers
+# at `iter`, the first group whose arms look at the value, as it does on the
+# interpreter. Native narrowed `xs` inside `pick` to a value that cannot be an
+# err, so `iter` kept no guard for one and the trace skipped it.
+import "std/list"
+import "std/text"
+
+fn bad x
+  text/to_int "{x}a"
+
+fn look xs
+  list/first xs
+
+fn pick 1 _
+  0
+
+fn pick _ xs
+  look xs
+
+fn shown z
+  v = list/to_list (list/map [0 z] bad)
+  "{pick z v}"
+
+pub play = print (shown 2)

@@ -20273,3 +20273,33 @@ function, twenty calls, twenty-five branches and 161 lines in each of those two
 programs. work_scanbench landed on 280,943 (+78) with the change. work_runbench fell 10,629 to 1,088,394,120,
 which no mechanism here predicts and no build has isolated. Welfare reads
 90.3228 against a floor of 90.3231, inside the gate's allowance.
+
+## 2026-09-30 — a lazy cell answers at the group that reads it
+
+The browser fuzzer found a program whose err trace named `list/find` on the
+interpreter and in the browser, and `list/found_in ← list/next` natively. The
+program bound a list to a name that only one arm of its callee reads, so
+demand made the binding a cell, and the cell reached `list/find` unforced.
+
+The interpreter forces a cell when a dispatcher has to look at it to choose an
+arm. `list/find` has an arm for a sorted list, so the interpreter forced the
+cell there, the err inside came out, and `find`'s guard answered it with its
+own name. Native forces a cell at a call only when some arm of the callee
+reads that position, and it asks the program after the unbuilt-arm prune. A
+program that sorts nothing compiles without the sorted arm, so native passed
+the cell on and it failed two frames later. The code generator now keeps the
+positions the prune stopped reading and forces a cell handed to one of them.
+
+Reducing the program found a second gap on the same path. When an arm binds a
+cell to a name, inference narrowed the name to a value that cannot fail, on
+the reasoning that the guard ahead of the arm has already answered any err.
+The guard sees the cell, not what is inside it. `list/iter` then kept no guard
+for an err, and a cell that `list/first` forced before calling it failed in
+`list/next` instead of `list/iter`. A name bound to a value that may be a cell
+now keeps its failures.
+
+`a_lazy_list_answers_where_a_dropped_arm_read_it` and
+`a_lazy_list_answers_at_the_group_that_reads_it` in the runtime corpus pin the
+two traces. The mutations "a pruned arm leaving its cell unforced" and "a bound
+cell losing its errs" each undo one change and turn their own fixture red; both
+are new ratchet rows.

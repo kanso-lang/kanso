@@ -955,9 +955,15 @@ fn bind_pattern<'a>(
     env: &mut Env<'a>,
 ) {
     match pattern {
-        // generics never bind failures
+        // generics never bind failures, except inside a cell nobody has
+        // forced: the guard ahead of the arm sees the cell and not its
+        // value, so what the cell turns into can still be an err
         Pattern::Var(name, _) => {
-            env.insert(name, joined & !FAIL);
+            let kept = match joined & THUNK {
+                0 => joined & !FAIL,
+                _ => joined,
+            };
+            env.insert(name, kept);
         }
         Pattern::Wildcard(_) | Pattern::IntLit(..) | Pattern::StrLit(..) | Pattern::Nullary(..) => {
         }

@@ -2493,12 +2493,54 @@ fn without_unbuilt_arms(program: &Program) -> Option<Program> {
     })
 }
 
+/// The positions a group read as written and no longer reads once the
+/// unbuilt-arm prune has run. A thunk handed to such a position is forced by
+/// the interpreter, whose dispatcher still holds the dropped arm and has to
+/// look at the value to rule it out; an err the thunk turns into then answers
+/// at that group, with its name in the trace. `list/find` loses its arm for a
+/// sorted list in a program that sorts nothing, and a lazy list handed to it
+/// went on to fail in `list/next`, two frames later and under other names.
+/// Forcing where the program as written would have looked keeps the trace
+/// the interpreter's.
+fn positions_the_prune_stopped_reading(
+    written: &Program,
+    kept: &Program,
+) -> Vec<(String, usize, usize)> {
+    use crate::ast::Pattern;
+    let reads = |d: &crate::ast::FnDecl, i: usize| {
+        !matches!(d.params.get(i), Some(Pattern::Var(..)) | Some(Pattern::Wildcard(_)))
+    };
+    let mut before: crate::hash::Set<(&str, usize, usize)> = crate::hash::Set::default();
+    for d in &written.fns {
+        for i in 0..d.params.len() {
+            if reads(d, i) {
+                before.insert((d.name.as_str(), d.params.len(), i));
+            }
+        }
+    }
+    for d in &kept.fns {
+        for i in 0..d.params.len() {
+            if reads(d, i) {
+                before.remove(&(d.name.as_str(), d.params.len(), i));
+            }
+        }
+    }
+    let mut lost: Vec<(String, usize, usize)> =
+        before.into_iter().map(|(g, n, i)| (g.to_string(), n, i)).collect();
+    lost.sort();
+    lost
+}
+
 fn emit_ir_for(
     program: &Program,
     convention: ClosureConvention,
     inline_helpers: bool,
 ) -> Result<String, String> {
     let pruned = without_unbuilt_arms(program);
+    let unread_positions = match &pruned {
+        Some(kept) => positions_the_prune_stopped_reading(program, kept),
+        None => Vec::new(),
+    };
     let program = pruned.as_ref().unwrap_or(program);
     let knotted = knotted_constants(program);
     let inference = infer::infer(program);
@@ -2590,6 +2632,7 @@ fn emit_ir_for(
         closure_consts: Vec::new(),
         demand: crate::demand::analyze(program),
         thunk_sites: Vec::new(),
+        unread_positions,
     };
     backend.emit().map(|ir| through_doors(ir, convention))
 }
@@ -2714,6 +2757,9 @@ struct Backend<'a> {
     demand: crate::demand::DemandInfo<'a>,
     /// (site evaluator symbol, captured-arg count), indexed by site id.
     thunk_sites: Vec<(String, usize)>,
+    /// (group, arity, position) an arm the unbuilt-arm prune dropped was
+    /// reading and no arm left reads. See `positions_the_prune_stopped_reading`.
+    unread_positions: Vec<(String, usize, usize)>,
 }
 
 /// The frame epilogue: release each releasable cell unless the outgoing
@@ -4908,7 +4954,7 @@ impl<'a> Backend<'a> {
             d.name == callee
                 && d.params.len() == arity
                 && !matches!(d.params.get(i), Some(Pattern::Var(..)) | Some(Pattern::Wildcard(_)))
-        })
+        }) || self.unread_positions.iter().any(|(g, n, p)| g == callee && *n == arity && *p == i)
     }
 
     /// An operand as an ordinary value. Only a carried argument slot reads the

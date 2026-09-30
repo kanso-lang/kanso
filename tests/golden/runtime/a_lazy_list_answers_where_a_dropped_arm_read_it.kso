@@ -1,0 +1,22 @@
+# `list/find` has an arm for a sorted list, and a program that sorts nothing
+# compiles without it, which leaves `find` reading nothing at its first
+# position. The interpreter keeps the arm and forces the cell to rule it out,
+# so the err inside answers at `find`. Native passed the cell on unforced and
+# it failed two frames later, in `next`, under `found_in`.
+import "std/list"
+import "std/text"
+
+fn bad x
+  text/to_int "{x}a"
+
+fn pick 1 _
+  0
+
+fn pick _ xs
+  list/find xs (x -> x > 5)
+
+fn shown z
+  v = list/to_list (list/map [0 z] bad)
+  "{pick z v}"
+
+pub play = print (shown 2)
