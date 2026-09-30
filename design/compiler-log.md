@@ -21040,3 +21040,37 @@ programs' emitted IR gain one line each. All of it is std/list carrying one
 more pub group through every compile that imports it. The runtime rows did not
 move. The floor comes down by that, as a ruled part of the language may.
 
+## 2026-09-30 — the interpreted row, read a hundred times by a second job
+
+The STATUS.md row "A welfare counter reads three parts per billion
+(2026-09-15)" rests on one pair of readings: two CI jobs on one commit that
+counted `interp_instructions` six apart, 2,178,502,266 and 2,178,502,272. It
+asks for the cause and a normalization. This entry adds the readings taken
+since, without a cause.
+
+Every push to main re-runs the cost-goldens job, and every value in
+`bench/interp_instructions_golden.txt` was copied from a pull request's own
+run. So a green job on a main push is a second job agreeing with the first to
+the instruction, on a tree the first measured whenever nothing else merged in
+between. Of the last hundred `ci` runs on main, from 2026-09-24 16:21Z to
+2026-09-30 21:05Z, 98 passed, one was cancelled, and one failed: the merge of
+kanso#1657 at 2026-09-26 07:50Z. The log the API returns for that job no
+longer reaches its vein summary, so which vein failed is not recorded here.
+Taken together: 98 of 99 completed pairs read the same interpreted count, and
+the remaining one is unattributed.
+
+Two things this does not show. It does not show the six is gone, because 98
+agreements are what a rare event predicts as well as an absent one. And it
+does not show the address-keyed interpreter caches that kanso#1757 removed
+were the cause, although they are the obvious candidate: that change made the
+row stop following `--aspace-minaddr`, and a count that depends on where the
+heap lands would also depend on anything about a runner that moves it.
+The hash tables are already out of it. `src/hash.rs` fixed the seed for every
+container on the check path after kanso#1449 spread three compile rows over
+three CI rounds, and the only `std::collections` maps left in `src/` are in
+`main.rs`'s codegen and the wasm runtime, neither of which the interpreted
+run reaches.
+
+What would close the row: a failing main push on the interpreted vein, read
+while its log still holds the summary, or a pair of runs on one commit that
+differ after the kanso#1757 change. Neither has appeared.
