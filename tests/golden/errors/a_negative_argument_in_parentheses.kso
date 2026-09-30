@@ -1,0 +1,7 @@
+# A negative literal needs no parentheses to be an argument: `math/round -3.5`
+# passes minus three and a half (ruled 2026-09-30), so the parentheses in
+# `math/round (-3.5)` group nothing. Before the ruling this refusal said the
+# same thing and was false, since `math/round -3.5` parsed as a subtraction.
+import "std/math"
+
+main = print "{math/round (-3.5)}"

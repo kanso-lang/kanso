@@ -599,23 +599,30 @@ fn lex_line(content: &str, line: usize, col_offset: usize) -> Result<LexedLine, 
             tokens.push((tok, span, s.span().col));
             continue;
         }
-        // a prefix minus folds into the literal: `-1` is a number, not an
-        // operation — binary minus needs an operand on its left
+        // A minus touching a digit folds into the literal, and spacing decides
+        // which minus that is (ruled 2026-09-30): binary minus takes a space on
+        // each side, so a `-` with a space before it and a digit after it is a
+        // negative number. `f -3` passes -3 and `[1 -3 4]` holds three. With no
+        // space before it the `-` is binary after anything a value ends with,
+        // and the spacing check names `3 - 3` when that is `3-3`.
         if c == '-' && s.peek(1).is_some_and(|d| d.is_ascii_digit()) {
-            let prefix = !matches!(
-                tokens.last(),
-                Some((
-                    Tok::Ident(_)
-                        | Tok::Int(_)
-                        | Tok::Float(_)
-                        | Tok::Str(_)
-                        | Tok::RParen
-                        | Tok::RGroup
-                        | Tok::RBracket,
-                    _,
-                    _
-                ))
-            );
+            let spaced =
+                tokens.last().is_some_and(|(_, _, end): &(Tok, Span, u32)| span.col > *end);
+            let prefix = spaced
+                || !matches!(
+                    tokens.last(),
+                    Some((
+                        Tok::Ident(_)
+                            | Tok::Int(_)
+                            | Tok::Float(_)
+                            | Tok::Str(_)
+                            | Tok::RParen
+                            | Tok::RGroup
+                            | Tok::RBracket,
+                        _,
+                        _
+                    ))
+                );
             if prefix {
                 s.pos += 1;
                 let tok = match s.lex_int()? {
@@ -1165,6 +1172,35 @@ fn validate_spacing(lexed_line: &LexedLine, line: usize, diags: &mut Vec<Diagnos
             (true, _) => 1,
             _ => required_gap(prev, next),
         };
+        // A binary minus is spaced on both sides, and a `-` touching a digit
+        // is part of the number, so `3-3` is the one shape that reaches here
+        // as a minus with no room around it. Say which spelling is meant.
+        let minus = matches!(prev, Tok::Op("-")) || matches!(next, Tok::Op("-"));
+        if minus && gap == 0 && required == 1 {
+            let side = |k: usize| match lexed_line.tokens.get(k).map(|(t, _, _)| t) {
+                Some(Tok::Int(n)) => Some(n.to_string()),
+                Some(Tok::Float(x)) => Some(x.to_string()),
+                Some(Tok::Ident(name)) => Some(name.to_string()),
+                _ => None,
+            };
+            let (left, right) = match matches!(next, Tok::Op("-")) {
+                true => (side(at), side(at + 2)),
+                false => (at.checked_sub(1).and_then(side), side(at + 1)),
+            };
+            let spelled = match (left, right) {
+                (Some(l), Some(r)) => format!("`{l} - {r}`"),
+                _ => "`a - b`".to_string(),
+            };
+            diags.push(Diagnostic::new(
+                "formatting",
+                format!(
+                    "binary minus takes a space on each side, {spelled}; a `-` touching \
+                     a digit is part of the number"
+                ),
+                Span::at(line, next_span.col as usize),
+            ));
+            continue;
+        }
         if gap != required {
             let wanted = match required {
                 0 => "no space".to_string(),

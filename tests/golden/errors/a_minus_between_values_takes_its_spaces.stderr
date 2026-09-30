@@ -1,0 +1,8 @@
+error[formatting]: binary minus takes a space on each side, `10 - 4`; a `-` touching a digit is part of the number
+  --> a_minus_between_values_takes_its_spaces.kso:4:9
+   4 | gap = 10-4
+               ^
+error[formatting]: binary minus takes a space on each side, `10 - 4`; a `-` touching a digit is part of the number
+  --> a_minus_between_values_takes_its_spaces.kso:4:10
+   4 | gap = 10-4
+                ^

@@ -20817,3 +20817,41 @@ on runners 1000108787 and the one before it, and read the interpreted row at
 590,343,751 both times. That is the first pair of CI readings on two runners
 since the interpreter's slot keys stopped reading the heap's address, and the
 two agree to the instruction.
+
+## 2026-09-30 — spacing decides a minus sign, built
+
+Builds "gavel: spacing decides a minus sign".
+
+The lexer folded a `-` into the number after it when the token before the `-`
+could not end a value, so `(-3)`, `[-3 4]`, `x = -3` and `7 * -2` were
+literals and everything after a value was a binary minus. It now also folds
+when there is a space before the `-`. So `twice -3` passes minus three,
+`[1 -3 4]` holds three and `[3 -3]` holds two. A minus with no space before it
+after a value is still binary, and the spacing check that already refused it
+now says what it meant: `10-4` gives "binary minus takes a space on each side,
+`10 - 4`; a `-` touching a digit is part of the number". `10 -4` reaches the
+parser as the number 10 followed by the number -4, and a number heading an
+application of a negative number is refused with the same sentence. The
+refusal of `math/round (-3.5)` as parentheses that group nothing is unchanged
+in wording and is now true.
+
+No program that compiled before changes meaning. Every shape the rule moves was
+refused before it: `f -3` and `[1 -3 4]` as spacing errors, `f (-3)` as
+redundant parentheses. The patched checker and the one before it gave the same
+answer on all 1,324 `.kso` files in the tree and in kq, vse and kanso-json. The
+tree still spells a negative argument `(0 - 7)` in 30 lines across 19 files,
+from before a negative literal could stand there. Those stay valid, and the
+ones under `lib/` stay because the compiler carries that code and a change there
+moves the compile rows.
+
+`tests/golden/micro/a_minus_touching_a_digit_is_the_number` runs the three
+engines over negative arguments, elements and operands, and the compiler before
+this change refuses it. The error corpus gains
+`a_minus_between_values_takes_its_spaces`, `a_number_applied_to_a_negative_number`
+and `a_negative_argument_in_parentheses`. Appendix A of the book shows `10-4`
+and its message. Mutation `a_spaced_minus_stays_binary` drops the spacing test
+and the micro corpus goes red; mutation
+`a_number_applied_to_a_negative_number_passes` drops the parser's refusal and
+the error corpus goes red. Ratchet rows `spaced_minus` and
+`number_heads_minus`. The editor grammar already coloured a `-` after a space or
+an opening bracket as part of the number, so it needed nothing.
