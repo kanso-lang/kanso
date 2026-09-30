@@ -20759,3 +20759,50 @@ to them here.
 Welfare reads 90.3227 on these rows against a floor of 90.32307: 0.0004 lower,
 inside the thousandth the gate allows either side, so the floor stands where it
 is and nothing is banked.
+
+## 2026-09-30 — `print` is a box to the check
+
+A generator that hands a box through zero to three parameters into something
+that takes a value found three programs that checked clean and died at run
+time. All three boxes were made by `print`. The smallest shape needs no
+parameter at all:
+
+    pub play = print (print "r" + 1)
+
+    error[runtime]: `+` is not defined for these values
+
+The same line with `effect 5` in place of `print "r"` is refused, and so is
+`io/write "w"`. The inference gives `print` the description bit, so a group
+whose tail is a `print` counts as a box. The check's own test for a box does
+not. `yields_box` recognised a call of `effect` ahead of its short circuit and
+asked `is_effect_builtin` for everything else, and that list names the io
+builtins and not `print`. Behind the short circuit sits a second gap: a
+program where no group's answer carries the description bit skips the test
+entirely, and a program whose only boxes come from `print` is that program.
+
+`print` is now read as a box beside `effect`, ahead of the short circuit, and
+under the same shadowing test. The error fixture
+`a_printed_box_where_a_value_is_expected` pins one box through a parameter
+into `+`, one through a parameter into a group with no arm for it, and one
+handed to `+` directly. The unpatched compiler checks all three clean and
+dies on the first. Mutation `print_answers_no_box` narrows the arm back to
+`effect`, and the error corpus goes red on that fixture. Ratchet row
+`printed_box`.
+
+One fixture moved. `tests/golden/runtime/bitwise_meets_an_effect` pinned the
+run-time message for `print "x" & print "y"`, which the check now refuses. It
+takes the route `a_description_is_not_a_condition` took when its box became
+provable: each box goes through a one-element list, where nothing can prove
+it, and both engines still print `and takes whole numbers, got <io>`.
+
+The patched checker read every `.kso` file under `tests/golden`, `docs`,
+`examples`, `lib`, `scripts` and `bench`, 1,297 of them, and the 245
+directories holding them as modules, against the checker before the patch,
+and every file and module in kq, vse and kanso-json at their main. The two
+files above are the only ones whose answer changed.
+
+The other two programs the generator reported pass the box through `y = x`
+before handing `y` on. The parameter pass leaves a name the body binds again
+out on purpose, and a new name bound to the parameter falls on the same side of
+that line: the check cannot follow it without following bindings, which it
+declines to do. They are recorded here and not fixed.

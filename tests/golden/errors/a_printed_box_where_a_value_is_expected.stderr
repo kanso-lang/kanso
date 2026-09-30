@@ -1,0 +1,12 @@
+error[effect]: this is an effect — a box the words open — and `seen` takes a value; open it with `.>` (module a_printed_box_where_a_value_is_expected)
+  --> a_printed_box_where_a_value_is_expected.kso:16:25
+  16 |   .> (_ -> print (seen (print "q")))
+                               ^
+error[effect]: this is an effect — a box the words open — and `+` takes a value; open it with `.>` (module a_printed_box_where_a_value_is_expected)
+  --> a_printed_box_where_a_value_is_expected.kso:17:19
+  17 |   .> (_ -> print (print "r" + 1))
+                         ^
+error[effect]: `x` holds an effect — `play` hands `plus` one — and `+` takes a value; open it with `.>` where `play` calls `plus` (module a_printed_box_where_a_value_is_expected)
+  --> a_printed_box_where_a_value_is_expected.kso:13:3
+  13 |   x + 1
+         ^

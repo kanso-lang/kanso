@@ -1,0 +1,17 @@
+# `print` answers a box, the same as `effect`, and the checker counted only
+# `effect`. So each of these checked clean and died at run time: `plus` with
+# "`+` is not defined for these values", `seen` with "no overload of `seen`
+# matches these arguments", and the last with the `+` message again. The first
+# two hand the box through a parameter, the third hands it to `+` directly.
+fn seen 7
+  "seven"
+
+fn seen 8
+  "eight"
+
+fn plus x
+  x + 1
+
+pub play = print (plus (print "p"))
+  .> (_ -> print (seen (print "q")))
+  .> (_ -> print (print "r" + 1))
