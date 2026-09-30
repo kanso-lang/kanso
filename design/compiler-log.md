@@ -20806,3 +20806,14 @@ before handing `y` on. The parameter pass leaves a name the body binds again
 out on purpose, and a new name bound to the parameter falls on the same side of
 that line: the check cannot follow it without following bindings, which it
 declines to do. They are recorded here and not fixed.
+
+The check costs a little on every program, since every call is now asked
+whether its head is `print`. CI's rows: `compile_instructions` rose from
+25,491,323 to 25,494,301 (+2,978), and `entry_instructions` and
+`library_instructions` by 9,158 each, to 84,316,551 and 84,851,189.
+
+The carrier this branch was cut from, kanso#1757, ran its cost goldens twice,
+on runners 1000108787 and the one before it, and read the interpreted row at
+590,343,751 both times. That is the first pair of CI readings on two runners
+since the interpreter's slot keys stopped reading the heap's address, and the
+two agree to the instruction.
