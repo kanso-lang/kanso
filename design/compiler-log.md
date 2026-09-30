@@ -20001,3 +20001,10 @@ and map shapes, and `put m k (m[k] + 1)` beside them, which must still write in
 place. The mutation "a stored sibling read as finished" makes every mention
 count as a read, and the micro corpus went red naming the fixture. It is a
 ratchet row.
+
+CI measured the second version against main with #1741 in it.
+emit_instructions landed on 30,113,943 (+15,444, 0.05%) and
+interp_instructions on 590,235,838 (+39,708, 0.007%). The pass now asks one
+more question of each sibling argument, and both rows rose with it; no build
+has isolated that question as the cause. The welfare history records the floor
+this language fix spends.
