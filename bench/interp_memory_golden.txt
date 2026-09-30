@@ -253,7 +253,7 @@
 #
 # CI measured a lazy cell answering at the group that reads it at 86a9b9b5:
 # interp_allocs 895,172 -> 895,178, a RISE of 6 (+0.0007%).
-interp_allocs=895178
+interp_allocs=895408
 #
 # 2026-09-18, kanso#1518 against main at kanso#1517, CI's sitting.
 # 951,438 -> 961,165, a RISE of
@@ -337,5 +337,5 @@ interp_allocs=895178
 #
 # CI measured keys and values over maps. interp_peak_bytes 720,417 -> 720,620,
 # a RISE of 203 (+0.0282%).
-interp_peak_bytes=721852
+interp_peak_bytes=725220
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

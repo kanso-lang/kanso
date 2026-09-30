@@ -1,0 +1,4 @@
+error[opacity]: `list/cursor` is foreign — only `list` builds a `cursor`; ask it for one through a pub function
+  --> tests/golden/errors/a_record_built_by_its_short_name.kso:8:3
+   8 |   cursor 1 xs
+         ^

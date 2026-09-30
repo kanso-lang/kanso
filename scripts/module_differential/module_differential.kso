@@ -38,10 +38,15 @@ work = "target/module_differential"
 # `prints` compiles and writes exactly `expected`; `check refuses` fails the
 # check with a message containing it; `run refuses` checks clean and fails
 # when run.
+# A point is m's to build, so a module that imports m asks for one through
+# `at` rather than building it by its short name (ruled 2026-09-30).
 point_src = """
   pub type point
     x
     y
+
+  pub fn at x y
+    point x y
 """
 
 one_src = """
@@ -92,7 +97,7 @@ c4b = filed "m/b.kso" """
     p.x
 """
 
-c4m = filed "main.kso" "import \"./m\"\n\nprint \"\{across (point 3 4)}\"\n"
+c4m = filed "main.kso" "import \"./m\"\n\nprint \"\{across (at 3 4)}\"\n"
 
 c4l = "a field of a type from a sibling file"
 
@@ -124,7 +129,7 @@ c6src = "{c6head}  list/to_list (list/map ps _.x)\n"
 
 c6b = filed "m/b.kso" c6src
 
-c6body = "print \"\{xs [(point 1 2) (point 3 4)]}\"\n"
+c6body = "print \"\{xs [(at 1 2) (at 3 4)]}\"\n"
 
 c6m = filed "main.kso" "import \"./m\"\n\n{c6body}"
 

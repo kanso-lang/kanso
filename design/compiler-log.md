@@ -20964,3 +20964,79 @@ What it costs, from CI's rows: `compile_instructions` 25,598,514 to 25,598,656
 comparison per group when the raisers are collected. No other row moved. The
 floor comes down by that, as a ruled part of the language may.
 
+## 2026-09-30 — building an imported record by its short name is refused, built
+
+Builds "building an imported record by its short name is refused", which cites
+the per-field-pub gavel of 2026-08-14 ("construction stays factory-only").
+
+std/list first. `iter`, private until now and already answering a cursor at 1
+for a list, is pub. `yield elem rest` is new and answers a step. A program's own
+type joins the `next` protocol by arming `next` for its state and answering
+`list/yield` of the element and the state after it; `examples/next_protocol.kso`
+now does that with a `countdown` beside a cursor from `list/iter`, and both
+engines print the same. The factory names follow std/list's verb-for-the-record
+pattern (`repeat` answers `repeated`, `cycle` answers `cycled`).
+
+Then the check. `foreign_at` knew a foreign type by the slash in its name. On
+the entry and library routes the alias pass runs after the check, so `cursor 1
+xs` arrived bare and passed. The loader's short-named copy of an imported type
+is a synthetic `TypeDecl` whose `origin` is the qualified name, so `Named` now
+keeps a map from those short names to their origins, and a bare head that is in
+it is refused with the qualified name's message. Two exceptions. A function of
+that name wins, as #1742 ruled, whether the module's own or an import's twin,
+and that is read from the arity table the check already holds. A name the body
+binds is its own binding, so the refusal goes on the same shadowable list as
+the arity refusal: `hako` binds a lambda as `grown`, which is also std/list's
+record, and was refused until that was done. Where the alias pass has run first
+and written the slash, the old skip now applies only when a function of that
+name exists.
+
+What changed answer, over every `.kso` file and directory with `kanso check`,
+plus the 98 play-shaped files with `kanso play`, against main at 72949009:
+
+- `examples/next_protocol.kso` built `cursor 1 [10 20 30]`; moved onto the
+  factories as above.
+- `tests/golden/micro/an_imported_record_keeps_its_name.kso` built `step 1 [5]`
+  and `sorted [3 1]`. It keeps testing that a record prints its own name, with
+  `list/yield 1 [5]` and `list/iter [3 1]`; its `.out` now reads
+  `list/step 1 [5] list/cursor 1 [3 1] 7`. std/list has no factory for
+  `sorted`, and nothing in it builds one.
+- `tests/golden/reexports/app` built geo's `disk 2.0`. geo gained `pub fn
+  circle r` and the fixture calls it; the spec's expected output is unchanged.
+- `hako` moved on the first build, before the shadowing fix, and is back to
+  unchanged.
+- `scripts/module_differential` writes its modules at run time, so the sweep
+  over files on disk could not see them, and CI found two: "a field of a type
+  from a sibling file" and "a getter of a sibling's type, as a value" each had
+  `main.kso` build m's `point` by its short name. `point_src` gained `pub fn
+  at x y` and both cases call it; the harness reads 36 modules, 0 wrong, on
+  this build and on main's. The other seven differential harnesses that CI
+  runs agree on this build.
+- kq, vse, kanso-json: nothing. `examples/concurrency.kso` prints random
+  rolls and differs between any two runs.
+
+Fixtures: `a_record_built_by_its_short_name` (error corpus) and
+`a_local_named_for_an_imported_record_is_the_local` (micro corpus). Mutations
+`a_record_built_by_its_short_name_passes` skips the short-name lookup and turns
+the error corpus red on the first; `a_local_named_for_an_imported_record_is_refused`
+drops the shadowable push and turns the micro corpus red on the second. Ratchet
+rows `short_record` and `short_record_local`.
+
+The module compile golden moves by the new declaration: `visits` goes from
+2,674 to 2,677 in `bench/compile_golden_modules.txt`, everything else in that
+row unchanged. `lib/list` is compiled into the compiler, so the instruction
+rows will move too; they are CI's to report.
+
+What it costs, from CI's rows. `compile_instructions` 25,598,656 to 25,719,895
+(+0.47%), `entry_instructions` 84,665,441 to 85,110,161 (+0.53%),
+`library_instructions` 85,199,255 to 85,641,806 (+0.52%), `emit_instructions`
+30,155,267 to 30,306,693 (+0.50%), `codegen_instructions_dev` 124,465,454 to
+124,466,652 and `codegen_instructions_release` 408,092,019 to 408,092,175.
+`interp_instructions` 590,343,751 to 590,630,366 (+0.05%), `interp_allocs`
+895,178 to 895,408 and `interp_peak_bytes` 721,852 to 725,220. `compile_allocs`
+14,307 to 14,494, `compile_peak_bytes` 711,716 to 717,297 (+0.78%), `front_end_visits` 7,523 to 7,526 and `module_visits` 2,674
+to 2,677. `emitted_other_lines` goes from 86,399 to 86,407: eight of the other
+programs' emitted IR gain one line each. All of it is std/list carrying one
+more pub group through every compile that imports it. The runtime rows did not
+move. The floor comes down by that, as a ruled part of the language may.
+

@@ -1,0 +1,10 @@
+# A record is built by the module that declares it. `list/cursor 1 xs` is
+# refused, and every pub name an import exports also exists under its short
+# name, so `cursor 1 xs` is the same construction and is refused the same way.
+# `list/iter xs` is how a program asks std/list for a cursor.
+import "std/list"
+
+fn start xs
+  cursor 1 xs
+
+pub play = print (start [1 2])

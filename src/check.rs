@@ -397,6 +397,18 @@ fn check_per_node<'a>(
                 })
                 .map(|ty| ty.name.as_str())
                 .collect(),
+            // The short-named clone the loader makes of each imported record,
+            // keyed by the short name and answering the qualified one. Built
+            // by that short name it is still a construction across the import.
+            foreign_short: program
+                .types
+                .iter()
+                .filter(|ty| ty.synthetic && (!ty.fields.is_empty() || ty.parent.is_some()))
+                .filter_map(|ty| {
+                    let origin = ty.origin.as_deref()?;
+                    crate::ast::has_slash(origin).then_some((ty.name.as_str(), origin))
+                })
+                .collect(),
             annotating: program
                 .types
                 .iter()
@@ -2911,16 +2923,24 @@ fn imported_arm(decl: &FnDecl) -> bool {
 /// A qualified name can never be a local binding, so unlike the arity walk
 /// beside it this needs no shadowing set: the slash IS the foreignness.
 fn foreign_at(name: &str, span: Span, named: &Named<'_>, diags: &mut Vec<Diagnostic>) {
-    // The slash here was written by `canonicalize_bare_aliases`, not
-    // by a person, so it says nothing about foreignness: the program
-    // called an imported FUNCTION by its bare name and the pass
-    // qualified it. Refusing that as a construction of the imported
-    // type of the same name rejects a program that compiles.
-    let pass_wrote_it = match named.rewritten.get(&(span.line, span.col)) {
-        Some(bare) => name.ends_with(bare.as_str()),
-        None => false,
+    // A slash `canonicalize_bare_aliases` wrote may stand for a call: a
+    // module can export a function and a type under one name, and the short
+    // name then calls the function. Refusing that as a construction rejects a
+    // program that compiles. With no function of that name the short name can
+    // only build the record, and building one by its short name is refused
+    // the same as by its qualified one (ruled 2026-09-30).
+    let calls_a_function = named.arities.get(name).is_some()
+        && match named.rewritten.get(&(span.line, span.col)) {
+            Some(bare) => name.ends_with(bare.as_str()),
+            None => false,
+        };
+    // Before the pass, the short name is the loader's clone. A function of
+    // that name, the module's own or an import's twin, is what a call reaches.
+    let name = match named.foreign_short.get(name) {
+        Some(origin) if named.arities.get(name).is_none() => origin,
+        _ => name,
     };
-    if !pass_wrote_it && named.foreign.contains(name) {
+    if !calls_a_function && named.foreign.contains(name) {
         let (owner, base) = crate::ast::split_qual(name).unwrap_or(("", name));
         diags.push(Diagnostic::new(
             "opacity",
@@ -2987,6 +3007,7 @@ struct Named<'a> {
     fields: HashMap<&'a str, (usize, Option<&'a str>)>,
     arities: Arities<'a>,
     foreign: HashSet<&'a str>,
+    foreign_short: HashMap<&'a str, &'a str>,
     annotating: HashSet<&'a str>,
     rewritten: &'a crate::Rewrites,
 }
@@ -3014,8 +3035,14 @@ fn named_at<'a>(
             // its walk began. The walk is shared now, so the emptiness test
             // moves to the node — a field read, where the lookup it skips is
             // a hash of the name.
-            if own && !named.foreign.is_empty() {
+            // A short name can be a local binding, which is not the import's
+            // record, so a refusal of one is shadowable like an arity's.
+            if own && (!named.foreign.is_empty() || !named.foreign_short.is_empty()) {
+                let refused = diags.len();
                 foreign_at(name, *span, named, diags);
+                if diags.len() > refused {
+                    shadowable.push((refused, diags.len(), name.as_str()));
+                }
             }
         }
     }
