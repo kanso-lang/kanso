@@ -1,0 +1,8 @@
+# Long enough that the bracket's benefit lands inside the benchmark. A loop
+# that only grows the list it was handed keeps its bracket, and the pushes go
+# outside the arena, where a superseded buffer is freed as the list grows.
+# Without the bracket they go into the arena, where every superseded buffer
+# stays until the outer iteration ends. At 400 elements a list never outgrows
+# its first block and the two cost the same memory; at 250,000 the list is two
+# megabytes and the difference is a fifth of the peak. Measured 2026-09-30.
+span = 250000

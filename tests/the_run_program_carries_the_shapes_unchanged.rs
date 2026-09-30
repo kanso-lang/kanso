@@ -57,6 +57,12 @@ fn every_carried_module_is_listed() {
         }
         for file in std::fs::read_dir(entry.path()).expect("a shape's directory reads") {
             let file = file.expect("its entries read");
+            // A size is the program's own and not part of the shape: the escape
+            // phase runs a shorter list than escapebench, whose length is chosen
+            // so the bracket's benefit lands inside it (2026-09-30).
+            if file.file_name() == "size.kso" {
+                continue;
+            }
             let rel = file
                 .path()
                 .strip_prefix(manifest_dir())

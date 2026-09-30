@@ -99,8 +99,9 @@ the box constructor is `effect`, which was already built. Four were closed on
 standing rulings: a fixture kind that pins the interpreter's answer where
 native refuses, the escape path's byte scan kept inside lib/json, the
 `.rodata` pin declined in favour of measuring a fixed heap start, and
-escapebench sized so it holds the bracket's benefit. Six of the seven are rows
-under "Ruled, unbuilt" below. The maps parse's share
+escapebench sized so it holds the bracket's benefit. Six of the seven went to
+"Ruled, unbuilt" below, and escapebench's size has since come off it built. The
+maps parse's share
 of the compile row's drift left this list ruled on 2026-09-15 and built the
 same night, kanso#1439. The assert hako left it by being built — `lib/expect`,
 kanso#1233, 2026-09-03.
@@ -149,7 +150,8 @@ the 2026-09-15 normalization ruling, which is ironclad and which a counter
 minted a day later does not satisfy.
 
 **Six more joined on 2026-09-30**, from the sitting that emptied the ledger of
-all but one entry, so eight rows stand. Each of the six has its own heading
+all but one entry. escapebench's size came off the same day, built, so seven
+rows stand. Each standing one has its own heading
 below, dated 2026-09-30, and a log entry of the same name. The seventh ruling
 of that sitting, the box constructor's spelling, has no row because `effect`
 was already built and pinned.
@@ -413,15 +415,6 @@ measured".
 Owes: one reading of kanso#1480's commit pair with the heap starting at the
 same address every run. If the 146,628 dies under it, the fixed heap start goes
 into the gates under the 2026-09-15 normalization rule.
-
-### escapebench grows until the bracket's benefit is inside it (2026-09-30)
-
-The log entry "directive: escapebench grows until the bracket's benefit is
-inside it", under the 2026-09-05 corpus-first ruling.
-
-Owes: the benchmark sized so a change deleting the escape bracket reads as a
-loss, the term that reads it re-based forward in the same change, and the
-direction recorded in the log.
 
 ## In flight
 

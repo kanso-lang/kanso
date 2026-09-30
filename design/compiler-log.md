@@ -20433,3 +20433,53 @@ Clay, on "Raising escapebench's size": the 2026-09-05 corpus-first ruling
 covers it. The benchmark is sized so the escape bracket's benefit falls inside
 it, the term that reads it is re-based forward in the same change, and the log
 says which way it moved. Unbuilt; STATUS.md carries the row.
+
+## 2026-09-30 — escapebench holds the bracket's benefit
+
+Builds "directive: escapebench grows until the bracket's benefit is inside it".
+
+The worry of 2026-09-05 was that escapebench priced the bracket's cost and none
+of its benefit, so a change deleting it would read as a 27.6% win. Two things
+have changed since. The loop that grows the list it was handed keeps its bracket
+and no longer rewinds, so the cost the 27.6% measured is mostly gone. And the
+objective no longer weighs escapebench: since the 2026-09-06 consolidation it
+reads the run program, whose escape phase is a copy of the same module.
+
+Measured with a scratch compiler that refuses `filled` its beat, which is what a
+change deleting the bracket would do:
+
+                              instructions         summed peak bytes
+    escapebench, span 400     45,519,404 ->        1,064,976 -> 1,064,576
+                              44,759,106 (-1.67%)
+    escapebench, span 250,000 41,636,403 ->        5,242,896 -> 6,291,488
+                              43,863,674 (+5.35%)  (+20.0%)
+    runbench as it stands     1,088,394,943 ->     flat
+                              1,090,095,713 (+0.16%)
+
+So the weighed term already reads the deletion as a loss, and escapebench, a
+diagnostic, read it as a win. At span 400 a list never outgrows its first arena
+block, so where its superseded buffers go costs nothing. At 250,000 the list is
+two megabytes: with the bracket the pushes grow it outside the arena and a
+superseded buffer is freed, and without it every superseded buffer stays in the
+arena until the lap ends.
+
+escapebench is now five laps of 250,000 pushes, 1,250,000 against the old
+1,200,000. The span moved out of the shared module into a `size.kso` beside it,
+because `tests/the_run_program_carries_the_shapes_unchanged.rs` requires the run
+program's copy to match byte for byte, and that spec now skips a directory's
+size file. The run program keeps span 400. Growing it would move
+`run_peak_bytes` from 3,899,936 to about 8,077,856, and that row sums the arena,
+held and permanent peaks, which happen at different times: with the bracket the
+long list's storage adds a permanent peak beside decode's arena peak, and
+without it the storage lands in the arena and overlaps it. The summed peak would
+then read the deletion as a 6.5% gain, which is the reverse of what this change
+is for.
+
+No weighed term reads escapebench, so nothing is re-based and the floor does
+not move. The escape counter golden moved with the size, as the trend gate
+names its rows: `escape_perm_peak_bytes` to 4,194,320 from 16,400, the long
+list's growth outside the arena; `escape_push_mut_slow` to 1,250,000 and
+`escape_push_mut_fast` to 5, one fast push per lap; `escape_bytes_freed` to 30;
+`escape_allocs` to 38 and `escape_beat_iters` to 5. The run program's IR changed only in string-constant
+numbering, one source line number and where `span`'s definition lands. STATUS.md
+drops the row.
