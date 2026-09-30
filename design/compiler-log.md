@@ -20480,6 +20480,7 @@ not move. The escape counter golden moved with the size, as the trend gate
 names its rows: `escape_perm_peak_bytes` to 4,194,320 from 16,400, the long
 list's growth outside the arena; `escape_push_mut_slow` to 1,250,000 and
 `escape_push_mut_fast` to 5, one fast push per lap; `escape_bytes_freed` to 30;
-`escape_allocs` to 38 and `escape_beat_iters` to 5. The run program's IR changed only in string-constant
+`escape_allocs` to 38 and `escape_beat_iters` to 5. CI measured
+`work_escapebench` at 41,544,680, down from 45,427,695. The run program's IR changed only in string-constant
 numbering, one source line number and where `span`'s definition lands. STATUS.md
 drops the row.
