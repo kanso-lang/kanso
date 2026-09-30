@@ -20461,3 +20461,73 @@ rose to 124,465,454 and `codegen_instructions_release` to 408,092,019 compiling
 it. `interp_instructions` rose to 591,340,712, the interpreter's `float_order`
 asking `is_nan` twice where `total_cmp` asked nothing. Every run row fell a few
 hundred instructions: runbench to 1,088,393,175. Welfare held at the floor.
+
+## 2026-09-30 — the escape scan on the string, measured again and declined
+
+"directive: the escape path's byte scan stays inside lib/json" asked for the
+scan to be built under a `builtin_` name only lib/json calls, and measured
+again first, because the 2026-09-15 figure predates two changes to the same
+path. It was built on both engines and measured, and it is not landing.
+
+`escape_onto` makes a bytes view of each string it writes and scans the view
+for a quote, a backslash or a control byte. The change scanned the string's own
+bytes first, through `builtin_find2_below_str`, appended a clean string whole,
+and made the view only for a string that needed escaping. Container A/B, both
+compilers built from one tree with and without it, output byte-identical:
+
+    runbench     1,088,394,897 -> 1,087,916,597   -478,300   -0.044%
+    encodebench  2,333,703,469 -> 2,333,703,224       -245
+    escapebench     45,427,288 ->    45,427,288          0
+
+On 2026-09-15 the same change was worth −22,237,650, −1.2193%, against a run of
+1.82 billion. Since then the view's header has moved into the calling frame,
+and kanso#1690 skips the scan for a decoded token already marked clean. How the
+1.2% divided between those two was not isolated. No allocation counter moved
+with the change, since the view no longer allocates.
+
+What it would cost is a wider privilege rule. The checker lets a `builtin_`
+name through only in a file whose path starts with `std/`, which is how the
+standard library reaches it through an import. lib/json is also compiled from
+its own directory, by `bench/make_jsonbench`, by the unit and integration
+specs that read "the library the compiler carries", and by the compile gates,
+and each of those refuses the name. Keeping the fence and the change together
+means granting the standard library's privilege by path, and a user project
+with a `lib/` of its own would inherit it. At 0.044% that is not worth doing.
+
+The branch's micro fixture stays as coverage of the escape path as it is:
+`tests/golden/micro/where_a_string_first_needs_escaping` puts the first byte to
+escape first, last, past the sixteen-byte step, behind characters of more than
+one byte, and nowhere, on both engines. STATUS.md drops the row.
+
+## 2026-09-30 — the fixed heap start, measured and not built
+
+"directive: `.rodata` is not pinned, and the heap start is measured" asked for
+one reading: kanso#1480's commit pair with the heap starting at the same address
+every run, and the fixed start built into the gates if the difference between
+the two died under it.
+
+The pair is the commit the bisection named, `646adb85` ("DECLARES is a
+constant, and it was parsed once per emit"), against its parent; it changes
+`src/codegen.rs` and nothing else. Both compilers checked lib/json as it stood
+at that commit, under callgrind with the compile gate's ten `GLIBC_TUNABLES`
+and its address-blind `memcmp`. A preload whose constructor moves the program
+break up to the next 2 MiB boundary before malloc runs fixed the heap start,
+and it printed where the break was and where it went:
+
+                       parent        646adb85      difference
+    heap as it falls   15,744,277    15,713,359       -30,918
+    heap fixed         15,787,785    15,754,602       -33,183
+
+Under callgrind the client's break was already at `0x403a000` for both
+binaries, and the preload moved both to `0x4200000`. valgrind lays out the
+client's address space itself, so data and bss of different sizes did not
+move where the heap began. The fixed start moved both readings by about 43,000
+and left the difference between them where it was. So the heap start is not
+what separates two builds on this row, and fixing it is not built into the
+gates. The 2026-09-17 profile diff of the same pair, which found the optimizer
+inlining differently inside inference, is the explanation that stands.
+
+This reading is on lib/json in this container, where the pair differs by
+−30,918; CI's reading on the compile corpus was +146,628. The question asked
+was whether a fixed heap start removes the difference, and on this input it
+does not. STATUS.md drops the row.
