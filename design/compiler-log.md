@@ -19916,3 +19916,38 @@ the one the language gives, and it is now the branch: `1 3` and `2 4`.
 `a_held_if_picks_its_branch` holds both halves: the interpreter's answer, and
 native naming its limit. The mutation "a held if counted as nothing" takes the
 count out and the spec goes red printing `<fn>`. It is a ratchet row.
+
+## 2026-09-30 — a push keeps the list it extends
+
+Reducing a generated program turned up a list written into itself:
+
+    fn two z
+      a = push [] [[] z]
+      push a [a 7]
+
+The answer is `[[[] 0] [[[[] 0]] 7]]`. The interpreter printed the inner `a`
+as `[]`, and native printed `<cycle>` in its place. The same shape through a
+fold, `push acc [acc x]`, and through a map, `put m k [m]`, went wrong the
+same way on both engines.
+
+A write may extend its container in place when nothing else holds it. Two
+mentions of the container in one call normally rule that out, but a builtin
+forces its arguments before it writes, so a mention in a sibling argument was
+discounted as finished by then. That is true of `put m k (m[k] + 1)`, where
+the sibling reads an element and lets the container go. It is false of
+`[a 7]`, which stores the container in the value being written. The
+interpreter moved the list out of `a` before the pair holding `a` was read
+back, and native extended the list the pair pointed at.
+
+A sibling now earns the discount only when it cannot hold the container: every
+mention in it is the container of an element or field read. The three places
+that grant the discount -- the count of a local's uses, the exemption for
+`put`'s own arguments, and a folder's accumulator -- all ask the same
+question. The cost veins agreed and the compile sweep saw nothing move, so no
+benchmark relied on a sibling that stores its container.
+
+`a_push_keeps_the_list_it_extends` in the micro corpus holds the list, fold
+and map shapes, and `put m k (m[k] + 1)` beside them, which must still write in
+place. The mutation "a stored sibling read as finished" makes every mention
+count as a read, and the micro corpus went red naming the fixture. It is a
+ratchet row.

@@ -4526,7 +4526,19 @@ held_if = row
 
 rows_c1zzzzzzz = text/concat rows_c1zzzzzz [held_if]
 
-rows_c = text/concat rows_c1zzzzzzz [itself]
+# A sibling argument that stores the container still holds it, so the write
+# copies instead of extending the list the sibling just stored.
+push_keeps = row
+  "a stored sibling read as finished"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_stored_sibling_read_as_finished")
+  release
+
+rows_c1zzzzzzzy = text/concat rows_c1zzzzzzz [push_keeps]
+
+rows_c = text/concat rows_c1zzzzzzzy [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
