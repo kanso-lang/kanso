@@ -100,7 +100,8 @@ standing rulings: a fixture kind that pins the interpreter's answer where
 native refuses, the escape path's byte scan kept inside lib/json, the
 `.rodata` pin declined in favour of measuring a fixed heap start, and
 escapebench sized so it holds the bracket's benefit. Six of the seven went to
-"Ruled, unbuilt" below, and escapebench's size has since come off it built. The
+"Ruled, unbuilt" below. Three have since come off it: escapebench's size,
+built, and the escape scan and the fixed heap start, measured and declined. The
 maps parse's share
 of the compile row's drift left this list ruled on 2026-09-15 and built the
 same night, kanso#1439. The assert hako left it by being built — `lib/expect`,
@@ -150,8 +151,9 @@ the 2026-09-15 normalization ruling, which is ironclad and which a counter
 minted a day later does not satisfy.
 
 **Six more joined on 2026-09-30**, from the sitting that emptied the ledger of
-all but one entry. escapebench's size came off the same day, built, so seven
-rows stand. Each standing one has its own heading
+all but one entry. Three came off the same day: escapebench's size, built, and
+the escape scan and the fixed heap start, each measured and declined. Five rows
+stand. Each standing one has its own heading
 below, dated 2026-09-30, and a log entry of the same name. The seventh ruling
 of that sitting, the box constructor's spelling, has no row because `effect`
 was already built and pinned.
@@ -398,23 +400,6 @@ native refuses". The small-integer change it was asked for is already on main
 Owes: the fixture kind, which asserts that the interpreter answers X and native
 refuses with Y, and fixtures at the int64 boundary that would catch a promotion
 one step late.
-
-### The escape path's byte scan stays inside lib/json (2026-09-30)
-
-The log entry "directive: the escape path's byte scan stays inside lib/json".
-
-Owes: a `builtin_` scan that only lib/json calls, with no public `text/`
-function, measured again on runbench because the escape path has changed since
-the entry's figure was taken.
-
-### `.rodata` is not pinned, and the heap start is measured (2026-09-30)
-
-The log entry "directive: `.rodata` is not pinned, and the heap start is
-measured".
-
-Owes: one reading of kanso#1480's commit pair with the heap starting at the
-same address every run. If the 146,628 dies under it, the fixed heap start goes
-into the gates under the 2026-09-15 normalization rule.
 
 ## In flight
 
