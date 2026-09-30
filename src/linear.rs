@@ -767,7 +767,8 @@ impl<'a> Analysis<'a> {
         if scoped == Some(var) {
             return true;
         }
-        let discounted: usize = exempt.iter().map(|e| count_in_expr(var, e)).sum();
+        let discounted: usize =
+            exempt.iter().filter(|e| !holds(var, e)).map(|e| count_in_expr(var, e)).sum();
         if effective_uses(var, &ctx.body).saturating_sub(discounted) > 1 {
             return false;
         }
@@ -865,7 +866,29 @@ fn takes_acc_first_with(args: &[Expr], acc: &str, forced_args: bool) -> bool {
     if !matches!(args.first(), Some(Expr::Ident(n, _, _)) if n == acc) {
         return false;
     }
-    forced_args || args[1..].iter().map(|a| count_in_expr(acc, a)).sum::<usize>() == 0
+    args[1..].iter().all(|a| match forced_args {
+        true => !holds(acc, a),
+        false => count_in_expr(acc, a) == 0,
+    })
+}
+
+/// Whether evaluating `e` can leave something holding `var`'s value: any
+/// mention except as the container of an element or field read, which
+/// answers the element and lets the container go. A forced sibling argument
+/// that only reads is finished with the value before the write; one that puts
+/// the value in a list, a record, a closure or another call's hands keeps it,
+/// and `push a [a 7]` writing into `a` changed the list it had just stored.
+fn holds(var: &str, e: &Expr) -> bool {
+    match e {
+        Expr::Ident(n, _, _) => n == var,
+        Expr::Index { base, index, .. } if matches!(base.as_ref(), Expr::Ident(n, _, _) if n == var) => {
+            holds(var, index)
+        }
+        Expr::Field { base, .. } if matches!(base.as_ref(), Expr::Ident(n, _, _) if n == var) => {
+            false
+        }
+        _ => crate::any_child(e, |c| holds(var, c)),
+    }
 }
 
 fn walk_for_push(
@@ -961,7 +984,7 @@ fn consumed_sibling_uses(var: &str, e: &Expr) -> usize {
         let consuming = matches!(head.as_ref(), Expr::Ident(h, _, _)
             if matches!(h.as_str(), "put" | "push" | "append" | "builtin_append"));
         if consuming && matches!(args.first(), Some(Expr::Ident(first, _, _)) if first == var) {
-            for sibling in &args[1..] {
+            for sibling in args[1..].iter().filter(|s| !holds(var, s)) {
                 n += count_in_expr(var, sibling);
             }
         }

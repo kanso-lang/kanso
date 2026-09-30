@@ -1,0 +1,21 @@
+# a write may extend its container in place when nothing else holds it, and
+# a read of the container in a sibling argument is finished before the write.
+# A sibling that stores the container still holds it: `push a [a 7]` wrote 7's
+# pair into the list it had just put inside that pair, so the interpreter
+# printed the inner copy empty and native printed a cycle
+import "std/list"
+
+fn two z
+  a = push [] [[] z]
+  push a [a 7]
+
+fn each xs
+  list/fold xs [] (acc x -> push acc [acc x])
+
+fn tag m k
+  put m k [m]
+
+fn bump m k
+  put m k (m[k] + 1)
+
+pub play = print "{two 0} {each [0 7]} {tag {"a":1} "b"} {bump {"a":1} "a"}"

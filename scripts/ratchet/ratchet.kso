@@ -4538,6 +4538,18 @@ arm_boxed = row
 
 rows_c1zzzzzzzz = text/concat rows_c1zzzzzzz [arm_boxed]
 
+# A sibling argument that stores the container still holds it, so the write
+# copies instead of extending the list the sibling just stored.
+push_keeps = row
+  "a stored sibling read as finished"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_stored_sibling_read_as_finished")
+  release
+
+rows_c1zzzzzzzza = text/concat rows_c1zzzzzzzz [push_keeps]
+
 # An import's type built by its short name is the import's type: it prints
 # under that type's name and matches that type's patterns.
 origin_once = row
@@ -4548,7 +4560,7 @@ origin_once = row
   (breaking "an_imported_origin_prefixed_twice")
   release
 
-rows_c1zzzzzzzv = text/concat rows_c1zzzzzzzz [origin_once]
+rows_c1zzzzzzzv = text/concat rows_c1zzzzzzzza [origin_once]
 
 rows_c = text/concat rows_c1zzzzzzzv [itself]
 

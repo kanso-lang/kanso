@@ -1,0 +1,18 @@
+# a partial hands its group on to be called with arguments no call site here
+# spells out, so the group's parameters cannot be taken to own what they are
+# given. `f = &add base` holds `base`, and each call must push onto a copy of
+# it. The fixture a curried application was first caught by stopped failing
+# once a string builder adopted a seed that is not a string, and this one
+# takes its place: counted as no mention at all, the partial let both pushes
+# write into `base`
+import "std/os"
+
+fn add xs x
+  push xs x
+
+fn shown z
+  base = [z z]
+  f = &add base
+  "{f 3} {f 4} {base}"
+
+pub play = os/args .> (a -> print (shown (length a)))
