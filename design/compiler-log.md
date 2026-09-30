@@ -20462,6 +20462,28 @@ it. `interp_instructions` rose to 591,340,712, the interpreter's `float_order`
 asking `is_nan` twice where `total_cmp` asked nothing. Every run row fell a few
 hundred instructions: runbench to 1,088,393,175. Welfare held at the floor.
 
+## 2026-09-30 — a corpus for the interpreter's answer where native refuses
+
+The directive of the same day, "a golden may pin the interpreter's answer
+where native refuses", is built. `tests/golden/one_engine` holds entry
+programs with two goldens each. `<name>.interp.out` is what the interpreter
+prints, exiting 0 with nothing on stderr; `<name>.native.err` is the refusal
+native answers with, exiting non-zero, beside an optional `<name>.native.out`.
+The test `one_engine_corpus_pins_the_interpreter_where_native_refuses` in
+`tests/golden.rs` also fails if the two engines print the same thing, so the
+corpus cannot hold an ordinary divergence.
+
+The first fixture, `an_int_past_int64_on_the_interpreter`, lands eleven
+integer operations exactly one step past the int64 boundary: an add, a
+subtract, two doublings, a square, a negation, a division of the least value
+by minus one, the least value squared, a list sum that crosses, a step back
+inside, and a comparison past the edge. Native refuses on the first with
+`integer overflow (int64 native build; spec int is arbitrary precision)`.
+The mutation "an int that wraps where it should widen" makes the
+interpreter's machine-word add wrap instead of promoting, which is what a
+promotion one step late looks like from outside, and turns the fixture red;
+it is a ratchet row.
+
 ## 2026-09-30 — the escape scan on the string, measured again and declined
 
 "directive: the escape path's byte scan stays inside lib/json" asked for the

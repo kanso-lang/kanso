@@ -1,0 +1,11 @@
+one past the largest: 9223372036854775808
+one below the least: -9223372036854775809
+the largest doubled: 18446744073709551614
+the largest added to itself: 18446744073709551614
+a square just past: 9223372037000250000
+the least negated: 9223372036854775808
+the least over minus one: 9223372036854775808
+the least squared: 85070591730234615865843651857942052864
+a sum that crosses: 9223372036854775808
+and back inside: true
+ordered past the edge: true
