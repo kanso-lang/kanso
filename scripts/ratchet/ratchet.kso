@@ -4627,7 +4627,19 @@ rows_c1zzzzzzzs = text/concat rows_c1zzzzzzzw [int_counter value_err_arm]
 
 rows_c1zzzzzzzt = text/concat rows_c1zzzzzzzs [lambda_third]
 
-rows_c = text/concat rows_c1zzzzzzzt [itself]
+# A pattern the parse did not read to its end answers an err, so an open
+# group or a stray `)` is refused rather than matched as a shorter pattern.
+unclosed_pattern = row
+  "an unclosed pattern matching what it read"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "an_unclosed_pattern_matching_what_it_read")
+  release
+
+rows_c1zzzzzzzr = text/concat rows_c1zzzzzzzt [unclosed_pattern]
+
+rows_c = text/concat rows_c1zzzzzzzr [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

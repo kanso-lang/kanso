@@ -745,11 +745,11 @@ deepbench 363026387
 escapebench 45427695
 pendbench 181091558
 indexbench 2398456
-scanbench 280865
+scanbench 280943
 digestbench 5365936
 readbench 4577898
 livebench 1537391669
-runbench 1088404749
+runbench 1088394120
 # 2026-09-06 (the run program joins): `runbench 3043743748` is a NEW row and
 # nothing regressed to make it appear. It is the program Clay's gavel that day
 # made the objective's whole run-speed term, and the thirteen rows above it

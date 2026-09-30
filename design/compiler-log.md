@@ -20215,3 +20215,61 @@ isolated that walk as the cause. Three run rows moved by a few hundred
 instructions: work_encodebench landed on 2,333,703,876 (+595), work_livebench on
 1,537,391,669 (+651) and work_oneshot on 12,744,007 (+343), while
 work_runbench fell 315. Welfare reads 90.3231 against a floor of 90.3230.
+
+## 2026-09-30 — an unclosed pattern answers an err
+
+The random-program generator had never called `regexp/matches`,
+`regexp/match_at` or `regexp/match?`. A survey of those three against
+malformed patterns found no engine split, because the regexp compiler is a
+kanso library and every engine runs the same code. It found a library that
+matched patterns it had not finished reading. `(a` found `a`, `a)b` found `a`,
+`[abc` found `a`, `b{2` counted a repeat with no closing brace, and a pattern
+ending in `\` matched a literal backslash. The library's own comment on
+`find` says a pattern that does not compile answers an err, and the only err
+it could produce was the lookbehind of varying width.
+
+The parser already had what it needed to see each case. A pattern parsed to
+its end stops one past its last character. A `)` that closes no group stops
+the top-level alternation early, so the parse ends short. An open group, class
+or count reads to the end of the text and then steps past a closing character
+that is not there, so the parse ends long. `compiled` now compares the two
+positions and answers "a `)` in the pattern closes no group" when the parse
+ended short and "the pattern ends inside a group, class, count or escape" when
+it ended long. A trailing `\` stepped one place, which made it look finished;
+it steps two now, so it falls into the second case.
+
+Probing the flag prefix found a hang. `(?i` and `(?ia` never returned on any
+engine: `flag_end` looks for the `)` that closes a leading flag group, and it
+walked past the end of the pattern forever, because a slice past the end is
+the empty string and never equals `)`. It stops at the end now. The check
+counts the flag prefix as well as the body, so a flag group left open is
+refused with the rest.
+
+Patterns that were well formed are read exactly as before. Every pattern in
+the tree still compiles: `scripts/book_check.sh` runs the two book scripts,
+which carry the most involved patterns here, and both passed. kq and vse call
+no regexp function.
+
+`an_unclosed_pattern_answers_an_err` in the micro corpus pins one well-formed
+pattern and seven refusals on every engine; on main its last line never
+returns. The mutation "an unclosed pattern
+matching what it read" tells `compiled` that every parse ended where the
+pattern did, and is a new ratchet row.
+
+Some lenient readings remain, and this change leaves them alone because each
+has a consistent meaning. A quantifier with nothing before it, as in `*a`, is
+a literal character. `[]` is a class that matches nothing, and `[z-a]` is an
+empty range.
+
+CI measured the change. `lib/regexp` is compiled into the compiler, and two
+compile rows rose with it: entry_instructions landed on 84,056,518 (+196,455)
+and library_instructions on 84,590,469 (+195,321). No build has isolated which
+part of the library change they follow. The two benchmarks that import
+regexp grew by the same code: text landed on 3,523,152 (+2,656, scanbench and
+runbench 1,408 and 1,248 bytes each), and the emitted rows for the programs
+beside the decoder landed on emitted_other_defines 1,558, emitted_other_calls
+10,801, emitted_other_branches 8,296 and emitted_other_lines 86,399, one
+function, twenty calls, twenty-five branches and 161 lines in each of those two
+programs. work_scanbench landed on 280,943 (+78) with the change. work_runbench fell 10,629 to 1,088,394,120,
+which no mechanism here predicts and no build has isolated. Welfare reads
+90.3228 against a floor of 90.3231, inside the gate's allowance.
