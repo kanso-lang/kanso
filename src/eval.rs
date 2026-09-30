@@ -2120,7 +2120,7 @@ impl<'a> Interp<'a> {
                 let answer = eval_binop(op, sub_base(left), sub_base(right), *span, &cells)?;
                 Ok(match matches!(&**op, "/" | "%") {
                     true => {
-                        as_declared_math(answer, self.type_decl(crate::DIVIDE_BY_ZERO).is_some())
+                        as_declared_math(answer, || self.type_decl(crate::DIVIDE_BY_ZERO).is_some())
                     }
                     false => answer,
                 })
@@ -4956,10 +4956,12 @@ fn cmp_int_float(x: &Int, y: f64) -> std::cmp::Ordering {
 /// wrapped in `divide_by_zero` under `math_failure`, and a program that never
 /// names either type gets the bare text, as it does on native: nothing there
 /// could tell the two apart except an operator's arms, which a subtype reaches
-/// and a string does not. `declared` says whether the program named them.
-pub fn as_declared_math(answer: Value, declared: bool) -> Value {
+/// and a string does not. `declared` says whether the program named them, and
+/// is asked only of a zero divisor's answer, so a division that succeeds pays
+/// no lookup.
+pub fn as_declared_math(answer: Value, declared: impl FnOnce() -> bool) -> Value {
     match answer {
-        Value::Sub { ty, inner } if !declared && &*ty == crate::DIVIDE_BY_ZERO => match &*inner {
+        Value::Sub { ty, inner } if &*ty == crate::DIVIDE_BY_ZERO && !declared() => match &*inner {
             Value::Sub { inner: text, .. } => (**text).clone(),
             _ => (*inner).clone(),
         },

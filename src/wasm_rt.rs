@@ -1117,10 +1117,9 @@ pub extern "C" fn rt_binop(op: u32, a: u32, b: u32) -> u32 {
     // same way any demand does.
     let cells = Cells { id: &cell_handle, force: &|v| Ok(forced(v)) };
     match eval_binop(op, a, b, SPAN0, &cells) {
-        Ok(v) if matches!(op, "/" | "%") => push(Slot::V(crate::eval::as_declared_math(
-            v,
-            type_index(crate::DIVIDE_BY_ZERO).is_some(),
-        ))),
+        Ok(v) if matches!(op, "/" | "%") => push(Slot::V(crate::eval::as_declared_math(v, || {
+            type_index(crate::DIVIDE_BY_ZERO).is_some()
+        }))),
         Ok(v) => push(Slot::V(v)),
         Err(rt) => die(rt.message),
     }

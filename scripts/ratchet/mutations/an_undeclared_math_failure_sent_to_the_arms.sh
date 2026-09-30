@@ -10,11 +10,11 @@
 # refused in the arms' words instead of the builtin's.
 set -e
 f=src/eval.rs
-grep -q "pub fn as_declared_math(answer: Value, declared: bool) -> Value" src/eval.rs
-line='                        as_declared_math(answer, self.type_decl(crate::DIVIDE_BY_ZERO).is_some())'
+grep -q "pub fn as_declared_math(answer: Value, declared: impl FnOnce() -> bool) -> Value" src/eval.rs
+line='                        as_declared_math(answer, || self.type_decl(crate::DIVIDE_BY_ZERO).is_some())'
 [ "$(grep -cxF "$line" "$f")" -eq 1 ] || {
   echo "the unwrap call moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i 's/^                        as_declared_math(answer, self\.type_decl(crate::DIVIDE_BY_ZERO)\.is_some())$/                        as_declared_math(answer, true)/' "$f"
-grep -qxF '                        as_declared_math(answer, true)' "$f"
+sed -i 's/^                        as_declared_math(answer, || self\.type_decl(crate::DIVIDE_BY_ZERO)\.is_some())$/                        as_declared_math(answer, || true)/' "$f"
+grep -qxF '                        as_declared_math(answer, || true)' "$f"
