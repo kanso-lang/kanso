@@ -20290,13 +20290,18 @@ program that sorts nothing compiles without the sorted arm, so native passed
 the cell on and it failed two frames later. The code generator now keeps the
 positions the prune stopped reading and forces a cell handed to one of them.
 
-Reducing the program found a second gap on the same path. When an arm binds a
-cell to a name, inference narrowed the name to a value that cannot fail, on
-the reasoning that the guard ahead of the arm has already answered any err.
-The guard sees the cell, not what is inside it. `list/iter` then kept no guard
-for an err, and a cell that `list/first` forced before calling it failed in
-`list/next` instead of `list/iter`. A name bound to a value that may be a cell
-now keeps its failures.
+Reducing the program found a second gap on the same path. Inference narrowed
+every parameter an arm binds to a value that cannot fail, on the reasoning
+that the guard ahead of the arm has already answered any err. The guard sees
+a cell, not what is inside it. `list/iter` then kept no guard for an err, and
+a cell that `list/first` forced before calling it failed in `list/next`
+instead of `list/iter`. A parameter that may hold a cell now keeps an err in
+a program that defers anything. It keeps it as an err the runtime met and
+never as a raise, because the exhaustiveness checker reads the raise bit: the
+first version kept both, and `scripts/trend_gate` stopped compiling. Applying
+it in every program also cost the module compile golden 578 expression visits
+(2,674 to 3,252), because every parameter widened to any value carries the
+cell bit; restricted to programs that defer, the golden does not move.
 
 `a_lazy_list_answers_where_a_dropped_arm_read_it` and
 `a_lazy_list_answers_at_the_group_that_reads_it` in the runtime corpus pin the

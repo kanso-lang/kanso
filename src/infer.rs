@@ -481,6 +481,7 @@ pub fn infer(program: &Program) -> Inference {
     let fns = &program.fns;
     let mut env = Env::default();
     let mut param_sets: Vec<Set> = Vec::new();
+    let cells = ctx.demand.lazy_bind_count() > 0 || ctx.defers_into_containers;
     // Every function is visited the first round; after that only the ones a
     // change can reach. Four fifths of the visits in a settled fixpoint find
     // nothing, and a visit costs a walk of the whole body.
@@ -536,6 +537,17 @@ pub fn infer(program: &Program) -> Inference {
             );
             for (pattern, joined) in decl.params.iter().zip(&param_sets) {
                 bind_pattern(pattern, *joined, &ctx.type_fields, &ctx.type_names, &mut env);
+                // A parameter can hold a cell nobody has forced, and the
+                // guard ahead of the arm sees the cell rather than what is
+                // in it, so a failure the cell holds survives the guard. It
+                // is kept as an err the runtime met, never as a raise: the
+                // checker reads RAISED, and a cell raises nothing here. Only
+                // a program that defers something has a cell to hold.
+                if let Pattern::Var(name, _) = pattern {
+                    if cells && joined & THUNK != 0 && joined & FAIL != 0 {
+                        env.insert(name, (joined & !FAIL) | ERR);
+                    }
+                }
             }
             let ret = eval_body(&mut ctx, &decl.body, &mut env);
             let mut widened = false;
@@ -955,15 +967,9 @@ fn bind_pattern<'a>(
     env: &mut Env<'a>,
 ) {
     match pattern {
-        // generics never bind failures, except inside a cell nobody has
-        // forced: the guard ahead of the arm sees the cell and not its
-        // value, so what the cell turns into can still be an err
+        // generics never bind failures
         Pattern::Var(name, _) => {
-            let kept = match joined & THUNK {
-                0 => joined & !FAIL,
-                _ => joined,
-            };
-            env.insert(name, kept);
+            env.insert(name, joined & !FAIL);
         }
         Pattern::Wildcard(_) | Pattern::IntLit(..) | Pattern::StrLit(..) | Pattern::Nullary(..) => {
         }
