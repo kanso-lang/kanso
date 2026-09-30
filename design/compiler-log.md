@@ -19891,3 +19891,28 @@ so `text`, the sum over the fourteen binaries, rose 5,152 to 3,544,688.
 instruction rows was isolated beyond the text growth. Welfare fell by less
 than a thousandth, and the floor was lowered to 90.32374 under the rule that
 a change making the engines agree pays what it costs.
+
+## 2026-09-29 — a held `if` picks its branch
+
+Reading which interpreter paths the random programs never reach turned up
+`builtin_if`, the arm that runs `if` when it is called as a held value.
+Driving it by hand:
+
+    fn pick c
+      g = &if
+      h = &if c
+      "{g c 1 2} {h 3 4}"
+
+The interpreter printed `<fn> <fn>` for both calls. Before calling a held
+function it counts the arguments the function answers to, and for a builtin
+it read that count from the checker's table. `if` is the one builtin that
+table leaves out on purpose, because its count is checked where its branches
+are. So a held `if` answered no count, three arguments did not match one, and
+the partial grew instead of being called. It now answers three. Native
+declines the form with `if` as a bare value is not yet supported, and the page
+refuses it too, which the differential law allows; the interpreter's answer is
+the one the language gives, and it is now the branch: `1 3` and `2 4`.
+
+`a_held_if_picks_its_branch` holds both halves: the interpreter's answer, and
+native naming its limit. The mutation "a held if counted as nothing" takes the
+count out and the spec goes red printing `<fn>`. It is a ratchet row.

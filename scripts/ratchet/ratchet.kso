@@ -4514,7 +4514,19 @@ bits_unwrap = row
 
 rows_c1zzzzzz = text/concat rows_c1zzzzz [bits_unwrap]
 
-rows_c = text/concat rows_c1zzzzzz [itself]
+# A held `if` takes the condition and both branches, so three arguments call
+# it on the interpreter instead of growing the partial.
+held_if = row
+  "a held if counted as nothing"
+  true
+  "cargo test --release --test a_held_if_picks_its_branch"
+  "specs (unit, golden, differential)"
+  (breaking "a_held_if_counted_as_nothing")
+  release
+
+rows_c1zzzzzzz = text/concat rows_c1zzzzzz [held_if]
+
+rows_c = text/concat rows_c1zzzzzzz [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
