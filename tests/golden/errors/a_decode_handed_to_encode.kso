@@ -1,0 +1,9 @@
+# `json/decode` answers a parse failure for text that is not json, and
+# `json/encode` has no arm for one. Handing the first straight to the second
+# is refused at the argument, which is where the dispatch belongs.
+import "std/json"
+
+fn round_trip s
+  json/encode (json/decode s)
+
+pub play = print (round_trip "[1, 2]")

@@ -526,7 +526,14 @@ fn written m phases epochs raw
   lines = list/select (text/split raw "\n") (l -> length l > 0)
   decoded = list/to_list (list/map lines json/decode)
   a = anchor decoded phases
-  divs = (epoch_divisors decoded epochs)[2]
+  scored_rows m phases decoded a (epoch_divisors decoded epochs)
+
+# An epoch naming a commit no row carries answers an err, handed on as it is.
+fn scored_rows _ _ _ _ e@(err _)
+  e
+
+fn scored_rows m phases decoded a epoch_divs
+  divs = epoch_divs[2]
   built = list/map decoded (r -> scored_row m divs r a phases)
   rows = list/to_list built
   io/write "{text/join rows "\n"}\n"
