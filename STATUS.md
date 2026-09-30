@@ -365,7 +365,6 @@ follows is whether an exact pin is the right instrument for a counter whose
 artifact and host both move under it. That one is Clay's, and this row does
 not decide it in advance.
 
-
 ### A golden may pin the interpreter's answer where native refuses (2026-09-30)
 
 The log entry "directive: a golden may pin the interpreter's answer where
