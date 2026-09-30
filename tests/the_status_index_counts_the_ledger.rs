@@ -153,9 +153,29 @@ fn the_status_index_counts_the_ledger() {
     // paragraph rather than from one line.
     let flat = status.split_whitespace().collect::<Vec<_>>().join(" ");
 
-    let claimed_total = word_before(&flat, "questions wait in `design/pending-gavels.md`");
+    // A count of one reads in the singular. Until 2026-09-30 the ledger had
+    // never held exactly one entry, and the plural phrases below were the only
+    // ones this spec could find, so the first sitting to leave one question
+    // standing turned it red on grammar.
+    let spoken = |plural: &'static str, singular: &'static str| {
+        if flat.contains(plural) {
+            plural
+        } else {
+            singular
+        }
+    };
+    let claimed_total = word_before(
+        &flat,
+        spoken(
+            "questions wait in `design/pending-gavels.md`",
+            "question waits in `design/pending-gavels.md`",
+        ),
+    );
     let claimed_blocking = word_before(&flat, "blocking,");
-    let claimed_open = word_before(&flat, "open — each with a recommendation");
+    let claimed_open = word_before(
+        &flat,
+        spoken("open — each with a recommendation", "open — with a recommendation"),
+    );
 
     // STATUS.md indexes the ledger TWICE: the sentence above, and an overview
     // one near the top of the file. Only the first was pinned, so on 2026-09-16
@@ -164,8 +184,10 @@ fn the_status_index_counts_the_ledger() {
     // and the ledger held none. A file that contradicts itself about the queue
     // is worse than one that is merely stale: a reader cannot tell which half
     // to believe. Both sentences are pinned to the ledger now.
-    let overview_total = word_before(&flat, "questions are waiting**");
-    let overview_blocking = word_after(&flat, "questions are waiting** —");
+    let overview_total =
+        word_before(&flat, spoken("questions are waiting**", "question is waiting**"));
+    let overview_blocking =
+        word_after(&flat, spoken("questions are waiting** —", "question is waiting** —"));
 
     // And a third: the paragraph that lists the open entries one by one counts
     // them in its own lead-in. On 2026-09-16 it read "The two open, not

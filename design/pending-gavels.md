@@ -52,123 +52,6 @@ went to the log rather than here.
 
 ## Open, not blocking
 
-### Is a NaN equal to itself, and is -0.0 equal to 0.0?
-
-**Cited:** the search of design/compiler-log.md, design/log/compiler-log-archive.md
-and design/*.md for `total_cmp`, "total order", "negative zero", `-0.0` and
-NaN found no ruling on how floats compare. The archive's 2026-09-08 gavel,
-"an infinite or nan float renders as inf, -inf and nan", settles how such a
-float prints and nothing about how it compares. The 2026-08-02 entry "a whole
-number and a fractional one compare exactly" (kanso#689) settles an int
-against a float, and its code sends NaN to a fallback without a rule behind
-it. `docs/book` and `docs/spec.html` do not mention either case.
-
-**The question.** A generated program on 2026-09-28 printed a map holding
-`nan == nan` and got `1` from the interpreter and `0` from both native builds.
-The two engines compare floats differently, and neither is consistent with
-itself:
-
-- The interpreter orders floats by Rust's `f64::total_cmp`, which ranks bit
-  patterns. `nan == nan` is true and NaN ranks above `inf`, but only for a
-  NaN whose sign bit is clear. `inf - inf` on x86 produces a NaN with the
-  sign bit set. That NaN is not equal to `text/to_float "nan"`, and it sorts
-  below `-inf`, although both print `nan`. ARM's default NaN has the other
-  sign, so there the same subtraction makes a NaN that ranks last, and the
-  interpreter's answer depends on the machine. `-0.0 == 0.0` is false and
-  `-0.0 < 0.0` is true, while `-0.0 == 0` is true, so equality is not
-  transitive across 0, 0.0 and -0.0.
-- The native runtime uses C's `==` for equality, so `nan == nan` is false and
-  `-0.0 == 0.0` is true. Its ordering answers "equal" for any pair involving a
-  NaN, so `nan >= nan` and `nan <= nan` are true while `nan == nan` is false.
-  It ranks an int above every NaN, where the interpreter ranks it below a
-  positive one.
-- Sorting a list of `inf - inf`, `nan`, `1.0` and `-inf` gives
-  `[nan -inf 1.0 nan]` on the interpreter and `[-inf 1.0 nan nan]` natively.
-  `list/min [nan 1.0]` is `1.0` on the interpreter and `nan` natively.
-
-The interpreter is the oracle, but here its answer changes with the host, so
-copying it into the runtime would copy that too. The native runtime changes
-under every answer below, and the interpreter under the first two.
-
-1. **One NaN, ranked last; zero has one value.** Every NaN equals every NaN
-   and ranks above `inf`. `-0.0` equals and ranks with `0.0`, and still
-   prints `-0.0`. Equality stays reflexive, which list and map equality lean
-   on (`[x] == [x]`), and transitive across ints and floats. Sorting has one
-   answer on every host. This is the recommendation.
-2. **IEEE 754.** NaN equals nothing, itself included, and every ordering
-   against it is false; `-0.0 == 0.0`. This is what C and Rust's operators do.
-   The cost is that `[x] == [x]` is false for a list holding a NaN, and
-   `list/sort` needs its own rule for elements that are neither less nor
-   greater.
-3. **The bit order the interpreter has today.** No work on the oracle, but
-   the answer changes with the host and with how a NaN was made, and `-0.0`
-   equals `0` without equalling `0.0`.
-
-### Where does a golden live that pins ONE engine's answer where another refuses?
-
-**Cited:** the differential law as this file and CLAUDE.md state it -- a feature
-may land on fewer engines only if the others REJECT it with a clear diagnostic,
-never silently diverge; `docs/book/ch02.html` and
-`docs/book/samples/ch02/overflow.out`, which pin native's refusal at the int64
-boundary; and `tests/golden.rs`'s `micro_corpus_agrees_across_engines`, which
-runs every micro fixture on both engines and requires agreement.
-
-**The question.** kanso's integers are arbitrary-precision by specification. The
-interpreter implements that with `BigInt`; the native build is int64 and raises
-`integer overflow (int64 native build; spec int is arbitrary precision)` past
-the boundary. The refusal is pinned. The interpreter's own ANSWERS there are
-not, and they cannot be: the micro corpus is the only behavioural corpus, it
-runs both engines, and it requires them to agree, so no fixture in it can hold
-a program native refuses.
-
-That matters now because the interpreter's `Value::Int` holds a `BigInt` whose
-clone allocates, and 610,763 of the run's 1,555,866 value clones are integers --
-every one of which fits an `i64`. An inline machine integer with `BigInt` on
-overflow removes those allocations, and the way it goes wrong is promoting one
-step late, which prints a WRAPPED number rather than raising. Nothing in the
-tree would catch that.
-
-1. **A fixture kind that pins one engine where another refuses.** A micro
-   fixture gains an optional companion recording the refusal, so the corpus
-   asserts "interp says X, native refuses with Y" rather than requiring
-   agreement. The cost is a second shape of golden for every reader to learn,
-   and a door to divergences being pinned rather than fixed.
-2. **Native gains arbitrary precision**, the two engines agree, and an ordinary
-   micro golden works. The cost is a bignum in the compiled runtime, on the
-   production side of the objective, for a case programs rarely reach.
-3. **Leave it unpinned** and let the small-integer change rest on the
-   interpreter's existing arithmetic tests. The cost is that the one defect the
-   change can introduce is the one nothing watches.
-
-**Recommendation: 1.** The divergence is already sanctioned and already
-documented in the book; what is missing is a place to assert it mechanically,
-and 2 spends production cost to remove a divergence the project chose. But
-this is a question about what the corpus is FOR, which is Clay's rather than
-the implementer's.
-
-**What is NOT being asked.** Whether to build the small-integer change; that
-is an ordinary performance question and it is the implementer's. Only where
-its fixture lives.
-
-**IT IS NO LONGER UNSIZED, and that is the only thing this entry gained on
-2026-09-19.** The BigInt clone-and-drop pair was measured at 35.00 instructions
-over three counts, which puts the integer clones at about 21.4 million and the
-string clones beside them at 12.9 million. Against the interpreted row as it
-now stands — 923,151,727, after the dispatch-pooling family took 14.1% off it
-— that is 2.3% and 3.7%.
-
-Two things follow for whoever rules this. The number is large by the standards
-of what is left: the three changes that landed tonight were 6.9, 2.8 and 6.1
-million each, so this one alone is bigger than all of them together. And the
-question stays exactly as posed — where the fixture lives — because the reason
-it is not simply built is the defect the change can introduce, promoting one
-step late and printing a WRAPPED number, which the corpus cannot currently
-watch.
-
-This paragraph adds evidence to a question already asked. It does not re-ask
-it, and the recommendation is unchanged.
-
-
 ### What spelling does "cyclic structures sized by data" need?
 
 **Cited:** the archive's "block-born is the whole cohort" (2026-08-29), whose
@@ -224,273 +107,62 @@ rule the 2026-09-16 gavel established and adds a binder rather than an escape
 hatch. But which of the three is Clay's, because the gavel's own words are
 what is at stake.
 
-### The box constructor's spelling
+**Worked examples, added 2026-09-30 at Clay's request.** Neither program
+compiles today; each is a sketch of one spelling. Both build the same graph
+from a map of edges, `a -> b`, `b -> c`, `c -> a`, and follow three links from
+`a` back to `a`.
 
-**Cited:** the live log's "gavel: the box is explicit, an err is a value, and
-a bare err halts where it lands" (2026-09-15), which rules that a value or an
-err can be boxed by hand and leaves the word unnamed; the archive's "gavel:
-effects are types, and the words are the only doors" (2026-08-29), which
-names the type `<t>effect` and the three eliminators `bind`, `annotate`,
-`rescue`; and "gavel: the fused chain operators" (2026-08-31), which gave the
-three words their chain spellings. Nothing names the introducer.
+*An iterating `build` block.*
 
-**The question.** What is the prefix word that boxes a value or an err by
-hand, so that `<int>effect` can be built in pure code? It is an ordinary
-one-argument function, effect-shaped in its answer and value-shaped in its
-argument, and it needs a chain spelling only if a chain ever ends by boxing,
-which nothing in lib does today.
+```
+type node
+  id
+  next
 
-**Recommendation:** `effect`, the type's own name in prefix position:
-`effect 5` answers `<int>effect` holding 5, `effect (err "bad")` answers a
-box holding the failure. A type spelled `<t>effect` and a constructor
-spelled `effect` read as one thing, the way `err reason` builds an err. No
-chain spelling until a chain wants one. Cloud builds against this unless
-Clay names a different word; it does not block the build.
+links = { "a":"b", "b":"c", "c":"a" }
 
-### How far does a binding position carry a box?
+pub play =
+  build
+    nodes = { id: node id _ | id in keys links }
+    for id in keys links
+      nodes[id].next = nodes[links[id]]
+  print "{nodes["a"].next.next.next.id}"
+```
 
-**Cited:** the live log's "a box handed to a binding parameter reaches the
-dispatch, and the dispatch answers wrong" (2026-09-16), which names three
-possible answers and rules none of them; the entry below it of the same date,
-which measures the cheapest one; the archive's "gavel: effects are types, and
-the words are the only doors" (2026-08-29), which says a box is opened by
-`bind`, `annotate` and `rescue` and by nothing else, and does not say what a
-box handed to an ordinary parameter does. Ten micro and runtime fixtures pin
-today's answer on three engines, `a_description_reaches_a_dispatch` and
-`a_plain_dot_hands_the_box_over` first among them.
+What it keeps: a hole is written only inside a `build` block, it is filled
+before the block freezes, and it cannot leave the block through a call or a
+lambda. What it changes: the number of births comes from data, since the map
+line makes one per key; and a fill's target may be an indexed name,
+`nodes[id].next`, which lifts the fifth of the five refusals above. "Filled
+exactly once" can then no longer be proved by counting names. It holds when
+the `for` walks the same keys that made the births, which the checker can
+see; anything else is checked when the block freezes.
 
-**The question.** A box carried through a plain parameter is invisible to the
-checker from then on. `encode_onto` handed a box directly is refused;
-`elem_onto x` then `encode_onto x` inside that body is not, because nothing
-says `x` holds a box. kq lost three unit tests to that shape and kanso-json
-two sites, each a box arriving at a group with no arm that could match it, so
-the program died at run time with a diagnostic about arguments rather than
-about the box.
+*A knot on a local binding.*
 
-Refusing a box at every bare-binder position closes it and was built and
-measured: one refusal across the whole tree's modules, and TEN in the corpora,
-two of which are the ruled behaviour itself — a description reaching a
-dispatch lands on the bare arm, and `held e` receives a box and hands it back.
-So the blunt rule is not available without reversing those.
+```
+type node
+  id
+  next
 
-**Recommendation:** track the box through the parameter — a position bound to
-a box carries a box into the body, and the existing refusal then fires at the
-call inside it. That is a typing change rather than a check, it leaves every
-one of the ten fixtures alone, and it is the answer the log entry that opened
-this thread already called the honest one. Cloud does not build it until Clay
-rules, because it changes what the checker proves about every program, and it
-does not block anything in flight: every site in kanso, kq and kanso-json is
-spelled today so that no box reaches a group with no arm for it.
+links = { "a":"b", "b":"c", "c":"a" }
 
-### A byte-position scan on a string, for the escape path
+fn graph links
+  nodes = list/to_h (list/map (keys links) (id -> [id (node id nodes[links[id]])]))
+  nodes
 
-**Cited:** the live log's "the per-call floors, mapped after the inlines"
-(2026-09-15), whose closing paragraph measures this change and says in its own
-words that it "goes to Clay with this number and is not built here" — and then
-no entry was ever filed here, so it went to nobody. Searched this ledger, the
-live log and `design/log/compiler-log-archive.md` for `byte-position`,
-`find2_below_str` and the escape path: those two log paragraphs are the only
-mentions, and the question has never been asked. Also read: kanso#1291's escape
-scan, which skipped and then iterated, and kanso#1276's proven length, both of
-which worked inside the view rather than removing it.
+pub play = print "{(graph links)["a"].next.next.next.id}"
+```
 
-**The question.** `escape_onto` looks through a string for the three bytes JSON
-escapes. It cannot look at the string: `text/find2_below` takes bytes, so
-`escape_onto` builds a thirty-two-byte bytes view of the string first, every
-time, and drops it unused when the string is clean, which is nearly always.
-That is seventeen instructions and thirty-two arena bytes per string,
-16,026,750 instructions a run.
-
-A scratch builtin `text/find2_below_str` looks through the string's own bytes
-and answers 0 for a miss, and `escape_onto` builds the view only when it hits.
-Container A/B on the kanso#1437 leaves, output byte-identical on both programs:
-runbench 1,823,814,374 -> 1,801,576,724, −22,237,650 (−1.2193%), the decoder
-unmoved. That is more than the view's own seventeen instructions because the
-element loop's beat and the view's arena bytes go with it. The patch sits in
-the session scratchpad as `escape_str.patch`.
-
-What the measurement cannot settle is the surface. A string's positions are
-codepoints everywhere else in `text`, and this primitive takes a byte floor and
-answers a byte offset.
-
-**Recommendation:** add it, spelled so the byte offset is never a position. What
-this call site asks is where the clean prefix ends, and the answer is consumed
-as a bound for building the view rather than as an index into the string; every
-`text` operation a program can reach still counts in codepoints. If that reading
-is too fine a distinction, the other answer is to keep the view and close the
-question — 1.22% of the run term is the price, written down, and the queue
-stops re-finding it.
-
-
-### Pinning `.rodata` to a fixed page, so code growth stops moving the compile rows
-
-**Cited:** the live log's 2026-09-15 entry "the maps parse is outside all three
-compile rows", whose closing paragraph measures this and says the choice "is
-Clay's, and goes to him with these numbers rather than to the ledger" — where
-this ledger is the only channel a waiting decision has, so it went nowhere.
-Searched this ledger, the live log and `design/log/compiler-log-archive.md` for
-`rodata`, `section-start` and the page-pin family: that one log paragraph is the
-only mention, and the question has never been asked here. Also read: kanso#1234,
-which chased the same "by layout" noise to glibc's `/proc/self/maps` parse and
-was ruled with `setarch` and sorts rather than a link change; and kanso#1404,
-which took the checkout path out of the rows. Neither touches section placement.
-
-**The question.** The three compile instruction rows move when code that sits
-ahead of `.rodata` in the binary grows, because every literal after it shifts.
-Most of this month's pull requests carry a line in their body naming some part
-of their compile-row delta as "by layout", and that term is what those words
-mean.
-
-Pinning the section to a fixed address removes the term for anything growing
-ahead of it. Built with `-C link-arg=-Wl,--section-start=.rodata=0x100000` on
-two sources differing by a hundred functions: `program` reads 43,471,592 on
-both, identical to the instruction, where the unpinned pair differed by 5,849.
-
-The price is the gap the linker writes. The binary grows from 4,677,120 to
-5,724,880 bytes at that address — about 1 per cent — or roughly 52 KiB at
-0x40000, one page above today's `.rodata`, which fails the link loudly the day
-the sections ahead of it outgrow it.
-
-What the pin cannot reach is growth *inside* `.rodata`. `src/runtime.c` and
-`lib/*.kso` are `include_str!`'d into it, so a runtime or library edit shifts
-every literal after them whatever the section's start — and those are the edits
-behind most of the "by layout" lines. So the pin buys the code-only case and
-leaves the common one alone.
-
-**Three more measurements of the term, gathered 2026-09-17, all pointing the
-same way.** They matter because the pin is priced against how large the term
-is, and every reading so far puts it small.
-
-- `scripts/gates/compile_instructions.sh`'s own header carries a seven-binary
-  ladder from 2026-09-04, sources differing only in code nothing reaches. The
-  anchored frame spans 1,028 across all seven, 7,632 bytes of unreachable code
-  moves it 402, and the movement is not monotone in `.text`. Data-only changes
-  leave the frame identical to the instruction. The header's conclusion is that
-  a difference near a thousand on this row is not evidence on its own.
-- kanso#1473 and kanso#1478 measured the same three rows to the instruction on
-  two different binaries, which says the term is quantized rather than noisy
-  and that most changes do not move it at all.
-- kanso#1480 moves `compile_instructions` 140,122 and `entry_instructions`
-  487,035 — two orders of magnitude above both readings above. Bisected by
-  cloud on 2026-09-17: 105 added lines in the linearity analysis cost 357,
-  and 74 lines REWRITING two private emitter functions cost 145,472. Both
-  are unreachable from a check.
-
-**Withdrawn: the rewrite explanation, measured and false.** This entry briefly
-said the term is small for ADDITIONS and large for REWRITES, on the strength of
-kanso#1480's bisection attributing 145,472 to 74 rewritten lines. kanso#1492
-built the ladder that tests it — eight rewrites of `without_stats_gate`, which
-`kanso check` never reaches, each a distinct binary — and the row is IDENTICAL
-TO THE INSTRUCTION across all eight, with `.text` spanning 256 bytes. So
-rewriting unreachable code costs nothing, and the sentence that was going to
-re-weigh this entry is void.
-
-**What the three calibrated shapes now say, and they all say small.**
-
-    unreachable additions   ~402, span 1,028 over seven binaries   (2026-09-04)
-    unreachable rewrites    0, over eight binaries                 (kanso#1492)
-    a reached addition      2,733                                  (kanso#1492)
-
-kanso#1480 reads +146,628 on CI, fifty times the largest of those. So the term
-this entry prices is SMALL in every shape anybody has measured, and the 146,628
-is not it — it is unexplained, and it belongs to whichever frame the profile
-diff names rather than to the layout term at all.
-
-**Recommendation, rewritten 2026-09-17 after the ladders.** Still decline the
-section pin, and do not close the question with it — the pin was never the
-right instrument and there is a better one to rule on.
-
-*Why the pin is not worth its price.* Every calibrated shape of the term is
-small: ~402 for an unreachable addition, 0 for an unreachable rewrite, 2,733
-for a reached one. The pin removes part of a term that costs at most a few
-thousand instructions on a 36-million-instruction row, and it costs a 1 per
-cent larger shipped binary or a measurement build linked unlike the shipped
-one. That trade was the first recommendation's reasoning and the ladders have
-only strengthened it.
-
-*And the mechanism points elsewhere.* `scripts/gates/compile_instructions.sh`'s
-header names what it found when it chased this: *a binary whose data and bss
-differ starts the heap at a different break. That moves how much work malloc
-does to service an identical request sequence without moving a single
-instruction the compiler executes* — seven readings, four distinct values,
-every kanso symbol identical to the instruction and only glibc's allocator
-moving. If that is also what carries the 146,628, then pinning `.rodata` does
-nothing for it: the heap break is set by where `.bss` ENDS, and a fixed
-`.rodata` start does not fix that.
-
-*The instrument worth ruling on instead.* Give the measured run a heap that
-starts at the same address every time, and the term goes away for additions and
-rewrites alike without the shipped binary changing by a byte — which answers
-the kanso#1234 objection the first recommendation leaned on, since nothing is
-special-cased away from what ships. This is the 2026-09-15 rule applied
-literally, in Clay's words: *you clear it out so it's identical every single
-run or you do something that puts it into a persistent known initial state.*
-The gate already pins ten `GLIBC_TUNABLES` for exactly this reason; where the
-heap begins is the one it does not pin.
-
-*And a second thread arrived at the same instrument, from the other end.*
-kanso#1492's entry "seven silicons, one recorded block, and a reader that was
-never called" chases six instructions on `interp_instructions` — 2,178,502,266
-against 2,178,502,272 across two CI jobs at one source. It built a reader for
-the whole 123-row CPU feature block and ruled the silicon out: identical on
-both jobs. Its live candidate is stated as an argument rather than a
-measurement, and it is this entry's mechanism in different words — the
-interpreted run is the allocation-heavy workload, 5,313,434 allocations
-against a compile's 27,397, and *where the allocator's heap starts moves with
-the size of the file the loader mapped*. So a fixed heap start is the
-instrument two independent chases now want, on two different veins. Whichever
-one measures it first answers the other, and that raises what the reading
-below is worth without changing what it is.
-
-*What this entry needs before it is ruled, and it is cheap.* One reading of
-kanso#1480's own commit pair with the heap start fixed. If the 146,628 dies
-under a fixed heap start, the instrument is chosen and the ruling is a
-formality; if it survives, the move is not a layout term of any kind and this
-entry is not where it belongs. Either way the frame-level diff of the two
-compile profiles names it, and kanso#1492 says CI uploads both as artifacts on
-every run. A build and two callgrind runs, and cloud's. Nothing here should be
-ruled without it.
-
-### Raising escapebench's size, so it pins the bracket's benefit and not only its cost
-
-**Cited:** the archive entry of 2026-09-05, "the clean run in front of the
-first escape, declined four ways", whose closing paragraph measures this and
-says *whether to raise its size is Clay's*. Found on 2026-09-17 by cloud's
-reach fix for `tests/a_question_sent_to_clay_has_a_ledger_entry.rs`, which
-reads the archive as well as the live log and went red on three sends; the
-other two were answered in the log the same day and this is the one with
-nowhere to land. Searched this ledger, the live log and the archive for
-`escapebench`, `27.6%` and the bracket by name: that paragraph is the only
-place the question is asked, and it has never been asked here.
-
-**The question.** escapebench is small enough that the escape bracket's cost
-falls inside it on every run while its benefit falls outside. The entry's
-measurement: at the third block the growing accumulator's superseded buffers
-exceed a block and the rewind is the only thing holding the peak down, so a
-change DELETING the bracket would read as a **27.6% win with every memory
-counter flat**. A benchmark that prices a mechanism's cost and none of its
-benefit reports a deletion as an improvement, which is the failure the corpus
-README exists to prevent, one level in.
-
-**The price of fixing it, which is why this is Clay's and not the
-implementer's.** `escape_instructions` is a welfare term. A bigger escapebench
-is a slower job on every run forever, and it moves a weighted counter, so the
-baseline moves with it and the history's rows before the change are not
-comparable across the boundary. That is a cost paid by the whole project
-against a failure mode nobody has actually triggered.
-
-**Recommendation: raise it, and take the baseline move.** The 2026-09-05
-corpus-first ruling already settled the principle for this exact shape — *"the
-corpus is blind" is never a reason to lower the floor; it is a corpus defect,
-and the remedy is to add the benchmark the objective could not see, baseline
-it forward, and let the fix score.* A benchmark that would score a deletion as
-a win is the same defect seen from the other side, and the same remedy applies:
-size it so the bracket's benefit is inside, re-baseline that term in the same
-change, and say in the log which way it went.
-
-The alternative is to leave it and rely on a reader noticing, which is what
-this entry is evidence does not happen — the measurement sat in the archive
-for twelve days and surfaced only because a spec learned to read that file.
+What it keeps: there are no holes and no `build` block. The machinery is the
+one a top-level constant knot uses today (`ring = { "a":ring }`): the
+self-mention is stored as a cell, forced when it is read, and equality compares
+by unfolding. What it changes: a local binding may name itself, which only a
+top-level constant may do today, and the knot's size comes from data. A link
+to an id nobody declared forces to `none` when it is read rather than failing
+where the knot is made. A local that has to force itself while it is still
+being built, such as `nodes = length nodes`, needs the same refusal a demanded
+top-level knot gets.
 
 ## Stale — the July campaign's unclosed letters (GAVELS.md, retired here)
 

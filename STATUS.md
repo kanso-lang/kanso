@@ -48,7 +48,10 @@ kanso — sat here and was bounced on 2026-08-29: a performance question with no
 surface area is the implementer's, per the ledger's own charter, and the log
 carries the research mandate it left with.
 
-**Eight questions are waiting** — zero blocking. The last two blocking entries
+**One question is waiting** — zero blocking. Clay ruled three and directed four
+on 2026-09-30 in one sitting, and each is in design/compiler-log.md under its
+entry's name; what stays open is the spelling of cyclic structures sized by
+data, now with two worked examples. The last two blocking entries
 were both about the wall `>>`, filed 2026-09-17 out of one reading of a book
 sample. Whether it survives the fused operators was ruled on 2026-09-26, and
 it does not. Whether its simultaneous-failure merge was meant to go closed on
@@ -59,10 +62,7 @@ alone. It went on the ground this file's own ledger states in its opening — an
 entry is there because it is about the language a user meets, and implementation
 details are decided by whoever holds the file — and a gate's environment
 variable is one. The reasoning and the decision are in design/compiler-log.md,
-and the entry cost a green pull request a day of blocking. The ninth is the
-newest and is not blocking: where a golden lives that pins ONE engine's answer
-where another refuses, which the interpreter's integer boundary needs and the
-micro corpus cannot hold. The
+and the entry cost a green pull request a day of blocking. The
 compile-term question before them was filed and ruled on 2026-09-16: two
 welfares and a meta-welfare over them, with the floor re-ratcheted. The
 welfare-floor entry left
@@ -88,23 +88,19 @@ entry cites the search behind it and proposes an answer, and a sitting can be a
 yes or a no rather than a fresh design conversation. On 2026-08-29 every
 remaining question was ruled in one pass.
 
-**The eight open, not blocking** — where a golden lives that pins ONE engine's
-answer where another refuses, filed 2026-09-18 when the interpreter's integer
-boundary turned out to have nowhere in the corpus to be pinned, since native
-refuses past int64 and the micro corpus runs both engines and requires them to
-agree; what spelling "cyclic structures sized by
-data" needs, filed 2026-09-18 with the measurement that sent it here and a
-recommendation to open a `build` block that iterates; the box constructor's spelling, recommending
-`effect`, which no build waits on; how far a binding position carries a box, filed 2026-09-16 with the ten
-fixtures that refuse the blunt answer; and a byte-position scan on a string for
-the JSON escape path, filed 2026-09-16 carrying a −1.2193% runbench measurement; and raising escapebench's size so it pins the escape bracket's benefit and
-not only its cost, filed 2026-09-17 when a spec learned to read the archive
-that had been taken on 2026-09-15 and filed to nobody; and pinning `.rodata`
-to a fixed page so code growth stops moving the compile rows, filed 2026-09-16
-with a recommendation to decline it, the second measured decision in two days
-found sitting in the log with no entry to go to; and whether a NaN equals itself and -0.0 equals 0.0,
-filed 2026-09-28 when a generated program found the two engines comparing
-floats differently, with a recommendation of one NaN ranked last and one zero. The maps parse's share
+**The one open, not blocking** — what spelling "cyclic structures sized by
+data" needs, filed 2026-09-18 with the measurement that sent it here. On
+2026-09-30 Clay left it open and asked for two worked examples, a graph read
+from a list of edges written once as an iterating `build` block and once as a
+knot on a local binding, and the entry carries both. The other seven left the
+ledger that day. Three were ruled: every NaN is one value ranked last and zero
+is one value; a parameter bound to a box carries the box into the body; and
+the box constructor is `effect`, which was already built. Four were closed on
+standing rulings: a fixture kind that pins the interpreter's answer where
+native refuses, the escape path's byte scan kept inside lib/json, the
+`.rodata` pin declined in favour of measuring a fixed heap start, and
+escapebench sized so it holds the bracket's benefit. Six of the seven are rows
+under "Ruled, unbuilt" below. The maps parse's share
 of the compile row's drift left this list ruled on 2026-09-15 and built the
 same night, kanso#1439. The assert hako left it by being built — `lib/expect`,
 kanso#1233, 2026-09-03.
@@ -151,6 +147,12 @@ sitting was probed against a release build of `5e256ce0`, nineteen came back
 built or declined, and the twentieth is the first row below. The second is
 the 2026-09-15 normalization ruling, which is ironclad and which a counter
 minted a day later does not satisfy.
+
+**Six more joined on 2026-09-30**, from the sitting that emptied the ledger of
+all but one entry, so eight rows stand. Each of the six has its own heading
+below, dated 2026-09-30, and a log entry of the same name. The seventh ruling
+of that sitting, the box constructor's spelling, has no row because `effect`
+was already built and pinned.
 
 **The third came off on 2026-09-18, late.** "A demanded knot counts on one
 engine only (2026-08-24)" was built and merged as kanso#1511 earlier the same
@@ -360,6 +362,66 @@ If the reading cannot be made to repeat between machines, the question that
 follows is whether an exact pin is the right instrument for a counter whose
 artifact and host both move under it. That one is Clay's, and this row does
 not decide it in advance.
+
+### Every NaN is one value ranked last, and zero is one value (2026-09-30)
+
+The log entry "gavel: every NaN is one value ranked last, and zero is one
+value". Every NaN equals every NaN and ranks above `inf`, whatever its sign bit
+or how it was made; `-0.0` equals and ranks with `0.0` and still prints `-0.0`;
+this is the builtin float order on every engine. Today the interpreter ranks
+floats by bit pattern and native compares with C's `==`.
+
+Owes: both engines changed, and goldens for the sort of
+`[inf - inf, nan, 1.0, -inf]`, `list/min [nan 1.0]`, `[x] == [x]` for a NaN
+`x`, and transitivity across `0`, `0.0` and `-0.0`. The fuzzer keeps NaN and
+`-0.0` out of `text/to_float` until this lands.
+
+### A parameter bound to a box carries the box into the body (2026-09-30)
+
+The log entry "gavel: a parameter bound to a box carries the box into the
+body", closed on the 2026-07-25 and 2026-08-29 gavels. Inference carries a box
+through an unannotated parameter, and the refusal for a box reaching a call
+with no arm for it fires at the call inside the body.
+
+Owes: the inference change, a fixture for the shape the ledger entry named
+(`elem_onto x` then `encode_onto x` inside the body), and the ten existing
+box fixtures still green.
+
+### A golden may pin the interpreter's answer where native refuses (2026-09-30)
+
+The log entry "directive: a golden may pin the interpreter's answer where
+native refuses". The small-integer change it was asked for is already on main
+(kanso#1654, 2026-09-25).
+
+Owes: the fixture kind, which asserts that the interpreter answers X and native
+refuses with Y, and fixtures at the int64 boundary that would catch a promotion
+one step late.
+
+### The escape path's byte scan stays inside lib/json (2026-09-30)
+
+The log entry "directive: the escape path's byte scan stays inside lib/json".
+
+Owes: a `builtin_` scan that only lib/json calls, with no public `text/`
+function, measured again on runbench because the escape path has changed since
+the entry's figure was taken.
+
+### `.rodata` is not pinned, and the heap start is measured (2026-09-30)
+
+The log entry "directive: `.rodata` is not pinned, and the heap start is
+measured".
+
+Owes: one reading of kanso#1480's commit pair with the heap starting at the
+same address every run. If the 146,628 dies under it, the fixed heap start goes
+into the gates under the 2026-09-15 normalization rule.
+
+### escapebench grows until the bracket's benefit is inside it (2026-09-30)
+
+The log entry "directive: escapebench grows until the bracket's benefit is
+inside it", under the 2026-09-05 corpus-first ruling.
+
+Owes: the benchmark sized so a change deleting the escape bracket reads as a
+loss, the term that reads it re-based forward in the same change, and the
+direction recorded in the log.
 
 ## In flight
 
@@ -578,8 +640,10 @@ else. Chains that tested for `none` after an effect migrate.
     checked from here on two days and both refused by the tooling
   - whether an err gains readers a lambda callback can use
 
-**Eight questions wait in `design/pending-gavels.md`** — zero blocking, eight
-open — each with a recommendation. Recounted on 2026-09-29: what `math/round`
+**One question waits in `design/pending-gavels.md`** — zero blocking, one
+open — with a recommendation and two worked examples. Recounted on 2026-09-30:
+Clay ruled three entries and directed four in one sitting, and only the
+cyclic-structures spelling stays. Recounted on 2026-09-29: what `math/round`
 answers for NaN and the infinities left Open ruled, under the 2026-09-03 gavel
 rather than either option the entry offered. Recounted twice on 2026-09-28: whether a
 NaN equals itself joined Open from a generated program the engines disagreed
