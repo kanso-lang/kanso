@@ -1117,6 +1117,12 @@ pub extern "C" fn rt_binop(op: u32, a: u32, b: u32) -> u32 {
     // same way any demand does.
     let cells = Cells { id: &cell_handle, force: &|v| Ok(forced(v)) };
     match eval_binop(op, a, b, SPAN0, &cells) {
+        // The browser asks an operator's arms outside this door, so a zero
+        // divisor's answer loses its wrapper here, where the program never
+        // named it; see `eval::bare_math`.
+        Ok(v) if matches!(op, "/" | "%") && type_index(crate::DIVIDE_BY_ZERO).is_none() => {
+            push(Slot::V(crate::eval::bare_math(v)))
+        }
         Ok(v) => push(Slot::V(v)),
         Err(rt) => die(rt.message),
     }

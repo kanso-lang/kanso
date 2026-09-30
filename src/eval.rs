@@ -1688,6 +1688,16 @@ impl<'a> Interp<'a> {
         }
     }
 
+    /// A zero divisor's answer as the program can see it; see `bare_math`.
+    /// The wrapper comes off here, where a value is about to be handed to an
+    /// operator's arms, and nowhere on the path every sum takes.
+    fn as_declared_math(&self, value: Value) -> Value {
+        match self.type_decl(crate::DIVIDE_BY_ZERO) {
+            Some(_) => value,
+            None => bare_math(value),
+        }
+    }
+
     fn type_decl(&self, name: &str) -> Option<&TypeDecl> {
         match name {
             "entry" => Some(&self.entry_decl),
@@ -2103,8 +2113,8 @@ impl<'a> Interp<'a> {
                 frame: frame.clone(),
             }))),
             Expr::BinOp { op, lhs, rhs, span } => {
-                let left = self.force_thunk(self.eval(lhs, env, frame)?)?;
-                let right = self.force_thunk(self.eval(rhs, env, frame)?)?;
+                let mut left = self.force_thunk(self.eval(lhs, env, frame)?)?;
+                let mut right = self.force_thunk(self.eval(rhs, env, frame)?)?;
                 // records dispatch to the operator's user arms; numbers stay
                 // on the builtin (coherence licenses the fast path, and the
                 // orphan rule keeps 2 + 3 meaning one thing forever). Either
@@ -2114,7 +2124,11 @@ impl<'a> Interp<'a> {
                 if (routes_to_arms(&left) || routes_to_arms(&right))
                     && self.fns.contains_key(op as &str)
                 {
-                    return self.call_named(op, vec![left, right], *span, frame);
+                    left = self.as_declared_math(left);
+                    right = self.as_declared_math(right);
+                    if routes_to_arms(&left) || routes_to_arms(&right) {
+                        return self.call_named(op, vec![left, right], *span, frame);
+                    }
                 }
                 let cells = Cells { id: &thunk_identity, force: &|v| self.force_thunk(v) };
                 eval_binop(op, sub_base(left), sub_base(right), *span, &cells)
@@ -4946,6 +4960,20 @@ fn cmp_int_float(x: &Int, y: f64) -> std::cmp::Ordering {
 /// `10 / 0` answers a value rather than a failure: a `divide_by_zero` under a
 /// `math_failure` under a string, so a handler may ask for the specific
 /// failure, for any math failure, or read the reason as text.
+/// A zero divisor's answer with its wrapper taken off, for a program that
+/// never names `divide_by_zero` or `math_failure`. Native gives such a program
+/// the bare text, and only an operator's arms could tell the two apart, since
+/// a subtype reaches them and a string does not.
+pub fn bare_math(value: Value) -> Value {
+    match value {
+        Value::Sub { ty, inner } if &*ty == crate::DIVIDE_BY_ZERO => match &*inner {
+            Value::Sub { inner: text, .. } => (**text).clone(),
+            _ => (*inner).clone(),
+        },
+        other => other,
+    }
+}
+
 fn math_failure(reason: &str) -> Value {
     let text = Value::Str(reason.to_string());
     let root = Value::Sub { ty: Rc::from(crate::MATH_FAILURE), inner: Rc::new(text) };

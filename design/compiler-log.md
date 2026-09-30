@@ -20091,3 +20091,49 @@ this host, whose rustc is older than CI's, reads the change at +36,900 there.
 The rest of CI's reading is not reproduced here. compile_allocs is unchanged at
 14,307, because the type spelling is held only where it differs from the short
 one.
+
+## 2026-09-30 — a zero divisor meets an operator arm
+
+Three generated programs in one batch declared `fn + (pt a s) (pt b t)` and
+then added a number to `x % z` with `z` zero. Both engines refused, in
+different words: the interpreter said no overload of `+` matched, and native
+said `+` is not defined for these values.
+
+The 2026-08-10 gavel made a zero divisor's answer the text "modulo by zero",
+wrapped in `divide_by_zero` under `math_failure` only where the program names
+one of those types. Native builds the wrapper only then. The interpreter and
+the browser engine, which share its arithmetic, built it every time, and a
+subtype is a value an operator's user arms are asked about, so their `+` went
+to the `pt` arm, which did not match. A program that names neither type cannot
+otherwise tell the wrapped answer from the text. Where the program declared
+neither type, the interpreter now takes the wrapper off a value about to be
+handed to an operator's arms, and the browser engine takes it off after `/`
+and `%`, since it asks the arms outside the door its arithmetic goes through.
+
+Where the program does name them, native had the opposite gap. An operator
+asks its arms only when an operand's recorded set says it may be a record,
+and native recorded a division's answer as a number or a failure. With
+`fn + m:math_failure n:int` declared, `7 % z + 1` ran the arm on the
+interpreter and was refused natively. A division's answer now carries the
+record bit where the program declares `divide_by_zero`. No benchmark names
+the type, so no benchmark's code can change.
+
+`a_zero_divisor_meets_an_operator_arm` in the runtime corpus pins the
+refusal's words for the undeclared case, and
+`a_named_zero_divisor_meets_an_operator_arm` in the micro corpus pins the arm
+running for the declared one. The mutations "an undeclared math failure sent
+to the arms" and "a named math failure kept from the arms" each take one half
+out. Both are ratchet rows.
+
+The first version unwrapped in the interpreter after every `/` and `%`, asking
+the program's type table each time, and CI read the interpreted run 1,961,885
+instructions up. Asking the table only for a zero divisor's answer took back
+22,440 of the 2,306,325 this host measured. Passing the question to the
+arithmetic as a third field of the value every operator builds cost 2,194,323
+on its own, with the division path untouched, so the cost was on the path
+every sum takes and not in the lookup. The unwrap now sits inside the branch
+that has already found a subtype on one side, and the row reads 585,933,148
+on this host, what main reads. CI, on main with #1741 through #1745 in it, read
+interp_instructions at 591,275,103 (+59,867), which this host does not
+reproduce. emit_instructions landed on 30,113,643 (+217) with native's record
+bit.

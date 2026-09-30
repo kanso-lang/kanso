@@ -8583,6 +8583,17 @@ impl<'a> Backend<'a> {
         self.emit_binop_builtin(f, op, a, b, span)
     }
 
+    /// What a zero divisor answers beyond the number: a `divide_by_zero`
+    /// record where the program declares the type, which an operator's arms
+    /// then have to be asked about. Where it does not, the answer is the bare
+    /// text, which no arm is asked about.
+    fn zero_divisor_set(&self) -> Set {
+        match self.type_ids.contains_key(crate::DIVIDE_BY_ZERO) {
+            true => REC,
+            false => 0,
+        }
+    }
+
     fn emit_binop_builtin(
         &mut self,
         f: &mut FnEmit,
@@ -8659,13 +8670,21 @@ impl<'a> Backend<'a> {
             f.start_block(&merge);
             let t = f.tmp();
             f.line(&format!("{t} = phi %KValue [ {fv}, %{fast} ], [ {sv}, %{slow} ]"));
-            f.record(&t, INT | ERR);
+            f.record(&t, INT | ERR | self.zero_divisor_set());
             return Ok(t);
         }
         if op == "/" || op == "%" {
             let t = f.tmp();
             f.line(&format!("{t} = {slow_call}"));
-            f.record(&t, (f.set_of(a) & FAIL) | (f.set_of(b) & FAIL) | INT | FLOAT | ERR);
+            f.record(
+                &t,
+                (f.set_of(a) & FAIL)
+                    | (f.set_of(b) & FAIL)
+                    | INT
+                    | FLOAT
+                    | ERR
+                    | self.zero_divisor_set(),
+            );
             return Ok(t);
         }
         if pure_int {
