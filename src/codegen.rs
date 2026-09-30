@@ -2319,7 +2319,7 @@ pub fn emit_ir_dev(program: &Program, convention: ClosureConvention) -> Result<S
 /// every one of them would go, so a call that reaches it still fails the way
 /// it did. The interpreter is untouched and the differential corpus is the
 /// check that the two still agree.
-fn without_unbuilt_arms(program: &Program) -> Option<Program> {
+fn without_unbuilt_arms(program: &Program) -> Option<(Program, Vec<(String, usize, usize)>)> {
     use crate::ast::{Expr, Pattern, Stmt, TemplatePart};
     let mut ids: HashMap<&str, i64> = HashMap::default();
     ids.insert("entry", 0);
@@ -2469,66 +2469,56 @@ fn without_unbuilt_arms(program: &Program) -> Option<Program> {
     if !dead.iter().any(|d| *d) {
         return None;
     }
-    // A group every one of whose arms would go keeps them all.
-    let mut live_arms: HashMap<(&str, usize), usize> = HashMap::default();
+    // A group every one of whose arms would go keeps them all. Beside each
+    // group's count of live arms sits the positions those arms read, so the
+    // positions only a dropped arm read fall out of the same walk.
+    let reads = |d: &crate::ast::FnDecl| {
+        d.params.iter().enumerate().fold(0u64, |m, (i, p)| {
+            if i < 64 && !matches!(p, Pattern::Var(..) | Pattern::Wildcard(_)) {
+                m | 1 << i
+            } else {
+                m
+            }
+        })
+    };
+    let mut live_arms: HashMap<(&str, usize), (usize, u64)> = HashMap::default();
     for (d, gone) in program.fns.iter().zip(&dead) {
-        let n = live_arms.entry((d.name.as_str(), d.params.len())).or_insert(0);
+        let n = live_arms.entry((d.name.as_str(), d.params.len())).or_insert((0, 0));
         if !gone {
-            *n += 1;
+            n.0 += 1;
+            n.1 |= reads(d);
         }
     }
+    let mut unread: Vec<(String, usize, usize)> = Vec::new();
+    for (d, gone) in program.fns.iter().zip(&dead) {
+        let (live, kept) = live_arms[&(d.name.as_str(), d.params.len())];
+        if !gone || live == 0 {
+            continue;
+        }
+        let lost = reads(d) & !kept;
+        for i in (0..d.params.len().min(64)).filter(|i| lost & 1 << i != 0) {
+            unread.push((d.name.clone(), d.params.len(), i));
+        }
+    }
+    unread.sort();
+    unread.dedup();
     let fns: Vec<crate::ast::FnDecl> = program
         .fns
         .iter()
         .zip(&dead)
-        .filter(|(d, gone)| !**gone || live_arms[&(d.name.as_str(), d.params.len())] == 0)
+        .filter(|(d, gone)| !**gone || live_arms[&(d.name.as_str(), d.params.len())].0 == 0)
         .map(|(d, _)| d.clone())
         .collect();
-    Some(Program {
-        fns,
-        types: program.types.clone(),
-        imports: program.imports.clone(),
-        reexports: program.reexports.clone(),
-        root: program.root.clone(),
-    })
-}
-
-/// The positions a group read as written and no longer reads once the
-/// unbuilt-arm prune has run. A thunk handed to such a position is forced by
-/// the interpreter, whose dispatcher still holds the dropped arm and has to
-/// look at the value to rule it out; an err the thunk turns into then answers
-/// at that group, with its name in the trace. `list/find` loses its arm for a
-/// sorted list in a program that sorts nothing, and a lazy list handed to it
-/// went on to fail in `list/next`, two frames later and under other names.
-/// Forcing where the program as written would have looked keeps the trace
-/// the interpreter's.
-fn positions_the_prune_stopped_reading(
-    written: &Program,
-    kept: &Program,
-) -> Vec<(String, usize, usize)> {
-    use crate::ast::Pattern;
-    let reads = |d: &crate::ast::FnDecl, i: usize| {
-        !matches!(d.params.get(i), Some(Pattern::Var(..)) | Some(Pattern::Wildcard(_)))
-    };
-    let mut before: crate::hash::Set<(&str, usize, usize)> = crate::hash::Set::default();
-    for d in &written.fns {
-        for i in 0..d.params.len() {
-            if reads(d, i) {
-                before.insert((d.name.as_str(), d.params.len(), i));
-            }
-        }
-    }
-    for d in &kept.fns {
-        for i in 0..d.params.len() {
-            if reads(d, i) {
-                before.remove(&(d.name.as_str(), d.params.len(), i));
-            }
-        }
-    }
-    let mut lost: Vec<(String, usize, usize)> =
-        before.into_iter().map(|(g, n, i)| (g.to_string(), n, i)).collect();
-    lost.sort();
-    lost
+    Some((
+        Program {
+            fns,
+            types: program.types.clone(),
+            imports: program.imports.clone(),
+            reexports: program.reexports.clone(),
+            root: program.root.clone(),
+        },
+        unread,
+    ))
 }
 
 fn emit_ir_for(
@@ -2536,10 +2526,18 @@ fn emit_ir_for(
     convention: ClosureConvention,
     inline_helpers: bool,
 ) -> Result<String, String> {
-    let pruned = without_unbuilt_arms(program);
-    let unread_positions = match &pruned {
-        Some(kept) => positions_the_prune_stopped_reading(program, kept),
-        None => Vec::new(),
+    // The prune also answers the positions a group read as written and no
+    // longer reads. A thunk handed to such a position is forced by
+    // the interpreter, whose dispatcher still holds the dropped arm and has to
+    // look at the value to rule it out; an err the thunk turns into then answers
+    // at that group, with its name in the trace. `list/find` loses its arm for a
+    // sorted list in a program that sorts nothing, and a lazy list handed to it
+    // went on to fail in `list/next`, two frames later and under other names.
+    // Forcing where the program as written would have looked keeps the trace
+    // the interpreter's.
+    let (pruned, unread_positions) = match without_unbuilt_arms(program) {
+        Some((kept, unread)) => (Some(kept), unread),
+        None => (None, Vec::new()),
     };
     let program = pruned.as_ref().unwrap_or(program);
     let knotted = knotted_constants(program);
@@ -2758,7 +2756,7 @@ struct Backend<'a> {
     /// (site evaluator symbol, captured-arg count), indexed by site id.
     thunk_sites: Vec<(String, usize)>,
     /// (group, arity, position) an arm the unbuilt-arm prune dropped was
-    /// reading and no arm left reads. See `positions_the_prune_stopped_reading`.
+    /// reading and no arm left reads. See `without_unbuilt_arms`.
     unread_positions: Vec<(String, usize, usize)>,
 }
 
