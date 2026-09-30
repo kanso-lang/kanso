@@ -4623,7 +4623,9 @@ lambda_third = row
   (breaking "a_lambda_dropping_its_third_err")
   release
 
-rows_c1zzzzzzzt = text/concat rows_c1zzzzzzzw [int_counter value_err_arm lambda_third]
+rows_c1zzzzzzzs = text/concat rows_c1zzzzzzzw [int_counter value_err_arm]
+
+rows_c1zzzzzzzt = text/concat rows_c1zzzzzzzs [lambda_third]
 
 rows_c = text/concat rows_c1zzzzzzzt [itself]
 
