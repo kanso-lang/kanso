@@ -4661,7 +4661,19 @@ pruned_read = row
 
 rows_c1zzzzzzzq = text/concat rows_c1zzzzzzzr [bound_cell pruned_read]
 
-rows_c = text/concat rows_c1zzzzzzzq [itself]
+# The prune names the positions a dropped arm read and no kept arm reads, from
+# the same walk that counts each group's live arms.
+pruned_mask = row
+  "a prune forgetting what it dropped"
+  true
+  "cargo test --release --test golden runtime_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_prune_forgetting_what_it_dropped")
+  release
+
+rows_c1zzzzzzzp = text/concat rows_c1zzzzzzzq [pruned_mask]
+
+rows_c = text/concat rows_c1zzzzzzzp [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
