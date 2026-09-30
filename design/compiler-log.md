@@ -20818,6 +20818,47 @@ on runners 1000108787 and the one before it, and read the interpreted row at
 since the interpreter's slot keys stopped reading the heap's address, and the
 two agree to the instruction.
 
+## 2026-09-30 — gavel: spacing decides a minus sign
+
+Clay, answering the question of how a negative number is passed: "spacing
+decides." Binary minus takes a space on each side, as `<` already does. A `-`
+touching a digit is part of the number literal. So `f -3` passes -3 to `f`, and
+`[1 -3 4]` is a list of three. `f (-3)` is refused as redundant parentheses,
+which is now true of it. `3-3` and `3 -3` are formatting errors that name
+`3 - 3`. Each shape is pinned by a golden, and the build lists every spelling in
+the tree and in kq, vse and kanso-json that the rule moves.
+
+Until this ruling `f (-3)` was refused as parentheses that group nothing, which
+was false: `f -3` parsed as `f - 3`, subtracting from a function, and died at
+run time. `[1 -3 4]` was a syntax error, and `[1 (-3) 4]` was refused the same
+way as `f (-3)`. No spelling passed a negative literal as an argument or an
+element.
+
+## 2026-09-30 — the raise check reads a visible err under an imprecise box
+
+Clay's answer on the raise check's leniency: covered by "the box is explicit,
+an err is a value, and a bare err halts where it lands" (2026-09-15), under
+which a bare err arriving where a value is wanted does not compile. The check
+skips an answer that is a box, and it should skip only when the answer is known
+to be one. An arm whose answer carries the raised bit counts as raising even
+when an imprecise set also carries the description bit. An answer that is only
+unknown, with no raised bit, stays lenient, as the none check already is:
+"Unknown is not proof." `json/encode (json/decode s)` with no err arm is the
+fixture that goes red. The build reports how many files in kanso, kq, vse and
+kanso-json change answer.
+
+## 2026-09-30 — building an imported record by its short name is refused
+
+Clay's answer: already ruled. The per-field-pub gavel of 2026-08-14 says
+"construction stays factory-only", enforced on 2026-08-20. `list/step 1 [5]`
+is refused with "only `list` builds a `step`; ask it for one through a pub
+function", and `step 1 [5]` reaches the same record without the check seeing
+it. Closing that is implementation. std/list first gains pub factories for a
+`step` and for starting a `cursor` over a list, so a user type can still join
+the `next` protocol. `examples/next_protocol.kso` and any other site move onto
+them, and then the short name is refused with the message the qualified
+spelling already gets.
+
 ## 2026-09-30 — spacing decides a minus sign, built
 
 Builds "gavel: spacing decides a minus sign".
