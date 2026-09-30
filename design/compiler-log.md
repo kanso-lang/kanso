@@ -20273,3 +20273,56 @@ function, twenty calls, twenty-five branches and 161 lines in each of those two
 programs. work_scanbench landed on 280,943 (+78) with the change. work_runbench fell 10,629 to 1,088,394,120,
 which no mechanism here predicts and no build has isolated. Welfare reads
 90.3228 against a floor of 90.3231, inside the gate's allowance.
+
+## 2026-09-30 — a lazy cell answers at the group that reads it
+
+The browser fuzzer found a program whose err trace named `list/find` on the
+interpreter and in the browser, and `list/found_in ← list/next` natively. The
+program bound a list to a name that only one arm of its callee reads, so
+demand made the binding a cell, and the cell reached `list/find` unforced.
+
+The interpreter forces a cell when a dispatcher has to look at it to choose an
+arm. `list/find` has an arm for a sorted list, so the interpreter forced the
+cell there, the err inside came out, and `find`'s guard answered it with its
+own name. Native forces a cell at a call only when some arm of the callee
+reads that position, and it asks the program after the unbuilt-arm prune. A
+program that sorts nothing compiles without the sorted arm, so native passed
+the cell on and it failed two frames later. The code generator now keeps the
+positions the prune stopped reading and forces a cell handed to one of them.
+
+Reducing the program found a second gap on the same path. Inference narrowed
+every parameter an arm binds to a value that cannot fail, on the reasoning
+that the guard ahead of the arm has already answered any err. The guard sees
+a cell, not what is inside it. `list/iter` then kept no guard for an err, and
+a cell that `list/first` forced before calling it failed in `list/next`
+instead of `list/iter`. A parameter a cell can reach now keeps an err. It
+keeps it as an err the runtime met and never as a raise, because the
+exhaustiveness checker reads the raise bit.
+
+Which parameters a cell can reach took three tries. The first kept every
+failure on any name whose set carried the cell bit; that kept the raise too,
+and `scripts/trend_gate` stopped compiling. The second kept only the err, but
+every parameter widened to any value carries the cell bit, so in a program
+with any lazy binding it kept an err nearly everywhere: CI measured runbench at
+1,101,510,705 instructions (+13,116,585) and 10,912 more bytes of code, all of
+it the inference change, since the code generator's half alone left the code
+byte-identical. Inference now works out the positions directly: a lazy binding
+passed to a call by name marks that position in every arm of the callee, a
+parameter so marked marks the positions it is passed on to, and the marks run
+to a fixpoint. Only a marked parameter keeps the err, and runbench's code is
+back to 403,128 bytes.
+
+`a_lazy_list_answers_where_a_dropped_arm_read_it` and
+`a_lazy_list_answers_at_the_group_that_reads_it` in the runtime corpus pin the
+two traces. The mutations "a pruned arm leaving its cell unforced" and "a bound
+cell losing its errs" each undo one change and turn their own fixture red; both
+are new ratchet rows.
+
+CI measured the fix at 86a9b9b5. Three rows rose: emit_instructions
+30,114,063 -> 30,225,570 (+111,507, +0.3703%), interp_instructions
+591,275,103 -> 591,334,106 (+59,003, +0.0100%), and interp_allocs 895,172 ->
+895,178 (+6). The first cut of the inference walk built a group map and a list
+of calls for every declaration and cost the interpreted run 1,049 allocations;
+it now reads inference's own group table and walks only the declarations that
+hold a cell. compile_instructions fell 2,115 to 25,386,552, entry_instructions
+981 to 84,055,537 and library_instructions 953 to 84,589,516.

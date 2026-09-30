@@ -4639,7 +4639,29 @@ unclosed_pattern = row
 
 rows_c1zzzzzzzr = text/concat rows_c1zzzzzzzt [unclosed_pattern]
 
-rows_c = text/concat rows_c1zzzzzzzr [itself]
+# A cell an arm binds keeps its failures in inference, so the group it
+# reaches next keeps the guard that answers its err.
+bound_cell = row
+  "a bound cell losing its errs"
+  true
+  "cargo test --release --test golden runtime_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_bound_cell_losing_its_errs")
+  release
+
+# A position an arm read before the unbuilt-arm prune dropped it still forces
+# the cell handed there, as the interpreter's dispatcher does.
+pruned_read = row
+  "a pruned arm leaving its cell unforced"
+  true
+  "cargo test --release --test golden runtime_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_pruned_arm_leaving_its_cell_unforced")
+  release
+
+rows_c1zzzzzzzq = text/concat rows_c1zzzzzzzr [bound_cell pruned_read]
+
+rows_c = text/concat rows_c1zzzzzzzq [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

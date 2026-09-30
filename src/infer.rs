@@ -481,6 +481,7 @@ pub fn infer(program: &Program) -> Inference {
     let fns = &program.fns;
     let mut env = Env::default();
     let mut param_sets: Vec<Set> = Vec::new();
+    let cells = cell_params(program, &ctx.demand, &ctx.groups, &ctx.group_members);
     // Every function is visited the first round; after that only the ones a
     // change can reach. Four fifths of the visits in a settled fixpoint find
     // nothing, and a visit costs a walk of the whole body.
@@ -534,8 +535,18 @@ pub fn infer(program: &Program) -> Inference {
             param_sets.extend_from_slice(
                 &ctx.params[ctx.param_starts[i] as usize..ctx.param_starts[i + 1] as usize],
             );
-            for (pattern, joined) in decl.params.iter().zip(&param_sets) {
+            for (at, (pattern, joined)) in decl.params.iter().zip(&param_sets).enumerate() {
                 bind_pattern(pattern, *joined, &ctx.type_fields, &ctx.type_names, &mut env);
+                // A parameter can hold a cell nobody has forced, and the
+                // guard ahead of the arm sees the cell rather than what is
+                // in it, so a failure the cell holds survives the guard. It
+                // is kept as an err the runtime met, never as a raise: the
+                // checker reads RAISED, and a cell raises nothing here.
+                if let Pattern::Var(name, _) = pattern {
+                    if joined & FAIL != 0 && cells.contains(&(i, at)) {
+                        env.insert(name, (joined & !FAIL) | ERR);
+                    }
+                }
             }
             let ret = eval_body(&mut ctx, &decl.body, &mut env);
             let mut widened = false;
@@ -1456,6 +1467,89 @@ fn store_fails(ctx: &mut Ctx<'_>, item: Set) {
         ctx.dirty.fill(true);
         ctx.dirty_next.fill(true);
     }
+}
+
+/// The (declaration, position) pairs a cell nobody has forced can arrive at.
+/// A lazy binding handed to a call by name puts its cell at that position of
+/// every arm of the callee, and a parameter holding a cell hands it on the
+/// same way, so the set is closed over calls that pass a name through. The
+/// set bit alone cannot say this: every parameter widened to any value
+/// carries it, and keeping an err on all of those cost runbench 10,912 bytes
+/// of code for cells it never holds. Only the declarations that hold a cell
+/// are walked, and nothing is allocated for the rest.
+fn cell_params(
+    program: &Program,
+    demand: &crate::demand::DemandInfo<'_>,
+    groups: &HashMap<(&str, usize), (u32, u32, u32)>,
+    members: &[usize],
+) -> crate::hash::Set<(usize, usize)> {
+    let mut marked: crate::hash::Set<(usize, usize)> = crate::hash::Set::default();
+    if demand.lazy_bind_count() == 0 {
+        return marked;
+    }
+    struct Walk<'g, 'a> {
+        groups: &'g HashMap<(&'a str, usize), (u32, u32, u32)>,
+        members: &'g [usize],
+        marked: &'g mut crate::hash::Set<(usize, usize)>,
+        changed: bool,
+    }
+    fn walk(e: &Expr, holders: &[&str], w: &mut Walk<'_, '_>) {
+        if let Expr::App { head, args, .. } = e {
+            if let Expr::Ident(callee, _, _) = head.as_ref() {
+                for (pos, arg) in args.iter().enumerate() {
+                    let Expr::Ident(name, _, _) = arg else { continue };
+                    if !holders.contains(&name.as_str()) {
+                        continue;
+                    }
+                    let Some(&(start, end, _)) = w.groups.get(&(callee.as_str(), args.len()))
+                    else {
+                        continue;
+                    };
+                    for &j in &w.members[start as usize..end as usize] {
+                        w.changed |= w.marked.insert((j, pos));
+                    }
+                }
+            }
+        }
+        crate::any_child(e, |c| {
+            walk(c, holders, w);
+            false
+        });
+    }
+    let mut w = Walk { groups, members, marked: &mut marked, changed: true };
+    let mut holders: Vec<&str> = Vec::new();
+    while w.changed {
+        w.changed = false;
+        for (i, d) in program.fns.iter().enumerate() {
+            let arity = d.params.len();
+            holders.clear();
+            for (k, stmt) in d.body.iter().enumerate() {
+                if let Stmt::Bind { pattern: Pattern::Var(name, _), .. } = stmt {
+                    if demand.is_lazy_bind(&d.name, arity, k) {
+                        holders.push(name);
+                    }
+                }
+            }
+            for (p, pat) in d.params.iter().enumerate() {
+                if let Pattern::Var(name, _) = pat {
+                    if w.marked.contains(&(i, p)) {
+                        holders.push(name);
+                    }
+                }
+            }
+            if holders.is_empty() {
+                continue;
+            }
+            for stmt in &d.body {
+                match stmt {
+                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
+                        walk(expr, &holders, &mut w)
+                    }
+                }
+            }
+        }
+    }
+    marked
 }
 
 fn widen_param(ctx: &mut Ctx<'_>, decl: usize, param: usize, set: Set) {
