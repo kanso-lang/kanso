@@ -4526,6 +4526,30 @@ held_if = row
 
 rows_c1zzzzzzz = text/concat rows_c1zzzzzz [held_if]
 
+# An operator's arms take records boxed, because the operator hands them the
+# boxed values it holds.
+arm_boxed = row
+  "an operator arm handed words"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "an_operator_arm_handed_words")
+  release
+
+rows_c1zzzzzzzz = text/concat rows_c1zzzzzzz [arm_boxed]
+
+# A sibling argument that stores the container still holds it, so the write
+# copies instead of extending the list the sibling just stored.
+push_keeps = row
+  "a stored sibling read as finished"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_stored_sibling_read_as_finished")
+  release
+
+rows_c1zzzzzzzza = text/concat rows_c1zzzzzzzz [push_keeps]
+
 # A zero divisor's answer reaches an operator's arms exactly where the
 # program declared the type that wraps it, on both engines.
 math_bare = row
@@ -4544,7 +4568,7 @@ math_named = row
   (breaking "a_named_math_failure_kept_from_the_arms")
   release
 
-rows_c1zzzzzzzw = text/concat rows_c1zzzzzzz [math_bare math_named]
+rows_c1zzzzzzzw = text/concat rows_c1zzzzzzzza [math_bare math_named]
 
 rows_c = text/concat rows_c1zzzzzzzw [itself]
 
