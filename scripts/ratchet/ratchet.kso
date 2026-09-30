@@ -4526,6 +4526,18 @@ held_if = row
 
 rows_c1zzzzzzz = text/concat rows_c1zzzzzz [held_if]
 
+# An operator's arms take records boxed, because the operator hands them the
+# boxed values it holds.
+arm_boxed = row
+  "an operator arm handed words"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "an_operator_arm_handed_words")
+  release
+
+rows_c1zzzzzzzz = text/concat rows_c1zzzzzzz [arm_boxed]
+
 # A function a module declares keeps its name beside an import's type of the
 # same name, and a call reaches the function.
 fn_beats_twin = row
@@ -4536,7 +4548,7 @@ fn_beats_twin = row
   (breaking "an_imported_type_twin_beside_a_function")
   release
 
-rows_c1zzzzzzzx = text/concat rows_c1zzzzzzz [fn_beats_twin]
+rows_c1zzzzzzzx = text/concat rows_c1zzzzzzzz [fn_beats_twin]
 
 rows_c = text/concat rows_c1zzzzzzzx [itself]
 
