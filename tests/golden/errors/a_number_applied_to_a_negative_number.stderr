@@ -1,0 +1,4 @@
+error[formatting]: binary minus takes a space on each side, `10 - 4`; a `-` touching a digit is part of the number
+  --> a_number_applied_to_a_negative_number.kso:4:10
+   4 | gap = 10 -4
+                ^
