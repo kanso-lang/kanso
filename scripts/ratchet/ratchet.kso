@@ -4673,7 +4673,19 @@ pruned_mask = row
 
 rows_c1zzzzzzzp = text/concat rows_c1zzzzzzzq [pruned_mask]
 
-rows_c = text/concat rows_c1zzzzzzzp [itself]
+# The interpreter promotes an int past int64 rather than wrapping it, and
+# native refuses the same program; only the one-engine corpus sees both.
+int_widens = row
+  "an int that wraps where it should widen"
+  true
+  "cargo test --release --test golden one_engine_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "an_int_that_wraps_where_it_should_widen")
+  release
+
+rows_c1zzzzzzzn = text/concat rows_c1zzzzzzzp [int_widens]
+
+rows_c = text/concat rows_c1zzzzzzzn [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

@@ -342,6 +342,66 @@ fn a_pinned_clock_reads_the_same_in_both_engines() {
 /// library path is also where four separate qualification bugs lived, none of
 /// which could fail a corpus that only ran files. A sample with no `pub play`
 /// is an entry file already and runs directly through the runner's fallback.
+/// Programs the interpreter answers and native refuses. The differential law
+/// lets a feature land on fewer engines only if the others refuse it with a
+/// clear diagnostic, and the micro corpus below cannot hold such a program,
+/// because it requires every engine to agree. This corpus asserts the
+/// divergence instead (directive of 2026-09-30): `<name>.interp.out` is what
+/// the interpreter prints, exiting 0 with nothing on stderr, and
+/// `<name>.native.err` is native's refusal, exiting non-zero. Native's stdout
+/// is `<name>.native.out` where one is written and empty otherwise.
+///
+/// A program both engines answer fails here, so the corpus cannot become a
+/// place to park an ordinary divergence: native has to refuse, in words the
+/// golden names, and the two stdouts have to differ.
+#[test]
+fn one_engine_corpus_pins_the_interpreter_where_native_refuses() {
+    let source = manifest_dir().join("tests/golden/one_engine");
+    let mut covered = 0;
+    for program in kso_files(&source) {
+        let name =
+            program.file_stem().and_then(|s| s.to_str()).expect("kso files have names").to_string();
+
+        let interp = run_kanso_env(&program, &["--interp"], &[]);
+        assert_eq!(
+            String::from_utf8_lossy(&interp.stdout),
+            expected(&program, "interp.out"),
+            "{name}: the interpreter's answer moved"
+        );
+        assert_eq!(
+            String::from_utf8_lossy(&interp.stderr),
+            "",
+            "{name}: the interpreter spoke on stderr"
+        );
+        assert_eq!(interp.status.code(), Some(0), "{name}: the interpreter exits 0");
+
+        let native = run_kanso_env(&program, &[], &[]);
+        let refusal = expected(&program, "native.err");
+        assert!(
+            !refusal.trim().is_empty(),
+            "{name}: a refusal golden says what native refuses with"
+        );
+        assert_eq!(
+            String::from_utf8_lossy(&native.stderr),
+            refusal,
+            "{name}: native refuses differently"
+        );
+        let native_out = match program.with_extension("native.out").exists() {
+            true => expected(&program, "native.out"),
+            false => String::new(),
+        };
+        assert_eq!(String::from_utf8_lossy(&native.stdout), native_out, "{name}: native printed");
+        assert_ne!(native.status.code(), Some(0), "{name}: native refuses, so it cannot exit 0");
+        assert_ne!(
+            native_out,
+            expected(&program, "interp.out"),
+            "{name}: both engines print the same, so it belongs in the micro corpus"
+        );
+        covered += 1;
+    }
+    assert!(covered > 0, "the one-engine corpus ran nothing");
+}
+
 #[test]
 fn micro_corpus_agrees_across_engines() {
     let source = manifest_dir().join("tests/golden/micro");
