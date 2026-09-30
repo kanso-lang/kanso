@@ -1,0 +1,16 @@
+# `f = f1` hands out the group as a value, and `f bad worse` calls it with two
+# errs. No arm of f1 takes an err, so the call answers the first of them with
+# its birthplace and names f1, as the direct call `f1 bad worse` does. Native
+# and the browser answered for the group before entering it and merged the two.
+import "std/text"
+
+fn f1 _ p
+  if (p < "b") 1 0
+
+fn go n
+  bad = text/from_code n
+  worse = text/to_int "x{n}"
+  f = f1
+  f bad worse
+
+pub play = print "{go 55296}"

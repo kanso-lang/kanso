@@ -1,0 +1,3 @@
+error[endpoint]: unhandled err reached the entry: "not a unicode scalar value"
+  born in text/from_code at std/text/text.kso:23
+  passed through a_group_value_answers_its_first_err/f1

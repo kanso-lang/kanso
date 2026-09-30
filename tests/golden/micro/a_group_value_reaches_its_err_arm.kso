@@ -1,0 +1,18 @@
+# a group handed out as a value is entered with the err it is given, as a
+# direct call is, so its `(err _)` arm answers. Native and the browser turned
+# the err down before entering the group and never reached the arm.
+import "std/os"
+import "std/text"
+
+fn settle (err _) _
+  "caught"
+
+fn settle p q
+  "{p}{q}"
+
+fn go n
+  bad = text/to_int "x{n}"
+  f = settle
+  f bad 1
+
+pub play = os/args .> (a -> print (go (length a)))

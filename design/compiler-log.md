@@ -20137,3 +20137,68 @@ on this host, what main reads. CI, on main with #1741 through #1745 in it, read
 interp_instructions at 591,275,103 (+59,867), which this host does not
 reproduce. emit_instructions landed on 30,113,643 (+217) with native's record
 bit.
+
+## 2026-09-30 — an int counter enters the accumulator loop
+
+The random-program generator learned accumulating recursion today:
+`1 + count (n - 1)`, `n * fact (n - 1)`, and near misses the rewrite has to
+leave alone. Within an hour it found a group the rewrite accepted and never
+ran. Written `fn count n:int`, a million-deep `1 + count (n - 1)` ran out of
+stack on the interpreter, and on native when the binary was run bare; written
+`fn count n`, it answered on both.
+
+The rewrite enters its loop through a wrapper arm that ascribes each counter
+`int`, `fn count trmcp0:int`, and relies on specificity to send integers there
+ahead of the program's own arms. `counter_names` already accepts an arm that
+writes `n:int`, so the rewrite built the helper for this group. But an arm
+that writes `int` at every counter has the wrapper's exact shape, a tie goes to
+the arm the program wrote, and the wrapper, which is synthetic and appended
+last, never ran. Such an arm only sees integers at its counters, so the
+rewrite now turns it into the entry: its patterns renamed to the wrapper's
+parameters, and a body that calls the helper with the identity. An arm with a
+literal or a record pattern outside the counters is left as it was.
+
+`an_int_counter_takes_the_loop` in the micro corpus runs the million-deep sum.
+The mutation "an int counter left beside the loop" drops the in-place entry,
+and the fixture runs out of stack on both engines. It is a ratchet row.
+
+The same generator also asked for depth where the rewrite does not reach: an
+operand over a parameter no arm dispatches on, such as `k1 + g (n - 1) k1`. The
+interpreter stops at its frame guard and native answers from a deeper stack.
+The 2026-07-27 entries already record that difference as the engines' own, and
+the generator now asks for depth only where the rewrite applies.
+
+## 2026-09-30 — a group value is entered with its errs
+
+A generated program handed a group two errs through a function value,
+`v114 v119 v119` with `v114 = &f8`. The interpreter reported the first err with
+its birthplace and named f8. Native reported one err whose reason listed both.
+
+The interpreter treats a call through a group value as a direct call: it runs
+the group's dispatcher, whose guard answers the leftmost failure and names the
+group when no arm takes an err there, and an `(err _)` arm takes the failure it
+was written for. All three engines agree on the direct call. Native's
+`k_call2`, `k_call3`, `k_call4` and `k_call_ref_wide`, and the browser's
+`call_closure`, instead answered for the group before entering it. They merged
+the first two failing arguments, and they never reached an err arm at all: with
+`fn settle (err _) _` declared, `f = settle; f bad 1` answered "caught" on the
+interpreter and reported the err on the other two engines. Each now enters the
+group with what it was given. A group mentioned as a value has every parameter
+widened to any value, so its wrapper unboxes nothing and the guard sees every
+argument. A builtin handed out as a value still merges every failing argument,
+as the builtin does.
+
+The same probes found a lambda gap in native. `k_call3` and `k_call4` merged the
+first two failing arguments and answered the first failure after them, so errs
+in a lambda's first and third slots reported one reason where the interpreter
+and the browser list both. They merge every failing argument now.
+
+`a_group_value_answers_its_first_err` and
+`a_lambda_merges_an_err_in_its_third_slot` in the runtime corpus and
+`a_group_value_reaches_its_err_arm` in the micro corpus pin the three answers.
+The mutations "a group value naming nothing" and "a browser group value naming
+nothing" were written against the code that answered for the group, and now
+restore it: the group goes unnamed, two errs merge, and the arm is skipped.
+"a group value skipping its err arm" turns a failing first argument down before
+native enters the group, and "a lambda dropping its third err" merges only two
+slots. The last two are new ratchet rows.

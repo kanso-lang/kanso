@@ -7098,13 +7098,21 @@ KValue k_fnref(void* described) {
 
 KValue k_env_get(void* env, long long i) { return ((KValue*)env)[i]; }
 
-/* A group handed out as a value turns down a failing argument the way a
-   direct call does, and a direct call's guard names the group in the trace.
-   The dispatchers answer the failure before entering the group, so they name
-   it here; a builtin is not a group and names nothing. `k_call1` enters the
-   group, whose own guard does it. */
-static KValue k_ref_hop(KFnref* r, KValue failure) {
-    return r->builtin ? failure : k_err_hop(failure, r->name);
+/* A group handed out as a value is entered with its failing arguments, as a
+   direct call is. The group's own guard propagates the leftmost failure and
+   names the group in the trace, and an `(err _)` arm takes the failure it was
+   written for. A group mentioned as a value has every parameter widened to
+   any value (infer.rs), so its wrapper unboxes nothing and the guard sees
+   every argument as the program passed it. The dispatchers below used to
+   answer for the group before entering it, which merged two failures a
+   direct call reports one of and never reached an err arm at all. A builtin
+   handed out as a value merges every failing argument, as the builtin itself
+   does. */
+static int k_any_failure(int n, const KValue* xs) {
+    for (int i = 0; i < n; i++) {
+        if (!k_not_failure(xs[i])) return 1;
+    }
+    return 0;
 }
 
 /* `foo()` runs a value that was waiting to be called — what `&` leaves when it
@@ -7174,7 +7182,7 @@ KValue k_call2(KValue f, KValue a, KValue b) {
     if (f.tag == K_FNREF) {
         KFnref* r = (KFnref*)(intptr_t)f.payload;
         if (r->arity != 2) k_die_ref_arity(r, 2);
-        if (!k_not_failure(a) || !k_not_failure(b)) return k_ref_hop(r, k_both_or_either(a, b));
+        if (r->builtin && (!k_not_failure(a) || !k_not_failure(b))) return k_both_or_either(a, b);
         return ((KValue(*)(KValue, KValue))r->fn)(a, b);
     }
     k_die_not_callable(f);
@@ -7187,8 +7195,8 @@ KValue k_call3(KValue f, KValue a, KValue b, KValue c) {
         KClosure* cl = (KClosure*)(intptr_t)f.payload;
         if (cl->arity < 0) { KValue fresh[3] = { a, b, c }; return k_partial_apply(cl, 3, fresh); }
         if (cl->arity != 3) k_die_arity(cl->arity, 3);
-        if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
-        if (!k_not_failure(c)) return c;
+        KValue xs[3] = { a, b, c };
+        if (k_any_failure(3, xs)) return k_failed_of(3, xs);
         /* In words, not as three KValues. C hands a struct that no longer
            fits the argument registers to the stack whole, and the emitted
            body, which takes its arguments as words, reads the first half of
@@ -7201,8 +7209,8 @@ KValue k_call3(KValue f, KValue a, KValue b, KValue c) {
     if (f.tag == K_FNREF) {
         KFnref* r = (KFnref*)(intptr_t)f.payload;
         if (r->arity != 3) k_die_ref_arity(r, 3);
-        if (!k_not_failure(a) || !k_not_failure(b)) return k_ref_hop(r, k_both_or_either(a, b));
-        if (!k_not_failure(c)) return k_ref_hop(r, c);
+        KValue xs[3] = { a, b, c };
+        if (r->builtin && k_any_failure(3, xs)) return k_failed_of(3, xs);
         return ((KValue(*)(KValue, KValue, KValue))r->fn)(a, b, c);
     }
     k_die_not_callable(f);
@@ -7215,9 +7223,8 @@ KValue k_call4(KValue f, KValue a, KValue b, KValue c, KValue d) {
         KClosure* cl = (KClosure*)(intptr_t)f.payload;
         if (cl->arity < 0) { KValue fresh[4] = { a, b, c, d }; return k_partial_apply(cl, 4, fresh); }
         if (cl->arity != 4) k_die_arity(cl->arity, 4);
-        if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
-        if (!k_not_failure(c)) return c;
-        if (!k_not_failure(d)) return d;
+        KValue xs[4] = { a, b, c, d };
+        if (k_any_failure(4, xs)) return k_failed_of(4, xs);
         typedef long long W;
         return ((KValue(K_CLOSCC *)(void*, W, W, W, W, W, W, W, W))cl->fn)(
             cl->env, a.tag, a.payload, b.tag, b.payload, c.tag, c.payload, d.tag, d.payload);
@@ -7225,9 +7232,8 @@ KValue k_call4(KValue f, KValue a, KValue b, KValue c, KValue d) {
     if (f.tag == K_FNREF) {
         KFnref* r = (KFnref*)(intptr_t)f.payload;
         if (r->arity != 4) k_die_ref_arity(r, 4);
-        if (!k_not_failure(a) || !k_not_failure(b)) return k_ref_hop(r, k_both_or_either(a, b));
-        if (!k_not_failure(c)) return k_ref_hop(r, c);
-        if (!k_not_failure(d)) return k_ref_hop(r, d);
+        KValue xs[4] = { a, b, c, d };
+        if (r->builtin && k_any_failure(4, xs)) return k_failed_of(4, xs);
         return ((KValue(*)(KValue, KValue, KValue, KValue))r->fn)(a, b, c, d);
     }
     k_die_not_callable(f);
@@ -7312,16 +7318,13 @@ static long long k_callee_arity(KValue callee) {
 }
 
 /* A group value called with five or more arguments, which only a partial
-   reaches. The order is k_call4's: the count, then the first two arguments
-   together, then each in turn. Past eight the wrapper takes the arguments as
+   reaches. The order is k_call4's: the count, then the group, entered with
+   whatever it was handed. Past eight the wrapper takes the arguments as
    one array, since no cast here can name every width. */
 static KValue k_call_ref_wide(KFnref* r, long long n, KValue* a) {
     typedef KValue V;
     if (r->arity != n) k_die_ref_arity(r, n);
-    if (!k_not_failure(a[0]) || !k_not_failure(a[1])) return k_ref_hop(r, k_both_or_either(a[0], a[1]));
-    for (long long i = 2; i < n; i++) {
-        if (!k_not_failure(a[i])) return k_ref_hop(r, a[i]);
-    }
+    if (r->builtin && k_any_failure((int)n, a)) return k_failed_of((int)n, a);
     switch (n) {
         case 5: return ((V(*)(V, V, V, V, V))r->fn)(a[0], a[1], a[2], a[3], a[4]);
         case 6: return ((V(*)(V, V, V, V, V, V))r->fn)(a[0], a[1], a[2], a[3], a[4], a[5]);

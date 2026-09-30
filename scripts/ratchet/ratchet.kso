@@ -4594,7 +4594,38 @@ math_named = row
 
 rows_c1zzzzzzzw = text/concat rows_c1zzzzzzzx [math_bare math_named]
 
-rows_c = text/concat rows_c1zzzzzzzw [itself]
+# A group that writes `int` at its counter enters the accumulator loop, as a
+# group that writes a bare name does.
+int_counter = row
+  "an int counter left beside the loop"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "an_int_counter_left_beside_the_loop")
+  release
+
+# A group reached through a function value is entered with its failing
+# arguments, as a direct call is, so its err arm answers on every engine.
+value_err_arm = row
+  "a group value skipping its err arm"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_group_value_skipping_its_err_arm")
+  release
+
+# A lambda merges every failing argument, the third as well as the first two.
+lambda_third = row
+  "a lambda dropping its third err"
+  true
+  "cargo test --release --test golden runtime_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_lambda_dropping_its_third_err")
+  release
+
+rows_c1zzzzzzzt = text/concat rows_c1zzzzzzzw [int_counter value_err_arm lambda_third]
+
+rows_c = text/concat rows_c1zzzzzzzt [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
