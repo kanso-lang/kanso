@@ -442,8 +442,8 @@ fn compiled pattern
   body = text/slice pattern flags.pos (length pattern)
   chars = text/chars body
   parsed_body = read_alt chars 1
-  marked_body = flagged parsed_body.node flags.node
-  ended marked_body (parsed_body.pos - length chars - 1)
+  over = parsed_body.pos - length chars - 1
+  ended parsed_body.node flags.node over
 
 # A lookbehind has to know how far back to stand, so one whose width varies is
 # refused rather than quietly never matching. Answering an err here reaches
@@ -462,10 +462,10 @@ fn refused node wanted false
 # group, a class, a count or an escape is still open there. Either way part
 # of the pattern was never read, so it is refused rather than matched as
 # whatever the rest happened to spell.
-fn ended node 0
-  numbered node 1 . (n -> settled n.node (n.next - 1))
+fn ended node flags 0
+  numbered (flagged node flags) 1 . (n -> settled n.node (n.next - 1))
 
-fn ended _ over
+fn ended _ _ over
   return err "a `)` in the pattern closes no group" if over < 0
   err "the pattern ends inside a group, class, count or escape"
 
