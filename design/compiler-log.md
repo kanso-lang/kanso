@@ -19916,3 +19916,31 @@ the one the language gives, and it is now the branch: `1 3` and `2 4`.
 `a_held_if_picks_its_branch` holds both halves: the interpreter's answer, and
 native naming its limit. The mutation "a held if counted as nothing" takes the
 count out and the spec goes red printing `<fn>`. It is a ratchet row.
+
+## 2026-09-30 — an imported record keeps its name
+
+`step 1 [5]` in a module that imports std/list printed `defs/list/step 1 [5]`
+on the interpreter and `record 1 [5]` natively, where a step std/list builds
+itself prints `list/step`. A pattern on `(step e _)` in the same module did
+not match it, on either engine.
+
+Every pub name an import exports also exists under its short name, as a clone
+that remembers the declaration it came from. For std/list's step that memory
+is `list/step`, already qualified. The loader prefixed it with the importing
+module's name anyway, so the clone named `defs/list/step`, a type nothing
+declares. The interpreter printed that name and matched no pattern against it.
+Native gives a clone its origin's id and found no origin, so the clone kept a
+slot of its own that the name table leaves as `record`. The GAVEL 51 rule that
+a qualified name is its identity already governed the names beside it; the
+origin now follows it too.
+
+`an_imported_record_keeps_its_name` in the micro corpus builds two of
+std/list's records by their short names and matches one. The mutation "an
+imported origin prefixed twice" puts the prefix back, and the micro corpus
+went red. It is a ratchet row.
+
+Whether a module may build an import's record by its short name at all is a
+separate question. The construction check refuses `list/step 1 [5]` as
+foreign and accepts `step 1 [5]`, and `examples/next_protocol.kso` builds a
+`cursor` the second way. That is a question about the language and is not
+changed here.
