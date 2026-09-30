@@ -20260,3 +20260,16 @@ Some lenient readings remain, and this change leaves them alone because each
 has a consistent meaning. A quantifier with nothing before it, as in `*a`, is
 a literal character. `[]` is a class that matches nothing, and `[z-a]` is an
 empty range.
+
+CI measured the change. `lib/regexp` is compiled into the compiler, and two
+compile rows rose with it: entry_instructions landed on 84,056,518 (+196,455)
+and library_instructions on 84,590,469 (+195,321). No build has isolated which
+part of the library change they follow. The two benchmarks that import
+regexp grew by the same code: text landed on 3,523,152 (+2,656, scanbench and
+runbench 1,408 and 1,248 bytes each), and the emitted rows for the programs
+beside the decoder landed on emitted_other_defines 1,558, emitted_other_calls
+10,801, emitted_other_branches 8,296 and emitted_other_lines 86,399, one
+function, twenty calls, twenty-five branches and 161 lines in each of those two
+programs. work_scanbench landed on 280,943 (+78) with the change. work_runbench fell 10,629 to 1,088,394,120,
+which no mechanism here predicts and no build has isolated. Welfare reads
+90.3228 against a floor of 90.3231, inside the gate's allowance.
