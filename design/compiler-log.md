@@ -20295,13 +20295,22 @@ every parameter an arm binds to a value that cannot fail, on the reasoning
 that the guard ahead of the arm has already answered any err. The guard sees
 a cell, not what is inside it. `list/iter` then kept no guard for an err, and
 a cell that `list/first` forced before calling it failed in `list/next`
-instead of `list/iter`. A parameter that may hold a cell now keeps an err in
-a program that defers anything. It keeps it as an err the runtime met and
-never as a raise, because the exhaustiveness checker reads the raise bit: the
-first version kept both, and `scripts/trend_gate` stopped compiling. Applying
-it in every program also cost the module compile golden 578 expression visits
-(2,674 to 3,252), because every parameter widened to any value carries the
-cell bit; restricted to programs that defer, the golden does not move.
+instead of `list/iter`. A parameter a cell can reach now keeps an err. It
+keeps it as an err the runtime met and never as a raise, because the
+exhaustiveness checker reads the raise bit.
+
+Which parameters a cell can reach took three tries. The first kept every
+failure on any name whose set carried the cell bit; that kept the raise too,
+and `scripts/trend_gate` stopped compiling. The second kept only the err, but
+every parameter widened to any value carries the cell bit, so in a program
+with any lazy binding it kept an err nearly everywhere: CI measured runbench at
+1,101,510,705 instructions (+13,116,585) and 10,912 more bytes of code, all of
+it the inference change, since the code generator's half alone left the code
+byte-identical. Inference now works out the positions directly: a lazy binding
+passed to a call by name marks that position in every arm of the callee, a
+parameter so marked marks the positions it is passed on to, and the marks run
+to a fixpoint. Only a marked parameter keeps the err, and runbench's code is
+back to 403,128 bytes.
 
 `a_lazy_list_answers_where_a_dropped_arm_read_it` and
 `a_lazy_list_answers_at_the_group_that_reads_it` in the runtime corpus pin the
