@@ -4550,6 +4550,18 @@ push_keeps = row
 
 rows_c1zzzzzzzza = text/concat rows_c1zzzzzzzz [push_keeps]
 
+# An import's type built by its short name is the import's type: it prints
+# under that type's name and matches that type's patterns.
+origin_once = row
+  "an imported origin prefixed twice"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "an_imported_origin_prefixed_twice")
+  release
+
+rows_c1zzzzzzzv = text/concat rows_c1zzzzzzzza [origin_once]
+
 # A zero divisor's answer reaches an operator's arms exactly where the
 # program declared the type that wraps it, on both engines.
 math_bare = row
@@ -4568,7 +4580,7 @@ math_named = row
   (breaking "a_named_math_failure_kept_from_the_arms")
   release
 
-rows_c1zzzzzzzw = text/concat rows_c1zzzzzzzza [math_bare math_named]
+rows_c1zzzzzzzw = text/concat rows_c1zzzzzzzv [math_bare math_named]
 
 rows_c = text/concat rows_c1zzzzzzzw [itself]
 

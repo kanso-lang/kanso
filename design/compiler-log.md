@@ -20009,6 +20009,42 @@ more question of each sibling argument, and both rows rose with it; no build
 has isolated that question as the cause. The welfare history records the floor
 this language fix spends.
 
+## 2026-09-30 — an imported record keeps its name
+
+`step 1 [5]` in a module that imports std/list printed `defs/list/step 1 [5]`
+on the interpreter and `record 1 [5]` natively, where a step std/list builds
+itself prints `list/step`. A pattern on `(step e _)` in the same module did
+not match it, on either engine.
+
+Every pub name an import exports also exists under its short name, as a clone
+that remembers the declaration it came from. For std/list's step that memory
+is `list/step`, already qualified. The loader prefixed it with the importing
+module's name anyway, so the clone named `defs/list/step`, a type nothing
+declares. The interpreter printed that name and matched no pattern against it.
+Native gives a clone its origin's id and found no origin, so the clone kept a
+slot of its own that the name table leaves as `record`. The GAVEL 51 rule that
+a qualified name is its identity already governed the names beside it; the
+origin now follows it too.
+
+`an_imported_record_keeps_its_name` in the micro corpus builds two of
+std/list's records by their short names and matches one. The mutation "an
+imported origin prefixed twice" puts the prefix back, and the micro corpus
+went red. It is a ratchet row.
+
+Whether a module may build an import's record by its short name at all is a
+separate question. The construction check refuses `list/step 1 [5]` as
+foreign and accepts `step 1 [5]`, and `examples/next_protocol.kso` builds a
+`cursor` the second way. That is a question about the language and is not
+changed here.
+
+CI measured the change against main with #1741 in it. The interpreted run's
+allocations fell 15 to 895,172, entry_instructions fell 3,486 to 83,772,216
+and library_instructions fell 4,269 to 84,309,271. Two rows rose:
+emit_instructions landed on 30,116,768 (+2,825) and compile_instructions on
+25,364,634 (+68). The loader no longer builds a prefixed name for an origin
+that already has a slash, and nothing has isolated which of the moves that
+accounts for.
+
 ## 2026-09-30 — a zero divisor meets an operator arm
 
 Three generated programs in one batch declared `fn + (pt a s) (pt b t)` and
