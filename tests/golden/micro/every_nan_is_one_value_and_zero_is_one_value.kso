@@ -1,0 +1,29 @@
+# The builtin float order, ruled 2026-09-30. Every NaN equals every NaN and
+# ranks above inf, whatever its sign bit and however it was made, and -0.0
+# equals and ranks with 0.0 while still printing -0.0. Before the ruling the
+# interpreter ranked floats by bit pattern, so `inf - inf`, which carries the
+# sign bit on x86, sorted below -inf and was not equal to `nan`; native
+# compared with C's ==, so a list holding a NaN was not equal to itself, and
+# `list/min` handed back the NaN.
+import "std/list"
+import "std/text"
+
+inf = text/to_float "inf"
+
+nan = text/to_float "nan"
+
+made = inf - inf
+
+zero = text/to_float "-0.0"
+
+pub play =
+  print "sorted: {list/sort [made nan 1.0 (0.0 - inf)]}"
+  print "min: {list/min [nan 1.0]}"
+  print "max: {list/max [nan 1.0 inf]}"
+  print "a list holding a NaN equals itself: {[made] == [made]}"
+  print "two NaNs made differently: {nan == made} {[nan] == [made]}"
+  print "NaN against inf: {made < inf} {inf < made} {made >= inf}"
+  print "NaN against an int: {1 < nan} {nan > 1} {nan == 1}"
+  print "zero three ways: {zero == 0.0} {0.0 == 0} {zero == 0}"
+  print "negative zero ranks with zero: {zero < 0.0} {zero > 0.0} {zero <= 0}"
+  print "and still prints as itself: {zero}"

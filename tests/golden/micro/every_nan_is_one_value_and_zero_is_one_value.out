@@ -1,0 +1,10 @@
+sorted: [-inf 1.0 nan nan]
+min: 1.0
+max: nan
+a list holding a NaN equals itself: true
+two NaNs made differently: true true
+NaN against inf: false true true
+NaN against an int: true true false
+zero three ways: true true true
+negative zero ranks with zero: false false true
+and still prints as itself: -0.0
