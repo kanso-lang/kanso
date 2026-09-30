@@ -10370,8 +10370,11 @@ KValue k_b_sqrt(KValue v) {
 /* Bitwise, over signed 64-bit ints. A shift count outside 0..63 is undefined
    in C and answers differently by host, so it is refused rather than left to
    the machine — the same call the overflow checks make. Right shift is
-   arithmetic, which is what go, rust and java all spell `>>`. */
+   arithmetic, which is what go, rust and java all spell `>>`. A subtype of
+   int is read as the int it wraps, as `+` reads it; the operators reach here
+   with the wrapper still on, where the builtins arrive already unwrapped. */
 static long long k_bits_of(KValue v, const char* what) {
+    if (v.tag == K_SUB) v = k_sub_base(v);
     if (v.tag == K_INT) return v.payload;
     char said[64];
     snprintf(said, sizeof said, "%s takes whole numbers", what);

@@ -1,0 +1,2 @@
+fn + (pt a s) (pt b t)
+  pt (a + b) "{s}{t}"

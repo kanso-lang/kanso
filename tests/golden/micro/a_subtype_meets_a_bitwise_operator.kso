@@ -1,0 +1,10 @@
+# `&`, `|` and `^` see a subtype's value as its parent's, as `+` and the bits
+# builtins already did. The native runtime refused the wrapper at all three
+# ("and takes whole numbers, got 1") while the interpreter and the page
+# answered.
+type id int
+
+fn mask v
+  "{id 1 & v} {id 6 | v} {id 5 ^ v} {v & id 7}"
+
+pub play = print (mask 3)
