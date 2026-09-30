@@ -20202,3 +20202,16 @@ restore it: the group goes unnamed, two errs merge, and the arm is skipped.
 "a group value skipping its err arm" turns a failing first argument down before
 native enters the group, and "a lambda dropping its third err" merges only two
 slots. The last two are new ratchet rows.
+
+CI measured the two changes together. Every benchmark binary's machine code
+fell 1,728 bytes, runbench to 401,880, which is about the size of the answers
+the call dispatchers no longer give before entering a group, and
+codegen_instructions_release fell 135,477 to 408,091,569. Four compile rows
+rose: compile_instructions landed on 25,388,667 (+2,069), entry_instructions on
+83,860,063 (+5,964), library_instructions on 84,395,148 (+5,958) and
+emit_instructions on 30,114,063 (+420). The rewrite now walks each rewritten
+group's arms a second time, and every compile runs the rewrite, but no build has
+isolated that walk as the cause. Three run rows moved by a few hundred
+instructions: work_encodebench landed on 2,333,703,876 (+595), work_livebench on
+1,537,391,669 (+651) and work_oneshot on 12,744,007 (+343), while
+work_runbench fell 315. Welfare reads 90.3231 against a floor of 90.3230.
