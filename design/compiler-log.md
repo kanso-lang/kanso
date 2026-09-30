@@ -20454,3 +20454,10 @@ both native tiers. Two mutations each undo one engine and each turns the
 fixture red: "a NaN ranked level with everything" in the runtime and "a float
 ranked by its bits" in the interpreter. Both are ratchet rows. The book's
 comparison section in chapter 2 says the order in a paragraph.
+
+CI's rows moved in both directions by small amounts. The runtime's compare gained
+a NaN test, so `text` grew to 3,524,720 bytes, and `codegen_instructions_dev`
+rose to 124,465,454 and `codegen_instructions_release` to 408,092,019 compiling
+it. `interp_instructions` rose to 591,340,712, the interpreter's `float_order`
+asking `is_nan` twice where `total_cmp` asked nothing. Every run row fell a few
+hundred instructions: runbench to 1,088,393,175. Welfare held at the floor.
