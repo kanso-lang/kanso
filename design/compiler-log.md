@@ -20326,3 +20326,19 @@ of calls for every declaration and cost the interpreted run 1,049 allocations;
 it now reads inference's own group table and walks only the declarations that
 hold a cell. compile_instructions fell 2,115 to 25,386,552, entry_instructions
 981 to 84,055,537 and library_instructions 953 to 84,589,516.
+
+## 2026-09-30 — the prune names the positions it stopped reading
+
+The lazy-cell fix above needs the positions an arm dropped for an unbuilt type
+had read and no kept arm reads. It found them by hashing every read position of
+every declaration in the program as written, then removing every one the pruned
+program still read. The prune already walks each group to count its live arms,
+so that walk now also ors together the positions the live arms read, and a
+dropped arm's positions outside the mask are the answer.
+
+On the codegen corpus in this container, `emit_ir_for` measured 30,475,770
+instructions on main, 30,524,620 with the lazy-cell fix, and 30,512,425 with
+this change: 12,195 of the fix's 48,850 back. The container's toolchain differs
+from CI's, so those three readings compare with each other and not with the
+golden. The mutation "a prune forgetting what it dropped" zeroes the mask's
+answer and turns `a_lazy_list_answers_where_a_dropped_arm_read_it` red.
