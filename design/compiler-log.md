@@ -19951,3 +19951,60 @@ again, and the micro corpus went red naming the fixture. It is a ratchet row.
 The other three programs in the batch differ in the words of a refusal, not in
 an answer, and have a different cause: a zero divisor meeting a user `+`. That
 is open.
+
+## 2026-09-30 — a push keeps the list it extends
+
+Reducing a generated program turned up a list written into itself:
+
+    fn two z
+      a = push [] [[] z]
+      push a [a 7]
+
+The answer is `[[[] 0] [[[[] 0]] 7]]`. The interpreter printed the inner `a`
+as `[]`, and native printed `<cycle>` in its place. The same shape through a
+fold, `push acc [acc x]`, and through a map, `put m k [m]`, went wrong the
+same way on both engines.
+
+A write may extend its container in place when nothing else holds it. Two
+mentions of the container in one call normally rule that out, but a builtin
+forces its arguments before it writes, so a mention in a sibling argument was
+discounted as finished by then. That is true of `put m k (m[k] + 1)`, where
+the sibling reads an element and lets the container go. It is false of
+`[a 7]`, which stores the container in the value being written. The
+interpreter moved the list out of `a` before the pair holding `a` was read
+back, and native extended the list the pair pointed at.
+
+A sibling now earns the discount only when it cannot hold the container: every
+mention in it is the container of an element or field read. The three places
+that grant the discount -- the count of a local's uses, the exemption for
+`put`'s own arguments, and a folder's accumulator -- all ask the same
+question. The cost veins agreed and the compile sweep saw nothing move, so no
+benchmark relied on a sibling that stores its container.
+
+The first version walked each argument's children through `child_exprs`,
+which builds a list per node, and it counted every argument even where the
+callee forces them. CI read the interpreted run 467 allocations and 648,942
+instructions up and the emitter 67,071 instructions up. The walk now goes
+through `any_child`, which allocates nothing, and a forced argument is asked
+only whether it holds the container. The interpreted run reads 895,187
+allocations on this host, as it did before the change.
+
+The ratchet's check of rows that patch `src/linear.rs` found one already blind
+on main: "a curried group unseen as a value" leaves `&name` out of the
+mentions that count as a value, and its fixture stopped failing when a string
+builder began adopting a seed that is not a string. `f = &add base` and two
+calls of `f` now fail under that mutation on both engines, each push writing
+into `base`, and `a_partial_holds_the_list_it_was_given` holds that program.
+
+`a_push_keeps_the_list_it_extends` in the micro corpus holds the list, fold
+and map shapes, and `put m k (m[k] + 1)` beside them, which must still write in
+place. The mutation "a stored sibling read as finished" makes every mention
+count as a read, and the micro corpus went red naming the fixture. It is a
+ratchet row.
+
+CI measured the second version against main with #1741 in it.
+emit_instructions landed on 30,113,943 (+15,444, 0.05%) and
+interp_instructions on 590,235,838 (+39,708, 0.007%). The pass now asks one
+more question of each sibling argument, and both rows rose with it; no build
+has isolated that question as the cause. The welfare history records the floor
+this language fix spends.
