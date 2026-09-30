@@ -5,9 +5,10 @@
 # is the same; the witness is an_arm_no_value_reaches_is_not_emitted, whose
 # mapping program then defines next_skipped.
 set -e
-grep -qF '    let pruned = without_unbuilt_arms(program);' src/codegen.rs || {
+old='    let (pruned, unread_positions) = match without_unbuilt_arms(program) {'
+grep -qxF "$old" src/codegen.rs || {
   echo "the arm prune moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i 's|^    let pruned = without_unbuilt_arms(program);$|    let pruned: Option<Program> = None;|' src/codegen.rs
-[ "$(grep -cF '    let pruned: Option<Program> = None;' src/codegen.rs)" -eq 1 ]
+sed -i 's|^    let (pruned, unread_positions) = match without_unbuilt_arms(program) {$|    let (pruned, unread_positions) = match None::<(Program, UnreadPositions)> {|' src/codegen.rs
+[ "$(grep -cF 'match None::<(Program, UnreadPositions)> {' src/codegen.rs)" -eq 1 ]
