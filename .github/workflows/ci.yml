@@ -724,6 +724,8 @@ jobs:
             if [ -f "/tmp/cg.$n" ]; then cp "/tmp/cg.$n" "/tmp/profiles/cg.$n"; fi
             if [ -f "/tmp/cg.${n}2" ]; then cp "/tmp/cg.${n}2" "/tmp/profiles/cg.$n.again"; fi
           done
+          # the interpreted run read again with the heap started at 48 MiB
+          if [ -f /tmp/cg.interp_moved ]; then cp /tmp/cg.interp_moved /tmp/profiles/cg.interp.moved; fi
           {
             awk '/^(cpu family|model|model name|stepping)\t/ { print; n++ } n >= 4 { exit }' /proc/cpuinfo || true
             echo "glibc=$(ldd --version | head -1)"

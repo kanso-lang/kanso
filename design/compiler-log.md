@@ -20661,3 +20661,75 @@ This reading is on lib/json in this container, where the pair differs by
 −30,918; CI's reading on the compile corpus was +146,628. The question asked
 was whether a fixed heap start removes the difference, and on this input it
 does not. STATUS.md drops the row.
+
+## 2026-09-30 — the interpreter's caches stop reading the heap's address
+
+"A welfare counter reads three parts per billion" left the six instructions
+between two runners with one place to look, the allocator. mimalloc reads four
+things about the host when it starts: `/proc/sys/vm/overcommit_memory`,
+`/sys/kernel/mm/transparent_hugepage/enabled`, the physical memory through
+`sysinfo`, and the stack limit, which also decides where valgrind lays out the
+client. Each was varied in this container with the gate's own environment,
+tunables and preload, the two files bound over in a private mount namespace,
+reading `kanso::run_interpreted_on_stack` as the gate does:
+
+    arm                          row           process total
+    as found (twice)             585,995,155   622,419,231
+    THP [always]                 585,995,155   622,419,231
+    THP [never]                  585,995,155   622,419,245
+    overcommit 1                 585,995,155   622,419,231
+    overcommit 2                 585,995,155   622,423,604
+    stack 10 MiB, 16 MiB, none   585,995,155   622,419,231
+
+None of them moved the row. The overcommit and huge-page settings moved the
+process total, by 4,373 and 14, all of it in start-up work outside the frame
+the gate reads, and mimalloc stores the physical memory and never reads it
+again.
+
+The layout itself did move it. valgrind's `--aspace-minaddr` sets where it
+starts placing the program's mappings, and the same binary on the same program
+read:
+
+    mappings from         row
+    default               585,995,155
+    48 MiB                585,551,692
+    256 MiB               586,517,727
+    1 GiB                 585,551,880
+
+The difference sat in two functions. `callee_missed` and `frame_missed` are the
+slow paths behind two 256-slot direct-mapped tables, `recent_callees` and
+`recent_frames`, and both tables took their slot from a hash of the key's whole
+address. Where the heap landed decided which names and declarations shared a
+slot, and so how often a call missed. The backing maps were keyed by the same
+address under Fx. The compile row was checked the same way and did not move:
+25,680,577 at all four starts.
+
+The slot now comes from the key's offset inside its 64 KiB allocator slice,
+`addr & 0xFFFF`, and the backing maps hash that offset while still comparing
+the whole address. mimalloc places memory in slices on 64 KiB boundaries, so
+moving the heap moves no object within its slice. A 1 MiB mask was tried and
+lost the property at the 1 GiB start; 64 KiB held at eight starts from 48 MiB
+to 1 GiB and with the stack unlimited. The offsets collide more than whole
+addresses did, because objects of one size sit at the same offsets in every
+slice, and at 256 slots the row cost 1.47 million instructions more. The
+callee table has 1,024 slots now and the frame table 512. That reads
+586,031,229 here, 42,680 above the old reading at the default start and inside
+the range the old code covered across starts. 1,024 frame slots beside 1,024
+callee slots added 7,872 bytes to the run's peak; this pair adds none.
+Keys mixed from a declaration's line and column and a name's bytes were also
+tried, and cost 5.8 million more than the offset alone.
+
+The gate now reads the run a second time with the mappings started at 48 MiB
+and fails when the two readings differ. On main's compiler the second reading
+was 585,550,833 against 585,994,296, and the gate stopped there; on this one
+both read 586,030,370. Mutation `a_frame_slot_read_off_its_address` takes the
+frame slot from the whole address again, the two readings come out one
+instruction apart, and the gate goes red on that check. Ratchet row
+`slice_slot`. Taking the callee slot from the address instead is not a
+mutation this check can see: at 1,024 slots those two starts happen to give
+the same count.
+
+Whether the six instructions between runners came from these tables is not
+shown. A layout difference between runners would move the row through them,
+and the row can no longer move that way. The next pair of CI readings on two
+runners will say whether anything else does.
