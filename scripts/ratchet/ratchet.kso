@@ -4764,6 +4764,18 @@ number_heads_minus = row
 
 rows_c1zzzzzzzi = text/concat rows_c1zzzzzzzj [spaced_minus number_heads_minus]
 
+# An arm whose answer can be any value is counted as raising, so a raise handed
+# on through a field of an entry is refused where it arrives (ruled 2026-09-30).
+any_value_raises = row
+  "a raise hidden behind any value"
+  true
+  "cargo test --release --test golden {box_error_golden}"
+  "specs (unit, golden, differential)"
+  (breaking "a_raise_hidden_behind_any_value")
+  release
+
+rows_c1zzzzzzzh = text/concat rows_c1zzzzzzzi [any_value_raises]
+
 # An import's record built by its short name is refused like the qualified
 # spelling, and a local binding of that name is still the binding (ruled
 # 2026-09-30).
@@ -4783,7 +4795,7 @@ short_record_local = row
   (breaking "a_local_named_for_an_imported_record_is_refused")
   release
 
-rows_c1zzzzzzzg = text/concat rows_c1zzzzzzzi [short_record short_record_local]
+rows_c1zzzzzzzg = text/concat rows_c1zzzzzzzh [short_record short_record_local]
 
 rows_c = text/concat rows_c1zzzzzzzg [itself]
 

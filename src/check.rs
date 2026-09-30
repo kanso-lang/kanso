@@ -939,8 +939,10 @@ fn effect_discarded_at(e: &Expr, tables: &AfterInfer, diags: &mut Vec<Diagnostic
 /// infer sets only where a program spells an err. A strict index's miss and
 /// a division's zero divisor answer ERR without it, because what the checker
 /// should make of those is the ledger's open question and not this rule's.
-/// A description is skipped whatever it carries: a boxed failure is not a
-/// bare one, and the three words are its doors.
+/// A description is skipped: a boxed failure is not a bare one, and the
+/// three words are its doors. An answer that can be any value is not known
+/// to be a description, so an arm that spells an err beside it still counts
+/// (ruled 2026-09-30).
 fn raised_err_at(
     e: &Expr,
     raisers: &crate::hash::Map<(&str, usize), Vec<&[Pattern]>>,
@@ -1206,12 +1208,18 @@ fn check_after_infer<'p>(
     // The arms that can raise, keyed like `nones`: each one's patterns, for
     // the literal test `raised_err_at` makes at a call. An arm raises when
     // its answer carries RAISED, the bit infer sets only where a program
-    // spells an err; a description is not counted, since a boxed failure is
-    // not a bare one.
+    // spells an err. An answer known to be a box is skipped, since a boxed
+    // failure is not a bare one. An answer that can be ANY value is not known
+    // to be one: its description bit is inference not knowing, and an arm
+    // that hands on a field of a record the runtime built answers exactly
+    // that beside its own err (ruled 2026-09-30). An answer with no RAISED
+    // stays lenient either way, since unknown is not proof.
     let mut raisers: crate::hash::Map<(&str, usize), Vec<&[Pattern]>> = crate::hash::Map::default();
+    let any = crate::infer::TOP & !crate::infer::FAIL;
     for (i, d) in program.fns.iter().enumerate() {
         let r = inference.returns[i];
-        if r & crate::infer::RAISED != 0 && r & crate::infer::DESC == 0 {
+        let boxed = r & crate::infer::DESC != 0 && r & any != any;
+        if r & crate::infer::RAISED != 0 && !boxed {
             raisers.entry((d.name.as_str(), d.params.len())).or_default().push(&d.params);
         }
     }

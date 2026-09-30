@@ -45,8 +45,10 @@ lower = "abcdefghijklmnopqrstuvwxyz"
 
 blank = " \t\n\r"
 
+# Read by characters rather than by splitting on `c`: split answers an err
+# for an empty separator, and the checker cannot see that `c` is never one.
 fn in? set c
-  length (text/split set c) > 1
+  list/any? (text/chars set) (x -> x == c)
 
 fn all_in? set s
   list/all? (text/chars s) (c -> in? set c)

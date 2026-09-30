@@ -1,0 +1,4 @@
+error[exhaustive]: this can be an err and `consume` has no arm for it — dispatch on it here, or give `consume` an `(err _)` arm (in an_err_raised_beside_a_map_value.kso) (module an_err_raised_beside_a_map_value)
+  --> an_err_raised_beside_a_map_value.kso:16:12
+  16 |   consume (pick es[1])
+                  ^
