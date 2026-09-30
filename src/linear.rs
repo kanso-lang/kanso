@@ -866,7 +866,10 @@ fn takes_acc_first_with(args: &[Expr], acc: &str, forced_args: bool) -> bool {
     if !matches!(args.first(), Some(Expr::Ident(n, _, _)) if n == acc) {
         return false;
     }
-    args[1..].iter().all(|a| count_in_expr(acc, a) == 0 || (forced_args && !holds(acc, a)))
+    args[1..].iter().all(|a| match forced_args {
+        true => !holds(acc, a),
+        false => count_in_expr(acc, a) == 0,
+    })
 }
 
 /// Whether evaluating `e` can leave something holding `var`'s value: any
@@ -884,7 +887,7 @@ fn holds(var: &str, e: &Expr) -> bool {
         Expr::Field { base, .. } if matches!(base.as_ref(), Expr::Ident(n, _, _) if n == var) => {
             false
         }
-        _ => child_exprs(e).into_iter().any(|c| holds(var, c)),
+        _ => crate::any_child(e, |c| holds(var, c)),
     }
 }
 

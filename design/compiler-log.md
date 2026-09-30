@@ -19946,6 +19946,21 @@ that grant the discount -- the count of a local's uses, the exemption for
 question. The cost veins agreed and the compile sweep saw nothing move, so no
 benchmark relied on a sibling that stores its container.
 
+The first version walked each argument's children through `child_exprs`,
+which builds a list per node, and it counted every argument even where the
+callee forces them. CI read the interpreted run 467 allocations and 648,942
+instructions up and the emitter 67,071 instructions up. The walk now goes
+through `any_child`, which allocates nothing, and a forced argument is asked
+only whether it holds the container. The interpreted run reads 895,187
+allocations on this host, as it did before the change.
+
+The ratchet's check of rows that patch `src/linear.rs` found one already blind
+on main: "a curried group unseen as a value" leaves `&name` out of the
+mentions that count as a value, and its fixture stopped failing when a string
+builder began adopting a seed that is not a string. `f = &add base` and two
+calls of `f` now fail under that mutation on both engines, each push writing
+into `base`, and `a_partial_holds_the_list_it_was_given` holds that program.
+
 `a_push_keeps_the_list_it_extends` in the micro corpus holds the list, fold
 and map shapes, and `put m k (m[k] + 1)` beside them, which must still write in
 place. The mutation "a stored sibling read as finished" makes every mention
