@@ -19930,8 +19930,10 @@ one of those types. Native builds the wrapper only then. The interpreter and
 the browser engine, which share its arithmetic, built it every time, and a
 subtype is a value an operator's user arms are asked about, so their `+` went
 to the `pt` arm, which did not match. A program that names neither type cannot
-otherwise tell the wrapped answer from the text. After `/` and `%`, both now
-hand back the bare text where the program declared neither type.
+otherwise tell the wrapped answer from the text. Where the program declared
+neither type, the interpreter now takes the wrapper off a value about to be
+handed to an operator's arms, and the browser engine takes it off after `/`
+and `%`, since it asks the arms outside the door its arithmetic goes through.
 
 Where the program does name them, native had the opposite gap. An operator
 asks its arms only when an operand's recorded set says it may be a record,
@@ -19947,3 +19949,14 @@ refusal's words for the undeclared case, and
 running for the declared one. The mutations "an undeclared math failure sent
 to the arms" and "a named math failure kept from the arms" each take one half
 out. Both are ratchet rows.
+
+The first version unwrapped in the interpreter after every `/` and `%`, asking
+the program's type table each time, and CI read the interpreted run 1,961,885
+instructions up. Asking the table only for a zero divisor's answer took back
+22,440 of the 2,306,325 this host measured. Passing the question to the
+arithmetic as a third field of the value every operator builds cost 2,194,323
+on its own, with the division path untouched, so the cost was on the path
+every sum takes and not in the lookup. The unwrap now sits inside the branch
+that has already found a subtype on one side, and the row reads 585,933,148
+on this host, what main reads. The emitter's row landed on 30,097,923 (+277)
+with native's record bit.
