@@ -99,8 +99,8 @@ the box constructor is `effect`, which was already built. Four were closed on
 standing rulings: a fixture kind that pins the interpreter's answer where
 native refuses, the escape path's byte scan kept inside lib/json, the
 `.rodata` pin declined in favour of measuring a fixed heap start, and
-escapebench sized so it holds the bracket's benefit. Six of the seven are rows
-under "Ruled, unbuilt" below. The maps parse's share
+escapebench sized so it holds the bracket's benefit. Six of the seven went to
+"Ruled, unbuilt" below, and the float order has since come off it built. The maps parse's share
 of the compile row's drift left this list ruled on 2026-09-15 and built the
 same night, kanso#1439. The assert hako left it by being built — `lib/expect`,
 kanso#1233, 2026-09-03.
@@ -149,7 +149,8 @@ the 2026-09-15 normalization ruling, which is ironclad and which a counter
 minted a day later does not satisfy.
 
 **Six more joined on 2026-09-30**, from the sitting that emptied the ledger of
-all but one entry, so eight rows stand. Each of the six has its own heading
+all but one entry. The float order came off the same day, built, so seven rows
+stand. Each standing one has its own heading
 below, dated 2026-09-30, and a log entry of the same name. The seventh ruling
 of that sitting, the box constructor's spelling, has no row because `effect`
 was already built and pinned.
@@ -362,19 +363,6 @@ If the reading cannot be made to repeat between machines, the question that
 follows is whether an exact pin is the right instrument for a counter whose
 artifact and host both move under it. That one is Clay's, and this row does
 not decide it in advance.
-
-### Every NaN is one value ranked last, and zero is one value (2026-09-30)
-
-The log entry "gavel: every NaN is one value ranked last, and zero is one
-value". Every NaN equals every NaN and ranks above `inf`, whatever its sign bit
-or how it was made; `-0.0` equals and ranks with `0.0` and still prints `-0.0`;
-this is the builtin float order on every engine. Today the interpreter ranks
-floats by bit pattern and native compares with C's `==`.
-
-Owes: both engines changed, and goldens for the sort of
-`[inf - inf, nan, 1.0, -inf]`, `list/min [nan 1.0]`, `[x] == [x]` for a NaN
-`x`, and transitivity across `0`, `0.0` and `-0.0`. The fuzzer keeps NaN and
-`-0.0` out of `text/to_float` until this lands.
 
 ### A parameter bound to a box carries the box into the body (2026-09-30)
 

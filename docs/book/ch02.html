@@ -218,6 +218,8 @@ there <span class="o">=</span> <span class="f">point</span> <span class="n">1</s
 
 <p><code>here</code> and <code>there</code> are two separate constructions of the same point, and they compare equal—because equality asks what a value <em>is</em>, never where it lives. immutable values make this the only sensible answer, and it is the answer that lets maps key on records and lists compare in a single <code>==</code>.</p>
 
+<p>floats follow one order on every engine. an int and a float compare as the numbers they are, so <code>0 == 0.0</code> holds. every NaN equals every other NaN and ranks above <code>inf</code>, however it was made, so a list holding a NaN equals itself and <code>list/sort</code> puts NaNs last. <code>-0.0</code> equals <code>0.0</code> and sorts beside it, though it still prints as <code>-0.0</code>. a program that wants NaNs ordered another way wraps its floats in a type of its own and gives that type its own <code>&lt;</code> arm.</p>
+
 <h2>rebinding</h2>
 
 <p>values are immutable, but a <em>name</em> may be rebound to a new value. this reads naturally when a value evolves through steps—each line is a fresh, exact value, and the name simply follows along:</p>

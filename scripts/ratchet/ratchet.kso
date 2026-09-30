@@ -4673,7 +4673,27 @@ pruned_mask = row
 
 rows_c1zzzzzzzp = text/concat rows_c1zzzzzzzq [pruned_mask]
 
-rows_c = text/concat rows_c1zzzzzzzp [itself]
+# Every NaN equals every NaN and ranks last, and -0.0 ranks with 0.0, on every
+# engine (ruled 2026-09-30). One row per engine, since each could slip alone.
+nan_level = row
+  "a NaN ranked level with everything"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_nan_ranked_level_with_everything")
+  release
+
+float_bits = row
+  "a float ranked by its bits"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_float_ranked_by_its_bits")
+  release
+
+rows_c1zzzzzzzo = text/concat rows_c1zzzzzzzp [nan_level float_bits]
+
+rows_c = text/concat rows_c1zzzzzzzo [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

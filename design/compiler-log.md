@@ -20433,3 +20433,24 @@ Clay, on "Raising escapebench's size": the 2026-09-05 corpus-first ruling
 covers it. The benchmark is sized so the escape bracket's benefit falls inside
 it, the term that reads it is re-based forward in the same change, and the log
 says which way it moved. Unbuilt; STATUS.md carries the row.
+
+## 2026-09-30 — one float order, built
+
+The gavel of the same day, "every NaN is one value ranked last, and zero is
+one value", is built on both engines. The interpreter's `compare` and its
+float equality answer from one function, `float_order`: two NaNs are equal, a
+NaN ranks above everything else, and every other pair takes `partial_cmp`,
+which already puts `-0.0` level with `0.0`. `cmp_int_float` hands a NaN or an
+infinity to the same function, so an int ranks below every NaN. The runtime
+gains `k_order_float` with the same three cases, and `k_order`, `k_eq_rec`
+and `k_order_int_float` read it; the last answered "the int is greater" for a
+NaN and now answers "less".
+
+`every_nan_is_one_value_and_zero_is_one_value` in the micro corpus pins the
+sort of `[inf - inf, nan, 1.0, -inf]`, `list/min [nan 1.0]`,
+`list/max [nan 1.0 inf]`, `[x] == [x]` for a NaN `x`, two NaNs made
+differently, a NaN against an int, and the three zeros, on the interpreter and
+both native tiers. Two mutations each undo one engine and each turns the
+fixture red: "a NaN ranked level with everything" in the runtime and "a float
+ranked by its bits" in the interpreter. Both are ratchet rows. The book's
+comparison section in chapter 2 says the order in a paragraph.

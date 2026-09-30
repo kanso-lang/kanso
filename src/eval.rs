@@ -4926,11 +4926,25 @@ fn compare(a: &Value, b: &Value) -> Option<std::cmp::Ordering> {
     }
     match (a, b) {
         (Value::Int(x), Value::Int(y)) => Some(x.cmp(y)),
-        (Value::Float(x), Value::Float(y)) => Some(x.total_cmp(y)),
+        (Value::Float(x), Value::Float(y)) => Some(float_order(*x, *y)),
         (Value::Int(x), Value::Float(y)) => Some(cmp_int_float(x, *y)),
         (Value::Float(x), Value::Int(y)) => Some(cmp_int_float(y, *x).reverse()),
         (Value::Str(x), Value::Str(y)) => Some(x.cmp(y)),
         _ => None,
+    }
+}
+
+/// The builtin float order, ruled 2026-09-30. Every NaN equals every NaN and
+/// ranks above `inf`, whatever its sign bit and however it was made, and `-0.0`
+/// equals and ranks with `0.0`. `f64::total_cmp`, which this replaces, ranked
+/// bit patterns, so `inf - inf` sorted below `-inf` on x86 and above `inf` on
+/// ARM, and `-0.0` fell below `0.0` while equalling `0`.
+fn float_order(x: f64, y: f64) -> std::cmp::Ordering {
+    match (x.is_nan(), y.is_nan()) {
+        (true, true) => std::cmp::Ordering::Equal,
+        (true, false) => std::cmp::Ordering::Greater,
+        (false, true) => std::cmp::Ordering::Less,
+        (false, false) => x.partial_cmp(&y).unwrap_or(std::cmp::Ordering::Equal),
     }
 }
 
@@ -4947,9 +4961,9 @@ fn int_f(n: &Int) -> f64 {
 fn cmp_int_float(x: &Int, y: f64) -> std::cmp::Ordering {
     let floor = y.floor();
     // Only a NaN or an infinity has no floor to compare against, and the
-    // total order over the widened value is what ranks those.
+    // float order over the widened value is what ranks those.
     let Some(whole) = <BigInt as num_traits::FromPrimitive>::from_f64(floor) else {
-        return x.to_f64().total_cmp(&y);
+        return float_order(x.to_f64(), y);
     };
     match x.big().as_ref().cmp(&whole) {
         std::cmp::Ordering::Equal if y > floor => std::cmp::Ordering::Less,
@@ -5292,7 +5306,7 @@ fn values_equal_seen(
     }
     let answer = match (a, b) {
         (Value::Int(x), Value::Int(y)) => x == y,
-        (Value::Float(x), Value::Float(y)) => x.total_cmp(y).is_eq(),
+        (Value::Float(x), Value::Float(y)) => float_order(*x, *y).is_eq(),
         // One numeric domain, which `<=` and `>=` already assert: both answer
         // true for 1 and 1.0, and `<` answers false either way round because
         // neither is strictly less. Equality was the one operator dissenting.
