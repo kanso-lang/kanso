@@ -20477,3 +20477,14 @@ group with no arm for a box and two hops into `+`, and the unpatched compiler
 passes it and fails at run time. Mutation `a_box_lost_at_the_parameter` skips
 the second reading, and the error corpus goes red on that fixture. Ratchet row
 `held_box`. STATUS.md drops the row.
+
+The check costs something on every program, whether or not it hands a box to
+a parameter. CI's rows: `compile_instructions` rose to 25,528,949 (+142,397,
+0.56%), `entry_instructions` to 84,431,609 and `library_instructions` to
+84,965,462, each about 376,000 more. `emit_instructions` fell to 30,155,267 and
+`interp_instructions` to 590,296,603, neither of which runs this code. A
+profile of `kanso check lib/json` in this container puts the rise in the check
+itself: `check_after_infer` read 687,804 instructions on main and 805,964 here,
+where lib/json hands no box to a named parameter and the second reading never
+runs. The walk's per-site closure is now a frame of its own, 244,165
+instructions, where it used to be inlined. Welfare holds at the floor.
