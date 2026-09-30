@@ -1292,16 +1292,61 @@ impl Executor for ScriptedExecutor {
 /// Two memories rather than one because the rows would not fit in one: a value
 /// needs the name as an `Rc<str>` and a call needs the group, and an arm
 /// carrying both would size every row of both tables by the pair.
-/// The slot an address takes in the recent tables. Allocations sit at
-/// regular strides, so the low bits of an address repeat; multiplying by the
-/// golden ratio and keeping the top bits spreads them.
-fn recent_slot(key: usize) -> usize {
-    ((key as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15) >> (64 - RECENT_CALLEES.trailing_zeros()))
-        as usize
+/// The slot a key takes in the recent tables: the top bits of the key times
+/// the golden ratio, which spreads keys that differ only in their low bits.
+///
+/// The key is an object's place inside its allocator slice, never its whole
+/// address. Until 2026-09-30 it was the whole address, and where the heap
+/// landed decided which declarations and names shared a slot, so the
+/// interpreter's instruction count moved with the memory layout: a valgrind
+/// run with its mappings started at 48 MiB counted 443,467 fewer instructions
+/// than one started at the default, and one started at 256 MiB counted
+/// 522,700 more, on the same binary and the same program.
+fn recent_slot(key: u64, slots: usize) -> usize {
+    (key.wrapping_mul(0x9E37_79B9_7F4A_7C15) >> (64 - slots.trailing_zeros())) as usize
 }
 
-/// Slots in `Interp::recent_callees` and `Interp::recent_frames`.
-const RECENT_CALLEES: usize = 256;
+/// A map key that is equal by address and hashed by the object's place in its
+/// slice, so which entries collide depends on the program and not on where
+/// the heap landed. Two keys at one address are one object, so they carry one
+/// `stable`.
+#[derive(Clone, Copy)]
+struct Placed {
+    at: usize,
+    stable: u64,
+}
+
+impl PartialEq for Placed {
+    fn eq(&self, other: &Self) -> bool {
+        self.at == other.at
+    }
+}
+
+impl Eq for Placed {}
+
+impl std::hash::Hash for Placed {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        state.write_u64(self.stable);
+    }
+}
+
+/// Where an object sits inside the 64 KiB slice the allocator placed it in.
+/// The allocator hands out slices on 64 KiB boundaries, so moving the whole
+/// heap moves no object within its slice, and the offset is the same on every
+/// layout the same program produces.
+fn in_slice(at: usize) -> u64 {
+    (at & 0xFFFF) as u64
+}
+
+/// Slots in `Interp::recent_callees`. With keys that no longer spread by the
+/// heap's position, 256 slots missed often enough to cost 1.47 million
+/// instructions on the interpreter's corpus; 1,024 costs 42,680 over the old
+/// reading, and 2,048 starts to show in the run's peak memory.
+const RECENT_CALLEES: usize = 1024;
+
+/// Slots in `Interp::recent_frames`. At 1,024 beside the callees' 1,024 the
+/// two tables add 7,872 bytes to the interpreted run's peak.
+const RECENT_FRAMES: usize = 512;
 
 #[derive(Clone)]
 enum Callee<'a> {
@@ -1393,7 +1438,7 @@ pub struct Interp<'a> {
     callees: RefCell<Map<String, Callee<'a>>>,
     /// `callees` again, keyed by the address of a `Value::FnRef`'s name; see
     /// `call_ref`.
-    callees_by_ref: RefCell<Map<usize, (Rc<str>, Callee<'a>)>>,
+    callees_by_ref: RefCell<Map<Placed, (Rc<str>, Callee<'a>)>>,
     /// The last callee each of a few hundred reference addresses asked for,
     /// in front of `callees_by_ref`; see `callee_of_ref`.
     recent_callees: RefCell<Vec<(usize, Option<Callee<'a>>)>>,
@@ -1406,7 +1451,7 @@ pub struct Interp<'a> {
     /// only read when an err is raised. The answer depends on the declaration
     /// alone, and a declaration lives in the `Program` this interpreter
     /// borrows, so its address is stable for the whole run and unique to it.
-    frames: RefCell<Map<usize, Frame>>,
+    frames: RefCell<Map<Placed, Frame>>,
     /// The last frame each of a few hundred declaration slots asked for, in
     /// front of `frames`; see `frame_for`.
     recent_frames: RefCell<Vec<(usize, Frame)>>,
@@ -1489,7 +1534,7 @@ impl<'a> Interp<'a> {
             callees_by_ref: RefCell::new(Map::default()),
             recent_callees: RefCell::new(vec![(0, None); RECENT_CALLEES]),
             frames: RefCell::new(Map::default()),
-            recent_frames: RefCell::new(vec![(0, None); RECENT_CALLEES]),
+            recent_frames: RefCell::new(vec![(0, None); RECENT_FRAMES]),
             program,
         }
     }
@@ -1504,7 +1549,7 @@ impl<'a> Interp<'a> {
     #[inline]
     fn frame_for(&self, decl: &'a FnDecl) -> Frame {
         let key = decl as *const FnDecl as usize;
-        let slot = recent_slot(key);
+        let slot = recent_slot(in_slice(key), RECENT_FRAMES);
         if let (at, frame @ Some(_)) = &self.recent_frames.borrow()[slot] {
             if *at == key {
                 return frame.clone();
@@ -1516,12 +1561,13 @@ impl<'a> Interp<'a> {
     /// The table did not hold the declaration; out of line, as `callee_missed`.
     #[inline(never)]
     fn frame_missed(&self, decl: &'a FnDecl, key: usize, slot: usize) -> Frame {
-        let known = self.frames.borrow().get(&key).cloned();
+        let placed = Placed { at: key, stable: in_slice(key) };
+        let known = self.frames.borrow().get(&placed).cloned();
         let frame = match known {
             Some(frame) => frame,
             None => {
                 let made = frame_of(decl);
-                self.frames.borrow_mut().insert(key, made.clone());
+                self.frames.borrow_mut().insert(placed, made.clone());
                 made
             }
         };
@@ -2554,7 +2600,7 @@ impl<'a> Interp<'a> {
     /// so an address in the table cannot have been handed to another name.
     fn callee_of_ref(&self, name: &Rc<str>) -> Callee<'a> {
         let key = Rc::as_ptr(name) as *const u8 as usize;
-        let slot = recent_slot(key);
+        let slot = recent_slot(in_slice(key), RECENT_CALLEES);
         if let (k, Some(callee)) = &self.recent_callees.borrow()[slot] {
             if *k == key {
                 return callee.clone();
@@ -2567,7 +2613,8 @@ impl<'a> Interp<'a> {
     /// for no frame.
     #[inline(never)]
     fn callee_missed(&self, name: &Rc<str>, key: usize, slot: usize) -> Callee<'a> {
-        let known = self.callees_by_ref.borrow().get(&key).map(|(_, callee)| callee.clone());
+        let placed = Placed { at: key, stable: in_slice(key) };
+        let known = self.callees_by_ref.borrow().get(&placed).map(|(_, callee)| callee.clone());
         if let Some(callee) = &known {
             self.recent_callees.borrow_mut()[slot] = (key, Some(callee.clone()));
         }
@@ -2575,7 +2622,7 @@ impl<'a> Interp<'a> {
             Some(callee) => callee,
             None => {
                 let callee = self.callee_named(name);
-                self.callees_by_ref.borrow_mut().insert(key, (name.clone(), callee.clone()));
+                self.callees_by_ref.borrow_mut().insert(placed, (name.clone(), callee.clone()));
                 self.recent_callees.borrow_mut()[slot] = (key, Some(callee.clone()));
                 callee
             }

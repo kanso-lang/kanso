@@ -4673,7 +4673,21 @@ pruned_mask = row
 
 rows_c1zzzzzzzp = text/concat rows_c1zzzzzzzq [pruned_mask]
 
-rows_c = text/concat rows_c1zzzzzzzp [itself]
+# The interpreter's caches take their slots from an object's place inside its
+# allocator slice. Taking the frame slot from the whole address again makes
+# the row read one number with the heap where valgrind puts it and another
+# with the heap started at 48 MiB, and the gate compares the two.
+slice_slot = row
+  "a frame slot read off its address"
+  true
+  interp_gate
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_frame_slot_read_off_its_address")
+  release
+
+rows_c1zzzzzzzk = text/concat rows_c1zzzzzzzp [slice_slot]
+
+rows_c = text/concat rows_c1zzzzzzzk [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
