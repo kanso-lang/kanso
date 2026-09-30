@@ -443,7 +443,7 @@ fn compiled pattern
   chars = text/chars body
   parsed_body = read_alt chars 1
   marked_body = flagged parsed_body.node flags.node
-  numbered marked_body 1 . (n -> settled n.node (n.next - 1))
+  ended marked_body (parsed_body.pos - length chars - 1)
 
 # A lookbehind has to know how far back to stand, so one whose width varies is
 # refused rather than quietly never matching. Answering an err here reaches
@@ -456,6 +456,18 @@ fn refused _ _ true
 
 fn refused node wanted false
   program node (starters node) wanted (required node)
+
+# A pattern that parses whole ends one past its last character. The parse
+# stops short at a `)` that closes no group, and runs past the end when a
+# group, a class, a count or an escape is still open there. Either way part
+# of the pattern was never read, so it is refused rather than matched as
+# whatever the rest happened to spell.
+fn ended node 0
+  numbered node 1 . (n -> settled n.node (n.next - 1))
+
+fn ended _ over
+  return err "a `)` in the pattern closes no group" if over < 0
+  err "the pattern ends inside a group, class, count or escape"
 
 # A literal every match of the node must contain, or "" when none is known.
 # Only a sequence's own literal parts count, and only side by side: each is
@@ -1057,7 +1069,7 @@ fn opened _ at "$"
   parsed (edge "end") (at + 1)
 
 fn opened chars at "\\"
-  return parsed (lit "\\") (at + 1) if at < 0 or length chars < at + 1
+  return parsed (lit "\\") (at + 2) if at < 0 or length chars < at + 1
   escaped chars (at + 1) chars[at + 1]
 
 fn opened _ at c

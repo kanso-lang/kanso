@@ -1,0 +1,7 @@
+closed:      (ab)
+open group:  the pattern ends inside a group, class, count or escape
+stray close: a `)` in the pattern closes no group
+open class:  the pattern ends inside a group, class, count or escape
+open count:  the pattern ends inside a group, class, count or escape
+lone escape: the pattern ends inside a group, class, count or escape
+open ahead:  the pattern ends inside a group, class, count or escape

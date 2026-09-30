@@ -20215,3 +20215,40 @@ isolated that walk as the cause. Three run rows moved by a few hundred
 instructions: work_encodebench landed on 2,333,703,876 (+595), work_livebench on
 1,537,391,669 (+651) and work_oneshot on 12,744,007 (+343), while
 work_runbench fell 315. Welfare reads 90.3231 against a floor of 90.3230.
+
+## 2026-09-30 — an unclosed pattern answers an err
+
+The random-program generator had never called `regexp/matches`,
+`regexp/match_at` or `regexp/match?`. A survey of those three against
+malformed patterns found no engine split, because the regexp compiler is a
+kanso library and every engine runs the same code. It found a library that
+matched patterns it had not finished reading. `(a` found `a`, `a)b` found `a`,
+`[abc` found `a`, `b{2` counted a repeat with no closing brace, and a pattern
+ending in `\` matched a literal backslash. The library's own comment on
+`find` says a pattern that does not compile answers an err, and the only err
+it could produce was the lookbehind of varying width.
+
+The parser already had what it needed to see each case. A pattern parsed to
+its end stops one past its last character. A `)` that closes no group stops
+the top-level alternation early, so the parse ends short. An open group, class
+or count reads to the end of the text and then steps past a closing character
+that is not there, so the parse ends long. `compiled` now compares the two
+positions and answers "a `)` in the pattern closes no group" when the parse
+ended short and "the pattern ends inside a group, class, count or escape" when
+it ended long. A trailing `\` stepped one place, which made it look finished;
+it steps two now, so it falls into the second case.
+
+Patterns that were well formed are read exactly as before. Every pattern in
+the tree still compiles: `scripts/book_check.sh` runs the two book scripts,
+which carry the most involved patterns here, and both passed. kq and vse call
+no regexp function.
+
+`an_unclosed_pattern_answers_an_err` in the micro corpus pins one well-formed
+pattern and six refusals on every engine. The mutation "an unclosed pattern
+matching what it read" tells `compiled` that every parse ended where the
+pattern did, and is a new ratchet row.
+
+Some lenient readings remain, and this change leaves them alone because each
+has a consistent meaning. A quantifier with nothing before it, as in `*a`, is
+a literal character. `[]` is a class that matches nothing, and `[z-a]` is an
+empty range.

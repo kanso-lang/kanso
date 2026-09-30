@@ -1,0 +1,14 @@
+import "std/regexp"
+
+open_count = "b\{2"
+
+fn said p
+  rescue (regexp/find p "x(ab)c\\") (e -> e.reason)
+
+pub play = print "closed:      {said "\\(ab\\)"}"
+  .> (_ -> print "open group:  {said "(ab"}")
+  .> (_ -> print "stray close: {said "ab)"}")
+  .> (_ -> print "open class:  {said "[ab"}")
+  .> (_ -> print "open count:  {said open_count}")
+  .> (_ -> print "lone escape: {said "c\\"}")
+  .> (_ -> print "open ahead:  {said "(?=ab"}")
