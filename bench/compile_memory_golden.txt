@@ -213,7 +213,9 @@ front_end_rounds=15
 # 2026-09-28, a cycle of an empty list ends: `next` on a cycled view gains a
 # guard, and lib/list is in the corpus's imports. front_end_visits 7,505 ->
 # 7,523, a RISE of 18 (+0.2398%).
-front_end_visits=7523
+# 2026-09-30, std/list gains `yield` and makes `iter` pub for the factory-only
+# ruling. front_end_visits 7,523 -> 7,526, a RISE of 3.
+front_end_visits=7526
 # 2026-08-31 (the AST's identifiers are inline names): 728,030 -> 713,606, a
 # fall of 14,424, or 1.98%. Banked. The peak falls with the traffic because a
 # short name's bytes now live inside the AST node the allocator already gave

@@ -20970,3 +20970,16 @@ The module compile golden moves by the new declaration: `visits` goes from
 row unchanged. `lib/list` is compiled into the compiler, so the instruction
 rows will move too; they are CI's to report.
 
+What it costs, from CI's rows. `compile_instructions` 25,598,514 to 25,719,753
+(+0.47%), `entry_instructions` 84,665,188 to 85,109,908 (+0.53%),
+`library_instructions` 85,199,000 to 85,641,551 (+0.52%), `emit_instructions`
+30,155,267 to 30,306,693 (+0.50%), `codegen_instructions_dev` 124,465,454 to
+124,466,652 and `codegen_instructions_release` 408,092,019 to 408,092,175.
+`interp_instructions` 590,343,751 to 590,630,366 (+0.05%), `interp_allocs`
+895,178 to 895,408 and `interp_peak_bytes` 721,852 to 725,220. `compile_allocs`
+14,307 to 14,494, `front_end_visits` 7,523 to 7,526 and `module_visits` 2,674
+to 2,677. `emitted_other_lines` goes from 86,399 to 86,407: eight of the other
+programs' emitted IR gain one line each. All of it is std/list carrying one
+more pub group through every compile that imports it. The runtime rows did not
+move. The floor comes down by that, as a ruled part of the language may.
+
