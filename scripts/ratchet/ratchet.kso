@@ -4550,7 +4550,19 @@ push_keeps = row
 
 rows_c1zzzzzzzza = text/concat rows_c1zzzzzzzz [push_keeps]
 
-rows_c = text/concat rows_c1zzzzzzzza [itself]
+# An import's type built by its short name is the import's type: it prints
+# under that type's name and matches that type's patterns.
+origin_once = row
+  "an imported origin prefixed twice"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "an_imported_origin_prefixed_twice")
+  release
+
+rows_c1zzzzzzzv = text/concat rows_c1zzzzzzzza [origin_once]
+
+rows_c = text/concat rows_c1zzzzzzzv [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

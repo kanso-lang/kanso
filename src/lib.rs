@@ -1926,7 +1926,12 @@ fn qualify(
         let joined = ast::qualified(qual, &ty.name);
         exports.insert(joined.clone(), ty.is_pub);
         ty.name = joined;
-        if let Some(o) = &mut ty.origin {
+        // GAVEL 51: a qualified origin is already the declaration's identity.
+        // An import's short-named twin remembers `list/step`, and prefixing it
+        // again named a type nothing declares: the interpreter printed
+        // `defs/list/step` for std/list's own record and native printed
+        // `record`, since no type's slot was left for it.
+        if let Some(o) = ty.origin.as_mut().filter(|o| !ast::has_slash(o)) {
             *o = ast::qualified(qual, o);
         }
         if let Some(parent) = &mut ty.parent {
