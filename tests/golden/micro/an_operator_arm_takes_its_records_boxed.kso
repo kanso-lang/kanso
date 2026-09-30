@@ -1,0 +1,15 @@
+# a record holding an int and one other value fits in two registers, and a
+# group whose arms all take one may be passed its words instead of the
+# record. An operator's arms are reached through the operator, which hands
+# them the boxed record, so the arm read a pointer as a packed int and the
+# program printed the two records side by side
+import "std/os"
+
+type pt
+  n
+  s
+
+fn + (pt a s) (pt b t)
+  pt (a + b) "{s}{t}"
+
+pub play = os/args .> (_ -> print "{pt 1 "a" + pt 3 "b"}")
