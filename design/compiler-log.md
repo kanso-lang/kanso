@@ -20715,7 +20715,10 @@ slice, and at 256 slots the row cost 1.47 million instructions more. The
 callee table has 1,024 slots now and the frame table 512. That reads
 586,031,229 here, 42,680 above the old reading at the default start and inside
 the range the old code covered across starts. 1,024 frame slots beside 1,024
-callee slots added 7,872 bytes to the run's peak; this pair adds none.
+callee slots added 7,872 bytes to the run's peak; this pair adds none. CI read
+the change alone, on main before the float order, at 591,374,402 against
+591,334,106: 40,296 more, with the peak unchanged at 721,852 and the reading at
+48 MiB identical to the first.
 Keys mixed from a declaration's line and column and a name's bytes were also
 tried, and cost 5.8 million more than the offset alone.
 
@@ -20733,3 +20736,26 @@ Whether the six instructions between runners came from these tables is not
 shown. A layout difference between runners would move the row through them,
 and the row can no longer move that way. The next pair of CI readings on two
 runners will say whether anything else does.
+
+## 2026-09-30 — the four carried builds, read together on CI
+
+kanso#1757 carries the box through a parameter, the one-engine fixture kind,
+escapebench's new size and the interpreter's slot keys onto main after the
+float order. CI's readings against main's goldens:
+
+    row                     main          carrier       move
+    compile_instructions    25,528,949    25,491,323    -37,626
+    emit_instructions       30,155,267    30,142,341    -12,926
+    entry_instructions      84,431,609    84,307,393   -124,216
+    library_instructions    84,965,462    84,842,031   -123,431
+    interp_instructions    590,303,209   590,343,751    +40,542
+
+The one row that rose is the interpreted run. The slot keys cost 40,296 when CI
+read them alone, so 246 of the 40,542 arrived with the other three builds; which
+of them carries it is not isolated. The four compile rows fell together, by
+amounts that arrived with the carrier as a whole and have no mechanism assigned
+to them here.
+
+Welfare reads 90.3227 on these rows against a floor of 90.32307: 0.0004 lower,
+inside the thousandth the gate allows either side, so the floor stands where it
+is and nothing is banked.
