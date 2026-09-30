@@ -1,0 +1,25 @@
+# a module may name a function after a type one of its imports exports, and a
+# call reaches the function. std/list exports `sorted` with one field and
+# `step` with two, and every import's pub names also exist under their short
+# names. The function and that short-named twin shared one spelling, so a call
+# whose count matched the type's fields built the import's record instead: both
+# engines printed a `sorted` for `sorted 1`, and the interpreter folded with
+# the `step` constructor. A pattern that names the type still means the type.
+import "std/list"
+
+fn sorted x
+  x + 1
+
+fn step acc x
+  acc + x
+
+fn head_of (step e _)
+  e
+
+fn head_of _
+  none
+
+fn first xs
+  head_of (list/next (list/repeat xs))
+
+pub play = print "{sorted 1} {list/fold [1 7] 0 step} {first [5 6]}"

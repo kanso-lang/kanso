@@ -20044,3 +20044,50 @@ emit_instructions landed on 30,116,768 (+2,825) and compile_instructions on
 25,364,634 (+68). The loader no longer builds a prefixed name for an origin
 that already has a slash, and nothing has isolated which of the moves that
 accounts for.
+
+## 2026-09-30 — a function named for an imported type is called
+
+Reducing a generated program turned up a module whose own function could not
+be reached by its own name:
+
+    import "std/list"
+
+    fn step acc x
+      acc + x
+
+`list/fold [1 7] 0 step` printed `8` on native and folded with std/list's
+`step` constructor on the interpreter. A direct call, `step a x`, built the
+record on both engines. `fn sorted x` beside the same import did the same:
+`sorted 1` printed a `sorted` record.
+
+Every pub name an import exports also exists under its short name, so std/list's
+types `step` and `sorted` have short-named twins in any module that imports
+it. A function the module declares under one of those names took the module's
+spelling, and so did the twin, and a call reaching that spelling built the
+record whenever its argument count matched the type's fields. The 2026-09-16
+fix for `fn entry` beside std/json's `entry` kept patterns on the type and
+said a call belongs to the function; its fixture passed because `entry 1`
+never matched the two-field type.
+
+The module's function now takes the short name, as a type the module declares
+already does. The twin goes, and a pattern or annotation that names the type
+reads the declaration the twin was cloned from, so `(step e _)` still matches
+std/list's record.
+
+`a_function_named_for_an_imported_type_is_called` in the micro corpus holds
+both names and the pattern. The mutation "an imported type twin beside a
+function" keeps every twin, and the micro corpus went red printing the record.
+It is a ratchet row.
+
+CI measured four instruction rows rising with the change. On main with #1745 in
+it, compile_instructions landed on 25,386,598 (+21,964), entry_instructions on
+83,854,099 (+81,883), library_instructions on 84,389,190 (+79,919) and, with
+#1743, interp_instructions on 591,215,236 (+979,398, 0.17%). The emitter's row
+fell 3,342 to 30,113,426. The fix adds a map from each beaten twin to its
+origin and a lookup at every type position, and all four rows load std modules
+through that path, but no build has isolated the lookup as the cause. The
+interpreted run is the odd one: the counted frame starts after loading, and
+this host, whose rustc is older than CI's, reads the change at +36,900 there.
+The rest of CI's reading is not reproduced here. compile_allocs is unchanged at
+14,307, because the type spelling is held only where it differs from the short
+one.

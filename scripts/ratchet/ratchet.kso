@@ -4562,7 +4562,19 @@ origin_once = row
 
 rows_c1zzzzzzzv = text/concat rows_c1zzzzzzzza [origin_once]
 
-rows_c = text/concat rows_c1zzzzzzzv [itself]
+# A function a module declares keeps its name beside an import's type of the
+# same name, and a call reaches the function.
+fn_beats_twin = row
+  "an imported type twin beside a function"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "an_imported_type_twin_beside_a_function")
+  release
+
+rows_c1zzzzzzzx = text/concat rows_c1zzzzzzzv [fn_beats_twin]
+
+rows_c = text/concat rows_c1zzzzzzzx [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
