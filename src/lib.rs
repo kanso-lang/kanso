@@ -1910,10 +1910,7 @@ fn qualify(
                 true => ast::bare_space(qual, n),
                 false => ast::qualified(qual, n),
             };
-            let ty_spelling = match beaten_twins.get(n) {
-                Some(origin) => origin.clone(),
-                None => spelling.clone(),
-            };
+            let ty_spelling = beaten_twins.get(n).cloned();
             let a_type = type_names.contains(n) || beaten_twins.contains_key(n);
             (Name::new(n), Owned { spelling, ty_spelling, a_type })
         })
@@ -1964,7 +1961,7 @@ fn qualify(
         for (_, members, _) in &mut ty.fields {
             for member in members {
                 if let Some(o) = owned.get(member.as_str()).filter(|o| o.a_type) {
-                    *member = o.ty_spelling.clone();
+                    *member = o.ty_position().to_string();
                 }
             }
         }
@@ -2327,24 +2324,33 @@ fn pattern_binds(p: &ast::Pattern, out: &mut Vec<Name>) {
 #[derive(Clone)]
 struct Owned {
     spelling: String,
-    /// Where a type position goes: the spelling, unless a function of this
-    /// module took the name from an import's type twin.
-    ty_spelling: String,
+    /// Where a type position goes when it is not the spelling: the declaration
+    /// an import's type twin was cloned from, when a function of this module
+    /// took the twin's name. Held only then, so the common case allocates
+    /// nothing more than it did.
+    ty_spelling: Option<String>,
     a_type: bool,
+}
+
+impl Owned {
+    /// The spelling a type position takes.
+    fn ty_position(&self) -> &str {
+        self.ty_spelling.as_deref().unwrap_or(&self.spelling)
+    }
 }
 
 fn rewrite_pattern(p: &mut ast::Pattern, owned: &crate::hash::Map<Name, Owned>) {
     match p {
         ast::Pattern::Ctor { ty, fields, .. } => {
             if let Some(o) = owned.get(ty.as_str()).filter(|o| o.a_type) {
-                *ty = Name::new(&o.ty_spelling);
+                *ty = Name::new(o.ty_position());
             }
             for f in fields {
                 rewrite_pattern(f, owned);
             }
         }
         ast::Pattern::Annotated { ty, .. } if owned.get(ty.as_str()).is_some_and(|o| o.a_type) => {
-            *ty = Name::new(&owned[ty.as_str()].ty_spelling);
+            *ty = Name::new(owned[ty.as_str()].ty_position());
         }
         _ => {}
     }
@@ -2401,7 +2407,7 @@ fn rewrite_expr(e: &mut ast::Expr, owned: &crate::hash::Map<Name, Owned>, bound:
         // while holding one, and both backends refuse the module outright.
         ast::Expr::Upcast { expr, ty, .. } => {
             if let Some(o) = owned.get(ty.as_str()).filter(|o| o.a_type) {
-                *ty = o.ty_spelling.clone();
+                *ty = o.ty_position().to_string();
             }
             rewrite_expr(expr, owned, bound);
         }
