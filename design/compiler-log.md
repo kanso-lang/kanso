@@ -19940,7 +19940,9 @@ isolated.
 
 An operator's groups now stay on the boxed convention, beside the union groups
 that were already kept there for the same reason. No library or benchmark
-declares an operator arm, so no runtime vein can move.
+declares an operator arm, so no runtime vein can move. CI measured one compile-side
+row: `emit_instructions` rose 853, to 30,098,499. The mechanism was not
+isolated; the row arrived with the change, and welfare held at its floor.
 
 `an_operator_arm_takes_its_records_boxed` in the micro corpus is the reduced
 program. The mutation "an operator arm handed words" lets operators through
