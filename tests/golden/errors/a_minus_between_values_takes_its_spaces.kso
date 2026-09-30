@@ -1,0 +1,6 @@
+# A binary minus takes a space on each side (ruled 2026-09-30), and a `-`
+# touching a digit belongs to the number, so `10-4` is the subtraction written
+# without its spaces. The message names the spelling it meant.
+gap = 10-4
+
+main = print "{gap}"

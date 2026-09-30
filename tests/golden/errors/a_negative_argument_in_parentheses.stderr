@@ -1,0 +1,4 @@
+error[formatting]: these parentheses group nothing — the expression parses the same without them
+  --> a_negative_argument_in_parentheses.kso:7:27
+   7 | main = print "{math/round (-3.5)}"
+                                 ^

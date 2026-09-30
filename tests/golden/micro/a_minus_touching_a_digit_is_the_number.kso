@@ -1,0 +1,19 @@
+# A `-` touching a digit is part of the number, and a binary minus takes a
+# space on each side (ruled 2026-09-30). So a negative literal is an argument
+# or a list element with no parentheses around it: `twice -3` passes minus
+# three, `[1 -3 4]` holds three elements and `[3 -3]` holds two. Before the
+# ruling each of these was refused as a spacing error, and a negative argument
+# had to be spelled `(0 - 3)`.
+fn twice x
+  x * 2
+
+fn between? lo hi x
+  lo < x and x < hi
+
+args = "{twice -3} {twice -2.5} {between? -5 5 -4}"
+
+lists = "{[1 -3 4]} {length [3 -3]} {[-1.5 -0.5]}"
+
+operators = "{7 * -2} {10 - -3} {0 - 3}"
+
+pub play = print "{args}\n{lists}\n{operators}"

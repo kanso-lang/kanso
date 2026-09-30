@@ -4743,6 +4743,27 @@ printed_box = row
 
 rows_c1zzzzzzzj = text/concat rows_c1zzzzzzzk [printed_box]
 
+# Spacing decides a minus sign: a `-` touching a digit with a space before it
+# is part of the number, so a negative literal is an argument or an element.
+spaced_minus = row
+  "a spaced minus read as binary"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_spaced_minus_stays_binary")
+  release
+
+# `10 -4` is a subtraction missing a space, and the refusal names `10 - 4`.
+number_heads_minus = row
+  "a number applied to a negative number let through"
+  true
+  "cargo test --release --test golden {box_error_golden}"
+  "specs (unit, golden, differential)"
+  (breaking "a_number_applied_to_a_negative_number_passes")
+  release
+
+rows_c1zzzzzzzi = text/concat rows_c1zzzzzzzj [spaced_minus number_heads_minus]
+
 # An import's record built by its short name is refused like the qualified
 # spelling, and a local binding of that name is still the binding (ruled
 # 2026-09-30).
@@ -4762,7 +4783,7 @@ short_record_local = row
   (breaking "a_local_named_for_an_imported_record_is_refused")
   release
 
-rows_c1zzzzzzzg = text/concat rows_c1zzzzzzzj [short_record short_record_local]
+rows_c1zzzzzzzg = text/concat rows_c1zzzzzzzi [short_record short_record_local]
 
 rows_c = text/concat rows_c1zzzzzzzg [itself]
 

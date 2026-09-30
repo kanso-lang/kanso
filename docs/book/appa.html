@@ -65,6 +65,25 @@ extra_css: /book/book.css
   </div>
 </div>
 
+<p>a minus takes the same space on each side, and the spacing is also how a negative number is told apart from a subtraction. a <code>-</code> touching a digit belongs to the number, so <code>abs -4</code> passes minus four and <code>[1 -3 4]</code> is a list of three. written without its spaces, a subtraction is refused, and the message spells out the one it meant:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">cramped_minus_check.kso</div>
+  <pre><code>gap <span class="o">=</span> <span class="n">10</span><span class="o">-</span><span class="n">4</span>
+<span class="f">print</span> <span class="s">"<span class="i">{gap}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso check cramped_minus_check.kso</div>
+    <pre><code><span class="k">error[formatting]</span>: binary minus takes a space on each side, `10 - 4`; a `-` touching a digit is part of the number
+<span class="c">  --&gt; cramped_minus_check.kso:1:9</span>
+   1 | gap = 10-4
+               <span class="k">^</span>
+<span class="k">error[formatting]</span>: binary minus takes a space on each side, `10 - 4`; a `-` touching a digit is part of the number
+<span class="c">  --&gt; cramped_minus_check.kso:1:10</span>
+   1 | gap = 10-4
+                <span class="k">^</span></code></pre>
+  </div>
+</div>
+
 <p>the reflex you brought from every c-descended language is parentheses hugging a call. a call is a name, one space, its arguments, and the compiler says so by name:</p>
 
 <div class="code-panel">
