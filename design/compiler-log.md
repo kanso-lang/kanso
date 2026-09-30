@@ -20858,3 +20858,55 @@ it. Closing that is implementation. std/list first gains pub factories for a
 the `next` protocol. `examples/next_protocol.kso` and any other site move onto
 them, and then the short name is refused with the message the qualified
 spelling already gets.
+
+## 2026-09-30 — building an imported record by its short name is refused, built
+
+Builds "building an imported record by its short name is refused", which cites
+the per-field-pub gavel of 2026-08-14 ("construction stays factory-only").
+
+std/list first. `iter`, private until now and already answering a cursor at 1
+for a list, is pub. `yield elem rest` is new and answers a step. A program's own
+type joins the `next` protocol by arming `next` for its state and answering
+`list/yield` of the element and the state after it; `examples/next_protocol.kso`
+now does that with a `countdown` beside a cursor from `list/iter`, and both
+engines print the same. The factory names follow std/list's verb-for-the-record
+pattern (`repeat` answers `repeated`, `cycle` answers `cycled`).
+
+Then the check. `foreign_at` knew a foreign type by the slash in its name. On
+the entry and library routes the alias pass runs after the check, so `cursor 1
+xs` arrived bare and passed. The loader's short-named copy of an imported type
+is a synthetic `TypeDecl` whose `origin` is the qualified name, so `Named` now
+keeps a map from those short names to their origins, and a bare head that is in
+it is refused with the qualified name's message. Two exceptions. A function of
+that name wins, as #1742 ruled, whether the module's own or an import's twin,
+and that is read from the arity table the check already holds. A name the body
+binds is its own binding, so the refusal goes on the same shadowable list as
+the arity refusal: `hako` binds a lambda as `grown`, which is also std/list's
+record, and was refused until that was done. Where the alias pass has run first
+and written the slash, the old skip now applies only when a function of that
+name exists.
+
+What changed answer, over every `.kso` file and directory with `kanso check`,
+plus the 98 play-shaped files with `kanso play`, against main at 72949009:
+
+- `examples/next_protocol.kso` built `cursor 1 [10 20 30]`; moved onto the
+  factories as above.
+- `tests/golden/micro/an_imported_record_keeps_its_name.kso` built `step 1 [5]`
+  and `sorted [3 1]`. It keeps testing that a record prints its own name, with
+  `list/yield 1 [5]` and `list/iter [3 1]`; its `.out` now reads
+  `list/step 1 [5] list/cursor 1 [3 1] 7`. std/list has no factory for
+  `sorted`, and nothing in it builds one.
+- `tests/golden/reexports/app` built geo's `disk 2.0`. geo gained `pub fn
+  circle r` and the fixture calls it; the spec's expected output is unchanged.
+- `hako` moved on the first build, before the shadowing fix, and is back to
+  unchanged.
+- kq, vse, kanso-json: nothing. `examples/concurrency.kso` prints random
+  rolls and differs between any two runs.
+
+Fixtures: `a_record_built_by_its_short_name` (error corpus) and
+`a_local_named_for_an_imported_record_is_the_local` (micro corpus). Mutations
+`a_record_built_by_its_short_name_passes` skips the short-name lookup and turns
+the error corpus red on the first; `a_local_named_for_an_imported_record_is_refused`
+drops the shadowable push and turns the micro corpus red on the second. Ratchet
+rows `short_record` and `short_record_local`.
+

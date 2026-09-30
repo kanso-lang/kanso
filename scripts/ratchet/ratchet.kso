@@ -4743,7 +4743,28 @@ printed_box = row
 
 rows_c1zzzzzzzj = text/concat rows_c1zzzzzzzk [printed_box]
 
-rows_c = text/concat rows_c1zzzzzzzj [itself]
+# An import's record built by its short name is refused like the qualified
+# spelling, and a local binding of that name is still the binding (ruled
+# 2026-09-30).
+short_record = row
+  "an import's record built by its short name"
+  true
+  "cargo test --release --test golden {box_error_golden}"
+  "specs (unit, golden, differential)"
+  (breaking "a_record_built_by_its_short_name_passes")
+  release
+
+short_record_local = row
+  "a local named for an import's record"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_local_named_for_an_imported_record_is_refused")
+  release
+
+rows_c1zzzzzzzg = text/concat rows_c1zzzzzzzj [short_record short_record_local]
+
+rows_c = text/concat rows_c1zzzzzzzg [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

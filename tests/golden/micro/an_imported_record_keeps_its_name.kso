@@ -11,4 +11,9 @@ fn first_of (step e _)
 fn first_of _
   none
 
-pub play = print "{step 1 [5]} {sorted [3 1]} {first_of (step 7 [])}"
+# A record is built by the module that declares it, so these come from
+# std/list's factories: `yield` answers a step and `iter` a cursor.
+fn shown one many
+  "{one} {many} {first_of (list/yield 7 [])}"
+
+pub play = print (shown (list/yield 1 [5]) (list/iter [3 1]))

@@ -3,6 +3,10 @@ import "std/list"
 pub type disk
   r
 
+# A disk is geo's to build, so a caller asks for one here.
+pub fn circle r
+  disk r
+
 pub fn areas rs
   to_list (select rs (r -> 0 < r))
 

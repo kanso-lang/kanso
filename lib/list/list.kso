@@ -223,41 +223,49 @@ fn file_under acc k x
 pub fn index_by coll key
   fold coll {} (acc x -> put acc (key x) x)
 
-fn iter (bounded at stop source)
+pub fn iter (bounded at stop source)
   bounded at stop source
 
-fn iter (capped left source)
+pub fn iter (capped left source)
   capped left source
 
-fn iter (counting at)
+pub fn iter (counting at)
   counting at
 
-fn iter (cycled at source)
+pub fn iter (cycled at source)
   cycled at source
 
-fn iter (grown seed stretch)
+pub fn iter (grown seed stretch)
   grown seed stretch
 
-fn iter (paired left right)
+pub fn iter (paired left right)
   paired left right
 
-fn iter (repeated value)
+pub fn iter (repeated value)
   repeated value
 
-fn iter (cursor at source)
+pub fn iter (cursor at source)
   cursor at source
 
-fn iter (mapped shape source)
+pub fn iter (mapped shape source)
   mapped shape source
 
-fn iter (sifted keep source test)
+pub fn iter (sifted keep source test)
   sifted keep source test
 
-fn iter (skipped burn source)
+pub fn iter (skipped burn source)
   skipped burn source
 
-fn iter source
+pub fn iter source
   cursor 1 source
+
+# A step is one element and what follows it, which is what `next` answers.
+# A type of your own joins the `next` protocol by arming `next` for its state
+# and answering `yield` of the element and the state after it. `iter` above
+# starts a cursor over a list. A step and a cursor are built here and nowhere
+# else, like every record a module declares (ruled 2026-08-14).
+pub fn yield elem rest
+  step elem rest
 
 pub fn iterate seed stretch
   grown seed stretch

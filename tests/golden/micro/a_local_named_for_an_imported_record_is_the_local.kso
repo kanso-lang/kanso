@@ -1,0 +1,10 @@
+# std/list declares a record named `grown`, and an import's records also
+# answer to their short names. A name the body binds is the binding, so
+# `grown x` here calls the lambda and builds nothing.
+import "std/list"
+
+fn twice x
+  grown = (n -> n * 2)
+  grown x
+
+pub play = print (twice 4)
