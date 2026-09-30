@@ -335,4 +335,7 @@
 #
 # CI measured the result assume at 95f78ace: emit_instructions 29,158,246 ->
 # 29,329,209, a RISE of 170,963 (+0.5863%).
-emit_instructions=30225570
+#
+# CI measured the prune naming what it stopped reading at b8fb95af:
+# emit_instructions 30,225,570 -> 30,212,843, a FALL of 12,727 (-0.0421%).
+emit_instructions=30212843

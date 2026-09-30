@@ -20342,3 +20342,6 @@ this change: 12,195 of the fix's 48,850 back. The container's toolchain differs
 from CI's, so those three readings compare with each other and not with the
 golden. The mutation "a prune forgetting what it dropped" zeroes the mask's
 answer and turns `a_lazy_list_answers_where_a_dropped_arm_read_it` red.
+
+CI measured it at b8fb95af: emit_instructions 30,225,570 -> 30,212,843, a FALL
+of 12,727 (-0.0421%). No other row moved.
