@@ -100,9 +100,9 @@ standing rulings: a fixture kind that pins the interpreter's answer where
 native refuses, the escape path's byte scan kept inside lib/json, the
 `.rodata` pin declined in favour of measuring a fixed heap start, and
 escapebench sized so it holds the bracket's benefit. Six of the seven went to
-"Ruled, unbuilt" below. Four have since come off it: the float order and the
-one-engine fixture kind, built, and the escape scan and the fixed heap start,
-measured and declined. The maps parse's share
+"Ruled, unbuilt" below. Five have since come off it: the float order, the
+one-engine fixture kind and the box through a parameter, built, and the escape
+scan and the fixed heap start, measured and declined. The maps parse's share
 of the compile row's drift left this list ruled on 2026-09-15 and built the
 same night, kanso#1439. The assert hako left it by being built — `lib/expect`,
 kanso#1233, 2026-09-03.
@@ -151,9 +151,9 @@ the 2026-09-15 normalization ruling, which is ironclad and which a counter
 minted a day later does not satisfy.
 
 **Six more joined on 2026-09-30**, from the sitting that emptied the ledger of
-all but one entry. Four came off the same day: the float order and the
-one-engine fixture kind, built, and the escape scan and the fixed heap start,
-each measured and declined. Four rows stand. Each standing one has its own heading
+all but one entry. Five came off the same day: the float order, the one-engine
+fixture kind and the box through a parameter, built, and the escape scan and the
+fixed heap start, each measured and declined. Three rows stand. Each standing one has its own heading
 below, dated 2026-09-30, and a log entry of the same name. The seventh ruling
 of that sitting, the box constructor's spelling, has no row because `effect`
 was already built and pinned.
@@ -367,16 +367,6 @@ follows is whether an exact pin is the right instrument for a counter whose
 artifact and host both move under it. That one is Clay's, and this row does
 not decide it in advance.
 
-### A parameter bound to a box carries the box into the body (2026-09-30)
-
-The log entry "gavel: a parameter bound to a box carries the box into the
-body", closed on the 2026-07-25 and 2026-08-29 gavels. Inference carries a box
-through an unannotated parameter, and the refusal for a box reaching a call
-with no arm for it fires at the call inside the body.
-
-Owes: the inference change, a fixture for the shape the ledger entry named
-(`elem_onto x` then `encode_onto x` inside the body), and the ten existing
-box fixtures still green.
 
 ### escapebench grows until the bracket's benefit is inside it (2026-09-30)
 

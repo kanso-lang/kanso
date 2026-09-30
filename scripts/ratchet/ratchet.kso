@@ -4705,7 +4705,19 @@ int_widens = row
 
 rows_c1zzzzzzzn = text/concat rows_c1zzzzzzzo [int_widens]
 
-rows_c = text/concat rows_c1zzzzzzzn [itself]
+# A box handed to a parameter is a box inside the body, and the refusal fires
+# at the call there that takes a value.
+held_box = row
+  "a box handed to a parameter forgotten inside the body"
+  true
+  "cargo test --release --test golden {box_error_golden}"
+  "specs (unit, golden, differential)"
+  (breaking "a_box_lost_at_the_parameter")
+  release
+
+rows_c1zzzzzzzm = text/concat rows_c1zzzzzzzn [held_box]
+
+rows_c = text/concat rows_c1zzzzzzzm [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

@@ -20484,6 +20484,63 @@ interpreter's machine-word add wrap instead of promoting, which is what a
 promotion one step late looks like from outside, and turns the fixture red;
 it is a ratchet row.
 
+## 2026-09-30 — a box handed to a parameter is a box inside the body, built
+
+Builds "gavel: a parameter bound to a box carries the box into the body".
+
+The box check let a box into any group position that binds anything, a bare
+name, a `_` or an arm annotated with an effect type, and stopped looking there.
+So `print (plus (effect 5))`, with `plus x` answering `x + 1`, checked clean,
+and so did the ledger's shape, a box handed through one binder into a group
+with no arm for it, which died at run time with "no overload of `seen` matches
+these arguments".
+
+The walk that checks each declaration now records every position where it let
+a box in. After the walk, every arm of that group that names the position
+holds a box under that name, and its body is read again with the name counted
+as one. A box the body hands on to a further group is recorded the same way,
+and the reading repeats until no name is added. The refusal then fires where
+the body hands the name to an operator, an index, a field read, an `if`
+condition, a reading builtin, or a group with no arm for a box. It names the
+call where the box first went into a parameter, since that is where it can be
+opened:
+
+    `x` holds an effect — `play` hands `twice` one — and `+` takes a value;
+    open it with `.>` where `play` calls `twice`
+
+Two limits are deliberate. A name the body binds again, in a binding or a
+lambda, is left out, because the check cannot tell which binding a use means
+and a refusal it cannot justify is worse than one it declines. And a `_` holds
+nothing, so a description reaching a dispatch still lands on the bare arm, as
+`a_description_reaches_a_dispatch` pins. The second reading keeps only
+refusals at spans the first reading left alone, so nothing is said twice.
+
+Nothing in the tree moved. The patched checker read every `.kso` file under
+`tests/golden`, `docs`, `examples`, `lib`, `scripts` and `bench`, 1,290 of
+them, the 246 directories holding them as modules, and every file and
+directory in kq, vse and kanso-json. It found no new refusal. A probe that
+should be refused was read in the same sweep and was, so a quiet sweep means
+something. The ten fixtures that pin the ruled behaviour are unchanged.
+
+`tests/golden/errors/a_box_carried_through_a_parameter` pins one hop into a
+group with no arm for a box and two hops into `+`, and the unpatched compiler
+passes it and fails at run time. Mutation `a_box_lost_at_the_parameter` skips
+the second reading, and the error corpus goes red on that fixture. Ratchet row
+`held_box`. STATUS.md drops the row.
+
+The check costs something on every program, whether or not it hands a box to
+a parameter. CI's rows: `compile_instructions` rose to 25,528,949 (+142,397,
+0.56%), `entry_instructions` to 84,431,609 and `library_instructions` to
+84,965,462, each about 376,000 more. `emit_instructions` fell to 30,155,267 and
+`interp_instructions` to 590,296,603, neither of which runs this code. With the
+float order merged in, `interp_instructions` reads 590,303,209, the float
+order's 6,606 on top of this change's reading. A
+profile of `kanso check lib/json` in this container puts the rise in the check
+itself: `check_after_infer` read 687,804 instructions on main and 805,964 here,
+where lib/json hands no box to a named parameter and the second reading never
+runs. The walk's per-site closure is now a frame of its own, 244,165
+instructions, where it used to be inlined. Welfare holds at the floor.
+
 ## 2026-09-30 — the escape scan on the string, measured again and declined
 
 "directive: the escape path's byte scan stays inside lib/json" asked for the
