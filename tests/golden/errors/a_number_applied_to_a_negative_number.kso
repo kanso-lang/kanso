@@ -1,0 +1,6 @@
+# `10 -4` reads as the number 10 followed by the number -4, since the minus
+# touches its digit (ruled 2026-09-30). A number applies to nothing, so this is
+# a subtraction missing the space after its minus, and the refusal says so.
+gap = 10 -4
+
+main = print "{gap}"

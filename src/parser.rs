@@ -2118,6 +2118,34 @@ impl<'a> P<'a> {
     /// end's peak on the compile corpus.
     fn parse_app(&mut self) -> Result<Expr, Diagnostic> {
         let head = self.parse_atom()?;
+        // A number heading an application of a negative number is `3 -3`: the
+        // minus touches the digit, so it is part of the second literal, and a
+        // number applies to nothing. It was a subtraction written without the
+        // space the binary minus takes (ruled 2026-09-30); say which.
+        if matches!(head, Expr::Int(..) | Expr::Float(..)) {
+            let right = match self.peek() {
+                Some(Tok::Int(n)) if n.sign() == num_bigint::Sign::Minus => {
+                    Some((-n.clone()).to_string())
+                }
+                Some(Tok::Float(x)) if x.is_sign_negative() => Some((-x).to_string()),
+                _ => None,
+            };
+            if let Some(right) = right {
+                let left = match &head {
+                    Expr::Int(n, _) => n.to_string(),
+                    Expr::Float(x, _) => x.to_string(),
+                    _ => String::new(),
+                };
+                return Err(Diagnostic::new(
+                    "formatting",
+                    format!(
+                        "binary minus takes a space on each side, `{left} - {right}`; a `-` \
+                         touching a digit is part of the number"
+                    ),
+                    self.span_here(),
+                ));
+            }
+        }
         let base = ARGS.with(|stack| stack.borrow().len());
         while self.starts_atom() {
             match self.parse_atom() {

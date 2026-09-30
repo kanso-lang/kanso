@@ -1,0 +1,2 @@
+gap = 10-4
+print "{gap}"

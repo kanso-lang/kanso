@@ -1,0 +1,8 @@
+error[formatting]: binary minus takes a space on each side, `10 - 4`; a `-` touching a digit is part of the number
+  --> cramped_minus_check.kso:1:9
+   1 | gap = 10-4
+               ^
+error[formatting]: binary minus takes a space on each side, `10 - 4`; a `-` touching a digit is part of the number
+  --> cramped_minus_check.kso:1:10
+   1 | gap = 10-4
+                ^
