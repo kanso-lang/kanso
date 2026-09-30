@@ -4526,6 +4526,18 @@ held_if = row
 
 rows_c1zzzzzzz = text/concat rows_c1zzzzzz [held_if]
 
+# An operator's arms take records boxed, because the operator hands them the
+# boxed values it holds.
+arm_boxed = row
+  "an operator arm handed words"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "an_operator_arm_handed_words")
+  release
+
+rows_c1zzzzzzzz = text/concat rows_c1zzzzzzz [arm_boxed]
+
 # A sibling argument that stores the container still holds it, so the write
 # copies instead of extending the list the sibling just stored.
 push_keeps = row
@@ -4536,9 +4548,9 @@ push_keeps = row
   (breaking "a_stored_sibling_read_as_finished")
   release
 
-rows_c1zzzzzzzy = text/concat rows_c1zzzzzzz [push_keeps]
+rows_c1zzzzzzzza = text/concat rows_c1zzzzzzzz [push_keeps]
 
-rows_c = text/concat rows_c1zzzzzzzy [itself]
+rows_c = text/concat rows_c1zzzzzzzza [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

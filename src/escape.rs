@@ -45,9 +45,16 @@ pub fn analyze(program: &Program, inference: &crate::infer::Inference) -> Escape
     // boxed: their arms come from different modules with independently
     // computed conventions, and mixing %parsed with %KValue in one
     // dispatcher is the register-ABI crash family
+    //
+    // An operator's arms stay boxed too. `a + b` reaches them through the
+    // operator's own dispatch, which asks at run time whether either side is
+    // a record and then calls the group with the two values it holds, boxed,
+    // and reads a boxed answer back. A record shaped like `_parsed` -- an int
+    // and a value -- let `fn + (pt a s) (pt b t)` take and return words, and
+    // the arm read a boxed record's tag and pointer as a packed int.
     let mut union_groups = crate::hash::Set::default();
     for d in &program.fns {
-        if d.synthetic {
+        if d.synthetic || crate::is_operator(&d.name) {
             union_groups.insert((d.name.clone(), d.params.len()));
         }
     }
