@@ -20462,6 +20462,136 @@ it. `interp_instructions` rose to 591,340,712, the interpreter's `float_order`
 asking `is_nan` twice where `total_cmp` asked nothing. Every run row fell a few
 hundred instructions: runbench to 1,088,393,175. Welfare held at the floor.
 
+## 2026-09-30 — a corpus for the interpreter's answer where native refuses
+
+The directive of the same day, "a golden may pin the interpreter's answer
+where native refuses", is built. `tests/golden/one_engine` holds entry
+programs with two goldens each. `<name>.interp.out` is what the interpreter
+prints, exiting 0 with nothing on stderr; `<name>.native.err` is the refusal
+native answers with, exiting non-zero, beside an optional `<name>.native.out`.
+The test `one_engine_corpus_pins_the_interpreter_where_native_refuses` in
+`tests/golden.rs` also fails if the two engines print the same thing, so the
+corpus cannot hold an ordinary divergence.
+
+The first fixture, `an_int_past_int64_on_the_interpreter`, lands eleven
+integer operations exactly one step past the int64 boundary: an add, a
+subtract, two doublings, a square, a negation, a division of the least value
+by minus one, the least value squared, a list sum that crosses, a step back
+inside, and a comparison past the edge. Native refuses on the first with
+`integer overflow (int64 native build; spec int is arbitrary precision)`.
+The mutation "an int that wraps where it should widen" makes the
+interpreter's machine-word add wrap instead of promoting, which is what a
+promotion one step late looks like from outside, and turns the fixture red;
+it is a ratchet row.
+
+## 2026-09-30 — a box handed to a parameter is a box inside the body, built
+
+Builds "gavel: a parameter bound to a box carries the box into the body".
+
+The box check let a box into any group position that binds anything, a bare
+name, a `_` or an arm annotated with an effect type, and stopped looking there.
+So `print (plus (effect 5))`, with `plus x` answering `x + 1`, checked clean,
+and so did the ledger's shape, a box handed through one binder into a group
+with no arm for it, which died at run time with "no overload of `seen` matches
+these arguments".
+
+The walk that checks each declaration now records every position where it let
+a box in. After the walk, every arm of that group that names the position
+holds a box under that name, and its body is read again with the name counted
+as one. A box the body hands on to a further group is recorded the same way,
+and the reading repeats until no name is added. The refusal then fires where
+the body hands the name to an operator, an index, a field read, an `if`
+condition, a reading builtin, or a group with no arm for a box. It names the
+call where the box first went into a parameter, since that is where it can be
+opened:
+
+    `x` holds an effect — `play` hands `twice` one — and `+` takes a value;
+    open it with `.>` where `play` calls `twice`
+
+Two limits are deliberate. A name the body binds again, in a binding or a
+lambda, is left out, because the check cannot tell which binding a use means
+and a refusal it cannot justify is worse than one it declines. And a `_` holds
+nothing, so a description reaching a dispatch still lands on the bare arm, as
+`a_description_reaches_a_dispatch` pins. The second reading keeps only
+refusals at spans the first reading left alone, so nothing is said twice.
+
+Nothing in the tree moved. The patched checker read every `.kso` file under
+`tests/golden`, `docs`, `examples`, `lib`, `scripts` and `bench`, 1,290 of
+them, the 246 directories holding them as modules, and every file and
+directory in kq, vse and kanso-json. It found no new refusal. A probe that
+should be refused was read in the same sweep and was, so a quiet sweep means
+something. The ten fixtures that pin the ruled behaviour are unchanged.
+
+`tests/golden/errors/a_box_carried_through_a_parameter` pins one hop into a
+group with no arm for a box and two hops into `+`, and the unpatched compiler
+passes it and fails at run time. Mutation `a_box_lost_at_the_parameter` skips
+the second reading, and the error corpus goes red on that fixture. Ratchet row
+`held_box`. STATUS.md drops the row.
+
+The check costs something on every program, whether or not it hands a box to
+a parameter. CI's rows: `compile_instructions` rose to 25,528,949 (+142,397,
+0.56%), `entry_instructions` to 84,431,609 and `library_instructions` to
+84,965,462, each about 376,000 more. `emit_instructions` fell to 30,155,267 and
+`interp_instructions` to 590,296,603, neither of which runs this code. With the
+float order merged in, `interp_instructions` reads 590,303,209, the float
+order's 6,606 on top of this change's reading. A
+profile of `kanso check lib/json` in this container puts the rise in the check
+itself: `check_after_infer` read 687,804 instructions on main and 805,964 here,
+where lib/json hands no box to a named parameter and the second reading never
+runs. The walk's per-site closure is now a frame of its own, 244,165
+instructions, where it used to be inlined. Welfare holds at the floor.
+
+## 2026-09-30 — escapebench holds the bracket's benefit
+
+Builds "directive: escapebench grows until the bracket's benefit is inside it".
+
+The worry of 2026-09-05 was that escapebench priced the bracket's cost and none
+of its benefit, so a change deleting it would read as a 27.6% win. Two things
+have changed since. The loop that grows the list it was handed keeps its bracket
+and no longer rewinds, so the cost the 27.6% measured is mostly gone. And the
+objective no longer weighs escapebench: since the 2026-09-06 consolidation it
+reads the run program, whose escape phase is a copy of the same module.
+
+Measured with a scratch compiler that refuses `filled` its beat, which is what a
+change deleting the bracket would do:
+
+                              instructions         summed peak bytes
+    escapebench, span 400     45,519,404 ->        1,064,976 -> 1,064,576
+                              44,759,106 (-1.67%)
+    escapebench, span 250,000 41,636,403 ->        5,242,896 -> 6,291,488
+                              43,863,674 (+5.35%)  (+20.0%)
+    runbench as it stands     1,088,394,943 ->     flat
+                              1,090,095,713 (+0.16%)
+
+So the weighed term already reads the deletion as a loss, and escapebench, a
+diagnostic, read it as a win. At span 400 a list never outgrows its first arena
+block, so where its superseded buffers go costs nothing. At 250,000 the list is
+two megabytes: with the bracket the pushes grow it outside the arena and a
+superseded buffer is freed, and without it every superseded buffer stays in the
+arena until the lap ends.
+
+escapebench is now five laps of 250,000 pushes, 1,250,000 against the old
+1,200,000. The span moved out of the shared module into a `size.kso` beside it,
+because `tests/the_run_program_carries_the_shapes_unchanged.rs` requires the run
+program's copy to match byte for byte, and that spec now skips a directory's
+size file. The run program keeps span 400. Growing it would move
+`run_peak_bytes` from 3,899,936 to about 8,077,856, and that row sums the arena,
+held and permanent peaks, which happen at different times: with the bracket the
+long list's storage adds a permanent peak beside decode's arena peak, and
+without it the storage lands in the arena and overlaps it. The summed peak would
+then read the deletion as a 6.5% gain, which is the reverse of what this change
+is for.
+
+No weighed term reads escapebench, so nothing is re-based and the floor does
+not move. The escape counter golden moved with the size, as the trend gate
+names its rows: `escape_perm_peak_bytes` to 4,194,320 from 16,400, the long
+list's growth outside the arena; `escape_push_mut_slow` to 1,250,000 and
+`escape_push_mut_fast` to 5, one fast push per lap; `escape_bytes_freed` to 30;
+`escape_allocs` to 38 and `escape_beat_iters` to 5. CI measured
+`work_escapebench` at 41,544,680, down from 45,427,695. The run program's IR changed only in string-constant
+numbering, one source line number and where `span`'s definition lands. STATUS.md
+drops the row.
+
 ## 2026-09-30 — the escape scan on the string, measured again and declined
 
 "directive: the escape path's byte scan stays inside lib/json" asked for the
@@ -20531,3 +20661,101 @@ This reading is on lib/json in this container, where the pair differs by
 −30,918; CI's reading on the compile corpus was +146,628. The question asked
 was whether a fixed heap start removes the difference, and on this input it
 does not. STATUS.md drops the row.
+
+## 2026-09-30 — the interpreter's caches stop reading the heap's address
+
+"A welfare counter reads three parts per billion" left the six instructions
+between two runners with one place to look, the allocator. mimalloc reads four
+things about the host when it starts: `/proc/sys/vm/overcommit_memory`,
+`/sys/kernel/mm/transparent_hugepage/enabled`, the physical memory through
+`sysinfo`, and the stack limit, which also decides where valgrind lays out the
+client. Each was varied in this container with the gate's own environment,
+tunables and preload, the two files bound over in a private mount namespace,
+reading `kanso::run_interpreted_on_stack` as the gate does:
+
+    arm                          row           process total
+    as found (twice)             585,995,155   622,419,231
+    THP [always]                 585,995,155   622,419,231
+    THP [never]                  585,995,155   622,419,245
+    overcommit 1                 585,995,155   622,419,231
+    overcommit 2                 585,995,155   622,423,604
+    stack 10 MiB, 16 MiB, none   585,995,155   622,419,231
+
+None of them moved the row. The overcommit and huge-page settings moved the
+process total, by 4,373 and 14, all of it in start-up work outside the frame
+the gate reads, and mimalloc stores the physical memory and never reads it
+again.
+
+The layout itself did move it. valgrind's `--aspace-minaddr` sets where it
+starts placing the program's mappings, and the same binary on the same program
+read:
+
+    mappings from         row
+    default               585,995,155
+    48 MiB                585,551,692
+    256 MiB               586,517,727
+    1 GiB                 585,551,880
+
+The difference sat in two functions. `callee_missed` and `frame_missed` are the
+slow paths behind two 256-slot direct-mapped tables, `recent_callees` and
+`recent_frames`, and both tables took their slot from a hash of the key's whole
+address. Where the heap landed decided which names and declarations shared a
+slot, and so how often a call missed. The backing maps were keyed by the same
+address under Fx. The compile row was checked the same way and did not move:
+25,680,577 at all four starts.
+
+The slot now comes from the key's offset inside its 64 KiB allocator slice,
+`addr & 0xFFFF`, and the backing maps hash that offset while still comparing
+the whole address. mimalloc places memory in slices on 64 KiB boundaries, so
+moving the heap moves no object within its slice. A 1 MiB mask was tried and
+lost the property at the 1 GiB start; 64 KiB held at eight starts from 48 MiB
+to 1 GiB and with the stack unlimited. The offsets collide more than whole
+addresses did, because objects of one size sit at the same offsets in every
+slice, and at 256 slots the row cost 1.47 million instructions more. The
+callee table has 1,024 slots now and the frame table 512. That reads
+586,031,229 here, 42,680 above the old reading at the default start and inside
+the range the old code covered across starts. 1,024 frame slots beside 1,024
+callee slots added 7,872 bytes to the run's peak; this pair adds none. CI read
+the change alone, on main before the float order, at 591,374,402 against
+591,334,106: 40,296 more, with the peak unchanged at 721,852 and the reading at
+48 MiB identical to the first.
+Keys mixed from a declaration's line and column and a name's bytes were also
+tried, and cost 5.8 million more than the offset alone.
+
+The gate now reads the run a second time with the mappings started at 48 MiB
+and fails when the two readings differ. On main's compiler the second reading
+was 585,550,833 against 585,994,296, and the gate stopped there; on this one
+both read 586,030,370. Mutation `a_frame_slot_read_off_its_address` takes the
+frame slot from the whole address again, the two readings come out one
+instruction apart, and the gate goes red on that check. Ratchet row
+`slice_slot`. Taking the callee slot from the address instead is not a
+mutation this check can see: at 1,024 slots those two starts happen to give
+the same count.
+
+Whether the six instructions between runners came from these tables is not
+shown. A layout difference between runners would move the row through them,
+and the row can no longer move that way. The next pair of CI readings on two
+runners will say whether anything else does.
+
+## 2026-09-30 — the four carried builds, read together on CI
+
+kanso#1757 carries the box through a parameter, the one-engine fixture kind,
+escapebench's new size and the interpreter's slot keys onto main after the
+float order. CI's readings against main's goldens:
+
+    row                     main          carrier       move
+    compile_instructions    25,528,949    25,491,323    -37,626
+    emit_instructions       30,155,267    30,142,341    -12,926
+    entry_instructions      84,431,609    84,307,393   -124,216
+    library_instructions    84,965,462    84,842,031   -123,431
+    interp_instructions    590,303,209   590,343,751    +40,542
+
+The one row that rose is the interpreted run. The slot keys cost 40,296 when CI
+read them alone, so 246 of the 40,542 arrived with the other three builds; which
+of them carries it is not isolated. The four compile rows fell together, by
+amounts that arrived with the carrier as a whole and have no mechanism assigned
+to them here.
+
+Welfare reads 90.3227 on these rows against a floor of 90.32307: 0.0004 lower,
+inside the thousandth the gate allows either side, so the floor stands where it
+is and nothing is banked.

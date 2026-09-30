@@ -99,14 +99,17 @@ fn a_gate_that_counts_twice_subtracts_the_printed_line_from_both() {
              stable binary reported as unstable by exactly that many \
              instructions."
         );
+        // One call per callgrind pass. It was two until 2026-09-30, when
+        // interp_instructions.sh took a third pass with the heap moved.
         let calls = body.matches("printed_cost /tmp/").count();
+        let passes = body.matches("--callgrind-out-file=/tmp/").count();
         assert_eq!(
-            calls, 2,
-            "{name} calls printed_cost {calls} time(s). It takes two \
-             callgrind passes and both rows carry the printed line, so both \
-             must have it taken off. One call means the second reading is the \
-             raw frame and every comparison against the first is short by \
-             whatever the printed line cost."
+            calls, passes,
+            "{name} calls printed_cost {calls} time(s) and takes {passes} \
+             callgrind passes. Every row it reads carries the printed line, so \
+             every one must have it taken off. A missing call means one \
+             reading is the raw frame and every comparison against the first \
+             is short by whatever the printed line cost."
         );
         checked.push(name);
     }

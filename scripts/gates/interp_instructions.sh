@@ -147,6 +147,37 @@ callgrind_annotate --threshold=90 /tmp/cg.interp 2>&1 | head -40
 
 sh "$(dirname "$0")/function_table.sh" /tmp/cg.interp interp
 
+# THE SAME RUN WITH ITS HEAP SOMEWHERE ELSE. valgrind places every mapping
+# the program asks for, starting from a fixed address, so each runner lays the
+# heap out the same way and a count that depends on where objects land reads
+# the same twice in one job. It is still a count of the layout. Until
+# 2026-09-30 the interpreter keyed two caches by address, and this row moved by
+# 443,467 instructions when the mappings started at 48 MiB instead of the
+# default, on one binary and one program. `--aspace-minaddr` moves the start,
+# and the row must not follow it.
+(
+  cd "$box"
+  env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" LD_PRELOAD="$blind" valgrind --tool=callgrind \
+    --aspace-minaddr=0x3000000 --callgrind-out-file=/tmp/cg.interp_moved \
+    ./kanso run interp_corpus --interp >/dev/null 2>/dev/null
+)
+moved=$(callgrind_annotate --inclusive=yes --threshold=100 /tmp/cg.interp_moved 2>/dev/null \
+        | awk '/kanso::run_interpreted_on_stack/ && !seen { gsub(/,/, "", $1); print $1; seen = 1 }')
+moved_printed=$(printed_cost /tmp/cg.interp_moved)
+case "$moved_printed" in '' | *[!0-9]*) moved_printed=0 ;; esac
+case "$moved" in '' | *[!0-9]*) moved=0 ;; esac
+moved=$((moved - moved_printed))
+printf 'interp_moved row=%s (the first reading was %s)\n' "$moved" "$own"
+if [ "$moved" != "$own" ]; then
+  echo "::error::the interpreted run counted $own with the heap where valgrind"
+  echo "::error::puts it and $moved with the heap started at 48 MiB. The row is"
+  echo "::error::reading where memory landed, which the 2026-09-15 rule forbids:"
+  echo "::error::something on the interpreter's path hashes or compares an"
+  echo "::error::address. Diff /tmp/cg.interp against /tmp/cg.interp_moved by"
+  echo "::error::function to find it."
+  exit 1
+fi
+
 want=$(sed -n 's/^interp_instructions=//p' "$golden")
 got=$(sed -n 's/^interp_instructions=//p' interp_ir_got.txt)
 case "$want" in

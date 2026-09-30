@@ -1,0 +1,27 @@
+# A box handed to a parameter is still a box inside the body (ruled
+# 2026-09-30). `step` and `plus` bind anything at their one position, so the
+# box gets in, and the refusal comes where the body hands it to something that
+# takes a value: `seen`, which has no arm a box can match, and `+`. Until the
+# ruling the checker lost the box at the parameter, and each of these died at
+# run time instead, `seen` with "no overload of `seen` matches these
+# arguments". `twice` hands its box on to `plus` without reading it, so the
+# refusal inside `plus` names the call where the box went in.
+fn seen 7
+  "seven"
+
+fn seen 8
+  "eight"
+
+fn step x
+  seen x
+
+fn plus x
+  x + 1
+
+fn twice x
+  plus x
+
+pub fn run xs
+  step xs[1]!
+
+pub play = print (run [7]) .> (_ -> print (twice (effect 5)))

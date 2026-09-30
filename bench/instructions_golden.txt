@@ -742,7 +742,7 @@ oneshot 12743468
 basket 29464216
 widebench 27311129
 deepbench 363026387
-escapebench 45427695
+escapebench 41544680
 pendbench 181091558
 indexbench 2398456
 scanbench 280943

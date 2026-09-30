@@ -100,8 +100,10 @@ standing rulings: a fixture kind that pins the interpreter's answer where
 native refuses, the escape path's byte scan kept inside lib/json, the
 `.rodata` pin declined in favour of measuring a fixed heap start, and
 escapebench sized so it holds the bracket's benefit. Six of the seven went to
-"Ruled, unbuilt" below. Three have since come off it: the float order, built,
-and the escape scan and the fixed heap start, measured and declined. The maps parse's share
+"Ruled, unbuilt" below. All six have since come off it: the float order, the
+one-engine fixture kind, the box through a parameter and escapebench's size,
+built, and the escape scan and the fixed heap start, measured and declined. The
+maps parse's share
 of the compile row's drift left this list ruled on 2026-09-15 and built the
 same night, kanso#1439. The assert hako left it by being built — `lib/expect`,
 kanso#1233, 2026-09-03.
@@ -150,9 +152,10 @@ the 2026-09-15 normalization ruling, which is ironclad and which a counter
 minted a day later does not satisfy.
 
 **Six more joined on 2026-09-30**, from the sitting that emptied the ledger of
-all but one entry. Three came off the same day: the float order, built, and the
-escape scan and the fixed heap start, each measured and declined. Five rows
-stand. Each standing one has its own heading
+all but one entry. All six came off the same day: the float order, the
+one-engine fixture kind, the box through a parameter and escapebench's size,
+built, and the escape scan and the fixed heap start, each measured and declined.
+Two rows stand. Each standing one has its own heading
 below, dated 2026-09-30, and a log entry of the same name. The seventh ruling
 of that sitting, the box constructor's spelling, has no row because `effect`
 was already built and pinned.
@@ -365,36 +368,6 @@ If the reading cannot be made to repeat between machines, the question that
 follows is whether an exact pin is the right instrument for a counter whose
 artifact and host both move under it. That one is Clay's, and this row does
 not decide it in advance.
-
-### A parameter bound to a box carries the box into the body (2026-09-30)
-
-The log entry "gavel: a parameter bound to a box carries the box into the
-body", closed on the 2026-07-25 and 2026-08-29 gavels. Inference carries a box
-through an unannotated parameter, and the refusal for a box reaching a call
-with no arm for it fires at the call inside the body.
-
-Owes: the inference change, a fixture for the shape the ledger entry named
-(`elem_onto x` then `encode_onto x` inside the body), and the ten existing
-box fixtures still green.
-
-### A golden may pin the interpreter's answer where native refuses (2026-09-30)
-
-The log entry "directive: a golden may pin the interpreter's answer where
-native refuses". The small-integer change it was asked for is already on main
-(kanso#1654, 2026-09-25).
-
-Owes: the fixture kind, which asserts that the interpreter answers X and native
-refuses with Y, and fixtures at the int64 boundary that would catch a promotion
-one step late.
-
-### escapebench grows until the bracket's benefit is inside it (2026-09-30)
-
-The log entry "directive: escapebench grows until the bracket's benefit is
-inside it", under the 2026-09-05 corpus-first ruling.
-
-Owes: the benchmark sized so a change deleting the escape bracket reads as a
-loss, the term that reads it re-based forward in the same change, and the
-direction recorded in the log.
 
 ## In flight
 

@@ -1275,11 +1275,12 @@ fn check_after_infer<'p>(
         boxed_group: &dyn Fn(&str, usize) -> bool,
         shadows: &dyn Fn(&str) -> bool,
         any_boxed: bool,
+        held: Option<&dyn Fn(&str) -> bool>,
     ) -> bool {
         match e {
             // a `.>` step answers the chain its subject opened
             Expr::App { args, piped: true, .. } => {
-                args.first().is_some_and(|a| yields_box(a, boxed_group, shadows, any_boxed))
+                args.first().is_some_and(|a| yields_box(a, boxed_group, shadows, any_boxed, held))
             }
             // THE TABLE ANSWERS BEFORE THE BINDER SET DOES, and both are a hash
             // of the same name. A name the table does not hold, or holds as
@@ -1301,14 +1302,18 @@ fn check_after_infer<'p>(
             Expr::App { head, args, piped: false, .. } if any_boxed => match head.as_ref() {
                 // both branches of an `if` answering a box makes the `if` one
                 Expr::Ident(name, _, _) if name == "if" && args.len() == 3 => {
-                    yields_box(&args[1], boxed_group, shadows, any_boxed)
-                        && yields_box(&args[2], boxed_group, shadows, any_boxed)
+                    yields_box(&args[1], boxed_group, shadows, any_boxed, held)
+                        && yields_box(&args[2], boxed_group, shadows, any_boxed, held)
                 }
                 Expr::Ident(name, _, _) => {
                     boxed_group(name.as_str(), args.len()) && !shadows(name.as_str())
                 }
                 _ => false,
             },
+            // a parameter some call hands a box holds one here (ruled
+            // 2026-09-30); `held` is `None` everywhere but the pass that
+            // reads the declarations those calls reach
+            Expr::Ident(name, _, _) if held.is_some_and(|h| h(name.as_str())) => true,
             Expr::Ident(name, _, _) if any_boxed => {
                 boxed_group(name.as_str(), 0) && !shadows(name.as_str())
             }
@@ -1362,9 +1367,13 @@ fn check_after_infer<'p>(
             while i != u32::MAX && all {
                 let decl = &self.program.fns[i as usize];
                 all = match decl.body.last() {
-                    Some(Stmt::Expr(tail)) => {
-                        yields_box(tail, &|n, a| self.group(n, a), &|n| binds_name(decl, n), true)
-                    }
+                    Some(Stmt::Expr(tail)) => yields_box(
+                        tail,
+                        &|n, a| self.group(n, a),
+                        &|n| binds_name(decl, n),
+                        true,
+                        None,
+                    ),
                     _ => false,
                 };
                 i = self.next[i as usize];
@@ -1513,27 +1522,56 @@ fn check_after_infer<'p>(
         }
         b.set.contains(name)
     };
-    let site = |e: &Expr, shadow: &dyn Fn(&str) -> bool, diags: &mut Vec<Diagnostic>| {
-        let is_box = |e: &Expr| yields_box(e, &boxed_group, shadow, any_boxed);
+    // A parameter some call hands a box: the name, and the call where the box
+    // first went into a parameter, as the declaration making it and the group
+    // it called. A box handed on from one parameter to the next keeps the
+    // first call, since that is where it can be opened.
+    type Held<'a> = (&'a str, &'a str, &'a str);
+    type Handed<'a> = (u32, usize, Option<(&'a str, &'a str)>);
+    let site = |e: &Expr,
+                shadow: &dyn Fn(&str) -> bool,
+                held: &[Held<'p>],
+                handed: &mut Vec<Handed<'p>>,
+                diags: &mut Vec<Diagnostic>| {
+        let holds = |n: &str| held.iter().any(|h| h.0 == n);
+        let holds: Option<&dyn Fn(&str) -> bool> = (!held.is_empty()).then_some(&holds);
+        let is_box = |e: &Expr| yields_box(e, &boxed_group, shadow, any_boxed, holds);
+        let say = |diags: &mut Vec<Diagnostic>, who: &str, at: &Expr| {
+            let from = match at {
+                Expr::Ident(n, _, _) => held.iter().find(|h| h.0 == n.as_str()),
+                _ => None,
+            };
+            let Some((name, caller, callee)) = from else {
+                return refuse(diags, who, at.span());
+            };
+            diags.push(Diagnostic::new(
+                "effect",
+                format!(
+                    "`{name}` holds an effect — `{caller}` hands `{callee}` one — and \
+                     {who} takes a value; open it with `.>` where `{caller}` calls `{callee}`"
+                ),
+                at.span(),
+            ));
+        };
         match e {
             Expr::BinOp { op, lhs, rhs, .. } => {
                 for side in [lhs, rhs] {
                     if is_box(side) {
-                        refuse(diags, &format!("`{op}`"), side.span());
+                        say(diags, &format!("`{op}`"), side);
                     }
                 }
             }
             Expr::Index { base, index, .. } => {
                 if is_box(base) {
-                    refuse(diags, "an index", base.span());
+                    say(diags, "an index", base);
                 }
                 if is_box(index) {
-                    refuse(diags, "an index", index.span());
+                    say(diags, "an index", index);
                 }
             }
             Expr::Field { base, name, .. } => {
                 if is_box(base) {
-                    refuse(diags, &format!("`.{name}`"), base.span());
+                    say(diags, &format!("`.{name}`"), base);
                 }
             }
             // `box . (n -> n - 1)` is the lambda applied to the box, and the
@@ -1558,7 +1596,7 @@ fn check_after_infer<'p>(
                 if name == "if" {
                     if let Some(cond) = args.first() {
                         if is_box(cond) {
-                            refuse(diags, "`if`", cond.span());
+                            say(diags, "`if`", cond);
                         }
                     }
                     return;
@@ -1584,10 +1622,20 @@ fn check_after_infer<'p>(
                     if !is_box(arg) {
                         continue;
                     }
-                    if found.is_some() && (pos >= 64 || binds & (1u64 << pos) != 0) {
-                        continue;
+                    if let Some((_, head, _)) = found {
+                        if pos >= 64 {
+                            continue;
+                        }
+                        if binds & (1u64 << pos) != 0 {
+                            let first = match arg {
+                                Expr::Ident(n, _, _) => held.iter().find(|h| h.0 == n.as_str()),
+                                _ => None,
+                            };
+                            handed.push((head, pos, first.map(|h| (h.1, h.2))));
+                            continue;
+                        }
                     }
-                    refuse(diags, &format!("`{name}`"), arg.span());
+                    say(diags, &format!("`{name}`"), arg);
                 }
             }
             _ => {}
@@ -1601,6 +1649,10 @@ fn check_after_infer<'p>(
     // does — a mutation that leaves items behind keeps the whole error corpus
     // green — so the reuse does not rest on it.
     let mut stack: Vec<&Expr> = Vec::new();
+    // every group position a box was let into, with the declaration whose call
+    // let it in, for the pass after this walk
+    let mut handed: Vec<(Handed<'p>, u32)> = Vec::new();
+    let mut handed_here: Vec<Handed<'p>> = Vec::new();
     for (i, decl) in program.fns.iter().enumerate() {
         // The box question's shadowing test is asked of THIS declaration, and
         // the set behind it is filled on the first ask — so the closure has to
@@ -1617,15 +1669,105 @@ fn check_after_infer<'p>(
                 effect_discarded_at(cur, &tables, effect_diags);
                 none_exhaustive_at(cur, &tables, &decl.file, none_diags);
                 raised_err_at(cur, &raisers, &consts, &err_arms, &decl.file, none_diags);
-                site(cur, &shadow, box_diags);
+                site(cur, &shadow, &[], &mut handed_here, box_diags);
                 crate::for_each_child(cur, |c| stack.push(c));
             }
         }
+        handed.extend(handed_here.drain(..).map(|h| (h, i as u32)));
         // All three are about this declaration's statements, and in a module
         // the program holds every file's, so each is placed in its file.
         place_in(&mut effect_diags[marks.0..], &decl.file);
         place_in(&mut box_diags[marks.1..], &decl.file);
         place_in(&mut none_diags[marks.2..], &decl.file);
+    }
+    if handed.is_empty() {
+        return;
+    }
+
+    // A BOX HANDED TO A PARAMETER IS A BOX INSIDE THE BODY (ruled 2026-09-30).
+    // The walk above lets a box through wherever the callee's group binds that
+    // position, and a bare binder may hold one: a description reaching a
+    // dispatch lands on the bare arm, and `held e` hands its box back. What
+    // it cannot see is the body. Every arm that NAMES the position now holds a
+    // box under that name, so the body is read again with the name counted as
+    // one, and a box it hands on to a further group is followed the same way.
+    // Names are only ever added and there are finitely many, so the reading
+    // stops. A name the body binds again, in a binding or a lambda, is left
+    // out: the check under-refuses where it cannot tell which one is meant.
+    let mut held: crate::hash::Map<u32, Vec<Held<'p>>> = crate::hash::Map::default();
+    let mut reread: Vec<u32> = Vec::new();
+    let mut rebound: HashSet<&str> = HashSet::default();
+    let read = |j: u32,
+                names: &[Held<'p>],
+                stack: &mut Vec<&'p Expr>,
+                handed: &mut Vec<Handed<'p>>,
+                diags: &mut Vec<Diagnostic>| {
+        let shadow = |n: &str| shadows(j as usize, n);
+        for stmt in &program.fns[j as usize].body {
+            let e = match stmt {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expr,
+            };
+            stack.clear();
+            stack.push(e);
+            while let Some(cur) = stack.pop() {
+                site(cur, &shadow, names, handed, diags);
+                crate::for_each_child(cur, |c| stack.push(c));
+            }
+        }
+    };
+    let mut scratch: Vec<Diagnostic> = Vec::new();
+    while !handed.is_empty() {
+        for ((head, pos, first), caller) in handed.drain(..) {
+            let (from, to) = first.unwrap_or((
+                program.fns[caller as usize].name.as_str(),
+                program.fns[head as usize].name.as_str(),
+            ));
+            let mut j = head;
+            while j != u32::MAX {
+                let decl = &program.fns[j as usize];
+                let name = match decl.params.get(pos) {
+                    Some(Pattern::Var(n, _)) => Some(n.as_str()),
+                    Some(Pattern::Annotated { name, ty, .. }) if crate::ast::is_effect_type(ty) => {
+                        Some(name.as_str())
+                    }
+                    _ => None,
+                };
+                if let Some(name) = name.filter(|n| *n != "_") {
+                    rebound.clear();
+                    for stmt in &decl.body {
+                        bound_in_stmt(stmt, &mut rebound);
+                    }
+                    let names = held.entry(j).or_default();
+                    if !rebound.contains(name) && !names.iter().any(|h| h.0 == name) {
+                        names.push((name, from, to));
+                        reread.push(j);
+                    }
+                }
+                j = next[j as usize];
+            }
+        }
+        reread.sort_unstable();
+        reread.dedup();
+        for j in reread.drain(..) {
+            let names = held[&j].clone();
+            read(j, &names, &mut stack, &mut handed_here, &mut scratch);
+            handed.extend(handed_here.drain(..).map(|h| (h, j)));
+        }
+        scratch.clear();
+    }
+    // What the second reading says that the first did not is the refusal of a
+    // held name, so only a refusal at a span the first reading left alone is
+    // kept; everything else there was already said above.
+    let mut order: Vec<u32> = held.iter().filter(|(_, n)| !n.is_empty()).map(|(j, _)| *j).collect();
+    order.sort_unstable();
+    for j in order {
+        let mut before: Vec<Diagnostic> = Vec::new();
+        read(j, &[], &mut stack, &mut handed_here, &mut before);
+        read(j, &held[&j], &mut stack, &mut handed_here, &mut scratch);
+        handed_here.clear();
+        let mark = box_diags.len();
+        box_diags.extend(scratch.drain(..).filter(|d| !before.iter().any(|b| b.span == d.span)));
+        place_in(&mut box_diags[mark..], &program.fns[j as usize].file);
     }
 }
 
