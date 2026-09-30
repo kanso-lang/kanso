@@ -1,0 +1,18 @@
+# `pick` raises for one key and otherwise hands on the value it took out of
+# an `entry`. That value is a field of a record the runtime built, so nothing
+# says what it holds and inference answers any value at all, a description
+# included. The check used to read that as a boxed failure and let the raise
+# through to `consume`, which has arms for ints only. An answer that can be
+# anything says nothing about a box, and the call is refused like any other.
+fn pick (entry k v)
+  return err "no price for {k}" if k == "bad"
+  v
+
+fn consume n:int
+  n + 1
+
+fn walk es
+  return 0 if length es < 1
+  consume (pick es[1])
+
+pub play = print "{walk (entries { "a":1 })}"

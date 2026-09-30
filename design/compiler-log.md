@@ -20858,3 +20858,55 @@ it. Closing that is implementation. std/list first gains pub factories for a
 the `next` protocol. `examples/next_protocol.kso` and any other site move onto
 them, and then the short name is refused with the message the qualified
 spelling already gets.
+
+## 2026-09-30 — the raise check reads a visible err under an imprecise box, built
+
+Builds "the raise check reads a visible err under an imprecise box", which
+cites the 2026-09-15 gavel "the box is explicit, an err is a value, and a bare
+err halts where it lands".
+
+`check_after_infer` collects the groups that can raise from their inferred
+answers. An answer with RAISED counted unless it also carried DESC. A group
+that hands on a field of a record the runtime built answers every value the
+inference knows, DESC among them, so `fn pick (entry k v)` raising for one key
+was read as a box and `consume (pick es[1])` checked clean with `consume`
+taking ints only. An answer is now skipped only when it carries DESC and does
+not carry every value (`TOP & !FAIL`). An answer with no RAISED stays lenient.
+
+Clay's ruling put the question as whether RAISED should count under any DESC.
+Counting it under every DESC was tried first and refused four more things that
+hand over a real box: `docs/book/samples/ch05/counted.kso`
+(`counted (os/read_file! ...)`), `tests/golden/micro/a_plain_dot_hands_the_box_over.kso`,
+`tests/golden/errors/an_effect_discarded_beside_a_later_refusal.kso` (a new
+refusal beside the old one) and `scripts/module_differential`. The answer of
+`os/read_file!` carries the raised bit and is a box, and the ruling's "skip
+only when the answer is known to be one" keeps it skipped. The narrower test is the one built.
+
+Files that change answer, checked one at a time with `kanso check` against
+main at 72949009, over every `.kso` file and every directory holding one:
+1,334 files and 259 directories across kanso, kq (88229e7), vse (2336090) and
+kanso-json (5428caf). Four modules move, all in kanso's scripts, twelve rows
+of the sweep counting each module's directory and its two files:
+
+- `scripts/book_quotes`: `leading` and `missing` receive std/regexp's answer,
+  an err when a pattern does not compile. Both gained arms that hand it on.
+- `scripts/prose_check`: `in_page`'s answer, from the same source, now goes to
+  `onward`, which hands an err on.
+- `scripts/diagnostic_coverage`: `in?` split `set` on a one-character string
+  the check cannot prove non-empty, and split answers an err for an empty
+  separator. It now compares characters. All ten refusals in the module came
+  from that one line.
+- `scripts/welfare_rescore`: `divisors` raises for an epoch naming a commit no
+  row carries, and `written` indexed the answer. `scored_rows` now receives it
+  and hands the err on.
+
+Each of the four prints byte-identical output before and after, welfare_rescore
+over the last 500 rows of perf-history.
+
+`json/encode (json/decode s)` with no err arm, the fixture the ruling named,
+was already refused on main by every route tried (entry, library, a callback
+handed to `os/read_file!`). It is pinned now as `a_decode_handed_to_encode`. The case
+that was lenient is `an_err_raised_beside_a_map_value`. Mutation
+`a_raise_hidden_behind_any_value` restores the DESC-only test and turns the
+error corpus red on that fixture; ratchet row `any_value_raises`.
+

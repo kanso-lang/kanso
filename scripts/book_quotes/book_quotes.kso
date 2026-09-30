@@ -152,6 +152,15 @@ fn identing body hits at acc false
 fn holds? names name
   length (list/to_list (list/select names (n -> n == name))) > 0
 
+fn missing e@(err _) (err _)
+  e
+
+fn missing e@(err _) _
+  e
+
+fn missing _ e@(err _)
+  e
+
 fn missing names got
   list/to_list (list/select got (n -> not holds? names n))
 
@@ -238,6 +247,10 @@ fn found_for q file bodies
   gone = missing declared (shown panel)
   loose = missing (reachable bodies) (named_in panel)
   as_findings q lead "declares" gone (as_findings q lead "names" loose [])
+
+# A pattern that does not compile answers an err, and these hand it on.
+fn leading e@(err _)
+  e
 
 fn leading names
   first names (length names == 0)

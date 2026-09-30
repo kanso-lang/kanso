@@ -1,0 +1,4 @@
+error[exhaustive]: this can be an err and `json/encode` has no arm for it — dispatch on it here, or give `json/encode` an `(err _)` arm (in a_decode_handed_to_encode.kso)
+  --> tests/golden/errors/a_decode_handed_to_encode.kso:7:16
+   7 |   json/encode (json/decode s)
+                      ^

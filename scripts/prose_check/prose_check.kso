@@ -113,7 +113,14 @@ fn reading pages at acc after false
 
 fn scanned_page pages at acc after page raw
   text = prose raw
-  found = text/concat acc (in_page page text)
+  onward pages at acc after (in_page page text)
+
+# A pattern that does not compile answers an err, handed on as it is.
+fn onward _ _ _ _ e@(err _)
+  e
+
+fn onward pages at acc after here
+  found = text/concat acc here
   read_pages pages (at + 1) (list/to_list found) after
 
 # The page with its code stripped, so a sample is never a finding.
