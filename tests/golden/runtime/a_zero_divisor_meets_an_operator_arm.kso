@@ -1,0 +1,19 @@
+# A zero divisor answers the text "modulo by zero", wrapped in `divide_by_zero`
+# only where the program names that type or `math_failure`. This one names
+# neither, so the answer is text, and text does not reach an operator's arms:
+# `+` refuses it as it refuses any string beside a number. The interpreter
+# wrapped the answer anyway, sent it to the arms of the `+` below, and refused
+# it in other words than native's. Found by a generated program on 2026-09-30.
+import "std/os"
+
+type pt
+  n
+  s
+
+fn + (pt a s) (pt b t)
+  pt (a + b) "{s}{t}"
+
+fn shown z
+  "{1 + 7 % z}"
+
+pub play = os/args .> (a -> print (shown (length a)))

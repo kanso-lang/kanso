@@ -2117,7 +2117,13 @@ impl<'a> Interp<'a> {
                     return self.call_named(op, vec![left, right], *span, frame);
                 }
                 let cells = Cells { id: &thunk_identity, force: &|v| self.force_thunk(v) };
-                eval_binop(op, sub_base(left), sub_base(right), *span, &cells)
+                let answer = eval_binop(op, sub_base(left), sub_base(right), *span, &cells)?;
+                Ok(match matches!(&**op, "/" | "%") {
+                    true => {
+                        as_declared_math(answer, self.type_decl(crate::DIVIDE_BY_ZERO).is_some())
+                    }
+                    false => answer,
+                })
             }
             Expr::Guard { cond, early, rest, span } => {
                 let c = self.eval(cond, env, frame)?;
@@ -4946,6 +4952,21 @@ fn cmp_int_float(x: &Int, y: f64) -> std::cmp::Ordering {
 /// `10 / 0` answers a value rather than a failure: a `divide_by_zero` under a
 /// `math_failure` under a string, so a handler may ask for the specific
 /// failure, for any math failure, or read the reason as text.
+/// A zero divisor's answer as the program can see it. The failure is the text
+/// wrapped in `divide_by_zero` under `math_failure`, and a program that never
+/// names either type gets the bare text, as it does on native: nothing there
+/// could tell the two apart except an operator's arms, which a subtype reaches
+/// and a string does not. `declared` says whether the program named them.
+pub fn as_declared_math(answer: Value, declared: bool) -> Value {
+    match answer {
+        Value::Sub { ty, inner } if !declared && &*ty == crate::DIVIDE_BY_ZERO => match &*inner {
+            Value::Sub { inner: text, .. } => (**text).clone(),
+            _ => (*inner).clone(),
+        },
+        other => other,
+    }
+}
+
 fn math_failure(reason: &str) -> Value {
     let text = Value::Str(reason.to_string());
     let root = Value::Sub { ty: Rc::from(crate::MATH_FAILURE), inner: Rc::new(text) };

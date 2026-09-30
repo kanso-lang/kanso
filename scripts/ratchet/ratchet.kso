@@ -4526,7 +4526,27 @@ held_if = row
 
 rows_c1zzzzzzz = text/concat rows_c1zzzzzz [held_if]
 
-rows_c = text/concat rows_c1zzzzzzz [itself]
+# A zero divisor's answer reaches an operator's arms exactly where the
+# program declared the type that wraps it, on both engines.
+math_bare = row
+  "an undeclared math failure sent to the arms"
+  true
+  "cargo test --release --test golden runtime_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "an_undeclared_math_failure_sent_to_the_arms")
+  release
+
+math_named = row
+  "a named math failure kept from the arms"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_named_math_failure_kept_from_the_arms")
+  release
+
+rows_c1zzzzzzzw = text/concat rows_c1zzzzzzz [math_bare math_named]
+
+rows_c = text/concat rows_c1zzzzzzzw [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

@@ -1,0 +1,14 @@
+# where a program names `math_failure`, a zero divisor answers a
+# `divide_by_zero` under it, and that is a value an operator's arms are asked
+# about, as any subtype is. Native typed a division's answer as a number or a
+# failure, so its `+` never asked the arms and refused a value the arm below
+# takes
+import "std/os"
+
+fn + m:math_failure n:int
+  "{m} and {n}"
+
+fn shown z
+  "{7 % z + 1}"
+
+pub play = os/args .> (a -> print (shown (length a)))

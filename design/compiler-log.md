@@ -19916,3 +19916,34 @@ the one the language gives, and it is now the branch: `1 3` and `2 4`.
 `a_held_if_picks_its_branch` holds both halves: the interpreter's answer, and
 native naming its limit. The mutation "a held if counted as nothing" takes the
 count out and the spec goes red printing `<fn>`. It is a ratchet row.
+
+## 2026-09-30 — a zero divisor meets an operator arm
+
+Three generated programs in one batch declared `fn + (pt a s) (pt b t)` and
+then added a number to `x % z` with `z` zero. Both engines refused, in
+different words: the interpreter said no overload of `+` matched, and native
+said `+` is not defined for these values.
+
+The 2026-08-10 gavel made a zero divisor's answer the text "modulo by zero",
+wrapped in `divide_by_zero` under `math_failure` only where the program names
+one of those types. Native builds the wrapper only then. The interpreter and
+the browser engine, which share its arithmetic, built it every time, and a
+subtype is a value an operator's user arms are asked about, so their `+` went
+to the `pt` arm, which did not match. A program that names neither type cannot
+otherwise tell the wrapped answer from the text. After `/` and `%`, both now
+hand back the bare text where the program declared neither type.
+
+Where the program does name them, native had the opposite gap. An operator
+asks its arms only when an operand's recorded set says it may be a record,
+and native recorded a division's answer as a number or a failure. With
+`fn + m:math_failure n:int` declared, `7 % z + 1` ran the arm on the
+interpreter and was refused natively. A division's answer now carries the
+record bit where the program declares `divide_by_zero`. No benchmark names
+the type, so no benchmark's code can change.
+
+`a_zero_divisor_meets_an_operator_arm` in the runtime corpus pins the
+refusal's words for the undeclared case, and
+`a_named_zero_divisor_meets_an_operator_arm` in the micro corpus pins the arm
+running for the declared one. The mutations "an undeclared math failure sent
+to the arms" and "a named math failure kept from the arms" each take one half
+out. Both are ratchet rows.
