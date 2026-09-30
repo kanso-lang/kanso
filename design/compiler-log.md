@@ -20510,7 +20510,9 @@ The check costs something on every program, whether or not it hands a box to
 a parameter. CI's rows: `compile_instructions` rose to 25,528,949 (+142,397,
 0.56%), `entry_instructions` to 84,431,609 and `library_instructions` to
 84,965,462, each about 376,000 more. `emit_instructions` fell to 30,155,267 and
-`interp_instructions` to 590,296,603, neither of which runs this code. A
+`interp_instructions` to 590,296,603, neither of which runs this code. With the
+float order merged in, `interp_instructions` reads 590,303,209, the float
+order's 6,606 on top of this change's reading. A
 profile of `kanso check lib/json` in this container puts the rise in the check
 itself: `check_after_infer` read 687,804 instructions on main and 805,964 here,
 where lib/json hands no box to a named parameter and the second reading never
