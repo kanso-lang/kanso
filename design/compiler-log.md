@@ -20040,7 +20040,7 @@ changed here.
 CI measured the change against main with #1741 in it. The interpreted run's
 allocations fell 15 to 895,172, entry_instructions fell 3,486 to 83,772,216
 and library_instructions fell 4,269 to 84,309,271. Two rows rose:
-emit_instructions landed on 30,101,324 (+2,825) and compile_instructions on
+emit_instructions landed on 30,116,768 (+2,825) and compile_instructions on
 25,364,634 (+68). The loader no longer builds a prefixed name for an origin
 that already has a slash, and nothing has isolated which of the moves that
 accounts for.
