@@ -4,8 +4,8 @@
 # matched as whatever the parse happened to read, and the micro corpus
 # fixture prints a match where every engine should print the refusal.
 set -e
-old='  over = parsed_body.pos - length chars - 1'
+old='  over = flags.pos + parsed_body.pos - length pattern - 2'
 [ "$(grep -cxF "$old" lib/regexp/regexp.kso)" -eq 1 ]
-sed -i.bak 's#^  over = parsed_body.pos - length chars - 1$#  over = 0#' lib/regexp/regexp.kso
+sed -i.bak 's#^  over = flags.pos + parsed_body.pos - length pattern - 2$#  over = 0#' lib/regexp/regexp.kso
 rm -f lib/regexp/regexp.kso.bak
 grep -qxF '  over = 0' lib/regexp/regexp.kso

@@ -20238,13 +20238,21 @@ ended short and "the pattern ends inside a group, class, count or escape" when
 it ended long. A trailing `\` stepped one place, which made it look finished;
 it steps two now, so it falls into the second case.
 
+Probing the flag prefix found a hang. `(?i` and `(?ia` never returned on any
+engine: `flag_end` looks for the `)` that closes a leading flag group, and it
+walked past the end of the pattern forever, because a slice past the end is
+the empty string and never equals `)`. It stops at the end now. The check
+counts the flag prefix as well as the body, so a flag group left open is
+refused with the rest.
+
 Patterns that were well formed are read exactly as before. Every pattern in
 the tree still compiles: `scripts/book_check.sh` runs the two book scripts,
 which carry the most involved patterns here, and both passed. kq and vse call
 no regexp function.
 
 `an_unclosed_pattern_answers_an_err` in the micro corpus pins one well-formed
-pattern and six refusals on every engine. The mutation "an unclosed pattern
+pattern and seven refusals on every engine; on main its last line never
+returns. The mutation "an unclosed pattern
 matching what it read" tells `compiled` that every parse ended where the
 pattern did, and is a new ratchet row.
 

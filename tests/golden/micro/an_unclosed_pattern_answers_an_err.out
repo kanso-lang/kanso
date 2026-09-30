@@ -5,3 +5,4 @@ open class:  the pattern ends inside a group, class, count or escape
 open count:  the pattern ends inside a group, class, count or escape
 lone escape: the pattern ends inside a group, class, count or escape
 open ahead:  the pattern ends inside a group, class, count or escape
+open flags:  the pattern ends inside a group, class, count or escape

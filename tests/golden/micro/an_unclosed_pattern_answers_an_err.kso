@@ -12,3 +12,4 @@ pub play = print "closed:      {said "\\(ab\\)"}"
   .> (_ -> print "open count:  {said open_count}")
   .> (_ -> print "lone escape: {said "c\\"}")
   .> (_ -> print "open ahead:  {said "(?=ab"}")
+  .> (_ -> print "open flags:  {said "(?i"}")
