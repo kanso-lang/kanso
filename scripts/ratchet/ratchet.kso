@@ -4550,6 +4550,18 @@ push_keeps = row
 
 rows_c1zzzzzzzza = text/concat rows_c1zzzzzzzz [push_keeps]
 
+# An import's type built by its short name is the import's type: it prints
+# under that type's name and matches that type's patterns.
+origin_once = row
+  "an imported origin prefixed twice"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "an_imported_origin_prefixed_twice")
+  release
+
+rows_c1zzzzzzzv = text/concat rows_c1zzzzzzzza [origin_once]
+
 # A function a module declares keeps its name beside an import's type of the
 # same name, and a call reaches the function.
 fn_beats_twin = row
@@ -4560,7 +4572,7 @@ fn_beats_twin = row
   (breaking "an_imported_type_twin_beside_a_function")
   release
 
-rows_c1zzzzzzzx = text/concat rows_c1zzzzzzzza [fn_beats_twin]
+rows_c1zzzzzzzx = text/concat rows_c1zzzzzzzv [fn_beats_twin]
 
 rows_c = text/concat rows_c1zzzzzzzx [itself]
 

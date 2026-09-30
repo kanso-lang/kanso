@@ -1,0 +1,14 @@
+# every pub name an import exports also exists under its short name, as a
+# clone that remembers the declaration it came from. The loader prefixed that
+# memory with the importing module's name, so `step 1 [5]` built a record
+# of a type nothing declared: the interpreter printed `<module>/list/step`
+# where std/list's own step prints `list/step`, and native printed `record`
+import "std/list"
+
+fn first_of (step e _)
+  e
+
+fn first_of _
+  none
+
+pub play = print "{step 1 [5]} {sorted [3 1]} {first_of (step 7 [])}"
