@@ -21102,6 +21102,10 @@ with: the positions are `p + 1` over a `p` that arrived as a parameter.
 
 What is cheap is telling LLVM the spill path is rare. `k_parsed_spill`,
 `k_parsed_wide_int` and `k_parsed_wide_value` are now declared `cold`, which
-moves the blocks that call them out of the hot path: jsonbench 758,928,207 ->
-755,739,507 (-0.42%), runbench 1,088,489,008 -> 1,088,455,703 (-33,305). The
-CI rows follow.
+moves the blocks that call them out of the hot path. CI's rows: jsonbench
+758,833,558 -> 755,644,858 (-0.42%), runbench 1,088,393,175 -> 1,088,359,870
+(-33,305), encodebench -20,762, oneshot -20,816, widebench -32,008 and
+livebench -21,299. The cold blocks are laid out apart from the functions that
+call them, so `.text` grows by 32 to 160 bytes per benchmark binary and the
+`text` row in `bench/text_golden.txt` goes from 3,524,720 to 3,525,136 (+416
+bytes). The objective does not weigh it.
