@@ -21074,3 +21074,38 @@ run reaches.
 What would close the row: a failing main push on the interpreted vein, read
 while its log still holds the summary, or a pair of runs on one commit that
 differ after the kanso#1757 change. Neither has appeared.
+
+## 2026-10-01 — where kanso#1716's cost went, and the part a cold attribute buys back
+
+kanso#1716 made a packed record keep its int: a `%parsed` result now checks
+that the int survives the shift into the tag word, spilling the record to the
+heap when it does not, and the reader checks for the spill. It cost runbench
++1.68% and jsonbench +4.06%, the largest single fall of the floor since
+2026-09-28 (-0.080 of -0.095). Neither benchmark ever holds an int too wide to
+pack, so the whole cost is the two checks.
+
+Measured on this container against main at f6d3ec89, outside the gate's `env
+-i`, so only the differences mean anything. Removing each check on its own (a
+throwaway build, not a candidate) splits the cost:
+
+| check removed | jsonbench | runbench |
+|---|---|---|
+| neither | 758,928,207 | 1,088,489,008 |
+| the reader's spill test | 744,315,207 (-14.6M) | 1,080,261,572 (-8.2M) |
+| the packer's fit test | 742,938,957 (-16.0M) | 1,078,600,583 (-9.9M) |
+
+The two add up to the 29.6M kanso#1716 added to jsonbench. The scanner has a
+dozen pack and unpack sites and calls pass through without repacking, so each
+token crosses once and pays both tests. Neither can be dropped without proving
+the int fits in 56 bits, and the compiler has no range analysis to prove it
+with: the positions are `p + 1` over a `p` that arrived as a parameter.
+
+What is cheap is telling LLVM the spill path is rare. `k_parsed_spill`,
+`k_parsed_wide_int` and `k_parsed_wide_value` are now declared `cold`, which
+moves the blocks that call them out of the hot path. CI's rows: jsonbench
+758,833,558 -> 755,644,858 (-0.42%), runbench 1,088,393,175 -> 1,088,359,870
+(-33,305), encodebench -20,762, oneshot -20,816, widebench -32,008 and
+livebench -21,299. The cold blocks are laid out apart from the functions that
+call them, so `.text` grows by 32 to 160 bytes per benchmark binary and the
+`text` row in `bench/text_golden.txt` goes from 3,524,720 to 3,525,136 (+416
+bytes). The objective does not weigh it.
