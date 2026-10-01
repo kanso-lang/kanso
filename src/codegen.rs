@@ -1266,9 +1266,9 @@ declare %KValue @k_pair_failure(%KValue, %KValue)
 declare %KValue @k_rec_reuse(i64, i64, ptr, %KValue)
 declare %KValue @k_parsed_box(i64, i64, i64)
 declare %KValue @k_parsed_words(%KValue)
-declare %KValue @k_parsed_spill(i64, i64, i64, i64)
-declare i64 @k_parsed_wide_int(i64)
-declare %KValue @k_parsed_wide_value(i64)
+declare %KValue @k_parsed_spill(i64, i64, i64, i64) cold
+declare i64 @k_parsed_wide_int(i64) cold
+declare %KValue @k_parsed_wide_value(i64) cold
 declare %KValue @k_concat_arr_mut(i64, ptr)
 declare %KValue @k_b_str_builder(%KValue)
 declare %KValue @k_b_adopt(%KValue, %KValue)
