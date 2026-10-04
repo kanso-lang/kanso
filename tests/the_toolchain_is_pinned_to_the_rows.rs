@@ -62,16 +62,11 @@ fn floating_steps(text: &str) -> Vec<String> {
         let Some(at) = line.find(STEP) else { continue };
         let rev = line[at + STEP.len()..].trim();
         if rev != "master" {
-            bad.push(format!(
-                "line {}: installs `@{rev}`, which picks its own rustc",
-                i + 1
-            ));
+            bad.push(format!("line {}: installs `@{rev}`, which picks its own rustc", i + 1));
             continue;
         }
         let own = indent(line);
-        let body = lines[i + 1..]
-            .iter()
-            .take_while(|l| l.trim().is_empty() || indent(l) > own);
+        let body = lines[i + 1..].iter().take_while(|l| l.trim().is_empty() || indent(l) > own);
         if !body.into_iter().any(|l| l.trim() == PINNED) {
             bad.push(format!("line {}: no `{PINNED}` under the step", i + 1));
         }
