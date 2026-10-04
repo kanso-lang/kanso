@@ -48,10 +48,11 @@ kanso — sat here and was bounced on 2026-08-29: a performance question with no
 surface area is the implementer's, per the ledger's own charter, and the log
 carries the research mandate it left with.
 
-**One question is waiting** — zero blocking. Clay ruled three and directed four
-on 2026-09-30 in one sitting, and each is in design/compiler-log.md under its
-entry's name; what stays open is the spelling of cyclic structures sized by
-data, now with two worked examples. The last two blocking entries
+**One question is waiting** — zero blocking. It is whether `build` still earns
+its place beside `tie`, filed 2026-10-04 by the ruling that gave cyclic
+structures sized by data their spelling, `list/tie` and `list/tie!`. Clay
+ruled three and directed four on 2026-09-30 in one sitting, and each is in
+design/compiler-log.md under its entry's name. The last two blocking entries
 were both about the wall `>>`, filed 2026-09-17 out of one reading of a book
 sample. Whether it survives the fused operators was ruled on 2026-09-26, and
 it does not. Whether its simultaneous-failure merge was meant to go closed on
@@ -88,12 +89,14 @@ entry cites the search behind it and proposes an answer, and a sitting can be a
 yes or a no rather than a fresh design conversation. On 2026-08-29 every
 remaining question was ruled in one pass.
 
-**The one open, not blocking** — what spelling "cyclic structures sized by
-data" needs, filed 2026-09-18 with the measurement that sent it here. On
-2026-09-30 Clay left it open and asked for two worked examples, a graph read
-from a list of edges written once as an iterating `build` block and once as a
-knot on a local binding, and the entry carries both. The other seven left the
-ledger that day. Three were ruled: every NaN is one value ranked last and zero
+**The one open, not blocking** — whether `build` still earns its place beside
+`tie`, filed 2026-10-04 with a recommendation to retire it once `tie` is built
+and its compile-time check on literal data is pinned. The entry it replaces,
+what spelling "cyclic structures sized by data" needs, was filed 2026-09-18 and
+ruled on 2026-10-04: a data-sized cycle is tied with `list/tie`, and `list/tie!`
+insists. The iterating `build` block it had recommended went the same day, with
+the gavel that kanso has no loop construct. On 2026-09-30 seven entries left
+the ledger in one sitting. Three were ruled: every NaN is one value ranked last and zero
 is one value; a parameter bound to a box carries the box into the body; and
 the box constructor is `effect`, which was already built. Four were closed on
 standing rulings: a fixture kind that pins the interpreter's answer where
@@ -234,57 +237,27 @@ name the two welfares at all. This paragraph is the first thing cloud reads
 before choosing work, so a row miscounted here is a row chosen or skipped
 wrongly.
 
-### The cohort gavel's data-sized cycle (2026-08-29, narrowed 2026-09-16)
+### Data-sized cycles are tied with `list/tie` (2026-10-04)
 
-The archive entry "block-born is the whole cohort", Clay: "okay whole cohort
-it is." Built on 2026-09-09 as kanso#1359 with all four shapes the gavel
-names. The build-hole gavel of 2026-09-16 took two of them back: a record an
-`if` chose and an element of a born list can no longer be written through,
-because a hole is filled exactly once and a name whose birth is `Either`
-cannot be shown to fill one. That reasoning is sound and this row does not
-ask for it to be undone.
+The live log's "gavel: a data-sized cycle is tied with `list/tie`, and
+`list/tie!` insists". It replaces the row for the 2026-08-29 cohort gavel's
+data-sized cycle, which stood here from 2026-09-18 waiting on Clay's answer to
+the spelling and is answered by this ruling; the alias and the field of a born
+node that the cohort gavel also named stay built, as that row said.
 
-What the row asks for is the purpose the two shapes carried. The cohort
-gavel's words are "cyclic structures sized by data (a graph parsed from
-input, N linked nodes from a map) gain a spelling", and against a build of
-main there is no such spelling left: an indexed element cannot fill a hole, a
-field built with a value cannot be written at all, birth does not flow through
-a call, and N nodes cannot carry N names. The alias and the field of a born
-node stay built and are not part of this row.
+    nodes = list/tie! (keys links) (id ref -> node id (ref links[id]))
 
-MEASURED 2026-09-18, and the answer sends this row to the ledger. The route
-this row proposed was birth through a call: the 2026-09-09 entry named that
-widening as the next one and claimed it as the implementer's, on the reasoning
-that a call returning one record may resolve to one birth and give the fill its
-uniqueness back. Five programs were run against a release build of `30fb1abe`,
-and the log entry "birth through a call, measured" carries them with their
-diagnostics.
+The maker gets a key and `ref`, answers a complete node, and may store a
+reference only in a constructor's field; a read through one is a compile
+error. `tie` resolves the references when every key is made. A broken link is
+a marker record from `tie` and a failure inside the box from `tie!`, and with
+literal data it is refused at check. One call's nodes are one birth cohort.
 
-Birth through a call does not resolve today — `born_of` reaches `types.get` and
-a function name is not a type, so the call answers nothing. Widening it is real
-work and would lift exactly one of the five refusals, the one where a call's
-result is not block-born. It does not reach the gavel's purpose. "Sized by
-data" needs a hole to survive a call or a lambda, and those are closed by two
-separate rules; and a fill's target parses as a bare name, so N nodes need N
-names before any analysis is consulted.
-
-So the row stands, and what it waits on has changed from a measurement to a
-decision. The question is in design/pending-gavels.md under "Open, not
-blocking" as *What spelling does "cyclic structures sized by data" need?*, with
-three routes and a recommendation: a `build` block that iterates, which keeps
-every rule the 2026-09-16 gavel established.
-
-One thing this row asked for turned out not to exist. It said the golden's
-header should stop claiming four shapes while the checker admits two; a
-repo-wide search for that claim finds it in `design/compiler-log.md` and
-`design/memory-frontier-research.md`, about the memory frontier's shapes, and
-in no golden header at all. `tests/golden/mem/build_cycle.kso` had no header.
-It has one now, saying what it pins, which two shapes the build-hole gavel took
-back, and that two names is the largest cycle the language admits rather than a
-choice the fixture made.
-
-Owes: Clay's answer on the spelling. The widening of `born_of` is separable and
-may be built whenever somebody wants it; it does not close this row.
+Owes, from the ruling: both forms on every engine with goldens for a ring, a
+graph from a map of edges, each form's broken-link answer and the compile-time
+refusal; error goldens for a read through a reference in the maker and in a
+helper it calls; and a fixture that ties and drops ten thousand graphs with a
+flat arena peak.
 
 ### A welfare counter reads three parts per billion (2026-09-15)
 
@@ -587,7 +560,9 @@ else. Chains that tested for `none` after an effect migrate.
   - whether an err gains readers a lambda callback can use
 
 **One question waits in `design/pending-gavels.md`** — zero blocking, one
-open — with a recommendation and two worked examples. Recounted on 2026-09-30:
+open — with a recommendation. Recounted on 2026-10-04: the spelling of cyclic
+structures sized by data left Open ruled, `list/tie` and `list/tie!`, and
+whether `build` still earns its place beside `tie` joined it. Recounted on 2026-09-30:
 Clay ruled three entries and directed four in one sitting, and only the
 cyclic-structures spelling stays. Recounted on 2026-09-29: what `math/round`
 answers for NaN and the infinities left Open ruled, under the 2026-09-03 gavel
