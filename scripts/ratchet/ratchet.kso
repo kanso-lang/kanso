@@ -4797,7 +4797,21 @@ short_record_local = row
 
 rows_c1zzzzzzzg = text/concat rows_c1zzzzzzzh [short_record short_record_local]
 
-rows_c = text/concat rows_c1zzzzzzzg [itself]
+# Every workflow installs the rustc its goldens were measured under, named
+# once at the top of the file, rather than whatever is stable that day.
+# Unpinned, the runner moved to 1.99.0 after 2026-10-01 and every gate that
+# names rustc refused (2026-10-04).
+toolchain_pinned = row
+  "a job that installs whatever rustc is stable"
+  true
+  "cargo test --release --test the_toolchain_is_pinned_to_the_rows"
+  "specs (unit, golden, differential)"
+  (breaking "a_job_takes_whatever_rustc_is_stable")
+  no_setup
+
+rows_c1zzzzzzzf = text/concat rows_c1zzzzzzzg [toolchain_pinned]
+
+rows_c = text/concat rows_c1zzzzzzzf [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

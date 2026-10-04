@@ -21110,6 +21110,69 @@ call them, so `.text` grows by 32 to 160 bytes per benchmark binary and the
 `text` row in `bench/text_golden.txt` goes from 3,524,720 to 3,525,136 (+416
 bytes). The objective does not weigh it.
 
+## 2026-10-04 — the rust toolchain is pinned, and the goldens keep their rows
+
+Every workflow installed `dtolnay/rust-toolchain@stable`. After main's last
+green run on 2026-10-01 the runner's stable moved from 1.98.1 to 1.99.0, and
+the cost goldens job went red at "every vein had its say" on every pull
+request, including kanso#1765, which changes only prose. The refusals came from
+`measured_on.sh`: every golden whose measured-on line names `rustc=1.98.1`
+refused a host that reported 1.99.0. That is eleven goldens:
+`compile_allocs`, `compile_instructions`, `compile_memory`,
+`entry_instructions`, `library_instructions`, `startup_instructions`,
+`interp_instructions`, `interp_memory`, `codegen_instructions_dev`,
+`codegen_instructions_release` and `emit_instructions`.
+
+The job measured anyway, as `host_gate.sh` lets CI do, so the rows 1.99.0
+produces are in kanso#1765's log. That tree runs main's code, so every
+difference below belongs to the toolchain:
+
+| row | main, rustc 1.98.1 | kanso#1765, rustc 1.99.0 | change |
+|---|---|---|---|
+| compile_instructions | 25,719,895 | 25,526,610 | -193,285 (-0.75%) |
+| entry_instructions | 85,110,161 | 84,412,406 | -697,755 (-0.82%) |
+| library_instructions | 85,641,806 | 84,939,634 | -702,172 (-0.82%) |
+| startup_instructions | 52,405 | 52,134 | -271 |
+| interp_instructions | 590,630,366 | 584,580,005 | -6,050,361 (-1.02%) |
+| emit_instructions | 30,306,693 | 29,533,895 | -772,798 (-2.55%) |
+
+The allocation counts, the two peaks and both codegen rows came back identical.
+The codegen rows count clang and the linker, which rustc does not build.
+
+There were two ways to go green: take these rows and move the measured-on
+lines to 1.99.0, as each golden's header says to do when the host changes, or
+pin the toolchain. The header describes how to record a host that moved. The
+2026-09-15 rule decides whether the host should be allowed to move by itself,
+and it says a counter reads the code under test and nothing else, with
+external state put into a known state before it is measured. The rustc that
+builds the compiler is external state of exactly that kind. Under 1.99.0 the
+objective scores 90.3230 against a floor of 90.3174, a rise of 0.0056 that
+`--set` would then have banked as compiler work the compiler did not do. So
+the toolchain is pinned, and the rows and the floor stay as they are. Welfare
+on this tree is 90.3174, the floor, because no golden moved.
+
+Each of `ci.yml`, `ratchet.yml`, `pages.yml` and `release.yml` now names
+`RUST_TOOLCHAIN: "1.98.1"` at the top, and every toolchain step installs
+`dtolnay/rust-toolchain@master` with `toolchain: ${{ env.RUST_TOOLCHAIN }}`.
+The ratchet workflow runs the same gates every night and would have hit the
+same refusals. The site and release workflows build what ships, so they build
+it with the rustc the goldens describe.
+
+`tests/the_toolchain_is_pinned_to_the_rows.rs` holds the pieces together. One
+test fails when any toolchain step in any workflow installs something other
+than the named version; on main's workflows it names every `@stable` line. The
+other fails when the pinned version differs from a golden's `rustc=` fact; with
+`RUST_TOOLCHAIN` set to 1.99.0 it lists each golden that names 1.98.1. Mutation
+`a_job_takes_whatever_rustc_is_stable` floats the first step back to `@stable`
+and turns the spec red. Ratchet row `toolchain_pinned`.
+
+A later rustc is a deliberate change: one pull request moves `RUST_TOOLCHAIN`
+in all four workflows, re-sits every golden that names rustc on CI's rows, and
+moves their measured-on lines. The spec refuses any of the three moving
+without the others. Whether such a move re-bases the welfare baseline or banks
+the change is a question about the objective. It is not settled here, and
+nothing needs it settled until someone wants a newer rustc.
+
 ## 2026-10-04 — gavel: kanso has no loop construct
 
 Clay, 2026-10-01, on the worked example that spelled a data-sized cycle as a

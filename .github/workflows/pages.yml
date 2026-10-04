@@ -19,13 +19,20 @@ concurrency:
   group: pages
   cancel-in-progress: false
 
+# The rust toolchain is pinned to the one ci.yml names, for the reason given
+# there. tests/the_toolchain_is_pinned_to_the_rows.rs holds them together.
+env:
+  RUST_TOOLCHAIN: "1.98.1"
+
 jobs:
   build:
     name: build the site and digest its assets
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
       - uses: actions/configure-pages@v5
       # The playground runs docs/kanso.wasm, and this job used to ship
       # whatever copy was committed — so a merge that changed the compiler
