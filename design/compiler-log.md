@@ -21172,3 +21172,91 @@ moves their measured-on lines. The spec refuses any of the three moving
 without the others. Whether such a move re-bases the welfare baseline or banks
 the change is a question about the objective. It is not settled here, and
 nothing needs it settled until someone wants a newer rustc.
+
+## 2026-10-04 — gavel: kanso has no loop construct
+
+Clay, 2026-10-01, on the worked example that spelled a data-sized cycle as a
+`build` block holding a `for`: "no way will i ever ever do a 'for' loop
+construct, not if you held a gun to my head." Iteration is recursion and the
+library functions written with it. No `for`, `while`, `loop` or comprehension
+form enters the grammar, inside a `build` block or anywhere else.
+
+It closes the iterating `build` block that the ledger entry "What spelling does
+'cyclic structures sized by data' need?" had recommended. That route had no
+form without a loop: a hole may not be written inside a function, so a node
+whose link is still open cannot be made by a call, and repeating its
+construction N times has to happen in the block itself. Nothing is owed; the
+grammar has no loop today.
+
+## 2026-10-04 — gavel: a data-sized cycle is tied with `list/tie`, and `list/tie!` insists
+
+Clay ruled the ledger entry "What spelling does 'cyclic structures sized by
+data' need?" on 2026-10-04, after a discussion that began on 2026-10-01 and
+is summarised here because the entry it settles leaves the ledger in this
+commit. The 2026-08-29 gavel "block-born is the whole cohort" promised that a
+graph parsed from input gains a spelling. This is the spelling.
+
+    nodes = list/tie! (keys links) (id ref -> node id (ref links[id]))
+
+**The shape.** `list/tie` takes a list of keys and a maker. It calls the
+maker once per key with two arguments: the key, and `ref`, a function from a
+key to a reference to the node made for that key. The maker answers a complete
+node. When every key has been made, `tie` resolves each reference to its node
+and answers the map from key to node.
+
+**What the maker may do with a reference.** Store it in a constructor's field,
+and nothing else. A reference has a type of its own that only a field accepts,
+so `(ref "a").name` inside the maker is a compile error, since a node may not
+exist yet when the maker runs. `ref` itself is an ordinary function value and
+may be handed to any helper; whatever a helper gets back from it is still a
+reference and still lands only in a field. The maker never receives the
+half-built map, so nothing it calls can read it early. The precedent for
+refusing at check rather than at run time is the 2026-09-15 gavel's: a
+program that cannot work "would just fail to compile obviously."
+
+**A link to a key no call made.** A link field has the node's type, so it never
+holds `none` or an unfilled hole; Clay, on a draft that let a miss answer
+`none`: "it shouldn't be a none that doesn't make any sense." The two forms
+follow the 2026-09-03 gavel, "failures are for the exceptional; the bang
+chooses the channel":
+
+- `list/tie` answers the map, or a marker record naming the broken link by its
+  from-key and to-key, for the caller to dispatch on. This is the form for
+  links read from input.
+- `list/tie!` answers a box holding the map, and a broken link is a failure
+  inside it. This is the form for links the program wrote itself.
+
+Where the keys and the links are literals the compiler can see the whole graph,
+and a broken link is refused at check, as an unfilled hole in a `build` block
+is.
+
+**Memory.** Every node one `tie` call makes is born in that call, and a
+reference resolves only to a node of the same call, so the cycle stays inside
+one birth cohort and the birthday theorem holds unchanged: pointers aim
+pastward except inside a cohort, and the cohort is freed as one unit when the
+scope that made it is left. A reference that resolved into a different `tie`
+call's nodes would be a pointer across birthdays, and the design gives the
+maker no way to name one.
+
+**What was set aside.** The iterating `build` block went with the gavel above.
+A knot on a local binding, `nodes = ... nodes ...`, was declined because
+rebinding already gives that line a meaning: `x = x + 1` reads the earlier
+`x`, so the same text would be a knot or a rebinding depending on whether some
+other binding stood above it.
+
+**Owes.**
+
+- `list/tie` and `list/tie!` on every engine, with goldens for a ring, a graph
+  read from a map of edges, each form's answer for a broken link, and the
+  compile-time refusal of a broken link in literal data.
+- The check that refuses a read through a reference, with error goldens for a
+  read in the maker and a read inside a helper the maker calls.
+- A fixture that ties and drops ten thousand small graphs and pins a flat
+  arena peak, which is the check that one call's nodes are allocated and
+  freed as one cohort.
+- Whether the existing deferred cell can hold a reference until `tie` resolves
+  it, or a new kind is needed, is the implementer's and changes nothing a user
+  writes.
+
+Whether `build` still earns its place beside `tie` is not settled here. It is
+the ledger's new open entry, filed in this commit.
