@@ -12,6 +12,11 @@ on:
 permissions:
   contents: write
 
+# The rust toolchain is pinned to the one ci.yml names, for the reason given
+# there. tests/the_toolchain_is_pinned_to_the_rows.rs holds them together.
+env:
+  RUST_TOOLCHAIN: "1.98.1"
+
 jobs:
   # The release exists before anything uploads to it. kq's workflow creates it
   # in parallel with the builds and papers over the race with `|| true`, which
@@ -41,7 +46,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
       - run: cargo build --release
       # The suite is what says this binary is the one the goldens describe.
       # A release built from a red commit is worth less than no release.
