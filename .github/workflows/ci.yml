@@ -27,6 +27,18 @@ on:
   # for: dispatch the run by hand and wait for real results.
   workflow_dispatch:
 
+# THE RUST TOOLCHAIN IS PINNED, and every job installs the version named here.
+# A golden whose measured-on line names rustc holds numbers that belong to that
+# rustc, and a counter reads the code under test and nothing else (the
+# 2026-09-15 rule). Under `@stable` the runner's rustc moved on its own after
+# 2026-10-01, from 1.98.1 to 1.99.0. Every gate that names rustc refused, and
+# the rows the runner printed fell by up to 2.55% on a tree whose code had not
+# changed. A new rustc now arrives in a pull request that moves this line and
+# re-sits every golden that names it. tests/the_toolchain_is_pinned_to_the_rows.rs
+# holds this line, the install steps and the goldens to one version.
+env:
+  RUST_TOOLCHAIN: "1.98.1"
+
 # One job per kind of check, so a red run names what broke on the PR page
 # instead of hiding it inside a single "test" job.
 jobs:
@@ -36,8 +48,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
           components: rustfmt
       - run: cargo fmt --check
 
@@ -53,8 +66,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
           components: clippy
       # --all-targets so the specs are linted too; without it the tests drift
       # while the library stays clean.
@@ -65,7 +79,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
       # the wasm engine test runs docs/kanso.wasm, which is built here and not
       # committed — every job that needs it builds it, so the third engine's
       # result is always about this commit's source
@@ -125,7 +141,9 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
       # the same reason the linux suite rebuilds it: the committed artifact is
       # whatever the last author remembered, and a stale one would fail this
       # job for a reason that has nothing to do with the host
@@ -156,7 +174,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
       - run: cargo test --test playground
 
   decoder:
@@ -164,7 +184,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
       - name: the checksum the decoder owes
         run: sh scripts/gates/native_checksum.sh
 
@@ -173,7 +195,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
       - run: |
           cargo build --release
           ./target/release/kanso run scripts/utf8_differential
@@ -183,7 +207,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
       # jekyll copies ./docs into ./_site, and the fingerprinter refuses a site
       # with no engine in it ("missing asset: kanso.wasm"), so the blob has to
       # exist before the copy rather than before the fingerprint. It is not
@@ -215,7 +241,9 @@ jobs:
     needs: cost-goldens
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
       - run: cargo build --release
       # The score and its per-term breakdown on the run page, not only in a
       # log somebody has to open and scroll. The script still gates; this is
@@ -244,7 +272,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       # the check is a kanso program, so the job compiles the toolchain it runs
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
       - run: cargo build --release
       - run: ./target/release/kanso run scripts/grammar_check
 
@@ -253,7 +283,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
       # book_check runs target/release/kanso directly
       - run: cargo build --release
       - run: sh scripts/book_check.sh
@@ -268,7 +300,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
       # preserve_none is an LLVM 19 calling convention, and the emitter probes
       # for it rather than assuming it: on clang 18 the probe fails and the
       # emitter writes the fallback. So without this install the binaries this
@@ -817,7 +851,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
       # kq caught a compiler bug that nineteen suites, ninety-eight
       # differential programs, three cost veins and every memory pin agreed
       # was not there: an in-place string concat printed 267 nul bytes at
@@ -887,7 +923,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
       - run: cargo build --release
       # asks every exported std function for the wrong thing, in every
       # argument position, and requires the two engines to answer identically
@@ -936,7 +974,9 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
       - name: rebuild the engine the pages load
         run: |
           rustup target add wasm32-unknown-unknown
@@ -956,7 +996,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
       - run: |
           rustup target add wasm32-unknown-unknown
           bash scripts/browser_differential.sh || {
@@ -1001,7 +1043,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
       - run: cargo build --release
       # Costs one compile and no builds: it reads this file against the table,
       # then applies every mutation in a throwaway worktree to check it still
@@ -1049,7 +1093,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
       # The ratchet runs other jobs' gates, so it needs what those jobs
       # install. It had neither valgrind nor the wasm target, and the two rows
       # whose gate runs callgrind were red here before any mutation was
@@ -1070,7 +1116,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.head_ref || github.ref_name }}
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
       - run: cargo build --release
       # NOT main-only. The row is what the numbers page charts, and building
       # it is the only thing that checks it assembles — a PR that breaks a

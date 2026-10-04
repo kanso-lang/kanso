@@ -29,6 +29,11 @@ on:
     - cron: '0 9 * * *'
   workflow_dispatch:
 
+# The rust toolchain is pinned to the one ci.yml names, for the reason given
+# there. tests/the_toolchain_is_pinned_to_the_rows.rs holds them together.
+env:
+  RUST_TOOLCHAIN: "1.98.1"
+
 jobs:
   prove:
     name: every mutation turns its gate red (shard ${{ matrix.shard }} of 8)
@@ -42,8 +47,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
           components: clippy, rustfmt
       # The ratchet runs other jobs' gates, so it needs what those jobs
       # install: the wasm target the browser rows' gates rebuild the blob
