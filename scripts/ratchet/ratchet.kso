@@ -4886,7 +4886,7 @@ tie_interp_resolves = row
 tie_serial = row
   "a tie ref that answers any open tie"
   true
-  "cargo test --release --test golden runtime_corpus_reports_endpoint_violations"
+  "cargo test --release --test golden runtime_corpus"
   "specs (unit, golden, differential)"
   (breaking "a_tie_ref_that_answers_any_open_tie")
   release
@@ -4894,7 +4894,7 @@ tie_serial = row
 tie_native_serial = row
   "a native tie ref that answers any open tie"
   true
-  "cargo test --release --test golden runtime_corpus_reports_endpoint_violations"
+  "cargo test --release --test golden runtime_corpus"
   "specs (unit, golden, differential)"
   (breaking "a_native_tie_ref_that_answers_any_open_tie")
   release
@@ -4907,7 +4907,9 @@ tie_native_depth = row
   (breaking "a_native_tie_stack_that_stops_at_256")
   release
 
-rows_c1zzzzzzza = text/concat rows_c1zzzzzzzb [tie_interp_resolves tie_serial tie_native_serial tie_native_depth]
+tie_fixes = [tie_interp_resolves tie_serial tie_native_serial tie_native_depth]
+
+rows_c1zzzzzzza = text/concat rows_c1zzzzzzzb tie_fixes
 
 rows_c = text/concat rows_c1zzzzzzza [itself]
 
