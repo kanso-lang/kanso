@@ -21303,3 +21303,95 @@ as. It just no longer proves this filter.
 A row's fixture can lose its path without failing anything, and only the
 nightly sees it. That ran for five days here because nothing was watching the
 scheduled run. Its failures now get read at each check-in, like a red PR.
+
+## 2026-10-05 — `list/tie` runs on the interpreter and is checked, and native refuses it by name
+
+The first two parts of the 2026-10-04 gavel, "a data-sized cycle is tied with
+`list/tie`, and `list/tie!` insists". `list/tie ids maker` and
+`list/tie! ids maker` are in std/list, and the interpreter runs both. The
+native engine stops with `list/tie is not built for native programs yet; the
+interpreter runs it (--interp)` when a program reaches either, which is the
+refusal the differential law asks of an engine that does not speak a feature
+yet. A program that imports std/list and never calls them is unaffected on
+both engines. The STATUS.md row stays, because native and the memory fixture
+are still owed.
+
+**How the interpreter ties.** Before the first node is made, `tie` makes one
+cell per id, a blackhole like the one a knotted constant uses. The maker gets
+the id and `ref`, which answers the cell for an id. A constructor already
+stores a blackhole cell rather than demanding it (the knot rule: "a
+constructor slot is where a knot ties"), so a node can hold a reference to a
+node not made yet. When every id is made, `tie` fills each cell with its node
+and answers the map from id to node. A walk through a field then forces the
+cell and finds the node, and the graph is cyclic.
+
+**A broken link.** `ref` of an id not in the list answers a fresh cell, so the
+node under construction still builds, and the call remembers the first such
+link. After the last node is made, `tie` answers `list/broken_link from to`
+instead of the map, where `from` is the id whose node asked and `to` is the
+id it named. `tie!` is `effect` over the same call, with the broken link
+turned into a failure inside the box that reads "tie! found a link from 1 to
+2, and no key made 2". A caller outside std/list cannot destructure the
+record, which is opaque across the import like every module's record, so it
+dispatches on `_:list/broken_link` and renders it.
+
+**What the ruling's rule about fields means in practice.** A reference is
+stored in a constructor's field and nowhere else. A list of references is
+therefore outside the rule, and the interpreter agrees: `list/map ids ref`
+builds its list through `push`, which demands its argument, and the blackhole
+stops the run. A node with several links holds a chain of records with one
+reference in each. The graph fixture does exactly that, with a `road` record
+per edge and a `no_road` marker at the end of each chain.
+
+The parameter is called `ids` rather than the ruling's `keys` because `keys`
+is a builtin and std/list may not rebind it.
+
+**Fixtures.** Four in the one-engine corpus, each with the interpreter's
+output and native's refusal: a three-station ring walked past its own start, a
+graph read from a map of edges with a cycle and a town two roads reach, `tie`
+answering a broken link and then a whole tie, and `tie!` answering a box that
+opens on success and fails on a broken link. The corpus ran entry files only,
+and an entry file cannot declare a type, so its harness now runs a library
+fixture through an import, as the micro corpus does. The one fixture already
+there is an entry file and runs as before.
+
+**The check.** Every call of the maker's `ref` must be an argument of a
+constructor. `ref` itself may be handed to a function the program declares,
+and that function's parameter is then held to the same rule, which is how a
+read inside a helper is found; handed to anything else, including a std
+function such as `list/map`, it is refused, because what happens to it there
+is out of the check's sight. A lambda inside the maker is walked as part of
+it, so `list/fold edges no_road (rest k -> road (ref k) rest)` passes: the
+call is still a constructor's argument. Where the ids are a list of literals
+and a link is a literal, a link to an id the list does not hold is refused at
+check rather than answered as a broken link. Three error goldens pin the three
+refusals: a read in the maker, a read in a helper the maker calls, and the
+literal broken link. Each was watched red with the check's call removed.
+
+**A std module tested from the checkout.** `kanso test lib/list` stamps the
+module's files `lib/list/...`, not `std/list/...`, so `builtin_tie` was refused
+as a user program reaching into the library. No std module with tests had
+called a builtin before, so the case had not come up. The refusing arm now
+asks whether the file sits in the toolchain's own std directory before it
+refuses. A correct program never reaches that arm, so the filesystem calls it
+makes cost nothing on the ordinary path.
+
+**The page.** The wasm engine hands builtins to the embedded interpreter, so
+`tie`'s argument refusal there is the interpreter's. The test that compares how
+the page and native complain
+about each std function's wrong arguments found native refusing `list/tie bad`
+with its "not built" sentence where the page said "tie takes a list of ids and
+a maker". Native now gives the same argument refusal first.
+
+**Ratchet.** Two rows. "a tie that never fills its cells" replaces the fill
+with nothing, so the ring's walk reaches a blackhole and the interpreter stops
+with "a lazy binding demands its own value"; the one-engine corpus goes red.
+"a tie reference read anywhere" removes the check's call; the error corpus
+goes red.
+
+**Still owed by the ruling.** Native `tie`. The cell cannot simply be the
+malloc'd thunk a knotted constant uses: the deep copy at a cohort pop keeps a
+thunk and redirects its result, so every tied node would leave its cell
+behind. The plan is for `tie` to rewrite each reference in the nodes it made
+once they are all made, and release the cells. The fixture that ties and drops
+ten thousand graphs with a flat arena peak waits on that.
