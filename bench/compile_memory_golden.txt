@@ -215,7 +215,10 @@ front_end_rounds=15
 # 7,523, a RISE of 18 (+0.2398%).
 # 2026-09-30, std/list gains `yield` and makes `iter` pub for the factory-only
 # ruling. front_end_visits 7,523 -> 7,526, a RISE of 3.
-front_end_visits=7526
+# 2026-10-05 (list/tie, ruled 2026-10-04): std/list gains `tie`, `tie!` and
+# their helper, and lib/list is in the corpus's imports. front_end_visits
+# 7,526 -> 7,555, a RISE of 29 (+0.3853%).
+front_end_visits=7555
 # 2026-08-31 (the AST's identifiers are inline names): 728,030 -> 713,606, a
 # fall of 14,424, or 1.98%. Banked. The peak falls with the traffic because a
 # short name's bytes now live inside the AST node the allocator already gave

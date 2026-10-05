@@ -4433,7 +4433,8 @@ impl<'a> Interp<'a> {
         let mut nodes = Entries::new();
         for key in keys {
             let held = vec![Value::int(at as i64), key.clone()];
-            let r = Value::Partial(Rc::new(Value::FnRef(Rc::from("builtin_tie_ref"))), Rc::new(held));
+            let r =
+                Value::Partial(Rc::new(Value::FnRef(Rc::from("builtin_tie_ref"))), Rc::new(held));
             let node = self.call(maker.clone(), vec![key.clone(), r], span, frame)?;
             let node = self.force_thunk(node)?;
             if is_failure(&node) {
