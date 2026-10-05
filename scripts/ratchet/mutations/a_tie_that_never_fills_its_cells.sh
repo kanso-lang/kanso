@@ -6,6 +6,7 @@
 # made. Without the fill a reference stays a blackhole, and the first walk
 # through one stops with "a lazy binding demands its own value".
 set -e
+grep -qF '*cell.borrow_mut() = ThunkState::Forced(node.clone());' src/eval.rs
 f=src/eval.rs
 line='                    *cell.borrow_mut() = ThunkState::Forced(node.clone());'
 [ "$(grep -cxF "$line" "$f")" -eq 1 ] || {
