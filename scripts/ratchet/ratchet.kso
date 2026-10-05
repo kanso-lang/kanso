@@ -4824,7 +4824,19 @@ tie_fills = row
 
 rows_c1zzzzzzze = text/concat rows_c1zzzzzzzf [tie_fills]
 
-rows_c = text/concat rows_c1zzzzzzze [itself]
+# A tie's reference goes into a constructor's field and nowhere else, and a
+# literal link to an id the list does not hold is refused (2026-10-04).
+tie_check = row
+  "a tie reference read anywhere"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_tie_reference_read_anywhere")
+  release
+
+rows_c1zzzzzzzd = text/concat rows_c1zzzzzzze [tie_check]
+
+rows_c = text/concat rows_c1zzzzzzzd [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

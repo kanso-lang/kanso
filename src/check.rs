@@ -5115,6 +5115,26 @@ struct Declared<'a> {
     types: TypeNames<'a>,
 }
 
+/// Whether `file` is one of the shipped library's own files, read from disk.
+/// Imported, a std module's files are stamped `std/...`; tested from the
+/// checkout, as `kanso test lib/list` does, the same files are stamped
+/// `lib/...`, and they may reach the builtins they wrap like any other copy of
+/// themselves. Asked only on the arm that would refuse a builtin, which a
+/// correct program never reaches, so its filesystem calls cost nothing there.
+fn in_shipped_library(file: &str) -> bool {
+    let Some(module) = std::path::Path::new(file).parent() else { return false };
+    let Ok(module) = std::fs::canonicalize(module) else { return false };
+    let roots = [
+        std::env::var("KANSO_STD").ok().map(std::path::PathBuf::from),
+        std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.join("../../lib"))),
+    ];
+    roots
+        .into_iter()
+        .flatten()
+        .filter_map(|r| std::fs::canonicalize(r).ok())
+        .any(|root| module.parent() == Some(root.as_path()))
+}
+
 struct Resolver<'a> {
     globals: &'a HashSet<&'a str>,
     locals: Vec<Local<'a>>,
@@ -5124,6 +5144,9 @@ struct Resolver<'a> {
     /// std-origin files (stamped `std/...` by the loader) may name internal
     /// builtins through the builtin_ prefix; nothing else may.
     std_origin: bool,
+    /// The file, for the one case `std_origin` misses: a std module tested
+    /// from the checkout, which the loader stamps `lib/...`.
+    file: &'a str,
 }
 
 fn check_fn_body_shadow<'a>(
@@ -5139,6 +5162,7 @@ fn check_fn_body_shadow<'a>(
         locals: std::mem::take(locals),
         diags: Vec::new(),
         std_origin: decl.file.starts_with("std/"),
+        file: &decl.file,
         shadowable,
         declared,
     };
@@ -5496,6 +5520,7 @@ impl<'a> Resolver<'a> {
             // instructions more for an answer only the refusal needs.
             match self.std_origin && BUILTINS.contains(&stripped) {
                 true => return,
+                false if BUILTINS.contains(&stripped) && in_shipped_library(self.file) => return,
                 false if !name.contains('/') => {
                     self.diags.push(Diagnostic::new(
                         "name",
