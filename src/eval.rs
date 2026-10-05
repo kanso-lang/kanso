@@ -4514,6 +4514,13 @@ impl<'a> Interp<'a> {
         Ok(value)
     }
 
+    /// Call a value from outside the evaluator. The page reaches this with a
+    /// callable the interpreter made and handed out, which is the `ref` a
+    /// `list/tie` hands its maker.
+    pub fn call_value(&self, callee: Value, args: Vec<Value>, span: Span) -> EvalResult {
+        self.call(callee, args, span, &None)
+    }
+
     /// Force a cell from outside the evaluator.
     pub fn demand(&self, value: &Value) -> EvalResult {
         self.force_thunk(value.clone())

@@ -21304,16 +21304,12 @@ A row's fixture can lose its path without failing anything, and only the
 nightly sees it. That ran for five days here because nothing was watching the
 scheduled run. Its failures now get read at each check-in, like a red PR.
 
-## 2026-10-05 — `list/tie` ties a cycle sized by data, on the interpreter and native
+## 2026-10-05 — `list/tie` ties a cycle sized by data, on every engine
 
 The 2026-10-04 gavel, "a data-sized cycle is tied with `list/tie`, and
 `list/tie!` insists", built. `list/tie ids maker` and `list/tie! ids maker` are
-in std/list, and the interpreter and native run both. The page refuses them by
-name, "the playground cannot tie cycles yet: list/tie", because a closure the
-page compiled cannot call the `ref` its embedded interpreter makes; the four
-micro fixtures are listed as wasm gaps with that text. The STATUS.md row can
-come off when the page runs them, which is the one thing the ruling's "on every
-engine" still lacks.
+in std/list, and the interpreter, native and the page run both. The STATUS.md
+row can come off when this lands.
 
 **How the interpreter ties.** Before the first node is made, `tie` makes one
 cell per id, a blackhole like the one a knotted constant uses. The maker gets
@@ -21401,7 +21397,19 @@ as a hundred rings measured the same way, while allocations go from 1,602 to
 160,002. Neither engine counts a tie cell as a lazy-tier thunk, so those
 counters read zero on both and the oracle's comparison agrees.
 
-**Ratchet.** Three rows, each watched red:
+**The page.** The page hands builtins to its embedded interpreter, so the
+interpreter runs `tie` there too, and calls the maker the page compiled. Two
+things stood between that and a working program. The maker calls `ref`, which
+is a partial the interpreter made, and the page's call refused anything but a
+closure it had compiled: "`<fn>` is not callable". It now hands such a value
+back to the interpreter, where the tie it belongs to is still running. And a
+field the maker filled holds the interpreter's cell, which the page's field
+read passed on as it was, so the graph fixture's walk matched no arm of
+`trail`. The read now asks the interpreter for the cell's value, as it already
+did for one of its own deferred bindings. The cells stay in the graph on the
+page, as they do on the interpreter; only native rewrites them away.
+
+**Ratchet.** Five rows, each watched red:
 
 - "a tie that never fills its cells" replaces the interpreter's fill with
   nothing; the ring's walk reaches a blackhole and the micro corpus fails.
@@ -21410,3 +21418,7 @@ counters read zero on both and the oracle's comparison agrees.
 - "a native tie that frees cells still in its graph" skips native's rewrite;
   the ring's first step reads a released blackhole and native stops with "a
   lazy binding demands its own value".
+- "a page that cannot call a tie ref" restores the page's refusal; all four
+  tie fixtures die as not callable and the wasm corpus fails.
+- "a page that reads a tie cell as a value" skips the read through the cell;
+  the graph fixture matches no arm of `trail` and the wasm corpus fails.

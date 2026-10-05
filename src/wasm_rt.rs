@@ -280,6 +280,14 @@ fn partial_apply(env: u32, fresh: Vec<u32>) -> u32 {
 /// A container read reaches through a deferral. The answer is written back
 /// over the closure, so a cycle read twice costs one call.
 fn forced(v: Value) -> Value {
+    // A cell the interpreter made, which the page meets in a field a
+    // `list/tie` maker filled with a `ref`. The interpreter reads it.
+    if let Value::Thunk(_) = v {
+        return match with_interp(|interp| interp.demand(&v)) {
+            Ok(value) => forced(value),
+            Err(rt) => die(rt.message),
+        };
+    }
     let Value::TableFn(h) = v else {
         return v;
     };
@@ -403,6 +411,16 @@ fn call_closure(c_h: u32, arg_handles: Vec<u32>) -> u32 {
         if let Slot::V(value) = v {
             if is_failure(&value) {
                 return c_h;
+            }
+            // A callable the embedded interpreter made, which the page meets
+            // as the `ref` a `list/tie` hands its maker. The interpreter calls
+            // it, and the tie it belongs to is the one still running there.
+            if matches!(value, Value::FnRef(_) | Value::Partial(..) | Value::Closure(_)) {
+                let args = arg_handles.iter().map(|&h| value_of(h)).collect();
+                return match with_interp(|interp| interp.call_value(value, args, SPAN0)) {
+                    Ok(v) => push(Slot::V(v)),
+                    Err(rt) => die(rt.message),
+                };
             }
             die(format!("`{}` is not callable", render_demanded(&value, false)));
         }
@@ -1206,13 +1224,6 @@ fn builtin_call(name_lit: u32, n: u32, moves: bool) -> u32 {
         // hands back a list still holding it. See
         // a_description_rides_through_a_builtin.
         args.push(value_of(h));
-    }
-    // `list/tie` hands the maker a `ref` the embedded interpreter makes, and
-    // a closure the page compiled cannot call a host value, so the page says
-    // what it lacks instead of dying on the first `ref`. The argument check
-    // comes first so a wrong argument is refused in the other engines' words.
-    if name == "tie" && args.first().is_some_and(|ids| matches!(ids, Value::List(_))) {
-        die("the playground cannot tie cycles yet: list/tie".to_string());
     }
     let result = with_interp(|interp| interp.call_builtin(&name, args, SPAN0, &None));
     match result {
