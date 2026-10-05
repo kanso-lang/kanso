@@ -3,6 +3,12 @@ pub type bounded
   stop
   source
 
+# The link `tie` could not make: the node made for key `from` asked for a
+# reference to `to`, and no key in the list was `to`.
+pub type broken_link
+  from
+  to
+
 pub type capped
   left
   source
@@ -494,6 +500,26 @@ fn unwrap_found found
   found
 
 # both build through put, so a colliding key keeps its last value
+# Ruled 2026-10-04. `tie ids maker` calls `maker id ref` once for each id
+# and answers the map from key to the node it made. `ref k` is a reference to
+# the node made for `k`, and the maker may only store it in a constructor's
+# field, because that node may not be made yet. When every key is made the
+# references resolve, so the nodes may form cycles. A reference to a key that
+# is not in the list answers a `broken_link` instead of the map.
+pub fn tie ids maker
+  builtin_tie ids maker (from to -> broken_link from to)
+
+# `tie!` is for links the program wrote itself: a broken one is a failure in
+# the box rather than a record to dispatch on.
+pub fn tie! ids maker
+  effect (insisted_tie (tie ids maker))
+
+fn insisted_tie (broken_link from to)
+  err "tie! found a link from {from} to {to}, and no key made {to}"
+
+fn insisted_tie nodes
+  nodes
+
 pub fn to_h pairs
   fold pairs {} (acc kv -> if (length kv < 2) acc (put acc kv[1] kv[2]))
 

@@ -1,0 +1,34 @@
+import "std/list"
+
+# Ruled 2026-10-04: `list/tie` makes a cycle sized by data. Each key's maker
+# gets `ref`, stores the reference in a constructor's field, and once every
+# key is made the references resolve to the nodes, so walking the ring comes
+# back around. Native refuses `tie` until it is built there.
+type station
+  name
+  next
+
+fn successor "a"
+  "b"
+
+fn successor "b"
+  "c"
+
+fn successor _
+  "a"
+
+fn tour none
+  "no such station"
+
+fn tour s
+  walk s 7
+
+fn walk (station name _) 0
+  name
+
+fn walk (station name next) n
+  "{name} {walk next (n - 1)}"
+
+pub play =
+  ring = list/tie ["a" "b" "c"] (k ref -> station k (ref (successor k)))
+  print (tour ring["a"])

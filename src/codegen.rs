@@ -1413,6 +1413,7 @@ declare %KValue @k_b_bit_shl(%KValue, %KValue)
 declare %KValue @k_b_bit_shr(%KValue, %KValue)
 declare %KValue @k_b_sqrt(%KValue)
 declare %KValue @k_b_round(%KValue)
+declare %KValue @k_b_tie(%KValue, %KValue, %KValue)
 declare %KValue @k_b_to_int(%KValue, ptr)
 declare %KValue @k_b_to_bytes(%KValue, ptr)
 declare %KValue @k_b_render_value(%KValue)
@@ -2059,7 +2060,7 @@ mod the_declares_table_is_the_scan_it_replaced {
     }
 }
 
-pub(crate) const BUILTIN_CALLS: [&str; 60] = [
+pub(crate) const BUILTIN_CALLS: [&str; 61] = [
     "effect",
     "net_port",
     "start",
@@ -2120,6 +2121,7 @@ pub(crate) const BUILTIN_CALLS: [&str; 60] = [
     "to_float",
     "to_int",
     "values",
+    "tie",
 ];
 
 /// The bit builtins that have an inline twin. Each is one machine op on two

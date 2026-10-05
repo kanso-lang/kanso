@@ -156,6 +156,14 @@ pub enum ThunkState {
     Forced(Value),
 }
 
+/// A `list/tie` call while its maker runs: the cell each key's node will
+/// fill, made before the first node, and the first link the maker asked for
+/// that no key will make.
+struct Tie {
+    cells: Entries,
+    broken: Option<(Value, Value)>,
+}
+
 /// An err value carries its propagation trace: the origin baked at the
 /// construction site ("{fn} at {file}:{line}"; executor-born errs have none)
 /// and one hop per dispatcher failure pass-through. The happy path never
@@ -1399,6 +1407,9 @@ pub struct Interp<'a> {
     /// the constant is still being computed gets the unforced cell, which is
     /// how a value that names itself gets a value at all.
     knots: RefCell<Map<String, Rc<RefCell<ThunkState>>>>,
+    /// One entry per `list/tie` call still making its nodes, innermost last.
+    /// A `ref` the maker holds names its call by position here.
+    ties: RefCell<Vec<Tie>>,
     /// The constants that reach themselves through a chain of mentions --
     /// the same set the emitter computes, so the two engines count the same
     /// cells. Every constant goes through `knotted`, but only these are the
@@ -1524,6 +1535,7 @@ impl<'a> Interp<'a> {
             thunk_stats: ThunkStats::default(),
             depth: Cell::new(0),
             knots: RefCell::new(Map::default()),
+            ties: RefCell::new(Vec::new()),
             cycles: std::cell::OnceCell::new(),
             in_place: std::cell::OnceCell::new(),
             moved: std::cell::OnceCell::new(),
@@ -4041,6 +4053,61 @@ impl<'a> Interp<'a> {
                 };
                 Ok(Value::int(out))
             }
+            // Ruled 2026-10-04: `list/tie keys maker` calls the maker once
+            // per key with the key and `ref`, and answers the map from key to
+            // node. Every key's cell exists before the first node is made, so
+            // a reference to a key made later is the same cell that key's
+            // node fills. A reference is stored, never read, while the maker
+            // runs: a constructor keeps a cell that is still a blackhole.
+            b"tie" => {
+                let [keys, maker, broken] = arity(args, name, span)?;
+                let Value::List(keys) = keys else {
+                    return Err(RuntimeError {
+                        message: "tie takes a list of keys and a maker".to_string(),
+                        span,
+                    });
+                };
+                let mut cells = Entries::new();
+                for key in keys.iter() {
+                    let cell = Rc::new(RefCell::new(ThunkState::Blackhole));
+                    cells.insert(map_key(key.clone(), span)?, Value::Thunk(cell));
+                }
+                let at = self.ties.borrow().len();
+                self.ties.borrow_mut().push(Tie { cells, broken: None });
+                let made = self.make_tied(at, &keys, maker, span, frame);
+                let tie = self.ties.borrow_mut().pop().expect("the tie this call pushed");
+                let made = made?;
+                let Value::Map(nodes) = &made else { return Ok(made) };
+                if let Some((from, to)) = tie.broken {
+                    return self.call(broken, vec![from, to], span, frame);
+                }
+                for (key, cell) in tie.cells.iter() {
+                    let (Value::Thunk(cell), Some(node)) = (cell, nodes.get(key)) else {
+                        continue;
+                    };
+                    *cell.borrow_mut() = ThunkState::Forced(node.clone());
+                }
+                Ok(made)
+            }
+            // What a maker's `ref` answers: the cell for `key`. A key no call
+            // makes still gets a cell, so the node under construction is
+            // built, and the tie answers the first such link as broken.
+            b"tie_ref" => {
+                let [at, from, key] = arity(args, name, span)?;
+                let Value::Int(at) = at else { unreachable!("a ref carries its tie's position") };
+                let at = at.to_i64().expect("a tie's position is small") as usize;
+                let mut ties = self.ties.borrow_mut();
+                let tie = &mut ties[at];
+                let wanted = map_key(key.clone(), span)?;
+                if let Some(cell) = tie.cells.get(&wanted) {
+                    let cell: Value = cell.clone();
+                    return Ok(cell);
+                }
+                if tie.broken.is_none() {
+                    tie.broken = Some((from, key));
+                }
+                Ok(Value::Thunk(Rc::new(RefCell::new(ThunkState::Blackhole))))
+            }
             b"sqrt" => {
                 let [x] = arity(args, name, span)?;
                 match x {
@@ -4353,6 +4420,30 @@ impl<'a> Interp<'a> {
     /// A list only stores what it is given, so an element naming a constant
     /// still being computed waits rather than demanding a value that does not
     /// exist yet.
+    /// Runs a tie's maker over its keys and answers the map of what it made,
+    /// or the first failure a maker answered.
+    fn make_tied(
+        &self,
+        at: usize,
+        keys: &[Value],
+        maker: Value,
+        span: Span,
+        frame: &Frame,
+    ) -> EvalResult {
+        let mut nodes = Entries::new();
+        for key in keys {
+            let held = vec![Value::int(at as i64), key.clone()];
+            let r = Value::Partial(Rc::new(Value::FnRef(Rc::from("builtin_tie_ref"))), Rc::new(held));
+            let node = self.call(maker.clone(), vec![key.clone(), r], span, frame)?;
+            let node = self.force_thunk(node)?;
+            if is_failure(&node) {
+                return Ok(node);
+            }
+            nodes.insert(map_key(key.clone(), span)?, node);
+        }
+        Ok(Value::Map(Rc::new(nodes)))
+    }
+
     fn stored(&self, expr: &Expr, env: &Option<Rc<Env>>, frame: &Frame) -> EvalResult {
         if !self.awaits_a_knot(expr) {
             return self.eval(expr, env, frame);

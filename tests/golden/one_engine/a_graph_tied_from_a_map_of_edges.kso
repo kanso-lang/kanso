@@ -1,0 +1,50 @@
+import "std/list"
+
+# The ruling's second shape: links read from a map of edges. A reference is
+# stored only in a constructor's field, so a town with several roads holds a
+# chain of `road` records, one reference in each. The graph has a cycle (ash,
+# cedar, ash) and a town two roads lead to, and `trail` follows every road to
+# a depth, so it stops on the cycle.
+type town
+  name
+  roads
+
+type road
+  to
+  rest
+
+type no_road
+
+edges = { "ash":["birch" "cedar"] "birch":["cedar"] "cedar":["ash"] }
+
+fn roads_of none
+  []
+
+fn roads_of names
+  names
+
+fn make name ref
+  roads = list/fold (roads_of edges[name]) no_road (rest k -> road (ref k) rest)
+  town name roads
+
+fn trail (town name _) 0
+  name
+
+fn trail (town name roads) depth
+  "{name} ({ahead roads (depth - 1)} )"
+
+fn ahead no_road _
+  ""
+
+fn ahead (road to rest) depth
+  "{ahead rest depth} {trail to depth}"
+
+fn from none
+  "no such town"
+
+fn from t
+  trail t 3
+
+pub play =
+  towns = list/tie (keys edges) make
+  print (from towns["ash"])

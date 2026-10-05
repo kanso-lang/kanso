@@ -10369,6 +10369,15 @@ K_DOORCC KValue k_b_to_float_slice(KValue cs, KValue fromv, KValue tov, const ch
     return k_b_to_float(k_b_slice(cs, fromv, tov), origin);
 }
 
+/* Ruled 2026-10-04 and built on the interpreter first. A native program that
+   reaches `list/tie` stops here with the reason, which is the refusal the
+   differential law asks of an engine that does not speak a feature yet. A
+   program that imports std/list without calling it never reaches this. */
+KValue k_b_tie(KValue ids, KValue maker, KValue broken) {
+    (void)ids; (void)maker; (void)broken;
+    k_die("list/tie is not built for native programs yet; the interpreter runs it (--interp)");
+}
+
 KValue k_b_sqrt(KValue v) {
     if (!k_not_failure(v)) return v;
     if (v.tag == K_INT) return k_float(sqrt((double)v.payload));

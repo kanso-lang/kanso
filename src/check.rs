@@ -3,7 +3,7 @@ use crate::diag::{article, Diagnostic, Span};
 use crate::hash::{Map as HashMap, Set as HashSet};
 use num_traits::Zero;
 
-pub const BUILTINS: [&str; 63] = [
+pub const BUILTINS: [&str; 65] = [
     "annotate",
     "append",
     "args",
@@ -67,6 +67,8 @@ pub const BUILTINS: [&str; 63] = [
     "net_read",
     "net_write",
     "net_close",
+    "tie",
+    "tie_ref",
 ];
 
 /// The bare-name subset: what resolves without an import. Everything else
@@ -91,7 +93,7 @@ pub const AMBIENT: [&str; 12] = [
 /// `native backend: `length` takes 1 argument(s)` and no span, the page
 /// died at the call, and `kanso check` said ok. So the counts live here,
 /// beside the names, and every reader takes them from one place.
-pub const BUILTIN_ARITY: [(&str, usize); 67] = [
+pub const BUILTIN_ARITY: [(&str, usize); 69] = [
     ("accept", 1),
     ("annotate", 2),
     ("append", 2),
@@ -150,6 +152,8 @@ pub const BUILTIN_ARITY: [(&str, usize); 67] = [
     ("start", 2),
     ("stdin", 0),
     ("sum", 1),
+    ("tie", 3),
+    ("tie_ref", 3),
     ("to_bytes", 1),
     ("to_float", 1),
     ("to_int", 1),

@@ -4811,7 +4811,20 @@ toolchain_pinned = row
 
 rows_c1zzzzzzzf = text/concat rows_c1zzzzzzzg [toolchain_pinned]
 
-rows_c = text/concat rows_c1zzzzzzzf [itself]
+# `list/tie` fills each key's cell with its node once every node is made,
+# which is what turns the references the maker stored into a cycle
+# (2026-10-04).
+tie_fills = row
+  "a tie that never fills its cells"
+  true
+  "cargo test --release --test golden one_engine_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_tie_that_never_fills_its_cells")
+  release
+
+rows_c1zzzzzzze = text/concat rows_c1zzzzzzzf [tie_fills]
+
+rows_c = text/concat rows_c1zzzzzzze [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
