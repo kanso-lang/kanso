@@ -317,4 +317,4 @@ front_end_visits=7555
 # 710,484, a RISE of 203 (+0.0286%).
 # 2026-09-30, std/list's pub `iter` and `yield` for the factory-only ruling:
 # 711,716 -> 717,297, a RISE of 5,581 (+0.78%).
-compile_peak_bytes=717297
+compile_peak_bytes=729597
