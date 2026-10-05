@@ -1,0 +1,7 @@
+import "../steps"
+
+pub fn kind _:steps/step
+  "a step"
+
+pub fn kind x
+  "not a step: {x}"

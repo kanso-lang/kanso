@@ -21260,3 +21260,46 @@ other binding stood above it.
 
 Whether `build` still earns its place beside `tie` is not settled here. It is
 the ledger's new open entry, filed in this commit.
+
+## 2026-10-05 — a ratchet row went blind when its fixture lost its path
+
+The nightly ratchet has failed on main every day since 2026-10-01. Seven of
+its eight shards passed each time. The eighth reported one row as BLIND, "an
+imported origin prefixed twice": its mutation went in and the gate it names,
+the micro corpus, stayed green.
+
+The mutation removes the filter in the loader that leaves an already-qualified
+type origin alone. A module that imports std/list holds a twin of `list/step`
+whose origin is `list/step`. When that module is imported in turn, the loader
+renames the twin `steps/step`. Without the filter, its origin becomes
+`steps/list/step`, which no declaration has.
+
+The fixture for that row, an_imported_record_keeps_its_name, built a record
+through its short name, `step 1 [5]`. That construction reached the renamed
+twin, and the twin's origin decided what the record printed as. kanso#1762
+refused short-name construction under the per-field-pub gavel and rewrote the
+fixture to build its records through std/list's factories. That was correct
+for the fixture's subject. It also meant nothing in the micro corpus reached
+the renamed twin's origin any more. The fixture's remaining pattern resolves
+through the bare twin, which this loop does not touch. A probe at the filter
+confirmed the line still runs for every imported record, and a probe in
+`canonicalize_types` showed the pattern going through `step`, not
+`<module>/step`. The nightly that first ran after #1762 merged was the first
+to go red.
+
+A pattern on `steps/step` from an importer is refused as opaque, but an
+ascription is not. So the new fixture, tests/golden/twin_origin, has three
+modules: `steps` imports std/list, `kinds` imports `steps` and ascribes
+`_:steps/step`, and the entry calls `kinds/kind` on a step and on an int. On
+main both engines print `a step` and `not a step: 4`. Under the mutation,
+native refuses the build with `unknown type steps/list/step` and the
+interpreter sends the step to the other arm. The spec,
+tests/a_twin_named_from_two_imports_away.rs, was watched red that way, and the
+row now names it as its gate.
+
+The micro fixture stays as it is. It still pins what an imported record prints
+as. It just no longer proves this filter.
+
+A row's fixture can lose its path without failing anything, and only the
+nightly sees it. That ran for five days here because nothing was watching the
+scheduled run. Its failures now get read at each check-in, like a red PR.

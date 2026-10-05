@@ -2,10 +2,11 @@
 # A type twin's qualified origin is prefixed with the importing module's name.
 #
 # An import's pub type also exists under its short name, as a clone that
-# remembers the declaration it came from, `list/step`. The loader leaves an
-# origin that already carries a qualification alone. Prefixed again, it names
-# a type nothing declares: a record built by the short name prints under the
-# wrong name, native prints `record`, and a pattern on the type misses it.
+# remembers the declaration it came from, `list/step`. When the module holding
+# that clone is imported in turn, the loader renames it `steps/step` and leaves
+# its already-qualified origin alone. Prefixed again, the origin names a type
+# nothing declares: an ascription `_:steps/step` misses a step in the
+# interpreter, and native refuses the build with `unknown type`.
 set -e
 f=src/lib.rs
 grep -q "if let Some(o) = ty.origin.as_mut().filter(|o| !ast::has_slash(o)) {" src/lib.rs

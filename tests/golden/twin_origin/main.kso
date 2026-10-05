@@ -1,0 +1,5 @@
+import "./kinds"
+import "./steps"
+
+print (kinds/kind (steps/one 4))
+print (kinds/kind 4)
