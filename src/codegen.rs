@@ -2060,6 +2060,29 @@ mod the_declares_table_is_the_scan_it_replaced {
     }
 }
 
+/// Whether a program of the user's calls `list/tie` or `list/tie!`. Their
+/// makers store a reference still being made in a constructor's field, which
+/// is the same deferral a knotted constant needs, so a constructor in such a
+/// program keeps a blackhole rather than demanding it. Asked of the user's
+/// declarations only: std/list's `tie!` calls `tie`, and every program that
+/// imports the module would otherwise pay for a feature it never calls. The
+/// module is known by its names rather than its file, because a module
+/// loaded from the checkout is stamped `lib/` rather than `std/`.
+fn ties(program: &Program) -> bool {
+    fn mentions(e: &Expr) -> bool {
+        match e {
+            Expr::Ident(n, _, _) | Expr::Partial(n, _) => n == "list/tie" || n == "list/tie!",
+            _ => crate::any_child(e, mentions),
+        }
+    }
+    let stmt = |st: &Stmt| match st {
+        Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
+            mentions(expr)
+        }
+    };
+    program.fns.iter().filter(|d| !d.name.starts_with("list/")).any(|d| d.body.iter().any(stmt))
+}
+
 pub(crate) const BUILTIN_CALLS: [&str; 61] = [
     "effect",
     "net_port",
@@ -2627,7 +2650,7 @@ fn emit_ir_for(
         lift_counter: 0,
         fn_value_wrappers: Vec::new(),
         builtin_value_wrappers: Vec::new(),
-        defers_self_reference: !knotted.is_empty(),
+        defers_self_reference: !knotted.is_empty() || ties(program),
         knotted,
         print_value_wrapper: false,
         caf_cells: Vec::new(),

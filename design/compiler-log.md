@@ -21304,17 +21304,16 @@ A row's fixture can lose its path without failing anything, and only the
 nightly sees it. That ran for five days here because nothing was watching the
 scheduled run. Its failures now get read at each check-in, like a red PR.
 
-## 2026-10-05 — `list/tie` runs on the interpreter and is checked, and native refuses it by name
+## 2026-10-05 — `list/tie` ties a cycle sized by data, on the interpreter and native
 
-The first two parts of the 2026-10-04 gavel, "a data-sized cycle is tied with
-`list/tie`, and `list/tie!` insists". `list/tie ids maker` and
-`list/tie! ids maker` are in std/list, and the interpreter runs both. The
-native engine stops with `list/tie is not built for native programs yet; the
-interpreter runs it (--interp)` when a program reaches either, which is the
-refusal the differential law asks of an engine that does not speak a feature
-yet. A program that imports std/list and never calls them is unaffected on
-both engines. The STATUS.md row stays, because native and the memory fixture
-are still owed.
+The 2026-10-04 gavel, "a data-sized cycle is tied with `list/tie`, and
+`list/tie!` insists", built. `list/tie ids maker` and `list/tie! ids maker` are
+in std/list, and the interpreter and native run both. The page refuses them by
+name, "the playground cannot tie cycles yet: list/tie", because a closure the
+page compiled cannot call the `ref` its embedded interpreter makes; the four
+micro fixtures are listed as wasm gaps with that text. The STATUS.md row can
+come off when the page runs them, which is the one thing the ruling's "on every
+engine" still lacks.
 
 **How the interpreter ties.** Before the first node is made, `tie` makes one
 cell per id, a blackhole like the one a knotted constant uses. The maker gets
@@ -21346,14 +21345,13 @@ per edge and a `no_road` marker at the end of each chain.
 The parameter is called `ids` rather than the ruling's `keys` because `keys`
 is a builtin and std/list may not rebind it.
 
-**Fixtures.** Four in the one-engine corpus, each with the interpreter's
-output and native's refusal: a three-station ring walked past its own start, a
-graph read from a map of edges with a cycle and a town two roads reach, `tie`
-answering a broken link and then a whole tie, and `tie!` answering a box that
-opens on success and fails on a broken link. The corpus ran entry files only,
-and an entry file cannot declare a type, so its harness now runs a library
-fixture through an import, as the micro corpus does. The one fixture already
-there is an entry file and runs as before.
+**Fixtures.** Four in the micro corpus: a three-station ring walked past its
+own start, a graph read from a map of edges with a cycle and a town two roads
+reach, `tie` answering a broken link and then a whole tie, and `tie!` answering
+a box that opens on success and fails on a broken link. They started in the one-engine
+corpus while native refused them, and that corpus's harness learned to run a
+library fixture through an import as the micro corpus does; with native built
+they moved to the micro corpus, and the harness change stays.
 
 **The check.** Every call of the maker's `ref` must be an argument of a
 constructor. `ref` itself may be handed to a function the program declares,
@@ -21376,22 +21374,39 @@ asks whether the file sits in the toolchain's own std directory before it
 refuses. A correct program never reaches that arm, so the filesystem calls it
 makes cost nothing on the ordinary path.
 
-**The page.** The wasm engine hands builtins to the embedded interpreter, so
-`tie`'s argument refusal there is the interpreter's. The test that compares how
-the page and native complain
-about each std function's wrong arguments found native refusing `list/tie bad`
-with its "not built" sentence where the page said "tie takes a list of ids and
-a maker". Native now gives the same argument refusal first.
+**Wrong arguments.** The test that compares how the page and native complain
+about each std function's wrong arguments found the two disagreeing on
+`list/tie bad`. All three engines now refuse ids that are not a list with
+"tie takes a list of ids and a maker" before anything else.
 
-**Ratchet.** Two rows. "a tie that never fills its cells" replaces the fill
-with nothing, so the ring's walk reaches a blackhole and the interpreter stops
-with "a lazy binding demands its own value"; the one-engine corpus goes red.
-"a tie reference read anywhere" removes the check's call; the error corpus
-goes red.
+**Native.** `k_b_tie` keeps one cell per id, a blackhole from the lazy tier's
+free list, and hands the maker a runtime closure as `ref`. A program of the
+user's that names `list/tie` or `list/tie!` turns on the constructor rule a
+knotted constant already uses, so a field keeps a blackhole rather than
+demanding it; std/list's own declarations do not count, or every program that
+imports the module would pay for a feature it never calls. When every node is
+made, each cell is filled. The cells do not stay in the graph: a thunk lives
+outside the arenas, and the deep copy at a cohort pop keeps a thunk and
+redirects its result, so a graph holding cells would leave one behind per node
+each time it was tied and dropped. So a walk rewrites every field holding a
+filled cell to hold the node itself, through records, lists, map values and
+subtype wrappers, never through a cell and never twice through one value, and
+then the cells go back to the free list. A link to an id the list does not hold
+freezes both ids, because the one asked for may live in a region a helper's
+return is about to free.
 
-**Still owed by the ruling.** Native `tie`. The cell cannot simply be the
-malloc'd thunk a knotted constant uses: the deep copy at a cohort pop keeps a
-thunk and redirects its result, so every tied node would leave its cell
-behind. The plan is for `tie` to rewrite each reference in the nodes it made
-once they are all made, and release the cells. The fixture that ties and drops
-ten thousand graphs with a flat arena peak waits on that.
+**The memory fixture.** `ten_thousand_ties_dropped` ties ten thousand two-node
+rings and keeps a count from each. Its arena peak is 1,048,576 bytes, the same
+as a hundred rings measured the same way, while allocations go from 1,602 to
+160,002. Neither engine counts a tie cell as a lazy-tier thunk, so those
+counters read zero on both and the oracle's comparison agrees.
+
+**Ratchet.** Three rows, each watched red:
+
+- "a tie that never fills its cells" replaces the interpreter's fill with
+  nothing; the ring's walk reaches a blackhole and the micro corpus fails.
+- "a tie reference read anywhere" removes the check's call; the error corpus
+  fails.
+- "a native tie that frees cells still in its graph" skips native's rewrite;
+  the ring's first step reads a released blackhole and native stops with "a
+  lazy binding demands its own value".

@@ -1207,6 +1207,13 @@ fn builtin_call(name_lit: u32, n: u32, moves: bool) -> u32 {
         // a_description_rides_through_a_builtin.
         args.push(value_of(h));
     }
+    // `list/tie` hands the maker a `ref` the embedded interpreter makes, and
+    // a closure the page compiled cannot call a host value, so the page says
+    // what it lacks instead of dying on the first `ref`. The argument check
+    // comes first so a wrong argument is refused in the other engines' words.
+    if name == "tie" && args.first().is_some_and(|ids| matches!(ids, Value::List(_))) {
+        die("the playground cannot tie cycles yet: list/tie".to_string());
+    }
     let result = with_interp(|interp| interp.call_builtin(&name, args, SPAN0, &None));
     match result {
         Ok(v) => push(Slot::V(v)),

@@ -1,9 +1,9 @@
 import "std/list"
 
-# Ruled 2026-10-04: `list/tie` makes a cycle sized by data. Each key's maker
-# gets `ref`, stores the reference in a constructor's field, and once every
-# key is made the references resolve to the nodes, so walking the ring comes
-# back around. Native refuses `tie` until it is built there.
+# Ruled 2026-10-04: `list/tie` makes a cycle sized by data. The maker is
+# called once per id with `ref`, stores the reference in a constructor's
+# field, and once every id is made the references resolve to the nodes, so
+# walking the ring comes back around.
 type station
   name
   next

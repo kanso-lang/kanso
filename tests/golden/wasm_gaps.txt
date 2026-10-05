@@ -62,3 +62,11 @@ tests/golden/micro/stdin_reads_what_it_is_given.kso	the playground has no stdin
 # wrong. All three reach the executor now; this one still answers zero because
 # a page genuinely has no clock.
 tests/golden/micro/the_clock_answers_something.kso	the clock is past the epoch: false
+
+# `list/tie` gives its maker a `ref` the embedded interpreter makes, and a
+# closure the page compiled cannot call a host value. The page refuses the
+# feature by name; the interpreter and native run all four.
+tests/golden/micro/a_ring_tied_by_list_tie.kso	the playground cannot tie cycles yet: list/tie
+tests/golden/micro/a_graph_tied_from_a_map_of_edges.kso	the playground cannot tie cycles yet: list/tie
+tests/golden/micro/a_tie_names_its_broken_link.kso	the playground cannot tie cycles yet: list/tie
+tests/golden/micro/a_bang_tie_fails_inside_its_box.kso	the playground cannot tie cycles yet: list/tie

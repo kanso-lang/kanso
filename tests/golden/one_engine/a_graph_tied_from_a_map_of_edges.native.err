@@ -1,1 +1,0 @@
-error[runtime]: list/tie is not built for native programs yet; the interpreter runs it (--interp)

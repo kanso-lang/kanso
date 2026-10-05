@@ -4819,7 +4819,7 @@ rows_c1zzzzzzzf = text/concat rows_c1zzzzzzzg [toolchain_pinned]
 tie_fills = row
   "a tie that never fills its cells"
   true
-  "cargo test --release --test golden one_engine_corpus"
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
   "specs (unit, golden, differential)"
   (breaking "a_tie_that_never_fills_its_cells")
   release
@@ -4838,7 +4838,19 @@ tie_check = row
 
 rows_c1zzzzzzzd = text/concat rows_c1zzzzzzze [tie_check]
 
-rows_c = text/concat rows_c1zzzzzzzd [itself]
+# Native `tie` rewrites every field holding one of its cells to hold the node
+# before the cells go back to the free list (2026-10-05).
+tie_resolves = row
+  "a native tie that frees cells still in its graph"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_native_tie_that_frees_cells_still_in_its_graph")
+  release
+
+rows_c1zzzzzzzc = text/concat rows_c1zzzzzzzd [tie_resolves]
+
+rows_c = text/concat rows_c1zzzzzzzc [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

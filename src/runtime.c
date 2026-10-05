@@ -10369,17 +10369,171 @@ K_DOORCC KValue k_b_to_float_slice(KValue cs, KValue fromv, KValue tov, const ch
     return k_b_to_float(k_b_slice(cs, fromv, tov), origin);
 }
 
-/* Ruled 2026-10-04 and built on the interpreter first. A native program that
-   reaches `list/tie` stops here with the reason, which is the refusal the
-   differential law asks of an engine that does not speak a feature yet. A
-   program that imports std/list without calling it never reaches this. */
-KValue k_b_tie(KValue ids, KValue maker, KValue broken) {
-    (void)maker; (void)broken;
+/* Ruled 2026-10-04: `list/tie ids maker` calls the maker once per id with
+   the id and `ref`, and answers the map from id to node. Each id's cell is a
+   blackhole made before the first node, so a node can store the cell of an id
+   made later; a constructor keeps a blackhole rather than demanding it, which
+   is the rule a knotted constant already relies on. When every node is made,
+   each cell is filled with its node.
+
+   The cells do not stay in the graph. A thunk lives outside the arenas, and
+   the deep copy at a cohort pop keeps a thunk and redirects its result, so a
+   graph left holding cells would leave one behind per node every time it was
+   tied and dropped. So once the cells are filled, every field the maker built
+   that holds one is rewritten to hold the node itself, and the cells go back
+   to the free list. The check keeps a reference in constructor fields, which
+   is where this walk looks: records and lists below the nodes, never through
+   a cell, and never twice through one value.
+
+   One `tie` runs inside another's maker as easily as anywhere, so the calls
+   still making their nodes are a stack, and `ref` names its own by position.
+
+   Every runtime entry is in every binary whether the program calls it or not,
+   so these are cold and left unoptimized: with the inliner free to fold the
+   map and closure calls in, every benchmark's text grew by 13 KB for a
+   feature none of them uses, and `minsize` alone still left 11 KB. */
+#define K_TIE_MAX 256
+typedef struct {
+    KValue cells;   /* map from id to its cell, made before the first node */
+    int open;       /* the maker is still running */
+    int broken;     /* a link to an id no call made was asked for */
+    KValue from, to;
+} KTie;
+static KTie k_ties[K_TIE_MAX];
+static long long k_tie_depth = 0;
+static KPtrMap k_tie_seen;
+static size_t k_tie_seen_live = 0;
+
+/* A blackhole cell from the free list the lazy tier recycles through. */
+static __attribute__((cold, optnone, noinline)) KValue k_tie_cell(void) {
+    KThunk* t = k_thunk_free;
+    if (t) {
+        k_thunk_free = t->next_free;
+    } else {
+        t = (KThunk*)malloc(sizeof(KThunk));
+        if (!t) { fputs("out of memory\n", stderr); exit(1); }
+    }
+    t->rc = 1;
+    t->site = K_SITE_BLACKHOLE;
+    t->forced = K_MEMO_NONE;
+    t->argc = 0;
+    t->next_free = 0;
+    KValue v;
+    v.tag = K_THUNK;
+    v.payload = (long long)t;
+    return v;
+}
+
+static __attribute__((cold, optnone, noinline)) K_CLOSCC KValue k_tie_ref(void* env, KValue id) {
+    KTie* t = &k_ties[k_env_get(env, 0).payload];
+    if (!t->open) k_die("a reference from list/tie was asked for after its tie returned");
+    if (!k_not_failure(id)) return id;
+    KValue cell = k_b_at(t->cells, id);
+    if (cell.tag == K_THUNK) return cell;
+    /* A link to an id the list does not hold. The node under construction
+       still builds around a cell nothing fills, and the tie answers the first
+       such link once its maker is done. Both ids are frozen, because the one
+       asked for may live in a region a helper's return is about to free. */
+    if (!t->broken) {
+        t->broken = 1;
+        t->from = k_caf_freeze(k_env_get(env, 1));
+        t->to = k_caf_freeze(id);
+    }
+    return k_tie_cell();
+}
+
+static int k_tie_filled(KValue v) {
+    if (v.tag != K_THUNK) return 0;
+    KThunk* t = (KThunk*)(intptr_t)v.payload;
+    return t->site == K_SITE_BLACKHOLE && t->forced == K_MEMO_KEPT;
+}
+
+static void k_tie_resolve(KValue v);
+
+/* Every `step`-th slot from `from`: a record's fields and a list's items are
+   every slot, a map's values every second one. */
+static __attribute__((cold, optnone, noinline)) void k_tie_resolve_slots(KValue* items, long long n, long long from, long long step) {
+    for (long long i = from; i < n; i += step) {
+        if (k_tie_filled(items[i])) {
+            items[i] = ((KThunk*)(intptr_t)items[i].payload)->result;
+            continue;
+        }
+        k_tie_resolve(items[i]);
+    }
+}
+
+static __attribute__((cold, optnone, noinline)) void k_tie_resolve(KValue v) {
+    if (v.tag != K_REC && v.tag != K_LIST && v.tag != K_MAP && v.tag != K_SUB) return;
+    void* p = (void*)(intptr_t)v.payload;
+    KPtrSlot* slot = k_ptrmap_at(&k_tie_seen, p, &k_tie_seen_live);
+    if (slot->gen == k_tie_seen.gen && slot->key == p) return;
+    if (slot->gen != k_tie_seen.gen) k_tie_seen_live++;
+    slot->gen = k_tie_seen.gen;
+    slot->key = p;
+    if (v.tag == K_REC) {
+        k_tie_resolve_slots(k_as_rec(v)->fields, k_as_rec(v)->nfields, 0, 1);
+    } else if (v.tag == K_LIST) {
+        k_tie_resolve_slots(k_as_list(v)->items, k_as_list(v)->len, 0, 1);
+    } else if (v.tag == K_MAP) {
+        KMap* m = (KMap*)p;
+        k_tie_resolve_slots(m->pairs, 2 * m->len, 1, 2);
+        if (m->sorted) k_tie_resolve_slots(m->sorted, 2 * m->sorted_len, 1, 2);
+    } else {
+        KSub* sub = (KSub*)p;
+        k_tie_resolve_slots(&sub->inner, 1, 0, 1);
+    }
+}
+
+__attribute__((cold, optnone, noinline)) KValue k_b_tie(KValue ids, KValue maker, KValue broken) {
     if (!k_not_failure(ids)) return ids;
-    /* the interpreter's own refusal for arguments it cannot tie, so the page
-       and native complain alike before native says what it lacks */
     if (ids.tag != K_LIST) k_die("tie takes a list of ids and a maker");
-    k_die("list/tie is not built for native programs yet; the interpreter runs it (--interp)");
+    if (k_tie_depth >= K_TIE_MAX) k_die("list/tie nests deeper than the runtime holds");
+    KList* l = k_as_list(ids);
+    long long n = l->len;
+    long long at = k_tie_depth++;
+    KTie* t = &k_ties[at];
+    t->open = 1;
+    t->broken = 0;
+    KValue cells = k_map_empty();
+    for (long long i = 0; i < n; i++) cells = k_b_put(cells, l->items[i], k_tie_cell());
+    t->cells = cells;
+    KValue nodes = k_map_empty();
+    for (long long i = 0; i < n; i++) {
+        KValue held[2];
+        held[0].tag = K_INT;
+        held[0].payload = at;
+        held[1] = l->items[i];
+        KValue ref = k_closure(k_tie_ref, 1, 2, held);
+        KValue node = k_force(k_call2(maker, l->items[i], ref));
+        if (!k_not_failure(node)) {
+            t->open = 0;
+            k_tie_depth--;
+            return node;
+        }
+        nodes = k_b_put(nodes, l->items[i], node);
+    }
+    t->open = 0;
+    k_tie_depth--;
+    if (t->broken) return k_call2(broken, t->from, t->to);
+    for (long long i = 0; i < n; i++) {
+        KThunk* c = (KThunk*)(intptr_t)k_b_at(cells, l->items[i]).payload;
+        c->result = k_b_at(nodes, l->items[i]);
+        c->forced = K_MEMO_KEPT;
+    }
+    k_ptrmap_begin(&k_tie_seen);
+    k_tie_seen_live = 0;
+    for (long long i = 0; i < n; i++) k_tie_resolve(k_b_at(nodes, l->items[i]));
+    /* Every reference now holds its node, so the cells go back to the free
+       list. An id the list names twice reaches its cell twice, and the first
+       release clears the mark the second one asks for. */
+    for (long long i = 0; i < n; i++) {
+        KThunk* th = (KThunk*)(intptr_t)k_b_at(cells, l->items[i]).payload;
+        if (th->forced != K_MEMO_KEPT) continue;
+        th->forced = K_MEMO_NONE;
+        th->next_free = k_thunk_free;
+        k_thunk_free = th;
+    }
+    return nodes;
 }
 
 KValue k_b_sqrt(KValue v) {
