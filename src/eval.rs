@@ -160,6 +160,7 @@ pub enum ThunkState {
 /// fill, made before the first node, and the first link the maker asked for
 /// that no key will make.
 struct Tie {
+    serial: i64,
     cells: Entries,
     broken: Option<(Value, Value)>,
 }
@@ -1408,8 +1409,11 @@ pub struct Interp<'a> {
     /// how a value that names itself gets a value at all.
     knots: RefCell<Map<String, Rc<RefCell<ThunkState>>>>,
     /// One entry per `list/tie` call still making its nodes, innermost last.
-    /// A `ref` the maker holds names its call by position here.
+    /// A `ref` the maker holds names its call by serial, never by position: a
+    /// lambda the maker stored can call `ref` after its tie has returned, and
+    /// by then the position may hold a later tie.
     ties: RefCell<Vec<Tie>>,
+    tie_serial: Cell<i64>,
     /// The constants that reach themselves through a chain of mentions --
     /// the same set the emitter computes, so the two engines count the same
     /// cells. Every constant goes through `knotted`, but only these are the
@@ -1536,6 +1540,7 @@ impl<'a> Interp<'a> {
             depth: Cell::new(0),
             knots: RefCell::new(Map::default()),
             ties: RefCell::new(Vec::new()),
+            tie_serial: Cell::new(0),
             cycles: std::cell::OnceCell::new(),
             in_place: std::cell::OnceCell::new(),
             moved: std::cell::OnceCell::new(),
@@ -4072,9 +4077,10 @@ impl<'a> Interp<'a> {
                     let cell = Rc::new(RefCell::new(ThunkState::Blackhole));
                     cells.insert(map_key(key.clone(), span)?, Value::Thunk(cell));
                 }
-                let at = self.ties.borrow().len();
-                self.ties.borrow_mut().push(Tie { cells, broken: None });
-                let made = self.make_tied(at, &keys, maker, span, frame);
+                let serial = self.tie_serial.get() + 1;
+                self.tie_serial.set(serial);
+                self.ties.borrow_mut().push(Tie { serial, cells, broken: None });
+                let made = self.make_tied(serial, &keys, maker, span, frame);
                 let tie = self.ties.borrow_mut().pop().expect("the tie this call pushed");
                 let made = made?;
                 let Value::Map(nodes) = &made else { return Ok(made) };
@@ -4087,17 +4093,27 @@ impl<'a> Interp<'a> {
                     };
                     *cell.borrow_mut() = ThunkState::Forced(node.clone());
                 }
+                let mut seen: std::collections::HashSet<usize> = Default::default();
+                for (_, node) in nodes.iter() {
+                    resolve_tied(node, &mut seen);
+                }
                 Ok(made)
             }
             // What a maker's `ref` answers: the cell for `key`. A key no call
             // makes still gets a cell, so the node under construction is
             // built, and the tie answers the first such link as broken.
             b"tie_ref" => {
-                let [at, from, key] = arity(args, name, span)?;
-                let Value::Int(at) = at else { unreachable!("a ref carries its tie's position") };
-                let at = at.to_i64().expect("a tie's position is small") as usize;
+                let [serial, from, key] = arity(args, name, span)?;
+                let Value::Int(serial) = serial else { unreachable!("a ref carries its tie") };
+                let serial = serial.to_i64().expect("a tie's serial is small");
                 let mut ties = self.ties.borrow_mut();
-                let tie = &mut ties[at];
+                let Some(tie) = ties.iter_mut().rev().find(|t| t.serial == serial) else {
+                    return Err(RuntimeError {
+                        message: "a reference from list/tie was asked for after its tie returned"
+                            .to_string(),
+                        span,
+                    });
+                };
                 let wanted = map_key(key.clone(), span)?;
                 if let Some(cell) = tie.cells.get(&wanted) {
                     let cell: Value = cell.clone();
@@ -4424,7 +4440,7 @@ impl<'a> Interp<'a> {
     /// or the first failure a maker answered.
     fn make_tied(
         &self,
-        at: usize,
+        serial: i64,
         keys: &[Value],
         maker: Value,
         span: Span,
@@ -4432,7 +4448,7 @@ impl<'a> Interp<'a> {
     ) -> EvalResult {
         let mut nodes = Entries::new();
         for key in keys {
-            let held = vec![Value::int(at as i64), key.clone()];
+            let held = vec![Value::int(serial), key.clone()];
             let r =
                 Value::Partial(Rc::new(Value::FnRef(Rc::from("builtin_tie_ref"))), Rc::new(held));
             let node = self.call(maker.clone(), vec![key.clone(), r], span, frame)?;
@@ -4806,6 +4822,49 @@ fn bind_moved(params: &[Pattern], args: &mut [Value], binds: &mut Bindings) {
 fn bind_whole(whole: &Option<Box<(Name, crate::diag::Span)>>, arg: &Value, binds: &mut Bindings) {
     if let Some(named) = whole {
         binds.push((named.0.clone(), arg.clone()));
+    }
+}
+
+/// Every field below a tie's nodes that holds a filled cell is rewritten to
+/// hold the node, as native does before it releases its cells. A graph left
+/// holding cells reads the same through a field, but a nested pattern
+/// compares the field as it stands, and `(ring _ (ring d _))` matched native's
+/// node and missed the interpreter's cell. Records are rewritten in place, so
+/// the walk goes once through each and never through a cell.
+fn resolve_tied(v: &Value, seen: &mut std::collections::HashSet<usize>) {
+    match v {
+        Value::Record { fields, .. } => {
+            if !seen.insert(Rc::as_ptr(fields) as *const () as usize) {
+                return;
+            }
+            let held: Vec<Value> = {
+                let mut fields = fields.borrow_mut();
+                for slot in fields.iter_mut() {
+                    let Value::Thunk(cell) = slot else { continue };
+                    let node = match &*cell.borrow() {
+                        ThunkState::Forced(node) => node.clone(),
+                        _ => continue,
+                    };
+                    *slot = node;
+                }
+                fields.clone()
+            };
+            for field in &held {
+                resolve_tied(field, seen);
+            }
+        }
+        Value::List(items) => {
+            if seen.insert(Rc::as_ptr(items) as *const () as usize) {
+                items.iter().for_each(|item| resolve_tied(item, seen));
+            }
+        }
+        Value::Map(entries) => {
+            if seen.insert(Rc::as_ptr(entries) as *const () as usize) {
+                entries.iter().for_each(|(_, value)| resolve_tied(value, seen));
+            }
+        }
+        Value::Sub { inner, .. } => resolve_tied(inner, seen),
+        _ => {}
     }
 }
 

@@ -21409,7 +21409,38 @@ read passed on as it was, so the graph fixture's walk matched no arm of
 did for one of its own deferred bindings. The cells stay in the graph on the
 page, as they do on the interpreter; only native rewrites them away.
 
-**Ratchet.** Five rows, each watched red:
+**What a generator of random graphs found.** Six hundred random tied graphs,
+run on the interpreter and both native tiers, agreed. Writing the fixtures
+that `diagnostic_coverage` asked for then found three faults the generator's
+shapes had not reached.
+
+- A lambda inside the maker counts as part of the maker, so `node id (x ->
+  held (ref x))` passes the check, and the lambda can be called after the tie
+  has returned. The interpreter then indexed an empty stack and panicked. Both
+  engines named a tie by its position on the stack of open ties, so a stale
+  `ref` called inside a later tie's maker answered that tie's cell, and both
+  printed a wrong answer without complaint. Each tie now carries a serial
+  number, and a `ref` whose tie is no longer open is refused on every engine:
+  "a reference from list/tie was asked for after its tie returned".
+- Native held its open ties in a fixed array of 256 and refused the 257th. A
+  maker can call `tie` itself, so nesting is as deep as the program recurses.
+  The array now grows. Since it can move while a maker runs, `k_b_tie` reads
+  its entry by index after each call instead of holding a pointer across one.
+- The interpreter left each filled cell in the field the maker had built, and
+  a field read saw through it, but a nested pattern compares the field as it
+  stands. `(ring _ (ring d _))` matched native's node and missed the
+  interpreter's cell, so the same program printed 2 on native and 0 on the
+  interpreter. The interpreter now rewrites those fields to hold the nodes,
+  as native does. Records are rewritten in place, and the walk visits each one
+  once.
+
+Four fixtures pin them: `a_tie_reference_asked_for_after_its_tie` and
+`tie_takes_a_list_of_ids` in the runtime corpus, and
+`a_tied_node_matches_a_nested_pattern` and `three_hundred_ties_nested` in the
+micro corpus. Each failed on the build before these changes. The machine code
+grows another 272 bytes on every benchmark.
+
+**Ratchet.** Nine rows, each watched red:
 
 - "a tie that never fills its cells" replaces the interpreter's fill with
   nothing; the ring's walk reaches a blackhole and the micro corpus fails.
@@ -21422,3 +21453,10 @@ page, as they do on the interpreter; only native rewrites them away.
   tie fixtures die as not callable and the wasm corpus fails.
 - "a page that reads a tie cell as a value" skips the read through the cell;
   the graph fixture matches no arm of `trail` and the wasm corpus fails.
+- "an interpreter tie that leaves cells in its graph" skips the rewrite; the
+  nested pattern answers 0 and the micro corpus fails.
+- "a tie ref that answers any open tie" and "a native tie ref that answers
+  any open tie" drop the serial test on each engine; the stale `ref` answers
+  the second tie's cell and the runtime corpus fails.
+- "a native tie stack that stops at 256" puts the limit back; the nested
+  fixture stops at the 257th tie and the micro corpus fails.

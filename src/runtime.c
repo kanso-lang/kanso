@@ -10386,21 +10386,25 @@ K_DOORCC KValue k_b_to_float_slice(KValue cs, KValue fromv, KValue tov, const ch
    a cell, and never twice through one value.
 
    One `tie` runs inside another's maker as easily as anywhere, so the calls
-   still making their nodes are a stack, and `ref` names its own by position.
+   still making their nodes are a stack, grown as deep as the program nests
+   them. `ref` names its own call by serial rather than by position: a lambda
+   the maker stored can call `ref` after its tie has returned, and by then the
+   position may hold a later tie.
 
    Every runtime entry is in every binary whether the program calls it or not,
    so these are cold and left unoptimized: with the inliner free to fold the
    map and closure calls in, every benchmark's text grew by 13 KB for a
    feature none of them uses, and `minsize` alone still left 11 KB. */
-#define K_TIE_MAX 256
 typedef struct {
     KValue cells;   /* map from id to its cell, made before the first node */
-    int open;       /* the maker is still running */
+    long long serial;
     int broken;     /* a link to an id no call made was asked for */
     KValue from, to;
 } KTie;
-static KTie k_ties[K_TIE_MAX];
+static KTie* k_ties = 0;
+static long long k_tie_cap = 0;
 static long long k_tie_depth = 0;
+static long long k_tie_serial = 0;
 static KPtrMap k_tie_seen;
 static size_t k_tie_seen_live = 0;
 
@@ -10425,8 +10429,11 @@ static __attribute__((cold, optnone, noinline)) KValue k_tie_cell(void) {
 }
 
 static __attribute__((cold, optnone, noinline)) K_CLOSCC KValue k_tie_ref(void* env, KValue id) {
-    KTie* t = &k_ties[k_env_get(env, 0).payload];
-    if (!t->open) k_die("a reference from list/tie was asked for after its tie returned");
+    long long serial = k_env_get(env, 0).payload;
+    KTie* t = 0;
+    for (long long i = k_tie_depth - 1; i >= 0 && !t; i--)
+        if (k_ties[i].serial == serial) t = &k_ties[i];
+    if (!t) k_die("a reference from list/tie was asked for after its tie returned");
     if (!k_not_failure(id)) return id;
     KValue cell = k_b_at(t->cells, id);
     if (cell.tag == K_THUNK) return cell;
@@ -10487,34 +10494,39 @@ static __attribute__((cold, optnone, noinline)) void k_tie_resolve(KValue v) {
 __attribute__((cold, optnone, noinline)) KValue k_b_tie(KValue ids, KValue maker, KValue broken) {
     if (!k_not_failure(ids)) return ids;
     if (ids.tag != K_LIST) k_die("tie takes a list of ids and a maker");
-    if (k_tie_depth >= K_TIE_MAX) k_die("list/tie nests deeper than the runtime holds");
     KList* l = k_as_list(ids);
     long long n = l->len;
+    if (k_tie_depth == k_tie_cap) {
+        k_tie_cap = k_tie_cap ? 2 * k_tie_cap : 8;
+        k_ties = (KTie*)realloc(k_ties, (size_t)k_tie_cap * sizeof(KTie));
+        if (!k_ties) { fputs("out of memory\n", stderr); exit(1); }
+    }
+    /* The stack can move while the maker runs, so its entry is read by index
+       after each call rather than through a pointer held across one. */
     long long at = k_tie_depth++;
-    KTie* t = &k_ties[at];
-    t->open = 1;
-    t->broken = 0;
+    long long serial = ++k_tie_serial;
+    k_ties[at].serial = serial;
+    k_ties[at].broken = 0;
     KValue cells = k_map_empty();
     for (long long i = 0; i < n; i++) cells = k_b_put(cells, l->items[i], k_tie_cell());
-    t->cells = cells;
+    k_ties[at].cells = cells;
     KValue nodes = k_map_empty();
     for (long long i = 0; i < n; i++) {
         KValue held[2];
         held[0].tag = K_INT;
-        held[0].payload = at;
+        held[0].payload = serial;
         held[1] = l->items[i];
         KValue ref = k_closure(k_tie_ref, 1, 2, held);
         KValue node = k_force(k_call2(maker, l->items[i], ref));
         if (!k_not_failure(node)) {
-            t->open = 0;
             k_tie_depth--;
             return node;
         }
         nodes = k_b_put(nodes, l->items[i], node);
     }
-    t->open = 0;
+    KTie done = k_ties[at];
     k_tie_depth--;
-    if (t->broken) return k_call2(broken, t->from, t->to);
+    if (done.broken) return k_call2(broken, done.from, done.to);
     for (long long i = 0; i < n; i++) {
         KThunk* c = (KThunk*)(intptr_t)k_b_at(cells, l->items[i]).payload;
         c->result = k_b_at(nodes, l->items[i]);

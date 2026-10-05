@@ -4871,7 +4871,45 @@ tie_page_reads = row
 
 rows_c1zzzzzzzb = text/concat rows_c1zzzzzzzc [tie_page_calls tie_page_reads]
 
-rows_c = text/concat rows_c1zzzzzzzb [itself]
+# The interpreter rewrites the fields holding a tie's cells to hold the nodes,
+# as native does; a `ref` names its tie by serial, so one called after its tie
+# returned is refused on both engines; and native's stack of open ties grows
+# rather than stopping at 256 (2026-10-05).
+tie_interp_resolves = row
+  "an interpreter tie that leaves cells in its graph"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "an_interpreter_tie_that_leaves_cells_in_its_graph")
+  release
+
+tie_serial = row
+  "a tie ref that answers any open tie"
+  true
+  "cargo test --release --test golden runtime_corpus_reports_endpoint_violations"
+  "specs (unit, golden, differential)"
+  (breaking "a_tie_ref_that_answers_any_open_tie")
+  release
+
+tie_native_serial = row
+  "a native tie ref that answers any open tie"
+  true
+  "cargo test --release --test golden runtime_corpus_reports_endpoint_violations"
+  "specs (unit, golden, differential)"
+  (breaking "a_native_tie_ref_that_answers_any_open_tie")
+  release
+
+tie_native_depth = row
+  "a native tie stack that stops at 256"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_native_tie_stack_that_stops_at_256")
+  release
+
+rows_c1zzzzzzza = text/concat rows_c1zzzzzzzb [tie_interp_resolves tie_serial tie_native_serial tie_native_depth]
+
+rows_c = text/concat rows_c1zzzzzzza [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
