@@ -10374,7 +10374,11 @@ K_DOORCC KValue k_b_to_float_slice(KValue cs, KValue fromv, KValue tov, const ch
    differential law asks of an engine that does not speak a feature yet. A
    program that imports std/list without calling it never reaches this. */
 KValue k_b_tie(KValue ids, KValue maker, KValue broken) {
-    (void)ids; (void)maker; (void)broken;
+    (void)maker; (void)broken;
+    if (!k_not_failure(ids)) return ids;
+    /* the interpreter's own refusal for arguments it cannot tie, so the page
+       and native complain alike before native says what it lacks */
+    if (ids.tag != K_LIST) k_die("tie takes a list of ids and a maker");
     k_die("list/tie is not built for native programs yet; the interpreter runs it (--interp)");
 }
 

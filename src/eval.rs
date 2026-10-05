@@ -4063,7 +4063,7 @@ impl<'a> Interp<'a> {
                 let [keys, maker, broken] = arity(args, name, span)?;
                 let Value::List(keys) = keys else {
                     return Err(RuntimeError {
-                        message: "tie takes a list of keys and a maker".to_string(),
+                        message: "tie takes a list of ids and a maker".to_string(),
                         span,
                     });
                 };
