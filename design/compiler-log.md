@@ -21440,6 +21440,15 @@ Four fixtures pin them: `a_tie_reference_asked_for_after_its_tie` and
 micro corpus. Each failed on the build before these changes. The machine code
 grows another 272 bytes on every benchmark.
 
+**Compile cost.** CI read the first version of this as 569,303 more
+instructions on `compile_instructions`, 2.2%, and about 1.5 million more on the
+entry and library rows. The check accounted for 239,259 of the 566,137 this
+box measured: it walked every function, std's included, and built its tables
+whether or not anything tied. It now collects the `list/tie` calls outside std
+first and builds the tables only when there is one. The other 326,878 are
+std/list's new declarations being lexed, parsed and inferred in every program
+that imports the module.
+
 **Ratchet.** Nine rows, each watched red:
 
 - "a tie that never fills its cells" replaces the interpreter's fill with

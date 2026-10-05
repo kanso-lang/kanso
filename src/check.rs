@@ -2011,6 +2011,18 @@ fn demand_conflicts(
 /// graph is visible, and a link to an id the list does not hold is refused
 /// here rather than answered as a broken link at run time.
 fn check_tie_references(program: &Program, diags: &mut Vec<Diagnostic>) {
+    // The calls first, and the tables the check reads only when there is one:
+    // a program that never ties pays for one walk of its own functions. std's
+    // functions are left out, because no std module calls `list/tie`.
+    let mut sites: Vec<(&Expr, &std::sync::Arc<str>)> = Vec::new();
+    for d in program.fns.iter().filter(|d| !d.file.starts_with("std/")) {
+        for st in &d.body {
+            tie_calls(stmt_expr(st), &d.file, &mut sites);
+        }
+    }
+    if sites.is_empty() {
+        return;
+    }
     let ctors: HashSet<&str> =
         program.types.iter().filter(|t| t.members.is_empty()).map(|t| t.name.as_str()).collect();
     let mut groups: HashMap<&str, Vec<&FnDecl>> = HashMap::default();
@@ -2018,13 +2030,11 @@ fn check_tie_references(program: &Program, diags: &mut Vec<Diagnostic>) {
         groups.entry(d.name.as_str()).or_default().push(d);
     }
     let mut tie = TieCheck { ctors: &ctors, groups: &groups, held: Vec::new(), diags: Vec::new() };
-    for d in &program.fns {
+    for (call, file) in sites {
         let first = tie.diags.len();
-        for st in &d.body {
-            tie.find_ties(stmt_expr(st));
-        }
-        if !d.file.is_empty() {
-            place_in(&mut tie.diags[first..], &d.file);
+        tie.check_tie(call);
+        if !file.is_empty() {
+            place_in(&mut tie.diags[first..], file);
         }
     }
     let mut seen: HashSet<(&str, usize)> = HashSet::default();
@@ -2045,6 +2055,22 @@ fn check_tie_references(program: &Program, diags: &mut Vec<Diagnostic>) {
         }
     }
     diags.append(&mut tie.diags);
+}
+
+/// Every `list/tie` and `list/tie!` call under `e`, a maker's own included.
+fn tie_calls<'a>(
+    e: &'a Expr,
+    file: &'a std::sync::Arc<str>,
+    sites: &mut Vec<(&'a Expr, &'a std::sync::Arc<str>)>,
+) {
+    if let Expr::App { head, args, .. } = e {
+        let tied =
+            matches!(head.as_ref(), Expr::Ident(n, _, _) if n == "list/tie" || n == "list/tie!");
+        if tied && args.len() == 2 {
+            sites.push((e, file));
+        }
+    }
+    crate::for_each_child(e, |c| tie_calls(c, file, sites));
 }
 
 fn stmt_expr(st: &Stmt) -> &Expr {
@@ -2075,28 +2101,25 @@ fn tie_literal(e: &Expr) -> Option<String> {
 }
 
 impl<'a> TieCheck<'a> {
-    fn find_ties(&mut self, e: &'a Expr) {
-        if let Expr::App { head, args, .. } = e {
-            let tied = matches!(head.as_ref(), Expr::Ident(n, _, _) if n == "list/tie" || n == "list/tie!");
-            if let (true, [ids, maker]) = (tied, args.as_slice()) {
-                let literal: Option<HashSet<String>> = match ids {
-                    Expr::List(items, _) => items.iter().map(tie_literal).collect(),
-                    _ => None,
-                };
-                match maker {
-                    Expr::Lambda { params, body, .. } if params.len() == 2 => {
-                        self.reads(body, params[1].0.as_str(), literal.as_ref(), false);
-                    }
-                    Expr::Ident(f, _, _) | Expr::Partial(f, _) => {
-                        if let Some((name, _)) = self.groups.get_key_value(f.as_str()) {
-                            self.held.push((name, 1));
-                        }
-                    }
-                    _ => {}
+    /// One call `tie_calls` found: its maker's `ref` is held to the rule.
+    fn check_tie(&mut self, call: &'a Expr) {
+        let Expr::App { args, .. } = call else { return };
+        let [ids, maker] = args.as_slice() else { return };
+        let literal: Option<HashSet<String>> = match ids {
+            Expr::List(items, _) => items.iter().map(tie_literal).collect(),
+            _ => None,
+        };
+        match maker {
+            Expr::Lambda { params, body, .. } if params.len() == 2 => {
+                self.reads(body, params[1].0.as_str(), literal.as_ref(), false);
+            }
+            Expr::Ident(f, _, _) | Expr::Partial(f, _) => {
+                if let Some((name, _)) = self.groups.get_key_value(f.as_str()) {
+                    self.held.push((name, 1));
                 }
             }
+            _ => {}
         }
-        crate::for_each_child(e, |c| self.find_ties(c));
     }
 
     /// Walks `e`, where `r` is a `ref`. `in_field` says `e` is itself an
