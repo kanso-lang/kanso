@@ -21501,3 +21501,46 @@ exactly what it costs.
   the second tie's cell and the runtime corpus fails.
 - "a native tie stack that stops at 256" puts the limit back; the nested
   fixture stops at the 257th tie and the micro corpus fails.
+
+## 2026-10-06 — gavel: welfare weighs every environment kanso runs in, and none at zero
+
+Clay, on learning that nothing in the objective measures the browser engine:
+"I've been explicit that you absolutely factor into the welfare equation
+everything in all environments like nothing is just ignored. you can choose a
+pragmatic weight to apply to that versus actual production run time and stuff
+but it doesn't have zero weight."
+
+**What was missing.** `bench/objective_sources.txt` names fourteen pairs over
+eleven terms: native run instructions and memory, both codegen tiers, the
+emitter, the front end, start-up, and the interpreter's speed and memory. None
+of them measures the browser engine, which compiles a program inside the
+playground tab and runs it there. CLAUDE.md's welfare section already says
+that what the model leaves out it implicitly weights at zero, and the browser
+was left out. Two costs sit in it: compiling in the tab, and running the
+compiled module, where every value is a handle into a host-side registry that
+holds each value until the run ends.
+
+**The ruling.** Every environment the language runs in has terms in the
+objective, for its CPU cost and its memory, at a weight chosen for how much
+that environment matters next to production. A weight may be small. It may
+not be zero, and an environment may not be absent. The browser is the first
+gap found under this rule and is not the rule's limit: an engine or tier added
+later joins the objective in the pull request that adds it.
+
+**How the terms are measured is the implementer's**, under the 2026-09-15
+normalization rule: a counter must read the same number on every run of the
+same code. Browser wall time does not qualify. Counting the compile and the
+run under a deterministic wasm runtime does, as does a count of the module's
+instructions and of the registry's peak.
+
+**The weights and the placement are proposed by the implementer and recorded
+with their reasons**, the way every `--set` records why. Whether the browser
+terms join the development side, the production side, or a third side under
+the meta is part of that proposal. Adding terms re-scores the objective, so the
+floor re-ratchets in the same change, as it did when the 2026-09-16 split was
+built.
+
+Owes: browser terms in `scripts/welfare/welfare.kso` and
+`bench/objective_sources.txt`, their goldens with a CI gate, the weights with
+reasons in `bench/welfare_floor.json`, and a sentence in CLAUDE.md's welfare
+section naming the rule.
