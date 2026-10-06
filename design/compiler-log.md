@@ -21304,6 +21304,216 @@ A row's fixture can lose its path without failing anything, and only the
 nightly sees it. That ran for five days here because nothing was watching the
 scheduled run. Its failures now get read at each check-in, like a red PR.
 
+## 2026-10-05 — `list/tie` ties a cycle sized by data, on every engine
+
+The 2026-10-04 gavel, "a data-sized cycle is tied with `list/tie`, and
+`list/tie!` insists", built. `list/tie ids maker` and `list/tie! ids maker` are
+in std/list, and the interpreter, native and the page run both. The STATUS.md
+row can come off when this lands.
+
+**How the interpreter ties.** Before the first node is made, `tie` makes one
+cell per id, a blackhole like the one a knotted constant uses. The maker gets
+the id and `ref`, which answers the cell for an id. A constructor already
+stores a blackhole cell rather than demanding it (the knot rule: "a
+constructor slot is where a knot ties"), so a node can hold a reference to a
+node not made yet. When every id is made, `tie` fills each cell with its node
+and answers the map from id to node. A walk through a field then forces the
+cell and finds the node, and the graph is cyclic.
+
+**A broken link.** `ref` of an id not in the list answers a fresh cell, so the
+node under construction still builds, and the call remembers the first such
+link. After the last node is made, `tie` answers `list/broken_link from to`
+instead of the map, where `from` is the id whose node asked and `to` is the
+id it named. `tie!` is `effect` over the same call, with the broken link
+turned into a failure inside the box that reads "tie! found a link from 1 to
+2, and no key made 2". A caller outside std/list cannot destructure the
+record, which is opaque across the import like every module's record, so it
+dispatches on `_:list/broken_link` and renders it.
+
+**What the ruling's rule about fields means in practice.** A reference is
+stored in a constructor's field and nowhere else. A list of references is
+therefore outside the rule, and the interpreter agrees: `list/map ids ref`
+builds its list through `push`, which demands its argument, and the blackhole
+stops the run. A node with several links holds a chain of records with one
+reference in each. The graph fixture does exactly that, with a `road` record
+per edge and a `no_road` marker at the end of each chain.
+
+The parameter is called `ids` rather than the ruling's `keys` because `keys`
+is a builtin and std/list may not rebind it.
+
+**Fixtures.** Four in the micro corpus: a three-station ring walked past its
+own start, a graph read from a map of edges with a cycle and a town two roads
+reach, `tie` answering a broken link and then a whole tie, and `tie!` answering
+a box that opens on success and fails on a broken link. They started in the one-engine
+corpus while native refused them, and that corpus's harness learned to run a
+library fixture through an import as the micro corpus does; with native built
+they moved to the micro corpus, and the harness change stays.
+
+**The check.** Every call of the maker's `ref` must be an argument of a
+constructor. `ref` itself may be handed to a function the program declares,
+and that function's parameter is then held to the same rule, which is how a
+read inside a helper is found; handed to anything else, including a std
+function such as `list/map`, it is refused, because what happens to it there
+is out of the check's sight. A lambda inside the maker is walked as part of
+it, so `list/fold edges no_road (rest k -> road (ref k) rest)` passes: the
+call is still a constructor's argument. Where the ids are a list of literals
+and a link is a literal, a link to an id the list does not hold is refused at
+check rather than answered as a broken link. Three error goldens pin the three
+refusals: a read in the maker, a read in a helper the maker calls, and the
+literal broken link. Each was watched red with the check's call removed.
+
+**A std module tested from the checkout.** `kanso test lib/list` stamps the
+module's files `lib/list/...`, not `std/list/...`, so `builtin_tie` was refused
+as a user program reaching into the library. No std module with tests had
+called a builtin before, so the case had not come up. The refusing arm now
+asks whether the file sits in the toolchain's own std directory before it
+refuses. A correct program never reaches that arm, so the filesystem calls it
+makes cost nothing on the ordinary path.
+
+**Wrong arguments.** The test that compares how the page and native complain
+about each std function's wrong arguments found the two disagreeing on
+`list/tie bad`. All three engines now refuse ids that are not a list with
+"tie takes a list of ids and a maker" before anything else.
+
+**Native.** `k_b_tie` keeps one cell per id, a blackhole from the lazy tier's
+free list, and hands the maker a runtime closure as `ref`. A program of the
+user's that names `list/tie` or `list/tie!` turns on the constructor rule a
+knotted constant already uses, so a field keeps a blackhole rather than
+demanding it; std/list's own declarations do not count, or every program that
+imports the module would pay for a feature it never calls. When every node is
+made, each cell is filled. The cells do not stay in the graph: a thunk lives
+outside the arenas, and the deep copy at a cohort pop keeps a thunk and
+redirects its result, so a graph holding cells would leave one behind per node
+each time it was tied and dropped. So a walk rewrites every field holding a
+filled cell to hold the node itself, through records, lists, map values and
+subtype wrappers, never through a cell and never twice through one value, and
+then the cells go back to the free list. A link to an id the list does not hold
+freezes both ids, because the one asked for may live in a region a helper's
+return is about to free.
+
+**The memory fixture.** `ten_thousand_ties_dropped` ties ten thousand two-node
+rings and keeps a count from each. Its arena peak is 1,048,576 bytes, the same
+as a hundred rings measured the same way, while allocations go from 1,602 to
+160,002. Neither engine counts a tie cell as a lazy-tier thunk, so those
+counters read zero on both and the oracle's comparison agrees.
+
+**The page.** The page hands builtins to its embedded interpreter, so the
+interpreter runs `tie` there too, and calls the maker the page compiled. Two
+things stood between that and a working program. The maker calls `ref`, which
+is a partial the interpreter made, and the page's call refused anything but a
+closure it had compiled: "`<fn>` is not callable". It now hands such a value
+back to the interpreter, where the tie it belongs to is still running. And a
+field the maker filled held the interpreter's cell, which the page's field
+read passed on as it was, so the graph fixture's walk matched no arm of
+`trail`. That was first fixed in the page's read, by asking the interpreter for
+the cell's value. The interpreter's rewrite described further down then made
+the fix dead: every field holding a cell holds its node before `tie` returns,
+so the page never meets one. The ratchet showed it. The row that disabled the
+page's read stayed green on CI, and the wasm corpus stayed green here with the
+read gone. The read and its row were removed rather than kept as a check that
+can no longer fail.
+
+**What a generator of random graphs found.** Six hundred random tied graphs,
+run on the interpreter and both native tiers, agreed. Writing the fixtures
+that `diagnostic_coverage` asked for then found three faults the generator's
+shapes had not reached.
+
+- A lambda inside the maker counts as part of the maker, so `node id (x ->
+  held (ref x))` passes the check, and the lambda can be called after the tie
+  has returned. The interpreter then indexed an empty stack and panicked. Both
+  engines named a tie by its position on the stack of open ties, so a stale
+  `ref` called inside a later tie's maker answered that tie's cell, and both
+  printed a wrong answer without complaint. Each tie now carries a serial
+  number, and a `ref` whose tie is no longer open is refused on every engine:
+  "a reference from list/tie was asked for after its tie returned".
+- Native held its open ties in a fixed array of 256 and refused the 257th. A
+  maker can call `tie` itself, so nesting is as deep as the program recurses.
+  The array now grows. Since it can move while a maker runs, `k_b_tie` reads
+  its entry by index after each call instead of holding a pointer across one.
+- The interpreter left each filled cell in the field the maker had built, and
+  a field read saw through it, but a nested pattern compares the field as it
+  stands. `(ring _ (ring d _))` matched native's node and missed the
+  interpreter's cell, so the same program printed 2 on native and 0 on the
+  interpreter. The interpreter now rewrites those fields to hold the nodes,
+  as native does. Records are rewritten in place, and the walk visits each one
+  once.
+
+Four fixtures pin them: `a_tie_reference_asked_for_after_its_tie` and
+`tie_takes_a_list_of_ids` in the runtime corpus, and
+`a_tied_node_matches_a_nested_pattern` and `three_hundred_ties_nested` in the
+micro corpus. Each failed on the build before these changes. The machine code
+grows another 272 bytes on every benchmark.
+
+**Compile cost.** CI read the first version of this as 569,303 more
+instructions on `compile_instructions`, 2.2%, and about 1.5 million more on the
+entry and library rows. The check accounted for 239,259 of the 566,137 this
+box measured: it walked every function, std's included, and built its tables
+whether or not anything tied. It now collects the `list/tie` calls outside std
+first and builds the tables only when there is one. The other 326,878 are
+std/list's new declarations being lexed, parsed and inferred in every program
+that imports the module.
+
+CI's rows on d384a33f, on the silicon `bench/dispatch.txt` records, all of
+them what std/list's new declarations and the three engines' tie code cost:
+
+- the front end: `compile_instructions` 25,719,895 -> 26,062,711 (+1.33%),
+  `compile_allocs` 14,494 -> 14,744, `compile_peak_bytes` 717,297 ->
+  729,597, `front_end_visits` 7,526 -> 7,555, `module_lines` 1,105 -> 1,109
+  and `module_visits` 2,677 -> 2,706;
+- the other two compile routes: `entry_instructions` 85,110,161 ->
+  86,029,749 and `library_instructions` 85,641,806 -> 86,591,709;
+- the interpreter: `interp_instructions` 590,630,366 -> 591,566,141,
+  `interp_allocs` 895,408 -> 896,116 and `interp_peak_bytes` 725,220 ->
+  739,436;
+- codegen: `codegen_instructions_dev` 124,466,652 -> 124,656,243,
+  `codegen_instructions_release` 408,092,175 -> 408,634,242 and
+  `emit_instructions` 30,306,693 -> 31,223,159; `emitted_other_lines` 86,407
+  -> 86,557, `emitted_other_calls` 10,801 -> 10,817 and
+  `emitted_other_branches` 8,296 -> 8,314; and `text`, summed over the
+  benchmarks, 3,525,136 -> 3,575,680, for the runtime's tie entries;
+- run work, by tens of instructions a benchmark: `work_basket` 29,464,281,
+  `work_deepbench` 363,026,452, `work_digestbench` 5,366,001,
+  `work_encodebench` 2,333,682,570, `work_pendbench` 181,091,623 and
+  `work_widebench` 27,279,186, each 65 up; `work_oneshot` 12,723,114 (+462),
+  `work_scanbench` 281,017 (+74) and `work_livebench` 1,537,370,202 (+651);
+  `work_jsonbench` and `work_runbench` fall 4 and 636. An earlier run on other
+  silicon read the same figures.
+
+Welfare reads 90.3053 against a floor of 90.3174, and the floor comes down to
+the score, by the ruling that a built part of the language lowers it by
+exactly what it costs.
+
+**The browser.** The browser side joined the objective while this branch was
+open, so it pays here too. The tab compiles the same std/list, and its runtime
+is the embedded interpreter with the tie arms in it.
+`browser_compile_instructions` rose from 343,917,485 to 347,448,919,
+`browser_compile_peak_bytes` from 588,109 to 594,529,
+`browser_run_instructions` from 2,331,914,518 to 2,389,805,261, and
+`browser_run_peak_bytes` from 16,141,282 to 16,509,161. The run rose 2.48%
+where the native interpreted row rose 0.15%. The corpus never calls `list/tie`,
+so the rise arrived with code the tab carries rather than with work the program
+asks for. Which change inside `kanso.wasm` it came from has not been isolated.
+The floor comes down to 88.84 by the same rule as the rest of this entry.
+
+**Ratchet.** Eight rows, each watched red:
+
+- "a tie that never fills its cells" replaces the interpreter's fill with
+  nothing; the ring's walk reaches a blackhole and the micro corpus fails.
+- "a tie reference read anywhere" removes the check's call; the error corpus
+  fails.
+- "a native tie that frees cells still in its graph" skips native's rewrite;
+  the ring's first step reads a released blackhole and native stops with "a
+  lazy binding demands its own value".
+- "a page that cannot call a tie ref" restores the page's refusal; all four
+  tie fixtures die as not callable and the wasm corpus fails.
+- "an interpreter tie that leaves cells in its graph" skips the rewrite; the
+  nested pattern answers 0 and the micro corpus fails.
+- "a tie ref that answers any open tie" and "a native tie ref that answers
+  any open tie" drop the serial test on each engine; the stale `ref` answers
+  the second tie's cell and the runtime corpus fails.
+- "a native tie stack that stops at 256" puts the limit back; the nested
+  fixture stops at the 257th tie and the micro corpus fails.
+
 ## 2026-10-06 — gavel: welfare weighs every environment kanso runs in, and none at zero
 
 Clay, on learning that nothing in the objective measures the browser engine:

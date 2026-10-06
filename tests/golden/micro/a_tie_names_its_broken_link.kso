@@ -1,0 +1,21 @@
+import "std/list"
+
+# A link to a key no call made: `tie` answers a `broken_link` naming the key
+# whose node held the link and the key it asked for, for the caller to
+# dispatch on. This is the form for links read from input.
+type node
+  id
+  next
+
+links = { 1:2 2:3 3:9 }
+
+fn tied b:list/broken_link
+  "not tied: {b}"
+
+fn tied nodes
+  "{length nodes} nodes"
+
+pub play =
+  made = list/tie [1 2 3] (id ref -> node id (ref links[id]))
+  whole = list/tie [1 2] (id ref -> node id (ref (3 - id)))
+  print "{tied made}; {tied whole}"

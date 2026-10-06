@@ -1,0 +1,29 @@
+import "std/list"
+
+# A maker can call `list/tie` itself, so ties nest as deep as the program
+# recurses. Native held 256 of them in a fixed array until 2026-10-05 and
+# refused the 257th; every engine now nests as deep as the stack allows.
+type ring
+  depth
+  next
+  inner
+
+fn make 0 id ref
+  ring 0 (ref id) 0
+
+fn make depth id ref
+  inner = list/tie [depth] (&make (depth - 1))
+  ring depth (ref id) inner[depth]
+
+fn depth_of none
+  0
+
+fn depth_of (ring _ (ring d _ _) inner)
+  d + depth_of inner
+
+fn depth_of _
+  0
+
+pub play =
+  rings = list/tie [300] (&make 300)
+  print "nested {depth_of rings[300]}"

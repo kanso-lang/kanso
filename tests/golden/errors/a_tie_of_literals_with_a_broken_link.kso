@@ -1,0 +1,12 @@
+import "std/list"
+
+# With the ids and the link both literals, the compiler sees the whole graph,
+# and a link to an id the list does not hold is refused here instead of
+# answering a broken link when the program runs (ruled 2026-10-04).
+type station
+  name
+  next
+
+pub play =
+  ring = list/tie ["a" "b"] (k ref -> station k (ref "c"))
+  print "{length ring}"

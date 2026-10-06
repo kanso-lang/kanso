@@ -1,0 +1,16 @@
+import "std/list"
+
+# The ids are a list. Anything else is refused before the maker runs, in the
+# same words on every engine.
+type node
+  id
+
+fn make id _
+  node id
+
+fn ids_of n
+  n
+
+pub play =
+  nodes = list/tie (ids_of 7) make
+  print "{nodes}"

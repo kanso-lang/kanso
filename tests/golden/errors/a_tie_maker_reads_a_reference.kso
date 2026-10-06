@@ -1,0 +1,13 @@
+import "std/list"
+
+# Ruled 2026-10-04: what `ref` answers is stored in a constructor's field and
+# never read, because the node it names may not be made yet. This maker reads
+# one for a name. Unchecked, the interpreter stopped at run time on a node
+# still being made.
+type station
+  name
+  next
+
+pub play =
+  ring = list/tie ["a" "b"] (k ref -> station "{(ref k).name}!" (ref k))
+  print "{length ring}"

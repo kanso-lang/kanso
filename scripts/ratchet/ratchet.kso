@@ -4813,7 +4813,96 @@ toolchain_pinned = row
 
 rows_c1zzzzzzzf = text/concat rows_c1zzzzzzzg [toolchain_pinned]
 
-rows_c = text/concat rows_c1zzzzzzzf [itself]
+# `list/tie` fills each key's cell with its node once every node is made,
+# which is what turns the references the maker stored into a cycle
+# (2026-10-04).
+tie_fills = row
+  "a tie that never fills its cells"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_tie_that_never_fills_its_cells")
+  release
+
+rows_c1zzzzzzze = text/concat rows_c1zzzzzzzf [tie_fills]
+
+# A tie's reference goes into a constructor's field and nowhere else, and a
+# literal link to an id the list does not hold is refused (2026-10-04).
+tie_check = row
+  "a tie reference read anywhere"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_tie_reference_read_anywhere")
+  release
+
+rows_c1zzzzzzzd = text/concat rows_c1zzzzzzze [tie_check]
+
+# Native `tie` rewrites every field holding one of its cells to hold the node
+# before the cells go back to the free list (2026-10-05).
+tie_resolves = row
+  "a native tie that frees cells still in its graph"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_native_tie_that_frees_cells_still_in_its_graph")
+  release
+
+rows_c1zzzzzzzc = text/concat rows_c1zzzzzzzd [tie_resolves]
+
+# The page calls the `ref` the embedded interpreter hands a tie's maker
+# (2026-10-05).
+tie_page_calls = row
+  "a page that cannot call a tie ref"
+  true
+  "cargo test --release --test wasm_engine {wasm_corpus}"
+  "specs (unit, golden, differential)"
+  (breaking "a_page_that_cannot_call_a_tie_ref")
+  with_blob
+
+rows_c1zzzzzzzb = text/concat rows_c1zzzzzzzc [tie_page_calls]
+
+# The interpreter rewrites the fields holding a tie's cells to hold the nodes,
+# as native does; a `ref` names its tie by serial, so one called after its tie
+# returned is refused on both engines; and native's stack of open ties grows
+# rather than stopping at 256 (2026-10-05).
+tie_interp_resolves = row
+  "an interpreter tie that leaves cells in its graph"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "an_interpreter_tie_that_leaves_cells_in_its_graph")
+  release
+
+tie_serial = row
+  "a tie ref that answers any open tie"
+  true
+  "cargo test --release --test golden runtime_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_tie_ref_that_answers_any_open_tie")
+  release
+
+tie_native_serial = row
+  "a native tie ref that answers any open tie"
+  true
+  "cargo test --release --test golden runtime_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_native_tie_ref_that_answers_any_open_tie")
+  release
+
+tie_native_depth = row
+  "a native tie stack that stops at 256"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_native_tie_stack_that_stops_at_256")
+  release
+
+tie_fixes = [tie_interp_resolves tie_serial tie_native_serial tie_native_depth]
+
+rows_c1zzzzzzza = text/concat rows_c1zzzzzzzb tie_fixes
+
+rows_c = text/concat rows_c1zzzzzzza [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
