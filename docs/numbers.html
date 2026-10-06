@@ -282,10 +282,10 @@ divided by the weight those terms carry, times a hundred.</p>
       note: 'The most the in-tab compile held above where it began, from the toolchain allocator\u2019s own tally.' },
     { token: 'browser_run_instructions', hue: 'var(--series-browser-run)',
       label: 'browser run', read: (r) => r.browser_run_instructions,
-      note: 'Wasm instructions spent running the module the tab compiled, including every call it makes back into the toolchain. Each value lives in a registry the toolchain keeps, so this is where the playground is furthest from native.' },
+      note: 'Wasm instructions spent running the module the tab compiled, including every call it makes into the runtime, which is kanso\u2019s own runtime built for wasm32 and lays values out as a native build does.' },
     { token: 'browser_run_peak_bytes', hue: 'var(--series-browser-run-memory)',
       label: 'browser run memory', read: (r) => r.browser_run_peak_bytes,
-      note: 'The most that run held above where it began, which is mostly the value registry and what it keeps alive until the run ends.' },
+      note: 'How far the runtime\u2019s linear memory grew while the program ran, in whole 64 KiB pages.' },
     // The decoder's machine code. Only its own, because every binary links the
     // same runtime and summing them would count it four times. Dashed, and
     // second to last, because the score does not read it: a machine-code-size

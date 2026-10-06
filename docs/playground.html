@@ -1,7 +1,7 @@
 ---
 layout: default
 title: "kanso playground"
-description: "run kanso in your browser: programs compile to wasm modules right in the tab via kanso's own wasm backend, with a live syntax-highlighted editor and a repl."
+description: "run kanso in your browser: programs compile to wasm right in the tab, through the same emitter native builds use, with a live syntax-highlighted editor and a repl."
 ---
 <style>
 .play-wrap {
@@ -203,13 +203,14 @@ description: "run kanso in your browser: programs compile to wasm modules right 
   </div>
 
   <p class="play-note">this is not a toy evaluator: it is kanso's whole toolchain compiled to
-  webassembly, with a hand-rolled editor on top. your program <strong>compiles to a wasm module
-  right here in the tab</strong>—kanso's own wasm backend, no llvm, no server—and runs as machine
-  code, tail calls included; the badge under the output names the engine that ran. programs the
-  browser backend doesn't cover yet fall back to the reference interpreter, byte-identically.
-  integers are arbitrary-precision here, so <code>fact 100</code> just works. descriptions execute when
-  they reach the edge; there is no filesystem in a browser tab, so <code>read_file</code> and <code>read_bytes</code>
-  answer with an err, exactly as the model says it should.</p>
+  webassembly, with a hand-rolled editor on top. your program <strong>compiles right here in the
+  tab</strong>, through the same emitter a native build uses and with no server, and runs as machine
+  code against kanso's runtime built for wasm32, tail calls included; the badge under the output
+  names the engine that ran. a browser that cannot load the runtime runs the reference interpreter
+  instead. integers are 64 bits in compiled code, as in a native build, so <code>fact 100</code>
+  stops with an overflow error where the interpreter prints all 158 digits. descriptions execute
+  when they reach the edge; there is no filesystem in a browser tab, so <code>read_file</code> and
+  <code>read_bytes</code> answer with an err, exactly as the model says it should.</p>
 </div>
 
 <script src="/kanso-engine.js"></script>
