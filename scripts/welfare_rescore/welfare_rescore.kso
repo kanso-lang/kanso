@@ -68,6 +68,7 @@ pub type scoring
 # formula date is read rather than held: a copy here would keep its value
 # through the gavel that moves it.
 pub type over
+  browser_share
   prod_share
   dev_share
   satiation
@@ -111,17 +112,24 @@ fn meta_line? l
 # for and what five hundred rows were scored by. Saturating them anyway would
 # rewrite every historical number for a model nobody applied to them.
 fn over_read _ true
-  over 1.0 0.0 0.0
+  over 0.0 1.0 0.0 0.0
 
 fn over_read rows false
   return over_read rows true if length rows < 1
   line = rows[1]
   parts = text/split (text/slice line 6 (length line)) "|"
-  return over 1.0 0.0 0.0 if length parts < 3
+  return over 0.0 1.0 0.0 0.0 if length parts < 3
   a = text/to_float parts[1]
   b = text/to_float parts[2]
   c = text/to_float parts[3]
-  over a b c
+  over (browser_part parts) a b c
+
+# THE BROWSER'S SHARE IS A FOURTH FIELD, added with the third side on
+# 2026-10-06. A three-field meta line is a model from before it, with no
+# browser side to weigh.
+fn browser_part parts
+  return 0.0 if length parts < 4
+  text/to_float parts[4]
 
 # --- the model, as `scripts/welfare -- --model` writes it -------------------
 fn model_lines model
@@ -605,7 +613,8 @@ fn present row base t
 fn score row ts base m
   p = side_fraction row (on_side ts "production") base
   d = side_fraction row (on_side ts "development") base
-  100.0 * combined m p d / saturated m.satiation 1.0
+  b = side_fraction row (on_side ts "browser") base
+  100.0 * combined m p d b / saturated m.satiation 1.0
 
 fn on_side ts which
   list/to_list (list/select ts (t -> t.side == which))
@@ -624,23 +633,29 @@ fn fractioned row ts base held false
   shares = list/to_list (list/map ts (t -> share row base t))
   list/sum shares / held
 
-# Both sides, one side, or neither. With one side the meta is that side alone,
-# because a share of nothing is not a share -- renormalising 0.70 up to 1.00 is
-# the only reading that does not silently score the absent side as a loss.
-fn combined m p d
-  weigh m p d (p == none) (d == none)
+# Whichever sides the row carries, renormalised over their shares. With every
+# side present the shares sum to one and nothing is divided away; with one the
+# meta is that side alone, because a share of nothing is not a share --
+# renormalising 0.70 up to 1.00 is the only reading that does not silently
+# score the absent side as a loss. Every row before 2026-10-06 carries no
+# browser counter, so it is scored on the other two in the ratio they always
+# had, which is the ratio the browser's share was carved from.
+fn combined m p d b
+  k = m.satiation
+  pp = part k m.prod_share p
+  dd = part k m.dev_share d
+  bb = part k m.browser_share b
+  held = pp[2] + dd[2] + bb[2]
+  return 0.0 if held == 0.0
+  (pp[1] + dd[1] + bb[1]) / held
 
-fn weigh _ _ _ true true
-  0.0
+# A side's contribution and the share it holds, or nothing for either when the
+# row carries nothing that side weighs.
+fn part _ _ none
+  [0.0 0.0]
 
-fn weigh m _ d true false
-  saturated m.satiation d
-
-fn weigh m p _ false true
-  saturated m.satiation p
-
-fn weigh m p d false false
-  m.prod_share * saturated m.satiation p + m.dev_share * saturated m.satiation d
+fn part k portion f
+  [(portion * saturated k f) portion]
 
 fn saturated k w
   return w if k == 0.0

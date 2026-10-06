@@ -626,6 +626,14 @@ jobs:
         if: always()
         continue-on-error: true
         run: sh scripts/gates/emit_instructions.sh
+      # The browser side of the objective, ruled 2026-10-06: the playground
+      # compiling bench/interp_corpus in the tab and running what it emits,
+      # counted by wasmi's fuel meter. The gate builds docs/kanso.wasm itself.
+      - name: what the browser engine costs
+        id: browser
+        if: always()
+        continue-on-error: true
+        run: sh scripts/gates/browser_cost.sh
       # The interpreted engine's own two rows, and the first here that count a
       # program EXECUTING. `kanso run --interp` parses, infers and then runs in
       # one process, so nothing above can see either number: every gate beside
@@ -798,6 +806,7 @@ jobs:
                       "dev-tier codegen:${{ steps.codegen_dev.outcome }}" \
                       "release-tier codegen:${{ steps.codegen_release.outcome }}" \
                       "what emitting costs:${{ steps.emit_ir.outcome }}" \
+                      "browser engine:${{ steps.browser.outcome }}" \
                       "encode counters:${{ steps.encode.outcome }}" \
                       "wide counters:${{ steps.wide.outcome }}" \
                       "pending-cell counters:${{ steps.pend.outcome }}" \
