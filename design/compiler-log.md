@@ -21731,8 +21731,9 @@ nests three hundred ties, which goes past a thousand wasm frames. wasmi stops
 at a thousand by default. A browser gives a page several times that, and
 native runs on an 8 MB stack. The spec's host now allows ten thousand frames,
 and the program agrees. The two codegen rows take CI's readings on the merged
-tree: `codegen_instructions_release` lands on 408,634,272 and
-`codegen_instructions_dev` on 124,656,228. Both moves are in the child tree
+tree: `codegen_instructions_release` lands on 408,634,431 and
+`codegen_instructions_dev` on 124,656,257, read after `k_arena_left` went back
+to `size_t` on native. Both moves are in the child tree
 that compiles `runtime.c`, whose `k_arena_left` and `k_thunk_new` changed. The
 welfare meta holds at the floor.
 
