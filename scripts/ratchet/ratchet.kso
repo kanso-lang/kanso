@@ -3386,13 +3386,15 @@ render_group = row
 
 rows_c1zzc = text/concat rows_c1zzb [render_group]
 
-# An integer written as text past int64 is refused by a compiled build, with
-# arithmetic's own diagnostic. Answering an err value again lets a program
-# catch it, and std/json turns it into "invalid number".
+# An integer written as text past int64 is read whole by a compiled build.
+# Answering an err value again lets a program catch it, and std/json turns it
+# into "invalid number".
+int_whole = "an_integer_past_int64_reads_whole_on_every_engine"
+
 int_refused = row
   "an overflowing integer answered as an err"
   true
-  "cargo test --release --test an_integer_past_int64_is_refused_natively"
+  "cargo test --release --test {int_whole}"
   "specs (unit, golden, differential)"
   (breaking "an_overflowing_integer_answered_as_an_err")
   no_setup

@@ -10766,10 +10766,10 @@ static __attribute__((noinline, cold, preserve_most)) KValue k_b_to_int_slow(con
     if (copy != small) free(copy);
     if (!whole) return k_not_a_number(data, len, "\" is not an integer", "bytes are not an integer", origin);
     /* strtoll saturates while consuming every digit, and the interpreter
-       answers the whole integer. A value this build cannot hold is refused
-       with the diagnostic arithmetic gives on overflow. An err here was a
-       value a program could catch and carry on from, and std/json caught it
-       and answered "invalid number" for a well-formed document. */
+       answers the whole integer, so a value past the word is read again from
+       its digits into a bignum. An err here was a value a program could catch
+       and carry on from, and std/json caught it and answered "invalid number"
+       for a well-formed document. */
     if (range) return k_int_of_digits(data, len);
     return k_int(n);
 }
