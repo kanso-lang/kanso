@@ -21896,5 +21896,12 @@ which is 913,489 to 864,246 gzipped. With the runtime's 105,100 gzipped bytes a
 first visit downloads 969,346 compressed bytes, against 652,614 before the tab
 compiled at all. The native emitter is most of what remains of the growth.
 
-The browser rows do not move: `tests/browser_cost.rs` already measured the
-native route.
+**Rows.** Six moved on CI, and all six fell. Compile instructions read
+26,046,706 against 26,074,590, entry 85,962,181 against 86,063,837, library
+86,525,594 against 86,626,059, emitting 31,109,637 against 31,191,395, the
+interpreted run 590,481,428 against 590,552,679, and the tab's compile
+591,832,734 against 592,373,894. Each arrived with this change. Nothing here
+isolates the mechanism; none of these paths calls the deleted code, so layout
+is the likeliest reading and it is not shown. The tab's run row and both
+memory rows hold, since `tests/browser_cost.rs` already measured the native
+route.
