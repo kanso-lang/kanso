@@ -22204,8 +22204,10 @@ own work: `front_end_visits` 7,982, `compile_instructions` 26,191,422,
 `compile_allocs` 14,747 and `emit_instructions` 32,132,166. The interpreter,
 by 1,320 instructions and six allocations: `interp_instructions`
 590,482,748 and `interp_allocs` 896,122. The two codegen tiers:
-`codegen_instructions_dev` 130,522,884 and `codegen_instructions_release`
-503,605,225. The tab: `browser_compile_instructions` 633,010,618,
+`codegen_instructions_dev` 130,522,835 and `codegen_instructions_release`
+503,605,244. Those two read 130,522,884 and 503,605,225 a commit earlier; the
+one input to them that changed between the two was a comment rewritten in
+src/runtime.c, whose text clang reads. The tab: `browser_compile_instructions` 633,010,618,
 `browser_compile_peak_bytes` 2,639,715 and `browser_run_instructions`
 33,447,328. The run programs: `work_basket` 32,465,828, `work_deepbench`
 370,955,233, `work_digestbench` 5,735,451, `work_encodebench` 2,382,879,127,
