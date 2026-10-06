@@ -21929,6 +21929,17 @@ warns about the collision on every build. The page needs the binary, which
 exports the allocator's heap counters, and it was getting the binary because
 the binary links last.
 
+**Random programs through the tab's route.** The generator the earlier
+differential batches used, run with `KANSO_GEN_NO_FS=1` since the page has no
+filesystem, wrote 4,000 programs from seeds 910001 to 911000 and 920001 to
+923000. Each was built natively, and its emitted module was retargeted,
+translated by `ir_wasm` and run against the wasm32 runtime under the specs'
+WASI host. 3,337 built and ran on both, and stream for stream and exit code
+for exit code none differed. The other 663 are programs the compiler refuses,
+mostly a conversion folded at compile time that cannot succeed. An earlier
+batch of 200 that kept the filesystem calls differed on 16, each one a
+program making a directory, which the tab's host answers with ENOSYS.
+
 **Built, measured and declined: LTO and one codegen unit.** Every arm with
 either made the tab's compile dearer, and only the two with one unit made the
 module smaller. All five arms were stripped, on
