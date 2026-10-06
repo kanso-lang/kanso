@@ -21731,7 +21731,9 @@ nests three hundred ties, which goes past a thousand wasm frames. wasmi stops
 at a thousand by default. A browser gives a page several times that, and
 native runs on an 8 MB stack. The spec's host now allows ten thousand frames,
 and the program agrees. The two codegen rows take main's readings plus this
-change's own moves, +50 on the release tier and -36 on the dev tier. Both
+change's own moves, +50 on the release tier and -36 on the dev tier:
+`codegen_instructions_release` lands on 408,634,292 and
+`codegen_instructions_dev` on 124,656,207. Both
 moves are in the child tree that compiles `runtime.c`, whose `k_arena_left`
 and `k_thunk_new` changed. The welfare meta holds at the floor.
 ## 2026-10-06 — the playground compiles with native's emitter and runs on runtime.c
