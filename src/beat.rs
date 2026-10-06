@@ -1989,7 +1989,6 @@ fn arg_ok(
     callee_set != 0 && callee_set & !FAIL & !CROSSES == 0
 }
 
-
 fn group_param_set(
     program: &Program,
     inference: &infer::Inference,

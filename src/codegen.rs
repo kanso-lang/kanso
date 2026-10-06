@@ -4714,17 +4714,18 @@ fn lift_around(
             .collect()
     };
     // merges each lifted argument from the two ways into `at`
-    let merge = |f: &mut FnEmit, emitted: &mut [String], moved: &[String], from: &str, via: &str| {
-        for (k, &j) in lifted.iter().enumerate() {
-            let v = f.tmp();
-            f.line(&format!(
-                "{v} = phi %KValue [ {}, %{from} ], [ {}, %{via} ]",
-                emitted[j], moved[k]
-            ));
-            f.record(&v, sets[k]);
-            emitted[j] = v;
-        }
-    };
+    let merge =
+        |f: &mut FnEmit, emitted: &mut [String], moved: &[String], from: &str, via: &str| {
+            for (k, &j) in lifted.iter().enumerate() {
+                let v = f.tmp();
+                f.line(&format!(
+                    "{v} = phi %KValue [ {}, %{from} ], [ {}, %{via} ]",
+                    emitted[j], moved[k]
+                ));
+                f.record(&v, sets[k]);
+                emitted[j] = v;
+            }
+        };
     let out = f.label();
     let mid = f.label();
     let before = f.cur_label.clone();
@@ -5872,7 +5873,8 @@ impl<'a> Backend<'a> {
                 self.emit_dispatcher(name, arity, &by_arity[&arity])?;
                 if self.has_twin(name, arity) {
                     self.twin_of = Some((name.to_string(), arity));
-                    let emitted = self.emit_dispatcher_as(&tsym(name, arity), name, arity, &by_arity[&arity]);
+                    let emitted =
+                        self.emit_dispatcher_as(&tsym(name, arity), name, arity, &by_arity[&arity]);
                     self.twin_of = None;
                     emitted?;
                 }
@@ -8561,7 +8563,11 @@ impl<'a> Backend<'a> {
                                         // re-seed. Only a slot builder_params
                                         // names is kept, so nothing that merely
                                         // has capacity is aliased.
-                                        match self.builder_params.contains(&(name.to_string(), n, j)) {
+                                        match self.builder_params.contains(&(
+                                            name.to_string(),
+                                            n,
+                                            j,
+                                        )) {
                                             true => "k_carry_stage_kept",
                                             false => "k_carry_stage",
                                         }
@@ -8570,7 +8576,10 @@ impl<'a> Backend<'a> {
                                 let mut carry = |f: &mut FnEmit, emitted: &mut [String]| {
                                     f.line("call void @k_carry_reset()");
                                     for (&j, stage) in positions.iter().zip(&stages) {
-                                        f.line(&format!("call void @{stage}(%KValue {})", emitted[j]));
+                                        f.line(&format!(
+                                            "call void @{stage}(%KValue {})",
+                                            emitted[j]
+                                        ));
                                     }
                                     f.line("call void @k_beat_iter_carry()");
                                     for (slot, &j) in positions.iter().enumerate() {
