@@ -21945,8 +21945,7 @@ rustc 1.98.1, read by `tests/browser_cost.rs`:
 The compile's peak bytes held at 2,256,216 in every arm. The cheapest of them
 is fat LTO with one unit: 35,897 fewer gzipped bytes for 3,361,145 more
 instructions, 0.57%. Download size is not a term in the objective, so welfare
-would read that trade as a pure regression, and lowering the floor for
-something other than the language is Clay's decision. Fat LTO also doubled the
+reads that trade as a pure regression, and it is declined. Fat LTO also doubled the
 wasm build, from about 40 seconds to about 95, in each of the six jobs that
 run it.
 
