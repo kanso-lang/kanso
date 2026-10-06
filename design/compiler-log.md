@@ -22005,3 +22005,41 @@ it stops with `error[runtime]: integer overflow (int64 native build; spec int
 is arbitrary precision)`, exactly as a native build does, and the interpreter
 still prints all 158 digits. Values in native's layout are 64-bit words. The
 note now says so.
+
+## 2026-10-07 — gavel: compiled code gets the integers the spec promises
+
+Ruling from Clay, 2026-10-07: compiled code gets the arbitrary-precision
+integers the spec and chapter 2 promise, and the tab gets no interpreter
+fallback.
+
+**What raised it.** kanso#1776 found that the playground's compiled route
+stops `fact 100` with `integer overflow (int64 native build; spec int is
+arbitrary precision)`, as a native build does, where the older wasm backend
+and the interpreter print all 158 digits. Chapter 2 already says the bignum
+backing "is on the way", and the 2026-08-29 rule says a decided feature never
+rests at refusing honestly. Re-running an overflowing program in the
+interpreter was weighed and declined. It fixes only the tab and leaves native
+disagreeing with it. It runs a second engine without saying so. It re-runs
+the program from the start, so output printed before the overflow appears
+twice.
+
+**The design.** An int stays an inline 64-bit value until an operation
+overflows. The runtime then promotes it to a bignum, and every integer
+operation accepts either kind. Native and the tab share `runtime.c`, so both
+get it in one change. Native's refusal goes everywhere it is raised: the
+emitter's `llvm.s*.with.overflow` traps, the runtime's `__builtin_*_overflow`
+sites and the `round` path.
+
+**Owed.** `fact 100` and the one-engine fixtures that pin native's refusal
+become ordinary all-engine goldens, the 1e30 `math/round` case among them. An
+adversarial set sits around the boundary: ±2^63, mixed small and big operands,
+division and remainder, comparison, rendering and map keys. The fast path's
+cost and the runtime's size are measured, and since this builds a ruled part
+of the language the welfare floor drops by exactly what it costs, with the
+reason in the history entry. Chapter 2's "on the way" paragraph and
+`samples/ch02/overflow` change with it, and the playground page's 64-bit note
+goes.
+
+The 2026-09-30 directive, "a golden may pin the interpreter's answer where
+native refuses", stays useful until this lands. After that the two engines
+agree and its int fixture becomes an ordinary golden.

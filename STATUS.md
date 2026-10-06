@@ -259,6 +259,22 @@ refusal; error goldens for a read through a reference in the maker and in a
 helper it calls; and a fixture that ties and drops ten thousand graphs with a
 flat arena peak.
 
+### Compiled code gets arbitrary-precision integers (2026-10-07)
+
+The live log's "gavel: compiled code gets the integers the spec promises". An
+int stays an inline 64-bit value until an operation overflows, and the
+runtime then promotes it to a bignum. Native and the tab share the runtime.
+No interpreter fallback in the tab.
+
+Owes, from the ruling: native's int64 refusal gone from the emitter's
+overflow traps, the runtime's `__builtin_*_overflow` sites and the `round`
+path; `fact 100` and the one-engine int fixtures as all-engine goldens, the
+1e30 `math/round` case among them; an adversarial set at ±2^63 covering mixed
+operands, division and remainder, comparison, rendering and map keys; the
+fast path's cost and the runtime's size measured, with the floor dropped by
+exactly that cost; chapter 2's "on the way" paragraph, `samples/ch02/overflow`
+and the playground's 64-bit note updated.
+
 ### Every environment is weighed, and the browser is missing (2026-10-06)
 
 The live log's "gavel: welfare weighs every environment kanso runs in, and none
