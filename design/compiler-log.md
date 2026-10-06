@@ -22164,6 +22164,21 @@ The basket, run, scan and digest counters are back to main's byte for byte,
 and on CI basket's instructions read 32,465,828 against 33,760,303 and
 runbench 1,240,341,240.
 
+A byte run, `cs[p] == 97 and cs[p + 1] == 98` over bytes and an int, reads
+as one window test and plain compares only when `p` is an int, and a position
+that can step past the word is now an int or a bignum. The test stopped firing
+on every benchmark, and the ratchet found it: both byte-run rows went blind.
+The window test now also asks that `p` hold a word, and a bignum takes the
+general reads. In this container runbench went from 1,240,342,077 to
+1,211,249,956 with it and jsonbench from 923,660,159 to 879,580,859.
+`a_byte_run_at_a_position_past_the_word` walks a position past 2^64 in both
+directions through one. The same run found the zero-divisor row blind. A
+quotient may be a bignum, so the arithmetic in its fixture tests the tag
+whatever inference said, and the row now reads
+`arithmetic_on_a_modulo_by_zero_is_refused`: a remainder by a word is a word,
+and typed that way an inference that calls the zero divisor's answer an err
+multiplies the string's address.
+
 A dev build and the tab get no twins. A twin buys run speed with a second
 copy of each looping group, and the tab's compile of interp_corpus read
 738,305,432 fuel against main's 591,832,734 with them and held 3,367,720

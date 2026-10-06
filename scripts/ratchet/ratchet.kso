@@ -3428,7 +3428,9 @@ rows_c1zzg = text/concat rows_c1zzf [element_err]
 
 # A zero divisor answers a value. Typed as an err, it lets a compiled build
 # compute on the string as though it were a number, and the runtime corpus
-# reads a number where the refusal of `*` belongs.
+# reads a number where the refusal of `*` belongs, in the `%` fixture: a
+# remainder by a word is a word, where a quotient may be a bignum whose
+# arithmetic tests the tag.
 zero_divisor = row
   "a zero divisor answered as an err"
   true

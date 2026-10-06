@@ -8889,7 +8889,10 @@ impl<'a> Backend<'a> {
             return Ok(None);
         }
         let (Some(xv), Some(pv)) = (f.lookup(x), f.lookup(p)) else { return Ok(None) };
-        if f.set_of(&xv) != BYTES || f.set_of(&pv) != INT {
+        // A position that may have grown past the word is tested for its tag
+        // beside the bounds, and a bignum takes the general arm.
+        let p_set = f.set_of(&pv);
+        if f.set_of(&xv) != BYTES || (p_set != INT && p_set != INT | infer::BIG) {
             return Ok(None);
         }
         let kmin = reads.iter().map(|r| r.0).min().unwrap_or(0);
@@ -8908,8 +8911,16 @@ impl<'a> Backend<'a> {
         f.line(&format!("{top} = sub i64 {len}, {kmax}"));
         let hi = f.tmp();
         f.line(&format!("{hi} = icmp sle i64 {idx}, {top}"));
-        let inside = f.tmp();
+        let mut inside = f.tmp();
         f.line(&format!("{inside} = and i1 {lo}, {hi}"));
+        if p_set != INT {
+            let tag = inline_tag(f, &pv);
+            let word = f.tmp();
+            f.line(&format!("{word} = icmp eq i64 {tag}, 0"));
+            let both = f.tmp();
+            f.line(&format!("{both} = and i1 {inside}, {word}"));
+            inside = both;
+        }
         let fast = f.label();
         let slow = f.label();
         let merge = f.label();
