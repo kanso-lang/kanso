@@ -14,6 +14,7 @@ pub mod hash;
 pub mod infer;
 pub mod inline;
 pub mod int;
+pub mod ir_wasm;
 pub mod lexer;
 pub mod linear;
 pub mod name;
