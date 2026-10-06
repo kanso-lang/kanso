@@ -21662,3 +21662,84 @@ registry until the run ends. That is the ratio the next step attacks: values in
 linear memory in native's layout, with `runtime.c` compiled to wasm32 and
 called directly. The artifact it changes is 2,167,289 bytes today under rustc
 1.98.1, and the next step reports what it does to that.
+
+## 2026-10-06 — native's layout runs on wasm32, and the corpus agrees
+
+The first step of putting values in linear memory in native's layout, with
+`runtime.c` compiled to wasm32. Before the tab emits anything new, the layout
+it would target is held to the goldens: native's own emitted module, built for
+wasm32 against the runtime built the same way, answers the micro corpus byte
+for byte.
+
+**What it takes.** `codegen::retarget_wasm32` rewrites an emitted module for
+wasm32 and touches three things. The triple names wasm32, and the x86 data
+layout goes. `tailcc` and `preserve_none` go, since wasm has neither, and
+`-mtail-call` keeps every `musttail`. And six lines in `WASM32_LINES` are
+rewritten, where an inline helper reads a runtime struct at a byte offset that
+follows a pointer: `KStr`'s length and capacity, `KMap`'s `sorted`, and
+`KClosure`'s `env` and `arity`. Every other offset the emitter writes follows a
+`long long` and holds on both targets.
+
+`runtime.c` needed two changes, and native compiles both of them as it did
+before. `k_arena_left` was a `size_t`, which is four bytes on wasm32, while the
+emitted module loads and stores it as an `i64`; it is an
+`unsigned long long` now, the same width native always had. And
+`k_thunk_new` reads its variadic `KValue`s as the two words the wasm backend
+writes for a first-class struct, under `#ifdef __wasm__`; the wasm32 C ABI
+would have read each one through a pointer, and every deferred value in the
+corpus came back wrong.
+
+The rest is the build. `wasm/include` declares the process and socket calls
+the effect executor makes, and `wasm/shim.c` answers each as a failure and
+supplies the three 128-bit helpers wasi-libc calls, which no wasm32 compiler-rt
+on this toolchain has. The runtime is lowered with clang's multivalue C ABI so
+a `KValue` passes as two words, as the emitted module passes it; the backend
+step keeps the standard ABI, so the 128-bit helpers match the ones wasi-libc
+was built against. The stack is 8 MB and placed first. wasm-ld's default is
+64 KB growing down into the data segment, and a twenty-step `.>` chain overran
+it and wrote over libc's `stdout`, which showed up as a trap inside `fputc`.
+
+**What holds it.** `tests/native_layout_on_wasm32.rs` builds each played
+program in the micro corpus with `kanso build`, retargets the module, builds
+and links it for wasm32, runs it under wasmi with a WASI host of a dozen calls,
+and compares stdout, stderr and the exit code with the program's goldens. All
+259 agree. Seven programs that run a command or reach the filesystem are left
+out, each with its reason, because the page has neither. Two breaks were
+watched red: the `KStr` length rewrite put back to native's offset turned 35
+programs red, and the variadic read put back turned 8 red. The Linux specs job
+installs wasi-libc and lld's wasm linker and sets `KANSO_WASM32_REQUIRED`, so a
+missing piece there fails the spec instead of skipping it.
+
+**What it would buy.** The interpreted row's corpus, built this way, runs in
+22,228,209 wasm instructions under the same fuel meter that counts the tab's
+run at 2,389,805,261. That is about 107 times less. The module is 232,261
+bytes, 97,172 gzipped, with the runtime and libc linked in and stripped to
+what the program reaches. The runtime alone with every symbol exported is
+253,684 bytes. The playground ships `kanso.wasm` at 2,167,289 bytes (630,478
+gzipped) today, so a page that carried the runtime beside it would grow by
+about 12% before compression.
+
+**What it does not do yet.** The tab cannot run clang, so this is the layout
+and the runtime proven, and not yet compilation in the tab. The step after this
+is the in-tab emitter writing wasm in this layout and linking against the
+runtime built here, held to the same goldens. Native's module defines seven
+hooks the runtime calls (`k_user_main`, `d_thunk_eval` and the type tables),
+and a module the page builds will have to supply the same seven.
+
+**After `list/tie` landed.** Its micro program `three_hundred_ties_nested`
+nests three hundred ties, which goes past a thousand wasm frames. wasmi stops
+at a thousand by default. A browser gives a page several times that, and
+native runs on an 8 MB stack. The spec's host now allows ten thousand frames,
+and the program agrees. The two codegen rows take CI's readings on the merged
+tree: `codegen_instructions_release` lands on 408,634,431 and
+`codegen_instructions_dev` on 124,656,257, read after `k_arena_left` went back
+to `size_t` on native. Both moves are in the child tree
+that compiles `runtime.c`, whose `k_arena_left` and `k_thunk_new` changed. The
+welfare meta holds at the floor.
+
+`k_arena_left` is now declared `unsigned long long` on wasm32 only. Declared so
+everywhere, it is the same width on x86-64 as the `size_t` it replaced, and CI
+still read every benchmark's machine code 16 bytes smaller, with twelve of the
+fourteen work rows moving and deepbench up 324,000 instructions. Putting
+`size_t` back for native and nothing else returned the machine code to its
+golden byte for byte on this host.

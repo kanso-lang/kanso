@@ -107,6 +107,15 @@ jobs:
             echo "::error::clang 19 is installed but not selected: $(clang --version | head -1)"
             exit 1
           }
+      # tests/native_layout_on_wasm32.rs builds the micro corpus for wasm32
+      # in native's layout, which wants wasi-libc and lld's wasm linker. The
+      # spec skips on a host without them and refuses to under this variable,
+      # so the job that installs them cannot quietly stop running it.
+      - name: wasi-libc and wasm-ld, for native's layout on wasm32
+        run: |
+          sudo apt-get install -y -qq --no-install-recommends wasi-libc
+          sudo ln -sf /usr/bin/wasm-ld-19 /usr/local/bin/wasm-ld
+          echo "KANSO_WASM32_REQUIRED=1" >> "$GITHUB_ENV"
       # --no-fail-fast because cargo stops at the first failing test
       # BINARY, not the first failing test, and the binaries run in
       # alphabetical order. With welfare red in its own spec (then
@@ -1102,9 +1111,15 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      # rustfmt and clippy because the format and lint rows' gates are cargo
+      # fmt and cargo clippy, and a pinned toolchain arrives without either.
+      # ratchet.yml has carried both since the nightly was written; this job
+      # did not, so a branch touching a .rs file selected the format row and
+      # read `cargo-fmt is not installed` as ALREADY RED.
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
+          components: clippy, rustfmt
       # The ratchet runs other jobs' gates, so it needs what those jobs
       # install. It had neither valgrind nor the wasm target, and the two rows
       # whose gate runs callgrind were red here before any mutation was

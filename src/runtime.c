@@ -227,7 +227,16 @@ KValue k_thunk_new(long long site, int argc, ...) {
     va_list ap;
     va_start(ap, argc);
     for (int i = 0; i < argc; i++) {
+#ifdef __wasm__
+        /* The emitted IR passes each argument as a first-class `%KValue`,
+           which the wasm backend writes into the variadic buffer as its two
+           words. The wasm32 C ABI would read a struct through a pointer, so
+           the words are read as the backend wrote them. */
+        t->args[i].tag = va_arg(ap, long long);
+        t->args[i].payload = va_arg(ap, long long);
+#else
         t->args[i] = va_arg(ap, KValue);
+#endif
         /* a cell holding another cell keeps it alive */
         if (t->args[i].tag == K_THUNK) ((KThunk*)t->args[i].payload)->rc++;
     }
@@ -538,7 +547,16 @@ static long long k_seek_char = 0;
 static long k_seek_byte = 0;
 
 char* k_arena = NULL;
+/* The emitted IR reads and writes this as an i64, which is size_t on a 64-bit
+   host and twice it on wasm32. The native declaration stays size_t: spelled
+   `unsigned long long`, the same width under another name, it took 16 bytes
+   off every benchmark's machine code and moved twelve of the fourteen work
+   rows, deepbench up by 324,000 instructions. */
+#ifdef __wasm__
+unsigned long long k_arena_left = 0;
+#else
 size_t k_arena_left = 0;
+#endif
 
 /* Cost counters: every value is an exact, machine-independent constant for a
    deterministic program, so they golden like output does. KANSO_COUNTERS=1
