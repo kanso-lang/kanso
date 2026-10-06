@@ -21449,16 +21449,31 @@ first and builds the tables only when there is one. The other 326,878 are
 std/list's new declarations being lexed, parsed and inferred in every program
 that imports the module.
 
-CI's rows on d384a33f, on the silicon `bench/dispatch.txt` records:
-`compile_instructions` 25,719,895 -> 26,062,711 (+1.33%), `compile_allocs`
-14,494 -> 14,744, `compile_peak_bytes` 717,297 -> 729,597, entry +919,588,
-library +949,903, `interp_instructions` +890,235 and `interp_peak_bytes`
-725,220 -> 739,436, release codegen +542,067, dev codegen +189,591 and
-`emit_instructions` +876,648. The run work moves by tens of instructions per
-benchmark (livebench +651, runbench -636), the same figures an earlier run
-read on other silicon. Welfare reads 90.3053 against a floor of 90.3174, and
-the floor comes down to the score, by the ruling that a built part of the
-language lowers it by exactly what it costs.
+CI's rows on d384a33f, on the silicon `bench/dispatch.txt` records, all of
+them what std/list's new declarations and the three engines' tie code cost:
+
+- the front end: `compile_instructions` 25,719,895 -> 26,062,711 (+1.33%),
+  `compile_allocs` 14,494 -> 14,744, `compile_peak_bytes` 717,297 ->
+  729,597, `front_end_visits` 7,526 -> 7,555, `module_lines` 1,105 -> 1,109
+  and `module_visits` 2,677 -> 2,706;
+- the other two compile routes: `entry_instructions` 85,110,161 ->
+  86,029,749 and `library_instructions` 85,641,806 -> 86,591,709;
+- the interpreter: `interp_instructions` 590,630,366 -> 591,520,601,
+  `interp_allocs` 895,408 -> 896,116 and `interp_peak_bytes` 725,220 ->
+  739,436;
+- codegen: `codegen_instructions_dev` +189,591, `codegen_instructions_release`
+  +542,067 and `emit_instructions` +876,648, with `emitted_other_lines`,
+  `emitted_other_calls` and `emitted_other_branches` up 150, 16 and 18 and
+  `text` up 3,440 to 4,688 bytes a binary for the runtime's tie entries;
+- run work, by tens of instructions a benchmark: `work_basket`,
+  `work_deepbench`, `work_digestbench`, `work_encodebench`, `work_pendbench`
+  and `work_widebench` +65 each, `work_oneshot` +462, `work_scanbench` +74,
+  `work_livebench` +651, and `work_jsonbench` -4 and `work_runbench` -636.
+  An earlier run on other silicon read the same figures.
+
+Welfare reads 90.3053 against a floor of 90.3174, and the floor comes down to
+the score, by the ruling that a built part of the language lowers it by
+exactly what it costs.
 
 **Ratchet.** Nine rows, each watched red:
 
