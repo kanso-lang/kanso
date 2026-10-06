@@ -21833,7 +21833,9 @@ them. They are layout moves, taken from CI: `compile_instructions` lands on
 more fall and are taken from CI: `emit_instructions` to 31,191,395 (from
 31,223,159) and `interp_instructions` to 590,552,679 (from 591,566,141). Both
 arrived with this change; nothing here isolates the mechanism, and native's
-emitting runs none of the new code.
+emitting runs none of the new code. `codegen_instructions_dev` reads
+124,659,910, 3,653 above #1771's reading on the same `runtime.c`, so the rise
+is in the dev tier's compile of the emitted program rather than of the runtime.
 
 **Size.** On rustc 1.98.1, `kanso.wasm` grows from 2,161,218 bytes to
 3,237,163, which is 652,614 to 913,489 gzipped. The runtime adds 259,284
