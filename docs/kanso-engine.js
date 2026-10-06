@@ -227,10 +227,174 @@ async function runCompiled(src, compileFn) {
 }
 
 
+/* ---------- the native route: the emitter's module on runtime.c ----------
+
+   The toolchain compiles a program the way `kanso build` does and lowers the
+   module the native emitter writes to a wasm side module (src/ir_wasm.rs).
+   That module links against runtime.c built for wasm32 (kanso-runtime.wasm):
+   it imports the runtime's memory, table and stack pointer, plus two bases
+   chosen here, `__memory_base` for its data and `__table_base` for its
+   functions. Values live in the runtime's memory in native's layout, and the
+   program calls the same k_* functions a native binary calls. */
+
+let runtimeModule = null;
+
+async function loadRuntime() {
+  try {
+    const response = await fetch(new URL('kanso-runtime.wasm', HERE));
+    if (!response.ok) return;
+    runtimeModule = await WebAssembly.compile(await response.arrayBuffer());
+  } catch (e) {
+    console.warn('kanso: the native route is unavailable', e);
+  }
+}
+
+class ProcExit {
+  constructor(code) { this.code = code; }
+}
+
+/* The dozen WASI calls the runtime makes when a program runs, answered for a
+   page. No stream is a terminal, so diagnostics carry no colour. A sleep
+   returns at once and moves the program's clock by what it asked for, so the
+   scheduler meets its deadlines in the order native does. There are no files
+   and no processes, so everything else answers ENOSYS and the runtime refuses
+   the call in its own words. */
+function wasiHost(env) {
+  const host = { memory: null, out: [], err: [], slept: 0n, start: BigInt(Date.now()) * 1000000n };
+  const view = () => new DataView(host.memory.buffer);
+  const bytes = () => new Uint8Array(host.memory.buffer);
+  const entries = Object.entries(env).map(([k, v]) => new TextEncoder().encode(`${k}=${v}\0`));
+  const calls = {
+    fd_write(fd, iovs, n, written) {
+      let total = 0;
+      for (let k = 0; k < n; k++) {
+        const p = view().getUint32(iovs + k * 8, true);
+        const len = view().getUint32(iovs + k * 8 + 4, true);
+        (fd === 2 ? host.err : host.out).push(bytes().slice(p, p + len));
+        total += len;
+      }
+      view().setUint32(written, total, true);
+      return 0;
+    },
+    args_sizes_get(count, size) {
+      view().setUint32(count, 0, true);
+      view().setUint32(size, 0, true);
+      return 0;
+    },
+    args_get() { return 0; },
+    environ_sizes_get(count, size) {
+      view().setUint32(count, entries.length, true);
+      view().setUint32(size, entries.reduce((n, e) => n + e.length, 0), true);
+      return 0;
+    },
+    environ_get(at, buf) {
+      for (const e of entries) {
+        view().setUint32(at, buf, true);
+        bytes().set(e, buf);
+        at += 4;
+        buf += e.length;
+      }
+      return 0;
+    },
+    random_get(buf, len) {
+      crypto.getRandomValues(bytes().subarray(buf, buf + len));
+      return 0;
+    },
+    fd_fdstat_get(fd, stat) {
+      bytes().fill(0, stat, stat + 24);
+      return 0;
+    },
+    fd_prestat_get() { return 8; },
+    clock_time_get(id, precision, at) {
+      view().setBigUint64(at, host.start + host.slept, true);
+      return 0;
+    },
+    poll_oneoff(subs, events, n, count) {
+      for (let k = 0; k < n; k++) {
+        const sub = subs + k * 48;
+        const tag = bytes()[sub + 8];
+        if (tag === 0) host.slept += view().getBigUint64(sub + 24, true);
+        bytes().fill(0, events + k * 32, events + k * 32 + 32);
+        bytes().set(bytes().slice(sub, sub + 8), events + k * 32);
+        bytes()[events + k * 32 + 10] = tag;
+      }
+      view().setUint32(count, n, true);
+      return 0;
+    },
+    sched_yield() { return 0; },
+    proc_exit(code) { throw new ProcExit(code); },
+  };
+  host.imports = new Proxy(calls, { get: (target, name) => target[name] || (() => 52) });
+  return host;
+}
+
+function joined(chunks) {
+  const all = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0));
+  let at = 0;
+  for (const c of chunks) {
+    all.set(c, at);
+    at += c.length;
+  }
+  return new TextDecoder().decode(all);
+}
+
+/* compile the editor's program through the native emitter and run it on the
+   runtime; returns null when the route is unavailable or declines the
+   program, and the older route picks it up */
+async function runNative(src, compileFn) {
+  if (!runtimeModule) return null;
+  const { ptr, len } = writeInput(src);
+  const status = compileFn(ptr, len);
+  if (status === 2) return { code: 1, text: readOut(), engine: 'error' };
+  if (status === 1) return null;
+  const side = new Uint8Array(wasm.memory.buffer, wasm.kanso_wasm_ptr() >>> 0, wasm.kanso_wasm_len() >>> 0).slice();
+  const data = wasm.kanso_side_data() >>> 0;
+  const slots = wasm.kanso_side_table() >>> 0;
+  const host = wasiHost({ KANSO_SEED: String(Date.now() >>> 0) });
+  const runtime = await WebAssembly.instantiate(runtimeModule, { wasi_snapshot_preview1: host.imports });
+  const rt = runtime.exports;
+  host.memory = rt.memory;
+  const env = {
+    memory: rt.memory,
+    __indirect_function_table: rt.__indirect_function_table,
+    __memory_base: new WebAssembly.Global({ value: 'i32', mutable: false }, rt.malloc(data)),
+    __table_base: new WebAssembly.Global({ value: 'i32', mutable: false }, rt.__indirect_function_table.grow(slots)),
+  };
+  let module;
+  try {
+    module = await WebAssembly.compile(side);
+  } catch (e) {
+    console.warn('kanso: the translator wrote a module the engine rejected', e);
+    return null;
+  }
+  for (const imp of WebAssembly.Module.imports(module)) {
+    if (!(imp.name in env)) env[imp.name] = rt[imp.name];
+  }
+  let code = 0;
+  try {
+    await WebAssembly.instantiate(module, { env });
+    rt._start();
+  } catch (e) {
+    if (e instanceof ProcExit) {
+      code = e.code;
+    } else if (e instanceof RangeError) {
+      /* the wasm call stack ran out: the sentence every engine prints */
+      wasm.kanso_stack_exhausted();
+      host.err.push(new TextEncoder().encode(readOut()));
+      code = 1;
+    } else {
+      host.err.push(new TextEncoder().encode(`${e}\n`));
+      code = 1;
+    }
+  }
+  return { code, text: joined(host.out) + joined(host.err), engine: 'native' };
+}
+
+
 /* ---------- what a page needs ---------- */
 
 async function ready() {
-  if (!wasm) await loadWasm();
+  if (!wasm) await Promise.all([loadWasm(), loadRuntime()]);
 }
 
 /* Run a program the way the playground does: compiled to wasm when the
@@ -238,6 +402,8 @@ async function ready() {
 async function runSource(src) {
   await ready();
   wasm.kanso_set_seed(Date.now() >>> 0);
+  const native = await runNative(src, wasm.kanso_compile_native);
+  if (native) return native;
   const compiled = await runCompiled(src, wasm.kanso_compile_wasm);
   if (compiled) return compiled;
   return Object.assign(callKanso('kanso_run', src), { engine: 'interp' });
@@ -248,6 +414,8 @@ async function runSource(src) {
 async function playSource(src) {
   await ready();
   wasm.kanso_set_seed(Date.now() >>> 0);
+  const native = await runNative(src, wasm.kanso_play_native);
+  if (native) return native;
   const compiled = await runCompiled(src, wasm.kanso_play_wasm);
   if (compiled) return compiled;
   return Object.assign(callKanso('kanso_play', src), { engine: 'interp' });
@@ -266,6 +434,8 @@ async function runLibrary(stem, src) {
   const lib = writeInput(src);
   wasm.kanso_hand_source(path.ptr, path.len, file.ptr, file.len, lib.ptr, lib.len);
   const entry = `import "${stem}"\n\n${stem}/play\n`;
+  const native = await runNative(entry, wasm.kanso_compile_native);
+  if (native) return native;
   const compiled = await runCompiled(entry, wasm.kanso_compile_wasm);
   if (compiled) return compiled;
   return Object.assign(callKanso('kanso_run', entry), { engine: 'interp' });

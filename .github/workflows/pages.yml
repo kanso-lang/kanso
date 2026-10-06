@@ -45,6 +45,17 @@ jobs:
         run: |
           rustup target add wasm32-unknown-unknown
           sh scripts/build_wasm.sh
+      # The playground compiles a program with the native emitter and links
+      # what it writes against runtime.c built for wasm32, which is shipped
+      # beside the engine as docs/kanso-runtime.wasm. Built here for the same
+      # reason the engine is: the site serves the runtime it was built from.
+      - name: build the runtime the playground links against
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends clang-19 lld-19 wasi-libc
+          sudo ln -sf /usr/bin/clang-19 /usr/local/bin/clang
+          sudo ln -sf /usr/bin/wasm-ld-19 /usr/local/bin/wasm-ld
+          sh scripts/build_runtime_wasm.sh docs/kanso-runtime.wasm
       - uses: actions/jekyll-build-pages@v1
         with:
           source: ./docs

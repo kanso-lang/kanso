@@ -10576,17 +10576,31 @@ pub fn retarget_wasm32(module: &str) -> String {
             out.push('\n');
             continue;
         }
-        let plain = line.replace("tailcc ", "").replace("preserve_nonecc ", "");
-        let body = plain.trim_start();
-        let indent = &plain[..plain.len() - body.len()];
+        let body = line.trim_start();
         match WASM32_LINES.iter().find(|(native, _)| *native == body) {
             Some((_, wasm)) => {
-                out.push_str(indent);
+                out.push_str(&line[..line.len() - body.len()]);
                 out.push_str(wasm);
             }
-            None => out.push_str(&plain),
+            None => without_conventions(line, &mut out),
         }
         out.push('\n');
     }
     out
+}
+
+/// `line` with every `tailcc ` and `preserve_nonecc ` taken out, appended to
+/// `out`. Most lines carry neither and are copied whole.
+fn without_conventions(line: &str, out: &mut String) {
+    let mut rest = line;
+    while let Some(at) = rest.find("cc ") {
+        let head = &rest[..at + 3];
+        let cut = ["preserve_nonecc ", "tailcc "].iter().find(|cc| head.ends_with(*cc));
+        match cut {
+            Some(cc) => out.push_str(&head[..head.len() - cc.len()]),
+            None => out.push_str(head),
+        }
+        rest = &rest[at + 3..];
+    }
+    out.push_str(rest);
 }
