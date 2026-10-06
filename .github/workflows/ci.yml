@@ -227,6 +227,16 @@ jobs:
         run: |
           rustup target add wasm32-unknown-unknown
           sh scripts/build_wasm.sh
+      # The same holds for the runtime the playground links a compiled program
+      # against, which the fingerprinter lists beside the engine. Built the way
+      # pages.yml builds it, so this job checks the site that ships.
+      - name: build the runtime the playground links against
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends clang-19 lld-19 wasi-libc
+          sudo ln -sf /usr/bin/clang-19 /usr/local/bin/clang
+          sudo ln -sf /usr/bin/wasm-ld-19 /usr/local/bin/wasm-ld
+          sh scripts/build_runtime_wasm.sh docs/kanso-runtime.wasm
       - uses: actions/jekyll-build-pages@v1
         with:
           source: ./docs
