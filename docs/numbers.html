@@ -90,6 +90,10 @@ divided by the weight those terms carry, times a hundred.</p>
   --series-emitting: #a8437a;
   --series-interp-speed: #0b8f9e;
   --series-interp-memory: #7a5c00;
+  --series-browser-compile: #3d6fa8;
+  --series-browser-compile-memory: #8a5a2b;
+  --series-browser-run: #b8336a;
+  --series-browser-run-memory: #5a6e00;
   --series-binary-size: #e87ba4;
   --series-welfare: #008300;
 }
@@ -106,6 +110,10 @@ divided by the weight those terms carry, times a hundred.</p>
     --series-emitting: #c25f92;
     --series-interp-speed: #0f9bb0;
     --series-interp-memory: #a9862f;
+    --series-browser-compile: #5b93d6;
+    --series-browser-compile-memory: #c08a55;
+    --series-browser-run: #d4608f;
+    --series-browser-run-memory: #9fb43a;
     --series-binary-size: #d55181;
     --series-welfare: #008300;
   }
@@ -263,6 +271,21 @@ divided by the weight those terms carry, times a hundred.</p>
     { token: 'interp_peak_bytes', hue: 'var(--series-interp-memory)',
       label: 'interpreter memory', read: (r) => r.interp_peak_bytes,
       note: 'That run\u2019s high-water mark. Last of the three the 2026-09-16 gavel ordered for the interpreted engine: start-up matters most, then speed, then this.' },
+    // The browser side, the third under the meta since 2026-10-06: the
+    // playground compiling the interpreter's corpus inside the tab and running
+    // what it emits, counted by wasmi's fuel meter rather than timed.
+    { token: 'browser_compile_instructions', hue: 'var(--series-browser-compile)',
+      label: 'browser compile', read: (r) => r.browser_compile_instructions,
+      note: 'Wasm instructions the playground spends compiling the interpreter\u2019s corpus inside the tab, counted under wasmi with fuel metering. Fuel is spent per executed instruction, so the same artifact reads the same number on every machine.' },
+    { token: 'browser_compile_peak_bytes', hue: 'var(--series-browser-compile-memory)',
+      label: 'browser compile memory', read: (r) => r.browser_compile_peak_bytes,
+      note: 'The most the in-tab compile held above where it began, from the toolchain allocator\u2019s own tally.' },
+    { token: 'browser_run_instructions', hue: 'var(--series-browser-run)',
+      label: 'browser run', read: (r) => r.browser_run_instructions,
+      note: 'Wasm instructions spent running the module the tab compiled, including every call it makes back into the toolchain. Each value lives in a registry the toolchain keeps, so this is where the playground is furthest from native.' },
+    { token: 'browser_run_peak_bytes', hue: 'var(--series-browser-run-memory)',
+      label: 'browser run memory', read: (r) => r.browser_run_peak_bytes,
+      note: 'The most that run held above where it began, which is mostly the value registry and what it keeps alive until the run ends.' },
     // The decoder's machine code. Only its own, because every binary links the
     // same runtime and summing them would count it four times. Dashed, and
     // second to last, because the score does not read it: a machine-code-size

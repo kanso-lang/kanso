@@ -110,7 +110,16 @@ lower_gs0 = text/concat lower_g lower_gg
 # regression. Lower is better for both.
 lower_gc = ["codegen_instructions_dev" "codegen_instructions_release"]
 
-lower_gs = text/concat lower_gs0 lower_gc
+# The browser side's four, which joined with their golden on 2026-10-06 and
+# were given a direction in the same commit so they cannot repeat the codegen
+# rows' fortnight of counting toward neither side. Lower is better for all four.
+lower_gb = ["browser_compile_instructions" "browser_compile_peak_bytes"]
+
+lower_gr = ["browser_run_instructions" "browser_run_peak_bytes"]
+
+lower_gt = text/concat lower_gc (text/concat lower_gb lower_gr)
+
+lower_gs = text/concat lower_gs0 lower_gt
 
 # The runtime work vein, per benchmark. Four of these are welfare's run-speed
 # terms, so half the score's inputs were invisible to the gate that exists to
@@ -398,7 +407,14 @@ bench_libcheck = text/concat bench_library bench_traffic_up
 
 bench_codegen_tiers = text/concat bench_codegen_dev bench_codegen_release
 
-bench_codegen = text/concat bench_codegen_tiers bench_emit
+# The browser side, added 2026-10-06 with the gavel that put it in the
+# objective. Fuel spent and allocator peaks under wasmi, written by
+# tests/browser_cost.rs. No prefix: every row already says `browser_`.
+bench_browser = [["bench/browser_golden.txt" ""]]
+
+bench_emit_tab = text/concat bench_emit bench_browser
+
+bench_codegen = text/concat bench_codegen_tiers bench_emit_tab
 
 bench_checked = text/concat bench_libcheck bench_codegen
 

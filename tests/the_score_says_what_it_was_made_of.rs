@@ -69,6 +69,11 @@ fn the_counter_set_is_the_one_the_formula_reads() {
         "startup_instructions",
         "interp_instructions",
         "interp_peak_bytes",
+        // browser
+        "browser_compile_instructions",
+        "browser_compile_peak_bytes",
+        "browser_run_instructions",
+        "browser_run_peak_bytes",
     ];
     let named: Vec<&str> =
         said.lines().filter_map(|l| l.split('=').next()).filter(|l| !l.is_empty()).collect();

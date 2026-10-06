@@ -798,6 +798,17 @@ So, before an argument rests on a number:
   implicitly weights at zero. Arguing the model is the intended way to change
   it. Every `--set` records why, so the history of the objective is readable
   beside the history of the code.
+- **Every environment kanso runs in has terms in the objective, and none sits
+  at zero.** Ruled 2026-10-06, after the browser engine was found missing from
+  every term. Each environment gets a CPU term and a memory term at a weight
+  chosen for how much it matters next to production; a weight may be small and
+  may not be zero. An engine or tier added later joins the objective in the
+  pull request that adds it, with a golden, a gate and a re-ratcheted floor.
+  The browser is the third side under the meta, built the same day: compiling
+  `bench/interp_corpus` in the tab and running what it emits, counted under
+  wasmi's fuel meter by `tests/browser_cost.rs` and gated by
+  `scripts/gates/browser_cost.sh`. Its rows belong to the rustc that built
+  `docs/kanso.wasm`, so take them from CI or from that same rustc.
 - **This does not replace the per-counter goldens.** They say which kernel
   moved; welfare says whether the project came out ahead. The first catches a
   deletion, the second catches a trade.

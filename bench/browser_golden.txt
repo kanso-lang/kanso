@@ -1,0 +1,10 @@
+# What the browser engine costs: bench/interp_corpus compiled by
+# docs/kanso.wasm and its emitted module run, both under wasmi with fuel
+# metering. Fuel is spent per executed wasm instruction and the peaks are the
+# toolchain allocator's requested bytes, so every row is the same on every
+# run of the same code. See tests/browser_cost.rs.
+# measured-on rustc=1.98.1
+browser_compile_instructions=343917485
+browser_compile_peak_bytes=588109
+browser_run_instructions=2331914518
+browser_run_peak_bytes=16141282
