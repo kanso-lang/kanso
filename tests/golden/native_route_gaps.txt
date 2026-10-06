@@ -1,0 +1,17 @@
+# The programs the playground's native route answers differently from native,
+# and what it answers instead. One line per program: the path, a tab, and text
+# the route's output contains. tests/wasm_engine.rs reads this, holds each listed
+# program to its answer, and fails on a listed program that has started agreeing
+# with native: a closed gap left on the list is a lie about the route.
+#
+# The route runs runtime.c built for wasm32 under a WASI host with no processes
+# and no filesystem, so each of these is the runtime's own refusal of a call the
+# host could not serve.
+
+tests/golden/micro/a_command_that_answers_127.kso	cannot start sh
+tests/golden/micro/process_run.kso	cannot start printf
+
+tests/golden/micro/a_file_that_is_not_text.kso	cannot read not_text.bin: no such file
+tests/golden/micro/dir_listing_is_sorted.kso	cannot list listing: no such directory or unreadable
+tests/golden/micro/is_dir.kso	false
+tests/golden/micro/make_dir_is_idempotent.kso	cannot make .

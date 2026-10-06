@@ -1,14 +1,18 @@
 //! What the browser engine costs, counted rather than timed.
 //!
 //! The playground compiles a program inside the tab with `docs/kanso.wasm`
-//! and runs the module it emits there. Ruled 2026-10-06: every environment
+//! the way `kanso build` compiles it, lowers the module the native emitter
+//! writes to wasm (`src/ir_wasm.rs`), and runs it against `runtime.c` built
+//! for wasm32 (`docs/kanso-runtime.wasm`). Ruled 2026-10-06: every environment
 //! kanso runs in has terms in the objective, for CPU and for memory, and none
 //! at zero. Wall time in a browser cannot be made to read the same number
 //! twice, so neither stage is timed. wasmi runs both with fuel metering on,
 //! and fuel is spent per executed wasm instruction: the same module on the
-//! same input spends the same fuel on every machine. Memory is the toolchain's
-//! own allocator tally (`kanso_heap_*` in `src/main.rs`), in requested bytes,
-//! which the same code also answers identically on every run.
+//! same input spends the same fuel on every machine. The compile's memory is
+//! the toolchain's own allocator tally (`kanso_heap_*` in `src/main.rs`), in
+//! requested bytes. The run's memory is what the runtime's linear memory grew
+//! by while the program ran, in whole 64 KiB pages, which is what the page
+//! holds for it. The same code answers both identically on every run.
 //!
 //! The workload is `bench/interp_corpus`, the program the interpreted row
 //! runs, so the browser and the interpreter are priced on the same work. It
@@ -17,11 +21,10 @@
 //! Four rows:
 //!   browser_compile_instructions  fuel spent compiling the entry in the tab
 //!   browser_compile_peak_bytes    the most the compile held above where it began
-//!   browser_run_instructions      fuel spent running the emitted module,
-//!                                 including every `rt_*` call it makes into
-//!                                 the toolchain
-//!   browser_run_peak_bytes        the most the run held above where it began,
-//!                                 which is the value registry and what it holds
+//!   browser_run_instructions      fuel spent running the program, its module
+//!                                 and every runtime function it calls
+//!   browser_run_peak_bytes        what the runtime's linear memory grew by
+//!                                 while the program ran
 //!
 //! Regenerate with `KANSO_REGEN_BROWSER_GOLDEN=1 cargo test --release --test
 //! browser_cost` after `sh scripts/build_wasm.sh`.
@@ -39,6 +42,9 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use wasmi::{Caller, Config, Engine, Extern, Func, Linker, Module, Store, Table, Val};
 
+#[path = "support/wasm32.rs"]
+mod wasm32;
+
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
@@ -55,7 +61,6 @@ const TANK: u64 = u64::MAX / 4;
 struct Toolchain {
     store: Store<Dispatch>,
     instance: wasmi::Instance,
-    engine: Engine,
 }
 
 impl Toolchain {
@@ -91,7 +96,7 @@ impl Toolchain {
         linker.define("env", "k_callback", callback).expect("k_callback is the one import");
         let instance =
             linker.instantiate_and_start(&mut store, &module).expect("the toolchain instantiates");
-        Toolchain { store, instance, engine }
+        Toolchain { store, instance }
     }
 
     fn func(&self, name: &str) -> Func {
@@ -167,7 +172,12 @@ struct Sitting {
     output: String,
 }
 
-fn sitting() -> Sitting {
+/// The corpus through the native route: compiled by the toolchain the way
+/// `kanso build` compiles it and lowered by `ir_wasm` (`kanso_compile_native`),
+/// then run against `runtime.c` built for wasm32. The run's memory is what
+/// the runtime's linear memory grew by while the program ran: the page holds
+/// that much for it, in whole 64 KiB pages.
+fn sitting(rt: &[u8]) -> Sitting {
     let mut t = Toolchain::load();
     let source =
         std::fs::read_to_string(root().join("bench/interp_corpus/interp_corpus/interp_corpus.kso"))
@@ -190,46 +200,23 @@ fn sitting() -> Sitting {
     );
     let entry = "import \"./interp_corpus\"\n\ninterp_corpus/play\n";
     let (name_ptr, name_len) = t.write("main.kso");
-    t.call("kanso_set_seed", &[Val::I32(1)], &mut []);
     t.call("kanso_set_file", &[Val::I32(name_ptr), Val::I32(name_len)], &mut []);
     let (ptr, len) = t.write(entry);
-
     let start = t.begin();
-    let status = t.i32_call("kanso_compile_wasm", &[Val::I32(ptr), Val::I32(len), Val::I32(1)]);
+    let status = t.i32_call("kanso_compile_native", &[Val::I32(ptr), Val::I32(len)]);
     let compile = t.end(start);
     assert_eq!(
         status,
         0,
-        "the corpus compiles in the tab: {:?}",
-        t.read("kanso_out_ptr", "kanso_out_len")
+        "the corpus compiles on the native route: {:?}",
+        String::from_utf8_lossy(&t.read("kanso_out_ptr", "kanso_out_len"))
     );
-    let emitted = t.read("kanso_wasm_ptr", "kanso_wasm_len");
-
-    let start = t.begin();
-    let module = Module::new(&t.engine, &emitted[..]).expect("the emitted module parses");
-    let mut linker = Linker::new(&t.engine);
-    let wanted: Vec<String> = module.imports().map(|i| i.name().to_string()).collect();
-    for name in wanted {
-        let Some(Extern::Func(f)) = t.instance.get_export(&t.store, &name) else {
-            panic!("the program imports `{name}`, which the toolchain does not export");
-        };
-        linker.define("env", &name, f).expect("the shim defines");
-    }
-    let program =
-        linker.instantiate_and_start(&mut t.store, &module).expect("the program instantiates");
-    match program.get_export(&t.store, "table") {
-        Some(Extern::Table(table)) => *t.store.data().0.borrow_mut() = Some(table),
-        _ => panic!("the program exports no function table"),
-    }
-    let main = program.get_func(&t.store, "main").expect("the program exports main");
-    let mut handle = [Val::I32(0)];
-    main.call(&mut t.store, &[], &mut handle).expect("main runs");
-    let mut code = [Val::I32(0)];
-    t.func("kanso_exec_main").call(&mut t.store, &handle, &mut code).expect("the run finishes");
-    let run = t.end(start);
-    assert_eq!(code[0].i32(), Some(0), "the corpus runs to completion in the tab");
-    let output = String::from_utf8_lossy(&t.read("kanso_out_ptr", "kanso_out_len")).into_owned();
-    Sitting { compile, run, output }
+    let side = t.read("kanso_wasm_ptr", "kanso_wasm_len");
+    let data = t.i32_call("kanso_side_data", &[]) as u32;
+    let table = t.i32_call("kanso_side_table", &[]) as u32;
+    let ran = wasm32::execute(rt, &side, data, table, &[("KANSO_SEED", "1")]).expect("it runs");
+    assert_eq!(ran.exit, 0, "the corpus runs to completion: {}", ran.err);
+    Sitting { compile, run: (ran.fuel, ran.grown), output: ran.out }
 }
 
 fn rows(s: &Sitting) -> String {
@@ -251,16 +238,28 @@ fn rustc_here() -> String {
 
 const HEADER: &str = "\
 # What the browser engine costs: bench/interp_corpus compiled by
-# docs/kanso.wasm and its emitted module run, both under wasmi with fuel
-# metering. Fuel is spent per executed wasm instruction and the peaks are the
-# toolchain allocator's requested bytes, so every row is the same on every
+# docs/kanso.wasm the way kanso build compiles it, its module lowered to wasm
+# in the toolchain, and run against runtime.c built for wasm32, all under wasmi
+# with fuel metering. Fuel is spent per executed wasm instruction, the compile
+# peak is the toolchain allocator's requested bytes and the run's memory is
+# what the runtime's linear memory grew by, so every row is the same on every
 # run of the same code. See tests/browser_cost.rs.
 ";
 
 #[test]
 fn the_browser_engine_costs_what_the_golden_says() {
-    let first = sitting();
-    let again = sitting();
+    // the runtime is part of what the page ships, so a host that cannot build
+    // it cannot price the page; under CI that is a failure (`toolchain`)
+    if !wasm32::toolchain() {
+        eprintln!("no wasm32 toolchain here: clang, wasm-ld and wasi-libc are wanted");
+        return;
+    }
+    let work = std::env::temp_dir().join(format!("kanso-browser-cost-{}", std::process::id()));
+    std::fs::create_dir_all(&work).expect("the work dir makes");
+    let rt = wasm32::runtime(&work);
+    let first = sitting(&rt);
+    let again = sitting(&rt);
+    let _ = std::fs::remove_dir_all(&work);
     // the interpreter's own answer for this corpus, so a module that ran and
     // printed nothing is not priced as a cheap one
     assert!(

@@ -350,6 +350,16 @@ jobs:
             echo "::error::clang 19 is installed but not selected: $(clang --version | head -1)"
             exit 1
           }
+      # The browser rows run a program the way the playground does: compiled
+      # in docs/kanso.wasm, lowered to wasm there, and linked against
+      # runtime.c built for wasm32 by scripts/build_runtime_wasm.sh. That
+      # build wants wasi-libc and lld's wasm linker, and the spec refuses to
+      # skip under this variable.
+      - name: wasi-libc and wasm-ld, for the runtime the playground links
+        run: |
+          sudo apt-get install -y -qq --no-install-recommends wasi-libc
+          sudo ln -sf /usr/bin/wasm-ld-19 /usr/local/bin/wasm-ld
+          echo "KANSO_WASM32_REQUIRED=1" >> "$GITHUB_ENV"
           ld.lld --version | grep -q 'LLD 19' || {
             echo "::error::lld 19 is installed but not selected: $(ld.lld --version 2>&1 | head -1)"
             exit 1

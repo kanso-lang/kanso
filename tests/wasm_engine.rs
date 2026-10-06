@@ -15,6 +15,9 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use wasmi::{Caller, Engine, Extern, Func, Linker, Module, Store, Table, Val};
 
+#[path = "support/wasm32.rs"]
+mod wasm32;
+
 /// The playground pins the dice so a program calling `random` compares two
 /// streams rather than one; the native side gets the same value. The page
 /// spells it in decimal and JavaScript wraps it into the i32 the export
@@ -152,8 +155,9 @@ impl Toolchain {
         String::from_utf8_lossy(&bytes).into_owned()
     }
 
-    /// Compile and run one program, answering what a user would see.
-    fn run(&mut self, name: &str, source: &str) -> Answer {
+    /// Hand the toolchain one program the way the page does, answering whether
+    /// it takes the play door and where the source to compile sits.
+    fn prepare(&mut self, name: &str, source: &str) -> (bool, i32, i32) {
         // A program that exports `play` is a library: the engine is handed it
         // under the name an import will use, and compiles the entry that runs
         // it — the same two files the native engine is given, with no
@@ -201,6 +205,12 @@ impl Toolchain {
         self.call("kanso_set_file", &[Val::I32(name_ptr), Val::I32(name_len)], &mut [])
             .expect("the file name is accepted");
         let (ptr, len) = self.write(&compiled);
+        (plays, ptr, len)
+    }
+
+    /// Compile and run one program, answering what a user would see.
+    fn run(&mut self, name: &str, source: &str) -> Answer {
+        let (plays, ptr, len) = self.prepare(name, source);
         // tail calls on, as every browser this targets reports them: a
         // self-call that must not grow the stack is a different program
         // without them, and comparing that to the golden compares two
@@ -253,6 +263,41 @@ impl Toolchain {
             return Answer::Ran(1, self.output());
         }
         Answer::Ran(code[0].i32().unwrap_or(1), self.output())
+    }
+}
+
+impl Toolchain {
+    /// Compile one program the way `kanso build` does, lower its module in
+    /// the toolchain (`kanso_compile_native`), and run it against the wasm32
+    /// runtime: the route the playground takes to native's layout.
+    fn run_native(&mut self, name: &str, source: &str, rt: &[u8]) -> Answer {
+        let (plays, ptr, len) = self.prepare(name, source);
+        let door = match plays {
+            true => "kanso_play_native",
+            false => "kanso_compile_native",
+        };
+        let status = self.i32_call(door, &[Val::I32(ptr), Val::I32(len)]);
+        if status == 2 {
+            return Answer::CompileError(self.output());
+        }
+        if status == 1 {
+            return Answer::Declined(self.output());
+        }
+        let ptr = self.i32_call("kanso_wasm_ptr", &[]) as u32 as usize;
+        let len = self.i32_call("kanso_wasm_len", &[]) as u32 as usize;
+        let mut side = vec![0u8; len];
+        self.memory().read(&self.store, ptr, &mut side).expect("the side module reads");
+        let data = self.i32_call("kanso_side_data", &[]) as u32;
+        let table = self.i32_call("kanso_side_table", &[]) as u32;
+        match wasm32::execute(rt, &side, data, table, &[("KANSO_SEED", SEED_TEXT)]) {
+            Ok(ran) => Answer::Ran(ran.exit, ran.out + &ran.err),
+            // Native catches a stack overflow and says so; wasm's call stack
+            // ends in a trap, and the page answers it with the same sentence.
+            Err(e) if e.contains("call stack exhausted") => {
+                Answer::Ran(1, format!("{}\n", kanso::stack_exhausted()))
+            }
+            Err(e) => Answer::Ran(-1, format!("the host stopped it: {e}")),
+        }
     }
 }
 
@@ -1316,5 +1361,90 @@ fn the_page_builds_a_partial_over_a_value() {
         Answer::Ran(code, out) => assert_eq!((code, out.as_str()), (0, "14\n")),
         Answer::Declined(said) => panic!("the page still declines it: {said}"),
         Answer::CompileError(said) => panic!("the front door refused it: {said}"),
+    }
+}
+
+/// The native route's gaps: path and the text it answers instead, from
+/// tests/golden/native_route_gaps.txt.
+fn route_gaps() -> Vec<(String, String)> {
+    let text = std::fs::read_to_string(root().join("tests/golden/native_route_gaps.txt"))
+        .expect("the route's gap list");
+    text.lines()
+        .filter(|line| !line.trim().is_empty() && !line.starts_with('#'))
+        .map(|line| {
+            let (name, answer) = line.split_once('\t').expect("a gap is path<tab>answer");
+            (name.to_string(), answer.to_string())
+        })
+        .collect()
+}
+
+/// The playground's route to native's layout, held to the corpus the current
+/// engine is held to: every program compiled the way `kanso build` compiles
+/// it, its module lowered by `ir_wasm` inside the toolchain, and run against
+/// `runtime.c` built for wasm32. Each answer is compared with the native
+/// binary's, stream and exit code, except where tests/golden/native_route_gaps.txt
+/// says what the route answers instead.
+#[test]
+fn the_native_route_agrees_with_the_golden_corpus() {
+    if !wasm32::toolchain() {
+        eprintln!("no wasm32 toolchain here: clang, wasm-ld and wasi-libc are wanted");
+        return;
+    }
+    let work = std::env::temp_dir().join(format!("kanso-native-route-{}", std::process::id()));
+    std::fs::create_dir_all(&work).expect("the work dir makes");
+    let rt = wasm32::runtime(&work);
+    let mut toolchain = Toolchain::load();
+    let gaps = route_gaps();
+    let only = std::env::var("KANSO_ROUTE_ONLY").ok();
+    let (mut ran, mut met, mut held, mut wrong) = (0, 0, 0, Vec::new());
+    for path in corpus() {
+        let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+        let listed = path.strip_prefix(root()).unwrap_or(&path).to_string_lossy().to_string();
+        if only.as_deref().is_some_and(|o| !listed.contains(o)) {
+            continue;
+        }
+        let source = std::fs::read_to_string(&path).expect("the program reads");
+        // the same two holes the current engine's walk has, for the same reasons
+        if wants_a_filesystem(&source) || outruns_the_runners_stack(&listed) {
+            held += 1;
+            continue;
+        }
+        let (native_code, native_text) = natively(&path);
+        let gap = gaps.iter().find(|(g, _)| *g == listed);
+        let answer = match toolchain.run_native(&name, &source, &rt) {
+            Answer::Ran(code, text) => (code, text),
+            Answer::Declined(why) => (-2, format!("declined: {}", why.trim())),
+            Answer::CompileError(text) => (native_code.max(1), text),
+        };
+        let agrees = answer.0 == native_code && answer.1 == native_text;
+        match (agrees, gap) {
+            (true, None) => ran += 1,
+            (false, Some((_, said))) if answer.1.contains(said.as_str()) => met += 1,
+            (true, Some(_)) => wrong.push(format!(
+                "{listed} agrees with native now: take it off tests/golden/native_route_gaps.txt"
+            )),
+            (false, Some((_, said))) => wrong.push(format!(
+                "{listed} is listed as answering `{said}` and answers {:?}",
+                answer.1.chars().take(300).collect::<String>()
+            )),
+            (false, None) => wrong.push(format!(
+                "{listed}: exit {} against {native_code}\n  page   {:?}\n  native {:?}",
+                answer.0,
+                answer.1.chars().take(300).collect::<String>(),
+                native_text.chars().take(300).collect::<String>()
+            )),
+        }
+    }
+    let _ = std::fs::remove_dir_all(&work);
+    println!("native route: {ran} agree, {met} known gaps, {held} held out");
+    assert!(wrong.is_empty(), "{} programs are wrong:\n{}", wrong.len(), wrong.join("\n"));
+    if only.is_none() {
+        assert_eq!(
+            ran + met + held,
+            corpus().len(),
+            "the walk lost programs: {ran} ran, {met} gaps, {held} held out, {} in the corpus",
+            corpus().len()
+        );
+        assert_eq!(met, gaps.len(), "a program in tests/golden/native_route_gaps.txt was never reached");
     }
 }

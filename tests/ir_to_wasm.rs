@@ -1,9 +1,9 @@
 //! The tab's own route to native's layout: the emitter's IR, lowered to wasm by
 //! `ir_wasm`, linked at instantiation against `runtime.c` built for wasm32.
 //!
-//! The runtime is built once with clang, as `tests/native_layout_on_wasm32.rs`
-//! builds it, plus `wasm/hooks.c`, and linked as a module that exports its
-//! memory, table, stack pointer and every symbol. Each program is built by
+//! The runtime is built once by `scripts/build_runtime_wasm.sh`, the script the
+//! playground's build runs, as a module that exports its memory, table, stack
+//! pointer and every symbol. Each program is built by
 //! `kanso build`, and its module is retargeted and translated with no clang
 //! involved. The host instantiates the runtime, sets aside the data and table
 //! room the translated module asks for, instantiates the module against the
@@ -12,9 +12,10 @@
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use wasmi::{
-    Caller, Config, Engine, Extern, Func, Global, Linker, Module, Mutability, Ref, Store, Val,
-};
+
+#[path = "support/wasm32.rs"]
+mod wasm32;
+use wasm32::{execute, runtime, toolchain};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -31,219 +32,9 @@ const HOST: [(&str, &str); 7] = [
     ("write_err_stream", "orders two streams the host interleaves"),
 ];
 
-const SYSROOT: &str = "/usr";
-const WASI_LIB: &str = "/usr/lib/wasm32-wasi";
-
-fn toolchain() -> bool {
-    let clang = Command::new("clang").arg("--version").output().is_ok();
-    let ld = Command::new("wasm-ld").arg("--version").output().is_ok();
-    let libc = Path::new(WASI_LIB).join("libc.a").exists();
-    let ok = clang && ld && libc;
-    assert!(
-        ok || std::env::var("KANSO_WASM32_REQUIRED").is_err(),
-        "this job installs the wasm32 toolchain: clang {clang}, wasm-ld {ld}, wasi-libc {libc}"
-    );
-    ok
-}
-
 fn run(cmd: &mut Command, what: &str) {
     let out = cmd.output().unwrap_or_else(|e| panic!("{what}: {e}"));
     assert!(out.status.success(), "{what}: {}", String::from_utf8_lossy(&out.stderr));
-}
-
-/// The runtime as a module of its own, built once into `dir`.
-fn runtime(dir: &Path) -> Vec<u8> {
-    let target = ["--target=wasm32-wasi", &format!("--sysroot={SYSROOT}"), "-O2", "-mtail-call"];
-    let rt_ll = dir.join("runtime.ll");
-    run(
-        Command::new("clang")
-            .args(target)
-            .args(["-Xclang", "-target-abi", "-Xclang", "experimental-mv"])
-            .args(["-D_WASI_EMULATED_SIGNAL", "-w", "-S", "-emit-llvm"])
-            .arg("-I")
-            .arg(root().join("wasm/include"))
-            .arg(root().join("src/runtime.c"))
-            .arg("-o")
-            .arg(&rt_ll),
-        "runtime.c lowers for wasm32",
-    );
-    let hooks_ll = dir.join("hooks.ll");
-    run(
-        Command::new("clang")
-            .args(target)
-            .args(["-Xclang", "-target-abi", "-Xclang", "experimental-mv"])
-            .args(["-w", "-S", "-emit-llvm"])
-            .arg(root().join("wasm/hooks.c"))
-            .arg("-o")
-            .arg(&hooks_ll),
-        "the hooks lower for wasm32",
-    );
-    let mut objs = Vec::new();
-    for (src, name) in
-        [(rt_ll, "runtime.o"), (hooks_ll, "hooks.o"), (root().join("wasm/shim.c"), "shim.o")]
-    {
-        let o = dir.join(name);
-        run(
-            Command::new("clang").args(target).args(["-w", "-c"]).arg(&src).arg("-o").arg(&o),
-            &format!("{name} builds for wasm32"),
-        );
-        objs.push(o);
-    }
-    let wasm = dir.join("runtime.wasm");
-    run(
-        Command::new("wasm-ld")
-            .arg(Path::new(WASI_LIB).join("crt1-command.o"))
-            .args(&objs)
-            .arg(format!("-L{WASI_LIB}"))
-            .args(["-lc", "-lwasi-emulated-signal", "-lwasi-emulated-getpid"])
-            .args([
-                "--export-all",
-                "--export-table",
-                "--growable-table",
-                "--export=__stack_pointer",
-            ])
-            .args(["--export=malloc", "--stack-first", "-z", "stack-size=8388608", "-o"])
-            .arg(&wasm),
-        "the runtime links for wasm32",
-    );
-    std::fs::read(&wasm).expect("the runtime reads")
-}
-
-#[derive(Default)]
-struct Host {
-    out: Vec<u8>,
-    err: Vec<u8>,
-    exit: Option<i32>,
-    memory: Option<wasmi::Memory>,
-}
-
-fn word(m: &wasmi::Memory, c: &Caller<'_, Host>, at: usize) -> usize {
-    let mut b = [0u8; 4];
-    m.read(c, at, &mut b).expect("in bounds");
-    u32::from_le_bytes(b) as usize
-}
-
-/// One WASI call, answered as `tests/native_layout_on_wasm32.rs` answers it.
-fn wasi(name: &str, c: &mut Caller<'_, Host>, args: &[Val]) -> Result<i32, wasmi::Error> {
-    let i = |k: usize| args[k].i32().expect("an i32 argument") as usize;
-    let m = c.data().memory.expect("the runtime's memory");
-    Ok(match name {
-        "fd_write" => {
-            let mut total = 0u32;
-            for k in 0..i(2) {
-                let p = word(&m, c, i(1) + k * 8);
-                let n = word(&m, c, i(1) + k * 8 + 4);
-                let mut bytes = vec![0u8; n];
-                m.read(&*c, p, &mut bytes).expect("in bounds");
-                match i(0) {
-                    2 => c.data_mut().err.extend_from_slice(&bytes),
-                    _ => c.data_mut().out.extend_from_slice(&bytes),
-                }
-                total += n as u32;
-            }
-            m.write(&mut *c, i(3), &total.to_le_bytes()).expect("in bounds");
-            0
-        }
-        "args_sizes_get" | "environ_sizes_get" => {
-            m.write(&mut *c, i(0), &0u32.to_le_bytes()).expect("in bounds");
-            m.write(&mut *c, i(1), &0u32.to_le_bytes()).expect("in bounds");
-            0
-        }
-        "args_get" | "environ_get" | "random_get" => 0,
-        "fd_fdstat_get" => {
-            m.write(&mut *c, i(1), &[2u8, 0, 0, 0, 0, 0, 0, 0]).expect("in bounds");
-            0
-        }
-        "clock_time_get" => {
-            let at: u64 = 1_767_225_600_000_000_000;
-            m.write(&mut *c, i(2), &at.to_le_bytes()).expect("in bounds");
-            0
-        }
-        "fd_prestat_get" => 8,
-        "proc_exit" => {
-            c.data_mut().exit = Some(i(0) as i32);
-            return Err(wasmi::Error::new("proc_exit"));
-        }
-        _ => 52,
-    })
-}
-
-struct Ran {
-    out: String,
-    err: String,
-    exit: i32,
-    fuel: u64,
-}
-
-/// Instantiates the runtime, links the side module into it and runs `_start`.
-fn execute(runtime: &[u8], side: &kanso::ir_wasm::Side) -> Result<Ran, String> {
-    let mut config = Config::default();
-    config.consume_fuel(true);
-    let engine = Engine::new(&config);
-    let rt = Module::new(&engine, runtime).map_err(|e| format!("runtime: {e}"))?;
-    let prog =
-        Module::new(&engine, &side.wasm[..]).map_err(|e| format!("the module validates: {e}"))?;
-    let mut store = Store::new(&engine, Host::default());
-    // A micro program spends well under a hundred million; a translation that
-    // loops forever stops here and reads as a failure.
-    store.set_fuel(2_000_000_000).expect("fuel is on");
-    let mut linker = Linker::<Host>::new(&engine);
-    for import in rt.imports() {
-        let wasmi::ExternType::Func(ty) = import.ty() else { continue };
-        let name = import.name().to_string();
-        let f = Func::new(&mut store, ty.clone(), move |mut c, args, res| {
-            let r = wasi(&name, &mut c, args)?;
-            if let Some(slot) = res.first_mut() {
-                *slot = Val::I32(r);
-            }
-            Ok(())
-        });
-        linker.define(import.module(), import.name(), f).expect("the import defines");
-    }
-    let rti = linker.instantiate_and_start(&mut store, &rt).map_err(|e| format!("runtime: {e}"))?;
-    let memory = rti.get_memory(&store, "memory").expect("the runtime exports its memory");
-    store.data_mut().memory = Some(memory);
-    let table =
-        rti.get_table(&store, "__indirect_function_table").expect("the runtime exports its table");
-    let malloc = rti.get_typed_func::<i32, i32>(&store, "malloc").expect("malloc");
-    let data = malloc.call(&mut store, side.data as i32).map_err(|e| format!("malloc: {e}"))?;
-    let tbase = table
-        .grow(&mut store, side.table as u64, Val::FuncRef(Ref::Null))
-        .map_err(|e| format!("table grow: {e}"))?;
-
-    let mut plinker = Linker::<Host>::new(&engine);
-    for import in prog.imports() {
-        let name = import.name();
-        let ext: Extern = match name {
-            "memory" => memory.into(),
-            "__indirect_function_table" => table.into(),
-            "__memory_base" => Global::new(&mut store, Val::I32(data), Mutability::Const).into(),
-            "__table_base" => {
-                Global::new(&mut store, Val::I32(tbase as i32), Mutability::Const).into()
-            }
-            _ => rti.get_export(&store, name).ok_or(format!("the runtime has no {name}"))?,
-        };
-        plinker.define("env", name, ext).map_err(|e| format!("{name}: {e}"))?;
-    }
-    plinker
-        .instantiate_and_start(&mut store, &prog)
-        .map_err(|e| format!("the module links: {e}"))?;
-    let start = rti.get_func(&store, "_start").expect("a command exports _start");
-    let before = store.get_fuel().expect("fuel is on");
-    let finished = start.call(&mut store, &[], &mut []);
-    let fuel = before - store.get_fuel().expect("fuel is on");
-    let host = store.data();
-    let exit = match (finished, host.exit) {
-        (_, Some(code)) => code,
-        (Ok(()), None) => 0,
-        (Err(e), None) => return Err(format!("trapped: {e}")),
-    };
-    Ok(Ran {
-        out: String::from_utf8_lossy(&host.out).into_owned(),
-        err: String::from_utf8_lossy(&host.err).into_owned(),
-        exit,
-        fuel,
-    })
 }
 
 /// `program`, staged beside an entry that imports it, built natively; returns
@@ -310,7 +101,7 @@ fn the_micro_corpus_answers_the_same_through_the_translator() {
             }
         };
         std::fs::write(work.join(format!("{name}.wasm")), &side.wasm).expect("the module writes");
-        match execute(&rt, &side) {
+        match execute(&rt, &side.wasm, side.data, side.table, &[]) {
             Err(e) => failures.push(format!("{name}: {e}")),
             Ok(ran) => {
                 let want_exit: i32 = golden(p, "exit").trim().parse().unwrap_or(0);
@@ -368,7 +159,7 @@ fn the_interp_corpus_answers_through_the_translator() {
     let ir = std::fs::read_to_string(stage.join("main.ll")).expect("the ir reads");
     let side =
         kanso::ir_wasm::translate(&kanso::codegen::retarget_wasm32(&ir)).expect("it translates");
-    let ran = execute(&rt, &side).expect("it runs");
+    let ran = execute(&rt, &side.wasm, side.data, side.table, &[]).expect("it runs");
     let _ = std::fs::remove_dir_all(&work);
     assert_eq!(ran.out, String::from_utf8_lossy(&native.stdout), "the corpus's answer");
     assert_eq!(ran.exit, 0);
@@ -379,4 +170,15 @@ fn the_interp_corpus_answers_through_the_translator() {
         side.data,
         side.table
     );
+}
+
+/// Translates the module at `KANSO_IRWASM_PROFILE` once, for a profiler to
+/// watch: `cargo test --release --test ir_to_wasm translate_one -- --ignored`.
+#[test]
+#[ignore]
+fn translate_one() {
+    let Ok(path) = std::env::var("KANSO_IRWASM_PROFILE") else { return };
+    let ir = std::fs::read_to_string(path).expect("the ir reads");
+    let side = kanso::ir_wasm::translate(&kanso::codegen::retarget_wasm32(&ir)).expect("it translates");
+    println!("{} bytes", side.wasm.len());
 }

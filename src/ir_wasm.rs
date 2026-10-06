@@ -26,7 +26,9 @@
 //! the block number and returns to the loop's `br_table`.
 
 use crate::wasm_encode::{sleb, uleb};
-use std::collections::HashMap;
+use std::borrow::Cow;
+use crate::hash::Map as HashMap;
+use std::rc::Rc;
 
 #[derive(Clone, Debug, PartialEq)]
 enum Ty {
@@ -38,8 +40,8 @@ enum Ty {
     F64,
     Ptr,
     Void,
-    Struct(Vec<Ty>),
-    Array(u32, Box<Ty>),
+    Struct(Rc<[Ty]>),
+    Array(u32, Rc<Ty>),
 }
 
 const VI32: u8 = 0x7f;
@@ -60,7 +62,7 @@ impl Ty {
             Ty::Void => (0, 1),
             Ty::Struct(fs) => {
                 let (mut off, mut al) = (0, 1);
-                for f in fs {
+                for f in fs.iter() {
                     let (s, a) = f.size_align();
                     off = align_to(off, a) + s;
                     al = al.max(a);
@@ -152,7 +154,7 @@ impl Ty {
                 }
                 Ty::Array(_, e) => {
                     start += i * e.width();
-                    *e
+                    (*e).clone()
                 }
                 t => return Err(format!("no member {i} in {t:?}")),
             };
@@ -175,12 +177,12 @@ enum Val {
 // ---------------------------------------------------------------- tokens
 
 #[derive(Clone, Debug, PartialEq)]
-enum Tok {
-    Local(String),
-    Global(String),
+enum Tok<'a> {
+    Local(Cow<'a, str>),
+    Global(Cow<'a, str>),
     Int(i64),
     Float(u64),
-    Word(String),
+    Word(&'a str),
     P(u8),
     Bytes(Vec<u8>),
 }
@@ -207,9 +209,9 @@ fn unescape(raw: &[u8]) -> Vec<u8> {
     out
 }
 
-fn tokenize(line: &str) -> Result<Vec<Tok>, String> {
+fn tokenize(line: &str) -> Result<Vec<Tok<'_>>, String> {
     let s = line.as_bytes();
-    let mut out = Vec::new();
+    let mut out = Vec::with_capacity(16);
     let mut i = 0;
     while i < s.len() {
         let c = s[i];
@@ -225,13 +227,16 @@ fn tokenize(line: &str) -> Result<Vec<Tok>, String> {
                         j += 1;
                     }
                     i = j + 1;
-                    String::from_utf8(unescape(&s[start..j])).map_err(|e| e.to_string())?
+                    match s[start..j].contains(&b'\\') {
+                        true => Cow::Owned(String::from_utf8(unescape(&s[start..j])).map_err(|e| e.to_string())?),
+                        false => Cow::Borrowed(&line[start..j]),
+                    }
                 } else {
                     let start = i;
                     while i < s.len() && name_char(s[i]) {
                         i += 1;
                     }
-                    line[start..i].to_string()
+                    Cow::Borrowed(&line[start..i])
                 };
                 out.push(if c == b'%' { Tok::Local(name) } else { Tok::Global(name) });
             }
@@ -277,7 +282,7 @@ fn tokenize(line: &str) -> Result<Vec<Tok>, String> {
                 }
             }
             b'.' if s.get(i + 1) == Some(&b'.') => {
-                out.push(Tok::Word("...".into()));
+                out.push(Tok::Word("..."));
                 i += 3;
             }
             c if c.is_ascii_alphabetic() || c == b'_' => {
@@ -285,7 +290,7 @@ fn tokenize(line: &str) -> Result<Vec<Tok>, String> {
                 while i < s.len() && name_char(s[i]) {
                     i += 1;
                 }
-                out.push(Tok::Word(line[start..i].to_string()));
+                out.push(Tok::Word(&line[start..i]));
             }
             _ => {
                 out.push(Tok::P(c));
@@ -377,8 +382,8 @@ struct Ir {
     funcs: Vec<Func>,
 }
 
-struct P<'a> {
-    t: Vec<Tok>,
+struct P<'t, 'a> {
+    t: Vec<Tok<'t>>,
     i: usize,
     types: &'a HashMap<String, Ty>,
     names: Option<&'a mut HashMap<String, u32>>,
@@ -414,11 +419,11 @@ const SKIP: &[&str] = &[
     "nofree",
 ];
 
-impl<'a> P<'a> {
-    fn peek(&self) -> Option<&Tok> {
+impl<'t> P<'t, '_> {
+    fn peek(&self) -> Option<&Tok<'t>> {
         self.t.get(self.i)
     }
-    fn next(&mut self) -> Result<Tok, String> {
+    fn next(&mut self) -> Result<Tok<'t>, String> {
         let t = self.t.get(self.i).cloned().ok_or("unexpected end of line")?;
         self.i += 1;
         Ok(t)
@@ -470,13 +475,17 @@ impl<'a> P<'a> {
     }
     fn local(&mut self, name: &str) -> u32 {
         let names = self.names.as_mut().expect("a function body");
+        if let Some(n) = names.get(name) {
+            return *n;
+        }
         let n = names.len() as u32;
-        *names.entry(name.to_string()).or_insert(n)
+        names.insert(name.to_string(), n);
+        n
     }
 
     fn ty(&mut self) -> Result<Ty, String> {
         let t = match self.next()? {
-            Tok::Word(w) => match w.as_str() {
+            Tok::Word(w) => match w {
                 "i1" => Ty::I1,
                 "i8" => Ty::I8,
                 "i16" => Ty::I16,
@@ -487,7 +496,7 @@ impl<'a> P<'a> {
                 "void" => Ty::Void,
                 w => return Err(format!("unknown type {w}")),
             },
-            Tok::Local(n) => self.types.get(&n).cloned().ok_or(format!("unknown type %{n}"))?,
+            Tok::Local(n) => self.types.get(n.as_ref()).cloned().ok_or_else(|| format!("unknown type %{n}"))?,
             Tok::P(b'{') => {
                 let mut fs = Vec::new();
                 if !self.eat(b'}') {
@@ -499,7 +508,7 @@ impl<'a> P<'a> {
                         self.expect(b',')?;
                     }
                 }
-                Ty::Struct(fs)
+                Ty::Struct(fs.into())
             }
             Tok::P(b'[') => {
                 let n = match self.next()? {
@@ -511,7 +520,7 @@ impl<'a> P<'a> {
                 }
                 let e = self.ty()?;
                 self.expect(b']')?;
-                Ty::Array(n, Box::new(e))
+                Ty::Array(n, Rc::new(e))
             }
             t => return Err(format!("expected a type at {t:?}")),
         };
@@ -521,11 +530,11 @@ impl<'a> P<'a> {
     fn value(&mut self, ty: &Ty) -> Result<Val, String> {
         Ok(match self.next()? {
             Tok::Local(n) => Val::Local(self.local(&n)),
-            Tok::Global(n) => Val::Global(n),
+            Tok::Global(n) => Val::Global(n.into_owned()),
             Tok::Int(n) => Val::Int(n),
             Tok::Float(b) => Val::Int(b as i64),
             Tok::Bytes(b) => Val::Bytes(b),
-            Tok::Word(w) => match w.as_str() {
+            Tok::Word(w) => match w {
                 "true" => Val::Int(1),
                 "false" => Val::Int(0),
                 "null" | "undef" | "poison" | "zeroinitializer" => Val::Zero,
@@ -572,7 +581,7 @@ impl<'a> P<'a> {
             return Err("expected label".into());
         }
         match self.next()? {
-            Tok::Local(n) => Ok(n),
+            Tok::Local(n) => Ok(n.into_owned()),
             t => Err(format!("label name {t:?}")),
         }
     }
@@ -654,7 +663,7 @@ fn parse_inst(p: &mut P, types: &mut Vec<Option<Ty>>) -> Result<Inst, String> {
         Tok::Word(w) => w,
         t => return Err(format!("expected an opcode at {t:?}")),
     };
-    let inst = match op.as_str() {
+    let inst = match op {
         w if bin_op(w).is_some() => {
             p.skip_attrs();
             let t = p.ty()?;
@@ -674,14 +683,14 @@ fn parse_inst(p: &mut P, types: &mut Vec<Option<Ty>>) -> Result<Inst, String> {
             p.expect(b',')?;
             let b = p.value(&t)?;
             def(dst, &Ty::I1);
-            Inst::Icmp(d()?, pred, t, a, b)
+            Inst::Icmp(d()?, pred.to_string(), t, a, b)
         }
         "zext" | "sext" | "trunc" | "inttoptr" | "ptrtoint" | "bitcast" => {
             let (from, v) = p.typed()?;
             p.eat_word("to");
             let to = p.ty()?;
             def(dst, &to);
-            Inst::Cast(d()?, op.clone(), from, v, to)
+            Inst::Cast(d()?, op.to_string(), from, v, to)
         }
         "select" => {
             let (_, c) = p.typed()?;
@@ -753,7 +762,7 @@ fn parse_inst(p: &mut P, types: &mut Vec<Option<Ty>>) -> Result<Inst, String> {
                 p.params(false)?;
             }
             let callee = match p.next()? {
-                Tok::Global(n) => Callee::Direct(n),
+                Tok::Global(n) => Callee::Direct(n.into_owned()),
                 Tok::Local(n) => Callee::Indirect(Val::Local(p.local(&n))),
                 t => return Err(format!("callee {t:?}")),
             };
@@ -770,7 +779,7 @@ fn parse_inst(p: &mut P, types: &mut Vec<Option<Ty>>) -> Result<Inst, String> {
             }
             let ret = match &callee {
                 Callee::Direct(n) if n.ends_with(".with.overflow.i64") => {
-                    Ty::Struct(vec![Ty::I64, Ty::I1])
+                    Ty::Struct(Rc::from(vec![Ty::I64, Ty::I1]))
                 }
                 _ => ret,
             };
@@ -787,7 +796,7 @@ fn parse_inst(p: &mut P, types: &mut Vec<Option<Ty>>) -> Result<Inst, String> {
                 let v = p.value(&t)?;
                 p.expect(b',')?;
                 let b = match p.next()? {
-                    Tok::Local(n) => n,
+                    Tok::Local(n) => n.into_owned(),
                     t => return Err(format!("phi block {t:?}")),
                 };
                 p.expect(b']')?;
@@ -859,8 +868,8 @@ fn parse(ir: &str) -> Result<Ir, String> {
         if let (Some(Tok::Local(n)), Some(Tok::P(b'=')), Some(Tok::Word(w))) =
             (t.first(), t.get(1), t.get(2))
         {
-            if w == "type" {
-                let n = n.clone();
+            if *w == "type" {
+                let n = n.to_string();
                 let mut p = P { t, i: 3, types: &m.types, names: None };
                 let ty = p.ty()?;
                 m.types.insert(n, ty);
@@ -868,10 +877,10 @@ fn parse(ir: &str) -> Result<Ir, String> {
             }
         }
         if let Some(Tok::Global(name)) = t.first() {
-            let name = name.clone();
-            if t.iter().any(|x| *x == Tok::Word("alias".into())) {
+            let name = name.to_string();
+            if t.iter().any(|x| *x == Tok::Word("alias")) {
                 match t.last() {
-                    Some(Tok::Global(target)) => m.aliases.insert(name, target.clone()),
+                    Some(Tok::Global(target)) => m.aliases.insert(name, target.to_string()),
                     _ => return Err(format!("alias {name}")),
                 };
                 continue;
@@ -896,7 +905,7 @@ fn parse(ir: &str) -> Result<Ir, String> {
             p.skip_attrs();
             let ret = p.ty()?;
             let name = match p.next()? {
-                Tok::Global(n) => n,
+                Tok::Global(n) => n.into_owned(),
                 t => return Err(format!("declare {t:?}")),
             };
             let (params, _, varargs) = p.params(false)?;
@@ -906,13 +915,13 @@ fn parse(ir: &str) -> Result<Ir, String> {
             continue;
         }
         if line.starts_with("define") {
-            let mut names = HashMap::new();
+            let mut names = HashMap::default();
             let mut types: Vec<Option<Ty>> = Vec::new();
             let mut p = P { t, i: 1, types: &m.types, names: Some(&mut names) };
             p.skip_attrs();
             let ret = p.ty()?;
             let name = match p.next()? {
-                Tok::Global(n) => n,
+                Tok::Global(n) => n.into_owned(),
                 t => return Err(format!("define {t:?}")),
             };
             let (params, ids, varargs) = p.params(true)?;
@@ -925,9 +934,9 @@ fn parse(ir: &str) -> Result<Ir, String> {
             }
             let mut blocks = vec![Block { name: String::new(), insts: Vec::new() }];
             loop {
-                let raw = lines.get(i).ok_or(format!("{name} has no end"))?;
+                let raw = lines.get(i).ok_or_else(|| format!("{name} has no end"))?;
                 i += 1;
-                let mut body = raw.trim().to_string();
+                let mut body = Cow::Borrowed(raw.trim());
                 if body == "}" {
                     break;
                 }
@@ -936,8 +945,9 @@ fn parse(ir: &str) -> Result<Ir, String> {
                 }
                 if body.starts_with("switch") || body.contains("= switch") {
                     while !body.trim_end().ends_with(']') {
-                        body.push(' ');
-                        body.push_str(lines.get(i).ok_or("switch runs off the end")?.trim());
+                        let next = lines.get(i).ok_or("switch runs off the end")?.trim();
+                        body.to_mut().push(' ');
+                        body.to_mut().push_str(next);
                         i += 1;
                     }
                 }
@@ -1053,17 +1063,21 @@ impl Mx {
         s
     }
     fn target(&mut self, name: &str) -> Result<Reloc, String> {
-        let name = self.resolve(name).to_string();
-        if let Some(off) = self.data_off.get(&name) {
-            return Ok(Reloc::Data(*off));
+        let found = {
+            let name = self.resolve(name);
+            match (self.data_off.get(name), self.func_idx.get(name), self.extern_idx.get(name)) {
+                (Some(off), _, _) => Some(Reloc::Data(*off)),
+                (_, Some(f), _) => Some(Reloc::Func(*f)),
+                (_, _, Some(g)) => Some(Reloc::Extern(*g)),
+                _ => None,
+            }
+        };
+        match found {
+            // a function's address is its slot in the table, assigned here
+            Some(Reloc::Func(f)) => Ok(Reloc::Func(self.slot(f))),
+            Some(r) => Ok(r),
+            None => Err(format!("unknown symbol @{name}")),
         }
-        if let Some(f) = self.func_idx.get(&name).copied() {
-            return Ok(Reloc::Func(self.slot(f)));
-        }
-        if let Some(g) = self.extern_idx.get(&name) {
-            return Ok(Reloc::Extern(*g));
-        }
-        Err(format!("unknown symbol @{name}"))
     }
 }
 
@@ -1181,13 +1195,13 @@ pub fn translate(ir: &str) -> Result<Side, String> {
     let ir = parse(ir)?;
     let mut mx = Mx {
         types: Vec::new(),
-        func_idx: HashMap::new(),
+        func_idx: HashMap::default(),
         sigs: Vec::new(),
-        data_off: HashMap::new(),
-        extern_idx: HashMap::new(),
+        data_off: HashMap::default(),
+        extern_idx: HashMap::default(),
         aliases: ir.aliases.clone(),
         slots: Vec::new(),
-        slot_of: HashMap::new(),
+        slot_of: HashMap::default(),
     };
 
     // Imported globals: the three the linker supplies, the runtime's data
@@ -1383,7 +1397,7 @@ struct Fx<'m> {
     tmp64: u32,
     n: usize,
     sret: bool,
-    phis: Vec<Vec<PhiAt>>,
+    phis: Vec<Rc<Vec<PhiAt>>>,
     block_of: HashMap<String, usize>,
 }
 
@@ -1405,7 +1419,7 @@ fn lower(mx: &mut Mx, f: &Func) -> Result<Vec<u8>, String> {
         n: f.blocks.len(),
         sret,
         phis: Vec::new(),
-        block_of: HashMap::new(),
+        block_of: HashMap::default(),
     };
     let mut at = sret as u32;
     for (id, t) in f.params.iter().zip(&f.sig.params) {
@@ -1439,8 +1453,8 @@ fn lower(mx: &mut Mx, f: &Func) -> Result<Vec<u8>, String> {
                 Inst::Call(_, ret, callee, args, _) => {
                     scratch = scratch.max(if ret.width() > 1 { ret.size() } else { 0 });
                     if let Callee::Direct(name) = callee {
-                        let name = fx.mx.resolve(name).to_string();
-                        if let Some(&fi) = fx.mx.func_idx.get(&name) {
+                        let resolved = fx.mx.resolve(name);
+                        if let Some(&fi) = fx.mx.func_idx.get(resolved) {
                             let sig = &fx.mx.sigs[fi as usize];
                             if sig.varargs {
                                 let mut s = 0;
@@ -1456,7 +1470,7 @@ fn lower(mx: &mut Mx, f: &Func) -> Result<Vec<u8>, String> {
                 _ => {}
             }
         }
-        fx.phis.push(phis);
+        fx.phis.push(Rc::new(phis));
     }
     frame = align_to(frame, 8);
     fx.scratch = frame;
@@ -1640,9 +1654,9 @@ impl Fx<'_> {
 
     /// The phi copies for the edge `from -> to`, written as a parallel move.
     fn moves(&mut self, from: usize, to: usize) -> Result<bool, String> {
-        let phis = self.phis[to].clone();
+        let phis = Rc::clone(&self.phis[to]);
         let mut sets = Vec::new();
-        for (d, t, inc) in &phis {
+        for (d, t, inc) in phis.iter() {
             let v = inc
                 .iter()
                 .find(|(_, b)| self.block_of.get(b) == Some(&from))
@@ -1678,7 +1692,7 @@ impl Fx<'_> {
     }
 
     fn block(&self, name: &str) -> Result<usize, String> {
-        self.block_of.get(name).copied().ok_or(format!("no block %{name}"))
+        self.block_of.get(name).copied().ok_or_else(|| format!("no block %{name}"))
     }
 
     fn simple(&self, from: usize, to: usize) -> bool {
@@ -2004,8 +2018,11 @@ impl Fx<'_> {
         }
         let (target, sig_params, varargs) = match callee {
             Callee::Direct(name) => {
-                let name = self.mx.resolve(name).to_string();
-                let fi = *self.mx.func_idx.get(&name).ok_or(format!("call to unknown @{name}"))?;
+                let fi = *self
+                    .mx
+                    .func_idx
+                    .get(self.mx.resolve(name))
+                    .ok_or_else(|| format!("call to unknown @{name}"))?;
                 let sig = &self.mx.sigs[fi as usize];
                 (Some(fi), sig.params.len(), sig.varargs)
             }
