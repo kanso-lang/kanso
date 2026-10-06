@@ -21743,3 +21743,110 @@ still read every benchmark's machine code 16 bytes smaller, with twelve of the
 fourteen work rows moving and deepbench up 324,000 instructions. Putting
 `size_t` back for native and nothing else returned the machine code to its
 golden byte for byte on this host.
+
+## 2026-10-06 — the playground compiles with native's emitter and runs on runtime.c
+
+The tab now compiles a program the way `kanso build` does and runs it on the
+same C a native binary runs on. `docs/kanso.wasm` parses and checks the
+program, writes its module with `codegen::emit_ir_dev`, retargets it with
+`retarget_wasm32`, and lowers the result to wasm with a new translator,
+`src/ir_wasm.rs`. The page links that module against `runtime.c` built for
+wasm32, which it fetches as `docs/kanso-runtime.wasm`. Values live in the
+runtime's linear memory in native's layout, and every helper the program calls
+is the runtime's own `k_*` function. There is no LLVM in the tab.
+
+**The translator** reads the subset of IR the emitter writes: about thirty
+opcodes, three overflow intrinsics, `memcpy`, one variadic declaration and the
+constant forms the emitter's globals use. Every function follows the C ABI
+clang uses for the same IR on wasm32. A struct argument is passed as its
+fields, and a struct return goes through a pointer passed first. So the
+runtime calls a closure or a hook without knowing which compiler wrote it.
+Control flow is a dispatch loop of nested blocks: a forward branch is a direct
+`br`, and a backward one sets the block number and goes round the loop's
+`br_table`. `musttail` becomes `return_call`.
+
+**Linking.** The module is a side module. It imports the runtime's memory,
+table and stack pointer, plus two bases the page chooses: `__memory_base`,
+where the runtime's `malloc` has set aside room for its data, and
+`__table_base`, where the shared table has grown to hold its functions. Its
+start function patches the addresses in its data and writes seven hook
+functions into slots that `wasm/hooks.c` gives the runtime. A native link
+resolves those seven by name (`k_user_main`, `d_thunk_eval` and the type
+tables), and a runtime built ahead of time has no program to resolve them
+against.
+
+**The page's host** answers a dozen WASI calls. No stream is a terminal, so
+diagnostics carry no colour, as when native's stderr is a pipe. A sleep
+returns at once and moves the program's clock by what it asked for, so
+`examples/concurrency.kso` meets its deadlines in native's order. When wasm's
+call stack runs out, the page prints `kanso::stack_exhausted()`, the sentence
+every other engine prints. Files and processes answer ENOSYS, and the runtime
+refuses those calls in its own words.
+
+**What holds it.** `tests/ir_to_wasm.rs` builds every played micro program,
+translates it with no clang on the program's side, and compares stdout,
+stderr and exit with the goldens: 259 of 259. Making `ssub`'s overflow test
+read as `sadd`'s turns 70 of them red. `tests/wasm_engine.rs` gained
+`the_native_route_agrees_with_the_golden_corpus`, which drives the route
+through `docs/kanso.wasm` exactly as the page does and holds it to native over
+the same corpus the older route is held to. 466 programs agree, one is held
+out for the reason the older walk holds it out, and six differ.
+`tests/golden/native_route_gaps.txt` lists those six with what the route
+answers instead. Each needs a process or a filesystem. The older route lists
+ten. The clock, stdin, a missing file and a command that cannot start now
+agree with native. Hello, a library, `deep_recursion`, the concurrency
+example and the clock were also run by hand in headless Chromium through
+`docs/kanso-engine.js`, and each answered as native does.
+
+**The rows.** `bench/browser_golden.txt` now measures the route the page
+takes. All four rows are rustc 1.98.1's.
+
+    row                              before            after
+    browser_compile_instructions     343,917,485       592,373,894
+    browser_compile_peak_bytes       588,109           2,256,216
+    browser_run_instructions         2,331,914,518     29,965,453
+    browser_run_peak_bytes           16,141,282        1,310,720
+
+The run is 78 times cheaper. The run's memory row now counts what the
+runtime's linear memory grew by while the program ran, in whole 64 KiB pages,
+where the older row counted the value registry's peak. Both are what the page
+holds for the run. The compile costs more because it does more: it writes the
+IR native writes and then translates it. A profile of the first translator
+spent 40% of its 94 million native instructions in the allocator. Borrowing
+tokens from the source line, sharing struct types, building error messages
+only on the error path, and copying a line whole through `retarget_wasm32`
+unless it names a calling convention brought that to 43 million, and the tab's
+compile from 712,317,394 to 586,802,309 before `list/tie` landed; the table
+above is after it.
+
+**Welfare.** The browser side rises from 56.22 to 77.54 and the meta from
+88.84 to 90.07. Two of its counters worsen and are named above with the values
+they landed on: `browser_compile_instructions` at 592,373,894 and
+`browser_compile_peak_bytes` at 2,256,216. The run terms
+pay for both many times over at the weights the 2026-10-06 placement chose.
+
+Three compile rows move because `src/ir_wasm.rs` and the new exports in
+`src/wasm.rs` are compiled into the native binary as well, where nothing calls
+them. They are layout moves, taken from CI: `compile_instructions` lands on
+26,074,590 (from 26,062,711), `entry_instructions` on 86,063,837 (from
+86,029,749) and `library_instructions` on 86,626,059 (from 86,591,709). Two
+more fall and are taken from CI: `emit_instructions` to 31,191,395 (from
+31,223,159) and `interp_instructions` to 590,552,679 (from 591,566,141). Both
+arrived with this change; nothing here isolates the mechanism, and native's
+emitting runs none of the new code. `codegen_instructions_dev` reads
+124,659,910, 3,653 above #1771's reading on the same `runtime.c`, so the rise
+is in the dev tier's compile of the emitted program rather than of the runtime.
+
+**Size.** On rustc 1.98.1, `kanso.wasm` grows from 2,161,218 bytes to
+3,237,163, which is 652,614 to 913,489 gzipped. The runtime adds 259,284
+bytes, 105,100 gzipped. Both were measured on the tree with `list/tie` merged;
+the figures first written here, 3,203,732 and 254,532, were taken before it. A first visit downloads about a megabyte compressed
+where it downloaded about two thirds of one. Most of the growth is the native
+emitter, which the tab now carries. The older route is still inside as the
+fallback when the runtime cannot be fetched, and removing it is the next step
+and gives some of the size back.
+
+**Not yet covered.** The headless-Chrome differential still drives the older
+route through its own inline page, and `site_smoke` serves no runtime, so its
+pages take the fallback. The wasmi walk above is what holds the native route
+to the goldens until the Chrome harness learns it.

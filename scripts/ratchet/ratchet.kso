@@ -117,11 +117,15 @@ ag_site = "{ag_dir} && cp -r docs /tmp/agsite/_site"
 
 ag_stub = "printf 'stand-in\\n' > /tmp/agsite/_site/kanso.wasm"
 
+# The runtime the playground links against is a build artifact like the engine,
+# and the fingerprinter refuses a site without it, so it is stood in for too.
+ag_stub_rt = "printf 'stand-in\\n' > /tmp/agsite/_site/kanso-runtime.wasm"
+
 ag_run = "$W/target/release/kanso run $W/scripts/fingerprint -- ./_site"
 
 ag_check = "sh $W/scripts/gates/undigested_references.sh"
 
-ag_made = "{ag_site} && {ag_stub} && W=$PWD"
+ag_made = "{ag_site} && {ag_stub} && {ag_stub_rt} && W=$PWD"
 
 ag_gate = "{ag_made} && cd /tmp/agsite && {ag_run} && {ag_check}"
 

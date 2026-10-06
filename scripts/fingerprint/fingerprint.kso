@@ -24,7 +24,7 @@ type named
 # The order is the dependency order, not the alphabet: kanso-engine.js fetches
 # the wasm module by name rather than through a tag, so its own text has to be
 # rewritten before it is hashed, or it names a module that no longer exists.
-front = ["style.css" "kanso.wasm" "play.js"]
+front = ["style.css" "kanso.wasm" "kanso-runtime.wasm" "play.js"]
 
 back = ["landing-play.js" "kanso-engine.js"]
 

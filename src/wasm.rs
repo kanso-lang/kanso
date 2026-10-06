@@ -241,6 +241,82 @@ fn lower_to_wasm(program: crate::ast::Program, tailcalls: i32) -> i32 {
 }
 
 #[cfg(target_arch = "wasm32")]
+thread_local! {
+    static SIDE: std::cell::Cell<(u32, u32)> = const { std::cell::Cell::new((0, 0)) };
+}
+
+/// Compile the program the way `kanso build` does, and lower the module the
+/// native emitter writes to a side module for the wasm32 runtime
+/// (`ir_wasm`). Returns 0 with the module ready, 1 when the emitter or the
+/// translator refuses the program (reason in the output buffer), or 2 on a
+/// compile error. `kanso_side_data` and `kanso_side_table` then say what the
+/// host sets aside for it before instantiation.
+#[cfg(target_arch = "wasm32")]
+#[no_mangle]
+pub extern "C" fn kanso_compile_native(ptr: *const u8, len: usize) -> i32 {
+    let source = take_input(ptr, len);
+    match crate::compile_source("run", &current_file(), &source) {
+        Ok(program) => lower_native(&program),
+        Err(rendered) => {
+            set_out(&rendered);
+            2
+        }
+    }
+}
+
+/// The play door onto the same route.
+#[cfg(target_arch = "wasm32")]
+#[no_mangle]
+pub extern "C" fn kanso_play_native(ptr: *const u8, len: usize) -> i32 {
+    let source = take_input(ptr, len);
+    match crate::compile_play_file(&current_file(), &source) {
+        Ok(program) => lower_native(&program),
+        Err(rendered) => {
+            set_out(&rendered);
+            2
+        }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn lower_native(program: &crate::ast::Program) -> i32 {
+    let convention = crate::codegen::ClosureConvention::Absent;
+    let side = crate::codegen::emit_ir_dev(program, convention)
+        .and_then(|ir| crate::ir_wasm::translate(&crate::codegen::retarget_wasm32(&ir)));
+    match side {
+        Ok(side) => {
+            SIDE.with(|s| s.set((side.data, side.table)));
+            WASM_BYTES.with(|b| *b.borrow_mut() = side.wasm);
+            0
+        }
+        Err(reason) => {
+            set_out(&reason);
+            1
+        }
+    }
+}
+
+/// The page's answer when a natively compiled program exhausts the wasm call
+/// stack: the sentence every other engine prints, in the output buffer.
+#[cfg(target_arch = "wasm32")]
+#[no_mangle]
+pub extern "C" fn kanso_stack_exhausted() {
+    set_out(&format!("{}\n", crate::stack_exhausted()));
+}
+
+#[cfg(target_arch = "wasm32")]
+#[no_mangle]
+pub extern "C" fn kanso_side_data() -> u32 {
+    SIDE.with(|s| s.get().0)
+}
+
+#[cfg(target_arch = "wasm32")]
+#[no_mangle]
+pub extern "C" fn kanso_side_table() -> u32 {
+    SIDE.with(|s| s.get().1)
+}
+
+#[cfg(target_arch = "wasm32")]
 #[no_mangle]
 pub extern "C" fn kanso_wasm_ptr() -> *const u8 {
     WASM_BYTES.with(|b| b.borrow().as_ptr())
