@@ -547,7 +547,16 @@ static long long k_seek_char = 0;
 static long k_seek_byte = 0;
 
 char* k_arena = NULL;
+/* The emitted IR reads and writes this as an i64, which is size_t on a 64-bit
+   host and twice it on wasm32. The native declaration stays size_t: spelled
+   `unsigned long long`, the same width under another name, it took 16 bytes
+   off every benchmark's machine code and moved twelve of the fourteen work
+   rows, deepbench up by 324,000 instructions. */
+#ifdef __wasm__
 unsigned long long k_arena_left = 0;
+#else
+size_t k_arena_left = 0;
+#endif
 
 /* Cost counters: every value is an exact, machine-independent constant for a
    deterministic program, so they golden like output does. KANSO_COUNTERS=1
