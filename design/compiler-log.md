@@ -21911,6 +21911,55 @@ is the likeliest reading and it is not shown. The tab's run row and both
 memory rows hold, since `tests/browser_cost.rs` already measured the native
 route.
 
+## 2026-10-06 — the engine drops its names
+
+`scripts/build_wasm.sh` now builds the playground's engine with
+`CARGO_PROFILE_RELEASE_STRIP=true`, which removes the `name`, `producers` and
+`target_features` custom sections. On rustc 1.98.1 the module falls from
+3,011,568 bytes to 2,691,214, and from 855,367 to 807,745 gzipped at level
+nine. The code is unchanged, and all four browser rows read what they read
+before. A first visit now downloads 912,845 compressed bytes for the engine
+and the runtime. `tests/the_engine_ships_without_names.rs` lists the shipped
+module's custom sections and expects none; on an unstripped build it named all
+three.
+
+The script also builds `--bin kanso` alone. The library's cdylib and the
+binary both write `target/wasm32-unknown-unknown/release/kanso.wasm`, and cargo
+warns about the collision on every build. The page needs the binary, which
+exports the allocator's heap counters, and it was getting the binary because
+the binary links last.
+
+**Random programs through the tab's route.** The generator the earlier
+differential batches used, run with `KANSO_GEN_NO_FS=1` since the page has no
+filesystem, wrote 4,000 programs from seeds 910001 to 911000 and 920001 to
+923000. Each was built natively, and its emitted module was retargeted,
+translated by `ir_wasm` and run against the wasm32 runtime under the specs'
+WASI host. 3,337 built and ran on both, and stream for stream and exit code
+for exit code none differed. The other 663 are programs the compiler refuses,
+mostly a conversion folded at compile time that cannot succeed. An earlier
+batch of 200 that kept the filesystem calls differed on 16, each one a
+program making a directory, which the tab's host answers with ENOSYS.
+
+**Built, measured and declined: LTO and one codegen unit.** Every arm with
+either made the tab's compile dearer, and only the two with one unit made the
+module smaller. All five arms were stripped, on
+rustc 1.98.1, read by `tests/browser_cost.rs`:
+
+| profile | bytes | gzipped | `browser_compile_instructions` |
+|---|---|---|---|
+| strip | 2,691,214 | 807,745 | 591,832,734 |
+| one codegen unit | 2,463,022 | 761,217 | 610,836,378 |
+| fat LTO, one codegen unit | 2,474,774 | 771,848 | 595,193,879 |
+| thin LTO | 3,279,265 | 873,176 | 641,793,446 |
+| fat LTO, sixteen units | 3,147,304 | 900,061 | 647,803,628 |
+
+The compile's peak bytes held at 2,256,216 in every arm. The cheapest of them
+is fat LTO with one unit: 35,897 fewer gzipped bytes for 3,361,145 more
+instructions, 0.57%. Download size is not a term in the objective, so welfare
+reads that trade as a pure regression, and it is declined. Fat LTO also doubled the
+wasm build, from about 40 seconds to about 95, in each of the six jobs that
+run it.
+
 ## 2026-10-06 — the checkout names its rustc
 
 kanso#1766 pinned rustc 1.98.1 in the four workflows, and the goldens that name
