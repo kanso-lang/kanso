@@ -784,6 +784,14 @@ So, before an argument rests on a number:
   because a compiler that was imperceptible and is now noticeable has lost
   something real, while a decoder that was already the expensive part has only
   got worse at being expensive.
+- **Every environment kanso runs in is weighed, and none at zero.** Native,
+  the interpreter, both codegen tiers and the browser engine each carry terms
+  for CPU and memory, at a weight chosen for how much the environment matters
+  next to production. A small weight is a judgement; an absent term is the
+  model silently weighting that environment at zero. Clay, 2026-10-06: "you
+  can choose a pragmatic weight to apply to that versus actual production run
+  time and stuff but it doesn't have zero weight." An engine or tier added
+  later joins the objective in the pull request that adds it.
 - **The function is provisional and says so.** Seven deterministic terms are a
   model of what the project wants, not the thing itself; wall time is absent
   because it cannot be made deterministic, and what a model leaves out it

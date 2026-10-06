@@ -158,7 +158,7 @@ minted a day later does not satisfy.
 all but one entry. All six came off the same day: the float order, the
 one-engine fixture kind, the box through a parameter and escapebench's size,
 built, and the escape scan and the fixed heap start, each measured and declined.
-Two rows stand. Each standing one has its own heading
+Three rows stand as of 2026-10-06. Each standing one has its own heading
 below, dated 2026-09-30, and a log entry of the same name. The seventh ruling
 of that sitting, the box constructor's spelling, has no row because `effect`
 was already built and pinned.
@@ -258,6 +258,16 @@ graph from a map of edges, each form's broken-link answer and the compile-time
 refusal; error goldens for a read through a reference in the maker and in a
 helper it calls; and a fixture that ties and drops ten thousand graphs with a
 flat arena peak.
+
+### Every environment is weighed, and the browser is missing (2026-10-06)
+
+The live log's "gavel: welfare weighs every environment kanso runs in, and none
+at zero". Nothing in the objective measures the browser engine: neither
+compiling in the playground tab nor running the module it makes. Owes: browser
+terms for CPU and memory, counted deterministically, in `scripts/welfare` and
+`bench/objective_sources.txt`, with goldens and a CI gate; weights and their
+placement proposed by the implementer and recorded with reasons; the floor
+re-ratcheted in the same change.
 
 ### A welfare counter reads three parts per billion (2026-09-15)
 
