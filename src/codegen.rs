@@ -1268,6 +1268,7 @@ declare %KValue @k_b_wrap_err(%KValue, %KValue, ptr)
 declare %KValue @k_b_effect(%KValue)
 declare %KValue @k_err_hop(%KValue, ptr)
 declare void @llvm.assume(i1 noundef)
+attributes #90 = { noinline }
 declare %KValue @k_unsub(%KValue)
 declare %KValue @k_rec(i64, i64, ptr)
 declare %KValue @k_pair_failure(%KValue, %KValue)
@@ -4905,6 +4906,91 @@ fn byte_run(args: &[Expr]) -> Option<ByteRun<'_>> {
     Some((x, p, reads.iter().map(|r| (r.2, r.3)).collect()))
 }
 
+/// The operands of an argument that ran on words, and the flags that say
+/// whether any of its operations overflowed.
+type WordFlags = Option<(Vec<String>, Vec<String>)>;
+
+fn word_arith(op: &str) -> bool {
+    matches!(op, "+" | "-" | "*" | "/" | "%")
+}
+
+fn arith_ops(e: &Expr) -> usize {
+    match e {
+        Expr::BinOp { op, lhs, rhs, .. } if word_arith(op) => 1 + arith_ops(lhs) + arith_ops(rhs),
+        _ => 0,
+    }
+}
+
+/// The operands of a word run, in the order the operations would evaluate
+/// them.
+fn arith_leaves<'e>(e: &'e Expr, out: &mut Vec<&'e Expr>) {
+    match e {
+        Expr::BinOp { op, lhs, rhs, .. } if word_arith(op) => {
+            arith_leaves(lhs, out);
+            arith_leaves(rhs, out);
+        }
+        _ => out.push(e),
+    }
+}
+
+/// The operations of a word run on raw words. Each one that can leave the
+/// word, or divide by zero or by minus one, adds its flag to `flags`; the
+/// answer is meaningful only when none is set.
+fn word_run(
+    f: &mut FnEmit,
+    e: &Expr,
+    words: &[String],
+    at: &mut usize,
+    flags: &mut Vec<String>,
+) -> String {
+    let Expr::BinOp { op, lhs, rhs, .. } = e else {
+        *at += 1;
+        return words[*at - 1].clone();
+    };
+    if !word_arith(op) {
+        *at += 1;
+        return words[*at - 1].clone();
+    }
+    let a = word_run(f, lhs, words, at, flags);
+    let b = word_run(f, rhs, words, at, flags);
+    let t = f.tmp();
+    match *op {
+        "+" | "-" | "*" => {
+            let intrinsic = match *op {
+                "+" => "llvm.sadd.with.overflow.i64",
+                "-" => "llvm.ssub.with.overflow.i64",
+                _ => "llvm.smul.with.overflow.i64",
+            };
+            let pair = f.tmp();
+            f.line(&format!("{pair} = call {{ i64, i1 }} @{intrinsic}(i64 {a}, i64 {b})"));
+            f.line(&format!("{t} = extractvalue {{ i64, i1 }} {pair}, 0"));
+            let over = f.tmp();
+            f.line(&format!("{over} = extractvalue {{ i64, i1 }} {pair}, 1"));
+            flags.push(over);
+        }
+        _ => {
+            if !matches!(b.parse::<i64>(), Ok(d) if d != 0 && d != -1) {
+                let zero = f.tmp();
+                f.line(&format!("{zero} = icmp eq i64 {b}, 0"));
+                let minus = f.tmp();
+                f.line(&format!("{minus} = icmp eq i64 {b}, -1"));
+                let edge = f.tmp();
+                f.line(&format!("{edge} = or i1 {zero}, {minus}"));
+                flags.push(edge.clone());
+                // the instruction must not trap on the path it does not take
+                let safe = f.tmp();
+                f.line(&format!("{safe} = select i1 {edge}, i64 1, i64 {b}"));
+                let insn = if *op == "%" { "srem" } else { "sdiv" };
+                f.line(&format!("{t} = {insn} i64 {a}, {safe}"));
+                return t;
+            }
+            let insn = if *op == "%" { "srem" } else { "sdiv" };
+            f.line(&format!("{t} = {insn} i64 {a}, {b}"));
+        }
+    }
+    t
+}
+
 fn inline_tag(f: &mut FnEmit, value: &str) -> String {
     if let Some(word) = literal_word(value, 0) {
         return word.to_string();
@@ -5146,7 +5232,12 @@ impl<'a> Backend<'a> {
     /// with a parameter the twin can take as a word. A group run once a call
     /// would pay the code twice for one test saved.
     fn has_twin(&self, name: &str, arity: usize) -> bool {
-        arity > 0
+        // A twin buys run speed with a second copy of the group, which a dev
+        // build and the tab pay for in compile time and memory and have no
+        // use for: on 2026-10-06 the tab's compile of interp_corpus read
+        // 24.7% more fuel and held 49% more memory with them.
+        self.inline_helpers
+            && arity > 0
             && !self.knotted.contains(name)
             && self.cycle_members.contains(name)
             && (0..arity).any(|i| self.twin_param(name, arity, i))
@@ -5178,6 +5269,48 @@ impl<'a> Backend<'a> {
     /// a word. `Some(None)` is the twin, every such argument already known to
     /// be a word. `Some(Some(c))` tests at run time, `c` true when every one
     /// is a word.
+    fn twin_reachable(&self, f: &FnEmit, name: &str, n: usize) -> bool {
+        // A general body stays general. It runs only once a bignum has
+        // arrived, and a call from it into a twin would give every twin a
+        // second caller, which costs the single-caller inlining that folds a
+        // loop's steps into one function.
+        self.has_twin(name, n)
+            && !(self.has_twin(&f.group, f.arity) && !self.emitting_twin(&f.group, f.arity))
+    }
+
+    /// An argument a twin takes as a word, written as arithmetic over words,
+    /// such as the `n - 1` of a counting loop: the operations run on raw
+    /// words and their overflow flags go back to the caller, which folds
+    /// them into the test that picks the twin. Merging the overflow call
+    /// back first left a phi whose tag the test then read, and LLVM does not
+    /// thread a branch into a loop's header, so a counting loop paid three
+    /// instructions a step to learn what the arithmetic had already said.
+    /// The second value is the operands and the flags; the general way
+    /// re-runs the operations on those operands.
+    fn emit_word_arg(&mut self, f: &mut FnEmit, arg: &Expr) -> Result<(String, WordFlags), String> {
+        let mut leaves = Vec::new();
+        arith_leaves(arg, &mut leaves);
+        let mut vals = Vec::with_capacity(leaves.len());
+        for leaf in leaves {
+            let v = self.emit_expr(f, leaf)?;
+            let v = self.maybe_force(f, v);
+            vals.push(self.as_value(f, &v));
+        }
+        if vals.iter().any(|v| f.set_of(v) != INT) {
+            return Ok((self.emit_arith_general(f, arg, &vals, &mut 0)?, None));
+        }
+        let words: Vec<String> = vals.iter().map(|v| inline_payload(f, v)).collect();
+        let mut flags = Vec::new();
+        let r = word_run(f, arg, &words, &mut 0, &mut flags);
+        let v = f.tmp();
+        f.line(&format!("{v} = insertvalue %KValue {{ i64 0, i64 undef }}, i64 {r}, 1"));
+        f.record(&v, INT);
+        match flags.is_empty() {
+            true => Ok((v, None)),
+            false => Ok((v, Some((vals, flags)))),
+        }
+    }
+
     fn twin_test(
         &self,
         f: &mut FnEmit,
@@ -5186,14 +5319,7 @@ impl<'a> Backend<'a> {
         emitted: &[String],
         packed: &[Option<String>],
     ) -> Option<Option<String>> {
-        if !self.has_twin(name, n) {
-            return None;
-        }
-        // A general body stays general. It runs only once a bignum has
-        // arrived, and a call from it into a twin would give every twin a
-        // second caller, which costs the single-caller inlining that folds a
-        // loop's steps into one function.
-        if self.has_twin(&f.group, f.arity) && !self.emitting_twin(&f.group, f.arity) {
+        if !self.twin_reachable(f, name, n) {
             return None;
         }
         let positions = self.twin_positions(name, n);
@@ -8204,6 +8330,9 @@ impl<'a> Backend<'a> {
                 Ok(t)
             }
             Expr::BinOp { op, lhs, rhs, span } => {
+                if word_arith(op) && arith_ops(expr) >= 2 {
+                    return self.emit_word_run(f, expr);
+                }
                 let a = self.emit_expr(f, lhs)?;
                 let a = self.maybe_force(f, a);
                 let b = self.emit_expr(f, rhs)?;
@@ -8467,6 +8596,14 @@ impl<'a> Backend<'a> {
                     let n = args.len();
                     let mut emitted = Vec::new();
                     let mut packed: Vec<Option<String>> = Vec::new();
+                    let word_args =
+                        self.ret_ty(name, n) == f.ret_ty && self.twin_reachable(f, name, n);
+                    let word_positions = match word_args {
+                        true => self.twin_positions(name, n),
+                        false => Vec::new(),
+                    };
+                    let mut deferred: Vec<(usize, Vec<String>)> = Vec::new();
+                    let mut overflow: Vec<String> = Vec::new();
                     for (i, arg) in args.iter().enumerate() {
                         match self.packed_arg_fields(name, n, i, arg) {
                             Some(fields) => {
@@ -8479,6 +8616,15 @@ impl<'a> Backend<'a> {
                                 let p = self.emit_packed_arg(f, &fields, &ty)?;
                                 emitted.push(String::new());
                                 packed.push(Some(p));
+                            }
+                            None if word_positions.contains(&i) && arith_ops(arg) >= 1 => {
+                                let (v, raw) = self.emit_word_arg(f, arg)?;
+                                if let Some((vals, flags)) = raw {
+                                    deferred.push((i, vals));
+                                    overflow.extend(flags);
+                                }
+                                emitted.push(v);
+                                packed.push(None);
                             }
                             None => {
                                 emitted.push(self.emit_expr(f, arg)?);
@@ -8501,16 +8647,72 @@ impl<'a> Backend<'a> {
                     // edge skips its rewind: the general group's next edge
                     // lifts its bignums and takes this iteration's garbage
                     // with its own.
-                    let twin = match same_ret {
+                    let mut twin = match same_ret {
                         true => self.twin_test(f, name, n, &emitted, &packed),
                         false => None,
                     };
+                    if let Some(first) = overflow.first().cloned() {
+                        let mut any = first;
+                        for flag in &overflow[1..] {
+                            let t = f.tmp();
+                            f.line(&format!("{t} = or i1 {any}, {flag}"));
+                            any = t;
+                        }
+                        match &mut twin {
+                            Some(cond) => {
+                                let none = f.tmp();
+                                f.line(&format!("{none} = xor i1 {any}, true"));
+                                *cond = Some(match cond.take() {
+                                    None => none,
+                                    Some(c) => {
+                                        let both = f.tmp();
+                                        f.line(&format!("{both} = and i1 {c}, {none}"));
+                                        both
+                                    }
+                                });
+                            }
+                            None => {
+                                // no twin after all: the words go back into
+                                // values, the general way where one overflowed
+                                let fast = f.label();
+                                let slow = f.label();
+                                let merge = f.label();
+                                f.line(&format!("br i1 {any}, label %{slow}, label %{fast}"));
+                                f.start_block(&slow);
+                                let mut wide = Vec::new();
+                                for (i, vals) in &deferred {
+                                    wide.push(self.emit_arith_general(f, &args[*i], vals, &mut 0)?);
+                                }
+                                let slow_from = f.cur_label.clone();
+                                f.line(&format!("br label %{merge}"));
+                                f.start_block(&fast);
+                                f.line(&format!("br label %{merge}"));
+                                f.start_block(&merge);
+                                for ((i, _), w) in deferred.iter().zip(wide) {
+                                    let t = f.tmp();
+                                    f.line(&format!(
+                                        "{t} = phi %KValue [ {}, %{fast} ], [ {w}, %{slow_from} ]",
+                                        emitted[*i]
+                                    ));
+                                    f.record(&t, INT | f.set_of(&w));
+                                    emitted[*i] = t;
+                                }
+                                deferred.clear();
+                            }
+                        }
+                    }
                     if let Some(Some(words)) = &twin {
                         let to_twin = f.label();
                         let to_general = f.label();
                         f.line(&format!("br i1 {words}, label %{to_twin}, label %{to_general}"));
                         f.start_block(&to_general);
-                        let general_ir: Vec<String> = emitted
+                        // an argument that overflowed is worked out again,
+                        // the general way, from the same operands
+                        let mut general = emitted.clone();
+                        for (i, vals) in &deferred {
+                            general[*i] = self.emit_arith_general(f, &args[*i], vals, &mut 0)?;
+                        }
+                        let general_ir: Vec<String> = general
                             .iter()
                             .enumerate()
                             .map(|(i, e)| match &packed[i] {
@@ -8519,9 +8721,14 @@ impl<'a> Backend<'a> {
                             })
                             .collect();
                         self.settle_cells(f, &general_ir);
+                        // The way to the general group runs once a bignum
+                        // has arrived. Inlined, it is the general body copied
+                        // into the twin, which then costs too much to fold
+                        // into its own caller: json/obj_key_end stood alone
+                        // on the run program until this said noinline.
                         let g = f.tmp();
                         f.line(&format!(
-                            "{g} = {kind} tailcc {callee_ret} @{}({})",
+                            "{g} = {kind} tailcc {callee_ret} @{}({}) #90",
                             dsym(name, n),
                             general_ir.join(", ")
                         ));
@@ -8972,6 +9179,80 @@ impl<'a> Backend<'a> {
         self.test_cond_value(f, sv, then_label, else_label, merge)
     }
 
+    /// An expression of two or more `+ - * / %` over words, such as
+    /// `(k * 31 + n * 7 + 3) % 997`, runs on raw words with one overflow
+    /// test at the end. Every operation on its own merged its overflow call
+    /// back through a phi, and the next operation tested the phi's tag:
+    /// escapebench's inner loop went from 33 instructions an element to 60.
+    /// Its operands are evaluated once, in order, and an overflow anywhere
+    /// re-runs the operations the general way on the same values, which the
+    /// operations being pure makes the same answer.
+    fn emit_word_run(&mut self, f: &mut FnEmit, e: &Expr) -> Result<String, String> {
+        let mut leaves = Vec::new();
+        arith_leaves(e, &mut leaves);
+        let mut vals = Vec::with_capacity(leaves.len());
+        for leaf in leaves {
+            let v = self.emit_expr(f, leaf)?;
+            let v = self.maybe_force(f, v);
+            vals.push(self.as_value(f, &v));
+        }
+        if vals.iter().any(|v| f.set_of(v) != INT) {
+            return self.emit_arith_general(f, e, &vals, &mut 0);
+        }
+        let mut flags = Vec::new();
+        let words: Vec<String> = vals.iter().map(|v| inline_payload(f, v)).collect();
+        let r = word_run(f, e, &words, &mut 0, &mut flags);
+        let fv = f.tmp();
+        f.line(&format!("{fv} = insertvalue %KValue {{ i64 0, i64 undef }}, i64 {r}, 1"));
+        let Some(first) = flags.first().cloned() else {
+            f.record(&fv, INT);
+            return Ok(fv);
+        };
+        let mut any = first;
+        for flag in &flags[1..] {
+            let t = f.tmp();
+            f.line(&format!("{t} = or i1 {any}, {flag}"));
+            any = t;
+        }
+        let fast = f.label();
+        let slow = f.label();
+        let merge = f.label();
+        f.line(&format!("br i1 {any}, label %{slow}, label %{fast}"));
+        f.start_block(&fast);
+        f.line(&format!("br label %{merge}"));
+        f.start_block(&slow);
+        let sv = self.emit_arith_general(f, e, &vals, &mut 0)?;
+        let slow_from = f.cur_label.clone();
+        f.line(&format!("br label %{merge}"));
+        f.start_block(&merge);
+        let t = f.tmp();
+        f.line(&format!("{t} = phi %KValue [ {fv}, %{fast} ], [ {sv}, %{slow_from} ]"));
+        f.record(&t, INT | f.set_of(&sv));
+        Ok(t)
+    }
+
+    /// The operations of a word run, the general way, over operands already
+    /// evaluated.
+    fn emit_arith_general(
+        &mut self,
+        f: &mut FnEmit,
+        e: &Expr,
+        vals: &[String],
+        at: &mut usize,
+    ) -> Result<String, String> {
+        match e {
+            Expr::BinOp { op, lhs, rhs, span } if word_arith(op) => {
+                let a = self.emit_arith_general(f, lhs, vals, at)?;
+                let b = self.emit_arith_general(f, rhs, vals, at)?;
+                self.emit_binop(f, op, &a, &b, *span)
+            }
+            _ => {
+                *at += 1;
+                Ok(vals[*at - 1].clone())
+            }
+        }
+    }
+
     fn emit_binop(
         &mut self,
         f: &mut FnEmit,
@@ -9128,13 +9409,19 @@ impl<'a> Backend<'a> {
             let t = f.tmp();
             f.line(&format!("{t} = phi %KValue [ {fv}, %{fast} ], [ {sv}, %{slow} ]"));
             // The least int over minus one is the one quotient of two words
-            // that is not a word.
-            let wide = match (op, guarded) {
-                ("/", _) | (_, true) => infer::BIG,
-                _ => 0,
+            // that is not a word. A remainder by a word is smaller than the
+            // word, so only a bignum divisor can make it one.
+            let wide = match op {
+                "/" => infer::BIG,
+                _ => f.set_of(b) & infer::BIG,
             };
             let fails = (f.set_of(a) | f.set_of(b)) & FAIL;
-            f.record(&t, fails | INT | wide | ERR | self.zero_divisor_set());
+            // a divisor written as a literal other than zero cannot fail
+            let refused = match pb.parse::<i64>() {
+                Ok(d) if d != 0 => 0,
+                _ => ERR | self.zero_divisor_set(),
+            };
+            f.record(&t, fails | INT | wide | refused);
             return Ok(t);
         }
         if op == "/" || op == "%" {
@@ -10410,7 +10697,7 @@ impl<'a> Backend<'a> {
                             f.start_block(&to_general);
                             let b = f.tmp();
                             f.line(&format!(
-                                "{b} = call tailcc {callee_ret} @{}({})",
+                                "{b} = call tailcc {callee_ret} @{}({}) #90",
                                 dsym(name, n),
                                 args_ir.join(", ")
                             ));

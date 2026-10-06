@@ -1267,13 +1267,14 @@ fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut Env<'a>) -> Set {
 /// The numeric result of `+`/`-`/`*`/`/`/`%`: int only when both are int;
 /// float whenever a float meets any number (the int widens). Two words make
 /// a word or, past one, a bignum: every `+`, `-` and `*` can overflow, and so
-/// can `/` at the least int over minus one. A remainder of two words is a
-/// word. Once either side may be a bignum, so may the answer.
+/// can `/` at the least int over minus one. A remainder by a word is a word
+/// whatever the dividend, because it is smaller than the divisor. Otherwise,
+/// once either side may be a bignum, so may the answer.
 fn numeric_result(op: &str, a: Set, b: Set) -> Set {
     let mut out = 0;
     if a & ANY_INT != 0 && b & ANY_INT != 0 {
         out |= INT;
-        if op != "%" || (a | b) & BIG != 0 {
+        if op != "%" || b & BIG != 0 {
             out |= BIG;
         }
     }

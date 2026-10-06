@@ -22093,8 +22093,8 @@ they cannot reach. Three changes keep them sound:
 The cost on the run program is the int parameters. A loop counter or a
 parser position was a raw word, because `n + 1` was a word; now it is `int`
 or bignum, so it travels boxed, every use tests its tag, and the paths that
-read a payload directly stay shut. So every group on a cycle of the call
-graph with such a parameter is emitted twice. The twin, `d_<name>_<n>_w`,
+read a payload directly stay shut. So in a release build every group on a
+cycle of the call graph with such a parameter is emitted twice. The twin, `d_<name>_<n>_w`,
 takes those parameters as raw words. A call into the group tests the tags of
 its arguments and takes the twin when every one is a word; a call from the
 general group stays general, so each twin keeps one caller and the inlining
@@ -22121,8 +22121,45 @@ word gave 1,194,836,442, and inference that never widens arithmetic gave
 1,158,456,574. The twins recover less than the first probe because the
 groups LLVM inlined into one another before no longer all inline: the
 profile shows `escape/filled`, `json/obj_key_end` and `json/array_delim`
-standing alone where base folded them into their callers. That is the next
-lead.
+standing alone where base folded them into their callers.
+
+CI's first run of this branch found what runbench's 17.9% had hidden.
+escapebench read 75,295,126 instructions against 41,544,680, 81% more, and
+jsonbench 24.9% more. escapebench's inner loop pushes
+`(k * 31 + n * 7 + 3) % 997`. Each operation merged its overflow call back
+through a phi, the next operation tested the phi's tag, and LLVM left the
+constant tags in place: 60 instructions an element against 33. Four changes
+in the emitter answer most of it.
+
+- An expression of two or more `+ - * / %` over words runs on raw words and
+  tests for overflow once, at the end. When any operation overflowed it
+  re-runs the operations the general way on the same operands, which their
+  being pure makes the same answer.
+- A remainder by a word is a word whatever the dividend, because it is
+  smaller than the divisor, and a divisor written as a literal other than
+  zero cannot fail. The pushed element is then an int with no err beside it,
+  and the inlined push stops testing for either.
+- An argument a twin takes as a word, such as a loop's `n - 1`, runs the
+  same way at its call, and its overflow flag joins the test that picks the
+  twin. The merged phi had cost a counting loop three instructions a step,
+  because LLVM does not thread a branch into a loop's header.
+- A call from a twin into the general group is marked `noinline`. Inlined,
+  it copied the general body into the twin, which then cost too much to fold
+  into its own caller.
+
+escapebench went from 75,294,779 to 57,794,754 in this container, and
+runbench from 1,279,294,697 to 1,240,344,874. A fifth change, reading
+`cs[p + 1]` over bytes with an index past the word as index 0, measured
+1,245,214,168 on runbench and 931,768,709 on jsonbench against 1,240,344,874
+and 923,660,159 without it, and was taken out.
+
+A dev build and the tab get no twins. A twin buys run speed with a second
+copy of each looping group, and the tab's compile of interp_corpus read
+738,305,432 fuel against main's 591,832,734 with them and held 3,367,720
+bytes against 2,256,216. Without them it reads 632,100,525 and holds
+2,630,053, and the tab's run reads 33,447,328 against main's 29,965,453 and
+31,952,303 with twins. The mem vein, whose programs build at the dev tier,
+is back to main's values byte for byte.
 
 Two specs went red on the way. The release spec that runs a cycle through a
 twelve-word arm three million times has a seven-parameter group whose count
@@ -22135,8 +22172,10 @@ emitted module at clang's default inline threshold, and there a `musttail`
 returning a `KValue` is an ordinary call, because the backend returns the
 struct through a slot in the caller's frame; `a_record_rebuilt_at_depth`
 had run in one frame only because LLVM inlined one step into the other. The
-twin's step costs 260 against 225, so the harness now uses 2000, the
-threshold native's release link already uses.
+harness builds at the dev tier, so its step takes the counter boxed, and
+the boxed step no longer inlines at the default: the program exhausts the
+stack with twins and without them. The harness now uses 2000, the threshold
+native's release link already uses.
 
 The floor drops by what this costs, under the 2026-09-13 rule for building
 the specified language.
@@ -22149,7 +22188,10 @@ rendering, map keys, `fact 100` beside `math/round` and `text/to_int`, a wide
 pattern literal, a position past the word, a loop that carries a bignum
 across a plain rewind, one that carries it beside a record the carry copies,
 and a bignum stored into a map and a list that outlive the loop. Each of the
-last three goes red with its lift or its move taken out. A runtime golden
+last three goes red with its lift or its move taken out. One more,
+`arithmetic_over_words_leaves_the_word_at_any_step`, crosses 2^63 at a
+different step in each answer; release goes wrong on it with the word run's
+flags dropped and with the tail argument's. A runtime golden
 pins the bitwise refusal. The specs that asserted the refusal now assert
 agreement, and `an_overflow_trap_is_written_once_a_function` goes with the
 trap. `scripts/numeric_differential` fails on any disagreement, where it

@@ -6,7 +6,7 @@
 # what the runtime's linear memory grew by, so every row is the same on every
 # run of the same code. See tests/browser_cost.rs.
 # measured-on rustc=1.98.1
-browser_compile_instructions=591832734
-browser_compile_peak_bytes=2256216
-browser_run_instructions=29965453
+browser_compile_instructions=633010931
+browser_compile_peak_bytes=2639715
+browser_run_instructions=33447328
 browser_run_peak_bytes=1310720

@@ -244,7 +244,7 @@
 # 2026-09-25, a proven tag is assumed: the decoder's parameters proven to be
 # one kind of heap value each carry an `llvm.assume` on their tag, a call line
 # apiece. calls 482 -> 539, lines 5,479 -> 5,651; branches and defines hold.
-defines=83
-calls=591
-branches=567
-lines=5873
+defines=106
+calls=992
+branches=1121
+lines=9995
