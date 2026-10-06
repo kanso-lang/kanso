@@ -4093,7 +4093,7 @@ impl<'a> Interp<'a> {
                     };
                     *cell.borrow_mut() = ThunkState::Forced(node.clone());
                 }
-                let mut seen: std::collections::HashSet<usize> = Default::default();
+                let mut seen: crate::hash::Set<usize> = Default::default();
                 for (_, node) in nodes.iter() {
                     resolve_tied(node, &mut seen);
                 }
@@ -4831,7 +4831,7 @@ fn bind_whole(whole: &Option<Box<(Name, crate::diag::Span)>>, arg: &Value, binds
 /// compares the field as it stands, and `(ring _ (ring d _))` matched native's
 /// node and missed the interpreter's cell. Records are rewritten in place, so
 /// the walk goes once through each and never through a cell.
-fn resolve_tied(v: &Value, seen: &mut std::collections::HashSet<usize>) {
+fn resolve_tied(v: &Value, seen: &mut crate::hash::Set<usize>) {
     match v {
         Value::Record { fields, .. } => {
             if !seen.insert(Rc::as_ptr(fields) as *const () as usize) {
