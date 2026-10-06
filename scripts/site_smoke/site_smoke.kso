@@ -23,6 +23,7 @@ type pages
   painting
   play_js
   wasm
+  runtime
 
 type paint_want
   at
@@ -58,7 +59,9 @@ chart_port = 8752
 
 paint_port = 8753
 
-assets = ["kanso-engine.js" "kanso.wasm" "landing-play.js" "play.js"]
+engine_assets = ["kanso-engine.js" "kanso.wasm" "kanso-runtime.wasm"]
+
+assets = text/concat engine_assets ["landing-play.js" "play.js"]
 
 # The page reports by posting to /report, which is the only path the server
 # treats as anything but a file.
@@ -107,6 +110,9 @@ fn body_for "/kanso-engine.js" set
 
 fn body_for "/kanso.wasm" set
   set.wasm
+
+fn body_for "/kanso-runtime.wasm" set
+  set.runtime
 
 fn body_for "/landing-play.js" set
   set.hero
@@ -516,7 +522,8 @@ fn judged set chrome failures report
   b = missing_fanout read a
   c = missing_repl read b
   e = missing_edit read c
-  faults = missing_keys read e
+  k = missing_keys read e
+  faults = missing_compile read k
   visiting_book set chrome faults
 
 fn visiting_book set chrome failures
@@ -678,6 +685,14 @@ fn missing_keys read acc
   said = said_in? read "keyed" "keys then run 5"
   noted acc why said
 
+# The playground compiles through the native emitter and runs what it wrote
+# on the runtime; a page that cannot fetch or compile the runtime interprets
+# every program instead, and says so under the output.
+fn missing_compile read acc
+  why = "the playground interpreted a program it should have compiled"
+  said = said_in? read "edited" "compiled to wasm in your tab"
+  noted acc why said
+
 fn finished failures report
   ended failures report (length failures == 0)
 
@@ -705,13 +720,19 @@ more_pages = ["docs/playground.html" "docs/book-play.js"]
 
 last_pages = ["docs/book/ch04.html" "docs/numbers.html"]
 
+# The runtime a compiled program links against, which the pages fetch beside
+# the engine. Without it every run on these pages would be interpreted.
+runtime_files = ["docs/kanso-runtime.wasm"]
+
 early_files = text/concat engine_files hero_files
 
 middle_files = text/concat page_files more_pages
 
 opening_files = text/concat early_files middle_files
 
-wanted_files = text/concat opening_files last_pages
+closing_files = text/concat last_pages runtime_files
+
+wanted_files = text/concat opening_files closing_files
 
 pub play = read_each wanted_files 1 []
 
@@ -731,11 +752,14 @@ fn gathered paths at acc false
 fn read_one "docs/kanso.wasm"
   os/read_bytes! "docs/kanso.wasm"
 
+fn read_one "docs/kanso-runtime.wasm"
+  os/read_bytes! "docs/kanso-runtime.wasm"
+
 fn read_one path
   os/read_file! path
 
 fn with_all bodies
-  return io/write "site_smoke: fewer than ten pages\n" if length bodies < 10
+  return io/write "site_smoke: fewer than eleven files\n" if length bodies < 11
   header = bodies[5]
   index = document "" header bodies[6] "" landing
   shown = document "" header bodies[7] "" board
@@ -749,8 +773,9 @@ fn assembled bodies shown read drawn index
   hero = bodies[3]
   js = bodies[4]
   book = bodies[8]
+  runtime = bodies[11]
   painted = document "" "" "" engine_tag paint
-  set = pages shown book read drawn engine hero index painted js wasm
+  set = pages shown book read drawn engine hero index painted js wasm runtime
   wanted set
 
 fn wanted set

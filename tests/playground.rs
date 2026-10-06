@@ -124,24 +124,19 @@ fn every_playground_example_agrees_between_the_interpreter_and_native() {
     }
 }
 
-/// The playground compiles each example to a wasm module and runs it in the
-/// tab, falling back to the interpreter when the backend does not cover the
-/// program. Either is fine; a panic or a module the encoder cannot finish is
-/// not. Behaviour inside the browser needs a wasm host, which this suite has
-/// no way to reach — see the browser-differential thread in the compiler log.
+/// The playground compiles each example with the native emitter and lowers
+/// the module to wasm in the tab, where it runs on runtime.c. Every example
+/// must get through both steps: a refusal here is an example the page would
+/// hand to the interpreter, and a panic is a page that answers nothing. Running
+/// what comes out is tests/wasm_engine.rs's job.
 #[test]
-fn every_playground_example_survives_the_browser_backend() {
+fn every_playground_example_lowers_for_the_tab() {
     for (name, source) in examples() {
         let program = kanso::compile_play_file(&format!("{name}.kso"), &source)
             .unwrap_or_else(|e| panic!("the {name} example must compile: {e}"));
-
-        let emitted = kanso::wasm_backend::compile(&program, false);
-
-        if let Ok(module) = emitted {
-            assert!(
-                !module.bytes.is_empty(),
-                "the browser backend accepted the {name} example and emitted nothing"
-            );
-        }
+        let side = kanso::codegen::emit_ir_dev(&program, kanso::codegen::ClosureConvention::Absent)
+            .and_then(|ir| kanso::ir_wasm::translate(&kanso::codegen::retarget_wasm32(&ir)))
+            .unwrap_or_else(|e| panic!("the {name} example does not lower for the tab: {e}"));
+        assert!(!side.wasm.is_empty(), "the {name} example lowered to nothing");
     }
 }

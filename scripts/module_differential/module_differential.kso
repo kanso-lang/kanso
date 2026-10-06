@@ -656,7 +656,7 @@ cases_e = text/concat cases_d [c24 c25 c26 c27 c28 c29 c30 c31 c32 c33]
 cases = text/concat cases_e [c34 c35 c36]
 
 # Behaviour that is wrong, and known to be wrong. Recorded the way
-# tests/golden/wasm_gaps.txt records an engine's declines: a defect written
+# tests/golden/native_route_gaps.txt records the page's gaps: a defect written
 # down stops being a surprise, and a defect that quietly changes shape is how
 # it survives a rewrite. An entry here that stops matching fails this sweep,
 # which is the reminder to settle it and delete the entry — never to update the
