@@ -107,6 +107,15 @@ jobs:
             echo "::error::clang 19 is installed but not selected: $(clang --version | head -1)"
             exit 1
           }
+      # tests/native_layout_on_wasm32.rs builds the micro corpus for wasm32
+      # in native's layout, which wants wasi-libc and lld's wasm linker. The
+      # spec skips on a host without them and refuses to under this variable,
+      # so the job that installs them cannot quietly stop running it.
+      - name: wasi-libc and wasm-ld, for native's layout on wasm32
+        run: |
+          sudo apt-get install -y -qq --no-install-recommends wasi-libc
+          sudo ln -sf /usr/bin/wasm-ld-19 /usr/local/bin/wasm-ld
+          echo "KANSO_WASM32_REQUIRED=1" >> "$GITHUB_ENV"
       # --no-fail-fast because cargo stops at the first failing test
       # BINARY, not the first failing test, and the binaries run in
       # alphabetical order. With welfare red in its own spec (then
