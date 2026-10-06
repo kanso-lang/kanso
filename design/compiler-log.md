@@ -21461,15 +21461,19 @@ them what std/list's new declarations and the three engines' tie code cost:
 - the interpreter: `interp_instructions` 590,630,366 -> 591,520,601,
   `interp_allocs` 895,408 -> 896,116 and `interp_peak_bytes` 725,220 ->
   739,436;
-- codegen: `codegen_instructions_dev` +189,591, `codegen_instructions_release`
-  +542,067 and `emit_instructions` +876,648, with `emitted_other_lines`,
-  `emitted_other_calls` and `emitted_other_branches` up 150, 16 and 18 and
-  `text` up 3,440 to 4,688 bytes a binary for the runtime's tie entries;
-- run work, by tens of instructions a benchmark: `work_basket`,
-  `work_deepbench`, `work_digestbench`, `work_encodebench`, `work_pendbench`
-  and `work_widebench` +65 each, `work_oneshot` +462, `work_scanbench` +74,
-  `work_livebench` +651, and `work_jsonbench` -4 and `work_runbench` -636.
-  An earlier run on other silicon read the same figures.
+- codegen: `codegen_instructions_dev` 124,466,652 -> 124,656,243,
+  `codegen_instructions_release` 408,092,175 -> 408,634,242 and
+  `emit_instructions` 30,306,693 -> 31,183,341; `emitted_other_lines` 86,407
+  -> 86,557, `emitted_other_calls` 10,801 -> 10,817 and
+  `emitted_other_branches` 8,296 -> 8,314; and `text`, summed over the
+  benchmarks, 3,525,136 -> 3,575,680, for the runtime's tie entries;
+- run work, by tens of instructions a benchmark: `work_basket` 29,464,281,
+  `work_deepbench` 363,026,452, `work_digestbench` 5,366,001,
+  `work_encodebench` 2,333,682,570, `work_pendbench` 181,091,623 and
+  `work_widebench` 27,279,186, each 65 up; `work_oneshot` 12,723,114 (+462),
+  `work_scanbench` 281,017 (+74) and `work_livebench` 1,537,370,202 (+651);
+  `work_jsonbench` and `work_runbench` fall 4 and 636. An earlier run on other
+  silicon read the same figures.
 
 Welfare reads 90.3053 against a floor of 90.3174, and the floor comes down to
 the score, by the ruling that a built part of the language lowers it by
