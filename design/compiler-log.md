@@ -21824,8 +21824,9 @@ them. They are layout moves, taken from CI: `compile_instructions` lands on
 86,029,749) and `library_instructions` on 86,626,059 (from 86,591,709).
 
 **Size.** On rustc 1.98.1, `kanso.wasm` grows from 2,161,218 bytes to
-3,203,732, which is 652,614 to 903,326 gzipped. The runtime adds 254,532
-bytes, 103,080 gzipped. A first visit downloads about a megabyte compressed
+3,237,163, which is 652,614 to 913,489 gzipped. The runtime adds 259,284
+bytes, 105,100 gzipped. Both were measured on the tree with `list/tie` merged;
+the figures first written here, 3,203,732 and 254,532, were taken before it. A first visit downloads about a megabyte compressed
 where it downloaded about two thirds of one. Most of the growth is the native
 emitter, which the tab now carries. The older route is still inside as the
 fallback when the runtime cannot be fetched, and removing it is the next step
