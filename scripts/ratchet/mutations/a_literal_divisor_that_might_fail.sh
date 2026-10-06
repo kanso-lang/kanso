@@ -8,10 +8,10 @@
 set -e
 f=src/infer.rs
 grep -q 'fn nonzero_literal(e: &Expr)' src/infer.rs
-line='                "/" | "%" if nonzero_literal(rhs) => fails | numeric_result(a, b),'
+line='                "/" | "%" if nonzero_literal(rhs) => fails | numeric_result(op, a, b),'
 [ "$(grep -cxF "$line" "$f")" -eq 1 ] || {
   echo "the literal divisor's arm moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i 's/^                "\/" | "%" if nonzero_literal(rhs) => fails | numeric_result(a, b),$/                "\/" | "%" if nonzero_literal(rhs) => fails | ERR | numeric_result(a, b),/' "$f"
+sed -i 's/^                "\/" | "%" if nonzero_literal(rhs) => fails | numeric_result(op, a, b),$/                "\/" | "%" if nonzero_literal(rhs) => fails | ERR | numeric_result(op, a, b),/' "$f"
 if grep -qxF "$line" "$f"; then exit 1; fi

@@ -2054,17 +2054,9 @@ known_tag = row
 
 rows_b1kt = text/concat rows_b1nm [known_tag]
 
-# A function's checked integer ops share one overflow trap. The mutation gives
-# every op its own, and the spec's `spread` holds six.
-one_trap = row
-  "an overflow trap written at every op"
-  true
-  "cargo test --release --test an_overflow_trap_is_written_once_a_function"
-  "specs (unit, golden, differential)"
-  (breaking "an_overflow_trap_written_at_every_op")
-  release
-
-rows_b1ot = text/concat rows_b1kt [one_trap]
+# The row that gave every checked op its own overflow trap went with the trap:
+# since the 2026-10-07 gavel an overflow builds a bignum and nothing traps.
+rows_b1ot = rows_b1kt
 
 # A nine-word arm keeps its tail calls on x86-64. The mutation narrows at
 # eight, and a release build running a three-million-step cycle through a
