@@ -10649,13 +10649,28 @@ impl<'a> Backend<'a> {
                 && !f.synthetic
                 && !caller_loops
                 && emitted.iter().all(|e| f.set_of(e) & arg_heapish == 0);
+            // The twin's arguments are rendered here too, below the mark the
+            // push sets, and a slot that is not a word reuses the general
+            // rendering. Rendered after the push, a string builder's seed sat
+            // above the mark, and the string it grew was evacuated whole at
+            // the pop: 55,136 bytes for basket's document.
+            let no_pack: Vec<Option<String>> = vec![None; n];
+            let twin = self.twin_test(f, name, n, &emitted, &no_pack);
+            let twin_ir: Vec<String> = match twin {
+                Some(_) => (0..n)
+                    .map(|i| match self.twin_param(name, n, i) {
+                        true => self.call_arg_to(f, name, n, i, &emitted[i], args.get(i), true),
+                        false => args_ir[i].clone(),
+                    })
+                    .collect(),
+                None => Vec::new(),
+            };
             if !region && (beat_entry || cohort_entry) {
                 // entering a beat loop or a cohort: mark the frontier; args
                 // are already evaluated, so they live below the mark
                 f.line("call void @k_beat_push()");
             }
-            let no_pack: Vec<Option<String>> = vec![None; n];
-            let t = match self.twin_test(f, name, n, &emitted, &no_pack) {
+            let t = match twin {
                 None => {
                     let t = f.tmp();
                     f.line(&format!(
@@ -10666,11 +10681,6 @@ impl<'a> Backend<'a> {
                     t
                 }
                 Some(words) => {
-                    let twin_ir: Vec<String> = emitted
-                        .iter()
-                        .enumerate()
-                        .map(|(i, e)| self.call_arg_to(f, name, n, i, e, args.get(i), true))
-                        .collect();
                     let call_twin = |f: &mut FnEmit| {
                         let t = f.tmp();
                         f.line(&format!(

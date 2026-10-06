@@ -22155,6 +22155,13 @@ runbench went from 1,279,294,697 to 1,240,344,037, 14.0% over main's
 1,245,214,168 on runbench and 931,768,709 on jsonbench against 1,240,344,874
 and 923,660,159 without it, and was taken out.
 
+A call from outside a loop into its twin rendered the twin's arguments after
+the beat's push, so a string builder's seed sat above the mark and the string
+it grew was evacuated whole at the pop: basket's `evac_bytes` read 55,136
+against 192. The twin's arguments are rendered below the mark now, and a slot
+that is not a word reuses the general rendering, so the seed is made once.
+The basket, run, scan and digest counters are back to main's byte for byte.
+
 A dev build and the tab get no twins. A twin buys run speed with a second
 copy of each looping group, and the tab's compile of interp_corpus read
 738,305,432 fuel against main's 591,832,734 with them and held 3,367,720
