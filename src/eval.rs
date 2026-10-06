@@ -156,6 +156,15 @@ pub enum ThunkState {
     Forced(Value),
 }
 
+/// A `list/tie` call while its maker runs: the cell each key's node will
+/// fill, made before the first node, and the first link the maker asked for
+/// that no key will make.
+struct Tie {
+    serial: i64,
+    cells: Entries,
+    broken: Option<(Value, Value)>,
+}
+
 /// An err value carries its propagation trace: the origin baked at the
 /// construction site ("{fn} at {file}:{line}"; executor-born errs have none)
 /// and one hop per dispatcher failure pass-through. The happy path never
@@ -1399,6 +1408,12 @@ pub struct Interp<'a> {
     /// the constant is still being computed gets the unforced cell, which is
     /// how a value that names itself gets a value at all.
     knots: RefCell<Map<String, Rc<RefCell<ThunkState>>>>,
+    /// One entry per `list/tie` call still making its nodes, innermost last.
+    /// A `ref` the maker holds names its call by serial, never by position: a
+    /// lambda the maker stored can call `ref` after its tie has returned, and
+    /// by then the position may hold a later tie.
+    ties: RefCell<Vec<Tie>>,
+    tie_serial: Cell<i64>,
     /// The constants that reach themselves through a chain of mentions --
     /// the same set the emitter computes, so the two engines count the same
     /// cells. Every constant goes through `knotted`, but only these are the
@@ -1524,6 +1539,8 @@ impl<'a> Interp<'a> {
             thunk_stats: ThunkStats::default(),
             depth: Cell::new(0),
             knots: RefCell::new(Map::default()),
+            ties: RefCell::new(Vec::new()),
+            tie_serial: Cell::new(0),
             cycles: std::cell::OnceCell::new(),
             in_place: std::cell::OnceCell::new(),
             moved: std::cell::OnceCell::new(),
@@ -4041,6 +4058,72 @@ impl<'a> Interp<'a> {
                 };
                 Ok(Value::int(out))
             }
+            // Ruled 2026-10-04: `list/tie keys maker` calls the maker once
+            // per key with the key and `ref`, and answers the map from key to
+            // node. Every key's cell exists before the first node is made, so
+            // a reference to a key made later is the same cell that key's
+            // node fills. A reference is stored, never read, while the maker
+            // runs: a constructor keeps a cell that is still a blackhole.
+            b"tie" => {
+                let [keys, maker, broken] = arity(args, name, span)?;
+                let Value::List(keys) = keys else {
+                    return Err(RuntimeError {
+                        message: "tie takes a list of ids and a maker".to_string(),
+                        span,
+                    });
+                };
+                let mut cells = Entries::new();
+                for key in keys.iter() {
+                    let cell = Rc::new(RefCell::new(ThunkState::Blackhole));
+                    cells.insert(map_key(key.clone(), span)?, Value::Thunk(cell));
+                }
+                let serial = self.tie_serial.get() + 1;
+                self.tie_serial.set(serial);
+                self.ties.borrow_mut().push(Tie { serial, cells, broken: None });
+                let made = self.make_tied(serial, &keys, maker, span, frame);
+                let tie = self.ties.borrow_mut().pop().expect("the tie this call pushed");
+                let made = made?;
+                let Value::Map(nodes) = &made else { return Ok(made) };
+                if let Some((from, to)) = tie.broken {
+                    return self.call(broken, vec![from, to], span, frame);
+                }
+                for (key, cell) in tie.cells.iter() {
+                    let (Value::Thunk(cell), Some(node)) = (cell, nodes.get(key)) else {
+                        continue;
+                    };
+                    *cell.borrow_mut() = ThunkState::Forced(node.clone());
+                }
+                let mut seen: crate::hash::Set<usize> = Default::default();
+                for (_, node) in nodes.iter() {
+                    resolve_tied(node, &mut seen);
+                }
+                Ok(made)
+            }
+            // What a maker's `ref` answers: the cell for `key`. A key no call
+            // makes still gets a cell, so the node under construction is
+            // built, and the tie answers the first such link as broken.
+            b"tie_ref" => {
+                let [serial, from, key] = arity(args, name, span)?;
+                let Value::Int(serial) = serial else { unreachable!("a ref carries its tie") };
+                let serial = serial.to_i64().expect("a tie's serial is small");
+                let mut ties = self.ties.borrow_mut();
+                let Some(tie) = ties.iter_mut().rev().find(|t| t.serial == serial) else {
+                    return Err(RuntimeError {
+                        message: "a reference from list/tie was asked for after its tie returned"
+                            .to_string(),
+                        span,
+                    });
+                };
+                let wanted = map_key(key.clone(), span)?;
+                if let Some(cell) = tie.cells.get(&wanted) {
+                    let cell: Value = cell.clone();
+                    return Ok(cell);
+                }
+                if tie.broken.is_none() {
+                    tie.broken = Some((from, key));
+                }
+                Ok(Value::Thunk(Rc::new(RefCell::new(ThunkState::Blackhole))))
+            }
             b"sqrt" => {
                 let [x] = arity(args, name, span)?;
                 match x {
@@ -4353,6 +4436,31 @@ impl<'a> Interp<'a> {
     /// A list only stores what it is given, so an element naming a constant
     /// still being computed waits rather than demanding a value that does not
     /// exist yet.
+    /// Runs a tie's maker over its keys and answers the map of what it made,
+    /// or the first failure a maker answered.
+    fn make_tied(
+        &self,
+        serial: i64,
+        keys: &[Value],
+        maker: Value,
+        span: Span,
+        frame: &Frame,
+    ) -> EvalResult {
+        let mut nodes = Entries::new();
+        for key in keys {
+            let held = vec![Value::int(serial), key.clone()];
+            let r =
+                Value::Partial(Rc::new(Value::FnRef(Rc::from("builtin_tie_ref"))), Rc::new(held));
+            let node = self.call(maker.clone(), vec![key.clone(), r], span, frame)?;
+            let node = self.force_thunk(node)?;
+            if is_failure(&node) {
+                return Ok(node);
+            }
+            nodes.insert(map_key(key.clone(), span)?, node);
+        }
+        Ok(Value::Map(Rc::new(nodes)))
+    }
+
     fn stored(&self, expr: &Expr, env: &Option<Rc<Env>>, frame: &Frame) -> EvalResult {
         if !self.awaits_a_knot(expr) {
             return self.eval(expr, env, frame);
@@ -4420,6 +4528,13 @@ impl<'a> Interp<'a> {
         }
         *cell.borrow_mut() = ThunkState::Forced(value.clone());
         Ok(value)
+    }
+
+    /// Call a value from outside the evaluator. The page reaches this with a
+    /// callable the interpreter made and handed out, which is the `ref` a
+    /// `list/tie` hands its maker.
+    pub fn call_value(&self, callee: Value, args: Vec<Value>, span: Span) -> EvalResult {
+        self.call(callee, args, span, &None)
     }
 
     /// Force a cell from outside the evaluator.
@@ -4707,6 +4822,49 @@ fn bind_moved(params: &[Pattern], args: &mut [Value], binds: &mut Bindings) {
 fn bind_whole(whole: &Option<Box<(Name, crate::diag::Span)>>, arg: &Value, binds: &mut Bindings) {
     if let Some(named) = whole {
         binds.push((named.0.clone(), arg.clone()));
+    }
+}
+
+/// Every field below a tie's nodes that holds a filled cell is rewritten to
+/// hold the node, as native does before it releases its cells. A graph left
+/// holding cells reads the same through a field, but a nested pattern
+/// compares the field as it stands, and `(ring _ (ring d _))` matched native's
+/// node and missed the interpreter's cell. Records are rewritten in place, so
+/// the walk goes once through each and never through a cell.
+fn resolve_tied(v: &Value, seen: &mut crate::hash::Set<usize>) {
+    match v {
+        Value::Record { fields, .. } => {
+            if !seen.insert(Rc::as_ptr(fields) as *const () as usize) {
+                return;
+            }
+            let held: Vec<Value> = {
+                let mut fields = fields.borrow_mut();
+                for slot in fields.iter_mut() {
+                    let Value::Thunk(cell) = slot else { continue };
+                    let node = match &*cell.borrow() {
+                        ThunkState::Forced(node) => node.clone(),
+                        _ => continue,
+                    };
+                    *slot = node;
+                }
+                fields.clone()
+            };
+            for field in &held {
+                resolve_tied(field, seen);
+            }
+        }
+        Value::List(items) => {
+            if seen.insert(Rc::as_ptr(items) as *const () as usize) {
+                items.iter().for_each(|item| resolve_tied(item, seen));
+            }
+        }
+        Value::Map(entries) => {
+            if seen.insert(Rc::as_ptr(entries) as *const () as usize) {
+                entries.iter().for_each(|(_, value)| resolve_tied(value, seen));
+            }
+        }
+        Value::Sub { inner, .. } => resolve_tied(inner, seen),
+        _ => {}
     }
 }
 

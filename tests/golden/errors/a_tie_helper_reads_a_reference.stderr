@@ -1,0 +1,4 @@
+error[tie]: `ref` answers a reference to a node that may not be made yet, so it goes straight into a constructor's field and is never read or kept anywhere else
+  --> tests/golden/errors/a_tie_helper_reads_a_reference.kso:11:4
+  11 |   (ref k).name
+          ^

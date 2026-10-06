@@ -1,0 +1,23 @@
+import "std/list"
+
+# Ruled 2026-10-04: one `list/tie` call's nodes are one birth cohort, made and
+# freed together. This ties ten thousand two-node rings and keeps only a count
+# from each, so the arena's peak is what one ring needs: the same as a
+# hundred rings, measured, while the allocation count grows with the laps.
+# A ring's cells are not lazy-tier thunks, so those counters stay at zero on
+# both engines, and they go back to the free list once the references they
+# stood for hold their nodes.
+type node
+  id
+  next
+
+fn ring n
+  list/tie [n (n + 1)] (k ref -> node k (ref (2 * n + 1 - k)))
+
+fn lap 0 acc
+  acc
+
+fn lap n acc
+  lap (n - 1) (acc + length (ring n))
+
+pub play = print (lap 10000 0)

@@ -12,7 +12,9 @@
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use wasmi::{Caller, Config, Engine, Extern, Func, Global, Linker, Module, Mutability, Ref, Store, Val};
+use wasmi::{
+    Caller, Config, Engine, Extern, Func, Global, Linker, Module, Mutability, Ref, Store, Val,
+};
 
 const WASI_LIB: &str = "/usr/lib/wasm32-wasi";
 
@@ -179,6 +181,10 @@ pub fn execute(
 ) -> Result<Ran, String> {
     let mut config = Config::default();
     config.consume_fuel(true);
+    // wasmi stops at a thousand frames, where a browser gives a page several
+    // times that and native runs on an 8 MB stack: three hundred nested ties
+    // reach past a thousand frames on every engine that runs them.
+    config.set_max_recursion_depth(10_000);
     let engine = Engine::new(&config);
     let rt = Module::new(&engine, runtime).map_err(|e| format!("runtime: {e}"))?;
     let prog = Module::new(&engine, module).map_err(|e| format!("the module validates: {e}"))?;
@@ -201,7 +207,8 @@ pub fn execute(
     let rti = linker.instantiate_and_start(&mut store, &rt).map_err(|e| format!("runtime: {e}"))?;
     let memory = rti.get_memory(&store, "memory").expect("the runtime exports its memory");
     store.data_mut().memory = Some(memory);
-    let shared = rti.get_table(&store, "__indirect_function_table").expect("the runtime exports its table");
+    let shared =
+        rti.get_table(&store, "__indirect_function_table").expect("the runtime exports its table");
     let malloc = rti.get_typed_func::<i32, i32>(&store, "malloc").expect("malloc");
     let base = malloc.call(&mut store, data as i32).map_err(|e| format!("malloc: {e}"))?;
     let tbase = shared
@@ -215,12 +222,16 @@ pub fn execute(
             "memory" => memory.into(),
             "__indirect_function_table" => shared.into(),
             "__memory_base" => Global::new(&mut store, Val::I32(base), Mutability::Const).into(),
-            "__table_base" => Global::new(&mut store, Val::I32(tbase as i32), Mutability::Const).into(),
+            "__table_base" => {
+                Global::new(&mut store, Val::I32(tbase as i32), Mutability::Const).into()
+            }
             _ => rti.get_export(&store, name).ok_or(format!("the runtime has no {name}"))?,
         };
         plinker.define("env", name, ext).map_err(|e| format!("{name}: {e}"))?;
     }
-    plinker.instantiate_and_start(&mut store, &prog).map_err(|e| format!("the module links: {e}"))?;
+    plinker
+        .instantiate_and_start(&mut store, &prog)
+        .map_err(|e| format!("the module links: {e}"))?;
     let start = rti.get_func(&store, "_start").expect("a command exports _start");
     let before = store.get_fuel().expect("fuel is on");
     let size = memory.size(&store);

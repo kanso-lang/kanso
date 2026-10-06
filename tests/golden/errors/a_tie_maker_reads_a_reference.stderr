@@ -1,0 +1,4 @@
+error[tie]: `ref` answers a reference to a node that may not be made yet, so it goes straight into a constructor's field and is never read or kept anywhere else
+  --> tests/golden/errors/a_tie_maker_reads_a_reference.kso:12:50
+  12 |   ring = list/tie ["a" "b"] (k ref -> station "{(ref k).name}!" (ref k))
+                                                        ^

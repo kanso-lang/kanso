@@ -25,9 +25,9 @@
 //! `br` to the block that ends just before its target. A backward branch sets
 //! the block number and returns to the loop's `br_table`.
 
+use crate::hash::Map as HashMap;
 use crate::wasm_encode::{sleb, uleb};
 use std::borrow::Cow;
-use crate::hash::Map as HashMap;
 use std::rc::Rc;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -228,7 +228,9 @@ fn tokenize(line: &str) -> Result<Vec<Tok<'_>>, String> {
                     }
                     i = j + 1;
                     match s[start..j].contains(&b'\\') {
-                        true => Cow::Owned(String::from_utf8(unescape(&s[start..j])).map_err(|e| e.to_string())?),
+                        true => Cow::Owned(
+                            String::from_utf8(unescape(&s[start..j])).map_err(|e| e.to_string())?,
+                        ),
                         false => Cow::Borrowed(&line[start..j]),
                     }
                 } else {
@@ -496,7 +498,9 @@ impl<'t> P<'t, '_> {
                 "void" => Ty::Void,
                 w => return Err(format!("unknown type {w}")),
             },
-            Tok::Local(n) => self.types.get(n.as_ref()).cloned().ok_or_else(|| format!("unknown type %{n}"))?,
+            Tok::Local(n) => {
+                self.types.get(n.as_ref()).cloned().ok_or_else(|| format!("unknown type %{n}"))?
+            }
             Tok::P(b'{') => {
                 let mut fs = Vec::new();
                 if !self.eat(b'}') {
@@ -878,7 +882,7 @@ fn parse(ir: &str) -> Result<Ir, String> {
         }
         if let Some(Tok::Global(name)) = t.first() {
             let name = name.to_string();
-            if t.iter().any(|x| *x == Tok::Word("alias")) {
+            if t.contains(&Tok::Word("alias")) {
                 match t.last() {
                     Some(Tok::Global(target)) => m.aliases.insert(name, target.to_string()),
                     _ => return Err(format!("alias {name}")),

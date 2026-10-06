@@ -362,7 +362,9 @@ fn one_engine_corpus_pins_the_interpreter_where_native_refuses() {
         let name =
             program.file_stem().and_then(|s| s.to_str()).expect("kso files have names").to_string();
 
-        let interp = run_kanso_env(&program, &["--interp"], &[]);
+        // A program that declares types or functions is a library run through
+        // an import, as the micro corpus runs one; an entry file runs as is.
+        let interp = run_kanso_as_library(&program, &["--interp"], &[]);
         assert_eq!(
             String::from_utf8_lossy(&interp.stdout),
             expected(&program, "interp.out"),
@@ -375,7 +377,7 @@ fn one_engine_corpus_pins_the_interpreter_where_native_refuses() {
         );
         assert_eq!(interp.status.code(), Some(0), "{name}: the interpreter exits 0");
 
-        let native = run_kanso_env(&program, &[], &[]);
+        let native = run_kanso_as_library(&program, &[], &[]);
         let refusal = expected(&program, "native.err");
         assert!(
             !refusal.trim().is_empty(),

@@ -1445,6 +1445,10 @@ fn the_native_route_agrees_with_the_golden_corpus() {
             "the walk lost programs: {ran} ran, {met} gaps, {held} held out, {} in the corpus",
             corpus().len()
         );
-        assert_eq!(met, gaps.len(), "a program in tests/golden/native_route_gaps.txt was never reached");
+        assert_eq!(
+            met,
+            gaps.len(),
+            "a program in tests/golden/native_route_gaps.txt was never reached"
+        );
     }
 }

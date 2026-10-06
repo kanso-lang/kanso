@@ -1,0 +1,4 @@
+error[tie]: `ref` links to `c`, and no id in the list is `c`, so this tie can only break
+  --> tests/golden/errors/a_tie_of_literals_with_a_broken_link.kso:11:50
+  11 |   ring = list/tie ["a" "b"] (k ref -> station k (ref "c"))
+                                                        ^

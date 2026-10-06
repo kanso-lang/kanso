@@ -1,0 +1,30 @@
+import "std/list"
+
+# A lambda inside the maker is part of the maker, so a `ref` call that is a
+# constructor's argument passes the check there. Stored in a node and called
+# after the tie has returned, it asks for a cell no tie holds any more. Every
+# engine refuses it in the same words, here from inside a second tie's maker,
+# where a `ref` that named its tie by position on the stack would find the
+# second tie and answer its cell. Before 2026-10-05 the interpreter panicked
+# when the stack was empty and both engines answered the wrong tie when it was
+# not.
+type node
+  id
+  later
+
+type held
+  it
+
+fn make id ref
+  node id (x -> held (ref x))
+
+fn late none
+  "none"
+
+fn late (node _ f)
+  f 1
+
+pub play =
+  first = list/tie [1 2] make
+  again = list/tie [1] (id _ -> node id (late first[1]))
+  print "{length again}"

@@ -179,6 +179,7 @@ fn the_interp_corpus_answers_through_the_translator() {
 fn translate_one() {
     let Ok(path) = std::env::var("KANSO_IRWASM_PROFILE") else { return };
     let ir = std::fs::read_to_string(path).expect("the ir reads");
-    let side = kanso::ir_wasm::translate(&kanso::codegen::retarget_wasm32(&ir)).expect("it translates");
+    let side =
+        kanso::ir_wasm::translate(&kanso::codegen::retarget_wasm32(&ir)).expect("it translates");
     println!("{} bytes", side.wasm.len());
 }
