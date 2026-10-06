@@ -37,10 +37,8 @@
 //! comparing them -- and, under CI, still fails, because CI's rows are the only
 //! ones that may be recorded (`scripts/gates/host_gate.sh` draws the same line).
 
-use std::cell::RefCell;
 use std::path::PathBuf;
-use std::rc::Rc;
-use wasmi::{Caller, Config, Engine, Extern, Func, Linker, Module, Store, Table, Val};
+use wasmi::{Config, Engine, Extern, Func, Linker, Module, Store, Val};
 
 #[path = "support/wasm32.rs"]
 mod wasm32;
@@ -49,17 +47,12 @@ fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
-/// The emitted program's function table, which a closure the toolchain calls
-/// back into is found in.
-#[derive(Default)]
-struct Dispatch(Rc<RefCell<Option<Table>>>);
-
 /// Enough fuel that no workload this size runs out; what is left afterwards is
 /// what says how much was spent.
 const TANK: u64 = u64::MAX / 4;
 
 struct Toolchain {
-    store: Store<Dispatch>,
+    store: Store<()>,
     instance: wasmi::Instance,
 }
 
@@ -71,31 +64,11 @@ impl Toolchain {
         let bytes = std::fs::read(root().join("docs/kanso.wasm"))
             .expect("docs/kanso.wasm reads; run scripts/build_wasm.sh");
         let module = Module::new(&engine, &bytes[..]).expect("the artifact is a wasm module");
-        let mut store = Store::new(&engine, Dispatch::default());
+        let mut store = Store::new(&engine, ());
         store.set_fuel(TANK).expect("fuel is on");
-        let mut linker = Linker::new(&engine);
-        let callback = Func::wrap(
-            &mut store,
-            |mut caller: Caller<'_, Dispatch>,
-             handle: i32,
-             env: i32,
-             arg: i32|
-             -> Result<i32, wasmi::Error> {
-                let table = caller.data().0.borrow().expect("a closure ran before main");
-                let target = table
-                    .get(&mut caller, handle as u64)
-                    .expect("the handle is in the table")
-                    .funcref()
-                    .and_then(|f| f.val().copied().copied())
-                    .expect("the table entry is a function");
-                let mut out = [Val::I32(0)];
-                target.call(&mut caller, &[Val::I32(env), Val::I32(arg)], &mut out)?;
-                Ok(out[0].i32().expect("a closure answers an i32"))
-            },
-        );
-        linker.define("env", "k_callback", callback).expect("k_callback is the one import");
-        let instance =
-            linker.instantiate_and_start(&mut store, &module).expect("the toolchain instantiates");
+        let instance = Linker::new(&engine)
+            .instantiate_and_start(&mut store, &module)
+            .expect("the toolchain instantiates");
         Toolchain { store, instance }
     }
 

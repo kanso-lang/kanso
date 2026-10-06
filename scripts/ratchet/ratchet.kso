@@ -1718,8 +1718,22 @@ in_the_page = row
   true
   "bash scripts/browser_differential.sh"
   "browser differential (three engines, byte-identical, headless chrome)"
-  (breaking "the_wasm_engine_answers_something_else")
+  (breaking "the_page_answers_something_else")
   release
+
+# The page's route inside cargo test: tests/wasm_engine.rs compiles the corpus
+# through the toolchain, lowers each module with `ir_wasm`, and runs it on the
+# runtime under wasmi. Chrome is the confirmation; this is the walk a branch
+# can run without one.
+page_corpus = "the_page_agrees_with_the_golden_corpus"
+
+page_route = row
+  "the translator writing one instruction for another"
+  true
+  "cargo test --release --test wasm_engine {page_corpus}"
+  "specs (unit, golden, differential)"
+  (breaking "a_translator_that_subtracts_for_add")
+  with_blob
 
 shop_window = row
   "a playground example the language will not run"
@@ -2363,19 +2377,6 @@ int_word = row
 
 rows_b1iw = text/concat rows_b1mg [int_word]
 
-# A trap unwinds nothing, so a program that runs out of stack in the page can
-# die holding one of wasm_rt's cells. Asking that cell for its borrow again at
-# the next `load` panics, and the program after the fall answers a trap.
-dead_borrow = row
-  "a program that dies holding a cell leaving it held"
-  true
-  "cargo test --release --test wasm_engine a_program_that_runs_out_of_stack"
-  "specs (unit, golden, differential)"
-  (breaking "a_dead_program_keeps_its_borrow")
-  with_blob
-
-rows_b1db = text/concat rows_b1iw [dead_borrow]
-
 # A walk by index steps its cursor one character on, and a join of counted
 # pieces writes the sum. Closing the step leaves every character right and
 # `seek_resumes` where it was, so `seek_steps` is what goes red; dropping the
@@ -2405,7 +2406,7 @@ join_sep = row
   (breaking "a_join_count_that_drops_its_separator")
   release
 
-rows_b1ix = text/concat rows_b1db [seek_step join_seed join_sep]
+rows_b1ix = text/concat rows_b1iw [seek_step join_seed join_sep]
 
 # Under clang 19 the emitter writes the preserve_none convention in front of
 # every declare of and call to a door, in one pass over the module. Matching a
@@ -2890,7 +2891,7 @@ rows_c1f0 = text/concat rows_c1e [coverage_floor decoder]
 
 rows_c1f = text/concat rows_c1f0 [validator validator_tail]
 
-rows_c1g = text/concat rows_c1f [landing in_the_page shop_window]
+rows_c1g = text/concat rows_c1f [landing in_the_page page_route shop_window]
 
 # kq is a real program with its own JSON, and its own text goes through
 # `text/append` seventy times, so a runtime that corrupts an in-place append
@@ -2967,37 +2968,9 @@ rows_c1i = text/concat rows_c1h [coverage_printed kq_specs asset_digests]
 
 rows_c1j = text/concat rows_c1i [coverage_native]
 
-# A SIXTH opener, on the engine a reader meets FIRST — the website's playground
-# runs `docs/kanso.wasm`, and until the scan learned bare `die(` none of
-# wasm_rt.rs's 36 sites was read by any gate. Three of those sentences turned
-# out to be saying the wrong thing on 2026-08-28, and a fourth was a wrong
-# ANSWER rather than a wrong sentence.
-#
-# Two rows for the same reason as the oracle's two: `die("` carries its own
-# opening quote and the literal is the first piece of a split on it, where
-# `die(format!(` may put the string on the next line and the literal is the
-# second.
-coverage_page = row
-  "a refusal only the page writes, with no golden"
-  true
-  "./target/release/kanso run scripts/diagnostic_coverage"
-  "diagnostics differential (both engines say the same thing)"
-  (breaking "a_page_refusal_arrives_without_a_golden")
-  release
-
-coverage_page_format = row
-  "a page refusal built with format!, with no golden"
-  true
-  "./target/release/kanso run scripts/diagnostic_coverage"
-  "diagnostics differential (both engines say the same thing)"
-  (breaking "a_page_format_refusal_arrives_without_a_golden")
-  release
-
 rows_c1k = text/concat rows_c1j [coverage_oracle coverage_oracle_format]
 
-rows_c1l = text/concat rows_c1k [coverage_page coverage_page_format]
-
-rows_c1m0 = text/concat rows_c1l [beat_cursor rescue_licence raised_err]
+rows_c1m0 = text/concat rows_c1k [beat_cursor rescue_licence raised_err]
 
 rows_c1m = text/concat rows_c1m0 [clay_send_filed]
 
@@ -3659,18 +3632,6 @@ interp_wrapped_cond = row
 
 rows_c1zzw = text/concat rows_c1zzv [interp_wrapped_cond]
 
-browser_wrapped_cond = row
-  "a browser wrapped condition refused"
-  true
-  "cargo test --release --test wasm_engine {wasm_corpus}"
-  "specs (unit, golden, differential)"
-  (breaking "a_browser_wrapped_condition_refused")
-  with_blob
-
-wasm_corpus = "the_wasm_engine_agrees_with_the_golden_corpus"
-
-rows_c1zzx = text/concat rows_c1zzw [browser_wrapped_cond]
-
 # A `_:done` arm asks through the chain in a program that declares a subtype.
 # Asking the tag alone, a subtype of done falls past it.
 native_done_sub = row
@@ -3681,7 +3642,7 @@ native_done_sub = row
   (breaking "a_native_done_arm_blind_to_subtypes")
   release
 
-rows_c1zzy = text/concat rows_c1zzx [native_done_sub]
+rows_c1zzy = text/concat rows_c1zzw [native_done_sub]
 
 # An element reads through a subtype where `join` and `to_bytes` would refuse
 # it. Blind to them, each engine refuses a list of subtypes.
@@ -3731,16 +3692,6 @@ native_nested_set = row
 
 rows_c1zzzc = text/concat rows_c1zzzb [native_nested_set]
 
-browser_nested_set = row
-  "a browser typeset read member by member"
-  true
-  "cargo test --release --test wasm_engine {wasm_corpus}"
-  "specs (unit, golden, differential)"
-  (breaking "a_browser_typeset_read_member_by_member")
-  with_blob
-
-rows_c1zzzd = text/concat rows_c1zzzc [browser_nested_set]
-
 # A typeset that reaches itself names no set. Left unchecked, the error
 # corpus holds a diagnostic nobody raised.
 cycle_unchecked = row
@@ -3751,7 +3702,7 @@ cycle_unchecked = row
   (breaking "a_typeset_cycle_left_unchecked")
   no_setup
 
-rows_c1zzze = text/concat rows_c1zzzd [cycle_unchecked]
+rows_c1zzze = text/concat rows_c1zzzc [cycle_unchecked]
 
 # A wrapper has no fields of its own. Left unchecked, a pattern that takes one
 # apart passes `kanso check` and the error corpus holds a diagnostic nobody
@@ -3997,15 +3948,7 @@ part_entered = row
   (breaking "a_finished_partial_entering_with_its_err")
   release
 
-part_browser = row
-  "a browser partial ignoring its held err"
-  true
-  "cargo test --release --test wasm_engine {wasm_corpus}"
-  "specs (unit, golden, differential)"
-  (breaking "a_browser_partial_ignoring_its_held_err")
-  with_blob
-
-rows_c1zzzx = text/concat rows_c1zzzw [part_closure part_entered part_browser]
+rows_c1zzzx = text/concat rows_c1zzzw [part_closure part_entered]
 
 # A record of an int and a value crosses a call in two words, the int above
 # the value's tag. Until 2026-09-29 the int came back through a logical shift
@@ -4062,15 +4005,7 @@ partial_nest_native = row
   (breaking "a_native_partial_answering_nothing")
   release
 
-partial_nest_browser = row
-  "a browser partial answering nothing"
-  true
-  "cargo test --release --test wasm_engine {wasm_corpus}"
-  "specs (unit, golden, differential)"
-  (breaking "a_browser_partial_answering_nothing")
-  with_blob
-
-partial_nests = [partial_nest partial_nest_native partial_nest_browser]
+partial_nests = [partial_nest partial_nest_native]
 
 rows_c1zzzz = text/concat rows_c1zzzze partial_nests
 
@@ -4210,23 +4145,7 @@ hop_partial = row
   (breaking "a_partial_held_in_a_nameless_closure")
   release
 
-hop_browser = row
-  "a browser group value naming nothing"
-  true
-  "cargo test --release --test wasm_engine {wasm_corpus}"
-  "specs (unit, golden, differential)"
-  (breaking "a_browser_group_value_naming_nothing")
-  with_blob
-
-hop_browser_partial = row
-  "a browser partial held in a nameless closure"
-  true
-  "cargo test --release --test wasm_engine {wasm_corpus}"
-  "specs (unit, golden, differential)"
-  (breaking "a_browser_partial_held_in_a_nameless_closure")
-  with_blob
-
-hops = [hop_value hop_partial hop_browser hop_browser_partial]
+hops = [hop_value hop_partial]
 
 rows_c1zzzzd = text/concat rows_c1zzzzi hops
 
@@ -4263,14 +4182,6 @@ wide_call = row
   (breaking "a_wide_group_value_left_uncalled")
   release
 
-hop_browser_wide = row
-  "a browser wide partial held in a closure"
-  true
-  "cargo test --release --test wasm_engine {wasm_corpus}"
-  "specs (unit, golden, differential)"
-  (breaking "a_browser_wide_partial_held_in_a_closure")
-  with_blob
-
 wide_held = row
   "a partial holding five refused"
   true
@@ -4287,7 +4198,7 @@ nine_value = row
   (breaking "a_nine_wide_group_refused_as_a_value")
   release
 
-wides = [hop_wide wide_call hop_browser_wide wide_held nine_value]
+wides = [hop_wide wide_call wide_held nine_value]
 
 rows_c1zzzzg = text/concat rows_c1zzzzh wides
 
@@ -4304,123 +4215,9 @@ high_pointers = row
 
 rows_c1zzzzn = text/concat rows_c1zzzzg [high_pointers]
 
-# The wasm engine extends an accumulator the linearity analysis proves nobody
-# else reads. Copying it instead leaves every small answer right and fills the
-# memory on a large one.
-copied_accumulator = row
-  "an accumulator copied on every write in wasm"
-  true
-  "cargo test --release --test wasm_engine an_accumulator_grows_where_it_stands"
-  "specs (unit, golden, differential)"
-  (breaking "an_accumulator_copied_on_every_write_in_wasm")
-  with_blob
+lazy_rows = []
 
-rows_c1zzzzo = text/concat rows_c1zzzzn [copied_accumulator]
-
-# An exhausted page and an exhausted stack both trap with nothing recorded, and
-# the allocator's note is what tells them apart.
-memory_as_stack = row
-  "a page out of memory reported as a stack overflow"
-  true
-  "cargo test --release --test wasm_engine {out_of_memory}"
-  "specs (unit, golden, differential)"
-  (breaking "a_page_out_of_memory_reported_as_a_stack_overflow")
-  with_blob
-
-out_of_memory = "a_program_that_runs_out_of_memory_says_so"
-
-rows_c1zzzzp = text/concat rows_c1zzzzo [memory_as_stack]
-
-# A run that filled the page leaves the next compile room only if the registry
-# lets go of the dead run's values before that compile begins.
-dead_run_held = row
-  "a dead run holding the page"
-  true
-  "cargo test --release --test wasm_engine {after_full}"
-  "specs (unit, golden, differential)"
-  (breaking "a_dead_run_holding_the_page")
-  with_blob
-
-after_full = "the_program_after_one_that_ran_out_of_memory_runs"
-
-rows_c1zzzzq = text/concat rows_c1zzzzp [dead_run_held]
-
-# A string built onto itself grows where it stands on the wasm engine, and only
-# a builder a previous join handed over is taken: a literal seed is shared.
-string_join_copied = row
-  "a string join copied every lap in wasm"
-  true
-  "cargo test --release --test wasm_engine {built_onto_itself}"
-  "specs (unit, golden, differential)"
-  (breaking "a_string_join_copied_every_lap_in_wasm")
-  with_blob
-
-seed_taken = row
-  "a seed taken by a string join in wasm"
-  true
-  "cargo test --release --test wasm_engine {built_onto_itself}"
-  "specs (unit, golden, differential)"
-  (breaking "a_seed_taken_by_a_string_join_in_wasm")
-  with_blob
-
-built_onto_itself = "a_string_built_onto_itself_grows_where_it_stands"
-
-rows_c1zzzzr = text/concat rows_c1zzzzq [string_join_copied seed_taken]
-
-# A list seed its caller reads again is copied once on the wasm engine: the call
-# hands it over under a handle of its own, so the loop writes a copy in place
-# and the caller's handle keeps the seed.
-seed_copied = row
-  "a seed copied every lap in wasm"
-  true
-  "cargo test --release --test wasm_engine {seeded_once}"
-  "specs (unit, golden, differential)"
-  (breaking "a_seed_copied_every_lap_in_wasm")
-  with_blob
-
-seed_written_through = row
-  "a seed written through its caller's handle in wasm"
-  true
-  "cargo test --release --test wasm_engine {seeded_once}"
-  "specs (unit, golden, differential)"
-  (breaking "a_seed_written_through_its_callers_handle_in_wasm")
-  with_blob
-
-seeded_once = "a_loop_seeded_with_a_list_its_caller_reads_copies_it_once"
-
-rows_c1zzzzt = text/concat rows_c1zzzzr [seed_copied seed_written_through]
-
-# A binding the demand analysis made lazy runs on the wasm engine when
-# something reads it: a call that ignores it leaves it unrun.
-lazy_run_early = row
-  "a lazy binding run where it stands in wasm"
-  true
-  "cargo test --release --test wasm_engine {lazy_unread}"
-  "specs (unit, golden, differential)"
-  (breaking "a_lazy_binding_run_where_it_stands_in_wasm")
-  with_blob
-
-lazy_failure_check = row
-  "a failure check that runs a lazy binding in wasm"
-  true
-  "cargo test --release --test wasm_engine {lazy_unread}"
-  "specs (unit, golden, differential)"
-  (breaking "a_failure_check_that_runs_a_lazy_binding_in_wasm")
-  with_blob
-
-lazy_read_as_closure = row
-  "a lazy binding read as its closure in wasm"
-  true
-  "cargo test --release --test wasm_engine {lazy_unread}"
-  "specs (unit, golden, differential)"
-  (breaking "a_lazy_binding_read_as_its_closure_in_wasm")
-  with_blob
-
-lazy_unread = "a_lazy_binding_nobody_reads_never_runs"
-
-lazy_rows = [lazy_run_early lazy_failure_check lazy_read_as_closure]
-
-rows_c1zzzzu = text/concat rows_c1zzzzt lazy_rows
+rows_c1zzzzu = text/concat rows_c1zzzzn lazy_rows
 
 # A string builder may be seeded with any value, since a join renders what it
 # joins onto. Native used to refuse the seed, and the first join adopts it.
@@ -4442,18 +4239,6 @@ seed_unadopted = row
 
 rows_c1zzzzs = text/concat rows_c1zzzzu [seed_refused seed_unadopted]
 
-# A merged err keeps no birth site on the wasm engine, as it has none on the
-# interpreter.
-merged_stamp = row
-  "a merged err stamped with a site in wasm"
-  true
-  "cargo test --release --test wasm_engine a_merged_err_reports_no_birth_site"
-  "specs (unit, golden, differential)"
-  (breaking "a_merged_err_stamped_with_a_site_in_wasm")
-  with_blob
-
-rows_c1zzzzw = text/concat rows_c1zzzzs [merged_stamp]
-
 # A builtin in a program that declares a subtype unwraps its arguments, and
 # a lazy one is forced before the unwrap looks at it.
 lazy_sub = row
@@ -4464,7 +4249,7 @@ lazy_sub = row
   (breaking "a_lazy_subtype_unwrapped_before_it_is_forced")
   release
 
-rows_c1zzzzv = text/concat rows_c1zzzzw [lazy_sub]
+rows_c1zzzzv = text/concat rows_c1zzzzs [lazy_sub]
 
 # A seed bound lazily reaches a builder loop's first join as a thunk, and the
 # join asks about it as it arrived.
@@ -4850,18 +4635,6 @@ tie_resolves = row
 
 rows_c1zzzzzzzc = text/concat rows_c1zzzzzzzd [tie_resolves]
 
-# The page calls the `ref` the embedded interpreter hands a tie's maker
-# (2026-10-05).
-tie_page_calls = row
-  "a page that cannot call a tie ref"
-  true
-  "cargo test --release --test wasm_engine {wasm_corpus}"
-  "specs (unit, golden, differential)"
-  (breaking "a_page_that_cannot_call_a_tie_ref")
-  with_blob
-
-rows_c1zzzzzzzb = text/concat rows_c1zzzzzzzc [tie_page_calls]
-
 # The interpreter rewrites the fields holding a tie's cells to hold the nodes,
 # as native does; a `ref` names its tie by serial, so one called after its tie
 # returned is refused on both engines; and native's stack of open ties grows
@@ -4900,7 +4673,7 @@ tie_native_depth = row
 
 tie_fixes = [tie_interp_resolves tie_serial tie_native_serial tie_native_depth]
 
-rows_c1zzzzzzza = text/concat rows_c1zzzzzzzb tie_fixes
+rows_c1zzzzzzza = text/concat rows_c1zzzzzzzc tie_fixes
 
 rows_c = text/concat rows_c1zzzzzzza [itself]
 
@@ -5158,7 +4931,7 @@ fn read_it mode files list at acc r s
 # `set -e` is the common one. The other counts and asserts the count:
 #
 #     n=$(grep -cF "$target" src/lib.rs)
-#     [ "$n" -eq 1 ] || { echo "moved or multiplied ($n)" >&2; exit 1; }
+#     [ "$n" -eq 1] || { echo "moved or multiplied ($n)" >&2; exit 1; }
 #
 # which is a STRICTER guard than the first -- it catches the anchor multiplying
 # as well as vanishing -- and this read `grep -q` only, so three mutations that

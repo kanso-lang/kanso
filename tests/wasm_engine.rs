@@ -7,13 +7,18 @@
 //! dispatch failure on a synthesised getter reached CI.
 //!
 //! This runs the same corpus against `docs/kanso.wasm` under an embedded
-//! interpreter. Chrome remains the confirmation that a real browser agrees;
-//! it stops being the only thing that would notice.
+//! interpreter, the way the page does: the toolchain compiles a program with
+//! the native emitter, lowers the module to wasm, and the program runs on
+//! `runtime.c` built for wasm32. Chrome remains the confirmation that a real
+//! browser agrees; it stops being the only thing that would notice.
+//!
+//! A host without the wasm32 toolchain (clang, wasm-ld and wasi-libc) cannot
+//! build the runtime, so a spec that runs a program skips there. The Linux
+//! specs job installs the toolchain and refuses the skip.
 
-use std::cell::RefCell;
 use std::path::{Path, PathBuf};
-use std::rc::Rc;
-use wasmi::{Caller, Engine, Extern, Func, Linker, Module, Store, Table, Val};
+use std::sync::OnceLock;
+use wasmi::{Engine, Extern, Linker, Module, Store, Val};
 
 #[path = "support/wasm32.rs"]
 mod wasm32;
@@ -28,13 +33,6 @@ const SEED_TEXT: &str = "2685821657";
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
-
-/// The program module's function table, published after it is instantiated.
-/// The toolchain calls a kanso closure through `k_callback`, which has to
-/// reach a table that does not exist when the toolchain is instantiated —
-/// so the host holds the cell both sides meet in.
-#[derive(Default, Clone)]
-struct Dispatch(Rc<RefCell<Option<Table>>>);
 
 /// `docs/kanso.wasm` is a build artifact, and every spec in this file runs it.
 /// It is no longer committed, so a tree that has not built one has no blob at
@@ -69,9 +67,35 @@ fn freshness() -> Result<(), String> {
 }
 
 struct Toolchain {
-    store: Store<Dispatch>,
+    store: Store<()>,
     instance: wasmi::Instance,
-    engine: Engine,
+}
+
+/// The runtime a compiled program links against, built once for the whole
+/// binary by the playground's own script. None on a host that cannot build it.
+fn runtime() -> Option<&'static [u8]> {
+    static BUILT: OnceLock<Option<Vec<u8>>> = OnceLock::new();
+    BUILT
+        .get_or_init(|| {
+            if !wasm32::toolchain() {
+                return None;
+            }
+            let dir = std::env::temp_dir().join(format!("kanso-page-rt-{}", std::process::id()));
+            std::fs::create_dir_all(&dir).expect("the runtime's directory makes");
+            Some(wasm32::runtime(&dir))
+        })
+        .as_deref()
+}
+
+/// The toolchain, on a host that can run what it compiles.
+fn page() -> Option<Toolchain> {
+    match runtime() {
+        Some(_) => Some(Toolchain::load()),
+        None => {
+            eprintln!("no wasm32 toolchain here: clang, wasm-ld and wasi-libc are wanted");
+            None
+        }
+    }
 }
 
 impl Toolchain {
@@ -82,35 +106,11 @@ impl Toolchain {
         let engine = Engine::default();
         let bytes = std::fs::read(root().join("docs/kanso.wasm")).expect("the wasm artifact reads");
         let module = Module::new(&engine, &bytes[..]).expect("the artifact is a wasm module");
-        let mut store = Store::new(&engine, Dispatch::default());
-        let mut linker = Linker::new(&engine);
-        let callback = Func::wrap(
-            &mut store,
-            |mut caller: Caller<'_, Dispatch>,
-             handle: i32,
-             env: i32,
-             arg: i32|
-             -> Result<i32, wasmi::Error> {
-                let table = caller.data().0.borrow().expect("a closure ran before main");
-                let target = table
-                    .get(&mut caller, handle as u64)
-                    .expect("the handle is in the table")
-                    .funcref()
-                    .and_then(|f| f.val().copied().copied())
-                    .expect("the table entry is a function");
-                let mut out = [Val::I32(0)];
-                // A program that dies inside a closure body aborts, and an
-                // abort is a trap. Expecting success here turned every such
-                // diagnostic into a panic in the harness, so the engine looked
-                // silent on the one path where a lambda reports anything.
-                target.call(&mut caller, &[Val::I32(env), Val::I32(arg)], &mut out)?;
-                Ok(out[0].i32().expect("a closure answers an i32"))
-            },
-        );
-        linker.define("env", "k_callback", callback).expect("k_callback is the one import");
-        let instance =
-            linker.instantiate_and_start(&mut store, &module).expect("the toolchain instantiates");
-        Toolchain { store, instance, engine }
+        let mut store = Store::new(&engine, ());
+        let instance = Linker::new(&engine)
+            .instantiate_and_start(&mut store, &module)
+            .expect("the toolchain instantiates");
+        Toolchain { store, instance }
     }
 
     fn call(&mut self, name: &str, args: &[Val], results: &mut [Val]) -> Result<(), wasmi::Error> {
@@ -207,70 +207,14 @@ impl Toolchain {
         let (ptr, len) = self.write(&compiled);
         (plays, ptr, len)
     }
-
-    /// Compile and run one program, answering what a user would see.
-    fn run(&mut self, name: &str, source: &str) -> Answer {
-        let (plays, ptr, len) = self.prepare(name, source);
-        // tail calls on, as every browser this targets reports them: a
-        // self-call that must not grow the stack is a different program
-        // without them, and comparing that to the golden compares two
-        // different programs
-        let door = match plays {
-            true => "kanso_play_wasm",
-            false => "kanso_compile_wasm",
-        };
-        let status = self.i32_call(door, &[Val::I32(ptr), Val::I32(len), Val::I32(1)]);
-        if status == 2 {
-            return Answer::CompileError(self.output());
-        }
-        if status == 1 {
-            return Answer::Declined(self.output());
-        }
-        let ptr = self.i32_call("kanso_wasm_ptr", &[]) as u32 as usize;
-        let len = self.i32_call("kanso_wasm_len", &[]) as u32 as usize;
-        let mut emitted = vec![0u8; len];
-        self.memory().read(&self.store, ptr, &mut emitted).expect("the emitted module reads");
-
-        let module = Module::new(&self.engine, &emitted[..]).expect("the emitted module parses");
-        let mut linker = Linker::new(&self.engine);
-        // every rt_* the toolchain exports is an import the program wants
-        let wanted: Vec<String> =
-            module.imports().map(|import| import.name().to_string()).collect();
-        for name in wanted {
-            let Some(Extern::Func(f)) = self.instance.get_export(&self.store, &name) else {
-                panic!("the program imports `{name}`, which the toolchain does not export");
-            };
-            linker.define("env", &name, f).expect("the shim defines");
-        }
-        let program = linker
-            .instantiate_and_start(&mut self.store, &module)
-            .expect("the program instantiates");
-        match program.get_export(&self.store, "table") {
-            Some(Extern::Table(t)) => *self.store.data().0.borrow_mut() = Some(t),
-            _ => panic!("the program exports no function table"),
-        }
-
-        let main = program.get_func(&self.store, "main").expect("the program exports main");
-        let mut handle = [Val::I32(0)];
-        if main.call(&mut self.store, &[], &mut handle).is_err() {
-            let _ = self.call("kanso_take_rt_error", &[], &mut []);
-            return Answer::Ran(1, self.output());
-        }
-        let mut code = [Val::I32(0)];
-        let exec = self.instance.get_func(&self.store, "kanso_exec_main").expect("kanso_exec_main");
-        if exec.call(&mut self.store, &handle, &mut code).is_err() {
-            let _ = self.call("kanso_take_rt_error", &[], &mut []);
-            return Answer::Ran(1, self.output());
-        }
-        Answer::Ran(code[0].i32().unwrap_or(1), self.output())
-    }
 }
 
 impl Toolchain {
     /// Compile one program the way `kanso build` does, lower its module in
     /// the toolchain (`kanso_compile_native`), and run it against the wasm32
-    /// runtime: the route the playground takes to native's layout.
-    fn run_native(&mut self, name: &str, source: &str, rt: &[u8]) -> Answer {
+    /// runtime: the route the playground takes, answering what a user would
+    /// see.
+    fn run(&mut self, name: &str, source: &str) -> Answer {
         let (plays, ptr, len) = self.prepare(name, source);
         let door = match plays {
             true => "kanso_play_native",
@@ -289,6 +233,7 @@ impl Toolchain {
         self.memory().read(&self.store, ptr, &mut side).expect("the side module reads");
         let data = self.i32_call("kanso_side_data", &[]) as u32;
         let table = self.i32_call("kanso_side_table", &[]) as u32;
+        let rt = runtime().expect("a spec that runs a program asks for the page first");
         match wasm32::execute(rt, &side, data, table, &[("KANSO_SEED", SEED_TEXT)]) {
             Ok(ran) => Answer::Ran(ran.exit, ran.out + &ran.err),
             // Native catches a stack overflow and says so; wasm's call stack
@@ -308,22 +253,6 @@ enum Answer {
     /// falls back to the interpreter, so this is a stated gap, not a failure.
     Declined(String),
     CompileError(String),
-}
-
-/// The gaps the wasm engine has, and what it answers instead. Shared with
-/// the Chrome harness so a gap is written down once; a listed program that
-/// starts passing is a failure here, because a closed gap left on the list
-/// is a lie about the engine.
-fn known_gaps() -> Vec<(String, String)> {
-    let text =
-        std::fs::read_to_string(root().join("tests/golden/wasm_gaps.txt")).expect("the gap list");
-    text.lines()
-        .filter(|line| !line.trim().is_empty() && !line.starts_with('#'))
-        .map(|line| {
-            let (name, answer) = line.split_once('\t').expect("a gap is path<tab>answer");
-            (name.to_string(), answer.to_string())
-        })
-        .collect()
 }
 
 /// A relative import wants a filesystem, which neither host has; `std/`
@@ -348,18 +277,6 @@ fn imported_path(line: &str) -> Option<&str> {
     let open = line.find('"')? + 1;
     let rest = &line[open..];
     Some(&rest[..rest.find('"')?])
-}
-
-/// A program the wasm engine cannot survive long enough to be compared with.
-/// It has no blackhole, so an unguarded knot recurses until the stack ends it
-/// — in Chrome that is a diagnostic and lands in wasm_gaps.txt, but this
-/// runner shares the test process's stack and aborts it before any comparison
-/// can happen. The gap list cannot help: it is consulted after the run.
-///
-/// Named one at a time rather than pattern-matched, so closing the guard
-/// empties this list visibly.
-fn outruns_the_runners_stack(listed: &str) -> bool {
-    listed == "tests/golden/runtime/a_guarded_shape_that_is_not_a_knot.kso"
 }
 
 /// The same three directories the Chrome harness walks, so the two engines
@@ -466,131 +383,6 @@ fn natively(path: &Path) -> (i32, String) {
     (done.status.code().unwrap_or(1), text)
 }
 
-/// The micro corpus is one construct per program, so a divergence names the
-/// construct. Every program the wasm backend accepts must answer exactly what
-/// the native engine answers — the differential law, inside cargo test.
-#[test]
-fn the_wasm_engine_agrees_with_the_golden_corpus() {
-    let gaps = known_gaps();
-    let mut toolchain = Toolchain::load();
-    let (mut ran, mut met) = (0, 0);
-    let mut skipped: Vec<(String, &str)> = Vec::new();
-    for path in corpus() {
-        let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
-        let listed = path.strip_prefix(root()).unwrap_or(&path).to_string_lossy().to_string();
-        let source = std::fs::read_to_string(&path).expect("the program reads");
-        // Both reasons used to print as "relative import", so the one program
-        // skipped for outrunning the stack was described as something else
-        // entirely. A skip is a hole in the differential; the line that
-        // records it has to say which hole.
-        let why = match (wants_a_filesystem(&source), outruns_the_runners_stack(&listed)) {
-            (true, _) => Some("a local import, and neither host has a filesystem"),
-            (_, true) => Some("it outruns the runner's stack before it can be compared"),
-            _ => None,
-        };
-        if let Some(why) = why {
-            skipped.push((listed.clone(), why));
-            continue;
-        }
-        let gap = gaps.iter().find(|(listed_name, _)| *listed_name == listed);
-        match (toolchain.run(&name, &source), gap) {
-            (Answer::Ran(_, text), Some((_, answer))) => {
-                assert!(
-                    text.contains(answer),
-                    "{listed} is a known gap answering `{answer}`, and it now answers `{}` \
-                     — close it or restate it in tests/golden/wasm_gaps.txt",
-                    text.trim()
-                );
-                met += 1;
-            }
-            (Answer::Ran(code, text), None) => {
-                // the wasm backend translates a getter's internal name too, and
-                // it is the one engine no other test can watch doing it
-                assert!(
-                    !text.contains(&kanso::ast::getter_name("")),
-                    "{name} showed a getter its internal name on wasm: {text}"
-                );
-                let (native_code, native_text) = natively(&path);
-                assert_eq!(text, native_text, "wasm and native disagree on {name}");
-                assert_eq!(code, native_code, "wasm and native exit differently on {name}");
-                ran += 1;
-            }
-            // A refusal is the weaker outcome and needs the same watching as a
-            // wrong answer: the differential law allows an engine to speak
-            // fewer features only where it rejects them plainly, which makes
-            // the rejection the thing that has to be written down.
-            (Answer::Declined(reason), Some((_, answer))) => {
-                assert!(
-                    reason.contains(answer),
-                    "{listed} is a known gap answering `{answer}`, and the backend now \
-                     declines with `{}` — close it or restate it in \
-                     tests/golden/wasm_gaps.txt",
-                    reason.trim()
-                );
-                met += 1;
-            }
-            (Answer::Declined(reason), None) => panic!(
-                "{listed} is refused by the wasm backend with `{}`, and no gap says so. \
-                 Add it to tests/golden/wasm_gaps.txt or close it — a refusal nothing \
-                 records is a gap the corpus cannot see.",
-                reason.trim()
-            ),
-            (Answer::CompileError(text), _) => panic!("{name} fails to compile on wasm: {text}"),
-        }
-    }
-    // `ran > 0` stood here, which one surviving program would satisfy. A walk
-    // is worth what it covers, so what is asserted is the ACCOUNTING: every
-    // program in the corpus was run, met as a listed gap, or skipped for a
-    // reason named on this list — and nothing fell off it quietly.
-    assert_eq!(
-        ran + met + skipped.len(),
-        corpus().len(),
-        "the walk lost programs: {ran} ran, {met} gaps, {} skipped, {} in the corpus",
-        skipped.len(),
-        corpus().len()
-    );
-
-    // The skip list is pinned by NAME rather than by count, because the way
-    // this goes wrong is a predicate quietly widening. `wants_a_filesystem`
-    // read the start of an import line instead of its quoted path, so
-    // `import t { slice:cut } "std/text"` looked local and examples/imports.kso
-    // sat out the differential — a program the page runs correctly.
-    let expected_skips = [(
-        "tests/golden/runtime/a_guarded_shape_that_is_not_a_knot.kso",
-        "it outruns the runner's stack before it can be compared",
-    )];
-    let seen: Vec<(&str, &str)> = skipped.iter().map(|(n, w)| (n.as_str(), *w)).collect();
-    assert_eq!(
-        seen,
-        expected_skips.to_vec(),
-        "the set of programs held out of the wasm differential changed"
-    );
-
-    // A directory that stops contributing is the other way coverage collapses,
-    // and the total above cannot see it: `corpus()` would shrink and the
-    // accounting would still balance. Each walked directory answers for itself.
-    for dir in ["examples", "tests/golden/runtime", "tests/golden/micro"] {
-        let from_here = corpus()
-            .iter()
-            .filter(|p| p.strip_prefix(root()).unwrap_or(p).to_string_lossy().starts_with(dir))
-            .count();
-        assert!(from_here > 0, "{dir} contributed nothing to the wasm walk");
-    }
-    // A gap this runner cannot execute is still a gap — Chrome runs it and
-    // holds it to the listed answer. Counting it here would demand a run that
-    // ends the test process.
-    let unrunnable = gaps.iter().filter(|(listed, _)| outruns_the_runners_stack(listed)).count();
-    assert_eq!(
-        met + unrunnable,
-        gaps.len(),
-        "a program in tests/golden/wasm_gaps.txt was never reached"
-    );
-    println!("wasm: {ran} agree, {met} known gaps, {} held out", skipped.len());
-    for (name, why) in &skipped {
-        println!("  skipped {name} ({why})");
-    }
-}
-
 /// Every exported std function in the shipped library, with how many
 /// arguments it takes. Derived from `lib/` the same way
 /// `scripts/diagnostic_differential.py` derives it, because the rule is the
@@ -642,7 +434,7 @@ fn the_wasm_engine_complains_the_way_the_others_do() {
     let work = std::env::temp_dir().join("kanso-wasm-diagnostics");
     let _ = std::fs::remove_dir_all(&work);
     std::fs::create_dir_all(&work).expect("a directory of its own");
-    let mut toolchain = Toolchain::load();
+    let Some(mut toolchain) = page() else { return };
     let (mut asked, mut declined) = (0, 0);
     for (module, name, arity) in std_surface() {
         if arity == 0 {
@@ -674,19 +466,17 @@ fn the_wasm_engine_complains_the_way_the_others_do() {
     println!("wasm: {asked} std complaints match native, {declined} declined by the backend");
 }
 
-/// A pointer the engine hands back is a wasm i32, and past two gibibytes its
-/// top bit is set. Read as signed, the output buffer of a program that ran
-/// fine lands at a negative offset and the page reads nothing. The random
-/// programs found it: the playground keeps every value a run makes until the
-/// next run, so one accumulator loop of twenty thousand pushes took memory to
-/// 3.2 GB, and the NEXT program's answer was the one that could not be read.
-/// Growing the memory first puts the allocator's next pages above the line
-/// without that cost, and a sixteen-megabyte answer has to be put there.
+/// A pointer the toolchain hands back is a wasm i32, and past two gibibytes
+/// its top bit is set. Read as signed, a buffer that is fine lands at a
+/// negative offset and the page reads nothing. The random programs found it
+/// when the older engine kept every value a run made until the next run.
+/// Growing the toolchain's memory first puts the compiled module above the
+/// line, and the sixteen-megabyte answer then comes back through the runtime.
 #[test]
 fn an_answer_above_two_gibibytes_reads_back() {
     let source = "import \"std/text\"\n\nfn doubled s 0\n  s\n\nfn doubled s n\n  \
                   doubled (text/join [s s] \"\") (n - 1)\n\npub play = print (doubled \"ab\" 23)\n";
-    let mut toolchain = Toolchain::load();
+    let Some(mut toolchain) = page() else { return };
     let pages = toolchain.memory().size(&toolchain.store);
     let above = (1u64 << 31) / 65536 + 16;
     toolchain.memory().grow(&mut toolchain.store, above - pages).expect("the memory grows");
@@ -699,13 +489,10 @@ fn an_answer_above_two_gibibytes_reads_back() {
 }
 
 /// An accumulator the linearity analysis proves nobody else reads is extended
-/// where it stands, on this engine as on the other two. The registry holds
-/// every handle a run makes, so a `push` handed the list by handle found a
-/// second holder, copied the list, and kept the copy it was handed: sixteen
-/// thousand pushes held 31,290 pages, and thirty-two thousand filled the four
-/// gibibytes a wasm32 memory can address and died reporting a stack overflow.
-/// The random programs found it at seventy thousand. A map built by `put` to
-/// the same size failed too, answering 1 and printing nothing.
+/// where it stands. The older engine copied the list on every `push` and
+/// filled its four gibibytes at thirty-two thousand; a map built by `put` to
+/// the same size answered 1 and printed nothing. The page now runs runtime.c,
+/// which extends both in place as native does.
 #[test]
 fn an_accumulator_grows_where_it_stands() {
     let pushes = "fn fill acc 0\n  acc\n\nfn fill acc n\n  fill (push acc n) (n - 1)\n\n\
@@ -713,7 +500,7 @@ fn an_accumulator_grows_where_it_stands() {
     let puts = "fn fill m 0\n  m\n\nfn fill m n\n  fill (put m n n) (n - 1)\n\n\
                 pub play = print (length (entries (fill {} 32000)))\n";
     for (name, source) in [("pushes.kso", pushes), ("puts.kso", puts)] {
-        let mut toolchain = Toolchain::load();
+        let Some(mut toolchain) = page() else { return };
         let answer = toolchain.run(name, source);
         assert!(
             matches!(&answer, Answer::Ran(0, text) if text == "32000\n"),
@@ -722,66 +509,10 @@ fn an_accumulator_grows_where_it_stands() {
     }
 }
 
-/// A program that runs out of memory says so. The allocator aborts on an
-/// allocation the page cannot grow for, and that trap records nothing, so it
-/// read as a stack overflow: the accumulator above, before it was fixed,
-/// reported that recursion had gone too deep. Growing the page to sixteen
-/// mebibytes short of what a wasm32 memory can address leaves the allocator
-/// that much, and a sixty-four mebibyte answer needs more.
-#[test]
-fn a_program_that_runs_out_of_memory_says_so() {
-    let source = "import \"std/text\"\n\nfn doubled s 0\n  s\n\nfn doubled s n\n  \
-                  doubled (text/join [s s] \"\") (n - 1)\n\npub play = print (doubled \"ab\" 25)\n";
-    let mut toolchain = Toolchain::load();
-    let pages = toolchain.memory().size(&toolchain.store);
-    let short = (1u64 << 32) / 65536 - 256;
-    toolchain.memory().grow(&mut toolchain.store, short - pages).expect("the memory grows");
-    let answer = toolchain.run("full.kso", source);
-    assert!(
-        matches!(&answer, Answer::Ran(1, text) if text == "error[runtime]: the program ran out of memory\n"),
-        "the program answered {answer:?}"
-    );
-}
-
-/// And the program after it runs. A run's values stayed in the registry until
-/// the next `load`, which comes after the next compile, so the compile after a
-/// run that filled the page had nowhere to allocate and trapped, and so did
-/// every compile after that. The random programs found it: an accumulator that
-/// filled the page, then a harness panic on a program that ran fine alone.
-#[test]
-fn the_program_after_one_that_ran_out_of_memory_runs() {
-    // the loop reads its list on a line of its own, so every lap copies the
-    // list and the page fills. Seeded from a literal instead of a constant,
-    // the same loop leaves the next compile room even with the registry kept,
-    // and this spec stays green without the fix it pins.
-    let source =
-        "fn fill acc 0\n  acc\n\nfn fill acc n\n  k = length acc\n  fill (push acc k) (n - 1)\n\n\
-                  seed = [0]\n\npub play = print \"{length (fill seed 100000)} {seed}\"\n";
-    let mut toolchain = Toolchain::load();
-    let pages = toolchain.memory().size(&toolchain.store);
-    let short = (1u64 << 32) / 65536 - 256;
-    toolchain.memory().grow(&mut toolchain.store, short - pages).expect("the memory grows");
-    let full = toolchain.run("full.kso", source);
-    assert!(
-        matches!(&full, Answer::Ran(1, text) if text.contains("ran out of memory")),
-        "the first program answered {full:?}"
-    );
-    let after = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        toolchain.run("after.kso", "print \"{1 + 2}\"\n")
-    }));
-    assert!(
-        matches!(&after, Ok(Answer::Ran(0, text)) if text == "3\n"),
-        "the program after it answered {after:?}"
-    );
-}
-
-/// A string built by joining onto itself grows where it stands. The registry
-/// kept every string the loop made, so seventy thousand one-letter joins held
-/// the sum of every length on the way, about 2.4 GB, and filled the page. The
-/// join now takes the builder out of its handle when a previous join handed it
-/// straight to the call, and appends. A seed is not taken: a literal lives in
-/// one handle every mention of it shares, so the second program seeds three
-/// loops with the same `"ab"`.
+/// A string built by joining onto itself grows where it stands, and a seed is
+/// not written through: the second program seeds three loops with the same
+/// `"ab"`. The older engine kept every string such a loop made, about 2.4 GB
+/// for seventy thousand one-letter joins.
 #[test]
 fn a_string_built_onto_itself_grows_where_it_stands() {
     let long = "fn build s 0\n  s\n\nfn build s n\n  build \"{s}x\" (n - 1)\n\n\
@@ -791,7 +522,7 @@ fn a_string_built_onto_itself_grows_where_it_stands() {
     for (name, source, want) in
         [("long.kso", long, "70000\n"), ("seeded.kso", seeded, "abxx abxxx abx\n")]
     {
-        let mut toolchain = Toolchain::load();
+        let Some(mut toolchain) = page() else { return };
         let answer = toolchain.run(name, source);
         assert!(
             matches!(&answer, Answer::Ran(0, text) if text == want),
@@ -800,15 +531,11 @@ fn a_string_built_onto_itself_grows_where_it_stands() {
     }
 }
 
-/// A loop seeded with a list its caller reads again copies the seed once. The
-/// seed's handle is the caller's, and writing through it would change what
-/// the caller reads, so the loop copied on every lap and the registry kept
-/// every copy: seventy thousand pushes filled the page. The call now hands the
-/// seed over under a handle of its own. The first write copies the list
-/// behind it and every write after that extends the copy, and the caller's
-/// `seed` still reads `[0]`. A map written with `put` goes the same way, and
-/// a loop that returns its seed untouched hands back a list the next push
-/// copies rather than writes.
+/// A loop seeded with a list its caller reads again copies the seed once, and
+/// the caller's `seed` still reads `[0]`. A map written with `put` goes the
+/// same way, and a loop that returns its seed untouched hands back a list the
+/// next push copies rather than writes. The older engine copied on every lap
+/// and filled its memory at seventy thousand pushes.
 #[test]
 fn a_loop_seeded_with_a_list_its_caller_reads_copies_it_once() {
     let source = "fn fill acc 0\n  acc\n\nfn fill acc n\n  fill (push acc n) (n - 1)\n\n\
@@ -817,7 +544,7 @@ fn a_loop_seeded_with_a_list_its_caller_reads_copies_it_once() {
                   print \"{length (fill seed 70000)} {seed}\"\n\
                   print \"{length (keyed base 30000)} {base}\"\n\
                   print \"{push kept 9} {seed}\"\n";
-    let mut toolchain = Toolchain::load();
+    let Some(mut toolchain) = page() else { return };
     let answer = toolchain.run("seeded.kso", source);
     let want = "70001 [0]\n30001 { \"a\":1 }\n[0 9] [0]\n";
     assert!(matches!(&answer, Answer::Ran(0, text) if text == want), "{answer:?}");
@@ -825,10 +552,10 @@ fn a_loop_seeded_with_a_list_its_caller_reads_copies_it_once() {
 
 /// A binding the demand analysis made lazy runs when something reads it, and
 /// not before. `v = nope 2` fails if it runs, and its one use hands it to a
-/// parameter the second arm of `f4` ignores. The interpreter and native
-/// thunk it and print 7. The browser engine ran every binding where it stood
-/// and died on `nope`. When the first arm returns the binding instead, the
-/// print reads it, and all three engines fail on it.
+/// parameter the second arm of `f4` ignores, so every engine prints 7. When
+/// the first arm returns the binding instead, the print reads it, and every
+/// engine fails on it. The older browser engine ran every binding where it
+/// stood and died on `nope` in the first case.
 #[test]
 fn a_lazy_binding_nobody_reads_never_runs() {
     let defs = "fn nope 1\n  1\n\nfn f4 0 x\n  x\n\nfn f4 _ _\n  7\n\n\
@@ -844,17 +571,16 @@ fn a_lazy_binding_nobody_reads_never_runs() {
             ),
         ),
     ] {
-        let mut toolchain = Toolchain::load();
+        let Some(mut toolchain) = page() else { return };
         let answer = toolchain.run(name, &format!("{defs}{call}"));
         assert_eq!(format!("{answer:?}"), format!("{want:?}"), "{name}");
     }
 }
 
 /// Two errs meeting in one operation merge, and a merged err was born
-/// nowhere: the interpreter gives it no origin, so its report has no `born in`
-/// line. The browser engine stamped the operation's site on any err that came
-/// back without an origin, which gave the merge one. An err with a single
-/// birth keeps the site it was born at.
+/// nowhere, so its report has no `born in` line. An err with a single birth
+/// keeps the site it was born at. The older browser engine stamped the
+/// operation's site on the merge.
 #[test]
 fn a_merged_err_reports_no_birth_site() {
     let defs = "import \"std/text\"\n\nfn shown z\n  v = text/to_float \"{z}x\"\n";
@@ -874,7 +600,7 @@ fn a_merged_err_reports_no_birth_site() {
             ),
         ),
     ] {
-        let mut toolchain = Toolchain::load();
+        let Some(mut toolchain) = page() else { return };
         let answer = toolchain.run(name, &format!("{defs}{body}\nprint (shown 0)\n"));
         assert_eq!(format!("{answer:?}"), format!("{:?}", Answer::Ran(1, want)), "{name}");
     }
@@ -944,16 +670,14 @@ fn the_playground_prompt_can_start_over() {
     assert_eq!(code, 1, "the declaration survived the reset: {gone}");
 }
 
-/// A program that dies leaves the module instance usable. `with_interp` used
-/// to hold the INTERP borrow across evaluation, so an abort inside it left the
-/// cell borrowed forever and the NEXT program's `load` could not take it — the
-/// failure surfaced as a compiler trap on a program that is fine by itself.
-/// Both mention the same knotted binding, which is what reaches the abort.
+/// A program that dies leaves the toolchain usable for the next one. Both
+/// programs mention the same knotted binding; the second must still compile
+/// and answer the blackhole's sentence.
 #[test]
 fn a_program_that_dies_leaves_the_engine_usable() {
     let knot = "type box\n  v\n\nd = (box d).v\n\n";
     let blackhole = "error[runtime]: a lazy binding demands its own value\n";
-    let mut toolchain = Toolchain::load();
+    let Some(mut toolchain) = page() else { return };
 
     toolchain.run("dies.kso", &format!("{knot}fn go x\n  x\n\npub play = print \"{{go d}}\"\n"));
     let after = toolchain.run("after.kso", &format!("{knot}pub play = print \"{{d}}\"\n"));
@@ -964,16 +688,14 @@ fn a_program_that_dies_leaves_the_engine_usable() {
     );
 }
 
-/// A program that runs out of stack leaves the instance usable too. A trap
-/// unwinds nothing, and the one this recursion takes lands inside `push`
-/// while REG is borrowed; the RefCell's flag stayed set for the life of the
-/// instance, so the next program's `load` panicked and a fine program
-/// answered a compiler trap.
+/// A program that runs out of stack says so, and the program after it runs.
+/// The wasm call stack ends in a trap, and the page answers it with the
+/// sentence native prints.
 #[test]
 fn a_program_that_runs_out_of_stack_leaves_the_engine_usable() {
     let deep = std::fs::read_to_string(root().join("tests/golden/runtime/deep_recursion.kso"))
         .expect("the deep recursion fixture reads");
-    let mut toolchain = Toolchain::load();
+    let Some(mut toolchain) = page() else { return };
 
     let fell = toolchain.run("deep_recursion.kso", &deep);
     let after = toolchain.run("after.kso", "print \"{1 + 2}\"\n");
@@ -990,10 +712,9 @@ fn a_program_that_runs_out_of_stack_leaves_the_engine_usable() {
 
 /// A deliberate exit is the one err an endpoint reads rather than reports:
 /// `os/exit 3` yields an err carrying `os/exit_status 3`, and the program
-/// said what it meant. Three of the four endpoints already knew this —
-/// `k_exit_status` in the emitted C runtime, and `eval::deliberate_exit`
-/// from the driver — but `exec_main` here did not, so a page that called
-/// `os/exit` printed `unhandled err reached the executor` at its reader and
+/// said what it meant. The page runs `k_exit_status` from runtime.c, the
+/// endpoint native runs, and the runtime's `proc_exit` carries the code out.
+/// The older browser engine printed `unhandled err reached the executor` and
 /// answered 1 whatever code the program named.
 ///
 /// The corpus walk holds the zero case
@@ -1004,7 +725,7 @@ fn a_program_that_runs_out_of_stack_leaves_the_engine_usable() {
 /// tests/a_deliberate_exit_carries_its_code.rs for the other two.
 #[test]
 fn a_deliberate_exit_carries_its_code_out_of_the_page() {
-    let mut toolchain = Toolchain::load();
+    let Some(mut toolchain) = page() else { return };
     let source = "import \"std/io\"\nimport \"std/os\"\n\n\
                   pub play = io/write \"before\" .> (_ -> os/exit 3)\n";
 
@@ -1213,7 +934,7 @@ fn census_expr(e: &kanso::ast::Expr, census: &mut Census, program: &str) {
 #[test]
 fn every_construct_is_carried_by_a_program_the_page_runs() {
     let gapped: std::collections::BTreeSet<String> =
-        known_gaps().into_iter().map(|(path, _)| path).collect();
+        route_gaps().into_iter().map(|(path, _)| path).collect();
 
     let mut census = Census::new();
     // the same census over the programs an import reaches, and therefore the
@@ -1354,7 +1075,7 @@ fn every_construct_is_carried_by_a_program_the_page_runs() {
 /// this spec pinned the refusal.
 #[test]
 fn the_page_builds_a_partial_over_a_value() {
-    let mut toolchain = Toolchain::load();
+    let Some(mut toolchain) = page() else { return };
     let program =
         "fn add a b c\n  a + b + c\n\nfn foo f\n  &f 2\n\npub play = print \"{(foo add) 5 7}\"\n";
     match toolchain.run("of_param.kso", program) {
@@ -1385,18 +1106,11 @@ fn route_gaps() -> Vec<(String, String)> {
 /// binary's, stream and exit code, except where tests/golden/native_route_gaps.txt
 /// says what the route answers instead.
 #[test]
-fn the_native_route_agrees_with_the_golden_corpus() {
-    if !wasm32::toolchain() {
-        eprintln!("no wasm32 toolchain here: clang, wasm-ld and wasi-libc are wanted");
-        return;
-    }
-    let work = std::env::temp_dir().join(format!("kanso-native-route-{}", std::process::id()));
-    std::fs::create_dir_all(&work).expect("the work dir makes");
-    let rt = wasm32::runtime(&work);
-    let mut toolchain = Toolchain::load();
+fn the_page_agrees_with_the_golden_corpus() {
+    let Some(mut toolchain) = page() else { return };
     let gaps = route_gaps();
     let only = std::env::var("KANSO_ROUTE_ONLY").ok();
-    let (mut ran, mut met, mut held, mut wrong) = (0, 0, 0, Vec::new());
+    let (mut ran, mut met, mut held, mut wrong) = (0, 0, Vec::new(), Vec::new());
     for path in corpus() {
         let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
         let listed = path.strip_prefix(root()).unwrap_or(&path).to_string_lossy().to_string();
@@ -1404,14 +1118,14 @@ fn the_native_route_agrees_with_the_golden_corpus() {
             continue;
         }
         let source = std::fs::read_to_string(&path).expect("the program reads");
-        // the same two holes the current engine's walk has, for the same reasons
-        if wants_a_filesystem(&source) || outruns_the_runners_stack(&listed) {
-            held += 1;
+        // a local import wants a filesystem, which neither host has
+        if wants_a_filesystem(&source) {
+            held.push(listed);
             continue;
         }
         let (native_code, native_text) = natively(&path);
         let gap = gaps.iter().find(|(g, _)| *g == listed);
-        let answer = match toolchain.run_native(&name, &source, &rt) {
+        let answer = match toolchain.run(&name, &source) {
             Answer::Ran(code, text) => (code, text),
             Answer::Declined(why) => (-2, format!("declined: {}", why.trim())),
             Answer::CompileError(text) => (native_code.max(1), text),
@@ -1435,14 +1149,14 @@ fn the_native_route_agrees_with_the_golden_corpus() {
             )),
         }
     }
-    let _ = std::fs::remove_dir_all(&work);
-    println!("native route: {ran} agree, {met} known gaps, {held} held out");
+    println!("the page: {ran} agree, {met} known gaps, {} held out", held.len());
     assert!(wrong.is_empty(), "{} programs are wrong:\n{}", wrong.len(), wrong.join("\n"));
     if only.is_none() {
         assert_eq!(
-            ran + met + held,
+            ran + met + held.len(),
             corpus().len(),
-            "the walk lost programs: {ran} ran, {met} gaps, {held} held out, {} in the corpus",
+            "the walk lost programs: {ran} ran, {met} gaps, {} held out, {} in the corpus",
+            held.len(),
             corpus().len()
         );
         assert_eq!(
@@ -1450,5 +1164,21 @@ fn the_native_route_agrees_with_the_golden_corpus() {
             gaps.len(),
             "a program in tests/golden/native_route_gaps.txt was never reached"
         );
+        // Held out by name rather than by count, because the way this goes
+        // wrong is the filesystem test quietly widening: it once read the
+        // start of an import line instead of its quoted path, and
+        // examples/imports.kso sat out the differential while being a program
+        // the page runs correctly. Nothing in the corpus imports a local
+        // module today, so the list is empty.
+        assert_eq!(held, Vec::<String>::new(), "the programs held out of the walk changed");
+        // A directory that stops contributing is the other way coverage
+        // collapses, and the total above cannot see it.
+        for dir in ["examples", "tests/golden/runtime", "tests/golden/micro"] {
+            let from_here = corpus()
+                .iter()
+                .filter(|p| p.strip_prefix(root()).unwrap_or(p).to_string_lossy().starts_with(dir))
+                .count();
+            assert!(from_here > 0, "{dir} contributed nothing to the walk");
+        }
     }
 }

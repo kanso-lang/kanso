@@ -23,9 +23,7 @@ pub mod provenance;
 pub mod repl;
 pub mod trmc;
 pub mod wasm;
-pub mod wasm_backend;
 pub mod wasm_encode;
-pub mod wasm_rt;
 
 pub fn compile(file: &str, source: &str, require_entry: bool) -> Result<ast::Program, String> {
     let lexed =

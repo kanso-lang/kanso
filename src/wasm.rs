@@ -4,24 +4,12 @@
 use crate::eval::{render, Executor, Interp, Value};
 use crate::repl::{Outcome, Session};
 use std::cell::RefCell;
-use std::sync::atomic::{AtomicBool, Ordering};
 
 thread_local! {
     static SESSION: RefCell<Session> = RefCell::new(Session::new());
     static OUT: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
     static FILE: RefCell<String> = RefCell::new("playground".to_string());
     static RNG: RefCell<crate::eval::Rng> = RefCell::new(crate::eval::Rng::seeded());
-}
-
-/// Set by the allocator when the page could not grow for an allocation. The
-/// abort that follows is a trap like a stack overflow, and without this the
-/// two read the same: thirty-two thousand pushes that filled four gibibytes
-/// reported that recursion had gone too deep.
-static OUT_OF_MEMORY: AtomicBool = AtomicBool::new(false);
-
-/// Called by the allocator on an allocation it could not make.
-pub fn note_out_of_memory() {
-    OUT_OF_MEMORY.store(true, Ordering::Relaxed);
 }
 
 fn current_file() -> String {
@@ -188,58 +176,6 @@ thread_local! {
     static WASM_BYTES: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
 }
 
-/// Compile the program to a wasm module for in-browser execution. Returns
-/// 0 with module bytes ready, 1 when the program uses something the browser
-/// backend doesn't cover (caller falls back to the interpreter; reason in
-/// the output buffer), or 2 on a compile error (rendered in the buffer).
-#[cfg(target_arch = "wasm32")]
-#[no_mangle]
-pub extern "C" fn kanso_compile_wasm(ptr: *const u8, len: usize, tailcalls: i32) -> i32 {
-    crate::wasm_rt::release();
-    let source = take_input(ptr, len);
-    let program = match crate::compile_source("run", &current_file(), &source) {
-        Ok(program) => program,
-        Err(rendered) => {
-            set_out(&rendered);
-            return 2;
-        }
-    };
-    lower_to_wasm(program, tailcalls)
-}
-
-/// The play compile for the browser's compiled path: the playground buffer
-/// is a play file, and it reaches the wasm backend the same way `run`
-/// programs do.
-#[cfg(target_arch = "wasm32")]
-#[no_mangle]
-pub extern "C" fn kanso_play_wasm(ptr: *const u8, len: usize, tailcalls: i32) -> i32 {
-    crate::wasm_rt::release();
-    let source = take_input(ptr, len);
-    let program = match crate::compile_play_file(&current_file(), &source) {
-        Ok(program) => program,
-        Err(rendered) => {
-            set_out(&rendered);
-            return 2;
-        }
-    };
-    lower_to_wasm(program, tailcalls)
-}
-
-#[cfg(target_arch = "wasm32")]
-fn lower_to_wasm(program: crate::ast::Program, tailcalls: i32) -> i32 {
-    match crate::wasm_backend::compile(&program, tailcalls != 0) {
-        Ok(compiled) => {
-            crate::wasm_rt::load(program, &compiled.lits, compiled.types);
-            WASM_BYTES.with(|b| *b.borrow_mut() = compiled.bytes);
-            0
-        }
-        Err(reason) => {
-            set_out(&reason);
-            1
-        }
-    }
-}
-
 #[cfg(target_arch = "wasm32")]
 thread_local! {
     static SIDE: std::cell::Cell<(u32, u32)> = const { std::cell::Cell::new((0, 0)) };
@@ -326,36 +262,6 @@ pub extern "C" fn kanso_wasm_ptr() -> *const u8 {
 #[no_mangle]
 pub extern "C" fn kanso_wasm_len() -> usize {
     WASM_BYTES.with(|b| b.borrow().len())
-}
-
-/// Execute the handle the compiled program's main returned; output text
-/// lands in the buffer, status mirrors the native binary's exit code.
-#[cfg(target_arch = "wasm32")]
-#[no_mangle]
-pub extern "C" fn kanso_exec_main(h: u32) -> i32 {
-    let (status, text) = crate::wasm_rt::exec_main(h);
-    set_out(&text);
-    status
-}
-
-/// After a trap inside compiled code, fetch the runtime error message.
-#[cfg(target_arch = "wasm32")]
-#[no_mangle]
-pub extern "C" fn kanso_take_rt_error() {
-    let message = crate::wasm_rt::take_error();
-    if message.is_empty() {
-        // a trap nothing recorded. Two resources run out without a chance
-        // to say so: the stack, the same translation native's parent makes
-        // from the child's SIGSEGV, and memory, where an allocation the page
-        // could not grow for aborts after the allocator has noted it.
-        let said = match OUT_OF_MEMORY.swap(false, Ordering::Relaxed) {
-            true => "error[runtime]: the program ran out of memory".to_string(),
-            false => crate::stack_exhausted(),
-        };
-        set_out(&format!("{said}\n"));
-        return;
-    }
-    set_out(&format!("error[runtime]: {message}\n"));
 }
 
 /// Evaluate one repl input against the persistent session. Returns 0 on
