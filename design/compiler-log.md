@@ -21733,6 +21733,12 @@ native runs on an 8 MB stack. The spec's host now allows ten thousand frames,
 and the program agrees. The two codegen rows take CI's readings on the merged
 tree: `codegen_instructions_release` lands on 408,634,272 and
 `codegen_instructions_dev` on 124,656,228. Both moves are in the child tree
-that compiles `runtime.c`. Both
-moves are in the child tree that compiles `runtime.c`, whose `k_arena_left`
-and `k_thunk_new` changed. The welfare meta holds at the floor.
+that compiles `runtime.c`, whose `k_arena_left` and `k_thunk_new` changed. The
+welfare meta holds at the floor.
+
+`k_arena_left` is now declared `unsigned long long` on wasm32 only. Declared so
+everywhere, it is the same width on x86-64 as the `size_t` it replaced, and CI
+still read every benchmark's machine code 16 bytes smaller, with twelve of the
+fourteen work rows moving and deepbench up 324,000 instructions. Putting
+`size_t` back for native and nothing else returned the machine code to its
+golden byte for byte on this host.
