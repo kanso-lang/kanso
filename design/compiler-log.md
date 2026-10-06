@@ -22204,10 +22204,17 @@ own work: `front_end_visits` 7,982, `compile_instructions` 26,191,422,
 `compile_allocs` 14,747 and `emit_instructions` 32,132,166. The interpreter,
 by 1,320 instructions and six allocations: `interp_instructions`
 590,482,748 and `interp_allocs` 896,122. The two codegen tiers:
-`codegen_instructions_dev` 130,522,835 and `codegen_instructions_release`
-503,605,244. Those two read 130,522,884 and 503,605,225 a commit earlier; the
-one input to them that changed between the two was a comment rewritten in
-src/runtime.c, whose text clang reads. The tab: `browser_compile_instructions` 633,010,618,
+`codegen_instructions_dev` 130,522,511 and `codegen_instructions_release`
+503,605,244. The release row read 503,605,225 a commit earlier, and the one
+input to it that changed between the two was a comment rewritten in
+src/runtime.c, whose text clang reads. The dev row is not explained. It read
+130,522,884, 130,522,835 and 130,522,511 on three consecutive commits; the
+last two differ only in goldens and this log, and a merge base that did not
+move. Each reading agreed with a second count in its own job, and a re-run of
+the third commit read 130,522,511 again, so the row is stable within a commit
+and moves between commits that carry the same compiler. In this container it
+reads 129,705,923 on both trees. Main's row did not move this way over the
+commits before this branch. The tab: `browser_compile_instructions` 633,010,618,
 `browser_compile_peak_bytes` 2,639,715 and `browser_run_instructions`
 33,447,328. The run programs: `work_basket` 32,465,828, `work_deepbench`
 370,955,233, `work_digestbench` 5,735,451, `work_encodebench` 2,382,879,127,
