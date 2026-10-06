@@ -21960,3 +21960,21 @@ reads that trade as a pure regression, and it is declined. Fat LTO also doubled 
 wasm build, from about 40 seconds to about 95, in each of the six jobs that
 run it.
 
+## 2026-10-06 — the checkout names its rustc
+
+kanso#1766 pinned rustc 1.98.1 in the four workflows, and the goldens that name
+a rustc refuse any other. A size has no golden. This container's default
+`rustc` is 1.94.1, and the playground sizes in two log entries the same day were
+read off builds by it: `kanso.wasm` at 2,941,620 bytes where 1.98.1 builds
+3,011,568. kanso#1773 corrects both.
+
+`rust-toolchain.toml` now names 1.98.1, so a bare `cargo` in a checkout uses
+the rustc CI uses, and a hand measurement agrees with CI's without anyone
+remembering a flag. In CI it changes nothing: each job already installs 1.98.1
+as the default.
+
+`tests/the_toolchain_is_pinned_to_the_rows.rs` gains a third test, which reads
+the file's `channel` and compares it with `ci.yml`'s `RUST_TOOLCHAIN`. It was
+watched red with the channel set to 1.94.1 and with the file removed. Mutation
+`the_checkout_builds_with_its_own_rustc` removes the file. Ratchet row
+`checkout_pinned`.

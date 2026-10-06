@@ -152,3 +152,30 @@ fn the_pinned_rustc_is_the_one_the_goldens_name() {
         wrong.join("\n  ")
     );
 }
+
+/// The `channel` that `rust-toolchain.toml` names, if the file names one.
+fn checkout_channel(text: &str) -> Option<String> {
+    text.lines()
+        .filter_map(|l| l.trim().strip_prefix("channel"))
+        .filter_map(|rest| rest.trim().strip_prefix('='))
+        .map(|v| v.trim().trim_matches('"').to_string())
+        .next()
+}
+
+/// A checkout builds with the rustc the workflows install. Without the file, a
+/// container's own default answers every `cargo` run, and on 2026-10-06 that
+/// was 1.94.1: two log entries published playground sizes measured under it,
+/// 69,948 bytes off what the pinned rustc builds. No gate reads a module's
+/// size, so nothing caught it.
+#[test]
+fn the_checkout_builds_with_the_rustc_the_workflows_name() {
+    let ci = fs::read_to_string(root().join(".github/workflows/ci.yml")).expect("ci.yml reads");
+    let want = named_version(&ci).expect("ci.yml names RUST_TOOLCHAIN");
+    let file = fs::read_to_string(root().join("rust-toolchain.toml"))
+        .expect("rust-toolchain.toml pins the checkout's rustc");
+    assert_eq!(
+        checkout_channel(&file).as_deref(),
+        Some(want.as_str()),
+        "rust-toolchain.toml and ci.yml's RUST_TOOLCHAIN name different rustcs"
+    );
+}

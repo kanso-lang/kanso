@@ -1,0 +1,7 @@
+# The rustc every golden that names one was measured under, and the one the
+# four workflows install as RUST_TOOLCHAIN. A checkout builds with it by
+# default, so a reading taken by hand is a reading of the toolchain CI uses.
+# tests/the_toolchain_is_pinned_to_the_rows.rs holds this file, the workflows
+# and the goldens to one version.
+[toolchain]
+channel = "1.98.1"
