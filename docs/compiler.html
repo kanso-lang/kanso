@@ -421,7 +421,7 @@ basket         10,000                0          1,048,576</code></pre>
 
 <h3>recursion that never overflows</h3>
 
-<p>recursion is kanso's only loop, so a call in tail position—the last thing a function does—cannot be allowed to grow the stack, or every loop would eventually crash. it doesn't. the native backend emits <code>musttail</code>, the strongest promise llvm offers and one the code generator is required to honor; the browser backend emits wasm's <code>return_call</code>. the receipts: ten million frames of mutual recursion in constant stack natively, one million inside a browser tab. deep recursion carries no risk to manage, because in kanso it is simply how you write a loop.</p>
+<p>recursion is kanso's only loop, so a call in tail position—the last thing a function does—cannot be allowed to grow the stack, or every loop would eventually crash. it doesn't. the native backend emits <code>musttail</code>, the strongest promise llvm offers and one the code generator is required to honor; the translator the playground carries writes wasm's <code>return_call</code> for the same calls. the receipts: ten million frames of mutual recursion in constant stack natively, one million inside a browser tab. deep recursion carries no risk to manage, because in kanso it is simply how you write a loop.</p>
 
 <h3>arbitrary precision, paid for only when used</h3>
 
@@ -454,7 +454,7 @@ basket         10,000                0          1,048,576</code></pre>
 
 <h3>the whole toolchain in a browser tab</h3>
 
-<p>a third engine emits wasm bytecode directly—hand-rolled, no llvm anywhere near it, because llvm is measured in hundreds of megabytes and a browser tab is not. the whole thing is about half a megabyte of wasm, and it's what lets the <a href="playground.html">playground</a> compile the program you type into machine code inside the page, tail calls and all. its value representation is deliberately odd today (every value is a small handle into a registry the toolchain owns), and that first cut is staged toward a self-contained module over time, every step of the migration pinned by the same corpus of byte-identical golden outputs the other two engines are held to.</p>
+<p>the playground compiles the program you type with the same emitter native builds use. llvm itself is measured in hundreds of megabytes and a browser tab is not, so the page carries a translator instead: it reads the emitter's llvm ir as text and writes a wasm module from it. that module links, as the page instantiates it, against kanso's runtime&mdash;the same <code>runtime.c</code>, compiled ahead of time for wasm32 by clang and shipped beside the page. values sit in wasm memory in native's layout, tail calls stay tail calls, and the tab answers to the same corpus of byte-identical golden outputs as the other engines. the toolchain and the runtime together come to a little under a megabyte compressed. a browser that cannot load the runtime runs the interpreter instead.</p>
 
 <h2 id="deep"><span class="sec-num">6</span>the deep end</h2>
 

@@ -21978,3 +21978,30 @@ the file's `channel` and compares it with `ci.yml`'s `RUST_TOOLCHAIN`. It was
 watched red with the channel set to 1.94.1 and with the file removed. Mutation
 `the_checkout_builds_with_its_own_rustc` removes the file. Ratchet row
 `checkout_pinned`.
+
+## 2026-10-06 — the pages describe the tab that ships
+
+Seven passages on four pages still described the wasm backend kanso#1773
+removed: about.html
+and compiler.html's "whole toolchain in a browser tab" gave the playground as
+about half a megabyte of wasm with an engine of its own, compiler.html's
+tail-call paragraph credited `return_call` to that backend, numbers.html's two
+browser-run notes described a value registry the native route does not have,
+and playground.html's description and its note under the editor named "kanso's
+own wasm backend". Each now describes the route in `docs/kanso-engine.js`: the
+native emitter's IR, translated by `ir_wasm`, linked against `runtime.c` built
+for wasm32, and the interpreter when the runtime cannot load. The size reads
+"a little under a megabyte compressed", which the engine's 807,745 bytes and
+the runtime's 105,100 make 912,845.
+
+Each claim the new prose makes was run on the tab's route through the specs'
+wasm32 host before it was written. A million frames of mutual recursion
+answers `true`, so the translator's `return_call` keeps the stack flat.
+`os/read_file` on a missing file answers `os/file_not_found "x.txt"`.
+
+One claim did not survive. The playground note said integers are
+arbitrary-precision in the tab, so `fact 100` just works. On the compiled route
+it stops with `error[runtime]: integer overflow (int64 native build; spec int
+is arbitrary precision)`, exactly as a native build does, and the interpreter
+still prints all 158 digits. Values in native's layout are 64-bit words. The
+note now says so.
