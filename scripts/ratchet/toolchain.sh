@@ -60,3 +60,9 @@ clang --version | head -1 | grep -q 'clang version 19' || {
 # the build rather than on the defect — which is the same false proof by
 # another route.
 rustup target add wasm32-unknown-unknown
+
+# The specs job installs wasi-libc and selects lld's wasm linker for
+# tests/native_layout_on_wasm32.rs, which builds the micro corpus for wasm32 in
+# native's layout. The ratchet runs that job's specs, so it carries both.
+sudo apt-get install -y -qq --no-install-recommends wasi-libc
+sudo ln -sf /usr/bin/wasm-ld-19 /usr/local/bin/wasm-ld
