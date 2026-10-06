@@ -21458,12 +21458,12 @@ them what std/list's new declarations and the three engines' tie code cost:
   and `module_visits` 2,677 -> 2,706;
 - the other two compile routes: `entry_instructions` 85,110,161 ->
   86,029,749 and `library_instructions` 85,641,806 -> 86,591,709;
-- the interpreter: `interp_instructions` 590,630,366 -> 591,520,601,
+- the interpreter: `interp_instructions` 590,630,366 -> 591,566,141,
   `interp_allocs` 895,408 -> 896,116 and `interp_peak_bytes` 725,220 ->
   739,436;
 - codegen: `codegen_instructions_dev` 124,466,652 -> 124,656,243,
   `codegen_instructions_release` 408,092,175 -> 408,634,242 and
-  `emit_instructions` 30,306,693 -> 31,183,341; `emitted_other_lines` 86,407
+  `emit_instructions` 30,306,693 -> 31,223,159; `emitted_other_lines` 86,407
   -> 86,557, `emitted_other_calls` 10,801 -> 10,817 and
   `emitted_other_branches` 8,296 -> 8,314; and `text`, summed over the
   benchmarks, 3,525,136 -> 3,575,680, for the runtime's tie entries;
