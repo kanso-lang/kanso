@@ -22043,3 +22043,116 @@ goes.
 The 2026-09-30 directive, "a golden may pin the interpreter's answer where
 native refuses", stays useful until this lands. After that the two engines
 agree and its int fixture becomes an ordinary golden.
+
+## 2026-10-07 — compiled code gets arbitrary-precision integers
+
+Built per the gavel of the same date. An int stays a machine word until an
+operation's answer would leave it, and then the runtime builds a bignum: tag
+17, `K_BIG`, a `KBytes` in the arena holding a sign word and 32-bit limbs,
+least significant first. Every integer operation takes either kind. The form
+is canonical, as the interpreter's `Int` is: a result that fits a word goes
+back into one, so equality compares a tag and bytes, and a map orders a
+bignum key among the words by value. The native build and the tab share
+`runtime.c`, so both have it.
+
+In the emitter, the checked `+`, `-` and `*` it already wrote branch on
+overflow to `k_int_add`, `k_int_sub` and `k_int_mul` where they used to trap.
+`/` and `%` on two ints take one instruction behind a test that both tags say
+word. A literal past the word is read from its digits. An int literal in an
+arm past the word keeps its group off the switch and is compared whole: the
+native switch had matched the literal's low 64 bits, so `fn which
+100000000000000000000` matched nothing, a divergence nothing reported. The
+overflow refusal is gone from the emitter and the runtime. `math/round` of
+1e30 answers the exact integer, `text/to_int` reads a number past the word
+whole, and the checker no longer refuses `to_int` of such a literal, which it
+did on every engine.
+
+Inference keeps `INT` for the word and adds `BIG` for the bignum; the type
+`int` is the two. Every decision the emitter makes on a set that is exactly
+`INT`, unboxing a parameter or reading a payload without its tag, stays
+sound, because a set that might hold a bignum is not `INT`. Arithmetic on
+ints answers `INT | BIG`, except a remainder of two words.
+
+A bignum lives in the arena, and the rewinds had treated an int as something
+they cannot reach. Three changes keep them sound:
+
+- A loop edge that rewinds lifts any argument that is a bignum when the edge
+  is reached: `k_big_lift_out` copies it to malloc'd storage, the rewind
+  runs, and `k_big_lift_in` copies it back above the mark. The plain rewind
+  and the carry both take it, behind one tag test an argument.
+- An in-place push or put of a bignum into a list or map older than the
+  beat's mark moves the bignum to permanent storage first (`k_big_kept`), so
+  an int stays licensed as an accumulator's element. The inlined push and
+  put send a bignum item to the C, beside an err.
+- A pure loop that builds bignums and allocates nothing else does not
+  rewind. Its bignums stay in the arena until an enclosing rewind or the
+  end of the bracket, as they would in any loop that is not a beat. Only a
+  program that would have died on the refusal before reaches this, so no
+  program that ran before uses more memory.
+
+The cost on the run program is the int parameters. A loop counter or a
+parser position was a raw word, because `n + 1` was a word; now it is `int`
+or bignum, so it travels boxed, every use tests its tag, and the paths that
+read a payload directly stay shut. So every group on a cycle of the call
+graph with such a parameter is emitted twice. The twin, `d_<name>_<n>_w`,
+takes those parameters as raw words. A call into the group tests the tags of
+its arguments and takes the twin when every one is a word; a call from the
+general group stays general, so each twin keeps one caller and the inlining
+that folds a loop's steps together. On the way to the general group, which
+a call takes only when a bignum has arrived, that one edge skips its
+rewind; the general group's next edge lifts the bignum and takes the
+skipped iteration's garbage with its own.
+
+Measured on runbench in this container with callgrind, both compilers'
+binaries copied into one directory: 1,088,360,071 instructions before and
+1,283,258,510 after, 17.9% more. CI's rows replace these. The steps:
+
+- the first working build, 1,542,086,570;
+- `/` and `%` given the word path above, 1,484,462,274;
+- the parser's position records packed into two words when the position is a
+  word, and spilled to the heap record when it is a bignum, as a word past 56
+  bits already was, 1,299,344,383; `k_rec` had been 134,619,394 of the first
+  build;
+- the twins, 1,283,258,510.
+
+Two probes, unsound and not committed, bounded the parameters' share before
+the twins: unboxing a parameter whose set is `INT | BIG` as though it were a
+word gave 1,194,836,442, and inference that never widens arithmetic gave
+1,158,456,574. The twins recover less than the first probe because the
+groups LLVM inlined into one another before no longer all inline: the
+profile shows `escape/filled`, `json/obj_key_end` and `json/array_delim`
+standing alone where base folded them into their callers. That is the next
+lead.
+
+Two specs went red on the way. The release spec that runs a cycle through a
+twelve-word arm three million times has a seven-parameter group whose count
+and total were raw words. Boxed, its arm was fourteen words and lost its
+tail call, and the binary died on SIGSEGV; the twins take both as words, the
+arm is twelve words again, and the spec passes as written. The general
+group's arm is still fourteen words, so a cycle like that one which carries
+a bignum spends a frame per step. The wasm32 layout harness compiles the
+emitted module at clang's default inline threshold, and there a `musttail`
+returning a `KValue` is an ordinary call, because the backend returns the
+struct through a slot in the caller's frame; `a_record_rebuilt_at_depth`
+had run in one frame only because LLVM inlined one step into the other. The
+twin's step costs 260 against 225, so the harness now uses 2000, the
+threshold native's release link already uses.
+
+The floor drops by what this costs, under the 2026-09-13 rule for building
+the specified language.
+
+The one-engine corpus held one program, which now runs on every engine in the
+micro corpus as `an_int_past_int64_on_every_engine`, so the corpus and its
+test go. Ten more micro goldens cover the boundary: a bignum meeting a word
+in every operator, ordering across the word's edge and against floats,
+rendering, map keys, `fact 100` beside `math/round` and `text/to_int`, a wide
+pattern literal, a position past the word, a loop that carries a bignum
+across a plain rewind, one that carries it beside a record the carry copies,
+and a bignum stored into a map and a list that outlive the loop. Each of the
+last three goes red with its lift or its move taken out. A runtime golden
+pins the bitwise refusal. The specs that asserted the refusal now assert
+agreement, and `an_overflow_trap_is_written_once_a_function` goes with the
+trap. `scripts/numeric_differential` fails on any disagreement, where it
+counted the refusals as a known ceiling and failed when there were none.
+ch02's overflow sample prints `100000000000000000000`, and the playground
+note about 64-bit integers is gone.
