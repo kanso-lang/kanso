@@ -22147,8 +22147,10 @@ in the emitter answer most of it.
   it copied the general body into the twin, which then cost too much to fold
   into its own caller.
 
-escapebench went from 75,294,779 to 57,794,754 in this container, and
-runbench from 1,279,294,697 to 1,240,344,874. A fifth change, reading
+escapebench went from 75,294,779 to 57,794,754 in this container. On CI,
+runbench went from 1,279,294,697 to 1,240,344,037, 14.0% over main's
+1,088,359,234, and the release tier's codegen from 505,720,838 to
+503,605,225 against main's 408,634,431. A fifth change, reading
 `cs[p + 1]` over bytes with an index past the word as index 0, measured
 1,245,214,168 on runbench and 931,768,709 on jsonbench against 1,240,344,874
 and 923,660,159 without it, and was taken out.
@@ -22178,7 +22180,9 @@ stack with twins and without them. The harness now uses 2000, the threshold
 native's release link already uses.
 
 The floor drops by what this costs, under the 2026-09-13 rule for building
-the specified language.
+the specified language: 90.0696 to 89.3861 on CI's rows. Projected without
+the twins, from this container's ratios on runbench and the release codegen
+row, the index reads 89.19, so they stay.
 
 The one-engine corpus held one program, which now runs on every engine in the
 micro corpus as `an_int_past_int64_on_every_engine`, so the corpus and its
