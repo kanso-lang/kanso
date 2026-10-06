@@ -4850,8 +4850,7 @@ tie_resolves = row
 
 rows_c1zzzzzzzc = text/concat rows_c1zzzzzzzd [tie_resolves]
 
-# The page calls the `ref` the embedded interpreter hands a tie's maker, and
-# reads a field holding one of the interpreter's cells through the interpreter
+# The page calls the `ref` the embedded interpreter hands a tie's maker
 # (2026-10-05).
 tie_page_calls = row
   "a page that cannot call a tie ref"
@@ -4861,15 +4860,7 @@ tie_page_calls = row
   (breaking "a_page_that_cannot_call_a_tie_ref")
   with_blob
 
-tie_page_reads = row
-  "a page that reads a tie cell as a value"
-  true
-  "cargo test --release --test wasm_engine {wasm_corpus}"
-  "specs (unit, golden, differential)"
-  (breaking "a_page_that_reads_a_tie_cell_as_a_value")
-  with_blob
-
-rows_c1zzzzzzzb = text/concat rows_c1zzzzzzzc [tie_page_calls tie_page_reads]
+rows_c1zzzzzzzb = text/concat rows_c1zzzzzzzc [tie_page_calls]
 
 # The interpreter rewrites the fields holding a tie's cells to hold the nodes,
 # as native does; a `ref` names its tie by serial, so one called after its tie

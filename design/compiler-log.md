@@ -21403,11 +21403,15 @@ things stood between that and a working program. The maker calls `ref`, which
 is a partial the interpreter made, and the page's call refused anything but a
 closure it had compiled: "`<fn>` is not callable". It now hands such a value
 back to the interpreter, where the tie it belongs to is still running. And a
-field the maker filled holds the interpreter's cell, which the page's field
+field the maker filled held the interpreter's cell, which the page's field
 read passed on as it was, so the graph fixture's walk matched no arm of
-`trail`. The read now asks the interpreter for the cell's value, as it already
-did for one of its own deferred bindings. The cells stay in the graph on the
-page, as they do on the interpreter; only native rewrites them away.
+`trail`. That was first fixed in the page's read, by asking the interpreter for
+the cell's value. The interpreter's rewrite described further down then made
+the fix dead: every field holding a cell holds its node before `tie` returns,
+so the page never meets one. The ratchet showed it. The row that disabled the
+page's read stayed green on CI, and the wasm corpus stayed green here with the
+read gone. The read and its row were removed rather than kept as a check that
+can no longer fail.
 
 **What a generator of random graphs found.** Six hundred random tied graphs,
 run on the interpreter and both native tiers, agreed. Writing the fixtures
@@ -21479,7 +21483,7 @@ Welfare reads 90.3053 against a floor of 90.3174, and the floor comes down to
 the score, by the ruling that a built part of the language lowers it by
 exactly what it costs.
 
-**Ratchet.** Nine rows, each watched red:
+**Ratchet.** Eight rows, each watched red:
 
 - "a tie that never fills its cells" replaces the interpreter's fill with
   nothing; the ring's walk reaches a blackhole and the micro corpus fails.
@@ -21490,8 +21494,6 @@ exactly what it costs.
   lazy binding demands its own value".
 - "a page that cannot call a tie ref" restores the page's refusal; all four
   tie fixtures die as not callable and the wasm corpus fails.
-- "a page that reads a tie cell as a value" skips the read through the cell;
-  the graph fixture matches no arm of `trail` and the wasm corpus fails.
 - "an interpreter tie that leaves cells in its graph" skips the rewrite; the
   nested pattern answers 0 and the micro corpus fails.
 - "a tie ref that answers any open tie" and "a native tie ref that answers

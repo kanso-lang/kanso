@@ -280,14 +280,6 @@ fn partial_apply(env: u32, fresh: Vec<u32>) -> u32 {
 /// A container read reaches through a deferral. The answer is written back
 /// over the closure, so a cycle read twice costs one call.
 fn forced(v: Value) -> Value {
-    // A cell the interpreter made, which the page meets in a field a
-    // `list/tie` maker filled with a `ref`. The interpreter reads it.
-    if let Value::Thunk(_) = v {
-        return match with_interp(|interp| interp.demand(&v)) {
-            Ok(value) => forced(value),
-            Err(rt) => die(rt.message),
-        };
-    }
     let Value::TableFn(h) = v else {
         return v;
     };
