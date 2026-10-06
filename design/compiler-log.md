@@ -21837,8 +21837,10 @@ emitting runs none of the new code. `codegen_instructions_dev` reads
 124,659,910, 3,653 above #1771's reading on the same `runtime.c`, so the rise
 is in the dev tier's compile of the emitted program rather than of the runtime.
 
-**Size.** On rustc 1.98.1, `kanso.wasm` grows from 2,161,218 bytes to
-3,237,163, which is 652,614 to 913,489 gzipped. The runtime adds 259,284
+**Size.** On rustc 1.98.1, `kanso.wasm` grows from 2,196,981 bytes to
+3,237,161, which is 639,316 to 913,489 gzipped at level nine. The figures
+first written here for main, 2,161,218 and 652,614, did not come from the
+pinned toolchain; these were re-read on it with the next entry. The runtime adds 259,284
 bytes, 105,100 gzipped. Both were measured on the tree with `list/tie` merged;
 the figures first written here, 3,203,732 and 254,532, were taken before it. A first visit downloads about a megabyte compressed
 where it downloaded about two thirds of one. Most of the growth is the native
@@ -21891,10 +21893,13 @@ trapped stack, and Chrome's walk turned red on `deep_recursion` alone. A new
 row, `page_route`, has the translator write `sub` for `add`, and the cargo walk
 turned red on 117 programs.
 
-**Size.** On rustc 1.98.1, `kanso.wasm` falls from 3,237,163 bytes to 2,941,620,
-which is 913,489 to 864,246 gzipped. With the runtime's 105,100 gzipped bytes a
-first visit downloads 969,346 compressed bytes, against 652,614 before the tab
-compiled at all. The native emitter is most of what remains of the growth.
+**Size.** On rustc 1.98.1, built by `scripts/build_wasm.sh`, `kanso.wasm`
+falls from 3,237,161 bytes to 3,011,568, which is 913,489 to 855,367 gzipped at
+level nine. Before the tab compiled at all it was 2,196,981 and 639,316. With
+the runtime's 105,100 gzipped bytes a first visit now downloads 960,467
+compressed bytes for the two modules. An earlier draft of this paragraph gave 2,941,620 and
+864,246; those were read off a build by this container's default rustc,
+1.94.1, and the toolchain CI pins builds a larger module.
 
 **Rows.** Six moved on CI, and all six fell. Compile instructions read
 26,046,706 against 26,074,590, entry 85,962,181 against 86,063,837, library
