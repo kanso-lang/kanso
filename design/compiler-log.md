@@ -21733,9 +21733,16 @@ native runs on an 8 MB stack. The spec's host now allows ten thousand frames,
 and the program agrees. The two codegen rows take CI's readings on the merged
 tree: `codegen_instructions_release` lands on 408,634,272 and
 `codegen_instructions_dev` on 124,656,228. Both moves are in the child tree
-that compiles `runtime.c`. Both
-moves are in the child tree that compiles `runtime.c`, whose `k_arena_left`
-and `k_thunk_new` changed. The welfare meta holds at the floor.
+that compiles `runtime.c`, whose `k_arena_left` and `k_thunk_new` changed. The
+welfare meta holds at the floor.
+
+`k_arena_left` is now declared `unsigned long long` on wasm32 only. Declared so
+everywhere, it is the same width on x86-64 as the `size_t` it replaced, and CI
+still read every benchmark's machine code 16 bytes smaller, with twelve of the
+fourteen work rows moving and deepbench up 324,000 instructions. Putting
+`size_t` back for native and nothing else returned the machine code to its
+golden byte for byte on this host.
+
 ## 2026-10-06 — the playground compiles with native's emitter and runs on runtime.c
 
 The tab now compiles a program the way `kanso build` does and runs it on the
@@ -21821,11 +21828,16 @@ Three compile rows move because `src/ir_wasm.rs` and the new exports in
 `src/wasm.rs` are compiled into the native binary as well, where nothing calls
 them. They are layout moves, taken from CI: `compile_instructions` lands on
 26,074,590 (from 26,062,711), `entry_instructions` on 86,063,837 (from
-86,029,749) and `library_instructions` on 86,626,059 (from 86,591,709).
+86,029,749) and `library_instructions` on 86,626,059 (from 86,591,709). Two
+more fall and are taken from CI: `emit_instructions` to 31,191,395 (from
+31,223,159) and `interp_instructions` to 590,552,679 (from 591,566,141). Both
+arrived with this change; nothing here isolates the mechanism, and native's
+emitting runs none of the new code.
 
 **Size.** On rustc 1.98.1, `kanso.wasm` grows from 2,161,218 bytes to
-3,203,732, which is 652,614 to 903,326 gzipped. The runtime adds 254,532
-bytes, 103,080 gzipped. A first visit downloads about a megabyte compressed
+3,237,163, which is 652,614 to 913,489 gzipped. The runtime adds 259,284
+bytes, 105,100 gzipped. Both were measured on the tree with `list/tie` merged;
+the figures first written here, 3,203,732 and 254,532, were taken before it. A first visit downloads about a megabyte compressed
 where it downloaded about two thirds of one. Most of the growth is the native
 emitter, which the tab now carries. The older route is still inside as the
 fallback when the runtime cannot be fetched, and removing it is the next step
