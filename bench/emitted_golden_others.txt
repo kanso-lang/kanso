@@ -227,14 +227,14 @@
 # imports it, for the factory-only ruling: each of the moved rows is +1 line.
 encodebench defines=135 calls=1141 branches=1070 lines=10613
 oneshot defines=137 calls=1197 branches=1236 lines=11472
-basket defines=125 calls=1126 branches=1044 lines=9046
+basket defines=125 calls=1124 branches=1044 lines=9043
 widebench defines=151 calls=1296 branches=1192 lines=11715
 deepbench defines=52 calls=271 branches=277 lines=2696
 escapebench defines=20 calls=92 branches=101 lines=974
 pendbench defines=70 calls=494 branches=416 lines=3976
-scanbench defines=318 calls=3065 branches=2978 lines=25219
+scanbench defines=318 calls=3064 branches=2978 lines=25217
 indexbench defines=19 calls=68 branches=48 lines=741
-digestbench defines=132 calls=950 branches=978 lines=8184
+digestbench defines=132 calls=949 branches=978 lines=8182
 readbench defines=20 calls=66 branches=43 lines=769
 livebench defines=139 calls=1235 branches=1290 lines=11853
-runbench defines=653 calls=6317 branches=5777 lines=49296
+runbench defines=653 calls=6308 branches=5777 lines=49285

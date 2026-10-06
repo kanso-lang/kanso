@@ -22160,7 +22160,9 @@ the beat's push, so a string builder's seed sat above the mark and the string
 it grew was evacuated whole at the pop: basket's `evac_bytes` read 55,136
 against 192. The twin's arguments are rendered below the mark now, and a slot
 that is not a word reuses the general rendering, so the seed is made once.
-The basket, run, scan and digest counters are back to main's byte for byte.
+The basket, run, scan and digest counters are back to main's byte for byte,
+and on CI basket's instructions read 32,465,828 against 33,760,303 and
+runbench 1,240,341,240.
 
 A dev build and the tab get no twins. A twin buys run speed with a second
 copy of each looping group, and the tab's compile of interp_corpus read
@@ -22190,6 +22192,31 @@ The floor drops by what this costs, under the 2026-09-13 rule for building
 the specified language: 90.0696 to 89.3861 on CI's rows. Projected without
 the twins, from this container's ratios on runbench and the release codegen
 row, the index reads 89.19, so they stay.
+
+Every counter that rose, at the value it landed on. The compile goldens,
+where a word run and its general re-run are emitted for what used to be one
+expression: `branches` 52, `calls` 86, `defines` 45, `lines` 1,564,
+`rounds` 13 and `visits` 121, and for modules `module_branches` 105,
+`module_calls` 128, `module_defines` 29, `module_lines` 1,280,
+`module_rounds` 8 and `module_visits` 2,909. The front end and the compiler's
+own work: `front_end_visits` 7,982, `compile_instructions` 26,191,422,
+`entry_instructions` 86,403,005, `library_instructions` 86,947,537,
+`compile_allocs` 14,747 and `emit_instructions` 32,132,166. The interpreter,
+by 1,320 instructions and six allocations: `interp_instructions`
+590,482,748 and `interp_allocs` 896,122. The two codegen tiers:
+`codegen_instructions_dev` 130,522,884 and `codegen_instructions_release`
+503,605,225. The tab: `browser_compile_instructions` 633,010,618,
+`browser_compile_peak_bytes` 2,639,715 and `browser_run_instructions`
+33,447,328. The run programs: `work_basket` 32,465,828, `work_deepbench`
+370,955,233, `work_digestbench` 5,735,451, `work_encodebench` 2,382,879,127,
+`work_escapebench` 57,795,101, `work_indexbench` 2,458,503, `work_jsonbench`
+923,660,506, `work_livebench` 1,565,277,697, `work_oneshot` 13,859,803,
+`work_pendbench` 194,495,238, `work_readbench` 4,578,315, `work_runbench`
+1,240,341,240, `work_scanbench` 281,579 and `work_widebench` 28,254,259. The
+emitted code: `emitted_branches` 1,121, `emitted_calls` 1,018,
+`emitted_defines` 106, `emitted_lines` 10,074, `emitted_other_branches`
+16,450, `emitted_other_calls` 17,305, `emitted_other_defines` 1,971,
+`emitted_other_lines` 146,536 and `text` 4,619,088.
 
 The one-engine corpus held one program, which now runs on every engine in the
 micro corpus as `an_int_past_int64_on_every_engine`, so the corpus and its
