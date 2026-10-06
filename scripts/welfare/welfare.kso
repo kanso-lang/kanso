@@ -185,6 +185,46 @@ d_interp_speed = dimension interp_speed_counters "interpreter speed" 1.0 0.11
 
 d_interp_memory = dimension interp_memory_counters "interpreter memory" 1.0 0.04
 
+# THE BROWSER, a third side under the meta, ruled 2026-10-06: "welfare weighs
+# every environment kanso runs in, and none at zero." The playground compiles a
+# program inside the tab with docs/kanso.wasm and runs the module it emits
+# there, and until this side existed a change could make both twice as slow
+# and score nothing.
+#
+# A SIDE OF ITS OWN rather than terms folded into the two that exist, because
+# it is neither of them. It is not production: nobody ships a program by
+# running it in the playground. It is not the edit-test loop either: nobody
+# runs `kanso test` there. It is where a reader meets the language for the
+# first time, and what that reader is owed is a quick answer to a small
+# program, which is a different good from the other two and wants its own
+# satiation at the meta.
+#
+# Four terms over one workload, bench/interp_corpus, the program the interpreted
+# row runs, so the browser and the interpreter are priced on the same work.
+# Every row is counted under wasmi with fuel metering -- fuel is spent per
+# executed wasm instruction -- and the peaks are the toolchain allocator's own
+# tally, so the same artifact reads the same number on every machine. Wall time
+# in a browser cannot be made to do that and is absent for the reason it is
+# absent everywhere else.
+#
+# The weights inside the side: running the program 0.40 and compiling it 0.30,
+# because the run is the larger wait -- 2.33 billion instructions against 344
+# million on the first sitting -- and what the reader came to see. Memory takes
+# the rest at a third of each, 0.20 and 0.10: a tab that holds sixteen
+# megabytes is not a tab anyone notices, but a registry that grows without
+# bound takes the page down, so the run's peak is weighed and weighed more than
+# the compile's. Compiling satiates at 0.5 like the native front end, since a
+# compile in the tab already answers inside a keystroke's patience. Running
+# satiates at 1.0 like the interpreter, which is the engine the tab's runtime
+# calls into for every value it holds.
+d_tab_compile = dimension tab_compile_counters "browser compile speed" 0.5 0.30
+
+d_tab_held = dimension tab_held_counters "browser compile memory" 0.5 0.10
+
+d_tab_run = dimension tab_run_counters "browser run speed" 1.0 0.40
+
+d_tab_peak = dimension tab_peak_counters "browser run memory" 1.0 0.20
+
 # Retired instructions, which is what a run costs. Laziness is priced here and
 # nowhere else: a thunk is an implementation detail, so no thunk counter carries
 # a weight, and the pending shape earns its place by what its work costs like
@@ -246,6 +286,14 @@ interp_speed_counters = ["interp_instructions"]
 # to add up.
 interp_memory_counters = ["interp_peak_bytes"]
 
+tab_compile_counters = ["browser_compile_instructions"]
+
+tab_held_counters = ["browser_compile_peak_bytes"]
+
+tab_run_counters = ["browser_run_instructions"]
+
+tab_peak_counters = ["browser_run_peak_bytes"]
+
 # TWO WELFARES AND A META, ruled 2026-09-16. Production is the binary: what the
 # program costs to run and what it cost to build for shipping. Development is
 # the edit-test loop: the front end `kanso test` runs on every invocation, the
@@ -262,16 +310,36 @@ build_terms = [d_codegen_dev d_emit]
 
 dev_terms = text/concat (text/concat compile_terms build_terms) interp_terms
 
+browser_compile_terms = [d_tab_compile d_tab_held]
+
+browser_run_terms = [d_tab_run d_tab_peak]
+
+browser_terms = text/concat browser_compile_terms browser_run_terms
+
 # Every term, for the reporting that is keyed by counter rather than by side.
-terms = text/concat prod_terms dev_terms
+terms = text/concat (text/concat prod_terms dev_terms) browser_terms
 
 # HOW MUCH EACH SIDE IS WORTH TO THE META. Clay's framing: "if we're optimizing
 # for production performance and not compile performance, then compile
 # performance becomes more like a very dialed-down input to the overall
-# welfare." Production carries 0.70 and development 0.30.
-prod_share = 0.70
+# welfare." Production carried 0.70 and development 0.30.
+#
+# THE BROWSER TAKES 0.08, carved from the other two in the ratio they already
+# had, so production still outweighs development seventy to thirty and carries
+# 0.644 where it carried 0.70. Eight per cent and not more because the tab is
+# where a program is tried rather than where one lives: a reader there runs a
+# few small programs and moves on, where production runs a program for as long
+# as it is deployed and development pays the loop on every edit. Eight per cent
+# and not less because the ruling put a floor under every environment, and a
+# share small enough that doubling the playground's cost moves the meta less
+# than the meta's own tolerance is a zero by another name. At 0.08, every
+# browser counter doubling at once costs the meta 1.22 points (measured on the
+# day: 88.8793 to 87.6634).
+prod_share = 0.644
 
-dev_share = 0.30
+dev_share = 0.276
+
+browser_share = 0.08
 
 # THE META SATIATES, and that is what makes it more than arithmetic. A linear
 # `a*W_prod + b*W_dev` is algebraically one flat term list -- the same model
@@ -295,7 +363,7 @@ meta_satiation = 1.0
 # the saturation rule — and it is emitted with the model so the one thing that
 # rewrites history.jsonl's welfare column does not keep its own copy to go
 # stale. The date is the day of the gavel that last moved the formula.
-formula = "2026-09-17"
+formula = "2026-10-06"
 
 # The baseline and the per-counter breakdown are keyed by counter, because a
 # counter is what is measured; a dimension is what it is measured FOR.
@@ -309,8 +377,14 @@ interp_counters = text/concat start_counters
 codegen_counters = text/concat (text/concat codegen_dev_counters emit_counters)
   codegen_release_counters
 
-counter_names = text/concat (text/concat run_counters compile_counters)
+browser_counters = text/concat
+  (text/concat tab_compile_counters tab_held_counters)
+  (text/concat tab_run_counters tab_peak_counters)
+
+native_counters = text/concat (text/concat run_counters compile_counters)
   (text/concat interp_counters codegen_counters)
+
+counter_names = text/concat native_counters browser_counters
 
 # A comment is not a counter, and one of them carries an `=`: the
 # compile-memory golden names its host as `# measured-on rustc=1.98.0`,
@@ -396,7 +470,7 @@ fn compile_totals text
 fn peak_of m
   m["arena_peak_bytes"] + m["held_peak_bytes"] + m["perm_peak_bytes"]
 
-fn measured run work veins
+fn measured run work veins browser
   rp = [["run_peak_bytes" (peak_of run)]]
   ir = veins[1]
   traffic = veins[2]
@@ -408,7 +482,16 @@ fn measured run work veins
   cm = [["compile_peak_bytes" held["compile_peak_bytes"]]]
   compile = text/concat ci (text/concat ca cm)
   old = text/concat (text/concat rp (worked work)) compile
-  list/to_h (text/concat old (added veins))
+  list/to_h (text/concat (text/concat old (added veins)) (in_tab browser))
+
+# The browser side's four, read straight from bench/browser_golden.txt by the
+# names that golden gives them.
+fn in_tab b
+  cs = [["browser_compile_instructions" b["browser_compile_instructions"]]]
+  cm = [["browser_compile_peak_bytes" b["browser_compile_peak_bytes"]]]
+  rs = [["browser_run_instructions" b["browser_run_instructions"]]]
+  rm = [["browser_run_peak_bytes" b["browser_run_peak_bytes"]]]
+  text/concat (text/concat cs cm) (text/concat rs rm)
 
 # The five counters the 2026-09-16 gavel added, each read straight from its own
 # golden by the name that golden gives it. Nothing here sums or renames, which
@@ -515,15 +598,22 @@ fn score_prod now base
 fn score_dev now base
   score_over dev_terms now base
 
+# The browser side: compiling in the playground tab and running what it emits.
+fn score_browser now base
+  score_over browser_terms now base
+
 # THE NUMBER CI GATES ON. One floor, on the meta, for the reason the standing
 # rule gives: the sum is the objective and the terms are diagnostics, so
 # ratcheting the two sides separately would re-enable the part-against-whole
 # optimisation that rule exists to stop.
 fn score now base
-  meta (score_prod now base / 100.0) (score_dev now base / 100.0)
+  p = score_prod now base / 100.0
+  d = score_dev now base / 100.0
+  meta p d (score_browser now base / 100.0)
 
-fn meta w_prod w_dev
-  weighted = prod_share * saturated w_prod + dev_share * saturated w_dev
+fn meta w_prod w_dev w_browser
+  two = prod_share * saturated w_prod + dev_share * saturated w_dev
+  weighted = two + browser_share * saturated w_browser
   100.0 * weighted / saturated 1.0
 
 fn saturated w
@@ -541,7 +631,16 @@ fn balanced? ts
   s = list/sum (list/to_list (list/map ts (t -> t.weight)))
   s > 0.999999 and s < 1.000001
 
-weighed = checked (balanced? prod_terms) (balanced? dev_terms)
+shares = prod_share + dev_share + browser_share
+
+# The meta's shares are held to the same rule as each side's weights: a meta
+# summing to 0.92 would put every score eight per cent under its ceiling and
+# read as three sides each being behind.
+whole? = shares > 0.999999 and shares < 1.000001
+
+sides_balanced? = balanced? prod_terms and balanced? dev_terms
+
+weighed = checked sides_balanced? (balanced? browser_terms and whole?)
 
 fn checked true true
   io/write ""
@@ -555,11 +654,13 @@ u_two = "scored by the wrong share, and the meta reads the shortfall as\n"
 
 u_three = "that side sitting far from its ceiling. A weight is a share of\n"
 
-u_four = "its own sub-welfare: fix prod_terms and dev_terms in\n"
+u_four = "its own sub-welfare: fix prod_terms, dev_terms, browser_terms\n"
 
-u_five = "scripts/welfare/welfare.kso so each of them totals 1.0.\n"
+u_five = "or the three shares in scripts/welfare/welfare.kso so each\n"
 
-unbalanced = "{u_one}{u_two}{u_three}{u_four}{u_five}"
+u_six = "of them totals 1.0.\n"
+
+unbalanced = "{u_one}{u_two}{u_three}{u_four}{u_five}{u_six}"
 
 fn pow10 0
   1
@@ -634,7 +735,7 @@ fn asked path
 # known where the index is written; on a literal it is an index. Writing the
 # nine out is what lets `measured` read them by position without opening nine
 # boxes it has already had pinned for it.
-fn gauge run w ir ca held ent st ii im cd cr em
+fn gauge run w ir ca held ent st ii im cd cr em br
   work = work_of w
   vir = counters ir
   vca = counters ca
@@ -646,12 +747,14 @@ fn gauge run w ir ca held ent st ii im cd cr em
   vcd = counters cd
   vcr = counters cr
   vem = counters em
+  vbr = counters br
   veins = [vir vca vhe ven vst vii vim vcd vcr vem]
   weighed
     .> (_ -> pinned work vir vca vhe ven)
     .> (_ -> pinned_new vst vii vim vcd vcr)
     .> (_ -> vem["emit_instructions"]!)
-    .> (_ -> floored (measured (counters run) work veins))
+    .> (_ -> pinned_browser vbr)
+    .> (_ -> floored (measured (counters run) work veins vbr))
 
 fn floored now
   os/read_file! floor_path .> (f -> against now (json/decode f))
@@ -677,6 +780,13 @@ fn pinned_new st ii im cd cr
     .> (_ -> im["interp_peak_bytes"]!)
     .> (_ -> cd["codegen_instructions_dev"]!)
     .> (_ -> cr["codegen_instructions_release"]!)
+
+# The browser side's four, pinned for the same reason.
+fn pinned_browser b
+  b["browser_compile_instructions"]!
+    .> (_ -> b["browser_compile_peak_bytes"]!)
+    .> (_ -> b["browser_run_instructions"]!)
+    .> (_ -> b["browser_run_peak_bytes"]!)
 
 # Every counter the objective weighs stands on a measurement of its own.
 #
@@ -802,7 +912,7 @@ fn routed now base held value args setting _
 #
 #   formula <date>
 #   term <name>|<weight>|<satiation>|<counter,counter,...>|<side>
-#   meta <production share>|<development share>|<satiation>
+#   meta <production share>|<development share>|<satiation>|<browser share>
 #   base <counter>=<value>
 #
 # THE SIDE AND THE META LINE ARRIVED WITH THE SPLIT, and they are here rather
@@ -816,20 +926,27 @@ fn term_line t
   side = side_of t
   "term {t.name}|{t.weight}|{t.satiation}|{listed_counters}|{side}\n"
 
+# The browser's share is the meta line's fourth field rather than its third,
+# so a reader written before the third side reads the first three as it always
+# did.
 fn side_of t
-  named_side (list/any? prod_terms (p -> p.name == t.name))
+  in_prod = list/any? prod_terms (p -> p.name == t.name)
+  named_side in_prod (list/any? browser_terms (p -> p.name == t.name))
 
-fn named_side true
-  "production"
+fn named_side false true
+  "browser"
 
-fn named_side false
+fn named_side false false
   "development"
+
+fn named_side true _
+  "production"
 
 fn model_of base
   shaped = list/to_list (list/map terms term_line)
   kept = list/select counter_names (c -> base[c] != none)
   held = list/to_list (list/map kept (c -> "base {c}={base[c]}\n"))
-  m = "meta {prod_share}|{dev_share}|{meta_satiation}\n"
+  m = "meta {prod_share}|{dev_share}|{meta_satiation}|{browser_share}\n"
   io/write "formula {formula}\n{text/join shaped ""}{m}{text/join held ""}"
 
 fn counters_of now
@@ -930,7 +1047,9 @@ fn reported now base held value
 fn sides now base
   p = score_prod now base
   d = score_dev now base
-  io/write "  production {fixed p 2}   development {fixed d 2}\n"
+  b = score_browser now base
+  both = "production {fixed p 2}   development {fixed d 2}"
+  io/write "  {both}   browser {fixed b 2}\n"
 
 fn moved? now base c
   base[c] != now[c]
@@ -1081,6 +1200,11 @@ fn with_dev run w ir ca held e st ii im cd
 
 fn with_rel run w ir ca held e st ii im cd cr
   asked "bench/emit_instructions_golden.txt"
-    .> (em -> gauge run w ir ca held e st ii im cd cr em)
+    .> (em -> with_emit run w ir ca held e st ii im cd cr em)
+
+# TWELVE, with the browser's golden: the 2026-10-06 gavel's third side.
+fn with_emit run w ir ca held e st ii im cd cr em
+  asked "bench/browser_golden.txt"
+    .> (br -> gauge run w ir ca held e st ii im cd cr em br)
 
 pub play = asked "bench/cost_golden_run.txt" .> (r -> with_run r)

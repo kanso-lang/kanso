@@ -21483,6 +21483,18 @@ Welfare reads 90.3053 against a floor of 90.3174, and the floor comes down to
 the score, by the ruling that a built part of the language lowers it by
 exactly what it costs.
 
+**The browser.** The browser side joined the objective while this branch was
+open, so it pays here too. The tab compiles the same std/list, and its runtime
+is the embedded interpreter with the tie arms in it.
+`browser_compile_instructions` rose from 343,917,485 to 347,448,919,
+`browser_compile_peak_bytes` from 588,109 to 594,529,
+`browser_run_instructions` from 2,331,914,518 to 2,389,805,261, and
+`browser_run_peak_bytes` from 16,141,282 to 16,509,161. The run rose 2.48%
+where the native interpreted row rose 0.15%. The corpus never calls `list/tie`,
+so the rise arrived with code the tab carries rather than with work the program
+asks for. Which change inside `kanso.wasm` it came from has not been isolated.
+The floor comes down to 88.84 by the same rule as the rest of this entry.
+
 **Ratchet.** Eight rows, each watched red:
 
 - "a tie that never fills its cells" replaces the interpreter's fill with
@@ -21544,3 +21556,109 @@ Owes: browser terms in `scripts/welfare/welfare.kso` and
 `bench/objective_sources.txt`, their goldens with a CI gate, the weights with
 reasons in `bench/welfare_floor.json`, and a sentence in CLAUDE.md's welfare
 section naming the rule.
+
+## 2026-10-06 — the browser is a third side of the objective
+
+The ruling above is built. The playground's two costs are counted, they have a
+golden and a gate, and welfare weighs them as a third side under the meta.
+
+**What is counted.** `tests/browser_cost.rs` loads `docs/kanso.wasm` into wasmi
+with fuel metering on. It compiles `bench/interp_corpus` with the toolchain's
+own `kanso_compile_wasm`, then instantiates the emitted module against the
+toolchain's exports and runs it to the end. wasmi spends one unit of fuel per
+executed wasm instruction, so the instruction rows are a count. The memory rows
+come from the allocator tally `src/main.rs` already kept for the native compile
+peak, which now has three wasm exports: `kanso_heap_reset`, `kanso_heap_peak`
+and `kanso_heap_live`. Each peak is measured above the live bytes the stage
+began with. The run's peak is mostly the value registry, because the emitted
+module holds every value as a handle into it.
+
+The workload is the interpreted row's corpus, so the browser and the
+interpreter are priced on the same work. It builds its own input and imports
+only std, so the tab needs no files. The spec runs the whole thing twice and
+refuses rows that differ between sittings; they never have.
+
+    browser_compile_instructions     343,917,485
+    browser_compile_peak_bytes           588,109
+    browser_run_instructions       2,331,914,518
+    browser_run_peak_bytes            16,141,282
+
+**The rows belong to the rustc that built the artifact.** The wasm target is
+the same on every host, so the machine does not move them. The compiler does:
+the same source built by rustc 1.94.1 read 349,792,427 and 2,570,450,109 for the
+two instruction rows, against 343,917,485 and 2,331,914,518 under 1.98.1. Both
+peaks were identical. So the golden carries `# measured-on rustc=1.98.1`, the
+version the workflows pin. On another rustc the spec prints its rows and
+compares nothing. Under CI it also fails, which is the line `host_gate.sh`
+draws for the compile veins.
+
+**The gate.** `scripts/gates/browser_cost.sh` builds `docs/kanso.wasm` itself,
+because the artifact is not committed and a stale one would price another
+tree. It then runs the spec. It is a step in the cost-goldens job ("what the
+browser engine costs") and is listed in the job's vein summary. The spec also
+runs in both `specs` jobs, which build the artifact before `cargo test`. The
+trend gate walks `bench/browser_golden.txt` and classifies all four rows as
+lower-is-better.
+
+**The placement is a third side.** The browser is not production, since nobody
+ships a program by running it in the playground. It is not the edit-test loop
+either, since nobody runs `kanso test` there. It is where a reader first runs
+the language, and it gets its own side so its distance from its own ceiling is
+weighed separately by the meta's saturation.
+
+**Its share is 0.08,** carved from the other two in the ratio they had:
+production 0.644, development 0.276. It is small because a reader in the tab
+runs a few small programs and leaves, while production runs a program for as
+long as it is deployed and development pays its loop on every edit. It is not
+smaller because the ruling forbids a zero by another name. At 0.08, every
+browser counter doubling at once takes the meta from 88.8793 to 87.6634, a fall
+of 1.22 points against a gate whose tolerance is a thousandth.
+
+**The weights inside the side** are run speed 0.40, compile speed 0.30, run
+memory 0.20 and compile memory 0.10. Running gets the most because it is the
+larger wait (2.33 billion instructions against 344 million) and it is what
+the reader came to see. Memory takes a third of each half, and the run's peak
+more than the compile's: sixteen megabytes in a tab goes unnoticed, but a
+registry that grows without bound takes the page down. Compiling satiates at
+0.5, like the native front end. Running satiates at 1.0, like the interpreter,
+which is the engine the tab's runtime calls into.
+
+**The floor re-bases from 90.32 to 88.88** with no counter moving. The new side
+enters at its own baseline and scores 56.67 there. The other two sit higher
+only because they have improved since their baselines were taken, and the
+index's origin is arbitrary. The `--set` that moved it records the placement
+and weights with their reasons in `bench/welfare_floor.json`. The formula date
+is now 2026-10-06. The model line `meta` gains the browser's share as a fourth
+field, after the satiation, so a reader of the three-field form reads what it
+always did. `scripts/welfare_rescore` scores whichever sides a history row
+carries, renormalised over their shares. Every row before today carries no
+browser counter, so it is scored on the other two in their 70:30 ratio, the
+ratio the browser's share was carved from.
+
+**The gap against native, on the same corpus.** This was the first thing the
+second half of the prompt asked for. Native figures are this container's
+callgrind counts of x86 instructions; the tab's are wasm instructions under
+wasmi. The two units differ, so the ratios bound the gap and do not price it
+exactly. The memory figures are the same unit on both sides.
+
+    stage                  native                 the tab              ratio
+    run, instructions      13,778,818             2,331,914,518        169x
+    run, peak bytes        1,261,490              16,141,282           12.8x
+    compile, instructions  126,853,358            343,917,485          2.7x
+    compile, peak bytes    725,174                588,109              0.81x
+
+The native run is the whole process of the binary `kanso build` writes, loader
+included. Its peak is the three pools summed: arena 1,048,576, held 207,414 and
+perm 5,500. The native compile is `kanso build`'s own process with clang
+excluded, so the front end (37,884,542 for `kanso check` alone) and the IR
+emitter (`emit_ir_for`, 89,427,293). The tab's compile does both jobs in one
+call and writes a wasm binary where native writes IR text. The compile peak is
+lower in the tab, plausibly because every pointer is four bytes on wasm32
+rather than eight.
+
+The run is where the playground pays. The emitted module calls back into the
+toolchain for every value it touches, and the toolchain holds every value in a
+registry until the run ends. That is the ratio the next step attacks: values in
+linear memory in native's layout, with `runtime.c` compiled to wasm32 and
+called directly. The artifact it changes is 2,167,289 bytes today under rustc
+1.98.1, and the next step reports what it does to that.

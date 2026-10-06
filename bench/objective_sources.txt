@@ -108,3 +108,12 @@ codegen_instructions_release codegen_instructions_release
 # process, so this is the half of "dev-tier codegen" the child-tree row cannot
 # reach. Weighing one without the other left the gavel's term half measured.
 emit_instructions emit_instructions
+
+# THE BROWSER SIDE, ruled 2026-10-06: compiling bench/interp_corpus in the
+# playground tab with docs/kanso.wasm and running the module it emits, counted
+# under wasmi fuel metering by tests/browser_cost.rs. One row a counter and no
+# renaming, so one line apiece.
+browser_compile_instructions browser_compile_instructions
+browser_compile_peak_bytes browser_compile_peak_bytes
+browser_run_instructions browser_run_instructions
+browser_run_peak_bytes browser_run_peak_bytes

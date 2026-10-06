@@ -176,6 +176,29 @@ unsafe impl std::alloc::GlobalAlloc for Counting {
 #[global_allocator]
 static COMPILER_ALLOCATOR: Counting = Counting;
 
+/// The playground's memory terms read the same tally the compile row reads:
+/// the peak is moved down to what is live before a stage, and read after it,
+/// so a compile and a run each answer the most their own stage held. Requested
+/// bytes rather than pages, because a page is 64 KiB and a term that moves in
+/// steps that size cannot see most changes.
+#[cfg(target_arch = "wasm32")]
+#[no_mangle]
+pub extern "C" fn kanso_heap_reset() {
+    PEAK_BYTES.store(LIVE_BYTES.load(Ordering::Relaxed), Ordering::Relaxed);
+}
+
+#[cfg(target_arch = "wasm32")]
+#[no_mangle]
+pub extern "C" fn kanso_heap_peak() -> u64 {
+    PEAK_BYTES.load(Ordering::Relaxed)
+}
+
+#[cfg(target_arch = "wasm32")]
+#[no_mangle]
+pub extern "C" fn kanso_heap_live() -> u64 {
+    LIVE_BYTES.load(Ordering::Relaxed)
+}
+
 /// The compiler's own cost, in the same shape the runtime prints its own:
 /// `KANSO_COUNTERS=1 kanso check <program>` writes them to stderr so a
 /// recorder can read one and a reader can read the other.
