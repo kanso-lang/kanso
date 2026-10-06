@@ -4,7 +4,7 @@ use crate::hash::Map as HashMap;
 /// Propagable type sets as tag bitsets — the single monotone inference
 /// fixpoint (the story is told in about.html part 03), coarse to start:
 /// one bit per runtime tag, records unrefined.
-pub type Set = u16;
+pub type Set = u32;
 
 pub const INT: Set = 1 << 0;
 pub const FLOAT: Set = 1 << 1;
@@ -25,7 +25,13 @@ pub const THUNK: Set = 1 << 13;
 /// A succeeded effect's yield: the one value that means "finished" and
 /// nothing else, so an absence never stands in for a success.
 pub const DONE: Set = 1 << 14;
-pub const TOP: Set = (1 << 15) - 1;
+/// An int past a machine word: a bignum, which lives in the arena. `INT` is
+/// the word, so a set that is exactly `INT` still proves an inline payload,
+/// and the type `int` is the two together. Ruled 2026-10-07.
+pub const BIG: Set = 1 << 16;
+/// Every int, of either kind: what an `int` annotation admits.
+pub const ANY_INT: Set = INT | BIG;
+pub const TOP: Set = ((1 << 15) - 1) | BIG;
 /// An err the PROGRAM raised, as opposed to one an operation answered on its
 /// own: `err reason`, or an err bound by name and handed on. The bit rides
 /// with ERR everywhere ERR goes and is set at the two places a program
@@ -974,7 +980,7 @@ fn bind_pattern<'a>(
         }
         Pattern::Annotated { name, ty, .. } => {
             let set = match ty.as_str() {
-                "int" => INT,
+                "int" => ANY_INT,
                 "float64" => FLOAT,
                 "string" => STR,
                 "bool" => BOOL,
@@ -1060,7 +1066,10 @@ fn eval_body<'a>(ctx: &mut Ctx<'a>, body: &'a [Stmt], env: &mut Env<'a>) -> Set 
 fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut Env<'a>) -> Set {
     work::visit();
     match expr {
-        Expr::Int(..) => INT,
+        Expr::Int(n, _) => match i64::try_from(n) {
+            Ok(_) => INT,
+            Err(_) => BIG,
+        },
         // A hole is filled with a real value before its block freezes, so what
         // readers see is that value: anything but a failure, and not a none.
         Expr::Hole(..) => TOP & !FAIL & !NONE,
@@ -1203,13 +1212,13 @@ fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut Env<'a>) -> Set {
             match *op {
                 // int op int stays int; any float operand widens the other,
                 // so the result is float
-                "+" | "-" | "*" => fails | numeric_result(a, b),
+                "+" | "-" | "*" => fails | numeric_result(op, a, b),
                 // A zero divisor answers a value, not a failure (ruled
                 // 2026-08-10): `divide_by_zero` over a string where some arm
                 // names the math failure types, the bare string where none
                 // does. One written as a nonzero literal cannot be zero.
-                "/" | "%" if nonzero_literal(rhs) => fails | numeric_result(a, b),
-                "/" | "%" => fails | STR | REC | numeric_result(a, b),
+                "/" | "%" if nonzero_literal(rhs) => fails | numeric_result(op, a, b),
+                "/" | "%" => fails | STR | REC | numeric_result(op, a, b),
                 // the bitwise three answer a whole number; every remaining
                 // operator compares, and a comparison answers true or false
                 "&" | "|" | "^" => fails | INT,
@@ -1255,15 +1264,21 @@ fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut Env<'a>) -> Set {
     }
 }
 
-/// The numeric result of `+`/`-`/`*`/`/`: int only when both are int; float
-/// whenever a float meets any number (the int widens).
-fn numeric_result(a: Set, b: Set) -> Set {
+/// The numeric result of `+`/`-`/`*`/`/`/`%`: int only when both are int;
+/// float whenever a float meets any number (the int widens). Two words make
+/// a word or, past one, a bignum: every `+`, `-` and `*` can overflow, and so
+/// can `/` at the least int over minus one. A remainder of two words is a
+/// word. Once either side may be a bignum, so may the answer.
+fn numeric_result(op: &str, a: Set, b: Set) -> Set {
     let mut out = 0;
-    if a & INT != 0 && b & INT != 0 {
+    if a & ANY_INT != 0 && b & ANY_INT != 0 {
         out |= INT;
+        if op != "%" || (a | b) & BIG != 0 {
+            out |= BIG;
+        }
     }
-    let anum = a & (INT | FLOAT);
-    let bnum = b & (INT | FLOAT);
+    let anum = a & (ANY_INT | FLOAT);
+    let bnum = b & (ANY_INT | FLOAT);
     if (a & FLOAT != 0 && bnum != 0) || (b & FLOAT != 0 && anum != 0) {
         out |= FLOAT;
     }
@@ -1946,18 +1961,18 @@ pub fn builtin_set(name: &str, args: &[Set]) -> Set {
         "map" => LIST | fails,
         "put" => MAP | fails,
         "join" => STR | fails,
-        "to_int" => INT | ERR | fails,
+        "to_int" => ANY_INT | ERR | fails,
         "to_float" => FLOAT | ERR | fails,
         "from_code" => STR | ERR | fails,
         "char_code" => INT | fails,
-        "sum" => INT | fails,
+        "sum" => ANY_INT | fails,
         "bit_and" | "bit_or" | "bit_xor" | "bit_not" | "bit_shl" | "bit_shr" => INT | fails,
         "sqrt" => FLOAT | fails,
         // a float may be NaN or infinite, which rounds to `none`; an int
         // passes through as itself
         "round" => match args[0] & FLOAT != 0 {
-            true => INT | NONE | fails,
-            false => INT | fails,
+            true => ANY_INT | NONE | fails,
+            false => (args[0] & ANY_INT) | fails,
         },
         // a worded chain step answers a description when its subject is one,
         // and whatever its callback answers when the subject has settled

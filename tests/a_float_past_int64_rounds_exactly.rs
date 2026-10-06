@@ -7,11 +7,10 @@
 //! call rounded to -9223372036854775808 there. Found by generated programs on
 //! 2026-09-28, printing round of a large parsed float on each engine.
 //!
-//! The interpreter now answers the exact integer. A compiled build holds an
-//! int in 64 bits, and past that it refuses with the diagnostic its
-//! arithmetic already gives, which is how the differential law lets an
-//! engine that cannot represent a value decline it. Inside the range the
-//! engines agree to the byte. NaN and the infinities round to `none` on
+//! The interpreter then answered the exact integer and a compiled build
+//! refused anything past int64. Since the 2026-10-07 gavel a compiled build
+//! answers the exact integer too, as a bignum, and the engines agree to the
+//! byte on both sides of the edge. NaN and the infinities round to `none` on
 //! every engine (ruled 2026-09-29); until then they answered 0 and the ends
 //! of int64.
 //!
@@ -79,14 +78,9 @@ fn the_interpreter_rounds_past_int64_exactly() {
 }
 
 #[test]
-fn a_compiled_build_refuses_past_int64() {
-    for (tag, literal) in [("big", "1e30"), ("neg", "-9.3e18")] {
-        let said = compiled(tag, literal);
-        assert!(
-            said.contains("integer overflow (int64 native build; spec int is arbitrary precision)"),
-            "round of {literal} in a compiled build said {said:?}"
-        );
-    }
+fn a_compiled_build_rounds_past_int64_exactly() {
+    assert_eq!(compiled("big", "1e30"), "1000000000000000019884624838656\n");
+    assert_eq!(compiled("neg", "-9.3e18"), "-9300000000000000000\n");
 }
 
 #[test]

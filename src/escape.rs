@@ -244,7 +244,9 @@ impl<'a> Analysis<'a> {
         // which is only sound for an int: a pointer payload would lose its
         // tag and overflow the shift. Fields carry no written types, so the
         // question is put to inference — every construction site's first
-        // argument joined, which must be exactly an int and nothing else.
+        // argument joined, which must be an int and nothing else. A bignum
+        // is an int whose word would not survive the shift, so it spills to
+        // the heap record the way a word past 56 bits does.
         let first_field_is_int = self
             .program
             .types
@@ -252,7 +254,7 @@ impl<'a> Analysis<'a> {
             .position(|t| t.name == ty)
             .and_then(|idx| inference.type_fields.get(idx))
             .and_then(|fields| fields.first())
-            .is_some_and(|set| *set == crate::infer::INT);
+            .is_some_and(|set| *set & crate::infer::INT != 0 && *set & !crate::infer::ANY_INT == 0);
         if !first_field_is_int {
             return false;
         }

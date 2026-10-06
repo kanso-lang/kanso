@@ -7,8 +7,8 @@
 //! both and reads them back through arithmetic, on the interpreter and the
 //! native engine.
 //!
-//! Past 64 bits only the interpreter reads the literal, and the native engine
-//! refuses it by name, which the differential law allows.
+//! Past 64 bits the literal is a bignum on every engine. Until the
+//! 2026-10-07 gavel the native engine refused it by name.
 //!
 //! Watched red with the fast path taking twenty digits: the interpreter read
 //! the twenty-digit literal wrapped, and the difference came out wrong.
@@ -52,23 +52,20 @@ fn every_width_reads_back_as_written() {
 }
 
 #[test]
-fn a_literal_past_64_bits_reads_on_the_interpreter_and_is_refused_natively() {
+fn a_literal_past_64_bits_reads_the_same_on_every_engine() {
     let dir = std::env::temp_dir().join(format!("kanso_int_wide_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("a scratch directory");
     std::fs::write(
         dir.join("main.kso"),
-        "print \"{99999999999999999999 - 99999999999999999998}\"\n",
+        "print \"{99999999999999999999 - 99999999999999999998}\"\n\
+         print \"{18446744073709551616} {0 - 18446744073709551616}\"\n",
     )
     .expect("the program writes");
+    let want = "1\n18446744073709551616 -18446744073709551616\n";
     let interp = play(&dir, true);
-    let native = run(&dir, false);
+    let native = play(&dir, false);
     let _ = std::fs::remove_dir_all(&dir);
-    assert_eq!(interp, "1\n");
-    assert!(!native.status.success(), "the native engine ran a literal it cannot hold");
-    assert!(
-        String::from_utf8_lossy(&native.stderr).contains("does not fit this build's 64-bit int"),
-        "{}",
-        String::from_utf8_lossy(&native.stderr)
-    );
+    assert_eq!(interp, want);
+    assert_eq!(native, want);
 }

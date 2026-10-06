@@ -4485,11 +4485,12 @@ float_bits = row
 rows_c1zzzzzzzo = text/concat rows_c1zzzzzzzp [nan_level float_bits]
 
 # The interpreter promotes an int past int64 rather than wrapping it, and
-# native refuses the same program; only the one-engine corpus sees both.
+# every engine answers the same since the 2026-10-07 gavel, so the micro
+# corpus pins the answer one step past the edge.
 int_widens = row
   "an int that wraps where it should widen"
   true
-  "cargo test --release --test golden one_engine_corpus"
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
   "specs (unit, golden, differential)"
   (breaking "an_int_that_wraps_where_it_should_widen")
   release

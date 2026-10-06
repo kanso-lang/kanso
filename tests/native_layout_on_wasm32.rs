@@ -29,7 +29,22 @@
 //!   failure and supplies the three 128-bit helpers no wasm32 compiler-rt on
 //!   this toolchain has.
 //! - `-mtail-call`, because the emitted module's `musttail` calls stay tail
-//!   calls once their convention is dropped.
+//!   calls once their convention is dropped -- all but the ones returning a
+//!   `KValue`. Without the multivalue ABI the backend returns that struct
+//!   through a slot in the caller's frame, and a call that has to write into
+//!   its caller's frame cannot replace it, so the backend makes an ordinary
+//!   call and no error says so. A pair of groups that call each other two
+//!   hundred thousand times then runs in one frame only because LLVM inlines
+//!   one into the other and the pair becomes a loop.
+//! - `-inline-threshold=2000` on the module, the threshold native's release
+//!   link uses, for the same reason. At clang's default of 225 the inlining
+//!   that turns such a pair into a loop held until ints could widen
+//!   (2026-10-07): each step's int then carries a test for a bignum and a
+//!   way to the general group, and `a_record_rebuilt_at_depth`'s step costs
+//!   260 against 225 and ran out of stack. The multivalue ABI would make the
+//!   calls real tail calls, and it broke the 128-bit helpers' products when
+//!   tried on every object, so this harness keeps the standard ABI and the
+//!   threshold release already uses.
 //! - An 8 MB stack placed first. wasm-ld's default is 64 KB growing down into
 //!   the data segment, and a twenty-step `.>` chain overran it and wrote over
 //!   libc's `stdout`; native runs with 8 MB.
@@ -125,6 +140,7 @@ fn link(stage: &Path, entry: &str, rt: &(PathBuf, PathBuf)) -> PathBuf {
     run(
         Command::new("clang")
             .args(["--target=wasm32-wasi", &format!("--sysroot={SYSROOT}"), "-O2", "-mtail-call"])
+            .args(["-mllvm", "-inline-threshold=2000"])
             .args(["-w", "-c"])
             .arg(&ll)
             .arg("-o")

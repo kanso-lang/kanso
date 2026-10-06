@@ -1,8 +1,8 @@
 #!/bin/sh
 # Let the interpreter's machine-word add wrap instead of promoting to a
 # bignum, which is what a promotion one step late looks like from outside:
-# `big + 1` prints -9223372036854775808. Native refuses the same program, so
-# only the one-engine corpus's an_int_past_int64_on_the_interpreter can see it.
+# `big + 1` prints -9223372036854775808, and the micro corpus's
+# an_int_past_int64_on_every_engine answers 9223372036854775808 on the others.
 set -e
 old='            (Int::Small(a), Int::Small(b)) => match a.checked_add(*b) {'
 [ "$(grep -cxF "$old" src/int.rs)" -eq 1 ]

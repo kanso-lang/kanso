@@ -1,0 +1,22 @@
+# A position past the machine word lies past the end of anything memory can
+# hold, so an index answers `none` and a slice bound reads as no position at
+# all, as the interpreter has always read one. Native refused the index.
+import "std/text"
+
+xs = [10 20 30]
+
+big = 18446744073709551616
+
+fn shown none
+  "none"
+
+fn shown (err reason)
+  "err {reason}"
+
+fn shown other
+  "{other}"
+
+pub play = print "{shown xs[big]} {shown xs[0 - big]}"
+  .> (_ -> print "{shown "abc"[big]}")
+  .> (_ -> print "{shown (text/slice "abcdef" 1 big)}")
+  .> (_ -> print "{shown (text/bytes "abc")[big]}")

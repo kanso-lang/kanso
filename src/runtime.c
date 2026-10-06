@@ -51,7 +51,9 @@
 /* ABI shared with emitted LLVM IR: %KValue = type { i64, i64 } */
 typedef struct { long long tag; long long payload; } KValue;
 
-enum { K_INT, K_FLOAT, K_TRUE, K_FALSE, K_NONE, K_ERR, K_STR, K_REC, K_DESC, K_LIST, K_MAP, K_CLOSURE, K_FNREF, K_BYTES, K_THUNK, K_SUB, K_DONE };
+enum { K_INT, K_FLOAT, K_TRUE, K_FALSE, K_NONE, K_ERR, K_STR, K_REC, K_DESC, K_LIST, K_MAP, K_CLOSURE, K_FNREF, K_BYTES, K_THUNK, K_SUB, K_DONE, K_BIG };
+/* An int of either kind: a word, or a bignum past one. */
+#define K_IS_INT(v) ((v).tag == K_INT || (v).tag == K_BIG)
 
 /* `cap` is spare room the string may grow into. Zero for every string built
    the ordinary way; positive only for a builder, whose storage is malloc'd
@@ -1221,6 +1223,56 @@ __attribute__((always_inline)) void k_beat_iter(void) {
 void k_beat_iter(void);
 #endif
 
+static long long k_ptr(void* p);
+
+/* A rewind with bignums among the loop's arguments, plain or carried. A
+   bignum the iteration made sits above the mark the rewind returns to, so
+   before it each one moves to malloc'd storage, and after it each moves back
+   into the arena, above the mark again, and the copy is freed. Only an
+   argument that is a bignum when the loop reaches its edge is moved, and the
+   emitter calls these only then. */
+void k_big_lift_out(KValue* vs, long long n) {
+    for (long long i = 0; i < n; i++) {
+        if (vs[i].tag != K_BIG) continue;
+        KBytes* b = (KBytes*)(intptr_t)vs[i].payload;
+        KBytes* r = malloc(sizeof(KBytes) + (size_t)b->len);
+        if (!r) { fputs("out of memory\n", stderr); exit(1); }
+        r->data = (const unsigned char*)(r + 1);
+        r->cap = 0;
+        r->len = b->len;
+        memcpy((unsigned char*)(r + 1), b->data, (size_t)b->len);
+        vs[i].payload = k_ptr(r);
+    }
+}
+
+/* The common edge lifts one argument, and takes it and hands it back by
+   value rather than through a slot the caller writes and reads. */
+KValue k_big_lift_out1(KValue v) {
+    k_big_lift_out(&v, 1);
+    return v;
+}
+
+KValue k_big_lift_in1(KValue v);
+
+void k_big_lift_in(KValue* vs, long long n) {
+    for (long long i = 0; i < n; i++) {
+        if (vs[i].tag != K_BIG) continue;
+        KBytes* h = (KBytes*)(intptr_t)vs[i].payload;
+        KBytes* r = k_alloc(sizeof(KBytes) + (size_t)h->len);
+        r->data = (const unsigned char*)(r + 1);
+        r->cap = 0;
+        r->len = h->len;
+        memcpy((unsigned char*)(r + 1), h->data, (size_t)h->len);
+        free(h);
+        vs[i].payload = k_ptr(r);
+    }
+}
+
+KValue k_big_lift_in1(KValue v) {
+    k_big_lift_in(&v, 1);
+    return v;
+}
+
 KValue k_beat_pop(KValue r);
 
 /* The fold carry. A carry beat's loop-varying arguments (typically one
@@ -1917,6 +1969,7 @@ static int k_interior_survives(KValue v, const void* p, KMark* m) {
             KStr* st = (KStr*)p;
             return st->cap > 0 || k_survives_x(st->data, m);
         }
+        case K_BIG:
         case K_BYTES: {
             KBytes* b = (KBytes*)p;
             return k_bytes_malloced(b) || k_survives_x(b->data, m);
@@ -2033,6 +2086,7 @@ static size_t k_copy_size(KValue v, KMark* m) {
                 n += k_copy_size_ptr(s->data, (size_t)s->len + 1, m);
             break;
         }
+        case K_BIG:
         case K_BYTES: {
             KBytes* b = (KBytes*)p;
             n += k_copy_size_ptr(b, sizeof(KBytes), m);
@@ -2125,6 +2179,7 @@ static size_t k_repair_size(KValue v, const void* p, KMark* m) {
             if (!k_survives_x(st->data, m)) n += k_copy_size_ptr(st->data, (size_t)st->len + 1, m);
             break;
         }
+        case K_BIG:
         case K_BYTES: {
             KBytes* b = (KBytes*)p;
             if (!k_survives_x(b->data, m)) n += k_copy_size_ptr(b->data, (size_t)b->len, m);
@@ -2272,6 +2327,7 @@ static KValue k_deep_copy(KValue v, KCopy* cp) {
             out.payload = k_ptr(ns);
             break;
         }
+        case K_BIG:
         case K_BYTES: {
             KBytes* b = (KBytes*)p;
             KBytes* nb = k_copy_alloc(cp, sizeof(KBytes));
@@ -2407,6 +2463,7 @@ static void k_repair_interior(KValue v, void* p, KCopy* cp) {
             st->cap = st->cap < 0 ? st->cap : 0;
             break;
         }
+        case K_BIG:
         case K_BYTES: {
             KBytes* b = (KBytes*)p;
             if (k_survives_x(b->data, cp->mark)) break;
@@ -2883,7 +2940,8 @@ KValue k_caf_complete(KValue built, KValue seeded) {
    and giving `k_slots_survive` its own copy of the switch reads exactly what
    the shared switch does. */
 static int k_is_heap(long long tag) {
-    return (int)((0xAFE0U >> (tag & 15)) & 1U);
+    /* bit 17 is K_BIG, whose limbs sit in the arena like bytes do */
+    return (int)((0x2AFE0U >> (tag & 31)) & 1U);
 }
 
 /* Diagnostics color from the site palette, only when stderr is a tty and
@@ -3078,6 +3136,347 @@ static inline __attribute__((always_inline)) void k_copy_short(char* d, const ch
 KValue k_int(long long i) { KValue v; v.tag = K_INT; v.payload = i; return v; }
 KValue k_bool(long long b) { KValue v; v.tag = b ? K_TRUE : K_FALSE; v.payload = 0; return v; }
 KValue k_none(void) { KValue v; v.tag = K_NONE; v.payload = 0; return v; }
+
+/* ---- integers past a machine word ---------------------------------------
+   An int that outgrows a word is a bignum: tag K_BIG, payload a KBytes whose
+   bytes are a sign word (0 or 1) and then the magnitude in 32-bit limbs, least
+   significant first, the top limb nonzero. The form is canonical, as the
+   interpreter's `Int` keeps it: a K_BIG never holds a number a K_INT can, so
+   two equal ints always share a tag. The bytes sit in the arena behind their
+   header, which is the layout the copy and rewind paths already carry for
+   bytes, and a bignum takes those paths beside K_BYTES. Every operation here
+   accepts either kind and answers the canonical one. */
+
+typedef struct { int neg; long long n; const uint32_t* d; uint32_t tmp[2]; } KBigView;
+
+/* The sign and magnitude of an int of either kind. A small int's limbs are
+   written into the view itself, so a view is used where it was filled. */
+static void k_big_view(KValue v, KBigView* o) {
+    if (v.tag == K_BIG) {
+        KBytes* b = (KBytes*)(intptr_t)v.payload;
+        uint32_t sign;
+        memcpy(&sign, b->data, 4);
+        o->neg = (int)sign;
+        o->n = (b->len - 4) / 4;
+        o->d = (const uint32_t*)(b->data + 4);
+        return;
+    }
+    long long x = v.payload;
+    uint64_t m = x < 0 ? (uint64_t)0 - (uint64_t)x : (uint64_t)x;
+    o->neg = x < 0;
+    o->tmp[0] = (uint32_t)m;
+    o->tmp[1] = (uint32_t)(m >> 32);
+    o->n = m == 0 ? 0 : (o->tmp[1] ? 2 : 1);
+    o->d = o->tmp;
+}
+
+/* Room for a result of up to `n` limbs, in the arena where it will stay. */
+static KBytes* k_big_room(long long n) {
+    KBytes* b = k_alloc(sizeof(KBytes) + 4 + 4 * (size_t)(n > 0 ? n : 1));
+    b->data = (const unsigned char*)(b + 1);
+    b->cap = 0;
+    return b;
+}
+
+static inline uint32_t* k_big_limbs(KBytes* b) { return (uint32_t*)(b + 1) + 1; }
+
+/* Finish a result written into `b`'s limbs: strip leading zero limbs, and
+   answer a small int when the number fits one, the arena bytes then going
+   unused. */
+static KValue k_big_finish(KBytes* b, int neg, long long n) {
+    uint32_t* d = k_big_limbs(b);
+    while (n > 0 && d[n - 1] == 0) n--;
+    if (n <= 2) {
+        uint64_t m = n == 0 ? 0 : (n == 1 ? d[0] : ((uint64_t)d[1] << 32) | d[0]);
+        if (!neg && m <= (uint64_t)INT64_MAX) return k_int((long long)m);
+        if (neg && m <= (uint64_t)1 << 63) return k_int((long long)((uint64_t)0 - m));
+    }
+    uint32_t sign = neg ? 1 : 0;
+    memcpy((unsigned char*)(b + 1), &sign, 4);
+    b->len = 4 + 4 * n;
+    KValue v; v.tag = K_BIG; v.payload = k_ptr(b); return v;
+}
+
+static int k_mag_cmp(const uint32_t* a, long long an, const uint32_t* b, long long bn) {
+    if (an != bn) return an < bn ? -1 : 1;
+    for (long long i = an - 1; i >= 0; i--)
+        if (a[i] != b[i]) return a[i] < b[i] ? -1 : 1;
+    return 0;
+}
+
+/* r = a + b; r has room for max(an, bn) + 1 limbs. */
+static long long k_mag_add(uint32_t* r, const uint32_t* a, long long an, const uint32_t* b, long long bn) {
+    if (an < bn) { const uint32_t* t = a; a = b; b = t; long long tn = an; an = bn; bn = tn; }
+    uint64_t carry = 0;
+    long long i = 0;
+    for (; i < bn; i++) { uint64_t s = (uint64_t)a[i] + b[i] + carry; r[i] = (uint32_t)s; carry = s >> 32; }
+    for (; i < an; i++) { uint64_t s = (uint64_t)a[i] + carry; r[i] = (uint32_t)s; carry = s >> 32; }
+    r[i] = (uint32_t)carry;
+    return an + 1;
+}
+
+/* r = a - b where a >= b; r has room for an limbs. */
+static long long k_mag_sub(uint32_t* r, const uint32_t* a, long long an, const uint32_t* b, long long bn) {
+    int64_t borrow = 0;
+    long long i = 0;
+    for (; i < bn; i++) {
+        int64_t d = (int64_t)a[i] - b[i] - borrow;
+        borrow = d < 0;
+        r[i] = (uint32_t)(d + (borrow ? ((int64_t)1 << 32) : 0));
+    }
+    for (; i < an; i++) {
+        int64_t d = (int64_t)a[i] - borrow;
+        borrow = d < 0;
+        r[i] = (uint32_t)(d + (borrow ? ((int64_t)1 << 32) : 0));
+    }
+    return an;
+}
+
+/* The signed sum of two ints given as views, `bneg` standing in for b's sign
+   so subtraction is the sum with it flipped. */
+static KValue k_big_addsub(const KBigView* a, const KBigView* b, int bneg) {
+    long long n = (a->n > b->n ? a->n : b->n) + 1;
+    KBytes* r = k_big_room(n);
+    uint32_t* d = k_big_limbs(r);
+    if (a->neg == bneg) {
+        long long rn = k_mag_add(d, a->d, a->n, b->d, b->n);
+        return k_big_finish(r, a->neg, rn);
+    }
+    int c = k_mag_cmp(a->d, a->n, b->d, b->n);
+    if (c == 0) return k_int(0);
+    if (c > 0) return k_big_finish(r, a->neg, k_mag_sub(d, a->d, a->n, b->d, b->n));
+    return k_big_finish(r, bneg, k_mag_sub(d, b->d, b->n, a->d, a->n));
+}
+
+KValue k_int_add(KValue x, KValue y) {
+    KBigView a, b;
+    k_big_view(x, &a);
+    k_big_view(y, &b);
+    return k_big_addsub(&a, &b, b.neg);
+}
+
+KValue k_int_sub(KValue x, KValue y) {
+    KBigView a, b;
+    k_big_view(x, &a);
+    k_big_view(y, &b);
+    return k_big_addsub(&a, &b, b.n == 0 ? 0 : !b.neg);
+}
+
+KValue k_int_mul(KValue x, KValue y) {
+    KBigView a, b;
+    k_big_view(x, &a);
+    k_big_view(y, &b);
+    if (a.n == 0 || b.n == 0) return k_int(0);
+    long long n = a.n + b.n;
+    KBytes* r = k_big_room(n);
+    uint32_t* d = k_big_limbs(r);
+    memset(d, 0, 4 * (size_t)n);
+    for (long long i = 0; i < a.n; i++) {
+        uint64_t carry = 0;
+        for (long long j = 0; j < b.n; j++) {
+            uint64_t t = (uint64_t)a.d[i] * b.d[j] + d[i + j] + carry;
+            d[i + j] = (uint32_t)t;
+            carry = t >> 32;
+        }
+        d[i + b.n] = (uint32_t)carry;
+    }
+    return k_big_finish(r, a.neg != b.neg, n);
+}
+
+/* Magnitude division, u / v, for u at least as long as v and v nonzero:
+   the quotient into q (un - vn + 1 limbs) and the remainder into r (vn
+   limbs). Knuth's algorithm D with 32-bit digits, as Hacker's Delight
+   writes it. */
+static void k_mag_divmod(uint32_t* q, uint32_t* r, const uint32_t* u, long long m, const uint32_t* v, long long n) {
+    if (n == 1) {
+        uint64_t rem = 0;
+        for (long long i = m - 1; i >= 0; i--) {
+            uint64_t cur = (rem << 32) | u[i];
+            q[i] = (uint32_t)(cur / v[0]);
+            rem = cur % v[0];
+        }
+        r[0] = (uint32_t)rem;
+        return;
+    }
+    const uint64_t base = (uint64_t)1 << 32;
+    int s = __builtin_clz(v[n - 1]);
+    uint32_t* vn = malloc(4 * (size_t)n);
+    uint32_t* un = malloc(4 * (size_t)(m + 1));
+    for (long long i = n - 1; i > 0; i--)
+        vn[i] = (v[i] << s) | (s ? (uint32_t)((uint64_t)v[i - 1] >> (32 - s)) : 0);
+    vn[0] = v[0] << s;
+    un[m] = s ? (uint32_t)((uint64_t)u[m - 1] >> (32 - s)) : 0;
+    for (long long i = m - 1; i > 0; i--)
+        un[i] = (u[i] << s) | (s ? (uint32_t)((uint64_t)u[i - 1] >> (32 - s)) : 0);
+    un[0] = u[0] << s;
+    for (long long j = m - n; j >= 0; j--) {
+        uint64_t num = ((uint64_t)un[j + n] << 32) | un[j + n - 1];
+        uint64_t qhat = num / vn[n - 1];
+        uint64_t rhat = num - qhat * vn[n - 1];
+        while (qhat >= base || qhat * vn[n - 2] > ((rhat << 32) | un[j + n - 2])) {
+            qhat--;
+            rhat += vn[n - 1];
+            if (rhat >= base) break;
+        }
+        int64_t k = 0, t;
+        for (long long i = 0; i < n; i++) {
+            uint64_t p = qhat * vn[i];
+            t = (int64_t)un[i + j] - k - (int64_t)(p & 0xFFFFFFFFu);
+            un[i + j] = (uint32_t)t;
+            k = (int64_t)(p >> 32) - (t >> 32);
+        }
+        t = (int64_t)un[j + n] - k;
+        un[j + n] = (uint32_t)t;
+        q[j] = (uint32_t)qhat;
+        if (t < 0) {
+            q[j]--;
+            uint64_t c = 0;
+            for (long long i = 0; i < n; i++) {
+                uint64_t w = (uint64_t)un[i + j] + vn[i] + c;
+                un[i + j] = (uint32_t)w;
+                c = w >> 32;
+            }
+            un[j + n] += (uint32_t)c;
+        }
+    }
+    for (long long i = 0; i < n - 1; i++)
+        r[i] = (un[i] >> s) | (s ? (uint32_t)((uint64_t)un[i + 1] << (32 - s)) : 0);
+    r[n - 1] = un[n - 1] >> s;
+    free(vn);
+    free(un);
+}
+
+/* Truncating division and its remainder, the remainder taking the dividend's
+   sign: what `BigInt`'s `/` and `%` answer, so what the interpreter does. The
+   divisor is not zero. */
+static KValue k_big_divrem(KValue x, KValue y, int want_rem) {
+    KBigView a, b;
+    k_big_view(x, &a);
+    k_big_view(y, &b);
+    if (k_mag_cmp(a.d, a.n, b.d, b.n) < 0) return want_rem ? x : k_int(0);
+    long long qn = a.n - b.n + 1;
+    KBytes* qb = k_big_room(qn);
+    KBytes* rb = k_big_room(b.n);
+    k_mag_divmod(k_big_limbs(qb), k_big_limbs(rb), a.d, a.n, b.d, b.n);
+    if (want_rem) return k_big_finish(rb, a.neg, b.n);
+    return k_big_finish(qb, a.neg != b.neg, qn);
+}
+
+KValue k_int_div(KValue x, KValue y) { return k_big_divrem(x, y, 0); }
+KValue k_int_rem(KValue x, KValue y) { return k_big_divrem(x, y, 1); }
+
+KValue k_int_neg(KValue x) { return k_int_sub(k_int(0), x); }
+
+/* Ordering of two ints of either kind. */
+int k_int_cmp(KValue x, KValue y) {
+    if (x.tag == K_INT && y.tag == K_INT) return (x.payload > y.payload) - (x.payload < y.payload);
+    KBigView a, b;
+    k_big_view(x, &a);
+    k_big_view(y, &b);
+    if (a.neg != b.neg) return a.neg ? -1 : 1;
+    int c = k_mag_cmp(a.d, a.n, b.d, b.n);
+    return a.neg ? -c : c;
+}
+
+/* The nearest double, ties to even, as `BigInt::to_f64` answers: the top 64
+   bits with every bit below them folded into the lowest, converted by the
+   hardware, then scaled. A number past the largest double is an infinity. */
+double k_int_to_f(KValue x) {
+    if (x.tag == K_INT) return (double)x.payload;
+    KBigView a;
+    k_big_view(x, &a);
+    long long bits = a.n * 32 - __builtin_clz(a.d[a.n - 1]);
+    long long shift = bits - 64;
+    uint64_t top = 0;
+    for (int k = 0; k < 64; k++) {
+        long long bit = shift + k;
+        if (a.d[bit / 32] >> (bit % 32) & 1) top |= (uint64_t)1 << k;
+    }
+    int sticky = 0;
+    for (long long bit = 0; bit < shift && !sticky; bit++)
+        if (a.d[bit / 32] >> (bit % 32) & 1) sticky = 1;
+    double d = ldexp((double)(top | (uint64_t)sticky), (int)(shift > 2000 ? 2000 : shift));
+    return a.neg ? -d : d;
+}
+
+/* The int a whole finite double holds, exactly. */
+KValue k_int_of_whole_f(double d) {
+    if (d >= -9223372036854775808.0 && d < 9223372036854775808.0) return k_int((long long)d);
+    uint64_t bits;
+    memcpy(&bits, &d, 8);
+    int neg = (int)(bits >> 63);
+    int exp = (int)((bits >> 52) & 0x7FF);
+    uint64_t mant = (bits & (((uint64_t)1 << 52) - 1)) | ((uint64_t)1 << 52);
+    long long e = exp - 1075; /* d = mant * 2^e, and e > 0 past 2^63 */
+    long long n = (53 + e + 31) / 32 + 1;
+    KBytes* r = k_big_room(n);
+    uint32_t* l = k_big_limbs(r);
+    memset(l, 0, 4 * (size_t)n);
+    for (int k = 0; k < 53; k++) {
+        if (!(mant >> k & 1)) continue;
+        long long bit = k + e;
+        l[bit / 32] |= (uint32_t)1 << (bit % 32);
+    }
+    return k_big_finish(r, neg, n);
+}
+
+/* The decimal digits of a bignum, sign first, into a fresh arena string. */
+KValue k_str_n(const char* data, long long len);
+static KValue k_big_render(KValue x) {
+    KBigView a;
+    k_big_view(x, &a);
+    uint32_t* w = malloc(4 * (size_t)a.n);
+    memcpy(w, a.d, 4 * (size_t)a.n);
+    long long wn = a.n;
+    /* ten decimal digits per 32 bits is generous, plus a sign */
+    long long cap = a.n * 10 + 2;
+    char* buf = malloc((size_t)cap);
+    long long at = cap;
+    while (wn > 0) {
+        uint64_t rem = 0;
+        for (long long i = wn - 1; i >= 0; i--) {
+            uint64_t cur = (rem << 32) | w[i];
+            w[i] = (uint32_t)(cur / 1000000000u);
+            rem = cur % 1000000000u;
+        }
+        while (wn > 0 && w[wn - 1] == 0) wn--;
+        for (int k = 0; k < 9; k++) {
+            buf[--at] = (char)('0' + rem % 10);
+            rem /= 10;
+            if (wn == 0 && rem == 0) break;
+        }
+    }
+    if (a.neg) buf[--at] = '-';
+    KValue out = k_str_n(buf + at, cap - at);
+    free(w);
+    free(buf);
+    return out;
+}
+
+/* The int a run of decimal digits spells, with an optional leading '-'. */
+KValue k_int_of_digits(const char* s, long long len) {
+    int neg = 0;
+    if (len > 0 && (s[0] == '-' || s[0] == '+')) { neg = s[0] == '-'; s++; len--; }
+    long long n = len / 9 + 2;
+    KBytes* r = k_big_room(n);
+    uint32_t* d = k_big_limbs(r);
+    long long dn = 0;
+    long long i = 0;
+    while (i < len) {
+        long long take = len - i < 9 ? len - i : 9;
+        uint32_t chunk = 0, scale = 1;
+        for (long long k = 0; k < take; k++) { chunk = chunk * 10 + (uint32_t)(s[i + k] - '0'); scale *= 10; }
+        uint64_t carry = chunk;
+        for (long long k = 0; k < dn; k++) {
+            uint64_t t = (uint64_t)d[k] * scale + carry;
+            d[k] = (uint32_t)t;
+            carry = t >> 32;
+        }
+        if (carry) d[dn++] = (uint32_t)carry;
+        i += take;
+    }
+    return k_big_finish(r, neg, dn);
+}
 /* What a succeeded effect yields: `none` is absence and nothing else. */
 KValue k_done(void) { KValue v; v.tag = K_DONE; v.payload = 0; return v; }
 
@@ -3107,7 +3506,9 @@ static inline __attribute__((always_inline)) KStr* k_str_alloc(long long len) {
    before the first digit, so the string is allocated at that length and the
    digits are written into it where they will stay. */
 KValue k_str_n(const char* data, long long len);
+static KValue k_big_render(KValue x);
 KValue k_b_render_value(KValue v) {
+    if (v.tag == K_BIG) return k_big_render(v);
     if (v.tag == K_INT) {
         long long x = v.payload;
         /* One digit is a one-byte string, which k_str_n answers from the
@@ -3452,7 +3853,7 @@ KValue k_field(KValue v, long long i) {
    The convention was built for the scanner's byte position, but the
    analysis admits any record whose first field is an int. Eight bits of a
    64-bit int do not survive the shift, so an int outside 56 signed bits
-   does not pack: the record is built on the heap and crosses as
+   does not pack, and neither does a bignum: the record is built on the heap and crosses as
    K_PARSED_WIDE in the low byte, which no value's tag is, with the record
    in the second word. The shift back is arithmetic, so a negative int
    keeps its sign. Until 2026-09-29 it was logical and neither case was
@@ -3477,7 +3878,7 @@ KValue k_parsed_words(KValue v) {
     if (!k_not_failure(v)) return v;
     KValue f0 = k_field(v, 0), f1 = k_field(v, 1);
     KValue out;
-    if (!k_packs(f0.payload)) {
+    if (f0.tag != K_INT || !k_packs(f0.payload)) {
         out.tag = K_PARSED_WIDE;
         out.payload = k_ptr(k_as_rec(v.tag == K_SUB ? k_sub_base(v) : v));
         return out;
@@ -3488,14 +3889,14 @@ KValue k_parsed_words(KValue v) {
 }
 /* The emitter's slow side of a pack: the int did not fit, so the record is
    built here and handed back in its spilled words. */
-KValue k_parsed_spill(long long type_id, long long n, long long vtag, long long vpay) {
+KValue k_parsed_spill(long long type_id, long long ntag, long long n, long long vtag, long long vpay) {
     KValue fields[2];
-    fields[0].tag = K_INT; fields[0].payload = n;
+    fields[0].tag = ntag; fields[0].payload = n;
     fields[1].tag = vtag; fields[1].payload = vpay;
     KValue out; out.tag = K_PARSED_WIDE; out.payload = k_rec(type_id, 2, fields).payload;
     return out;
 }
-long long k_parsed_wide_int(long long w1) { return k_as_rec(k_parsed_spilled(w1))->fields[0].payload; }
+KValue k_parsed_wide_first(long long w1) { return k_as_rec(k_parsed_spilled(w1))->fields[0]; }
 KValue k_parsed_wide_value(long long w1) { return k_as_rec(k_parsed_spilled(w1))->fields[1]; }
 KValue k_err_inner(KValue v) { return k_err_box(v)->reason; }
 
@@ -3517,6 +3918,13 @@ KValue k_err_read(KValue v, const char* field) {
 
 /* pattern checks: nonzero on match */
 long long k_check_tag(KValue v, long long tag) { return v.tag == tag; }
+/* `int` is two tags, a word and a bignum, and an annotation accepts either. */
+long long k_check_int_type(KValue v) { return K_IS_INT(v); }
+/* A pattern's literal past a word: only a bignum can equal it, and the digits
+   are read and compared whole. */
+long long k_check_big_lit(KValue v, const char* s, long long len) {
+    return v.tag == K_BIG && k_int_cmp(v, k_int_of_digits(s, len)) == 0;
+}
 /* `some` is a value that is not none. A failure is neither, and answering
    otherwise made an arm that names no err at all take a foreign failure. */
 long long k_check_some(KValue v) { return v.tag != K_NONE && v.tag != K_ERR; }
@@ -4910,6 +5318,7 @@ KValue k_sub_wrap(long long type_id, KValue inner) {
 static int k_want_prim(KValue v, long long want_id) {
     if (want_id == K_WANT_BOOL) return v.tag == K_TRUE || v.tag == K_FALSE;
     if (want_id == K_WANT_SOME) return v.tag != K_NONE && k_not_failure(v);
+    if (want_id == -(K_INT + 1)) return K_IS_INT(v);
     return v.tag == -(want_id + 1);
 }
 
@@ -5120,6 +5529,11 @@ static void k_render_into(KRenderBuf* b, KValue v, long long quote) {
         case K_FLOAT:
             k_rb_put(b, buf, k_render_number(v, buf));
             return;
+        case K_BIG: {
+            KStr* st = k_as_str(k_big_render(v));
+            k_rb_put(b, st->data, st->len);
+            return;
+        }
         case K_TRUE: k_rb_lit(b, "true"); return;
         case K_FALSE: k_rb_lit(b, "false"); return;
         case K_NONE: k_rb_lit(b, "<none>"); return;
@@ -5238,6 +5652,7 @@ static KValue k_render_at(KValue v, long long quote, int held) {
         case K_FLOAT:
             nlen = k_render_number(v, buf);
             break;
+        case K_BIG: return k_big_render(v);
         case K_TRUE: return k_str("true");
         case K_FALSE: return k_str("false");
         case K_NONE: return k_str("<none>");
@@ -5379,6 +5794,20 @@ static int k_order_float(double x, double y) {
     return (x > y) - (x < y);
 }
 
+/* An int of either kind against a float, exactly, as the interpreter's
+   `cmp_int_float` answers: the int against the float's floor, and a float
+   with a fraction above its floor ranks above an int equal to that floor. */
+static int k_order_intv_float(KValue i, double d) {
+    if (i.tag == K_INT) return k_order_int_float(i.payload, d);
+    if (d != d) return -1;
+    if (d == INFINITY) return -1;
+    if (d == -INFINITY) return 1;
+    double fl = floor(d);
+    int c = k_int_cmp(i, k_int_of_whole_f(fl));
+    if (c == 0 && d > fl) return -1;
+    return c;
+}
+
 static long long k_eq_rec(KValue a, KValue b) {
     if (k_opaque_to_equality(a) || k_opaque_to_equality(b))
         k_die("equality is not defined on a function or an effect — write an arm "
@@ -5407,8 +5836,12 @@ static long long k_eq_rec(KValue a, KValue b) {
        true for 1 and 1.0, and `<` answers false either way round because
        neither is strictly less. Equality was the one operator dissenting. A
        float cannot be a map key, so nothing needs them told apart. */
-    if (a.tag == K_INT && b.tag == K_FLOAT) return k_order_int_float(a.payload, k_as_f(b)) == 0;
-    if (a.tag == K_FLOAT && b.tag == K_INT) return k_order_int_float(b.payload, k_as_f(a)) == 0;
+    if (K_IS_INT(a) && b.tag == K_FLOAT) return k_order_intv_float(a, k_as_f(b)) == 0;
+    if (a.tag == K_FLOAT && K_IS_INT(b)) return k_order_intv_float(b, k_as_f(a)) == 0;
+    if (a.tag == K_BIG && b.tag == K_BIG) {
+        KBytes* x = k_as_bytes(a); KBytes* y = k_as_bytes(b);
+        return x->len == y->len && memcmp(x->data, y->data, (size_t)x->len) == 0;
+    }
     if (a.tag != b.tag) return 0;
     switch (a.tag) {
         case K_INT: return a.payload == b.payload;
@@ -5469,12 +5902,13 @@ KValue k_add(KValue a, KValue b) {
     if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
     if (a.tag == K_INT && b.tag == K_INT) {
         long long r;
-        if (__builtin_add_overflow(a.payload, b.payload, &r)) k_die("integer overflow (int64 native build; spec int is arbitrary precision)");
+        if (__builtin_add_overflow(a.payload, b.payload, &r)) return k_int_add(a, b);
         return k_int(r);
     }
     if (a.tag == K_FLOAT && b.tag == K_FLOAT) return k_float(k_as_f(a) + k_as_f(b));
-    if (a.tag == K_INT && b.tag == K_FLOAT) return k_float((double)a.payload + k_as_f(b));
-    if (a.tag == K_FLOAT && b.tag == K_INT) return k_float(k_as_f(a) + (double)b.payload);
+    if (K_IS_INT(a) && K_IS_INT(b)) return k_int_add(a, b);
+    if (K_IS_INT(a) && b.tag == K_FLOAT) return k_float(k_int_to_f(a) + k_as_f(b));
+    if (a.tag == K_FLOAT && K_IS_INT(b)) return k_float(k_as_f(a) + k_int_to_f(b));
     k_die("`+` is not defined for these values");
     return k_none();
 }
@@ -5485,12 +5919,13 @@ KValue k_sub(KValue a, KValue b) {
     if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
     if (a.tag == K_INT && b.tag == K_INT) {
         long long r;
-        if (__builtin_sub_overflow(a.payload, b.payload, &r)) k_die("integer overflow (int64 native build; spec int is arbitrary precision)");
+        if (__builtin_sub_overflow(a.payload, b.payload, &r)) return k_int_sub(a, b);
         return k_int(r);
     }
     if (a.tag == K_FLOAT && b.tag == K_FLOAT) return k_float(k_as_f(a) - k_as_f(b));
-    if (a.tag == K_INT && b.tag == K_FLOAT) return k_float((double)a.payload - k_as_f(b));
-    if (a.tag == K_FLOAT && b.tag == K_INT) return k_float(k_as_f(a) - (double)b.payload);
+    if (K_IS_INT(a) && K_IS_INT(b)) return k_int_sub(a, b);
+    if (K_IS_INT(a) && b.tag == K_FLOAT) return k_float(k_int_to_f(a) - k_as_f(b));
+    if (a.tag == K_FLOAT && K_IS_INT(b)) return k_float(k_as_f(a) - k_int_to_f(b));
     k_die("`-` is not defined for these values");
     return k_none();
 }
@@ -5501,12 +5936,13 @@ KValue k_mul(KValue a, KValue b) {
     if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
     if (a.tag == K_INT && b.tag == K_INT) {
         long long r;
-        if (__builtin_mul_overflow(a.payload, b.payload, &r)) k_die("integer overflow (int64 native build; spec int is arbitrary precision)");
+        if (__builtin_mul_overflow(a.payload, b.payload, &r)) return k_int_mul(a, b);
         return k_int(r);
     }
     if (a.tag == K_FLOAT && b.tag == K_FLOAT) return k_float(k_as_f(a) * k_as_f(b));
-    if (a.tag == K_INT && b.tag == K_FLOAT) return k_float((double)a.payload * k_as_f(b));
-    if (a.tag == K_FLOAT && b.tag == K_INT) return k_float(k_as_f(a) * (double)b.payload);
+    if (K_IS_INT(a) && K_IS_INT(b)) return k_int_mul(a, b);
+    if (K_IS_INT(a) && b.tag == K_FLOAT) return k_float(k_int_to_f(a) * k_as_f(b));
+    if (a.tag == K_FLOAT && K_IS_INT(b)) return k_float(k_as_f(a) * k_int_to_f(b));
     k_die("`*` is not defined for these values");
     return k_none();
 }
@@ -5541,19 +5977,21 @@ KValue k_div(KValue a, KValue b, const char* origin) {
         if (b.payload == 0) return k_math_failure("division by zero");
         /* the one signed division that overflows: the least integer over -1
            is one past the greatest, which C leaves undefined and this machine
-           answers by wrapping. Every other overflow here is loud, and a wrong
-           number is worse than a refusal. */
-        if (a.payload == INT64_MIN && b.payload == -1)
-            k_die("integer overflow (int64 native build; spec int is arbitrary precision)");
+           answers by wrapping. The answer is a bignum. */
+        if (a.payload == INT64_MIN && b.payload == -1) return k_int_div(a, b);
         return k_int(a.payload / b.payload);
+    }
+    if (K_IS_INT(a) && K_IS_INT(b)) {
+        if (b.tag == K_INT && b.payload == 0) return k_math_failure("division by zero");
+        return k_int_div(a, b);
     }
     if (a.tag == K_FLOAT && b.tag == K_FLOAT) {
         if (k_as_f(b) == 0.0) return k_math_failure("division by zero");
         return k_float(k_as_f(a) / k_as_f(b));
     }
-    if ((a.tag == K_INT || a.tag == K_FLOAT) && (b.tag == K_INT || b.tag == K_FLOAT)) {
-        double x = a.tag == K_INT ? (double)a.payload : k_as_f(a);
-        double y = b.tag == K_INT ? (double)b.payload : k_as_f(b);
+    if ((K_IS_INT(a) || a.tag == K_FLOAT) && (K_IS_INT(b) || b.tag == K_FLOAT)) {
+        double x = a.tag == K_FLOAT ? k_as_f(a) : k_int_to_f(a);
+        double y = b.tag == K_FLOAT ? k_as_f(b) : k_int_to_f(b);
         if (y == 0.0) return k_math_failure("division by zero");
         return k_float(x / y);
     }
@@ -5574,9 +6012,13 @@ KValue k_mod(KValue a, KValue b, const char* origin) {
         if (a.payload == INT64_MIN && b.payload == -1) return k_int(0);
         return k_int(a.payload % b.payload);
     }
-    if ((a.tag == K_INT || a.tag == K_FLOAT) && (b.tag == K_INT || b.tag == K_FLOAT)) {
-        double x = a.tag == K_INT ? (double)a.payload : k_as_f(a);
-        double y = b.tag == K_INT ? (double)b.payload : k_as_f(b);
+    if (K_IS_INT(a) && K_IS_INT(b)) {
+        if (b.tag == K_INT && b.payload == 0) return k_math_failure("modulo by zero");
+        return k_int_rem(a, b);
+    }
+    if ((K_IS_INT(a) || a.tag == K_FLOAT) && (K_IS_INT(b) || b.tag == K_FLOAT)) {
+        double x = a.tag == K_FLOAT ? k_as_f(a) : k_int_to_f(a);
+        double y = b.tag == K_FLOAT ? k_as_f(b) : k_int_to_f(b);
         if (y == 0.0) return k_math_failure("modulo by zero");
         return k_float(fmod(x, y));
     }
@@ -5587,8 +6029,9 @@ KValue k_mod(KValue a, KValue b, const char* origin) {
 static int k_order(KValue a, KValue b) {
     if (a.tag == K_INT && b.tag == K_INT) return (a.payload > b.payload) - (a.payload < b.payload);
     if (a.tag == K_FLOAT && b.tag == K_FLOAT) return k_order_float(k_as_f(a), k_as_f(b));
-    if (a.tag == K_INT && b.tag == K_FLOAT) return k_order_int_float(a.payload, k_as_f(b));
-    if (a.tag == K_FLOAT && b.tag == K_INT) return -k_order_int_float(b.payload, k_as_f(a));
+    if (K_IS_INT(a) && K_IS_INT(b)) return k_int_cmp(a, b);
+    if (K_IS_INT(a) && b.tag == K_FLOAT) return k_order_intv_float(a, k_as_f(b));
+    if (a.tag == K_FLOAT && K_IS_INT(b)) return -k_order_intv_float(b, k_as_f(a));
     if (a.tag == K_STR && b.tag == K_STR) {
         KStr* sa = k_as_str(a);
         KStr* sb = k_as_str(b);
@@ -6016,12 +6459,15 @@ KValue k_b_annotate(KValue subject, KValue callback, const char* origin) {
 
 KValue k_desc_sleep(KValue ms) {
     if (!k_not_failure(ms)) return ms;
+    /* a count past a word reads as none at all, as the interpreter reads it */
+    if (ms.tag == K_BIG) ms = k_int(0);
     if (ms.tag != K_INT) k_die_got("sleep takes milliseconds (an int)", ms);
     return k_mkdesc(8, ms, k_none());
 }
 
 KValue k_desc_random(KValue n) {
     if (!k_not_failure(n)) return n;
+    if (n.tag == K_BIG) n = k_int(0);
     if (n.tag != K_INT) k_die_got("random takes a bound (an int)", n);
     return k_mkdesc(9, n, k_none());
 }
@@ -6972,6 +7418,28 @@ static inline int k_outlives_beat(const void* p) {
     return k_survives(p, NULL) && k_survives(p, inner);
 }
 
+/* A bignum written in place into a list or map that predates the beat. The
+   analysis licenses an int as an accumulator's element because a word holds
+   no pointer, and a bignum does: it was built in the arena, after the mark,
+   and the loop's rewind would free it under the accumulator. So it moves to
+   permanent storage on the way in. Only a program whose ints outgrow a word
+   reaches this, and what it keeps is the bignum's own bytes. */
+static __attribute__((noinline, cold)) KValue k_big_perm(KValue v) {
+    KBytes* b = (KBytes*)(intptr_t)v.payload;
+    KBytes* r = k_alloc_perm(sizeof(KBytes) + (size_t)b->len);
+    r->data = (const unsigned char*)(r + 1);
+    r->cap = 0;
+    r->len = b->len;
+    memcpy((unsigned char*)(r + 1), b->data, (size_t)b->len);
+    v.payload = k_ptr(r);
+    return v;
+}
+
+static inline KValue k_big_kept(KValue v, const void* holder) {
+    if (__builtin_expect(v.tag == K_BIG, 0) && k_outlives_beat(holder)) return k_big_perm(v);
+    return v;
+}
+
 static KValue* k_buf(long long cap) {
     int c = k_buf_class(cap);
     if (c >= 0 && k_buf_free[c]) {
@@ -7418,8 +7886,9 @@ static KValue k_partial_run(KClosure* p) {
 static int k_key_cmp(KValue a, KValue b) {
     a = k_sub_base(a);
     b = k_sub_base(b);
-    if (a.tag != b.tag) return a.tag < b.tag ? -1 : 1;
-    if (a.tag == K_INT) return (a.payload > b.payload) - (a.payload < b.payload);
+    /* every int ranks with the ints, a bignum among them */
+    if (K_IS_INT(a) && K_IS_INT(b)) return k_int_cmp(a, b);
+    if (a.tag != b.tag) return K_IS_INT(a) ? -1 : K_IS_INT(b) ? 1 : (a.tag < b.tag ? -1 : 1);
     KStr* sa = k_as_str(a); KStr* sb = k_as_str(b);
     long n = sa->len < sb->len ? sa->len : sb->len;
     int c = memcmp(sa->data, sb->data, n);
@@ -7596,7 +8065,7 @@ KValue k_map_empty(void) {
    nothing could look up by equality — `1 == 1.0` is false — while sorting
    next to its integer twin. */
 static void k_check_map_key(KValue key) {
-    if (key.tag == K_INT || key.tag == K_STR) return;
+    if (K_IS_INT(key) || key.tag == K_STR) return;
     KValue shown = k_render(key, 1);
     KStr* s = k_as_str(shown);
     char said[256];
@@ -7719,6 +8188,7 @@ KValue k_b_put_mut(KValue mv, KValue key, KValue val) {
     if (mv.tag != K_MAP) k_die("put takes a map, a key, and a value");
     k_check_map_key(key);
     KMap* m = k_as_map(mv);
+    val = k_big_kept(val, m);
     if (k_map_replace(m, key, val)) {
         return mv;
     }
@@ -8802,11 +9272,14 @@ static __attribute__((noinline, cold, preserve_most)) KValue k_b_at_rest(KValue 
         KValue (*volatile again)(KValue, KValue) = k_b_at;
         return again(k_sub_base(container), k_sub_base(index));
     }
+    /* A position past a word is past the end of anything memory can hold. */
+    if (index.tag == K_BIG && (container.tag == K_LIST || container.tag == K_BYTES || container.tag == K_STR))
+        return k_none();
     if (container.tag == K_MAP) {
         /* A map is indexed by an int or a string. Anything else, a none
            among them, is refused as the interpreter refuses it, where the
            search below would answer a miss. */
-        if (index.tag != K_INT && index.tag != K_STR) {
+        if (!K_IS_INT(index) && index.tag != K_STR) {
             k_die_index(container);
             return k_none();
         }
@@ -8965,6 +9438,7 @@ static KValue k_b_push_into_proven(KValue lv, KValue item, int mutate, int prove
     if (lv.tag != K_LIST) k_die_push_takes(lv);
     KList* l = k_as_list(lv);
     if (mutate && !proven && !k_born_this_beat(l)) mutate = 0;
+    if (mutate) item = k_big_kept(item, l);
     KBuf* buf = k_buf_of(l->items);
     if (buf->used == l->len && l->len < k_buf_cap(buf)) {
         /* this list is the frontier of its buffer: claim the next slot */
@@ -9081,6 +9555,7 @@ KValue k_b_push_mut(KValue lv, KValue item) {
     if (__builtin_expect(!k_not_failure(lv) || !k_not_failure(item), 0)) return k_failed2(lv, item);
     if (lv.tag != K_LIST) k_die_push_takes(lv);
     KList* l = k_as_list(lv);
+    item = k_big_kept(item, l);
     KBuf* buf = k_buf_of(l->items);
     if (buf->used == l->len && l->len < k_buf_cap(buf)) {
         if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) {
@@ -9376,7 +9851,8 @@ static int k_number_byte(unsigned char c) {
 KValue k_b_number_span(KValue cs, KValue fromv) {
     if (K_COUNTING) k_stat_number_spans++;
     if (__builtin_expect(!k_not_failure(cs) || !k_not_failure(fromv), 0)) return k_failed2(cs, fromv);
-    if (cs.tag != K_BYTES || fromv.tag != K_INT) k_die("number_span takes bytes and a position");
+    if (cs.tag != K_BYTES || !K_IS_INT(fromv)) k_die("number_span takes bytes and a position");
+    if (fromv.tag == K_BIG) return fromv;
     KBytes* by = k_as_bytes(cs);
     const unsigned char* d = by->data;
     long long len = by->len;
@@ -9494,6 +9970,13 @@ static __attribute__((noinline)) KValue k_b_append_wide(KValue acc, KBytes* a,
         n = b->len;
     } else if (x.tag == K_INT) {
         one = (unsigned char)(x.payload & 0xff);
+        src = &one;
+        n = 1;
+    } else if (x.tag == K_BIG) {
+        /* the magnitude's low byte, as the interpreter takes it */
+        KBigView big;
+        k_big_view(x, &big);
+        one = (unsigned char)(big.d[0] & 0xff);
         src = &one;
         n = 1;
     } else {
@@ -9919,8 +10402,10 @@ static void k_slice_skip(KStr* s, long* at, long long* seen, long long next) {
 
 KValue k_b_slice(KValue container, KValue fromv, KValue tov) {
     if (__builtin_expect(!k_not_failure(container) || !k_not_failure(fromv) || !k_not_failure(tov), 0)) return k_failed3(container, fromv, tov);
-    if (fromv.tag != K_INT || tov.tag != K_INT) k_die("slice takes 1-based inclusive positions");
-    long long from = fromv.payload, to = tov.payload;
+    if (!K_IS_INT(fromv) || !K_IS_INT(tov)) k_die("slice takes 1-based inclusive positions");
+    /* A bound past a word reads as zero, which no slice starts or ends at,
+       as the interpreter reads one that is no position at all. */
+    long long from = fromv.tag == K_INT ? fromv.payload : 0, to = tov.tag == K_INT ? tov.payload : 0;
     if (container.tag == K_BYTES) {
         KBytes* b = k_as_bytes(container);
         return k_b_slice_raw(b->data, b->len, from, to);
@@ -10185,9 +10670,19 @@ KValue k_b_sum(KValue lv) {
     long long total = 0;
     for (long long i = 0; i < l->len; i++) {
         if (!k_not_failure(l->items[i])) return l->items[i];
-        if (l->items[i].tag != K_INT) k_die("sum takes a list of int");
+        if (!K_IS_INT(l->items[i])) k_die("sum takes a list of int");
         long long r;
-        if (__builtin_add_overflow(total, l->items[i].payload, &r)) k_die("integer overflow (int64 native build; spec int is arbitrary precision)");
+        if (l->items[i].tag == K_BIG || __builtin_add_overflow(total, l->items[i].payload, &r)) {
+            /* past a word: the rest of the sum is a bignum's, and a failure
+               later in the list still answers in place of it */
+            KValue big = k_int(total);
+            for (long long j = i; j < l->len; j++) {
+                if (!k_not_failure(l->items[j])) return l->items[j];
+                if (!K_IS_INT(l->items[j])) k_die("sum takes a list of int");
+                big = k_int_add(big, l->items[j]);
+            }
+            return big;
+        }
         total = r;
     }
     return k_int(total);
@@ -10210,8 +10705,8 @@ KValue k_b_char_code(KValue cv) {
 
 KValue k_b_from_code(KValue nv, const char* origin) {
     if (!k_not_failure(nv)) return nv;
-    if (nv.tag != K_INT) k_die("from_code takes an int");
-    long long cp = nv.payload;
+    if (!K_IS_INT(nv)) k_die("from_code takes an int");
+    long long cp = nv.tag == K_INT ? nv.payload : -1;
     if (cp < 0 || cp > 0x10ffff || (cp >= 0xd800 && cp <= 0xdfff)) {
         return k_err(k_str("not a unicode scalar value"), origin);
     }
@@ -10275,8 +10770,7 @@ static __attribute__((noinline, cold, preserve_most)) KValue k_b_to_int_slow(con
        with the diagnostic arithmetic gives on overflow. An err here was a
        value a program could catch and carry on from, and std/json caught it
        and answered "invalid number" for a well-formed document. */
-    if (range)
-        k_die("integer overflow (int64 native build; spec int is arbitrary precision)");
+    if (range) return k_int_of_digits(data, len);
     return k_int(n);
 }
 
@@ -10288,7 +10782,7 @@ KValue k_b_to_float(KValue v, const char* origin);
 
 KValue k_b_to_int(KValue sv, const char* origin) {
     if (!k_not_failure(sv)) return sv;
-    if (sv.tag == K_INT) return sv;
+    if (K_IS_INT(sv)) return sv;
     if (sv.tag != K_STR && sv.tag != K_BYTES) k_die_value("to_int takes a string, bytes, or int", sv);
     const char* data;
     long long len;
@@ -10569,6 +11063,7 @@ __attribute__((cold, optnone, noinline)) KValue k_b_tie(KValue ids, KValue maker
 KValue k_b_sqrt(KValue v) {
     if (!k_not_failure(v)) return v;
     if (v.tag == K_INT) return k_float(sqrt((double)v.payload));
+    if (v.tag == K_BIG) return k_float(sqrt(k_int_to_f(v)));
     if (v.tag == K_FLOAT) return k_float(sqrt(k_as_f(v)));
     k_die_got("sqrt takes a number", v);
     return k_none();
@@ -10583,6 +11078,11 @@ KValue k_b_sqrt(KValue v) {
 static long long k_bits_of(KValue v, const char* what) {
     if (v.tag == K_SUB) v = k_sub_base(v);
     if (v.tag == K_INT) return v.payload;
+    if (v.tag == K_BIG) {
+        char fits[96];
+        snprintf(fits, sizeof fits, "%s takes whole numbers that fit 64 bits", what);
+        k_die(fits);
+    }
     char said[64];
     snprintf(said, sizeof said, "%s takes whole numbers", what);
     k_die_got(said, v);
@@ -10639,21 +11139,15 @@ KValue k_b_bit_shr(KValue a, KValue b) {
 
 KValue k_b_round(KValue v) {
     if (!k_not_failure(v)) return v;
-    if (v.tag == K_INT) return v;
+    if (K_IS_INT(v)) return v;
     if (v.tag == K_FLOAT) {
         double x = k_as_f(v);
         /* NaN and the infinities have no integer to round to and answer
-           none, as the interpreter does (ruled 2026-09-29). A finite float
-           past int64 rounds to an integer this build cannot hold, the same
-           refusal arithmetic makes. llround answered LLONG_MIN for all of
-           them. */
+           none, as the interpreter does (ruled 2026-09-29). Every finite
+           float rounds to a whole number, and one past int64 is a bignum:
+           1e30 rounds to a thirty-one digit int. */
         if (x != x || isinf(x)) return k_none();
-        if (x >= 9223372036854775807.0 || x < -9223372036854775808.0)
-            k_die("integer overflow (int64 native build; spec int is arbitrary precision)");
-        double r = round(x);
-        if (r >= 9223372036854775807.0 || r < -9223372036854775808.0)
-            k_die("integer overflow (int64 native build; spec int is arbitrary precision)");
-        return k_int((long long)r);
+        return k_int_of_whole_f(round(x));
     }
     k_die_got("round takes a number", v);
     return k_none();
@@ -11388,6 +11882,7 @@ KValue k_b_to_float(KValue v, const char* origin) {
     if (!k_not_failure(v)) return v;
     if (v.tag == K_FLOAT) return v;
     if (v.tag == K_INT) return k_float((double)v.payload);
+    if (v.tag == K_BIG) return k_float(k_int_to_f(v));
     if (v.tag != K_STR && v.tag != K_BYTES) k_die_value("to_float takes a string, bytes, or number", v);
     const char* data;
     long long len;

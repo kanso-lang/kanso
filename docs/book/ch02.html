@@ -50,7 +50,7 @@ days <span class="o">=</span> <span class="n">365000000</span>
   </div>
 </div>
 
-<p>exactness is a promise kanso keeps even when it cannot fit the answer. the language's design specifies arbitrary-precision integers—no ceiling at all—and the bignum backing that delivers it is on the way. the build you have today backs <code>int</code> with 64 bits, and when a result would not fit, it refuses to lie about it. instead of wrapping, it hands you a diagnostic:</p>
+<p>exactness holds past the machine word. an <code>int</code> has no ceiling: while a number fits in 64 bits it is kept in one, and when an operation's answer would need more, the runtime moves the answer to a bignum that grows as far as the number does. every engine works this way, compiled code included, so this program prints all twenty-one digits:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">overflow.kso</div>
@@ -58,7 +58,7 @@ days <span class="o">=</span> <span class="n">365000000</span>
 <span class="f">print</span> <span class="s">"<span class="i">{billion * billion * 100}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run overflow.kso</div>
-    <pre><code><span class="k">error[runtime]</span>: integer overflow (int64 native build; spec int is arbitrary precision)</code></pre>
+    <pre><code>100000000000000000000</code></pre>
   </div>
 </div>
 
@@ -292,7 +292,7 @@ tau <span class="o">=</span> <span class="n">3</span>
 
 <h2>what you can now do</h2>
 
-<p>you have the whole value vocabulary: exact ints and honest overflow, floats and the one-way widening that joins them, strings that interpolate any expression, lists and maps with strict lookup and a planned-for miss, records you construct positionally and take apart by destructuring, and structural equality that reaches all the way down. you have the two rules that govern names—rebind, but use each version; and never shadow a name already spoken for. with these you can model most of the data a real program touches, and you have met the failure rail—<code>err</code> and <code>none</code> riding to the endpoint—that chapter 04 makes the center of the story. next, chapter 03 turns the <code>type</code> you just met into the language's dispatch mechanism.</p>
+<p>you have the whole value vocabulary: exact ints with no ceiling, floats and the one-way widening that joins them, strings that interpolate any expression, lists and maps with strict lookup and a planned-for miss, records you construct positionally and take apart by destructuring, and structural equality that reaches all the way down. you have the two rules that govern names—rebind, but use each version; and never shadow a name already spoken for. with these you can model most of the data a real program touches, and you have met the failure rail—<code>err</code> and <code>none</code> riding to the endpoint—that chapter 04 makes the center of the story. next, chapter 03 turns the <code>type</code> you just met into the language's dispatch mechanism.</p>
 
 <h2>exercises</h2>
 <ol class="exercises">

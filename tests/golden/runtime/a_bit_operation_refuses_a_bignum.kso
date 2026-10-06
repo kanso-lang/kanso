@@ -1,0 +1,8 @@
+# Bits are counted over a machine word, so a bitwise operator refuses a
+# bignum, on every engine and in the same words. The interpreter named the
+# operator by its symbol and native by its std/bits name until the 2026-10-07
+# gavel, when native first reached the refusal: before it, native refused the
+# literal itself.
+big = 18446744073709551616
+
+pub play = print "{big & 1}"

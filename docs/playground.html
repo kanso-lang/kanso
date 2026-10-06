@@ -207,8 +207,7 @@ description: "run kanso in your browser: programs compile to wasm right in the t
   tab</strong>, through the same emitter a native build uses and with no server, and runs as machine
   code against kanso's runtime built for wasm32, tail calls included; the badge under the output
   names the engine that ran. a browser that cannot load the runtime runs the reference interpreter
-  instead. integers are 64 bits in compiled code, as in a native build, so <code>fact 100</code>
-  stops with an overflow error where the interpreter prints all 158 digits. descriptions execute
+  instead. descriptions execute
   when they reach the edge; there is no filesystem in a browser tab, so <code>read_file</code> and
   <code>read_bytes</code> answer with an err, exactly as the model says it should.</p>
 </div>

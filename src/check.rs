@@ -5730,7 +5730,8 @@ fn unparseable_conversion(name: &str, args: &[Expr], diags: &mut Vec<Diagnostic>
     let Some(Expr::Str(parts, span)) = args.first() else { return };
     let [TemplatePart::Lit(text)] = parts.as_slice() else { return };
     let refuses = match bare {
-        "to_int" => text.trim().parse::<i64>().is_err(),
+        // An int has no ceiling, so a literal past a word still parses.
+        "to_int" => text.contains('_') || text.trim().parse::<num_bigint::BigInt>().is_err(),
         "to_float" => text.trim().parse::<f64>().is_err(),
         _ => return,
     };

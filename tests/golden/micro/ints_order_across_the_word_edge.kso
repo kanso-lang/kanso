@@ -1,0 +1,23 @@
+# Ordering and equality on both sides of the machine word, and against
+# floats. 9223372036854775808.0 is 2^63 exactly, so it equals the first
+# bignum and lies above the largest word; 2^63 + 1 has no float of its own
+# and is greater than the float it would round to.
+big = 9223372036854775808
+
+max = 9223372036854775807
+
+f = 9223372036854775808.0
+
+g = 10000000000000000000.0
+
+h = 1000000000000000000000000000000.0
+
+pub play = print "{big > max} {max < big} {big == max + 1} {big != max}"
+  .> (_ -> print "{big >= big} {big <= max} {0 - big < 0 - max}")
+  .> (_ -> print "{0 - big - 1 < 0 - big} {big * big > big}")
+  .> (_ -> print "{big == f} {big > 9223372036854775807.0} {big < g}")
+  .> (_ -> print "{max == 9223372036854775807.0} {max < f} {max == f}")
+  .> (_ -> print "{big + 1 > f} {big + 1 == f} {f < big + 1}")
+  .> (_ -> print "{h > big} {0.0 - h < 0 - big} {big == 3}")
+  .> (_ -> print "{[big 1] == [big 1]} {[big] == [(max + 1)]} {[big] == [max]}")
+  .> (_ -> print "{0 - big == 0 - f} {0 - big - 1 < 0 - f}")

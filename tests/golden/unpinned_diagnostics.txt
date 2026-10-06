@@ -326,15 +326,6 @@ a compiled closure escaped the engine that owns it
 # `no_main`; the two differ only in the sentence after the full stop.
 `{}` is a library — nothing to run. it exports
 
-# Two engines refuse the same program at different times, in different words.
-# `9223372036854775808 & 1` reaches the interpreter's bitwise guard, and the
-# native backend refuses the literal at compile time — "the literal ... does
-# not fit this build's 64-bit int (spec int is arbitrary precision)". The
-# runtime corpus runs both engines and requires the same stderr from each, so
-# a program that raises one raises neither there.
-`{}` takes whole numbers that fit 64 bits
-{} takes whole numbers that fit 64 bits
-
 # A field annotated with two or more types is refused at the front door on
 # both engines — "a record field carries no type — write `v` and let the
 # compiler infer what it holds" — so construction never runs and the member

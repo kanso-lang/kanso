@@ -47,6 +47,18 @@ struct Cluster {
 }
 
 const SCALAR: Set = INT | FLOAT | BOOL;
+/// What may cross a rewind as an argument. A bignum lives in the arena, so it
+/// is not a scalar to anything that stores it, but the rewind on a loop edge
+/// lifts a bignum argument out of the arena and puts it back after
+/// (`k_big_lift_out` and `k_big_lift_in`), and a loop whose counter can widen
+/// keeps its beat.
+const CROSSES: Set = SCALAR | infer::BIG;
+/// What an accumulator licensed to cross a rewind may hold as an element. A
+/// bignum is a pointer into the arena when it is made, and the in-place push
+/// or put that stores it into a list or map older than the mark moves it to
+/// permanent storage first (`k_big_kept`), so it holds nothing the rewind
+/// frees by the time it is an element.
+const ELEM: Set = SCALAR | infer::BIG;
 /// Sets an entry-threaded bare parameter may carry across a rewind. A value
 /// that arrived at entry lives wholly below the mark — transitively, since
 /// purity means a value never contains pointers to anything newer than
@@ -76,7 +88,7 @@ const SCALAR: Set = INT | FLOAT | BOOL;
 /// one field a read writes into the header is the sorted view, and the view
 /// is malloc'd, so a rewind never frees what a below-mark header points at.
 /// Maps were kept out while the view lived in the arena.
-const THREADED: Set = SCALAR | NONE | STR | BYTES | FN | REC | DESC | LIST | MAP;
+const THREADED: Set = CROSSES | NONE | STR | BYTES | FN | REC | DESC | LIST | MAP;
 
 /// One self-recursive group's fate under the analysis. `Beat` is the only
 /// verdict codegen acts on; the others exist so `report` can say why a loop
@@ -782,7 +794,7 @@ fn cluster_edges_ok(
         let decl = &program.fns[*di];
         for (i, arg) in args.iter().enumerate() {
             let s = slot_set(*to, i);
-            if (s != 0 && s & !FAIL & !SCALAR == 0)
+            if (s != 0 && s & !FAIL & !CROSSES == 0)
                 || threaded.contains(&(*to, i))
                 || chain_threaded.contains(&(*to, i))
             {
@@ -1736,7 +1748,7 @@ fn scalar_elem(
                     .position(|pat| matches!(pat, Pattern::Var(v, _) if v == n))
                     .is_some_and(|j| {
                         let set = inference.param(decl_index, j);
-                        set != 0 && set & !FAIL & !SCALAR == 0
+                        set != 0 && set & !FAIL & !ELEM == 0
                     })
         }
         // A builtin answers from its own table; a function the program
@@ -1749,7 +1761,7 @@ fn scalar_elem(
         Expr::App { head, args, .. } => match head.as_ref() {
             Expr::Ident(n, _, _) => {
                 let set = infer::builtin_set(n, &vec![infer::TOP; args.len()]);
-                if set != 0 && set & !FAIL & !SCALAR == 0 {
+                if set != 0 && set & !FAIL & !ELEM == 0 {
                     return true;
                 }
                 // The declarations are walked rather than indexed by a map the
@@ -1761,7 +1773,7 @@ fn scalar_elem(
                     if d.name == *n && d.params.len() == args.len() {
                         named = true;
                         let r = inference.returns[i];
-                        if r == 0 || r & !FAIL & !SCALAR != 0 {
+                        if r == 0 || r & !FAIL & !ELEM != 0 {
                             return false;
                         }
                     }
@@ -1974,8 +1986,9 @@ fn arg_ok(
     // an empty set means inference saw no resolved call site — unknown,
     // never assumed safe
     let callee_set = group_param_set(program, inference, name, arity, position);
-    callee_set != 0 && callee_set & !FAIL & !SCALAR == 0
+    callee_set != 0 && callee_set & !FAIL & !CROSSES == 0
 }
+
 
 fn group_param_set(
     program: &Program,

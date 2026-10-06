@@ -1,0 +1,20 @@
+# A loop whose rewind carries a record it rebuilds also carries a bignum
+# beside it. The carry copies the record across the rewind; the bignum was
+# built in the same arena, so the edge lifts it out and back in around the
+# carry. The string each step builds lands where the bignum was.
+type rect
+  w
+  h
+
+fn tripled (rect w h) acc n
+  grown (rect w h) (acc * 3 + w) n
+
+fn grown _ acc 0
+  acc
+
+fn grown r acc n
+  pad = "{n}:{n}:{n}:{n}:{n}:{n}:{n}:{n}:{n}:{n}:{n}:{n}"
+  tripled r (acc + length pad - length pad) (n - 1)
+
+pub play = print "{tripled (rect 1 2) 1 300 % 1000000007}"
+  .> (_ -> print "{tripled (rect 0 2) 2 90}")

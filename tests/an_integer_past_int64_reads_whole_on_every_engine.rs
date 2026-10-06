@@ -1,17 +1,12 @@
-//! An integer written as text that a compiled build cannot hold is refused,
-//! with the diagnostic its arithmetic gives on overflow.
+//! An integer written as text past int64 is read whole by every engine.
 //!
 //! The interpreter reads `text/to_int "12345678901234567890"` as the whole
 //! integer, because a kanso int is arbitrary precision. A compiled build
-//! answered an err value, `"..." overflows this engine's integers`, which a
-//! program can catch and carry on from. std/json caught it and answered
-//! `parse_failure "invalid number"` for a well-formed document, so a program
-//! decoding one took a different path on each engine. Found by generated
-//! programs on 2026-09-28.
-//!
-//! Refusing is how the differential law lets an engine decline a value it
-//! cannot represent; `math/round` of a float past int64 does the same. Inside
-//! the range the engines agree to the byte, at both ends of it.
+//! answered an err value, `"..." overflows this engine's integers`, which
+//! std/json turned into `parse_failure "invalid number"` for a well-formed
+//! document. Found by generated programs on 2026-09-28; compiled builds then
+//! refused the number outright, and since the 2026-10-07 gavel they read it
+//! into a bignum.
 //!
 //! The text is built at run time, so no engine can fold the call away.
 
@@ -88,13 +83,9 @@ fn the_interpreter_reads_the_whole_integer() {
 }
 
 #[test]
-fn a_compiled_build_refuses_past_int64() {
-    for (tag, call, literal, _) in PAST {
-        let said = compiled(tag, call, literal);
-        assert!(
-            said.contains("integer overflow (int64 native build; spec int is arbitrary precision)"),
-            "{call} {literal} in a compiled build said {said:?}"
-        );
+fn a_compiled_build_reads_the_whole_integer() {
+    for (tag, call, literal, want) in PAST {
+        assert_eq!(compiled(tag, call, literal), want, "compiled {call} {literal}");
     }
 }
 
