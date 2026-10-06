@@ -1019,6 +1019,17 @@ jobs:
         run: |
           rustup target add wasm32-unknown-unknown
           sh scripts/build_wasm.sh
+      # The pages compile a program through the native emitter and run it on
+      # runtime.c built for wasm32. A page that cannot fetch the runtime
+      # interprets everything instead, so a job that left it out would be
+      # checking a route the site does not take.
+      - name: build the runtime the pages link against
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends clang-19 lld-19 wasi-libc
+          sudo ln -sf /usr/bin/clang-19 /usr/local/bin/clang
+          sudo ln -sf /usr/bin/wasm-ld-19 /usr/local/bin/wasm-ld
+          sh scripts/build_runtime_wasm.sh docs/kanso-runtime.wasm
       - run: cargo build --release
       - run: ./target/release/kanso run scripts/site_smoke
       # the mechanical half of the writing rules. the families it cannot see —
@@ -1037,6 +1048,17 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
+      # The pages compile a program through the native emitter and run it on
+      # runtime.c built for wasm32. A page that cannot fetch the runtime
+      # interprets everything instead, so a job that left it out would be
+      # checking a route the site does not take.
+      # scripts/browser_differential.sh builds it with these.
+      - name: the toolchain for the runtime the pages link against
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends clang-19 lld-19 wasi-libc
+          sudo ln -sf /usr/bin/clang-19 /usr/local/bin/clang
+          sudo ln -sf /usr/bin/wasm-ld-19 /usr/local/bin/wasm-ld
       - run: |
           rustup target add wasm32-unknown-unknown
           bash scripts/browser_differential.sh || {

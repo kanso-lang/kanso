@@ -8,7 +8,7 @@
 //! deterministic to the byte, so they are pinned rather than bounded, and a
 //! change to what the hash holds turns this red. That is the point: the entry
 //! that stops matching is the reminder, the same contract
-//! tests/golden/wasm_gaps.txt keeps.
+//! tests/golden/native_route_gaps.txt keeps.
 //!
 //! The next three paragraphs describe the hash as it was before kanso#1580,
 //! and are kept because the figures in them were measured then.

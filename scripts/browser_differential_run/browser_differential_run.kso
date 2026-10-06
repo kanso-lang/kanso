@@ -18,6 +18,7 @@ type program
 type served
   page
   wasm
+  runtime
 
 dirs = ["examples" "tests/golden/runtime" "tests/golden/micro"]
 
@@ -134,11 +135,15 @@ fn counted progs
 
 fn with_page progs
   page = page_for progs
-  on = (w -> with_engine progs page w)
+  on = (w -> with_runtime progs page w)
   os/read_bytes! "docs/kanso.wasm" .> on
 
-fn with_engine progs page w
-  set = served page w
+fn with_runtime progs page w
+  on = (r -> with_engine progs page w r)
+  os/read_bytes! "docs/kanso-runtime.wasm" .> on
+
+fn with_engine progs page w r
+  set = served page w r
   on = (told_where -> chosen progs set told_where)
   os/env "KANSO_CHROME" .> on
 
@@ -388,8 +393,8 @@ pinned = "KANSO_SEED=2685821657"
 # Where the native side runs a library from. The directory comes along for the
 # fixtures beside a program, any directory sharing the sample's name is removed
 # because an import cannot name both, and the entry that imports it is written
-# there. The seed matches the page's kanso_set_seed, or a program that calls
-# `random` compares two unrelated streams.
+# there. The seed matches the KANSO_SEED the page hands the runtime, or a
+# program that calls `random` compares two unrelated streams.
 fn shell script
   os/run "sh" ["-c" script]
 
@@ -439,11 +444,10 @@ fn ran_native p _
   here = dir_of p.path
   ran_in here "run" (file_of p.path)
 
-# The page the tab runs: it fetches the engine, compiles each case through
-# kanso_compile_wasm (or the play door for a file holding both declarations and
-# statements), instantiates what comes back, executes it, and posts the whole
-# tally home. Taken verbatim from the python it replaces, so the two stay
-# comparable line for line while the swap is made.
+# The page the tab runs: it fetches the engine and the runtime, compiles each
+# case through kanso_compile_native (or the play door for a file holding both
+# declarations and statements), links what comes back against a fresh instance
+# of the runtime, runs it, and posts the whole tally home.
 #
 # A text block takes real line breaks rather than escapes, so the three places
 # the script writes a `\n` into a template literal are carried as __BSN__ and
@@ -467,7 +471,6 @@ page_template = """
   const tailCalls = WebAssembly.validate(TAILCALL_PROBE);
 
   let wasm = null;
-  let programTable = null;
 
   function writeInput(text) \{
     const bytes = new TextEncoder().encode(text);
@@ -481,19 +484,95 @@ page_template = """
     return new TextDecoder().decode(out);
   }
 
-  function rtImports() \{
-    const env = \{};
-    for (const key of Object.keys(wasm)) \{
-      if (key.startsWith('rt_')) env[key] = wasm[key];
-    }
-    return env;
+  class ProcExit \{
+    constructor(code) \{ this.code = code; }
   }
+
+  // The WASI calls the runtime makes, answered as docs/kanso-engine.js answers
+  // them: no terminal, a clock that a sleep moves, no files, no processes.
+  function wasiHost(env) \{
+    const host = \{ memory: null, out: [], err: [], slept: 0n, start: BigInt(Date.now()) * 1000000n };
+    const view = () => new DataView(host.memory.buffer);
+    const bytes = () => new Uint8Array(host.memory.buffer);
+    const entries = Object.entries(env).map(([k, v]) => new TextEncoder().encode(`$\{k}=$\{v}` + String.fromCharCode(0)));
+    const calls = \{
+      fd_write(fd, iovs, n, written) \{
+        let total = 0;
+        for (let k = 0; k < n; k++) \{
+          const p = view().getUint32(iovs + k * 8, true);
+          const len = view().getUint32(iovs + k * 8 + 4, true);
+          (fd === 2 ? host.err : host.out).push(bytes().slice(p, p + len));
+          total += len;
+        }
+        view().setUint32(written, total, true);
+        return 0;
+      },
+      args_sizes_get(count, size) \{
+        view().setUint32(count, 0, true);
+        view().setUint32(size, 0, true);
+        return 0;
+      },
+      args_get() \{ return 0; },
+      environ_sizes_get(count, size) \{
+        view().setUint32(count, entries.length, true);
+        view().setUint32(size, entries.reduce((n, e) => n + e.length, 0), true);
+        return 0;
+      },
+      environ_get(at, buf) \{
+        for (const e of entries) \{
+          view().setUint32(at, buf, true);
+          bytes().set(e, buf);
+          at += 4;
+          buf += e.length;
+        }
+        return 0;
+      },
+      random_get(buf, len) \{
+        crypto.getRandomValues(bytes().subarray(buf, buf + len));
+        return 0;
+      },
+      fd_fdstat_get(fd, stat) \{
+        bytes().fill(0, stat, stat + 24);
+        return 0;
+      },
+      fd_prestat_get() \{ return 8; },
+      clock_time_get(id, precision, at) \{
+        view().setBigUint64(at, host.start + host.slept, true);
+        return 0;
+      },
+      poll_oneoff(subs, events, n, count) \{
+        for (let k = 0; k < n; k++) \{
+          const sub = subs + k * 48;
+          const tag = bytes()[sub + 8];
+          if (tag === 0) host.slept += view().getBigUint64(sub + 24, true);
+          bytes().fill(0, events + k * 32, events + k * 32 + 32);
+          bytes().set(bytes().slice(sub, sub + 8), events + k * 32);
+          bytes()[events + k * 32 + 10] = tag;
+        }
+        view().setUint32(count, n, true);
+        return 0;
+      },
+      sched_yield() \{ return 0; },
+      proc_exit(code) \{ throw new ProcExit(code); },
+    };
+    host.imports = new Proxy(calls, \{ get: (target, name) => target[name] || (() => 52) });
+    return host;
+  }
+
+  function joined(chunks) \{
+    const all = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0));
+    let at = 0;
+    for (const c of chunks) \{
+      all.set(c, at);
+      at += c.length;
+    }
+    return new TextDecoder().decode(all);
+  }
+
+  let runtimeModule = null;
 
   async function runCase(c) \{
     const name = writeInput(c.name.split('/').pop());
-    // pin the dice: the native side gets the same value through KANSO_SEED, or
-    // a program that calls `random` compares two unrelated streams
-    wasm.kanso_set_seed(SEED);
     // A corpus program that exports `play` is a library, so the engine is
     // handed it under the name an import will use and compiles the entry that
     // runs it — the same two files the native side gets, neither read from a
@@ -514,40 +593,58 @@ page_template = """
     const \{ ptr, len } = writeInput(source);
     // a playground sample is a play file: declarations and statements in one
     // buffer, which the run door does not accept and the play door does
-    const compile = c.play ? wasm.kanso_play_wasm : wasm.kanso_compile_wasm;
-    const status = compile(ptr, len, tailCalls ? 1 : 0);
+    const compile = c.play ? wasm.kanso_play_native : wasm.kanso_compile_native;
+    const status = compile(ptr, len);
     if (status === 2) return \{ kind: 'compile-error', code: 2, text: readOut() };
     if (status === 1) return \{ kind: 'fallback', reason: readOut() };
-    const bytes = new Uint8Array(wasm.memory.buffer, wasm.kanso_wasm_ptr() >>> 0, wasm.kanso_wasm_len() >>> 0).slice();
-    let instance;
+    const side = new Uint8Array(wasm.memory.buffer, wasm.kanso_wasm_ptr() >>> 0, wasm.kanso_wasm_len() >>> 0).slice();
+    const data = wasm.kanso_side_data() >>> 0;
+    const slots = wasm.kanso_side_table() >>> 0;
+    // pin the dice: the native side gets the same value through KANSO_SEED, or
+    // a program that calls `random` compares two unrelated streams
+    const host = wasiHost(\{ KANSO_SEED: String(SEED) });
+    const runtime = await WebAssembly.instantiate(runtimeModule, \{ wasi_snapshot_preview1: host.imports });
+    const rt = runtime.exports;
+    host.memory = rt.memory;
+    const env = \{
+      memory: rt.memory,
+      __indirect_function_table: rt.__indirect_function_table,
+      __memory_base: new WebAssembly.Global(\{ value: 'i32', mutable: false }, rt.malloc(data)),
+      __table_base: new WebAssembly.Global(\{ value: 'i32', mutable: false }, rt.__indirect_function_table.grow(slots)),
+    };
+    let module;
     try \{
-      (\{ instance } = await WebAssembly.instantiate(bytes, \{ env: rtImports() }));
+      module = await WebAssembly.compile(side);
     } catch (e) \{
       return \{ kind: 'reject', reason: String(e) };
     }
-    programTable = instance.exports.table;
-    let handle;
-    try \{
-      handle = instance.exports.main();
-    } catch (e) \{
-      wasm.kanso_take_rt_error();
-      return \{ kind: 'wasm', code: 1, text: readOut() };
+    for (const imp of WebAssembly.Module.imports(module)) \{
+      if (!(imp.name in env)) env[imp.name] = rt[imp.name];
     }
-    let code;
+    let code = 0;
     try \{
-      code = wasm.kanso_exec_main(handle);
+      await WebAssembly.instantiate(module, \{ env });
+      rt._start();
     } catch (e) \{
-      wasm.kanso_take_rt_error();
-      return \{ kind: 'wasm', code: 1, text: readOut() };
+      if (e instanceof ProcExit) \{
+        code = e.code;
+      } else if (e instanceof RangeError) \{
+        wasm.kanso_stack_exhausted();
+        host.err.push(new TextEncoder().encode(readOut()));
+        code = 1;
+      } else \{
+        return \{ kind: 'crash', reason: String((e && e.stack) || e) };
+      }
     }
-    return \{ kind: 'wasm', code, text: readOut() };
+    return \{ kind: 'wasm', code, text: joined(host.out) + joined(host.err) };
   }
 
   async function main() \{
     const response = await fetch('kanso.wasm');
-    const imports = \{ env: \{ k_callback: (t, e, a) => programTable.get(t)(e, a) } };
+    const imports = \{ env: \{ k_callback: () => 0 } };
     const \{ instance } = await WebAssembly.instantiate(await response.arrayBuffer(), imports);
     wasm = instance.exports;
+    runtimeModule = await WebAssembly.compile(await (await fetch('kanso-runtime.wasm')).arrayBuffer());
     const results = [];
     for (const c of CASES) \{
       let r;
@@ -605,6 +702,9 @@ fn body_for "/index.html" set
 
 fn body_for "/kanso.wasm" set
   set.wasm
+
+fn body_for "/kanso-runtime.wasm" set
+  set.runtime
 
 fn body_for _ _
   none
@@ -695,12 +795,13 @@ fn kept_crash acc _ none
 fn kept_crash acc _ _
   acc
 
-# The gaps live in tests/golden/wasm_gaps.txt, which tests/wasm_engine.rs reads
-# too: one home, so a gap cannot close in one harness and stay written down in
-# the other. Each line is a path and the text the wasm engine answers instead.
+# The gaps live in tests/golden/native_route_gaps.txt, which
+# tests/wasm_engine.rs reads too: one home, so a gap cannot close in one
+# harness and stay written down in the other. Each line is a path and the text
+# the page answers instead.
 fn with_gaps progs seen
   on = (text -> against progs seen (gaps_from text) 1 [] 0 0)
-  os/read_file! "tests/golden/wasm_gaps.txt" .> on
+  os/read_file! "tests/golden/native_route_gaps.txt" .> on
 
 fn gaps_from text
   lines = text/split text "\n"
@@ -793,7 +894,8 @@ fn still_listed progs seen gaps at bad agreed skipped _ none
 # A gap that closed and stayed written down is a lie about the engine, so it
 # fails here rather than passing quietly.
 fn still_listed progs seen gaps at bad agreed skipped p _
-  why = "{p.path}: agrees now — take it out of tests/golden/wasm_gaps.txt"
+  listing = "tests/golden/native_route_gaps.txt"
+  why = "{p.path}: agrees now — take it out of {listing}"
   against progs seen gaps (at + 1) (text/concat bad [why]) agreed skipped
 
 fn noted_pair progs seen gaps at bad agreed skipped p r said false

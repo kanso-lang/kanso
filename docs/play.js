@@ -26,7 +26,7 @@ function syncMirror() {
 
 async function run() {
   const result = await playSource(editor.value);
-  const badge = { wasm: '⚡ compiled to wasm in your tab', interp: 'interpreted', error: '' }[result.engine];
+  const badge = { native: '⚡ compiled to wasm in your tab', interp: 'interpreted', error: '' }[result.engine];
   output.textContent = (result.text || '(no output)') + (badge ? `\n\n— ${badge}` : '');
   output.classList.toggle('play-error', result.code !== 0);
 }

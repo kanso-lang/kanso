@@ -146,23 +146,9 @@ function highlight(source) {
 
 let wasm = null;
 
-/* the compiled program's function table; k_callback lets host-side closures
-   (map, filter, bind) call back into it */
-let programTable = null;
-
-/* wasm tail calls: a tiny module using return_call, validated up front */
-const TAILCALL_PROBE = new Uint8Array([
-  0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
-  0x01, 0x04, 0x01, 0x60, 0x00, 0x00,
-  0x03, 0x02, 0x01, 0x00,
-  0x0a, 0x06, 0x01, 0x04, 0x00, 0x12, 0x00, 0x0b,
-]);
-const tailCalls = WebAssembly.validate(TAILCALL_PROBE);
-
 async function loadWasm() {
   const response = await fetch(new URL('kanso.wasm', HERE));
-  const imports = { env: { k_callback: (t, e, a) => programTable.get(t)(e, a) } };
-  const { instance } = await WebAssembly.instantiate(await response.arrayBuffer(), imports);
+  const { instance } = await WebAssembly.instantiate(await response.arrayBuffer(), {});
   wasm = instance.exports;
 }
 
@@ -183,49 +169,6 @@ function callKanso(entry, text) {
   const code = wasm[entry](ptr, len);
   return { code, text: readOut() };
 }
-
-function rtImports() {
-  const env = {};
-  for (const key of Object.keys(wasm)) {
-    if (key.startsWith('rt_')) env[key] = wasm[key];
-  }
-  return env;
-}
-
-/* compile the editor's program to a wasm module and run it natively in the
-   tab; returns null when the browser backend doesn't cover the program yet
-   (the interpreter picks it up) */
-async function runCompiled(src, compileFn) {
-  const { ptr, len } = writeInput(src);
-  const status = compileFn(ptr, len, tailCalls ? 1 : 0);
-  if (status === 2) return { code: 1, text: readOut(), engine: 'error' };
-  if (status === 1) return null;
-  const bytes = new Uint8Array(wasm.memory.buffer, wasm.kanso_wasm_ptr() >>> 0, wasm.kanso_wasm_len() >>> 0).slice();
-  let instance;
-  try {
-    ({ instance } = await WebAssembly.instantiate(bytes, { env: rtImports() }));
-  } catch (e) {
-    console.warn('kanso wasm backend emitted a module the engine rejected', e);
-    return null;
-  }
-  programTable = instance.exports.table;
-  let handle;
-  try {
-    handle = instance.exports.main();
-  } catch (e) {
-    wasm.kanso_take_rt_error();
-    return { code: 1, text: readOut(), engine: 'wasm' };
-  }
-  let code;
-  try {
-    code = wasm.kanso_exec_main(handle);
-  } catch (e) {
-    wasm.kanso_take_rt_error();
-    return { code: 1, text: readOut(), engine: 'wasm' };
-  }
-  return { code, text: readOut(), engine: 'wasm' };
-}
-
 
 /* ---------- the native route: the emitter's module on runtime.c ----------
 
@@ -340,7 +283,9 @@ function joined(chunks) {
 
 /* compile the editor's program through the native emitter and run it on the
    runtime; returns null when the route is unavailable or declines the
-   program, and the older route picks it up */
+   program, and the interpreter picks it up. The runtime is built with tail
+   calls, so a browser without them cannot compile it and runs every program
+   in the interpreter. */
 async function runNative(src, compileFn) {
   if (!runtimeModule) return null;
   const { ptr, len } = writeInput(src);
@@ -397,27 +342,24 @@ async function ready() {
   if (!wasm) await Promise.all([loadWasm(), loadRuntime()]);
 }
 
-/* Run a program the way the playground does: compiled to wasm when the
-   backend covers it, interpreted when it declines. */
+/* Run a program the way the playground does: compiled through the native
+   emitter and run on the runtime, interpreted when that route is
+   unavailable. */
 async function runSource(src) {
   await ready();
   wasm.kanso_set_seed(Date.now() >>> 0);
   const native = await runNative(src, wasm.kanso_compile_native);
   if (native) return native;
-  const compiled = await runCompiled(src, wasm.kanso_compile_wasm);
-  if (compiled) return compiled;
   return Object.assign(callKanso('kanso_run', src), { engine: 'interp' });
 }
 
 /* Run a playground buffer: a play file — declarations and statements in
-   one file, stdlib imports only. Same two engines, the play door. */
+   one file, stdlib imports only. The same two routes, through the play door. */
 async function playSource(src) {
   await ready();
   wasm.kanso_set_seed(Date.now() >>> 0);
   const native = await runNative(src, wasm.kanso_play_native);
   if (native) return native;
-  const compiled = await runCompiled(src, wasm.kanso_play_wasm);
-  if (compiled) return compiled;
   return Object.assign(callKanso('kanso_play', src), { engine: 'interp' });
 }
 
@@ -436,8 +378,6 @@ async function runLibrary(stem, src) {
   const entry = `import "${stem}"\n\n${stem}/play\n`;
   const native = await runNative(entry, wasm.kanso_compile_native);
   if (native) return native;
-  const compiled = await runCompiled(entry, wasm.kanso_compile_wasm);
-  if (compiled) return compiled;
   return Object.assign(callKanso('kanso_run', entry), { engine: 'interp' });
 }
 

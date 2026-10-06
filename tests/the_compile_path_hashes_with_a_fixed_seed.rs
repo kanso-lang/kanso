@@ -48,18 +48,11 @@ fn root() -> &'static Path {
 ///
 /// `kanso check` is the whole of what the three compile gates run. A container
 /// only these paths build is never constructed while that command is counted.
-const OFF_THE_COUNTED_PATH: &[(&str, &str)] = &[
-    (
-        "src/wasm_rt.rs",
-        "the wasm runtime shim, compiled into the wasm blob rather than into a \
-         path `kanso check` walks.",
-    ),
-    (
-        "src/main.rs",
-        "narrow_tailcc, which rewrites emitted LLVM IR. The compile rows stop \
+const OFF_THE_COUNTED_PATH: &[(&str, &str)] = &[(
+    "src/main.rs",
+    "narrow_tailcc, which rewrites emitted LLVM IR. The compile rows stop \
          before codegen; only `kanso build` reaches it.",
-    ),
-];
+)];
 
 #[test]
 fn the_compile_path_hashes_with_a_fixed_seed() {
