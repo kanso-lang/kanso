@@ -404,6 +404,16 @@ fn call_closure(c_h: u32, arg_handles: Vec<u32>) -> u32 {
             if is_failure(&value) {
                 return c_h;
             }
+            // A callable the embedded interpreter made, which the page meets
+            // as the `ref` a `list/tie` hands its maker. The interpreter calls
+            // it, and the tie it belongs to is the one still running there.
+            if matches!(value, Value::FnRef(_) | Value::Partial(..) | Value::Closure(_)) {
+                let args = arg_handles.iter().map(|&h| value_of(h)).collect();
+                return match with_interp(|interp| interp.call_value(value, args, SPAN0)) {
+                    Ok(v) => push(Slot::V(v)),
+                    Err(rt) => die(rt.message),
+                };
+            }
             die(format!("`{}` is not callable", render_demanded(&value, false)));
         }
         die("this value is not callable".to_string());

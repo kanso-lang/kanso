@@ -226,6 +226,10 @@ struct Ran {
 fn execute(wasm: &Path) -> Ran {
     let mut config = Config::default();
     config.consume_fuel(true);
+    // wasmi stops at a thousand frames, where a browser gives a page several
+    // times that and native runs on an 8 MB stack: three hundred nested ties
+    // reach past a thousand frames on every engine that runs them.
+    config.set_max_recursion_depth(10_000);
     let engine = Engine::new(&config);
     let module = Module::new(&engine, &std::fs::read(wasm).expect("the module reads")[..])
         .expect("the module parses");

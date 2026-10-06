@@ -1,0 +1,16 @@
+import "std/list"
+
+# `ref` may be handed to a function of the program, and that function is held
+# to the same rule as the maker: here the helper reads through the reference,
+# and the refusal points at the helper's line.
+type station
+  name
+  next
+
+fn named ref k
+  (ref k).name
+
+fn make k ref
+  station (named ref k) (ref k)
+
+pub play = print "{length (list/tie ["a" "b"] make)}"

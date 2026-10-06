@@ -1,0 +1,22 @@
+import "std/list"
+
+# An arm can name the node a field leads to, as `second` does. Native
+# rewrites each field that held a tie's cell to hold the node, and until
+# 2026-10-05 the interpreter left the filled cell in the field, so the nested
+# pattern matched on native and missed on the interpreter.
+type ring
+  id
+  next
+
+fn second none
+  0
+
+fn second (ring _ (ring d _))
+  d
+
+fn second _
+  0
+
+pub play =
+  rings = list/tie [1 2] (id ref -> ring id (ref (3 - id)))
+  print "{second rings[1]} {second rings[2]}"
