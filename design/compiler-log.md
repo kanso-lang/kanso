@@ -21835,3 +21835,51 @@ and gives some of the size back.
 route through its own inline page, and `site_smoke` serves no runtime, so its
 pages take the fallback. The wasmi walk above is what holds the native route
 to the goldens until the Chrome harness learns it.
+
+## 2026-10-06 — one engine in the tab: the older wasm backend goes
+
+The playground now has one way to run a compiled program: the native emitter's
+module, lowered by `ir_wasm` and linked against `runtime.c` built for wasm32.
+The backend that lowered the AST to wasm of its own and ran it against a Rust
+runtime inside `kanso.wasm` is deleted: `src/wasm_backend.rs`,
+`src/wasm_rt.rs`, the four exports that drove them, and `runCompiled` in
+`docs/kanso-engine.js`. A page that cannot fetch or compile
+`kanso-runtime.wasm` interprets every program, which is what a browser without
+wasm tail calls does, since the runtime is built with them.
+
+**Held to the corpus in Chrome.** The headless-Chrome differential now drives
+the native route: its page fetches the runtime, links each program the way
+`docs/kanso-engine.js` does, and compares stream and exit with native. It reads
+554 programs that agree and the six host-input programs in
+`tests/golden/native_route_gaps.txt`, with none disagreeing. `site_smoke` serves
+the runtime too, and asserts that the playground's run says it was compiled
+rather than interpreted. The site job and the browser job build the runtime.
+
+**The cargo walk.** `tests/wasm_engine.rs` runs every program through the
+toolchain on the new route, and the specs that pinned behaviour on the older
+engine now pin it on this one: an accumulator extended in place, a seed copied
+once, a lazy binding nobody reads, a merged err with no birth site, an exit
+code carried out, the error corpus refused in native's words. All nineteen
+pass. The one program the old walk held out, a guarded shape that is not a
+knot, outran the test process's stack there; wasmi keeps its own stack, and it
+agrees with native now, so nothing is held out. Two specs went with the engine
+they described: the page running out of memory and the program after it, both
+about the registry the older runtime kept between runs. A fresh runtime
+instance per run leaves nothing to carry over.
+
+**The ratchet.** Twenty-two rows proved checks that watched the deleted code,
+and they go with their mutations: twenty gated on the older engine's specs, and
+two on `diagnostic_coverage`'s scan of `wasm_rt.rs`'s own refusals, which goes
+with the eleven sentences it had listed in `tests/golden/unpinned_diagnostics.txt`.
+`in_the_page` now mutates `kanso_stack_exhausted`, the page's own sentence for a
+trapped stack, and Chrome's walk turned red on `deep_recursion` alone. A new
+row, `page_route`, has the translator write `sub` for `add`, and the cargo walk
+turned red on 117 programs.
+
+**Size.** On rustc 1.98.1, `kanso.wasm` falls from 3,237,163 bytes to 2,941,620,
+which is 913,489 to 864,246 gzipped. With the runtime's 105,100 gzipped bytes a
+first visit downloads 969,346 compressed bytes, against 652,614 before the tab
+compiled at all. The native emitter is most of what remains of the growth.
+
+The browser rows do not move: `tests/browser_cost.rs` already measured the
+native route.
