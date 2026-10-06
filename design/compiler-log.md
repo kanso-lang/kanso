@@ -22177,7 +22177,8 @@ quotient may be a bignum, so the arithmetic in its fixture tests the tag
 whatever inference said, and the row now reads
 `arithmetic_on_a_modulo_by_zero_is_refused`: a remainder by a word is a word,
 and typed that way an inference that calls the zero divisor's answer an err
-multiplies the string's address.
+multiplies the string's address. On CI the byte run took runbench to
+1,211,249,119, 11.3% over main, and jsonbench to 879,581,206.
 
 A dev build and the tab get no twins. A twin buys run speed with a second
 copy of each looping group, and the tab's compile of interp_corpus read
@@ -22204,18 +22205,19 @@ stack with twins and without them. The harness now uses 2000, the threshold
 native's release link already uses.
 
 The floor drops by what this costs, under the 2026-09-13 rule for building
-the specified language: 90.0696 to 89.3861 on CI's rows. Projected without
+the specified language: 90.0696 to 89.4906 on CI's rows, with the byte run
+back in place. Projected without
 the twins, from this container's ratios on runbench and the release codegen
 row, the index reads 89.19, so they stay.
 
 Every counter that rose, at the value it landed on. The compile goldens,
 where a word run and its general re-run are emitted for what used to be one
-expression: `branches` 52, `calls` 86, `defines` 45, `lines` 1,564,
-`rounds` 13 and `visits` 121, and for modules `module_branches` 105,
-`module_calls` 128, `module_defines` 29, `module_lines` 1,280,
+expression: `branches` 52 `calls` 86 `defines` 45 `lines` 1,564
+`rounds` 13 and `visits` 121 and for modules `module_branches` 105
+`module_calls` 128 `module_defines` 29 `module_lines` 1,280
 `module_rounds` 8 and `module_visits` 2,909. The front end and the compiler's
-own work: `front_end_visits` 7,982, `compile_instructions` 26,191,422,
-`entry_instructions` 86,403,005, `library_instructions` 86,947,537,
+own work: `front_end_visits` 7,982 `compile_instructions` 26,191,422
+`entry_instructions` 86,403,005 `library_instructions` 86,947,537
 `compile_allocs` 14,747 and `emit_instructions` 32,132,166. The interpreter,
 by 1,320 instructions and six allocations: `interp_instructions`
 590,482,748 and `interp_allocs` 896,122. The two codegen tiers:
@@ -22229,18 +22231,18 @@ move. Each reading agreed with a second count in its own job, and a re-run of
 the third commit read 130,522,511 again, so the row is stable within a commit
 and moves between commits that carry the same compiler. In this container it
 reads 129,705,923 on both trees. Main's row did not move this way over the
-commits before this branch. The tab: `browser_compile_instructions` 633,010,618,
-`browser_compile_peak_bytes` 2,639,715 and `browser_run_instructions`
-33,447,328. The run programs: `work_basket` 32,465,828, `work_deepbench`
-370,955,233, `work_digestbench` 5,735,451, `work_encodebench` 2,382,879,127,
-`work_escapebench` 57,795,101, `work_indexbench` 2,458,503, `work_jsonbench`
-923,660,506, `work_livebench` 1,565,277,697, `work_oneshot` 13,859,803,
-`work_pendbench` 194,495,238, `work_readbench` 4,578,315, `work_runbench`
-1,240,341,240, `work_scanbench` 281,579 and `work_widebench` 28,254,259. The
-emitted code: `emitted_branches` 1,121, `emitted_calls` 1,018,
-`emitted_defines` 106, `emitted_lines` 10,074, `emitted_other_branches`
-16,450, `emitted_other_calls` 17,305, `emitted_other_defines` 1,971,
-`emitted_other_lines` 146,536 and `text` 4,619,088.
+commits before this branch. The tab: `browser_compile_instructions` 636,739,574
+`browser_compile_peak_bytes` 2,665,939 and `browser_run_instructions`
+33,495,845. The run programs: `work_basket` 32,465,828 `work_deepbench`
+370,955,233 `work_digestbench` 5,735,451 `work_encodebench` 2,382,879,127
+`work_escapebench` 57,795,101 `work_indexbench` 2,458,503 `work_jsonbench`
+879,581,206 `work_livebench` 1,564,983,541 `work_oneshot` 13,566,200
+`work_pendbench` 194,495,238 `work_readbench` 4,578,315 `work_runbench`
+1,211,249,119 `work_scanbench` 281,579 and `work_widebench` 28,254,259. The
+emitted code: `emitted_branches` 1,136 `emitted_calls` 1,018
+`emitted_defines` 106 `emitted_lines` 10,188 `emitted_other_branches`
+16,495 `emitted_other_calls` 17,305 `emitted_other_defines` 1,971
+`emitted_other_lines` 146,878 and `text` 4,622,752.
 
 The one-engine corpus held one program, which now runs on every engine in the
 micro corpus as `an_int_past_int64_on_every_engine`, so the corpus and its
