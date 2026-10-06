@@ -4811,7 +4811,18 @@ toolchain_pinned = row
   (breaking "a_job_takes_whatever_rustc_is_stable")
   no_setup
 
-rows_c1zzzzzzzf = text/concat rows_c1zzzzzzzg [toolchain_pinned]
+# A checkout builds with that same rustc, so a reading taken by hand is a
+# reading of CI's toolchain. Two playground sizes were published from a
+# container's default 1.94.1 before rust-toolchain.toml existed (2026-10-06).
+checkout_pinned = row
+  "a checkout that builds with whatever rustc the host has"
+  true
+  "cargo test --release --test the_toolchain_is_pinned_to_the_rows"
+  "specs (unit, golden, differential)"
+  (breaking "the_checkout_builds_with_its_own_rustc")
+  no_setup
+
+rows_c1zzzzzzzf = text/concat rows_c1zzzzzzzg [toolchain_pinned checkout_pinned]
 
 # `list/tie` fills each key's cell with its node once every node is made,
 # which is what turns the references the maker stored into a cycle
