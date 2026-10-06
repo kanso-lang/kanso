@@ -21817,6 +21817,12 @@ they landed on: `browser_compile_instructions` at 592,373,894 and
 `browser_compile_peak_bytes` at 2,256,216. The run terms
 pay for both many times over at the weights the 2026-10-06 placement chose.
 
+Three compile rows move because `src/ir_wasm.rs` and the new exports in
+`src/wasm.rs` are compiled into the native binary as well, where nothing calls
+them. They are layout moves, taken from CI: `compile_instructions` lands on
+26,074,590 (from 26,062,711), `entry_instructions` on 86,063,837 (from
+86,029,749) and `library_instructions` on 86,626,059 (from 86,591,709).
+
 **Size.** On rustc 1.98.1, `kanso.wasm` grows from 2,161,218 bytes to
 3,203,732, which is 652,614 to 903,326 gzipped. The runtime adds 254,532
 bytes, 103,080 gzipped. A first visit downloads about a megabyte compressed
