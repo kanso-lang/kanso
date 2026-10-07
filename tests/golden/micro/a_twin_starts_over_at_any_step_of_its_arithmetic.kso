@@ -1,0 +1,18 @@
+# A word twin's argument of several operations branches to the general body
+# from whichever operation leaves the word. `climb` crosses 2^63 on the
+# argument's last step, the `+ 1`; `twice` crosses it on the first, `p * 2`,
+# though the whole argument is only `p + 1`. Each answer must be the exact
+# integer, as the interpreter computes it.
+fn climb 0 p
+  p
+
+fn climb k p
+  climb (k - 1) (p * 1 + 1)
+
+fn twice 0 p
+  p
+
+fn twice k p
+  twice (k - 1) (p * 2 - p + 1)
+
+pub play = print "{climb 4 9223372036854775805} {twice 3 9223372036854775805}"

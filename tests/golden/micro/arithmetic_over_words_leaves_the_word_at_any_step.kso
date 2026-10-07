@@ -1,7 +1,7 @@
 # Arithmetic over words that leaves the word part of the way through. An
-# expression of several operations over words runs on raw words and tests for
-# overflow once, at the end, and re-runs the operations the general way when
-# any of them overflowed. A loop's `n + 1` handed to its own call folds its
+# expression of several operations over words runs on raw words, branches out
+# at the first operation that overflows, and re-runs the operations the
+# general way. A loop's `n + 1` handed to its own call folds its
 # overflow into the test that picks the word twin. `cs[p + 1]` over bytes reads
 # an index past the word as one no bytes hold. Each answer here crosses 2^63
 # at a different step.
@@ -64,6 +64,7 @@ fn report big
   l6 = "{walk abc 0 []} {walk xy (big - 1) []} {walk xy big []}"
   l7 = "{down (small + 3) []}"
   l8 = "{churn 3 5 []} {churn 3 (big / 2) []} {churn 2 big []}"
-  "{l1}\n{l2}\n{l3}\n{l4}\n{l5}\n{l6}\n{l7}\n{l8}"
+  l9 = "{mix big 1 1} {churn 3 (big / 31) []}"
+  "{l1}\n{l2}\n{l3}\n{l4}\n{l5}\n{l6}\n{l7}\n{l8}\n{l9}"
 
 pub play = print (report 9223372036854775807)
