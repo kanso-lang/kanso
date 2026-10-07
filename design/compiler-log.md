@@ -22971,14 +22971,14 @@ a test on every append, and still paid the scan later (+13,280,220 in
 library, known when the library was written, and no append pays for it. The
 later scan is still paid, in the vector loop.
 
-    runbench     1,187,675,072 -> 1,166,763,592   -20,911,480   -1.76%
-    livebench    1,564,885,266 -> 1,473,820,495   -91,064,771   -5.82%
-    pendbench      194,494,534 ->   192,800,677    -1,693,857   -0.87%
-    oneshot         13,467,834 ->    13,239,626      -228,208   -1.69%
-    deepbench      370,955,233 ->   370,966,282       +11,049
+    runbench     1,187,675,072 -> 1,166,762,755   -20,912,317   -1.76%
+    livebench    1,564,885,266 -> 1,473,820,842   -91,064,424   -5.82%
+    pendbench      194,494,534 ->   192,801,138    -1,693,396   -0.87%
+    oneshot         13,467,834 ->    13,239,964      -227,870   -1.69%
 
-encodebench and widebench carry copies of the encoder of their own and moved
-by less than a hundred, and the rest by a few hundred. On the run program
+These are CI's readings. encodebench and widebench carry copies of the encoder
+of their own: encodebench rose 434 and widebench held. Of the rest, basket fell
+18,950 and indexbench, scanbench and digestbench rose 6, 66 and 40. On the run program
 `utf8_bytes` falls 20,292,857 -> 3,310,037, and `str_scans` rises 138 -> 228
 and `str_scan_bytes` 945,324 -> 17,928,144: 90 documents whose length was
 asked are still read once, by the vector loop.
@@ -22997,14 +22997,19 @@ The rows that rose:
   with both binaries copied to one directory. It arrived in
   `Interp::callee_missed` (+559,730), the slow path behind the interpreter's
   direct-mapped table of recent callees, which is keyed by the address of the
-  callee's name. Which name now misses, and why, was not isolated.
-  interp_allocs fell 873,378 -> 873,373 and startup_instructions 52,396 ->
-  51,286.
+  callee's name. Which name now misses, and why, was not isolated. Asking
+  the slot's neighbour before the map, with a fill moving the old entry
+  there, read 585,289,619 (+107,528 more) when a neighbour hit swapped the
+  two back, and 585,262,218 (+80,127) when it did not; `callee_missed` still
+  counted 696,407 and 679,558, so the misses are not two names trading one
+  slot. Neither was kept.
+  interp_allocs fell 873,378 -> 873,373.
 - **browser_compile_instructions 519,106,529 -> 519,230,261 (+123,732)**, and
   the front end's rows read on this container: compile_instructions +40,988,
   entry_instructions +131,784, library_instructions +132,770 and
-  emit_instructions +12,488. compile_allocs fell 14,747 -> 14,745. The codegen
-  rows read lower here, and CI's readings stand.
+  emit_instructions +12,488. compile_allocs fell 14,747 -> 14,745. On CI
+  codegen_instructions_dev rose 126,434,707 -> 126,446,253 (+11,546) and
+  codegen_instructions_release fell 496,747,166 -> 496,667,112 (-80,054).
 
 Every counter that rose, at the value it landed on. Each `str_scan_bytes` row
 rose by exactly what the `utf8_bytes` row beside it fell: the same bytes, read
@@ -23022,8 +23027,10 @@ by the count instead of the check.
     a_maps_two_columns_are_one_allocation_str_scan_bytes     0 -> 17,787
     a_nested_map_gives_back_its_entries_str_scans            0 -> 1
     a_nested_map_gives_back_its_entries_str_scan_bytes       0 -> 269,038
-    work_deepbench                         370,955,233 -> 370,966,282
-    work_encodebench                     2,382,771,679 -> 2,382,771,766
+    work_encodebench                     2,382,771,679 -> 2,382,772,113
+    work_indexbench                          2,458,503 -> 2,458,509
+    work_scanbench                             281,628 -> 281,694
+    work_digestbench                         5,649,145 -> 5,649,185
     text                                     4,582,368 -> 4,594,256
     compile_instructions                    26,131,846 -> 26,172,834
     entry_instructions                      86,221,710 -> 86,353,494
