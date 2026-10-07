@@ -338,10 +338,25 @@ impl<'a> Analysis<'a> {
             mentions,
             handles,
         };
+        // A parameter enters the set only if the half of its linearity
+        // that no removal can change already holds: every arm moves it, and
+        // the group is called by name where a call can be seen. Asked once
+        // here, those were asked again on every fixpoint round for every
+        // parameter still standing, and the arm half's use count was 10.0M of
+        // the 204.5M the tab spends compiling `bench/interp_corpus`. The
+        // fixpoint then asks only the call sites, which are what removal
+        // changes. A greatest fixpoint has one answer whichever order the
+        // removals come in, so the set it ends on is the same set.
+        let mut seeds = Vec::new();
         for decl in real_fns(program) {
             a.returns_unique.insert((decl.name.clone(), decl.params.len()));
             for i in 0..decl.params.len() {
-                a.linear_params.insert((decl.name.clone(), decl.params.len(), i));
+                seeds.push((decl.name.clone(), decl.params.len(), i));
+            }
+        }
+        for (name, arity, i) in seeds {
+            if a.arms_move(&name, arity, i) && a.called_by_name(&name, arity) {
+                a.linear_params.insert((name, arity, i));
             }
         }
         a.fixpoint();
@@ -354,7 +369,7 @@ impl<'a> Analysis<'a> {
             let drop_params: Vec<_> = self
                 .linear_params
                 .iter()
-                .filter(|(name, arity, i)| !self.param_is_linear(name, *arity, *i))
+                .filter(|(name, arity, i)| !self.call_sites_hand_over(name, *arity, *i))
                 .cloned()
                 .collect();
             for k in drop_params {
@@ -393,7 +408,12 @@ impl<'a> Analysis<'a> {
             .filter(move |d| d.params.len() == arity)
     }
 
-    fn param_is_linear(&self, name: &str, arity: usize, i: usize) -> bool {
+    /// The arm half of a parameter's linearity: every arm moves it. The caller
+    /// half is `callers_hand_over`, asked in front of the two refusals for a
+    /// group whose calls the walk cannot see, so that a folder handed to
+    /// `fold`, mentioned as a value and never called by name, is not marked an
+    /// accumulator on the silence of a walk that found no call site.
+    fn arms_move(&self, name: &str, arity: usize, i: usize) -> bool {
         // In every arm the parameter must be moved: a plain Var used at most
         // once, or a wildcard (dropped, used zero times). Anything else — a
         // literal discriminator, a destructure — can't be a linear accumulator.
@@ -408,22 +428,15 @@ impl<'a> Analysis<'a> {
                 _ => return false,
             }
         }
-        // Every call site must pass a uniquely-owned list at position i, asked
-        // through `callers_hand_over` — which is this same walk, in front of
-        // the two refusals for a group whose calls the walk cannot see. It was
-        // written out a second time here instead, so those refusals sat in a
-        // caller half that the granting path never consulted: a folder handed
-        // to `fold` is mentioned as a value and never called by name, the walk
-        // found no call site to object to, and the first parameter was marked
-        // an accumulator on that silence.
-        self.callers_hand_over(name, arity, i)
+        true
     }
 
     /// Every call site of this group hands over a uniquely-owned value at `i`.
     ///
-    /// This is the caller half of `param_is_linear`, and `param_is_linear`
-    /// asks it — so the two refusals below reach the grant, which is the whole
-    /// point of them. It is also asked on its own at the reuse sites, without
+    /// This is the caller half of a parameter's linearity. The analysis asks
+    /// its two refusals when it seeds the set (`called_by_name`) and its walk
+    /// on every round (`call_sites_hand_over`), so the refusals reach the
+    /// grant, which is the whole point of them. It is also asked on its own at the reuse sites, without
     /// the other half. That half — used at most once — is deliberately not
     /// asked there, because a record read twice for its fields is used twice
     /// and is still finished afterwards; the reuse site replaces it with a
@@ -436,9 +449,17 @@ impl<'a> Analysis<'a> {
         // With no call sites to look at the question answers yes for free,
         // and a parameter marked an accumulator on that answer reaches the
         // runtime as a plain string it was promised it could write into.
-        if crate::is_operator(name) || self.escapes_as_value(name, arity) {
-            return false;
-        }
+        self.called_by_name(name, arity) && self.call_sites_hand_over(name, arity, i)
+    }
+
+    /// The two refusals in front of `callers_hand_over`'s walk. Neither reads
+    /// anything the fixpoint removes, so the seeding asks them once.
+    fn called_by_name(&self, name: &str, arity: usize) -> bool {
+        !crate::is_operator(name) && !self.escapes_as_value(name, arity)
+    }
+
+    /// `callers_hand_over`'s walk over the call sites, without its refusals.
+    fn call_sites_hand_over(&self, name: &str, arity: usize, i: usize) -> bool {
         // ONLY THE DECLARATIONS THAT NAME IT. `callsites_unique` answers false
         // only where it finds a call to `name`, so a declaration whose body
         // never mentions the name at all can only answer true, and walking it
@@ -1725,7 +1746,7 @@ mod the_group_index_answers_what_the_scan_answered {
                         std::ptr::eq(*w, *g),
                         "`{name}` at arity {arity}: the index answered a different declaration, \
                          or the same ones in a different order -- the fixpoint reads them in \
-                         order and `param_is_linear` stops at the first arm that disproves, so \
+                         order and `arms_move` stops at the first arm that disproves, so \
                          order is part of the answer"
                     );
                 }

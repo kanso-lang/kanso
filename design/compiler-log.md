@@ -22315,6 +22315,41 @@ CI's rows: `codegen_instructions_dev` 130,522,511 -> 126,434,707
 503,519,717 (-85,527). Gold reads one small directory where it read nine
 large ones. Why lld's count moves has not been measured; it arrived with the
 same change. Every other row read main's value, the compile rows included.
+
+## 2026-10-07 — the linear pass asks the fixed half once
+
+Profiling the tab's compile of `bench/interp_corpus` natively (the same
+`compile_source`, `emit_ir_dev`, `retarget_wasm32` and `ir_wasm::translate`
+the playground runs) put 23.0M of 204.5M instructions in
+`linear::for_the_emitter`, and 11.5M of those in one place: the fixpoint
+that decides which parameters are linear accumulators. Each round asked every
+parameter still in the set the whole question, and most of the question
+cannot change between rounds. Whether every arm moves the parameter, whether
+the group is an operator and whether it is ever handed around as a value are
+facts about the program. Only the call sites read the set the fixpoint is
+shrinking.
+
+So the set is now seeded with the parameters whose fixed half holds, and each
+round asks only the call sites. A greatest fixpoint has one answer whatever
+order its removals come in, and the emitted code is byte for byte what it was:
+`scripts/gates/emitted_code.sh` agrees with every benchmark's IR, the golden
+suite passes, and the five accumulator specs pass. `param_is_linear` had no
+caller left and went; its comment about the two refusals moved to the new
+`arms_move`.
+
+In this container the tab's compile, run natively, read 204,459,713 and then
+202,749,313 (-0.84%), and `emit_instructions` read 32,132,166 and then
+30,865,650 (-3.94%). CI read the same two emit figures. Its other rows:
+`browser_compile_instructions` 636,739,574 -> 632,344,041 (-0.69%),
+`interp_allocs` 896,122 -> 895,818, and `interp_instructions` 590,482,748 ->
+590,586,868, a rise of 104,120. The interpreted run builds this analysis too,
+and its share fell by 397,216. What rose is `Interp::callee_missed`, by
+532,291. The interpreter keeps a direct-mapped table of recent callees keyed
+by the low sixteen bits of a name's address. The analysis now allocates 304
+times fewer before the run starts, the names land at different addresses,
+and a different set of them share a slot. This container read both
+interpreted figures to the instruction.
+
 ## 2026-10-07 — the tab drops the program and the native IR early
 
 The browser side scores lowest under the meta, and its compile memory is the
@@ -22349,6 +22384,11 @@ benchmark. Natively the emitter's high-water mark fell from 2,705,776 to
 2,500,014. In the tab, `browser_compile_peak_bytes` fell again, 2,369,806 ->
 2,164,044, by the same 205,762, and `browser_compile_instructions` read
 636,625,521. `emit_instructions` fell 3,572.
+
+kanso#1780 landed first. Over it, `browser_compile_instructions` reads
+632,344,041 -> 632,207,457 (-136,584), `browser_compile_peak_bytes`
+2,665,939 -> 2,164,044 (-501,895, -18.8%), and `emit_instructions`
+30,865,650 -> 30,862,078.
 
 ## 2026-10-07 — a two-way callee table, measured and declined
 

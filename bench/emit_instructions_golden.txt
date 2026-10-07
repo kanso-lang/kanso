@@ -339,8 +339,13 @@
 # CI measured the prune naming what it stopped reading at b8fb95af:
 # emit_instructions 30,225,570 -> 30,212,843, a FALL of 12,727 (-0.0421%).
 #
+# 2026-10-07 (kanso#1780): the linear pass seeds its set with the parameters
+# whose fixed half holds and asks each round only the call sites. CI's
+# reading: emit_instructions 32,132,166 -> 30,865,650, a FALL of 1,266,516
+# (-3.9416%).
+#
 # 2026-10-07 (kanso#1781): the emitter assembles the module in one more buffer
 # instead of three, with `out` sized before the body goes in. Measured on the
-# host the golden names: emit_instructions 32,132,166 -> 32,128,594, a FALL of
-# 3,572 (-0.0111%).
-emit_instructions=32128594
+# host the golden names, over kanso#1780: emit_instructions 30,865,650 ->
+# 30,862,078, a FALL of 3,572 (-0.0116%).
+emit_instructions=30862078
