@@ -22613,8 +22613,16 @@ the six lines.
 
 Natively, the tab's compile of `bench/interp_corpus` reads 182,484,483
 instructions against 188,394,075 on main (-3.14%).
-browser_compile_instructions 587,205,094 -> 577,492,111 (-1.65%), measured in
-this container on the golden's rustc. browser_compile_peak_bytes does not
+browser_compile_instructions 587,205,094 -> 577,492,111 (-1.65%), the same in
+this container and on CI. browser_compile_peak_bytes does not
 move: the old path dropped the native module once the copy was made, so one
 copy of the module text sat under the translation's peak before and one sits
 under it now.
+
+Five rows that run none of the changed code moved with the compiler binary.
+compile_instructions 26,151,558 -> 26,169,794, entry_instructions 86,272,729
+-> 86,347,223, library_instructions 86,818,080 -> 86,891,755,
+interp_instructions 585,696,023 -> 585,696,420 and emit_instructions
+27,787,117 -> 27,800,961. What moved them is not isolated. These are CI's
+readings, and this container read the same. The welfare floor rises to take
+the net gain.

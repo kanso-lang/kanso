@@ -2354,7 +2354,12 @@
 # the change's. Measured in this container on the
 # golden's own glibc and rustc: compile_instructions 26,191,422 -> 26,151,558, a FALL of
 # 39,864 (-0.1522%). CI's reading replaces it if it differs.
-compile_instructions=26151558
+# 2026-10-07: the wasm translator reads the native IR, and the tab no
+# longer copies the module through `retarget_wasm32`; `kanso check` stops before codegen and runs none of the changed code.
+# The row moved with the change, and what moved it is not isolated.
+# CI measured 26,151,558 -> 26,169,794, a RISE of 18,236
+# (+0.0697%), and this container read the same.
+compile_instructions=26169794
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

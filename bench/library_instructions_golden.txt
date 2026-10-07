@@ -1121,7 +1121,12 @@
 # the change's. Measured in this container on the
 # golden's own glibc and rustc: library_instructions 86,947,537 -> 86,818,080, a FALL of
 # 129,457 (-0.1489%). CI's reading replaces it if it differs.
-library_instructions=86818080
+# 2026-10-07: the wasm translator reads the native IR, and the tab no
+# longer copies the module through `retarget_wasm32`; the library route stops before codegen and runs none of the changed code.
+# The row moved with the change, and what moved it is not isolated.
+# CI measured 86,818,080 -> 86,891,755, a RISE of 73,675
+# (+0.0849%), and this container read the same.
+library_instructions=86891755
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.
