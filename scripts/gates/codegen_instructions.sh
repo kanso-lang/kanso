@@ -329,7 +329,7 @@ size --format=sysv "$box/kanso" \
 # the benchmarks and left this row identical to the instruction. The line below
 # prints the clang the counted build runs, and the check after it refuses to
 # count when that is not the clang this job's PATH finds.
-gate_clang=$(env -i PATH=/usr/local/bin:/usr/bin:/bin clang --version | head -1)
+gate_clang=$(PATH=/usr/local/bin:/usr/bin:/bin clang --version | head -1)
 printf 'codegen_clang %s\n' "$gate_clang"
 if [ "$gate_clang" != "$(clang --version | head -1)" ]; then
   echo "::error::the counted build would run $gate_clang, and this job builds"
