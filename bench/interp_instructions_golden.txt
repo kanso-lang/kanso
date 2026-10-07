@@ -624,5 +624,10 @@
 # isolated. Measured in this container, where the previous tree reads on the row:
 # 585,690,203 -> 585,702,055, a RISE of 11,852 (+0.0020%).
 # CI's reading replaces it if it differs.
-interp_instructions=585141444
+# 2026-10-07: a local reference reads the frame and slot it last found its
+# binding in, and walks only when the name is not there. Measured in this
+# container, where main reads 585,141,444 on the row:
+# 585,141,444 -> 573,873,591, a FALL of 11,267,853 (-1.9257%).
+# CI's reading replaces it if it differs.
+interp_instructions=573873591
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
