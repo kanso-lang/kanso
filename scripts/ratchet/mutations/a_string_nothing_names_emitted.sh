@@ -5,10 +5,10 @@
 # the witness is a_string_nothing_names_is_not_emitted, which finds strings
 # nothing names.
 set -e
-line='        let named = named_strings(&[&body, &self.globals], self.strings.len());'
+line='        let named = named_strings(&texts, self.strings.len());'
 grep -qF "$line" src/codegen.rs || {
   echo "the string filter moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i 's/^        let named = named_strings(&\[&body, &self.globals\], self.strings.len());$/        let named = vec![[true; 2]; self.strings.len()];/' src/codegen.rs
+sed -i 's/^        let named = named_strings(&texts, self.strings.len());$/        let named = vec![[true; 2]; self.strings.len()];/' src/codegen.rs
 [ "$(grep -cF '        let named = vec![[true; 2]; self.strings.len()];' src/codegen.rs)" -eq 1 ]
