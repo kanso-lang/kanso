@@ -23310,11 +23310,13 @@ every run, and it finds clang 19. The codegen gate prints the clang the counted
 build runs and refuses to count when that is not the clang the job's own PATH
 finds. With the old path the refusal fires and names clang 18.
 
-In this container the rows read:
+On CI the rows move from their clang 18 readings to:
 
-    codegen_instructions_dev      118,871,022
-    codegen_instructions_release  449,011,647
-    emit_instructions              24,923,517
+    codegen_instructions_dev      126,448,042 -> 118,872,382
+    codegen_instructions_release  496,432,472 -> 449,424,792
+    emit_instructions              24,714,409 ->  24,923,517
+
+This container reads 118,871,022, 449,011,647 and 24,923,517.
 
 The emit row moves with the clang because kanso probes clang for
 `preserve_none` before it emits (`preserve_none_probe`). Clang 18 rejects a
@@ -23322,5 +23324,8 @@ The emit row moves with the clang because kanso probes clang for
 gate counted the emitter writing a convention the release build never uses.
 
 This re-bases three welfare terms. Each baseline is scaled by its row's new
-reading over its old one on CI, so every ratio holds and the floor does not
-move for a change in what is measured.
+reading over its old one on CI and rounded up, as the address-blind preload's
+re-basings were: `codegen_instructions_dev` 596,161,187 -> 560,444,427,
+`codegen_instructions_release` 6,826,827,769 -> 6,180,388,720 and
+`emit_instructions` 379,919,026 -> 383,133,512. Every ratio holds, and the
+score reads 90.01 before and after.
