@@ -2365,7 +2365,14 @@
 # Measured in this container, where main reads 26,169,794 on the row:
 # 26,169,794 -> 26,173,298, a RISE of 3,504 (+0.0134%).
 # CI's reading replaces it if it differs.
-compile_instructions=26173298
+# 2026-10-07: the emitter drops unbuilt arms from a program it is handed
+# rather than copying it, and lets its tables go before it assembles the
+# module; `kanso check` stops before codegen and runs none of the changed code.
+# The row moved with the change, and what moved it is not isolated.
+# Measured in this container, where the previous tree reads 26,173,298 on the row:
+# 26,173,298 -> 26,173,342, a RISE of 44 (+0.0002%).
+# CI's reading replaces it if it differs.
+compile_instructions=26173342
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

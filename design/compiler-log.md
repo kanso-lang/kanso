@@ -22675,3 +22675,69 @@ both tiers, so they are left alone. CI's readings replace these if they
 differ. CI agreed with all four, and read one row this container had not
 checked: interp_instructions 585,696,420 -> 585,690,203, which this
 container then read too. The interpreter runs none of the changed code.
+
+## 2026-10-07 — the tab's compile stops holding what the emitter is done with
+
+With the body in pieces, the tab's compile still held two things at its high
+point that nothing needed any more: the emitter's analyses and indexes while
+the module was assembled, and a second copy of most of the program throughout
+emission. A probe that counts each reallocation as a new block found the first,
+and a massif snapshot of the same compile, taken natively on
+`bench/interp_corpus`, found the second.
+
+**The program is no longer copied to drop arms.** `without_unbuilt_arms` built
+a new `Program` out of clones of every declaration it kept, and both the
+original and the copy lived through emission. It now returns which
+declarations to keep. A caller that is done with its program hands it over
+with `emit_ir_owned` or `emit_ir_dev_owned`, and the dropped arms leave it
+with a `retain`. A caller that lends its program gets the copy, as before.
+`kanso build` and the tab hand theirs over. `an_owned_program_emits_what_a_lent_one_does`
+holds the two modules equal; with the owned path keeping every arm it fails,
+and so does `an_arm_no_value_reaches_is_not_emitted`, which goes through
+`kanso build`.
+
+**The emitter's tables go before the module is assembled.** `Backend::emit`
+stops after the last definition and hands back a `Written` holding the pieces
+and the five tables the tail reads: the closure constants, the two kinds of
+cell, the strings and the globals. The `Backend` is dropped before
+`Written::finish` prunes, allocates the module and narrows. `emit_ir_for` is
+the two calls in turn.
+
+**Every write to the body asks `room` first.** Only the function sites asked
+before. A dispatcher, a wrapper or a lazy cell written into a piece without
+enough room doubled it past 64 KiB, and the tab's allocator holds the old block
+and the new one while it copies. Each write now asks with a size taken from the
+parts of its text that vary.
+
+In the tab, as compile instructions and compile peak bytes:
+
+    after the body in pieces    577,520,396   1,299,927
+    room at every write         577,521,033   1,299,975
+    emit, then finish           578,022,529   1,143,695
+    both                        578,022,485   1,078,255
+    and no copy of the program  573,418,144     882,546
+
+The guards do nothing alone, because the doubling they prevent was not the high
+point until the tables were gone. Together the three take
+browser_compile_peak_bytes 1,299,927 -> 882,546 (-32.1%) and
+browser_compile_instructions 577,520,396 -> 573,418,144 (-0.71%). The split on
+its own added 502,089 instructions, and what moved them is not isolated;
+keeping `without_unbuilt_arms` out of line took back 6,457 of them and was not
+kept. The emitted IR is unchanged.
+
+The first version also let the tab drop the program between the two halves.
+That looked like the gain until a build that left the tab's call alone read the
+same peak. The tables were what mattered there, and the tab now hands its
+program to the emitter instead.
+
+The anchor `emit_instructions` reads had lost its `#[inline(never)]`. A doc
+comment had been inserted between the attribute and `emit_ir_for`, so the
+attribute sat on `without_unbuilt_arms`, and `emit_ir_for` stayed out of line
+only because it was large. Once it was two calls it was inlined and the gate
+found no frame to read. The attribute is back on the function it names.
+
+Natively, emit_instructions 27,530,325 -> 27,248,851 (-1.02%), measured in
+this container; compile_instructions 26,173,298 -> 26,173,342,
+entry_instructions 86,357,298 -> 86,357,296 and library_instructions
+86,901,952 -> 86,901,950 moved with the binary. CI's readings replace these if
+they differ.
