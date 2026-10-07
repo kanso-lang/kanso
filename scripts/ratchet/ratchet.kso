@@ -4696,7 +4696,28 @@ loop_unswitch = row
 
 rows_c1zzzzzzz9 = text/concat rows_c1zzzzzzza [loop_unswitch]
 
-rows_c = text/concat rows_c1zzzzzzz9 [itself]
+# The release link runs correlated propagation after each jump-threading and
+# early-cse<memssa> before the first (2026-10-07). Each mutation takes its pass
+# out of the link's pipeline.
+link_correlated = row
+  "a release link without correlated propagation"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_release_link_without_correlated_propagation")
+  benchmarks
+
+link_early_cse = row
+  "a release link without early-cse"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_release_link_without_early_cse")
+  benchmarks
+
+rows_c1zzzzzzz8 = text/concat rows_c1zzzzzzz9 [link_correlated link_early_cse]
+
+rows_c = text/concat rows_c1zzzzzzz8 [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

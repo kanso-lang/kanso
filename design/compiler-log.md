@@ -23329,3 +23329,65 @@ re-basings were: `codegen_instructions_dev` 596,161,187 -> 560,444,427,
 `codegen_instructions_release` 6,826,827,769 -> 6,180,388,720 and
 `emit_instructions` 379,919,026 -> 383,133,512. Every ratio holds, and the
 score reads 90.01 before and after.
+
+## 2026-10-07 — the release link runs correlated propagation and early-cse
+
+After the unswitch pass was in, I tried the passes that LLVM's O3 function
+pipeline runs and the link's pipeline lacks, one at a time against runbench.
+Two of them paid. `correlated-propagation` now runs after each
+`jump-threading` in the link's pipeline, and `early-cse<memssa>` before the
+first. `lto<O3>` names neither pass. The `-O1` compile before the link runs
+`early-cse` but no correlated propagation.
+
+Correlated propagation drops a test that an earlier test on the same value has
+already decided. In the escape loop, `n * 7` not overflowing bounds `n` well
+inside the range where `n - 1` cannot overflow, so the test on `n - 1` goes,
+and `d_escape/filled_3_w` falls 3,120,832 instructions in runbench.
+`d_json/parse_value_2_w` falls 2,182,752 and `d_json/array_delim_4_w`
+1,345,212.
+
+Measured in this container with clang 19, against the unswitched link:
+
+    runbench    1,137,538,548 -> 1,129,589,618  -7,948,930  (-0.699%)
+    escapebench    41,544,768 ->    39,044,698  -2,500,070  (-6.018%)
+    pendbench     192,000,261 ->   190,396,558  -1,603,703  (-0.835%)
+    jsonbench     864,868,995 ->   860,548,095  -4,320,900  (-0.500%)
+    digestbench     5,642,610 ->     5,566,368     -76,242  (-1.351%)
+    deepbench     370,966,268 ->   370,102,268    -864,000  (-0.233%)
+    widebench      28,237,901 ->    28,093,898    -144,003  (-0.510%)
+    encodebench 2,382,770,548 -> 2,384,337,036  +1,566,488  (+0.066%)
+
+oneshot falls 29,368, basket 30,471 and livebench 150,834; scanbench rises 29;
+indexbench and readbench are unchanged. In the goldens, `work_encodebench`
+lands on 2,384,337,369 and `work_scanbench` on 281,713, and
+`codegen_instructions_release` on 457,532,287 on CI, each a rise the runbench
+fall pays for. Summed over the fourteen programs,
+`text` falls 5,810 bytes to 4,598,766; runbench's `.text` shrinks 2,943 bytes
+and digestbench's 2,383.
+
+The link pays for the two passes. On the codegen corpus built with clang 19,
+ld.lld runs 241,907,162 -> 250,049,700, +8,142,538 (+3.37%), and `clang -cc1`
+is byte-identical. Correlated propagation alone costs 6,068,153 of that and
+early-cse the other 2,074,385. The release codegen row, which counts the
+clang 19 link since the gate fix before this entry, reads 449,011,647 ->
+457,212,083 here (+8,200,436, +1.83%). Projected into the objective, welfare reads
+90.04 with both passes and 90.04 with correlated propagation alone, against
+90.01 without; production reads 78.40 with early-cse and 78.39 without it, so
+early-cse stays.
+
+Not kept. Against the unswitched link, `loop-rotate` before the first `licm`
+raised runbench 2,084,505 (+0.18%), and a second unswitch at the late `licm`
+left it byte-identical. With correlated propagation in place, `reassociate`
+and `adce` each left it byte-identical, as did `loop-instsimplify` with
+`loop-simplifycfg` beside the first `licm`, and `loop-load-elim` after the
+vectorizer. Raising the link's inline threshold to 1000 took 3,043,948 off
+runbench (-0.27%) and cost the corpus's link 47,126,137 instructions (+18.8% of
+ld.lld), and 500 left runbench 7,064 higher. `dfa-jump-threading` and
+`gvn-hoist` each left runbench byte-identical, `gvn-sink` raised it 523,672,
+and a second `jump-threading` after correlated propagation took 278,581 off it,
+which I did not carry further.
+
+The ratchet rows `link_correlated` and `link_early_cse` each take one pass back
+out. Without early-cse, runbench reads 1,407,664 higher; correlated
+propagation, measured before early-cse joined, was worth 6,541,266. The work
+vein sees either.

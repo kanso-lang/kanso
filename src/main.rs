@@ -1455,7 +1455,8 @@ fn lld_links_lto() -> bool {
 }
 
 /// LLVM 19's `lto<O3>` pipeline, as `opt -print-pipeline-passes` writes it,
-/// with `deadargelim` taken out and non-trivial loop unswitching put in.
+/// with `deadargelim` taken out and four passes put in: non-trivial loop
+/// unswitching, `correlated-propagation` twice and `early-cse<memssa>`.
 ///
 /// Dead-argument elimination judges the words of a two-word return one at a
 /// time, by what the callers read, and keeps a function's arguments whole
@@ -1480,6 +1481,15 @@ fn lld_links_lto() -> bool {
 /// the test, and the copy that runs has no test in it. The run program fell
 /// 0.422% and the codegen corpus's link rose 188,548 instructions, 0.078% of
 /// ld.lld (2026-10-07).
+///
+/// `correlated-propagation` runs after each `jump-threading`, and
+/// `early-cse<memssa>` before the first. `lto<O3>` names neither, and the
+/// `-O1` compile before the link runs `early-cse` but no correlated
+/// propagation. Correlated propagation drops an overflow test that an
+/// earlier test on the same value has already decided: in the escape loop,
+/// `n * 7` not overflowing bounds `n`, and the test on `n - 1` goes. The run
+/// program fell a further 0.699% and the corpus's link rose 8,142,538
+/// instructions, 3.4% of ld.lld (2026-10-07).
 const LTO_O3_WITHOUT_DEADARGELIM: &str = concat!(
     "cross-dso-cfi,openmp-opt,globaldce<vfe-linkage-unit-visibility>,inferatt",
     "rs,function<eager-inv>(callsite-splitting),pgo-icall-prom,ipsccp,called-",
@@ -1489,7 +1499,7 @@ const LTO_O3_WITHOUT_DEADARGELIM: &str = concat!(
     "ggressive-instcombine),cgscc(inline<only-mandatory>,inline),globalopt,op",
     "enmp-opt,globaldce<vfe-linkage-unit-visibility>,cgscc(argpromotion),func",
     "tion<eager-inv>(instcombine<max-iterations=1;no-use-loop-info;no-verify-",
-    "fixpoint>,constraint-elimination,jump-threading,sroa<modify-cfg>,tailcal",
+    "fixpoint>,constraint-elimination,early-cse<memssa>,jump-threading,correlated-propagation,sroa<modify-cfg>,tailcal",
     "lelim),cgscc(function-attrs),require<globals-aa>,function(invalidate<aa>",
     "),cgscc(openmp-opt-cgscc),function<eager-inv>(loop-mssa(licm<allowspecul",
     "ation>,simple-loop-unswitch<nontrivial;trivial>),gvn<>,memcpyopt,dse,move-auto-init,mldst-motion<no-split-footer-",
@@ -1503,7 +1513,7 @@ const LTO_O3_WITHOUT_DEADARGELIM: &str = concat!(
     "ations=1;no-use-loop-info;no-verify-fixpoint>,bdce,slp-vectorizer,vector",
     "-combine,infer-alignment,instcombine<max-iterations=1;no-use-loop-info;n",
     "o-verify-fixpoint>,loop-mssa(licm<allowspeculation>),alignment-from-assu",
-    "mptions,jump-threading),lowertypetests,lowertypetests,function(loop-sink",
+    "mptions,jump-threading,correlated-propagation),lowertypetests,lowertypetests,function(loop-sink",
     ",div-rem-pairs,simplifycfg<bonus-inst-threshold=1;no-forward-switch-cond",
     ";switch-range-to-icmp;no-switch-to-lookup;keep-loops;hoist-common-insts;",
     "no-sink-common-insts;speculate-blocks;simplify-cond-branch;speculate-unp",
