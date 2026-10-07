@@ -372,4 +372,10 @@
 # The row moved with the change, and what moved it is not isolated.
 # CI measured 27,787,117 -> 27,800,961, a RISE of 13,844
 # (+0.0498%), and this container read the same.
-emit_instructions=27800961
+# 2026-10-07: the emitter writes its body in pieces of 64 KiB and the
+# narrowing rewrites the module in place; `codegen::emit_ir` runs all of the changed code.
+# The row moved with the change, and what moved it is not isolated.
+# Measured in this container, where main reads 27,800,961 on the row:
+# 27,800,961 -> 27,530,325, a FALL of 270,636 (-0.9735%).
+# CI's reading replaces it if it differs.
+emit_instructions=27530325

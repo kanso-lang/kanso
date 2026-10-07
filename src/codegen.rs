@@ -2673,6 +2673,7 @@ fn emit_ir_for(
         globals: String::new(),
         interned: HashMap::default(),
         body: String::new(),
+        sealed: Vec::new(),
         lift_counter: 0,
         fn_value_wrappers: Vec::new(),
         builtin_value_wrappers: Vec::new(),
@@ -2788,7 +2789,14 @@ struct Backend<'a> {
     /// calls do not walk them.
     globals: String,
     interned: HashMap<Vec<u8>, String>,
+    /// The functions written so far, in pieces. `body` is the piece being
+    /// written and `sealed` the ones before it, in order. A piece is closed
+    /// when the next function would not fit in the room it has, so the text
+    /// is never copied into a bigger buffer while it is written. Doubling one
+    /// buffer held the old copy and the new one at once, and on
+    /// `bench/interp_corpus` that moment was the tab's high-water mark.
     body: String,
+    sealed: Vec<String>,
     lift_counter: usize,
     fn_value_wrappers: Vec<(String, usize)>,
     /// (builtin, arity) pairs a program hands out as values, each needing a
@@ -3317,11 +3325,25 @@ impl FnEmit {
 /// wrapper is named by the cell rather than by a call, and a site that loads
 /// the cell is what keeps it.
 ///
-/// The blocks kept are moved down inside the body's own buffer rather than
-/// gathered into a new one: they are runs of the body in order, and a second
-/// buffer the size of what survives sat at the tab's high-water mark.
-fn prune_unnamed(body: String, entry: &str, cells: &[(String, String, usize)]) -> String {
-    let blocks = ir_defines(&body);
+/// The body arrives as the pieces the emitter sealed, and no block crosses a
+/// piece. The blocks kept are moved down inside each piece's own buffer rather
+/// than gathered into a new one: they are runs of the piece in order, and a
+/// second buffer the size of what survives sat at the tab's high-water mark.
+fn prune_unnamed(
+    pieces: Vec<String>,
+    entry: &str,
+    cells: &[(String, String, usize)],
+) -> Vec<String> {
+    // A block never straddles two pieces, because a piece is only closed
+    // between two whole writes. `owner` says which piece each block is in.
+    let mut owner: Vec<usize> = Vec::new();
+    let mut blocks: Vec<(&str, &str)> = Vec::new();
+    for (i, piece) in pieces.iter().enumerate() {
+        for block in ir_defines(piece) {
+            owner.push(i);
+            blocks.push(block);
+        }
+    }
     let mut alive = vec![false; blocks.len()];
     {
         // Every name this prune will ever ask about: one per block, plus the
@@ -3402,26 +3424,32 @@ fn prune_unnamed(body: String, entry: &str, cells: &[(String, String, usize)]) -
             }
         }
     }
-    let kept: Vec<std::ops::Range<usize>> = blocks
-        .iter()
-        .zip(alive)
-        .filter(|(_, alive)| *alive)
-        .map(|((_, text), _)| {
-            let at = text.as_ptr() as usize - body.as_ptr() as usize;
-            at..at + text.len()
-        })
-        .collect();
-    drop(blocks);
-    let mut bytes = body.into_bytes();
-    let mut to = 0;
-    for run in kept {
-        let len = run.len();
-        bytes.copy_within(run, to);
-        to += len;
+    let mut kept: Vec<Vec<std::ops::Range<usize>>> = vec![Vec::new(); pieces.len()];
+    for ((&i, (_, text)), alive) in owner.iter().zip(&blocks).zip(alive) {
+        if alive {
+            let at = text.as_ptr() as usize - pieces[i].as_ptr() as usize;
+            kept[i].push(at..at + text.len());
+        }
     }
-    bytes.truncate(to);
-    bytes.shrink_to_fit();
-    String::from_utf8(bytes).expect("every block ends at a line break")
+    drop(blocks);
+    pieces
+        .into_iter()
+        .zip(kept)
+        .map(|(piece, runs)| {
+            let mut bytes = piece.into_bytes();
+            let mut to = 0;
+            for run in runs {
+                let len = run.len();
+                bytes.copy_within(run, to);
+                to += len;
+            }
+            // The room a piece was opened with is given back, a piece at a
+            // time, before the module they are copied into is allocated.
+            bytes.truncate(to);
+            bytes.shrink_to_fit();
+            String::from_utf8(bytes).expect("every block ends at a line break")
+        })
+        .collect()
 }
 
 /// Whether `queries_named` can tokenise this symbol, which is to say whether
@@ -4457,6 +4485,34 @@ mod the_prune_agrees_with_the_search {
         format!("define %KValue @{sym}() {{\nentry:\n{body}\n}}\n")
     }
 
+    /// The prune over a body written as one piece, which is what these
+    /// specs were written against.
+    fn prune_unnamed(body: String, entry: &str, cells: &[(String, String, usize)]) -> String {
+        super::prune_unnamed(vec![body], entry, cells).concat()
+    }
+
+    /// The emitter closes a piece between two definitions, so a caller and
+    /// its callee can sit in different pieces. The prune reads the names
+    /// across all of them, and keeps the same blocks it keeps from one.
+    #[test]
+    fn a_body_in_pieces_keeps_what_the_whole_body_keeps() {
+        let first = format!(
+            "{}{}",
+            define("d_entry", "  call %KValue @d_a()"),
+            define("d_dead", "  call %KValue @d_b()")
+        );
+        let second = format!(
+            "{}{}{}",
+            define("d_a", "  call %KValue @d_b()"),
+            define("d_b", "  ret %KValue zeroinitializer"),
+            define("d_c", "  ret %KValue zeroinitializer")
+        );
+        let whole = prune_unnamed(format!("{first}{second}"), "d_entry", &[]);
+        let pieces = super::prune_unnamed(vec![first, second], "d_entry", &[]);
+        assert_eq!(pieces.concat(), whole, "the pieces kept different blocks");
+        assert!(whole.contains("@d_b()") && !whole.contains("@d_c("), "{whole}");
+    }
+
     fn agree_on(body: &str, entry: &str, cells: &[(String, String, usize)]) {
         assert_eq!(
             prune_unnamed(body.to_string(), entry, cells),
@@ -4925,7 +4981,7 @@ fn both_ints(f: &mut FnEmit, ta: &str, tb: &str) -> String {
 /// The search goes from one call to the next rather than line by line, and a
 /// body with no pair comes back as it was, because this runs on every build
 /// and most programs have none.
-fn paired_appends(body: &str) -> std::borrow::Cow<'_, str> {
+fn paired_appends(body: String) -> String {
     const CALL: &str = " = call %KValue @k_b_append_mut_int(%KValue ";
     fn parse(line: &str) -> Option<(&str, &str, &str)> {
         let rest = line.strip_prefix("  ")?;
@@ -4968,17 +5024,23 @@ fn paired_appends(body: &str) -> std::borrow::Cow<'_, str> {
         }
     }
     if edits.is_empty() {
-        return std::borrow::Cow::Borrowed(body);
+        return body;
     }
-    let mut out = String::with_capacity(body.len());
-    let mut kept = 0;
+    // Each pair becomes one line shorter than the two it replaces, so the
+    // body is rewritten where it stands and its text only moves down.
+    let mut bytes = body.into_bytes();
+    let (mut to, mut kept) = (0, 0);
     for (start, end, line) in edits {
-        out.push_str(&body[kept..start]);
-        out.push_str(&line);
+        bytes.copy_within(kept..start, to);
+        to += start - kept;
+        bytes[to..to + line.len()].copy_from_slice(line.as_bytes());
+        to += line.len();
         kept = end;
     }
-    out.push_str(&body[kept..]);
-    std::borrow::Cow::Owned(out)
+    let len = bytes.len();
+    bytes.copy_within(kept..len, to);
+    bytes.truncate(to + len - kept);
+    String::from_utf8(bytes).expect("each edit replaces whole lines")
 }
 
 /// How many times `name` appears in `line` as a whole operand.
@@ -6335,16 +6397,13 @@ impl<'a> Backend<'a> {
         // let go once the paired appends have rewritten it. Kept to the end,
         // `self.body` and the pruned copy sat under the tail below, which is
         // the tab's high-water mark.
-        let written = std::mem::take(&mut self.body);
+        let mut written = std::mem::take(&mut self.sealed);
+        written.push(std::mem::take(&mut self.body));
         let pruned = match self.program.fns.iter().any(|d| d.name == crate::ast::ENTRY) {
             true => prune_unnamed(written, &dsym(crate::ast::ENTRY, 0), &self.closure_consts),
             false => written,
         };
-        let rewritten = match paired_appends(&pruned) {
-            std::borrow::Cow::Owned(text) => Some(text),
-            std::borrow::Cow::Borrowed(_) => None,
-        };
-        let body = rewritten.unwrap_or(pruned);
+        let pieces: Vec<String> = pruned.into_iter().map(paired_appends).collect();
         // One inline dispatcher per arity the program actually writes. An
         // unused `internal` definition costs nothing after optimization, but
         // it does cost a line, a define and a branch in the emitted golden —
@@ -6355,8 +6414,12 @@ impl<'a> Backend<'a> {
         // be answered by searching the whole emitted body for each, which is
         // 163 scans of a text that grows with the program. On a build of
         // bench/compile_corpus that search was 17.08% of the process.
-        let body_calls = called_symbols(&body);
-        let body_lines = symbols_before_newline(&body);
+        let mut body_calls = crate::hash::Set::default();
+        let mut body_lines = crate::hash::Set::default();
+        for piece in &pieces {
+            body_calls.extend(called_symbols(piece));
+            body_lines.extend(symbols_before_newline(piece));
+        }
         let call_twins: String = (0..=4)
             .filter(|n| body_calls.contains(format!("k_call{n}_fast").as_str()))
             .map(|n| call_twin(n, self.convention, self.inline_helpers))
@@ -6414,7 +6477,10 @@ impl<'a> Backend<'a> {
         // strings and 264 of their literal cells were named by nothing, 36% of
         // the module's bytes, each parsed and laid out by clang all the same.
         // Only the body and the type tables name a string.
-        let named = named_strings(&[&body, &self.globals], self.strings.len());
+        let texts: Vec<&str> =
+            pieces.iter().map(String::as_str).chain([self.globals.as_str()]).collect();
+        let named = named_strings(&texts, self.strings.len());
+        drop(texts);
         for ((name, bytes), [string, lit]) in self.strings.iter().zip(named) {
             if string {
                 let _ = writeln!(
@@ -6428,22 +6494,39 @@ impl<'a> Backend<'a> {
                 let _ = writeln!(out, "@{name}_lit = internal global %KValue zeroinitializer");
             }
         }
-        // THE MODULE IS WRITTEN ONCE MORE, NOT THREE TIMES. The body was
-        // copied into `out`, `out` into the narrowed text, and that into a
-        // fresh string behind the declarations, with every copy alive beside
-        // the next and `out` grown by doubling. The playground prices the
-        // most its compile holds at once, and on `bench/interp_corpus` this
-        // tail was the emitter's high-water mark. Now `out` is sized before
-        // the body goes in, the body is dropped as soon as it has, and the
-        // narrowing writes behind the declarations in its own buffer.
-        out.reserve(self.globals.len() + 1 + body.len());
+        // THE MODULE IS WRITTEN ONCE, at its own size. The declarations and
+        // everything above go in first and the body's pieces follow, each let
+        // go as soon as it is copied, and the narrowing rewrites the lines
+        // where they stand. The body used to be copied behind the globals and
+        // the narrowing wrote that again into a buffer of its own, so two
+        // copies of the module were held at once.
         out.push_str(&self.globals);
         out.push('\n');
-        out.push_str(&body);
-        drop(body);
-        let mut head = declares;
-        head.push('\n');
-        Ok(narrowed_after(&head, out))
+        let declared = declares.len() + 1;
+        let size = declared + out.len() + pieces.iter().map(String::len).sum::<usize>();
+        let mut module = String::with_capacity(size);
+        module.push_str(&declares);
+        module.push('\n');
+        module.push_str(&out);
+        drop((declares, out));
+        for piece in pieces {
+            module.push_str(&piece);
+        }
+        Ok(narrowed_in_place(module, declared))
+    }
+
+    /// Room for `need` more bytes in the piece being written, which closes
+    /// it and opens the next when it has less. Called before a function is
+    /// written, and only there, so a definition is never split between two
+    /// pieces.
+    fn room(&mut self, need: usize) {
+        if self.body.capacity() - self.body.len() < need {
+            let next = String::with_capacity(need.max(BODY_PIECE));
+            let piece = std::mem::replace(&mut self.body, next);
+            if !piece.is_empty() {
+                self.sealed.push(piece);
+            }
+        }
     }
 
     fn intern(&mut self, text: &str) -> (String, usize) {
@@ -7348,7 +7431,9 @@ impl<'a> Backend<'a> {
         }
         f.lazy_cells.truncate(cells_before);
         if !open {
-            let _ = writeln!(self.body, "{header}\n{}}}\n", f.body());
+            let text = f.body();
+            self.room(header.len() + text.len() + 4);
+            let _ = writeln!(self.body, "{header}\n{text}}}\n");
             return Ok(());
         }
         for i in 0..arity {
@@ -7395,7 +7480,9 @@ impl<'a> Backend<'a> {
             }
         }
         f.line("unreachable");
-        let _ = writeln!(self.body, "{header}\n{}}}\n", f.body());
+        let text = f.body();
+        self.room(header.len() + text.len() + 4);
+        let _ = writeln!(self.body, "{header}\n{text}}}\n");
         Ok(())
     }
 
@@ -11222,11 +11309,10 @@ impl<'a> Backend<'a> {
         }
         self.emit_tail(&mut f, body)?;
         let sig: String = (0..params.len()).map(|i| format!(", %KValue %a{i}")).collect();
-        let _ = writeln!(
-            self.body,
-            "define tailcc %KValue @{lifted}(ptr %env{sig}) {{\n{}}}\n",
-            f.body()
-        );
+        let text = f.body();
+        self.room(2 * lifted.len() + 3 * sig.len() + text.len() + 256);
+        let _ =
+            writeln!(self.body, "define tailcc %KValue @{lifted}(ptr %env{sig}) {{\n{text}}}\n");
         // The convention rides on the wrapper AND on every arm that calls
         // through a closure pointer. Split them and the arguments arrive in
         // the wrong registers: leaving the runtime's `k_call{n}` on the C
@@ -11356,21 +11442,32 @@ fn holds(line: &str, needle: &str, at: usize) -> bool {
 
 #[cfg(test)]
 fn narrow_tailcc(ir: String) -> String {
-    narrowed_after("", ir)
+    narrowed_in_place(ir, 0)
 }
 
-/// `narrow_tailcc`'s answer written after `head`, in one buffer.
-fn narrowed_after(head: &str, ir: String) -> String {
+/// `narrow_tailcc`'s answer for everything in `text` after `from`, written
+/// over the lines it replaces. Every rewrite takes words out of a line or
+/// renames a callee to its trampoline, which is shorter than the words it
+/// lost, so a line never outgrows the one it replaces and the text only moves
+/// down. A rewrite that did grow would send the whole answer into a buffer of
+/// its own, so the answer does not rest on that.
+fn narrowed_in_place(text: String, from: usize) -> String {
     let code = |line: &str| !line.starts_with('@');
-    // Split once and walk the lines three times. Splitting is a search for
-    // every newline, and three splits of a one-line program's body were
-    // 75,721 of the start-up row's instructions.
-    let lines: Vec<&str> = ir.lines().collect();
+    // Two walks over the lines, neither of which keeps a list of them: one
+    // reads which functions keep the convention and sets aside the few
+    // `define tailcc` lines the trampolines are decided from, and one finds
+    // the lines to rewrite. A list of every line, held across the three
+    // walks this used to make, was a third of the module's size again.
+    let ir = &text[from..];
     let mut keep: crate::hash::Set<String> = crate::hash::Set::default();
     let mut current: Option<String> = None;
-    for &line in lines.iter().filter(|line| code(line)) {
+    let mut tailcc_defines: Vec<&str> = Vec::new();
+    for line in ir.lines().filter(|line| code(line)) {
         if let Some(rest) = line.strip_prefix("define ") {
             current = symbol_of(rest);
+            if rest.starts_with("tailcc ") {
+                tailcc_defines.push(line);
+            }
         }
         if holds(line, "musttail call", 0) {
             // both ends of a musttail edge must agree on the convention
@@ -11387,7 +11484,7 @@ fn narrowed_after(head: &str, ir: String) -> String {
     // too; x86 passes fewer and does not exhibit the defect anyway.
     let mut trampolines: Vec<(String, String)> = Vec::new();
     let mut spilling: crate::hash::Set<String> = crate::hash::Set::default();
-    for &line in &lines {
+    for &line in &tailcc_defines {
         let Some(rest) = line.strip_prefix("define tailcc ") else { continue };
         let Some(name) = symbol_of(rest) else { continue };
         if !keep.contains(&name) {
@@ -11422,32 +11519,64 @@ fn narrowed_after(head: &str, ir: String) -> String {
         spilling.insert(name);
     }
 
+    drop(tailcc_defines);
     let mut rerouted: crate::hash::Set<String> = crate::hash::Set::default();
-    let mut out = String::with_capacity(head.len() + ir.len());
-    out.push_str(head);
-    for &line in &lines {
-        // Every rewrite below needs the word, so a line without it is copied
-        // as it stands and its callee is never looked up.
+    // (start, end, replacement) for each line that changes, in order.
+    let mut edits: Vec<(usize, usize, String)> = Vec::new();
+    for line in ir.lines() {
+        // Every rewrite below needs the word, so a line without it stands as
+        // it is and its callee is never looked up.
         if !code(line) || !holds(line, "tailcc ", 4) {
-            out.push_str(line);
-            out.push('\n');
             continue;
         }
         let named = symbol_of(line);
         let reroute = !holds(line, "musttail call", 0)
             && line.contains("call tailcc ")
             && named.as_ref().is_some_and(|n| spilling.contains(n));
-        if reroute {
+        let rewritten = if reroute {
             let name = named.expect("checked above");
             let call = format!("@{}(", quoted(&name));
             let through = format!("@{}(", trampoline_name(&name));
-            out.push_str(&line.replace("call tailcc ", "call ").replace(&call, &through));
             rerouted.insert(name);
+            line.replace("call tailcc ", "call ").replace(&call, &through)
         } else if !named.as_ref().is_some_and(|n| keep.contains(n)) {
-            out.push_str(&line.replace("tailcc ", ""));
+            line.replace("tailcc ", "")
         } else {
-            out.push_str(line);
+            continue;
+        };
+        let at = line.as_ptr() as usize - text.as_ptr() as usize;
+        edits.push((at, at + line.len(), rewritten));
+    }
+    let shrinks = edits.iter().all(|(start, end, line)| line.len() <= end - start);
+    let mut out = match shrinks {
+        true => {
+            let mut bytes = text.into_bytes();
+            let (mut to, mut kept) = (0, 0);
+            for (start, end, line) in edits {
+                bytes.copy_within(kept..start, to);
+                to += start - kept;
+                bytes[to..to + line.len()].copy_from_slice(line.as_bytes());
+                to += line.len();
+                kept = end;
+            }
+            let len = bytes.len();
+            bytes.copy_within(kept..len, to);
+            bytes.truncate(to + len - kept);
+            String::from_utf8(bytes).expect("each edit replaces a whole line")
         }
+        false => {
+            let mut out = String::with_capacity(text.len());
+            let mut kept = 0;
+            for (start, end, line) in edits {
+                out.push_str(&text[kept..start]);
+                out.push_str(&line);
+                kept = end;
+            }
+            out.push_str(&text[kept..]);
+            out
+        }
+    };
+    if !out.ends_with('\n') {
         out.push('\n');
     }
     // A trampoline no call was rerouted through is a function nothing names,
@@ -11459,6 +11588,9 @@ fn narrowed_after(head: &str, ir: String) -> String {
     }
     out
 }
+
+/// How much of the emitted body a piece holds before the next is opened.
+const BODY_PIECE: usize = 64 * 1024;
 
 /// The first symbol a line names, without its quotes.
 fn symbol_of(line: &str) -> Option<String> {
@@ -11577,6 +11709,22 @@ mod a_trampoline_is_emitted_for_a_call_that_uses_it {
             "the rerouted call has no trampoline:\n{out}"
         );
         assert!(out.contains("call %KValue @f.c("), "the call was not rerouted:\n{out}");
+    }
+
+    /// The narrowing writes over the lines it reads, which holds while no
+    /// rewrite is longer than its line. Rerouting takes seven bytes out and
+    /// adds two per mention of the callee, so a line naming it four times
+    /// grows by one, and the answer is written into a buffer of its own. The
+    /// lines after it come through rewritten all the same.
+    #[test]
+    fn a_line_that_grows_is_written_beside_the_rest() {
+        let caller = "define %KValue @g(%KValue %a) {\nentry:\n  %r = call tailcc %KValue @f(@f(@f(@f(%KValue %a)\n  %s = call tailcc %KValue @h(%KValue %a)\n  ret %KValue %r\n}\n";
+        let out = narrow_tailcc(format!("{LOOP}{caller}"));
+        let narrowed = "define %KValue @g(%KValue %a) {\nentry:\n  %r = call %KValue @f.c(@f.c(@f.c(@f.c(%KValue %a)\n  %s = call %KValue @h(%KValue %a)\n  ret %KValue %r\n}\n";
+        assert!(
+            out.starts_with(&format!("{LOOP}{narrowed}define %KValue @f.c(")),
+            "the narrowed module is not the line-by-line rewrite:\n{out}"
+        );
     }
 }
 
