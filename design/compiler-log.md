@@ -22672,4 +22672,6 @@ moved with the binary. What moved any of them is not isolated. Both codegen
 rows read off their goldens here on main and on this branch alike, by the
 same amounts, and the native module for their corpus is byte-identical at
 both tiers, so they are left alone. CI's readings replace these if they
-differ.
+differ. CI agreed with all four, and read one row this container had not
+checked: interp_instructions 585,696,420 -> 585,690,203, which this
+container then read too. The interpreter runs none of the changed code.

@@ -614,5 +614,10 @@
 # The row moved with the change, and what moved it is not isolated.
 # CI measured 585,696,023 -> 585,696,420, a RISE of 397
 # (+0.0001%), and this container read the same.
-interp_instructions=585696420
+# 2026-10-07: the emitter writes its body in pieces of 64 KiB and the
+# narrowing rewrites the module in place; the interpreter runs none of the changed code.
+# The row moved with the change, and what moved it is not isolated.
+# CI measured 585,696,420 -> 585,690,203, a FALL of 6,217
+# (-0.0011%), and this container read the same.
+interp_instructions=585690203
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
