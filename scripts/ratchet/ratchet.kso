@@ -4683,7 +4683,20 @@ tie_fixes = [tie_interp_resolves tie_serial tie_native_serial tie_native_depth]
 
 rows_c1zzzzzzza = text/concat rows_c1zzzzzzzc tie_fixes
 
-rows_c = text/concat rows_c1zzzzzzza [itself]
+# The release link unswitches a loop on a test of a value the loop does not
+# change, such as the overflow flag of `k * 31` in the escape loop
+# (2026-10-07). The mutation takes the pass out of the link's pipeline.
+loop_unswitch = row
+  "a release link that tests an invariant inside its loop"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_release_link_that_tests_an_invariant_inside_its_loop")
+  benchmarks
+
+rows_c1zzzzzzz9 = text/concat rows_c1zzzzzzza [loop_unswitch]
+
+rows_c = text/concat rows_c1zzzzzzz9 [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
