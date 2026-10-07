@@ -23114,3 +23114,8 @@ kq's rows, in this container: print_small 25,536,074 before #1790,
 25,547,882 with it and 25,540,917 with this change; print_big 246,363,193,
 246,481,109 and 246,411,403. That recovers 59% of the rise. What remains is
 the length test `k_str_chars` now makes before it calls either scan.
+
+The second scan is 720 bytes of machine code in every benchmark, so `text`
+rises 4,594,256 -> 4,604,144 with the decoder's 64 bytes off three of them
+counted in. Each benchmark's instruction row, read here against main's own
+reading in this container, moves by less than 1,300 either way.
