@@ -5147,8 +5147,11 @@ struct Declared<'a> {
 /// themselves. Asked only on the arm that would refuse a builtin, which a
 /// correct program never reaches, so its filesystem calls cost nothing there.
 fn in_shipped_library(file: &str) -> bool {
-    let Some(module) = std::path::Path::new(file).parent() else { return false };
-    let Ok(module) = std::fs::canonicalize(module) else { return false };
+    // The file is resolved, not only its directory, so a module built of links
+    // to the library's files (the book's ch08 sample is one) reads as the
+    // library, which is the text it is.
+    let Ok(file) = std::fs::canonicalize(file) else { return false };
+    let Some(module) = file.parent() else { return false };
     // A unit test runs from target/<profile>/deps, one directory deeper than
     // the compiler, so the second root misses the checkout there; the third
     // names it, and exists only in that build.

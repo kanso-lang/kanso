@@ -22950,7 +22950,15 @@ resolves only from the standard library, so a user program cannot vouch for
 bytes it has not built. The interpreter still validates, because a Rust
 `String` has to, and answers a runtime error if the bytes are bad. The
 jsonbench maker copies lib/json in as a user module, which cannot call a
-builtin, so it rewrites the call back to `text/utf8`.
+builtin, so it rewrites the call back to `text/utf8`. Two other readers of
+lib/json found the call refused. The book's ch08 sample builds its module of
+links to the library's files, and `in_shipped_library` resolved the module's
+directory but not the file, so it now resolves the file. The unit tests
+compile lib/json from the checkout while running from `target/<profile>/deps`,
+one directory deeper than the compiler, so a test build counts the checkout's
+`lib/` as the library too. The three refusals `built_text` can raise are
+listed as unreachable in tests/golden/unpinned_diagnostics.txt, with the
+argument.
 
 The check also seeded the string's character count, so a program that asks
 the `length` of what it encoded now scans for it. `k_utf8_chars` read eight

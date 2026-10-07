@@ -386,3 +386,14 @@ too many processes at once
 # hand back an uninitialised length.
 k_render_number: not a number
 
+
+# `built_text`'s three refusals, unreachable by name. Like every `builtin_`
+# name it resolves only from the standard library (src/check.rs refuses it in
+# any other file), and the library calls it in one place, `json/encode`, on the
+# bytes `encode_onto` returns, which begin as `text/bytes ""` and are only ever
+# appended to. So the argument is always bytes, and always text: each piece was
+# a string, a slice of one cut beside an ascii byte, or an ascii byte. The
+# native and interpreted refusals of a non-bytes argument and the interpreter's
+# refusal of bad UTF-8 stay because a builtin must answer what it is handed.
+built_text takes bytes
+built_text was handed bytes that are not text
