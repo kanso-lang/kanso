@@ -630,7 +630,7 @@ fn eligible_clusters(
         }
     }
     let sccs = tail_sccs(groups.len(), &edges);
-    let mut mentions: Option<HashMap<&str, HashSet<String>>> = None;
+    let mut mentions: Option<HashMap<&str, HashSet<&str>>> = None;
     let mut out = Vec::new();
     for scc in sccs {
         if scc.len() < 2 {
@@ -2010,8 +2010,8 @@ fn group_param_set(
 /// Every name each declaration mentions — a call head, an argument, a lambda
 /// body, a guard, alike. Built once per analysis and read by every cluster
 /// that has an entry to judge.
-fn mention_map(program: &Program) -> HashMap<&str, HashSet<String>> {
-    let mut mentions: HashMap<&str, HashSet<String>> = HashMap::default();
+fn mention_map(program: &Program) -> HashMap<&str, HashSet<&str>> {
+    let mut mentions: HashMap<&str, HashSet<&str>> = HashMap::default();
     for decl in &program.fns {
         let entry = mentions.entry(decl.name.as_str()).or_default();
         for stmt in &decl.body {
@@ -2026,25 +2026,25 @@ fn mention_map(program: &Program) -> HashMap<&str, HashSet<String>> {
 /// safe direction here: a caller wrongly judged reachable costs a cluster its
 /// bracket, where one wrongly judged unreachable costs a bounded stack.
 fn reachable_names<'a>(
-    mentions: &HashMap<&str, HashSet<String>>,
+    mentions: &HashMap<&'a str, HashSet<&'a str>>,
     seeds: impl Iterator<Item = &'a str>,
-) -> HashSet<String> {
-    let mut seen: HashSet<String> = HashSet::default();
-    let mut queue: Vec<String> = seeds.map(str::to_string).collect();
+) -> HashSet<&'a str> {
+    let mut seen: HashSet<&str> = HashSet::default();
+    let mut queue: Vec<&str> = seeds.collect();
     while let Some(name) = queue.pop() {
-        for next in mentions.get(name.as_str()).into_iter().flatten() {
-            if seen.insert(next.clone()) {
-                queue.push(next.clone());
+        for &next in mentions.get(name).into_iter().flatten() {
+            if seen.insert(next) {
+                queue.push(next);
             }
         }
     }
     seen
 }
 
-fn collect_names(e: &Expr, out: &mut HashSet<String>) {
+fn collect_names<'a>(e: &'a Expr, out: &mut HashSet<&'a str>) {
     match e {
         Expr::Ident(n, _, _) | Expr::Partial(n, _) => {
-            out.insert(n.to_string());
+            out.insert(n.as_str());
         }
         Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
             for st in stmts {
