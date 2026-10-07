@@ -828,9 +828,13 @@
 # the runtime gains built_text. Every program grows 912 bytes but oneshot
 # (752), livebench (544) and runbench (560), the three that encode through
 # std/json.
+#
+# 2026-10-07: the decoder hands an unescaped string over with built_text.
+# oneshot, livebench and runbench, the three that decode through std/json,
+# each fall 64 bytes.
 jsonbench text=313464
 encodebench text=327656
-oneshot text=328808
+oneshot text=328744
 basket text=292920
 widebench text=335944
 deepbench text=270984
@@ -840,5 +844,5 @@ indexbench text=260984
 scanbench text=430888
 digestbench text=305304
 readbench text=261752
-livebench text=331608
-runbench text=593416
+livebench text=331544
+runbench text=593352

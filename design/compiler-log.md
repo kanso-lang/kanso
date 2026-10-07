@@ -23049,3 +23049,40 @@ the emitted_code gate. Making `ByteDiscs::contains` answer false passes
 tests/golden.rs and all_counters.sh.
 
 Welfare 89.82 -> 89.90.
+
+## 2026-10-07 — the decoder's unescaped strings are taken the same way
+
+A JSON string with an escape in it is decoded a piece at a time onto a byte
+builder: a run of the input between escapes, an ascii byte for `\n` or `\"`,
+or a code point `text/from_code` encodes for `\u`, which refuses a lone
+surrogate before it gets there. `decode` only takes a string, so each run is
+a slice of valid text cut beside a quote or a backslash. The finished bytes
+are text by construction, and `str_char` now hands them over with
+`built_text` in place of `text/utf8`. The escape-free path, which slices the
+input and takes `utf8` of the slice, is left alone: the emitter fuses that
+pair into one call that does not copy.
+
+The jsonbench maker copies all of lib/json into a user module, which cannot
+name a builtin, so it now rewrites the call back to `text/utf8` in every file
+it copies rather than only in json.kso.
+
+On the run program `utf8_bytes` falls 3,310,037 -> 424,484, and no
+`str_scan` counter moves: nothing in the benchmarks asks the length of a
+string it decoded. Read on this container and carried onto CI's base:
+
+    runbench     1,166,762,755 -> 1,148,541,100   -18,221,655   -1.56%
+    oneshot         13,239,964 ->    13,055,762      -184,202
+    livebench    1,473,820,842 -> 1,473,635,968      -184,874
+
+The three programs that decode through std/json each lose 64 bytes of text.
+compile_allocs falls 14,745 -> 14,743, compile_instructions 26,172,834 ->
+26,172,340, entry_instructions 86,353,494 -> 86,353,046, library_instructions
+86,899,427 -> 86,898,979, interp_instructions 585,181,217 -> 585,178,552,
+interp_allocs 873,373 -> 873,371 and browser_compile_instructions
+519,236,048 -> 519,126,894. The tab's run corpus has no escapes, and its row
+holds.
+
+The spec is `a_decoded_string_counts_its_characters`: five strings with
+escapes, from a single `\n` to a surrogate pair beside the character it
+spells, decoded and printed with `length` beside the count of `text/chars`.
+Seeding the byte length as the count makes four of the five disagree.
