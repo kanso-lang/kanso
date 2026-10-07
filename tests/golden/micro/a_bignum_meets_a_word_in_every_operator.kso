@@ -1,0 +1,31 @@
+# A word and a bignum meet in each operator, in both orders and with both
+# signs. Division truncates toward zero and a remainder takes the dividend's
+# sign, on bignums as on words; a zero divisor answers the same value it
+# answers for a word. The divisors 2^64 and 2^64 - 1 sit on a limb edge of
+# the native bignum, where a long division's estimate is most often wrong.
+big = 100000000000000000000
+
+neg = 0 - big
+
+a = 340282366920938463463374607431768211456
+
+b = 340282366920938463463374607431768211455
+
+fn told f:divide_by_zero
+  "by zero: {f}"
+
+fn told n
+  "a number: {n}"
+
+pub play = print "{big + 1} {1 + big} {big - 1} {1 - big} {big * 3} {3 * big}"
+  .> (_ -> print "{big + neg} {big - big} {big * 0} {0 * big}")
+  .> (_ -> print "{big / 7} {big % 7} {neg / 7} {neg % 7}")
+  .> (_ -> print "{big / (0 - 7)} {big % (0 - 7)} {neg / (0 - 7)}")
+  .> (_ -> print "{neg % (0 - 7)} {7 / big} {7 % big} {(0 - 7) % big}")
+  .> (_ -> print "{big / big} {big % big} {big * big / big}")
+  .> (_ -> print "{big * big % (big + 1)} {(big * big + 12345) % big}")
+  .> (_ -> print "{a / 18446744073709551616} {b / 18446744073709551615}")
+  .> (_ -> print "{b % 18446744073709551617} {b / 4294967295}")
+  .> (_ -> print "{big + 0.5} {big * 2.0} {big / 4.0} {1.5 - big}")
+  .> (_ -> print (told (big / (big - big))))
+  .> (_ -> print (told (big % (big - big))))

@@ -4618,8 +4618,8 @@ fn pending_knot(value: &Value) -> bool {
 
 /// A bitwise operand. Failures travel through as themselves, the way every
 /// builtin lets them; anything else is the type complaint native prints, in
-/// the same words. Native's ints are 64 bits wide by construction, so a value
-/// too wide to be one is a case only the interpreter can reach.
+/// the same words. Bits are counted over a machine word, so a bignum is
+/// refused on every engine.
 fn whole(v: Value, name: &str, span: Span) -> Result<Result<i64, Value>, RuntimeError> {
     if is_failure(&v) {
         return Ok(Err(v));
@@ -5283,7 +5283,7 @@ fn spelled_op(op: &str) -> &str {
 fn bitwise(op: &str, a: &Int, b: &Int, span: Span) -> EvalResult {
     let (Some(x), Some(y)) = (a.to_i64(), b.to_i64()) else {
         return Err(RuntimeError {
-            message: format!("`{op}` takes whole numbers that fit 64 bits"),
+            message: format!("{} takes whole numbers that fit 64 bits", spelled_op(op)),
             span,
         });
     };

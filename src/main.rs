@@ -956,6 +956,14 @@ fn top_level_items(list: &str) -> Vec<&str> {
     items
 }
 
+/// The two words of a literal `{ i64 A, i64 B }`. An argument that was a raw
+/// word before ints could be bignums is often a boxed literal now, `n 0` among
+/// them, and reading its words with `extractvalue` is an instruction clang's
+/// fast selector at -O0 does not lower.
+fn literal_words(value: &str) -> Option<(&str, &str)> {
+    value.strip_prefix("{ i64 ")?.strip_suffix(" }")?.split_once(", i64 ")
+}
+
 /// The index just past the parenthesis that closes the one before `open`.
 fn closing(line: &str, open: usize) -> Option<usize> {
     let mut depth = 0i32;
@@ -1209,15 +1217,22 @@ fn preserve_none_tails(ir: String) -> String {
                             ));
                             args.push(format!("i64 %pn{fresh}"));
                         }
-                        _ => {
-                            for half in 0..2 {
-                                fresh += 1;
-                                out.push_str(&format!(
-                                    "{indent}%pn{fresh} = extractvalue {ty} {value}, {half}\n"
-                                ));
-                                args.push(format!("i64 %pn{fresh}"));
+                        _ => match literal_words(value) {
+                            // a literal's words are written, not read off it
+                            Some((a, b)) => {
+                                args.push(format!("i64 {a}"));
+                                args.push(format!("i64 {b}"));
                             }
-                        }
+                            None => {
+                                for half in 0..2 {
+                                    fresh += 1;
+                                    out.push_str(&format!(
+                                        "{indent}%pn{fresh} = extractvalue {ty} {value}, {half}\n"
+                                    ));
+                                    args.push(format!("i64 %pn{fresh}"));
+                                }
+                            }
+                        },
                     }
                 }
                 while args.len() < words {

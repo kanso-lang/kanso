@@ -11,10 +11,10 @@ import "std/text"
 # actually governs — what a program prints, not what a function returns.
 #
 # Ranges are chosen to straddle the places arithmetic changes character:
-# around zero, around the i32 and i64 boundaries, and well past 2^63 where the
-# native build's ceiling lives. A known divergence there is recorded below, so
-# this reports it once rather than drowning in it, and fails if the set of
-# divergences grows — or shrinks without the entry being removed.
+# around zero, around the i32 and i64 boundaries, and well past 2^63, where a
+# word becomes a bignum. Every disagreement fails the run. Until the
+# 2026-10-07 gavel the native build refused past 2^63 and this counted those
+# refusals as a known ceiling.
 #
 # Every operand is carried as text. Half of them do not fit an int64, which is
 # the point: the generator may not hold a value the program under test is
@@ -33,15 +33,6 @@ type answer
 
 probe = "target/numeric_probe.kso"
 
-# The divergence this project has accepted and pinned (task #46): above the
-# native ceiling the oracle is exact and the native build refuses. It refuses
-# in two voices — a literal too wide is caught while compiling, an operation
-# that overflows while running — and matching only the second counted the
-# first as four hundred bugs. Every other disagreement is a bug.
-ceiling_a = "integer overflow"
-
-ceiling_b = "does not fit this build's 64-bit int"
-
 small = ["0" "1" "-1" "2" "-2" "7" "-7" "10" "255" "256" "-256"]
 
 word32 = ["2147483647" "2147483648" "-2147483648" "4294967296" "-4294967296"]
@@ -59,7 +50,8 @@ edges = list/to_list (text/concat narrow wide)
 batch_size = 200
 
 # A Lehmer generator on the 31-bit Mersenne prime: every product stays under
-# 2^47, so nothing here can reach the ceiling the programs it writes are about.
+# 2^47, so nothing here leaves the machine word the programs it writes are
+# about.
 # It answers the same stream on every engine and every run, which the host's
 # own generator does not.
 seed = 2685821657
@@ -154,13 +146,6 @@ fn both n i
 fn agree? n i
   n.code == i.code and n.out == i.out and n.err == i.err
 
-fn holds? hay needle
-  length (text/split hay needle) > 1
-
-fn at_ceiling? n i
-  said = "{n.err}{i.err}"
-  holds? said ceiling_a or holds? said ceiling_b
-
 fn chunked cases at acc
   more_chunks cases at acc (at > length cases)
 
@@ -209,43 +194,33 @@ fn widened suspect here false
   joined suspect here
 
 fn narrowed everything batches suspect
-  alone suspect 1 [] 0 .> (found -> reported everything batches found)
+  alone suspect 1 [] .> (bad -> reported everything batches bad)
 
-fn alone suspect at bad known
-  onward_one suspect at bad known (at > length suspect)
+fn alone suspect at bad
+  onward_one suspect at bad (at > length suspect)
 
-fn onward_one _ _ bad known true
-  [bad known]
+fn onward_one _ _ bad true
+  bad
 
-fn onward_one suspect at bad known false
+fn onward_one suspect at bad false
   c = suspect[at]
-  ran (program [c]) .> (r -> judged suspect at bad known c r)
+  ran (program [c]) .> (r -> judged suspect at bad c r)
 
-fn judged suspect at bad known c r
-  return alone suspect (at + 1) bad known if length r < 2
-  settled suspect at bad known c r (agree? r[1] r[2])
+fn judged suspect at bad c r
+  return alone suspect (at + 1) bad if length r < 2
+  settled suspect at bad c r (agree? r[1] r[2])
 
-fn settled suspect at bad known _ _ true
-  alone suspect (at + 1) bad known
+fn settled suspect at bad _ _ true
+  alone suspect (at + 1) bad
 
-fn settled suspect at bad known c r false
-  return alone suspect (at + 1) bad known if length r < 2
-  ceiling = at_ceiling? r[1] r[2]
-  counted suspect at bad known c r ceiling
+fn settled suspect at bad c r false
+  alone suspect (at + 1) (push bad [c r[1] r[2]])
 
-fn counted suspect at bad known _ _ true
-  alone suspect (at + 1) bad (known + 1)
-
-fn counted suspect at bad known c r false
-  alone suspect (at + 1) (push bad [c r[1] r[2]]) known
-
-fn reported everything batches found
-  bad = found[1]
-  known = found[2]
+fn reported everything batches bad
   head = "{length everything} programs in {length batches} batches"
-  tail = "{known} at the known ceiling, {length bad} disagreements"
-  io/write "{head}, {tail}\n" .> (_ -> io/write (findings bad))
-    .> (_ -> closed (length bad) known)
+  io/write "{head}, {length bad} disagreements\n"
+    .> (_ -> io/write (findings bad))
+    .> (_ -> closed (length bad))
 
 # Ten of them, by index. Ten is what a reader can hold; the count above says
 # how many there really were.
@@ -293,15 +268,10 @@ fn dropped s "\n"
 fn dropped s _
   s
 
-fn closed 0 0
-  io/write "\nnothing reached the native ceiling — either the gap closed,\n"
-    .> (_ -> io/write "or the ranges above stopped straddling it.\n")
-    .> (_ -> os/exit 1)
-
-fn closed 0 _
+fn closed 0
   io/write ""
 
-fn closed _ _
+fn closed _
   io/write "\nthe interpreter is the oracle: these are native's to fix.\n"
     .> (_ -> os/exit 1)
 

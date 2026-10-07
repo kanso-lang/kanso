@@ -1,0 +1,43 @@
+# The programs the bignum is for. `fact 100` has 158 digits and the 300th
+# Fibonacci number 63; 2^200 is built by doubling the last element of a list.
+# `math/round` of 1e30 answers the integer the double holds exactly, and
+# `text/to_int` reads a number past the word whole. A bignum is an `int` to
+# an annotation, and converts to a float where a float meets it.
+import "std/list"
+import "std/math"
+import "std/text"
+
+fn fact 0
+  1
+
+fn fact n
+  n * fact (n - 1)
+
+fn fib a _ 0
+  a
+
+fn fib a b n
+  fib b (a + b) (n - 1)
+
+fn powers acc 0
+  acc
+
+fn powers acc n
+  powers (push acc (list/last acc * 2)) (n - 1)
+
+fn kind n:int
+  "an int {n}"
+
+fn kind x
+  "something else {x}"
+
+pub play = print "{fact 100}"
+  .> (_ -> print "{fib 0 1 300}")
+  .> (_ -> print "{list/last (powers [1] 200)}")
+  .> (_ -> print "{math/round 1000000000000000000000000000000.0}")
+  .> (_ -> print "{math/round (0.0 - 123456789012345678901234.0)}")
+  .> (_ -> print "{text/to_int "123456789012345678901234567890"}")
+  .> (_ -> print "{text/to_int "-9223372036854775809"}")
+  .> (_ -> print "{kind (fact 30)} {kind 2.5}")
+  .> (_ -> print "{math/sqrt (fact 30)} {fact 25 / 2.0}")
+  .> (_ -> print "{fact 25 / fact 23} {fact 25 % 1000000007}")

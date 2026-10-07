@@ -1,0 +1,23 @@
+# An int literal in an arm can be wider than a machine word. The native
+# dispatcher switched on the literal's low 64 bits, so `fn which
+# 100000000000000000000` matched nothing on native while the interpreter
+# matched it; a literal past the word now keeps its group off the switch and
+# is compared whole.
+fn which 100000000000000000000
+  "the big one"
+
+fn which 7
+  "seven"
+
+fn which _
+  "other"
+
+fn solo 18446744073709551616
+  "two to the sixty-fourth"
+
+fn solo n
+  "not it: {n}"
+
+pub play = print "{which 100000000000000000000} {which 7} {which 8}"
+  .> (_ -> print "{which (10000000000 * 10000000000)} {which 2.5}")
+  .> (_ -> print "{solo (4294967296 * 4294967296)} {solo 3}")

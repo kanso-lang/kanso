@@ -1,0 +1,29 @@
+# A loop that rewinds every iteration stores a bignum into the map or the
+# list it carries. The bignum is made in the arena after the loop's mark, so
+# the store has to move it out before the rewind takes the arena back. The
+# strings built after each loop would land on it if it had not.
+fn tripled 0 m
+  m
+
+fn tripled n m
+  junk = "k{n % 17}"
+  tripled (n - 1) (put m "k" (m["k"] * 3 + length junk))
+
+fn powers 0 _ xs
+  xs
+
+fn powers n p xs
+  junk = "k{n % 17}"
+  powers (n - 1) (p * 7) (push xs (p * 5 + length junk))
+
+fn filler 0 s
+  s
+
+fn filler n s
+  filler (n - 1) "{s} {n * 7919}"
+
+fn shown m xs
+  f = filler 300 ""
+  "{length f} {m["k"]} {xs[70]} {length xs}"
+
+pub play = print (shown (tripled 60 { "k":1 }) (powers 70 1 []))

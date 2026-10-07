@@ -2054,18 +2054,6 @@ known_tag = row
 
 rows_b1kt = text/concat rows_b1nm [known_tag]
 
-# A function's checked integer ops share one overflow trap. The mutation gives
-# every op its own, and the spec's `spread` holds six.
-one_trap = row
-  "an overflow trap written at every op"
-  true
-  "cargo test --release --test an_overflow_trap_is_written_once_a_function"
-  "specs (unit, golden, differential)"
-  (breaking "an_overflow_trap_written_at_every_op")
-  release
-
-rows_b1ot = text/concat rows_b1kt [one_trap]
-
 # A nine-word arm keeps its tail calls on x86-64. The mutation narrows at
 # eight, and a release build running a three-million-step cycle through a
 # twelve-word arm overflows its stack.
@@ -2077,7 +2065,7 @@ nine_words = row
   (breaking "a_nine_word_arm_narrowed_on_x86")
   release
 
-rows_b1nw = text/concat rows_b1ot [nine_words]
+rows_b1nw = text/concat rows_b1kt [nine_words]
 
 # A tail cycle takes one flat signature under preserve_nonecc in a release
 # build on x86-64. The first mutation skips the rewrite, which only the work
@@ -3386,13 +3374,15 @@ render_group = row
 
 rows_c1zzc = text/concat rows_c1zzb [render_group]
 
-# An integer written as text past int64 is refused by a compiled build, with
-# arithmetic's own diagnostic. Answering an err value again lets a program
-# catch it, and std/json turns it into "invalid number".
+# An integer written as text past int64 is read whole by a compiled build.
+# Answering an err value again lets a program catch it, and std/json turns it
+# into "invalid number".
+int_whole = "an_integer_past_int64_reads_whole_on_every_engine"
+
 int_refused = row
   "an overflowing integer answered as an err"
   true
-  "cargo test --release --test an_integer_past_int64_is_refused_natively"
+  "cargo test --release --test {int_whole}"
   "specs (unit, golden, differential)"
   (breaking "an_overflowing_integer_answered_as_an_err")
   no_setup
@@ -3438,7 +3428,9 @@ rows_c1zzg = text/concat rows_c1zzf [element_err]
 
 # A zero divisor answers a value. Typed as an err, it lets a compiled build
 # compute on the string as though it were a number, and the runtime corpus
-# reads a number where the refusal of `*` belongs.
+# reads a number where the refusal of `*` belongs, in the `%` fixture: a
+# remainder by a word is a word, where a quotient may be a bignum whose
+# arithmetic tests the tag.
 zero_divisor = row
   "a zero divisor answered as an err"
   true
@@ -4485,11 +4477,12 @@ float_bits = row
 rows_c1zzzzzzzo = text/concat rows_c1zzzzzzzp [nan_level float_bits]
 
 # The interpreter promotes an int past int64 rather than wrapping it, and
-# native refuses the same program; only the one-engine corpus sees both.
+# every engine answers the same since the 2026-10-07 gavel, so the micro
+# corpus pins the answer one step past the edge.
 int_widens = row
   "an int that wraps where it should widen"
   true
-  "cargo test --release --test golden one_engine_corpus"
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
   "specs (unit, golden, differential)"
   (breaking "an_int_that_wraps_where_it_should_widen")
   release

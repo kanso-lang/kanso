@@ -1,0 +1,16 @@
+# A zero divisor answers a value, the text "modulo by zero" for `%`, and `*`
+# is not defined on text. A remainder by a word is typed as a word, so an
+# inference that called the zero divisor's answer an err left `p` below an int
+# and nothing else: a compiled build multiplied the string's address and
+# printed the number. The `/` fixture beside this one no longer shows it,
+# because a quotient may be a bignum and its arithmetic tests the tag.
+import "std/os"
+
+fn scaled _ p
+  p * 9
+
+fn shown z
+  rest = 4 % z
+  "{scaled 10 rest}"
+
+pub play = os/args .> (a -> print (shown (length a)))

@@ -225,16 +225,16 @@
 # test:
 # 2026-09-30, std/list's pub `iter` keeps one more line in every program that
 # imports it, for the factory-only ruling: each of the moved rows is +1 line.
-encodebench defines=109 calls=687 branches=516 lines=6180
-oneshot defines=111 calls=741 branches=645 lines=6958
-basket defines=97 calls=732 branches=551 lines=5423
-widebench defines=116 calls=735 branches=540 lines=6473
-deepbench defines=42 calls=170 branches=148 lines=1752
-escapebench defines=18 calls=50 branches=31 lines=544
-pendbench defines=62 calls=405 branches=304 lines=3044
-scanbench defines=235 calls=1940 branches=1562 lines=14909
-indexbench defines=17 calls=54 branches=26 lines=575
-digestbench defines=115 calls=553 branches=414 lines=4588
-readbench defines=19 calls=51 branches=23 lines=613
-livebench defines=112 calls=753 branches=665 lines=7083
-runbench defines=505 calls=3946 branches=2889 lines=28415
+encodebench defines=135 calls=1141 branches=1070 lines=10613
+oneshot defines=137 calls=1197 branches=1251 lines=11586
+basket defines=125 calls=1124 branches=1044 lines=9043
+widebench defines=151 calls=1296 branches=1192 lines=11715
+deepbench defines=52 calls=271 branches=277 lines=2696
+escapebench defines=20 calls=92 branches=101 lines=974
+pendbench defines=70 calls=494 branches=416 lines=3976
+scanbench defines=318 calls=3064 branches=2978 lines=25217
+indexbench defines=19 calls=68 branches=48 lines=741
+digestbench defines=132 calls=949 branches=978 lines=8182
+readbench defines=20 calls=66 branches=43 lines=769
+livebench defines=139 calls=1235 branches=1305 lines=11967
+runbench defines=653 calls=6308 branches=5792 lines=49399

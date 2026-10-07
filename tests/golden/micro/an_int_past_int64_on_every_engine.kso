@@ -1,0 +1,25 @@
+# kanso's integers are arbitrary precision. Every engine holds one in a
+# machine word and promotes it to a bignum when an operation would leave the
+# word; until the 2026-10-07 gavel the native build refused there instead,
+# and this program lived in a one-engine corpus that pinned the interpreter
+# alone.
+#
+# Each line lands exactly one step past the int64 boundary, so a promotion
+# that came one step late would print a wrapped number here.
+import "std/list"
+
+big = 9223372036854775807
+
+low = 0 - big - 1
+
+pub play = print "one past the largest: {big + 1}"
+  .> (_ -> print "one below the least: {low - 1}")
+  .> (_ -> print "the largest doubled: {big * 2}")
+  .> (_ -> print "the largest added to itself: {big + big}")
+  .> (_ -> print "a square just past: {3037000500 * 3037000500}")
+  .> (_ -> print "the least negated: {0 - low}")
+  .> (_ -> print "the least over minus one: {low / (0 - 1)}")
+  .> (_ -> print "the least squared: {low * low}")
+  .> (_ -> print "a sum that crosses: {list/sum [big 1]}")
+  .> (_ -> print "and back inside: {big + 1 - 1 == big}")
+  .> (_ -> print "ordered past the edge: {big + 1 > big}")

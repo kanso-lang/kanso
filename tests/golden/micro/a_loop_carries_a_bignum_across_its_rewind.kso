@@ -1,0 +1,28 @@
+# Each loop carries a bignum from one iteration to the next and builds a
+# string it drops, so the loop rewinds between iterations. The rewind hands
+# back the arena the iteration used, the bignum argument among it, so the
+# edge lifts a bignum argument out of the arena and puts it back after.
+fn fib a _ 0
+  a
+
+fn fib a b n
+  tag = "f{n % 7}"
+  fib b (a + b + length tag - 2) (n - 1)
+
+fn grow acc 0
+  acc
+
+fn grow acc n
+  tag = "g{n % 7}"
+  grow (acc * 3 + length tag - 2) (n - 1)
+
+fn count k 0
+  k
+
+fn count k n
+  tag = "c{n % 7}"
+  count (k + n * n * n * n * n + length tag - 2) (n - 1)
+
+pub play = print "{fib 0 1 5000 % 1000000007}"
+  .> (_ -> print "{grow 1 3000 % 1000000007}")
+  .> (_ -> print "{count 0 200000}")

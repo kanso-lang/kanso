@@ -1,0 +1,17 @@
+# `cs[p] == 97 and cs[p + 1] == 98` reads as one window test when `p` is an
+# int, and that holds when `p` may have grown past the word: the test asks for
+# a word beside the bounds, and a bignum position takes the general reads,
+# each of which answers none. The walk multiplies its position past 2^64 in
+# both directions.
+import "std/io"
+import "std/text"
+
+fn ab? cs p
+  cs[p] == 97 and cs[p + 1] == 98
+
+fn probe cs p n
+  if (n == 0) "" "{ab? cs p} {probe cs (p * 65536) (n - 1)}"
+
+ab = text/bytes "ab"
+
+pub play = io/write "{probe ab 1 6}\n{probe ab (0 - 1) 6}\n"

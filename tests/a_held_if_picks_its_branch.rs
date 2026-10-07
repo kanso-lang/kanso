@@ -20,16 +20,18 @@ const HELD: &str = "fn pick c
 print \"{pick true} {pick false}\"
 ";
 
-fn written() -> PathBuf {
-    let dir = std::env::temp_dir().join("kanso-held-if-test");
+/// Each test writes its own copy: the two run at once, and one reading the
+/// file while the other was writing it found it empty.
+fn written(name: &str) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("kanso-held-if-{name}-{}", std::process::id()));
     std::fs::create_dir_all(&dir).expect("temp work dir");
     let file = dir.join("held_if.kso");
     std::fs::write(&file, HELD).expect("program writes");
     file
 }
 
-fn run(extra: &[&str]) -> std::process::Output {
-    let path = written();
+fn run(name: &str, extra: &[&str]) -> std::process::Output {
+    let path = written(name);
     let mut args = vec!["play", path.to_str().expect("utf-8")];
     args.extend_from_slice(extra);
     Command::new(env!("CARGO_BIN_EXE_kanso")).args(args).output().expect("kanso runs")
@@ -37,7 +39,7 @@ fn run(extra: &[&str]) -> std::process::Output {
 
 #[test]
 fn a_held_if_answers_the_branch_it_picks() {
-    let out = run(&["--interp"]);
+    let out = run("oracle", &["--interp"]);
     assert_eq!(
         String::from_utf8_lossy(&out.stdout).trim(),
         "1 3 2 4",
@@ -48,7 +50,7 @@ fn a_held_if_answers_the_branch_it_picks() {
 
 #[test]
 fn native_names_its_limit_for_a_held_if() {
-    let said = String::from_utf8_lossy(&run(&[]).stderr).into_owned();
+    let said = String::from_utf8_lossy(&run("native", &[]).stderr).into_owned();
     assert!(
         said.contains("`if` as a bare value is not yet supported"),
         "the backend did not name its own limit: {said}"

@@ -21,8 +21,8 @@
 # and it sits in the preamble every program carries, so five samples that
 # import nothing move by exactly its definition. Held as the price of runbench
 # falling 0.3591% on the container; the log entry carries the figures.
-recursion lines=281 calls=13 branches=9 defines=8 rounds=4 visits=45
-dispatch lines=304 calls=19 branches=9 defines=10 rounds=2 visits=12
-guards lines=262 calls=11 branches=7 defines=9 rounds=2 visits=25
-records lines=358 calls=22 branches=15 defines=10 rounds=2 visits=20
-build_block lines=246 calls=10 branches=4 defines=7 rounds=2 visits=12
+recursion lines=381 calls=24 branches=17 defines=9 rounds=4 visits=45
+dispatch lines=308 calls=19 branches=9 defines=10 rounds=2 visits=12
+guards lines=265 calls=11 branches=7 defines=9 rounds=2 visits=25
+records lines=361 calls=22 branches=15 defines=10 rounds=3 visits=27
+build_block lines=249 calls=10 branches=4 defines=7 rounds=2 visits=12

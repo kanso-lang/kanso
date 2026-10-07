@@ -1,0 +1,20 @@
+# A bignum renders where a word does: alone, negated, inside a list, a record
+# and a map, and as what `list/sum` answers when its total leaves the word.
+import "std/list"
+
+type pair
+  a
+  b
+
+big = 123456789012345678901234567890
+
+m = 9223372036854775807
+
+pub play = print "{big} {0 - big}"
+  .> (_ -> print "{[big (0 - big) 1]}")
+  .> (_ -> print "{pair big 2}")
+  .> (_ -> print "{{ "k":big }}")
+  .> (_ -> print "{1000000000 * 1000000000 * 1000000000}")
+  .> (_ -> print "{0 - 1000000000 * 1000000000 * 1000000000}")
+  .> (_ -> print "{list/sum [m m m]} {list/sum [big (0 - big)]}")
+  .> (_ -> print "{4294967296 * 4294967296 * 4294967296 * 4294967296}")

@@ -1,0 +1,13 @@
+# A map orders its keys by value, and a bignum key sorts among the words: the
+# least word's negation is below every word, and 2^63 is above the largest.
+# A key computed as `largest + 1` finds the one written as a literal, because
+# a number past the word has exactly one form.
+big = 9223372036854775808
+
+m = put (put (put (put { 1:"one" } big "big") (0 - big) "neg") (big * big) "sq")
+  9223372036854775807
+  "max"
+
+pub play = print m
+  .> (_ -> print "{m[big]} {m[9223372036854775807 + 1]} {m[big * big]}")
+  .> (_ -> print "{m[0 - big]} {m[big + 2]} {m[1]}")

@@ -22043,3 +22043,222 @@ goes.
 The 2026-09-30 directive, "a golden may pin the interpreter's answer where
 native refuses", stays useful until this lands. After that the two engines
 agree and its int fixture becomes an ordinary golden.
+
+## 2026-10-07 — compiled code gets arbitrary-precision integers
+
+Built per the gavel of the same date. An int stays a machine word until an
+operation's answer would leave it, and then the runtime builds a bignum: tag
+17, `K_BIG`, a `KBytes` in the arena holding a sign word and 32-bit limbs,
+least significant first. Every integer operation takes either kind. The form
+is canonical, as the interpreter's `Int` is: a result that fits a word goes
+back into one, so equality compares a tag and bytes, and a map orders a
+bignum key among the words by value. The native build and the tab share
+`runtime.c`, so both have it.
+
+In the emitter, the checked `+`, `-` and `*` it already wrote branch on
+overflow to `k_int_add`, `k_int_sub` and `k_int_mul` where they used to trap.
+`/` and `%` on two ints take one instruction behind a test that both tags say
+word. A literal past the word is read from its digits. An int literal in an
+arm past the word keeps its group off the switch and is compared whole: the
+native switch had matched the literal's low 64 bits, so `fn which
+100000000000000000000` matched nothing, a divergence nothing reported. The
+overflow refusal is gone from the emitter and the runtime. `math/round` of
+1e30 answers the exact integer, `text/to_int` reads a number past the word
+whole, and the checker no longer refuses `to_int` of such a literal, which it
+did on every engine.
+
+Inference keeps `INT` for the word and adds `BIG` for the bignum; the type
+`int` is the two. Every decision the emitter makes on a set that is exactly
+`INT`, unboxing a parameter or reading a payload without its tag, stays
+sound, because a set that might hold a bignum is not `INT`. Arithmetic on
+ints answers `INT | BIG`, except a remainder of two words.
+
+A bignum lives in the arena, and the rewinds had treated an int as something
+they cannot reach. Three changes keep them sound:
+
+- A loop edge that rewinds lifts any argument that is a bignum when the edge
+  is reached: `k_big_lift_out` copies it to malloc'd storage, the rewind
+  runs, and `k_big_lift_in` copies it back above the mark. The plain rewind
+  and the carry both take it, behind one tag test an argument.
+- An in-place push or put of a bignum into a list or map older than the
+  beat's mark moves the bignum to permanent storage first (`k_big_kept`), so
+  an int stays licensed as an accumulator's element. The inlined push and
+  put send a bignum item to the C, beside an err.
+- A pure loop that builds bignums and allocates nothing else does not
+  rewind. Its bignums stay in the arena until an enclosing rewind or the
+  end of the bracket, as they would in any loop that is not a beat. Only a
+  program that would have died on the refusal before reaches this, so no
+  program that ran before uses more memory.
+
+The cost on the run program is the int parameters. A loop counter or a
+parser position was a raw word, because `n + 1` was a word; now it is `int`
+or bignum, so it travels boxed, every use tests its tag, and the paths that
+read a payload directly stay shut. So in a release build every group on a
+cycle of the call graph with such a parameter is emitted twice. The twin, `d_<name>_<n>_w`,
+takes those parameters as raw words. A call into the group tests the tags of
+its arguments and takes the twin when every one is a word; a call from the
+general group stays general, so each twin keeps one caller and the inlining
+that folds a loop's steps together. On the way to the general group, which
+a call takes only when a bignum has arrived, that one edge skips its
+rewind; the general group's next edge lifts the bignum and takes the
+skipped iteration's garbage with its own.
+
+Measured on runbench in this container with callgrind, both compilers'
+binaries copied into one directory: 1,088,360,071 instructions before and
+1,283,258,510 after, 17.9% more. CI's rows replace these. The steps:
+
+- the first working build, 1,542,086,570;
+- `/` and `%` given the word path above, 1,484,462,274;
+- the parser's position records packed into two words when the position is a
+  word, and spilled to the heap record when it is a bignum, as a word past 56
+  bits already was, 1,299,344,383; `k_rec` had been 134,619,394 of the first
+  build;
+- the twins, 1,283,258,510.
+
+Two probes, unsound and not committed, bounded the parameters' share before
+the twins: unboxing a parameter whose set is `INT | BIG` as though it were a
+word gave 1,194,836,442, and inference that never widens arithmetic gave
+1,158,456,574. The twins recover less than the first probe because the
+groups LLVM inlined into one another before no longer all inline: the
+profile shows `escape/filled`, `json/obj_key_end` and `json/array_delim`
+standing alone where base folded them into their callers.
+
+CI's first run of this branch found what runbench's 17.9% had hidden.
+escapebench read 75,295,126 instructions against 41,544,680, 81% more, and
+jsonbench 24.9% more. escapebench's inner loop pushes
+`(k * 31 + n * 7 + 3) % 997`. Each operation merged its overflow call back
+through a phi, the next operation tested the phi's tag, and LLVM left the
+constant tags in place: 60 instructions an element against 33. Four changes
+in the emitter answer most of it.
+
+- An expression of two or more `+ - * / %` over words runs on raw words and
+  tests for overflow once, at the end. When any operation overflowed it
+  re-runs the operations the general way on the same operands, which their
+  being pure makes the same answer.
+- A remainder by a word is a word whatever the dividend, because it is
+  smaller than the divisor, and a divisor written as a literal other than
+  zero cannot fail. The pushed element is then an int with no err beside it,
+  and the inlined push stops testing for either.
+- An argument a twin takes as a word, such as a loop's `n - 1`, runs the
+  same way at its call, and its overflow flag joins the test that picks the
+  twin. The merged phi had cost a counting loop three instructions a step,
+  because LLVM does not thread a branch into a loop's header.
+- A call from a twin into the general group is marked `noinline`. Inlined,
+  it copied the general body into the twin, which then cost too much to fold
+  into its own caller.
+
+escapebench went from 75,294,779 to 57,794,754 in this container. On CI,
+runbench went from 1,279,294,697 to 1,240,344,037, 14.0% over main's
+1,088,359,234, and the release tier's codegen from 505,720,838 to
+503,605,225 against main's 408,634,431. A fifth change, reading
+`cs[p + 1]` over bytes with an index past the word as index 0, measured
+1,245,214,168 on runbench and 931,768,709 on jsonbench against 1,240,344,874
+and 923,660,159 without it, and was taken out.
+
+A call from outside a loop into its twin rendered the twin's arguments after
+the beat's push, so a string builder's seed sat above the mark and the string
+it grew was evacuated whole at the pop: basket's `evac_bytes` read 55,136
+against 192. The twin's arguments are rendered below the mark now, and a slot
+that is not a word reuses the general rendering, so the seed is made once.
+The basket, run, scan and digest counters are back to main's byte for byte,
+and on CI basket's instructions read 32,465,828 against 33,760,303 and
+runbench 1,240,341,240.
+
+A byte run, `cs[p] == 97 and cs[p + 1] == 98` over bytes and an int, reads
+as one window test and plain compares only when `p` is an int, and a position
+that can step past the word is now an int or a bignum. The test stopped firing
+on every benchmark, and the ratchet found it: both byte-run rows went blind.
+The window test now also asks that `p` hold a word, and a bignum takes the
+general reads. In this container runbench went from 1,240,342,077 to
+1,211,249,956 with it and jsonbench from 923,660,159 to 879,580,859.
+`a_byte_run_at_a_position_past_the_word` walks a position past 2^64 in both
+directions through one. The same run found the zero-divisor row blind. A
+quotient may be a bignum, so the arithmetic in its fixture tests the tag
+whatever inference said, and the row now reads
+`arithmetic_on_a_modulo_by_zero_is_refused`: a remainder by a word is a word,
+and typed that way an inference that calls the zero divisor's answer an err
+multiplies the string's address. On CI the byte run took runbench to
+1,211,249,119, 11.3% over main, and jsonbench to 879,581,206.
+
+A dev build and the tab get no twins. A twin buys run speed with a second
+copy of each looping group, and the tab's compile of interp_corpus read
+738,305,432 fuel against main's 591,832,734 with them and held 3,367,720
+bytes against 2,256,216. Without them it reads 632,100,525 and holds
+2,630,053, and the tab's run reads 33,447,328 against main's 29,965,453 and
+31,952,303 with twins. The mem vein, whose programs build at the dev tier,
+is back to main's values byte for byte.
+
+Two specs went red on the way. The release spec that runs a cycle through a
+twelve-word arm three million times has a seven-parameter group whose count
+and total were raw words. Boxed, its arm was fourteen words and lost its
+tail call, and the binary died on SIGSEGV; the twins take both as words, the
+arm is twelve words again, and the spec passes as written. The general
+group's arm is still fourteen words, so a cycle like that one which carries
+a bignum spends a frame per step. The wasm32 layout harness compiles the
+emitted module at clang's default inline threshold, and there a `musttail`
+returning a `KValue` is an ordinary call, because the backend returns the
+struct through a slot in the caller's frame; `a_record_rebuilt_at_depth`
+had run in one frame only because LLVM inlined one step into the other. The
+harness builds at the dev tier, so its step takes the counter boxed, and
+the boxed step no longer inlines at the default: the program exhausts the
+stack with twins and without them. The harness now uses 2000, the threshold
+native's release link already uses.
+
+The floor drops by what this costs, under the 2026-09-13 rule for building
+the specified language: 90.0696 to 89.4906 on CI's rows, with the byte run
+back in place. Projected without
+the twins, from this container's ratios on runbench and the release codegen
+row, the index reads 89.19, so they stay.
+
+Every counter that rose, at the value it landed on. The compile goldens,
+where a word run and its general re-run are emitted for what used to be one
+expression: `branches` 52 `calls` 86 `defines` 45 `lines` 1,564
+`rounds` 13 and `visits` 121 and for modules `module_branches` 105
+`module_calls` 128 `module_defines` 29 `module_lines` 1,280
+`module_rounds` 8 and `module_visits` 2,909. The front end and the compiler's
+own work: `front_end_visits` 7,982 `compile_instructions` 26,191,422
+`entry_instructions` 86,403,005 `library_instructions` 86,947,537
+`compile_allocs` 14,747 and `emit_instructions` 32,132,166. The interpreter,
+by 1,320 instructions and six allocations: `interp_instructions`
+590,482,748 and `interp_allocs` 896,122. The two codegen tiers:
+`codegen_instructions_dev` 130,522,511 and `codegen_instructions_release`
+503,605,244. The release row read 503,605,225 a commit earlier, and the one
+input to it that changed between the two was a comment rewritten in
+src/runtime.c, whose text clang reads. The dev row is not explained. It read
+130,522,884, 130,522,835 and 130,522,511 on three consecutive commits; the
+last two differ only in goldens and this log, and a merge base that did not
+move. Each reading agreed with a second count in its own job, and a re-run of
+the third commit read 130,522,511 again, so the row is stable within a commit
+and moves between commits that carry the same compiler. In this container it
+reads 129,705,923 on both trees. Main's row did not move this way over the
+commits before this branch. The tab: `browser_compile_instructions` 636,739,574
+`browser_compile_peak_bytes` 2,665,939 and `browser_run_instructions`
+33,495,845. The run programs: `work_basket` 32,465,828 `work_deepbench`
+370,955,233 `work_digestbench` 5,735,451 `work_encodebench` 2,382,879,127
+`work_escapebench` 57,795,101 `work_indexbench` 2,458,503 `work_jsonbench`
+879,581,206 `work_livebench` 1,564,983,541 `work_oneshot` 13,566,200
+`work_pendbench` 194,495,238 `work_readbench` 4,578,315 `work_runbench`
+1,211,249,119 `work_scanbench` 281,579 and `work_widebench` 28,254,259. The
+emitted code: `emitted_branches` 1,136 `emitted_calls` 1,018
+`emitted_defines` 106 `emitted_lines` 10,188 `emitted_other_branches`
+16,495 `emitted_other_calls` 17,305 `emitted_other_defines` 1,971
+`emitted_other_lines` 146,878 and `text` 4,622,752.
+
+The one-engine corpus held one program, which now runs on every engine in the
+micro corpus as `an_int_past_int64_on_every_engine`, so the corpus and its
+test go. Ten more micro goldens cover the boundary: a bignum meeting a word
+in every operator, ordering across the word's edge and against floats,
+rendering, map keys, `fact 100` beside `math/round` and `text/to_int`, a wide
+pattern literal, a position past the word, a loop that carries a bignum
+across a plain rewind, one that carries it beside a record the carry copies,
+and a bignum stored into a map and a list that outlive the loop. Each of the
+last three goes red with its lift or its move taken out. One more,
+`arithmetic_over_words_leaves_the_word_at_any_step`, crosses 2^63 at a
+different step in each answer; release goes wrong on it with the word run's
+flags dropped and with the tail argument's. A runtime golden
+pins the bitwise refusal. The specs that asserted the refusal now assert
+agreement, and `an_overflow_trap_is_written_once_a_function` goes with the
+trap. `scripts/numeric_differential` fails on any disagreement, where it
+counted the refusals as a known ceiling and failed when there were none.
+ch02's overflow sample prints `100000000000000000000`, and the playground
+note about 64-bit integers is gone.

@@ -1,0 +1,69 @@
+# Arithmetic over words that leaves the word part of the way through. An
+# expression of several operations over words runs on raw words and tests for
+# overflow once, at the end, and re-runs the operations the general way when
+# any of them overflowed. A loop's `n + 1` handed to its own call folds its
+# overflow into the test that picks the word twin. `cs[p + 1]` over bytes reads
+# an index past the word as one no bytes hold. Each answer here crosses 2^63
+# at a different step.
+import "std/text"
+
+fn mix a b c
+  (a * b + c) % 997
+
+fn spread a b c
+  a * b + c * 2 - a
+
+fn quot a d
+  (a + 0) / d
+
+fn rem a d
+  a * 1 % d
+
+fn count_up n stop acc
+  more n stop acc (n > stop)
+
+fn more _ _ acc true
+  acc
+
+fn more n stop acc false
+  count_up (n + 1) stop (push acc (n * 2 + 1))
+
+fn walk cs p acc
+  step cs cs[p + 1] (p + 1) acc
+
+fn step _ none p acc
+  push acc p
+
+fn step cs c p acc
+  walk cs p (push acc c)
+
+fn down n acc
+  down2 n acc (n < -9223372036854775806)
+
+fn down2 _ acc true
+  acc
+
+fn down2 n acc false
+  down (n - 1) (push acc (n * 3 - 7))
+
+fn churn 0 _ acc
+  acc
+
+fn churn n k acc
+  churn (n - 1) k (push acc ((k * 31 + n * 7 + 3) % 997))
+
+fn report big
+  small = 0 - big - 1
+  l1 = "{mix 3 5 7} {mix big 3 1} {mix small 2 5} {mix big big big}"
+  l2 = "{spread 4 5 6} {spread big 2 3} {spread small small 1}"
+  l3 = "{quot 7 2} {quot small (0 - 1)} {quot big 0} {quot (0 - 7) 2}"
+  l4 = "{rem 7 3} {rem small (0 - 1)} {rem big 0} {rem (0 - 7) 3}"
+  l5 = "{rem (big * 4) 5} {count_up (big - 3) (big + 2) []}"
+  abc = text/bytes "abc"
+  xy = text/bytes "xy"
+  l6 = "{walk abc 0 []} {walk xy (big - 1) []} {walk xy big []}"
+  l7 = "{down (small + 3) []}"
+  l8 = "{churn 3 5 []} {churn 3 (big / 2) []} {churn 2 big []}"
+  "{l1}\n{l2}\n{l3}\n{l4}\n{l5}\n{l6}\n{l7}\n{l8}"
+
+pub play = print (report 9223372036854775807)
