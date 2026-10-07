@@ -603,5 +603,11 @@
 # name's address, and the analysis now allocates 304 times fewer before the
 # run, so different names share a slot. CI's reading: interp_instructions
 # 590,482,748 -> 590,586,868, a RISE of 104,120 (+0.0176%).
-interp_instructions=590586868
+#
+# 2026-10-07: the linear pass reads a node's children in place instead of
+# building a list of them per visit. CI's reading, and this container's on a
+# binary built from the same tree: interp_instructions 590,586,868 ->
+# 585,696,023, a FALL of 4,890,845 (-0.8281%). Main reads 590,586,868 in this
+# container, so the move is the change's and not the silicon's.
+interp_instructions=585696023
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

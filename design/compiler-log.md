@@ -22565,6 +22565,10 @@ moved with the change and what moved them is not isolated. The browser rows,
 from the same rustc that builds `docs/kanso.wasm`: browser_compile_instructions
 632,343,268 -> 604,663,295 (-4.38%), browser_compile_peak_bytes 2,164,044 ->
 1,495,678 (-30.9%). The emitted IR is unchanged: every runtime vein and the
-emitted and machine-code gates agree. The two codegen rows read 126,344,437 and
+emitted and machine-code gates agree. The interpreter's rows moved as well,
+since `kanso run` goes through the linear pass before it interprets anything:
+interp_instructions 590,586,868 -> 585,696,023 (-0.83%) and interp_allocs
+895,818 -> 874,027, measured by CI and here alike, with main reading its
+goldens here. The two codegen rows read 126,344,437 and
 496,054,428 here on main as well as on this branch, so their disagreement with
 the goldens is this host's, and they are left as CI measured them.
