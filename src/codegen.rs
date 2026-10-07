@@ -6243,15 +6243,22 @@ impl<'a> Backend<'a> {
                 let _ = writeln!(out, "@{name}_lit = internal global %KValue zeroinitializer");
             }
         }
+        // THE MODULE IS WRITTEN ONCE MORE, NOT THREE TIMES. The body was
+        // copied into `out`, `out` into the narrowed text, and that into a
+        // fresh string behind the declarations, with every copy alive beside
+        // the next and `out` grown by doubling. The playground prices the
+        // most its compile holds at once, and on `bench/interp_corpus` this
+        // tail was the emitter's high-water mark. Now `out` is sized before
+        // the body goes in, the body is dropped as soon as it has, and the
+        // narrowing writes behind the declarations in its own buffer.
+        out.reserve(self.globals.len() + 1 + body.len());
         out.push_str(&self.globals);
         out.push('\n');
         out.push_str(&body);
-        let narrowed = narrow_tailcc(out);
-        let mut module = String::with_capacity(declares.len() + 1 + narrowed.len());
-        module.push_str(&declares);
-        module.push('\n');
-        module.push_str(&narrowed);
-        Ok(module)
+        drop(body);
+        let mut head = declares;
+        head.push('\n');
+        Ok(narrowed_after(&head, out))
     }
 
     fn intern(&mut self, text: &str) -> (String, usize) {
@@ -11080,7 +11087,13 @@ fn holds(line: &str, needle: &str, at: usize) -> bool {
         .any(|(i, _)| i >= at && line.as_bytes()[i - at..].starts_with(needle.as_bytes()))
 }
 
+#[cfg(test)]
 fn narrow_tailcc(ir: String) -> String {
+    narrowed_after("", ir)
+}
+
+/// `narrow_tailcc`'s answer written after `head`, in one buffer.
+fn narrowed_after(head: &str, ir: String) -> String {
     let code = |line: &str| !line.starts_with('@');
     // Split once and walk the lines three times. Splitting is a search for
     // every newline, and three splits of a one-line program's body were
@@ -11143,7 +11156,8 @@ fn narrow_tailcc(ir: String) -> String {
     }
 
     let mut rerouted: crate::hash::Set<String> = crate::hash::Set::default();
-    let mut out = String::with_capacity(ir.len());
+    let mut out = String::with_capacity(head.len() + ir.len());
+    out.push_str(head);
     for &line in &lines {
         // Every rewrite below needs the word, so a line without it is copied
         // as it stands and its callee is never looked up.
