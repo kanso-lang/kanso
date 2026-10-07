@@ -1340,6 +1340,7 @@ declare %KValue @k_b_chars(%KValue)
 declare %KValue @k_b_split(%KValue, %KValue)
 declare %KValue @k_b_concat(%KValue, %KValue)
 declare %KValue @k_b_utf8(%KValue, ptr)
+declare %KValue @k_b_built_text(%KValue)
 declare %KValue @k_desc_args()
 declare %KValue @k_desc_stdin()
 declare %KValue @k_b_read_file(%KValue)
@@ -2102,8 +2103,9 @@ fn ties(program: &Program) -> bool {
     program.fns.iter().filter(|d| !d.name.starts_with("list/")).any(|d| d.body.iter().any(stmt))
 }
 
-pub(crate) const BUILTIN_CALLS: [&str; 61] = [
+pub(crate) const BUILTIN_CALLS: [&str; 62] = [
     "effect",
+    "built_text",
     "net_port",
     "start",
     "kill",

@@ -1,0 +1,36 @@
+import "std/json"
+import "std/text"
+
+# The encoder hands its bytes over as text without checking them again, and
+# the count `length` reads is taken from those bytes when it is first asked.
+# The documents hold one-, two-, three- and four-byte characters. The first is
+# shorter than the 64 bytes the count reads at once, and the last two are
+# longer than the 4,032 it reads before folding its tallies. The very last is
+# mostly continuation bytes, so a tally kept past 4,032 bytes would wrap. A
+# count of bytes, or one that dropped a block or a fold, would print a
+# different number. `chars` counts the same text one character at a time, so
+# each pair of numbers must agree.
+word = "aé€😀"
+
+plain = "plain ascii that runs well past one block of sixty-four bytes"
+
+fn many _ s 0
+  s
+
+fn many w s n
+  many w "{s}{w}" (n - 1)
+
+fn repeated s n
+  many word s n
+
+fn report doc
+  out = json/encode doc
+  print "{length out} {length (text/chars out)} {length (text/bytes out)}"
+
+pub play =
+  report (repeated "" 1)
+  report (repeated "" 17)
+  report { "k":(repeated "" 40) "n":[1 2 3] }
+  report [(repeated "" 200) plain]
+  report (repeated "" 500)
+  report (many "😀" "" 2000)

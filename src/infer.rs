@@ -1955,6 +1955,7 @@ pub fn builtin_set(name: &str, args: &[Set]) -> Set {
         "number_span" => INT | fails,
         "slice" => (args[0] & (BYTES | LIST | STR)) | fails,
         "utf8" => STR | ERR | fails,
+        "built_text" => STR | fails,
         "render_value" => STR | fails,
         "length" => INT | fails,
         "push" | "concat" | "chars" | "split" | "entries" | "keys" | "values" | "sort"

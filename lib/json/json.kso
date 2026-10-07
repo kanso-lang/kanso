@@ -19,8 +19,10 @@ pub fn decode s
 fn elem_onto acc x
   encode_onto (text/append acc 44) x
 
+# Everything the encoder appends is text or an ascii byte, so the bytes it
+# hands back are text already and `built_text` takes them without checking.
 pub fn encode v
-  text/utf8 (encode_onto (text/bytes "") v)
+  builtin_built_text (encode_onto (text/bytes "") v)
 
 # the bound is written where the read is, so the checker proves the read in
 # range and the plain form answers the element (ruled 2026-09-16)

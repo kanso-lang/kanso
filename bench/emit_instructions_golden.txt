@@ -390,4 +390,4 @@
 # isolated. Measured in this container, where the previous tree reads on the row:
 # 27,248,851 -> 27,259,671, a RISE of 10,820 (+0.0397%).
 # CI's reading replaces it if it differs.
-emit_instructions=25135836
+emit_instructions=25148324

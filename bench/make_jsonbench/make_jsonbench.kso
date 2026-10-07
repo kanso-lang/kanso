@@ -61,12 +61,19 @@ trimmed = os/read_file! "lib/json/json.kso" .> stripped
 fn stripped source
   os/write_file "{module_dir}/json.kso" (kept source)
 
+# The encoder ends with `builtin_built_text`, which only the standard library
+# may name. This copy is an ordinary module, so it ends with the checked
+# `text/utf8` the encoder used before; the benchmark only decodes.
+vouched = "builtin_built_text"
+
+checked = "text/utf8"
+
 # Blocks are separated by a blank line, which is what makes the one function
 # this benchmark does not want addressable without parsing the file.
 fn kept source
   blocks = text/split (text/trim source) "\n\n"
   staying = list/to_list (list/reject blocks starts_dropped?)
-  "{text/join staying "\n\n"}\n"
+  text/join (text/split "{text/join staying "\n\n"}\n" vouched) checked
 
 fn starts_dropped? block
   text/slice block 1 (length dropped) == dropped

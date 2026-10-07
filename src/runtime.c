@@ -9080,16 +9080,36 @@ static KValue k_utf8_check(char* data, long long len, const char* origin) {
     return v;
 }
 
-/* The builder-aware finish: when the bytes own a KBuf-headed buffer with
-   room for the terminator, the string takes the buffer in place — no
-   copy — and the frontier burns (used = cap) so a later append on any
-   surviving bytes value must grow away rather than write under the
-   string. */
+#define K_CHARS_UNKNOWN 0x7fffffffffffffffLL
+static KValue k_utf8_take(KBytes* b, long long chars);
+
 static KValue k_utf8_finish(KValue bv, const char* origin) {
     KBytes* b = k_as_bytes(bv);
     long long chars;
     KValue bad = k_utf8_bad((const char*)b->data, b->len, origin, &chars);
     if (bad.tag == K_ERR) return bad;
+    return k_utf8_take(b, chars);
+}
+
+/* `built_text`: bytes the standard library assembled from text and ascii
+   bytes alone. Every piece was text when it was appended, so the whole is,
+   and the check `utf8` makes would read the bytes again to learn nothing.
+   The JSON encoder ends this way, and on runbench that check read every
+   document it wrote, 17 MB over 90 encodes. */
+KValue k_b_built_text(KValue bv) {
+    if (!k_not_failure(bv)) return bv;
+    if (bv.tag != K_BYTES) k_die("built_text takes bytes");
+    return k_utf8_take(k_as_bytes(bv), K_CHARS_UNKNOWN);
+}
+
+/* The builder-aware finish: when the bytes own a KBuf-headed buffer with
+   room for the terminator, the string takes the buffer in place — no
+   copy — and the frontier burns (used = cap) so a later append on any
+   surviving bytes value must grow away rather than write under the
+   string. `chars` is the character count when the caller has one, and
+   K_CHARS_UNKNOWN when it does not, which leaves the count for `length` to
+   take when it is asked. */
+static KValue k_utf8_take(KBytes* b, long long chars) {
     long long bcap = b->cap & ~1LL;
     if (bcap && b->len < bcap) {
         KBuf* buf = ((KBuf*)b->data) - 1;
@@ -9613,6 +9633,34 @@ static const char* k_lazy_hint(KValue v) {
 static long long k_utf8_chars(const unsigned char* p, long long len) {
     long long i = 0;
     long long conts = 0;
+#if defined(__x86_64__)
+    /* Sixteen bytes a compare: a continuation byte is 0x80..0xBF, which as a
+       signed byte is below -64. Each lane counts in a byte for up to 63
+       blocks of 64 before the sum of absolute differences against zero folds
+       the lanes into two halves. The word loop below read 8 bytes in about
+       seven instructions; this reads 64 in about fourteen. */
+    {
+        const __m128i below = _mm_set1_epi8((char)0xC0);
+        const __m128i zero = _mm_setzero_si128();
+        while (i + 64 <= len) {
+            __m128i acc = zero;
+            long long stop = i + 64LL * 63;
+            if (stop > len) stop = len;
+            for (; i + 64 <= stop; i += 64) {
+                __m128i a = _mm_loadu_si128((const __m128i*)(p + i));
+                __m128i b = _mm_loadu_si128((const __m128i*)(p + i + 16));
+                __m128i c = _mm_loadu_si128((const __m128i*)(p + i + 32));
+                __m128i d = _mm_loadu_si128((const __m128i*)(p + i + 48));
+                acc = _mm_sub_epi8(acc, _mm_cmplt_epi8(a, below));
+                acc = _mm_sub_epi8(acc, _mm_cmplt_epi8(b, below));
+                acc = _mm_sub_epi8(acc, _mm_cmplt_epi8(c, below));
+                acc = _mm_sub_epi8(acc, _mm_cmplt_epi8(d, below));
+            }
+            __m128i sums = _mm_sad_epu8(acc, zero);
+            conts += _mm_cvtsi128_si64(sums) + _mm_cvtsi128_si64(_mm_unpackhi_epi64(sums, sums));
+        }
+    }
+#endif
     for (; i + 8 <= len; i += 8) {
         unsigned long long w;
         memcpy(&w, p + i, sizeof w);

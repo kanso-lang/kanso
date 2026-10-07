@@ -1565,6 +1565,7 @@ fn expr_allocates(
         "slice",
         "sort",
         "utf8",
+        "built_text",
         "values",
     ];
     const PURE: &[&str] = &[
@@ -2766,7 +2767,7 @@ mod tests {
         let regions: Vec<usize> = loops.regions.iter().map(|(_, line, _)| *line).collect();
         assert_eq!(
             regions,
-            vec![67],
+            vec![69],
             "the one region is the descent into a map, `encode_map acc (keys m) (values m)`"
         );
     }

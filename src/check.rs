@@ -3,8 +3,9 @@ use crate::diag::{article, Diagnostic, Span};
 use crate::hash::{Map as HashMap, Set as HashSet};
 use num_traits::Zero;
 
-pub const BUILTINS: [&str; 65] = [
+pub const BUILTINS: [&str; 66] = [
     "annotate",
+    "built_text",
     "append",
     "args",
     "bytes",
@@ -93,7 +94,7 @@ pub const AMBIENT: [&str; 12] = [
 /// `native backend: `length` takes 1 argument(s)` and no span, the page
 /// died at the call, and `kanso check` said ok. So the counts live here,
 /// beside the names, and every reader takes them from one place.
-pub const BUILTIN_ARITY: [(&str, usize); 69] = [
+pub const BUILTIN_ARITY: [(&str, usize); 70] = [
     ("accept", 1),
     ("annotate", 2),
     ("append", 2),
@@ -106,6 +107,7 @@ pub const BUILTIN_ARITY: [(&str, usize); 69] = [
     ("bit_shl", 2),
     ("bit_shr", 2),
     ("bit_xor", 2),
+    ("built_text", 1),
     ("bytes", 1),
     ("char_code", 1),
     ("chars", 1),
@@ -5145,11 +5147,19 @@ struct Declared<'a> {
 /// themselves. Asked only on the arm that would refuse a builtin, which a
 /// correct program never reaches, so its filesystem calls cost nothing there.
 fn in_shipped_library(file: &str) -> bool {
-    let Some(module) = std::path::Path::new(file).parent() else { return false };
-    let Ok(module) = std::fs::canonicalize(module) else { return false };
+    // The file is resolved, not only its directory, so a module built of links
+    // to the library's files (the book's ch08 sample is one) reads as the
+    // library, which is the text it is.
+    let Ok(file) = std::fs::canonicalize(file) else { return false };
+    let Some(module) = file.parent() else { return false };
+    // A unit test runs from target/<profile>/deps, one directory deeper than
+    // the compiler, so the second root misses the checkout there; the third
+    // names it, and exists only in that build.
     let roots = [
         std::env::var("KANSO_STD").ok().map(std::path::PathBuf::from),
         std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.join("../../lib"))),
+        #[cfg(test)]
+        Some(std::path::PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/lib"))),
     ];
     roots
         .into_iter()
