@@ -192,7 +192,7 @@ thread_local! {
 pub extern "C" fn kanso_compile_native(ptr: *const u8, len: usize) -> i32 {
     let source = take_input(ptr, len);
     match crate::compile_source("run", &current_file(), &source) {
-        Ok(program) => lower_native(&program),
+        Ok(program) => lower_native(program),
         Err(rendered) => {
             set_out(&rendered);
             2
@@ -206,7 +206,7 @@ pub extern "C" fn kanso_compile_native(ptr: *const u8, len: usize) -> i32 {
 pub extern "C" fn kanso_play_native(ptr: *const u8, len: usize) -> i32 {
     let source = take_input(ptr, len);
     match crate::compile_play_file(&current_file(), &source) {
-        Ok(program) => lower_native(&program),
+        Ok(program) => lower_native(program),
         Err(rendered) => {
             set_out(&rendered);
             2
@@ -214,11 +214,23 @@ pub extern "C" fn kanso_play_native(ptr: *const u8, len: usize) -> i32 {
     }
 }
 
+/// THE PROGRAM AND THE NATIVE IR ARE DROPPED AS SOON AS NOTHING READS THEM.
+/// The tab's compile is priced by the most it holds at once
+/// (`browser_compile_peak_bytes`), and that peak falls inside the translation.
+/// Kept alive to the end, the program's tree and the native IR sat under it
+/// beside the retargeted copy the translation actually reads: on
+/// `bench/interp_corpus`, natively, 503,160 and 295,852 bytes of a 3,785,556
+/// peak, which read 2,988,848 with both gone.
 #[cfg(target_arch = "wasm32")]
-fn lower_native(program: &crate::ast::Program) -> i32 {
+fn lower_native(program: crate::ast::Program) -> i32 {
     let convention = crate::codegen::ClosureConvention::Absent;
-    let side = crate::codegen::emit_ir_dev(program, convention)
-        .and_then(|ir| crate::ir_wasm::translate(&crate::codegen::retarget_wasm32(&ir)));
+    let ir = crate::codegen::emit_ir_dev(&program, convention);
+    drop(program);
+    let side = ir.and_then(|ir| {
+        let module = crate::codegen::retarget_wasm32(&ir);
+        drop(ir);
+        crate::ir_wasm::translate(&module)
+    });
     match side {
         Ok(side) => {
             SIDE.with(|s| s.set((side.data, side.table)));

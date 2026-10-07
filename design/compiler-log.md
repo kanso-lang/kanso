@@ -22315,6 +22315,7 @@ CI's rows: `codegen_instructions_dev` 130,522,511 -> 126,434,707
 503,519,717 (-85,527). Gold reads one small directory where it read nine
 large ones. Why lld's count moves has not been measured; it arrived with the
 same change. Every other row read main's value, the compile rows included.
+
 ## 2026-10-07 — the linear pass asks the fixed half once
 
 Profiling the tab's compile of `bench/interp_corpus` natively (the same
@@ -22348,6 +22349,65 @@ by the low sixteen bits of a name's address. The analysis now allocates 304
 times fewer before the run starts, the names land at different addresses,
 and a different set of them share a slot. This container read both
 interpreted figures to the instruction.
+
+## 2026-10-07 — the tab drops the program and the native IR early
+
+The browser side scores lowest under the meta, and its compile memory is the
+term that fell furthest when compilation moved into the tab:
+`browser_compile_peak_bytes` reads 2,665,939 against an origin of 588,109. A
+counting allocator around the same four calls the playground makes, run
+natively on `bench/interp_corpus`, put the peak inside `ir_wasm::translate`.
+When the translation began, three things were live: the program's tree
+(503,160 bytes), the native IR (295,852) and the retargeted copy of it the
+translation reads (294,374). Only the last is read again. `lower_native` now
+takes the program by value, drops it once `emit_ir_dev` returns, and drops the
+native IR once it is retargeted. Natively the peak read 3,785,556 and then
+2,988,848.
+
+In the tab, built by the rustc the golden names: `browser_compile_peak_bytes`
+2,665,939 -> 2,369,806 (-296,133, -11.1%), and
+`browser_compile_instructions` 636,739,574 -> 636,631,519 (-108,055), the
+frees moving earlier. The run rows read the same. CI read the same two
+figures.
+
+In the tab the peak then sat in the emitter, which pointer width explains: the
+translation's parsed instructions are 144 bytes each natively and much
+smaller in wasm32, while the emitter's text costs the same bytes in both. Its
+last step copied the module three times with each copy alive beside the
+next: the body into `out`, which grew by doubling; `out` into the narrowed
+text; and that into a fresh string behind the declarations. `out` is now
+sized before the body goes in, the body is dropped once copied, and the
+narrowing writes behind the declarations in its own buffer
+(`narrowed_after`). The module is byte for byte what it was, by sha256 on
+`bench/interp_corpus` and by `scripts/gates/emitted_code.sh` on every
+benchmark. Natively the emitter's high-water mark fell from 2,705,776 to
+2,500,014. In the tab, `browser_compile_peak_bytes` fell again, 2,369,806 ->
+2,164,044, by the same 205,762, and `browser_compile_instructions` read
+636,625,521. `emit_instructions` fell 3,572.
+
+kanso#1780 landed first. Over it, `browser_compile_instructions` reads
+632,344,041 -> 632,207,457 (-136,584), `browser_compile_peak_bytes`
+2,665,939 -> 2,164,044 (-501,895, -18.8%), and `emit_instructions`
+30,865,650 -> 30,862,078.
+
+## 2026-10-07 — a two-way callee table, measured and declined
+
+kanso#1780 raised `interp_instructions` by 104,120. The rise was all in
+`Interp::callee_missed`: the interpreter's direct-mapped table of recent
+callees is keyed by the low sixteen bits of a name's address. With 304 fewer
+allocations before the run, two hot names came to share a slot and missed
+5,359 times. A second way per set would have kept both names, so the table was
+tried as 512 sets of two, with its 1,024 entries unchanged. All three
+versions cost more than the direct-mapped table on main's tree, which reads
+590,482,748:
+
+    both ways checked on every lookup               593,242,057  (+2,759,309)
+    second way checked on a miss, then swapped      590,799,462    (+316,714)
+    second way checked on a miss, no swap           591,394,104    (+911,356)
+
+The first puts about three instructions on each of a million hits. The other
+two keep the hit path as it was, but halving the number of sets adds more
+collisions than the second way removes. The table stays direct-mapped.
 
 ## 2026-10-07 — a word twin starts over when a sum leaves the word
 
@@ -22406,3 +22466,7 @@ runs only in one, but moving it out of `FnEmit::line` still left
 `browser_compile_instructions` 135,811 higher (632,344,041 -> 632,479,852).
 With the scan written inside `line` the row read 634,030,395. What the
 remaining 135,811 is has not been isolated.
+
+kanso#1781 landed first. Over it, `emit_instructions` reads 30,862,078 ->
+30,876,981 and `browser_compile_instructions` 632,207,457 -> 632,343,268, the
+same two deltas to the instruction.
