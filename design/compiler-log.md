@@ -23365,7 +23365,9 @@ and digestbench's 2,383.
 The link pays for the two passes. On the codegen corpus built with clang 19,
 ld.lld runs 241,907,162 -> 250,049,700, +8,142,538 (+3.37%), and `clang -cc1`
 is byte-identical. Correlated propagation alone costs 6,068,153 of that and
-early-cse the other 2,074,385. Projected into the objective, welfare reads
+early-cse the other 2,074,385. The release codegen row, which counts the
+clang 19 link since the gate fix before this entry, reads 449,011,647 ->
+457,212,083 here (+8,200,436, +1.83%). Projected into the objective, welfare reads
 90.04 with both passes and 90.04 with correlated propagation alone, against
 90.01 without; production reads 78.40 with early-cse and 78.39 without it, so
 early-cse stays.
