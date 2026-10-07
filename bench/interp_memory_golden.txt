@@ -253,7 +253,11 @@
 #
 # CI measured a lazy cell answering at the group that reads it at 86a9b9b5:
 # interp_allocs 895,172 -> 895,178, a RISE of 6 (+0.0007%).
-interp_allocs=896122
+#
+# 2026-10-07 (kanso#1780): the linear analysis no longer seeds parameters the
+# fixed half refuses, so it allocates and frees 304 fewer times. CI's reading:
+# interp_allocs 896,122 -> 895,818, a FALL of 304 (-0.0339%).
+interp_allocs=895818
 #
 # 2026-09-18, kanso#1518 against main at kanso#1517, CI's sitting.
 # 951,438 -> 961,165, a RISE of

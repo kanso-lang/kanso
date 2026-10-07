@@ -22286,4 +22286,13 @@ caller left and went; its comment about the two refusals moved to the new
 
 In this container the tab's compile, run natively, read 204,459,713 and then
 202,749,313 (-0.84%), and `emit_instructions` read 32,132,166 and then
-30,865,650 (-3.94%). CI's rows follow.
+30,865,650 (-3.94%). CI read the same two emit figures. Its other rows:
+`browser_compile_instructions` 636,739,574 -> 632,344,041 (-0.69%),
+`interp_allocs` 896,122 -> 895,818, and `interp_instructions` 590,482,748 ->
+590,586,868, a rise of 104,120. The interpreted run builds this analysis too,
+and its share fell by 397,216. What rose is `Interp::callee_missed`, by
+532,291. The interpreter keeps a direct-mapped table of recent callees keyed
+by the low sixteen bits of a name's address. The analysis now allocates 304
+times fewer before the run starts, the names land at different addresses,
+and a different set of them share a slot. This container read both
+interpreted figures to the instruction.

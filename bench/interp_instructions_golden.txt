@@ -596,5 +596,12 @@
 # CI measured a length, an index and a literal becoming words directly, at
 # f774749e: interp_instructions 584,588,724 -> 578,807,674, a FALL of
 # 5,781,050.
-interp_instructions=590482748
+#
+# 2026-10-07 (kanso#1780): the linear analysis the interpreted run builds got
+# cheaper by 397,216 (Analysis::build), and Interp::callee_missed rose
+# 532,291. The callee table is direct-mapped on the low sixteen bits of a
+# name's address, and the analysis now allocates 304 times fewer before the
+# run, so different names share a slot. CI's reading: interp_instructions
+# 590,482,748 -> 590,586,868, a RISE of 104,120 (+0.0176%).
+interp_instructions=590586868
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
