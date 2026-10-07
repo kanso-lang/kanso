@@ -22808,9 +22808,20 @@ the place directly. A branch to a label no block defines fails in `body`.
 Resolving every label to the block before the right one fails both translator
 corpus tests.
 
+Three more allocation sites came out of a DHAT profile of the same compile. A type's
+scalar leaves were listed into a new vector at every load, store and local,
+and a vector grown one push at a time; a scalar, which is most of what is
+asked, now answers with its one leaf in place, and a struct's list is sized
+before it is filled. A zero aggregate's component `k` listed every leaf of the
+type to read one, once per component; `leaf` walks to it instead. And the
+closure that names an instruction's result built its error message on every
+call, whether or not the name was missing. Making `leaf` skip the offset into
+a struct's later fields fails both translator corpus tests.
+
 The module is byte-identical. browser_compile_instructions 573,888,797 ->
-562,308,776 (-2.02%): the shared buffer took 6,303,396 of that, the static
-names 138,361, the labels 1,165,172 and the table the rest. Before the static
+557,315,919 (-2.89%): the shared buffer took 6,303,396 of that, the static
+names 138,361, the labels 1,165,172, the leaves and the error message
+4,992,857, and the table the rest. Before the static
 names and the labels, the translation went from 46.1 million instructions to
 43.1 million natively.
 

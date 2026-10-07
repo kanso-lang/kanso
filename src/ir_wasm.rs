@@ -44,6 +44,22 @@ enum Ty {
     Array(u32, Rc<Ty>),
 }
 
+/// A type's scalar leaves: one held in place, or a list.
+enum Leaves {
+    One([(Ty, u32); 1]),
+    Many(Vec<(Ty, u32)>),
+}
+
+impl std::ops::Deref for Leaves {
+    type Target = [(Ty, u32)];
+    fn deref(&self) -> &[(Ty, u32)] {
+        match self {
+            Leaves::One(one) => one,
+            Leaves::Many(many) => many,
+        }
+    }
+}
+
 const VI32: u8 = 0x7f;
 const VI64: u8 = 0x7e;
 const VF64: u8 = 0x7c;
@@ -109,10 +125,45 @@ impl Ty {
         }
     }
 
-    fn leaves(&self) -> Vec<(Ty, u32)> {
-        let mut out = Vec::new();
-        self.scalars(0, &mut out);
-        out
+    /// The scalar leaves with their offsets. A scalar is its own one leaf
+    /// and is answered without a vector; most of the types the translator
+    /// asks about are scalars.
+    fn leaves(&self) -> Leaves {
+        match self {
+            Ty::Struct(_) | Ty::Array(..) => {
+                let mut out = Vec::with_capacity(self.width() as usize);
+                self.scalars(0, &mut out);
+                Leaves::Many(out)
+            }
+            Ty::Void => Leaves::Many(Vec::new()),
+            t => Leaves::One([(t.clone(), 0)]),
+        }
+    }
+
+    /// Leaf `k` of this type, found without listing the others.
+    fn leaf(&self, k: u32) -> Option<Ty> {
+        match self {
+            Ty::Struct(fs) => {
+                let mut k = k;
+                for f in fs.iter() {
+                    let w = f.width();
+                    if k < w {
+                        return f.leaf(k);
+                    }
+                    k -= w;
+                }
+                None
+            }
+            Ty::Array(n, e) => {
+                let w = e.width();
+                if w == 0 || k >= n * w {
+                    return None;
+                }
+                e.leaf(k % w)
+            }
+            Ty::Void => None,
+            t => (k == 0).then(|| t.clone()),
+        }
     }
 
     fn width(&self) -> u32 {
@@ -743,7 +794,7 @@ fn parse_inst(p: &mut P, types: &mut Vec<Option<Ty>>) -> Result<Inst, String> {
             types[id] = Some(t.clone());
         }
     };
-    let d = || dst.ok_or("an instruction with a result is unnamed".to_string());
+    let d = || dst.ok_or_else(|| "an instruction with a result is unnamed".to_string());
     let op = match p.next()? {
         Tok::Word(w) => w,
         t => return Err(format!("expected an opcode at {t:?}")),
@@ -1629,7 +1680,7 @@ fn lower(mx: &mut Mx, f: &Func) -> Result<Vec<u8>, String> {
     for (id, t) in f.types.iter().enumerate() {
         if fx.base[id] == u32::MAX && *t != Ty::Void {
             fx.base[id] = fx.nparams + fx.locals.len() as u32;
-            for (l, _) in t.leaves() {
+            for (l, _) in t.leaves().iter() {
                 fx.locals.push(l.vt());
             }
         }
@@ -1781,8 +1832,8 @@ impl Fx<'_> {
         match v {
             Val::Local(id) => self.get(*id, k),
             Val::Zero => {
-                let leaves = ty.leaves();
-                self.zero(&leaves[k as usize].0)
+                let leaf = ty.leaf(k).ok_or("a zero read past its type's leaves")?;
+                self.zero(&leaf)
             }
             Val::Int(n) => match ty {
                 Ty::I64 => i64c(&mut self.code, *n),
