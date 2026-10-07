@@ -238,6 +238,13 @@ tune=$tune:glibc.malloc.tcache_count=7
 # `fedcba` -- read 5,163,341,042. `-save-temps=obj` derives the name from the
 # input instead, so it is the same string every run.
 #
+# KANSO_LINK_DIR IS THE THIRD, and it reaches what the link searches. `ld.gold`
+# reads every `-L` directory whole, so the dev row counted the runner image's
+# `/usr/lib/x86_64-linux-gnu`: two values on one binary that followed the
+# image version. codegen_box.sh stages a directory holding the five libraries
+# the link resolves, and kanso puts it in place of the driver's `-L` list.
+# codegen_box.sh has the measurements.
+#
 # The two travel together on every `env -i` line here, and
 # `tests/the_measured_link_names_its_object.rs` says so: one without the other
 # is a measurement pinned in one of its two loose places.
@@ -304,7 +311,7 @@ stage_and_warm() {
   # on which of the two the job happened to ask for first.
   for warm_flag in "" "--release"; do
     clear_output
-    ( cd "$box" && env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" KANSO_LTO_JOBS=1 KANSO_FIXED_TEMPS=1 \
+    ( cd "$box" && env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" KANSO_LTO_JOBS=1 KANSO_FIXED_TEMPS=1 KANSO_LINK_DIR="$box/link" \
         ./kanso build pkg/codegen_corpus $warm_flag >/dev/null 2>&1 )
   done
 }
@@ -320,7 +327,7 @@ rm -f /tmp/cg.codegen.$tier.*
 clear_output
 (
   cd "$box"
-  env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" KANSO_LTO_JOBS=1 KANSO_FIXED_TEMPS=1 valgrind --tool=callgrind \
+  env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" KANSO_LTO_JOBS=1 KANSO_FIXED_TEMPS=1 KANSO_LINK_DIR="$box/link" valgrind --tool=callgrind \
     --trace-children=yes --callgrind-out-file=/tmp/cg.codegen.$tier.%p \
     ./kanso build pkg/codegen_corpus $flag >/dev/null 2>/dev/null
 )
@@ -394,7 +401,7 @@ rm -f /tmp/cg.codegen.${tier}b.*
 clear_output
 (
   cd "$box"
-  env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" KANSO_LTO_JOBS=1 KANSO_FIXED_TEMPS=1 valgrind --tool=callgrind \
+  env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" KANSO_LTO_JOBS=1 KANSO_FIXED_TEMPS=1 KANSO_LINK_DIR="$box/link" valgrind --tool=callgrind \
     --trace-children=yes --callgrind-out-file=/tmp/cg.codegen.${tier}b.%p \
     ./kanso build pkg/codegen_corpus $flag >/dev/null 2>/dev/null
 )
