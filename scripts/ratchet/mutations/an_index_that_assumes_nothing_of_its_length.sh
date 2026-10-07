@@ -7,10 +7,10 @@
 set -e
 f=src/codegen.rs
 grep -q 'fn assume_length(' src/codegen.rs
-line='    f.line(&format!("{ok} = icmp sge i64 {len}, 0"));'
+line='    f.line_fmt(format_args!("{ok} = icmp sge i64 {len}, 0"));'
 [ "$(grep -cxF "$line" "$f")" -eq 1 ] || {
   echo "the length assumption moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i 's/^    f.line(&format!("{ok} = icmp sge i64 {len}, 0"));$/    f.line(\&format!("{ok} = icmp sge i64 0, 0"));/' "$f"
+sed -i 's/^    f.line_fmt(format_args!("{ok} = icmp sge i64 {len}, 0"));$/    f.line_fmt(format_args!("{ok} = icmp sge i64 0, 0"));/' "$f"
 if grep -qxF "$line" "$f"; then exit 1; fi

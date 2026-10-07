@@ -7,11 +7,11 @@
 set -e
 f=src/codegen.rs
 grep -q 'fn index_in_range(' src/codegen.rs
-line='    f.line(&format!("{len} = load i64, ptr {len_ptr}"));'
+line='    f.line_fmt(format_args!("{len} = load i64, ptr {len_ptr}"));'
 [ "$(grep -cxF "$line" "$f")" -eq 1 ] || {
   echo "the index's length load moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i -e '/^    let len = f.tmp();$/d' -e '/^    f.line(&format!("{len} = load i64, ptr {len_ptr}"));$/d' \
-  -e 's/^    let ge1 = f.tmp();$/    let len = f.tmp();\n    f.line(\&format!("{len} = load i64, ptr {len_ptr}"));\n    let ge1 = f.tmp();/' "$f"
+sed -i -e '/^    let len = f.tmp();$/d' -e '/^    f.line_fmt(format_args!("{len} = load i64, ptr {len_ptr}"));$/d' \
+  -e 's/^    let ge1 = f.tmp();$/    let len = f.tmp();\n    f.line_fmt(format_args!("{len} = load i64, ptr {len_ptr}"));\n    let ge1 = f.tmp();/' "$f"
 [ "$(grep -cxF "$line" "$f")" -eq 1 ]

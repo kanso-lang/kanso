@@ -4,9 +4,9 @@
 # that boxes one. A negative int then comes back as 2^56 plus it, and the
 # micro corpus and the packed-record entry spec go red.
 set -e
-old='    f.line(&format!("{n} = ashr i64 {w0}, 8"));'
+old='    f.line_fmt(format_args!("{n} = ashr i64 {w0}, 8"));'
 [ "$(grep -cxF "$old" src/codegen.rs)" -eq 1 ]
-sed -i.bak 's#^    f.line(&format!("{n} = ashr i64 {w0}, 8"));$#    f.line(\&format!("{n} = lshr i64 {w0}, 8"));#' src/codegen.rs
+sed -i.bak 's#^    f.line_fmt(format_args!("{n} = ashr i64 {w0}, 8"));$#    f.line_fmt(format_args!("{n} = lshr i64 {w0}, 8"));#' src/codegen.rs
 rm -f src/codegen.rs.bak
 ! grep -qxF "$old" src/codegen.rs
 box='    fields[0].tag = K_INT; fields[0].payload = w0 >> 8;'
