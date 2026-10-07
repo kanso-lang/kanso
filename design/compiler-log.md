@@ -23391,3 +23391,48 @@ The ratchet rows `link_correlated` and `link_early_cse` each take one pass back
 out. Without early-cse, runbench reads 1,407,664 higher; correlated
 propagation, measured before early-cse joined, was worth 6,541,266. The work
 vein sees either.
+
+## 2026-10-07 — the program's inline threshold stays at 2000
+
+The comment above `-inline-threshold=2000` in src/main.rs declined 4000 on
+2026-09-19 for a 3.64% rise in `codegen_instructions_release`. That rise was
+measured while the gate found clang 18, which kanso#1795 corrected, so I
+measured 4000 again under clang 19 on the tree after kanso#1796.
+
+The run gains hold. Against 2000, in this container:
+
+    runbench    1,129,589,618 -> 1,122,248,562   -7,341,056  (-0.650%)
+    encodebench 2,384,337,036 -> 2,367,226,282  -17,110,754  (-0.718%)
+    livebench   1,473,485,636 -> 1,460,513,428  -12,972,208  (-0.880%)
+    jsonbench     860,548,095 ->   854,565,945   -5,982,150  (-0.695%)
+    digestbench     5,566,368 ->     5,510,253      -56,115  (-1.008%)
+
+oneshot falls 73,560, and the other rows move by fewer than 2,000 or not at
+all. Summed `.text` grows 187,376 bytes, 4.1%, of which runbench accounts for
+89,296.
+
+On the codegen corpus, `clang -cc1` and ld.lld read byte-identical at the two
+thresholds, 206,785,011 and 250,049,700. Scored on those rows, welfare would
+read 90.07 against a floor of 90.04.
+
+Building runbench gives the other side. Traced the same way, with clang 19, a
+release build of bench/runbench at 4000 costs `clang -cc1` 11,766,666,246
+instructions against 8,481,293,726 (+38.7%) and ld.lld 27,062,341,881 against
+20,412,779,482 (+32.6%). The corpus is 62 lines of kanso and has no function
+whose inlining cost falls between 2000 and 4000, so the threshold can move
+without the corpus seeing it. Runbench has many such functions.
+
+So 4000 stays declined. Taking it would have banked a run gain whose build cost
+the objective has no row for.
+
+I ran the same check on correlated propagation and early-cse, which kanso#1796
+priced on the corpus. Building runbench, ld.lld reads 19,947,820,412 before
+them and 20,412,779,482 after, +2.33%, where the corpus read +3.37%, and
+`clang -cc1` moves 0.13%. For those passes the corpus priced the change in
+proportion.
+
+Open: the release codegen row reads one small program. A change whose build
+cost grows with function size, such as an inline threshold or an unroll count,
+can move it by nothing. Counting runbench's own build beside it would close
+that, at about fifty-five times the corpus build's instruction count under
+callgrind.
