@@ -23270,7 +23270,7 @@ escapebench -3,750,005, pendbench -800,198, scanbench -37 and basket -4. The
 14-instruction falls this container read did not appear there, and the other
 nine rows are unchanged. In `.text`, scanbench grows 592 bytes for its copied
 loops, and runbench shrinks 128, escapebench 48, and pendbench and basket 16
-each.
+each. Summed over the fourteen programs, `text` rises 384 bytes to 4,604,576.
 
 The pass costs the link something. On the codegen corpus, built with clang 19,
 ld.lld runs 241,718,614 -> 241,907,162, +188,548 (+0.078%). `clang -cc1` is
