@@ -23360,8 +23360,8 @@ Measured in this container with clang 19, against the unswitched link:
 oneshot falls 29,368, basket 30,471 and livebench 150,834; scanbench rises 29;
 indexbench and readbench are unchanged. In the goldens, `work_encodebench`
 lands on 2,384,337,369 and `work_scanbench` on 281,713, and
-`codegen_instructions_release` on 457,625,228, each a rise the runbench fall
-pays for. Summed over the fourteen programs,
+`codegen_instructions_release` on 457,532,287 on CI, each a rise the runbench
+fall pays for. Summed over the fourteen programs,
 `text` falls 5,810 bytes to 4,598,766; runbench's `.text` shrinks 2,943 bytes
 and digestbench's 2,383.
 
@@ -23382,7 +23382,10 @@ and `adce` each left it byte-identical, as did `loop-instsimplify` with
 `loop-simplifycfg` beside the first `licm`, and `loop-load-elim` after the
 vectorizer. Raising the link's inline threshold to 1000 took 3,043,948 off
 runbench (-0.27%) and cost the corpus's link 47,126,137 instructions (+18.8% of
-ld.lld), and 500 left runbench 7,064 higher.
+ld.lld), and 500 left runbench 7,064 higher. `dfa-jump-threading` and
+`gvn-hoist` each left runbench byte-identical, `gvn-sink` raised it 523,672,
+and a second `jump-threading` after correlated propagation took 278,581 off it,
+which I did not carry further.
 
 The ratchet rows `link_correlated` and `link_early_cse` each take one pass back
 out. Without early-cse, runbench reads 1,407,664 higher; correlated
