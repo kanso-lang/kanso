@@ -23181,3 +23181,54 @@ line whose answers overflow at the middle and last operations, and
 argument. Writing the branch as `br i1 false` sends three of the golden's
 lines and both of the new fixture's answers to wrapped words in the release
 build, and leaves the interpreter's answers alone.
+
+## 2026-10-07 — the module's late passes search for the lines they edit
+
+A native profile of the tab's compile of `bench/interp_corpus`, through
+`emit_ir_dev`, `retarget_wasm32` and the translator, counted 167,949,794
+instructions. Three passes that run after the body is written visited every
+line of the module, and none of the three edits more than a few hundred of
+its 8,726 lines.
+
+- `narrowed_in_place` walked every line twice, once to find the `define` and
+  musttail lines that decide which functions keep `tailcc` and once to find
+  the lines holding `tailcc ` it rewrites. 125 lines are a `define`, 96 hold a
+  musttail call and 211 hold `tailcc `. Each walk now searches the module for
+  its words and takes the line around each match, through `lines_holding`.
+- `symbols_before_newline`, which `finish` runs over each piece of the body,
+  searched for every newline and then for the last `@` before it. It is now
+  one pass over the bytes.
+- `retarget_wasm32` visited every line and searched each one for `cc `. It
+  now searches the whole module for `cc `, for the two `target` lines and for
+  the six `getelementptr` lines `WASM32_LINES` names, and copies the text
+  between the edits.
+
+The module and its wasm32 retarget are byte-identical to main's for the
+corpus, compared with `cmp`. Native, one step at a time, on main before
+kanso#1791 landed:
+
+    main                          167,949,794
+    symbols_before_newline        167,748,901     -200,893
+    narrowed_in_place             164,935,903   -2,812,998
+    retarget_wasm32               162,084,175   -2,851,728
+
+In the tab, under wasmi's fuel meter and on the tree merged with
+kanso#1793, browser_compile_instructions falls 519,121,158 -> 514,922,959,
+-4,198,199 (-0.81%). The retarget rewrite is worth 815,080 of that in the tab and 2.85 million natively, so the two
+measures do not move in proportion.
+
+The same passes run in every native build, and emit_instructions falls
+25,148,470 -> 24,714,409 (-1.73%). The interpreter's row falls 37,108 to
+585,141,444. Three rows that never reach these passes rise with the binary
+around them: compile_instructions +9,898 to 26,182,238, entry_instructions
++28,550 to 86,381,596 and library_instructions +28,451 to 86,927,430, all
+read in this container, where each has matched CI's reading on main.
+
+Not kept: reading `%t` and `L` numbers by hand in the translator's
+`Locals::number`, in place of `str::parse`, saved 48,865 of the native
+162,084,175. Most of what that function costs is its map.
+
+The specs are the ones that already read these passes. Leaving `tailcc ` out
+of the retarget's list turns `native_layout_on_wasm32` red on all three
+threads, and dropping the musttail lines from the narrowing walk fails the two
+trampoline tests in `codegen::a_trampoline_is_emitted_for_a_call_that_uses_it`.
