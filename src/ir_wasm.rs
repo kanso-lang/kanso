@@ -375,13 +375,24 @@ struct Global {
 }
 
 #[derive(Default)]
-struct Ir {
+struct Ir<'a> {
     types: HashMap<String, Ty>,
     globals: Vec<Global>,
     externs: Vec<String>,
     aliases: HashMap<String, String>,
     declares: Vec<(String, Sig)>,
-    funcs: Vec<Func>,
+    funcs: Vec<Head<'a>>,
+}
+
+/// A function as the module's first pass leaves it: its name and signature,
+/// which every other function's lowering may need, and its text from the
+/// `define` line to the closing brace, which only its own lowering reads.
+/// `body` parses that text when the function's turn comes, so one function's
+/// instructions are held at a time rather than the whole module's.
+struct Head<'a> {
+    name: String,
+    sig: Sig,
+    text: &'a str,
 }
 
 struct P<'t, 'a> {
@@ -595,6 +606,19 @@ impl<'t> P<'t, '_> {
             Tok::Int(n) => Ok(n),
             t => Err(format!("expected an integer at {t:?}")),
         }
+    }
+
+    /// The rest of a `define` line: its signature and the local numbers its
+    /// parameters bind.
+    fn define(&mut self) -> Result<(String, Sig, Vec<u32>), String> {
+        self.skip_attrs();
+        let ret = self.ty()?;
+        let name = match self.next()? {
+            Tok::Global(n) => n.into_owned(),
+            t => return Err(format!("define {t:?}")),
+        };
+        let (params, ids, varargs) = self.params(true)?;
+        Ok((name, Sig { ret, params, varargs }, ids))
     }
 
     /// `(T [attrs] [%name], ...)` with an optional trailing `...`.
@@ -852,13 +876,14 @@ fn parse_inst(p: &mut P, types: &mut Vec<Option<Ty>>) -> Result<Inst, String> {
     Ok(inst)
 }
 
-fn parse(ir: &str) -> Result<Ir, String> {
+fn parse(ir: &str) -> Result<Ir<'_>, String> {
     let mut m = Ir::default();
-    let lines: Vec<&str> = ir.lines().collect();
-    let mut i = 0;
-    while i < lines.len() {
-        let line = lines[i].trim();
-        i += 1;
+    let mut at = 0;
+    while at < ir.len() {
+        let end = ir[at..].find('\n').map_or(ir.len(), |n| at + n);
+        let raw = &ir[at..end];
+        at = end + 1;
+        let line = raw.trim();
         if line.is_empty()
             || line.starts_with(';')
             || line.starts_with("target ")
@@ -920,74 +945,81 @@ fn parse(ir: &str) -> Result<Ir, String> {
         }
         if line.starts_with("define") {
             let mut names = HashMap::default();
-            let mut types: Vec<Option<Ty>> = Vec::new();
             let mut p = P { t, i: 1, types: &m.types, names: Some(&mut names) };
-            p.skip_attrs();
-            let ret = p.ty()?;
-            let name = match p.next()? {
-                Tok::Global(n) => n.into_owned(),
-                t => return Err(format!("define {t:?}")),
+            let (name, sig, _) = p.define()?;
+            // The body ends at the first line that is `}` alone. Every such
+            // line holds a `}`, and few others do, so the search steps from
+            // brace to brace rather than reading the body a line at a time;
+            // `body` reads it that way once, when the function is lowered.
+            let from = end - raw.len();
+            let mut look = at.min(ir.len());
+            let to = loop {
+                let brace = ir[look..].find('}').ok_or_else(|| format!("{name} has no end"))?;
+                let brace = look + brace;
+                let open = ir[..brace].rfind('\n').map_or(0, |n| n + 1);
+                let close = ir[brace..].find('\n').map_or(ir.len(), |n| brace + n);
+                if ir[open..close].trim() == "}" {
+                    at = close + 1;
+                    break open;
+                }
+                look = close;
             };
-            let (params, ids, varargs) = p.params(true)?;
-            for (id, t) in ids.iter().zip(&params) {
-                let id = *id as usize;
-                if types.len() <= id {
-                    types.resize(id + 1, None);
-                }
-                types[id] = Some(t.clone());
-            }
-            let mut blocks = vec![Block { name: String::new(), insts: Vec::new() }];
-            loop {
-                let raw = lines.get(i).ok_or_else(|| format!("{name} has no end"))?;
-                i += 1;
-                let mut body = Cow::Borrowed(raw.trim());
-                if body == "}" {
-                    break;
-                }
-                if body.is_empty() || body.starts_with(';') {
-                    continue;
-                }
-                if body.starts_with("switch") || body.contains("= switch") {
-                    while !body.trim_end().ends_with(']') {
-                        let next = lines.get(i).ok_or("switch runs off the end")?.trim();
-                        body.to_mut().push(' ');
-                        body.to_mut().push_str(next);
-                        i += 1;
-                    }
-                }
-                if let Some(label) = body.strip_suffix(':') {
-                    if !label.contains(' ') {
-                        let label = label.trim_matches('"').to_string();
-                        if blocks.len() == 1
-                            && blocks[0].insts.is_empty()
-                            && blocks[0].name.is_empty()
-                        {
-                            blocks[0].name = label;
-                        } else {
-                            blocks.push(Block { name: label, insts: Vec::new() });
-                        }
-                        continue;
-                    }
-                }
-                let mut p =
-                    P { t: tokenize(&body)?, i: 0, types: &m.types, names: Some(&mut names) };
-                let inst = parse_inst(&mut p, &mut types)
-                    .map_err(|e| format!("{name}: {e} in `{body}`"))?;
-                blocks.last_mut().expect("a block").insts.push(inst);
-            }
-            let types = types.into_iter().map(|t| t.unwrap_or(Ty::Void)).collect();
-            m.funcs.push(Func {
-                name,
-                sig: Sig { ret, params, varargs },
-                params: ids,
-                blocks,
-                types,
-            });
+            m.funcs.push(Head { name, sig, text: &ir[from..to] });
             continue;
         }
         return Err(format!("unsupported line `{line}`"));
     }
     Ok(m)
+}
+
+/// A function's instructions, parsed from the text its head kept. The
+/// `define` line is read again here because the names it binds number the
+/// body's locals.
+fn body(text: &str, types: &HashMap<String, Ty>) -> Result<Func, String> {
+    let mut lines = text.lines();
+    let head = lines.next().unwrap_or("").trim();
+    let mut names = HashMap::default();
+    let mut slots: Vec<Option<Ty>> = Vec::new();
+    let mut p = P { t: tokenize(head)?, i: 1, types, names: Some(&mut names) };
+    let (name, sig, ids) = p.define()?;
+    for (id, t) in ids.iter().zip(&sig.params) {
+        let id = *id as usize;
+        if slots.len() <= id {
+            slots.resize(id + 1, None);
+        }
+        slots[id] = Some(t.clone());
+    }
+    let mut blocks = vec![Block { name: String::new(), insts: Vec::new() }];
+    while let Some(raw) = lines.next() {
+        let mut body = Cow::Borrowed(raw.trim());
+        if body.is_empty() || body.starts_with(';') {
+            continue;
+        }
+        if body.starts_with("switch") || body.contains("= switch") {
+            while !body.trim_end().ends_with(']') {
+                let next = lines.next().ok_or("switch runs off the end")?.trim();
+                body.to_mut().push(' ');
+                body.to_mut().push_str(next);
+            }
+        }
+        if let Some(label) = body.strip_suffix(':') {
+            if !label.contains(' ') {
+                let label = label.trim_matches('"').to_string();
+                if blocks.len() == 1 && blocks[0].insts.is_empty() && blocks[0].name.is_empty() {
+                    blocks[0].name = label;
+                } else {
+                    blocks.push(Block { name: label, insts: Vec::new() });
+                }
+                continue;
+            }
+        }
+        let mut p = P { t: tokenize(&body)?, i: 0, types, names: Some(&mut names) };
+        let inst =
+            parse_inst(&mut p, &mut slots).map_err(|e| format!("{name}: {e} in `{body}`"))?;
+        blocks.last_mut().expect("a block").insts.push(inst);
+    }
+    let types = slots.into_iter().map(|t| t.unwrap_or(Ty::Void)).collect();
+    Ok(Func { name, sig, params: ids, blocks, types })
 }
 
 // ---------------------------------------------------------------- module
@@ -1269,8 +1301,9 @@ pub fn translate(ir: &str) -> Result<Side, String> {
     }
 
     let mut codes = Vec::new();
-    for f in &ir.funcs {
-        codes.push(lower(&mut mx, f).map_err(|e| format!("{}: {e}", f.name))?);
+    for h in &ir.funcs {
+        let f = body(h.text, &ir.types)?;
+        codes.push(lower(&mut mx, &f).map_err(|e| format!("{}: {e}", f.name))?);
     }
 
     // The start function: patch the data's addresses, then fill the hooks.
