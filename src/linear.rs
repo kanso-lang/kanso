@@ -1056,7 +1056,7 @@ fn field_reads_in(var: &str, e: &Expr) -> usize {
         }
         _ => false,
     } as usize;
-    here + child_exprs(e).into_iter().map(|c| field_reads_in(var, c)).sum::<usize>()
+    here + child_exprs(e).map(|c| field_reads_in(var, c)).sum::<usize>()
 }
 
 fn count_in_expr(var: &str, e: &Expr) -> usize {
@@ -1081,14 +1081,14 @@ fn count_in_expr(var: &str, e: &Expr) -> usize {
             .sum();
         return here + count_in_expr(var, cond) + count_in_expr(var, early).max(after);
     }
-    here + child_exprs(e).into_iter().map(|c| count_in_expr(var, c)).sum::<usize>()
+    here + child_exprs(e).map(|c| count_in_expr(var, c)).sum::<usize>()
 }
 
 fn child_exprs(e: &Expr) -> Kids<'_> {
     match e {
-        Expr::Field { base: x, .. } | Expr::Upcast { expr: x, .. } | Expr::Lambda { body: x, .. } => {
-            Kids::Two(Some(x), None)
-        }
+        Expr::Field { base: x, .. }
+        | Expr::Upcast { expr: x, .. }
+        | Expr::Lambda { body: x, .. } => Kids::Two(Some(x), None),
         Expr::Index { base: a, index: b, .. }
         | Expr::BinOp { lhs: a, rhs: b, .. }
         | Expr::Join { lhs: a, rhs: b, .. } => Kids::Two(Some(a), Some(b)),
@@ -1129,7 +1129,9 @@ impl<'a> Iterator for Kids<'a> {
         match self {
             Kids::Two(a, b) => a.take().or_else(|| b.take()),
             Kids::Head(h, rest) => h.take().or_else(|| rest.next()),
-            Kids::Guard(c, e, rest) => c.take().or_else(|| e.take()).or_else(|| rest.next().map(stmt_expr)),
+            Kids::Guard(c, e, rest) => {
+                c.take().or_else(|| e.take()).or_else(|| rest.next().map(stmt_expr))
+            }
             Kids::Stmts(rest) => rest.next().map(stmt_expr),
             Kids::Exprs(rest) => rest.next(),
             Kids::Pairs(v, rest) => v.take().or_else(|| {
@@ -1266,7 +1268,7 @@ fn mentioned_as_value(e: &Expr, name: &str, arity: usize) -> bool {
         };
         return escaping_head || args.iter().any(|a| mentioned_as_value(a, name, arity));
     }
-    child_exprs(e).into_iter().any(|c| mentioned_as_value(c, name, arity))
+    child_exprs(e).any(|c| mentioned_as_value(c, name, arity))
 }
 
 /// The hand-over being asked about: which group, at which arity, at which
@@ -1445,7 +1447,7 @@ fn called_somewhere(program: &Program, name: &str, arity: usize) -> bool {
                 return true;
             }
         }
-        child_exprs(e).into_iter().any(|c| in_expr(c, name, arity))
+        child_exprs(e).any(|c| in_expr(c, name, arity))
     }
     program.fns.iter().any(|d| {
         d.body.iter().any(|s| {
