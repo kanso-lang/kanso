@@ -624,5 +624,5 @@
 # isolated. Measured in this container, where the previous tree reads on the row:
 # 585,690,203 -> 585,702,055, a RISE of 11,852 (+0.0020%).
 # CI's reading replaces it if it differs.
-interp_instructions=585690427
+interp_instructions=585691747
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

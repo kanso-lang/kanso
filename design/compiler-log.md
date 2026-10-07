@@ -22772,7 +22772,7 @@ The piece size was measured with the peak in emission: 16 KiB pieces read
 pieces cost memory and instructions, and larger ones gain 24 bytes, so the
 size stays where it is.
 
-## 2026-10-07 — the translator reads a function's lines through one buffer
+## 2026-10-07 — the tab's compile stops copying what it only reads
 
 Profiled natively on `bench/interp_corpus`, the tab's compile spends a quarter
 of its instructions translating, and most of that reading the IR back:
@@ -22818,16 +22818,33 @@ closure that names an instruction's result built its error message on every
 call, whether or not the name was missing. Making `leaf` skip the offset into
 a struct's later fields fails both translator corpus tests.
 
+The same profile pointed past the translator at two analyses the emitter runs
+first. The escape analysis finds, for each record type, the groups that return
+it: a fixpoint that asked after every function on every round, keyed each
+question by a copy of the function's name, and copied a callee's name again for
+every call it read. Its set now borrows the names from the program. The answer
+it hands codegen was keyed the same way, `(name, arity)` and `(name, arity,
+parameter)`, and codegen asks it about every argument of every call it emits,
+so each question copied a name too; the answer is now keyed by name alone, with
+the arities and positions in a short list under it. And `dispatch::walk` built
+a vector of each node's children to visit them, where `for_each_child`, which
+every other walker uses, hands them over one at a time.
+
 The module is byte-identical. browser_compile_instructions 573,888,797 ->
-557,315,919 (-2.89%): the shared buffer took 6,303,396 of that, the static
-names 138,361, the labels 1,165,172, the leaves and the error message
-4,992,857, and the table the rest. Before the static
+538,776,015 (-6.12%): in the translator, the shared buffer took 6,303,396 of
+that, the static names 138,361, the labels 1,165,172, the leaves and the error
+message 4,992,857, and the table the rest. Of the 18,539,904 the analyses took,
+putting back the old walk alone costs 3,563,531 and putting back the old answer
+alone 4,102,156; the borrowed set is the remainder, 10,874,217, read by
+difference rather than built alone. browser_compile_peak_bytes rose 826,348 ->
+828,524 with the answer's new shape. emit_instructions, which counts the native
+emitter and so both analyses, fell 27,259,671 -> 26,596,193 (-2.43%). Breaking
+`carries_ty` so that it ignores the parameter fails four golden tests. Before the static
 names and the labels, the translation went from 46.1 million instructions to
 43.1 million natively.
 
-None of the native paths runs the translator, and seven of their rows
-fell all the same, read on this container: compile_instructions -26,053,
-entry_instructions -88,725, library_instructions -89,095, emit_instructions
--10,968, codegen_instructions_dev -90,270, codegen_instructions_release
--692,738 and interp_instructions -11,628. The compiler's binary lost code and
-the rest of it moved. If CI reads different rows, they are CI's.
+The rows on paths that run neither the translator nor the emitter moved with
+the binary's layout, read on this container: compile_instructions -741,
+entry_instructions -780, library_instructions -1,034 and interp_instructions
+-10,308. The codegen rows did not move on CI, though this container read both
+lower; CI's readings stand.

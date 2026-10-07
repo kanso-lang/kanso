@@ -2679,8 +2679,7 @@ fn emit_written(
             })
     });
     let packable: crate::hash::Set<String> = escape.field_count.keys().cloned().collect();
-    escape.returns.retain(|_, ty| packable.contains(ty));
-    escape.carries.retain(|_, ty| packable.contains(ty));
+    escape.keep_types(|ty| packable.contains(ty));
     let byte_disc = crate::dispatch::byte_dispatched(program, &inference);
     // One `Analysis` for all three, rather than one each: see
     // `linear::for_the_emitter`.
