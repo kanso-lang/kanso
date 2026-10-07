@@ -91,7 +91,7 @@ fn parse_string cs p
 
 # string bytes: 34 quote, 92 backslash; escapes name their targets
 fn str_char _ 34 p acc
-  parsed (p + 1) (string_ok p (text/utf8 acc))
+  parsed (p + 1) (string_ok p (builtin_built_text acc))
 
 fn str_char cs 92 p acc
   str_escape cs (cs[p + 1]) p acc
