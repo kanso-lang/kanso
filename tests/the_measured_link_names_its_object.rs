@@ -89,6 +89,12 @@ fn every_measured_build_sets_the_variable() {
             "one pin without the other on this line, so the measurement is \
              loose in one of its two places:\n  {line}"
         );
+        assert_eq!(
+            line.contains("KANSO_LTO_JOBS"),
+            line.contains("KANSO_LINK_DIR"),
+            "the link directory is not pinned beside the thread count on this \
+             line, so the link searches whatever the runner image installed:\n  {line}"
+        );
     }
 }
 

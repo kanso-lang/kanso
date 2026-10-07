@@ -382,4 +382,10 @@
 # CI measured kanso#1658 over the runtime without the token cache's dead copy:
 # codegen_instructions_release 406,462,416 -> 406,462,442, a RISE of 26
 # (+0.0000%).
-codegen_instructions_release=503605244
+#
+# 2026-10-07 (kanso#1779): the link searches one staged directory. ld.lld
+# searches the one directory the gate stages, under -nostdlib, instead of the
+# driver's eight and its own defaults. CI's reading:
+# codegen_instructions_release 503,605,244 -> 503,519,717, a FALL of 85,527
+# (-0.0170%).
+codegen_instructions_release=503519717
