@@ -15,6 +15,16 @@ pub fn uleb(mut n: u64, out: &mut Vec<u8>) {
     }
 }
 
+/// How many bytes `uleb` writes for `n`.
+pub fn uleb_len(mut n: u64) -> usize {
+    let mut len = 1;
+    while n >= 0x80 {
+        n >>= 7;
+        len += 1;
+    }
+    len
+}
+
 pub fn sleb(mut n: i64, out: &mut Vec<u8>) {
     loop {
         let byte = (n & 0x7f) as u8;

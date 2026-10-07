@@ -165,6 +165,10 @@ fn the_interp_corpus_answers_through_the_translator() {
     let direct = kanso::ir_wasm::translate(&ir).expect("the native IR translates");
     assert!(direct.wasm == side.wasm, "the native IR translated to a different module");
     assert_eq!((direct.data, direct.table), (side.data, side.table));
+    // The tab hands the IR over, and the translator lets it go before it
+    // assembles the module; that must change nothing about the module.
+    let owned = kanso::ir_wasm::translate_owned(ir.clone()).expect("the owned IR translates");
+    assert!(owned.wasm == direct.wasm, "the owned IR translated to a different module");
     let ran = execute(&rt, &side.wasm, side.data, side.table, &[]).expect("it runs");
     let _ = std::fs::remove_dir_all(&work);
     assert_eq!(ran.out, String::from_utf8_lossy(&native.stdout), "the corpus's answer");

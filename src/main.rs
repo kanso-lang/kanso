@@ -466,7 +466,7 @@ fn driven() -> ExitCode {
         return run_tests(&program, &file, &source, only_from.as_deref());
     }
     if command == "build" {
-        return build(&program, &file, release, built_as);
+        return build(program, &file, release, built_as);
     }
     if interp {
         return run_interpreted(&program, program_args());
@@ -751,10 +751,10 @@ fn program_args() -> Vec<String> {
     }
 }
 
-fn build(program: &ast::Program, file: &str, release: bool, built_as: Option<String>) -> ExitCode {
+fn build(program: ast::Program, file: &str, release: bool, built_as: Option<String>) -> ExitCode {
     let emitted = match release {
-        true => kanso::codegen::emit_ir(program, closure_convention()),
-        false => kanso::codegen::emit_ir_dev(program, closure_convention()),
+        true => kanso::codegen::emit_ir_owned(program, closure_convention()),
+        false => kanso::codegen::emit_ir_dev_owned(program, closure_convention()),
     };
     let ir = match emitted {
         Ok(ir) => ir,

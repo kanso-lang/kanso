@@ -26,7 +26,7 @@
 //! the block number and returns to the loop's `br_table`.
 
 use crate::hash::Map as HashMap;
-use crate::wasm_encode::{sleb, uleb};
+use crate::wasm_encode::{sleb, uleb, uleb_len};
 use std::borrow::Cow;
 use std::rc::Rc;
 
@@ -1238,7 +1238,29 @@ pub struct Side {
 /// It takes the native text or the text `codegen::retarget_wasm32` made from
 /// it, and the two give the same module.
 pub fn translate(ir: &str) -> Result<Side, String> {
-    let ir = parse(ir)?;
+    translate_given(Text::Lent(ir))
+}
+
+/// `translate` for a caller done with the IR. The text is let go once every
+/// function is lowered, before the module is put together; the tab's compile
+/// peaks in that assembly, and the IR is the largest thing it would otherwise
+/// still hold.
+pub fn translate_owned(ir: String) -> Result<Side, String> {
+    translate_given(Text::Owned(ir))
+}
+
+/// The IR handed to the translator: lent, or given to it to let go.
+enum Text<'a> {
+    Lent(&'a str),
+    Owned(String),
+}
+
+fn translate_given(text: Text<'_>) -> Result<Side, String> {
+    let src = match &text {
+        Text::Lent(s) => *s,
+        Text::Owned(s) => s.as_str(),
+    };
+    let ir = parse(src)?;
     let mut mx = Mx {
         types: Vec::new(),
         func_idx: HashMap::default(),
@@ -1336,6 +1358,10 @@ pub fn translate(ir: &str) -> Result<Side, String> {
     entry.extend_from_slice(&start);
     entry.push(0x0b);
     codes.push(entry);
+    // Nothing below reads the IR or what was parsed out of it.
+    drop(defined);
+    drop(ir);
+    drop(text);
 
     // ---- assemble
     let mut out = vec![0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00];
@@ -1395,22 +1421,33 @@ pub fn translate(ir: &str) -> Result<Side, String> {
         section(9, &sec, &mut out);
     }
 
-    let mut sec = Vec::new();
-    uleb(codes.len() as u64, &mut sec);
-    for c in &codes {
-        uleb(c.len() as u64, &mut sec);
-        sec.extend_from_slice(c);
+    // The code and data sections are the bulk of the module, and they are
+    // written into `out` where they will stay, at a size known in advance:
+    // each function's code is let go as it is copied in, and nothing is
+    // gathered into a section buffer first or grown by doubling.
+    let code_len = uleb_len(codes.len() as u64)
+        + codes.iter().map(|c| uleb_len(c.len() as u64) + c.len()).sum::<usize>();
+    let mut data_head = Vec::new();
+    uleb(1, &mut data_head);
+    data_head.push(0x00);
+    op(&mut data_head, 0x23, G_MB);
+    data_head.push(0x0b);
+    uleb(img.len() as u64, &mut data_head);
+    let data_len = data_head.len() + img.len();
+    out.reserve_exact(
+        2 + uleb_len(code_len as u64) + code_len + uleb_len(data_len as u64) + data_len,
+    );
+    out.push(10);
+    uleb(code_len as u64, &mut out);
+    uleb(codes.len() as u64, &mut out);
+    for c in codes {
+        uleb(c.len() as u64, &mut out);
+        out.extend_from_slice(&c);
     }
-    section(10, &sec, &mut out);
-
-    let mut sec = Vec::new();
-    uleb(1, &mut sec);
-    sec.push(0x00);
-    op(&mut sec, 0x23, G_MB);
-    sec.push(0x0b);
-    uleb(img.len() as u64, &mut sec);
-    sec.extend_from_slice(&img);
-    section(11, &sec, &mut out);
+    out.push(11);
+    uleb(data_len as u64, &mut out);
+    out.extend_from_slice(&data_head);
+    out.extend_from_slice(&img);
     Ok(Side { wasm: out, data: size, table: mx.slots.len() as u32 })
 }
 

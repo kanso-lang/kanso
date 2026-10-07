@@ -2322,7 +2322,13 @@ impl ClosureConvention {
 }
 
 pub fn emit_ir(program: &Program, convention: ClosureConvention) -> Result<String, String> {
-    emit_ir_for(program, convention, true)
+    emit_ir_for(Given::Lent(program), convention, true)
+}
+
+/// `emit_ir` for a caller done with the program, which the emitter then
+/// changes in place rather than copying.
+pub fn emit_ir_owned(program: Program, convention: ClosureConvention) -> Result<String, String> {
+    emit_ir_for(Given::Owned(program), convention, true)
 }
 
 /// The module a dev build compiles: the same as `emit_ir`'s, with the
@@ -2338,15 +2344,20 @@ pub fn emit_ir(program: &Program, convention: ClosureConvention) -> Result<Strin
 /// reads a frame or return address, or makes a `musttail` call, and the
 /// program's calls into them are all plain calls.
 pub fn emit_ir_dev(program: &Program, convention: ClosureConvention) -> Result<String, String> {
-    emit_ir_for(program, convention, false)
+    emit_ir_for(Given::Lent(program), convention, false)
+}
+
+/// `emit_ir_dev` for a caller done with the program. See `emit_ir_owned`.
+pub fn emit_ir_dev_owned(
+    program: Program,
+    convention: ClosureConvention,
+) -> Result<String, String> {
+    emit_ir_for(Given::Owned(program), convention, false)
 }
 
 /// A group's name and arity, and a position in it.
 type UnreadPositions = Vec<(String, usize, usize)>;
 
-/// The work both tiers share, and the frame `emit_instructions` anchors on.
-/// Kept out of line so the anchor exists whichever entry point reached it.
-#[inline(never)]
 /// Arms no value in the program can reach, dropped before anything is emitted.
 ///
 /// An arm whose parameter pattern names a record type matches only a value of
@@ -2366,7 +2377,7 @@ type UnreadPositions = Vec<(String, usize, usize)>;
 /// every one of them would go, so a call that reaches it still fails the way
 /// it did. The interpreter is untouched and the differential corpus is the
 /// check that the two still agree.
-fn without_unbuilt_arms(program: &Program) -> Option<(Program, UnreadPositions)> {
+fn without_unbuilt_arms(program: &Program) -> Option<(Vec<bool>, UnreadPositions)> {
     use crate::ast::{Expr, Pattern, Stmt, TemplatePart};
     let mut ids: HashMap<&str, i64> = HashMap::default();
     ids.insert("entry", 0);
@@ -2549,30 +2560,71 @@ fn without_unbuilt_arms(program: &Program) -> Option<(Program, UnreadPositions)>
     }
     unread.sort();
     unread.dedup();
-    let fns: Vec<crate::ast::FnDecl> = program
+    let keep = program
         .fns
         .iter()
         .zip(&dead)
-        .filter(|(d, gone)| !**gone || live_arms[&(d.name.as_str(), d.params.len())].0 == 0)
-        .map(|(d, _)| d.clone())
+        .map(|(d, gone)| !gone || live_arms[&(d.name.as_str(), d.params.len())].0 == 0)
         .collect();
-    Some((
-        Program {
-            fns,
-            types: program.types.clone(),
-            imports: program.imports.clone(),
-            reexports: program.reexports.clone(),
-            root: program.root.clone(),
-        },
-        unread,
-    ))
+    Some((keep, unread))
 }
 
+/// A program the emitter was handed: lent, when the caller goes on to use it,
+/// or given, when it does not.
+enum Given<'a> {
+    Lent(&'a Program),
+    Owned(Program),
+}
+
+impl std::ops::Deref for Given<'_> {
+    type Target = Program;
+    fn deref(&self) -> &Program {
+        match self {
+            Given::Lent(p) => p,
+            Given::Owned(p) => p,
+        }
+    }
+}
+
+/// The program `without_unbuilt_arms` describes. One the caller owns loses its
+/// dropped arms where it stands; one it lends is copied, arm by kept arm, since
+/// the caller goes on holding the original.
+fn kept_arms(program: Given<'_>, keep: &[bool]) -> Program {
+    match program {
+        Given::Owned(mut owned) => {
+            let mut at = keep.iter();
+            owned.fns.retain(|_| *at.next().unwrap_or(&true));
+            owned
+        }
+        Given::Lent(lent) => Program {
+            fns: lent.fns.iter().zip(keep).filter(|(_, k)| **k).map(|(d, _)| d.clone()).collect(),
+            types: lent.types.clone(),
+            imports: lent.imports.clone(),
+            reexports: lent.reexports.clone(),
+            root: lent.root.clone(),
+        },
+    }
+}
+
+/// The work both tiers share, and the frame `emit_instructions` anchors on.
+/// Kept out of line so the anchor exists whichever entry point reached it.
+/// The attribute sat on `without_unbuilt_arms` below for a while, with a doc
+/// comment between them, and this frame stayed out of line only because it
+/// was large; once it was two calls, the profile lost it.
+#[inline(never)]
 fn emit_ir_for(
-    program: &Program,
+    program: Given<'_>,
     convention: ClosureConvention,
     inline_helpers: bool,
 ) -> Result<String, String> {
+    emit_written(program, convention, inline_helpers).map(Written::finish)
+}
+
+fn emit_written(
+    program: Given<'_>,
+    convention: ClosureConvention,
+    inline_helpers: bool,
+) -> Result<Written, String> {
     // The prune also answers the positions a group read as written and no
     // longer reads. A thunk handed to such a position is forced by
     // the interpreter, whose dispatcher still holds the dropped arm and has to
@@ -2582,11 +2634,11 @@ fn emit_ir_for(
     // went on to fail in `list/next`, two frames later and under other names.
     // Forcing where the program as written would have looked keeps the trace
     // the interpreter's.
-    let (pruned, unread_positions) = match without_unbuilt_arms(program) {
-        Some((kept, unread)) => (Some(kept), unread),
-        None => (None, Vec::new()),
+    let (program, unread_positions) = match without_unbuilt_arms(&program) {
+        Some((keep, unread)) => (Given::Owned(kept_arms(program, &keep)), unread),
+        None => (program, Vec::new()),
     };
-    let program = pruned.as_ref().unwrap_or(program);
+    let program = &*program;
     let knotted = knotted_constants(program);
     let inference = infer::infer(program);
     let mut type_ids = HashMap::default();
@@ -2687,7 +2739,146 @@ fn emit_ir_for(
         thunk_sites: Vec::new(),
         unread_positions,
     };
-    backend.emit().map(|ir| through_doors(ir, convention))
+    backend.emit()
+}
+
+/// What the emitter has written once it has walked the program: the body in
+/// the pieces it was sealed in, and the tables the head of the module is
+/// written from. `emit` hands this back and the `Backend` goes, with every
+/// analysis and index it held, before `finish` allocates the module. Kept
+/// together, they were under the module's allocation, which was the most the
+/// tab's compile held.
+struct Written {
+    convention: ClosureConvention,
+    inline_helpers: bool,
+    has_entry: bool,
+    pieces: Vec<String>,
+    closure_consts: Vec<(String, String, usize)>,
+    caf_cells: Vec<String>,
+    closure_cells: Vec<String>,
+    strings: Vec<(String, Vec<u8>)>,
+    globals: String,
+}
+
+impl Written {
+    /// The module: the body pruned, the declarations and globals it names
+    /// written in front of it, and the tail calls narrowed.
+    fn finish(self) -> String {
+        let pruned = match self.has_entry {
+            true => prune_unnamed(self.pieces, &dsym(crate::ast::ENTRY, 0), &self.closure_consts),
+            false => self.pieces,
+        };
+        let pieces: Vec<String> = pruned.into_iter().map(paired_appends).collect();
+        // One inline dispatcher per arity the program actually writes. An
+        // unused `internal` definition costs nothing after optimization, but
+        // it does cost a line, a define and a branch in the emitted golden —
+        // so the twins are generated against the body rather than carried in
+        // DECLARES the way the other inline helpers are.
+        // Every `@sym(` the body writes, read off in one pass. The question
+        // below is asked once per declare line -- 163 of them -- and used to
+        // be answered by searching the whole emitted body for each, which is
+        // 163 scans of a text that grows with the program. On a build of
+        // bench/compile_corpus that search was 17.08% of the process.
+        let mut body_calls = crate::hash::Set::default();
+        let mut body_lines = crate::hash::Set::default();
+        for piece in &pieces {
+            body_calls.extend(called_symbols(piece));
+            body_lines.extend(symbols_before_newline(piece));
+        }
+        let call_twins: String = (0..=4)
+            .filter(|n| body_calls.contains(format!("k_call{n}_fast").as_str()))
+            .map(|n| call_twin(n, self.convention, self.inline_helpers))
+            .collect();
+        let declares: String = {
+            // BOTH SIDES OF THIS BUILT THE SAME INDEX. kanso#1461 landed one
+            // inline, joining DECLARES’s non-declare lines and scanning the
+            // three haystacks in place; this branch had already factored the
+            // scan into `called_symbols` and cached the DECLARES half in a
+            // `OnceLock`, so `body_calls` is computed once above and reused by
+            // the call-twin filter rather than rebuilt here. The sets are the
+            // same for every query the emitter makes: a symbol from a
+            // `declare` line holds no whitespace and no `(`, so bounding the
+            // span at the first `(` and bounding it at the first `(` or space
+            // cannot disagree about one.
+            //
+            // `crate::hash::Set` and not std’s, which kanso#1461’s comment
+            // gives the reason for and `tests/the_compile_path_hashes_with_a
+            // _fixed_seed.rs` pins: std seeds per process, and a randomly
+            // seeded table makes this count differ between two runs of one
+            // binary, which the compile rows read as a reproduction failure.
+            let twin_calls = called_symbols(&call_twins);
+            // A symbol DECLARES's own definitions call is kept as well, and
+            // each line knows whether it is one: `DeclareLine::context`.
+            let called = |sym: &str| body_calls.contains(sym) || twin_calls.contains(sym);
+            declares_for_program(called, called, counters_wanted(), self.inline_helpers, true)
+        };
+        let mut out = String::new();
+        out.push_str(&call_twins);
+        for cell in &self.caf_cells {
+            let _ = writeln!(out, "@{cell} = internal global %KValue zeroinitializer");
+            let _ = writeln!(out, "@{cell}_ready = internal global i8 0");
+        }
+        for cell in &self.closure_cells {
+            let _ = writeln!(out, "@{cell} = internal global %KValue zeroinitializer");
+        }
+        for (cell, w, arity) in
+            self.closure_consts.iter().filter(|(cell, _, _)| body_lines.contains(cell.as_str()))
+        {
+            // K_INT 0 is the env a zero-capture closure never reads; K_CLOSURE
+            // is tag 11. The KClosure layout is the runtime's:
+            // { fn, env, ncaps, arity }.
+            let _ = writeln!(out, "@{cell}_env = internal constant %KValue zeroinitializer");
+            let _ = writeln!(
+                out,
+                "@{cell}_clo = internal constant {{ ptr, ptr, i64, i64 }}                  {{ ptr @{w}, ptr @{cell}_env, i64 0, i64 {arity} }}"
+            );
+            let _ = writeln!(
+                out,
+                "@{cell} = internal constant %KValue                  {{ i64 11, i64 ptrtoint (ptr @{cell}_clo to i64) }}"
+            );
+        }
+        // A string is interned when a function asks for it, and the function
+        // may since have been pruned: on the codegen corpus 198 of 270
+        // strings and 264 of their literal cells were named by nothing, 36% of
+        // the module's bytes, each parsed and laid out by clang all the same.
+        // Only the body and the type tables name a string.
+        let texts: Vec<&str> =
+            pieces.iter().map(String::as_str).chain([self.globals.as_str()]).collect();
+        let named = named_strings(&texts, self.strings.len());
+        drop(texts);
+        for ((name, bytes), [string, lit]) in self.strings.iter().zip(named) {
+            if string {
+                let _ = writeln!(
+                    out,
+                    "@{name} = private unnamed_addr constant [{} x i8] c\"{}\"",
+                    bytes.len(),
+                    ir_bytes(bytes)
+                );
+            }
+            if lit {
+                let _ = writeln!(out, "@{name}_lit = internal global %KValue zeroinitializer");
+            }
+        }
+        // THE MODULE IS WRITTEN ONCE, at its own size. The declarations and
+        // everything above go in first and the body's pieces follow, each let
+        // go as soon as it is copied, and the narrowing rewrites the lines
+        // where they stand. The body used to be copied behind the globals and
+        // the narrowing wrote that again into a buffer of its own, so two
+        // copies of the module were held at once.
+        out.push_str(&self.globals);
+        out.push('\n');
+        let declared = declares.len() + 1;
+        let size = declared + out.len() + pieces.iter().map(String::len).sum::<usize>();
+        let mut module = String::with_capacity(size);
+        module.push_str(&declares);
+        module.push('\n');
+        module.push_str(&out);
+        drop((declares, out));
+        for piece in pieces {
+            module.push_str(&piece);
+        }
+        through_doors(narrowed_in_place(module, declared), self.convention)
+    }
 }
 
 /// The runtime functions the program calls that take `preserve_nonecc`
@@ -6126,12 +6317,10 @@ impl<'a> Backend<'a> {
         }
         self.emit_tail(&mut f, expr)?;
         let sig: Vec<String> = (0..captures.len()).map(|i| format!("%KValue %a{i}")).collect();
-        let _ = writeln!(
-            self.body,
-            "define tailcc %KValue @{sym}({}) {{\n{}}}\n",
-            sig.join(", "),
-            f.body()
-        );
+        let text = f.body();
+        self.room(sym.len() + 16 * sig.len() + text.len() + 64);
+        let _ =
+            writeln!(self.body, "define tailcc %KValue @{sym}({}) {{\n{text}}}\n", sig.join(", "),);
         Ok(())
     }
 
@@ -6154,13 +6343,14 @@ impl<'a> Backend<'a> {
                 args.join(", ")
             );
         }
+        self.room(cases.len() + arms.len() + 256);
         let _ = writeln!(
             self.body,
             "define %KValue @d_thunk_eval(i64 %site, ptr %args) {{\nentry:\n  switch i64 %site, label %bad [\n{cases}  ]\n{arms}bad:\n  unreachable\n}}\n"
         );
     }
 
-    fn emit(&mut self) -> Result<String, String> {
+    fn emit(&mut self) -> Result<Written, String> {
         self.emit_type_names();
         self.emit_type_fields();
         // group by name across the whole program: the bare overload space
@@ -6276,6 +6466,7 @@ impl<'a> Backend<'a> {
                 .collect();
             let sym = dsym(name, arity);
             let _ = writeln!(conv, "  %r = call tailcc %KValue @{sym}({})", call_args.join(", "));
+            self.room(conv.len() + 3 * sym.len() + 32 * arity + 256);
             let _ = writeln!(
                 self.body,
                 "define %KValue @{}({}) {{\nentry:\n{conv}  ret %KValue %r\n}}\n",
@@ -6299,6 +6490,7 @@ impl<'a> Backend<'a> {
             let params: Vec<String> = (0..arity).map(|i| format!("%KValue %a{i}")).collect();
             let call_args: Vec<String> = (0..arity).map(|i| format!("%KValue %a{i}")).collect();
             let held = format!("builtin.{name}");
+            self.room(4 * held.len() + 48 * arity + 256);
             let _ = writeln!(
                 self.body,
                 "define %KValue @{}({}) {{\nentry:\n  %r = call %KValue @k_b_{name}({})\n  \
@@ -6327,6 +6519,7 @@ impl<'a> Backend<'a> {
                     .to_string(),
             };
             let held = "builtin.print";
+            self.room(render.len() + 1024);
             let _ = writeln!(
                 self.body,
                 "define %KValue @{}(%KValue %a0) {{\nentry:\n  \
@@ -6372,6 +6565,7 @@ impl<'a> Backend<'a> {
             (Some(dz), Some(mf)) => format!("  call void @k_math_ids(i64 {dz}, i64 {mf})\n"),
             _ => String::new(),
         };
+        self.room(ids.len() + 128);
         let _ = writeln!(
             self.body,
             "define void @k_caf_init() {{\nentry:\n{ids}{fills}  ret void\n}}\n"
@@ -6380,6 +6574,7 @@ impl<'a> Backend<'a> {
         // there is a symbol the linker would ask about.
         if self.program.fns.iter().any(|d| d.name == crate::ast::ENTRY) {
             let entry = dsym(crate::ast::ENTRY, 0);
+            self.room(entry.len() + 128);
             let _ = writeln!(
                 self.body,
                 "define %KValue @k_user_main() {{\nentry:\n  %r = call tailcc %KValue \
@@ -6397,128 +6592,29 @@ impl<'a> Backend<'a> {
         // let go once the paired appends have rewritten it. Kept to the end,
         // `self.body` and the pruned copy sat under the tail below, which is
         // the tab's high-water mark.
-        let mut written = std::mem::take(&mut self.sealed);
-        written.push(std::mem::take(&mut self.body));
-        let pruned = match self.program.fns.iter().any(|d| d.name == crate::ast::ENTRY) {
-            true => prune_unnamed(written, &dsym(crate::ast::ENTRY, 0), &self.closure_consts),
-            false => written,
-        };
-        let pieces: Vec<String> = pruned.into_iter().map(paired_appends).collect();
-        // One inline dispatcher per arity the program actually writes. An
-        // unused `internal` definition costs nothing after optimization, but
-        // it does cost a line, a define and a branch in the emitted golden —
-        // so the twins are generated against the body rather than carried in
-        // DECLARES the way the other inline helpers are.
-        // Every `@sym(` the body writes, read off in one pass. The question
-        // below is asked once per declare line -- 163 of them -- and used to
-        // be answered by searching the whole emitted body for each, which is
-        // 163 scans of a text that grows with the program. On a build of
-        // bench/compile_corpus that search was 17.08% of the process.
-        let mut body_calls = crate::hash::Set::default();
-        let mut body_lines = crate::hash::Set::default();
-        for piece in &pieces {
-            body_calls.extend(called_symbols(piece));
-            body_lines.extend(symbols_before_newline(piece));
-        }
-        let call_twins: String = (0..=4)
-            .filter(|n| body_calls.contains(format!("k_call{n}_fast").as_str()))
-            .map(|n| call_twin(n, self.convention, self.inline_helpers))
-            .collect();
-        let declares: String = {
-            // BOTH SIDES OF THIS BUILT THE SAME INDEX. kanso#1461 landed one
-            // inline, joining DECLARES’s non-declare lines and scanning the
-            // three haystacks in place; this branch had already factored the
-            // scan into `called_symbols` and cached the DECLARES half in a
-            // `OnceLock`, so `body_calls` is computed once above and reused by
-            // the call-twin filter rather than rebuilt here. The sets are the
-            // same for every query the emitter makes: a symbol from a
-            // `declare` line holds no whitespace and no `(`, so bounding the
-            // span at the first `(` and bounding it at the first `(` or space
-            // cannot disagree about one.
-            //
-            // `crate::hash::Set` and not std’s, which kanso#1461’s comment
-            // gives the reason for and `tests/the_compile_path_hashes_with_a
-            // _fixed_seed.rs` pins: std seeds per process, and a randomly
-            // seeded table makes this count differ between two runs of one
-            // binary, which the compile rows read as a reproduction failure.
-            let twin_calls = called_symbols(&call_twins);
-            // A symbol DECLARES's own definitions call is kept as well, and
-            // each line knows whether it is one: `DeclareLine::context`.
-            let called = |sym: &str| body_calls.contains(sym) || twin_calls.contains(sym);
-            declares_for_program(called, called, counters_wanted(), self.inline_helpers, true)
-        };
-        let mut out = String::new();
-        out.push_str(&call_twins);
-        for cell in &self.caf_cells {
-            let _ = writeln!(out, "@{cell} = internal global %KValue zeroinitializer");
-            let _ = writeln!(out, "@{cell}_ready = internal global i8 0");
-        }
-        for cell in &self.closure_cells {
-            let _ = writeln!(out, "@{cell} = internal global %KValue zeroinitializer");
-        }
-        for (cell, w, arity) in
-            self.closure_consts.iter().filter(|(cell, _, _)| body_lines.contains(cell.as_str()))
-        {
-            // K_INT 0 is the env a zero-capture closure never reads; K_CLOSURE
-            // is tag 11. The KClosure layout is the runtime's:
-            // { fn, env, ncaps, arity }.
-            let _ = writeln!(out, "@{cell}_env = internal constant %KValue zeroinitializer");
-            let _ = writeln!(
-                out,
-                "@{cell}_clo = internal constant {{ ptr, ptr, i64, i64 }}                  {{ ptr @{w}, ptr @{cell}_env, i64 0, i64 {arity} }}"
-            );
-            let _ = writeln!(
-                out,
-                "@{cell} = internal constant %KValue                  {{ i64 11, i64 ptrtoint (ptr @{cell}_clo to i64) }}"
-            );
-        }
-        // A string is interned when a function asks for it, and the function
-        // may since have been pruned: on the codegen corpus 198 of 270
-        // strings and 264 of their literal cells were named by nothing, 36% of
-        // the module's bytes, each parsed and laid out by clang all the same.
-        // Only the body and the type tables name a string.
-        let texts: Vec<&str> =
-            pieces.iter().map(String::as_str).chain([self.globals.as_str()]).collect();
-        let named = named_strings(&texts, self.strings.len());
-        drop(texts);
-        for ((name, bytes), [string, lit]) in self.strings.iter().zip(named) {
-            if string {
-                let _ = writeln!(
-                    out,
-                    "@{name} = private unnamed_addr constant [{} x i8] c\"{}\"",
-                    bytes.len(),
-                    ir_bytes(bytes)
-                );
-            }
-            if lit {
-                let _ = writeln!(out, "@{name}_lit = internal global %KValue zeroinitializer");
-            }
-        }
-        // THE MODULE IS WRITTEN ONCE, at its own size. The declarations and
-        // everything above go in first and the body's pieces follow, each let
-        // go as soon as it is copied, and the narrowing rewrites the lines
-        // where they stand. The body used to be copied behind the globals and
-        // the narrowing wrote that again into a buffer of its own, so two
-        // copies of the module were held at once.
-        out.push_str(&self.globals);
-        out.push('\n');
-        let declared = declares.len() + 1;
-        let size = declared + out.len() + pieces.iter().map(String::len).sum::<usize>();
-        let mut module = String::with_capacity(size);
-        module.push_str(&declares);
-        module.push('\n');
-        module.push_str(&out);
-        drop((declares, out));
-        for piece in pieces {
-            module.push_str(&piece);
-        }
-        Ok(narrowed_in_place(module, declared))
+        let mut pieces = std::mem::take(&mut self.sealed);
+        pieces.push(std::mem::take(&mut self.body));
+        Ok(Written {
+            convention: self.convention,
+            inline_helpers: self.inline_helpers,
+            has_entry: self.program.fns.iter().any(|d| d.name == crate::ast::ENTRY),
+            pieces,
+            closure_consts: std::mem::take(&mut self.closure_consts),
+            caf_cells: std::mem::take(&mut self.caf_cells),
+            closure_cells: std::mem::take(&mut self.closure_cells),
+            strings: std::mem::take(&mut self.strings),
+            globals: std::mem::take(&mut self.globals),
+        })
     }
 
     /// Room for `need` more bytes in the piece being written, which closes
-    /// it and opens the next when it has less. Called before a function is
-    /// written, and only there, so a definition is never split between two
-    /// pieces.
+    /// it and opens the next when it has less. Called before each definition
+    /// is written, and only there, so a definition is never split between two
+    /// pieces. Every write to the body asks first, with `need` taken from the
+    /// parts of the text that vary. A write that did not ask doubled the
+    /// piece once it ran past 64 KiB, and the tab's allocator holds the old
+    /// block and the new one while it copies: on `bench/interp_corpus` that
+    /// was a dispatcher's write.
     fn room(&mut self, need: usize) {
         if self.body.capacity() - self.body.len() < need {
             let next = String::with_capacity(need.max(BODY_PIECE));
@@ -7161,12 +7257,13 @@ impl<'a> Backend<'a> {
             self.emit_fn_body(&mut f, &decl.body)?;
             f.record(&format!("%x{disc}"), whole);
         }
+        let text = f.body();
+        self.room(header.len() + text.len() + 4);
         let _ = writeln!(
             self.body,
             "{header}
-{}}}
-",
-            f.body()
+{text}}}
+"
         );
         Ok(())
     }
@@ -7295,6 +7392,7 @@ impl<'a> Backend<'a> {
         // place — rewriting the indirection at first evaluation so later reads
         // check nothing — and it is the better shape if this costs anything
         // measurable. The number goes to the ledger before any freeze returns.
+        self.room(sym.len() + 4 * cell.len() + build.len() + 640);
         let _ = writeln!(
             self.body,
             "define tailcc %KValue @{sym}() {{\n\

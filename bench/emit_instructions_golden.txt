@@ -378,4 +378,16 @@
 # Measured in this container, where main reads 27,800,961 on the row:
 # 27,800,961 -> 27,530,325, a FALL of 270,636 (-0.9735%).
 # CI's reading replaces it if it differs.
-emit_instructions=27530325
+# 2026-10-07: the emitter drops unbuilt arms from a program it is handed
+# rather than copying it, and lets its tables go before it assembles the
+# module; `codegen::emit_ir_for` runs all of the changed code, and the copy of the program it no longer makes was inside it.
+# The row moved with the change, and what moved it is not isolated.
+# Measured in this container, where the previous tree reads 27,530,325 on the row:
+# 27,530,325 -> 27,248,851, a FALL of 281,474 (-1.0224%).
+# CI's reading replaces it if it differs.
+# 2026-10-07: the wasm translator lets go of the IR before it assembles the
+# module; `codegen::emit_ir_for` runs none of the translator. The row moved with the binary, and what moved it is not
+# isolated. Measured in this container, where the previous tree reads on the row:
+# 27,248,851 -> 27,259,671, a RISE of 10,820 (+0.0397%).
+# CI's reading replaces it if it differs.
+emit_instructions=27259671

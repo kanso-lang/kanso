@@ -214,7 +214,8 @@ pub extern "C" fn kanso_play_native(ptr: *const u8, len: usize) -> i32 {
     }
 }
 
-/// THE PROGRAM IS DROPPED AS SOON AS NOTHING READS IT.
+/// THE PROGRAM IS HANDED TO THE EMITTER, which drops the arms nothing can
+/// reach from it in place and lets it go before the module is assembled.
 /// The tab's compile is priced by the most it holds at once
 /// (`browser_compile_peak_bytes`), and that peak falls inside the translation.
 /// The translation reads the native IR as it is, rewriting the six wasm32
@@ -222,9 +223,8 @@ pub extern "C" fn kanso_play_native(ptr: *const u8, len: usize) -> i32 {
 #[cfg(target_arch = "wasm32")]
 fn lower_native(program: crate::ast::Program) -> i32 {
     let convention = crate::codegen::ClosureConvention::Absent;
-    let ir = crate::codegen::emit_ir_dev(&program, convention);
-    drop(program);
-    let side = ir.and_then(|ir| crate::ir_wasm::translate(&ir));
+    let ir = crate::codegen::emit_ir_dev_owned(program, convention);
+    let side = ir.and_then(crate::ir_wasm::translate_owned);
     match side {
         Ok(side) => {
             SIDE.with(|s| s.set((side.data, side.table)));
