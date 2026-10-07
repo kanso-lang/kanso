@@ -367,4 +367,9 @@
 # Measured in this container on the golden's own glibc and rustc:
 # emit_instructions 28,879,749 -> 27,787,117, a FALL of 1,092,632 (-3.7833%).
 # CI's reading replaces it if it differs.
-emit_instructions=27787117
+# 2026-10-07: the wasm translator reads the native IR, and the tab no
+# longer copies the module through `retarget_wasm32`; `codegen::emit_ir` runs none of the changed code.
+# The row moved with the change, and what moved it is not isolated.
+# CI measured 27,787,117 -> 27,800,961, a RISE of 13,844
+# (+0.0498%), and this container read the same.
+emit_instructions=27800961

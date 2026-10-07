@@ -22593,3 +22593,36 @@ peak rises by 146 bytes, browser_compile_peak_bytes 1,495,678 -> 1,495,824:
 the kept buffer is alive at the high-water mark. Natively, the tab's compile
 of `bench/interp_corpus` reads 188,396,740 instructions against 193,037,622
 with neither change.
+
+## 2026-10-07 — the translator reads the native IR
+
+The tab compiled a program in three steps after emitting it:
+`codegen::retarget_wasm32` copied the module text with the target lines
+replaced, the two calling conventions removed and six offsets rewritten for
+wasm32, and `ir_wasm::translate` read the copy. The translator already skips
+the target lines and both convention words, so the six offsets were the only
+part of the copy it needed. `ir_wasm::body` now rewrites those six lines as it
+reads them, from the same `WASM32_LINES` table, and the tab translates the
+native module directly. `retarget_wasm32` stays for the path where clang reads
+the text.
+
+The interp corpus test in tests/ir_to_wasm.rs translates every program both
+ways and asserts the bytes, data size and table size are equal. With the
+rewrite in `body` disabled, it fails on the first program that reaches one of
+the six lines.
+
+Natively, the tab's compile of `bench/interp_corpus` reads 182,484,483
+instructions against 188,394,075 on main (-3.14%).
+browser_compile_instructions 587,205,094 -> 577,492,111 (-1.65%), the same in
+this container and on CI. browser_compile_peak_bytes does not
+move: the old path dropped the native module once the copy was made, so one
+copy of the module text sat under the translation's peak before and one sits
+under it now.
+
+Five rows that run none of the changed code moved with the compiler binary.
+compile_instructions 26,151,558 -> 26,169,794, entry_instructions 86,272,729
+-> 86,347,223, library_instructions 86,818,080 -> 86,891,755,
+interp_instructions 585,696,023 -> 585,696,420 and emit_instructions
+27,787,117 -> 27,800,961. What moved them is not isolated. These are CI's
+readings, and this container read the same. The welfare floor rises to take
+the net gain.

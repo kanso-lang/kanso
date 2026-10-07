@@ -609,5 +609,10 @@
 # binary built from the same tree: interp_instructions 590,586,868 ->
 # 585,696,023, a FALL of 4,890,845 (-0.8281%). Main reads 590,586,868 in this
 # container, so the move is the change's and not the silicon's.
-interp_instructions=585696023
+# 2026-10-07: the wasm translator reads the native IR, and the tab no
+# longer copies the module through `retarget_wasm32`; the interpreter runs none of the changed code.
+# The row moved with the change, and what moved it is not isolated.
+# CI measured 585,696,023 -> 585,696,420, a RISE of 397
+# (+0.0001%), and this container read the same.
+interp_instructions=585696420
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

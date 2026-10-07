@@ -135,7 +135,7 @@ fn every_playground_example_lowers_for_the_tab() {
         let program = kanso::compile_play_file(&format!("{name}.kso"), &source)
             .unwrap_or_else(|e| panic!("the {name} example must compile: {e}"));
         let side = kanso::codegen::emit_ir_dev(&program, kanso::codegen::ClosureConvention::Absent)
-            .and_then(|ir| kanso::ir_wasm::translate(&kanso::codegen::retarget_wasm32(&ir)))
+            .and_then(|ir| kanso::ir_wasm::translate(&ir))
             .unwrap_or_else(|e| panic!("the {name} example does not lower for the tab: {e}"));
         assert!(!side.wasm.is_empty(), "the {name} example lowered to nothing");
     }

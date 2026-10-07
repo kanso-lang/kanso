@@ -159,6 +159,12 @@ fn the_interp_corpus_answers_through_the_translator() {
     let ir = std::fs::read_to_string(stage.join("main.ll")).expect("the ir reads");
     let side =
         kanso::ir_wasm::translate(&kanso::codegen::retarget_wasm32(&ir)).expect("it translates");
+    // The tab hands the translator the native IR and lets it rewrite the six
+    // wasm32 offsets as it reads them. That must be the same module, byte for
+    // byte, as translating the retargeted copy clang would read.
+    let direct = kanso::ir_wasm::translate(&ir).expect("the native IR translates");
+    assert!(direct.wasm == side.wasm, "the native IR translated to a different module");
+    assert_eq!((direct.data, direct.table), (side.data, side.table));
     let ran = execute(&rt, &side.wasm, side.data, side.table, &[]).expect("it runs");
     let _ = std::fs::remove_dir_all(&work);
     assert_eq!(ran.out, String::from_utf8_lossy(&native.stdout), "the corpus's answer");

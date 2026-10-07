@@ -991,7 +991,16 @@ fn body(text: &str, types: &HashMap<String, Ty>) -> Result<Func, String> {
     }
     let mut blocks = vec![Block { name: String::new(), insts: Vec::new() }];
     while let Some(raw) = lines.next() {
-        let mut body = Cow::Borrowed(raw.trim());
+        // The six lines whose offsets differ on wasm32 are rewritten as they
+        // are read, so the native module translates as it is and needs no
+        // retargeted copy of its own. `codegen::retarget_wasm32` makes the
+        // same substitution for the text clang reads.
+        let line = raw.trim();
+        let line = crate::codegen::WASM32_LINES
+            .iter()
+            .find(|(native, _)| *native == line)
+            .map_or(line, |(_, wasm)| wasm);
+        let mut body = Cow::Borrowed(line);
         if body.is_empty() || body.starts_with(';') {
             continue;
         }
@@ -1225,8 +1234,9 @@ pub struct Side {
     pub table: u32,
 }
 
-/// Translates an emitted module (already passed through
-/// `codegen::retarget_wasm32`) into a side module for the wasm32 runtime.
+/// Translates an emitted module into a side module for the wasm32 runtime.
+/// It takes the native text or the text `codegen::retarget_wasm32` made from
+/// it, and the two give the same module.
 pub fn translate(ir: &str) -> Result<Side, String> {
     let ir = parse(ir)?;
     let mut mx = Mx {
