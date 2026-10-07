@@ -23118,7 +23118,10 @@ the length test `k_str_chars` now makes before it calls either scan.
 The second scan is 720 bytes of machine code in every benchmark, so `text`
 rises 4,594,256 -> 4,604,144 with the decoder's 64 bytes off three of them
 counted in. Each benchmark's instruction row, read here against main's own
-reading in this container, moves by less than 1,300 either way. The tab
+reading in this container, moves by less than 1,300 either way; runbench,
+the one the objective weighs, by +140. Building the runtime costs clang
++1,686 instructions at -O0 and 366,750 fewer at -O3 with LTO, both against
+main's reading here. The tab
 runs the wasm32 runtime, which has no vector block. With the split built
 there too, browser_run_instructions rose 33,510,668 -> 33,511,114 for a
 length test that bought nothing, so the split is x86-64 only, and the row
