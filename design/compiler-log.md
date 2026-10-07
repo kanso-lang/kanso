@@ -22262,3 +22262,28 @@ trap. `scripts/numeric_differential` fails on any disagreement, where it
 counted the refusals as a known ceiling and failed when there were none.
 ch02's overflow sample prints `100000000000000000000`, and the playground
 note about 64-bit integers is gone.
+
+## 2026-10-07 — the linear pass asks the fixed half once
+
+Profiling the tab's compile of `bench/interp_corpus` natively (the same
+`compile_source`, `emit_ir_dev`, `retarget_wasm32` and `ir_wasm::translate`
+the playground runs) put 23.0M of 204.5M instructions in
+`linear::for_the_emitter`, and 11.5M of those in one place: the fixpoint
+that decides which parameters are linear accumulators. Each round asked every
+parameter still in the set the whole question, and most of the question
+cannot change between rounds. Whether every arm moves the parameter, whether
+the group is an operator and whether it is ever handed around as a value are
+facts about the program. Only the call sites read the set the fixpoint is
+shrinking.
+
+So the set is now seeded with the parameters whose fixed half holds, and each
+round asks only the call sites. A greatest fixpoint has one answer whatever
+order its removals come in, and the emitted code is byte for byte what it was:
+`scripts/gates/emitted_code.sh` agrees with every benchmark's IR, the golden
+suite passes, and the five accumulator specs pass. `param_is_linear` had no
+caller left and went; its comment about the two refusals moved to the new
+`arms_move`.
+
+In this container the tab's compile, run natively, read 204,459,713 and then
+202,749,313 (-0.84%), and `emit_instructions` read 32,132,166 and then
+30,865,650 (-3.94%). CI's rows follow.
