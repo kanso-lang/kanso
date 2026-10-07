@@ -22797,7 +22797,19 @@ An `icmp` predicate and a cast's name were also copied into a string for every
 instruction that carried one. Both come from short fixed lists, so the parsed
 instruction now holds a reference into the list.
 
+A branch carried its target's name as a string, and so did each incoming edge
+of a phi. Lowering mapped names to blocks through a table keyed by a copy of
+every block's name, and the test for a backward branch built a vector for each
+instruction it looked at. LLVM gives a function's labels and its locals one
+namespace, so a label is now numbered as a local is, with `L` and a number
+taking a table of its own the way `%t` does. Once the function is read, `body`
+replaces each number with the place of the block it names, and lowering reads
+the place directly. A branch to a label no block defines fails in `body`.
+Resolving every label to the block before the right one fails both translator
+corpus tests.
+
 The module is byte-identical. browser_compile_instructions 573,888,797 ->
-563,473,948 (-1.81%): the shared buffer took 6,303,396 of that, the static
-names 138,361, and the table the rest. Before the static names, the
-translation went from 46.1 million instructions to 43.1 million natively.
+562,308,776 (-2.02%): the shared buffer took 6,303,396 of that, the static
+names 138,361, the labels 1,165,172 and the table the rest. Before the static
+names and the labels, the translation went from 46.1 million instructions to
+43.1 million natively.
