@@ -3,8 +3,9 @@ use crate::diag::{article, Diagnostic, Span};
 use crate::hash::{Map as HashMap, Set as HashSet};
 use num_traits::Zero;
 
-pub const BUILTINS: [&str; 65] = [
+pub const BUILTINS: [&str; 66] = [
     "annotate",
+    "built_text",
     "append",
     "args",
     "bytes",
@@ -93,7 +94,7 @@ pub const AMBIENT: [&str; 12] = [
 /// `native backend: `length` takes 1 argument(s)` and no span, the page
 /// died at the call, and `kanso check` said ok. So the counts live here,
 /// beside the names, and every reader takes them from one place.
-pub const BUILTIN_ARITY: [(&str, usize); 69] = [
+pub const BUILTIN_ARITY: [(&str, usize); 70] = [
     ("accept", 1),
     ("annotate", 2),
     ("append", 2),
@@ -106,6 +107,7 @@ pub const BUILTIN_ARITY: [(&str, usize); 69] = [
     ("bit_shl", 2),
     ("bit_shr", 2),
     ("bit_xor", 2),
+    ("built_text", 1),
     ("bytes", 1),
     ("char_code", 1),
     ("chars", 1),

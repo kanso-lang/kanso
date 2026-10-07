@@ -3764,6 +3764,30 @@ impl<'a> Interp<'a> {
                     )),
                 }
             }
+            // Bytes the standard library assembled from text and ascii bytes
+            // alone, so they are text already. The native runtime takes them
+            // without reading them again; a Rust string has to be valid, so
+            // this arm still converts with the check, and on such bytes the
+            // check cannot fail.
+            b"built_text" => {
+                let [bytes] = arity(args, name, span)?;
+                if is_failure(&bytes) {
+                    return Ok(bytes);
+                }
+                let Value::Bytes(raw) = &bytes else {
+                    return Err(RuntimeError {
+                        message: "built_text takes bytes".to_string(),
+                        span,
+                    });
+                };
+                match String::from_utf8((**raw).clone()) {
+                    Ok(text) => Ok(Value::Str(text)),
+                    Err(_) => Err(RuntimeError {
+                        message: "built_text was handed bytes that are not text".to_string(),
+                        span,
+                    }),
+                }
+            }
             b"split" => {
                 let [text, sep] = arity(args, name, span)?;
                 let (Value::Str(text), Value::Str(sep)) = (&text, &sep) else {

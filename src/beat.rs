@@ -1565,6 +1565,7 @@ fn expr_allocates(
         "slice",
         "sort",
         "utf8",
+        "built_text",
         "values",
     ];
     const PURE: &[&str] = &[
