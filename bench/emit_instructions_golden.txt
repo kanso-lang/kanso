@@ -348,4 +348,9 @@
 # instead of three, with `out` sized before the body goes in. Measured on the
 # host the golden names, over kanso#1780: emit_instructions 30,865,650 ->
 # 30,862,078, a FALL of 3,572 (-0.0116%).
-emit_instructions=30862078
+#
+# 2026-10-07: a word twin starts its general body over when a sum overflows
+# before it has written anything. The emitter watches each line a twin writes
+# for a store or a call. Over kanso#1781: emit_instructions 30,862,078 ->
+# 30,876,981, a RISE of 14,903 (+0.0483%), held for the run it buys.
+emit_instructions=30876981

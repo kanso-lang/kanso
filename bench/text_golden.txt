@@ -815,17 +815,25 @@
 # src/runtime.c, which is linked into every program. The 336-byte spread is the
 # arms a program's own dispatch makes reachable. Machine-code size carries no
 # welfare term (ruled 2026-09-05); this vein is exact and watched on its own.
-jsonbench text=329192
-encodebench text=319656
-oneshot text=344696
-basket text=291688
-widebench text=327944
+#
+# 2026-10-07: a word twin whose sum overflows before it has written anything
+# tail-calls its general body instead of building the bignum in place. The
+# twins shrink and some fold into their callers: runbench 606,520 -> 592,856,
+# jsonbench 329,192 -> 312,552 and livebench 347,704 -> 331,064 fall, while
+# encodebench and widebench rise 7,088 each, scanbench 6,576 and digestbench
+# 2,752 and basket 320, where a twin that now fits is inlined into more than
+# one caller.
+jsonbench text=312552
+encodebench text=326744
+oneshot text=328056
+basket text=292008
+widebench text=335032
 deepbench text=270072
-escapebench text=261848
-pendbench text=277480
+escapebench text=261528
+pendbench text=277176
 indexbench text=260072
-scanbench text=423400
-digestbench text=301640
+scanbench text=429976
+digestbench text=304392
 readbench text=260840
-livebench text=347704
-runbench text=606520
+livebench text=331064
+runbench text=592856
