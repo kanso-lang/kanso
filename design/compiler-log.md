@@ -22826,8 +22826,8 @@ names and the labels, the translation went from 46.1 million instructions to
 43.1 million natively.
 
 None of the native paths runs the translator, and seven of their rows
-fell all the same, read on this container: compile_instructions -5,383,
-entry_instructions -35,769, library_instructions -36,059, emit_instructions
+fell all the same, read on this container: compile_instructions -26,053,
+entry_instructions -88,725, library_instructions -89,095, emit_instructions
 -10,968, codegen_instructions_dev -90,270, codegen_instructions_release
 -692,738 and interp_instructions -11,628. The compiler's binary lost code and
 the rest of it moved. If CI reads different rows, they are CI's.
