@@ -23004,7 +23004,7 @@ The rows that rose:
   counted 696,407 and 679,558, so the misses are not two names trading one
   slot. Neither was kept.
   interp_allocs fell 873,378 -> 873,373.
-- **browser_compile_instructions 519,106,529 -> 519,230,261 (+123,732)**, and
+- **browser_compile_instructions 519,106,529 -> 519,236,048 (+129,519)**, and
   the front end's rows read on this container: compile_instructions +40,988,
   entry_instructions +131,784, library_instructions +132,770 and
   emit_instructions +12,488. compile_allocs fell 14,747 -> 14,745. On CI
