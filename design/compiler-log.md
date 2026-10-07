@@ -23152,23 +23152,24 @@ its 8,726 lines.
   between the edits.
 
 The module and its wasm32 retarget are byte-identical to main's for the
-corpus, compared with `cmp`. Native, one step at a time:
+corpus, compared with `cmp`. Native, one step at a time, on main before
+kanso#1791 landed:
 
     main                          167,949,794
     symbols_before_newline        167,748,901     -200,893
     narrowed_in_place             164,935,903   -2,812,998
     retarget_wasm32               162,084,175   -2,851,728
 
-In the tab, under wasmi's fuel meter, browser_compile_instructions falls
-519,236,048 -> 515,039,116, -4,196,932 (-0.81%). The retarget rewrite is
-worth 815,080 of that in the tab and 2.85 million natively, so the two
+In the tab, under wasmi's fuel meter and on the tree merged with
+kanso#1791, browser_compile_instructions falls 519,126,894 -> 514,928,695,
+-4,198,199 (-0.81%). The retarget rewrite is worth 815,080 of that in the tab and 2.85 million natively, so the two
 measures do not move in proportion.
 
 The same passes run in every native build, and emit_instructions falls
-25,148,324 -> 24,714,263 (-1.73%). The interpreter's row falls 37,116 to
-585,144,101. Three rows that never reach these passes rise with the binary
-around them: compile_instructions +9,898 to 26,182,732, entry_instructions
-+28,550 to 86,382,044 and library_instructions +28,451 to 86,927,878, all
+25,148,324 -> 24,714,263 (-1.73%). The interpreter's row falls 37,108 to
+585,141,444. Three rows that never reach these passes rise with the binary
+around them: compile_instructions +9,898 to 26,182,238, entry_instructions
++28,550 to 86,381,596 and library_instructions +28,451 to 86,927,430, all
 read in this container, where each has matched CI's reading on main.
 
 Not kept: reading `%t` and `L` numbers by hand in the translator's
