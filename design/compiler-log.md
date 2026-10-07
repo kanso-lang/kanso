@@ -22385,6 +22385,11 @@ tag-tested path, where an operand may already be a bignum, read
 1,187,675,909 to the instruction: the decoder never reaches that path in a
 twin.
 
+CI read the same runbench delta to the instruction, 1,211,249,119 ->
+1,187,675,072. Over the corpus, escapebench fell 12.98% and jsonbench 1.67%;
+`work_scanbench` rose 49, 281,579 -> 281,628. Why has not been isolated. `codegen_instructions_release` fell 6,772,551 (-1.345%),
+because clang compiles smaller twins.
+
 `tests/golden/micro/a_twin_starts_over_when_a_sum_leaves_the_word.kso` crosses
 2^63 inside a twin before anything is written; with the bail branch never
 taken it printed -9223372036854775807. `a_twin_that_has_pushed_does_not_start_over.kso`
@@ -22396,7 +22401,7 @@ and lines 49,399 -> 48,976), and `compile_golden`'s `recursion` sample writes
 358 lines where it wrote 381. Machine code falls on six benchmarks and rises on
 five, by up to 7,088 bytes, where a twin small enough to inline now goes into
 more than one caller. The emitter pays to watch the lines a twin writes:
-`emit_instructions` rises 14,903 (+0.048%). The tab has no twins, and the scan
+`emit_instructions` rises 14,903 (+0.048%), 30,865,650 -> 30,880,553. The tab has no twins, and the scan
 runs only in one, but moving it out of `FnEmit::line` still left
 `browser_compile_instructions` 135,811 higher (632,344,041 -> 632,479,852).
 With the scan written inside `line` the row read 634,030,395. What the
