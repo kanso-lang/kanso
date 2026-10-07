@@ -23358,7 +23358,10 @@ Measured in this container with clang 19, against the unswitched link:
     encodebench 2,382,770,548 -> 2,384,337,036  +1,566,488  (+0.066%)
 
 oneshot falls 29,368, basket 30,471 and livebench 150,834; scanbench rises 29;
-indexbench and readbench are unchanged. Summed over the fourteen programs,
+indexbench and readbench are unchanged. In the goldens, `work_encodebench`
+lands on 2,384,337,369 and `work_scanbench` on 281,713, and
+`codegen_instructions_release` on 457,625,228, each a rise the runbench fall
+pays for. Summed over the fourteen programs,
 `text` falls 5,810 bytes to 4,598,766; runbench's `.text` shrinks 2,943 bytes
 and digestbench's 2,383.
 
