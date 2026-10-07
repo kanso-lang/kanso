@@ -22470,3 +22470,101 @@ remaining 135,811 is has not been isolated.
 kanso#1781 landed first. Over it, `emit_instructions` reads 30,862,078 ->
 30,876,981 and `browser_compile_instructions` 632,207,457 -> 632,343,268, the
 same two deltas to the instruction.
+
+
+## 2026-10-07 — what is left of the bignum's cost, sized
+
+After kanso#1782, runbench reads 1,187,675,909 in this container. Removing
+bignums from inference altogether reads 1,147,931,452, so 39.7M of the cost
+remains, and the function-level diff puts nearly all of it in inlining:
+`json/obj_key_end` stops folding into `json/obj_key_start`, `escape/filled`
+into `runbench/tally`, `json/escape_at` and `json/esc_byte` into
+`json/escape_onto`, and `json/str_run` and `json/str_escape` into
+`json/str_char`.
+
+Three probes, none built:
+
+- Letting a sum in a body with no twin die on overflow, which no correct
+  build may do, bounds what those bodies' bignum merges cost: 7.7M (0.65%).
+- Writing a twin's bail as a plain call instead of a `musttail` read
+  1,187,675,524, the same within 385. A `musttail` into another function
+  blocks inlining into a call that is not itself a tail call, and that was the
+  suspicion; the twins were not being refused for that reason.
+- Writing the twin's call-site dispatch into the general body as a plain call
+  as well read 1,188,297,351, 621,442 worse.
+
+So the gap sits in those four folds, and none of the three probes moved it.
+What stops each call from folding has not been isolated.
+
+## 2026-10-07 — the linear pass reads children in place
+
+`child_exprs` in src/linear.rs answered every walk in the file with a `Vec` of
+the node's children, built and freed once per node per visit. The fixpoint
+walks the tree once per parameter per round, and `child_exprs` alone was
+7,611,398 instructions inclusive of the tab's compile of `bench/interp_corpus`.
+It now returns an iterator over the tree in place, and the callers are
+unchanged.
+
+Measured natively on the tab's compile of `bench/interp_corpus`, the probe
+used for kanso#1781: 202,484,134 -> 192,726,638 instructions, -9,757,496
+(-4.82%), with 18,130 fewer calls to the allocator (181,584 -> 163,454).
+`linear::for_the_emitter` went from 21,345,239 to 11,733,780 inclusive.
+
+## 2026-10-07 — the tab's compile holds a third less
+
+The tab's compile is priced by the most it holds at once. On
+`bench/interp_corpus`, measured natively with a counting allocator, that was
+2,988,848 bytes, and massif put the peak inside `ir_wasm::translate`, which
+parsed the whole retargeted module into instructions before lowering any of
+it: 1,347,264 bytes of the peak were the functions' instruction vectors.
+
+The translation's first pass now reads only what lowering any one function
+can need: the named types, the globals, the declares, and each definition's
+name and signature. It keeps each body as a slice of the text, found by
+stepping from one `}` to the next and testing only those lines for the
+closing brace, since every closing line holds one and few other lines do.
+`translate` parses a body when its turn comes, lowers it and drops it. That
+took the peak to 2,500,014, inside `emit_ir_dev`.
+
+The emitter's peak was three copies of the module text alive together.
+`self.body` was kept to the end of `emit` though nothing read it after the
+prune, and had grown by doubling to 557,056 bytes of capacity. The pruned
+copy lived on under the `Cow` that `paired_appends` returned, because the
+binding it shadowed still owned it. And `ir_defines` copied every block into a
+`String` of its own for the prune to read. Now the body is taken out of the
+emitter, `ir_defines` returns slices of it, the prune moves the blocks it keeps
+down inside the body's own buffer, and the pruned text goes as soon as the
+paired appends have rewritten it.
+
+| step | native peak (bytes) |
+|---|---|
+| main | 2,988,848 |
+| one function lowered at a time | 2,500,014 |
+| `self.body` and the pruned text let go | 2,129,667 |
+| blocks as slices | 1,750,128 |
+| prune in place | 1,695,150 |
+
+The peak is now the last copy in `emit`, where the narrowed body is written
+behind the declarations while the unnarrowed one is still alive. Removing it
+means writing the declarations after the body, which every IR golden would
+see.
+
+The first version of the per-function translation found each body's end by
+reading every line twice and cost 2.8M instructions on the same compile.
+Stepping from brace to brace brought that to about 1.2M, for a second
+tokenisation of each `define` line and an allocation per function. With the
+change below, the whole compile reads 193,037,622 instructions natively
+against 202,484,134 on main.
+
+Rows, in this container on each golden's own glibc and rustc, where main reads
+its goldens: emit_instructions 30,876,981 -> 28,879,749 (-6.47%),
+compile_instructions 26,191,422 -> 26,151,558, entry_instructions
+86,403,005 -> 86,272,729, library_instructions 86,947,537 -> 86,818,080. The
+last three come from `kanso check`, which runs none of the changed code; they
+moved with the change and what moved them is not isolated. The browser rows,
+from the same rustc that builds `docs/kanso.wasm`: browser_compile_instructions
+632,343,268 -> 604,663,295 (-4.38%), browser_compile_peak_bytes 2,164,044 ->
+1,495,678 (-30.9%). The emitted IR is unchanged: every runtime vein and the
+emitted and machine-code gates agree. The two codegen rows read 126,344,437 and
+496,054,428 here on main as well as on this branch, so their disagreement with
+the goldens is this host's, and they are left as CI measured them.

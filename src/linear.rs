@@ -1084,44 +1084,64 @@ fn count_in_expr(var: &str, e: &Expr) -> usize {
     here + child_exprs(e).into_iter().map(|c| count_in_expr(var, c)).sum::<usize>()
 }
 
-fn child_exprs(e: &Expr) -> Vec<&Expr> {
+fn child_exprs(e: &Expr) -> Kids<'_> {
     match e {
-        Expr::Partial(..) => Vec::new(),
-        Expr::Field { base, .. } => vec![base.as_ref()],
-        Expr::Upcast { expr, .. } => vec![expr.as_ref()],
-        Expr::Block(stmts, _) | Expr::Build(stmts, _) => stmts
-            .iter()
-            .map(|st| match st {
-                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expr,
-            })
-            .collect(),
-        Expr::App { head, args, .. } => {
-            let mut v: Vec<&Expr> = vec![head.as_ref()];
-            v.extend(args.iter());
-            v
+        Expr::Field { base: x, .. } | Expr::Upcast { expr: x, .. } | Expr::Lambda { body: x, .. } => {
+            Kids::Two(Some(x), None)
         }
-        Expr::Index { base, index, .. } => vec![base.as_ref(), index.as_ref()],
-        Expr::BinOp { lhs, rhs, .. } | Expr::Join { lhs, rhs, .. } => {
-            vec![lhs.as_ref(), rhs.as_ref()]
+        Expr::Index { base: a, index: b, .. }
+        | Expr::BinOp { lhs: a, rhs: b, .. }
+        | Expr::Join { lhs: a, rhs: b, .. } => Kids::Two(Some(a), Some(b)),
+        Expr::Block(stmts, _) | Expr::Build(stmts, _) => Kids::Stmts(stmts.iter()),
+        Expr::App { head, args, .. } => Kids::Head(Some(head), args.iter()),
+        Expr::Guard { cond, early, rest, .. } => Kids::Guard(Some(cond), Some(early), rest.iter()),
+        Expr::List(items, _) => Kids::Exprs(items.iter()),
+        Expr::MapLit(pairs, _) => Kids::Pairs(None, pairs.iter()),
+        Expr::Str(parts, _) => Kids::Parts(parts.iter()),
+        Expr::Partial(..) | Expr::Int(..) | Expr::Float(..) | Expr::Ident(..) | Expr::Hole(..) => {
+            Kids::Two(None, None)
         }
-        Expr::Guard { cond, early, rest, .. } => {
-            let mut v: Vec<&Expr> = vec![cond.as_ref(), early.as_ref()];
-            v.extend(rest.iter().map(|s| match s {
-                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expr,
-            }));
-            v
-        }
-        Expr::Lambda { body, .. } => vec![body.as_ref()],
-        Expr::List(items, _) => items.iter().collect(),
-        Expr::MapLit(pairs, _) => pairs.iter().flat_map(|(k, v)| [k, v]).collect(),
-        Expr::Str(parts, _) => parts
-            .iter()
-            .filter_map(|p| match p {
+    }
+}
+
+/// The direct children of an expression, in evaluation order. The walks in
+/// this file ask for them once per node per fixpoint round, so they come from
+/// the tree in place rather than through a list built for each node.
+enum Kids<'a> {
+    Two(Option<&'a Expr>, Option<&'a Expr>),
+    Head(Option<&'a Expr>, std::slice::Iter<'a, Expr>),
+    Guard(Option<&'a Expr>, Option<&'a Expr>, std::slice::Iter<'a, Stmt>),
+    Stmts(std::slice::Iter<'a, Stmt>),
+    Exprs(std::slice::Iter<'a, Expr>),
+    Pairs(Option<&'a Expr>, std::slice::Iter<'a, (Expr, Expr)>),
+    Parts(std::slice::Iter<'a, crate::ast::TemplatePart>),
+}
+
+fn stmt_expr(st: &Stmt) -> &Expr {
+    match st {
+        Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expr,
+    }
+}
+
+impl<'a> Iterator for Kids<'a> {
+    type Item = &'a Expr;
+    fn next(&mut self) -> Option<&'a Expr> {
+        match self {
+            Kids::Two(a, b) => a.take().or_else(|| b.take()),
+            Kids::Head(h, rest) => h.take().or_else(|| rest.next()),
+            Kids::Guard(c, e, rest) => c.take().or_else(|| e.take()).or_else(|| rest.next().map(stmt_expr)),
+            Kids::Stmts(rest) => rest.next().map(stmt_expr),
+            Kids::Exprs(rest) => rest.next(),
+            Kids::Pairs(v, rest) => v.take().or_else(|| {
+                let (k, val) = rest.next()?;
+                *v = Some(val);
+                Some(k)
+            }),
+            Kids::Parts(rest) => rest.find_map(|p| match p {
                 crate::ast::TemplatePart::Interp(x) => Some(x),
                 crate::ast::TemplatePart::Lit(_) => None,
-            })
-            .collect(),
-        Expr::Int(..) | Expr::Float(..) | Expr::Ident(..) | Expr::Hole(..) => vec![],
+            }),
+        }
     }
 }
 

@@ -353,4 +353,11 @@
 # before it has written anything. The emitter watches each line a twin writes
 # for a store or a call. Over kanso#1781: emit_instructions 30,862,078 ->
 # 30,876,981, a RISE of 14,903 (+0.0483%), held for the run it buys.
-emit_instructions=30876981
+#
+# 2026-10-07: the linear pass reads children in place, the wasm translation
+# lowers one function at a time, and the emitter prunes its body inside its
+# own buffer. `emit_ir` runs the linear pass and the prune; main reads
+# its own golden in this container. Measured in this container on the
+# golden's own glibc and rustc: emit_instructions 30,876,981 -> 28,879,749, a FALL of
+# 1,997,232 (-6.4684%). CI's reading replaces it if it differs.
+emit_instructions=28879749

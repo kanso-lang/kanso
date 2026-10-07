@@ -3289,8 +3289,12 @@ impl FnEmit {
 /// pointer lives in a module global rather than in any function body, so the
 /// wrapper is named by the cell rather than by a call, and a site that loads
 /// the cell is what keeps it.
-fn prune_unnamed(body: &str, entry: &str, cells: &[(String, String, usize)]) -> String {
-    let blocks = ir_defines(body);
+///
+/// The blocks kept are moved down inside the body's own buffer rather than
+/// gathered into a new one: they are runs of the body in order, and a second
+/// buffer the size of what survives sat at the tab's high-water mark.
+fn prune_unnamed(body: String, entry: &str, cells: &[(String, String, usize)]) -> String {
+    let blocks = ir_defines(&body);
     let mut alive = vec![false; blocks.len()];
     {
         // Every name this prune will ever ask about: one per block, plus the
@@ -3298,7 +3302,7 @@ fn prune_unnamed(body: &str, entry: &str, cells: &[(String, String, usize)]) -> 
         // nothing asks about costs nothing to walk past.
         let queries: crate::hash::Set<&str> = blocks
             .iter()
-            .map(|(sym, _)| sym.as_str())
+            .map(|(sym, _)| *sym)
             .chain(cells.iter().map(|(cell, _, _)| cell.as_str()))
             .filter(|sym| !sym.is_empty())
             .collect();
@@ -3332,7 +3336,7 @@ fn prune_unnamed(body: &str, entry: &str, cells: &[(String, String, usize)]) -> 
             .iter()
             .enumerate()
             .filter(|(_, (sym, _))| !sym.is_empty())
-            .map(|(at, (sym, _))| (sym.as_str(), at))
+            .map(|(at, (sym, _))| (*sym, at))
             .collect();
         let wrapped: crate::hash::Map<&str, &str> =
             cells.iter().map(|(cell, w, _)| (cell.as_str(), w.as_str())).collect();
@@ -3342,8 +3346,8 @@ fn prune_unnamed(body: &str, entry: &str, cells: &[(String, String, usize)]) -> 
             .filter(|(_, (sym, _))| {
                 // The runtime calls the thunk dispatcher itself, from
                 // `k_force`, so no emitted line names it.
-                sym == entry
-                    || sym == "d_thunk_eval"
+                *sym == entry
+                    || *sym == "d_thunk_eval"
                     || !(sym.starts_with("d_")
                         || sym.starts_with("w_")
                         || sym.starts_with("klam")
@@ -3371,7 +3375,26 @@ fn prune_unnamed(body: &str, entry: &str, cells: &[(String, String, usize)]) -> 
             }
         }
     }
-    blocks.into_iter().zip(alive).filter(|(_, alive)| *alive).map(|((_, text), _)| text).collect()
+    let kept: Vec<std::ops::Range<usize>> = blocks
+        .iter()
+        .zip(alive)
+        .filter(|(_, alive)| *alive)
+        .map(|((_, text), _)| {
+            let at = text.as_ptr() as usize - body.as_ptr() as usize;
+            at..at + text.len()
+        })
+        .collect();
+    drop(blocks);
+    let mut bytes = body.into_bytes();
+    let mut to = 0;
+    for run in kept {
+        let len = run.len();
+        bytes.copy_within(run, to);
+        to += len;
+    }
+    bytes.truncate(to);
+    bytes.shrink_to_fit();
+    String::from_utf8(bytes).expect("every block ends at a line break")
 }
 
 /// Whether `queries_named` can tokenise this symbol, which is to say whether
@@ -4409,7 +4432,7 @@ mod the_prune_agrees_with_the_search {
 
     fn agree_on(body: &str, entry: &str, cells: &[(String, String, usize)]) {
         assert_eq!(
-            prune_unnamed(body, entry, cells),
+            prune_unnamed(body.to_string(), entry, cells),
             by_search(body, entry, cells),
             "the index and the search kept different blocks"
         );
@@ -4426,7 +4449,7 @@ mod the_prune_agrees_with_the_search {
             define("d_c", "  ret %KValue zeroinitializer"),
         ]
         .concat();
-        assert!(!prune_unnamed(&body, "d_entry", &[]).contains("@d_c("));
+        assert!(!prune_unnamed(body.clone(), "d_entry", &[]).contains("@d_c("));
         agree_on(&body, "d_entry", &[]);
     }
 
@@ -4442,7 +4465,7 @@ mod the_prune_agrees_with_the_search {
             define("d_pick", "  %x = call %KValue @d_merge()\n  ret %KValue %x"),
         ]
         .concat();
-        let kept = prune_unnamed(&body, "d_entry", &[]);
+        let kept = prune_unnamed(body.clone(), "d_entry", &[]);
         assert!(kept.contains("@d_kept("), "the named block was pruned");
         assert!(!kept.contains("@d_merge("), "a cycle nothing reaches was kept");
         assert!(!kept.contains("@d_pick("), "a cycle nothing reaches was kept");
@@ -4459,7 +4482,7 @@ mod the_prune_agrees_with_the_search {
             define("w_klam17", "  ret %KValue zeroinitializer"),
         ]
         .concat();
-        let kept = prune_unnamed(&body, "d_entry", &[]);
+        let kept = prune_unnamed(body.clone(), "d_entry", &[]);
         assert!(kept.contains("@w_klam17("), "the named wrapper was pruned");
         assert!(!kept.contains("define %KValue @w_klam1()"), "the unnamed wrapper was kept");
         agree_on(&body, "d_entry", &[]);
@@ -4476,7 +4499,7 @@ mod the_prune_agrees_with_the_search {
             define("\"d_sub/2\"", "  ret %KValue zeroinitializer"),
         ]
         .concat();
-        let kept = prune_unnamed(&body, "d_entry", &[]);
+        let kept = prune_unnamed(body.clone(), "d_entry", &[]);
         assert!(kept.contains("@\"d_add/2\"("), "the named quoted block was pruned");
         assert!(!kept.contains("@\"d_sub/2\"()"), "the unnamed quoted block was kept");
         agree_on(&body, "d_entry", &[]);
@@ -4497,7 +4520,7 @@ mod the_prune_agrees_with_the_search {
             define("klam5", "  ret %KValue zeroinitializer"),
         ]
         .concat();
-        let kept = prune_unnamed(&body, "d_entry", &[]);
+        let kept = prune_unnamed(body.clone(), "d_entry", &[]);
         assert!(kept.contains("define %KValue @klam5("), "the lambda a closure names was pruned");
         assert!(!kept.contains("define %KValue @klam3("), "the lambda nothing reaches was kept");
         agree_on(&body, "d_entry", &[]);
@@ -4514,7 +4537,7 @@ mod the_prune_agrees_with_the_search {
         ]
         .concat();
         let cells = [("k_clo_7".to_string(), "w_klam3".to_string(), 1usize)];
-        let kept = prune_unnamed(&body, "d_entry", &cells);
+        let kept = prune_unnamed(body.clone(), "d_entry", &cells);
         assert!(kept.contains("@w_klam3("), "the wrapper its cell names was pruned");
         assert!(!kept.contains("@w_klam4("), "the wrapper nothing names was kept");
         agree_on(&body, "d_entry", &cells);
@@ -4534,7 +4557,7 @@ mod the_prune_agrees_with_the_search {
             define("d_foo.baz", "  ret %KValue zeroinitializer"),
         ]
         .concat();
-        let kept = prune_unnamed(&body, "d_entry", &[]);
+        let kept = prune_unnamed(body.clone(), "d_entry", &[]);
         assert!(kept.contains("@d_foo.bar("), "the named odd block was pruned");
         assert!(!kept.contains("@d_foo.baz("), "the unnamed odd block was kept");
         agree_on(&body, "d_entry", &[]);
@@ -4561,32 +4584,36 @@ mod the_prune_agrees_with_the_search {
 /// runs from its header to the closing brace on its own line and carries its
 /// symbol; everything between definitions — globals the fnref statics live in
 /// among them — is a segment with no symbol, which the prune never touches.
-fn ir_defines(body: &str) -> Vec<(String, String)> {
-    let mut out: Vec<(String, String)> = Vec::new();
-    let mut sym = String::new();
-    let mut text = String::new();
+fn ir_defines(body: &str) -> Vec<(&str, &str)> {
+    // Every block is a run of whole lines, so it is a slice of the body
+    // rather than a copy: the prune that reads these runs at the emitter's
+    // high-water mark, beside the body it splits.
+    let mut out: Vec<(&str, &str)> = Vec::new();
+    let mut sym = "";
+    let mut from = 0;
+    let mut at = 0;
     let mut inside = false;
     for line in body.split_inclusive('\n') {
         if !inside && line.starts_with("define ") {
-            if !text.is_empty() {
-                out.push((String::new(), std::mem::take(&mut text)));
+            if at > from {
+                out.push(("", &body[from..at]));
+                from = at;
             }
             inside = true;
             sym = line
                 .find('@')
-                .and_then(|at| {
-                    line[at + 1..].find('(').map(|p| line[at + 1..at + 1 + p].to_string())
-                })
+                .and_then(|a| line[a + 1..].find('(').map(|p| &line[a + 1..a + 1 + p]))
                 .unwrap_or_default();
         }
-        text.push_str(line);
+        at += line.len();
         if inside && line.trim_end() == "}" {
-            out.push((std::mem::take(&mut sym), std::mem::take(&mut text)));
+            out.push((std::mem::take(&mut sym), &body[from..at]));
+            from = at;
             inside = false;
         }
     }
-    if !text.is_empty() {
-        out.push((String::new(), text));
+    if at > from {
+        out.push(("", &body[from..at]));
     }
     out
 }
@@ -6269,11 +6296,20 @@ impl<'a> Backend<'a> {
         // Only a program with an entry has a place for the walk to start. A
         // library's surface is its callers' business, and every definition in
         // it is reachable from outside the module the emitter can see.
-        let body = match self.program.fns.iter().any(|d| d.name == crate::ast::ENTRY) {
-            true => prune_unnamed(&self.body, &dsym(crate::ast::ENTRY, 0), &self.closure_consts),
-            false => self.body.clone(),
+        // The body is taken rather than copied, pruned in its own buffer, and
+        // let go once the paired appends have rewritten it. Kept to the end,
+        // `self.body` and the pruned copy sat under the tail below, which is
+        // the tab's high-water mark.
+        let written = std::mem::take(&mut self.body);
+        let pruned = match self.program.fns.iter().any(|d| d.name == crate::ast::ENTRY) {
+            true => prune_unnamed(written, &dsym(crate::ast::ENTRY, 0), &self.closure_consts),
+            false => written,
         };
-        let body = paired_appends(&body);
+        let rewritten = match paired_appends(&pruned) {
+            std::borrow::Cow::Owned(text) => Some(text),
+            std::borrow::Cow::Borrowed(_) => None,
+        };
+        let body = rewritten.unwrap_or(pruned);
         // One inline dispatcher per arity the program actually writes. An
         // unused `internal` definition costs nothing after optimization, but
         // it does cost a line, a define and a branch in the emitted golden —

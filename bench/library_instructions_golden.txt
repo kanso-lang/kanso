@@ -1112,7 +1112,16 @@
 # CI measured the carrier at e63ff428, the literal divisor's settled fixpoint
 # among what it carries: library_instructions 85,855,270 -> 85,850,050, a FALL
 # of 5,220 (-0.0061%).
-library_instructions=86947537
+#
+# 2026-10-07: the linear pass reads children in place, the wasm translation
+# lowers one function at a time, and the emitter prunes its body inside its
+# own buffer. `kanso check` stops before codegen and runs none of the
+# changed code; the row moved with the change, and what moved it is not
+# isolated. Main reads its own golden in this container, so the move is
+# the change's. Measured in this container on the
+# golden's own glibc and rustc: library_instructions 86,947,537 -> 86,818,080, a FALL of
+# 129,457 (-0.1489%). CI's reading replaces it if it differs.
+library_instructions=86818080
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.
