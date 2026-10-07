@@ -22332,7 +22332,39 @@ native IR once it is retargeted. Natively the peak read 3,785,556 and then
 In the tab, built by the rustc the golden names: `browser_compile_peak_bytes`
 2,665,939 -> 2,369,806 (-296,133, -11.1%), and
 `browser_compile_instructions` 636,739,574 -> 636,631,519 (-108,055), the
-frees moving earlier. The run rows read the same. The peak is now within a
-few percent of what `emit_ir_dev` holds on its own, so the next cut there is
-in the emitter or in a translation that does not parse the whole module
-before writing any of it.
+frees moving earlier. The run rows read the same. CI read the same two
+figures.
+
+In the tab the peak then sat in the emitter, which pointer width explains: the
+translation's parsed instructions are 144 bytes each natively and much
+smaller in wasm32, while the emitter's text costs the same bytes in both. Its
+last step copied the module three times with each copy alive beside the
+next: the body into `out`, which grew by doubling; `out` into the narrowed
+text; and that into a fresh string behind the declarations. `out` is now
+sized before the body goes in, the body is dropped once copied, and the
+narrowing writes behind the declarations in its own buffer
+(`narrowed_after`). The module is byte for byte what it was, by sha256 on
+`bench/interp_corpus` and by `scripts/gates/emitted_code.sh` on every
+benchmark. Natively the emitter's high-water mark fell from 2,705,776 to
+2,500,014. In the tab, `browser_compile_peak_bytes` fell again, 2,369,806 ->
+2,164,044, by the same 205,762, and `browser_compile_instructions` read
+636,625,521. `emit_instructions` fell 3,572.
+
+## 2026-10-07 — a two-way callee table, measured and declined
+
+kanso#1780 raised `interp_instructions` by 104,120. The rise was all in
+`Interp::callee_missed`: the interpreter's direct-mapped table of recent
+callees is keyed by the low sixteen bits of a name's address. With 304 fewer
+allocations before the run, two hot names came to share a slot and missed
+5,359 times. A second way per set would have kept both names, so the table was
+tried as 512 sets of two, with its 1,024 entries unchanged. All three
+versions cost more than the direct-mapped table on main's tree, which reads
+590,482,748:
+
+    both ways checked on every lookup               593,242,057  (+2,759,309)
+    second way checked on a miss, then swapped      590,799,462    (+316,714)
+    second way checked on a miss, no swap           591,394,104    (+911,356)
+
+The first puts about three instructions on each of a million hits. The other
+two keep the hit path as it was, but halving the number of sets adds more
+collisions than the second way removes. The table stays direct-mapped.
