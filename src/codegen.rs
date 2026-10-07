@@ -4413,14 +4413,21 @@ fn called_symbols(text: &str) -> crate::hash::Set<&str> {
 /// `kanso build bench/runbench` 209 million instructions, turning a fall into
 /// a rise.
 fn symbols_before_newline(text: &str) -> crate::hash::Set<&str> {
+    // One walk over the bytes, holding the last `@` since the line began. A
+    // search for each newline and then for the `@` before it was two calls a
+    // line, 42,784 lines in the tab's compile of its corpus.
     let mut found = crate::hash::Set::default();
-    let mut start = 0;
-    for (newline, _) in text.match_indices('\n') {
-        let line = &text[start..newline];
-        if let Some(at) = line.rfind('@') {
-            found.insert(&line[at + 1..]);
+    let mut last_at = None;
+    for (i, &b) in text.as_bytes().iter().enumerate() {
+        match b {
+            b'@' => last_at = Some(i),
+            b'\n' => {
+                if let Some(at) = last_at.take() {
+                    found.insert(&text[at + 1..i]);
+                }
+            }
+            _ => {}
         }
-        start = newline + 1;
     }
     found
 }
@@ -11610,6 +11617,42 @@ fn ir_bytes(bytes: &[u8]) -> String {
 /// program's start-up. The anchor byte is found by memchr, and the needle is
 /// compared where one lands. Pick `at` so the anchor is rare in the emitter's
 /// lines.
+/// The lines of `text` that hold `needle`, each once and in order, as byte
+/// ranges without the newline. The same lines `text.lines()` filtered by
+/// `contains(needle)` would give, for text with no carriage returns, which
+/// emitted IR never has.
+fn lines_holding<'a>(text: &'a str, needle: &'a str) -> impl Iterator<Item = (usize, usize)> + 'a {
+    let mut past = 0;
+    text.match_indices(needle).filter_map(move |(at, _)| {
+        if at < past {
+            return None;
+        }
+        let start = text[..at].rfind('\n').map_or(0, |n| n + 1);
+        let end = text[at..].find('\n').map_or(text.len(), |n| at + n);
+        past = end;
+        Some((start, end))
+    })
+}
+
+/// Two ascending runs of line ranges as one, a line in both given once.
+fn merged_lines(
+    a: impl Iterator<Item = (usize, usize)>,
+    b: impl Iterator<Item = (usize, usize)>,
+) -> impl Iterator<Item = (usize, usize)> {
+    let mut a = a.peekable();
+    let mut b = b.peekable();
+    std::iter::from_fn(move || match (a.peek().copied(), b.peek().copied()) {
+        (Some(x), Some(y)) if x.0 == y.0 => {
+            a.next();
+            b.next()
+        }
+        (Some(x), Some(y)) if x.0 < y.0 => a.next(),
+        (Some(_), Some(_)) => b.next(),
+        (Some(_), None) => a.next(),
+        (None, _) => b.next(),
+    })
+}
+
 fn holds(line: &str, needle: &str, at: usize) -> bool {
     let anchor = needle.as_bytes()[at] as char;
     line.match_indices(anchor)
@@ -11638,14 +11681,25 @@ fn narrowed_in_place(text: String, from: usize) -> String {
     let mut keep: crate::hash::Set<String> = crate::hash::Set::default();
     let mut current: Option<String> = None;
     let mut tailcc_defines: Vec<&str> = Vec::new();
-    for line in ir.lines().filter(|line| code(line)) {
+    // The walks visit only the lines that hold the words they act on, found by
+    // searching the text for the words. On the tab's corpus 125 lines of 8,726
+    // are a `define` and 96 a musttail call, and the line-by-line walk this
+    // replaced was 3.9 million instructions of finding newlines.
+    let defines =
+        lines_holding(ir, "define ").filter(|&(start, _)| ir[start..].starts_with("define "));
+    let musttails = lines_holding(ir, "musttail call");
+    for (start, end) in merged_lines(defines, musttails) {
+        let line = &ir[start..end];
+        if !code(line) {
+            continue;
+        }
         if let Some(rest) = line.strip_prefix("define ") {
             current = symbol_of(rest);
             if rest.starts_with("tailcc ") {
                 tailcc_defines.push(line);
             }
         }
-        if holds(line, "musttail call", 0) {
+        if line.contains("musttail call") {
             // both ends of a musttail edge must agree on the convention
             if let Some(callee) = symbol_of(line) {
                 keep.insert(callee);
@@ -11699,10 +11753,11 @@ fn narrowed_in_place(text: String, from: usize) -> String {
     let mut rerouted: crate::hash::Set<String> = crate::hash::Set::default();
     // (start, end, replacement) for each line that changes, in order.
     let mut edits: Vec<(usize, usize, String)> = Vec::new();
-    for line in ir.lines() {
+    for (start, end) in lines_holding(ir, "tailcc ") {
         // Every rewrite below needs the word, so a line without it stands as
         // it is and its callee is never looked up.
-        if !code(line) || !holds(line, "tailcc ", 4) {
+        let line = &ir[start..end];
+        if !code(line) {
             continue;
         }
         let named = symbol_of(line);
@@ -11942,45 +11997,57 @@ pub const WASM32_LINES: [(&str, &str); 6] = [
 /// opening with `@` is a global, and a string constant's bytes are the
 /// program's.
 pub fn retarget_wasm32(module: &str) -> String {
-    let mut out = String::with_capacity(module.len());
-    for line in module.lines() {
+    // The edits are found by searching the module for the words they act on
+    // and written between copies of everything else. A pass that visited
+    // every line, and searched each one for `cc `, was 6.2 million of the tab
+    // compile's 168 million instructions natively, for a few hundred edits in
+    // 8,726 lines.
+    let line_of = |at: usize| {
+        let start = module[..at].rfind('\n').map_or(0, |n| n + 1);
+        let end = module[at..].find('\n').map_or(module.len(), |n| at + n);
+        (start, end)
+    };
+    let mut edits: Vec<(usize, usize, &str)> = Vec::new();
+    for (start, end) in lines_holding(module, "target ") {
+        let line = &module[start..end];
         if line.starts_with("target datalayout") {
+            edits.push((start, (end + 1).min(module.len()), ""));
+        } else if line.starts_with("target triple") {
+            edits.push((start, end, "target triple = \"wasm32-unknown-wasi\""));
+        }
+    }
+    for (at, _) in module.match_indices("cc ") {
+        let Some(cc) =
+            ["preserve_nonecc ", "tailcc "].iter().find(|cc| module[..at + 3].ends_with(*cc))
+        else {
+            continue;
+        };
+        if module[line_of(at).0..].starts_with('@') {
             continue;
         }
-        if line.starts_with("target triple") {
-            out.push_str("target triple = \"wasm32-unknown-wasi\"\n");
-            continue;
-        }
+        edits.push((at + 3 - cc.len(), at + 3, ""));
+    }
+    for (start, end) in lines_holding(module, " = getelementptr i8, ptr %") {
+        let line = &module[start..end];
         if line.starts_with('@') {
-            out.push_str(line);
-            out.push('\n');
             continue;
         }
         let body = line.trim_start();
-        match WASM32_LINES.iter().find(|(native, _)| *native == body) {
-            Some((_, wasm)) => {
-                out.push_str(&line[..line.len() - body.len()]);
-                out.push_str(wasm);
-            }
-            None => without_conventions(line, &mut out),
+        if let Some((_, wasm)) = WASM32_LINES.iter().find(|(native, _)| *native == body) {
+            edits.push((end - body.len(), end, wasm));
         }
+    }
+    edits.sort_unstable_by_key(|&(start, _, _)| start);
+    let mut out = String::with_capacity(module.len());
+    let mut kept = 0;
+    for (start, end, with) in edits {
+        out.push_str(&module[kept..start]);
+        out.push_str(with);
+        kept = end;
+    }
+    out.push_str(&module[kept..]);
+    if !out.is_empty() && !out.ends_with('\n') {
         out.push('\n');
     }
     out
-}
-
-/// `line` with every `tailcc ` and `preserve_nonecc ` taken out, appended to
-/// `out`. Most lines carry neither and are copied whole.
-fn without_conventions(line: &str, out: &mut String) {
-    let mut rest = line;
-    while let Some(at) = rest.find("cc ") {
-        let head = &rest[..at + 3];
-        let cut = ["preserve_nonecc ", "tailcc "].iter().find(|cc| head.ends_with(*cc));
-        match cut {
-            Some(cc) => out.push_str(&head[..head.len() - cc.len()]),
-            None => out.push_str(head),
-        }
-        rest = &rest[at + 3..];
-    }
-    out.push_str(rest);
 }
