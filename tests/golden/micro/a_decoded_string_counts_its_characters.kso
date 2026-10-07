@@ -1,0 +1,27 @@
+import "std/json"
+import "std/list"
+import "std/text"
+
+# A string the decoder unescapes is handed over as text without checking it
+# again, and the count `length` reads is taken from its bytes when it is
+# first asked. Each string here has an escape, so it takes the path that
+# builds the text a piece at a time: a run of the input, an ascii escape, a
+# `\u` code point, a surrogate pair. `chars` counts the same text one
+# character at a time, so each pair of numbers must agree.
+fn report (err _)
+  print "refused"
+
+fn report s
+  print "{length s} {length (text/chars s)} {length (text/bytes s)}"
+
+fn decoded doc
+  report (json/decode doc)
+
+ten = list/to_list (list/map [1 2 3 4 5 6 7 8 9 10] (_ -> "aé€😀"))
+
+pub play =
+  decoded "\"a\\nb\""
+  decoded "\"é\\t€\""
+  decoded "\"\\u00e9\\u20ac\""
+  decoded "\"\\ud83d\\ude00 😀 x\""
+  decoded "\"{text/join ten "\\n"}\""
