@@ -298,4 +298,10 @@
 #
 # CI measured kanso#1658 over the runtime without the token cache's dead copy:
 # codegen_instructions_dev 124,061,133 -> 124,061,141, a RISE of 8 (+0.0000%).
-codegen_instructions_dev=130522511
+#
+# 2026-10-07 (kanso#1779): the link searches one staged directory. ld.gold,
+# which read every directory it could search, reads the one the gate stages
+# and nothing else, under -nostdlib, so the row stops counting what the runner
+# image installed. CI's reading: codegen_instructions_dev 130,522,511 ->
+# 126,434,707, a FALL of 4,087,804 (-3.1319%).
+codegen_instructions_dev=126434707
