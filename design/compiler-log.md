@@ -23086,3 +23086,31 @@ The spec is `a_decoded_string_counts_its_characters`: five strings with
 escapes, from a single `\n` to a surrogate pair beside the character it
 spells, decoded and printed with `length` beside the count of `text/chars`.
 Seeding the byte length as the count makes four of the five disagree.
+
+## 2026-10-07 — a short text's character count leaves the vector block out
+
+kq's pin to kanso#1790 came back red on its instruction vein: print_small
++11,808, print_big +118,952, both paths +141. kq has its own JSON code and
+never calls `built_text`, so the encoder change could not reach it. Built
+with each compiler in this container, print_small moved by the same 11,808,
+and all of it, 12,284 instructions, was in `k_str_chars_scan`, the
+function `length` calls the first time it counts a string. kq makes 2,376
+such calls on strings that average eight bytes, and every one of them is
+under 64 bytes, so none reaches the sixteen-byte block #1790 added. The block
+cost them anyway: it put a length test ahead of the word loop, and the loop,
+entered after the block, began from a position the compiler could no longer
+treat as zero, so its setup took the general form on every call.
+
+`k_str_chars` now sends a string of 64 bytes or more to
+`k_str_chars_scan_wide`, which is the scan main had, and a shorter one to
+`k_str_chars_scan`, which runs the word loop and the byte tail alone. Two
+shapes were tried first and both cost kanso's own rows. Splitting inside
+`k_utf8_chars` gave the scan one more register to save and recovered 1,424
+of the 12,284. Testing the length inside a dispatching scan saved nine registers
+before the test and cost 52 instructions on each of livebench's 400 long
+scans. Leaving main's long scan as it was is what kept those rows still.
+
+kq's rows, in this container: print_small 25,536,074 before #1790,
+25,547,882 with it and 25,540,917 with this change; print_big 246,363,193,
+246,481,109 and 246,411,403. That recovers 59% of the rise. What remains is
+the length test `k_str_chars` now makes before it calls either scan.
