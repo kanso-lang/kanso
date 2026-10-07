@@ -23155,11 +23155,12 @@ The escape loop runs 36 instructions an element where it ran 40. One flag
 still costs a test each pass: `k * 31` does not change inside the loop and
 LLVM hoists the multiply, but its flag is still tested every time round.
 
-Measured in this container against main's own reading: runbench
-1,148,542,406 -> 1,142,362,645 (-0.538%), escapebench 50,294,739 ->
-45,294,773 (-9.94%), basket -12,000 and digestbench -6,305. jsonbench,
-deepbench, pendbench, widebench, livebench, readbench and indexbench are
-unchanged; encodebench and oneshot read +14 and scanbench +1.
+CI's rows: runbench 1,148,541,609 -> 1,142,361,822 (-6,179,787, -0.538%),
+escapebench 50,295,086 -> 45,295,106 (-9.94%), basket -12,000 and
+digestbench -6,319. The other benchmarks are unchanged but scanbench, +1.
+A release build of the codegen corpus costs 147,384 fewer instructions,
+`codegen_instructions_release` 496,579,856 -> 496,432,472, and the dev
+build is unchanged.
 
 Each branch adds a block, so the emitted counts rise: `emitted_branches`
 1,094 -> 1,101 and `emitted_lines` 10,111 -> 10,125 for the decoder,
@@ -23168,9 +23169,8 @@ Each branch adds a block, so the emitted counts rise: `emitted_branches`
 1,541 -> 1,545. Writing those blocks costs the emitter 146 instructions,
 `emit_instructions` 25,148,324 -> 25,148,470. The machine code is 48 bytes
 longer in all, `text` 4,604,144 -> 4,604,192, with basket and digestbench
-shorter and escapebench and runbench longer. `work_encodebench` lands on
-2,382,770,895, `work_oneshot` on 13,056,646 and `work_scanbench` on 281,721,
-+14, +14 and +1 for a layout that moved around code they do not run.
+shorter and escapebench and runbench longer. `work_scanbench` lands on 281,721,
+one instruction more, from a layout that moved around code it does not run.
 
 The spec is the micro golden that already crosses 2^63 at each step of a
 word run. It reaches the word run in the release build that
