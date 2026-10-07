@@ -23292,3 +23292,35 @@ yet bailed straight to the general body, where kanso#1793 had it re-run its
 operations on boxed values. Alone it took 359 instructions off runbench and
 20,010 off digestbench. With the unswitch pass, escapebench read 42,794,748
 against 41,544,768 without the bail, so the bail was dropped.
+
+## 2026-10-07 — the codegen rows count the clang the benchmarks use
+
+`codegen_instructions` and `emit_instructions` run `kanso build` under
+`env -i PATH=/usr/bin:/bin`, so that nothing in the job's environment reaches
+the count. That path finds `/usr/bin/clang`, which is clang 18 on CI's runner
+and in this container. The workflow installs clang 19 and links it at
+`/usr/local/bin/clang`, where every other build in the job finds it. So the
+release row counted a clang 18 link, and kanso uses its own LTO pipeline only
+under clang 19. The unswitch pass that took 0.422% off runbench left
+`codegen_instructions_release` at 496,432,472 on CI with the pass and without
+it, and its ld.lld read 294,982,591, the size of a clang 18 link here.
+
+The gates' fixed path is now `/usr/local/bin:/usr/bin:/bin`, the same in
+every run, and it finds clang 19. The codegen gate prints the clang the counted
+build runs and refuses to count when that is not the clang the job's own PATH
+finds. With the old path the refusal fires and names clang 18.
+
+In this container the rows read:
+
+    codegen_instructions_dev      118,871,022
+    codegen_instructions_release  449,011,647
+    emit_instructions              24,923,517
+
+The emit row moves with the clang because kanso probes clang for
+`preserve_none` before it emits (`preserve_none_probe`). Clang 18 rejects a
+`preserve_nonecc` function and clang 19 compiles it, so under clang 18 the
+gate counted the emitter writing a convention the release build never uses.
+
+This re-bases three welfare terms. Each baseline is scaled by its row's new
+reading over its old one on CI, so every ratio holds and the floor does not
+move for a change in what is measured.

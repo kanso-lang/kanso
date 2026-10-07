@@ -311,7 +311,7 @@ stage_and_warm() {
   # on which of the two the job happened to ask for first.
   for warm_flag in "" "--release"; do
     clear_output
-    ( cd "$box" && env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" KANSO_LTO_JOBS=1 KANSO_FIXED_TEMPS=1 KANSO_LINK_DIR="$box/link" \
+    ( cd "$box" && env -i PATH=/usr/local/bin:/usr/bin:/bin GLIBC_TUNABLES="$tune" KANSO_LTO_JOBS=1 KANSO_FIXED_TEMPS=1 KANSO_LINK_DIR="$box/link" \
         ./kanso build pkg/codegen_corpus $warm_flag >/dev/null 2>&1 )
   done
 }
@@ -320,14 +320,30 @@ stage_and_warm
 printf 'codegen_binary sha256=%s\n' "$(sha256sum "$box/kanso" | cut -d' ' -f1)"
 size --format=sysv "$box/kanso" \
   | awk '/^\.(text|rodata|data|bss)[ \t]/ { printf "codegen_binary %s=%s\n", $1, $2 }'
-printf 'codegen_clang %s\n' "$(clang --version | head -1)"
+# THE COUNTED BUILD FINDS CLANG ON ITS OWN PATH, AND THAT PATH MUST FIND THE
+# CLANG THE BENCHMARKS ARE BUILT WITH. Until 2026-10-07 it was
+# `/usr/bin:/bin`, and both CI's runner and the container keep clang 18 at
+# /usr/bin/clang while the clang 19 everything else uses sits at
+# /usr/local/bin/clang. kanso runs its own LTO pipeline only under clang 19, so
+# this row counted a link nothing ships: adding a pass to that pipeline moved
+# the benchmarks and left this row identical to the instruction. The line below
+# prints the clang the counted build runs, and the check after it refuses to
+# count when that is not the clang this job's PATH finds.
+gate_clang=$(env -i PATH=/usr/local/bin:/usr/bin:/bin clang --version | head -1)
+printf 'codegen_clang %s\n' "$gate_clang"
+if [ "$gate_clang" != "$(clang --version | head -1)" ]; then
+  echo "::error::the counted build would run $gate_clang, and this job builds"
+  echo "::error::with $(clang --version | head -1). The row would count a"
+  echo "::error::toolchain the benchmarks do not use."
+  exit 1
+fi
 
 
 rm -f /tmp/cg.codegen.$tier.*
 clear_output
 (
   cd "$box"
-  env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" KANSO_LTO_JOBS=1 KANSO_FIXED_TEMPS=1 KANSO_LINK_DIR="$box/link" valgrind --tool=callgrind \
+  env -i PATH=/usr/local/bin:/usr/bin:/bin GLIBC_TUNABLES="$tune" KANSO_LTO_JOBS=1 KANSO_FIXED_TEMPS=1 KANSO_LINK_DIR="$box/link" valgrind --tool=callgrind \
     --trace-children=yes --callgrind-out-file=/tmp/cg.codegen.$tier.%p \
     ./kanso build pkg/codegen_corpus $flag >/dev/null 2>/dev/null
 )
@@ -401,7 +417,7 @@ rm -f /tmp/cg.codegen.${tier}b.*
 clear_output
 (
   cd "$box"
-  env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" KANSO_LTO_JOBS=1 KANSO_FIXED_TEMPS=1 KANSO_LINK_DIR="$box/link" valgrind --tool=callgrind \
+  env -i PATH=/usr/local/bin:/usr/bin:/bin GLIBC_TUNABLES="$tune" KANSO_LTO_JOBS=1 KANSO_FIXED_TEMPS=1 KANSO_LINK_DIR="$box/link" valgrind --tool=callgrind \
     --trace-children=yes --callgrind-out-file=/tmp/cg.codegen.${tier}b.%p \
     ./kanso build pkg/codegen_corpus $flag >/dev/null 2>/dev/null
 )
