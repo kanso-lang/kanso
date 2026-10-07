@@ -2212,14 +2212,14 @@ fn arity_of_emitted(name: &str) -> Option<usize> {
 /// Groups that are pure builtin forwarders: one arm, plain-var params,
 /// body exactly `builtin_X p1 p2 ...` in order. Call sites bypass the
 /// dispatch hop and reach the builtin (and its inline twins) directly.
-fn forwarder_map(program: &Program) -> HashMap<(String, usize), String> {
-    let mut counts: HashMap<(String, usize), usize> = HashMap::default();
+fn forwarder_map(program: &Program) -> Forwarders {
+    let mut counts: HashMap<(&str, usize), usize> = HashMap::default();
     for d in &program.fns {
-        *counts.entry((d.name.clone(), d.params.len())).or_default() += 1;
+        *counts.entry((d.name.as_str(), d.params.len())).or_default() += 1;
     }
-    let mut out = HashMap::default();
+    let mut out = Forwarders::default();
     for d in &program.fns {
-        if counts[&(d.name.clone(), d.params.len())] != 1 || d.body.len() != 1 {
+        if counts[&(d.name.as_str(), d.params.len())] != 1 || d.body.len() != 1 {
             continue;
         }
         let params: Vec<&str> = d
@@ -2241,10 +2241,27 @@ fn forwarder_map(program: &Program) -> HashMap<(String, usize), String> {
         let all_forwarded = args.len() == params.len()
             && args.iter().zip(&params).all(|(a, p)| matches!(a, Expr::Ident(n, _, _) if n == p));
         if all_forwarded {
-            out.insert((d.name.clone(), d.params.len()), target.to_string());
+            out.0.entry(d.name.clone()).or_default().push((d.params.len(), target.to_string()));
         }
     }
     out
+}
+
+/// The forwarder groups, by name: each arity with the builtin it forwards to.
+/// Keyed by name alone so a question borrows the name it is asked with; the
+/// emitter asks about every call it writes.
+#[derive(Default)]
+struct Forwarders(HashMap<String, Vec<(usize, String)>>);
+
+impl Forwarders {
+    fn get(&self, name: &str, arity: usize) -> Option<&str> {
+        let arities = self.0.get(name)?;
+        arities.iter().find(|(a, _)| *a == arity).map(|(_, target)| target.as_str())
+    }
+
+    fn contains(&self, name: &str, arity: usize) -> bool {
+        self.get(name, arity).is_some()
+    }
 }
 
 /// The constants a constant can reach from its own body, following mentions
@@ -2957,7 +2974,7 @@ struct Backend<'a> {
     /// See `framed_views`: (group, arity, span of the `bytes` call).
     framed_views: crate::hash::Set<(String, usize, Span)>,
     inference: infer::Inference,
-    forwarders: HashMap<(String, usize), String>,
+    forwarders: Forwarders,
     /// subtype name -> parent name; non-empty programs get chain-aware
     /// dispatch checks, everyone else keeps the exact ones
     sub_parents: HashMap<String, String>,
@@ -3425,7 +3442,8 @@ impl FnEmit {
 
     fn start_block(&mut self, label: &str) {
         let _ = writeln!(self.out, "{label}:");
-        self.cur_label = label.to_string();
+        self.cur_label.clear();
+        self.cur_label.push_str(label);
         if let Some(e) = self.arms_effects {
             if label
                 .strip_prefix("arm")
@@ -3913,11 +3931,11 @@ fn kept_out(program: &Program) -> crate::hash::Set<&str> {
 /// call gives the frame back before the callee reads the header.
 fn framed_views(
     program: &Program,
-    forwarders: &HashMap<(String, usize), String>,
+    forwarders: &Forwarders,
 ) -> crate::hash::Set<(String, usize, Span)> {
     struct Cx<'a> {
         groups: &'a HashMap<(&'a str, usize), Vec<&'a FnDecl>>,
-        forwarders: &'a HashMap<(String, usize), String>,
+        forwarders: &'a Forwarders,
         safe: &'a crate::hash::Set<(String, usize, usize)>,
         locals: crate::hash::Set<String>,
     }
@@ -4017,7 +4035,7 @@ fn framed_views(
                 }
                 let n = args.len();
                 let local = cx.locals.contains(h);
-                let forwarded = cx.forwarders.get(&(h.to_string(), n)).map(String::as_str);
+                let forwarded = cx.forwarders.get(h, n);
                 let user = !local && forwarded.is_none() && cx.groups.contains_key(&(h, n));
                 let builtin = match (local, forwarded) {
                     (true, _) => None,
@@ -4068,8 +4086,8 @@ fn framed_views(
             if args.len() != 1 {
                 continue;
             }
-            let target = match forwarders.get(&(h.to_string(), 1)) {
-                Some(b) => b.as_str(),
+            let target = match forwarders.get(h, 1) {
+                Some(b) => b,
                 None if groups.contains_key(&(h.as_str(), 1)) => continue,
                 None => h.strip_prefix("builtin_").unwrap_or(h),
             };
@@ -4139,9 +4157,7 @@ fn framed_views(
         }
         crate::for_each_child(expr, |c| handed(c, x, locals, user, out));
     }
-    let user = |h: &str, n: usize| {
-        !forwarders.contains_key(&(h.to_string(), n)) && groups.contains_key(&(h, n))
-    };
+    let user = |h: &str, n: usize| !forwarders.contains(h, n) && groups.contains_key(&(h, n));
     let mut reached: crate::hash::Set<(String, usize, usize)> = crate::hash::Set::default();
     let mut work = Vec::new();
     for (d, i, x, _, _) in &candidates {
@@ -8890,8 +8906,8 @@ impl<'a> Backend<'a> {
         if let Expr::App { head, args, piped: false, .. } = expr {
             if let Expr::Ident(name, _, _) = head.as_ref() {
                 let bare = name.strip_prefix("builtin_").unwrap_or(name);
-                if self.forwarders.contains_key(&(bare.to_string(), args.len()))
-                    || self.forwarders.contains_key(&(name.to_string(), args.len()))
+                if self.forwarders.contains(bare, args.len())
+                    || self.forwarders.contains(name, args.len())
                 {
                     let value = self.emit_expr(f, expr)?;
                     self.emit_ret(f, &value);
@@ -10413,8 +10429,8 @@ impl<'a> Backend<'a> {
     /// `builtin_` prefix off, or whatever the forwarder map says a plain
     /// wrapper of this arity forwards to.
     fn builtin_named(&self, name: &str, arity: usize) -> String {
-        match self.forwarders.get(&(name.to_string(), arity)) {
-            Some(target) => target.clone(),
+        match self.forwarders.get(name, arity) {
+            Some(target) => target.to_string(),
             None => name.strip_prefix("builtin_").unwrap_or(name).to_string(),
         }
     }
@@ -11242,7 +11258,7 @@ impl<'a> Backend<'a> {
         // inline twins). The rename lives INSIDE this branch only — it must
         // never leak into user-group dispatch, whose per-site specialized
         // signatures the renamed identity would not match.
-        let forwarded = self.forwarders.get(&(name.to_string(), emitted.len())).cloned();
+        let forwarded = self.forwarders.get(name, emitted.len()).map(str::to_string);
         let name: &str = match &forwarded {
             Some(target) => target.as_str(),
             None => name,

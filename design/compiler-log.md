@@ -22826,25 +22826,37 @@ every call it read. Its set now borrows the names from the program. The answer
 it hands codegen was keyed the same way, `(name, arity)` and `(name, arity,
 parameter)`, and codegen asks it about every argument of every call it emits,
 so each question copied a name too; the answer is now keyed by name alone, with
-the arities and positions in a short list under it. And `dispatch::walk` built
-a vector of each node's children to visit them, where `for_each_child`, which
+the arities and positions in a short list under it. The table of groups that
+only forward to a builtin had the same key and the same questions, one per call
+the emitter writes, and takes the same shape. And `dispatch::walk` built a
+vector of each node's children to visit them, where `for_each_child`, which
 every other walker uses, hands them over one at a time.
 
+Three smaller copies went with them. The beat analysis's group index was keyed
+by copies of names, cloned for every declaration and for every tail call it
+read; it now borrows them. Its strongly-connected-components walk allocated a
+work stack per root, now one for the whole walk. And every block the emitter
+opened copied its label into a fresh string for `cur_label`, which now reuses
+its buffer.
+
 The module is byte-identical. browser_compile_instructions 573,888,797 ->
-538,776,015 (-6.12%): in the translator, the shared buffer took 6,303,396 of
+533,521,346 (-7.04%): in the translator, the shared buffer took 6,303,396 of
 that, the static names 138,361, the labels 1,165,172, the leaves and the error
 message 4,992,857, and the table the rest. Of the 18,539,904 the analyses took,
 putting back the old walk alone costs 3,563,531 and putting back the old answer
 alone 4,102,156; the borrowed set is the remainder, 10,874,217, read by
-difference rather than built alone. browser_compile_peak_bytes rose 826,348 ->
-828,524 with the answer's new shape. emit_instructions, which counts the native
-emitter and so both analyses, fell 27,259,671 -> 26,596,193 (-2.43%). Breaking
-`carries_ty` so that it ignores the parameter fails four golden tests. Before the static
-names and the labels, the translation went from 46.1 million instructions to
-43.1 million natively.
+difference rather than built alone. Then the forwarder table took 2,371,480,
+the beat index and work stack 1,203,537, and the label 1,679,652, each measured
+on top of the one before. browser_compile_peak_bytes rose 826,348 -> 829,363
+(+0.36%) with the two tables' new shape. emit_instructions, which counts the
+native emitter and so every analysis here, fell 27,259,671 -> 26,302,567
+(-3.51%). Breaking `carries_ty` so that it ignores the parameter fails four
+golden tests. Before the static names and the labels, the translation went from
+46.1 million instructions to 43.1 million natively.
 
 The rows on paths that run neither the translator nor the emitter moved with
-the binary's layout, read on this container: compile_instructions -741,
-entry_instructions -780, library_instructions -1,034 and interp_instructions
--10,308. The codegen rows did not move on CI, though this container read both
+the binary's layout, read on this container: compile_instructions -28,979,
+entry_instructions -95,866, library_instructions -96,153 and
+interp_instructions +28,432, to 585,730,487. The interpreter runs none of the
+code that changed. The codegen rows did not move on CI, though this container read both
 lower; CI's readings stand.

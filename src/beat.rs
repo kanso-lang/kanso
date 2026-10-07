@@ -615,16 +615,16 @@ fn eligible_clusters(
         v.sort();
         v
     };
-    let index: HashMap<&(String, usize), usize> =
-        groups.iter().enumerate().map(|(i, g)| (g, i)).collect();
+    let index: HashMap<(&str, usize), usize> =
+        groups.iter().enumerate().map(|(i, (name, arity))| ((name.as_str(), *arity), i)).collect();
     // tail edges: (caller group, callee group, decl index, args)
     let mut edges: Vec<(usize, usize, usize, &Vec<Expr>)> = Vec::new();
     for (di, decl) in program.fns.iter().enumerate() {
-        let from = index[&(decl.name.clone(), decl.params.len())];
+        let from = index[&(decl.name.as_str(), decl.params.len())];
         for tail in tail_exprs(decl.body.last()) {
             let Expr::App { head, args, piped: false, .. } = tail else { continue };
             let Expr::Ident(callee, _, _) = head.as_ref() else { continue };
-            if let Some(&to) = index.get(&(callee.to_string(), args.len())) {
+            if let Some(&to) = index.get(&(callee.as_str(), args.len())) {
                 edges.push((from, to, di, args));
             }
         }
@@ -857,12 +857,13 @@ pub(crate) fn sccs_of(adj: &[Vec<usize>]) -> Vec<Vec<usize>> {
     let mut stack = Vec::new();
     let mut counter = 0;
     let mut out = Vec::new();
+    // (node, next child position), emptied by each root's walk and reused
+    let mut work: Vec<(usize, usize)> = Vec::new();
     for root in 0..n {
         if index[root] != usize::MAX {
             continue;
         }
-        // (node, next child position)
-        let mut work = vec![(root, 0usize)];
+        work.push((root, 0));
         while let Some(&mut (v, ref mut ci)) = work.last_mut() {
             if *ci == 0 {
                 index[v] = counter;

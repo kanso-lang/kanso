@@ -1109,7 +1109,7 @@
 # isolated. Measured in this container, where the previous tree reads on the row:
 # 86,357,296 -> 86,458,591, a RISE of 101,295 (+0.1173%).
 # CI's reading replaces it if it differs.
-entry_instructions=86457811
+entry_instructions=86362725
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.
