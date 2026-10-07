@@ -9630,6 +9630,26 @@ static const char* k_lazy_hint(KValue v) {
    The word is read with memcpy so an unaligned load is the compiler's
    problem, and byte order does not matter — every byte is tested in place
    and the answer is a population count, which is order-blind. */
+/* The same count for a text shorter than 64 bytes, which the vector block
+   below never reaches. It is a function of its own so that the scan built on
+   it saves only the registers this loop needs; see k_str_chars_scan. */
+static inline __attribute__((always_inline)) long long k_utf8_chars_short(
+    const unsigned char* p, long long len) {
+    long long i = 0;
+    long long conts = 0;
+    for (; i + 8 <= len; i += 8) {
+        unsigned long long w;
+        memcpy(&w, p + i, sizeof w);
+        unsigned long long cont = w & ~(w << 1) & 0x8080808080808080ULL;
+        conts += __builtin_popcountll(cont);
+    }
+#if defined(__clang__)
+#pragma clang loop vectorize(disable) unroll(disable)
+#endif
+    for (; i < len; i++) conts += ((p[i] & 0xc0) == 0x80);
+    return len - conts;
+}
+
 static long long k_utf8_chars(const unsigned char* p, long long len) {
     long long i = 0;
     long long conts = 0;
@@ -9680,17 +9700,31 @@ static long long k_utf8_chars(const unsigned char* p, long long len) {
 
 /* The scan runs once per string and the callers that ask -- an index, a
    slice -- are the hot ones, so it saves the registers it touches and they
-   keep no frame for it. */
-static __attribute__((noinline, preserve_most)) long long k_str_chars_scan(KStr* s) {
+   keep no frame for it.
+
+   There are two, and `k_str_chars` picks by length. With the vector block in
+   the only scan, every call saved the block's registers and took the word
+   loop's general entry, short texts included: kq's `length` calls are on
+   2,376 strings averaging eight bytes, and they cost 12,284 more
+   instructions once the block was added. */
+static __attribute__((noinline, preserve_most)) long long k_str_chars_scan_wide(KStr* s) {
     if (K_COUNTING) k_stat_str_scans++;
     if (K_COUNTING) k_stat_str_scan_bytes += s->len;
     long long count = k_utf8_chars((const unsigned char*)s->data, s->len);
     if (s->cap == 0 && count < 2147483647LL) s->cap = (int)(-count - 1);
     return count;
 }
+static __attribute__((noinline, preserve_most)) long long k_str_chars_scan(KStr* s) {
+    if (K_COUNTING) k_stat_str_scans++;
+    if (K_COUNTING) k_stat_str_scan_bytes += s->len;
+    long long count = k_utf8_chars_short((const unsigned char*)s->data, s->len);
+    if (s->cap == 0 && count < 2147483647LL) s->cap = (int)(-count - 1);
+    return count;
+}
 static long long k_str_chars(KStr* s) {
     if (s->cap < 0) return -(long long)s->cap - 1;
     if (s->cap > 0) return k_str_count(s);
+    if (s->len >= 64) return k_str_chars_scan_wide(s);
     return k_str_chars_scan(s);
 }
 
