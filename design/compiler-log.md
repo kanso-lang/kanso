@@ -23068,11 +23068,11 @@ it copies rather than only in json.kso.
 
 On the run program `utf8_bytes` falls 3,310,037 -> 424,484, and no
 `str_scan` counter moves: nothing in the benchmarks asks the length of a
-string it decoded. Read on this container and carried onto CI's base:
+string it decoded. CI's rows, with the short scan below in the same tree:
 
-    runbench     1,166,762,755 -> 1,148,541,100   -18,221,655   -1.56%
-    oneshot         13,239,964 ->    13,055,762      -184,202
-    livebench    1,473,820,842 -> 1,473,635,968      -184,874
+    runbench     1,166,762,755 -> 1,148,541,609   -18,221,146   -1.56%
+    oneshot         13,239,964 ->    13,056,632      -183,332
+    livebench    1,473,820,842 -> 1,473,636,831      -184,011
 
 The three programs that decode through std/json each lose 64 bytes of text.
 compile_allocs falls 14,745 -> 14,743, compile_instructions 26,172,834 ->
@@ -23117,11 +23117,14 @@ the length test `k_str_chars` now makes before it calls either scan.
 
 The second scan is 720 bytes of machine code in every benchmark, so `text`
 rises 4,594,256 -> 4,604,144 with the decoder's 64 bytes off three of them
-counted in. Each benchmark's instruction row, read here against main's own
-reading in this container, moves by less than 1,300 either way; runbench,
-the one the objective weighs, by +140. Building the runtime costs clang
-+1,686 instructions at -O0 and 366,750 fewer at -O3 with LTO, both against
-main's reading here. The tab
+counted in. Read against main's own reading in this container, the short
+scan alone moves each benchmark's instruction row by less than 1,300 either
+way, runbench, the one the objective weighs, by +140, and the runtime's
+compile by +1,686 instructions at -O0 and -366,750 at -O3 with LTO. CI's rows
+for the two changes together: the benchmarks the decoder does not reach move
+by encodebench -1,232, pendbench -204, `work_digestbench` +77 to 5,649,262
+and `work_scanbench` +26 to 281,720, and codegen_instructions_dev rises 1,789 to
+126,448,042 while the release row falls 87,256 to 496,579,856. The tab
 runs the wasm32 runtime, which has no vector block. With the split built
 there too, browser_run_instructions rose 33,510,668 -> 33,511,114 for a
 length test that bought nothing, so the split is x86-64 only, and the row
