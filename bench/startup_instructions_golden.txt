@@ -504,4 +504,10 @@
 #
 # CI measured the gold dev link at 9e45c486. startup_instructions 52,375 ->
 # 52,427, a RISE of 52 (+0.0993%).
-startup_instructions=52405
+#
+# 2026-10-07: the emitter drops unbuilt arms from a program it is handed and
+# lets its tables go before it assembles the module. A warm play compiles
+# nothing, so the row moved with the binary, and what moved it is not
+# isolated. CI measured startup_instructions 52,405 -> 52,396, a FALL of 9
+# (-0.0172%); this container reads 51,286 and does not compare.
+startup_instructions=52396

@@ -22739,5 +22739,6 @@ found no frame to read. The attribute is back on the function it names.
 Natively, emit_instructions 27,530,325 -> 27,248,851 (-1.02%), measured in
 this container; compile_instructions 26,173,298 -> 26,173,342,
 entry_instructions 86,357,298 -> 86,357,296 and library_instructions
-86,901,952 -> 86,901,950 moved with the binary. CI's readings replace these if
-they differ.
+86,901,952 -> 86,901,950 moved with the binary. CI read all four the same, and
+one more: startup_instructions 52,405 -> 52,396, a warm play that compiles
+nothing, so that row too moved with the binary.

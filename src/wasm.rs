@@ -214,7 +214,8 @@ pub extern "C" fn kanso_play_native(ptr: *const u8, len: usize) -> i32 {
     }
 }
 
-/// THE PROGRAM IS DROPPED AS SOON AS NOTHING READS IT.
+/// THE PROGRAM IS HANDED TO THE EMITTER, which drops the arms nothing can
+/// reach from it in place and lets it go before the module is assembled.
 /// The tab's compile is priced by the most it holds at once
 /// (`browser_compile_peak_bytes`), and that peak falls inside the translation.
 /// The translation reads the native IR as it is, rewriting the six wasm32
