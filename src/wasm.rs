@@ -214,23 +214,17 @@ pub extern "C" fn kanso_play_native(ptr: *const u8, len: usize) -> i32 {
     }
 }
 
-/// THE PROGRAM AND THE NATIVE IR ARE DROPPED AS SOON AS NOTHING READS THEM.
+/// THE PROGRAM IS DROPPED AS SOON AS NOTHING READS IT.
 /// The tab's compile is priced by the most it holds at once
 /// (`browser_compile_peak_bytes`), and that peak falls inside the translation.
-/// Kept alive to the end, the program's tree and the native IR sat under it
-/// beside the retargeted copy the translation actually reads: on
-/// `bench/interp_corpus`, natively, 503,160 and 295,852 bytes of a 3,785,556
-/// peak, which read 2,988,848 with both gone.
+/// The translation reads the native IR as it is, rewriting the six wasm32
+/// offsets line by line, so the module text is the only copy it holds.
 #[cfg(target_arch = "wasm32")]
 fn lower_native(program: crate::ast::Program) -> i32 {
     let convention = crate::codegen::ClosureConvention::Absent;
     let ir = crate::codegen::emit_ir_dev(&program, convention);
     drop(program);
-    let side = ir.and_then(|ir| {
-        let module = crate::codegen::retarget_wasm32(&ir);
-        drop(ir);
-        crate::ir_wasm::translate(&module)
-    });
+    let side = ir.and_then(|ir| crate::ir_wasm::translate(&ir));
     match side {
         Ok(side) => {
             SIDE.with(|s| s.set((side.data, side.table)));
