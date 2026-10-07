@@ -1,0 +1,12 @@
+# The twin starts the general body over only while it has written nothing. Here
+# the push into `acc` happens in place before `p + 1` overflows, so starting
+# over would push the same element a second time. The twin keeps the bignum
+# path instead, and the list holds each value once.
+fn fill 0 _ acc
+  acc
+
+fn fill k p acc
+  more = push acc p
+  fill (k - 1) (p + 1) more
+
+pub play = print (fill 4 9223372036854775805 [])

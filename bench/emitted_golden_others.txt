@@ -225,16 +225,20 @@
 # test:
 # 2026-09-30, std/list's pub `iter` keeps one more line in every program that
 # imports it, for the factory-only ruling: each of the moved rows is +1 line.
-encodebench defines=135 calls=1141 branches=1070 lines=10613
-oneshot defines=137 calls=1197 branches=1251 lines=11586
-basket defines=125 calls=1124 branches=1044 lines=9043
-widebench defines=151 calls=1296 branches=1192 lines=11715
+#
+# 2026-10-07: a word twin starts its general body over when a sum overflows
+# before it has written anything. Every row that moved fell; runbench reads
+# calls 6,308 -> 6,240, branches 5,792 -> 5,622 and lines 49,399 -> 48,976.
+encodebench defines=135 calls=1109 branches=1001 lines=10421
+oneshot defines=137 calls=1184 branches=1212 lines=11522
+basket defines=125 calls=1096 branches=998 lines=8848
+widebench defines=151 calls=1264 branches=1123 lines=11523
 deepbench defines=52 calls=271 branches=277 lines=2696
-escapebench defines=20 calls=92 branches=101 lines=974
-pendbench defines=70 calls=494 branches=416 lines=3976
-scanbench defines=318 calls=3064 branches=2978 lines=25217
-indexbench defines=19 calls=68 branches=48 lines=741
-digestbench defines=132 calls=949 branches=978 lines=8182
-readbench defines=20 calls=66 branches=43 lines=769
-livebench defines=139 calls=1235 branches=1305 lines=11967
-runbench defines=653 calls=6308 branches=5792 lines=49399
+escapebench defines=20 calls=91 branches=89 lines=968
+pendbench defines=70 calls=492 branches=413 lines=3963
+scanbench defines=318 calls=3032 branches=2911 lines=25008
+indexbench defines=19 calls=67 branches=46 lines=737
+digestbench defines=132 calls=933 branches=934 lines=8070
+readbench defines=20 calls=65 branches=41 lines=765
+livebench defines=139 calls=1222 branches=1266 lines=11903
+runbench defines=653 calls=6240 branches=5622 lines=48976

@@ -2890,7 +2890,43 @@ struct FnEmit {
     /// read of its tag or payload used to take it back apart with an
     /// `extractvalue`; the tag is 0 and the payload is the argument itself.
     known_words: crate::hash::Map<String, (String, String)>,
+    /// In a twin, the tail call into the general body with this body's own
+    /// arguments, and its return type. `bail_on` takes it when a word
+    /// overflows, so a sum the twin computes stays a word: the general body
+    /// starts again from the arguments and computes the bignum itself.
+    general: Option<(String, String)>,
+    /// Whether this body has written anything that running it a second time
+    /// would write again: a store, or a call to anything but an intrinsic or
+    /// a read-only predicate. A bail re-runs the body from its entry, so it
+    /// is taken only while this is false.
+    effects: bool,
+    /// `effects` as it stood when a switch dispatcher finished its entry. A
+    /// switch's arms are reached only from the switch, never from each other,
+    /// so each arm starts from this rather than from whatever the arm emitted
+    /// before it wrote.
+    arms_effects: Option<bool>,
 }
+/// Whether an emitted line changes something a second run of the body would
+/// see: a store, or a call to anything but an LLVM intrinsic or one of the
+/// predicates that only read their operand. An allocation counts, which is
+/// cautious: a second run would allocate again and leak nothing, but the
+/// runtime's region and beat calls change state the same way and are not
+/// told apart here.
+fn writes_state(line: &str) -> bool {
+    const READS: [&str; 6] = [
+        "@k_b_at_fast(",
+        "@k_truthy(",
+        "@k_truthy_w(",
+        "@k_str_lit_fast(",
+        "@k_check_rec_fast(",
+        "@k_check_rec_fast_w(",
+    ];
+    line.trim_start().starts_with("store ")
+        || (line.contains("call ")
+            && !line.contains("@llvm.")
+            && !READS.iter().any(|r| line.contains(r)))
+}
+
 /// Whether a line the emitters wrote is a stack slot, asked at the ONE place
 /// the needle can be.
 ///
@@ -2940,6 +2976,9 @@ impl FnEmit {
             raw_byte: crate::hash::Map::default(),
             words,
             known_words: crate::hash::Map::default(),
+            general: None,
+            effects: false,
+            arms_effects: None,
         }
     }
 
@@ -3003,7 +3042,42 @@ impl FnEmit {
     /// and the sixth would have shipped the same way.
     fn line(&mut self, text: &str) {
         let text = self.boxing_any_parsed_operand(text);
+        if self.general.is_some() {
+            self.note_effects(&text);
+        }
         self.write(&text);
+    }
+
+    /// Kept out of `line`, which every emitter calls: only a twin asks.
+    #[inline(never)]
+    fn note_effects(&mut self, text: &str) {
+        if !self.effects && writes_state(text) {
+            self.effects = true;
+        }
+    }
+
+    /// Branches to the general body when `overflow` is set, and carries on in
+    /// a block where it is not. False, writing nothing, when this is not a
+    /// twin or when the body has already written something a second run
+    /// would write again.
+    fn can_bail(&self) -> bool {
+        self.general.is_some() && !self.effects
+    }
+
+    fn bail_on(&mut self, overflow: &str) -> bool {
+        let Some((ret, call)) = self.general.clone().filter(|_| !self.effects) else {
+            return false;
+        };
+        let ok = self.label();
+        let out = self.label();
+        self.line(&format!("br i1 {overflow}, label %{out}, label %{ok}"));
+        self.start_block(&out);
+        let r = self.tmp();
+        let kind = if self.frame_held { "call" } else { "musttail call" };
+        self.write(&format!("{r} = {kind} {call}"));
+        self.write(&format!("ret {ret} {r}"));
+        self.start_block(&ok);
+        true
     }
 
     /// Every stack slot the body asks for is held back and written at the top
@@ -3130,6 +3204,14 @@ impl FnEmit {
     fn start_block(&mut self, label: &str) {
         let _ = writeln!(self.out, "{label}:");
         self.cur_label = label.to_string();
+        if let Some(e) = self.arms_effects {
+            if label
+                .strip_prefix("arm")
+                .is_some_and(|k| !k.is_empty() && k.bytes().all(|b| b.is_ascii_digit()))
+            {
+                self.effects = e;
+            }
+        }
     }
 
     /// Branches on `value` to the label its case names, or to `dflt`. A
@@ -5305,6 +5387,19 @@ impl<'a> Backend<'a> {
         let v = f.tmp();
         f.line(&format!("{v} = insertvalue %KValue {{ i64 0, i64 undef }}, i64 {r}, 1"));
         f.record(&v, INT);
+        // In a twin that has written nothing yet, an overflow here starts
+        // the general body over instead of going back to the caller, and the
+        // call this argument feeds can take the twin without asking.
+        if let (Some(first), true) = (flags.first(), f.can_bail()) {
+            let mut any = first.clone();
+            for flag in &flags[1..] {
+                let a = f.tmp();
+                f.line(&format!("{a} = or i1 {any}, {flag}"));
+                any = a;
+            }
+            f.bail_on(&any);
+            return Ok((v, None));
+        }
         match flags.is_empty() {
             true => Ok((v, None)),
             false => Ok((v, Some((vals, flags)))),
@@ -5585,6 +5680,25 @@ impl<'a> Backend<'a> {
     }
 
     fn rebox_params(&self, f: &mut FnEmit, name: &str, arity: usize) {
+        if self.emitting_twin(name, arity) {
+            // The general body's own convention, which differs from the
+            // twin's only at the positions the twin takes as words; those are
+            // reboxed below, so `%x{i}` names a boxed value either way.
+            let args: Vec<String> = (0..arity)
+                .map(|i| {
+                    if self.is_byte_disc(name, arity, i) || self.unboxed_param(name, arity, i) {
+                        format!("i64 %x{i}r")
+                    } else if self.escape.carries_ty(name, arity, i).is_some() {
+                        format!("%parsed %x{i}")
+                    } else {
+                        format!("%KValue %x{i}")
+                    }
+                })
+                .collect();
+            let ret = self.ret_ty(name, arity).to_string();
+            let call = format!("tailcc {ret} @{}({})", dsym(name, arity), args.join(", "));
+            f.general = Some((ret, call));
+        }
         for i in 0..arity {
             if self.is_byte_disc(name, arity, i) {
                 // Reconstruct the KValue the boxed dispatch expects: 256 is none,
@@ -6615,6 +6729,9 @@ impl<'a> Backend<'a> {
         self.rebox_params(&mut f, name, arity);
         self.emit_reader_hole(&mut f, name, arity)?;
         self.record_param_sets(&mut f, name, arity);
+        if f.general.is_some() {
+            f.arms_effects = Some(f.effects);
+        }
         // any non-discriminator failure means no arm can match: propagate leftmost
         let mut all_ok: Option<String> = None;
         for i in 0..arity {
@@ -9468,6 +9585,16 @@ impl<'a> Backend<'a> {
                     f.line(&format!("{sum} = extractvalue {{ i64, i1 }} {pair}, 0"));
                     let overflow = f.tmp();
                     f.line(&format!("{overflow} = extractvalue {{ i64, i1 }} {pair}, 1"));
+                    // A twin that has written nothing yet starts the general
+                    // body over instead, so the sum stays a word here.
+                    if f.bail_on(&overflow) {
+                        let v = f.tmp();
+                        f.line(&format!(
+                            "{v} = insertvalue %KValue {{ i64 0, i64 undef }}, i64 {sum}, 1"
+                        ));
+                        f.record(&v, INT);
+                        return Ok(v);
+                    }
                     // A result past a word is a bignum, which the runtime
                     // builds from the two operands; the word path stays the
                     // three instructions it was.

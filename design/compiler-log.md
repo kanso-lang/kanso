@@ -22348,3 +22348,56 @@ by the low sixteen bits of a name's address. The analysis now allocates 304
 times fewer before the run starts, the names land at different addresses,
 and a different set of them share a slot. This container read both
 interpreted figures to the instruction.
+
+## 2026-10-07 — a word twin starts over when a sum leaves the word
+
+Arbitrary-precision integers (kanso#1778) took `runbench` from 1,088,360,071
+instructions to 1,211,249,956 in this container, 11.3% more. Two probes sized
+where it went. Making a pure-word sum die on overflow, the pre-bignum code,
+recovered 29.1M. Removing bignums from inference altogether, so that no sum
+was ever wider than a word, recovered 89.2M. The remaining 34M is inlining
+around `array_open` and `array_delim` that no change to the arithmetic
+reaches.
+
+The cost is in the shape of the code around each sum. A sum in a
+twin that may overflow leaves a value that may be a bignum, and everything
+downstream has to allow for that: an index takes the tag test and the runtime
+fallback, and a call that hands the sum on tests whether to take the callee's
+twin or its general body. The twins grow past the inliner's threshold, and the
+step functions of the decoder stop folding into each other.
+
+A twin now handles an overflow by tail-calling its own general body with the
+arguments it was given. The general body handles bignums already, so it
+computes the same answer from the start, and the sum in the twin is a word in
+every block that follows. That is only correct while the twin has written
+nothing a second run would write again, so the emitter watches what it writes:
+a store, or a call to anything but an LLVM intrinsic or one of the read-only
+predicates, ends the window. A switch dispatcher's arms each start from the
+state at its entry, because no arm is reached through another. A cascade's
+arms are not reset, which is cautious but correct.
+
+Measured on `runbench` in this container: 1,211,249,956 -> 1,187,675,909,
+-23,574,047 (-1.95%), with the output byte-identical. Two variants were tried
+and dropped. Treating calls to user functions as clean read 1,188,289,216,
+no better, and the analysis it would need to be sound (no linear argument the
+callee writes in place) is not worth building for nothing. Bailing on the
+tag-tested path, where an operand may already be a bignum, read
+1,187,675,909 to the instruction: the decoder never reaches that path in a
+twin.
+
+`tests/golden/micro/a_twin_starts_over_when_a_sum_leaves_the_word.kso` crosses
+2^63 inside a twin before anything is written; with the bail branch never
+taken it printed -9223372036854775807. `a_twin_that_has_pushed_does_not_start_over.kso`
+pushes in place and then overflows; with the effect check removed the list
+held 9223372036854775807 twice.
+
+The emitted code falls on every benchmark (runbench's calls 6,308 -> 6,240
+and lines 49,399 -> 48,976), and `compile_golden`'s `recursion` sample writes
+358 lines where it wrote 381. Machine code falls on six benchmarks and rises on
+five, by up to 7,088 bytes, where a twin small enough to inline now goes into
+more than one caller. The emitter pays to watch the lines a twin writes:
+`emit_instructions` rises 14,903 (+0.048%). The tab has no twins, and the scan
+runs only in one, but moving it out of `FnEmit::line` still left
+`browser_compile_instructions` 135,811 higher (632,344,041 -> 632,479,852).
+With the scan written inside `line` the row read 634,030,395. What the
+remaining 135,811 is has not been isolated.

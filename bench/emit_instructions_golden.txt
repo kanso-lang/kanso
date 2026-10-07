@@ -343,4 +343,9 @@
 # whose fixed half holds and asks each round only the call sites. CI's
 # reading: emit_instructions 32,132,166 -> 30,865,650, a FALL of 1,266,516
 # (-3.9416%).
-emit_instructions=30865650
+#
+# 2026-10-07: a word twin starts its general body over when a sum overflows
+# before it has written anything. The emitter watches each line a twin writes
+# for a store or a call: emit_instructions 30,865,650 -> 30,880,553, a RISE of
+# 14,903 (+0.0483%), held for the run it buys.
+emit_instructions=30880553

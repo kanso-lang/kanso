@@ -244,7 +244,11 @@
 # 2026-09-25, a proven tag is assumed: the decoder's parameters proven to be
 # one kind of heap value each carry an `llvm.assume` on their tag, a call line
 # apiece. calls 482 -> 539, lines 5,479 -> 5,651; branches and defines hold.
+#
+# 2026-10-07: a word twin starts its general body over when a sum overflows
+# before it has written anything, so the bignum path leaves the twin: calls
+# 1,018 -> 1,003, branches 1,136 -> 1,094, lines 10,188 -> 10,111.
 defines=106
-calls=1018
-branches=1136
-lines=10188
+calls=1003
+branches=1094
+lines=10111

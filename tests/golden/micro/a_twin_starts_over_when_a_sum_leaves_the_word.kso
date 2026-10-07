@@ -1,0 +1,13 @@
+# A loop's word twin takes its int arguments as raw words. When a sum in the
+# twin overflows before the body has written anything, the twin calls the
+# general body with the arguments it was given, and the general body computes
+# the bignum. `q` crosses 2^63 on the third step; the answer must be the
+# exact sum, not a wrapped word.
+fn climb 0 p
+  p
+
+fn climb k p
+  q = p + 1
+  climb (k - 1) (q + 0)
+
+pub play = print (climb 4 9223372036854775805)
