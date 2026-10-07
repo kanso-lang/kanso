@@ -22262,3 +22262,25 @@ trap. `scripts/numeric_differential` fails on any disagreement, where it
 counted the refusals as a known ceiling and failed when there were none.
 ch02's overflow sample prints `100000000000000000000`, and the playground
 note about 64-bit integers is gone.
+
+## 2026-10-07 — the tab drops the program and the native IR early
+
+The browser side scores lowest under the meta, and its compile memory is the
+term that fell furthest when compilation moved into the tab:
+`browser_compile_peak_bytes` reads 2,665,939 against an origin of 588,109. A
+counting allocator around the same four calls the playground makes, run
+natively on `bench/interp_corpus`, put the peak inside `ir_wasm::translate`.
+When the translation began, three things were live: the program's tree
+(503,160 bytes), the native IR (295,852) and the retargeted copy of it the
+translation reads (294,374). Only the last is read again. `lower_native` now
+takes the program by value, drops it once `emit_ir_dev` returns, and drops the
+native IR once it is retargeted. Natively the peak read 3,785,556 and then
+2,988,848.
+
+In the tab, built by the rustc the golden names: `browser_compile_peak_bytes`
+2,665,939 -> 2,369,806 (-296,133, -11.1%), and
+`browser_compile_instructions` 636,739,574 -> 636,631,519 (-108,055), the
+frees moving earlier. The run rows read the same. The peak is now within a
+few percent of what `emit_ir_dev` holds on its own, so the next cut there is
+in the emitter or in a translation that does not parse the whole module
+before writing any of it.
