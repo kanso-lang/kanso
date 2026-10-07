@@ -1455,7 +1455,7 @@ fn lld_links_lto() -> bool {
 }
 
 /// LLVM 19's `lto<O3>` pipeline, as `opt -print-pipeline-passes` writes it,
-/// with `deadargelim` taken out.
+/// with `deadargelim` taken out and non-trivial loop unswitching put in.
 ///
 /// Dead-argument elimination judges the words of a two-word return one at a
 /// time, by what the callers read, and keeps a function's arguments whole
@@ -1468,9 +1468,18 @@ fn lld_links_lto() -> bool {
 /// writing the calls between functions as plain `tail` calls cost the run
 /// program 1.82%, and giving each such function a kept caller cost 5.1%.
 ///
-/// Handed to lld unchanged, this pipeline links runbench byte for byte as the
-/// default does; without the pass the run program reads 1,071,975,512 against
-/// 1,071,414,767, +0.052%.
+/// Before unswitching joined it, this pipeline handed to lld unchanged linked
+/// runbench byte for byte as the default does, and without `deadargelim` the
+/// run program read 1,071,975,512 against 1,071,414,767, +0.052%.
+///
+/// `simple-loop-unswitch<nontrivial;trivial>` runs beside the first `licm`.
+/// The default pipeline has no unswitch pass at the link, so a test of a value
+/// a loop does not change stays inside the loop even after `licm` has hoisted
+/// the value: the escape loop multiplied `k * 31` once and tested its overflow
+/// flag on every element. Unswitching copies the loop once for each outcome of
+/// the test, and the copy that runs has no test in it. The run program fell
+/// 0.422% and the codegen corpus's link rose 188,548 instructions, 0.078% of
+/// ld.lld (2026-10-07).
 const LTO_O3_WITHOUT_DEADARGELIM: &str = concat!(
     "cross-dso-cfi,openmp-opt,globaldce<vfe-linkage-unit-visibility>,inferatt",
     "rs,function<eager-inv>(callsite-splitting),pgo-icall-prom,ipsccp,called-",
@@ -1483,7 +1492,7 @@ const LTO_O3_WITHOUT_DEADARGELIM: &str = concat!(
     "fixpoint>,constraint-elimination,jump-threading,sroa<modify-cfg>,tailcal",
     "lelim),cgscc(function-attrs),require<globals-aa>,function(invalidate<aa>",
     "),cgscc(openmp-opt-cgscc),function<eager-inv>(loop-mssa(licm<allowspecul",
-    "ation>),gvn<>,memcpyopt,dse,move-auto-init,mldst-motion<no-split-footer-",
+    "ation>,simple-loop-unswitch<nontrivial;trivial>),gvn<>,memcpyopt,dse,move-auto-init,mldst-motion<no-split-footer-",
     "bb>,loop(indvars,loop-deletion,loop-unroll-full),loop-distribute,loop-ve",
     "ctorize<no-interleave-forced-only;no-vectorize-forced-only;>,infer-align",
     "ment,loop-unroll<O3>,transform-warning,sroa<preserve-cfg>,instcombine<ma",

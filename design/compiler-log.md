@@ -23232,3 +23232,63 @@ The specs are the ones that already read these passes. Leaving `tailcc ` out
 of the retarget's list turns `native_layout_on_wasm32` red on all three
 threads, and dropping the musttail lines from the narrowing walk fails the two
 trampoline tests in `codegen::a_trampoline_is_emitted_for_a_call_that_uses_it`.
+
+## 2026-10-07 — the release link unswitches loops
+
+After kanso#1793 the escape loop still tested one overflow flag on every
+element. `filled` passes `k` back to itself unchanged, so `k * 31` is the same
+on every pass, and `licm` hoists the multiply out of the loop that tail-call
+elimination makes of the recursion. It cannot hoist the branch on the
+multiply's flag, so the loop kept a `test` and a `jne` around a body of 36
+instructions.
+
+Taking that branch out of the loop is the job of non-trivial loop unswitching,
+and the link's pipeline had no unswitch pass. LLVM's `lto<O3>` names none, and
+`LTO_O3_WITHOUT_DEADARGELIM` is that pipeline less one pass. It now runs
+`simple-loop-unswitch<nontrivial;trivial>` beside its first `licm`. The pass
+copies the loop once for each outcome of the test, and the copy that runs has
+no test in it. In runbench, `d_escape/filled_3_w` tests the multiply's flag
+once before the loop, and the loop runs 33 instructions an element.
+
+The 2026-09-24 entry recorded non-trivial unswitching as byte-identical on all
+fourteen rows, whether the flag went to the LTO link or to the pre-link `-O1`
+compile. At the link, that flag had no pass to act on, since the default LTO
+pipeline names none. This change adds the pass itself.
+
+Measured in this container with clang 19 against main:
+
+    escapebench    45,294,773 ->    41,544,768   -3,750,005  (-8.279%)
+    pendbench     192,800,473 ->   192,000,261     -800,212  (-0.415%)
+    runbench    1,142,362,645 -> 1,137,538,548   -4,824,097  (-0.422%)
+
+scanbench falls 51; jsonbench, widebench, deepbench, readbench and livebench
+fall 14 each, and basket falls 4. encodebench, oneshot, indexbench and
+digestbench are unchanged.
+
+CI read runbench 1,142,361,822 -> 1,137,537,711 (-4,824,111, -0.422%),
+escapebench -3,750,005, pendbench -800,198, scanbench -37 and basket -4. The
+14-instruction falls this container read did not appear there, and the other
+nine rows are unchanged. In `.text`, scanbench grows 592 bytes for its copied
+loops, and runbench shrinks 128, escapebench 48, and pendbench and basket 16
+each. Summed over the fourteen programs, `text` rises 384 bytes to 4,604,576.
+
+The pass costs the link something. On the codegen corpus, built with clang 19,
+ld.lld runs 241,718,614 -> 241,907,162, +188,548 (+0.078%). `clang -cc1` is
+byte-identical, and kanso's own process is not part of the row. The gate does
+not see this. Its `env -i PATH=/usr/bin:/bin` finds clang 18 in this
+container, and kanso uses the custom pipeline only with clang 19, so the gate
+here reads 495,753,746 with the pass and without it. CI read 496,432,472 on
+both as well, with ld.lld at 294,982,591, close to this container's clang 18
+link (294,305,497) and far from its clang 19 one (241,907,162). So the row CI
+gates on appears to link with clang 18 too, and no change to
+`LTO_O3_WITHOUT_DEADARGELIM` reaches it. That is a hole in the objective: the
+welfare term for the release link cannot price this pipeline.
+
+The witness is the work vein. The ratchet row `loop_unswitch` takes the pass
+out of the pipeline, which puts escapebench back up by the 3.75 million it fell.
+
+Not kept: on the same branch, a word run inside a twin that has written nothing
+yet bailed straight to the general body, where kanso#1793 had it re-run its
+operations on boxed values. Alone it took 359 instructions off runbench and
+20,010 off digestbench. With the unswitch pass, escapebench read 42,794,748
+against 41,544,768 without the bail, so the bail was dropped.
