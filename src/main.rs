@@ -1921,6 +1921,15 @@ fn release_clang(stem: &str, ll_path: &str) -> std::io::Result<std::process::Exi
         // So 2000 stands on the objective rather than on `.text`, and 4000 is
         // measured-and-declined. design/compiler-log.md carries the frame
         // measurement this came out of.
+        //
+        // THE 3.64% ABOVE WAS A CLANG 18 FIGURE, and the reason still holds
+        // without it. Until kanso#1795 the codegen gate found clang 18, which
+        // builds without this compiler's pipeline. Measured again under clang
+        // 19 on 2026-10-07, 4000 takes 0.650% off runbench and leaves the
+        // codegen corpus's `clang -cc1` and ld.lld byte-identical, because the
+        // corpus has no function whose cost falls between the two thresholds.
+        // Building runbench itself costs `clang -cc1` 38.7% more and ld.lld
+        // 32.6% more. The log entry of that date has the figures.
         .arg("-mllvm")
         .arg("-inline-threshold=2000")
         .args(if cfg!(target_arch = "x86_64") { &["-mssse3"][..] } else { &[][..] })
