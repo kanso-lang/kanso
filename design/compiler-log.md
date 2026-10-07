@@ -22793,7 +22793,11 @@ numbering is still the order in which names are first read. With the table
 given a counter of its own, so that a temporary and a named local can share a
 number, both translator corpus tests fail.
 
+An `icmp` predicate and a cast's name were also copied into a string for every
+instruction that carried one. Both come from short fixed lists, so the parsed
+instruction now holds a reference into the list.
+
 The module is byte-identical. browser_compile_instructions 573,888,797 ->
-563,612,309 (-1.79%): the shared buffer took 6,303,396 of that and the table
-the rest. Natively the translation went from 46.1 million instructions to
-43.1 million.
+563,473,948 (-1.81%): the shared buffer took 6,303,396 of that, the static
+names 138,361, and the table the rest. Before the static names, the
+translation went from 46.1 million instructions to 43.1 million natively.

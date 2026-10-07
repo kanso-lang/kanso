@@ -338,8 +338,8 @@ enum Callee {
 #[derive(Debug)]
 enum Inst {
     Bin(u32, Bin, Ty, Val, Val),
-    Icmp(u32, String, Ty, Val, Val),
-    Cast(u32, String, Ty, Val, Ty),
+    Icmp(u32, &'static str, Ty, Val, Val),
+    Cast(u32, &'static str, Ty, Val, Ty),
     Select(u32, Ty, Val, Val, Val),
     Extract(u32, Ty, Val, Vec<u32>),
     Insert(u32, Ty, Val, Ty, Val, Vec<u32>),
@@ -709,6 +709,12 @@ fn bin_op(w: &str) -> Option<Bin> {
     })
 }
 
+/// The comparisons and casts the translator lowers, held by an instruction
+/// as these names rather than a copy of the word it was read from.
+const ICMP_PREDICATES: [&str; 10] =
+    ["eq", "ne", "slt", "ult", "sgt", "ugt", "sle", "ule", "sge", "uge"];
+const CASTS: [&str; 6] = ["zext", "sext", "trunc", "inttoptr", "ptrtoint", "bitcast"];
+
 fn parse_inst(p: &mut P, types: &mut Vec<Option<Ty>>) -> Result<Inst, String> {
     let dst = match (p.t.first(), p.t.get(1)) {
         (Some(Tok::Local(n)), Some(Tok::P(b'='))) => {
@@ -744,7 +750,11 @@ fn parse_inst(p: &mut P, types: &mut Vec<Option<Ty>>) -> Result<Inst, String> {
         }
         "icmp" => {
             let pred = match p.next()? {
-                Tok::Word(w) => w,
+                Tok::Word(w) => ICMP_PREDICATES
+                    .iter()
+                    .find(|known| **known == w)
+                    .copied()
+                    .ok_or_else(|| format!("icmp {w}"))?,
                 t => return Err(format!("icmp predicate {t:?}")),
             };
             let t = p.ty()?;
@@ -752,14 +762,19 @@ fn parse_inst(p: &mut P, types: &mut Vec<Option<Ty>>) -> Result<Inst, String> {
             p.expect(b',')?;
             let b = p.value(&t)?;
             def(dst, &Ty::I1);
-            Inst::Icmp(d()?, pred.to_string(), t, a, b)
+            Inst::Icmp(d()?, pred, t, a, b)
         }
         "zext" | "sext" | "trunc" | "inttoptr" | "ptrtoint" | "bitcast" => {
+            let op = CASTS
+                .iter()
+                .find(|known| **known == op)
+                .copied()
+                .expect("the arm names only casts");
             let (from, v) = p.typed()?;
             p.eat_word("to");
             let to = p.ty()?;
             def(dst, &to);
-            Inst::Cast(d()?, op.to_string(), from, v, to)
+            Inst::Cast(d()?, op, from, v, to)
         }
         "select" => {
             let (_, c) = p.typed()?;
@@ -1853,7 +1868,7 @@ impl Fx<'_> {
                     }
                 }
                 let base: u8 = if *t == Ty::I64 { 0x51 } else { 0x46 };
-                let off = match pred.as_str() {
+                let off = match *pred {
                     "eq" => 0,
                     "ne" => 1,
                     "slt" => 2,
@@ -1871,7 +1886,7 @@ impl Fx<'_> {
             }
             Inst::Cast(d, how, from, v, to) => {
                 self.comp(from, v, 0)?;
-                match (how.as_str(), from, to) {
+                match (*how, from, to) {
                     ("zext", f, Ty::I64) if *f != Ty::I64 => self.code.push(0xad),
                     ("zext", _, _) => {}
                     ("sext", f, t) => {
