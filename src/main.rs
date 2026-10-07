@@ -2094,6 +2094,9 @@ fn replayed(args: &[String]) -> Option<std::io::Result<std::process::ExitStatus>
         if n + 1 == jobs.len() {
             let at = argv.iter().position(|a| a == "-o")?;
             argv[at + 1] = out_abs.to_str()?.to_string();
+            if let Some(dir) = std::env::var("KANSO_LINK_DIR").ok().filter(|d| !d.is_empty()) {
+                argv = searching_only(argv, &dir);
+            }
         }
         let ran =
             std::process::Command::new(&argv[0]).args(&argv[1..]).current_dir(&stage).status();
@@ -2105,6 +2108,42 @@ fn replayed(args: &[String]) -> Option<std::io::Result<std::process::ExitStatus>
     }
     let _ = std::fs::remove_dir_all(&stage);
     status
+}
+
+/// The link job with every `-L` replaced by one directory, in the place the
+/// first one held.
+///
+/// `ld.gold` reads each search directory whole before it looks anything up, so
+/// what the link costs depends on how many files the machine has installed
+/// there and how long their names are. One file added to
+/// `/usr/lib/x86_64-linux-gnu` moved the dev codegen row by 3,559 instructions,
+/// and removing it put the row back to the instruction. On CI the row took two
+/// values on one binary, 130,465,044 and 130,465,609, and they followed the
+/// runner image (`ubuntu24/20260927.320` against `20261004.327`) rather than
+/// anything in the tree. The 2026-09-15 rule asks for that state to be put in
+/// a known one, so the codegen gate stages a directory holding only the
+/// libraries the link resolves and names it here. Unset for every other build:
+/// a user's link searches where the driver says.
+///
+/// `-nostdlib` goes with it, and is the linker's option rather than the
+/// driver's: "search only the directories on the command line". Without it
+/// gold still read its own four defaults, `//lib/x86_64-linux-gnu` and the
+/// rest, and the added file still moved the row by 1,864.
+fn searching_only(argv: Vec<String>, dir: &str) -> Vec<String> {
+    let mut out = Vec::with_capacity(argv.len() + 1);
+    let mut placed = false;
+    for a in argv {
+        if a.starts_with("-L") {
+            if !placed {
+                out.push("-nostdlib".to_string());
+                out.push(format!("-L{dir}"));
+                placed = true;
+            }
+            continue;
+        }
+        out.push(a);
+    }
+    out
 }
 
 /// The driver's jobs for `shape`, with the stage and the driver's own temporary

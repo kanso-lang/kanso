@@ -22262,3 +22262,56 @@ trap. `scripts/numeric_differential` fails on any disagreement, where it
 counted the refusals as a known ceiling and failed when there were none.
 ch02's overflow sample prints `100000000000000000000`, and the playground
 note about 64-bit integers is gone.
+
+## 2026-10-07 — the measured link searches one directory
+
+kanso#1778 left the dev codegen row unexplained: 130,522,884, 130,522,835 and
+130,522,511 on three commits with one compiler, each stable within its own
+job. The per-process notices the gate already prints put the whole difference
+in `ld.gold`. `clang -cc1` read 102,383,272 on every commit, and `ld.gold` read
+28,139,612, 28,139,563 and 28,139,239.
+
+Those three values lined up with three CPU models in the same notices: Zen 4,
+Zen 5 and Zen 3. That was a correlation over three jobs, so a branch that is
+not for merging, `claude/diag-ld-cpu`, ran the dev link on ten runners at once
+and printed the CPU, its cache sizes and gold's frames beside the count. The
+ten gave two values, 28,081,281 and 28,081,846, and Zen 3 drew both, so the CPU
+is not the variable. The two groups differed in the runner image:
+`ubuntu24/20260927.320`, with 202,296 files installed, against
+`20261004.327`, with 203,191. The frames that moved were `_int_malloc` (+404),
+`__strlen_avx2` (+56) and a few inside gold; `readdir` read the same in both.
+
+`ld.gold` reads every directory it may search, whole, before it looks a library
+up. In this container, on one binary:
+
+    as found                                    27,324,283
+    one file added to /usr/lib/x86_64-linux-gnu 27,327,842   +3,559
+    a second, longer name                       27,330,182
+    both removed                                27,324,283
+
+So the row counted what the image had installed. The 2026-09-15 rule asks for
+that state to be put in a known one. `codegen_box.sh` now stages a directory
+holding the five libraries the link resolves (`libm.so`, `libgcc.a`,
+`libgcc_s.so`, `libgcc_s.so.1` and `libc.so`, each where clang finds it), and
+when `KANSO_LINK_DIR` names it, kanso replaces the link job's `-L` list with
+that one entry. Only the gate sets the variable.
+
+Replacing the list was not enough by itself. Gold still opened its own four
+defaults, `//lib/x86_64-linux-gnu`, `//usr/lib/x86_64-linux-gnu`, `//lib` and
+`//usr/lib`, and the added file still moved the row by 1,864. The linker's
+`-nostdlib` stops that. With both, gold read 23,967,636 before, with a file
+added to each of three system directories, and after.
+
+`tests/the_measured_link_searches_one_directory.rs` builds with an empty link
+directory and requires the build to fail on both tiers, then builds with the
+staged one and runs the binary. With the variable ignored, the empty-directory
+dev build linked. `-nostdlib` changes what gold reads and not what it finds,
+since gold's defaults do not answer `-l`, so a second test reads it out of
+`searching_only`. `tests/the_measured_link_names_its_object.rs` now requires the
+variable on every `env -i` line that pins the thread count. Each was watched red.
+
+CI's rows: `codegen_instructions_dev` 130,522,511 -> 126,434,707
+(-4,087,804, -3.13%) and `codegen_instructions_release` 503,605,244 ->
+503,519,717 (-85,527). Gold reads one small directory where it read nine
+large ones. Why lld's count moves has not been measured; it arrived with the
+same change. Every other row read main's value, the compile rows included.
