@@ -883,6 +883,19 @@ jobs:
       - name: the function tables, packed to survive a log tail
         if: always()
         run: sh scripts/gates/function_tables_tail.sh
+      # The rows step above was written to sit where the tail reaches, and the
+      # packed tables, a few thousand lines of base64, now come after it. So
+      # the measured rows print once more here, after everything, where a
+      # forty-line tail finds them.
+      - name: the rows as measured, again, at the end of the log
+        if: always()
+        run: |
+          for f in work.txt emitted.txt emitted_others.txt text.txt *_got.txt; do
+            [ -f "$f" ] || continue
+            echo "=== $f"
+            cat "$f"
+          done
+          exit 0
 
   downstream:
     name: kq specs (a real program, gating)
