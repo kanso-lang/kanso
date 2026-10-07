@@ -22928,8 +22928,9 @@ analysis it runs, fell 26,302,567 -> 25,135,836 (-4.44%).
 
 The interpreter builds the linearity analysis for its in-place pushes, and
 nothing else this changes runs on its path: interp_instructions fell
-585,730,487 -> 584,677,956 (-1,052,531). How much of that is `Slots` and how
-much is layout was not separated. The rows on the front end moved with the
+585,730,487 -> 584,677,956 (-1,052,531), and on CI interp_allocs fell
+874,027 -> 873,378 (-649) with interp_peak_bytes unchanged. How much of the
+instructions is `Slots` and how much is layout was not separated. The rows on the front end moved with the
 binary, read on this container: compile_instructions -43,493 to 26,131,846,
 entry_instructions -141,015 to 86,221,710 and library_instructions -140,353 to
 86,766,657. The codegen rows read lower here, and CI's readings stand.
