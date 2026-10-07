@@ -23263,7 +23263,9 @@ Measured in this container with clang 19 against main:
 
 scanbench falls 51; jsonbench, widebench, deepbench, readbench and livebench
 fall 14 each, and basket falls 4. encodebench, oneshot, indexbench and
-digestbench are unchanged.
+digestbench are unchanged. In `.text`, scanbench grows 592 bytes for its copied
+loops, and runbench shrinks 128, escapebench 48, and pendbench and basket 16
+each.
 
 The pass costs the link something. On the codegen corpus, built with clang 19,
 ld.lld runs 241,718,614 -> 241,907,162, +188,548 (+0.078%). `clang -cc1` is
