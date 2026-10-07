@@ -22742,3 +22742,27 @@ entry_instructions 86,357,298 -> 86,357,296 and library_instructions
 86,901,952 -> 86,901,950 moved with the binary. CI read all four the same, and
 one more: startup_instructions 52,405 -> 52,396, a warm play that compiles
 nothing, so that row too moved with the binary.
+
+**The translator lets go of the IR before it assembles the module.** Measured
+in the tab by stopping the compile after each stage, parsing and checking held
+573,785 bytes at most, emission 826,348, and the translation took the whole to
+882,546. The translation's high point was its last step, where it held the IR
+text and what it parsed from it, every function's code, a second copy of all
+of it in the code section's buffer, and `out` growing by doubling around a
+third. `translate_owned` takes the IR from a caller done with it and drops the
+text and the parse once every function is lowered. The code and data sections
+are then written straight into `out` at a size worked out in advance, and each
+function's code is let go as it is copied in. The tab hands its IR over. The
+module is byte-identical, and the interpreter corpus's translation test now
+asserts that the owned path writes the same bytes; with the code section's
+length written one long, it fails.
+
+browser_compile_peak_bytes 882,546 -> 826,348 (-6.4%), which is the emission
+stage's high point, so the peak now falls there. browser_compile_instructions
+573,418,144 -> 573,888,797 (+0.08%), and what moved them is not isolated.
+The native rows moved with the binary, none of them running the translator:
+compile_instructions 26,173,342 -> 26,204,318, entry_instructions 86,357,296
+-> 86,458,591, library_instructions 86,901,950 -> 87,003,163,
+emit_instructions 27,248,851 -> 27,259,671 and interp_instructions
+585,690,203 -> 585,702,055, measured in this container. CI's readings replace
+these if they differ.

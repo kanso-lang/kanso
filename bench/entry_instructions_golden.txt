@@ -1104,7 +1104,12 @@
 # Measured in this container, where the previous tree reads 86,357,298 on the row:
 # 86,357,298 -> 86,357,296, a FALL of 2 (-0.0000%).
 # CI's reading replaces it if it differs.
-entry_instructions=86357296
+# 2026-10-07: the wasm translator lets go of the IR before it assembles the
+# module; `kanso check` runs none of the translator. The row moved with the binary, and what moved it is not
+# isolated. Measured in this container, where the previous tree reads on the row:
+# 86,357,296 -> 86,458,591, a RISE of 101,295 (+0.1173%).
+# CI's reading replaces it if it differs.
+entry_instructions=86458591
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

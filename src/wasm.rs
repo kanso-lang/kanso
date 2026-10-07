@@ -224,7 +224,7 @@ pub extern "C" fn kanso_play_native(ptr: *const u8, len: usize) -> i32 {
 fn lower_native(program: crate::ast::Program) -> i32 {
     let convention = crate::codegen::ClosureConvention::Absent;
     let ir = crate::codegen::emit_ir_dev_owned(program, convention);
-    let side = ir.and_then(|ir| crate::ir_wasm::translate(&ir));
+    let side = ir.and_then(crate::ir_wasm::translate_owned);
     match side {
         Ok(side) => {
             SIDE.with(|s| s.set((side.data, side.table)));
