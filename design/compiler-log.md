@@ -22572,3 +22572,24 @@ interp_instructions 590,586,868 -> 585,696,023 (-0.83%) and interp_allocs
 goldens here. The two codegen rows read 126,344,437 and
 496,054,428 here on main as well as on this branch, so their disagreement with
 the goldens is this host's, and they are left as CI measured them.
+
+## 2026-10-07 — the emitter formats its lines into one buffer
+
+Every line the emitter writes goes through `boxing_any_parsed_operand`, which
+boxes any carried operand the line names. It copied every line into a new
+`String` first, though most lines name no carried operand. It also built a
+`format!` needle for each carried temp it checked. A line with nothing to box
+now goes through as it is, and the check looks for the temp and tests the
+type in front of it. Separately, 453 call sites wrote
+`f.line(&format!(...))`, each allocating a string for one line. They now call
+`f.line_fmt(format_args!(...))`, which formats into a buffer the emitter keeps
+between lines.
+
+The emitted IR is unchanged: the emitted-code and machine-code gates and
+every runtime vein agree. Measured in this container on each golden's own
+glibc and rustc, emit_instructions 28,879,749 -> 27,787,117 (-3.78%),
+browser_compile_instructions 604,663,295 -> 587,205,094 (-2.89%). The tab's
+peak rises by 146 bytes, browser_compile_peak_bytes 1,495,678 -> 1,495,824:
+the kept buffer is alive at the high-water mark. Natively, the tab's compile
+of `bench/interp_corpus` reads 188,396,740 instructions against 193,037,622
+with neither change.

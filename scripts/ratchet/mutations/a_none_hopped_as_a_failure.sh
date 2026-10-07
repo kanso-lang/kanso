@@ -4,11 +4,11 @@
 # corpus fixture a_none_with_no_arm_is_refused then reads nothing where the
 # refusal belongs.
 set -e
-old='            f.line(&format!("{failing} = icmp eq i64 {disc_fail}, 5"));'
+old='            f.line_fmt(format_args!("{failing} = icmp eq i64 {disc_fail}, 5"));'
 [ "$(grep -cxF "$old" src/codegen.rs)" -eq 1 ]
-sed -i.bak 's#^            f.line(&format!("{failing} = icmp eq i64 {disc_fail}, 5"));$#            f.line(\&format!("{failing}.e = icmp eq i64 {disc_fail}, 5"));\
-            f.line(\&format!("{failing}.n = icmp eq i64 {disc_fail}, 4"));\
-            f.line(\&format!("{failing} = or i1 {failing}.e, {failing}.n"));#' src/codegen.rs
+sed -i.bak 's#^            f.line_fmt(format_args!("{failing} = icmp eq i64 {disc_fail}, 5"));$#            f.line_fmt(format_args!("{failing}.e = icmp eq i64 {disc_fail}, 5"));\
+            f.line_fmt(format_args!("{failing}.n = icmp eq i64 {disc_fail}, 4"));\
+            f.line_fmt(format_args!("{failing} = or i1 {failing}.e, {failing}.n"));#' src/codegen.rs
 rm -f src/codegen.rs.bak
 ! grep -qxF "$old" src/codegen.rs
 grep -qF '{failing} = or i1 {failing}.e, {failing}.n' src/codegen.rs

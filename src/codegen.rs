@@ -2831,7 +2831,9 @@ fn release_cells(f: &mut FnEmit, value: &str) -> String {
     let mut v = value.to_string();
     for cell in cells {
         let t = f.tmp();
-        f.line(&format!("{t} = call %KValue @k_thunk_release_unless(%KValue {cell}, %KValue {v})"));
+        f.line_fmt(format_args!(
+            "{t} = call %KValue @k_thunk_release_unless(%KValue {cell}, %KValue {v})"
+        ));
         v = t;
     }
     v
@@ -2895,6 +2897,9 @@ struct FnEmit {
     /// overflows, so a sum the twin computes stays a word: the general body
     /// starts again from the arguments and computes the bignum itself.
     general: Option<(String, String)>,
+    /// The buffer `line_fmt` formats into, kept between lines so a formatted
+    /// line costs no allocation of its own.
+    scratch: String,
     /// Whether this body has written anything that running it a second time
     /// would write again: a store, or a call to anything but an intrinsic or
     /// a read-only predicate. A bail re-runs the body from its entry, so it
@@ -2977,6 +2982,7 @@ impl FnEmit {
             words,
             known_words: crate::hash::Map::default(),
             general: None,
+            scratch: String::new(),
             effects: false,
             arms_effects: None,
         }
@@ -2997,7 +3003,7 @@ impl FnEmit {
             ("call i64 @k_check_rec_fast(%KValue ", "k_check_rec_fast_w", true),
         ];
         if !self.words {
-            self.line(&format!("{r} = {call}"));
+            self.line_fmt(format_args!("{r} = {call}"));
             return;
         }
         let split = FORMS.iter().find_map(|(prefix, to, pay)| {
@@ -3009,18 +3015,18 @@ impl FnEmit {
         match split {
             Some((to, pay, value, rest)) => {
                 let tag = self.tmp();
-                self.line(&format!("{tag} = extractvalue %KValue {value}, 0"));
+                self.line_fmt(format_args!("{tag} = extractvalue %KValue {value}, 0"));
                 let words = match pay {
                     true => {
                         let p = self.tmp();
-                        self.line(&format!("{p} = extractvalue %KValue {value}, 1"));
+                        self.line_fmt(format_args!("{p} = extractvalue %KValue {value}, 1"));
                         format!("i64 {tag}, i64 {p}")
                     }
                     false => format!("i64 {tag}"),
                 };
-                self.line(&format!("{r} = call i64 @{to}({words}{rest}"));
+                self.line_fmt(format_args!("{r} = call i64 @{to}({words}{rest}"));
             }
-            None => self.line(&format!("{r} = {call}")),
+            None => self.line_fmt(format_args!("{r} = {call}")),
         }
     }
 
@@ -3040,6 +3046,18 @@ impl FnEmit {
     /// each consumer is what makes the rule hold for consumers nobody has
     /// written yet: five separate sites were fixed one at a time before this,
     /// and the sixth would have shipped the same way.
+    /// `line` for a formatted line, written into a buffer the emitter keeps
+    /// rather than a string made for it. A line that boxes an operand calls
+    /// back into the emitter, which may format a line of its own; it finds
+    /// the buffer taken and uses a fresh one.
+    fn line_fmt(&mut self, args: std::fmt::Arguments) {
+        let mut text = std::mem::take(&mut self.scratch);
+        text.clear();
+        let _ = std::fmt::Write::write_fmt(&mut text, args);
+        self.line(&text);
+        self.scratch = text;
+    }
+
     fn line(&mut self, text: &str) {
         let text = self.boxing_any_parsed_operand(text);
         if self.general.is_some() {
@@ -3070,7 +3088,7 @@ impl FnEmit {
         };
         let ok = self.label();
         let out = self.label();
-        self.line(&format!("br i1 {overflow}, label %{out}, label %{ok}"));
+        self.line_fmt(format_args!("br i1 {overflow}, label %{out}, label %{ok}"));
         self.start_block(&out);
         let r = self.tmp();
         let kind = if self.frame_held { "call" } else { "musttail call" };
@@ -3155,17 +3173,23 @@ impl FnEmit {
         out
     }
 
-    fn boxing_any_parsed_operand(&mut self, text: &str) -> String {
+    fn boxing_any_parsed_operand<'t>(&mut self, text: &'t str) -> std::borrow::Cow<'t, str> {
+        // Most lines name no carried operand, and those go through as they
+        // are: copying each into a string of its own was one allocation per
+        // line the emitter wrote.
         if self.parsed.is_empty() {
-            return text.to_string();
+            return std::borrow::Cow::Borrowed(text);
         }
         // Sorted because the map's order is randomized per process, and a line
         // naming two carried operands would otherwise box them in an order
         // that differs between builds of the same program.
         let mut carried: Vec<String> =
             self.parsed.keys().filter(|t| named_as_a_value(text, t)).cloned().collect();
+        if carried.is_empty() {
+            return std::borrow::Cow::Borrowed(text);
+        }
         carried.sort();
-        carried.iter().fold(text.to_string(), |acc, t| {
+        std::borrow::Cow::Owned(carried.iter().fold(text.to_string(), |acc, t| {
             let boxed = self.box_parsed(t);
             let named = format!("%KValue {t}");
             let boxed_as = format!("%KValue {boxed}");
@@ -3176,7 +3200,7 @@ impl FnEmit {
                 Some(head) => format!("{head}{boxed_as}"),
                 None => inner,
             }
-        })
+        }))
     }
 
     /// Undo the by-value convention: rebuild the record the two words hold.
@@ -3221,7 +3245,10 @@ impl FnEmit {
     /// which it does.
     fn switch_on(&mut self, value: &str, dflt: &str, cases: &[String]) {
         if !self.words {
-            self.line(&format!("switch i64 {value}, label %{dflt} [\n{}\n  ]", cases.join("\n")));
+            self.line_fmt(format_args!(
+                "switch i64 {value}, label %{dflt} [\n{}\n  ]",
+                cases.join("\n")
+            ));
             return;
         }
         for case in cases {
@@ -3231,12 +3258,12 @@ impl FnEmit {
                 .and_then(|c| c.split_once(", label %"))
                 .expect("a case reads `i64 N, label %L`");
             let hit = self.tmp();
-            self.line(&format!("{hit} = icmp eq i64 {value}, {n}"));
+            self.line_fmt(format_args!("{hit} = icmp eq i64 {value}, {n}"));
             let next = self.label();
-            self.line(&format!("br i1 {hit}, label %{target}, label %{next}"));
+            self.line_fmt(format_args!("br i1 {hit}, label %{target}, label %{next}"));
             self.start_block(&next);
         }
-        self.line(&format!("br label %{dflt}"));
+        self.line_fmt(format_args!("br label %{dflt}"));
     }
 
     fn bind(&mut self, name: &str, temp: &str) {
@@ -4622,9 +4649,11 @@ fn ir_defines(body: &str) -> Vec<(&str, &str)> {
 /// The delimiter matters: `%t2` is a prefix of `%t20`, and boxing the wrong
 /// register writes a program that type-checks and computes the wrong record.
 fn named_as_a_value(text: &str, temp: &str) -> bool {
-    let needle = format!("%KValue {temp}");
-    text.match_indices(&needle).any(|(at, _)| {
-        matches!(text.as_bytes().get(at + needle.len()), Some(b',') | Some(b')') | None)
+    // Asked of every line for every carried temp, so the needle is not built:
+    // each place the temp appears is checked for the type in front of it.
+    text.match_indices(temp).any(|(at, _)| {
+        text[..at].ends_with("%KValue ")
+            && matches!(text.as_bytes().get(at + temp.len()), Some(b',') | Some(b')') | None)
     })
 }
 
@@ -4778,12 +4807,12 @@ fn lift_around(
     for &j in lifted {
         let t = inline_tag(f, &emitted[j]);
         let b = f.tmp();
-        f.line(&format!("{b} = icmp eq i64 {t}, {K_BIG}"));
+        f.line_fmt(format_args!("{b} = icmp eq i64 {t}, {K_BIG}"));
         any = Some(match any {
             None => b,
             Some(prev) => {
                 let o = f.tmp();
-                f.line(&format!("{o} = or i1 {prev}, {b}"));
+                f.line_fmt(format_args!("{o} = or i1 {prev}, {b}"));
                 o
             }
         });
@@ -4794,7 +4823,7 @@ fn lift_around(
         1 => String::new(),
         _ => {
             let arr = f.tmp();
-            f.line(&format!("{arr} = alloca [{n} x %KValue]"));
+            f.line_fmt(format_args!("{arr} = alloca [{n} x %KValue]"));
             arr
         }
     };
@@ -4804,21 +4833,25 @@ fn lift_around(
     let through = |f: &mut FnEmit, values: &[String], call: &str| -> Vec<String> {
         if n == 1 {
             let v = f.tmp();
-            f.line(&format!("{v} = call %KValue @{call}1(%KValue {})", values[0]));
+            f.line_fmt(format_args!("{v} = call %KValue @{call}1(%KValue {})", values[0]));
             return vec![v];
         }
         for (k, v) in values.iter().enumerate() {
             let at = f.tmp();
-            f.line(&format!("{at} = getelementptr [{n} x %KValue], ptr {arr}, i64 0, i64 {k}"));
-            f.line(&format!("store %KValue {v}, ptr {at}"));
+            f.line_fmt(format_args!(
+                "{at} = getelementptr [{n} x %KValue], ptr {arr}, i64 0, i64 {k}"
+            ));
+            f.line_fmt(format_args!("store %KValue {v}, ptr {at}"));
         }
-        f.line(&format!("call void @{call}(ptr {arr}, i64 {n})"));
+        f.line_fmt(format_args!("call void @{call}(ptr {arr}, i64 {n})"));
         (0..n)
             .map(|k| {
                 let at = f.tmp();
-                f.line(&format!("{at} = getelementptr [{n} x %KValue], ptr {arr}, i64 0, i64 {k}"));
+                f.line_fmt(format_args!(
+                    "{at} = getelementptr [{n} x %KValue], ptr {arr}, i64 0, i64 {k}"
+                ));
                 let v = f.tmp();
-                f.line(&format!("{v} = load %KValue, ptr {at}"));
+                f.line_fmt(format_args!("{v} = load %KValue, ptr {at}"));
                 v
             })
             .collect()
@@ -4828,7 +4861,7 @@ fn lift_around(
         |f: &mut FnEmit, emitted: &mut [String], moved: &[String], from: &str, via: &str| {
             for (k, &j) in lifted.iter().enumerate() {
                 let v = f.tmp();
-                f.line(&format!(
+                f.line_fmt(format_args!(
                     "{v} = phi %KValue [ {}, %{from} ], [ {}, %{via} ]",
                     emitted[j], moved[k]
                 ));
@@ -4839,22 +4872,22 @@ fn lift_around(
     let out = f.label();
     let mid = f.label();
     let before = f.cur_label.clone();
-    f.line(&format!("br i1 {any}, label %{out}, label %{mid}"));
+    f.line_fmt(format_args!("br i1 {any}, label %{out}, label %{mid}"));
     f.start_block(&out);
     let current: Vec<String> = lifted.iter().map(|&j| emitted[j].clone()).collect();
     let moved = through(f, &current, "k_big_lift_out");
-    f.line(&format!("br label %{mid}"));
+    f.line_fmt(format_args!("br label %{mid}"));
     f.start_block(&mid);
     merge(f, emitted, &moved, &before, &out);
     rewind(f, emitted);
     let rewound = f.cur_label.clone();
     let back = f.label();
     let done = f.label();
-    f.line(&format!("br i1 {any}, label %{back}, label %{done}"));
+    f.line_fmt(format_args!("br i1 {any}, label %{back}, label %{done}"));
     f.start_block(&back);
     let current: Vec<String> = lifted.iter().map(|&j| emitted[j].clone()).collect();
     let moved = through(f, &current, "k_big_lift_in");
-    f.line(&format!("br label %{done}"));
+    f.line_fmt(format_args!("br label %{done}"));
     f.start_block(&done);
     merge(f, emitted, &moved, &rewound, &back);
 }
@@ -4868,7 +4901,7 @@ fn both_ints(f: &mut FnEmit, ta: &str, tb: &str) -> String {
     for tag in [ta, tb] {
         if tag != "0" {
             let t = f.tmp();
-            f.line(&format!("{t} = icmp eq i64 {tag}, 0"));
+            f.line_fmt(format_args!("{t} = icmp eq i64 {tag}, 0"));
             tests.push(t);
         }
     }
@@ -4877,7 +4910,7 @@ fn both_ints(f: &mut FnEmit, ta: &str, tb: &str) -> String {
         [one] => one.clone(),
         [a, b] => {
             let both = f.tmp();
-            f.line(&format!("{both} = and i1 {a}, {b}"));
+            f.line_fmt(format_args!("{both} = and i1 {a}, {b}"));
             both
         }
         _ => unreachable!("two tags make at most two tests"),
@@ -5071,30 +5104,30 @@ fn word_run(
                 _ => "llvm.smul.with.overflow.i64",
             };
             let pair = f.tmp();
-            f.line(&format!("{pair} = call {{ i64, i1 }} @{intrinsic}(i64 {a}, i64 {b})"));
-            f.line(&format!("{t} = extractvalue {{ i64, i1 }} {pair}, 0"));
+            f.line_fmt(format_args!("{pair} = call {{ i64, i1 }} @{intrinsic}(i64 {a}, i64 {b})"));
+            f.line_fmt(format_args!("{t} = extractvalue {{ i64, i1 }} {pair}, 0"));
             let over = f.tmp();
-            f.line(&format!("{over} = extractvalue {{ i64, i1 }} {pair}, 1"));
+            f.line_fmt(format_args!("{over} = extractvalue {{ i64, i1 }} {pair}, 1"));
             flags.push(over);
         }
         _ => {
             if !matches!(b.parse::<i64>(), Ok(d) if d != 0 && d != -1) {
                 let zero = f.tmp();
-                f.line(&format!("{zero} = icmp eq i64 {b}, 0"));
+                f.line_fmt(format_args!("{zero} = icmp eq i64 {b}, 0"));
                 let minus = f.tmp();
-                f.line(&format!("{minus} = icmp eq i64 {b}, -1"));
+                f.line_fmt(format_args!("{minus} = icmp eq i64 {b}, -1"));
                 let edge = f.tmp();
-                f.line(&format!("{edge} = or i1 {zero}, {minus}"));
+                f.line_fmt(format_args!("{edge} = or i1 {zero}, {minus}"));
                 flags.push(edge.clone());
                 // the instruction must not trap on the path it does not take
                 let safe = f.tmp();
-                f.line(&format!("{safe} = select i1 {edge}, i64 1, i64 {b}"));
+                f.line_fmt(format_args!("{safe} = select i1 {edge}, i64 1, i64 {b}"));
                 let insn = if *op == "%" { "srem" } else { "sdiv" };
-                f.line(&format!("{t} = {insn} i64 {a}, {safe}"));
+                f.line_fmt(format_args!("{t} = {insn} i64 {a}, {safe}"));
                 return t;
             }
             let insn = if *op == "%" { "srem" } else { "sdiv" };
-            f.line(&format!("{t} = {insn} i64 {a}, {b}"));
+            f.line_fmt(format_args!("{t} = {insn} i64 {a}, {b}"));
         }
     }
     t
@@ -5108,7 +5141,7 @@ fn inline_tag(f: &mut FnEmit, value: &str) -> String {
         return tag.clone();
     }
     let t = f.tmp();
-    f.line(&format!("{t} = extractvalue %KValue {value}, 0"));
+    f.line_fmt(format_args!("{t} = extractvalue %KValue {value}, 0"));
     t
 }
 
@@ -5120,7 +5153,7 @@ fn inline_payload(f: &mut FnEmit, value: &str) -> String {
         return payload.clone();
     }
     let t = f.tmp();
-    f.line(&format!("{t} = extractvalue %KValue {value}, 1"));
+    f.line_fmt(format_args!("{t} = extractvalue %KValue {value}, 1"));
     t
 }
 
@@ -5132,16 +5165,16 @@ fn inline_payload(f: &mut FnEmit, value: &str) -> String {
 /// so LLVM can drop both where one ran upstream.
 fn index_in_range(f: &mut FnEmit, idx: &str, len_ptr: &str, hit: &str, miss: &str) {
     let ge1 = f.tmp();
-    f.line(&format!("{ge1} = icmp sge i64 {idx}, 1"));
+    f.line_fmt(format_args!("{ge1} = icmp sge i64 {idx}, 1"));
     let above = f.label();
-    f.line(&format!("br i1 {ge1}, label %{above}, label %{miss}"));
+    f.line_fmt(format_args!("br i1 {ge1}, label %{above}, label %{miss}"));
     f.start_block(&above);
     let len = f.tmp();
-    f.line(&format!("{len} = load i64, ptr {len_ptr}"));
+    f.line_fmt(format_args!("{len} = load i64, ptr {len_ptr}"));
     assume_length(f, &len);
     let le_len = f.tmp();
-    f.line(&format!("{le_len} = icmp sle i64 {idx}, {len}"));
-    f.line(&format!("br i1 {le_len}, label %{hit}, label %{miss}"));
+    f.line_fmt(format_args!("{le_len} = icmp sle i64 {idx}, {len}"));
+    f.line_fmt(format_args!("br i1 {le_len}, label %{hit}, label %{miss}"));
 }
 
 /// A length read out of a container is never negative, and saying so lets
@@ -5149,8 +5182,8 @@ fn index_in_range(f: &mut FnEmit, idx: &str, len_ptr: &str, hit: &str, miss: &st
 /// signed pair also stays visible to whatever proved it true upstream.
 fn assume_length(f: &mut FnEmit, len: &str) {
     let ok = f.tmp();
-    f.line(&format!("{ok} = icmp sge i64 {len}, 0"));
-    f.line(&format!("call void @llvm.assume(i1 {ok})"));
+    f.line_fmt(format_args!("{ok} = icmp sge i64 {len}, 0"));
+    f.line_fmt(format_args!("call void @llvm.assume(i1 {ok})"));
 }
 
 /// The low byte of a `%parsed` first word that holds no value's tag: the int
@@ -5164,42 +5197,42 @@ const PARSED_WIDE: i64 = 255;
 /// the heap and crosses as `PARSED_WIDE` over its pointer.
 fn pack_words(f: &mut FnEmit, id: i64, pos: &str, value: &str) -> (String, String) {
     let ptag = f.tmp();
-    f.line(&format!("{ptag} = extractvalue %KValue {pos}, 0"));
+    f.line_fmt(format_args!("{ptag} = extractvalue %KValue {pos}, 0"));
     let n = f.tmp();
-    f.line(&format!("{n} = extractvalue %KValue {pos}, 1"));
+    f.line_fmt(format_args!("{n} = extractvalue %KValue {pos}, 1"));
     let shifted = f.tmp();
-    f.line(&format!("{shifted} = shl i64 {n}, 8"));
+    f.line_fmt(format_args!("{shifted} = shl i64 {n}, 8"));
     let back = f.tmp();
-    f.line(&format!("{back} = ashr i64 {shifted}, 8"));
+    f.line_fmt(format_args!("{back} = ashr i64 {shifted}, 8"));
     let same = f.tmp();
-    f.line(&format!("{same} = icmp eq i64 {back}, {n}"));
+    f.line_fmt(format_args!("{same} = icmp eq i64 {back}, {n}"));
     // a bignum is a pointer, which the shift would ruin, so it spills too
     let word = f.tmp();
-    f.line(&format!("{word} = icmp eq i64 {ptag}, 0"));
+    f.line_fmt(format_args!("{word} = icmp eq i64 {ptag}, 0"));
     let fits = f.tmp();
-    f.line(&format!("{fits} = and i1 {same}, {word}"));
+    f.line_fmt(format_args!("{fits} = and i1 {same}, {word}"));
     let vtag = f.tmp();
-    f.line(&format!("{vtag} = extractvalue %KValue {value}, 0"));
+    f.line_fmt(format_args!("{vtag} = extractvalue %KValue {value}, 0"));
     let vpay = f.tmp();
-    f.line(&format!("{vpay} = extractvalue %KValue {value}, 1"));
+    f.line_fmt(format_args!("{vpay} = extractvalue %KValue {value}, 1"));
     let packed = f.tmp();
-    f.line(&format!("{packed} = or i64 {shifted}, {vtag}"));
+    f.line_fmt(format_args!("{packed} = or i64 {shifted}, {vtag}"));
     let from = f.cur_label.clone();
     let (wide, join) = (f.label(), f.label());
-    f.line(&format!("br i1 {fits}, label %{join}, label %{wide}"));
+    f.line_fmt(format_args!("br i1 {fits}, label %{join}, label %{wide}"));
     f.start_block(&wide);
     let spilled = f.tmp();
-    f.line(&format!(
+    f.line_fmt(format_args!(
         "{spilled} = call %KValue @k_parsed_spill(i64 {id}, i64 {ptag}, i64 {n}, i64 {vtag}, i64 {vpay})"
     ));
     let (s0, s1) = (f.tmp(), f.tmp());
-    f.line(&format!("{s0} = extractvalue %KValue {spilled}, 0"));
-    f.line(&format!("{s1} = extractvalue %KValue {spilled}, 1"));
-    f.line(&format!("br label %{join}"));
+    f.line_fmt(format_args!("{s0} = extractvalue %KValue {spilled}, 0"));
+    f.line_fmt(format_args!("{s1} = extractvalue %KValue {spilled}, 1"));
+    f.line_fmt(format_args!("br label %{join}"));
     f.start_block(&join);
     let (w0, w1) = (f.tmp(), f.tmp());
-    f.line(&format!("{w0} = phi i64 [ {packed}, %{from} ], [ {s0}, %{wide} ]"));
-    f.line(&format!("{w1} = phi i64 [ {vpay}, %{from} ], [ {s1}, %{wide} ]"));
+    f.line_fmt(format_args!("{w0} = phi i64 [ {packed}, %{from} ], [ {s0}, %{wide} ]"));
+    f.line_fmt(format_args!("{w1} = phi i64 [ {vpay}, %{from} ], [ {s1}, %{wide} ]"));
     (w0, w1)
 }
 
@@ -5209,32 +5242,32 @@ fn pack_words(f: &mut FnEmit, id: i64, pos: &str, value: &str) -> (String, Strin
 /// may be a bignum.
 fn unpack_words(f: &mut FnEmit, w0: &str, w1: &str) -> (String, String, String, String) {
     let low = f.tmp();
-    f.line(&format!("{low} = and i64 {w0}, 255"));
+    f.line_fmt(format_args!("{low} = and i64 {w0}, 255"));
     let spilled = f.tmp();
-    f.line(&format!("{spilled} = icmp eq i64 {low}, {PARSED_WIDE}"));
+    f.line_fmt(format_args!("{spilled} = icmp eq i64 {low}, {PARSED_WIDE}"));
     let n = f.tmp();
-    f.line(&format!("{n} = ashr i64 {w0}, 8"));
+    f.line_fmt(format_args!("{n} = ashr i64 {w0}, 8"));
     let from = f.cur_label.clone();
     let (wide, join) = (f.label(), f.label());
-    f.line(&format!("br i1 {spilled}, label %{wide}, label %{join}"));
+    f.line_fmt(format_args!("br i1 {spilled}, label %{wide}, label %{join}"));
     f.start_block(&wide);
     let wfirst = f.tmp();
-    f.line(&format!("{wfirst} = call %KValue @k_parsed_wide_first(i64 {w1})"));
+    f.line_fmt(format_args!("{wfirst} = call %KValue @k_parsed_wide_first(i64 {w1})"));
     let (wnt, wn) = (f.tmp(), f.tmp());
-    f.line(&format!("{wnt} = extractvalue %KValue {wfirst}, 0"));
-    f.line(&format!("{wn} = extractvalue %KValue {wfirst}, 1"));
+    f.line_fmt(format_args!("{wnt} = extractvalue %KValue {wfirst}, 0"));
+    f.line_fmt(format_args!("{wn} = extractvalue %KValue {wfirst}, 1"));
     let wv = f.tmp();
-    f.line(&format!("{wv} = call %KValue @k_parsed_wide_value(i64 {w1})"));
+    f.line_fmt(format_args!("{wv} = call %KValue @k_parsed_wide_value(i64 {w1})"));
     let (wt, wp) = (f.tmp(), f.tmp());
-    f.line(&format!("{wt} = extractvalue %KValue {wv}, 0"));
-    f.line(&format!("{wp} = extractvalue %KValue {wv}, 1"));
-    f.line(&format!("br label %{join}"));
+    f.line_fmt(format_args!("{wt} = extractvalue %KValue {wv}, 0"));
+    f.line_fmt(format_args!("{wp} = extractvalue %KValue {wv}, 1"));
+    f.line_fmt(format_args!("br label %{join}"));
     f.start_block(&join);
     let (pnt, pn, pt, pp) = (f.tmp(), f.tmp(), f.tmp(), f.tmp());
-    f.line(&format!("{pnt} = phi i64 [ 0, %{from} ], [ {wnt}, %{wide} ]"));
-    f.line(&format!("{pn} = phi i64 [ {n}, %{from} ], [ {wn}, %{wide} ]"));
-    f.line(&format!("{pt} = phi i64 [ {low}, %{from} ], [ {wt}, %{wide} ]"));
-    f.line(&format!("{pp} = phi i64 [ {w1}, %{from} ], [ {wp}, %{wide} ]"));
+    f.line_fmt(format_args!("{pnt} = phi i64 [ 0, %{from} ], [ {wnt}, %{wide} ]"));
+    f.line_fmt(format_args!("{pn} = phi i64 [ {n}, %{from} ], [ {wn}, %{wide} ]"));
+    f.line_fmt(format_args!("{pt} = phi i64 [ {low}, %{from} ], [ {wt}, %{wide} ]"));
+    f.line_fmt(format_args!("{pp} = phi i64 [ {w1}, %{from} ], [ {wp}, %{wide} ]"));
     (pnt, pn, pt, pp)
 }
 
@@ -5270,7 +5303,7 @@ fn not_failure_test(f: &mut FnEmit, value: &str) -> String {
         return (known != K_ERR_TAG).to_string();
     }
     let ok = f.tmp();
-    f.line(&format!("{ok} = icmp ne i64 {tag}, {K_ERR_TAG}"));
+    f.line_fmt(format_args!("{ok} = icmp ne i64 {tag}, {K_ERR_TAG}"));
     ok
 }
 
@@ -5359,10 +5392,10 @@ impl<'a> Backend<'a> {
         let cells = f.lazy_cells.clone();
         for cell in cells {
             if args_ir.iter().any(|a| a.ends_with(cell.as_str())) {
-                f.line(&format!("call void @k_thunk_note_escape(%KValue {cell})"));
+                f.line_fmt(format_args!("call void @k_thunk_note_escape(%KValue {cell})"));
             } else {
                 let d = f.tmp();
-                f.line(&format!(
+                f.line_fmt(format_args!(
                     "{d} = call %KValue @k_thunk_release_unless(%KValue {cell}, %KValue {{ i64 0, i64 0 }})"
                 ));
             }
@@ -5412,7 +5445,7 @@ impl<'a> Backend<'a> {
         let mut flags = Vec::new();
         let r = word_run(f, arg, &words, &mut 0, &mut flags);
         let v = f.tmp();
-        f.line(&format!("{v} = insertvalue %KValue {{ i64 0, i64 undef }}, i64 {r}, 1"));
+        f.line_fmt(format_args!("{v} = insertvalue %KValue {{ i64 0, i64 undef }}, i64 {r}, 1"));
         f.record(&v, INT);
         // In a twin that has written nothing yet, an overflow here starts
         // the general body over instead of going back to the caller, and the
@@ -5421,7 +5454,7 @@ impl<'a> Backend<'a> {
             let mut any = first.clone();
             for flag in &flags[1..] {
                 let a = f.tmp();
-                f.line(&format!("{a} = or i1 {any}, {flag}"));
+                f.line_fmt(format_args!("{a} = or i1 {any}, {flag}"));
                 any = a;
             }
             f.bail_on(&any);
@@ -5465,12 +5498,12 @@ impl<'a> Backend<'a> {
         for j in unknown {
             let t = inline_tag(f, &emitted[j]);
             let w = f.tmp();
-            f.line(&format!("{w} = icmp eq i64 {t}, 0"));
+            f.line_fmt(format_args!("{w} = icmp eq i64 {t}, 0"));
             all = Some(match all {
                 None => w,
                 Some(prev) => {
                     let a = f.tmp();
-                    f.line(&format!("{a} = and i1 {prev}, {w}"));
+                    f.line_fmt(format_args!("{a} = and i1 {prev}, {w}"));
                     a
                 }
             });
@@ -5562,7 +5595,7 @@ impl<'a> Backend<'a> {
                 // seed that is not a string is handed on as it is; the runtime
                 // tells them apart, and the first join adopts the second.
                 let t = f.tmp();
-                f.line(&format!("{t} = call %KValue @k_b_str_builder(%KValue {e})"));
+                f.line_fmt(format_args!("{t} = call %KValue @k_b_str_builder(%KValue {e})"));
                 f.record(&t, f.set_of(e));
                 seeded = t;
                 seeded.as_str()
@@ -5587,13 +5620,13 @@ impl<'a> Backend<'a> {
                 return format!("i64 {raw}");
             }
             let tag = f.tmp();
-            f.line(&format!("{tag} = extractvalue %KValue {e}, 0"));
+            f.line_fmt(format_args!("{tag} = extractvalue %KValue {e}, 0"));
             let payload = f.tmp();
-            f.line(&format!("{payload} = extractvalue %KValue {e}, 1"));
+            f.line_fmt(format_args!("{payload} = extractvalue %KValue {e}, 1"));
             let is_none = f.tmp();
-            f.line(&format!("{is_none} = icmp eq i64 {tag}, {K_NONE}"));
+            f.line_fmt(format_args!("{is_none} = icmp eq i64 {tag}, {K_NONE}"));
             let raw = f.tmp();
-            f.line(&format!("{raw} = select i1 {is_none}, i64 256, i64 {payload}"));
+            f.line_fmt(format_args!("{raw} = select i1 {is_none}, i64 256, i64 {payload}"));
             return format!("i64 {raw}");
         }
         // A register-returned record reaching a slot that wants an ordinary
@@ -5619,15 +5652,15 @@ impl<'a> Backend<'a> {
             // the runtime hands them over unread rather than reading fields
             // off a value that has none.
             let u = f.tmp();
-            f.line(&format!("{u} = call %KValue @k_parsed_words(%KValue {e})"));
+            f.line_fmt(format_args!("{u} = call %KValue @k_parsed_words(%KValue {e})"));
             let w0 = f.tmp();
-            f.line(&format!("{w0} = extractvalue %KValue {u}, 0"));
+            f.line_fmt(format_args!("{w0} = extractvalue %KValue {u}, 0"));
             let w1 = f.tmp();
-            f.line(&format!("{w1} = extractvalue %KValue {u}, 1"));
+            f.line_fmt(format_args!("{w1} = extractvalue %KValue {u}, 1"));
             let a = f.tmp();
-            f.line(&format!("{a} = insertvalue %parsed undef, i64 {w0}, 0"));
+            f.line_fmt(format_args!("{a} = insertvalue %parsed undef, i64 {w0}, 0"));
             let p = f.tmp();
-            f.line(&format!("{p} = insertvalue %parsed {a}, i64 {w1}, 1"));
+            f.line_fmt(format_args!("{p} = insertvalue %parsed {a}, i64 {w1}, 1"));
             format!("%parsed {p}")
         } else if self.unboxed_param(callee, arity, i) {
             let p = inline_payload(f, e);
@@ -5700,10 +5733,10 @@ impl<'a> Backend<'a> {
             _ => return,
         };
         let t = f.tmp();
-        f.line(&format!("{t} = extractvalue %KValue {value}, 0"));
+        f.line_fmt(format_args!("{t} = extractvalue %KValue {value}, 0"));
         let is = f.tmp();
-        f.line(&format!("{is} = icmp eq i64 {t}, {tag}"));
-        f.line(&format!("call void @llvm.assume(i1 {is})"));
+        f.line_fmt(format_args!("{is} = icmp eq i64 {t}, {tag}"));
+        f.line_fmt(format_args!("call void @llvm.assume(i1 {is})"));
     }
 
     fn rebox_params(&self, f: &mut FnEmit, name: &str, arity: usize) {
@@ -5732,15 +5765,15 @@ impl<'a> Backend<'a> {
                 // anything else is that byte. The reconstruction folds back into
                 // a raw switch, so only the raw i64 actually crossed the edge.
                 let is_none = f.tmp();
-                f.line(&format!("{is_none} = icmp eq i64 %x{i}r, 256"));
-                f.line(&format!(
+                f.line_fmt(format_args!("{is_none} = icmp eq i64 %x{i}r, 256"));
+                f.line_fmt(format_args!(
                     "%x{i}b = insertvalue %KValue {{ i64 0, i64 undef }}, i64 %x{i}r, 1"
                 ));
-                f.line(&format!(
+                f.line_fmt(format_args!(
                     "%x{i} = select i1 {is_none}, %KValue {{ i64 4, i64 0 }}, %KValue %x{i}b"
                 ));
             } else if self.own_unboxed(name, arity, i) {
-                f.line(&format!(
+                f.line_fmt(format_args!(
                     "%x{i} = insertvalue %KValue {{ i64 0, i64 undef }}, i64 %x{i}r, 1"
                 ));
                 // the unboxing condition is the proof: this slot is an int, and
@@ -5843,7 +5876,7 @@ impl<'a> Backend<'a> {
             args.push_str(&format!(", %KValue {temp}"));
         }
         let t = f.tmp();
-        f.line(&format!(
+        f.line_fmt(format_args!(
             "{t} = call %KValue (i64, i32, ...) @k_thunk_new(i64 {site}, i32 {}{args})",
             captures.len()
         ));
@@ -5865,7 +5898,7 @@ impl<'a> Backend<'a> {
         }
         let post = f.set_of(&value) & !crate::infer::THUNK;
         let t = f.tmp();
-        f.line(&format!("{t} = call %KValue @k_force_unless_black(%KValue {value})"));
+        f.line_fmt(format_args!("{t} = call %KValue @k_force_unless_black(%KValue {value})"));
         f.record(&t, if post == 0 { crate::infer::TOP } else { post | crate::infer::THUNK });
         t
     }
@@ -5899,7 +5932,7 @@ impl<'a> Backend<'a> {
             }
             false => {
                 let t = f.tmp();
-                f.line(&format!("{t} = call %KValue @k_render(%KValue {value}, i64 0)"));
+                f.line_fmt(format_args!("{t} = call %KValue @k_render(%KValue {value}, i64 0)"));
                 (t, fails)
             }
         }
@@ -5913,7 +5946,7 @@ impl<'a> Backend<'a> {
     fn render_through_group(&self, f: &mut FnEmit, value: &str, may_be_err: bool) -> String {
         let call = |f: &mut FnEmit| {
             let t = f.tmp();
-            f.line(&format!(
+            f.line_fmt(format_args!(
                 "{t} = call tailcc %KValue @{}(%KValue {value})",
                 dsym(RENDER_GROUP, 1)
             ));
@@ -5923,20 +5956,20 @@ impl<'a> Backend<'a> {
             return call(f);
         }
         let tag = f.tmp();
-        f.line(&format!("{tag} = extractvalue %KValue {value}, 0"));
+        f.line_fmt(format_args!("{tag} = extractvalue %KValue {value}, 0"));
         let failing = f.tmp();
-        f.line(&format!("{failing} = icmp eq i64 {tag}, 5"));
+        f.line_fmt(format_args!("{failing} = icmp eq i64 {tag}, 5"));
         let render = f.label();
         let merge = f.label();
         let from = f.cur_label.clone();
-        f.line(&format!("br i1 {failing}, label %{merge}, label %{render}"));
+        f.line_fmt(format_args!("br i1 {failing}, label %{merge}, label %{render}"));
         f.start_block(&render);
         let rendered = call(f);
         let rendered_from = f.cur_label.clone();
-        f.line(&format!("br label %{merge}"));
+        f.line_fmt(format_args!("br label %{merge}"));
         f.start_block(&merge);
         let t = f.tmp();
-        f.line(&format!(
+        f.line_fmt(format_args!(
             "{t} = phi %KValue [ {value}, %{from} ], [ {rendered}, %{rendered_from} ]"
         ));
         t
@@ -5952,7 +5985,7 @@ impl<'a> Backend<'a> {
             return value;
         }
         let t = f.tmp();
-        f.line(&format!("{t} = call %KValue @k_unsub(%KValue {value})"));
+        f.line_fmt(format_args!("{t} = call %KValue @k_unsub(%KValue {value})"));
         f.record(&t, f.set_of(&value));
         t
     }
@@ -5968,7 +6001,7 @@ impl<'a> Backend<'a> {
         }
         let post = f.set_of(&value) & !crate::infer::THUNK;
         let t = f.tmp();
-        f.line(&format!("{t} = call %KValue @k_force_fast(%KValue {value})"));
+        f.line_fmt(format_args!("{t} = call %KValue @k_force_fast(%KValue {value})"));
         // A forced thunk can yield anything its expr could; the bind site
         // recorded TOP, so widen conservatively past the removed bit.
         f.record(&t, if post == 0 { crate::infer::TOP & !crate::infer::THUNK } else { post });
@@ -5991,7 +6024,9 @@ impl<'a> Backend<'a> {
         self.thunk_sites.push((sym.clone(), 0));
         self.emit_thunk_site(&sym, &[], expr, f)?;
         let t = f.tmp();
-        f.line(&format!("{t} = call %KValue (i64, i32, ...) @k_thunk_new(i64 {site}, i32 0)"));
+        f.line_fmt(format_args!(
+            "{t} = call %KValue (i64, i32, ...) @k_thunk_new(i64 {site}, i32 0)"
+        ));
         f.record(&t, crate::infer::TOP);
         Ok(t)
     }
@@ -6428,7 +6463,7 @@ impl<'a> Backend<'a> {
         // into a permanent slot instead of allocating per visit
         let (name, len) = self.intern(text);
         let t = f.tmp();
-        f.line(&format!(
+        f.line_fmt(format_args!(
             "{t} = call %KValue @k_str_lit_fast(ptr @{name}, i64 {len}, ptr @{name}_lit)"
         ));
         t
@@ -6789,7 +6824,7 @@ impl<'a> Backend<'a> {
                 None => ok,
                 Some(prev) => {
                     let t = f.tmp();
-                    f.line(&format!("{t} = and i1 {prev}, {ok}"));
+                    f.line_fmt(format_args!("{t} = and i1 {prev}, {ok}"));
                     t
                 }
             });
@@ -6797,7 +6832,7 @@ impl<'a> Backend<'a> {
         let dispatch = f.label();
         if let Some(ok) = all_ok {
             let propagate = f.label();
-            f.line(&format!("br i1 {ok}, label %{dispatch}, label %{propagate}"));
+            f.line_fmt(format_args!("br i1 {ok}, label %{dispatch}, label %{propagate}"));
             f.start_block(&propagate);
             for i in 0..arity {
                 // NOT the folding twin. This block runs only when one of the
@@ -6808,10 +6843,10 @@ impl<'a> Backend<'a> {
                 let good = not_failure_test(&mut f, &format!("%x{i}"));
                 let next = f.label();
                 let ret_it = f.label();
-                f.line(&format!("br i1 {good}, label %{next}, label %{ret_it}"));
+                f.line_fmt(format_args!("br i1 {good}, label %{next}, label %{ret_it}"));
                 f.start_block(&ret_it);
                 let hopped = f.tmp();
-                f.line(&format!(
+                f.line_fmt(format_args!(
                     "{hopped} = call %KValue @k_err_hop(%KValue %x{i}, ptr @{hop_name})"
                 ));
                 self.emit_ret_failure(&mut f, name, arity, &hopped);
@@ -6819,7 +6854,7 @@ impl<'a> Backend<'a> {
             }
             f.line("unreachable");
         } else {
-            f.line(&format!("br label %{dispatch}"));
+            f.line_fmt(format_args!("br label %{dispatch}"));
         }
         f.start_block(&dispatch);
         let dv = format!("%x{disc}");
@@ -6871,12 +6906,12 @@ impl<'a> Backend<'a> {
                         ),
                     );
                     let b = f.tmp();
-                    f.line(&format!("{b} = icmp ne i64 {c}, 0"));
+                    f.line_fmt(format_args!("{b} = icmp ne i64 {c}, 0"));
                     let next = f.label();
-                    f.line(&format!("br i1 {b}, label %{label}, label %{next}"));
+                    f.line_fmt(format_args!("br i1 {b}, label %{label}, label %{next}"));
                     f.start_block(&next);
                 }
-                f.line(&format!("br label %{dflt}"));
+                f.line_fmt(format_args!("br label %{dflt}"));
             }
             f.start_block(&dflt);
             // With no generic arm both sides of the test are `nomatch`, so
@@ -6885,7 +6920,9 @@ impl<'a> Backend<'a> {
                 None => f.line("br label %nomatch"),
                 Some(_) => {
                     let disc_ok = inline_not_failure(&mut f, &dv);
-                    f.line(&format!("br i1 {disc_ok}, label %{generic_label}, label %nomatch"));
+                    f.line_fmt(format_args!(
+                        "br i1 {disc_ok}, label %{generic_label}, label %nomatch"
+                    ));
                 }
             }
         } else {
@@ -6955,10 +6992,10 @@ impl<'a> Backend<'a> {
                 f.switch_on(&format!("%x{disc}r"), &generic_label, &cases);
             } else {
                 let is_int = f.tmp();
-                f.line(&format!("{is_int} = icmp eq i64 {tag}, 0"));
+                f.line_fmt(format_args!("{is_int} = icmp eq i64 {tag}, 0"));
                 let int_block = f.label();
                 let not_int = f.label();
-                f.line(&format!("br i1 {is_int}, label %{int_block}, label %{not_int}"));
+                f.line_fmt(format_args!("br i1 {is_int}, label %{int_block}, label %{not_int}"));
                 f.start_block(&int_block);
                 let payload = inline_payload(&mut f, &dv);
                 let cases: Vec<String> =
@@ -6968,14 +7005,16 @@ impl<'a> Backend<'a> {
                 // nullary tags, then generic (non-failure) or propagation
                 for (t, l) in &nullary_cases {
                     let hit = f.tmp();
-                    f.line(&format!("{hit} = icmp eq i64 {tag}, {t}"));
+                    f.line_fmt(format_args!("{hit} = icmp eq i64 {tag}, {t}"));
                     let next = f.label();
-                    f.line(&format!("br i1 {hit}, label %{l}, label %{next}"));
+                    f.line_fmt(format_args!("br i1 {hit}, label %{l}, label %{next}"));
                     f.start_block(&next);
                 }
                 let disc_ok = inline_not_failure(&mut f, &dv);
                 let nomatch = "nomatch".to_string();
-                f.line(&format!("br i1 {disc_ok}, label %{generic_label}, label %{nomatch}"));
+                f.line_fmt(format_args!(
+                    "br i1 {disc_ok}, label %{generic_label}, label %{nomatch}"
+                ));
             }
         }
 
@@ -6988,21 +7027,23 @@ impl<'a> Backend<'a> {
             // failure here. A none is a value, not a failure (ruled
             // 2026-07-24), so it is refused like any other value no arm takes.
             let disc_fail = f.tmp();
-            f.line(&format!("{disc_fail} = extractvalue %KValue {dv}, 0"));
+            f.line_fmt(format_args!("{disc_fail} = extractvalue %KValue {dv}, 0"));
             let failing = f.tmp();
-            f.line(&format!("{failing} = icmp eq i64 {disc_fail}, 5"));
+            f.line_fmt(format_args!("{failing} = icmp eq i64 {disc_fail}, 5"));
             let ret_disc = f.label();
             let die = f.label();
-            f.line(&format!("br i1 {failing}, label %{ret_disc}, label %{die}"));
+            f.line_fmt(format_args!("br i1 {failing}, label %{ret_disc}, label %{die}"));
             f.start_block(&ret_disc);
             let hopped = f.tmp();
-            f.line(&format!("{hopped} = call %KValue @k_err_hop(%KValue {dv}, ptr @{hop_name})"));
+            f.line_fmt(format_args!(
+                "{hopped} = call %KValue @k_err_hop(%KValue {dv}, ptr @{hop_name})"
+            ));
             self.emit_ret_failure(&mut f, name, arity, &hopped);
             f.start_block(&die);
             let msg =
                 format!("no overload of `{}` matches these arguments\0", crate::ast::spoken(name));
             let (m, _len) = self.intern(&msg);
-            f.line(&format!("call void @k_die(ptr @{m})"));
+            f.line_fmt(format_args!("call void @k_die(ptr @{m})"));
             f.line("unreachable");
         }
         // arm bodies: patterns are known matched, only bind generics
@@ -7212,16 +7253,16 @@ impl<'a> Backend<'a> {
         }
         let (lit, _) = self.intern(&format!("{field}\0"));
         let is = f.tmp();
-        f.line(&format!("{is} = call i64 @k_is_err(%KValue %x0)"));
+        f.line_fmt(format_args!("{is} = call i64 @k_is_err(%KValue %x0)"));
         let err = f.tmp();
-        f.line(&format!("{err} = icmp ne i64 {is}, 0"));
+        f.line_fmt(format_args!("{err} = icmp ne i64 {is}, 0"));
         let read = f.label();
         let arms = f.label();
-        f.line(&format!("br i1 {err}, label %{read}, label %{arms}"));
+        f.line_fmt(format_args!("br i1 {err}, label %{read}, label %{arms}"));
         f.start_block(&read);
         let got = f.tmp();
-        f.line(&format!("{got} = call %KValue @k_err_read(%KValue %x0, ptr @{lit})"));
-        f.line(&format!("ret %KValue {got}"));
+        f.line_fmt(format_args!("{got} = call %KValue @k_err_read(%KValue %x0, ptr @{lit})"));
+        f.line_fmt(format_args!("ret %KValue {got}"));
         f.start_block(&arms);
         Ok(())
     }
@@ -7259,10 +7300,10 @@ impl<'a> Backend<'a> {
         // a failure tag, so `k_not_failure` still separates the two.
         for i in 0..arity {
             if self.escape.carries_ty(name, arity, i).is_some() {
-                f.line(&format!("%x{i}w0 = extractvalue %parsed %x{i}, 0"));
-                f.line(&format!("%x{i}w1 = extractvalue %parsed %x{i}, 1"));
-                f.line(&format!("%x{i}sa = insertvalue %KValue undef, i64 %x{i}w0, 0"));
-                f.line(&format!("%x{i}s = insertvalue %KValue %x{i}sa, i64 %x{i}w1, 1"));
+                f.line_fmt(format_args!("%x{i}w0 = extractvalue %parsed %x{i}, 0"));
+                f.line_fmt(format_args!("%x{i}w1 = extractvalue %parsed %x{i}, 1"));
+                f.line_fmt(format_args!("%x{i}sa = insertvalue %KValue undef, i64 %x{i}w0, 0"));
+                f.line_fmt(format_args!("%x{i}s = insertvalue %KValue %x{i}sa, i64 %x{i}w1, 1"));
             }
         }
         // A releasable cell is created inside an arm's body, so it exists only
@@ -7318,10 +7359,12 @@ impl<'a> Backend<'a> {
             let ok = inline_not_failure(&mut f, &val);
             let ret_label = f.label();
             let next = f.label();
-            f.line(&format!("br i1 {ok}, label %{next}, label %{ret_label}"));
+            f.line_fmt(format_args!("br i1 {ok}, label %{next}, label %{ret_label}"));
             f.start_block(&ret_label);
             let hopped = f.tmp();
-            f.line(&format!("{hopped} = call %KValue @k_err_hop(%KValue {val}, ptr @{hop_name})"));
+            f.line_fmt(format_args!(
+                "{hopped} = call %KValue @k_err_hop(%KValue {val}, ptr @{hop_name})"
+            ));
             self.emit_ret_failure(&mut f, name, arity, &hopped);
             f.start_block(&next);
         }
@@ -7333,10 +7376,10 @@ impl<'a> Backend<'a> {
                 // a getter never takes the by-value convention, so its
                 // parameter is already an ordinary value here
                 if self.ret_ty(name, arity) == "%parsed" {
-                    f.line(&format!("call void @k_no_field(%KValue %x0, ptr @{lit})"));
+                    f.line_fmt(format_args!("call void @k_no_field(%KValue %x0, ptr @{lit})"));
                 } else {
                     let got = f.tmp();
-                    f.line(&format!(
+                    f.line_fmt(format_args!(
                         "{got} = call %KValue @k_field_forced(%KValue %x0, ptr @{lit})"
                     ));
                     self.emit_ret(&mut f, &got);
@@ -7348,7 +7391,7 @@ impl<'a> Backend<'a> {
                     crate::ast::spoken(name)
                 );
                 let (m, _len) = self.intern(&format!("{msg}\0"));
-                f.line(&format!("call void @k_die(ptr @{m})"));
+                f.line_fmt(format_args!("call void @k_die(ptr @{m})"));
             }
         }
         f.line("unreachable");
@@ -7399,25 +7442,25 @@ impl<'a> Backend<'a> {
                 if !value_refuses {
                     let ok = inline_not_failure(f, status);
                     let cont = f.label();
-                    f.line(&format!("br i1 {ok}, label %{cont}, label %{fail}"));
+                    f.line_fmt(format_args!("br i1 {ok}, label %{cont}, label %{fail}"));
                     f.start_block(&cont);
                 }
                 let w0 = f.tmp();
-                f.line(&format!("{w0} = extractvalue %KValue {status}, 0"));
+                f.line_fmt(format_args!("{w0} = extractvalue %KValue {status}, 0"));
                 let w1 = f.tmp();
-                f.line(&format!("{w1} = extractvalue %KValue {status}, 1"));
+                f.line_fmt(format_args!("{w1} = extractvalue %KValue {status}, 1"));
                 let (post, posp, vtag, w1) = unpack_words(f, &w0, &w1);
                 let posa = f.tmp();
-                f.line(&format!("{posa} = insertvalue %KValue undef, i64 {post}, 0"));
+                f.line_fmt(format_args!("{posa} = insertvalue %KValue undef, i64 {post}, 0"));
                 let poskv = f.tmp();
-                f.line(&format!("{poskv} = insertvalue %KValue {posa}, i64 {posp}, 1"));
+                f.line_fmt(format_args!("{poskv} = insertvalue %KValue {posa}, i64 {posp}, 1"));
                 // The position is an int whatever the word held, so its
                 // pattern has no failure to refuse.
                 self.emit_pattern_known(f, &poskv, &fields[0], fail, TOP & !FAIL)?;
                 let va = f.tmp();
-                f.line(&format!("{va} = insertvalue %KValue undef, i64 {vtag}, 0"));
+                f.line_fmt(format_args!("{va} = insertvalue %KValue undef, i64 {vtag}, 0"));
                 let vkv = f.tmp();
-                f.line(&format!("{vkv} = insertvalue %KValue {va}, i64 {w1}, 1"));
+                f.line_fmt(format_args!("{vkv} = insertvalue %KValue {va}, i64 {w1}, 1"));
                 self.emit_pattern(f, &vkv, &fields[1], fail)?;
                 if let Some(named) = whole {
                     f.bind(&named.0, status);
@@ -7435,7 +7478,7 @@ impl<'a> Backend<'a> {
         if self.ret_ty(name, arity) == "%parsed" {
             self.emit_parsed_from_failure(f, &failure);
         } else {
-            f.line(&format!("ret %KValue {failure}"));
+            f.line_fmt(format_args!("ret %KValue {failure}"));
         }
     }
 
@@ -7453,7 +7496,7 @@ impl<'a> Backend<'a> {
             self.emit_parsed_from_failure(f, &value);
         } else {
             let value = self.as_value(f, &value);
-            f.line(&format!("ret %KValue {value}"));
+            f.line_fmt(format_args!("ret %KValue {value}"));
         }
     }
 
@@ -7462,14 +7505,14 @@ impl<'a> Backend<'a> {
     /// `%parsed` words, so the discriminator (low word ∈ {4,5}) stays intact.
     fn emit_parsed_from_failure(&self, f: &mut FnEmit, failure: &str) {
         let w0 = f.tmp();
-        f.line(&format!("{w0} = extractvalue %KValue {failure}, 0"));
+        f.line_fmt(format_args!("{w0} = extractvalue %KValue {failure}, 0"));
         let w1 = f.tmp();
-        f.line(&format!("{w1} = extractvalue %KValue {failure}, 1"));
+        f.line_fmt(format_args!("{w1} = extractvalue %KValue {failure}, 1"));
         let a = f.tmp();
-        f.line(&format!("{a} = insertvalue %parsed undef, i64 {w0}, 0"));
+        f.line_fmt(format_args!("{a} = insertvalue %parsed undef, i64 {w0}, 0"));
         let p = f.tmp();
-        f.line(&format!("{p} = insertvalue %parsed {a}, i64 {w1}, 1"));
-        f.line(&format!("ret %parsed {p}"));
+        f.line_fmt(format_args!("{p} = insertvalue %parsed {a}, i64 {w1}, 1"));
+        f.line_fmt(format_args!("ret %parsed {p}"));
     }
 
     /// A direct construction of the register-returnable type a callee slot
@@ -7509,9 +7552,9 @@ impl<'a> Backend<'a> {
         let pid = self.type_ids[ty];
         let (w0, w1) = pack_words(f, pid, &pos, &value);
         let a = f.tmp();
-        f.line(&format!("{a} = insertvalue %parsed undef, i64 {w0}, 0"));
+        f.line_fmt(format_args!("{a} = insertvalue %parsed undef, i64 {w0}, 0"));
         let p = f.tmp();
-        f.line(&format!("{p} = insertvalue %parsed {a}, i64 {w1}, 1"));
+        f.line_fmt(format_args!("{p} = insertvalue %parsed {a}, i64 {w1}, 1"));
         f.record_parsed(&p, ty, pid);
         Ok(p)
     }
@@ -7535,10 +7578,10 @@ impl<'a> Backend<'a> {
         self.bail_on_pair_failure(f, &pos, &value);
         let (w0, w1) = pack_words(f, self.type_ids[ty], &pos, &value);
         let a = f.tmp();
-        f.line(&format!("{a} = insertvalue %parsed undef, i64 {w0}, 0"));
+        f.line_fmt(format_args!("{a} = insertvalue %parsed undef, i64 {w0}, 0"));
         let p = f.tmp();
-        f.line(&format!("{p} = insertvalue %parsed {a}, i64 {w1}, 1"));
-        f.line(&format!("ret %parsed {p}"));
+        f.line_fmt(format_args!("{p} = insertvalue %parsed {a}, i64 {w1}, 1"));
+        f.line_fmt(format_args!("ret %parsed {p}"));
         Ok(())
     }
 
@@ -7548,13 +7591,13 @@ impl<'a> Backend<'a> {
         let ok_left = inline_not_failure(f, left);
         let ok_right = inline_not_failure(f, right);
         let both = f.tmp();
-        f.line(&format!("{both} = and i1 {ok_left}, {ok_right}"));
+        f.line_fmt(format_args!("{both} = and i1 {ok_left}, {ok_right}"));
         let cont = f.label();
         let bail = f.label();
-        f.line(&format!("br i1 {both}, label %{cont}, label %{bail}"));
+        f.line_fmt(format_args!("br i1 {both}, label %{cont}, label %{bail}"));
         f.start_block(&bail);
         let merged = f.tmp();
-        f.line(&format!(
+        f.line_fmt(format_args!(
             "{merged} = call %KValue @k_pair_failure(%KValue {left}, %KValue {right})"
         ));
         self.emit_ret(f, &merged);
@@ -7567,7 +7610,7 @@ impl<'a> Backend<'a> {
         let ok = inline_not_failure(f, value);
         let cont = f.label();
         let bail = f.label();
-        f.line(&format!("br i1 {ok}, label %{cont}, label %{bail}"));
+        f.line_fmt(format_args!("br i1 {ok}, label %{cont}, label %{bail}"));
         f.start_block(&bail);
         self.emit_ret(f, value);
         f.start_block(&cont);
@@ -7585,21 +7628,21 @@ impl<'a> Backend<'a> {
             let c = f.tmp();
             f.predicate(&c, call);
             let b = f.tmp();
-            f.line(&format!("{b} = icmp ne i64 {c}, 0"));
+            f.line_fmt(format_args!("{b} = icmp ne i64 {c}, 0"));
             let ok = f.label();
-            f.line(&format!("br i1 {b}, label %{ok}, label %{fail}"));
+            f.line_fmt(format_args!("br i1 {b}, label %{ok}, label %{fail}"));
             f.start_block(&ok);
             let _ = backend;
         };
         let branch_i1 = |f: &mut FnEmit, cond: String| {
             let ok = f.label();
-            f.line(&format!("br i1 {cond}, label %{ok}, label %{fail}"));
+            f.line_fmt(format_args!("br i1 {cond}, label %{ok}, label %{fail}"));
             f.start_block(&ok);
         };
         let tag_is = |f: &mut FnEmit, value: &str, tag: i64| {
             let t = inline_tag(f, value);
             let b = f.tmp();
-            f.line(&format!("{b} = icmp eq i64 {t}, {tag}"));
+            f.line_fmt(format_args!("{b} = icmp eq i64 {t}, {tag}"));
             b
         };
         match pattern {
@@ -7615,9 +7658,9 @@ impl<'a> Backend<'a> {
                 let is_int = tag_is(f, value, 0);
                 let payload = inline_payload(f, value);
                 let eq = f.tmp();
-                f.line(&format!("{eq} = icmp eq i64 {payload}, {n}"));
+                f.line_fmt(format_args!("{eq} = icmp eq i64 {payload}, {n}"));
                 let both = f.tmp();
-                f.line(&format!("{both} = and i1 {is_int}, {eq}"));
+                f.line_fmt(format_args!("{both} = and i1 {is_int}, {eq}"));
                 branch_i1(f, both);
             }
             Pattern::StrLit(s, _) => {
@@ -7679,14 +7722,14 @@ impl<'a> Backend<'a> {
                         None => c,
                         Some(prev) => {
                             let o = f.tmp();
-                            f.line(&format!("{o} = or i64 {prev}, {c}"));
+                            f.line_fmt(format_args!("{o} = or i64 {prev}, {c}"));
                             o
                         }
                     });
                 }
                 let combined = acc.expect("an annotation names at least one type");
                 let b = f.tmp();
-                f.line(&format!("{b} = icmp ne i64 {combined}, 0"));
+                f.line_fmt(format_args!("{b} = icmp ne i64 {combined}, 0"));
                 branch_i1(f, b);
                 f.bind(name, value);
             }
@@ -7694,7 +7737,9 @@ impl<'a> Backend<'a> {
                 if ty == "err" {
                     check(self, f, format!("call i64 @k_check_tag(%KValue {value}, i64 {K_ERR})"));
                     let inner = f.tmp();
-                    f.line(&format!("{inner} = call %KValue @k_err_inner(%KValue {value})"));
+                    f.line_fmt(format_args!(
+                        "{inner} = call %KValue @k_err_inner(%KValue {value})"
+                    ));
                     self.emit_pattern(f, &inner, &fields[0], fail)?;
                     if let Some(named) = whole {
                         f.bind(&named.0, value);
@@ -7715,7 +7760,9 @@ impl<'a> Backend<'a> {
                 );
                 for (i, field) in fields.iter().enumerate() {
                     let fv = f.tmp();
-                    f.line(&format!("{fv} = call %KValue @k_field_fast(%KValue {value}, i64 {i})"));
+                    f.line_fmt(format_args!(
+                        "{fv} = call %KValue @k_field_fast(%KValue {value}, i64 {i})"
+                    ));
                     self.emit_pattern(f, &fv, field, fail)?;
                 }
                 // the as-pattern's name takes the value that matched, so an
@@ -7752,14 +7799,14 @@ impl<'a> Backend<'a> {
             for member in tys {
                 let call = self.member_check_call(value, member)?;
                 let c = f.tmp();
-                f.line(&format!("{c} = {call}"));
+                f.line_fmt(format_args!("{c} = {call}"));
                 let b = f.tmp();
-                f.line(&format!("{b} = icmp ne i64 {c}, 0"));
+                f.line_fmt(format_args!("{b} = icmp ne i64 {c}, 0"));
                 matched = Some(match matched {
                     None => b,
                     Some(prev) => {
                         let t = f.tmp();
-                        f.line(&format!("{t} = or i1 {prev}, {b}"));
+                        f.line_fmt(format_args!("{t} = or i1 {prev}, {b}"));
                         t
                     }
                 });
@@ -7767,16 +7814,16 @@ impl<'a> Backend<'a> {
             let matched = matched.expect("a typeset has members");
             let not_fail = inline_not_failure(f, value);
             let not_matched = f.tmp();
-            f.line(&format!("{not_matched} = xor i1 {matched}, true"));
+            f.line_fmt(format_args!("{not_matched} = xor i1 {matched}, true"));
             let bad = f.tmp();
-            f.line(&format!("{bad} = and i1 {not_matched}, {not_fail}"));
+            f.line_fmt(format_args!("{bad} = and i1 {not_matched}, {not_fail}"));
             let die = f.label();
             let ok = f.label();
-            f.line(&format!("br i1 {bad}, label %{die}, label %{ok}"));
+            f.line_fmt(format_args!("br i1 {bad}, label %{die}, label %{ok}"));
             f.start_block(&die);
             let msg = format!("field `{field}` of `{name}` takes {}\0", tys.join(" "));
             let (m, _) = self.intern(&msg);
-            f.line(&format!("call void @k_die(ptr @{m})"));
+            f.line_fmt(format_args!("call void @k_die(ptr @{m})"));
             f.line("unreachable");
             f.start_block(&ok);
         }
@@ -7851,13 +7898,13 @@ impl<'a> Backend<'a> {
                     let t = f.tmp();
                     if arg_sets[0] == STR {
                         let slot = f.tmp();
-                        f.line(&format!("{slot} = alloca [3 x i64], align 8"));
-                        f.line(&format!(
+                        f.line_fmt(format_args!("{slot} = alloca [3 x i64], align 8"));
+                        f.line_fmt(format_args!(
                             "{t} = call %KValue @k_b_bytes_frame(%KValue {v}, ptr {slot})"
                         ));
                         f.frame_held = true;
                     } else {
-                        f.line(&format!("{t} = call %KValue @k_b_bytes_fast(%KValue {v})"));
+                        f.line_fmt(format_args!("{t} = call %KValue @k_b_bytes_fast(%KValue {v})"));
                     }
                     f.record(&t, infer::builtin_set("bytes", &arg_sets));
                     f.bind(name, &t);
@@ -7903,17 +7950,17 @@ impl<'a> Backend<'a> {
                                 ),
                             );
                             let b = f.tmp();
-                            f.line(&format!("{b} = icmp ne i64 {c}, 0"));
+                            f.line_fmt(format_args!("{b} = icmp ne i64 {c}, 0"));
                             let ok = f.label();
                             let bad = f.label();
-                            f.line(&format!("br i1 {b}, label %{ok}, label %{bad}"));
+                            f.line_fmt(format_args!("br i1 {b}, label %{ok}, label %{bad}"));
                             f.start_block(&bad);
                             // The value goes to the runtime rather than a baked
                             // sentence: the reader wants to see what they bound,
                             // and only the runtime knows it. Its keyed sibling
                             // `k_keyed_check` has always worked this way.
                             let (m, _) = self.intern(&format!("{ty}\0"));
-                            f.line(&format!(
+                            f.line_fmt(format_args!(
                                 "call void @k_die_destructure(%KValue {value}, ptr @{m})"
                             ));
                             f.line("unreachable");
@@ -7921,7 +7968,7 @@ impl<'a> Backend<'a> {
                             for (i, field) in fields.iter().enumerate() {
                                 if let Pattern::Var(name, _) = field {
                                     let fv = f.tmp();
-                                    f.line(&format!(
+                                    f.line_fmt(format_args!(
                                         "{fv} = call %KValue @k_field_fast(%KValue {value}, i64 {i})"
                                     ));
                                     f.bind(name, &fv);
@@ -7930,14 +7977,14 @@ impl<'a> Backend<'a> {
                         }
                         Pattern::Keyed { entries, .. } => {
                             let checked = f.tmp();
-                            f.line(&format!(
+                            f.line_fmt(format_args!(
                                 "{checked} = call %KValue @k_keyed_check(%KValue {value}, i64 {})",
                                 entries.len()
                             ));
                             for entry in entries {
                                 let (name, _) = self.intern(&format!("{}\0", entry.field));
                                 let fv = f.tmp();
-                                f.line(&format!(
+                                f.line_fmt(format_args!(
                                     "{fv} = call %KValue @k_keyed_field(%KValue {checked}, ptr @{name})"
                                 ));
                                 f.bind(&entry.bind_name, &fv);
@@ -8053,13 +8100,13 @@ impl<'a> Backend<'a> {
         for t in asked.iter().rev() {
             let ok = inline_not_failure(f, t);
             let pick = f.tmp();
-            f.line(&format!("{pick} = select i1 {ok}, %KValue {first}, %KValue {t}"));
+            f.line_fmt(format_args!("{pick} = select i1 {ok}, %KValue {first}, %KValue {t}"));
             let worse = f.tmp();
-            f.line(&format!("{worse} = select i1 {ok}, i1 {bad}, i1 true"));
+            f.line_fmt(format_args!("{worse} = select i1 {ok}, i1 {bad}, i1 true"));
             (first, bad) = (pick, worse);
         }
         let (go, skip, join) = (f.label(), f.label(), f.label());
-        f.line(&format!("br i1 {bad}, label %{skip}, label %{go}"));
+        f.line_fmt(format_args!("br i1 {bad}, label %{skip}, label %{go}"));
         f.start_block(&go);
         let called = self.emit_call_full(f, &callee, &all, piped, span)?;
         let called = match f.is_parsed(&called) {
@@ -8067,12 +8114,12 @@ impl<'a> Backend<'a> {
             false => called,
         };
         let called_from = f.cur_label.clone();
-        f.line(&format!("br label %{join}"));
+        f.line_fmt(format_args!("br label %{join}"));
         f.start_block(&skip);
-        f.line(&format!("br label %{join}"));
+        f.line_fmt(format_args!("br label %{join}"));
         f.start_block(&join);
         let answer = f.tmp();
-        f.line(&format!(
+        f.line_fmt(format_args!(
             "{answer} = phi %KValue [ {called}, %{called_from} ], [ {first}, %{skip} ]"
         ));
         let set = f.set_of(&called) | FAIL;
@@ -8138,7 +8185,9 @@ impl<'a> Backend<'a> {
             let take = rest.len().min(4);
             let arg_ir: String = rest[..take].iter().map(|v| format!(", %KValue {v}")).collect();
             let t = f.tmp();
-            f.line(&format!("{t} = call %KValue @k_partial{take}(%KValue {callee}{arg_ir})"));
+            f.line_fmt(format_args!(
+                "{t} = call %KValue @k_partial{take}(%KValue {callee}{arg_ir})"
+            ));
             f.record(&t, TOP);
             callee = t;
             rest = &rest[take..];
@@ -8164,7 +8213,7 @@ impl<'a> Backend<'a> {
                 let want = self.sub_want(ty)?;
                 let (tyn, _) = self.intern(&format!("{ty}\0"));
                 let t = f.tmp();
-                f.line(&format!(
+                f.line_fmt(format_args!(
                     "{t} = call %KValue @k_upcast(%KValue {v}, i64 {want}, ptr @{tyn})"
                 ));
                 f.record(&t, crate::infer::TOP);
@@ -8187,7 +8236,7 @@ impl<'a> Backend<'a> {
                             let tv = self.emit_expr(f, &ident)?;
                             let tv = self.maybe_force(f, tv);
                             let (label, _) = self.intern(&format!("{field}\0"));
-                            f.line(&format!(
+                            f.line_fmt(format_args!(
                                 "call %KValue @k_set_field(%KValue {tv}, ptr @{label}, %KValue {new})"
                             ));
                         }
@@ -8212,14 +8261,19 @@ impl<'a> Backend<'a> {
                 Err(_) => {
                     let (name, len) = self.intern(&n.to_string());
                     let t = f.tmp();
-                    f.line(&format!("{t} = call %KValue @k_int_of_digits(ptr @{name}, i64 {len})"));
+                    f.line_fmt(format_args!(
+                        "{t} = call %KValue @k_int_of_digits(ptr @{name}, i64 {len})"
+                    ));
                     f.record(&t, infer::BIG);
                     Ok(t)
                 }
             },
             Expr::Float(x, _) => {
                 let t = f.tmp();
-                f.line(&format!("{t} = call %KValue @k_float(double 0x{:016X})", x.to_bits()));
+                f.line_fmt(format_args!(
+                    "{t} = call %KValue @k_float(double 0x{:016X})",
+                    x.to_bits()
+                ));
                 Ok(t)
             }
             Expr::Str(parts, span) => {
@@ -8247,7 +8301,7 @@ impl<'a> Backend<'a> {
                             match joins_builder && i == 0 && f.set_of(&raw) & !STR != 0 {
                                 true => {
                                     let adopted = f.tmp();
-                                    f.line(&format!(
+                                    f.line_fmt(format_args!(
                                         "{adopted} = call %KValue @k_b_adopt(%KValue {raw}, %KValue {t})"
                                     ));
                                     adopted
@@ -8267,21 +8321,21 @@ impl<'a> Backend<'a> {
                     }
                     Some(pieces) if pieces.len() <= 16 => {
                         let arr = f.tmp();
-                        f.line(&format!("{arr} = alloca [{} x %KValue]", pieces.len()));
+                        f.line_fmt(format_args!("{arr} = alloca [{} x %KValue]", pieces.len()));
                         for (i, p) in pieces.iter().enumerate() {
                             let slot = f.tmp();
-                            f.line(&format!(
+                            f.line_fmt(format_args!(
                                 "{slot} = getelementptr [{} x %KValue], ptr {arr}, i64 0, i64 {i}",
                                 pieces.len()
                             ));
-                            f.line(&format!("store %KValue {p}, ptr {slot}"));
+                            f.line_fmt(format_args!("store %KValue {p}, ptr {slot}"));
                         }
                         let t = f.tmp();
                         let sym = match joins_builder {
                             true => "k_concat_arr_mut",
                             false => "k_concat_arr",
                         };
-                        f.line(&format!(
+                        f.line_fmt(format_args!(
                             "{t} = call %KValue @{sym}(i64 {}, ptr {arr})",
                             pieces.len()
                         ));
@@ -8292,7 +8346,7 @@ impl<'a> Backend<'a> {
                         let mut prev = it.next().expect("non-empty");
                         for piece in it {
                             let t = f.tmp();
-                            f.line(&format!(
+                            f.line_fmt(format_args!(
                                 "{t} = call %KValue @k_concat(%KValue {prev}, %KValue {piece})"
                             ));
                             prev = t;
@@ -8326,16 +8380,18 @@ impl<'a> Backend<'a> {
                 if self.program.types.iter().any(nullary_record) {
                     let id = self.type_ids[name.as_str()];
                     let arr = f.tmp();
-                    f.line(&format!("{arr} = alloca [1 x %KValue]"));
+                    f.line_fmt(format_args!("{arr} = alloca [1 x %KValue]"));
                     let t = f.tmp();
-                    f.line(&format!("{t} = call %KValue @k_rec(i64 {id}, i64 0, ptr {arr})"));
+                    f.line_fmt(format_args!(
+                        "{t} = call %KValue @k_rec(i64 {id}, i64 0, ptr {arr})"
+                    ));
                     f.record(&t, REC);
                     return Ok(t);
                 }
                 if self.program.fns.iter().any(|d| d.name == *name && d.params.is_empty()) {
                     let callee_ret = self.ret_ty(name, 0);
                     let t = f.tmp();
-                    f.line(&format!("{t} = call tailcc {callee_ret} @{}()", dsym(name, 0)));
+                    f.line_fmt(format_args!("{t} = call tailcc {callee_ret} @{}()", dsym(name, 0)));
                     // A group that returns its record in registers hands back a
                     // %parsed, and everything downstream of a constant reads a
                     // %KValue: the failure guard, the return, the field read.
@@ -8365,7 +8421,10 @@ impl<'a> Backend<'a> {
                     let arity = arities[0];
                     self.fn_value_wrappers.push((name.to_string(), arity));
                     let t = f.tmp();
-                    f.line(&format!("{t} = call %KValue @k_fnref(ptr @{})", rsym(name, arity)));
+                    f.line_fmt(format_args!(
+                        "{t} = call %KValue @k_fnref(ptr @{})",
+                        rsym(name, arity)
+                    ));
                     return Ok(t);
                 }
                 if !arities.is_empty() {
@@ -8384,7 +8443,7 @@ impl<'a> Backend<'a> {
                         self.builtin_value_wrappers.push((bare.to_string(), arity));
                         let t = f.tmp();
                         let sym = rsym(&format!("builtin.{bare}"), arity);
-                        f.line(&format!("{t} = call %KValue @k_fnref(ptr @{sym})"));
+                        f.line_fmt(format_args!("{t} = call %KValue @k_fnref(ptr @{sym})"));
                         return Ok(t);
                     }
                 }
@@ -8396,7 +8455,7 @@ impl<'a> Backend<'a> {
                     self.print_value_wrapper = true;
                     let t = f.tmp();
                     let sym = rsym("builtin.print", 1);
-                    f.line(&format!("{t} = call %KValue @k_fnref(ptr @{sym})"));
+                    f.line_fmt(format_args!("{t} = call %KValue @k_fnref(ptr @{sym})"));
                     return Ok(t);
                 }
                 match bare {
@@ -8406,19 +8465,19 @@ impl<'a> Backend<'a> {
                     "done" => Ok(format!("{{ i64 {K_DONE}, i64 0 }}")),
                     "args" => {
                         let t = f.tmp();
-                        f.line(&format!("{t} = call %KValue @k_desc_args()"));
+                        f.line_fmt(format_args!("{t} = call %KValue @k_desc_args()"));
                         f.record(&t, DESC);
                         Ok(t)
                     }
                     "stdin" => {
                         let t = f.tmp();
-                        f.line(&format!("{t} = call %KValue @k_desc_stdin()"));
+                        f.line_fmt(format_args!("{t} = call %KValue @k_desc_stdin()"));
                         f.record(&t, DESC);
                         Ok(t)
                     }
                     "now" => {
                         let t = f.tmp();
-                        f.line(&format!("{t} = call %KValue @k_desc_now()"));
+                        f.line_fmt(format_args!("{t} = call %KValue @k_desc_now()"));
                         f.record(&t, DESC);
                         Ok(t)
                     }
@@ -8459,7 +8518,9 @@ impl<'a> Backend<'a> {
                 let b = self.emit_expr(f, base)?;
                 let (label, _) = self.intern(&format!("{name}\0"));
                 let t = f.tmp();
-                f.line(&format!("{t} = call %KValue @k_b_field(%KValue {b}, ptr @{label})"));
+                f.line_fmt(format_args!(
+                    "{t} = call %KValue @k_b_field(%KValue {b}, ptr @{label})"
+                ));
                 f.record(&t, TOP);
                 Ok(t)
             }
@@ -8475,7 +8536,7 @@ impl<'a> Backend<'a> {
                 // the sigil is the choice of channel (ruled 2026-09-16): the
                 // element, or the missing-index err, settles into a box
                 let boxed = f.tmp();
-                f.line(&format!("{boxed} = call %KValue @k_b_effect(%KValue {read})"));
+                f.line_fmt(format_args!("{boxed} = call %KValue @k_b_effect(%KValue {read})"));
                 f.record(&boxed, DESC);
                 Ok(boxed)
             }
@@ -8485,7 +8546,9 @@ impl<'a> Backend<'a> {
                 let b = self.emit_expr(f, rhs)?;
                 let b = self.maybe_force(f, b);
                 let t = f.tmp();
-                f.line(&format!("{t} = call %KValue @k_desc_join(%KValue {a}, %KValue {b})"));
+                f.line_fmt(format_args!(
+                    "{t} = call %KValue @k_desc_join(%KValue {a}, %KValue {b})"
+                ));
                 f.record(&t, (f.set_of(&a) & FAIL) | (f.set_of(&b) & FAIL) | DESC | ERR);
                 Ok(t)
             }
@@ -8531,24 +8594,24 @@ impl<'a> Backend<'a> {
                     // the ccc wrapper, never the tailcc fn: C calls this pointer
                     self.closure_consts.push((cell.clone(), format!("w_{lifted}"), params.len()));
                     let t = f.tmp();
-                    f.line(&format!("{t} = load %KValue, ptr @{cell}"));
+                    f.line_fmt(format_args!("{t} = load %KValue, ptr @{cell}"));
                     return Ok(t);
                 }
                 let n = captures.len();
                 let arr = f.tmp();
-                f.line(&format!("{arr} = alloca [{n} x %KValue]"));
+                f.line_fmt(format_args!("{arr} = alloca [{n} x %KValue]"));
                 for (i, cap) in captures.iter().enumerate() {
                     let temp = f.lookup(cap).expect("capture is bound");
                     let temp = self.as_value(f, &temp);
                     let slot = f.tmp();
-                    f.line(&format!(
+                    f.line_fmt(format_args!(
                         "{slot} = getelementptr [{n} x %KValue], ptr {arr}, i64 0, i64 {i}"
                     ));
-                    f.line(&format!("store %KValue {temp}, ptr {slot}"));
+                    f.line_fmt(format_args!("store %KValue {temp}, ptr {slot}"));
                 }
                 let t = f.tmp();
                 // the ccc wrapper, never the tailcc fn: C calls this pointer
-                f.line(&format!(
+                f.line_fmt(format_args!(
                     "{t} = call %KValue @k_closure(ptr @w_{lifted}, i64 {}, i64 {}, ptr {arr})",
                     params.len(),
                     captures.len()
@@ -8557,13 +8620,13 @@ impl<'a> Backend<'a> {
             }
             Expr::List(items, _) if items.is_empty() => {
                 let t = f.tmp();
-                f.line(&format!("{t} = call %KValue @k_list_empty()"));
+                f.line_fmt(format_args!("{t} = call %KValue @k_list_empty()"));
                 f.record(&t, LIST);
                 Ok(t)
             }
             Expr::MapLit(pairs, _) if pairs.is_empty() => {
                 let t = f.tmp();
-                f.line(&format!("{t} = call %KValue @k_map_empty()"));
+                f.line_fmt(format_args!("{t} = call %KValue @k_map_empty()"));
                 f.record(&t, MAP);
                 Ok(t)
             }
@@ -8575,16 +8638,16 @@ impl<'a> Backend<'a> {
                 }
                 let n = emitted.len().max(1);
                 let arr = f.tmp();
-                f.line(&format!("{arr} = alloca [{n} x %KValue]"));
+                f.line_fmt(format_args!("{arr} = alloca [{n} x %KValue]"));
                 for (i, value) in emitted.iter().enumerate() {
                     let slot = f.tmp();
-                    f.line(&format!(
+                    f.line_fmt(format_args!(
                         "{slot} = getelementptr [{n} x %KValue], ptr {arr}, i64 0, i64 {i}"
                     ));
-                    f.line(&format!("store %KValue {value}, ptr {slot}"));
+                    f.line_fmt(format_args!("store %KValue {value}, ptr {slot}"));
                 }
                 let t = f.tmp();
-                f.line(&format!(
+                f.line_fmt(format_args!(
                     "{t} = call %KValue @k_list_lit(i64 {}, ptr {arr})",
                     emitted.len()
                 ));
@@ -8601,16 +8664,19 @@ impl<'a> Backend<'a> {
                 }
                 let n = emitted.len().max(1);
                 let arr = f.tmp();
-                f.line(&format!("{arr} = alloca [{n} x %KValue]"));
+                f.line_fmt(format_args!("{arr} = alloca [{n} x %KValue]"));
                 for (i, value) in emitted.iter().enumerate() {
                     let slot = f.tmp();
-                    f.line(&format!(
+                    f.line_fmt(format_args!(
                         "{slot} = getelementptr [{n} x %KValue], ptr {arr}, i64 0, i64 {i}"
                     ));
-                    f.line(&format!("store %KValue {value}, ptr {slot}"));
+                    f.line_fmt(format_args!("store %KValue {value}, ptr {slot}"));
                 }
                 let t = f.tmp();
-                f.line(&format!("{t} = call %KValue @k_map_lit(i64 {}, ptr {arr})", pairs.len()));
+                f.line_fmt(format_args!(
+                    "{t} = call %KValue @k_map_lit(i64 {}, ptr {arr})",
+                    pairs.len()
+                ));
                 f.record(&t, MAP);
                 Ok(t)
             }
@@ -8666,14 +8732,16 @@ impl<'a> Backend<'a> {
                         // on inference
                         let tag = inline_tag(f, &value);
                         let is_desc = f.tmp();
-                        f.line(&format!("{is_desc} = icmp eq i64 {tag}, 8"));
+                        f.line_fmt(format_args!("{is_desc} = icmp eq i64 {tag}, 8"));
                         let desc_path = f.label();
                         let check = f.label();
-                        f.line(&format!("br i1 {is_desc}, label %{desc_path}, label %{check}"));
+                        f.line_fmt(format_args!(
+                            "br i1 {is_desc}, label %{desc_path}, label %{check}"
+                        ));
                         f.start_block(&desc_path);
                         let t = f.tmp();
                         let closure = self.emit_expr(f, head)?;
-                        f.line(&format!(
+                        f.line_fmt(format_args!(
                             "{t} = call %KValue @k_maybe_bind(%KValue {value}, %KValue {closure})"
                         ));
                         f.record(&t, TOP);
@@ -8682,7 +8750,7 @@ impl<'a> Backend<'a> {
                         let ok = inline_not_failure(f, &value);
                         let bail = f.label();
                         let cont = f.label();
-                        f.line(&format!("br i1 {ok}, label %{cont}, label %{bail}"));
+                        f.line_fmt(format_args!("br i1 {ok}, label %{cont}, label %{bail}"));
                         f.start_block(&bail);
                         self.emit_ret(f, &value);
                         f.start_block(&cont);
@@ -8815,18 +8883,18 @@ impl<'a> Backend<'a> {
                         let mut any = first;
                         for flag in &overflow[1..] {
                             let t = f.tmp();
-                            f.line(&format!("{t} = or i1 {any}, {flag}"));
+                            f.line_fmt(format_args!("{t} = or i1 {any}, {flag}"));
                             any = t;
                         }
                         match &mut twin {
                             Some(cond) => {
                                 let none = f.tmp();
-                                f.line(&format!("{none} = xor i1 {any}, true"));
+                                f.line_fmt(format_args!("{none} = xor i1 {any}, true"));
                                 *cond = Some(match cond.take() {
                                     None => none,
                                     Some(c) => {
                                         let both = f.tmp();
-                                        f.line(&format!("{both} = and i1 {c}, {none}"));
+                                        f.line_fmt(format_args!("{both} = and i1 {c}, {none}"));
                                         both
                                     }
                                 });
@@ -8837,20 +8905,22 @@ impl<'a> Backend<'a> {
                                 let fast = f.label();
                                 let slow = f.label();
                                 let merge = f.label();
-                                f.line(&format!("br i1 {any}, label %{slow}, label %{fast}"));
+                                f.line_fmt(format_args!(
+                                    "br i1 {any}, label %{slow}, label %{fast}"
+                                ));
                                 f.start_block(&slow);
                                 let mut wide = Vec::new();
                                 for (i, vals) in &deferred {
                                     wide.push(self.emit_arith_general(f, &args[*i], vals, &mut 0)?);
                                 }
                                 let slow_from = f.cur_label.clone();
-                                f.line(&format!("br label %{merge}"));
+                                f.line_fmt(format_args!("br label %{merge}"));
                                 f.start_block(&fast);
-                                f.line(&format!("br label %{merge}"));
+                                f.line_fmt(format_args!("br label %{merge}"));
                                 f.start_block(&merge);
                                 for ((i, _), w) in deferred.iter().zip(wide) {
                                     let t = f.tmp();
-                                    f.line(&format!(
+                                    f.line_fmt(format_args!(
                                         "{t} = phi %KValue [ {}, %{fast} ], [ {w}, %{slow_from} ]",
                                         emitted[*i]
                                     ));
@@ -8864,7 +8934,9 @@ impl<'a> Backend<'a> {
                     if let Some(Some(words)) = &twin {
                         let to_twin = f.label();
                         let to_general = f.label();
-                        f.line(&format!("br i1 {words}, label %{to_twin}, label %{to_general}"));
+                        f.line_fmt(format_args!(
+                            "br i1 {words}, label %{to_twin}, label %{to_general}"
+                        ));
                         f.start_block(&to_general);
                         // an argument that overflowed is worked out again,
                         // the general way, from the same operands
@@ -8887,12 +8959,12 @@ impl<'a> Backend<'a> {
                         // into its own caller: json/obj_key_end stood alone
                         // on the run program until this said noinline.
                         let g = f.tmp();
-                        f.line(&format!(
+                        f.line_fmt(format_args!(
                             "{g} = {kind} tailcc {callee_ret} @{}({}) #90",
                             dsym(name, n),
                             general_ir.join(", ")
                         ));
-                        f.line(&format!("ret {callee_ret} {g}"));
+                        f.line_fmt(format_args!("ret {callee_ret} {g}"));
                         f.start_block(&to_twin);
                     }
                     let words_at: Vec<usize> = match twin {
@@ -8943,7 +9015,7 @@ impl<'a> Backend<'a> {
                                 let mut carry = |f: &mut FnEmit, emitted: &mut [String]| {
                                     f.line("call void @k_carry_reset()");
                                     for (&j, stage) in positions.iter().zip(&stages) {
-                                        f.line(&format!(
+                                        f.line_fmt(format_args!(
                                             "call void @{stage}(%KValue {})",
                                             emitted[j]
                                         ));
@@ -8951,7 +9023,7 @@ impl<'a> Backend<'a> {
                                     f.line("call void @k_beat_iter_carry()");
                                     for (slot, &j) in positions.iter().enumerate() {
                                         let t = f.tmp();
-                                        f.line(&format!(
+                                        f.line_fmt(format_args!(
                                             "{t} = call %KValue @k_carry_take(i64 {slot})"
                                         ));
                                         // the copy is the value it was handed
@@ -8997,11 +9069,11 @@ impl<'a> Backend<'a> {
                             true => tsym(name, n),
                             false => dsym(name, n),
                         };
-                        f.line(&format!(
+                        f.line_fmt(format_args!(
                             "{t} = {kind} tailcc {callee_ret} @{sym}({})",
                             args_ir.join(", ")
                         ));
-                        f.line(&format!("ret {callee_ret} {t}"));
+                        f.line_fmt(format_args!("ret {callee_ret} {t}"));
                     } else {
                         // A %parsed function tail-calling a KValue failure helper:
                         // can't musttail across the type change, so call and wrap.
@@ -9009,7 +9081,7 @@ impl<'a> Backend<'a> {
                         // made outside the analysis that matches a tail caller's
                         // shape to its callee's, calling a group that returns its
                         // record in registers: emit_ret boxes it.
-                        f.line(&format!(
+                        f.line_fmt(format_args!(
                             "{t} = call tailcc {callee_ret} @{}({})",
                             dsym(name, n),
                             args_ir.join(", ")
@@ -9059,64 +9131,68 @@ impl<'a> Backend<'a> {
         let kmax = reads.iter().map(|r| r.0).max().unwrap_or(0);
         let bp = inline_payload(f, &xv);
         let bptr = f.tmp();
-        f.line(&format!("{bptr} = inttoptr i64 {bp} to ptr"));
+        f.line_fmt(format_args!("{bptr} = inttoptr i64 {bp} to ptr"));
         let len_ptr = f.tmp();
-        f.line(&format!("{len_ptr} = getelementptr %KBytes, ptr {bptr}, i64 0, i32 0"));
+        f.line_fmt(format_args!("{len_ptr} = getelementptr %KBytes, ptr {bptr}, i64 0, i32 0"));
         let len = f.tmp();
-        f.line(&format!("{len} = load i64, ptr {len_ptr}"));
+        f.line_fmt(format_args!("{len} = load i64, ptr {len_ptr}"));
         let idx = inline_payload(f, &pv);
         let lo = f.tmp();
-        f.line(&format!("{lo} = icmp sge i64 {idx}, {}", 1 - kmin));
+        f.line_fmt(format_args!("{lo} = icmp sge i64 {idx}, {}", 1 - kmin));
         let top = f.tmp();
-        f.line(&format!("{top} = sub i64 {len}, {kmax}"));
+        f.line_fmt(format_args!("{top} = sub i64 {len}, {kmax}"));
         let hi = f.tmp();
-        f.line(&format!("{hi} = icmp sle i64 {idx}, {top}"));
+        f.line_fmt(format_args!("{hi} = icmp sle i64 {idx}, {top}"));
         let mut inside = f.tmp();
-        f.line(&format!("{inside} = and i1 {lo}, {hi}"));
+        f.line_fmt(format_args!("{inside} = and i1 {lo}, {hi}"));
         if p_set != INT {
             let tag = inline_tag(f, &pv);
             let word = f.tmp();
-            f.line(&format!("{word} = icmp eq i64 {tag}, 0"));
+            f.line_fmt(format_args!("{word} = icmp eq i64 {tag}, 0"));
             let both = f.tmp();
-            f.line(&format!("{both} = and i1 {inside}, {word}"));
+            f.line_fmt(format_args!("{both} = and i1 {inside}, {word}"));
             inside = both;
         }
         let fast = f.label();
         let slow = f.label();
         let merge = f.label();
-        f.line(&format!("br i1 {inside}, label %{fast}, label %{slow}"));
+        f.line_fmt(format_args!("br i1 {inside}, label %{fast}, label %{slow}"));
         f.start_block(&fast);
         let data_ptr = f.tmp();
-        f.line(&format!("{data_ptr} = getelementptr %KBytes, ptr {bptr}, i64 0, i32 1"));
+        f.line_fmt(format_args!("{data_ptr} = getelementptr %KBytes, ptr {bptr}, i64 0, i32 1"));
         let data = f.tmp();
-        f.line(&format!("{data} = load ptr, ptr {data_ptr}"));
+        f.line_fmt(format_args!("{data} = load ptr, ptr {data_ptr}"));
         let mut all = "true".to_string();
         for (k, c) in &reads {
             let off = f.tmp();
-            f.line(&format!("{off} = add i64 {idx}, {}", k - 1));
+            f.line_fmt(format_args!("{off} = add i64 {idx}, {}", k - 1));
             let at = f.tmp();
-            f.line(&format!("{at} = getelementptr i8, ptr {data}, i64 {off}"));
+            f.line_fmt(format_args!("{at} = getelementptr i8, ptr {data}, i64 {off}"));
             let byte = f.tmp();
-            f.line(&format!("{byte} = load i8, ptr {at}"));
+            f.line_fmt(format_args!("{byte} = load i8, ptr {at}"));
             let same = f.tmp();
-            f.line(&format!("{same} = icmp eq i8 {byte}, {}", *c as u8 as i8));
+            f.line_fmt(format_args!("{same} = icmp eq i8 {byte}, {}", *c as u8 as i8));
             let both = f.tmp();
-            f.line(&format!("{both} = and i1 {all}, {same}"));
+            f.line_fmt(format_args!("{both} = and i1 {all}, {same}"));
             all = both;
         }
         let tag = f.tmp();
-        f.line(&format!("{tag} = select i1 {all}, i64 2, i64 3"));
+        f.line_fmt(format_args!("{tag} = select i1 {all}, i64 2, i64 3"));
         let hit = f.tmp();
-        f.line(&format!("{hit} = insertvalue %KValue {{ i64 undef, i64 0 }}, i64 {tag}, 0"));
-        f.line(&format!("br label %{merge}"));
+        f.line_fmt(format_args!(
+            "{hit} = insertvalue %KValue {{ i64 undef, i64 0 }}, i64 {tag}, 0"
+        ));
+        f.line_fmt(format_args!("br label %{merge}"));
         f.start_block(&slow);
         let general = self.emit_if_value(f, args)?;
         let general = self.as_value(f, &general);
         let slow_from = f.cur_label.clone();
-        f.line(&format!("br label %{merge}"));
+        f.line_fmt(format_args!("br label %{merge}"));
         f.start_block(&merge);
         let t = f.tmp();
-        f.line(&format!("{t} = phi %KValue [ {hit}, %{fast} ], [ {general}, %{slow_from} ]"));
+        f.line_fmt(format_args!(
+            "{t} = phi %KValue [ {hit}, %{fast} ], [ {general}, %{slow_from} ]"
+        ));
         f.record(&t, infer::BOOL | f.set_of(&general));
         Ok(Some(t))
     }
@@ -9132,11 +9208,11 @@ impl<'a> Backend<'a> {
         f.start_block(&then_label);
         let then_value = self.emit_expr(f, &args[1])?;
         let then_from = f.cur_label.clone();
-        f.line(&format!("br label %{merge}"));
+        f.line_fmt(format_args!("br label %{merge}"));
         f.start_block(&else_label);
         let else_value = self.emit_expr(f, &args[2])?;
         let else_from = f.cur_label.clone();
-        f.line(&format!("br label %{merge}"));
+        f.line_fmt(format_args!("br label %{merge}"));
         f.start_block(&merge);
         let mut arms = vec![
             format!("[ {then_value}, %{then_from} ]"),
@@ -9148,7 +9224,7 @@ impl<'a> Backend<'a> {
             fail_set |= f.set_of(v) & FAIL;
         }
         let t = f.tmp();
-        f.line(&format!("{t} = phi %KValue {}", arms.join(", ")));
+        f.line_fmt(format_args!("{t} = phi %KValue {}", arms.join(", ")));
         f.record(&t, f.set_of(&then_value) | f.set_of(&else_value) | fail_set);
         Ok(t)
     }
@@ -9215,11 +9291,11 @@ impl<'a> Backend<'a> {
         if let Expr::Ident(name, _, _) = cond {
             if f.lookup(name).is_none() {
                 if name == "true" {
-                    f.line(&format!("br label %{then_label}"));
+                    f.line_fmt(format_args!("br label %{then_label}"));
                     return Ok(Cond { failed: Vec::new() });
                 }
                 if name == "false" {
-                    f.line(&format!("br label %{else_label}"));
+                    f.line_fmt(format_args!("br label %{else_label}"));
                     return Ok(Cond { failed: Vec::new() });
                 }
             }
@@ -9271,12 +9347,12 @@ impl<'a> Backend<'a> {
         let failed = match merge {
             Some(merge) => {
                 let fail_from = f.cur_label.clone();
-                f.line(&format!("br i1 {ok}, label %{check}, label %{merge}"));
+                f.line_fmt(format_args!("br i1 {ok}, label %{check}, label %{merge}"));
                 vec![(v.clone(), fail_from)]
             }
             None => {
                 let bail = f.label();
-                f.line(&format!("br i1 {ok}, label %{check}, label %{bail}"));
+                f.line_fmt(format_args!("br i1 {ok}, label %{check}, label %{bail}"));
                 f.start_block(&bail);
                 self.emit_ret(f, &v);
                 Vec::new()
@@ -9286,8 +9362,8 @@ impl<'a> Backend<'a> {
         let tv = f.tmp();
         f.predicate(&tv, format!("call i64 @k_truthy(%KValue {v})"));
         let tb = f.tmp();
-        f.line(&format!("{tb} = icmp ne i64 {tv}, 0"));
-        f.line(&format!("br i1 {tb}, label %{then_label}, label %{else_label}"));
+        f.line_fmt(format_args!("{tb} = icmp ne i64 {tv}, 0"));
+        f.line_fmt(format_args!("br i1 {tb}, label %{then_label}, label %{else_label}"));
         Cond { failed }
     }
 
@@ -9318,8 +9394,8 @@ impl<'a> Backend<'a> {
             let pa = inline_payload(f, a);
             let pb = inline_payload(f, b);
             let c = f.tmp();
-            f.line(&format!("{c} = icmp {cmp} i64 {pa}, {pb}"));
-            f.line(&format!("br i1 {c}, label %{then_label}, label %{else_label}"));
+            f.line_fmt(format_args!("{c} = icmp {cmp} i64 {pa}, {pb}"));
+            f.line_fmt(format_args!("br i1 {c}, label %{then_label}, label %{else_label}"));
             return Cond { failed: Vec::new() };
         }
         let code = match op {
@@ -9336,16 +9412,18 @@ impl<'a> Backend<'a> {
         let both = both_ints(f, &ta, &tb);
         let fast = f.label();
         let slow = f.label();
-        f.line(&format!("br i1 {both}, label %{fast}, label %{slow}"));
+        f.line_fmt(format_args!("br i1 {both}, label %{fast}, label %{slow}"));
         f.start_block(&fast);
         let pa = inline_payload(f, a);
         let pb = inline_payload(f, b);
         let c = f.tmp();
-        f.line(&format!("{c} = icmp {cmp} i64 {pa}, {pb}"));
-        f.line(&format!("br i1 {c}, label %{then_label}, label %{else_label}"));
+        f.line_fmt(format_args!("{c} = icmp {cmp} i64 {pa}, {pb}"));
+        f.line_fmt(format_args!("br i1 {c}, label %{then_label}, label %{else_label}"));
         f.start_block(&slow);
         let sv = f.tmp();
-        f.line(&format!("{sv} = call %KValue @k_cmp(%KValue {a}, %KValue {b}, i64 {code})"));
+        f.line_fmt(format_args!(
+            "{sv} = call %KValue @k_cmp(%KValue {a}, %KValue {b}, i64 {code})"
+        ));
         f.record(&sv, infer::BOOL | FAIL);
         self.test_cond_value(f, sv, then_label, else_label, merge)
     }
@@ -9374,7 +9452,7 @@ impl<'a> Backend<'a> {
         let words: Vec<String> = vals.iter().map(|v| inline_payload(f, v)).collect();
         let r = word_run(f, e, &words, &mut 0, &mut flags);
         let fv = f.tmp();
-        f.line(&format!("{fv} = insertvalue %KValue {{ i64 0, i64 undef }}, i64 {r}, 1"));
+        f.line_fmt(format_args!("{fv} = insertvalue %KValue {{ i64 0, i64 undef }}, i64 {r}, 1"));
         let Some(first) = flags.first().cloned() else {
             f.record(&fv, INT);
             return Ok(fv);
@@ -9382,22 +9460,22 @@ impl<'a> Backend<'a> {
         let mut any = first;
         for flag in &flags[1..] {
             let t = f.tmp();
-            f.line(&format!("{t} = or i1 {any}, {flag}"));
+            f.line_fmt(format_args!("{t} = or i1 {any}, {flag}"));
             any = t;
         }
         let fast = f.label();
         let slow = f.label();
         let merge = f.label();
-        f.line(&format!("br i1 {any}, label %{slow}, label %{fast}"));
+        f.line_fmt(format_args!("br i1 {any}, label %{slow}, label %{fast}"));
         f.start_block(&fast);
-        f.line(&format!("br label %{merge}"));
+        f.line_fmt(format_args!("br label %{merge}"));
         f.start_block(&slow);
         let sv = self.emit_arith_general(f, e, &vals, &mut 0)?;
         let slow_from = f.cur_label.clone();
-        f.line(&format!("br label %{merge}"));
+        f.line_fmt(format_args!("br label %{merge}"));
         f.start_block(&merge);
         let t = f.tmp();
-        f.line(&format!("{t} = phi %KValue [ {fv}, %{fast} ], [ {sv}, %{slow_from} ]"));
+        f.line_fmt(format_args!("{t} = phi %KValue [ {fv}, %{fast} ], [ {sv}, %{slow_from} ]"));
         f.record(&t, INT | f.set_of(&sv));
         Ok(t)
     }
@@ -9442,32 +9520,34 @@ impl<'a> Backend<'a> {
             && self.program.fns.iter().any(|d| d.name == op && d.params.len() == 2);
         if armable && (f.set_of(a) | f.set_of(b)) & REC != 0 {
             let a_routes = f.tmp();
-            f.line(&format!("{a_routes} = call i64 @k_routes_to_arms(%KValue {a})"));
+            f.line_fmt(format_args!("{a_routes} = call i64 @k_routes_to_arms(%KValue {a})"));
             let b_routes = f.tmp();
-            f.line(&format!("{b_routes} = call i64 @k_routes_to_arms(%KValue {b})"));
+            f.line_fmt(format_args!("{b_routes} = call i64 @k_routes_to_arms(%KValue {b})"));
             let either = f.tmp();
-            f.line(&format!("{either} = or i64 {a_routes}, {b_routes}"));
+            f.line_fmt(format_args!("{either} = or i64 {a_routes}, {b_routes}"));
             let isrec = f.tmp();
-            f.line(&format!("{isrec} = icmp ne i64 {either}, 0"));
+            f.line_fmt(format_args!("{isrec} = icmp ne i64 {either}, 0"));
             let user = f.label();
             let builtin = f.label();
             let merge = f.label();
-            f.line(&format!("br i1 {isrec}, label %{user}, label %{builtin}"));
+            f.line_fmt(format_args!("br i1 {isrec}, label %{user}, label %{builtin}"));
             f.start_block(&user);
             let uv = f.tmp();
-            f.line(&format!(
+            f.line_fmt(format_args!(
                 "{uv} = call tailcc %KValue @{}(%KValue {a}, %KValue {b})",
                 dsym(op, 2)
             ));
-            f.line(&format!("br label %{merge}"));
+            f.line_fmt(format_args!("br label %{merge}"));
             let user_from = user.clone();
             f.start_block(&builtin);
             let bv = self.emit_binop_builtin(f, op, a, b, span)?;
             let builtin_from = f.cur_label.clone();
-            f.line(&format!("br label %{merge}"));
+            f.line_fmt(format_args!("br label %{merge}"));
             f.start_block(&merge);
             let t = f.tmp();
-            f.line(&format!("{t} = phi %KValue [ {uv}, %{user_from} ], [ {bv}, %{builtin_from} ]"));
+            f.line_fmt(format_args!(
+                "{t} = phi %KValue [ {uv}, %{user_from} ], [ {bv}, %{builtin_from} ]"
+            ));
             f.record(
                 &t,
                 f.set_of(&bv) | self.group_return_set(op, 2) | ((f.set_of(a) | f.set_of(b)) & FAIL),
@@ -9525,7 +9605,7 @@ impl<'a> Backend<'a> {
         };
         if matches!(op, "&" | "|" | "^") {
             let t = f.tmp();
-            f.line(&format!("{t} = {slow_call}"));
+            f.line_fmt(format_args!("{t} = {slow_call}"));
             f.record(&t, (f.set_of(a) & FAIL) | (f.set_of(b) & FAIL) | INT);
             return Ok(t);
         }
@@ -9546,39 +9626,41 @@ impl<'a> Backend<'a> {
             let pa = inline_payload(f, a);
             let pb = inline_payload(f, b);
             let zero = f.tmp();
-            f.line(&format!("{zero} = icmp eq i64 {pb}, 0"));
+            f.line_fmt(format_args!("{zero} = icmp eq i64 {pb}, 0"));
             let minus = f.tmp();
-            f.line(&format!("{minus} = icmp eq i64 {pb}, -1"));
+            f.line_fmt(format_args!("{minus} = icmp eq i64 {pb}, -1"));
             let mut edge = f.tmp();
-            f.line(&format!("{edge} = or i1 {zero}, {minus}"));
+            f.line_fmt(format_args!("{edge} = or i1 {zero}, {minus}"));
             if guarded {
                 let ta = inline_tag(f, a);
                 let tb = inline_tag(f, b);
                 let both = both_ints(f, &ta, &tb);
                 let not_both = f.tmp();
-                f.line(&format!("{not_both} = xor i1 {both}, true"));
+                f.line_fmt(format_args!("{not_both} = xor i1 {both}, true"));
                 let any = f.tmp();
-                f.line(&format!("{any} = or i1 {edge}, {not_both}"));
+                f.line_fmt(format_args!("{any} = or i1 {edge}, {not_both}"));
                 edge = any;
             }
             let fast = f.label();
             let slow = f.label();
             let merge = f.label();
-            f.line(&format!("br i1 {edge}, label %{slow}, label %{fast}"));
+            f.line_fmt(format_args!("br i1 {edge}, label %{slow}, label %{fast}"));
             f.start_block(&fast);
             let r = f.tmp();
             let insn = if op == "%" { "srem" } else { "sdiv" };
-            f.line(&format!("{r} = {insn} i64 {pa}, {pb}"));
+            f.line_fmt(format_args!("{r} = {insn} i64 {pa}, {pb}"));
             let fv = f.tmp();
-            f.line(&format!("{fv} = insertvalue %KValue {{ i64 0, i64 undef }}, i64 {r}, 1"));
-            f.line(&format!("br label %{merge}"));
+            f.line_fmt(format_args!(
+                "{fv} = insertvalue %KValue {{ i64 0, i64 undef }}, i64 {r}, 1"
+            ));
+            f.line_fmt(format_args!("br label %{merge}"));
             f.start_block(&slow);
             let sv = f.tmp();
-            f.line(&format!("{sv} = {slow_call}"));
-            f.line(&format!("br label %{merge}"));
+            f.line_fmt(format_args!("{sv} = {slow_call}"));
+            f.line_fmt(format_args!("br label %{merge}"));
             f.start_block(&merge);
             let t = f.tmp();
-            f.line(&format!("{t} = phi %KValue [ {fv}, %{fast} ], [ {sv}, %{slow} ]"));
+            f.line_fmt(format_args!("{t} = phi %KValue [ {fv}, %{fast} ], [ {sv}, %{slow} ]"));
             // The least int over minus one is the one quotient of two words
             // that is not a word. A remainder by a word is smaller than the
             // word, so only a bignum divisor can make it one.
@@ -9597,7 +9679,7 @@ impl<'a> Backend<'a> {
         }
         if op == "/" || op == "%" {
             let t = f.tmp();
-            f.line(&format!("{t} = {slow_call}"));
+            f.line_fmt(format_args!("{t} = {slow_call}"));
             f.record(
                 &t,
                 (f.set_of(a) & FAIL)
@@ -9621,18 +9703,18 @@ impl<'a> Backend<'a> {
                         _ => "llvm.smul.with.overflow.i64",
                     };
                     let pair = f.tmp();
-                    f.line(&format!(
+                    f.line_fmt(format_args!(
                         "{pair} = call {{ i64, i1 }} @{intrinsic}(i64 {pa}, i64 {pb})"
                     ));
                     let sum = f.tmp();
-                    f.line(&format!("{sum} = extractvalue {{ i64, i1 }} {pair}, 0"));
+                    f.line_fmt(format_args!("{sum} = extractvalue {{ i64, i1 }} {pair}, 0"));
                     let overflow = f.tmp();
-                    f.line(&format!("{overflow} = extractvalue {{ i64, i1 }} {pair}, 1"));
+                    f.line_fmt(format_args!("{overflow} = extractvalue {{ i64, i1 }} {pair}, 1"));
                     // A twin that has written nothing yet starts the general
                     // body over instead, so the sum stays a word here.
                     if f.bail_on(&overflow) {
                         let v = f.tmp();
-                        f.line(&format!(
+                        f.line_fmt(format_args!(
                             "{v} = insertvalue %KValue {{ i64 0, i64 undef }}, i64 {sum}, 1"
                         ));
                         f.record(&v, INT);
@@ -9644,13 +9726,13 @@ impl<'a> Backend<'a> {
                     let ok = f.label();
                     let wide = f.label();
                     let merge = f.label();
-                    f.line(&format!("br i1 {overflow}, label %{wide}, label %{ok}"));
+                    f.line_fmt(format_args!("br i1 {overflow}, label %{wide}, label %{ok}"));
                     f.start_block(&ok);
                     let v = f.tmp();
-                    f.line(&format!(
+                    f.line_fmt(format_args!(
                         "{v} = insertvalue %KValue {{ i64 0, i64 undef }}, i64 {sum}, 1"
                     ));
-                    f.line(&format!("br label %{merge}"));
+                    f.line_fmt(format_args!("br label %{merge}"));
                     f.start_block(&wide);
                     let w = f.tmp();
                     let helper = match op {
@@ -9658,11 +9740,13 @@ impl<'a> Backend<'a> {
                         "-" => "k_int_sub",
                         _ => "k_int_mul",
                     };
-                    f.line(&format!("{w} = call %KValue @{helper}(%KValue {a}, %KValue {b})"));
-                    f.line(&format!("br label %{merge}"));
+                    f.line_fmt(format_args!(
+                        "{w} = call %KValue @{helper}(%KValue {a}, %KValue {b})"
+                    ));
+                    f.line_fmt(format_args!("br label %{merge}"));
                     f.start_block(&merge);
                     let t = f.tmp();
-                    f.line(&format!("{t} = phi %KValue [ {v}, %{ok} ], [ {w}, %{wide} ]"));
+                    f.line_fmt(format_args!("{t} = phi %KValue [ {v}, %{ok} ], [ {w}, %{wide} ]"));
                     f.record(&t, INT | infer::BIG);
                     t
                 }
@@ -9676,9 +9760,9 @@ impl<'a> Backend<'a> {
                         _ => "sge",
                     };
                     let c = f.tmp();
-                    f.line(&format!("{c} = icmp {cmp} i64 {pa}, {pb}"));
+                    f.line_fmt(format_args!("{c} = icmp {cmp} i64 {pa}, {pb}"));
                     let v = f.tmp();
-                    f.line(&format!(
+                    f.line_fmt(format_args!(
                         "{v} = select i1 {c}, %KValue {{ i64 2, i64 0 }}, %KValue {{ i64 3, i64 0 }}"
                     ));
                     f.record(&v, infer::BOOL);
@@ -9693,7 +9777,7 @@ impl<'a> Backend<'a> {
         let fast = f.label();
         let slow = f.label();
         let merge = f.label();
-        f.line(&format!("br i1 {both}, label %{fast}, label %{slow}"));
+        f.line_fmt(format_args!("br i1 {both}, label %{fast}, label %{slow}"));
         f.start_block(&fast);
         let pa = inline_payload(f, a);
         let pb = inline_payload(f, b);
@@ -9705,16 +9789,20 @@ impl<'a> Backend<'a> {
                     _ => "llvm.smul.with.overflow.i64",
                 };
                 let pair = f.tmp();
-                f.line(&format!("{pair} = call {{ i64, i1 }} @{intrinsic}(i64 {pa}, i64 {pb})"));
+                f.line_fmt(format_args!(
+                    "{pair} = call {{ i64, i1 }} @{intrinsic}(i64 {pa}, i64 {pb})"
+                ));
                 let sum = f.tmp();
-                f.line(&format!("{sum} = extractvalue {{ i64, i1 }} {pair}, 0"));
+                f.line_fmt(format_args!("{sum} = extractvalue {{ i64, i1 }} {pair}, 0"));
                 let overflow = f.tmp();
-                f.line(&format!("{overflow} = extractvalue {{ i64, i1 }} {pair}, 1"));
+                f.line_fmt(format_args!("{overflow} = extractvalue {{ i64, i1 }} {pair}, 1"));
                 let fast_ok = f.label();
-                f.line(&format!("br i1 {overflow}, label %{slow}, label %{fast_ok}"));
+                f.line_fmt(format_args!("br i1 {overflow}, label %{slow}, label %{fast_ok}"));
                 f.start_block(&fast_ok);
                 let v = f.tmp();
-                f.line(&format!("{v} = insertvalue %KValue {{ i64 0, i64 undef }}, i64 {sum}, 1"));
+                f.line_fmt(format_args!(
+                    "{v} = insertvalue %KValue {{ i64 0, i64 undef }}, i64 {sum}, 1"
+                ));
                 (v, fast_ok)
             }
             _ => {
@@ -9727,23 +9815,23 @@ impl<'a> Backend<'a> {
                     _ => "sge",
                 };
                 let c = f.tmp();
-                f.line(&format!("{c} = icmp {cmp} i64 {pa}, {pb}"));
+                f.line_fmt(format_args!("{c} = icmp {cmp} i64 {pa}, {pb}"));
                 let v = f.tmp();
-                f.line(&format!(
+                f.line_fmt(format_args!(
                     "{v} = select i1 {c}, %KValue {{ i64 2, i64 0 }}, %KValue {{ i64 3, i64 0 }}"
                 ));
                 (v, fast.clone())
             }
         };
-        f.line(&format!("br label %{merge}"));
+        f.line_fmt(format_args!("br label %{merge}"));
         f.start_block(&slow);
         let sv = f.tmp();
-        f.line(&format!("{sv} = {slow_call}"));
+        f.line_fmt(format_args!("{sv} = {slow_call}"));
         let slow_from = f.cur_label.clone();
-        f.line(&format!("br label %{merge}"));
+        f.line_fmt(format_args!("br label %{merge}"));
         f.start_block(&merge);
         let t = f.tmp();
-        f.line(&format!(
+        f.line_fmt(format_args!(
             "{t} = phi %KValue [ {fast_value}, %{fast_from} ], [ {sv}, %{slow_from} ]"
         ));
         // This phi carried no set until 2026-09-07, so every reader of it took
@@ -9800,9 +9888,9 @@ impl<'a> Backend<'a> {
         if proven {
             let bp = inline_payload(f, container);
             let bptr = f.tmp();
-            f.line(&format!("{bptr} = inttoptr i64 {bp} to ptr"));
+            f.line_fmt(format_args!("{bptr} = inttoptr i64 {bp} to ptr"));
             let len_ptr = f.tmp();
-            f.line(&format!("{len_ptr} = getelementptr %KBytes, ptr {bptr}, i64 0, i32 0"));
+            f.line_fmt(format_args!("{len_ptr} = getelementptr %KBytes, ptr {bptr}, i64 0, i32 0"));
             let idx = inline_payload(f, key);
             let load = f.label();
             let miss = f.label();
@@ -9812,24 +9900,28 @@ impl<'a> Backend<'a> {
             index_in_range(f, &idx, &len_ptr, &load, &miss);
             f.start_block(&load);
             let data_ptr = f.tmp();
-            f.line(&format!("{data_ptr} = getelementptr %KBytes, ptr {bptr}, i64 0, i32 1"));
+            f.line_fmt(format_args!(
+                "{data_ptr} = getelementptr %KBytes, ptr {bptr}, i64 0, i32 1"
+            ));
             let data = f.tmp();
-            f.line(&format!("{data} = load ptr, ptr {data_ptr}"));
+            f.line_fmt(format_args!("{data} = load ptr, ptr {data_ptr}"));
             let off = f.tmp();
-            f.line(&format!("{off} = add i64 {idx}, -1"));
+            f.line_fmt(format_args!("{off} = add i64 {idx}, -1"));
             let byte_ptr = f.tmp();
-            f.line(&format!("{byte_ptr} = getelementptr i8, ptr {data}, i64 {off}"));
+            f.line_fmt(format_args!("{byte_ptr} = getelementptr i8, ptr {data}, i64 {off}"));
             let byte = f.tmp();
-            f.line(&format!("{byte} = load i8, ptr {byte_ptr}"));
+            f.line_fmt(format_args!("{byte} = load i8, ptr {byte_ptr}"));
             let wide = f.tmp();
-            f.line(&format!("{wide} = zext i8 {byte} to i64"));
+            f.line_fmt(format_args!("{wide} = zext i8 {byte} to i64"));
             let hit = f.tmp();
-            f.line(&format!("{hit} = insertvalue %KValue {{ i64 0, i64 undef }}, i64 {wide}, 1"));
-            f.line(&format!("br label %{merge}"));
+            f.line_fmt(format_args!(
+                "{hit} = insertvalue %KValue {{ i64 0, i64 undef }}, i64 {wide}, 1"
+            ));
+            f.line_fmt(format_args!("br label %{merge}"));
             f.start_block(&miss);
             let miss_value = if strict {
                 let mv = f.tmp();
-                f.line(&format!(
+                f.line_fmt(format_args!(
                     "{mv} = call %KValue @{slow_fn}(%KValue {container}, %KValue {key}{slow_extra})"
                 ));
                 mv
@@ -9837,10 +9929,10 @@ impl<'a> Backend<'a> {
                 "{ i64 4, i64 0 }".to_string()
             };
             let miss_from = f.cur_label.clone();
-            f.line(&format!("br label %{merge}"));
+            f.line_fmt(format_args!("br label %{merge}"));
             f.start_block(&merge);
             let t = f.tmp();
-            f.line(&format!(
+            f.line_fmt(format_args!(
                 "{t} = phi %KValue [ {hit}, %{load} ], [ {miss_value}, %{miss_from} ]"
             ));
             f.record(&t, if strict { INT | ERR } else { INT | NONE });
@@ -9850,7 +9942,9 @@ impl<'a> Backend<'a> {
                 // it with an extractvalue pair, an icmp and a select. Nothing
                 // else reads it, so it costs nothing where it is unused.
                 let raw = f.tmp();
-                f.line(&format!("{raw} = phi i64 [ {wide}, %{load} ], [ 256, %{miss_from} ]"));
+                f.line_fmt(format_args!(
+                    "{raw} = phi i64 [ {wide}, %{load} ], [ 256, %{miss_from} ]"
+                ));
                 f.raw_byte.insert(t.clone(), raw);
             }
             return t;
@@ -9863,7 +9957,7 @@ impl<'a> Backend<'a> {
         if !strict && f.set_of(container) == LIST && f.set_of(key) == INT {
             let lp = inline_payload(f, container);
             let lptr = f.tmp();
-            f.line(&format!("{lptr} = inttoptr i64 {lp} to ptr"));
+            f.line_fmt(format_args!("{lptr} = inttoptr i64 {lp} to ptr"));
             let idx = inline_payload(f, key);
             let load = f.label();
             let miss = f.label();
@@ -9873,50 +9967,50 @@ impl<'a> Backend<'a> {
             index_in_range(f, &idx, &lptr, &load, &miss);
             f.start_block(&load);
             let items_ptr = f.tmp();
-            f.line(&format!("{items_ptr} = getelementptr i8, ptr {lptr}, i64 8"));
+            f.line_fmt(format_args!("{items_ptr} = getelementptr i8, ptr {lptr}, i64 8"));
             let items = f.tmp();
-            f.line(&format!("{items} = load ptr, ptr {items_ptr}"));
+            f.line_fmt(format_args!("{items} = load ptr, ptr {items_ptr}"));
             let off = f.tmp();
-            f.line(&format!("{off} = add i64 {idx}, -1"));
+            f.line_fmt(format_args!("{off} = add i64 {idx}, -1"));
             let slot = f.tmp();
-            f.line(&format!("{slot} = getelementptr %KValue, ptr {items}, i64 {off}"));
+            f.line_fmt(format_args!("{slot} = getelementptr %KValue, ptr {items}, i64 {off}"));
             let hit = f.tmp();
-            f.line(&format!("{hit} = load %KValue, ptr {slot}"));
-            f.line(&format!("br label %{merge}"));
+            f.line_fmt(format_args!("{hit} = load %KValue, ptr {slot}"));
+            f.line_fmt(format_args!("br label %{merge}"));
             f.start_block(&miss);
-            f.line(&format!("br label %{merge}"));
+            f.line_fmt(format_args!("br label %{merge}"));
             f.start_block(&merge);
             let t = f.tmp();
-            f.line(&format!(
+            f.line_fmt(format_args!(
                 "{t} = phi %KValue [ {hit}, %{load} ], [ {{ i64 4, i64 0 }}, %{miss} ]"
             ));
             return t;
         }
         let ct = inline_tag(f, container);
         let is_bytes = f.tmp();
-        f.line(&format!("{is_bytes} = icmp eq i64 {ct}, 13"));
+        f.line_fmt(format_args!("{is_bytes} = icmp eq i64 {ct}, 13"));
         let kt = inline_tag(f, key);
         // a literal index's tag is known, and then the bytes test is the test
         let both = match kt.as_str() {
             "0" => is_bytes,
             _ => {
                 let is_int = f.tmp();
-                f.line(&format!("{is_int} = icmp eq i64 {kt}, 0"));
+                f.line_fmt(format_args!("{is_int} = icmp eq i64 {kt}, 0"));
                 let both = f.tmp();
-                f.line(&format!("{both} = and i1 {is_bytes}, {is_int}"));
+                f.line_fmt(format_args!("{both} = and i1 {is_bytes}, {is_int}"));
                 both
             }
         };
         let fast = f.label();
         let slow = f.label();
         let merge = f.label();
-        f.line(&format!("br i1 {both}, label %{fast}, label %{slow}"));
+        f.line_fmt(format_args!("br i1 {both}, label %{fast}, label %{slow}"));
         f.start_block(&fast);
         let bp = inline_payload(f, container);
         let bptr = f.tmp();
-        f.line(&format!("{bptr} = inttoptr i64 {bp} to ptr"));
+        f.line_fmt(format_args!("{bptr} = inttoptr i64 {bp} to ptr"));
         let len_ptr = f.tmp();
-        f.line(&format!("{len_ptr} = getelementptr %KBytes, ptr {bptr}, i64 0, i32 0"));
+        f.line_fmt(format_args!("{len_ptr} = getelementptr %KBytes, ptr {bptr}, i64 0, i32 0"));
         let idx = inline_payload(f, key);
         let load = f.label();
         // Two branches, the way the room tests ask: joined with `and`, the
@@ -9924,25 +10018,25 @@ impl<'a> Backend<'a> {
         index_in_range(f, &idx, &len_ptr, &load, &slow);
         f.start_block(&load);
         let data_ptr = f.tmp();
-        f.line(&format!("{data_ptr} = getelementptr %KBytes, ptr {bptr}, i64 0, i32 1"));
+        f.line_fmt(format_args!("{data_ptr} = getelementptr %KBytes, ptr {bptr}, i64 0, i32 1"));
         let data = f.tmp();
-        f.line(&format!("{data} = load ptr, ptr {data_ptr}"));
+        f.line_fmt(format_args!("{data} = load ptr, ptr {data_ptr}"));
         let off = f.tmp();
-        f.line(&format!("{off} = add i64 {idx}, -1"));
+        f.line_fmt(format_args!("{off} = add i64 {idx}, -1"));
         let byte_ptr = f.tmp();
-        f.line(&format!("{byte_ptr} = getelementptr i8, ptr {data}, i64 {off}"));
+        f.line_fmt(format_args!("{byte_ptr} = getelementptr i8, ptr {data}, i64 {off}"));
         let byte = f.tmp();
-        f.line(&format!("{byte} = load i8, ptr {byte_ptr}"));
+        f.line_fmt(format_args!("{byte} = load i8, ptr {byte_ptr}"));
         let wide = f.tmp();
-        f.line(&format!("{wide} = zext i8 {byte} to i64"));
+        f.line_fmt(format_args!("{wide} = zext i8 {byte} to i64"));
         let fast_value = f.tmp();
-        f.line(&format!(
+        f.line_fmt(format_args!(
             "{fast_value} = insertvalue %KValue {{ i64 0, i64 undef }}, i64 {wide}, 1"
         ));
-        f.line(&format!("br label %{merge}"));
+        f.line_fmt(format_args!("br label %{merge}"));
         f.start_block(&slow);
         let slow_value = f.tmp();
-        f.line(&format!(
+        f.line_fmt(format_args!(
             "{slow_value} = call %KValue @{slow_fn}(%KValue {container}, %KValue {key}{slow_extra})"
         ));
         // The same i64 merge the proven path above builds, with the collapse
@@ -9956,26 +10050,28 @@ impl<'a> Backend<'a> {
             true => String::new(),
             false => {
                 let stag = f.tmp();
-                f.line(&format!("{stag} = extractvalue %KValue {slow_value}, 0"));
+                f.line_fmt(format_args!("{stag} = extractvalue %KValue {slow_value}, 0"));
                 let spay = f.tmp();
-                f.line(&format!("{spay} = extractvalue %KValue {slow_value}, 1"));
+                f.line_fmt(format_args!("{spay} = extractvalue %KValue {slow_value}, 1"));
                 let sisn = f.tmp();
-                f.line(&format!("{sisn} = icmp eq i64 {stag}, 4"));
+                f.line_fmt(format_args!("{sisn} = icmp eq i64 {stag}, 4"));
                 let sraw = f.tmp();
-                f.line(&format!("{sraw} = select i1 {sisn}, i64 256, i64 {spay}"));
+                f.line_fmt(format_args!("{sraw} = select i1 {sisn}, i64 256, i64 {spay}"));
                 sraw
             }
         };
         let slow_from = f.cur_label.clone();
-        f.line(&format!("br label %{merge}"));
+        f.line_fmt(format_args!("br label %{merge}"));
         f.start_block(&merge);
         let t = f.tmp();
-        f.line(&format!(
+        f.line_fmt(format_args!(
             "{t} = phi %KValue [ {fast_value}, %{load} ], [ {slow_value}, %{slow_from} ]"
         ));
         if !strict {
             let raw = f.tmp();
-            f.line(&format!("{raw} = phi i64 [ {wide}, %{load} ], [ {slow_raw}, %{slow_from} ]"));
+            f.line_fmt(format_args!(
+                "{raw} = phi i64 [ {wide}, %{load} ], [ {slow_raw}, %{slow_from} ]"
+            ));
             f.raw_byte.insert(t.clone(), raw);
         }
         // This merge carried no set, so every reader took the default, which
@@ -10026,34 +10122,34 @@ impl<'a> Backend<'a> {
                 let docall = f.label();
                 let missed = f.label();
                 let merge = f.label();
-                f.line(&format!("br i1 {ok}, label %{docall}, label %{missed}"));
+                f.line_fmt(format_args!("br i1 {ok}, label %{docall}, label %{missed}"));
                 f.start_block(&docall);
                 let called = self.emit_call_rest(f, head, args, Some(read.clone()), span)?;
                 let ctag = inline_tag(f, &called);
                 let is_box = f.tmp();
-                f.line(&format!("{is_box} = icmp eq i64 {ctag}, 8"));
+                f.line_fmt(format_args!("{is_box} = icmp eq i64 {ctag}, 8"));
                 let wrap = f.label();
                 let answered = f.label();
                 let called_from = f.cur_label.clone();
-                f.line(&format!("br i1 {is_box}, label %{answered}, label %{wrap}"));
+                f.line_fmt(format_args!("br i1 {is_box}, label %{answered}, label %{wrap}"));
                 f.start_block(&wrap);
                 let settled = f.tmp();
-                f.line(&format!("{settled} = call %KValue @k_b_effect(%KValue {called})"));
-                f.line(&format!("br label %{answered}"));
+                f.line_fmt(format_args!("{settled} = call %KValue @k_b_effect(%KValue {called})"));
+                f.line_fmt(format_args!("br label %{answered}"));
                 f.start_block(&answered);
                 let boxed = f.tmp();
-                f.line(&format!(
+                f.line_fmt(format_args!(
                     "{boxed} = phi %KValue [ {called}, %{called_from} ], [ {settled}, %{wrap} ]"
                 ));
                 let boxed_from = f.cur_label.clone();
-                f.line(&format!("br label %{merge}"));
+                f.line_fmt(format_args!("br label %{merge}"));
                 f.start_block(&missed);
                 let failed = f.tmp();
-                f.line(&format!("{failed} = call %KValue @k_b_effect(%KValue {read})"));
-                f.line(&format!("br label %{merge}"));
+                f.line_fmt(format_args!("{failed} = call %KValue @k_b_effect(%KValue {read})"));
+                f.line_fmt(format_args!("br label %{merge}"));
                 f.start_block(&merge);
                 let t = f.tmp();
-                f.line(&format!(
+                f.line_fmt(format_args!(
                     "{t} = phi %KValue [ {boxed}, %{boxed_from} ], [ {failed}, %{missed} ]"
                 ));
                 f.record(&t, DESC);
@@ -10079,7 +10175,7 @@ impl<'a> Backend<'a> {
                 };
                 let closure = self.emit_expr(f, &lambda)?;
                 let t = f.tmp();
-                f.line(&format!(
+                f.line_fmt(format_args!(
                     "{t} = call %KValue @k_maybe_bind(%KValue {piped_value}, %KValue {closure})"
                 ));
                 f.record(&t, TOP);
@@ -10092,14 +10188,14 @@ impl<'a> Backend<'a> {
                 let docall = f.label();
                 let merge = f.label();
                 let fail_from = f.cur_label.clone();
-                f.line(&format!("br i1 {ok}, label %{docall}, label %{merge}"));
+                f.line_fmt(format_args!("br i1 {ok}, label %{docall}, label %{merge}"));
                 f.start_block(&docall);
                 let called = self.emit_call_rest(f, head, args, Some(piped_value.clone()), span)?;
                 let call_from = f.cur_label.clone();
-                f.line(&format!("br label %{merge}"));
+                f.line_fmt(format_args!("br label %{merge}"));
                 f.start_block(&merge);
                 let t = f.tmp();
-                f.line(&format!(
+                f.line_fmt(format_args!(
                     "{t} = phi %KValue [ {piped_value}, %{fail_from} ], [ {called}, %{call_from} ]"
                 ));
                 f.record(&t, f.set_of(&called) | (f.set_of(&piped_value) & FAIL));
@@ -10200,11 +10296,11 @@ impl<'a> Backend<'a> {
         let m = self.maybe_force(f, m);
         let set = infer::builtin_set("keys", &[f.set_of(&m)]);
         let slot = f.tmp();
-        f.line(&format!("{slot} = alloca %KValue, align 8"));
+        f.line_fmt(format_args!("{slot} = alloca %KValue, align 8"));
         let ks = f.tmp();
-        f.line(&format!("{ks} = call %KValue @k_b_columns(%KValue {m}, ptr {slot})"));
+        f.line_fmt(format_args!("{ks} = call %KValue @k_b_columns(%KValue {m}, ptr {slot})"));
         let vs = f.tmp();
-        f.line(&format!("{vs} = load %KValue, ptr {slot}, align 8"));
+        f.line_fmt(format_args!("{vs} = load %KValue, ptr {slot}, align 8"));
         f.record(&ks, set);
         f.record(&vs, set);
         Ok((ks, vs))
@@ -10249,7 +10345,7 @@ impl<'a> Backend<'a> {
                     let ok = inline_not_failure(f, v);
                     let bail_from = f.cur_label.clone();
                     let cont = f.label();
-                    f.line(&format!("br i1 {ok}, label %{cont}, label %{merge}"));
+                    f.line_fmt(format_args!("br i1 {ok}, label %{cont}, label %{merge}"));
                     bails.push((v.clone(), bail_from));
                     f.start_block(&cont);
                 }
@@ -10273,13 +10369,13 @@ impl<'a> Backend<'a> {
                 let body_from = f.cur_label.clone();
                 let out_set = f.set_of(&out);
                 let fail_bits: Set = bails.iter().fold(0, |acc, (v, _)| acc | (f.set_of(v) & FAIL));
-                f.line(&format!("br label %{merge}"));
+                f.line_fmt(format_args!("br label %{merge}"));
                 f.start_block(&merge);
                 let t = f.tmp();
                 let mut sources: Vec<String> =
                     bails.iter().map(|(v, from)| format!("[ {v}, %{from} ]")).collect();
                 sources.push(format!("[ {out}, %{body_from} ]"));
-                f.line(&format!("{t} = phi %KValue {}", sources.join(", ")));
+                f.line_fmt(format_args!("{t} = phi %KValue {}", sources.join(", ")));
                 f.record(&t, out_set | fail_bits);
                 return Ok(t);
             }
@@ -10329,7 +10425,9 @@ impl<'a> Backend<'a> {
             }
             let arg_ir: String = arg_vals.iter().map(|v| format!(", %KValue {v}")).collect();
             let t = f.tmp();
-            f.line(&format!("{t} = call %KValue @k_call{n}_fast(%KValue {callee}{arg_ir})"));
+            f.line_fmt(format_args!(
+                "{t} = call %KValue @k_call{n}_fast(%KValue {callee}{arg_ir})"
+            ));
             f.record(&t, TOP);
             return Ok(t);
         }
@@ -10382,7 +10480,7 @@ impl<'a> Backend<'a> {
                         // the six integer registers the abi has, so the last
                         // spills and the callee reloads it; the twin tests the
                         // three tags here and hands the raw door five scalars.
-                        f.line(&format!(
+                        f.line_fmt(format_args!(
                             "{t} = call %KValue @k_b_utf8_slice_fast(%KValue {}, %KValue {}, %KValue {}, {origin})",
                             parts[0], parts[1], parts[2]
                         ));
@@ -10422,7 +10520,7 @@ impl<'a> Backend<'a> {
                             span.col as usize,
                         ));
                         let t = f.tmp();
-                        f.line(&format!(
+                        f.line_fmt(format_args!(
                             "{t} = call %KValue @k_b_append_slice_fast(%KValue {acc}, %KValue {}, %KValue {}, %KValue {}, i64 {})",
                             parts[0], parts[1], parts[2], i64::from(mutate)
                         ));
@@ -10463,7 +10561,7 @@ impl<'a> Backend<'a> {
                         let sliced = infer::builtin_set("slice", &sets);
                         let origin = self.origin_arg(f, span);
                         let t = f.tmp();
-                        f.line(&format!(
+                        f.line_fmt(format_args!(
                             "{t} = call %KValue @k_b_{door}_slice(%KValue {}, %KValue {}, %KValue {}, {origin})",
                             parts[0], parts[1], parts[2]
                         ));
@@ -10496,7 +10594,7 @@ impl<'a> Backend<'a> {
             if let Expr::Str(parts, _) = &args[0] {
                 if parts.iter().all(|p| matches!(p, TemplatePart::Lit(s) if s.is_empty())) {
                     let t = f.tmp();
-                    f.line(&format!("{t} = call %KValue @k_b_bytes_seed()"));
+                    f.line_fmt(format_args!("{t} = call %KValue @k_b_bytes_seed()"));
                     f.record(&t, infer::builtin_set("bytes", &[STR]));
                     return Ok(t);
                 }
@@ -10527,7 +10625,7 @@ impl<'a> Backend<'a> {
                     let word = i64::from_le_bytes(bytes);
                     let (lit, n) = self.intern(&text);
                     let t = f.tmp();
-                    f.line(&format!(
+                    f.line_fmt(format_args!(
                         "{t} = call %KValue @k_b_append_mut_word(%KValue {acc}, i64 {word}, i64 {n}, ptr @{lit}, ptr @{lit}_lit)"
                     ));
                     f.record(&t, infer::builtin_set("append", &[f.set_of(&acc), STR]));
@@ -10554,7 +10652,7 @@ impl<'a> Backend<'a> {
                         true => {
                             let fails = f.set_of(&value) & ERR;
                             let value = self.as_value(f, &value);
-                            f.line(&format!(
+                            f.line_fmt(format_args!(
                                 "{t} = call %KValue @k_b_append_rendered(%KValue {acc}, %KValue {value}, i64 {})",
                                 i64::from(mutate)
                             ));
@@ -10571,7 +10669,7 @@ impl<'a> Backend<'a> {
                                 true => "k_b_append_mut_byte",
                                 false => "k_b_append_byte",
                             };
-                            f.line(&format!(
+                            f.line_fmt(format_args!(
                                 "{t} = call %KValue @{sym}(%KValue {acc}, %KValue {rendered})"
                             ));
                             STR | fails
@@ -10657,14 +10755,14 @@ impl<'a> Backend<'a> {
             for e in emitted.iter_mut() {
                 let forced = self.maybe_force(f, e.clone());
                 let t = f.tmp();
-                f.line(&format!("{t} = call %KValue @k_unsub(%KValue {forced})"));
+                f.line_fmt(format_args!("{t} = call %KValue @k_unsub(%KValue {forced})"));
                 *e = t;
             }
         }
         if name == "err" {
             let origin = self.origin_arg(f, span);
             let t = f.tmp();
-            f.line(&format!("{t} = call %KValue @k_err(%KValue {}, {origin})", emitted[0]));
+            f.line_fmt(format_args!("{t} = call %KValue @k_err(%KValue {}, {origin})", emitted[0]));
             f.record(&t, ERR);
             return Ok(t);
         }
@@ -10677,7 +10775,7 @@ impl<'a> Backend<'a> {
         if name == "rescue" || name == "annotate" {
             let origin = self.origin_arg(f, span);
             let t = f.tmp();
-            f.line(&format!(
+            f.line_fmt(format_args!(
                 "{t} = call %KValue @k_b_{name}(%KValue {}, %KValue {}, {origin})",
                 emitted[0], emitted[1]
             ));
@@ -10687,7 +10785,7 @@ impl<'a> Backend<'a> {
         if name == "wrap_err" {
             let origin = self.origin_arg(f, span);
             let t = f.tmp();
-            f.line(&format!(
+            f.line_fmt(format_args!(
                 "{t} = call %KValue @k_b_wrap_err(%KValue {}, %KValue {}, {origin})",
                 emitted[0], emitted[1]
             ));
@@ -10708,13 +10806,13 @@ impl<'a> Backend<'a> {
                 }
             };
             let t = f.tmp();
-            f.line(&format!("{t} = call %KValue @k_desc_print(%KValue {arg})"));
+            f.line_fmt(format_args!("{t} = call %KValue @k_desc_print(%KValue {arg})"));
             f.record(&t, DESC | (f.set_of(&arg) & FAIL));
             return Ok(t);
         }
         if name == "sleep" || name == "random" {
             let t = f.tmp();
-            f.line(&format!("{t} = call %KValue @k_desc_{name}(%KValue {})", emitted[0]));
+            f.line_fmt(format_args!("{t} = call %KValue @k_desc_{name}(%KValue {})", emitted[0]));
             f.record(&t, DESC | (f.set_of(&emitted[0]) & FAIL));
             return Ok(t);
         }
@@ -10728,7 +10826,7 @@ impl<'a> Backend<'a> {
                 let (tyn, _) = self.intern(&format!("{name}\0"));
                 let (par, _) = self.intern(&format!("{parent}\0"));
                 let t = f.tmp();
-                f.line(&format!(
+                f.line_fmt(format_args!(
                     "{t} = call %KValue @k_sub_ctor(i64 {id}, i64 {want}, %KValue {inner}, ptr @{tyn}, ptr @{par})"
                 ));
                 f.record(&t, crate::infer::TOP);
@@ -10749,13 +10847,13 @@ impl<'a> Backend<'a> {
             self.emit_typeset_checks(f, name, &emitted)?;
             let n = emitted.len();
             let arr = f.tmp();
-            f.line(&format!("{arr} = alloca [{n} x %KValue]"));
+            f.line_fmt(format_args!("{arr} = alloca [{n} x %KValue]"));
             for (i, value) in emitted.iter().enumerate() {
                 let slot = f.tmp();
-                f.line(&format!(
+                f.line_fmt(format_args!(
                     "{slot} = getelementptr [{n} x %KValue], ptr {arr}, i64 0, i64 {i}"
                 ));
-                f.line(&format!("store %KValue {value}, ptr {slot}"));
+                f.line_fmt(format_args!("store %KValue {value}, ptr {slot}"));
             }
             let t = f.tmp();
             // a record this call is the last reader of can be built into
@@ -10764,10 +10862,12 @@ impl<'a> Backend<'a> {
                 .get(&(f.file.clone(), span.line as usize, span.col as usize))
                 .and_then(|name| f.lookup(name));
             match victim {
-                Some(v) => f.line(&format!(
+                Some(v) => f.line_fmt(format_args!(
                     "{t} = call %KValue @k_rec_reuse(i64 {id}, i64 {n}, ptr {arr}, %KValue {v})"
                 )),
-                None => f.line(&format!("{t} = call %KValue @k_rec(i64 {id}, i64 {n}, ptr {arr})")),
+                None => f.line_fmt(format_args!(
+                    "{t} = call %KValue @k_rec(i64 {id}, i64 {n}, ptr {arr})"
+                )),
             }
             let fails: Set = emitted.iter().fold(0, |acc, e| acc | (f.set_of(e) & FAIL));
             f.record(&t, REC | fails);
@@ -10854,7 +10954,7 @@ impl<'a> Backend<'a> {
             let t = match twin {
                 None => {
                     let t = f.tmp();
-                    f.line(&format!(
+                    f.line_fmt(format_args!(
                         "{t} = call tailcc {callee_ret} @{}({})",
                         dsym(name, n),
                         args_ir.join(", ")
@@ -10864,7 +10964,7 @@ impl<'a> Backend<'a> {
                 Some(words) => {
                     let call_twin = |f: &mut FnEmit| {
                         let t = f.tmp();
-                        f.line(&format!(
+                        f.line_fmt(format_args!(
                             "{t} = call tailcc {callee_ret} @{}({})",
                             tsym(name, n),
                             twin_ir.join(", ")
@@ -10879,23 +10979,23 @@ impl<'a> Backend<'a> {
                             let to_twin = f.label();
                             let to_general = f.label();
                             let joined = f.label();
-                            f.line(&format!(
+                            f.line_fmt(format_args!(
                                 "br i1 {words}, label %{to_twin}, label %{to_general}"
                             ));
                             f.start_block(&to_twin);
                             let a = call_twin(f);
-                            f.line(&format!("br label %{joined}"));
+                            f.line_fmt(format_args!("br label %{joined}"));
                             f.start_block(&to_general);
                             let b = f.tmp();
-                            f.line(&format!(
+                            f.line_fmt(format_args!(
                                 "{b} = call tailcc {callee_ret} @{}({}) #90",
                                 dsym(name, n),
                                 args_ir.join(", ")
                             ));
-                            f.line(&format!("br label %{joined}"));
+                            f.line_fmt(format_args!("br label %{joined}"));
                             f.start_block(&joined);
                             let t = f.tmp();
-                            f.line(&format!(
+                            f.line_fmt(format_args!(
                                 "{t} = phi {callee_ret} [ {a}, %{to_twin} ], [ {b}, %{to_general} ]"
                             ));
                             t
@@ -10906,15 +11006,15 @@ impl<'a> Backend<'a> {
             let fails: Set = emitted.iter().fold(0, |acc, e| acc | (f.set_of(e) & FAIL));
             let result = if region {
                 let p = f.tmp();
-                f.line(&format!("{p} = call %KValue @k_region_pop(%KValue {t})"));
+                f.line_fmt(format_args!("{p} = call %KValue @k_region_pop(%KValue {t})"));
                 p
             } else if beat_entry {
                 let p = f.tmp();
-                f.line(&format!("{p} = call %KValue @k_beat_pop(%KValue {t})"));
+                f.line_fmt(format_args!("{p} = call %KValue @k_beat_pop(%KValue {t})"));
                 p
             } else if cohort_entry {
                 let p = f.tmp();
-                f.line(&format!("{p} = call %KValue @k_cohort_pop(%KValue {t})"));
+                f.line_fmt(format_args!("{p} = call %KValue @k_cohort_pop(%KValue {t})"));
                 p
             } else {
                 t
@@ -10939,12 +11039,12 @@ impl<'a> Backend<'a> {
             let msg =
                 format!("no overload of `{}` matches these arguments", crate::ast::spoken(name));
             let (m, _) = self.intern(&format!("{msg}\0"));
-            f.line(&format!("call void @k_die(ptr @{m})"));
+            f.line_fmt(format_args!("call void @k_die(ptr @{m})"));
             f.line("unreachable");
             let after = f.label();
             f.start_block(&after);
             let t = f.tmp();
-            f.line(&format!(
+            f.line_fmt(format_args!(
                 "{t} = select i1 true, %KValue {{ i64 4, i64 0 }}, %KValue {{ i64 4, i64 0 }}"
             ));
             f.record(&t, NONE);
@@ -10981,13 +11081,17 @@ impl<'a> Backend<'a> {
             if name == "length" && held != 0 && held & !(BYTES | LIST) == 0 {
                 let bp = inline_payload(f, &emitted[0]);
                 let bptr = f.tmp();
-                f.line(&format!("{bptr} = inttoptr i64 {bp} to ptr"));
+                f.line_fmt(format_args!("{bptr} = inttoptr i64 {bp} to ptr"));
                 let len_ptr = f.tmp();
-                f.line(&format!("{len_ptr} = getelementptr %KBytes, ptr {bptr}, i64 0, i32 0"));
+                f.line_fmt(format_args!(
+                    "{len_ptr} = getelementptr %KBytes, ptr {bptr}, i64 0, i32 0"
+                ));
                 let len = f.tmp();
-                f.line(&format!("{len} = load i64, ptr {len_ptr}"));
+                f.line_fmt(format_args!("{len} = load i64, ptr {len_ptr}"));
                 let t = f.tmp();
-                f.line(&format!("{t} = insertvalue %KValue {{ i64 0, i64 undef }}, i64 {len}, 1"));
+                f.line_fmt(format_args!(
+                    "{t} = insertvalue %KValue {{ i64 0, i64 undef }}, i64 {len}, 1"
+                ));
                 f.record(&t, infer::builtin_set("length", &[held]));
                 return Ok(t);
             }
@@ -11070,7 +11174,7 @@ impl<'a> Backend<'a> {
                 name
             };
             let t = f.tmp();
-            f.line(&format!("{t} = call %KValue @k_b_{sym}({})", args_ir.join(", ")));
+            f.line_fmt(format_args!("{t} = call %KValue @k_b_{sym}({})", args_ir.join(", ")));
             let arg_sets: Vec<Set> = emitted.iter().map(|e| f.set_of(e)).collect();
             // `join` answers the first item that fails, and a list literal is
             // where an item can: inference admits it the same way.
@@ -11108,9 +11212,9 @@ impl<'a> Backend<'a> {
         f.start_block("entry");
         for (i, cap) in captures.iter().enumerate() {
             let slot = f.tmp();
-            f.line(&format!("{slot} = getelementptr %KValue, ptr %env, i64 {i}"));
+            f.line_fmt(format_args!("{slot} = getelementptr %KValue, ptr %env, i64 {i}"));
             let t = f.tmp();
-            f.line(&format!("{t} = load %KValue, ptr {slot}"));
+            f.line_fmt(format_args!("{t} = load %KValue, ptr {slot}"));
             f.bind(cap, &t);
         }
         for (i, p) in params.iter().enumerate() {

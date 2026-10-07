@@ -360,4 +360,11 @@
 # its own golden in this container. Measured in this container on the
 # golden's own glibc and rustc: emit_instructions 30,876,981 -> 28,879,749, a FALL of
 # 1,997,232 (-6.4684%). CI's reading replaces it if it differs.
-emit_instructions=28879749
+#
+# 2026-10-07: a line that names no carried operand goes through without being
+# copied, and the 453 sites that formatted a line into a string of its own
+# format into a buffer the emitter keeps. The emitted IR is unchanged.
+# Measured in this container on the golden's own glibc and rustc:
+# emit_instructions 28,879,749 -> 27,787,117, a FALL of 1,092,632 (-3.7833%).
+# CI's reading replaces it if it differs.
+emit_instructions=27787117
