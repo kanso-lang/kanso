@@ -22626,3 +22626,50 @@ interp_instructions 585,696,023 -> 585,696,420 and emit_instructions
 27,787,117 -> 27,800,961. What moved them is not isolated. These are CI's
 readings, and this container read the same. The welfare floor rises to take
 the net gain.
+
+
+## 2026-10-07 — the emitter writes its body in pieces
+
+With the translator reading the native IR, the most the tab's compile holds
+falls inside the emitter. Natively, a massif snapshot put two copies of the
+module there: the body copied behind the globals and the narrowing's output.
+Taking the second copy away moved the native peak from 1,695,150 bytes to
+1,472,664 and the browser row not at all. The allocator in the tab copies a
+buffer it cannot grow in place, so a doubling holds the old block and the new
+one at once. A probe that counts every reallocation as a new block found the
+browser's high-water mark there: the body growing from 278,528 bytes to
+557,056, beside the program's tree.
+
+The body is now written in pieces of 64 KiB. A piece is closed when the next
+function would not fit in the room it has, which happens only between two
+whole definitions, so no definition is split and no piece is ever copied into
+a bigger buffer. The prune reads names across every piece and moves the kept
+blocks down inside each one, then gives back the room it freed. The byte-pair
+merge rewrites each piece where it stands. The module is then allocated once
+at its exact size, and each piece is let go as it is copied in. The narrowing
+finds the lines it changes in one read and applies them in place when no
+rewrite is longer than the line it replaces, and writes a new buffer when
+one is.
+
+`a_body_in_pieces_keeps_what_the_whole_body_keeps` splits a caller from its
+callee across two pieces; with the prune reading only the first piece, it
+fails. `a_line_that_grows_is_written_beside_the_rest` builds a rerouted line
+that names its callee four times and grows by a byte, which sends the
+narrowing to the path that writes a new buffer; with that path copying lines
+unchanged, it fails.
+
+The emitted IR is unchanged: the tab's module for `bench/interp_corpus` is
+byte-identical. browser_compile_peak_bytes 1,495,824 -> 1,299,927 (-13.10%)
+and browser_compile_instructions 577,492,111 -> 577,520,396 (+0.005%),
+measured in this container on the golden's rustc.
+
+Four native compile rows moved, measured in this container where main reads
+on all four: emit_instructions 27,800,961 -> 27,530,325 (-0.97%),
+compile_instructions 26,169,794 -> 26,173,298, entry_instructions
+86,347,223 -> 86,357,298 and library_instructions 86,891,755 -> 86,901,952.
+The emit row counts the changed code; the other three stop before codegen and
+moved with the binary. What moved any of them is not isolated. Both codegen
+rows read off their goldens here on main and on this branch alike, by the
+same amounts, and the native module for their corpus is byte-identical at
+both tiers, so they are left alone. CI's readings replace these if they
+differ.
