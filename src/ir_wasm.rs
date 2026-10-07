@@ -210,8 +210,15 @@ fn unescape(raw: &[u8]) -> Vec<u8> {
 }
 
 fn tokenize(line: &str) -> Result<Vec<Tok<'_>>, String> {
-    let s = line.as_bytes();
     let mut out = Vec::with_capacity(16);
+    tokenize_into(line, &mut out)?;
+    Ok(out)
+}
+
+/// `tokenize` onto the end of a buffer the caller keeps, so a function's
+/// lines are read through one allocation rather than one each.
+fn tokenize_into<'a>(line: &'a str, out: &mut Vec<Tok<'a>>) -> Result<(), String> {
+    let s = line.as_bytes();
     let mut i = 0;
     while i < s.len() {
         let c = s[i];
@@ -300,7 +307,7 @@ fn tokenize(line: &str) -> Result<Vec<Tok<'_>>, String> {
             }
         }
     }
-    Ok(out)
+    Ok(())
 }
 
 // ---------------------------------------------------------------- parse
@@ -395,11 +402,51 @@ struct Head<'a> {
     text: &'a str,
 }
 
+/// A function's local names, numbered in the order they are first read.
+/// Most of what the emitter writes is `%t` and a number, and those are
+/// numbered through a table indexed by that number rather than a map keyed
+/// by a copy of the name; every other name goes through the map. One
+/// counter serves both, so the numbering is the order of first reading
+/// whichever way a name was found.
+#[derive(Default)]
+struct Locals {
+    by_name: HashMap<String, u32>,
+    temps: Vec<u32>,
+    next: u32,
+}
+
+impl Locals {
+    fn number(&mut self, name: &str) -> u32 {
+        let temp = name
+            .strip_prefix('t')
+            .filter(|d| !d.is_empty() && d.len() <= 9 && !d.starts_with('0') || *d == "0")
+            .filter(|d| d.bytes().all(|b| b.is_ascii_digit()))
+            .and_then(|d| d.parse::<usize>().ok());
+        if let Some(k) = temp {
+            if self.temps.len() <= k {
+                self.temps.resize(k + 1, u32::MAX);
+            }
+            if self.temps[k] == u32::MAX {
+                self.temps[k] = self.next;
+                self.next += 1;
+            }
+            return self.temps[k];
+        }
+        if let Some(n) = self.by_name.get(name) {
+            return *n;
+        }
+        let n = self.next;
+        self.next += 1;
+        self.by_name.insert(name.to_string(), n);
+        n
+    }
+}
+
 struct P<'t, 'a> {
     t: Vec<Tok<'t>>,
     i: usize,
     types: &'a HashMap<String, Ty>,
-    names: Option<&'a mut HashMap<String, u32>>,
+    names: Option<&'a mut Locals>,
 }
 
 const SKIP: &[&str] = &[
@@ -487,13 +534,7 @@ impl<'t> P<'t, '_> {
         }
     }
     fn local(&mut self, name: &str) -> u32 {
-        let names = self.names.as_mut().expect("a function body");
-        if let Some(n) = names.get(name) {
-            return *n;
-        }
-        let n = names.len() as u32;
-        names.insert(name.to_string(), n);
-        n
+        self.names.as_mut().expect("a function body").number(name)
     }
 
     fn ty(&mut self) -> Result<Ty, String> {
@@ -944,7 +985,7 @@ fn parse(ir: &str) -> Result<Ir<'_>, String> {
             continue;
         }
         if line.starts_with("define") {
-            let mut names = HashMap::default();
+            let mut names = Locals::default();
             let mut p = P { t, i: 1, types: &m.types, names: Some(&mut names) };
             let (name, sig, _) = p.define()?;
             // The body ends at the first line that is `}` alone. Every such
@@ -978,7 +1019,7 @@ fn parse(ir: &str) -> Result<Ir<'_>, String> {
 fn body(text: &str, types: &HashMap<String, Ty>) -> Result<Func, String> {
     let mut lines = text.lines();
     let head = lines.next().unwrap_or("").trim();
-    let mut names = HashMap::default();
+    let mut names = Locals::default();
     let mut slots: Vec<Option<Ty>> = Vec::new();
     let mut p = P { t: tokenize(head)?, i: 1, types, names: Some(&mut names) };
     let (name, sig, ids) = p.define()?;
@@ -990,6 +1031,7 @@ fn body(text: &str, types: &HashMap<String, Ty>) -> Result<Func, String> {
         slots[id] = Some(t.clone());
     }
     let mut blocks = vec![Block { name: String::new(), insts: Vec::new() }];
+    let mut toks = Vec::with_capacity(32);
     while let Some(raw) = lines.next() {
         // The six lines whose offsets differ on wasm32 are rewritten as they
         // are read, so the native module translates as it is and needs no
@@ -1022,9 +1064,25 @@ fn body(text: &str, types: &HashMap<String, Ty>) -> Result<Func, String> {
                 continue;
             }
         }
-        let mut p = P { t: tokenize(&body)?, i: 0, types, names: Some(&mut names) };
-        let inst =
-            parse_inst(&mut p, &mut slots).map_err(|e| format!("{name}: {e} in `{body}`"))?;
+        // A line read where it stands is tokenized into the buffer the whole
+        // function shares; a switch joined from several lines owns its text
+        // and takes a buffer of its own.
+        let inst = match &body {
+            Cow::Borrowed(line) => {
+                toks.clear();
+                tokenize_into(line, &mut toks)?;
+                let mut p =
+                    P { t: std::mem::take(&mut toks), i: 0, types, names: Some(&mut names) };
+                let inst = parse_inst(&mut p, &mut slots);
+                toks = p.t;
+                inst
+            }
+            Cow::Owned(joined) => {
+                let mut p = P { t: tokenize(joined)?, i: 0, types, names: Some(&mut names) };
+                parse_inst(&mut p, &mut slots)
+            }
+        }
+        .map_err(|e| format!("{name}: {e} in `{body}`"))?;
         blocks.last_mut().expect("a block").insts.push(inst);
     }
     let types = slots.into_iter().map(|t| t.unwrap_or(Ty::Void)).collect();
