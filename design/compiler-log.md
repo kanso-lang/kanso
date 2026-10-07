@@ -22766,3 +22766,97 @@ compile_instructions 26,173,342 -> 26,204,318, entry_instructions 86,357,296
 emit_instructions 27,248,851 -> 27,259,671 and interp_instructions
 585,690,203 -> 585,702,055, measured in this container. CI's readings replace
 these if they differ.
+
+The piece size was measured with the peak in emission: 16 KiB pieces read
+854,938 bytes and 128 KiB read 826,324, against 826,348 at 64 KiB. Smaller
+pieces cost memory and instructions, and larger ones gain 24 bytes, so the
+size stays where it is.
+
+## 2026-10-07 — the tab's compile stops copying what it only reads
+
+Profiled natively on `bench/interp_corpus`, the tab's compile spends a quarter
+of its instructions translating, and most of that reading the IR back:
+tokenizing and parsing 6,365 instructions took about 22 million instructions,
+some 3,500 for each one. Two of the costs in that reading were allocations
+made for every line.
+
+Each line was tokenized into a vector of its own. `tokenize_into` writes onto
+the end of a buffer the caller keeps, and `body` clears and reuses one buffer
+for every line of a function. A `switch` joined from several lines owns its
+text and still takes a buffer of its own.
+
+Each local was numbered through a map keyed by a copy of its name, so every
+new local allocated a string. Nearly all of the emitter's locals are `%t` and
+a number, and those are now numbered through a table indexed by that number,
+with the map kept for every other name. One counter serves both, so the
+numbering is still the order in which names are first read. With the table
+given a counter of its own, so that a temporary and a named local can share a
+number, both translator corpus tests fail.
+
+An `icmp` predicate and a cast's name were also copied into a string for every
+instruction that carried one. Both come from short fixed lists, so the parsed
+instruction now holds a reference into the list.
+
+A branch carried its target's name as a string, and so did each incoming edge
+of a phi. Lowering mapped names to blocks through a table keyed by a copy of
+every block's name, and the test for a backward branch built a vector for each
+instruction it looked at. LLVM gives a function's labels and its locals one
+namespace, so a label is now numbered as a local is, with `L` and a number
+taking a table of its own the way `%t` does. Once the function is read, `body`
+replaces each number with the place of the block it names, and lowering reads
+the place directly. A branch to a label no block defines fails in `body`.
+Resolving every label to the block before the right one fails both translator
+corpus tests.
+
+Three more allocation sites came out of a DHAT profile of the same compile. A type's
+scalar leaves were listed into a new vector at every load, store and local,
+and a vector grown one push at a time; a scalar, which is most of what is
+asked, now answers with its one leaf in place, and a struct's list is sized
+before it is filled. A zero aggregate's component `k` listed every leaf of the
+type to read one, once per component; `leaf` walks to it instead. And the
+closure that names an instruction's result built its error message on every
+call, whether or not the name was missing. Making `leaf` skip the offset into
+a struct's later fields fails both translator corpus tests.
+
+The same profile pointed past the translator at two analyses the emitter runs
+first. The escape analysis finds, for each record type, the groups that return
+it: a fixpoint that asked after every function on every round, keyed each
+question by a copy of the function's name, and copied a callee's name again for
+every call it read. Its set now borrows the names from the program. The answer
+it hands codegen was keyed the same way, `(name, arity)` and `(name, arity,
+parameter)`, and codegen asks it about every argument of every call it emits,
+so each question copied a name too; the answer is now keyed by name alone, with
+the arities and positions in a short list under it. The table of groups that
+only forward to a builtin had the same key and the same questions, one per call
+the emitter writes, and takes the same shape. And `dispatch::walk` built a
+vector of each node's children to visit them, where `for_each_child`, which
+every other walker uses, hands them over one at a time.
+
+Three smaller copies went with them. The beat analysis's group index was keyed
+by copies of names, cloned for every declaration and for every tail call it
+read; it now borrows them. Its strongly-connected-components walk allocated a
+work stack per root, now one for the whole walk. And every block the emitter
+opened copied its label into a fresh string for `cur_label`, which now reuses
+its buffer.
+
+The module is byte-identical. browser_compile_instructions 573,888,797 ->
+533,521,346 (-7.04%): in the translator, the shared buffer took 6,303,396 of
+that, the static names 138,361, the labels 1,165,172, the leaves and the error
+message 4,992,857, and the table the rest. Of the 18,539,904 the analyses took,
+putting back the old walk alone costs 3,563,531 and putting back the old answer
+alone 4,102,156; the borrowed set is the remainder, 10,874,217, read by
+difference rather than built alone. Then the forwarder table took 2,371,480,
+the beat index and work stack 1,203,537, and the label 1,679,652, each measured
+on top of the one before. browser_compile_peak_bytes rose 826,348 -> 829,363
+(+0.36%) with the two tables' new shape. emit_instructions, which counts the
+native emitter and so every analysis here, fell 27,259,671 -> 26,302,567
+(-3.51%). Breaking `carries_ty` so that it ignores the parameter fails four
+golden tests. Before the static names and the labels, the translation went from
+46.1 million instructions to 43.1 million natively.
+
+The rows on paths that run neither the translator nor the emitter moved with
+the binary's layout, read on this container: compile_instructions -28,979,
+entry_instructions -95,866, library_instructions -96,153 and
+interp_instructions +28,432, to 585,730,487. The interpreter runs none of the
+code that changed. The codegen rows did not move on CI, though this container read both
+lower; CI's readings stand.

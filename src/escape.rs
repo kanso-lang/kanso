@@ -18,22 +18,53 @@ use crate::hash::{Map as HashMap, Set as HashSet};
 pub struct EscapeInfo {
     /// Register-returnable type name -> field count.
     pub field_count: HashMap<String, usize>,
-    /// (function name, arity) groups whose result is a register-returnable
-    /// type, mapped to that type's name.
-    pub returns: HashMap<(String, usize), String>,
-    /// (function name, arity, parameter index) positions that carry a
-    /// register-returnable type (destructured as `(T ...)` by some arm),
-    /// mapped to the type's name.
-    pub carries: HashMap<(String, usize, usize), String>,
+    /// Groups whose result is a register-returnable type, by function name:
+    /// each arity with that type's name.
+    returns: HashMap<String, Vec<(usize, String)>>,
+    /// Positions that carry a register-returnable type (destructured as
+    /// `(T ...)` by some arm), by function name: each arity and parameter
+    /// index with the type's name.
+    carries: HashMap<String, Vec<(usize, usize, String)>>,
 }
 
+// Keyed by name alone so a question borrows the name it is asked with. Keyed
+// by `(name, arity)` it copied the name into a key on every question, and
+// codegen asks once for every argument of every call it emits.
 impl EscapeInfo {
     pub fn returns_ty(&self, name: &str, arity: usize) -> Option<&str> {
-        self.returns.get(&(name.to_string(), arity)).map(String::as_str)
+        let groups = self.returns.get(name)?;
+        groups.iter().find(|(a, _)| *a == arity).map(|(_, ty)| ty.as_str())
     }
 
     pub fn carries_ty(&self, name: &str, arity: usize, param: usize) -> Option<&str> {
-        self.carries.get(&(name.to_string(), arity, param)).map(String::as_str)
+        let slots = self.carries.get(name)?;
+        slots.iter().find(|(a, p, _)| *a == arity && *p == param).map(|(_, _, ty)| ty.as_str())
+    }
+
+    /// Keeps only the answers whose type `keep` accepts.
+    pub fn keep_types(&mut self, keep: impl Fn(&str) -> bool) {
+        for groups in self.returns.values_mut() {
+            groups.retain(|(_, ty)| keep(ty));
+        }
+        for slots in self.carries.values_mut() {
+            slots.retain(|(_, _, ty)| keep(ty));
+        }
+    }
+
+    fn from_groups(
+        field_count: HashMap<String, usize>,
+        returns: HashMap<(String, usize), String>,
+        carries: HashMap<(String, usize, usize), String>,
+    ) -> Self {
+        let mut info =
+            EscapeInfo { field_count, returns: HashMap::default(), carries: HashMap::default() };
+        for ((name, arity), ty) in returns {
+            info.returns.entry(name).or_default().push((arity, ty));
+        }
+        for ((name, arity, param), ty) in carries {
+            info.carries.entry(name).or_default().push((arity, param, ty));
+        }
+        info
     }
 }
 
@@ -58,8 +89,14 @@ pub fn analyze(program: &Program, inference: &crate::infer::Inference) -> Escape
             union_groups.insert((d.name.clone(), d.params.len()));
         }
     }
-    info.returns.retain(|k, _| !union_groups.contains(k));
-    info.carries.retain(|(name, arity, _), _| !union_groups.contains(&(name.clone(), *arity)));
+    for (name, arity) in &union_groups {
+        if let Some(groups) = info.returns.get_mut(name) {
+            groups.retain(|(a, _)| a != arity);
+        }
+        if let Some(slots) = info.carries.get_mut(name) {
+            slots.retain(|(a, _, _)| a != arity);
+        }
+    }
     info
 }
 
@@ -74,8 +111,8 @@ fn analyze_inner(program: &Program, inference: &crate::infer::Inference) -> Esca
         }
         let mut analysis = Analysis { program, returns_ty: HashSet::default() };
         analysis.compute_returns_ty(ty);
-        for key in analysis.returns_ty {
-            returns.insert(key, ty.clone());
+        for (name, arity) in analysis.returns_ty {
+            returns.insert((name.to_string(), arity), ty.clone());
         }
         for f in &program.fns {
             // A getter is the one function that must look at what it was
@@ -167,7 +204,7 @@ fn analyze_inner(program: &Program, inference: &crate::infer::Inference) -> Esca
             )
         })
     });
-    EscapeInfo { field_count, returns, carries }
+    EscapeInfo::from_groups(field_count, returns, carries)
 }
 
 /// Record type names that may be returned by value. A type qualifies when:
@@ -230,7 +267,10 @@ fn value_names(program: &Program) -> HashSet<String> {
 struct Analysis<'a> {
     program: &'a Program,
     /// (function name, arity) groups whose result is a `ty` value or a failure.
-    returns_ty: HashSet<(String, usize)>,
+    /// The names are borrowed from the program: the fixpoint below asks after
+    /// every function on every round, and `produces_ty` after every call it
+    /// reads, and a key holding a copy of the name cost a copy per question.
+    returns_ty: HashSet<(&'a str, usize)>,
 }
 
 impl<'a> Analysis<'a> {
@@ -271,8 +311,7 @@ impl<'a> Analysis<'a> {
         // answers one boxed word, so no group returning ty may be one. A
         // constant named bare is evaluated where it is named, and codegen
         // boxes its answer there, so a group of no arguments is not one.
-        if self.returns_ty.iter().any(|(name, arity)| *arity > 0 && values.contains(name.as_str()))
-        {
+        if self.returns_ty.iter().any(|(name, arity)| *arity > 0 && values.contains(*name)) {
             return false;
         }
         self.program.fns.iter().all(|f| self.body_is_safe(ty, &f.body))
@@ -282,10 +321,11 @@ impl<'a> Analysis<'a> {
     /// `ty` construction, a failure, or a call to another group that returns
     /// `ty`.
     fn compute_returns_ty(&mut self, ty: &str) {
+        let program = self.program;
         loop {
             let mut changed = false;
-            for f in &self.program.fns {
-                let key = (f.name.clone(), f.params.len());
+            for f in &program.fns {
+                let key = (f.name.as_str(), f.params.len());
                 if self.returns_ty.contains(&key) {
                     continue;
                 }
@@ -477,7 +517,7 @@ impl<'a> Analysis<'a> {
                         || (name == "if"
                             && args.len() == 3
                             && (self.produces_ty(ty, &args[1]) || self.produces_ty(ty, &args[2])))
-                        || self.returns_ty.contains(&(name.to_string(), args.len()))
+                        || self.returns_ty.contains(&(name.as_str(), args.len()))
                 }
                 _ => false,
             },

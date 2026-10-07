@@ -44,6 +44,22 @@ enum Ty {
     Array(u32, Rc<Ty>),
 }
 
+/// A type's scalar leaves: one held in place, or a list.
+enum Leaves {
+    One([(Ty, u32); 1]),
+    Many(Vec<(Ty, u32)>),
+}
+
+impl std::ops::Deref for Leaves {
+    type Target = [(Ty, u32)];
+    fn deref(&self) -> &[(Ty, u32)] {
+        match self {
+            Leaves::One(one) => one,
+            Leaves::Many(many) => many,
+        }
+    }
+}
+
 const VI32: u8 = 0x7f;
 const VI64: u8 = 0x7e;
 const VF64: u8 = 0x7c;
@@ -109,10 +125,45 @@ impl Ty {
         }
     }
 
-    fn leaves(&self) -> Vec<(Ty, u32)> {
-        let mut out = Vec::new();
-        self.scalars(0, &mut out);
-        out
+    /// The scalar leaves with their offsets. A scalar is its own one leaf
+    /// and is answered without a vector; most of the types the translator
+    /// asks about are scalars.
+    fn leaves(&self) -> Leaves {
+        match self {
+            Ty::Struct(_) | Ty::Array(..) => {
+                let mut out = Vec::with_capacity(self.width() as usize);
+                self.scalars(0, &mut out);
+                Leaves::Many(out)
+            }
+            Ty::Void => Leaves::Many(Vec::new()),
+            t => Leaves::One([(t.clone(), 0)]),
+        }
+    }
+
+    /// Leaf `k` of this type, found without listing the others.
+    fn leaf(&self, k: u32) -> Option<Ty> {
+        match self {
+            Ty::Struct(fs) => {
+                let mut k = k;
+                for f in fs.iter() {
+                    let w = f.width();
+                    if k < w {
+                        return f.leaf(k);
+                    }
+                    k -= w;
+                }
+                None
+            }
+            Ty::Array(n, e) => {
+                let w = e.width();
+                if w == 0 || k >= n * w {
+                    return None;
+                }
+                e.leaf(k % w)
+            }
+            Ty::Void => None,
+            t => (k == 0).then(|| t.clone()),
+        }
     }
 
     fn width(&self) -> u32 {
@@ -210,8 +261,15 @@ fn unescape(raw: &[u8]) -> Vec<u8> {
 }
 
 fn tokenize(line: &str) -> Result<Vec<Tok<'_>>, String> {
-    let s = line.as_bytes();
     let mut out = Vec::with_capacity(16);
+    tokenize_into(line, &mut out)?;
+    Ok(out)
+}
+
+/// `tokenize` onto the end of a buffer the caller keeps, so a function's
+/// lines are read through one allocation rather than one each.
+fn tokenize_into<'a>(line: &'a str, out: &mut Vec<Tok<'a>>) -> Result<(), String> {
+    let s = line.as_bytes();
     let mut i = 0;
     while i < s.len() {
         let c = s[i];
@@ -300,7 +358,7 @@ fn tokenize(line: &str) -> Result<Vec<Tok<'_>>, String> {
             }
         }
     }
-    Ok(out)
+    Ok(())
 }
 
 // ---------------------------------------------------------------- parse
@@ -331,8 +389,8 @@ enum Callee {
 #[derive(Debug)]
 enum Inst {
     Bin(u32, Bin, Ty, Val, Val),
-    Icmp(u32, String, Ty, Val, Val),
-    Cast(u32, String, Ty, Val, Ty),
+    Icmp(u32, &'static str, Ty, Val, Val),
+    Cast(u32, &'static str, Ty, Val, Ty),
     Select(u32, Ty, Val, Val, Val),
     Extract(u32, Ty, Val, Vec<u32>),
     Insert(u32, Ty, Val, Ty, Val, Vec<u32>),
@@ -341,16 +399,19 @@ enum Inst {
     Gep(u32, Ty, Val, Vec<(Ty, Val)>),
     Alloca(u32, Ty),
     Call(Option<u32>, Ty, Callee, Vec<(Ty, Val)>, bool),
-    Phi(u32, Ty, Vec<(Val, String)>),
-    Br(String),
-    CondBr(Val, String, String),
-    Switch(Ty, Val, String, Vec<(i64, String)>),
+    Phi(u32, Ty, Vec<(Val, u32)>),
+    Br(u32),
+    CondBr(Val, u32, u32),
+    Switch(Ty, Val, u32, Vec<(i64, u32)>),
     Ret(Ty, Option<Val>),
     Unreachable,
 }
 
+/// A block's instructions. A label an instruction names is the number of the
+/// block it names: `body` reads a label as a local, which LLVM's one namespace
+/// per function allows, and turns each into its block's place once the whole
+/// function has been read.
 struct Block {
-    name: String,
     insts: Vec<Inst>,
 }
 
@@ -395,11 +456,58 @@ struct Head<'a> {
     text: &'a str,
 }
 
+/// A function's local names, numbered in the order they are first read.
+/// Most of what the emitter writes is `%t` and a number, and those are
+/// numbered through a table indexed by that number rather than a map keyed
+/// by a copy of the name; every other name goes through the map. One
+/// counter serves both, so the numbering is the order of first reading
+/// whichever way a name was found.
+#[derive(Default)]
+struct Locals {
+    by_name: HashMap<String, u32>,
+    temps: Vec<u32>,
+    labels: Vec<u32>,
+    next: u32,
+}
+
+impl Locals {
+    fn number(&mut self, name: &str) -> u32 {
+        let numbered = |prefix: char| {
+            name.strip_prefix(prefix)
+                .filter(|d| !d.is_empty() && d.len() <= 9 && !d.starts_with('0') || *d == "0")
+                .filter(|d| d.bytes().all(|b| b.is_ascii_digit()))
+                .and_then(|d| d.parse::<usize>().ok())
+        };
+        let table = match (numbered('t'), numbered('L')) {
+            (Some(k), _) => Some((&mut self.temps, k)),
+            (_, Some(k)) => Some((&mut self.labels, k)),
+            _ => None,
+        };
+        if let Some((table, k)) = table {
+            if table.len() <= k {
+                table.resize(k + 1, u32::MAX);
+            }
+            if table[k] == u32::MAX {
+                table[k] = self.next;
+                self.next += 1;
+            }
+            return table[k];
+        }
+        if let Some(n) = self.by_name.get(name) {
+            return *n;
+        }
+        let n = self.next;
+        self.next += 1;
+        self.by_name.insert(name.to_string(), n);
+        n
+    }
+}
+
 struct P<'t, 'a> {
     t: Vec<Tok<'t>>,
     i: usize,
     types: &'a HashMap<String, Ty>,
-    names: Option<&'a mut HashMap<String, u32>>,
+    names: Option<&'a mut Locals>,
 }
 
 const SKIP: &[&str] = &[
@@ -487,13 +595,7 @@ impl<'t> P<'t, '_> {
         }
     }
     fn local(&mut self, name: &str) -> u32 {
-        let names = self.names.as_mut().expect("a function body");
-        if let Some(n) = names.get(name) {
-            return *n;
-        }
-        let n = names.len() as u32;
-        names.insert(name.to_string(), n);
-        n
+        self.names.as_mut().expect("a function body").number(name)
     }
 
     fn ty(&mut self) -> Result<Ty, String> {
@@ -591,12 +693,12 @@ impl<'t> P<'t, '_> {
         Ok((t, v))
     }
 
-    fn label(&mut self) -> Result<String, String> {
+    fn label(&mut self) -> Result<u32, String> {
         if !self.eat_word("label") {
             return Err("expected label".into());
         }
         match self.next()? {
-            Tok::Local(n) => Ok(n.into_owned()),
+            Tok::Local(n) => Ok(self.local(&n)),
             t => Err(format!("label name {t:?}")),
         }
     }
@@ -668,6 +770,12 @@ fn bin_op(w: &str) -> Option<Bin> {
     })
 }
 
+/// The comparisons and casts the translator lowers, held by an instruction
+/// as these names rather than a copy of the word it was read from.
+const ICMP_PREDICATES: [&str; 10] =
+    ["eq", "ne", "slt", "ult", "sgt", "ugt", "sle", "ule", "sge", "uge"];
+const CASTS: [&str; 6] = ["zext", "sext", "trunc", "inttoptr", "ptrtoint", "bitcast"];
+
 fn parse_inst(p: &mut P, types: &mut Vec<Option<Ty>>) -> Result<Inst, String> {
     let dst = match (p.t.first(), p.t.get(1)) {
         (Some(Tok::Local(n)), Some(Tok::P(b'='))) => {
@@ -686,7 +794,7 @@ fn parse_inst(p: &mut P, types: &mut Vec<Option<Ty>>) -> Result<Inst, String> {
             types[id] = Some(t.clone());
         }
     };
-    let d = || dst.ok_or("an instruction with a result is unnamed".to_string());
+    let d = || dst.ok_or_else(|| "an instruction with a result is unnamed".to_string());
     let op = match p.next()? {
         Tok::Word(w) => w,
         t => return Err(format!("expected an opcode at {t:?}")),
@@ -703,7 +811,11 @@ fn parse_inst(p: &mut P, types: &mut Vec<Option<Ty>>) -> Result<Inst, String> {
         }
         "icmp" => {
             let pred = match p.next()? {
-                Tok::Word(w) => w,
+                Tok::Word(w) => ICMP_PREDICATES
+                    .iter()
+                    .find(|known| **known == w)
+                    .copied()
+                    .ok_or_else(|| format!("icmp {w}"))?,
                 t => return Err(format!("icmp predicate {t:?}")),
             };
             let t = p.ty()?;
@@ -711,14 +823,19 @@ fn parse_inst(p: &mut P, types: &mut Vec<Option<Ty>>) -> Result<Inst, String> {
             p.expect(b',')?;
             let b = p.value(&t)?;
             def(dst, &Ty::I1);
-            Inst::Icmp(d()?, pred.to_string(), t, a, b)
+            Inst::Icmp(d()?, pred, t, a, b)
         }
         "zext" | "sext" | "trunc" | "inttoptr" | "ptrtoint" | "bitcast" => {
+            let op = CASTS
+                .iter()
+                .find(|known| **known == op)
+                .copied()
+                .expect("the arm names only casts");
             let (from, v) = p.typed()?;
             p.eat_word("to");
             let to = p.ty()?;
             def(dst, &to);
-            Inst::Cast(d()?, op.to_string(), from, v, to)
+            Inst::Cast(d()?, op, from, v, to)
         }
         "select" => {
             let (_, c) = p.typed()?;
@@ -824,7 +941,7 @@ fn parse_inst(p: &mut P, types: &mut Vec<Option<Ty>>) -> Result<Inst, String> {
                 let v = p.value(&t)?;
                 p.expect(b',')?;
                 let b = match p.next()? {
-                    Tok::Local(n) => n.into_owned(),
+                    Tok::Local(n) => p.local(&n),
                     t => return Err(format!("phi block {t:?}")),
                 };
                 p.expect(b']')?;
@@ -944,7 +1061,7 @@ fn parse(ir: &str) -> Result<Ir<'_>, String> {
             continue;
         }
         if line.starts_with("define") {
-            let mut names = HashMap::default();
+            let mut names = Locals::default();
             let mut p = P { t, i: 1, types: &m.types, names: Some(&mut names) };
             let (name, sig, _) = p.define()?;
             // The body ends at the first line that is `}` alone. Every such
@@ -978,7 +1095,7 @@ fn parse(ir: &str) -> Result<Ir<'_>, String> {
 fn body(text: &str, types: &HashMap<String, Ty>) -> Result<Func, String> {
     let mut lines = text.lines();
     let head = lines.next().unwrap_or("").trim();
-    let mut names = HashMap::default();
+    let mut names = Locals::default();
     let mut slots: Vec<Option<Ty>> = Vec::new();
     let mut p = P { t: tokenize(head)?, i: 1, types, names: Some(&mut names) };
     let (name, sig, ids) = p.define()?;
@@ -989,7 +1106,12 @@ fn body(text: &str, types: &HashMap<String, Ty>) -> Result<Func, String> {
         }
         slots[id] = Some(t.clone());
     }
-    let mut blocks = vec![Block { name: String::new(), insts: Vec::new() }];
+    let mut blocks = vec![Block { insts: Vec::new() }];
+    // The block each label names, indexed by the label's number; the entry
+    // block keeps its place whether or not it carries a label.
+    let mut block_of: Vec<u32> = Vec::new();
+    let mut entry_named = false;
+    let mut toks = Vec::with_capacity(32);
     while let Some(raw) = lines.next() {
         // The six lines whose offsets differ on wasm32 are rewritten as they
         // are read, so the native module translates as it is and needs no
@@ -1013,19 +1135,66 @@ fn body(text: &str, types: &HashMap<String, Ty>) -> Result<Func, String> {
         }
         if let Some(label) = body.strip_suffix(':') {
             if !label.contains(' ') {
-                let label = label.trim_matches('"').to_string();
-                if blocks.len() == 1 && blocks[0].insts.is_empty() && blocks[0].name.is_empty() {
-                    blocks[0].name = label;
-                } else {
-                    blocks.push(Block { name: label, insts: Vec::new() });
+                let id = names.number(label.trim_matches('"')) as usize;
+                if !(blocks.len() == 1 && blocks[0].insts.is_empty() && !entry_named) {
+                    blocks.push(Block { insts: Vec::new() });
                 }
+                entry_named = true;
+                if block_of.len() <= id {
+                    block_of.resize(id + 1, u32::MAX);
+                }
+                block_of[id] = blocks.len() as u32 - 1;
                 continue;
             }
         }
-        let mut p = P { t: tokenize(&body)?, i: 0, types, names: Some(&mut names) };
-        let inst =
-            parse_inst(&mut p, &mut slots).map_err(|e| format!("{name}: {e} in `{body}`"))?;
+        // A line read where it stands is tokenized into the buffer the whole
+        // function shares; a switch joined from several lines owns its text
+        // and takes a buffer of its own.
+        let inst = match &body {
+            Cow::Borrowed(line) => {
+                toks.clear();
+                tokenize_into(line, &mut toks)?;
+                let mut p =
+                    P { t: std::mem::take(&mut toks), i: 0, types, names: Some(&mut names) };
+                let inst = parse_inst(&mut p, &mut slots);
+                toks = p.t;
+                inst
+            }
+            Cow::Owned(joined) => {
+                let mut p = P { t: tokenize(joined)?, i: 0, types, names: Some(&mut names) };
+                parse_inst(&mut p, &mut slots)
+            }
+        }
+        .map_err(|e| format!("{name}: {e} in `{body}`"))?;
         blocks.last_mut().expect("a block").insts.push(inst);
+    }
+    let place = |l: &mut u32| match block_of.get(*l as usize) {
+        Some(&b) if b != u32::MAX => {
+            *l = b;
+            Ok(())
+        }
+        _ => Err(format!("{name}: a branch names no block")),
+    };
+    for inst in blocks.iter_mut().flat_map(|b| b.insts.iter_mut()) {
+        match inst {
+            Inst::Br(l) => place(l)?,
+            Inst::CondBr(_, a, b) => {
+                place(a)?;
+                place(b)?;
+            }
+            Inst::Switch(_, _, d, cases) => {
+                place(d)?;
+                for (_, l) in cases {
+                    place(l)?;
+                }
+            }
+            Inst::Phi(_, _, inc) => {
+                for (_, l) in inc {
+                    place(l)?;
+                }
+            }
+            _ => {}
+        }
     }
     let types = slots.into_iter().map(|t| t.unwrap_or(Ty::Void)).collect();
     Ok(Func { name, sig, params: ids, blocks, types })
@@ -1465,7 +1634,7 @@ fn str_(out: &mut Vec<u8>, s: &str) {
 // ---------------------------------------------------------------- functions
 
 /// A phi's result, its type, and its value along each incoming edge.
-type PhiAt = (u32, Ty, Vec<(Val, String)>);
+type PhiAt = (u32, Ty, Vec<(Val, u32)>);
 
 struct Fx<'m> {
     mx: &'m mut Mx,
@@ -1482,7 +1651,6 @@ struct Fx<'m> {
     n: usize,
     sret: bool,
     phis: Vec<Rc<Vec<PhiAt>>>,
-    block_of: HashMap<String, usize>,
 }
 
 fn lower(mx: &mut Mx, f: &Func) -> Result<Vec<u8>, String> {
@@ -1503,7 +1671,6 @@ fn lower(mx: &mut Mx, f: &Func) -> Result<Vec<u8>, String> {
         n: f.blocks.len(),
         sret,
         phis: Vec::new(),
-        block_of: HashMap::default(),
     };
     let mut at = sret as u32;
     for (id, t) in f.params.iter().zip(&f.sig.params) {
@@ -1513,7 +1680,7 @@ fn lower(mx: &mut Mx, f: &Func) -> Result<Vec<u8>, String> {
     for (id, t) in f.types.iter().enumerate() {
         if fx.base[id] == u32::MAX && *t != Ty::Void {
             fx.base[id] = fx.nparams + fx.locals.len() as u32;
-            for (l, _) in t.leaves() {
+            for (l, _) in t.leaves().iter() {
                 fx.locals.push(l.vt());
             }
         }
@@ -1525,8 +1692,7 @@ fn lower(mx: &mut Mx, f: &Func) -> Result<Vec<u8>, String> {
     // The frame: allocas, then one struct-return slot, then the largest
     // variadic buffer any call here writes.
     let (mut frame, mut va_size, mut scratch) = (0u32, 0u32, 0u32);
-    for (bi, b) in f.blocks.iter().enumerate() {
-        fx.block_of.insert(b.name.clone(), bi);
+    for b in &f.blocks {
         let mut phis = Vec::new();
         for inst in &b.insts {
             match inst {
@@ -1565,15 +1731,13 @@ fn lower(mx: &mut Mx, f: &Func) -> Result<Vec<u8>, String> {
 
     let back = f.blocks.iter().enumerate().any(|(bi, b)| {
         b.insts.iter().any(|i| {
-            let targets: Vec<&String> = match i {
-                Inst::Br(t) => vec![t],
-                Inst::CondBr(_, a, b) => vec![a, b],
-                Inst::Switch(_, _, d, cs) => {
-                    std::iter::once(d).chain(cs.iter().map(|(_, l)| l)).collect()
-                }
-                _ => vec![],
-            };
-            targets.iter().any(|t| fx.block_of.get(*t).is_some_and(|&j| j <= bi))
+            let back = |t: &u32| *t as usize <= bi;
+            match i {
+                Inst::Br(t) => back(t),
+                Inst::CondBr(_, a, b) => back(a) || back(b),
+                Inst::Switch(_, _, d, cs) => back(d) || cs.iter().any(|(_, l)| back(l)),
+                _ => false,
+            }
         })
     });
 
@@ -1668,8 +1832,8 @@ impl Fx<'_> {
         match v {
             Val::Local(id) => self.get(*id, k),
             Val::Zero => {
-                let leaves = ty.leaves();
-                self.zero(&leaves[k as usize].0)
+                let leaf = ty.leaf(k).ok_or("a zero read past its type's leaves")?;
+                self.zero(&leaf)
             }
             Val::Int(n) => match ty {
                 Ty::I64 => i64c(&mut self.code, *n),
@@ -1743,7 +1907,7 @@ impl Fx<'_> {
         for (d, t, inc) in phis.iter() {
             let v = inc
                 .iter()
-                .find(|(_, b)| self.block_of.get(b) == Some(&from))
+                .find(|(_, b)| *b as usize == from)
                 .map(|(v, _)| v.clone())
                 .ok_or("a phi has no value for an edge")?;
             self.push(t, &v)?;
@@ -1775,10 +1939,6 @@ impl Fx<'_> {
         Ok(())
     }
 
-    fn block(&self, name: &str) -> Result<usize, String> {
-        self.block_of.get(name).copied().ok_or_else(|| format!("no block %{name}"))
-    }
-
     fn simple(&self, from: usize, to: usize) -> bool {
         to > from && self.phis[to].is_empty()
     }
@@ -1795,7 +1955,7 @@ impl Fx<'_> {
                     }
                 }
                 let base: u8 = if *t == Ty::I64 { 0x51 } else { 0x46 };
-                let off = match pred.as_str() {
+                let off = match *pred {
                     "eq" => 0,
                     "ne" => 1,
                     "slt" => 2,
@@ -1813,7 +1973,7 @@ impl Fx<'_> {
             }
             Inst::Cast(d, how, from, v, to) => {
                 self.comp(from, v, 0)?;
-                match (how.as_str(), from, to) {
+                match (*how, from, to) {
                     ("zext", f, Ty::I64) if *f != Ty::I64 => self.code.push(0xad),
                     ("zext", _, _) => {}
                     ("sext", f, t) => {
@@ -1939,11 +2099,11 @@ impl Fx<'_> {
             Inst::Alloca(..) | Inst::Phi(..) => {}
             Inst::Call(d, ret, callee, args, tail) => self.call(*d, ret, callee, args, *tail)?,
             Inst::Br(l) => {
-                let to = self.block(l)?;
+                let to = *l as usize;
                 self.edge(bi, to, 0, true)?;
             }
             Inst::CondBr(c, a, b) => {
-                let (a, b) = (self.block(a)?, self.block(b)?);
+                let (a, b) = (*a as usize, *b as usize);
                 match c {
                     Val::Int(n) => self.edge(bi, if *n & 1 == 1 { a } else { b }, 0, true)?,
                     _ if self.simple(bi, a) => {
@@ -1968,11 +2128,9 @@ impl Fx<'_> {
                 }
             }
             Inst::Switch(t, v, dl, cases) => {
-                let dflt = self.block(dl)?;
-                let targets: Vec<(i64, usize)> = cases
-                    .iter()
-                    .map(|(k, l)| Ok((*k, self.block(l)?)))
-                    .collect::<Result<_, String>>()?;
+                let dflt = *dl as usize;
+                let targets: Vec<(i64, usize)> =
+                    cases.iter().map(|(k, l)| (*k, *l as usize)).collect();
                 let all_simple = self.simple(bi, dflt)
                     && targets.iter().all(|(_, j)| self.simple(bi, *j))
                     && *t == Ty::I64;

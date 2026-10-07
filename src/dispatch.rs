@@ -124,55 +124,12 @@ fn walk(e: &Expr, name: &str, arity: usize, disc: usize, ok: &mut bool) {
             }
         }
     }
-    for child in children(e) {
-        walk(child, name, arity, disc, ok);
-    }
+    crate::for_each_child(e, |child| walk(child, name, arity, disc, ok));
 }
 
 fn is_at_call(e: &Expr) -> bool {
     // lenient indexing (`cs[p]`) is the byte-discriminator shape
     matches!(e, Expr::Index { strict: false, .. })
-}
-
-fn children(e: &Expr) -> Vec<&Expr> {
-    match e {
-        Expr::Partial(..) => Vec::new(),
-        Expr::Field { base, .. } => vec![base.as_ref()],
-        Expr::Upcast { expr, .. } => vec![expr.as_ref()],
-        Expr::Block(stmts, _) | Expr::Build(stmts, _) => stmts
-            .iter()
-            .map(|st| match st {
-                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expr,
-            })
-            .collect(),
-        Expr::App { head, args, .. } => {
-            let mut v: Vec<&Expr> = vec![head.as_ref()];
-            v.extend(args.iter());
-            v
-        }
-        Expr::Index { base, index, .. } => vec![base.as_ref(), index.as_ref()],
-        Expr::BinOp { lhs, rhs, .. } | Expr::Join { lhs, rhs, .. } => {
-            vec![lhs.as_ref(), rhs.as_ref()]
-        }
-        Expr::Guard { cond, early, rest, .. } => {
-            let mut v: Vec<&Expr> = vec![cond.as_ref(), early.as_ref()];
-            v.extend(rest.iter().map(|s| match s {
-                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expr,
-            }));
-            v
-        }
-        Expr::Lambda { body, .. } => vec![body.as_ref()],
-        Expr::List(items, _) => items.iter().collect(),
-        Expr::MapLit(pairs, _) => pairs.iter().flat_map(|(k, v)| [k, v]).collect(),
-        Expr::Str(parts, _) => parts
-            .iter()
-            .filter_map(|p| match p {
-                crate::ast::TemplatePart::Interp(x) => Some(x),
-                crate::ast::TemplatePart::Lit(_) => None,
-            })
-            .collect(),
-        Expr::Int(..) | Expr::Float(..) | Expr::Ident(..) | Expr::Hole(..) => vec![],
-    }
 }
 
 #[cfg(test)]
