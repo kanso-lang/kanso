@@ -8,9 +8,9 @@
 set -e
 f=src/escape.rs
 grep -q "fn value_names" src/escape.rs
-grep -qF '        if self.returns_ty.iter().any(|(name, arity)| *arity > 0 && values.contains(name.as_str()))' "$f" || {
+grep -qF '        if self.returns_ty.iter().any(|(name, arity)| *arity > 0 && values.contains(*name)) {' "$f" || {
   echo "the value check in returnable moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i 's/^        if self.returns_ty.iter().any(|(name, arity)| \*arity > 0 \&\& values.contains(name.as_str()))$/        if false \&\& self.returns_ty.iter().any(|(name, arity)| *arity > 0 \&\& values.contains(name.as_str()))/' "$f"
+sed -i 's/^        if self.returns_ty.iter().any(|(name, arity)| \*arity > 0 \&\& values.contains(\*name)) {$/        if false \&\& self.returns_ty.iter().any(|(name, arity)| *arity > 0 \&\& values.contains(*name)) {/' "$f"
 grep -qF 'if false && self.returns_ty.iter().any(' "$f"
