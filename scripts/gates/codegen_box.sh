@@ -33,7 +33,7 @@ cp -r bench/codegen_corpus "$box/pkg/"
 # not a row.
 mkdir -p "$box/link"
 for lib in libm.so libgcc.a libgcc_s.so libgcc_s.so.1 libc.so; do
-  found=$(env -i PATH=/usr/bin:/bin clang -print-file-name="$lib")
+  found=$(env -i PATH=/usr/local/bin:/usr/bin:/bin clang -print-file-name="$lib")
   case "$found" in
     /*) ln -s "$found" "$box/link/$lib" ;;
     *) echo "::error::clang cannot find $lib, so the link directory is incomplete" >&2; exit 1 ;;
