@@ -23129,3 +23129,55 @@ runs the wasm32 runtime, which has no vector block. With the split built
 there too, browser_run_instructions rose 33,510,668 -> 33,511,114 for a
 length test that bought nothing, so the split is x86-64 only, and the row
 reads 33,510,647.
+
+## 2026-10-07 — a word run branches from the operation that overflows
+
+An expression of several `+ - * / %` over words runs on raw words, and
+until now it collected one overflow flag per operation, joined them with
+`or` and branched once at the end. x86 has no instruction that ORs the
+overflow flag into a register, so each flag became a `seto`, the `or`s
+became `or`s, and the final branch a `cmp` and a `jne`: nine instructions a
+pass for the escape loop's `(k * 31 + n * 7 + 3) % 997`, around a body of
+forty. Counted over the whole run program, 5,161,443 `seto` executed, and
+4,650,272 of them were in that loop.
+
+`word_run` now takes the label the expression falls back to and branches
+there after each operation that can leave the word. Each branch is a `jo` on
+the flag the operation has just set, and clang keeps them apart. Two places
+take the label: the expression on its own, whose fallback re-runs the
+operations the general way, and the argument a word twin takes before its
+body has written anything, whose fallback starts the general body over. The
+twin's own test, which folds an argument's flags into the choice of twin or
+general group, keeps its `or`: its general way reads every argument, so it
+cannot be entered from the middle of one.
+
+The escape loop runs 36 instructions an element where it ran 40. One flag
+still costs a test each pass: `k * 31` does not change inside the loop and
+LLVM hoists the multiply, but its flag is still tested every time round.
+
+Measured in this container against main's own reading: runbench
+1,148,542,406 -> 1,142,362,645 (-0.538%), escapebench 50,294,739 ->
+45,294,773 (-9.94%), basket -12,000 and digestbench -6,305. jsonbench,
+deepbench, pendbench, widebench, livebench, readbench and indexbench are
+unchanged; encodebench and oneshot read +14 and scanbench +1.
+
+Each branch adds a block, so the emitted counts rise: `emitted_branches`
+1,094 -> 1,101 and `emitted_lines` 10,111 -> 10,125 for the decoder,
+`emitted_other_branches` 15,916 -> 16,025 and `emitted_other_lines` 145,284
+-> 145,488 across the other benchmarks, and the compile corpus's `lines`
+1,541 -> 1,545. Writing those blocks costs the emitter 146 instructions,
+`emit_instructions` 25,148,324 -> 25,148,470. The machine code is 48 bytes
+longer in all, `text` 4,604,144 -> 4,604,192, with basket and digestbench
+shorter and escapebench and runbench longer. `work_encodebench` lands on
+2,382,770,895, `work_oneshot` on 13,056,646 and `work_scanbench` on 281,721,
++14, +14 and +1 for a layout that moved around code they do not run.
+
+The spec is the micro golden that already crosses 2^63 at each step of a
+word run. It reaches the word run in the release build that
+`micro_corpus_survives_a_release_build` makes; `kanso run` builds without
+twins and reaches it once, on a subtraction that never overflows. It gains a
+line whose answers overflow at the middle and last operations, and
+`a_twin_starts_over_at_any_step_of_its_arithmetic` covers the twin's
+argument. Writing the branch as `br i1 false` sends three of the golden's
+lines and both of the new fixture's answers to wrapped words in the release
+build, and leaves the interpreter's answers alone.

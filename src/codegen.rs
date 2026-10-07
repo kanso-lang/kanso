@@ -3365,19 +3365,29 @@ impl FnEmit {
     }
 
     fn bail_on(&mut self, overflow: &str) -> bool {
-        let Some((ret, call)) = self.general.clone().filter(|_| !self.effects) else {
+        if !self.can_bail() {
             return false;
-        };
+        }
         let ok = self.label();
         let out = self.label();
         self.line_fmt(format_args!("br i1 {overflow}, label %{out}, label %{ok}"));
-        self.start_block(&out);
+        self.bail_block(&out);
+        self.start_block(&ok);
+        true
+    }
+
+    /// The block `bail_on` branches to, for a caller that branched to it
+    /// itself: it starts the general body over. The block that was open
+    /// must already be closed.
+    fn bail_block(&mut self, out: &str) {
+        let Some((ret, call)) = self.general.clone() else {
+            return;
+        };
+        self.start_block(out);
         let r = self.tmp();
         let kind = if self.frame_held { "call" } else { "musttail call" };
         self.write(&format!("{r} = {kind} {call}"));
         self.write(&format!("ret {ret} {r}"));
-        self.start_block(&ok);
-        true
     }
 
     /// Every stack slot the body asks for is held back and written at the top
@@ -5413,12 +5423,18 @@ fn arith_leaves<'e>(e: &'e Expr, out: &mut Vec<&'e Expr>) {
 /// The operations of a word run on raw words. Each one that can leave the
 /// word, or divide by zero or by minus one, adds its flag to `flags`; the
 /// answer is meaningful only when none is set.
+///
+/// Given a `slow` label, a flag is a branch there instead, taken where the
+/// operation stands. An `or` of the flags made x86 keep each one in a
+/// register with `seto` and test the `or` at the end; a branch after each
+/// operation is a `jo` on the flag the operation already set.
 fn word_run(
     f: &mut FnEmit,
     e: &Expr,
     words: &[String],
     at: &mut usize,
     flags: &mut Vec<String>,
+    slow: Option<&str>,
 ) -> String {
     let Expr::BinOp { op, lhs, rhs, .. } = e else {
         *at += 1;
@@ -5428,8 +5444,8 @@ fn word_run(
         *at += 1;
         return words[*at - 1].clone();
     }
-    let a = word_run(f, lhs, words, at, flags);
-    let b = word_run(f, rhs, words, at, flags);
+    let a = word_run(f, lhs, words, at, flags, slow);
+    let b = word_run(f, rhs, words, at, flags, slow);
     let t = f.tmp();
     match *op {
         "+" | "-" | "*" => {
@@ -5443,7 +5459,7 @@ fn word_run(
             f.line_fmt(format_args!("{t} = extractvalue {{ i64, i1 }} {pair}, 0"));
             let over = f.tmp();
             f.line_fmt(format_args!("{over} = extractvalue {{ i64, i1 }} {pair}, 1"));
-            flags.push(over.to_string());
+            flag(f, over.to_string(), flags, slow);
         }
         _ => {
             if !matches!(b.parse::<i64>(), Ok(d) if d != 0 && d != -1) {
@@ -5453,7 +5469,7 @@ fn word_run(
                 f.line_fmt(format_args!("{minus} = icmp eq i64 {b}, -1"));
                 let edge = f.tmp();
                 f.line_fmt(format_args!("{edge} = or i1 {zero}, {minus}"));
-                flags.push(edge.to_string());
+                flag(f, edge.to_string(), flags, slow);
                 // the instruction must not trap on the path it does not take
                 let safe = f.tmp();
                 f.line_fmt(format_args!("{safe} = select i1 {edge}, i64 1, i64 {b}"));
@@ -5466,6 +5482,19 @@ fn word_run(
         }
     }
     t.to_string()
+}
+
+/// A word run's flag: kept for the caller, or a branch to `slow` here.
+fn flag(f: &mut FnEmit, over: String, flags: &mut Vec<String>, slow: Option<&str>) {
+    match slow {
+        Some(slow) => {
+            let on = f.label();
+            f.line_fmt(format_args!("br i1 {over}, label %{slow}, label %{on}"));
+            f.start_block(&on);
+            flags.push(over);
+        }
+        None => flags.push(over),
+    }
 }
 
 fn inline_tag(f: &mut FnEmit, value: &str) -> String {
@@ -5778,21 +5807,22 @@ impl<'a> Backend<'a> {
         }
         let words: Vec<String> = vals.iter().map(|v| inline_payload(f, v)).collect();
         let mut flags = Vec::new();
-        let r = word_run(f, arg, &words, &mut 0, &mut flags);
+        // In a twin that has written nothing yet, an overflow here starts
+        // the general body over instead of going back to the caller, and the
+        // call this argument feeds can take the twin without asking. Each
+        // operation branches there as it overflows.
+        let bail = f.can_bail().then(|| f.label());
+        let r = word_run(f, arg, &words, &mut 0, &mut flags, bail.as_deref());
         let v = f.tmp();
         f.line_fmt(format_args!("{v} = insertvalue %KValue {{ i64 0, i64 undef }}, i64 {r}, 1"));
         f.record(&v, INT);
-        // In a twin that has written nothing yet, an overflow here starts
-        // the general body over instead of going back to the caller, and the
-        // call this argument feeds can take the twin without asking.
-        if let (Some(first), true) = (flags.first(), f.can_bail()) {
-            let mut any = first.clone();
-            for flag in &flags[1..] {
-                let a = f.tmp();
-                f.line_fmt(format_args!("{a} = or i1 {any}, {flag}"));
-                any = a.to_string();
+        if let Some(out) = bail {
+            if !flags.is_empty() {
+                let ok = f.label();
+                f.line_fmt(format_args!("br label %{ok}"));
+                f.bail_block(&out);
+                f.start_block(&ok);
             }
-            f.bail_on(&any);
             return Ok((v.to_string(), None));
         }
         match flags.is_empty() {
@@ -9713,24 +9743,16 @@ impl<'a> Backend<'a> {
         }
         let mut flags = Vec::new();
         let words: Vec<String> = vals.iter().map(|v| inline_payload(f, v)).collect();
-        let r = word_run(f, e, &words, &mut 0, &mut flags);
+        let slow = f.label();
+        let r = word_run(f, e, &words, &mut 0, &mut flags, Some(&slow));
         let fv = f.tmp();
         f.line_fmt(format_args!("{fv} = insertvalue %KValue {{ i64 0, i64 undef }}, i64 {r}, 1"));
-        let Some(first) = flags.first().cloned() else {
+        if flags.is_empty() {
             f.record(&fv, INT);
             return Ok(fv.to_string());
-        };
-        let mut any = first;
-        for flag in &flags[1..] {
-            let t = f.tmp();
-            f.line_fmt(format_args!("{t} = or i1 {any}, {flag}"));
-            any = t.to_string();
         }
-        let fast = f.label();
-        let slow = f.label();
+        let fast = f.cur_label.clone();
         let merge = f.label();
-        f.line_fmt(format_args!("br i1 {any}, label %{slow}, label %{fast}"));
-        f.start_block(&fast);
         f.line_fmt(format_args!("br label %{merge}"));
         f.start_block(&slow);
         let sv = self.emit_arith_general(f, e, &vals, &mut 0)?;
