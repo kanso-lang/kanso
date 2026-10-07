@@ -335,9 +335,23 @@ fn tokenize_into<'a>(line: &'a str, out: &mut Vec<Tok<'a>>) -> Result<(), String
                         .map_err(|_| format!("bad float {}", &line[start..i]))?;
                     out.push(Tok::Float(f.to_bits()));
                 } else {
-                    let n: i128 = line[start..i]
-                        .parse()
-                        .map_err(|_| format!("bad int {}", &line[start..i]))?;
+                    // Read the digits directly: `str::parse` into an i128 went
+                    // through the general radix parser for every integer in
+                    // the module. The same range is accepted and refused.
+                    let neg = s[start] == b'-';
+                    let digits = &s[start + neg as usize..i];
+                    let bad = || format!("bad int {}", &line[start..i]);
+                    if digits.is_empty() {
+                        return Err(bad());
+                    }
+                    let mut n: i128 = 0;
+                    for &d in digits {
+                        let d = (d - b'0') as i128;
+                        n = n
+                            .checked_mul(10)
+                            .and_then(|n| if neg { n.checked_sub(d) } else { n.checked_add(d) })
+                            .ok_or_else(bad)?;
+                    }
                     out.push(Tok::Int(n as i64));
                 }
             }

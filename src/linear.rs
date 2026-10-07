@@ -85,8 +85,8 @@ pub fn handed_over_pushes(program: &Program) -> (Sites, Edges) {
     if let Some(edges) = &analysis.handles {
         edges.borrow_mut().clear();
     }
-    for (name, arity, i) in &analysis.linear_params {
-        analysis.callers_hand_over(name, *arity, *i);
+    for (name, arity, i) in analysis.linear_params.iter() {
+        analysis.callers_hand_over(name, arity, i);
     }
     let edges = analysis.handles.map(|e| e.into_inner()).unwrap_or_default();
     (in_place, edges)
@@ -332,7 +332,7 @@ impl<'a> Analysis<'a> {
             program,
             types,
             groups,
-            linear_params: HashSet::default(),
+            linear_params: Slots::default(),
             returns_unique: HashSet::default(),
             folds,
             mentions,
@@ -369,11 +369,11 @@ impl<'a> Analysis<'a> {
             let drop_params: Vec<_> = self
                 .linear_params
                 .iter()
-                .filter(|(name, arity, i)| !self.call_sites_hand_over(name, *arity, *i))
-                .cloned()
+                .filter(|&(name, arity, i)| !self.call_sites_hand_over(name, arity, i))
+                .map(|(name, arity, i)| (name.to_string(), arity, i))
                 .collect();
-            for k in drop_params {
-                self.linear_params.remove(&k);
+            for (name, arity, i) in drop_params {
+                self.linear_params.remove(&name, arity, i);
                 changed = true;
             }
             let drop_groups: Vec<_> = self
@@ -796,7 +796,7 @@ impl<'a> Analysis<'a> {
         if let Some(idx) =
             ctx.params.iter().position(|p| matches!(p, Pattern::Var(n, _) if n == var))
         {
-            return self.linear_params.contains(&(ctx.name.clone(), ctx.params.len(), idx));
+            return self.linear_params.contains(&ctx.name, ctx.params.len(), idx);
         }
         // a local binding `var = e`, read through the guards above it: the
         // lines under a `return x if c` are the guard's `rest`, one arm of
@@ -1328,7 +1328,54 @@ pub type Sites = HashSet<(std::sync::Arc<str>, usize, usize)>;
 /// `Sites`, which it used to share an alias with on the grounds that "the two
 /// happen to have the same shape" — they do, and a blanket change of that
 /// shape compiled everywhere it should not have.
-pub type Slots = HashSet<(String, usize, usize)>;
+///
+/// Keyed by name alone, so a question borrows the name it is asked with: the
+/// analyses ask about every argument of every call, and the emitter asks
+/// again for every call it writes.
+#[derive(Default, Debug, Clone)]
+pub struct Slots(HashMap<String, Vec<(usize, usize)>>);
+
+impl Slots {
+    pub fn contains(&self, name: &str, arity: usize, i: usize) -> bool {
+        self.0.get(name).is_some_and(|slots| slots.contains(&(arity, i)))
+    }
+
+    pub fn insert(&mut self, (name, arity, i): (String, usize, usize)) -> bool {
+        let slots = self.0.entry(name).or_default();
+        let new = !slots.contains(&(arity, i));
+        if new {
+            slots.push((arity, i));
+        }
+        new
+    }
+
+    fn remove(&mut self, name: &str, arity: usize, i: usize) {
+        if let Some(slots) = self.0.get_mut(name) {
+            slots.retain(|&s| s != (arity, i));
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.values().map(Vec::len).sum()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&str, usize, usize)> {
+        self.0
+            .iter()
+            .flat_map(|(name, slots)| slots.iter().map(move |&(a, i)| (name.as_str(), a, i)))
+    }
+}
+
+/// Two answers agree when they hold the same slots, in whatever order.
+impl PartialEq for Slots {
+    fn eq(&self, other: &Self) -> bool {
+        self.len() == other.len() && self.iter().all(|(n, a, i)| other.contains(n, a, i))
+    }
+}
 
 /// Where a string is built by joining onto itself, and which parameter holds
 /// the builder.
@@ -1348,7 +1395,7 @@ pub fn string_builders(program: &Program) -> (Sites, Slots, Sites) {
 /// The body of `string_builders`, reading an `Analysis` it was handed.
 fn string_builders_with(analysis: &Analysis, program: &Program) -> (Sites, Slots, Sites) {
     let mut sites = HashSet::default();
-    let mut accs = HashSet::default();
+    let mut accs = Slots::default();
     for decl in real_fns(program) {
         for stmt in &decl.body {
             let e = match stmt {
@@ -1382,7 +1429,7 @@ fn carried_args(a: &Analysis, program: &Program, joins: &Sites, accs: Slots) -> 
         for decl in real_fns(program) {
             let arity = decl.params.len();
             for (j, _) in param_names(decl) {
-                if carrying.contains(&(decl.name.clone(), arity, j)) {
+                if carrying.contains(&decl.name, arity, j) {
                     continue;
                 }
                 // Every arm of the group, not just this one: the set is keyed by
@@ -1498,7 +1545,7 @@ fn walk_forwards(carrying: &Slots, e: &Expr, name: &str, found: &mut bool) {
         if let Expr::Ident(callee, _, _) = head.as_ref() {
             for (i, arg) in args.iter().enumerate() {
                 if matches!(arg, Expr::Ident(n, _, _) if n == name)
-                    && carrying.contains(&(callee.to_string(), args.len(), i))
+                    && carrying.contains(callee, args.len(), i)
                 {
                     *found = true;
                 }
@@ -1520,13 +1567,13 @@ fn collect_carried(
     if let Expr::App { head, args, .. } = e {
         if let Expr::Ident(callee, _, _) = head.as_ref() {
             for (i, arg) in args.iter().enumerate() {
-                if !carrying.contains(&(callee.to_string(), args.len(), i)) {
+                if !carrying.contains(callee, args.len(), i) {
                     continue;
                 }
                 if let Expr::Ident(n, span, _) = arg {
                     let holds = built.contains(n.as_str())
                         || param_names(decl).into_iter().any(|(j, p)| {
-                            &p == n && carrying.contains(&(decl.name.clone(), decl.params.len(), j))
+                            &p == n && carrying.contains(&decl.name, decl.params.len(), j)
                         });
                     if holds {
                         out.insert((decl.file.clone(), span.line as usize, span.col as usize));

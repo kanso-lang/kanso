@@ -22860,3 +22860,77 @@ entry_instructions -95,866, library_instructions -96,153 and
 interp_instructions +28,432, to 585,730,487. The interpreter runs none of the
 code that changed. The codegen rows did not move on CI, though this container read both
 lower; CI's readings stand.
+
+## 2026-10-07 — the emitter stops naming its locals in strings
+
+A DHAT profile of the tab's compile, taken after the translator's copies came
+out, still counted 106,464 allocations. The largest single site was the
+emitter's `tmp()`, which formatted `%t` and a number into a new `String` for
+nearly every instruction it wrote: 6,722 of them. `label()` did the same for
+every branch target, 2,478 more. Both now return a `Numbered`, the prefix and
+the digits held in a 24-byte array, which formats and derefs to `str` like the
+string did. Where the name is kept past the instruction that defines it,
+because a function returns it or a table holds it, it becomes a `String` at
+that point, as before; the compiler found about 120 such places among the 427
+calls.
+
+Four analyses asked their tables questions keyed by a copy of a name.
+
+- **The byte discriminators.** `dispatch::byte_dispatched` answers with
+  `(name, arity, parameter)` triples, and codegen asked about every argument
+  of every call it wrote with `name.to_string()`. Codegen now keys the answer
+  by name, as it does the forwarder table, and a question borrows the name.
+- **The beat analysis's mentions.** `mention_map` recorded every name each
+  declaration mentions as a fresh `String`, and `reachable_names` cloned each
+  one again into its visited set and its queue. Both now borrow from the
+  program.
+- **The linearity analysis's slots.** `linear::Slots`, the parameters that
+  carry a string accumulator and those the fixpoint judges linear, was a set
+  of `(String, usize, usize)`, so each question copied the name. That was
+  every argument of every call in `collect_carried` and `walk_forwards`, every
+  parameter on every round of the carried-argument fixpoint, and every
+  parameter read in `unique_in_with`. `Slots` is now a type of its own, keyed
+  by name with the arities and positions under it, and codegen's
+  `builder_params` uses it too. Two answers compare equal when they hold the
+  same slots, whatever order they were added in.
+- **The view analysis's locals.** `framed_views` built, for each clause it
+  judged, the set of names the clause binds, as owned strings. The set now
+  borrows them.
+
+The integer reader in the translator's tokenizer went through
+`str::parse::<i128>`, the general radix parser, for every integer in the
+module. It now reads the digits itself, accumulating with the sign so that the
+same range is accepted and refused. Dropping the sign fails both translator
+corpus tests.
+
+The module is byte-identical, and so is the emitted IR. Each step measured on
+top of the one before:
+
+    after kanso#1788              533,521,346
+    integers read by hand         532,233,039   -1,288,307
+    byte discriminators by name   530,710,802   -1,522,237
+    beat mentions borrowed        527,261,716   -3,449,086
+    Slots by name                 525,106,752   -2,154,964
+    view locals borrowed          523,941,852   -1,164,900
+    tmp() in place                520,781,398   -3,160,454
+    label() in place              519,139,043   -1,642,355
+
+One more was built and not kept. `FnEmit::record` copies an operand's name
+into the map of inferred sets, 1,835 times in this compile, and nearly every
+operand is a `%t` temporary. A vector indexed by the temporary's number, with
+the map kept for every other operand, took 283,561 more instructions off and
+put 481 bytes on the peak, which is about the same fraction of each.
+
+browser_compile_instructions 533,521,346 -> 519,106,529 (-2.70%).
+browser_compile_peak_bytes 829,363 -> 829,597 (+234), with the byte
+discriminators' table. emit_instructions, the native emitter with every
+analysis it runs, fell 26,302,567 -> 25,135,836 (-4.44%).
+
+The interpreter builds the linearity analysis for its in-place pushes, and
+nothing else this changes runs on its path: interp_instructions fell
+585,730,487 -> 584,677,956 (-1,052,531), and on CI interp_allocs fell
+874,027 -> 873,378 (-649) with interp_peak_bytes unchanged. How much of the
+instructions is `Slots` and how much is layout was not separated. The rows on the front end moved with the
+binary, read on this container: compile_instructions -43,493 to 26,131,846,
+entry_instructions -141,015 to 86,221,710 and library_instructions -140,353 to
+86,766,657. The codegen rows read lower here, and CI's readings stand.
