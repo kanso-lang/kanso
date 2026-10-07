@@ -23119,6 +23119,7 @@ The second scan is 720 bytes of machine code in every benchmark, so `text`
 rises 4,594,256 -> 4,604,144 with the decoder's 64 bytes off three of them
 counted in. Each benchmark's instruction row, read here against main's own
 reading in this container, moves by less than 1,300 either way. The tab
-runs the wasm32 runtime, which has no vector block and so gains nothing from
-the split, and pays the length test: browser_run_instructions rises
-33,510,668 -> 33,511,114.
+runs the wasm32 runtime, which has no vector block. With the split built
+there too, browser_run_instructions rose 33,510,668 -> 33,511,114 for a
+length test that bought nothing, so the split is x86-64 only, and the row
+reads 33,510,647.

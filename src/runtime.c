@@ -9702,11 +9702,14 @@ static long long k_utf8_chars(const unsigned char* p, long long len) {
    slice -- are the hot ones, so it saves the registers it touches and they
    keep no frame for it.
 
-   There are two, and `k_str_chars` picks by length. With the vector block in
+   On x86-64 there are two, and `k_str_chars` picks by length; elsewhere
+   there is no vector block to keep out of the way, and only the short scan
+   is built. With the vector block in
    the only scan, every call saved the block's registers and took the word
    loop's general entry, short texts included: kq's `length` calls are on
    2,376 strings averaging eight bytes, and they cost 12,284 more
    instructions once the block was added. */
+#if defined(__x86_64__)
 static __attribute__((noinline, preserve_most)) long long k_str_chars_scan_wide(KStr* s) {
     if (K_COUNTING) k_stat_str_scans++;
     if (K_COUNTING) k_stat_str_scan_bytes += s->len;
@@ -9714,6 +9717,7 @@ static __attribute__((noinline, preserve_most)) long long k_str_chars_scan_wide(
     if (s->cap == 0 && count < 2147483647LL) s->cap = (int)(-count - 1);
     return count;
 }
+#endif
 static __attribute__((noinline, preserve_most)) long long k_str_chars_scan(KStr* s) {
     if (K_COUNTING) k_stat_str_scans++;
     if (K_COUNTING) k_stat_str_scan_bytes += s->len;
@@ -9724,7 +9728,9 @@ static __attribute__((noinline, preserve_most)) long long k_str_chars_scan(KStr*
 static long long k_str_chars(KStr* s) {
     if (s->cap < 0) return -(long long)s->cap - 1;
     if (s->cap > 0) return k_str_count(s);
+#if defined(__x86_64__)
     if (s->len >= 64) return k_str_chars_scan_wide(s);
+#endif
     return k_str_chars_scan(s);
 }
 
