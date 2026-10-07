@@ -23050,6 +23050,86 @@ tests/golden.rs and all_counters.sh.
 
 Welfare 89.82 -> 89.90.
 
+## 2026-10-07 — the decoder's unescaped strings are taken the same way
+
+A JSON string with an escape in it is decoded a piece at a time onto a byte
+builder: a run of the input between escapes, an ascii byte for `\n` or `\"`,
+or a code point `text/from_code` encodes for `\u`, which refuses a lone
+surrogate before it gets there. `decode` only takes a string, so each run is
+a slice of valid text cut beside a quote or a backslash. The finished bytes
+are text by construction, and `str_char` now hands them over with
+`built_text` in place of `text/utf8`. The escape-free path, which slices the
+input and takes `utf8` of the slice, is left alone: the emitter fuses that
+pair into one call that does not copy.
+
+The jsonbench maker copies all of lib/json into a user module, which cannot
+name a builtin, so it now rewrites the call back to `text/utf8` in every file
+it copies rather than only in json.kso.
+
+On the run program `utf8_bytes` falls 3,310,037 -> 424,484, and no
+`str_scan` counter moves: nothing in the benchmarks asks the length of a
+string it decoded. CI's rows, with the short scan below in the same tree:
+
+    runbench     1,166,762,755 -> 1,148,541,609   -18,221,146   -1.56%
+    oneshot         13,239,964 ->    13,056,632      -183,332
+    livebench    1,473,820,842 -> 1,473,636,831      -184,011
+
+The three programs that decode through std/json each lose 64 bytes of text.
+compile_allocs falls 14,745 -> 14,743, compile_instructions 26,172,834 ->
+26,172,340, entry_instructions 86,353,494 -> 86,353,046, library_instructions
+86,899,427 -> 86,898,979, interp_instructions 585,181,217 -> 585,178,552,
+interp_allocs 873,373 -> 873,371 and browser_compile_instructions
+519,236,048 -> 519,126,894. The tab's run corpus has no escapes, and its row
+holds.
+
+The spec is `a_decoded_string_counts_its_characters`: five strings with
+escapes, from a single `\n` to a surrogate pair beside the character it
+spells, decoded and printed with `length` beside the count of `text/chars`.
+Seeding the byte length as the count makes four of the five disagree.
+
+## 2026-10-07 — a short text's character count leaves the vector block out
+
+kq's pin to kanso#1790 came back red on its instruction vein: print_small
++11,808, print_big +118,952, both paths +141. kq has its own JSON code and
+never calls `built_text`, so the encoder change could not reach it. Built
+with each compiler in this container, print_small moved by the same 11,808,
+and all of it, 12,284 instructions, was in `k_str_chars_scan`, the
+function `length` calls the first time it counts a string. kq makes 2,376
+such calls on strings that average eight bytes, and every one of them is
+under 64 bytes, so none reaches the sixteen-byte block #1790 added. The block
+cost them anyway: it put a length test ahead of the word loop, and the loop,
+entered after the block, began from a position the compiler could no longer
+treat as zero, so its setup took the general form on every call.
+
+`k_str_chars` now sends a string of 64 bytes or more to
+`k_str_chars_scan_wide`, which is the scan main had, and a shorter one to
+`k_str_chars_scan`, which runs the word loop and the byte tail alone. Two
+shapes were tried first and both cost kanso's own rows. Splitting inside
+`k_utf8_chars` gave the scan one more register to save and recovered 1,424
+of the 12,284. Testing the length inside a dispatching scan saved nine registers
+before the test and cost 52 instructions on each of livebench's 400 long
+scans. Leaving main's long scan as it was is what kept those rows still.
+
+kq's rows, in this container: print_small 25,536,074 before #1790,
+25,547,882 with it and 25,540,917 with this change; print_big 246,363,193,
+246,481,109 and 246,411,403. That recovers 59% of the rise. What remains is
+the length test `k_str_chars` now makes before it calls either scan.
+
+The second scan is 720 bytes of machine code in every benchmark, so `text`
+rises 4,594,256 -> 4,604,144 with the decoder's 64 bytes off three of them
+counted in. Read against main's own reading in this container, the short
+scan alone moves each benchmark's instruction row by less than 1,300 either
+way, runbench, the one the objective weighs, by +140, and the runtime's
+compile by +1,686 instructions at -O0 and -366,750 at -O3 with LTO. CI's rows
+for the two changes together: the benchmarks the decoder does not reach move
+by encodebench -1,232, pendbench -204, `work_digestbench` +77 to 5,649,262
+and `work_scanbench` +26 to 281,720, and codegen_instructions_dev rises 1,789 to
+126,448,042 while the release row falls 87,256 to 496,579,856. The tab
+runs the wasm32 runtime, which has no vector block. With the split built
+there too, browser_run_instructions rose 33,510,668 -> 33,511,114 for a
+length test that bought nothing, so the split is x86-64 only, and the row
+reads 33,510,647.
+
 ## 2026-10-07 — the module's late passes search for the lines they edit
 
 A native profile of the tab's compile of `bench/interp_corpus`, through
