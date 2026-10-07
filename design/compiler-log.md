@@ -23436,3 +23436,33 @@ cost grows with function size, such as an inline threshold or an unroll count,
 can move it by nothing. Counting runbench's own build beside it would close
 that, at about fifty-five times the corpus build's instruction count under
 callgrind.
+
+## 2026-10-07 — the interpreter reads a local where it last found it
+
+A name the interpreter evaluates is resolved through `lookup`, which walks the
+environment from the innermost frame outward and compares the name against
+every binding it passes. On the interpreted corpus that walk ran 654,409 times
+for 45,066,454 instructions of its own, 69 a call, and was the third-largest
+function in the profile after the dispatch loop and `eval`.
+
+Each name node already keeps a `Resolution`: 0 until it first runs, 1 for a
+local, and a stamp for a global. The stamp is sound because the frames a node
+sees are fixed by where the node sits in the text. That property also fixes
+where the binding sits, so the node now keeps that too. A local found at frame
+`d` above the innermost, in slot `s` of that frame, keeps `3 + 256d + s`,
+which lies between plain local and the global stamps. A later run follows `d`
+parent pointers, compares the one name in slot `s`, and takes the value. A
+miss walks the frames the old way and keeps the new place. A frame deeper than
+127 or a slot past 255 keeps plain local and always walks. Debug builds check
+every kept place against a full walk, so the specs check the property on
+every program they carry.
+
+`interp_instructions` reads 585,141,444 -> 573,873,591 in this container, a fall
+of 11,267,853 (-1.93%), where main reads 585,141,444 on the row. The kept
+place still costs about 45 instructions a reference, most of it the clone of
+the value it returns. `interp_peak_bytes` and `interp_allocs` do not move,
+since the place lives in a word the node already had.
+
+The ratchet row `local_place` keeps plain local for every reference, and the
+interpreted row is its witness. Under that mutation the row reads 613,859,041,
+above main as well, since every reference then takes the out-of-line walk.
