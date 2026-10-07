@@ -22934,3 +22934,103 @@ instructions is `Slots` and how much is layout was not separated. The rows on th
 binary, read on this container: compile_instructions -43,493 to 26,131,846,
 entry_instructions -141,015 to 86,221,710 and library_instructions -140,353 to
 86,766,657. The codegen rows read lower here, and CI's readings stand.
+
+## 2026-10-07 — the encoder's text is taken without a second check
+
+`json/encode` ended with `text/utf8` over the bytes `encode_onto` had built,
+and the check read every byte the encoder had just written. Each of those
+bytes came from one of three places: a string's own text, a slice of a
+string's bytes cut beside a quote, a backslash or a control byte, or an ascii
+byte the encoder chose. So the bytes are valid UTF-8 by construction, and on
+the run program the check read 16,982,820 of them to learn nothing.
+
+`built_text` takes the bytes as a string the way `utf8` does, keeping the
+buffer when it can, and skips the check. Like every `builtin_` name it
+resolves only from the standard library, so a user program cannot vouch for
+bytes it has not built. The interpreter still validates, because a Rust
+`String` has to, and answers a runtime error if the bytes are bad. The
+jsonbench maker copies lib/json in as a user module, which cannot call a
+builtin, so it rewrites the call back to `text/utf8`.
+
+The check also seeded the string's character count, so a program that asks
+the `length` of what it encoded now scans for it. `k_utf8_chars` read eight
+bytes a word; on x86_64 it now reads sixteen a compare, sixty-four a pass,
+and folds its per-lane tallies every 63 passes, before a lane can wrap.
+
+The idea declined on 2026-09-24 marked bytes valid as they were built, paid
+a test on every append, and still paid the scan later (+13,280,220 in
+`k_str_chars_scan`). Here the validity is a fact about one function in the
+library, known when the library was written, and no append pays for it. The
+later scan is still paid, in the vector loop.
+
+    runbench     1,187,675,072 -> 1,166,763,592   -20,911,480   -1.76%
+    livebench    1,564,885,266 -> 1,473,820,495   -91,064,771   -5.82%
+    pendbench      194,494,534 ->   192,800,677    -1,693,857   -0.87%
+    oneshot         13,467,834 ->    13,239,626      -228,208   -1.69%
+    deepbench      370,955,233 ->   370,966,282       +11,049
+
+encodebench and widebench carry copies of the encoder of their own and moved
+by less than a hundred, and the rest by a few hundred. On the run program
+`utf8_bytes` falls 20,292,857 -> 3,310,037, and `str_scans` rises 138 -> 228
+and `str_scan_bytes` 945,324 -> 17,928,144: 90 documents whose length was
+asked are still read once, by the vector loop.
+Every program's text grows 912 bytes, except the three that encode through
+std/json, which grow 544 to 752.
+
+The rows that rose:
+
+- **browser_run_instructions 33,495,845 -> 33,510,668 (+14,823).** The tab's
+  corpus asks the length of each document it encodes, and the wasm32 build
+  has no vector arm, so there the count's word loop replaced the check's
+  ascii run. A word loop that skipped an all-ascii word before counting read
+  7,651 higher again and was not kept. Why the plain loop costs more than the
+  check did in the tab was not found.
+- **interp_instructions 584,677,956 -> 585,181,217 (+503,261).** Reproduced
+  with both binaries copied to one directory. It arrived in
+  `Interp::callee_missed` (+559,730), the slow path behind the interpreter's
+  direct-mapped table of recent callees, which is keyed by the address of the
+  callee's name. Which name now misses, and why, was not isolated.
+  interp_allocs fell 873,378 -> 873,373 and startup_instructions 52,396 ->
+  51,286.
+- **browser_compile_instructions 519,106,529 -> 519,230,261 (+123,732)**, and
+  the front end's rows read on this container: compile_instructions +40,988,
+  entry_instructions +131,784, library_instructions +132,770 and
+  emit_instructions +12,488. compile_allocs fell 14,747 -> 14,745. The codegen
+  rows read lower here, and CI's readings stand.
+
+Every counter that rose, at the value it landed on. Each `str_scan_bytes` row
+rose by exactly what the `utf8_bytes` row beside it fell: the same bytes, read
+by the count instead of the check.
+
+    run_str_scans                                          138 -> 228
+    run_str_scan_bytes                             945,324 -> 17,928,144
+    oneshot_str_scans                                        0 -> 1
+    oneshot_str_scan_bytes                                   0 -> 188,698
+    live_str_scans                                           0 -> 400
+    live_str_scan_bytes                                      0 -> 75,479,200
+    a_literal_appended_across_a_rewind_str_scans             0 -> 40
+    a_literal_appended_across_a_rewind_str_scan_bytes        0 -> 3,760
+    a_maps_two_columns_are_one_allocation_str_scans          0 -> 1
+    a_maps_two_columns_are_one_allocation_str_scan_bytes     0 -> 17,787
+    a_nested_map_gives_back_its_entries_str_scans            0 -> 1
+    a_nested_map_gives_back_its_entries_str_scan_bytes       0 -> 269,038
+    work_deepbench                         370,955,233 -> 370,966,282
+    work_encodebench                     2,382,771,679 -> 2,382,771,766
+    text                                     4,582,368 -> 4,594,256
+    compile_instructions                    26,131,846 -> 26,172,834
+    entry_instructions                      86,221,710 -> 86,353,494
+    library_instructions                    86,766,657 -> 86,899,427
+    emit_instructions                       25,135,836 -> 25,148,324
+
+The spec is `an_encoded_document_counts_its_characters`, whose documents mix
+one- to four-byte characters, run from under one 64-byte pass to over the
+4,032 bytes between folds, and end on one that is mostly continuation bytes.
+It prints `length` beside the count of `text/chars`. Seeding the byte length
+as the count, moving the compare's threshold, folding only the low half of the
+tallies, and dropping the 63-pass limit each make the two disagree.
+
+One gap kanso#1789 found and did not record: byte dispatch is pinned only by
+the emitted_code gate. Making `ByteDiscs::contains` answer false passes
+tests/golden.rs and all_counters.sh.
+
+Welfare 89.82 -> 89.90.

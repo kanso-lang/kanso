@@ -229,8 +229,13 @@
 # 2026-10-07: a word twin starts its general body over when a sum overflows
 # before it has written anything. Every row that moved fell; runbench reads
 # calls 6,308 -> 6,240, branches 5,792 -> 5,622 and lines 49,399 -> 48,976.
+#
+# 2026-10-07: std/json's encode hands its bytes over with built_text in place
+# of text/utf8. oneshot, livebench and runbench moved; runbench reads
+# calls 6,240 -> 6,238, branches 5,622 -> 5,614 and lines 48,976 -> 48,912;
+# livebench gains three calls and loses nine branches.
 encodebench defines=135 calls=1109 branches=1001 lines=10421
-oneshot defines=137 calls=1184 branches=1212 lines=11522
+oneshot defines=137 calls=1182 branches=1212 lines=11521
 basket defines=125 calls=1096 branches=998 lines=8848
 widebench defines=151 calls=1264 branches=1123 lines=11523
 deepbench defines=52 calls=271 branches=277 lines=2696
@@ -240,5 +245,5 @@ scanbench defines=318 calls=3032 branches=2911 lines=25008
 indexbench defines=19 calls=67 branches=46 lines=737
 digestbench defines=132 calls=933 branches=934 lines=8070
 readbench defines=20 calls=65 branches=41 lines=765
-livebench defines=139 calls=1222 branches=1266 lines=11903
-runbench defines=653 calls=6240 branches=5622 lines=48976
+livebench defines=139 calls=1225 branches=1257 lines=11852
+runbench defines=653 calls=6238 branches=5614 lines=48912

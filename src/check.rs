@@ -5149,9 +5149,14 @@ struct Declared<'a> {
 fn in_shipped_library(file: &str) -> bool {
     let Some(module) = std::path::Path::new(file).parent() else { return false };
     let Ok(module) = std::fs::canonicalize(module) else { return false };
+    // A unit test runs from target/<profile>/deps, one directory deeper than
+    // the compiler, so the second root misses the checkout there; the third
+    // names it, and exists only in that build.
     let roots = [
         std::env::var("KANSO_STD").ok().map(std::path::PathBuf::from),
         std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.join("../../lib"))),
+        #[cfg(test)]
+        Some(std::path::PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/lib"))),
     ];
     roots
         .into_iter()

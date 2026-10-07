@@ -262,7 +262,7 @@
 # building a list of them per visit, and `kanso run` runs that pass before
 # the interpreter starts. CI's reading and this container's agree:
 # interp_allocs 895,818 -> 874,027, a FALL of 21,791 (-2.4325%).
-interp_allocs=873378
+interp_allocs=873373
 #
 # 2026-09-18, kanso#1518 against main at kanso#1517, CI's sitting.
 # 951,438 -> 961,165, a RISE of

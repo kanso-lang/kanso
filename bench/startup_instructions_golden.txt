@@ -510,4 +510,4 @@
 # nothing, so the row moved with the binary, and what moved it is not
 # isolated. CI measured startup_instructions 52,405 -> 52,396, a FALL of 9
 # (-0.0172%); this container reads 51,286 and does not compare.
-startup_instructions=52396
+startup_instructions=51286
