@@ -593,6 +593,65 @@ fn next_generation() -> u16 {
     }
 }
 
+/// Where a local was found, as the `Resolution` a node keeps for it: the
+/// number of frames above the innermost and the slot inside that frame, packed
+/// into the range between plain local and the global stamps. A frame deeper
+/// than 127 or a slot past 255 keeps plain local, which walks.
+fn local_at(depth: u32, slot: usize) -> u32 {
+    match (depth, slot) {
+        (d, s) if d < 128 && s < 256 => 3 + (d << 8) + s as u32,
+        _ => crate::ast::Resolution::LOCAL,
+    }
+}
+
+/// The walk `lookup` makes, answering where the binding sat as well.
+fn lookup_placed(env: &Option<Rc<Env>>, name: &Name) -> Option<(Value, u32)> {
+    let mut cur = env.as_ref();
+    let mut depth = 0;
+    while let Some(frame) = cur {
+        match &**frame {
+            Env::One(bound, value, parent) => {
+                if bound == name {
+                    return Some((value.clone(), local_at(depth, 0)));
+                }
+                cur = parent.as_ref();
+            }
+            Env::Many(slots, parent) => {
+                for (i, (bound, value)) in slots.iter().enumerate().rev() {
+                    if bound == name {
+                        return Some((value.clone(), local_at(depth, i)));
+                    }
+                }
+                cur = parent.as_ref();
+            }
+        }
+        depth += 1;
+    }
+    None
+}
+
+/// The binding at a place `local_at` recorded, if the name is still there. The
+/// frames between the reference and its binder are fixed by where the
+/// reference sits, so the place found once is the place every later run finds;
+/// the name is compared anyway, and a miss walks.
+fn lookup_at(env: &Option<Rc<Env>>, name: &Name, place: u32) -> Option<Value> {
+    let place = place - 3;
+    let mut frame = env.as_ref()?;
+    for _ in 0..place >> 8 {
+        frame = match &**frame {
+            Env::One(_, _, parent) | Env::Many(_, parent) => parent.as_ref()?,
+        };
+    }
+    match &**frame {
+        Env::One(bound, value, _) if place & 0xff == 0 && bound == name => Some(value.clone()),
+        Env::Many(slots, _) => match slots.get((place & 0xff) as usize) {
+            Some((bound, value)) if bound == name => Some(value.clone()),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
 fn lookup(env: &Option<Rc<Env>>, name: &Name) -> Option<Value> {
     let mut cur = env.as_ref();
     while let Some(frame) = cur {
@@ -2257,18 +2316,20 @@ impl<'a> Interp<'a> {
             return self.named_value(name.as_str(), named);
         }
         match v {
-            Resolution::LOCAL => match lookup(env, name) {
-                Some(value) => Ok(value),
-                None => {
+            v if (3..1 << 16).contains(&v) => match lookup_at(env, name, v) {
+                Some(value) => {
                     debug_assert!(
-                        false,
-                        "`{}` at {:?} was kept as local and missed",
+                        lookup_placed(env, name).is_some_and(|(_, at)| at == v),
+                        "`{}` at {:?} was kept at {} and a nearer binding holds it",
                         name.as_str(),
-                        span
+                        span,
+                        v
                     );
-                    self.eval_global(name.as_str(), span)
+                    Ok(value)
                 }
+                None => self.local_moved(name, span, resolved, env),
             },
+            Resolution::LOCAL => self.local_moved(name, span, resolved, env),
             v if Resolution::is_global(v) => {
                 debug_assert!(
                     lookup(env, name).is_none(),
@@ -2278,13 +2339,40 @@ impl<'a> Interp<'a> {
                 );
                 self.global_at(name.as_str(), span, resolved)
             }
-            _ => match lookup(env, name) {
-                Some(value) => {
-                    resolved.set(Resolution::LOCAL);
+            _ => match lookup_placed(env, name) {
+                Some((value, at)) => {
+                    resolved.set(at);
                     Ok(value)
                 }
                 None => self.global_at(name.as_str(), span, resolved),
             },
+        }
+    }
+
+    /// A local whose kept place no longer holds it, or that never had one:
+    /// walk, and keep where the walk found it.
+    #[inline(never)]
+    fn local_moved(
+        &self,
+        name: &Name,
+        span: Span,
+        resolved: &crate::ast::Resolution,
+        env: &Option<Rc<Env>>,
+    ) -> EvalResult {
+        match lookup_placed(env, name) {
+            Some((value, at)) => {
+                resolved.set(at);
+                Ok(value)
+            }
+            None => {
+                debug_assert!(
+                    false,
+                    "`{}` at {:?} was kept as local and missed",
+                    name.as_str(),
+                    span
+                );
+                self.eval_global(name.as_str(), span)
+            }
         }
     }
 

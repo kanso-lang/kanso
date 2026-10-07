@@ -6,7 +6,9 @@ use num_bigint::BigInt;
 /// for a global, where the running interpreter keeps what it resolved to.
 ///
 /// 0 not yet known, 1 local, 2 global with no slot for the running
-/// interpreter; from 65,536 up, a global stamped with an interpreter's
+/// interpreter; from 3 to 32,770, a local kept at the place its binding sat,
+/// as 3 plus the frames above the innermost times 256 plus the slot in that
+/// frame; from 65,536 up, a global stamped with an interpreter's
 /// generation in the high sixteen bits and its slot in that interpreter's
 /// table in the low sixteen. The interpreter learns it on the node's first
 /// execution and keeps it, which is sound because the environment a node sees

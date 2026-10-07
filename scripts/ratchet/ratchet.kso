@@ -4717,7 +4717,20 @@ link_early_cse = row
 
 rows_c1zzzzzzz8 = text/concat rows_c1zzzzzzz9 [link_correlated link_early_cse]
 
-rows_c = text/concat rows_c1zzzzzzz8 [itself]
+# A local reference keeps the frame and slot its binding sat in, and reads
+# that place on every later run (2026-10-07). The mutation keeps plain local,
+# so every reference walks the frames again.
+local_place = row
+  "a local found by walking the frames"
+  true
+  interp_gate
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_local_found_by_walking")
+  release
+
+rows_c1zzzzzzz7 = text/concat rows_c1zzzzzzz8 [local_place]
+
+rows_c = text/concat rows_c1zzzzzzz7 [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
