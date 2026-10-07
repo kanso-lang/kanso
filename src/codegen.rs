@@ -2266,6 +2266,71 @@ impl Forwarders {
     }
 }
 
+/// A name the emitter numbers, `%t7` or `L7`, held in place rather than in a
+/// `String`: the emitter names a local for nearly every instruction it writes
+/// and a label for every branch.
+#[derive(Clone, Copy)]
+struct Numbered {
+    buf: [u8; 24],
+    len: u8,
+}
+
+impl Numbered {
+    fn new(prefix: &[u8], n: usize) -> Numbered {
+        let mut buf = [0u8; 24];
+        buf[..prefix.len()].copy_from_slice(prefix);
+        let mut digits = [0u8; 20];
+        let mut d = 0;
+        let mut n = n;
+        loop {
+            digits[d] = b'0' + (n % 10) as u8;
+            d += 1;
+            n /= 10;
+            if n == 0 {
+                break;
+            }
+        }
+        for k in 0..d {
+            buf[prefix.len() + k] = digits[d - 1 - k];
+        }
+        Numbered { buf, len: (prefix.len() + d) as u8 }
+    }
+}
+
+impl std::ops::Deref for Numbered {
+    type Target = str;
+    fn deref(&self) -> &str {
+        // a prefix and ASCII digits, nothing else
+        std::str::from_utf8(&self.buf[..self.len as usize]).unwrap_or_default()
+    }
+}
+
+impl std::fmt::Display for Numbered {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self)
+    }
+}
+
+/// The byte discriminators `crate::dispatch::byte_dispatched` found, keyed by
+/// name alone for the same reason as `Forwarders`: the emitter asks about
+/// every argument of every call it writes.
+#[derive(Default)]
+struct ByteDiscs(HashMap<String, Vec<(usize, usize)>>);
+
+impl ByteDiscs {
+    fn from(found: crate::hash::Set<(String, usize, usize)>) -> Self {
+        let mut out = ByteDiscs::default();
+        for (name, arity, param) in found {
+            out.0.entry(name).or_default().push((arity, param));
+        }
+        out
+    }
+
+    fn contains(&self, name: &str, arity: usize, param: usize) -> bool {
+        self.0.get(name).is_some_and(|found| found.contains(&(arity, param)))
+    }
+}
+
 /// The constants a constant can reach from its own body, following mentions
 /// through other constants. A name that reaches itself must be frozen: an
 /// unfrozen mention re-enters the builder, and the recursion has no floor.
@@ -2699,7 +2764,7 @@ fn emit_written(
     });
     let packable: crate::hash::Set<String> = escape.field_count.keys().cloned().collect();
     escape.keep_types(|ty| packable.contains(ty));
-    let byte_disc = crate::dispatch::byte_dispatched(program, &inference);
+    let byte_disc = ByteDiscs::from(crate::dispatch::byte_dispatched(program, &inference));
     // One `Analysis` for all three, rather than one each: see
     // `linear::for_the_emitter`.
     let (in_place_pushes, reusable_records, (builder_joins, builder_params, builder_carried)) =
@@ -2983,11 +3048,11 @@ struct Backend<'a> {
     /// typeset name -> members; an annotated param matches any member
     typesets: HashMap<String, Vec<String>>,
     escape: crate::escape::EscapeInfo,
-    byte_disc: crate::hash::Set<(String, usize, usize)>,
+    byte_disc: ByteDiscs,
     in_place_pushes: crate::hash::Set<(std::sync::Arc<str>, usize, usize)>,
     reusable_records: crate::hash::Map<(std::sync::Arc<str>, usize, usize), String>,
     builder_joins: crate::hash::Set<(std::sync::Arc<str>, usize, usize)>,
-    builder_params: crate::hash::Set<(String, usize, usize)>,
+    builder_params: crate::linear::Slots,
     /// Argument positions already carrying the builder, so no seed is needed.
     builder_carried: crate::hash::Set<(std::sync::Arc<str>, usize, usize)>,
     beat: crate::beat::Beats,
@@ -3051,7 +3116,7 @@ fn release_cells(f: &mut FnEmit, value: &str) -> String {
         f.line_fmt(format_args!(
             "{t} = call %KValue @k_thunk_release_unless(%KValue {cell}, %KValue {v})"
         ));
-        v = t;
+        v = t.to_string();
     }
     v
 }
@@ -3247,14 +3312,14 @@ impl FnEmit {
         }
     }
 
-    fn tmp(&mut self) -> String {
+    fn tmp(&mut self) -> Numbered {
         self.tmp += 1;
-        format!("%t{}", self.tmp)
+        Numbered::new(b"%t", self.tmp)
     }
 
-    fn label(&mut self) -> String {
+    fn label(&mut self) -> Numbered {
         self.label += 1;
-        format!("L{}", self.label)
+        Numbered::new(b"L", self.label)
     }
 
     /// Only a carried argument slot reads the two-word convention. Every other
@@ -3433,7 +3498,7 @@ impl FnEmit {
         self.raw(&format!("{w1} = extractvalue %parsed {e}, 1"));
         let t = self.tmp();
         self.raw(&format!("{t} = call %KValue @k_parsed_box(i64 {id}, i64 {w0}, i64 {w1})"));
-        t
+        t.to_string()
     }
 
     /// A line whose operands are already values: the boxing rewrite emits
@@ -3939,27 +4004,27 @@ fn framed_views(
         groups: &'a HashMap<(&'a str, usize), Vec<&'a FnDecl>>,
         forwarders: &'a Forwarders,
         safe: &'a crate::hash::Set<(String, usize, usize)>,
-        locals: crate::hash::Set<String>,
+        locals: crate::hash::Set<&'a str>,
     }
-    fn pattern_names(p: &Pattern, out: &mut crate::hash::Set<String>) {
+    fn pattern_names<'a>(p: &'a Pattern, out: &mut crate::hash::Set<&'a str>) {
         match p {
             Pattern::Var(n, _) => {
-                out.insert(n.to_string());
+                out.insert(n.as_str());
             }
             Pattern::Annotated { name, .. } => {
-                out.insert(name.to_string());
+                out.insert(name.as_str());
             }
             Pattern::Ctor { fields, whole, .. } => {
                 for f in fields {
                     pattern_names(f, out);
                 }
                 if let Some(w) = whole {
-                    out.insert(w.0.to_string());
+                    out.insert(w.0.as_str());
                 }
             }
             Pattern::Keyed { entries, .. } => {
                 for e in entries {
-                    out.insert(e.bind_name.clone());
+                    out.insert(e.bind_name.as_str());
                 }
             }
             _ => {}
@@ -3970,11 +4035,11 @@ fn framed_views(
             Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expr,
         }
     }
-    fn locals_of(expr: &Expr, out: &mut crate::hash::Set<String>) {
+    fn locals_of<'a>(expr: &'a Expr, out: &mut crate::hash::Set<&'a str>) {
         match expr {
             Expr::Lambda { params, .. } => {
                 for (n, _) in params {
-                    out.insert(n.clone());
+                    out.insert(n.as_str());
                 }
             }
             Expr::Block(stmts, _) | Expr::Build(stmts, _) | Expr::Guard { rest: stmts, .. } => {
@@ -3989,7 +4054,7 @@ fn framed_views(
         crate::for_each_child(expr, |c| locals_of(c, out));
     }
     // every name a body binds for itself, beside its parameters
-    fn bound_in(stmts: &[Stmt]) -> crate::hash::Set<String> {
+    fn bound_in(stmts: &[Stmt]) -> crate::hash::Set<&str> {
         let mut out = crate::hash::Set::default();
         for st in stmts {
             if let Stmt::Bind { pattern, .. } = st {
@@ -4068,13 +4133,13 @@ fn framed_views(
     for d in &program.fns {
         groups.entry((d.name.as_str(), d.params.len())).or_default().push(d);
     }
-    let locals_for = |d: &FnDecl| {
+    fn locals_for(d: &FnDecl) -> crate::hash::Set<&str> {
         let mut out = bound_in(&d.body);
         for p in &d.params {
             pattern_names(p, &mut out);
         }
         out
-    };
+    }
     // the bindings that could qualify, before anything is asked of their uses
     let mut candidates = Vec::new();
     for d in &program.fns {
@@ -4142,7 +4207,7 @@ fn framed_views(
     fn handed(
         expr: &Expr,
         x: &str,
-        locals: &crate::hash::Set<String>,
+        locals: &crate::hash::Set<&str>,
         user: &dyn Fn(&str, usize) -> bool,
         out: &mut Vec<(String, usize, usize)>,
     ) {
@@ -5073,11 +5138,11 @@ fn lift_around(
         let b = f.tmp();
         f.line_fmt(format_args!("{b} = icmp eq i64 {t}, {K_BIG}"));
         any = Some(match any {
-            None => b,
+            None => b.to_string(),
             Some(prev) => {
                 let o = f.tmp();
                 f.line_fmt(format_args!("{o} = or i1 {prev}, {b}"));
-                o
+                o.to_string()
             }
         });
     }
@@ -5088,7 +5153,7 @@ fn lift_around(
         _ => {
             let arr = f.tmp();
             f.line_fmt(format_args!("{arr} = alloca [{n} x %KValue]"));
-            arr
+            arr.to_string()
         }
     };
     let sets: Vec<Set> = lifted.iter().map(|&j| f.set_of(&emitted[j])).collect();
@@ -5098,7 +5163,7 @@ fn lift_around(
         if n == 1 {
             let v = f.tmp();
             f.line_fmt(format_args!("{v} = call %KValue @{call}1(%KValue {})", values[0]));
-            return vec![v];
+            return vec![v.to_string()];
         }
         for (k, v) in values.iter().enumerate() {
             let at = f.tmp();
@@ -5116,7 +5181,7 @@ fn lift_around(
                 ));
                 let v = f.tmp();
                 f.line_fmt(format_args!("{v} = load %KValue, ptr {at}"));
-                v
+                v.to_string()
             })
             .collect()
     };
@@ -5130,7 +5195,7 @@ fn lift_around(
                     emitted[j], moved[k]
                 ));
                 f.record(&v, sets[k]);
-                emitted[j] = v;
+                emitted[j] = v.to_string();
             }
         };
     let out = f.label();
@@ -5166,7 +5231,7 @@ fn both_ints(f: &mut FnEmit, ta: &str, tb: &str) -> String {
         if tag != "0" {
             let t = f.tmp();
             f.line_fmt(format_args!("{t} = icmp eq i64 {tag}, 0"));
-            tests.push(t);
+            tests.push(t.to_string());
         }
     }
     match tests.as_slice() {
@@ -5175,7 +5240,7 @@ fn both_ints(f: &mut FnEmit, ta: &str, tb: &str) -> String {
         [a, b] => {
             let both = f.tmp();
             f.line_fmt(format_args!("{both} = and i1 {a}, {b}"));
-            both
+            both.to_string()
         }
         _ => unreachable!("two tags make at most two tests"),
     }
@@ -5378,7 +5443,7 @@ fn word_run(
             f.line_fmt(format_args!("{t} = extractvalue {{ i64, i1 }} {pair}, 0"));
             let over = f.tmp();
             f.line_fmt(format_args!("{over} = extractvalue {{ i64, i1 }} {pair}, 1"));
-            flags.push(over);
+            flags.push(over.to_string());
         }
         _ => {
             if !matches!(b.parse::<i64>(), Ok(d) if d != 0 && d != -1) {
@@ -5388,19 +5453,19 @@ fn word_run(
                 f.line_fmt(format_args!("{minus} = icmp eq i64 {b}, -1"));
                 let edge = f.tmp();
                 f.line_fmt(format_args!("{edge} = or i1 {zero}, {minus}"));
-                flags.push(edge.clone());
+                flags.push(edge.to_string());
                 // the instruction must not trap on the path it does not take
                 let safe = f.tmp();
                 f.line_fmt(format_args!("{safe} = select i1 {edge}, i64 1, i64 {b}"));
                 let insn = if *op == "%" { "srem" } else { "sdiv" };
                 f.line_fmt(format_args!("{t} = {insn} i64 {a}, {safe}"));
-                return t;
+                return t.to_string();
             }
             let insn = if *op == "%" { "srem" } else { "sdiv" };
             f.line_fmt(format_args!("{t} = {insn} i64 {a}, {b}"));
         }
     }
-    t
+    t.to_string()
 }
 
 fn inline_tag(f: &mut FnEmit, value: &str) -> String {
@@ -5412,7 +5477,7 @@ fn inline_tag(f: &mut FnEmit, value: &str) -> String {
     }
     let t = f.tmp();
     f.line_fmt(format_args!("{t} = extractvalue %KValue {value}, 0"));
-    t
+    t.to_string()
 }
 
 fn inline_payload(f: &mut FnEmit, value: &str) -> String {
@@ -5424,7 +5489,7 @@ fn inline_payload(f: &mut FnEmit, value: &str) -> String {
     }
     let t = f.tmp();
     f.line_fmt(format_args!("{t} = extractvalue %KValue {value}, 1"));
-    t
+    t.to_string()
 }
 
 /// Branch to `hit` when a 1-based index lands inside the container whose
@@ -5503,7 +5568,7 @@ fn pack_words(f: &mut FnEmit, id: i64, pos: &str, value: &str) -> (String, Strin
     let (w0, w1) = (f.tmp(), f.tmp());
     f.line_fmt(format_args!("{w0} = phi i64 [ {packed}, %{from} ], [ {s0}, %{wide} ]"));
     f.line_fmt(format_args!("{w1} = phi i64 [ {vpay}, %{from} ], [ {s1}, %{wide} ]"));
-    (w0, w1)
+    (w0.to_string(), w1.to_string())
 }
 
 /// Read a `%parsed`'s two words back as the int's tag and word, the value's
@@ -5538,7 +5603,7 @@ fn unpack_words(f: &mut FnEmit, w0: &str, w1: &str) -> (String, String, String, 
     f.line_fmt(format_args!("{pn} = phi i64 [ {n}, %{from} ], [ {wn}, %{wide} ]"));
     f.line_fmt(format_args!("{pt} = phi i64 [ {low}, %{from} ], [ {wt}, %{wide} ]"));
     f.line_fmt(format_args!("{pp} = phi i64 [ {w1}, %{from} ], [ {wp}, %{wide} ]"));
-    (pnt, pn, pt, pp)
+    (pnt.to_string(), pn.to_string(), pt.to_string(), pp.to_string())
 }
 
 /// Whether a value is not a failure, as one compare of its tag against the
@@ -5574,7 +5639,7 @@ fn not_failure_test(f: &mut FnEmit, value: &str) -> String {
     }
     let ok = f.tmp();
     f.line_fmt(format_args!("{ok} = icmp ne i64 {tag}, {K_ERR_TAG}"));
-    ok
+    ok.to_string()
 }
 
 /// The runtime's `K_ERR`, the sixth tag in its enum.
@@ -5725,14 +5790,14 @@ impl<'a> Backend<'a> {
             for flag in &flags[1..] {
                 let a = f.tmp();
                 f.line_fmt(format_args!("{a} = or i1 {any}, {flag}"));
-                any = a;
+                any = a.to_string();
             }
             f.bail_on(&any);
-            return Ok((v, None));
+            return Ok((v.to_string(), None));
         }
         match flags.is_empty() {
-            true => Ok((v, None)),
-            false => Ok((v, Some((vals, flags)))),
+            true => Ok((v.to_string(), None)),
+            false => Ok((v.to_string(), Some((vals, flags)))),
         }
     }
 
@@ -5770,11 +5835,11 @@ impl<'a> Backend<'a> {
             let w = f.tmp();
             f.line_fmt(format_args!("{w} = icmp eq i64 {t}, 0"));
             all = Some(match all {
-                None => w,
+                None => w.to_string(),
                 Some(prev) => {
                     let a = f.tmp();
                     f.line_fmt(format_args!("{a} = and i1 {prev}, {w}"));
-                    a
+                    a.to_string()
                 }
             });
         }
@@ -5855,7 +5920,7 @@ impl<'a> Backend<'a> {
             )),
             _ => false,
         };
-        let entering = self.builder_params.contains(&(callee.to_string(), arity, i))
+        let entering = self.builder_params.contains(callee, arity, i)
             && !(f.group == callee && f.arity == arity)
             && !carried;
         let seeded;
@@ -5868,7 +5933,7 @@ impl<'a> Backend<'a> {
                 f.line_fmt(format_args!("{t} = call %KValue @k_b_str_builder(%KValue {e})"));
                 f.record(&t, f.set_of(e));
                 seeded = t;
-                seeded.as_str()
+                &*seeded
             }
             false => e,
         };
@@ -6058,7 +6123,7 @@ impl<'a> Backend<'a> {
     /// A switch discriminator inference proves is `at`-on-bytes, so it crosses
     /// as a raw i64 (byte value, or 256 for none) and is switched on directly.
     fn is_byte_disc(&self, name: &str, arity: usize, param: usize) -> bool {
-        self.byte_disc.contains(&(name.to_string(), arity, param))
+        self.byte_disc.contains(name, arity, param)
     }
 
     /// The dispatcher's parameter list: a raw i64 for a byte discriminator or a
@@ -6151,7 +6216,7 @@ impl<'a> Backend<'a> {
             captures.len()
         ));
         f.record(&t, crate::infer::TOP);
-        Ok(t)
+        Ok(t.to_string())
     }
 
     /// Force a value that may be a thunk; no-op (no IR) when the set proves
@@ -6170,7 +6235,7 @@ impl<'a> Backend<'a> {
         let t = f.tmp();
         f.line_fmt(format_args!("{t} = call %KValue @k_force_unless_black(%KValue {value})"));
         f.record(&t, if post == 0 { crate::infer::TOP } else { post | crate::infer::THUNK });
-        t
+        t.to_string()
     }
 
     /// Whether a rendered value goes through the ambient `render/to_string`
@@ -6203,7 +6268,7 @@ impl<'a> Backend<'a> {
             false => {
                 let t = f.tmp();
                 f.line_fmt(format_args!("{t} = call %KValue @k_render(%KValue {value}, i64 0)"));
-                (t, fails)
+                (t.to_string(), fails)
             }
         }
     }
@@ -6223,7 +6288,7 @@ impl<'a> Backend<'a> {
             t
         };
         if !may_be_err {
-            return call(f);
+            return call(f).to_string();
         }
         let tag = f.tmp();
         f.line_fmt(format_args!("{tag} = extractvalue %KValue {value}, 0"));
@@ -6242,7 +6307,7 @@ impl<'a> Backend<'a> {
         f.line_fmt(format_args!(
             "{t} = phi %KValue [ {value}, %{from} ], [ {rendered}, %{rendered_from} ]"
         ));
-        t
+        t.to_string()
     }
 
     /// A builtin sees a subtype's value as its parent's, and the generic call
@@ -6257,7 +6322,7 @@ impl<'a> Backend<'a> {
         let t = f.tmp();
         f.line_fmt(format_args!("{t} = call %KValue @k_unsub(%KValue {value})"));
         f.record(&t, f.set_of(&value));
-        t
+        t.to_string()
     }
 
     fn maybe_force(&self, f: &mut FnEmit, value: String) -> String {
@@ -6275,7 +6340,7 @@ impl<'a> Backend<'a> {
         // A forced thunk can yield anything its expr could; the bind site
         // recorded TOP, so widen conservatively past the removed bit.
         f.record(&t, if post == 0 { crate::infer::TOP & !crate::infer::THUNK } else { post });
-        t
+        t.to_string()
     }
 
     /// A storing position inside a constant that names itself holds a thunk
@@ -6298,7 +6363,7 @@ impl<'a> Backend<'a> {
             "{t} = call %KValue (i64, i32, ...) @k_thunk_new(i64 {site}, i32 0)"
         ));
         f.record(&t, crate::infer::TOP);
-        Ok(t)
+        Ok(t.to_string())
     }
 
     /// Whether this expression, in this frame, mentions the constant being
@@ -6662,7 +6727,7 @@ impl<'a> Backend<'a> {
         f.line_fmt(format_args!(
             "{t} = call %KValue @k_str_lit_fast(ptr @{name}, i64 {len}, ptr @{name}_lit)"
         ));
-        t
+        t.to_string()
     }
 
     /// The interned literal for an err construction site: the package that
@@ -7021,7 +7086,7 @@ impl<'a> Backend<'a> {
                 Some(prev) => {
                     let t = f.tmp();
                     f.line_fmt(format_args!("{t} = and i1 {prev}, {ok}"));
-                    t
+                    t.to_string()
                 }
             });
         }
@@ -7758,7 +7823,7 @@ impl<'a> Backend<'a> {
         let p = f.tmp();
         f.line_fmt(format_args!("{p} = insertvalue %parsed {a}, i64 {w1}, 1"));
         f.record_parsed(&p, ty, pid);
-        Ok(p)
+        Ok(p.to_string())
     }
 
     /// Build a register-returnable record in tail position as a by-value
@@ -7863,7 +7928,7 @@ impl<'a> Backend<'a> {
                 f.line_fmt(format_args!("{eq} = icmp eq i64 {payload}, {n}"));
                 let both = f.tmp();
                 f.line_fmt(format_args!("{both} = and i1 {is_int}, {eq}"));
-                branch_i1(f, both);
+                branch_i1(f, both.to_string());
             }
             Pattern::StrLit(s, _) => {
                 let (name, len) = self.intern(s);
@@ -7881,7 +7946,7 @@ impl<'a> Backend<'a> {
                     _ => K_NONE,
                 };
                 let b = tag_is(f, value, tag);
-                branch_i1(f, b);
+                branch_i1(f, b.to_string());
             }
             Pattern::Wildcard(_) => {
                 if known & FAIL != 0 {
@@ -7921,18 +7986,18 @@ impl<'a> Backend<'a> {
                     let c = f.tmp();
                     f.predicate(&c, call);
                     acc = Some(match acc {
-                        None => c,
+                        None => c.to_string(),
                         Some(prev) => {
                             let o = f.tmp();
                             f.line_fmt(format_args!("{o} = or i64 {prev}, {c}"));
-                            o
+                            o.to_string()
                         }
                     });
                 }
                 let combined = acc.expect("an annotation names at least one type");
                 let b = f.tmp();
                 f.line_fmt(format_args!("{b} = icmp ne i64 {combined}, 0"));
-                branch_i1(f, b);
+                branch_i1(f, b.to_string());
                 f.bind(name, value);
             }
             Pattern::Ctor { ty, fields, whole } => {
@@ -8005,11 +8070,11 @@ impl<'a> Backend<'a> {
                 let b = f.tmp();
                 f.line_fmt(format_args!("{b} = icmp ne i64 {c}, 0"));
                 matched = Some(match matched {
-                    None => b,
+                    None => b.to_string(),
                     Some(prev) => {
                         let t = f.tmp();
                         f.line_fmt(format_args!("{t} = or i1 {prev}, {b}"));
-                        t
+                        t.to_string()
                     }
                 });
             }
@@ -8305,7 +8370,7 @@ impl<'a> Backend<'a> {
             f.line_fmt(format_args!("{pick} = select i1 {ok}, %KValue {first}, %KValue {t}"));
             let worse = f.tmp();
             f.line_fmt(format_args!("{worse} = select i1 {ok}, i1 {bad}, i1 true"));
-            (first, bad) = (pick, worse);
+            (first, bad) = (pick.to_string(), worse.to_string());
         }
         let (go, skip, join) = (f.label(), f.label(), f.label());
         f.line_fmt(format_args!("br i1 {bad}, label %{skip}, label %{go}"));
@@ -8326,7 +8391,7 @@ impl<'a> Backend<'a> {
         ));
         let set = f.set_of(&called) | FAIL;
         f.record(&answer, set);
-        Ok(answer)
+        Ok(answer.to_string())
     }
 
     /// `&g a b` over a declared group, held by `k_partial{n}` over the value
@@ -8391,7 +8456,7 @@ impl<'a> Backend<'a> {
                 "{t} = call %KValue @k_partial{take}(%KValue {callee}{arg_ir})"
             ));
             f.record(&t, TOP);
-            callee = t;
+            callee = t.to_string();
             rest = &rest[take..];
             if rest.is_empty() {
                 return Ok(callee);
@@ -8419,7 +8484,7 @@ impl<'a> Backend<'a> {
                     "{t} = call %KValue @k_upcast(%KValue {v}, i64 {want}, ptr @{tyn})"
                 ));
                 f.record(&t, crate::infer::TOP);
-                Ok(t)
+                Ok(t.to_string())
             }
             Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
                 let mut value = "{ i64 4, i64 0 }".to_string();
@@ -8467,7 +8532,7 @@ impl<'a> Backend<'a> {
                         "{t} = call %KValue @k_int_of_digits(ptr @{name}, i64 {len})"
                     ));
                     f.record(&t, infer::BIG);
-                    Ok(t)
+                    Ok(t.to_string())
                 }
             },
             Expr::Float(x, _) => {
@@ -8476,7 +8541,7 @@ impl<'a> Backend<'a> {
                     "{t} = call %KValue @k_float(double 0x{:016X})",
                     x.to_bits()
                 ));
-                Ok(t)
+                Ok(t.to_string())
             }
             Expr::Str(parts, span) => {
                 let joins_builder = self.builder_joins.contains(&(
@@ -8506,7 +8571,7 @@ impl<'a> Backend<'a> {
                                     f.line_fmt(format_args!(
                                         "{adopted} = call %KValue @k_b_adopt(%KValue {raw}, %KValue {t})"
                                     ));
-                                    adopted
+                                    adopted.to_string()
                                 }
                                 false => t,
                             }
@@ -8541,7 +8606,7 @@ impl<'a> Backend<'a> {
                             "{t} = call %KValue @{sym}(i64 {}, ptr {arr})",
                             pieces.len()
                         ));
-                        t
+                        t.to_string()
                     }
                     Some(pieces) => {
                         let mut it = pieces.into_iter();
@@ -8551,7 +8616,7 @@ impl<'a> Backend<'a> {
                             f.line_fmt(format_args!(
                                 "{t} = call %KValue @k_concat(%KValue {prev}, %KValue {piece})"
                             ));
-                            prev = t;
+                            prev = t.to_string();
                         }
                         prev
                     }
@@ -8588,7 +8653,7 @@ impl<'a> Backend<'a> {
                         "{t} = call %KValue @k_rec(i64 {id}, i64 0, ptr {arr})"
                     ));
                     f.record(&t, REC);
-                    return Ok(t);
+                    return Ok(t.to_string());
                 }
                 if self.program.fns.iter().any(|d| d.name == *name && d.params.is_empty()) {
                     let callee_ret = self.ret_ty(name, 0);
@@ -8605,7 +8670,7 @@ impl<'a> Backend<'a> {
                             f.record_parsed(&t, ty, self.type_ids[ty]);
                             self.as_value(f, &t)
                         }
-                        _ => t,
+                        _ => t.to_string(),
                     };
                     f.record(&t, self.group_return_set(name, 0));
                     return Ok(t);
@@ -8627,7 +8692,7 @@ impl<'a> Backend<'a> {
                         "{t} = call %KValue @k_fnref(ptr @{})",
                         rsym(name, arity)
                     ));
-                    return Ok(t);
+                    return Ok(t.to_string());
                 }
                 if !arities.is_empty() {
                     return Err(format!(
@@ -8646,7 +8711,7 @@ impl<'a> Backend<'a> {
                         let t = f.tmp();
                         let sym = rsym(&format!("builtin.{bare}"), arity);
                         f.line_fmt(format_args!("{t} = call %KValue @k_fnref(ptr @{sym})"));
-                        return Ok(t);
+                        return Ok(t.to_string());
                     }
                 }
                 // `print` is not one of them: its argument reaches a user's
@@ -8658,7 +8723,7 @@ impl<'a> Backend<'a> {
                     let t = f.tmp();
                     let sym = rsym("builtin.print", 1);
                     f.line_fmt(format_args!("{t} = call %KValue @k_fnref(ptr @{sym})"));
-                    return Ok(t);
+                    return Ok(t.to_string());
                 }
                 match bare {
                     "true" => Ok("{ i64 2, i64 0 }".to_string()),
@@ -8669,19 +8734,19 @@ impl<'a> Backend<'a> {
                         let t = f.tmp();
                         f.line_fmt(format_args!("{t} = call %KValue @k_desc_args()"));
                         f.record(&t, DESC);
-                        Ok(t)
+                        Ok(t.to_string())
                     }
                     "stdin" => {
                         let t = f.tmp();
                         f.line_fmt(format_args!("{t} = call %KValue @k_desc_stdin()"));
                         f.record(&t, DESC);
-                        Ok(t)
+                        Ok(t.to_string())
                     }
                     "now" => {
                         let t = f.tmp();
                         f.line_fmt(format_args!("{t} = call %KValue @k_desc_now()"));
                         f.record(&t, DESC);
-                        Ok(t)
+                        Ok(t.to_string())
                     }
                     _ => Err(format!(
                         "native backend: `{name}` as a bare value is not yet supported"
@@ -8724,7 +8789,7 @@ impl<'a> Backend<'a> {
                     "{t} = call %KValue @k_b_field(%KValue {b}, ptr @{label})"
                 ));
                 f.record(&t, TOP);
-                Ok(t)
+                Ok(t.to_string())
             }
             Expr::Index { base, index, strict, span } => {
                 let container = self.emit_expr(f, base)?;
@@ -8740,7 +8805,7 @@ impl<'a> Backend<'a> {
                 let boxed = f.tmp();
                 f.line_fmt(format_args!("{boxed} = call %KValue @k_b_effect(%KValue {read})"));
                 f.record(&boxed, DESC);
-                Ok(boxed)
+                Ok(boxed.to_string())
             }
             Expr::Join { lhs, rhs, .. } => {
                 let a = self.emit_expr(f, lhs)?;
@@ -8752,7 +8817,7 @@ impl<'a> Backend<'a> {
                     "{t} = call %KValue @k_desc_join(%KValue {a}, %KValue {b})"
                 ));
                 f.record(&t, (f.set_of(&a) & FAIL) | (f.set_of(&b) & FAIL) | DESC | ERR);
-                Ok(t)
+                Ok(t.to_string())
             }
             Expr::BinOp { op, lhs, rhs, span } => {
                 if word_arith(op) && arith_ops(expr) >= 2 {
@@ -8797,7 +8862,7 @@ impl<'a> Backend<'a> {
                     self.closure_consts.push((cell.clone(), format!("w_{lifted}"), params.len()));
                     let t = f.tmp();
                     f.line_fmt(format_args!("{t} = load %KValue, ptr @{cell}"));
-                    return Ok(t);
+                    return Ok(t.to_string());
                 }
                 let n = captures.len();
                 let arr = f.tmp();
@@ -8818,19 +8883,19 @@ impl<'a> Backend<'a> {
                     params.len(),
                     captures.len()
                 ));
-                Ok(t)
+                Ok(t.to_string())
             }
             Expr::List(items, _) if items.is_empty() => {
                 let t = f.tmp();
                 f.line_fmt(format_args!("{t} = call %KValue @k_list_empty()"));
                 f.record(&t, LIST);
-                Ok(t)
+                Ok(t.to_string())
             }
             Expr::MapLit(pairs, _) if pairs.is_empty() => {
                 let t = f.tmp();
                 f.line_fmt(format_args!("{t} = call %KValue @k_map_empty()"));
                 f.record(&t, MAP);
-                Ok(t)
+                Ok(t.to_string())
             }
             Expr::List(items, _) => {
                 let mut emitted = Vec::new();
@@ -8854,7 +8919,7 @@ impl<'a> Backend<'a> {
                     emitted.len()
                 ));
                 f.record(&t, LIST);
-                Ok(t)
+                Ok(t.to_string())
             }
             Expr::MapLit(pairs, _) => {
                 let mut emitted = Vec::new();
@@ -8880,7 +8945,7 @@ impl<'a> Backend<'a> {
                     pairs.len()
                 ));
                 f.record(&t, MAP);
-                Ok(t)
+                Ok(t.to_string())
             }
         }
     }
@@ -9086,18 +9151,18 @@ impl<'a> Backend<'a> {
                         for flag in &overflow[1..] {
                             let t = f.tmp();
                             f.line_fmt(format_args!("{t} = or i1 {any}, {flag}"));
-                            any = t;
+                            any = t.to_string();
                         }
                         match &mut twin {
                             Some(cond) => {
                                 let none = f.tmp();
                                 f.line_fmt(format_args!("{none} = xor i1 {any}, true"));
                                 *cond = Some(match cond.take() {
-                                    None => none,
+                                    None => none.to_string(),
                                     Some(c) => {
                                         let both = f.tmp();
                                         f.line_fmt(format_args!("{both} = and i1 {c}, {none}"));
-                                        both
+                                        both.to_string()
                                     }
                                 });
                             }
@@ -9127,7 +9192,7 @@ impl<'a> Backend<'a> {
                                         emitted[*i]
                                     ));
                                     f.record(&t, INT | f.set_of(&w));
-                                    emitted[*i] = t;
+                                    emitted[*i] = t.to_string();
                                 }
                                 deferred.clear();
                             }
@@ -9204,11 +9269,7 @@ impl<'a> Backend<'a> {
                                         // re-seed. Only a slot builder_params
                                         // names is kept, so nothing that merely
                                         // has capacity is aliased.
-                                        match self.builder_params.contains(&(
-                                            name.to_string(),
-                                            n,
-                                            j,
-                                        )) {
+                                        match self.builder_params.contains(name, n, j) {
                                             true => "k_carry_stage_kept",
                                             false => "k_carry_stage",
                                         }
@@ -9231,7 +9292,7 @@ impl<'a> Backend<'a> {
                                         // the copy is the value it was handed
                                         let set = f.set_of(&emitted[j]);
                                         f.record(&t, set);
-                                        emitted[j] = t;
+                                        emitted[j] = t.to_string();
                                     }
                                 };
                                 lift_around(f, &mut emitted, &lifted, &mut carry);
@@ -9376,7 +9437,7 @@ impl<'a> Backend<'a> {
             f.line_fmt(format_args!("{same} = icmp eq i8 {byte}, {}", *c as u8 as i8));
             let both = f.tmp();
             f.line_fmt(format_args!("{both} = and i1 {all}, {same}"));
-            all = both;
+            all = both.to_string();
         }
         let tag = f.tmp();
         f.line_fmt(format_args!("{tag} = select i1 {all}, i64 2, i64 3"));
@@ -9396,7 +9457,7 @@ impl<'a> Backend<'a> {
             "{t} = phi %KValue [ {hit}, %{fast} ], [ {general}, %{slow_from} ]"
         ));
         f.record(&t, infer::BOOL | f.set_of(&general));
-        Ok(Some(t))
+        Ok(Some(t.to_string()))
     }
 
     /// An `if` read for its value: the condition asked as a question, each arm
@@ -9428,7 +9489,7 @@ impl<'a> Backend<'a> {
         let t = f.tmp();
         f.line_fmt(format_args!("{t} = phi %KValue {}", arms.join(", ")));
         f.record(&t, f.set_of(&then_value) | f.set_of(&else_value) | fail_set);
-        Ok(t)
+        Ok(t.to_string())
     }
 
     /// A condition is asked a question, not read for a value, and a
@@ -9627,7 +9688,7 @@ impl<'a> Backend<'a> {
             "{sv} = call %KValue @k_cmp(%KValue {a}, %KValue {b}, i64 {code})"
         ));
         f.record(&sv, infer::BOOL | FAIL);
-        self.test_cond_value(f, sv, then_label, else_label, merge)
+        self.test_cond_value(f, sv.to_string(), then_label, else_label, merge)
     }
 
     /// An expression of two or more `+ - * / %` over words, such as
@@ -9657,13 +9718,13 @@ impl<'a> Backend<'a> {
         f.line_fmt(format_args!("{fv} = insertvalue %KValue {{ i64 0, i64 undef }}, i64 {r}, 1"));
         let Some(first) = flags.first().cloned() else {
             f.record(&fv, INT);
-            return Ok(fv);
+            return Ok(fv.to_string());
         };
         let mut any = first;
         for flag in &flags[1..] {
             let t = f.tmp();
             f.line_fmt(format_args!("{t} = or i1 {any}, {flag}"));
-            any = t;
+            any = t.to_string();
         }
         let fast = f.label();
         let slow = f.label();
@@ -9679,7 +9740,7 @@ impl<'a> Backend<'a> {
         let t = f.tmp();
         f.line_fmt(format_args!("{t} = phi %KValue [ {fv}, %{fast} ], [ {sv}, %{slow_from} ]"));
         f.record(&t, INT | f.set_of(&sv));
-        Ok(t)
+        Ok(t.to_string())
     }
 
     /// The operations of a word run, the general way, over operands already
@@ -9740,7 +9801,7 @@ impl<'a> Backend<'a> {
                 dsym(op, 2)
             ));
             f.line_fmt(format_args!("br label %{merge}"));
-            let user_from = user.clone();
+            let user_from = user;
             f.start_block(&builtin);
             let bv = self.emit_binop_builtin(f, op, a, b, span)?;
             let builtin_from = f.cur_label.clone();
@@ -9754,7 +9815,7 @@ impl<'a> Backend<'a> {
                 &t,
                 f.set_of(&bv) | self.group_return_set(op, 2) | ((f.set_of(a) | f.set_of(b)) & FAIL),
             );
-            return Ok(t);
+            return Ok(t.to_string());
         }
         self.emit_binop_builtin(f, op, a, b, span)
     }
@@ -9809,7 +9870,7 @@ impl<'a> Backend<'a> {
             let t = f.tmp();
             f.line_fmt(format_args!("{t} = {slow_call}"));
             f.record(&t, (f.set_of(a) & FAIL) | (f.set_of(b) & FAIL) | INT);
-            return Ok(t);
+            return Ok(t.to_string());
         }
         let pure_int = f.set_of(a) == INT && f.set_of(b) == INT;
         // Ints of either kind, or a failure riding with one: the quotient
@@ -9877,7 +9938,7 @@ impl<'a> Backend<'a> {
                 _ => ERR | self.zero_divisor_set(),
             };
             f.record(&t, fails | INT | wide | refused);
-            return Ok(t);
+            return Ok(t.to_string());
         }
         if op == "/" || op == "%" {
             let t = f.tmp();
@@ -9892,7 +9953,7 @@ impl<'a> Backend<'a> {
                     | ERR
                     | self.zero_divisor_set(),
             );
-            return Ok(t);
+            return Ok(t.to_string());
         }
         if pure_int {
             let pa = inline_payload(f, a);
@@ -9920,7 +9981,7 @@ impl<'a> Backend<'a> {
                             "{v} = insertvalue %KValue {{ i64 0, i64 undef }}, i64 {sum}, 1"
                         ));
                         f.record(&v, INT);
-                        return Ok(v);
+                        return Ok(v.to_string());
                     }
                     // A result past a word is a bignum, which the runtime
                     // builds from the two operands; the word path stays the
@@ -9971,7 +10032,7 @@ impl<'a> Backend<'a> {
                     v
                 }
             };
-            return Ok(t);
+            return Ok(t.to_string());
         }
         let ta = inline_tag(f, a);
         let tb = inline_tag(f, b);
@@ -10022,7 +10083,7 @@ impl<'a> Backend<'a> {
                 f.line_fmt(format_args!(
                     "{v} = select i1 {c}, %KValue {{ i64 2, i64 0 }}, %KValue {{ i64 3, i64 0 }}"
                 ));
-                (v, fast.clone())
+                (v, fast)
             }
         };
         f.line_fmt(format_args!("br label %{merge}"));
@@ -10058,7 +10119,7 @@ impl<'a> Backend<'a> {
                 _ => (f.set_of(a) & FAIL) | (f.set_of(b) & FAIL) | infer::BOOL,
             },
         );
-        Ok(t)
+        Ok(t.to_string())
     }
 
     /// bytes-view indexing inlines to a bounds check and a byte load; every
@@ -10126,7 +10187,7 @@ impl<'a> Backend<'a> {
                 f.line_fmt(format_args!(
                     "{mv} = call %KValue @{slow_fn}(%KValue {container}, %KValue {key}{slow_extra})"
                 ));
-                mv
+                mv.to_string()
             } else {
                 "{ i64 4, i64 0 }".to_string()
             };
@@ -10147,9 +10208,9 @@ impl<'a> Backend<'a> {
                 f.line_fmt(format_args!(
                     "{raw} = phi i64 [ {wide}, %{load} ], [ 256, %{miss_from} ]"
                 ));
-                f.raw_byte.insert(t.clone(), raw);
+                f.raw_byte.insert(t.to_string(), raw.to_string());
             }
-            return t;
+            return t.to_string();
         }
         // A plain index of a container the sets prove is a list, read the way
         // the twin's list arm reads it, with no tag test in front. What comes
@@ -10186,7 +10247,7 @@ impl<'a> Backend<'a> {
             f.line_fmt(format_args!(
                 "{t} = phi %KValue [ {hit}, %{load} ], [ {{ i64 4, i64 0 }}, %{miss} ]"
             ));
-            return t;
+            return t.to_string();
         }
         let ct = inline_tag(f, container);
         let is_bytes = f.tmp();
@@ -10259,7 +10320,7 @@ impl<'a> Backend<'a> {
                 f.line_fmt(format_args!("{sisn} = icmp eq i64 {stag}, 4"));
                 let sraw = f.tmp();
                 f.line_fmt(format_args!("{sraw} = select i1 {sisn}, i64 256, i64 {spay}"));
-                sraw
+                sraw.to_string()
             }
         };
         let slow_from = f.cur_label.clone();
@@ -10274,7 +10335,7 @@ impl<'a> Backend<'a> {
             f.line_fmt(format_args!(
                 "{raw} = phi i64 [ {wide}, %{load} ], [ {slow_raw}, %{slow_from} ]"
             ));
-            f.raw_byte.insert(t.clone(), raw);
+            f.raw_byte.insert(t.to_string(), raw.to_string());
         }
         // This merge carried no set, so every reader took the default, which
         // is TOP, which contains THUNK -- and `maybe_force` then emitted a
@@ -10294,7 +10355,7 @@ impl<'a> Backend<'a> {
         if f.set_of(container) & LIST == 0 {
             f.record(&t, TOP & !infer::THUNK);
         }
-        t
+        t.to_string()
     }
 
     fn emit_call_full(
@@ -10355,7 +10416,7 @@ impl<'a> Backend<'a> {
                     "{t} = phi %KValue [ {boxed}, %{boxed_from} ], [ {failed}, %{missed} ]"
                 ));
                 f.record(&t, DESC);
-                return Ok(t);
+                return Ok(t.to_string());
             }
             let piped_value = self.emit_expr(f, &args[0])?;
             if f.set_of(&piped_value) & DESC != 0 {
@@ -10381,7 +10442,7 @@ impl<'a> Backend<'a> {
                     "{t} = call %KValue @k_maybe_bind(%KValue {piped_value}, %KValue {closure})"
                 ));
                 f.record(&t, TOP);
-                return Ok(t);
+                return Ok(t.to_string());
             }
             // a pipe hands its value on; a failure short-circuits before the
             // call (no dispatch, no hop) on every engine
@@ -10401,7 +10462,7 @@ impl<'a> Backend<'a> {
                     "{t} = phi %KValue [ {piped_value}, %{fail_from} ], [ {called}, %{call_from} ]"
                 ));
                 f.record(&t, f.set_of(&called) | (f.set_of(&piped_value) & FAIL));
-                return Ok(t);
+                return Ok(t.to_string());
             }
             // no description or failure can flow here: an ordinary call
             return self.emit_call_rest(f, head, args, Some(piped_value), span);
@@ -10505,7 +10566,7 @@ impl<'a> Backend<'a> {
         f.line_fmt(format_args!("{vs} = load %KValue, ptr {slot}, align 8"));
         f.record(&ks, set);
         f.record(&vs, set);
-        Ok((ks, vs))
+        Ok((ks.to_string(), vs.to_string()))
     }
 
     fn emit_call_rest(
@@ -10579,7 +10640,7 @@ impl<'a> Backend<'a> {
                 sources.push(format!("[ {out}, %{body_from} ]"));
                 f.line_fmt(format_args!("{t} = phi %KValue {}", sources.join(", ")));
                 f.record(&t, out_set | fail_bits);
-                return Ok(t);
+                return Ok(t.to_string());
             }
         }
         let computed_head = match head {
@@ -10631,7 +10692,7 @@ impl<'a> Backend<'a> {
                 "{t} = call %KValue @k_call{n}_fast(%KValue {callee}{arg_ir})"
             ));
             f.record(&t, TOP);
-            return Ok(t);
+            return Ok(t.to_string());
         }
         let Expr::Ident(name, _, _) = head else {
             unreachable!("non-ident heads take the computed path");
@@ -10687,7 +10748,7 @@ impl<'a> Backend<'a> {
                             parts[0], parts[1], parts[2]
                         ));
                         f.record(&t, infer::builtin_set("utf8", &[sliced]));
-                        return Ok(t);
+                        return Ok(t.to_string());
                     }
                 }
             }
@@ -10727,7 +10788,7 @@ impl<'a> Backend<'a> {
                             parts[0], parts[1], parts[2], i64::from(mutate)
                         ));
                         f.record(&t, infer::builtin_set("append", &[f.set_of(&acc), sliced]));
-                        return Ok(t);
+                        return Ok(t.to_string());
                     }
                 }
             }
@@ -10768,7 +10829,7 @@ impl<'a> Backend<'a> {
                             parts[0], parts[1], parts[2]
                         ));
                         f.record(&t, infer::builtin_set(door, &[sliced]));
-                        return Ok(t);
+                        return Ok(t.to_string());
                     }
                 }
             }
@@ -10798,7 +10859,7 @@ impl<'a> Backend<'a> {
                     let t = f.tmp();
                     f.line_fmt(format_args!("{t} = call %KValue @k_b_bytes_seed()"));
                     f.record(&t, infer::builtin_set("bytes", &[STR]));
-                    return Ok(t);
+                    return Ok(t.to_string());
                 }
             }
         }
@@ -10831,7 +10892,7 @@ impl<'a> Backend<'a> {
                         "{t} = call %KValue @k_b_append_mut_word(%KValue {acc}, i64 {word}, i64 {n}, ptr @{lit}, ptr @{lit}_lit)"
                     ));
                     f.record(&t, infer::builtin_set("append", &[f.set_of(&acc), STR]));
-                    return Ok(t);
+                    return Ok(t.to_string());
                 }
             }
         }
@@ -10878,7 +10939,7 @@ impl<'a> Backend<'a> {
                         }
                     };
                     f.record(&t, infer::builtin_set("append", &[f.set_of(&acc), rendered_set]));
-                    return Ok(t);
+                    return Ok(t.to_string());
                 }
             }
         }
@@ -10958,7 +11019,7 @@ impl<'a> Backend<'a> {
                 let forced = self.maybe_force(f, e.clone());
                 let t = f.tmp();
                 f.line_fmt(format_args!("{t} = call %KValue @k_unsub(%KValue {forced})"));
-                *e = t;
+                *e = t.to_string();
             }
         }
         if name == "err" {
@@ -10966,7 +11027,7 @@ impl<'a> Backend<'a> {
             let t = f.tmp();
             f.line_fmt(format_args!("{t} = call %KValue @k_err(%KValue {}, {origin})", emitted[0]));
             f.record(&t, ERR);
-            return Ok(t);
+            return Ok(t.to_string());
         }
         // `rescue` and `annotate` are handed the site they were written at,
         // like `err` and `wrap_err`: `annotate` because it raises an err of
@@ -10982,7 +11043,7 @@ impl<'a> Backend<'a> {
                 emitted[0], emitted[1]
             ));
             f.record(&t, TOP);
-            return Ok(t);
+            return Ok(t.to_string());
         }
         if name == "wrap_err" {
             let origin = self.origin_arg(f, span);
@@ -10992,7 +11053,7 @@ impl<'a> Backend<'a> {
                 emitted[0], emitted[1]
             ));
             f.record(&t, ERR);
-            return Ok(t);
+            return Ok(t.to_string());
         }
         if name == "print" {
             // a non-string argument renders through the same ambient
@@ -11010,13 +11071,13 @@ impl<'a> Backend<'a> {
             let t = f.tmp();
             f.line_fmt(format_args!("{t} = call %KValue @k_desc_print(%KValue {arg})"));
             f.record(&t, DESC | (f.set_of(&arg) & FAIL));
-            return Ok(t);
+            return Ok(t.to_string());
         }
         if name == "sleep" || name == "random" {
             let t = f.tmp();
             f.line_fmt(format_args!("{t} = call %KValue @k_desc_{name}(%KValue {})", emitted[0]));
             f.record(&t, DESC | (f.set_of(&emitted[0]) & FAIL));
-            return Ok(t);
+            return Ok(t.to_string());
         }
         if let Some(id) = self.type_ids.get(name).copied() {
             if let Some(parent) = self.sub_parents.get(name).cloned() {
@@ -11032,7 +11093,7 @@ impl<'a> Backend<'a> {
                     "{t} = call %KValue @k_sub_ctor(i64 {id}, i64 {want}, %KValue {inner}, ptr @{tyn}, ptr @{par})"
                 ));
                 f.record(&t, crate::infer::TOP);
-                return Ok(t);
+                return Ok(t.to_string());
             }
             // A constructor slot is where a knot ties: a field still being
             // computed is stored, so the cell completes here and the field
@@ -11073,7 +11134,7 @@ impl<'a> Backend<'a> {
             }
             let fails: Set = emitted.iter().fold(0, |acc, e| acc | (f.set_of(e) & FAIL));
             f.record(&t, REC | fails);
-            return Ok(t);
+            return Ok(t.to_string());
         }
         // The arity has to match a real declaration. Matching on the name
         // alone emits a call to `d_{name}_{n}` for any n the caller wrote,
@@ -11231,7 +11292,7 @@ impl<'a> Backend<'a> {
             if callee_ret == "%KValue" && self.sub_parents.is_empty() {
                 self.assume_tag(f, &result, returned);
             }
-            return Ok(result);
+            return Ok(result.to_string());
         }
         // Declared, but at no arity this call can reach. The interpreter
         // reports it when the call runs, so native reports the same words at
@@ -11250,7 +11311,7 @@ impl<'a> Backend<'a> {
                 "{t} = select i1 true, %KValue {{ i64 4, i64 0 }}, %KValue {{ i64 4, i64 0 }}"
             ));
             f.record(&t, NONE);
-            return Ok(t);
+            return Ok(t.to_string());
         }
         if name == "at" && emitted.len() == 2 {
             return Ok(self.emit_at(f, &emitted[0].clone(), &emitted[1].clone(), false, span));
@@ -11295,7 +11356,7 @@ impl<'a> Backend<'a> {
                     "{t} = insertvalue %KValue {{ i64 0, i64 undef }}, i64 {len}, 1"
                 ));
                 f.record(&t, infer::builtin_set("length", &[held]));
-                return Ok(t);
+                return Ok(t.to_string());
             }
             let mut args_ir: Vec<String> = emitted.iter().map(|e| format!("%KValue {e}")).collect();
             // builtins that can give birth to an err take the site's origin
@@ -11385,7 +11446,7 @@ impl<'a> Backend<'a> {
                 _ => 0,
             };
             f.record(&t, infer::builtin_set(name, &arg_sets) | read);
-            return Ok(t);
+            return Ok(t.to_string());
         }
         Err(format!("native backend: `{name}` is not yet supported"))
     }
