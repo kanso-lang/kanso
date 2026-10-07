@@ -23263,17 +23263,26 @@ Measured in this container with clang 19 against main:
 
 scanbench falls 51; jsonbench, widebench, deepbench, readbench and livebench
 fall 14 each, and basket falls 4. encodebench, oneshot, indexbench and
-digestbench are unchanged. In `.text`, scanbench grows 592 bytes for its copied
+digestbench are unchanged.
+
+CI read runbench 1,142,361,822 -> 1,137,537,711 (-4,824,111, -0.422%),
+escapebench -3,750,005, pendbench -800,198, scanbench -37 and basket -4. The
+14-instruction falls this container read did not appear there, and the other
+nine rows are unchanged. In `.text`, scanbench grows 592 bytes for its copied
 loops, and runbench shrinks 128, escapebench 48, and pendbench and basket 16
-each.
+each. Summed over the fourteen programs, `text` rises 384 bytes to 4,604,576.
 
 The pass costs the link something. On the codegen corpus, built with clang 19,
 ld.lld runs 241,718,614 -> 241,907,162, +188,548 (+0.078%). `clang -cc1` is
-byte-identical, and kanso's own process is not part of the row. The gate's
-`env -i PATH=/usr/bin:/bin` finds clang 18 in this container, and kanso uses
-the custom pipeline only with clang 19, so the gate here reads 495,753,746 with
-the pass and without it. CI's runner has clang 19 on that path, and
-`codegen_instructions_release` is taken from CI.
+byte-identical, and kanso's own process is not part of the row. The gate does
+not see this. Its `env -i PATH=/usr/bin:/bin` finds clang 18 in this
+container, and kanso uses the custom pipeline only with clang 19, so the gate
+here reads 495,753,746 with the pass and without it. CI read 496,432,472 on
+both as well, with ld.lld at 294,982,591, close to this container's clang 18
+link (294,305,497) and far from its clang 19 one (241,907,162). So the row CI
+gates on appears to link with clang 18 too, and no change to
+`LTO_O3_WITHOUT_DEADARGELIM` reaches it. That is a hole in the objective: the
+welfare term for the release link cannot price this pipeline.
 
 The witness is the work vein. The ratchet row `loop_unswitch` takes the pass
 out of the pipeline, which puts escapebench back up by the 3.75 million it fell.

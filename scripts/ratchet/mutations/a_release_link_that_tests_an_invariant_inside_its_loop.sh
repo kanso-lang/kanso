@@ -3,7 +3,7 @@
 # change. This mutation takes the pass out of the link's pipeline. The answers
 # are the same; the work vein is the witness.
 set -e
-pass='simple-loop-unswitch<nontrivial;trivial>'
+pass=',simple-loop-unswitch<nontrivial;trivial>'
 [ "$(grep -cF "$pass" src/main.rs)" -eq 1 ] || {
   echo "the link's unswitch pass moved; this mutation needs rewriting" >&2
   exit 1
