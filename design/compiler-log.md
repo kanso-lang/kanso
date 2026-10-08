@@ -23518,3 +23518,23 @@ which every instruction gate already calls to print its cpu, now prints an
 runners of one commit next read a row apart, the two job logs say whether
 these settings differed. `the_silicon_a_row_was_counted_on` requires the line
 with a loader and without one.
+
+## 2026-10-08 — the emitter writes its lines without the formatter
+
+`FnEmit::write` appended each line of a function body with
+`writeln!(self.out, "  {text}")`. The line is already a string, so the only
+work is two spaces, the text and a newline, and the formatter spent about 540
+instructions a line getting there. On the browser corpus that was 8,571 lines
+for 4,657,137 instructions. The line, the block label `start_block` writes and
+the stack slots `body` hoists into the entry block now go onto the buffer with
+`push_str`.
+
+The module text is the same; `machine_code` and `emitted_code` agree.
+`emit_instructions` reads 24,923,517 -> 23,997,530 in this container, a fall of
+925,987 (-3.72%), and CI's reading replaces it if it differs.
+`browser_compile_instructions` reads 514,922,959 -> 511,333,204 (-0.70%), which
+belongs to the rustc that built the artifact, 1.98.1 here as on CI. The
+`kanso check` rows do not move, since they stop before codegen.
+
+The ratchet row `emitted_lines` sends the body line through `writeln!` again,
+and the emit row reads 24,766,221 under it.

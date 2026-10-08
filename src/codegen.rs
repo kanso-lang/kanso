@@ -3409,7 +3409,9 @@ impl FnEmit {
             self.entry_allocas.push(text.to_string());
             return;
         }
-        let _ = writeln!(self.out, "  {text}");
+        self.out.push_str("  ");
+        self.out.push_str(text);
+        self.out.push('\n');
     }
 
     /// The function's body: what the emitters wrote, with the stack slots at
@@ -3431,7 +3433,9 @@ impl FnEmit {
             }
         }
         for slot in &self.entry_allocas {
-            let _ = writeln!(head, "  {slot}");
+            head.push_str("  ");
+            head.push_str(slot);
+            head.push('\n');
         }
         head.push_str(rest);
         head
@@ -3518,7 +3522,8 @@ impl FnEmit {
     }
 
     fn start_block(&mut self, label: &str) {
-        let _ = writeln!(self.out, "{label}:");
+        self.out.push_str(label);
+        self.out.push_str(":\n");
         self.cur_label.clear();
         self.cur_label.push_str(label);
         if let Some(e) = self.arms_effects {

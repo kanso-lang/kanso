@@ -4730,7 +4730,20 @@ local_place = row
 
 rows_c1zzzzzzz7 = text/concat rows_c1zzzzzzz8 [local_place]
 
-rows_c = text/concat rows_c1zzzzzzz7 [itself]
+# The emitter writes each body line with three pushes rather than through
+# `writeln!` (2026-10-08). The mutation sends the line through the formatter
+# again, so the emit row is the witness.
+emitted_lines = row
+  "emitted lines written through the formatter"
+  true
+  emit_gate
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "emitted_lines_through_fmt")
+  release
+
+rows_c1zzzzzzz6 = text/concat rows_c1zzzzzzz7 [emitted_lines]
+
+rows_c = text/concat rows_c1zzzzzzz6 [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
