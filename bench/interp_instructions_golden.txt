@@ -657,5 +657,9 @@
 # compiler inlines into its callers, before `eval_node` builds its frame. CI's
 # reading on kanso#1809: 540,215,448 -> 513,401,792, a FALL of 26,813,656
 # (-4.9635%).
-interp_instructions=513401792
+# 2026-10-08: a global naming a function, or `true`, `false`, `none` or `done`,
+# is read from a fixed table at the door, and integer literals are answered
+# there too. CI's reading on kanso#1810: 513,401,792 -> 499,300,948, a FALL
+# of 14,100,844 (-2.7466%).
+interp_instructions=499300948
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

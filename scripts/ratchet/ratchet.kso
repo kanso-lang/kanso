@@ -4849,6 +4849,20 @@ front_door = row
 
 rows_c1zzzzzzy8 = text/concat rows_c1zzzzzzy9 [front_door]
 
+# A global name whose slot holds a function reference is answered from a table
+# of fixed values before `eval_node` builds its frame (2026-10-08). The
+# mutation leaves the table without its function references, and the
+# interpreted row is the witness.
+fixed_globals = row
+  "a fixed global read through the whole node"
+  true
+  interp_gate
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_fixed_global_read_through_the_whole_node")
+  release
+
+rows_c1zzzzzzy7 = text/concat rows_c1zzzzzzy8 [fixed_globals]
+
 rows_c1zzzzzzz3 = text/concat rows_c1zzzzzzz4 [reached_groups]
 
 # A line's tokens are moved into a vector of their exact length, from a
@@ -4886,7 +4900,7 @@ guard_rest = row
   (breaking "a_guards_statements_held_in_every_expression")
   release
 
-rows_c1zzzzzzy5 = text/concat rows_c1zzzzzzy8 [line_exact alias_sites]
+rows_c1zzzzzzy5 = text/concat rows_c1zzzzzzy7 [line_exact alias_sites]
 
 # On a 64-bit target `Expr` keeps its tag in a byte of its own (2026-10-08).
 # The mutation leaves the tag to the compiler, which hides it in a field of a

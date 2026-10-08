@@ -273,11 +273,15 @@
 # 2026-10-08: a string of up to fifteen bytes is held inside the value.
 # Map keys hold the same type. Measured in this container: interp_allocs
 # 714,647 -> 626,209, a FALL of 88,438 (-12.38%). The peak does not move.
+# 2026-10-08: a global naming a function or a fixed value is read from a
+# second table beside the slots, which the run fills as it stamps them. Read
+# by the gate on this host, whose glibc and rustc are the golden's:
+# interp_allocs 626,209 -> 626,217, a RISE of 8.
 # 2026-10-08: the alias pass indexes only synthetic sites, each line's tokens
 # are kept at their length, and a guard's statements sit behind a box, which
 # makes every expression 48 bytes. Read by the gate on this host, whose rustc
-# is the golden's: 626,209 -> 625,999.
-interp_allocs=625999
+# is the golden's, over the fixed-value table: 626,217 -> 626,007.
+interp_allocs=626007
 #
 # 2026-09-18, kanso#1518 against main at kanso#1517, CI's sitting.
 # 951,438 -> 961,165, a RISE of
@@ -361,9 +365,13 @@ interp_allocs=625999
 #
 # CI measured keys and values over maps. interp_peak_bytes 720,417 -> 720,620,
 # a RISE of 203 (+0.0282%).
+#
+# 2026-10-08: the fixed-value table beside the global slots. Read by the gate
+# on this host: interp_peak_bytes 739,436 -> 742,431, a RISE of 2,995
+# (+0.4050%), bought for interp_instructions -2.75%.
 # 2026-10-08: the alias pass indexes only synthetic sites, each line's tokens
 # are kept at their length, and a guard's statements sit behind a box, which
 # makes every expression 48 bytes. Read by the gate on this host, whose rustc
-# is the golden's: 739,436 -> 693,463.
-interp_peak_bytes=693463
+# is the golden's, over the fixed-value table: 742,431 -> 709,847.
+interp_peak_bytes=709847
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
