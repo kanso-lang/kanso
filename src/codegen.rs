@@ -12302,8 +12302,10 @@ mod a_group_the_walk_misses_is_put_back {
     /// of it either way: only the question shows the miss.
     #[test]
     fn a_question_about_a_left_out_operator_is_noticed() {
-        let source =
-            include_str!("../tests/golden/micro/an_operator_arm_takes_its_records_boxed.kso");
+        // the micro golden an_operator_arm_takes_its_records_boxed, inline
+        let source = "import \"std/os\"\n\ntype pt\n  n\n  s\n\n\
+                      fn + (pt a s) (pt b t)\n  pt (a + b) \"{s}{t}\"\n\n\
+                      pub play = os/args .> (_ -> print \"{pt 1 \"a\" + pt 3 \"b\"}\")\n";
         let mut program = crate::compile_source("check", "arms.kso", source).expect("it compiles");
         let before = program.fns.len();
         program.fns.retain(|d| d.name != "+");
