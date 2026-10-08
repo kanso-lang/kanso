@@ -23863,3 +23863,51 @@ took the vector back from every builtin's `arity` read 539,054,147 and
 63 instructions for an allocation and its free, and the pool cost about 45 to
 take a vector and 40 to give it back, so the spread across variants is layout
 and none of it is a gain.
+
+## 2026-10-08 — globals and integer literals answered at the door
+
+With the front door built, 730,565 nodes still reached `eval_node` on
+`bench/interp_corpus`. Counted by form, the largest group was global names:
+299,294 of them, ahead of applications at 137,928 and integer literals at
+122,017. Most globals the corpus reads name a function, and the value such a
+name reads as never changes: a `FnRef` holding the name.
+
+Each global slot now has a neighbour in a second table, `fixed`, holding that
+value when it is fixed: a function reference, `true`, `false`, `none` or
+`done`. A constant gets nothing there, because the first read of a constant
+runs its body. `eval` asks a small out-of-line function, `fixed_global`, for
+any name that is not a kept local, and only a miss goes on to `eval_node`.
+Counted over the first 300,000 such reads, 298,949 were answered from the
+table. The 1,051 misses were names read before their slot had been stamped,
+which is the read that stamps it.
+
+Measured in this container on the same 874 lines of output, outside the gate:
+512,403,757 -> 500,796,787 (-11,606,970, -2.27%) with the table alone, and
+498,287,606 with integer literals as well, below. CI's gate reading for the
+whole change is 513,401,792 -> 499,300,948 (-14,100,844, -2.75%), and four
+compile rows moved with the binary's layout by between 1,090 and 68,472.
+The table costs memory: `interp_peak_bytes` 739,436 -> 742,431 (+2,995,
++0.41%) and `interp_allocs` 626,209 -> 626,217, read by the gate on a host whose glibc and
+rustc are the golden's. The objective weighs that against the instructions
+and comes out ahead.
+
+The ratchet row `fixed_globals`, mutation
+`a_fixed_global_read_through_the_whole_node`, keeps function references out of
+the table, so every one of them is asked for and missed. With it applied to the
+build that also carries the literal arm, the corpus reads 524,244,086, worse
+than before the table existed, because each global then pays for the miss as
+well as for `eval_node`.
+
+Integer literals were the next group, 122,017 of them. Sent from the door to a
+one-line out-of-line helper that builds the value, they first read
+533,252,591, thirty-two million worse than the table alone. The profile says
+why: in that build `eval` ran as a function of its own, 48,560,872
+instructions of it, where in the builds that gained it ran almost entirely
+inlined into its callers. The extra arm had taken the door past what the
+compiler would inline unasked. With `#[inline(always)]` on the door the same
+arm reads 498,287,606, 2.5 million better than the table alone, and the
+attribute now states what the door depends on.
+
+Applications were the group after that, 137,928 nodes. Moving their arm out of
+`eval_node` into its own function and sending them there from the door read
+503,651,651, 5.4 million worse, and it is not built.

@@ -774,6 +774,13 @@ fn release(value: Value) {
 /// frames between the reference and its binder are fixed by where the
 /// reference sits, so the place found once is the place every later run finds;
 /// the name is compared anyway, and a miss walks.
+/// An integer literal's value, out of line so the front door that calls it
+/// stays small enough to inline.
+#[inline(never)]
+fn int_literal(n: &BigInt) -> Value {
+    Value::int(n)
+}
+
 fn lookup_at(env: &Option<Rc<Env>>, name: &Name, place: u32) -> Option<Value> {
     let place = place - 3;
     let mut frame = env.as_ref()?;
@@ -1685,6 +1692,10 @@ pub struct Interp<'a> {
     /// What a global resolved to, by the slot its node was stamped with.
     /// Filled on first sight, for the reason `names` above is.
     slots: RefCell<Vec<Named<'a>>>,
+    /// Beside each slot in `slots`, the value its name always reads as, when
+    /// that value cannot change: a function reference or a literal word. A
+    /// constant has none, because reading one runs it the first time.
+    fixed: RefCell<Vec<Option<Value>>>,
     /// This interpreter's stamp on the nodes it resolves; see `Resolution`.
     /// 0 when the process has made more interpreters than sixteen bits hold,
     /// which turns stamping off rather than letting a stamp be reused.
@@ -1788,6 +1799,7 @@ impl<'a> Interp<'a> {
             moved: std::cell::OnceCell::new(),
             names: RefCell::new(Map::default()),
             slots: RefCell::new(Vec::new()),
+            fixed: RefCell::new(Vec::new()),
             generation: next_generation(),
             callees: RefCell::new(Map::default()),
             callees_by_ref: RefCell::new(Map::default()),
@@ -2211,19 +2223,22 @@ impl<'a> Interp<'a> {
         }
     }
 
-    /// A local whose place is kept answers here, and everything else goes to
-    /// `eval_node`.
+    /// A local whose place is kept answers here, a global whose slot holds a
+    /// fixed value answers here, and so does an integer literal; everything
+    /// else goes to `eval_node`.
     ///
     /// `eval_node` holds every expression form, so its frame is sized for the
     /// largest of them: six registers pushed and 792 bytes reserved on every
-    /// call. The commonest expression is a local name, 653,358 of them on the
-    /// interpreted corpus, and reading one walks a frame or two and clones the
-    /// value. This function is small enough for the compiler to inline where
-    /// it is called, so a local read there makes no call at all, and the
-    /// corpus fell from 539,217,785 instructions to 512,403,757. Kept out of
-    /// line with `#[inline(never)]` it read 542,946,770, worse than no door;
-    /// and adding integer literals to it read 543,053,630. Anything added here
-    /// is copied into every caller, so the door holds names and nothing else.
+    /// call. Local names were 653,358 of the expressions the interpreted
+    /// corpus evaluates, global names 299,294 and integer literals 122,017.
+    /// The gain depends on this function being inlined where it is called, so
+    /// that a local read there makes no call at all: kept out of line with
+    /// `#[inline(never)]` the corpus read 542,946,770, worse than no door.
+    /// With the literal arm the compiler stopped inlining it on its own and
+    /// the corpus read 533,252,591, so the attribute below says what the
+    /// whole design relies on. Anything added here is copied into every
+    /// caller.
+    #[inline(always)]
     fn eval(&self, expr: &Expr, env: &Option<Rc<Env>>, frame: &Frame) -> EvalResult {
         if let Expr::Ident(name, _, resolved) = expr {
             let v = resolved.get();
@@ -2231,9 +2246,24 @@ impl<'a> Interp<'a> {
                 if let Some(value) = lookup_at(env, name, v) {
                     return Ok(value);
                 }
+            } else if let Some(value) = self.fixed_global(v) {
+                return Ok(value);
             }
+        } else if let Expr::Int(n, _) = expr {
+            return Ok(int_literal(n));
         }
         self.eval_node(expr, env, frame)
+    }
+
+    /// A global name whose slot holds a fixed value, read without going
+    /// through `eval_node`. Of the first 300,000 global reads on the
+    /// interpreted corpus, 298,949 were answered from the table; the rest
+    /// were first reads, which stamp the slot. Out of line, so the door stays
+    /// small.
+    #[inline(never)]
+    fn fixed_global(&self, v: u32) -> Option<Value> {
+        let slot = crate::ast::Resolution::slot_for(v, self.generation)?;
+        self.fixed.borrow().get(slot)?.clone()
     }
 
     #[inline(never)]
@@ -2599,6 +2629,15 @@ impl<'a> Interp<'a> {
             match Resolution::stamped(self.generation, slots.len()) {
                 Resolution::GLOBAL => Resolution::GLOBAL,
                 stamp => {
+                    let fixed = match &named {
+                        Named::FnRef(n) => Some(Value::FnRef(n.clone())),
+                        Named::True => Some(Value::True),
+                        Named::False => Some(Value::False),
+                        Named::NoneV => Some(Value::NoneV),
+                        Named::Done => Some(Value::Done),
+                        _ => None,
+                    };
+                    self.fixed.borrow_mut().push(fixed);
                     slots.push(named.clone());
                     stamp
                 }
