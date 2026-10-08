@@ -267,6 +267,10 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
             Err(d) => diags.push(d),
         }
     }
+    // The line buffer is the length of the file's longest line, and nothing
+    // else needs it once the file is lexed; kept, it sat under the front end's
+    // peak for the rest of the compile.
+    LINE.with(|line| drop(line.take()));
     // One buffer for the whole file. `check_needless_continuation` groups a
     // line's tokens by source line to measure what the statement would be one
     // line wide, and it wants a vector to do it; a fresh one per line was 702
@@ -576,11 +580,13 @@ fn lex_line_with_block(
 
 fn lex_line(content: &str, line: usize, col_offset: usize) -> Result<LexedLine, Diagnostic> {
     let mut s = Scanner::new(content, line, col_offset);
-    // Eight, because a `Vec` starting empty reaches four and then doubles, and
-    // the doubling was 434 allocation blocks on lib/json. Sixteen takes 156
-    // more and puts 9.7% on compile_peak_bytes, which a line vector kept for
-    // the whole parse pays for; eight leaves the peak where it was.
-    let mut tokens = Vec::with_capacity(8);
+    // A line's tokens are gathered in a buffer kept between lines and moved out
+    // at the end into a vector of exactly their length. The vector is kept for
+    // the whole parse, so its spare capacity was resident at the front end's
+    // peak, and growing it by doubling was an allocation per step besides. A
+    // nested call, for an interpolation, finds the buffer taken and starts an
+    // empty one.
+    let mut tokens = LINE.with(std::cell::Cell::take);
     while s.pos < s.chars.len() {
         let c = s.chars[s.pos];
         let span = s.span();
@@ -742,7 +748,13 @@ fn lex_line(content: &str, line: usize, col_offset: usize) -> Result<LexedLine, 
         }
         return Err(Diagnostic::new("syntax", format!("unexpected character `{c}`"), span));
     }
-    Ok(LexedLine { tokens })
+    let exact = tokens.drain(..).collect();
+    LINE.with(|line| line.set(tokens));
+    Ok(LexedLine { tokens: exact })
+}
+
+thread_local! {
+    static LINE: std::cell::Cell<Vec<(Tok, Span, u32)>> = const { std::cell::Cell::new(Vec::new()) };
 }
 
 impl Scanner<'_> {

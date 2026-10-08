@@ -23863,3 +23863,54 @@ took the vector back from every builtin's `arity` read 539,054,147 and
 63 instructions for an allocation and its free, and the pool cost about 45 to
 take a vector and 40 to give it back, so the spread across variants is layout
 and none of it is a gain.
+
+## 2026-10-08 — the front end's peak, lowered at the two places it was set
+
+`compile_peak_bytes` and `interp_peak_bytes` are both set by the front end:
+the interpreter's run never holds more than its check did. Printing live and
+peak bytes around each front-end phase on `bench/compile_corpus` put the peak
+inside `canonicalize_bare_aliases`, the pass that rewrites a bare alias to the
+qualified name it stands for. At its top-level call it held two maps sized for
+every declaration in the program: 415 of them, of which 94 were synthetic
+aliases. Only those 94 are ever asked about. A name nothing synthetic carries
+cannot be an alias, and a site no synthetic declaration stands at is never
+looked up.
+
+The pass now counts the synthetic declarations first and returns at once when
+there are none, which is most of its calls. Otherwise it keys the site index
+by the synthetic sites alone and fills in the qualified declarations that
+stand there, and it keeps a name in the second map only when a synthetic
+declaration carries it; a qualified declaration of the same name only marks
+it as not an alias. The site index is dropped as soon as the names are
+resolved, and the set of locally bound names as soon as the aliases are
+chosen. On every target tried, the 56 of them that include each bench corpus,
+lib/json, kq and vse, `KANSO_ALIAS_REPORT` prints the same aliases before and
+after: 76 on the interpreter corpus.
+
+That alone moved the peak by 291 bytes, because the peak was set in two
+places. The second was the lexer. Each line's tokens were gathered in a vector
+that started at eight and doubled, and that vector was kept for the whole
+parse with up to half of it unused. A line's tokens are now gathered in a
+buffer kept between lines and moved out into a vector of exactly their length.
+The buffer is as long as the file's longest line and is released when the file
+is lexed; kept until the end, it held 3,072 bytes under the peak.
+
+Lowering the lexer's share by itself raised the peak by 3,076, to 732,705,
+because the alias pass then set it alone. Together, in this container:
+
+    compile_peak_bytes   729,629 -> 706,828   (-22,801, -3.13%)
+    compile_allocs        14,742 ->  14,515   (-227, -1.54%)
+    interp_peak_bytes    739,444 -> 726,051   (-13,393, -1.81%)
+    interp_allocs        626,209 -> 625,986   (-223)
+
+CI's rows replace these before the floor moves.
+
+`shrink_to_fit` on each line's vector was tried first. It reached the same
+peak, 706,828, and cost 723 more allocations, because each shrink is a
+reallocation.
+
+Two ratchet rows hold this. `line_exact`, mutation
+`a_line_of_tokens_grown_by_doubling`, hands the buffer itself to the parse, so
+every line grows from empty again: `compile_allocs` reads 15,196. `alias_sites`,
+mutation `every_declaration_indexed_for_its_alias`, indexes every declaration
+by site again, which changes no alias: `compile_peak_bytes` reads 712,674.
