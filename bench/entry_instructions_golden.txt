@@ -1109,7 +1109,11 @@
 # isolated. Measured in this container, where the previous tree reads on the row:
 # 86,357,296 -> 86,458,591, a RISE of 101,295 (+0.1173%).
 # CI's reading replaces it if it differs.
-entry_instructions=86381596
+# 2026-10-08: the same lexer inlining as library_instructions moves this row;
+# the emitter change it came with is not reached by `kanso check`. CI's reading
+# on kanso#1807:
+# 86,381,596 -> 86,445,359, a RISE of 63,763 (+0.0738%).
+entry_instructions=86445359
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

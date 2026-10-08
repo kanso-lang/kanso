@@ -23692,3 +23692,11 @@ here as on CI. Skipping in the emitter alone had reached 433,427,683 and
 instruction saving. `browser_run_instructions` moves by 61. The ratchet row
 `reached_groups` turns the walk off and the browser rows go back up, and
 `left_out_asked` stops noting the question, which the `+` spec catches.
+
+The index helps native builds as well. Every lookup of a group by name used
+to scan the whole declaration list, and now it reads the index the emitter
+already kept: `emit_instructions` falls 23,997,530 -> 23,393,086 (-2.52%) on
+CI. `entry_instructions` and `library_instructions` rise 63,763 and 63,913.
+Those rows run `kanso check`, which never reaches the emitter. Between main and
+this tree in one container the move sits inside the lexer, whose source did not
+change, so it is inlining redrawn around a changed codegen.rs.

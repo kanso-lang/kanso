@@ -1144,7 +1144,13 @@
 # isolated. Measured in this container, where the previous tree reads on the row:
 # 86,901,950 -> 87,003,163, a RISE of 101,213 (+0.1165%).
 # CI's reading replaces it if it differs.
-library_instructions=86927430
+# 2026-10-08: the change is in the emitter, which `kanso check` never reaches. The
+# move is inside the lexer, whose source did not change: validate_spacing
+# +58,807, lex_line +39,401 and lex -33,156 between main and this tree in one
+# container, which is inlining redrawn around a changed codegen.rs. CI's reading
+# on kanso#1807:
+# 86,927,430 -> 86,991,343, a RISE of 63,913 (+0.0735%).
+library_instructions=86991343
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.
