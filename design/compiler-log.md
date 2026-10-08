@@ -23466,3 +23466,17 @@ since the place lives in a word the node already had.
 The ratchet row `local_place` keeps plain local for every reference, and the
 interpreted row is its witness. Under that mutation the row reads 613,859,041,
 above main as well, since every reference then takes the out-of-line walk.
+
+## 2026-10-07 — a local's scalar copied inline costs more than the clone
+
+After the interpreter learned to read a local at the place it last found it,
+`lookup_at` still spent about 45 instructions a reference, most of them in the
+derived `Value::clone`, which is a call for every variant. A small int, a float
+and the four unit values hold no count to raise, so `lookup_at` was given a
+match that writes those six out directly and sends everything else through
+`clone`. `interp_instructions` rose 573,873,591 -> 586,635,237 (+12,761,646,
++2.22%) in this container. The output was unchanged. The match was not
+isolated from what inlining it did to the surrounding code, and it was taken
+back out.
+
+`docs/compiler.html` §198 and §199 cover this entry and the two before it.
