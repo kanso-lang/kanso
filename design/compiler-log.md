@@ -23689,10 +23689,9 @@ with the same six known gaps.
 `browser_compile_peak_bytes` 829,597 -> 673,727 (-18.8%), on rustc 1.98.1 here
 as on CI. Skipping in the emitter alone had reached 433,427,683 and 698,157, so
 taking the groups out before the analyses is two thirds of the instruction
-saving. `browser_run_instructions` moves by 61, 33,510,647 -> 33,510,708,
-because the emitted module numbers its cells differently. The ratchet row
-`reached_groups` turns the walk off and the browser rows go back up, and
-`left_out_asked` stops noting the question, which the `+` spec catches.
+saving. `browser_run_instructions` moves by 61, 33,510,647 -> 33,510,708. The
+ratchet row `reached_groups` turns the walk off and the browser rows go back
+up, and `left_out_asked` stops noting the question, which the `+` spec catches.
 
 The index helps native builds as well. Every lookup of a group by name used
 to scan the whole declaration list, and now it reads the index the emitter
