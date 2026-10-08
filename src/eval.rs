@@ -1685,6 +1685,10 @@ pub struct Interp<'a> {
     /// What a global resolved to, by the slot its node was stamped with.
     /// Filled on first sight, for the reason `names` above is.
     slots: RefCell<Vec<Named<'a>>>,
+    /// Beside each slot in `slots`, the value its name always reads as, when
+    /// that value cannot change: a function reference or a literal word. A
+    /// constant has none, because reading one runs it the first time.
+    fixed: RefCell<Vec<Option<Value>>>,
     /// This interpreter's stamp on the nodes it resolves; see `Resolution`.
     /// 0 when the process has made more interpreters than sixteen bits hold,
     /// which turns stamping off rather than letting a stamp be reused.
@@ -1788,6 +1792,7 @@ impl<'a> Interp<'a> {
             moved: std::cell::OnceCell::new(),
             names: RefCell::new(Map::default()),
             slots: RefCell::new(Vec::new()),
+            fixed: RefCell::new(Vec::new()),
             generation: next_generation(),
             callees: RefCell::new(Map::default()),
             callees_by_ref: RefCell::new(Map::default()),
@@ -2211,8 +2216,8 @@ impl<'a> Interp<'a> {
         }
     }
 
-    /// A local whose place is kept answers here, and everything else goes to
-    /// `eval_node`.
+    /// A local whose place is kept answers here, and so does a global whose
+    /// slot holds a fixed value; everything else goes to `eval_node`.
     ///
     /// `eval_node` holds every expression form, so its frame is sized for the
     /// largest of them: six registers pushed and 792 bytes reserved on every
@@ -2231,9 +2236,21 @@ impl<'a> Interp<'a> {
                 if let Some(value) = lookup_at(env, name, v) {
                     return Ok(value);
                 }
+            } else if let Some(value) = self.fixed_global(v) {
+                return Ok(value);
             }
         }
         self.eval_node(expr, env, frame)
+    }
+
+    /// A global name whose slot holds a fixed value, read without going
+    /// through `eval_node`. Global names were 299,294 of the 730,565 nodes
+    /// that reached `eval_node` on the interpreted corpus, and nearly all of
+    /// them name a function. Out of line, so the door stays small.
+    #[inline(never)]
+    fn fixed_global(&self, v: u32) -> Option<Value> {
+        let slot = crate::ast::Resolution::slot_for(v, self.generation)?;
+        self.fixed.borrow().get(slot)?.clone()
     }
 
     #[inline(never)]
@@ -2599,6 +2616,15 @@ impl<'a> Interp<'a> {
             match Resolution::stamped(self.generation, slots.len()) {
                 Resolution::GLOBAL => Resolution::GLOBAL,
                 stamp => {
+                    let fixed = match &named {
+                        Named::FnRef(n) => Some(Value::FnRef(n.clone())),
+                        Named::True => Some(Value::True),
+                        Named::False => Some(Value::False),
+                        Named::NoneV => Some(Value::NoneV),
+                        Named::Done => Some(Value::Done),
+                        _ => None,
+                    };
+                    self.fixed.borrow_mut().push(fixed);
                     slots.push(named.clone());
                     stamp
                 }
