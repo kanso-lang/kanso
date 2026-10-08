@@ -661,5 +661,10 @@
 # is read from a fixed table at the door, and integer literals are answered
 # there too. CI's reading on kanso#1810: 513,401,792 -> 499,300,948, a FALL
 # of 14,100,844 (-2.7466%).
-interp_instructions=499300948
+# 2026-10-08: the front end's peak lowered (an expression 48 bytes with its
+# tag explicit, a guard's statements boxed) and the interpreter's callee and
+# frame tables cut to 256 slots each, which trades instructions for peak. CI's
+# reading on kanso#1811, and this container's, where main reads 499,300,948:
+# 499,300,948 -> 500,281,043, a RISE of 980,095 (+0.1963%).
+interp_instructions=500281043
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

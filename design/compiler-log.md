@@ -24010,8 +24010,7 @@ direct-mapped tables `Interp::new` allocates and keeps for the whole run: 1,024
 callee slots and 512 frame slots. They were sized for speed when the peak was
 not counted. At 256 slots each the run holds 22,528 bytes less, and the
 corpus misses often enough to cost about 720,000 more instructions, 0.13%,
-read in this container where the instruction row is measured on other
-silicon:
+by the count in the table's last column:
 
     RECENT_CALLEES / RECENT_FRAMES   interp_peak_bytes   instructions here
     1,024 / 512                      709,850             536,115,019
@@ -24030,3 +24029,9 @@ CI's instruction rows for the change, which this host's gates reproduce:
 `emit_instructions` rose, 23,391,657 -> 23,409,658, 18,001 instructions. The
 rise arrived with the change, and what in it moved the emitter is not
 isolated.
+
+The gate's own interpreter row for the whole change, which CI read on a
+runner of family 0x6 model 0x6a and this container read the same:
+`interp_instructions` 499,300,948 -> 500,281,043, a rise of 980,095
+(+0.1963%). Main reads 499,300,948 here, so the rise belongs to the change
+and not to the silicon. `startup_instructions` did not move.
