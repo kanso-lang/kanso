@@ -23863,3 +23863,30 @@ took the vector back from every builtin's `arity` read 539,054,147 and
 63 instructions for an allocation and its free, and the pool cost about 45 to
 take a vector and 40 to give it back, so the spread across variants is layout
 and none of it is a gain.
+
+## 2026-10-08 — a global naming a function is read from a fixed table
+
+With the front door built, 730,565 nodes still reached `eval_node` on
+`bench/interp_corpus`. Counted by form, the largest group was global names:
+299,294 of them, ahead of applications at 137,928 and integer literals at
+122,017. Most globals the corpus reads name a function, and the value such a
+name reads as never changes: a `FnRef` holding the name.
+
+Each global slot now has a neighbour in a second table, `fixed`, holding that
+value when it is fixed: a function reference, `true`, `false`, `none` or
+`done`. A constant gets nothing there, because the first read of a constant
+runs its body. `eval` asks a small out-of-line function, `fixed_global`, for
+any name that is not a kept local, and only a miss goes on to `eval_node`.
+Counted over the first 300,000 such reads, 298,949 were answered from the
+table. The 1,051 misses were names read before their slot had been stamped,
+which is the read that stamps it.
+
+Measured in this container on the same 874 lines of output, outside the gate:
+512,403,757 -> 500,796,787 (-11,606,970, -2.27%). CI's gate reading replaces
+this.
+
+The ratchet row `fixed_globals`, mutation
+`a_fixed_global_read_through_the_whole_node`, keeps function references out of
+the table, so every one of them is asked for and missed. With it applied the
+corpus reads 526,318,936, worse than before the table existed, because each
+global now pays for the miss as well as for `eval_node`.
