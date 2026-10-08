@@ -698,7 +698,44 @@ pub struct RuntimeError {
 }
 
 type Bindings = Vec<(Name, Value)>;
-type Score = Vec<u8>;
+
+/// How many parameters' ranks a `Score` holds without allocating.
+const SCORE_INLINE: usize = 12;
+
+/// One rank a parameter, in order. It was a `Vec<u8>`, and every dispatch
+/// allocated one and freed it, and a candidate that won first left the next
+/// one to grow a fresh vector from nothing. The ranks of a call with more
+/// parameters than `SCORE_INLINE` go on in `spill`.
+#[derive(Default)]
+struct Score {
+    len: usize,
+    inline: [u8; SCORE_INLINE],
+    spill: Vec<u8>,
+}
+
+impl Score {
+    fn clear(&mut self) {
+        self.len = 0;
+        self.spill.clear();
+    }
+
+    fn push(&mut self, rank: u8) {
+        match self.len < SCORE_INLINE {
+            true => self.inline[self.len] = rank,
+            false => self.spill.push(rank),
+        }
+        self.len += 1;
+    }
+
+    /// Compares as the ranks in order would, as a `Vec<u8>` compared. The two
+    /// scores a dispatch compares always have one rank per argument, so their
+    /// inline parts are the same length.
+    fn beats(&self, other: &Score) -> bool {
+        let n = self.len.min(SCORE_INLINE);
+        let m = other.len.min(SCORE_INLINE);
+        (&self.inline[..n], &self.spill) > (&other.inline[..m], &other.spill)
+    }
+}
 
 type EvalResult = Result<Value, RuntimeError>;
 
@@ -2944,7 +2981,7 @@ impl<'a> Interp<'a> {
         // outgoing candidate's vector in `score`, so what survives the
         // iteration already has capacity and `match_params_into` clears it
         // before the next candidate fills it.
-        let mut score: Score = Vec::with_capacity(args.len());
+        let mut score = Score::default();
         // AND THE BINDINGS BUFFER COMES BACK TOO, when the frame it became is
         // the dispatcher's to take back. `bind_all` moves `binds` into
         // `Env::Many`, so unlike the score it cannot simply be kept -- the body
@@ -3056,7 +3093,6 @@ impl<'a> Interp<'a> {
             };
             binds.clear();
             binds.reserve(args_len);
-            score.reserve(args_len);
             for decl in overloads.iter() {
                 if decl.params.len() != args.len() {
                     continue;
@@ -3065,7 +3101,7 @@ impl<'a> Interp<'a> {
                     continue;
                 }
                 let replace = match &best {
-                    Some((best_score, ..)) => score > *best_score,
+                    Some((best_score, ..)) => score.beats(best_score),
                     None => true,
                 };
                 if replace {
@@ -6343,6 +6379,33 @@ mod tests {
             .expect("a constant named main")
             .map_err(|e| e.message)
             .expect("runs")
+    }
+
+    /// `Score::beats` orders as the `Vec<u8>` it replaced, at every length
+    /// either side of the inline width.
+    #[test]
+    fn a_score_compares_as_its_ranks_in_order() {
+        let mut seed: u32 = 0x2545_f491;
+        let mut next = move || {
+            seed ^= seed << 13;
+            seed ^= seed >> 17;
+            seed ^= seed << 5;
+            [10u8, 100, 99, 200][(seed % 4) as usize]
+        };
+        for len in 1..=SCORE_INLINE + 4 {
+            for _ in 0..200 {
+                // b differs from a in one position, inline or spilled, so a
+                // comparison that skipped the spill would call them tied
+                let a: Vec<u8> = (0..len).map(|_| next()).collect();
+                let mut b = a.clone();
+                let at = (next() as usize * 7 + next() as usize) % len;
+                b[at] = next();
+                let (mut x, mut y) = (Score::default(), Score::default());
+                a.iter().for_each(|r| x.push(*r));
+                b.iter().for_each(|r| y.push(*r));
+                assert_eq!(x.beats(&y), a > b, "{a:?} against {b:?}");
+            }
+        }
     }
 
     #[test]

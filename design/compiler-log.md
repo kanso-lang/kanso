@@ -23700,3 +23700,30 @@ CI. `entry_instructions` and `library_instructions` rise 63,763 and 63,913.
 Those rows run `kanso check`, which never reaches the emitter. Between main and
 this tree in one container the move sits inside the lexer, whose source did not
 change, so it is inlining redrawn around a changed codegen.rs.
+
+## 2026-10-08 — a dispatch ranks its candidates on the stack
+
+Arm selection ranks every candidate that matches into a score, one byte a
+parameter, and keeps the best. The score was a `Vec<u8>`. Every entry to
+`dispatch_loop` allocated one and freed it on the way out, and when the first
+candidate won, `std::mem::take` moved its buffer into `best` and left the next
+candidate to grow a new one from nothing. On `bench/interp_corpus` that growth
+was 44,905 calls to `RawVec<u8>::grow_one`.
+
+`Score` now holds twelve ranks inline and spills the rest into a vector that
+stays empty for any group of twelve parameters or fewer. A dispatch compares
+two scores of the same length, one rank per argument, so comparing the inline
+part and then the spill orders them as the vector did. A unit spec generates
+pairs of scores that differ in one position, inline or spilled, at every length
+from one to sixteen, and checks `beats` against the vector's comparison. With
+the spill left out of the comparison it fails on a thirteen-rank pair.
+
+`interp_instructions` reads 568,709,639 -> 559,187,740 in this container
+(-1.67%), with the corpus printing the same 874 lines; CI's reading replaces it.
+The ratchet row `scores_inline` gives the score a heap buffer at the start of
+every dispatch again, which puts back about 4.5 million of the 9.5.
+
+The bindings vector takes the same move when the first candidate wins, and its
+growth is the other half of what `dispatch_loop` grows. It is not changed here:
+the winner's bindings become the environment frame, so a second buffer has to
+exist whenever a later candidate is tried.

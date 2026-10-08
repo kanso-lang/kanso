@@ -640,5 +640,10 @@
 # tree's reads 568,709,639, in CI and in a container alike, so the move is
 # the binary's and not the host's. CI's reading on kanso#1807:
 # 568,708,684 -> 568,709,639, a RISE of 955 (+0.0002%).
-interp_instructions=568709639
+# 2026-10-08: a dispatch ranks its candidates into a score held on the stack
+# rather than a vector allocated per dispatch. Measured in this container,
+# where the previous tree reads 568,709,639 on the row:
+# 568,709,639 -> 559,187,740, a FALL of 9,521,899 (-1.6743%).
+# CI's reading replaces it if it differs.
+interp_instructions=559187740
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
