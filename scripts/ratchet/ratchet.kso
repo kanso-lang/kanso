@@ -4823,9 +4823,22 @@ spare_binds = row
 
 rows_c1zzzzzzz0 = text/concat rows_c1zzzzzzz1 [spare_binds]
 
+# A string value of up to fifteen bytes is held inside the value, which stays
+# 32 bytes. The mutation sends every string to the heap again, and the
+# interpreted row counts the allocations and copies that come back.
+short_strings = row
+  "a short string that allocates"
+  true
+  interp_gate
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_short_string_allocates")
+  release
+
+rows_c1zzzzzzy9 = text/concat rows_c1zzzzzzz0 [short_strings]
+
 rows_c1zzzzzzz3 = text/concat rows_c1zzzzzzz4 [reached_groups]
 
-rows_c = text/concat rows_c1zzzzzzz0 [itself]
+rows_c = text/concat rows_c1zzzzzzy9 [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

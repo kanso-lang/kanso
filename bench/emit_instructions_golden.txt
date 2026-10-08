@@ -401,4 +401,6 @@
 # cannot reach out before the analyses; the native path keeps every group. CI's
 # reading, on the cost-goldens job of kanso#1807:
 # 23,997,530 -> 23,393,086, a FALL of 604,444 (-2.5188%).
-emit_instructions=23393086
+# CI's reading with the interpreter's string value changed, which the
+# emitter does not run: 23,393,086 -> 23,392,747, a FALL of 339. Layout.
+emit_instructions=23392747

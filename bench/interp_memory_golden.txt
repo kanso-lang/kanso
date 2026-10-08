@@ -270,7 +270,10 @@
 # matched into for the next dispatch, instead of freeing it. Measured in this
 # container: interp_allocs 752,938 -> 714,647, a FALL of 38,291 (-5.09%). The
 # peak does not move.
-interp_allocs=714647
+# 2026-10-08: a string of up to fifteen bytes is held inside the value.
+# Map keys hold the same type. Measured in this container: interp_allocs
+# 714,647 -> 626,209, a FALL of 88,438 (-12.38%). The peak does not move.
+interp_allocs=626209
 #
 # 2026-09-18, kanso#1518 against main at kanso#1517, CI's sitting.
 # 951,438 -> 961,165, a RISE of
