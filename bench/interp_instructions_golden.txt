@@ -629,5 +629,11 @@
 # container, where main reads 585,141,444 on the row:
 # 585,141,444 -> 573,873,591, a FALL of 11,267,853 (-1.9257%).
 # CI's reading replaces it if it differs.
-interp_instructions=573873591
+# 2026-10-08: a dispatch lets go of what is left in its argument vector
+# through `release`, which forgets the variants that own nothing -- the
+# `NoneV` placeholders `bind_moved` leaves -- instead of calling `Value`'s
+# drop on each. Measured in this container, where main reads 573,873,591:
+# 573,873,591 -> 568,708,684, a FALL of 5,164,907 (-0.9000%).
+# CI's reading replaces it if it differs.
+interp_instructions=568708684
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

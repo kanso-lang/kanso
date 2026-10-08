@@ -23609,3 +23609,33 @@ artifact, 1.98.1 here as on CI. On main before that list it read
 
 The ratchet row `emitted_lines` sends the body line through `writeln!` again,
 and the emit row reads 24,766,221 under it.
+
+## 2026-10-08 — a dispatch stops dropping values that own nothing
+
+When the interpreter dispatches a call, `bind_moved` takes each argument a
+plain parameter binds and leaves `NoneV` in its place. The argument vector was
+then cleared with `args.clear()`, which hands every element to `Value`'s drop.
+`Value` has nineteen variants and its drop is an out-of-line function, so
+each placeholder cost a call that only found out there was nothing to free. On
+the interpreted corpus `dispatch_loop` made 1,384,579 of those calls, about 17
+instructions each.
+
+The vector is now emptied through `release`, which matches the variants that
+own nothing (a small int, a float, the booleans, `none`, `done` and a table
+slot) and forgets them, and drops the rest as before. `interp_instructions`
+reads 573,873,591 -> 568,708,684 in this container, a fall of 5,164,907
+(-0.90%), and CI's reading replaces it if it differs. Forgetting only `NoneV`
+read 570,633,594, so the other trivial variants account for a further 1.9
+million.
+
+Two neighbours were measured and are not built. Releasing the pooled
+frame's old bindings the same way, in place of `binds.clear()`, read
+578,197,383 with the argument change beside it: the pop loop over pairs cost
+more in `dispatch_loop` than the calls it saved. And in the browser's
+translator, adding up integer literals of eighteen digits or fewer in an
+`i64` without checks, ahead of the checked `i128` path, moved
+`browser_compile_instructions` from 450,123,996 to 452,683,338. The `i128`
+loop was not the cost.
+
+The ratchet row `arguments_released` puts `drop(arg)` back in the loop, and
+the interpreted row reads 576,822,655 under it.

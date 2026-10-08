@@ -4756,7 +4756,21 @@ emitted_lines = row
 
 rows_c1zzzzzzz5 = text/concat rows_c1zzzzzzz6 [emitted_lines]
 
-rows_c = text/concat rows_c1zzzzzzz5 [itself]
+# A dispatch lets go of what is left in its argument vector through
+# `release`, which skips `Value`'s drop for the variants that own nothing
+# (2026-10-08). The mutation drops every one again, so the interpreted row is
+# the witness.
+arguments_released = row
+  "argument placeholders dropped one by one"
+  true
+  interp_gate
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "arguments_dropped_one_by_one")
+  release
+
+rows_c1zzzzzzz4 = text/concat rows_c1zzzzzzz5 [arguments_released]
+
+rows_c = text/concat rows_c1zzzzzzz4 [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

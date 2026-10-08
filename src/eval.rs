@@ -630,6 +630,23 @@ fn lookup_placed(env: &Option<Rc<Env>>, name: &Name) -> Option<(Value, u32)> {
     None
 }
 
+/// Drops `value`, and for the variants that own nothing skips the call into
+/// `Value`'s drop that would only have found that out. A dispatch lets go of
+/// a few values every time it runs, and most of them are words.
+#[inline(always)]
+fn release(value: Value) {
+    match value {
+        Value::Int(Int::Small(_))
+        | Value::Float(_)
+        | Value::True
+        | Value::False
+        | Value::NoneV
+        | Value::Done
+        | Value::TableFn(_) => std::mem::forget(value),
+        value => drop(value),
+    }
+}
+
 /// The binding at a place `local_at` recorded, if the name is still there. The
 /// frames between the reference and its binder are fixed by where the
 /// reference sits, so the place found once is the place every later run finds;
@@ -3119,7 +3136,12 @@ impl<'a> Interp<'a> {
                     // `append`'s accumulator was unique on 3.6% of 36,966
                     // calls, so the builder copied 180 MB it mostly did not
                     // need to, and `Rc::try_unwrap` could not fire.
-                    args.clear();
+                    // `bind_moved` left `NoneV` where it took a value, and a
+                    // `NoneV` owns nothing, so `release` forgets it rather
+                    // than handing it to `Value`'s drop one call at a time.
+                    while let Some(arg) = args.pop() {
+                        release(arg);
+                    }
                     let flowed = self.eval_body_flow(decl, env);
                     // The body has finished with the frame. If nothing it made
                     // kept a handle -- a lazy thunk is the only thing that
