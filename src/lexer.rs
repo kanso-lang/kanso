@@ -748,7 +748,8 @@ fn lex_line(content: &str, line: usize, col_offset: usize) -> Result<LexedLine, 
         }
         return Err(Diagnostic::new("syntax", format!("unexpected character `{c}`"), span));
     }
-    let exact = tokens.drain(..).collect();
+    let mut exact = Vec::with_capacity(tokens.len());
+    exact.append(&mut tokens);
     LINE.with(|line| line.set(tokens));
     Ok(LexedLine { tokens: exact })
 }

@@ -5,10 +5,10 @@
 # the spare half for the whole parse. The output is identical either way, so
 # the witness is the allocation vein.
 set -e
-target='    let exact = tokens.drain(..).collect();'
+target='    let mut exact = Vec::with_capacity(tokens.len());'
 n=$(grep -cF "$target" src/lexer.rs)
 [ "$n" -eq 1 ] || { echo "the exact move moved or multiplied ($n); rewrite this" >&2; exit 1; }
 awk -v t="$target" '
-  $0 == t { print "    let exact = std::mem::take(&mut tokens);"; next }
+  $0 == t { print "    let mut exact = std::mem::take(&mut tokens);"; next }
   { print }
 ' src/lexer.rs > src/lexer.rs.mut && mv src/lexer.rs.mut src/lexer.rs

@@ -23905,9 +23905,18 @@ because the alias pass then set it alone. Together, in this container:
 
 CI's rows replace these before the floor moves.
 
-`shrink_to_fit` on each line's vector was tried first. It reached the same
-peak, 706,828, and cost 723 more allocations, because each shrink is a
-reallocation.
+The move out of the buffer is a `Vec::append` into a vector reserved at the
+line's length, which copies the line in one block. A first version used
+`drain(..).collect()`, which reached the same counters natively and moved
+each token separately: in the browser engine it read
+`browser_compile_instructions` 396,604,174 -> 397,453,894, and the lexer
+half alone 397,627,379. With `append` the browser row reads 396,335,868
+(-268,306), the lexer half alone 396,509,353, and its peak, which is set
+after the front end, does not move.
+
+`shrink_to_fit` on each line's vector was tried before either. It reached
+the same peak, 706,828, and cost 723 more allocations, because each shrink
+is a reallocation.
 
 Two ratchet rows hold this. `line_exact`, mutation
 `a_line_of_tokens_grown_by_doubling`, hands the buffer itself to the parse, so
