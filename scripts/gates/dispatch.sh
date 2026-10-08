@@ -78,7 +78,7 @@ fi
 # LD_PRELOAD could put in the way, so they are printed here rather than pinned.
 allocator_line() {
   oc=$(cat /proc/sys/vm/overcommit_memory 2>/dev/null || echo none)
-  thp=$(sed -n 's/.*\[\([a-z]*\)\].*/\1/p' /sys/kernel/mm/transparent_hugepage/enabled 2>/dev/null)
+  thp=$(sed -n 's/.*\[\([a-z]*\)\].*/\1/p' /sys/kernel/mm/transparent_hugepage/enabled 2>/dev/null || true)
   echo "allocator: overcommit=${oc:-none} thp=${thp:-none}"
 }
 
