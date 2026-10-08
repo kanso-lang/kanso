@@ -23888,9 +23888,10 @@ these.
 
 The ratchet row `fixed_globals`, mutation
 `a_fixed_global_read_through_the_whole_node`, keeps function references out of
-the table, so every one of them is asked for and missed. With it applied the
-corpus reads 526,318,936, worse than before the table existed, because each
-global now pays for the miss as well as for `eval_node`.
+the table, so every one of them is asked for and missed. With it applied to the
+build that also carries the literal arm, the corpus reads 524,244,086, worse
+than before the table existed, because each global then pays for the miss as
+well as for `eval_node`.
 
 Integer literals were the next group, 122,017 of them. Sent from the door to a
 one-line out-of-line helper that builds the value, they first read
