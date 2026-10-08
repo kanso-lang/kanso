@@ -23864,7 +23864,7 @@ took the vector back from every builtin's `arity` read 539,054,147 and
 take a vector and 40 to give it back, so the spread across variants is layout
 and none of it is a gain.
 
-## 2026-10-08 — a global naming a function is read from a fixed table
+## 2026-10-08 — globals and integer literals answered at the door
 
 With the front door built, 730,565 nodes still reached `eval_node` on
 `bench/interp_corpus`. Counted by form, the largest group was global names:
@@ -23882,8 +23882,9 @@ table. The 1,051 misses were names read before their slot had been stamped,
 which is the read that stamps it.
 
 Measured in this container on the same 874 lines of output, outside the gate:
-512,403,757 -> 500,796,787 (-11,606,970, -2.27%). CI's gate reading replaces
-this.
+512,403,757 -> 500,796,787 (-11,606,970, -2.27%) with the table alone, and
+498,287,606 with integer literals as well, below. CI's gate reading replaces
+these.
 
 The ratchet row `fixed_globals`, mutation
 `a_fixed_global_read_through_the_whole_node`, keeps function references out of
@@ -23892,7 +23893,15 @@ corpus reads 526,318,936, worse than before the table existed, because each
 global now pays for the miss as well as for `eval_node`.
 
 Integer literals were the next group, 122,017 of them. Sent from the door to a
-one-line out-of-line helper that builds the value, they read 533,252,591,
-thirty-two million worse than the table alone. That is the second time a
-literal added to the door has cost more than the whole door saves, and the
-cause is not isolated either time, so the door holds names only.
+one-line out-of-line helper that builds the value, they first read
+533,252,591, thirty-two million worse than the table alone. The profile says
+why: in that build `eval` ran as a function of its own, 48,560,872
+instructions of it, where in the builds that gained it ran almost entirely
+inlined into its callers. The extra arm had taken the door past what the
+compiler would inline unasked. With `#[inline(always)]` on the door the same
+arm reads 498,287,606, 2.5 million better than the table alone, and the
+attribute now states what the door depends on.
+
+Applications were the group after that, 137,928 nodes. Moving their arm out of
+`eval_node` into its own function and sending them there from the door read
+503,651,651, 5.4 million worse, and it is not built.
