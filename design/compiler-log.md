@@ -23886,6 +23886,10 @@ Measured in this container on the same 874 lines of output, outside the gate:
 498,287,606 with integer literals as well, below. CI's gate reading for the
 whole change is 513,401,792 -> 499,300,948 (-14,100,844, -2.75%), and four
 compile rows moved with the binary's layout by between 1,090 and 68,472.
+The table costs memory: `interp_peak_bytes` 739,436 -> 742,431 (+2,995,
++0.41%) and `interp_allocs` +8, read by the gate on a host whose glibc and
+rustc are the golden's. The objective weighs that against the instructions
+and comes out ahead.
 
 The ratchet row `fixed_globals`, mutation
 `a_fixed_global_read_through_the_whole_node`, keeps function references out of
