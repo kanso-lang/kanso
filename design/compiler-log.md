@@ -23887,7 +23887,7 @@ Measured in this container on the same 874 lines of output, outside the gate:
 whole change is 513,401,792 -> 499,300,948 (-14,100,844, -2.75%), and four
 compile rows moved with the binary's layout by between 1,090 and 68,472.
 The table costs memory: `interp_peak_bytes` 739,436 -> 742,431 (+2,995,
-+0.41%) and `interp_allocs` +8, read by the gate on a host whose glibc and
++0.41%) and `interp_allocs` 626,209 -> 626,217, read by the gate on a host whose glibc and
 rustc are the golden's. The objective weighs that against the instructions
 and comes out ahead.
 
