@@ -653,5 +653,9 @@
 # reading a string variable no longer allocates a copy. Measured in this
 # container: 553,555,448 -> 540,215,448, a FALL of 13,340,000 (-2.4099%),
 # map keys included. CI's reading replaces it if it differs.
-interp_instructions=540215448
+# 2026-10-08: a local whose place is kept is answered by a small `eval` the
+# compiler inlines into its callers, before `eval_node` builds its frame. CI's
+# reading on kanso#1809: 540,215,448 -> 513,401,792, a FALL of 26,813,656
+# (-4.9635%).
+interp_instructions=513401792
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

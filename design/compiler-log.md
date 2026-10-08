@@ -23830,14 +23830,29 @@ small function that answers exactly that case and hands everything else to
 `eval_node`, which is the old body unchanged. A global, or a local whose kept
 place no longer holds it, falls through and is resolved as before.
 
-Measured in this container on the same 874 lines of output:
-`interp_instructions` 539,217,785 -> 512,403,757 (-26,814,028, -4.97%). The
-allocation counters cannot move, since nothing allocates differently. CI's
-readings replace these if they differ.
+The gain depends on the compiler inlining the small function where it is
+called, so that a local read there makes no call. Forced out of line with
+`#[inline(never)]` the corpus read 542,946,770, worse than with no door at
+all. `#[inline(always)]` read 512,496,800, which is what the compiler chose
+without being told, so the attribute is left off.
+
+Measured in this container on the same 874 lines of output, outside the gate:
+539,217,785 -> 512,403,757 (-26,814,028, -4.97%). CI's gate reading is
+`interp_instructions` 540,215,448 -> 513,401,792, a fall of 26,813,656
+(-4.96%). Nothing allocates differently, so the allocation counters are where
+they were.
 
 The ratchet row `front_door`, mutation `a_name_read_through_the_whole_node`,
 makes the range test refuse every name, so each one goes through `eval_node`
 again. With it applied the corpus reads 538,764,987.
+
+Adding integer literals to the door, which `eval_node` answers with one
+clone, read 543,053,630: 30.6 million worse than the door with names alone,
+and worse than no door at all. Where it went is not isolated; the out-of-line
+copy of the door has the same prologue in both builds, five registers and 32
+bytes.
+Sending every other name to an out-of-line identifier path instead of
+`eval_node` read 515,440,309, three million worse than the door as built.
 
 Two neighbours of this were measured the same day and declined. Both
 recycled argument vectors instead of allocating them. A pool fed by `eval` and
