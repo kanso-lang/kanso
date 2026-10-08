@@ -635,5 +635,10 @@
 # drop on each. Measured in this container, where main reads 573,873,591:
 # 573,873,591 -> 568,708,684, a FALL of 5,164,907 (-0.9000%).
 # CI's reading replaces it if it differs.
-interp_instructions=568708684
+# 2026-10-08: the emitter change moves this row by layout. On one CPU model,
+# family 0x19 model 0x11, kanso#1806's binary read 568,708,684 and this
+# tree's reads 568,709,639, in CI and in a container alike, so the move is
+# the binary's and not the host's. CI's reading on kanso#1807:
+# 568,708,684 -> 568,709,639, a RISE of 955 (+0.0002%).
+interp_instructions=568709639
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
