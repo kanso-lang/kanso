@@ -20,6 +20,45 @@ const UNDER: mimalloc::MiMalloc = mimalloc::MiMalloc;
 #[cfg(target_arch = "wasm32")]
 const UNDER: std::alloc::System = std::alloc::System;
 
+/// Small blocks on wasm32, kept on a free list per size and handed back out
+/// before dlmalloc is asked. `std::alloc::System` on wasm32 is dlmalloc, and
+/// its malloc and free were the costliest thing the tab's compile did that the
+/// native compiler does not: mimalloc already keeps blocks this way. A request
+/// of 512 bytes or fewer is rounded up to a multiple of eight, so a block goes
+/// back to the list it came from and dlmalloc only ever sees the rounded size.
+/// On `bench/interp_corpus` this took `browser_compile_instructions` from
+/// 514,922,959 to 453,713,751. A ceiling of 256 bytes cost 0.8% more than
+/// 512, and one of 1024 saved 0.3% while keeping twice as much on the lists.
+/// The tally above counts requested bytes before any of this, so the peak row
+/// reads what the compiler asked for and not what the lists hold. The engine
+/// runs on one thread.
+#[cfg(target_arch = "wasm32")]
+mod small {
+    pub const MAX: usize = 512;
+    pub static mut FREE: [*mut u8; MAX / 8] = [std::ptr::null_mut(); MAX / 8];
+
+    pub fn class(size: usize, align: usize) -> Option<usize> {
+        (size != 0 && size <= MAX && align <= 8).then(|| (size - 1) / 8)
+    }
+
+    pub unsafe fn take(c: usize) -> *mut u8 {
+        let head = unsafe { std::ptr::addr_of_mut!(FREE[c]) };
+        let p = unsafe { *head };
+        if p.is_null() {
+            let layout = unsafe { std::alloc::Layout::from_size_align_unchecked((c + 1) * 8, 8) };
+            return unsafe { std::alloc::GlobalAlloc::alloc(&super::UNDER, layout) };
+        }
+        unsafe { *head = *(p as *mut *mut u8) };
+        p
+    }
+
+    pub unsafe fn give(c: usize, p: *mut u8) {
+        let head = unsafe { std::ptr::addr_of_mut!(FREE[c]) };
+        unsafe { *(p as *mut *mut u8) = *head };
+        unsafe { *head = p };
+    }
+}
+
 /// mimalloc's `mi_option_arena_eager_commit`, by its position in the
 /// `mi_option_t` enum. The Rust bindings stop naming options well before this
 /// one, so the number is written here rather than imported: libmimalloc-sys
@@ -157,11 +196,55 @@ unsafe impl std::alloc::GlobalAlloc for Counting {
         if layout.align() <= 8 {
             return unsafe { libmimalloc_sys::mi_malloc(layout.size()) }.cast();
         }
+        #[cfg(target_arch = "wasm32")]
+        if let Some(c) = small::class(layout.size(), layout.align()) {
+            return unsafe { small::take(c) };
+        }
         unsafe { UNDER.alloc(layout) }
     }
     unsafe fn dealloc(&self, ptr: *mut u8, layout: std::alloc::Layout) {
         LIVE_BYTES.fetch_sub(layout.size() as u64, Ordering::Relaxed);
+        #[cfg(target_arch = "wasm32")]
+        if let Some(c) = small::class(layout.size(), layout.align()) {
+            return unsafe { small::give(c, ptr) };
+        }
         unsafe { UNDER.dealloc(ptr, layout) }
+    }
+    /// Counted as the allocation, copy and free that `GlobalAlloc`'s own
+    /// `realloc` performs, so the tally reads the same either way. A small
+    /// block that stays in its class keeps its place; one that crosses moves
+    /// between the lists and dlmalloc; two large blocks are dlmalloc's, which
+    /// can grow in place where the default could only copy.
+    #[cfg(target_arch = "wasm32")]
+    unsafe fn realloc(&self, ptr: *mut u8, layout: std::alloc::Layout, new_size: usize) -> *mut u8 {
+        let (old, new) = (layout.size() as u64, new_size as u64);
+        ALLOC_BYTES.fetch_add(new, Ordering::Relaxed);
+        ALLOC_CALLS.fetch_add(1, Ordering::Relaxed);
+        let live = LIVE_BYTES.load(Ordering::Relaxed);
+        PEAK_BYTES.fetch_max(live + new, Ordering::Relaxed);
+        LIVE_BYTES.store(live + new - old, Ordering::Relaxed);
+        let was = small::class(layout.size(), layout.align());
+        let now = small::class(new_size, layout.align());
+        if was.is_none() && now.is_none() {
+            return unsafe { UNDER.realloc(ptr, layout, new_size) };
+        }
+        if was.is_some() && was == now {
+            return ptr;
+        }
+        let moved = match now {
+            Some(c) => unsafe { small::take(c) },
+            None => unsafe {
+                UNDER.alloc(std::alloc::Layout::from_size_align_unchecked(new_size, layout.align()))
+            },
+        };
+        if !moved.is_null() {
+            unsafe { std::ptr::copy_nonoverlapping(ptr, moved, layout.size().min(new_size)) };
+            match was {
+                Some(c) => unsafe { small::give(c, ptr) },
+                None => unsafe { UNDER.dealloc(ptr, layout) },
+            }
+        }
+        moved
     }
 }
 

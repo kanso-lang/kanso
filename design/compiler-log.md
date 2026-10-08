@@ -23519,6 +23519,75 @@ runners of one commit next read a row apart, the two job logs say whether
 these settings differed. `the_silicon_a_row_was_counted_on` requires the line
 with a loader and without one.
 
+## 2026-10-08 — two ways to shrink a decoded document, and neither moves the run peak
+
+`run_peak_bytes` reads 3,899,936: the arena's 3,670,032, the held pool's
+197,704 and the permanent pool's 32,200. The arena is counted in 1 MiB blocks
+plus the index shape's 524,304-byte oversize block, so a change that saves
+memory moves this row only when it frees a whole block. The 2026-09-24 entry
+found that the top-level `doc` keeps two of the three blocks for the whole run.
+
+One decode of bench/large.json allocates 1,355,840 bytes in 9,288 allocations.
+Counting them by size names three shapes. The 2,761 objects take 208 bytes
+each, 574,288 in all, because `{}` opens with room for five pairs and the
+document's objects hold one to five keys. The 2,752 arrays take 128 bytes
+each, 352,256 in all, for one to six elements. The 1,773 strings that contain
+an escape take 112 bytes each from `string_scan`, 198,576 in all, for text that
+is mostly under 32 bytes, plus a 16-byte header from `str_run`.
+
+Two changes were measured against that.
+
+- Smaller seeds, three pairs for a map and four slots for a list where they were
+  five and six. The arena peak held at 3,670,032 and runbench rose 4.18%
+  (1,129,589,604 -> 1,176,795,989), because the commonest sizes now grow once.
+- A string that takes its builder's buffer in place gives the unused room back
+  when that buffer ends at the arena's frontier. It fires on the decoder's
+  escaped strings and returns 32 bytes for each, about 57 KB a decode. The run
+  program's counters came back byte-identical, and the only vein that moved was
+  widebench's beat iterations, 18 -> 15. No objective term moved, and it adds a
+  test to every built string, so it was taken back out.
+
+Objects and arrays cannot get the same treatment at the point they close. Each
+is allocated when it opens and its children are allocated after it, so a
+container is at the frontier when it closes only if nothing inside it reached
+the heap.
+
+## 2026-10-08 — the tab's compiler keeps small blocks for itself
+
+The browser side's compile row was the one welfare term worse than its
+baseline: `browser_compile_instructions` read 514,922,959 against 343,917,485.
+A native profile of the same work, `bench/interp_corpus` compiled and lowered
+to wasm, put about 13% of its instructions in malloc and free, from 76,354
+allocations. Native kanso runs on mimalloc, which keeps freed blocks on a list
+for each size. `docs/kanso.wasm` runs on `std::alloc::System`, which on wasm32
+is dlmalloc, and dlmalloc has no such lists.
+
+The allocator under the compiler's tally now keeps them on wasm32. A request of
+512 bytes or fewer is rounded up to a multiple of eight. A freed block goes on
+the list for its size, and the next request of that size takes it before
+dlmalloc is asked. `realloc` was the trait's default before, an allocation, a
+copy and a free. It now keeps a small block in place when the new size falls
+in the same class, and hands two large blocks to dlmalloc's own `realloc`,
+which can grow one where it stands.
+
+`browser_compile_instructions` reads 514,922,959 -> 453,713,751, a fall of
+61,209,208 (-11.89%). The `realloc` change alone accounts for 1,614,339 of it.
+A ceiling of 256 bytes cost 0.8% more than 512, and one of 1024 saved 0.3%
+more while keeping twice as much on the lists. The other three browser rows do
+not move. `browser_compile_peak_bytes` holds at 829,597 because the tally
+counts requested bytes before any of this, and a `realloc` is counted as the
+allocation, copy and free it replaced. The browser rows belong to the rustc
+that built the artifact, which is 1.98.1 here as on CI.
+
+Native kanso is untouched. Taking `realloc` through `mi_realloc` there was
+measured first and made the compile rows worse: `compile_instructions` +45,622,
+`entry_instructions` +156,320, `emit_instructions` +166,452. So the override
+exists only on wasm32, and `compile_instructions` and `emit_instructions` read
+their goldens with it in place.
+
+The ratchet row `small_blocks` sets the ceiling to nothing, so every block goes
+to dlmalloc. The browser compile row reads 513,308,620 under it.
+
 ## 2026-10-08 — the emitter writes its lines without the formatter
 
 `FnEmit::write` appended each line of a function body with
@@ -23532,8 +23601,10 @@ the stack slots `body` hoists into the entry block now go onto the buffer with
 The module text is the same; `machine_code` and `emitted_code` agree.
 `emit_instructions` reads 24,923,517 -> 23,997,530 in this container, a fall of
 925,987 (-3.72%), and CI's reading replaces it if it differs.
-`browser_compile_instructions` reads 514,922,959 -> 511,333,204 (-0.70%), which
-belongs to the rustc that built the artifact, 1.98.1 here as on CI. The
+`browser_compile_instructions` reads 453,713,751 -> 450,123,996 (-0.79%) over
+the tab's small-block free list, which belongs to the rustc that built the
+artifact, 1.98.1 here as on CI. On main before that list it read
+514,922,959 -> 511,333,204, so the saving is the same 3.6 million either way. The
 `kanso check` rows do not move, since they stop before codegen.
 
 The ratchet row `emitted_lines` sends the body line through `writeln!` again,
