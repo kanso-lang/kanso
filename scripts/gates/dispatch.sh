@@ -67,8 +67,24 @@ if [ -x "$loader" ]; then
 fi
 [ -f "$scratch/now.txt" ] || : > "$scratch/now.txt"
 
+# The two host settings the allocator reads when it starts. mimalloc opens
+# /proc/sys/vm/overcommit_memory and decides from it whether to map with
+# MAP_NORESERVE and whether to commit arena memory on demand, and it reads
+# /sys/kernel/mm/transparent_hugepage/enabled to decide whether huge pages are
+# on offer. Both are the runner's, not the change's, and the interpreted and
+# compile rows each run on that allocator, so a row that reads a few
+# instructions apart on two runners of one commit can be checked against this
+# line before anything else. It reads them with a raw syscall, past anything
+# LD_PRELOAD could put in the way, so they are printed here rather than pinned.
+allocator_line() {
+  oc=$(cat /proc/sys/vm/overcommit_memory 2>/dev/null || echo none)
+  thp=$(sed -n 's/.*\[\([a-z]*\)\].*/\1/p' /sys/kernel/mm/transparent_hugepage/enabled 2>/dev/null)
+  echo "allocator: overcommit=${oc:-none} thp=${thp:-none}"
+}
+
 case "$verb" in
   name)
+    allocator_line
     if [ ! -s "$scratch/now.txt" ]; then
       echo "silicon: this loader reports no x86 features, so the cpu is unnamed"
       exit 0

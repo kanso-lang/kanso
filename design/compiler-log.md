@@ -23480,3 +23480,25 @@ isolated from what inlining it did to the surrounding code, and it was taken
 back out.
 
 `docs/compiler.html` §198 and §199 cover this entry and the two before it.
+
+## 2026-10-08 — the gates name the allocator's host settings
+
+The standing row "A welfare counter reads three parts per billion" ends on a
+pointer: the frames that moved between its corpus arms were the allocator
+committing pages, `_mi_os_commit_ex`, `mi_bitmap_setN` and `_mi_prim_commit`.
+What decides that path is in mimalloc's start-up. It opens
+`/proc/sys/vm/overcommit_memory` and, when the setting is 0 or 1, maps with
+`MAP_NORESERVE` and lets arenas commit on demand; it reads
+`/sys/kernel/mm/transparent_hugepage/enabled` to decide whether huge pages
+are on offer. Both are the runner's settings, both reach the interpreted and
+compile rows through the allocator those rows run on, and neither appears in
+any job log. This container reads `overcommit=0 thp=madvise`.
+
+mimalloc reads them with raw `syscall(SYS_open)` and `syscall(SYS_read)`, so
+the gate's `LD_PRELOAD` cannot hand them a fixed value, and this container
+cannot test the hypothesis by changing them. `scripts/gates/dispatch.sh name`,
+which every instruction gate already calls to print its cpu, now prints an
+`allocator:` line with both settings before the `silicon:` line. When two
+runners of one commit next read a row apart, the two job logs say whether
+these settings differed. `the_silicon_a_row_was_counted_on` requires the line
+with a loader and without one.
