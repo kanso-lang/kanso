@@ -24003,3 +24003,23 @@ Two more ratchet rows hold these. `guard_rest`, mutation
 again: `compile_peak_bytes` reads 706,832. `expr_tag`, mutation
 `an_expressions_tag_hidden_in_its_fields`, removes the explicit tag: the
 entry corpus reads 89,458,575.
+
+The interpreted run's peak is set after the front end, while the program
+runs. Probing the heap around the interpreter put 32,768 bytes of it in two
+direct-mapped tables `Interp::new` allocates and keeps for the whole run: 1,024
+callee slots and 512 frame slots. They were sized for speed when the peak was
+not counted. At 256 slots each the run holds 22,528 bytes less, and the
+corpus misses often enough to cost about 720,000 more instructions, 0.13%,
+read in this container where the instruction row is measured on other
+silicon:
+
+    RECENT_CALLEES / RECENT_FRAMES   interp_peak_bytes   instructions here
+    1,024 / 512                      709,850             536,115,019
+    512 / 512                        697,562             536,348,115
+    512 / 256                        693,466             536,843,473
+    256 / 256                        687,322             536,835,497
+
+The objective weighs the peak above the instructions: development welfare
+reads 91.33 against 91.30 with the projected rows. The ratchet row
+`callee_slots`, mutation `the_callee_cache_sized_for_speed`, gives the callees
+1,024 slots again and the run peaks at 705,757.

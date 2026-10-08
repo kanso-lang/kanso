@@ -1590,15 +1590,15 @@ fn in_slice(at: usize) -> u64 {
     (at & 0xFFFF) as u64
 }
 
-/// Slots in `Interp::recent_callees`. With keys that no longer spread by the
-/// heap's position, 256 slots missed often enough to cost 1.47 million
-/// instructions on the interpreter's corpus; 1,024 costs 42,680 over the old
-/// reading, and 2,048 starts to show in the run's peak memory.
-const RECENT_CALLEES: usize = 1024;
+/// Slots in `Interp::recent_callees`. The table lives for the whole run, so
+/// its size sits under the interpreted run's peak memory. At 1,024 slots,
+/// with the frames' 512 beside it, the two held 32,768 bytes; at 256 each
+/// they hold 10,240, and the corpus misses often enough to cost about 720,000
+/// more instructions, which the objective weighs as the smaller of the two.
+const RECENT_CALLEES: usize = 256;
 
-/// Slots in `Interp::recent_frames`. At 1,024 beside the callees' 1,024 the
-/// two tables add 7,872 bytes to the interpreted run's peak.
-const RECENT_FRAMES: usize = 512;
+/// Slots in `Interp::recent_frames`, sized with the callees above.
+const RECENT_FRAMES: usize = 256;
 
 #[derive(Clone)]
 enum Callee<'a> {

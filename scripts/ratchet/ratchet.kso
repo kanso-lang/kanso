@@ -4916,7 +4916,20 @@ expr_tag = row
 
 rows_c1zzzzzzy6 = text/concat rows_c1zzzzzzy5 [guard_rest expr_tag]
 
-rows_c = text/concat rows_c1zzzzzzy6 [itself]
+# The interpreter's callee and frame tables hold 256 slots each, sized by the
+# run's peak as well as its speed (2026-10-08). The mutation gives the callees
+# 1,024 again, and the interpreted run's peak is the witness.
+callee_slots = row
+  "the callee cache sized for speed"
+  false
+  "sh scripts/gates/interp_memory.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_callee_cache_sized_for_speed")
+  release
+
+rows_c1zzzzzzy4 = text/concat rows_c1zzzzzzy6 [callee_slots]
+
+rows_c = text/concat rows_c1zzzzzzy4 [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

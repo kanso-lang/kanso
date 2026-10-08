@@ -372,6 +372,8 @@ interp_allocs=626007
 # 2026-10-08: the alias pass indexes only synthetic sites, each line's tokens
 # are kept at their length, and a guard's statements sit behind a box, which
 # makes every expression 48 bytes. Read by the gate on this host, whose rustc
-# is the golden's, over the fixed-value table: 742,431 -> 709,847.
-interp_peak_bytes=709847
+# is the golden's, over the fixed-value table: 742,431 -> 709,847. The
+# interpreter's callee and frame tables then shrank to 256 slots each, which
+# the run holds throughout: 709,847 -> 687,319.
+interp_peak_bytes=687319
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
