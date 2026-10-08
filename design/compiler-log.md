@@ -23661,7 +23661,11 @@ the tree that compile alone, the seeded walk needed that second pass on none.
 Before the operator seed it needed it on three, all of them user arms of `+`,
 `<` and `>`.
 
-Native builds are unchanged and keep emitting every group. The tab's module
+Native builds are unchanged and keep emitting every group. Turning the walk
+on for them as well moved `emit_instructions` from 23,994,397 to 15,189,091 on
+`pkg/codegen_corpus`, and the meta by about 0.01, because the emitting term
+is already near the top of its curve. That gain does not pay for renumbering
+every native module and re-reading the machine-code goldens, so it waits. The tab's module
 differs in the numbering of lambdas, constant cells and strings, and the
 browser differential agrees on all 575 programs it compares, with the same six
 known gaps.
