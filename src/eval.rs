@@ -2211,7 +2211,33 @@ impl<'a> Interp<'a> {
         }
     }
 
+    /// A local whose place is kept answers here, and everything else goes to
+    /// `eval_node`.
+    ///
+    /// `eval_node` holds every expression form, so its frame is sized for the
+    /// largest of them: six registers pushed and 792 bytes reserved on every
+    /// call. The commonest expression is a local name, 653,358 of them on the
+    /// interpreted corpus, and reading one walks a frame or two and clones the
+    /// value. This function is small enough for the compiler to inline where
+    /// it is called, so a local read there makes no call at all, and the
+    /// corpus fell from 539,217,785 instructions to 512,403,757. Kept out of
+    /// line with `#[inline(never)]` it read 542,946,770, worse than no door;
+    /// and adding integer literals to it read 543,053,630. Anything added here
+    /// is copied into every caller, so the door holds names and nothing else.
     fn eval(&self, expr: &Expr, env: &Option<Rc<Env>>, frame: &Frame) -> EvalResult {
+        if let Expr::Ident(name, _, resolved) = expr {
+            let v = resolved.get();
+            if (3..1 << 16).contains(&v) {
+                if let Some(value) = lookup_at(env, name, v) {
+                    return Ok(value);
+                }
+            }
+        }
+        self.eval_node(expr, env, frame)
+    }
+
+    #[inline(never)]
+    fn eval_node(&self, expr: &Expr, env: &Option<Rc<Env>>, frame: &Frame) -> EvalResult {
         match expr {
             Expr::Int(n, _) => Ok(Value::int(n)),
             // A hole is a none until the block fills it, on every engine; the
