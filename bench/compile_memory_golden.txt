@@ -317,4 +317,8 @@ front_end_visits=7982
 # 710,484, a RISE of 203 (+0.0286%).
 # 2026-09-30, std/list's pub `iter` and `yield` for the factory-only ruling:
 # 711,716 -> 717,297, a RISE of 5,581 (+0.78%).
-compile_peak_bytes=729597
+# 2026-10-08: the alias pass indexes only synthetic sites, each line's tokens
+# are kept at their length, and a guard's statements sit behind a box, which
+# makes every expression 48 bytes. Read by the gate on this host, whose rustc
+# is the golden's: 729,597 -> 674,684.
+compile_peak_bytes=674684
