@@ -2439,6 +2439,19 @@ pub fn emit_ir_dev_owned(
     emit_ir_for(Given::Owned(program), convention, false)
 }
 
+/// `emit_ir_dev_owned` for the playground tab, which emits only the groups
+/// the entry can reach. The prune in `Written::finish` drops the rest from
+/// the module either way; on `bench/interp_corpus` that was 132 definitions
+/// and 127,415 bytes of text, a third of what the tab wrote, held beside the
+/// program at the most its compile ever holds. Native builds keep emitting
+/// every group, so their modules are unchanged.
+pub fn emit_ir_tab_owned(
+    program: Program,
+    convention: ClosureConvention,
+) -> Result<String, String> {
+    emit_written(Given::Owned(program), convention, false, true).map(Written::finish)
+}
+
 /// A group's name and arity, and a position in it.
 type UnreadPositions = Vec<(String, usize, usize)>;
 
@@ -2701,13 +2714,14 @@ fn emit_ir_for(
     convention: ClosureConvention,
     inline_helpers: bool,
 ) -> Result<String, String> {
-    emit_written(program, convention, inline_helpers).map(Written::finish)
+    emit_written(program, convention, inline_helpers, false).map(Written::finish)
 }
 
 fn emit_written(
     program: Given<'_>,
     convention: ClosureConvention,
     inline_helpers: bool,
+    only_reached: bool,
 ) -> Result<Written, String> {
     // The prune also answers the positions a group read as written and no
     // longer reads. A thunk handed to such a position is forced by
@@ -2723,6 +2737,56 @@ fn emit_written(
         None => (program, Vec::new()),
     };
     let program = &*program;
+    let reached = match only_reached {
+        true => reached_from_entry(program),
+        false => None,
+    };
+    let written =
+        emit_with(program, convention, inline_helpers, &unread_positions, reached.as_ref())?;
+    // The walk reads names the bodies mention, and the emitter can call a
+    // group no body names. Anything it skipped that the module then names is
+    // put back by emitting again with nothing skipped, so a miss costs time
+    // and never a module that does not link.
+    match reached.as_ref().is_some_and(|reached| written.names_skipped(program, reached)) {
+        true => emit_with(program, convention, inline_helpers, &unread_positions, None),
+        false => Ok(written),
+    }
+}
+
+/// The names the entry reaches, by what each body mentions, or `None` for a
+/// program with no entry. A mention counts as a call at every arity.
+fn reached_from_entry(program: &Program) -> Option<crate::hash::Set<&str>> {
+    let (names, adj) = call_graph(program);
+    let start = names.iter().position(|n| *n == crate::ast::ENTRY)?;
+    let mut seen = vec![false; names.len()];
+    let mut work = vec![start];
+    // An interpolated value dispatches to the render group by name, and an
+    // operator reaches its arms through an expression no walk of mentions
+    // reads as one, so every operator group is kept.
+    work.extend(names.iter().position(|n| *n == RENDER_GROUP));
+    work.extend(
+        names
+            .iter()
+            .enumerate()
+            .filter(|(_, n)| !n.bytes().any(|b| b.is_ascii_alphanumeric()))
+            .map(|(at, _)| at),
+    );
+    while let Some(at) = work.pop() {
+        if !seen[at] {
+            seen[at] = true;
+            work.extend(adj[at].iter().copied().filter(|&next| !seen[next]));
+        }
+    }
+    Some(names.iter().zip(seen).filter(|(_, s)| *s).map(|(n, _)| *n).collect())
+}
+
+fn emit_with<'a>(
+    program: &'a Program,
+    convention: ClosureConvention,
+    inline_helpers: bool,
+    unread_positions: &UnreadPositions,
+    only: Option<&crate::hash::Set<&'a str>>,
+) -> Result<Written, String> {
     let knotted = knotted_constants(program);
     let inference = infer::infer(program);
     let mut type_ids = HashMap::default();
@@ -2820,7 +2884,8 @@ fn emit_written(
         closure_consts: Vec::new(),
         demand: crate::demand::analyze(program),
         thunk_sites: Vec::new(),
-        unread_positions,
+        unread_positions: unread_positions.clone(),
+        only: only.cloned(),
     };
     backend.emit()
 }
@@ -2844,6 +2909,24 @@ struct Written {
 }
 
 impl Written {
+    /// Whether the body names a symbol of a group `reached` left out: its
+    /// dispatcher, word twin, value wrapper or wrapper record.
+    fn names_skipped(&self, program: &Program, reached: &crate::hash::Set<&str>) -> bool {
+        let mut skipped: Vec<String> = Vec::new();
+        for decl in program.fns.iter().filter(|d| !reached.contains(d.name.as_str())) {
+            let (name, arity) = (decl.name.as_str(), decl.params.len());
+            skipped.extend([
+                dsym(name, arity),
+                tsym(name, arity),
+                wsym(name, arity),
+                rsym(name, arity),
+            ]);
+        }
+        let queries: crate::hash::Set<&str> = skipped.iter().map(|s| s.as_str()).collect();
+        !queries.is_empty()
+            && self.pieces.iter().any(|piece| !queries_named(piece, &queries).is_empty())
+    }
+
     /// The module: the body pruned, the declarations and globals it names
     /// written in front of it, and the tail calls narrowed.
     fn finish(self) -> String {
@@ -3099,6 +3182,9 @@ struct Backend<'a> {
     /// (group, arity, position) an arm the unbuilt-arm prune dropped was
     /// reading and no arm left reads. See `without_unbuilt_arms`.
     unread_positions: Vec<(String, usize, usize)>,
+    /// The groups to emit, when the caller asked for only those the entry
+    /// reaches; `None` emits every group.
+    only: Option<crate::hash::Set<&'a str>>,
 }
 
 /// The frame epilogue: release each releasable cell unless the outgoing
@@ -6541,6 +6627,9 @@ impl<'a> Backend<'a> {
             });
         }
         for (name, decls) in &groups {
+            if self.only.as_ref().is_some_and(|only| !only.contains(name)) {
+                continue;
+            }
             let mut by_arity: HashMap<usize, Vec<&FnDecl>> = HashMap::default();
             for d in decls {
                 by_arity.entry(d.params.len()).or_default().push(d);
@@ -12077,4 +12166,49 @@ pub fn retarget_wasm32(module: &str) -> String {
         out.push('\n');
     }
     out
+}
+
+/// The tab emits only the groups the entry reaches, by the names its bodies
+/// mention. When the walk misses one the module still calls, the emitter has
+/// to notice and emit again with nothing left out; these pin that it notices.
+#[cfg(test)]
+mod a_group_the_walk_misses_is_put_back {
+    use super::{emit_with, reached_from_entry};
+
+    const SOURCE: &str = "import \"std/list\"\n\nprint \"{list/sum [3 1 2]}\"\n";
+
+    fn program() -> crate::ast::Program {
+        crate::compile_source("run", "main.kso", SOURCE).expect("the fixture compiles")
+    }
+
+    #[test]
+    fn the_walk_reaches_what_the_entry_calls_and_not_the_rest() {
+        let program = program();
+        let reached = reached_from_entry(&program).expect("the fixture has an entry");
+        assert!(reached.contains("list/sum"), "the walk missed a call: {reached:?}");
+        assert!(!reached.contains("list/sort"), "the walk kept a group nothing calls: {reached:?}");
+        let written = emit_with(
+            &program,
+            super::ClosureConvention::Absent,
+            false,
+            &Vec::new(),
+            Some(&reached),
+        )
+        .expect("the module emits");
+        assert!(!written.names_skipped(&program, &reached), "the module names a group it left out");
+    }
+
+    #[test]
+    fn a_called_group_left_out_is_noticed() {
+        let program = program();
+        let mut short = reached_from_entry(&program).expect("the fixture has an entry");
+        short.remove("list/sum");
+        let written =
+            emit_with(&program, super::ClosureConvention::Absent, false, &Vec::new(), Some(&short))
+                .expect("the module emits");
+        assert!(
+            written.names_skipped(&program, &short),
+            "the entry calls `list/sum`, which was left out, and nothing noticed"
+        );
+    }
 }

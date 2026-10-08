@@ -4770,7 +4770,21 @@ arguments_released = row
 
 rows_c1zzzzzzz4 = text/concat rows_c1zzzzzzz5 [arguments_released]
 
-rows_c = text/concat rows_c1zzzzzzz4 [itself]
+# The tab emits only the groups its entry reaches, by the names the bodies
+# mention, and emits again with nothing skipped when the module names a group
+# it left out (2026-10-08). The mutation emits every group, so the browser
+# compile row is the witness.
+reached_groups = row
+  "the tab emitting every group"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_tab_emits_every_group")
+  release
+
+rows_c1zzzzzzz3 = text/concat rows_c1zzzzzzz4 [reached_groups]
+
+rows_c = text/concat rows_c1zzzzzzz3 [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

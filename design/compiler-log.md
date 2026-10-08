@@ -23639,3 +23639,35 @@ loop was not the cost.
 
 The ratchet row `arguments_released` puts `drop(arg)` back in the loop, and
 the interpreted row reads 576,822,655 under it.
+
+## 2026-10-08 — the tab emits only what its entry reaches
+
+The emitter wrote a dispatcher for every group in the program, and on a
+program with an entry `Written::finish` then pruned whatever nothing reached
+from it. On `bench/interp_corpus` the prune dropped 132 definitions and 127,415
+bytes of the 369,868 the tab had written, almost all of them std/list
+functions the corpus never calls. The text was held beside the program until
+the end of emission, which is the most the tab's compile holds.
+
+The tab now walks the names each body mentions, from the entry, and emits
+only the groups the walk reaches. The walk is `call_graph`, which the cohort
+brackets already use. Two kinds of call do not appear in it as a name: an
+interpolated value dispatching to `render/to_string`, and an operator reaching
+a user's arm. The render group and every operator group are seeded. If the
+module still names the dispatcher, twin, wrapper or wrapper record of a group
+the walk left out, the emitter emits again with nothing skipped, so a miss
+costs time and never a module that fails to link. Across the 148 programs in
+the tree that compile alone, the seeded walk needed that second pass on none.
+Before the operator seed it needed it on three, all of them user arms of `+`,
+`<` and `>`.
+
+Native builds are unchanged and keep emitting every group. The tab's module
+differs in the numbering of lambdas, constant cells and strings, and the
+browser differential agrees on all 575 programs it compares, with the same six
+known gaps.
+
+`browser_compile_instructions` reads 450,123,996 -> 433,427,683 (-3.71%) and
+`browser_compile_peak_bytes` 829,597 -> 698,157 (-15.8%), on rustc 1.98.1
+here as on CI. `browser_run_instructions` moves by 56, from the string table.
+The ratchet row `reached_groups` turns the walk off, and the rows read
+450,112,045 and 829,764 under it.
