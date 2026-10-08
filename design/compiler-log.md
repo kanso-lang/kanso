@@ -23639,3 +23639,121 @@ loop was not the cost.
 
 The ratchet row `arguments_released` puts `drop(arg)` back in the loop, and
 the interpreted row reads 576,822,655 under it.
+
+## 2026-10-08 — the tab compiles only what its entry reaches
+
+The emitter wrote a dispatcher for every group in the program, and on a
+program with an entry `Written::finish` then pruned whatever nothing reached
+from it. On `bench/interp_corpus` the prune dropped 132 definitions and 127,415
+bytes of the 369,868 the tab had written, almost all of them std/list
+functions the corpus never calls. The text was held beside the program until
+the end of emission, which is the most the tab's compile holds. Every analysis
+before the emitter also read those functions: inference, linearity, the beat
+loops, escape and demand each walked the whole of std/list.
+
+The tab now walks the names each body mentions, from the entry, and takes
+every group the walk does not reach out of the program before any analysis
+runs. The walk is `call_graph`, which the cohort brackets already use. Some
+groups are reached without a body naming them. An interpolated value
+dispatches to `render`, a value-wrapped `print` renders through
+`render/to_string`, an operator finds a user's arm by asking whether the
+program declares one, and fused map columns stand in for `keys` and `values`
+only when the program declares neither. Those names are seeded.
+
+The first version of this skipped unreached groups in the emitter and kept
+them in the program, and it caught a miss by looking for a skipped group's
+symbols in the module. That check cannot work once the group is gone, because
+the emitter stops writing a call to something that is not there. The decisive
+case is an operator. With a user's `+` arm left out, the emitter asks whether
+`+` is declared, hears no, and sends two records down the numeric path. The
+module names nothing of `+` either way. So every question the emitter asks
+about a group by name now goes through one index, `group_named`, and a
+question about a left-out group sets a flag. A flagged module, a module naming
+a left-out group's symbols, and an emit that fails are all sent back with the
+program whole, so a miss costs a second emit and cannot change what the tab
+runs. A unit spec reads the emitter's source and fails if it scans its groups
+by name anywhere else. Across the 98 entry programs in the tree that compile
+alone, none needed the second emit.
+
+Native builds are unchanged and keep emitting every group. Turning the walk
+on for them as well moved `emit_instructions` from 23,994,397 to 15,189,091 on
+`pkg/codegen_corpus`, and the meta by about 0.01, because the emitting term
+is already near the top of its curve. That gain does not pay for renumbering
+every native module and re-reading the machine-code goldens, so it waits. The
+tab's module differs from the dev tier's in the numbering of lambdas, constant
+cells and strings, and in what inference concludes once the unreached callers
+are gone. The browser differential agrees on all 575 programs it compares,
+with the same six known gaps.
+
+`browser_compile_instructions` reads 450,123,996 -> 395,882,998 (-12.1%) and
+`browser_compile_peak_bytes` 829,597 -> 673,727 (-18.8%), on rustc 1.98.1 here
+as on CI. Skipping in the emitter alone had reached 433,427,683 and 698,157, so
+taking the groups out before the analyses is two thirds of the instruction
+saving. `browser_run_instructions` moves by 61, 33,510,647 -> 33,510,708. The
+ratchet row `reached_groups` turns the walk off and the browser rows go back
+up, and `left_out_asked` stops noting the question, which the `+` spec catches.
+
+The index helps native builds as well. Every lookup of a group by name used
+to scan the whole declaration list, and now it reads the index the emitter
+already kept: `emit_instructions` falls 23,997,530 -> 23,393,086 (-2.52%) on
+CI. Three front-end rows rise on CI: `compile_instructions` 26,182,238 ->
+26,200,562, `entry_instructions` 86,381,596 -> 86,445,364 and
+`library_instructions` 86,927,430 -> 86,991,343. Those rows run `kanso check`,
+which never reaches the emitter. Between main and this tree in one container
+the move sits inside the lexer, whose source did not change, so it is inlining
+redrawn around a changed codegen.rs.
+
+## 2026-10-08 — a dispatch ranks its candidates on the stack
+
+Arm selection ranks every candidate that matches into a score, one byte a
+parameter, and keeps the best. The score was a `Vec<u8>`. Every entry to
+`dispatch_loop` allocated one and freed it on the way out, and when the first
+candidate won, `std::mem::take` moved its buffer into `best` and left the next
+candidate to grow a new one from nothing. On `bench/interp_corpus` that growth
+was 44,905 calls to `RawVec<u8>::grow_one`.
+
+`Score` now holds twelve ranks inline and spills the rest into a vector that
+stays empty for any group of twelve parameters or fewer. A dispatch compares
+two scores of the same length, one rank per argument, so comparing the inline
+part and then the spill orders them as the vector did. A unit spec generates
+pairs of scores that differ in one position, inline or spilled, at every length
+from one to sixteen, and checks `beats` against the vector's comparison. With
+the spill left out of the comparison it fails on a thirteen-rank pair.
+
+`interp_instructions` reads 568,709,639 -> 559,187,740 in this container
+(-1.67%), with the corpus printing the same 874 lines, and CI read the same
+number. `interp_allocs` falls 873,371 -> 752,938, 120,433 fewer calls to the
+allocator, and the peak does not move.
+The ratchet row `scores_inline` gives the score a heap buffer at the start of
+every dispatch again, which puts back about 4.5 million of the 9.5.
+
+The bindings vector takes the same move when the first candidate wins, and its
+growth is the other half of what `dispatch_loop` grows. It is not changed here:
+the winner's bindings become the environment frame, so a second buffer has to
+exist whenever a later candidate is tried.
+
+## 2026-10-08 — a dispatch hands its second bindings buffer back
+
+The entry before this one left the bindings vector alone because the winner's
+bindings become the environment frame. When the first candidate matches,
+`std::mem::take` moves its buffer into `best`, and any later candidate the
+dispatch tries matches into a new vector. That vector was allocated for the
+dispatch and freed at its end, whether the later candidate won or not.
+
+The interpreter now keeps a short list of those buffers, at most 64. A
+candidate that finds `binds` empty pops one from the list before it matches,
+and at the end of the dispatch whatever buffer is left in `binds` is cleared
+and pushed back. The winner's buffer still leaves with the frame, so the list
+only ever holds buffers no frame kept.
+
+Measured in this container on `bench/interp_corpus`, printing the same 874
+lines: `interp_instructions` 559,187,740 -> 553,555,448 (-1.01%), and
+`interp_allocs` 752,938 -> 714,647, 38,291 fewer calls to the allocator. The
+peak does not move. CI's readings replace these if they differ.
+
+Taking a buffer from the list at the start of every dispatch, in place of the
+`Vec::new()` that `binds.reserve` then grows, read 556,139,823. Most dispatches
+never try a second candidate, and each of those paid for a pop and a push back.
+
+The ratchet row `spare_binds` turns the hand-back off, so each buffer goes to
+the allocator as before, and the row reads 558,551,917.

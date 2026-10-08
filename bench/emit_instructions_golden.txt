@@ -396,4 +396,9 @@
 # reads 24,923,517 on the row:
 # 24,923,517 -> 23,997,530, a FALL of 925,987 (-3.7154%).
 # CI's reading replaces it if it differs.
-emit_instructions=23997530
+# 2026-10-08: the emitter asks about a group by name through the group index
+# rather than scanning every declaration, and the tab takes what its entry
+# cannot reach out before the analyses; the native path keeps every group. CI's
+# reading, on the cost-goldens job of kanso#1807:
+# 23,997,530 -> 23,393,086, a FALL of 604,444 (-2.5188%).
+emit_instructions=23393086

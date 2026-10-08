@@ -698,7 +698,44 @@ pub struct RuntimeError {
 }
 
 type Bindings = Vec<(Name, Value)>;
-type Score = Vec<u8>;
+
+/// How many parameters' ranks a `Score` holds without allocating.
+const SCORE_INLINE: usize = 12;
+
+/// One rank a parameter, in order. It was a `Vec<u8>`, and every dispatch
+/// allocated one and freed it, and a candidate that won first left the next
+/// one to grow a fresh vector from nothing. The ranks of a call with more
+/// parameters than `SCORE_INLINE` go on in `spill`.
+#[derive(Default)]
+struct Score {
+    len: usize,
+    inline: [u8; SCORE_INLINE],
+    spill: Vec<u8>,
+}
+
+impl Score {
+    fn clear(&mut self) {
+        self.len = 0;
+        self.spill.clear();
+    }
+
+    fn push(&mut self, rank: u8) {
+        match self.len < SCORE_INLINE {
+            true => self.inline[self.len] = rank,
+            false => self.spill.push(rank),
+        }
+        self.len += 1;
+    }
+
+    /// Compares as the ranks in order would, as a `Vec<u8>` compared. The two
+    /// scores a dispatch compares always have one rank per argument, so their
+    /// inline parts are the same length.
+    fn beats(&self, other: &Score) -> bool {
+        let n = self.len.min(SCORE_INLINE);
+        let m = other.len.min(SCORE_INLINE);
+        (&self.inline[..n], &self.spill) > (&other.inline[..m], &other.spill)
+    }
+}
 
 type EvalResult = Result<Value, RuntimeError>;
 
@@ -1490,6 +1527,11 @@ pub struct Interp<'a> {
     /// by then the position may hold a later tie.
     ties: RefCell<Vec<Tie>>,
     tie_serial: Cell<i64>,
+    /// Bindings buffers a dispatch finished with, kept for the next one. A
+    /// dispatch that tries a second candidate after the first matched needs a
+    /// buffer beside the winner's, and it was allocated for that dispatch and
+    /// freed at its end.
+    spare_binds: RefCell<Vec<Bindings>>,
     /// The constants that reach themselves through a chain of mentions --
     /// the same set the emitter computes, so the two engines count the same
     /// cells. Every constant goes through `knotted`, but only these are the
@@ -1617,6 +1659,7 @@ impl<'a> Interp<'a> {
             knots: RefCell::new(Map::default()),
             ties: RefCell::new(Vec::new()),
             tie_serial: Cell::new(0),
+            spare_binds: RefCell::new(Vec::new()),
             cycles: std::cell::OnceCell::new(),
             in_place: std::cell::OnceCell::new(),
             moved: std::cell::OnceCell::new(),
@@ -2944,7 +2987,7 @@ impl<'a> Interp<'a> {
         // outgoing candidate's vector in `score`, so what survives the
         // iteration already has capacity and `match_params_into` clears it
         // before the next candidate fills it.
-        let mut score: Score = Vec::with_capacity(args.len());
+        let mut score = Score::default();
         // AND THE BINDINGS BUFFER COMES BACK TOO, when the frame it became is
         // the dispatcher's to take back. `bind_all` moves `binds` into
         // `Env::Many`, so unlike the score it cannot simply be kept -- the body
@@ -3056,16 +3099,18 @@ impl<'a> Interp<'a> {
             };
             binds.clear();
             binds.reserve(args_len);
-            score.reserve(args_len);
             for decl in overloads.iter() {
                 if decl.params.len() != args.len() {
                     continue;
+                }
+                if binds.capacity() == 0 {
+                    binds = self.spare_binds.borrow_mut().pop().unwrap_or_default();
                 }
                 if !match_params_into(&decl.params, &args, &mut score, &mut binds) {
                     continue;
                 }
                 let replace = match &best {
-                    Some((best_score, ..)) => score > *best_score,
+                    Some((best_score, ..)) => score.beats(best_score),
                     None => true,
                 };
                 if replace {
@@ -3086,6 +3131,15 @@ impl<'a> Interp<'a> {
                             ));
                         }
                     }
+                }
+            }
+            // The buffer the losers matched into goes back for the next
+            // dispatch rather than to the allocator.
+            if binds.capacity() > 0 {
+                binds.clear();
+                let mut spare = self.spare_binds.borrow_mut();
+                if spare.len() < 64 {
+                    spare.push(std::mem::take(&mut binds));
                 }
             }
             match best {
@@ -6343,6 +6397,33 @@ mod tests {
             .expect("a constant named main")
             .map_err(|e| e.message)
             .expect("runs")
+    }
+
+    /// `Score::beats` orders as the `Vec<u8>` it replaced, at every length
+    /// either side of the inline width.
+    #[test]
+    fn a_score_compares_as_its_ranks_in_order() {
+        let mut seed: u32 = 0x2545_f491;
+        let mut next = move || {
+            seed ^= seed << 13;
+            seed ^= seed >> 17;
+            seed ^= seed << 5;
+            [10u8, 100, 99, 200][(seed % 4) as usize]
+        };
+        for len in 1..=SCORE_INLINE + 4 {
+            for _ in 0..200 {
+                // b differs from a in one position, inline or spilled, so a
+                // comparison that skipped the spill would call them tied
+                let a: Vec<u8> = (0..len).map(|_| next()).collect();
+                let mut b = a.clone();
+                let at = (next() as usize * 7 + next() as usize) % len;
+                b[at] = next();
+                let (mut x, mut y) = (Score::default(), Score::default());
+                a.iter().for_each(|r| x.push(*r));
+                b.iter().for_each(|r| y.push(*r));
+                assert_eq!(x.beats(&y), a > b, "{a:?} against {b:?}");
+            }
+        }
     }
 
     #[test]

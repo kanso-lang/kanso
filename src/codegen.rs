@@ -2439,6 +2439,19 @@ pub fn emit_ir_dev_owned(
     emit_ir_for(Given::Owned(program), convention, false)
 }
 
+/// `emit_ir_dev_owned` for the playground tab, which emits only the groups
+/// the entry can reach. The prune in `Written::finish` drops the rest from
+/// the module either way; on `bench/interp_corpus` that was 132 definitions
+/// and 127,415 bytes of text, a third of what the tab wrote, held beside the
+/// program at the most its compile ever holds. Native builds keep emitting
+/// every group, so their modules are unchanged.
+pub fn emit_ir_tab_owned(
+    program: Program,
+    convention: ClosureConvention,
+) -> Result<String, String> {
+    emit_written(Given::Owned(program), convention, false, true).map(Written::finish)
+}
+
 /// A group's name and arity, and a position in it.
 type UnreadPositions = Vec<(String, usize, usize)>;
 
@@ -2701,13 +2714,14 @@ fn emit_ir_for(
     convention: ClosureConvention,
     inline_helpers: bool,
 ) -> Result<String, String> {
-    emit_written(program, convention, inline_helpers).map(Written::finish)
+    emit_written(program, convention, inline_helpers, false).map(Written::finish)
 }
 
 fn emit_written(
     program: Given<'_>,
     convention: ClosureConvention,
     inline_helpers: bool,
+    only_reached: bool,
 ) -> Result<Written, String> {
     // The prune also answers the positions a group read as written and no
     // longer reads. A thunk handed to such a position is forced by
@@ -2722,7 +2736,101 @@ fn emit_written(
         Some((keep, unread)) => (Given::Owned(kept_arms(program, &keep)), unread),
         None => (program, Vec::new()),
     };
-    let program = &*program;
+    let mut program = program;
+    // The tab owns its program, so what the entry cannot reach leaves it
+    // before any analysis reads it: inference, linearity, the beat loops and
+    // the rest each walked every std function the program imported, and the
+    // emitter wrote them all for the prune to drop.
+    let mut left_out: Vec<(usize, FnDecl)> = Vec::new();
+    if let Given::Owned(owned) = &mut program {
+        let reached = match only_reached {
+            true => reached_from_entry(owned),
+            false => None,
+        };
+        if let Some(reached) = reached {
+            let reached: crate::hash::Set<String> = reached.iter().map(|n| n.to_string()).collect();
+            for (at, decl) in std::mem::take(&mut owned.fns).into_iter().enumerate() {
+                match reached.contains(decl.name.as_str()) {
+                    true => owned.fns.push(decl),
+                    false => left_out.push((at, decl)),
+                }
+            }
+        }
+    }
+    let names: crate::hash::Set<String> = left_out.iter().map(|(_, d)| d.name.clone()).collect();
+    let first = emit_with(&program, convention, inline_helpers, &unread_positions, names);
+    // The walk reads names the bodies mention, and the emitter can reach a
+    // group no body names, by calling it or by asking whether it exists. Either
+    // one, for a group that was left out, gives the program back what it lost,
+    // in its place, and emits it again, so a miss costs time and never changes
+    // the module. So does a refusal: a call to a group that is not there is one
+    // the emitter declines to lower, and the program as written may not be.
+    let missed = match &first {
+        Ok(written) => written.asked_left_out || written.names_any(left_out.iter().map(|(_, d)| d)),
+        Err(_) => true,
+    };
+    if left_out.is_empty() || !missed {
+        return first;
+    }
+    if let Given::Owned(owned) = &mut program {
+        let total = owned.fns.len() + left_out.len();
+        let mut kept = std::mem::take(&mut owned.fns).into_iter();
+        let mut back = left_out.into_iter().peekable();
+        for at in 0..total {
+            match back.next_if(|(was, _)| *was == at) {
+                Some((_, decl)) => owned.fns.push(decl),
+                None => owned.fns.extend(kept.next()),
+            }
+        }
+    }
+    emit_with(&program, convention, inline_helpers, &unread_positions, Default::default())
+}
+
+/// The names the entry reaches, by what each body mentions, or `None` for a
+/// program with no entry. A mention counts as a call at every arity.
+fn reached_from_entry(program: &Program) -> Option<crate::hash::Set<&str>> {
+    let (names, adj) = call_graph(program);
+    let start = names.iter().position(|n| *n == crate::ast::ENTRY)?;
+    let mut seen = vec![false; names.len()];
+    let mut work = vec![start];
+    // An interpolated value dispatches to the render group by name, and an
+    // operator reaches its arms through an expression no walk of mentions
+    // reads as one, so every operator group is kept.
+    work.extend(names.iter().position(|n| *n == RENDER_GROUP));
+    // A value-wrapped `print` renders through `render/to_string`, and whether
+    // fused map columns may stand in for `keys` and `values` turns on whether
+    // the program declares its own. Each is a question by name a body need not
+    // mention, and a miss would only cost a second emit.
+    work.extend(
+        names
+            .iter()
+            .enumerate()
+            .filter(|(_, n)| matches!(**n, "render/to_string" | "keys" | "values"))
+            .map(|(at, _)| at),
+    );
+    work.extend(
+        names
+            .iter()
+            .enumerate()
+            .filter(|(_, n)| !n.bytes().any(|b| b.is_ascii_alphanumeric()))
+            .map(|(at, _)| at),
+    );
+    while let Some(at) = work.pop() {
+        if !seen[at] {
+            seen[at] = true;
+            work.extend(adj[at].iter().copied().filter(|&next| !seen[next]));
+        }
+    }
+    Some(names.iter().zip(seen).filter(|(_, s)| *s).map(|(n, _)| *n).collect())
+}
+
+fn emit_with(
+    program: &Program,
+    convention: ClosureConvention,
+    inline_helpers: bool,
+    unread_positions: &UnreadPositions,
+    left_out: crate::hash::Set<String>,
+) -> Result<Written, String> {
     let knotted = knotted_constants(program);
     let inference = infer::infer(program);
     let mut type_ids = HashMap::default();
@@ -2820,7 +2928,9 @@ fn emit_written(
         closure_consts: Vec::new(),
         demand: crate::demand::analyze(program),
         thunk_sites: Vec::new(),
-        unread_positions,
+        unread_positions: unread_positions.clone(),
+        left_out,
+        asked_left_out: std::cell::Cell::new(false),
     };
     backend.emit()
 }
@@ -2835,6 +2945,8 @@ struct Written {
     convention: ClosureConvention,
     inline_helpers: bool,
     has_entry: bool,
+    /// Whether the emitter asked by name about a group the walk left out.
+    asked_left_out: bool,
     pieces: Vec<String>,
     closure_consts: Vec<(String, String, usize)>,
     caf_cells: Vec<String>,
@@ -2844,6 +2956,24 @@ struct Written {
 }
 
 impl Written {
+    /// Whether the body names a symbol of one of `decls`: its dispatcher,
+    /// word twin, value wrapper or wrapper record.
+    fn names_any<'d>(&self, decls: impl Iterator<Item = &'d FnDecl>) -> bool {
+        let mut symbols: Vec<String> = Vec::new();
+        for decl in decls {
+            let (name, arity) = (decl.name.as_str(), decl.params.len());
+            symbols.extend([
+                dsym(name, arity),
+                tsym(name, arity),
+                wsym(name, arity),
+                rsym(name, arity),
+            ]);
+        }
+        let queries: crate::hash::Set<&str> = symbols.iter().map(|s| s.as_str()).collect();
+        !queries.is_empty()
+            && self.pieces.iter().any(|piece| !queries_named(piece, &queries).is_empty())
+    }
+
     /// The module: the body pruned, the declarations and globals it names
     /// written in front of it, and the tail calls narrowed.
     fn finish(self) -> String {
@@ -3099,6 +3229,10 @@ struct Backend<'a> {
     /// (group, arity, position) an arm the unbuilt-arm prune dropped was
     /// reading and no arm left reads. See `without_unbuilt_arms`.
     unread_positions: Vec<(String, usize, usize)>,
+    /// The groups the tab's walk took out of the program, and whether the
+    /// emitter asked about one by name. See `emit_written`.
+    left_out: crate::hash::Set<String>,
+    asked_left_out: std::cell::Cell<bool>,
 }
 
 /// The frame epilogue: release each releasable cell unless the outgoing
@@ -5690,7 +5824,38 @@ impl<'a> Backend<'a> {
     /// A group's declaration indices, read out of the index rather than
     /// scanned for. Program order, which is what the scan gave.
     fn group_indices<'s>(&'s self, name: &str, arity: usize) -> impl Iterator<Item = usize> + 's {
+        self.asked(name);
         group_indices_in(&self.group_by_name, self.program, name, arity)
+    }
+
+    /// Every declaration of a group, at every arity, in program order. The
+    /// emitter asks about a group by name only through this, `group_named`
+    /// and `group_indices`, so a question about a group the tab's walk left
+    /// out is seen; `a_lookup_by_name_goes_through_the_index` holds it to that.
+    fn decls_named(&self, name: &str) -> impl Iterator<Item = &'a FnDecl> + '_ {
+        let program = self.program;
+        self.group_named(name).iter().map(move |&at| &program.fns[at])
+    }
+
+    fn group_named(&self, name: &str) -> &[usize] {
+        self.asked(name);
+        self.group_by_name.get(name).map_or(&[][..], |at| at.as_slice())
+    }
+
+    fn declares(&self, name: &str) -> bool {
+        !self.group_named(name).is_empty()
+    }
+
+    fn declares_at(&self, name: &str, arity: usize) -> bool {
+        self.group_indices(name, arity).next().is_some()
+    }
+
+    /// Notes a question about a group the walk left out. The answer is wrong
+    /// for the program as written, so the module goes back to be emitted again.
+    fn asked(&self, name: &str) {
+        if self.left_out.contains(name) {
+            self.asked_left_out.set(true);
+        }
     }
 
     fn group_param_set(&self, name: &str, arity: usize, param: usize) -> Set {
@@ -5893,9 +6058,8 @@ impl<'a> Backend<'a> {
     /// Any arity-matching arm inspecting this position (anything but a bare
     /// Var/Wildcard) means a thunk must force before dispatch can select.
     fn scrutinizes(&self, callee: &str, arity: usize, i: usize) -> bool {
-        self.program.fns.iter().any(|d| {
-            d.name == callee
-                && d.params.len() == arity
+        self.decls_named(callee).any(|d| {
+            d.params.len() == arity
                 && !matches!(d.params.get(i), Some(Pattern::Var(..)) | Some(Pattern::Wildcard(_)))
         }) || self.unread_positions.iter().any(|(g, n, p)| g == callee && *n == arity && *p == i)
     }
@@ -6285,8 +6449,7 @@ impl<'a> Backend<'a> {
     /// Primitive-only sets keep the direct call — coherence proves no arm can
     /// exist for them (design/render-plan.md).
     fn render_dispatchable(&self, f: &FnEmit, value: &str) -> bool {
-        f.set_of(value) & (REC | NONE | infer::DONE | DESC) != 0
-            && self.program.fns.iter().any(|d| d.name == RENDER_GROUP)
+        f.set_of(value) & (REC | NONE | infer::DONE | DESC) != 0 && self.declares(RENDER_GROUP)
     }
 
     /// The string an interpolated `value` renders to, and the fail set it
@@ -6634,7 +6797,7 @@ impl<'a> Backend<'a> {
         }
         if self.print_value_wrapper {
             let group = "render/to_string";
-            let render = match self.program.fns.iter().any(|d| d.name == group) {
+            let render = match self.declares(group) {
                 true => format!(
                     "  %s1 = call tailcc %KValue @{}(%KValue %v)\n  br label %join",
                     dsym(group, 1)
@@ -6696,7 +6859,7 @@ impl<'a> Backend<'a> {
         );
         // A library has no entry to call, and a stub calling one that is not
         // there is a symbol the linker would ask about.
-        if self.program.fns.iter().any(|d| d.name == crate::ast::ENTRY) {
+        if self.declares(crate::ast::ENTRY) {
             let entry = dsym(crate::ast::ENTRY, 0);
             self.room(entry.len() + 128);
             let _ = writeln!(
@@ -6721,7 +6884,8 @@ impl<'a> Backend<'a> {
         Ok(Written {
             convention: self.convention,
             inline_helpers: self.inline_helpers,
-            has_entry: self.program.fns.iter().any(|d| d.name == crate::ast::ENTRY),
+            has_entry: self.declares(crate::ast::ENTRY),
+            asked_left_out: self.asked_left_out.get(),
             pieces,
             closure_consts: std::mem::take(&mut self.closure_consts),
             caf_cells: std::mem::take(&mut self.caf_cells),
@@ -8335,7 +8499,7 @@ impl<'a> Backend<'a> {
         // holding a function, a local, a builtin, a record's constructor —
         // and the callers route that to `emit_partial_value` before asking
         // for a lambda, so what reaches this point is a declared group.
-        debug_assert!(self.program.fns.iter().any(|d| d.name == name));
+        debug_assert!(self.declares(name));
         // Currying past every arm is the one real error: `&` supplies without
         // running, so supplying an arm's last argument is a partial like any
         // other — the value waits to be called rather than being a call. What
@@ -8462,7 +8626,7 @@ impl<'a> Backend<'a> {
     /// Whether a name is a declared group, which is what decides how `&` over
     /// it lowers: a group's arities are known here, a value's are not.
     fn declared(&self, name: &str) -> bool {
-        self.program.fns.iter().any(|d| d.name == name)
+        self.declares(name)
     }
 
     /// `&f 2` where `f` is a VALUE — a parameter, a local, a builtin handed
@@ -8697,7 +8861,7 @@ impl<'a> Backend<'a> {
                     f.record(&t, REC);
                     return Ok(t.to_string());
                 }
-                if self.program.fns.iter().any(|d| d.name == *name && d.params.is_empty()) {
+                if self.declares_at(name, 0) {
                     let callee_ret = self.ret_ty(name, 0);
                     let t = f.tmp();
                     f.line_fmt(format_args!("{t} = call tailcc {callee_ret} @{}()", dsym(name, 0)));
@@ -8719,7 +8883,7 @@ impl<'a> Backend<'a> {
                 }
                 let arities: Vec<usize> = {
                     let mut seen = Vec::new();
-                    for d in self.program.fns.iter().filter(|d| d.name == *name) {
+                    for d in self.decls_named(name) {
                         if !seen.contains(&d.params.len()) {
                             seen.push(d.params.len());
                         }
@@ -9616,7 +9780,7 @@ impl<'a> Backend<'a> {
                 // A record on either side dispatches to the operator's user
                 // arms, which answer with whatever the arm returns rather than
                 // a boolean, so that condition is a value like any other.
-                let armable = self.program.fns.iter().any(|d| d.name == *op && d.params.len() == 2);
+                let armable = self.declares_at(op, 2);
                 let routed = armable && (f.set_of(&a) | f.set_of(&b)) & REC != 0;
                 if !routed {
                     return Ok(
@@ -9814,7 +9978,7 @@ impl<'a> Backend<'a> {
         // a record on either side dispatches to the operator's user arms; the
         // numeric fast paths below stay untouched for everything else
         let armable = matches!(op, "+" | "-" | "*" | "/" | "%" | "<" | ">" | "<=" | ">=" | "==")
-            && self.program.fns.iter().any(|d| d.name == op && d.params.len() == 2);
+            && self.declares_at(op, 2);
         if armable && (f.set_of(a) | f.set_of(b)) & REC != 0 {
             let a_routes = f.tmp();
             f.line_fmt(format_args!("{a_routes} = call i64 @k_routes_to_arms(%KValue {a})"));
@@ -10508,7 +10672,7 @@ impl<'a> Backend<'a> {
     /// rather than at this call site. Fusing past a wrapper skips the frame
     /// whose file and line name the birthplace, and the oracle still calls it.
     fn forwarder_origin(&mut self, name: &str, arity: usize) -> Option<String> {
-        let decl = self.program.fns.iter().find(|d| d.name == name && d.params.len() == arity)?;
+        let decl = self.decls_named(name).find(|d| d.params.len() == arity)?;
         let line = match decl.body.first()? {
             Stmt::Expr(Expr::App { span, .. }) => span.line,
             _ => return None,
@@ -10554,9 +10718,7 @@ impl<'a> Backend<'a> {
     /// Whether `keys` and `values` here are the builtins and `map` a local:
     /// a program that declares or binds either name calls its own function.
     fn columns_are_the_builtins(&self, f: &FnEmit, map: &str) -> bool {
-        let declared = |name: &str| {
-            f.lookup(name).is_some() || self.program.fns.iter().any(|d| d.name == name)
-        };
+        let declared = |name: &str| f.lookup(name).is_some() || self.declares(name);
         f.lookup(map).is_some() && !declared("keys") && !declared("values")
     }
 
@@ -10691,7 +10853,7 @@ impl<'a> Backend<'a> {
                 matches!(name.as_str(), "true" | "false" | "none" | "done")
                     || f.lookup(name).is_some()
                     || (call_arity >= 1
-                        && self.program.fns.iter().any(|d| d.name == *name && d.params.is_empty())
+                        && self.declares_at(name, 0)
                         && !self
                             .program
                             .fns
@@ -10983,7 +11145,7 @@ impl<'a> Backend<'a> {
             && self.beat.regions.contains(&(f.file.clone(), span.line as usize, span.col as usize))
             && !name.starts_with("builtin_")
             && !self.type_ids.contains_key(name.as_str())
-            && self.program.fns.iter().any(|d| d.name == *name && d.params.len() == args.len());
+            && self.declares_at(name, args.len());
         if region {
             f.line("call void @k_beat_push()");
         }
@@ -11029,7 +11191,7 @@ impl<'a> Backend<'a> {
         // further down says so, and this has to say it too, because it runs
         // first. lib/sha256 declares `bytes`, and a guard that skipped this
         // condition refused its three-argument call as a wrong-count builtin.
-        let shadows = !was_builtin && self.program.fns.iter().any(|d| d.name == name);
+        let shadows = !was_builtin && self.declares(name);
         if !shadows {
             if let Some(takes) = crate::check::builtin_arity(name) {
                 if emitted.len() != takes {
@@ -11174,8 +11336,7 @@ impl<'a> Backend<'a> {
         // alone emits a call to `d_{name}_{n}` for any n the caller wrote,
         // and a dispatcher that was never defined is invalid IR the user
         // meets as a clang error.
-        let declared = |d: &FnDecl| d.name == *name && d.params.len() == emitted.len();
-        if !was_builtin && self.program.fns.iter().any(declared) {
+        if !was_builtin && self.declares_at(name, emitted.len()) {
             let n = emitted.len();
             let args_ir: Vec<String> = emitted
                 .iter()
@@ -11215,9 +11376,8 @@ impl<'a> Backend<'a> {
             // cell the caller still holds.
             let arg_heapish = heapish & !BYTES;
             let crosses_down = self
-                .group_by_name
-                .get(name)
-                .and_then(|at| at.first())
+                .group_named(name)
+                .first()
                 .is_some_and(|&i| *self.program.fns[i].file != *f.file);
             let cohort_entry = !beat_entry
                 && !region
@@ -11332,7 +11492,7 @@ impl<'a> Backend<'a> {
         // reports it when the call runs, so native reports the same words at
         // the same moment rather than refusing to build a program the oracle
         // executes.
-        if !was_builtin && self.program.fns.iter().any(|d| d.name == *name) {
+        if !was_builtin && self.declares(name) {
             let msg =
                 format!("no overload of `{}` matches these arguments", crate::ast::spoken(name));
             let (m, _) = self.intern(&format!("{msg}\0"));
@@ -12077,4 +12237,100 @@ pub fn retarget_wasm32(module: &str) -> String {
         out.push('\n');
     }
     out
+}
+
+/// The tab emits only the groups the entry reaches, by the names its bodies
+/// mention. When the walk misses one the module still calls, the emitter has
+/// to notice and emit again with the group put back; these pin that it
+/// notices, and that it stays quiet when nothing called was left out.
+#[cfg(test)]
+mod a_group_the_walk_misses_is_put_back {
+    use super::{emit_with, reached_from_entry, ClosureConvention};
+
+    const SOURCE: &str = "import \"std/list\"\n\nprint \"{list/sum [3 1 2]}\"\n";
+
+    fn program() -> crate::ast::Program {
+        crate::compile_source("run", "main.kso", SOURCE).expect("the fixture compiles")
+    }
+
+    /// The program without the groups named `gone`, and those groups.
+    fn without(gone: &[&str]) -> (crate::ast::Program, Vec<crate::ast::FnDecl>) {
+        let mut program = program();
+        let (out, kept): (Vec<_>, Vec<_>) =
+            program.fns.drain(..).partition(|d| gone.contains(&d.name.as_str()));
+        program.fns = kept;
+        (program, out)
+    }
+
+    #[test]
+    fn the_walk_reaches_what_the_entry_calls_and_not_the_rest() {
+        let program = program();
+        let reached = reached_from_entry(&program).expect("the fixture has an entry");
+        assert!(reached.contains("list/sum"), "the walk missed a call: {reached:?}");
+        assert!(!reached.contains("list/sort"), "the walk kept a group nothing calls: {reached:?}");
+    }
+
+    /// Emits the program with the groups named `gone` taken out, as the tab
+    /// takes out what its walk does not reach, and says whether the emitter
+    /// noticed one it needed.
+    fn noticed_without(gone: &[&str]) -> bool {
+        let (program, out) = without(gone);
+        assert_eq!(out.len(), gone.len(), "the fixture lacks one of {gone:?}");
+        let names = out.iter().map(|d| d.name.clone()).collect();
+        match emit_with(&program, ClosureConvention::Absent, false, &Vec::new(), names) {
+            Ok(written) => written.asked_left_out || written.names_any(out.iter()),
+            Err(_) => true,
+        }
+    }
+
+    #[test]
+    fn a_group_nothing_calls_left_out_goes_unremarked() {
+        assert!(!noticed_without(&["list/sort"]), "the emitter asked for a group nothing calls");
+    }
+
+    #[test]
+    fn a_called_group_left_out_is_noticed() {
+        assert!(
+            noticed_without(&["list/sum"]),
+            "the entry calls `list/sum`, which was left out, and nothing noticed"
+        );
+    }
+
+    /// An operator's arms are found by asking whether the program declares
+    /// the operator, and with the arm gone the answer sends records down the
+    /// numeric path. Nothing calls `+` by name, so the module names no symbol
+    /// of it either way: only the question shows the miss.
+    #[test]
+    fn a_question_about_a_left_out_operator_is_noticed() {
+        // the micro golden an_operator_arm_takes_its_records_boxed, inline
+        let source = "import \"std/os\"\n\ntype pt\n  n\n  s\n\n\
+                      fn + (pt a s) (pt b t)\n  pt (a + b) \"{s}{t}\"\n\n\
+                      pub play = os/args .> (_ -> print \"{pt 1 \"a\" + pt 3 \"b\"}\")\n";
+        let mut program = crate::compile_source("check", "arms.kso", source).expect("it compiles");
+        let before = program.fns.len();
+        program.fns.retain(|d| d.name != "+");
+        assert_eq!(program.fns.len() + 1, before, "the fixture has one `+` arm to leave out");
+        let names = std::iter::once("+".to_string()).collect();
+        let written = emit_with(&program, ClosureConvention::Absent, false, &Vec::new(), names)
+            .expect("records added with no arm still lower");
+        assert!(written.asked_left_out, "the emitter asked about `+` and nothing saw it");
+    }
+
+    /// The fallback sees a question about a left-out group only when the
+    /// question goes through `group_named` or `group_indices`. A scan of the
+    /// program's groups by name anywhere else in the emitter would answer
+    /// without being seen, and the tab would emit a program with the answer
+    /// wrong. The patterns are built here so this file does not match itself.
+    #[test]
+    fn a_lookup_by_name_goes_through_the_index() {
+        let source = include_str!("codegen.rs");
+        let scan = concat!("self.program.fns", ".iter()");
+        let index = concat!("self.group_by", "_name");
+        assert_eq!(source.matches(scan).count(), 0, "the emitter scans its groups by hand");
+        assert_eq!(
+            source.matches(index).count(),
+            2,
+            "the emitter reads the index around the helpers"
+        );
+    }
 }

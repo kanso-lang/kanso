@@ -262,7 +262,15 @@
 # building a list of them per visit, and `kanso run` runs that pass before
 # the interpreter starts. CI's reading and this container's agree:
 # interp_allocs 895,818 -> 874,027, a FALL of 21,791 (-2.4325%).
-interp_allocs=873371
+# 2026-10-08: a dispatch ranks its candidates into a score held on the stack
+# rather than a vector allocated per dispatch. CI's reading:
+# interp_allocs 873,371 -> 752,938, a FALL of 120,433 (-13.79%). The peak
+# does not move.
+# 2026-10-08: a dispatch keeps the bindings buffer its losing candidates
+# matched into for the next dispatch, instead of freeing it. Measured in this
+# container: interp_allocs 752,938 -> 714,647, a FALL of 38,291 (-5.09%). The
+# peak does not move.
+interp_allocs=714647
 #
 # 2026-09-18, kanso#1518 against main at kanso#1517, CI's sitting.
 # 951,438 -> 961,165, a RISE of

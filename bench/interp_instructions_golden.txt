@@ -635,5 +635,19 @@
 # drop on each. Measured in this container, where main reads 573,873,591:
 # 573,873,591 -> 568,708,684, a FALL of 5,164,907 (-0.9000%).
 # CI's reading replaces it if it differs.
-interp_instructions=568708684
+# 2026-10-08: the emitter change moves this row by layout. On one CPU model,
+# family 0x19 model 0x11, kanso#1806's binary read 568,708,684 and this
+# tree's reads 568,709,639, in CI and in a container alike, so the move is
+# the binary's and not the host's. CI's reading on kanso#1807:
+# 568,708,684 -> 568,709,639, a RISE of 955 (+0.0002%).
+# 2026-10-08: a dispatch ranks its candidates into a score held on the stack
+# rather than a vector allocated per dispatch. Measured in this container,
+# where the previous tree reads 568,709,639 on the row:
+# 568,709,639 -> 559,187,740, a FALL of 9,521,899 (-1.6743%).
+# CI's reading replaces it if it differs.
+# 2026-10-08: a dispatch that tries a second candidate keeps the bindings
+# buffer its losers matched into for the next dispatch, instead of freeing it.
+# Measured in this container: 559,187,740 -> 553,555,448, a FALL of 5,632,292
+# (-1.0072%). CI's reading replaces it if it differs.
+interp_instructions=553555448
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

@@ -4770,7 +4770,62 @@ arguments_released = row
 
 rows_c1zzzzzzz4 = text/concat rows_c1zzzzzzz5 [arguments_released]
 
-rows_c = text/concat rows_c1zzzzzzz4 [itself]
+# The tab emits only the groups its entry reaches, by the names the bodies
+# mention, and emits again with nothing skipped when the module names a group
+# it left out (2026-10-08). The mutation emits every group, so the browser
+# compile row is the witness.
+reached_groups = row
+  "the tab emitting every group"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_tab_emits_every_group")
+  release
+
+# The tab's walk leaves groups out of the program before any analysis reads
+# it, and the emitter asks about some groups by name rather than calling them.
+# A question about a left-out group has to send the program back whole. The
+# mutation stops noting the question, and the unit spec that leaves a `+` arm
+# out says nothing saw it.
+left_out_asked = row
+  "a question about a group the tab left out, answered unseen"
+  true
+  "cargo test --release --lib a_question_about_a_left_out_operator_is_noticed"
+  "specs (unit, golden, differential)"
+  (breaking "a_question_about_a_left_out_group_goes_unseen")
+  no_setup
+
+rows_c1zzzzzzz2 = text/concat rows_c1zzzzzzz3 [left_out_asked]
+
+# A dispatch ranks its candidates into a `Score` held on the stack, twelve ranks
+# inline (2026-10-08). The mutation gives the score a heap buffer at the start
+# of every dispatch again, and the interpreted row is the witness.
+scores_inline = row
+  "a dispatch that allocates its score"
+  true
+  interp_gate
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_dispatch_allocates_its_score")
+  release
+
+rows_c1zzzzzzz1 = text/concat rows_c1zzzzzzz2 [scores_inline]
+
+# A dispatch that tries a second candidate keeps the losers' bindings buffer
+# for the next dispatch instead of freeing it. The mutation frees it again, and
+# the interpreted row counts the allocations that come back.
+spare_binds = row
+  "a dispatch that frees its losers' bindings"
+  true
+  interp_gate
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_dispatch_frees_its_spare_binds")
+  release
+
+rows_c1zzzzzzz0 = text/concat rows_c1zzzzzzz1 [spare_binds]
+
+rows_c1zzzzzzz3 = text/concat rows_c1zzzzzzz4 [reached_groups]
+
+rows_c = text/concat rows_c1zzzzzzz0 [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
