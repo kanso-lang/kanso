@@ -4730,7 +4730,20 @@ local_place = row
 
 rows_c1zzzzzzz7 = text/concat rows_c1zzzzzzz8 [local_place]
 
-rows_c = text/concat rows_c1zzzzzzz7 [itself]
+# The tab's compiler keeps a free list for each size of small block and hands
+# blocks out again before dlmalloc is asked (2026-10-08). The mutation sends
+# every block to dlmalloc, so the browser compile row is the witness.
+small_blocks = row
+  "small blocks left to dlmalloc"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "small_blocks_left_to_dlmalloc")
+  release
+
+rows_c1zzzzzzz6 = text/concat rows_c1zzzzzzz7 [small_blocks]
+
+rows_c = text/concat rows_c1zzzzzzz6 [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

@@ -23551,3 +23551,39 @@ Objects and arrays cannot get the same treatment at the point they close. Each
 is allocated when it opens and its children are allocated after it, so a
 container is at the frontier when it closes only if nothing inside it reached
 the heap.
+
+## 2026-10-08 — the tab's compiler keeps small blocks for itself
+
+The browser side's compile row was the one welfare term worse than its
+baseline: `browser_compile_instructions` read 514,922,959 against 343,917,485.
+A native profile of the same work, `bench/interp_corpus` compiled and lowered
+to wasm, put about 13% of its instructions in malloc and free, from 76,354
+allocations. Native kanso runs on mimalloc, which keeps freed blocks on a list
+for each size. `docs/kanso.wasm` runs on `std::alloc::System`, which on wasm32
+is dlmalloc, and dlmalloc has no such lists.
+
+The allocator under the compiler's tally now keeps them on wasm32. A request of
+512 bytes or fewer is rounded up to a multiple of eight. A freed block goes on
+the list for its size, and the next request of that size takes it before
+dlmalloc is asked. `realloc` was the trait's default before, an allocation, a
+copy and a free. It now keeps a small block in place when the new size falls
+in the same class, and hands two large blocks to dlmalloc's own `realloc`,
+which can grow one where it stands.
+
+`browser_compile_instructions` reads 514,922,959 -> 453,713,751, a fall of
+61,209,208 (-11.89%). The `realloc` change alone accounts for 1,614,339 of it.
+A ceiling of 256 bytes cost 0.8% more than 512, and one of 1024 saved 0.3%
+more while keeping twice as much on the lists. The other three browser rows do
+not move. `browser_compile_peak_bytes` holds at 829,597 because the tally
+counts requested bytes before any of this, and a `realloc` is counted as the
+allocation, copy and free it replaced. The browser rows belong to the rustc
+that built the artifact, which is 1.98.1 here as on CI.
+
+Native kanso is untouched. Taking `realloc` through `mi_realloc` there was
+measured first and made the compile rows worse: `compile_instructions` +45,622,
+`entry_instructions` +156,320, `emit_instructions` +166,452. So the override
+exists only on wasm32, and `compile_instructions` and `emit_instructions` read
+their goldens with it in place.
+
+The ratchet row `small_blocks` sets the ceiling to nothing, so every block goes
+to dlmalloc. The browser compile row reads 513,308,620 under it.
