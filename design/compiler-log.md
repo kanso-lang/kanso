@@ -23813,3 +23813,38 @@ The browser engine links the interpreter, so its binary changed too.
 721,176 (+0.18%), read on rustc 1.98.1 as CI builds it. With the value change
 alone it had moved 1,238, so most of the rise arrived with the map keys. What
 in the tab's compile reads them is not isolated here.
+
+## 2026-10-08 — a kept local is answered before eval builds its frame
+
+`Interp::eval` held every expression form in one function, so its stack frame
+was sized for the largest of them. Every call pushed six callee-saved
+registers, reserved 760 bytes, and undid both on the way out. The line holding
+the function's signature carried 15.2 million instructions on
+`bench/interp_corpus` and its closing brace 11.1 million, about twenty
+instructions a call.
+
+Most calls did not need that frame. The commonest expression is a local name
+whose place the interpreter has already kept, 653,358 of them on the corpus,
+and reading one walks a frame or two and clones the value. `eval` is now a
+small function that answers exactly that case and hands everything else to
+`eval_node`, which is the old body unchanged. A global, or a local whose kept
+place no longer holds it, falls through and is resolved as before.
+
+Measured in this container on the same 874 lines of output:
+`interp_instructions` 539,217,785 -> 512,403,757 (-26,814,028, -4.97%). The
+allocation counters cannot move, since nothing allocates differently. CI's
+readings replace these if they differ.
+
+The ratchet row `front_door`, mutation `a_name_read_through_the_whole_node`,
+makes the range test refuse every name, so each one goes through `eval_node`
+again. With it applied the corpus reads 538,764,987.
+
+Two neighbours of this were measured the same day and declined. Both
+recycled argument vectors instead of allocating them. A pool fed by `eval` and
+`eval_tail` and refilled by the dispatcher read between 537,922,216 and
+540,566,075 depending on how it fell back when empty, and a version that also
+took the vector back from every builtin's `arity` read 539,054,147 and
+543,162,566 for its two ways of emptying it. mimalloc's fast path costs about
+63 instructions for an allocation and its free, and the pool cost about 45 to
+take a vector and 40 to give it back, so the spread across variants is layout
+and none of it is a gain.
