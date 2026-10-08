@@ -131,6 +131,27 @@ fn every_run_names_the_cpu_it_is_about_to_count_on() {
     }
 }
 
+/// The allocator reads two of the runner's settings when it starts, overcommit
+/// and transparent huge pages, and both decide which of its paths run. Every
+/// run prints them beside the cpu, with or without a loader to ask about the
+/// cpu, so two runners that disagree on a row can be told apart by one line.
+#[test]
+fn every_run_names_the_allocators_host_settings() {
+    for (said, how) in [
+        (asked("name", None, "alloc-name", false).1, "with the loader"),
+        (asked_blind("name", None, "alloc-blind", false).1, "with no loader"),
+    ] {
+        let line = said
+            .lines()
+            .find(|l| l.starts_with("allocator: "))
+            .unwrap_or_else(|| panic!("{how}, the allocator's settings are named: {said}"));
+        assert!(
+            line.contains("overcommit=") && line.contains(" thp="),
+            "{how}, by both settings it reads: {line}"
+        );
+    }
+}
+
 /// The no-x86 arm, reachable on every host. It has to answer 2 — never 0,
 /// which would let a moved row pass as verified, and never 1, which would
 /// blame silicon nobody read.
