@@ -406,4 +406,9 @@
 # 2026-10-08: the change is in the interpreter, which the emitter never
 # reaches; the row moved with the binary's layout. CI's reading on kanso#1810:
 # 23,392,747 -> 23,391,657, a FALL of 1,090 (-0.0047%).
-emit_instructions=23391657
+# 2026-10-08: the alias pass indexes only synthetic sites, each line's tokens
+# are kept at their length, a guard's statements sit behind a box and
+# `Expr` keeps its tag in a byte of its own. CI's reading on kanso#1811,
+# which this host's gate reproduces: 23,391,657 -> 23,409,658, a RISE of 18,001
+# (+0.0770%).
+emit_instructions=23409658

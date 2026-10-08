@@ -74,7 +74,15 @@ impl std::fmt::Debug for Resolution {
     }
 }
 
+/// On a 64-bit target the tag is a byte of its own. Left to the compiler, a
+/// 48-byte `Expr` kept its tag in a spare range of one of its fields, and every
+/// `match` over an expression decoded it: 2.7 million more instructions to
+/// check the entry corpus than the same enum at 56 bytes with a plain tag. With
+/// the tag explicit, `App` lists `piped` first so the byte beside the tag holds
+/// it and the variant still fits 48 bytes. On wasm32 the explicit tag costs
+/// the browser engine instructions, so it is left to the compiler there.
 #[derive(Clone, Debug)]
+#[cfg_attr(target_pointer_width = "64", repr(u8))]
 pub enum Expr {
     Int(BigInt, Span),
     Float(f64, Span),
@@ -87,10 +95,10 @@ pub enum Expr {
     Partial(Name, Span),
     List(Vec<Expr>, Span),
     App {
+        piped: bool,
         head: Box<Expr>,
         args: Vec<Expr>,
         span: Span,
-        piped: bool,
     },
     Field {
         base: Box<Expr>,
@@ -141,9 +149,50 @@ pub enum Expr {
     Guard {
         cond: Box<Expr>,
         early: Box<Expr>,
-        rest: Vec<Stmt>,
+        rest: Rest,
         span: Span,
     },
+}
+
+/// The statements below a guard. On a 64-bit target they are boxed, because
+/// `Guard` was the one variant that held a vector inline and the largest
+/// variant sets the size of every `Expr`: inline, it made each of them 56
+/// bytes where 48 hold the rest. On wasm32 a pointer is four bytes, `Guard`
+/// was never the largest variant, and the box would only add a hop.
+#[cfg(target_pointer_width = "64")]
+#[derive(Clone, Debug)]
+#[allow(clippy::box_collection)]
+pub struct Rest(Box<Vec<Stmt>>);
+
+#[cfg(target_pointer_width = "64")]
+impl Rest {
+    pub fn new(stmts: Vec<Stmt>) -> Rest {
+        Rest(Box::new(stmts))
+    }
+}
+
+#[cfg(not(target_pointer_width = "64"))]
+#[derive(Clone, Debug)]
+pub struct Rest(Vec<Stmt>);
+
+#[cfg(not(target_pointer_width = "64"))]
+impl Rest {
+    pub fn new(stmts: Vec<Stmt>) -> Rest {
+        Rest(stmts)
+    }
+}
+
+impl std::ops::Deref for Rest {
+    type Target = Vec<Stmt>;
+    fn deref(&self) -> &Vec<Stmt> {
+        &self.0
+    }
+}
+
+impl std::ops::DerefMut for Rest {
+    fn deref_mut(&mut self) -> &mut Vec<Stmt> {
+        &mut self.0
+    }
 }
 
 #[derive(Clone, Debug)]

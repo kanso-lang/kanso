@@ -137,7 +137,7 @@ fn use_targets(expr: &Expr, name: &str, out: &mut Vec<(String, usize, usize)>) {
         Expr::Guard { cond, early, rest, .. } => {
             use_targets(cond, name, out);
             use_targets(early, name, out);
-            for st in rest {
+            for st in rest.iter() {
                 match st {
                     Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
                         use_targets(expr, name, out)
@@ -246,7 +246,7 @@ fn collect_uses(
         Expr::Guard { cond, early, rest, .. } => {
             collect_uses(cond, name, discard, uses);
             collect_uses(early, name, discard, uses);
-            for st in rest {
+            for st in rest.iter() {
                 match st {
                     Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
                         collect_uses(expr, name, discard, uses)

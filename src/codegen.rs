@@ -4191,8 +4191,15 @@ fn framed_views(
                     out.insert(n.as_str());
                 }
             }
-            Expr::Block(stmts, _) | Expr::Build(stmts, _) | Expr::Guard { rest: stmts, .. } => {
+            Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
                 for st in stmts {
+                    if let Stmt::Bind { pattern, .. } = st {
+                        pattern_names(pattern, out);
+                    }
+                }
+            }
+            Expr::Guard { rest, .. } => {
+                for st in rest.iter() {
                     if let Stmt::Bind { pattern, .. } = st {
                         pattern_names(pattern, out);
                     }
@@ -11750,7 +11757,7 @@ fn collect_idents(expr: &Expr, out: &mut Vec<String>) {
         Expr::Guard { cond, early, rest, .. } => {
             collect_idents(cond, out);
             collect_idents(early, out);
-            for stmt in rest {
+            for stmt in rest.iter() {
                 match stmt {
                     Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
                         collect_idents(expr, out)

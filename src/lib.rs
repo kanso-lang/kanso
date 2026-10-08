@@ -993,7 +993,7 @@ fn bound_in_expr<'a>(e: &'a ast::Expr, out: &mut crate::hash::Set<&'a str>) {
         ast::Expr::Guard { cond, early, rest, .. } => {
             bound_in_expr(cond, out);
             bound_in_expr(early, out);
-            for st in rest {
+            for st in rest.iter() {
                 bound_in_stmt(st, out);
             }
         }
@@ -1093,54 +1093,64 @@ impl<'a> Targets<'a> {
 
 pub fn canonicalize_bare_aliases(program: &mut ast::Program) -> Rewrites {
     use crate::hash::{Map as HashMap, Set as HashSet};
+    // A name can be an alias only if a synthetic declaration carries it, so a
+    // program with none has nothing to rewrite and every map below would be
+    // built to answer no.
+    let synthetic = program.fns.iter().filter(|d| d.synthetic).count();
+    if synthetic == 0 {
+        return Rewrites::default();
+    }
+    fn site(d: &ast::FnDecl) -> Site<'_> {
+        (&d.file, d.span.line as usize, d.span.col as usize, d.params.len())
+    }
     // A synthetic bare alias and the qualified declaration it stands for are
     // the same source position with the same arity, so that tuple indexes
-    // them. Finding the twin used to be a scan of every declaration for every
-    // synthetic one — quadratic in the program, with a `format!` per pair
-    // inside the inner loop.
+    // them. Only the sites a synthetic declaration stands at are asked about,
+    // so only those are kept: indexing every declaration made this the
+    // largest thing alive in the front end, for answers nothing read.
     // A site nearly always holds one declaration, so the first is kept in the
-    // entry and only a second reaches the vector: a `Vec` per site was an
-    // allocation for each of lib/json's non-synthetic declarations.
-    let mut at_site: HashMap<Site, (&str, Vec<&str>)> =
-        HashMap::with_capacity_and_hasher(program.fns.len(), Default::default());
-    for twin in &program.fns {
-        if !twin.synthetic {
-            let key =
-                (&*twin.file, twin.span.line as usize, twin.span.col as usize, twin.params.len());
-            match at_site.entry(key) {
-                std::collections::hash_map::Entry::Occupied(mut o) => {
-                    o.get_mut().1.push(twin.name.as_str())
-                }
-                std::collections::hash_map::Entry::Vacant(v) => {
-                    v.insert((twin.name.as_str(), Vec::new()));
-                }
+    // entry and only a second reaches the vector.
+    let mut at_site: HashMap<Site, (Option<&str>, Vec<&str>)> =
+        HashMap::with_capacity_and_hasher(synthetic, Default::default());
+    for d in program.fns.iter().filter(|d| d.synthetic) {
+        at_site.entry(site(d)).or_insert((None, Vec::new()));
+    }
+    for twin in program.fns.iter().filter(|d| !d.synthetic) {
+        if let Some(entry) = at_site.get_mut(&site(twin)) {
+            match entry.0 {
+                None => entry.0 = Some(twin.name.as_str()),
+                Some(_) => entry.1.push(twin.name.as_str()),
             }
         }
     }
+    // Likewise only a name some synthetic declaration carries can be an
+    // alias; a qualified declaration of the same bare name only disqualifies
+    // it.
     let mut by_name: HashMap<&str, (bool, Targets)> =
-        HashMap::with_capacity_and_hasher(program.fns.len(), Default::default());
-    for d in &program.fns {
+        HashMap::with_capacity_and_hasher(synthetic, Default::default());
+    for d in program.fns.iter().filter(|d| d.synthetic) {
         if ast::has_slash(&d.name) {
             continue;
         }
         let entry = by_name.entry(d.name.as_str()).or_insert((true, Targets::None));
-        entry.0 &= d.synthetic;
-        if d.synthetic {
-            if let Some((first, rest)) =
-                at_site.get(&(&d.file, d.span.line as usize, d.span.col as usize, d.params.len()))
-            {
-                for name in std::iter::once(first).chain(rest) {
-                    // `qual/name`, asked without building the needle. A
-                    // `format!("/{}", d.name)` here cost a String per
-                    // synthetic declaration, which is most of what this pass
-                    // allocates and none of what it decides.
-                    let qualified =
-                        name.strip_suffix(d.name.as_str()).is_some_and(|qual| qual.ends_with('/'));
-                    if qualified {
-                        entry.1.add(name);
-                    }
+        if let Some((first, rest)) = at_site.get(&site(d)) {
+            for name in first.iter().chain(rest) {
+                // `qual/name`, asked without building the needle. A
+                // `format!("/{}", d.name)` here cost a String per
+                // synthetic declaration, which is most of what this pass
+                // allocates and none of what it decides.
+                let qualified =
+                    name.strip_suffix(d.name.as_str()).is_some_and(|qual| qual.ends_with('/'));
+                if qualified {
+                    entry.1.add(name);
                 }
             }
+        }
+    }
+    drop(at_site);
+    for d in program.fns.iter().filter(|d| !d.synthetic) {
+        if let Some(entry) = by_name.get_mut(d.name.as_str()) {
+            entry.0 = false;
         }
     }
     // The escape hatch's names come from the environment rather than the
@@ -1172,6 +1182,8 @@ pub fn canonicalize_bare_aliases(program: &mut ast::Program) -> Rewrites {
             _ => None,
         })
         .collect();
+    drop(skip);
+    drop(env_skip);
     if aliases.is_empty() {
         return Rewrites::default();
     }
@@ -1261,7 +1273,7 @@ fn alias_expr(e: &mut ast::Expr, aliases: &crate::hash::Map<String, String>, wro
         ast::Expr::Guard { cond, early, rest, .. } => {
             alias_expr(cond, aliases, wrote);
             alias_expr(early, aliases, wrote);
-            for st in rest {
+            for st in rest.iter_mut() {
                 alias_stmt(st, aliases, wrote);
             }
         }
@@ -2277,7 +2289,7 @@ fn mentions_in_expr<'a>(e: &'a ast::Expr, out: &mut crate::hash::Set<&'a str>) {
         ast::Expr::Guard { cond, early, rest, .. } => {
             mentions_in_expr(cond, out);
             mentions_in_expr(early, out);
-            for s in rest {
+            for s in rest.iter() {
                 mentions_in_stmt(s, out);
             }
         }
@@ -3255,7 +3267,7 @@ fn walk_children<'a, F: FnMut(&'a ast::Expr) -> bool>(e: &'a ast::Expr, f: &mut 
             if !f(cond) || !f(early) {
                 return;
             }
-            for st in rest {
+            for st in rest.iter() {
                 if !f(stmt_expr(st)) {
                     return;
                 }
@@ -4113,7 +4125,7 @@ fn walk_children_mut(e: &mut ast::Expr, f: &mut dyn FnMut(&mut ast::Expr)) {
         Expr::Guard { cond, early, rest, .. } => {
             f(cond);
             f(early);
-            for stmt in rest {
+            for stmt in rest.iter_mut() {
                 f(stmt_expr_mut(stmt));
             }
         }

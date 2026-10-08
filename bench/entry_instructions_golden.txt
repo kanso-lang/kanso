@@ -1121,7 +1121,12 @@
 # 2026-10-08: the change is in the interpreter, which `kanso check` never
 # runs; the row moved with the binary's layout. CI's reading on kanso#1810:
 # 86,445,359 -> 86,376,944, a FALL of 68,415 (-0.0791%).
-entry_instructions=86376944
+# 2026-10-08: the alias pass indexes only synthetic sites, each line's tokens
+# are kept at their length, a guard's statements sit behind a box and
+# `Expr` keeps its tag in a byte of its own. CI's reading on kanso#1811,
+# which this host's gate reproduces: 86,376,944 -> 85,213,654, a FALL of 1,163,290
+# (-1.3468%).
+entry_instructions=85213654
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

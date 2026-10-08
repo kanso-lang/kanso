@@ -505,4 +505,8 @@
 #
 # CI measured keys and values over maps: two more builtins and the encoder's
 # longer walk. compile_allocs 14,272 -> 14,288, a RISE of 16 (+0.1121%).
-compile_allocs=14743
+# 2026-10-08: the alias pass indexes only synthetic sites, each line's tokens
+# are kept at their length, and a guard's statements sit behind a box, which
+# makes every expression 48 bytes. Read by the gate on this host, whose rustc
+# is the golden's: 14,743 -> 14,529.
+compile_allocs=14529

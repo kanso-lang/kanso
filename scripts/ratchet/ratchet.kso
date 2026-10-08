@@ -4865,7 +4865,73 @@ rows_c1zzzzzzy7 = text/concat rows_c1zzzzzzy8 [fixed_globals]
 
 rows_c1zzzzzzz3 = text/concat rows_c1zzzzzzz4 [reached_groups]
 
-rows_c = text/concat rows_c1zzzzzzy7 [itself]
+# A line's tokens are moved into a vector of their exact length, from a
+# buffer kept between lines (2026-10-08). The mutation hands the buffer itself
+# over, so every line grows from empty by doubling; the allocation vein is the
+# witness.
+line_exact = row
+  "a line of tokens grown by doubling"
+  false
+  "sh scripts/gates/compile_allocs.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_line_of_tokens_grown_by_doubling")
+  release
+
+# The alias pass indexes only the sites a synthetic declaration stands at
+# (2026-10-08). The mutation indexes every declaration again, which changes no
+# alias. The witness is the allocation count: once the syntax tree shrank, the
+# front end's peak is set where the index is no longer alive, and a shard on
+# CI found the peak blind to it.
+alias_sites = row
+  "every declaration indexed for its alias"
+  false
+  "sh scripts/gates/compile_allocs.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "every_declaration_indexed_for_its_alias")
+  release
+
+# A guard's statements sit behind a box, so `Guard` is no longer the variant
+# that sets the size of every `Expr` (2026-10-08). The mutation holds them
+# inline again; every expression grows by eight bytes and the front end's peak
+# is the witness.
+guard_rest = row
+  "a guard's statements held in every expression"
+  false
+  "sh scripts/gates/compile_memory.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_guards_statements_held_in_every_expression")
+  release
+
+rows_c1zzzzzzy5 = text/concat rows_c1zzzzzzy7 [line_exact alias_sites]
+
+# On a 64-bit target `Expr` keeps its tag in a byte of its own (2026-10-08).
+# The mutation leaves the tag to the compiler, which hides it in a field of a
+# 48-byte enum; every walk over the program decodes it, and the entry row is
+# the witness.
+expr_tag = row
+  "an expression's tag hidden in its fields"
+  false
+  "sh scripts/gates/entry_instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "an_expressions_tag_hidden_in_its_fields")
+  release
+
+rows_c1zzzzzzy6 = text/concat rows_c1zzzzzzy5 [guard_rest expr_tag]
+
+# The interpreter's callee and frame tables hold 256 slots each, sized by the
+# run's peak as well as its speed (2026-10-08). The mutation gives the callees
+# 1,024 again, and the interpreted run's peak is the witness.
+callee_slots = row
+  "the callee cache sized for speed"
+  false
+  "sh scripts/gates/interp_memory.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_callee_cache_sized_for_speed")
+  release
+
+rows_c1zzzzzzy4 = text/concat rows_c1zzzzzzy6 [callee_slots]
+
+rows_c = text/concat rows_c1zzzzzzy4 [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

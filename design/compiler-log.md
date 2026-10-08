@@ -23911,3 +23911,134 @@ attribute now states what the door depends on.
 Applications were the group after that, 137,928 nodes. Moving their arm out of
 `eval_node` into its own function and sending them there from the door read
 503,651,651, 5.4 million worse, and it is not built.
+
+## 2026-10-08 — the front end's peak, lowered at the two places it was set
+
+`compile_peak_bytes` and `interp_peak_bytes` are both set by the front end:
+the interpreter's run never holds more than its check did. Printing live and
+peak bytes around each front-end phase on `bench/compile_corpus` put the peak
+inside `canonicalize_bare_aliases`, the pass that rewrites a bare alias to the
+qualified name it stands for. At its top-level call it held two maps sized for
+every declaration in the program: 415 of them, of which 94 were synthetic
+aliases. Only those 94 are ever asked about. A name nothing synthetic carries
+cannot be an alias, and a site no synthetic declaration stands at is never
+looked up.
+
+The pass now counts the synthetic declarations first and returns at once when
+there are none, which is most of its calls. Otherwise it keys the site index
+by the synthetic sites alone and fills in the qualified declarations that
+stand there, and it keeps a name in the second map only when a synthetic
+declaration carries it; a qualified declaration of the same name only marks
+it as not an alias. The site index is dropped as soon as the names are
+resolved, and the set of locally bound names as soon as the aliases are
+chosen. On every target tried, the 56 of them that include each bench corpus,
+lib/json, kq and vse, `KANSO_ALIAS_REPORT` prints the same aliases before and
+after: 76 on the interpreter corpus.
+
+That alone moved the peak by 291 bytes, because the peak was set in two
+places. The second was the lexer. Each line's tokens were gathered in a vector
+that started at eight and doubled, and that vector was kept for the whole
+parse with up to half of it unused. A line's tokens are now gathered in a
+buffer kept between lines and moved out into a vector of exactly their length.
+The buffer is as long as the file's longest line and is released when the file
+is lexed; kept until the end, it held 3,072 bytes under the peak.
+
+Lowering the lexer's share by itself raised the peak by 3,076, to 732,705,
+because the alias pass then set it alone. Together, in this container:
+
+    compile_peak_bytes   729,629 -> 706,828   (-22,801, -3.13%)
+    compile_allocs        14,742 ->  14,515   (-227, -1.54%)
+    interp_peak_bytes    739,444 -> 726,051   (-13,393, -1.81%)
+    interp_allocs        626,209 -> 625,986   (-223)
+
+CI's rows replace these before the floor moves.
+
+The move out of the buffer is a `Vec::append` into a vector reserved at the
+line's length, which copies the line in one block. A first version used
+`drain(..).collect()`, which reached the same counters natively and moved
+each token separately: in the browser engine it read
+`browser_compile_instructions` 396,604,174 -> 397,453,894, and the lexer
+half alone 397,627,379. With `append` the browser row reads 396,335,868
+(-268,306), the lexer half alone 396,509,353, and its peak, which is set
+after the front end, does not move.
+
+`shrink_to_fit` on each line's vector was tried before either. It reached
+the same peak, 706,828, and cost 723 more allocations, because each shrink
+is a reallocation.
+
+Two ratchet rows hold this. `line_exact`, mutation
+`a_line_of_tokens_grown_by_doubling`, hands the buffer itself to the parse, so
+every line grows from empty again: `compile_allocs` reads 15,196. `alias_sites`,
+mutation `every_declaration_indexed_for_its_alias`, indexes every declaration
+by site again, which changes no alias. Before the change below it read
+`compile_peak_bytes` 712,674. After it, the peak is set at a point where the
+index is no longer alive, and under the mutation the peak reads 674,684, the
+same as without it. The ratchet's shard on CI found that the row had gone
+blind. It now watches `compile_allocs`, which reads 14,534 under the mutation
+against 14,529, and `compile_instructions` reads 25,933,852 against
+25,842,553. On the finished change, then, the alias pass saves five
+allocations and 91,299 instructions and no longer lowers the peak.
+
+With the peak no longer set by a pass, it is set by what the program is: the
+syntax tree, which is live from the parse to the end of the compile. `Expr`
+was 56 bytes on a 64-bit target and `Stmt`, which holds one, 120. The size of
+an enum is the size of its largest variant, and the largest was `Guard`, the
+only variant holding a vector inline; every other one fits 48. The statements
+below a guard now sit behind a box, `Rest`, which makes every expression 48
+bytes and every statement 112:
+
+    compile_peak_bytes   706,828 -> 674,716   (-32,112, -4.54%)
+    interp_peak_bytes    726,051 -> 693,467   (-32,584, -4.49%)
+
+The first build of that was slower everywhere. Checking the entry corpus went
+from 87,188,776 instructions to 89,458,310, spread across every walk over the
+tree at about 100,000 each. At 48 bytes the compiler no longer gave `Expr` a
+tag byte of its own: it hid the tag in a spare range of one of the fields, and
+every `match` over an expression decoded it. `#[repr(u8)]` puts the tag back
+in a byte of its own, and `App` lists `piped` first so that byte's neighbour
+holds it and the variant still fits 48 bytes. The entry corpus then reads
+86,720,594, below the 56-byte tree.
+
+Neither change helps on wasm32, where a pointer is four bytes and `Guard` was
+never the largest variant. The box alone took `browser_compile_instructions`
+to 397,184,456 and the box with the explicit tag to 398,423,756, against
+396,335,868 without either. Both are applied on 64-bit targets only, and the
+browser row reads 396,233,999, with the `App` reordering kept everywhere.
+
+Two more ratchet rows hold these. `guard_rest`, mutation
+`a_guards_statements_held_in_every_expression`, holds the statements inline
+again: `compile_peak_bytes` reads 706,832. `expr_tag`, mutation
+`an_expressions_tag_hidden_in_its_fields`, removes the explicit tag: the
+entry corpus reads 89,458,575.
+
+The interpreted run's peak is set after the front end, while the program
+runs. Probing the heap around the interpreter put 32,768 bytes of it in two
+direct-mapped tables `Interp::new` allocates and keeps for the whole run: 1,024
+callee slots and 512 frame slots. They were sized for speed when the peak was
+not counted. At 256 slots each the run holds 22,528 bytes less, and the
+corpus misses often enough to cost about 720,000 more instructions, 0.13%,
+by the count in the table's last column:
+
+    RECENT_CALLEES / RECENT_FRAMES   interp_peak_bytes   instructions here
+    1,024 / 512                      709,850             536,115,019
+    512 / 512                        697,562             536,348,115
+    512 / 256                        693,466             536,843,473
+    256 / 256                        687,322             536,835,497
+
+The objective weighs the peak above the instructions: development welfare
+reads 91.33 against 91.30 with the projected rows. The ratchet row
+`callee_slots`, mutation `the_callee_cache_sized_for_speed`, gives the callees
+1,024 slots again and the run peaks at 705,757.
+
+CI's instruction rows for the change, which this host's gates reproduce:
+`compile_instructions` 26,181,647 -> 25,842,553, `entry_instructions`
+86,376,944 -> 85,213,654 and `library_instructions` 86,922,871 -> 85,769,613.
+`emit_instructions` rose, 23,391,657 -> 23,409,658, 18,001 instructions. The
+rise arrived with the change, and what in it moved the emitter is not
+isolated.
+
+The gate's own interpreter row for the whole change, which CI read on a
+runner of family 0x6 model 0x6a and this container read the same:
+`interp_instructions` 499,300,948 -> 500,281,043, a rise of 980,095
+(+0.1963%). Main reads 499,300,948 here, so the rise belongs to the change
+and not to the silicon. `startup_instructions` did not move.

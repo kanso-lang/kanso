@@ -699,7 +699,7 @@ fn per_node_walk<'a>(
             per_node_walk(cond, tables, state, down(flags), diags);
             per_node_walk(early, tables, state, taken, diags);
             let outer = state.build.born.clone();
-            for stmt in rest {
+            for stmt in rest.iter() {
                 state.build.before(stmt, &tables.types, diags);
                 let inner = match stmt {
                     Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
@@ -2491,7 +2491,7 @@ fn check_marker_calls(expr: &Expr, markers: &HashSet<String>, diags: &mut Vec<Di
         Expr::Guard { cond, early, rest, .. } => {
             check_marker_calls(cond, markers, diags);
             check_marker_calls(early, markers, diags);
-            for stmt in rest {
+            for stmt in rest.iter() {
                 match stmt {
                     Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
                         check_marker_calls(expr, markers, diags)
@@ -3330,7 +3330,7 @@ fn bound_in_expr<'a>(e: &'a Expr, out: &mut HashSet<&'a str>) {
     // read them, a name bound behind a guard was taken for the declaration
     // sharing its spelling, and `start = text/split ..` read as the effect
     if let Expr::Guard { rest, .. } = e {
-        for stmt in rest {
+        for stmt in rest.iter() {
             bound_in_stmt(stmt, out);
         }
     }
@@ -5515,7 +5515,7 @@ impl<'a> Resolver<'a> {
                 self.resolve_expr(cond);
                 self.resolve_expr(early);
                 let base = self.locals.len();
-                for stmt in rest {
+                for stmt in rest.iter() {
                     match stmt {
                         Stmt::Bind { pattern, expr } => {
                             self.resolve_expr(expr);

@@ -2071,7 +2071,7 @@ fn collect_names<'a>(e: &'a Expr, out: &mut HashSet<&'a str>) {
         Expr::Guard { cond, early, rest, .. } => {
             collect_names(cond, out);
             collect_names(early, out);
-            for s in rest {
+            for s in rest.iter() {
                 collect_names(guard_stmt_expr(s), out);
             }
         }
@@ -2169,7 +2169,7 @@ fn collect_value_uses<'a>(e: &'a Expr, out: &mut crate::hash::Set<&'a str>) {
         Expr::Guard { cond, early, rest, .. } => {
             collect_value_uses(cond, out);
             collect_value_uses(early, out);
-            for s in rest {
+            for s in rest.iter() {
                 collect_value_uses(guard_stmt_expr(s), out);
             }
         }
