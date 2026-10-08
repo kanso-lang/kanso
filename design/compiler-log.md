@@ -23970,7 +23970,14 @@ Two ratchet rows hold this. `line_exact`, mutation
 `a_line_of_tokens_grown_by_doubling`, hands the buffer itself to the parse, so
 every line grows from empty again: `compile_allocs` reads 15,196. `alias_sites`,
 mutation `every_declaration_indexed_for_its_alias`, indexes every declaration
-by site again, which changes no alias: `compile_peak_bytes` reads 712,674.
+by site again, which changes no alias. Before the change below it read
+`compile_peak_bytes` 712,674. After it, the peak is set at a point where the
+index is no longer alive, and under the mutation the peak reads 674,684, the
+same as without it. The ratchet's shard on CI found that the row had gone
+blind. It now watches `compile_allocs`, which reads 14,534 under the mutation
+against 14,529, and `compile_instructions` reads 25,933,852 against
+25,842,553. On the finished change, then, the alias pass saves five
+allocations and 91,299 instructions and no longer lowers the peak.
 
 With the peak no longer set by a pass, it is set by what the program is: the
 syntax tree, which is live from the parse to the end of the compile. `Expr`

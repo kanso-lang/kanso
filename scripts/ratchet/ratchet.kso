@@ -4879,11 +4879,13 @@ line_exact = row
 
 # The alias pass indexes only the sites a synthetic declaration stands at
 # (2026-10-08). The mutation indexes every declaration again, which changes no
-# alias and puts the index back under the front end's peak.
+# alias. The witness is the allocation count: once the syntax tree shrank, the
+# front end's peak is set where the index is no longer alive, and a shard on
+# CI found the peak blind to it.
 alias_sites = row
   "every declaration indexed for its alias"
   false
-  "sh scripts/gates/compile_memory.sh"
+  "sh scripts/gates/compile_allocs.sh"
   "cost goldens (deterministic ratchet, no clocks)"
   (breaking "every_declaration_indexed_for_its_alias")
   release
