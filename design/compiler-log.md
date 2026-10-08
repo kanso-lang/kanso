@@ -23794,10 +23794,11 @@ code outside it can build an inline string from bytes that are not UTF-8, read
 inside `Value::clone`. A `Clone` written by hand, matching the two forms and
 copying the inline one directly, reads the same as the bare enum did.
 
-Measured in this container, printing the same 874 lines:
-`interp_instructions` 553,555,448 -> 542,300,428 (-2.03%), and `interp_allocs`
-714,647 -> 636,769, 77,878 fewer calls to the allocator. The peak does not
-move. CI's readings replace these if they differ.
+Measured in this container, printing the same 874 lines, with values and map
+keys both changed: `interp_instructions` 553,555,448 -> 540,215,448 (-2.41%),
+and `interp_allocs` 714,647 -> 626,209, 88,438 fewer calls to the allocator.
+Values alone had read 542,300,428 and 636,769. The peak does not move. CI's
+readings replace these if they differ.
 
 Two unit specs pin the shape. One asserts that `Text` is the size of a `String`
 and `Value` is 32 bytes; it fails at an inline width of 22. The other reads
@@ -23805,9 +23806,10 @@ strings back at every length from zero to nineteen bytes, in one-byte and
 two-byte characters, and checks that any two compare and order as their `str`s
 do; it fails when the inline read drops a byte. The ratchet row
 `short_strings` sets the inline width to zero, so every string but the empty
-one goes to the heap again, and the row reads 552,058,680.
+one goes to the heap again, and the row reads 550,877,389.
 
-The browser engine links the interpreter, so its binary changed too, and
-`browser_compile_instructions` moved 395,882,998 -> 395,884,236, a rise of
-1,238 on a compile that never runs the interpreter. That is the wasm binary's
-layout, read on rustc 1.98.1 as CI builds it.
+The browser engine links the interpreter, so its binary changed too.
+`browser_compile_instructions` moved 395,882,998 -> 396,604,174, a rise of
+721,176 (+0.18%), read on rustc 1.98.1 as CI builds it. With the value change
+alone it had moved 1,238, so most of the rise arrived with the map keys. What
+in the tab's compile reads them is not isolated here.

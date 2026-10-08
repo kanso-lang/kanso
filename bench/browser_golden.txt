@@ -5,12 +5,12 @@
 # peak is the toolchain allocator's requested bytes and the run's memory is
 # what the runtime's linear memory grew by, so every row is the same on every
 # run of the same code. See tests/browser_cost.rs.
-# 2026-10-08: the interpreter's string value changed shape, and the engine
-# links the interpreter though the tab's compile does not run it.
-# browser_compile_instructions 395,882,998 -> 395,884,236, a RISE of 1,238,
-# on rustc 1.98.1 as CI builds it.
+# 2026-10-08: the interpreter's string value and map key changed shape, and
+# the engine links the interpreter. browser_compile_instructions
+# 395,882,998 -> 396,604,174, a RISE of 721,176 (+0.18%), on rustc 1.98.1 as
+# CI builds it. The value change alone had moved it 1,238.
 # measured-on rustc=1.98.1
-browser_compile_instructions=395884236
+browser_compile_instructions=396604174
 browser_compile_peak_bytes=673727
 browser_run_instructions=33510708
 browser_run_peak_bytes=1310720
