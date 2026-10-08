@@ -23953,4 +23953,5 @@ browser row reads 396,233,999, with the `App` reordering kept everywhere.
 Two more ratchet rows hold these. `guard_rest`, mutation
 `a_guards_statements_held_in_every_expression`, holds the statements inline
 again: `compile_peak_bytes` reads 706,832. `expr_tag`, mutation
-`an_expressions_tag_hidden_in_its_fields`, removes the explicit tag.
+`an_expressions_tag_hidden_in_its_fields`, removes the explicit tag: the
+entry corpus reads 89,458,575.
