@@ -23481,6 +23481,22 @@ back out.
 
 `docs/compiler.html` §198 and §199 cover this entry and the two before it.
 
+## 2026-10-08 — two more ideas measured and declined
+
+The interpreter's tail calls each allocate an argument vector, and the
+dispatcher frees it once the arguments are bound, so a chain of tail calls
+allocated and freed one vector a hop. Keeping the emptied vector in a `Cell` on
+the interpreter for the next tail call to fill raised `interp_instructions`
+573,873,591 -> 576,314,674 (+2,441,083, +0.43%). Many of the vectors `eval_tail`
+fills end in an ordinary call rather than a hop, so the spare was often empty,
+and the take and the set cost more than the allocations they saved.
+
+The release link's loop unroll threshold was raised through
+`-Wl,-mllvm,-unroll-threshold`. At 600 runbench read 176 instructions higher
+and `.text` grew 512 bytes; at 4000 runbench fell 2,445 and `.text` grew
+19,264. The loops runbench spends its time in are not held back by the
+threshold.
+
 ## 2026-10-08 — the gates name the allocator's host settings
 
 The standing row "A welfare counter reads three parts per billion" ends on a
