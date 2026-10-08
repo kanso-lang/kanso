@@ -851,7 +851,12 @@ fn parse_body(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
             ));
         }
         let rest = std::mem::take(&mut cont);
-        let guard = Expr::Guard { cond: Box::new(cond), early: Box::new(early), rest, span };
+        let guard = Expr::Guard {
+            cond: Box::new(cond),
+            early: Box::new(early),
+            rest: crate::ast::Rest::new(rest),
+            span,
+        };
         cont = vec![Stmt::Expr(guard)];
     }
     Ok(cont)

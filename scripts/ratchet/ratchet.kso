@@ -4874,7 +4874,33 @@ alias_sites = row
   (breaking "every_declaration_indexed_for_its_alias")
   release
 
-rows_c1zzzzzzy6 = text/concat rows_c1zzzzzzy8 [line_exact alias_sites]
+# A guard's statements sit behind a box, so `Guard` is no longer the variant
+# that sets the size of every `Expr` (2026-10-08). The mutation holds them
+# inline again; every expression grows by eight bytes and the front end's peak
+# is the witness.
+guard_rest = row
+  "a guard's statements held in every expression"
+  false
+  "sh scripts/gates/compile_memory.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_guards_statements_held_in_every_expression")
+  release
+
+rows_c1zzzzzzy5 = text/concat rows_c1zzzzzzy8 [line_exact alias_sites]
+
+# On a 64-bit target `Expr` keeps its tag in a byte of its own (2026-10-08).
+# The mutation leaves the tag to the compiler, which hides it in a field of a
+# 48-byte enum; every walk over the program decodes it, and the entry row is
+# the witness.
+expr_tag = row
+  "an expression's tag hidden in its fields"
+  false
+  "sh scripts/gates/entry_instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "an_expressions_tag_hidden_in_its_fields")
+  release
+
+rows_c1zzzzzzy6 = text/concat rows_c1zzzzzzy5 [guard_rest expr_tag]
 
 rows_c = text/concat rows_c1zzzzzzy6 [itself]
 

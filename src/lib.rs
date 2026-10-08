@@ -993,7 +993,7 @@ fn bound_in_expr<'a>(e: &'a ast::Expr, out: &mut crate::hash::Set<&'a str>) {
         ast::Expr::Guard { cond, early, rest, .. } => {
             bound_in_expr(cond, out);
             bound_in_expr(early, out);
-            for st in rest {
+            for st in rest.iter() {
                 bound_in_stmt(st, out);
             }
         }
@@ -1273,7 +1273,7 @@ fn alias_expr(e: &mut ast::Expr, aliases: &crate::hash::Map<String, String>, wro
         ast::Expr::Guard { cond, early, rest, .. } => {
             alias_expr(cond, aliases, wrote);
             alias_expr(early, aliases, wrote);
-            for st in rest {
+            for st in rest.iter_mut() {
                 alias_stmt(st, aliases, wrote);
             }
         }
@@ -2289,7 +2289,7 @@ fn mentions_in_expr<'a>(e: &'a ast::Expr, out: &mut crate::hash::Set<&'a str>) {
         ast::Expr::Guard { cond, early, rest, .. } => {
             mentions_in_expr(cond, out);
             mentions_in_expr(early, out);
-            for s in rest {
+            for s in rest.iter() {
                 mentions_in_stmt(s, out);
             }
         }
@@ -3267,7 +3267,7 @@ fn walk_children<'a, F: FnMut(&'a ast::Expr) -> bool>(e: &'a ast::Expr, f: &mut 
             if !f(cond) || !f(early) {
                 return;
             }
-            for st in rest {
+            for st in rest.iter() {
                 if !f(stmt_expr(st)) {
                     return;
                 }
@@ -4125,7 +4125,7 @@ fn walk_children_mut(e: &mut ast::Expr, f: &mut dyn FnMut(&mut ast::Expr)) {
         Expr::Guard { cond, early, rest, .. } => {
             f(cond);
             f(early);
-            for stmt in rest {
+            for stmt in rest.iter_mut() {
                 f(stmt_expr_mut(stmt));
             }
         }

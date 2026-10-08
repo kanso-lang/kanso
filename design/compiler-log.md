@@ -23923,3 +23923,34 @@ Two ratchet rows hold this. `line_exact`, mutation
 every line grows from empty again: `compile_allocs` reads 15,196. `alias_sites`,
 mutation `every_declaration_indexed_for_its_alias`, indexes every declaration
 by site again, which changes no alias: `compile_peak_bytes` reads 712,674.
+
+With the peak no longer set by a pass, it is set by what the program is: the
+syntax tree, which is live from the parse to the end of the compile. `Expr`
+was 56 bytes on a 64-bit target and `Stmt`, which holds one, 120. The size of
+an enum is the size of its largest variant, and the largest was `Guard`, the
+only variant holding a vector inline; every other one fits 48. The statements
+below a guard now sit behind a box, `Rest`, which makes every expression 48
+bytes and every statement 112:
+
+    compile_peak_bytes   706,828 -> 674,716   (-32,112, -4.54%)
+    interp_peak_bytes    726,051 -> 693,467   (-32,584, -4.49%)
+
+The first build of that was slower everywhere. Checking the entry corpus went
+from 87,188,776 instructions to 89,458,310, spread across every walk over the
+tree at about 100,000 each. At 48 bytes the compiler no longer gave `Expr` a
+tag byte of its own: it hid the tag in a spare range of one of the fields, and
+every `match` over an expression decoded it. `#[repr(u8)]` puts the tag back
+in a byte of its own, and `App` lists `piped` first so that byte's neighbour
+holds it and the variant still fits 48 bytes. The entry corpus then reads
+86,720,594, below the 56-byte tree.
+
+Neither change helps on wasm32, where a pointer is four bytes and `Guard` was
+never the largest variant. The box alone took `browser_compile_instructions`
+to 397,184,456 and the box with the explicit tag to 398,423,756, against
+396,335,868 without either. Both are applied on 64-bit targets only, and the
+browser row reads 396,233,999, with the `App` reordering kept everywhere.
+
+Two more ratchet rows hold these. `guard_rest`, mutation
+`a_guards_statements_held_in_every_expression`, holds the statements inline
+again: `compile_peak_bytes` reads 706,832. `expr_tag`, mutation
+`an_expressions_tag_hidden_in_its_fields`, removes the explicit tag.
