@@ -390,4 +390,10 @@
 # isolated. Measured in this container, where the previous tree reads on the row:
 # 27,248,851 -> 27,259,671, a RISE of 10,820 (+0.0397%).
 # CI's reading replaces it if it differs.
-emit_instructions=24923517
+# 2026-10-08: the emitter writes each line, block label and hoisted stack slot
+# with three pushes rather than through `writeln!`; `codegen::emit_ir_for` runs
+# all of the changed code. Measured in this container, where the previous tree
+# reads 24,923,517 on the row:
+# 24,923,517 -> 23,997,530, a FALL of 925,987 (-3.7154%).
+# CI's reading replaces it if it differs.
+emit_instructions=23997530

@@ -137,8 +137,16 @@ case "$own" in
 esac
 
 printf 'interp_instructions=%s\n' "$own" > interp_ir_got.txt
-printf 'interp_sample cpu="%s" sha=%.12s row=%s\n' \
-  "$(sh scripts/gates/dispatch.sh name | sed -n 's/^silicon: //p')" \
+# A NOTICE, so the sample can be read without the job log. The log is served
+# from blob storage behind a redirect, and a session that can read annotations
+# cannot always follow it; the open question this line serves -- one row
+# reading a handful of instructions apart on two runners of one commit --
+# needs the row, the binary and both host lines from many jobs side by side.
+# The allocator's two settings ride with the silicon for that reason.
+host_lines=$(sh scripts/gates/dispatch.sh name)
+printf '::notice::interp_sample cpu="%s" %s sha=%.12s row=%s\n' \
+  "$(printf '%s\n' "$host_lines" | sed -n 's/^silicon: //p')" \
+  "$(printf '%s\n' "$host_lines" | sed -n 's/^allocator: //p')" \
   "$(sha256sum "$box/kanso" | cut -d' ' -f1)" \
   "$(sed -n 's/^interp_instructions=//p' interp_ir_got.txt)"
 

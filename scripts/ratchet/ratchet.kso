@@ -4743,7 +4743,34 @@ small_blocks = row
 
 rows_c1zzzzzzz6 = text/concat rows_c1zzzzzzz7 [small_blocks]
 
-rows_c = text/concat rows_c1zzzzzzz6 [itself]
+# The emitter writes each body line with three pushes rather than through
+# `writeln!` (2026-10-08). The mutation sends the line through the formatter
+# again, so the emit row is the witness.
+emitted_lines = row
+  "emitted lines written through the formatter"
+  true
+  emit_gate
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "emitted_lines_through_fmt")
+  release
+
+rows_c1zzzzzzz5 = text/concat rows_c1zzzzzzz6 [emitted_lines]
+
+# A dispatch lets go of what is left in its argument vector through
+# `release`, which skips `Value`'s drop for the variants that own nothing
+# (2026-10-08). The mutation drops every one again, so the interpreted row is
+# the witness.
+arguments_released = row
+  "argument placeholders dropped one by one"
+  true
+  interp_gate
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "arguments_dropped_one_by_one")
+  release
+
+rows_c1zzzzzzz4 = text/concat rows_c1zzzzzzz5 [arguments_released]
+
+rows_c = text/concat rows_c1zzzzzzz4 [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

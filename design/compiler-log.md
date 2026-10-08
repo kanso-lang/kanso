@@ -23587,3 +23587,55 @@ their goldens with it in place.
 
 The ratchet row `small_blocks` sets the ceiling to nothing, so every block goes
 to dlmalloc. The browser compile row reads 513,308,620 under it.
+
+## 2026-10-08 — the emitter writes its lines without the formatter
+
+`FnEmit::write` appended each line of a function body with
+`writeln!(self.out, "  {text}")`. The line is already a string, so the only
+work is two spaces, the text and a newline, and the formatter spent about 540
+instructions a line getting there. On the browser corpus that was 8,571 lines
+for 4,657,137 instructions. The line, the block label `start_block` writes and
+the stack slots `body` hoists into the entry block now go onto the buffer with
+`push_str`.
+
+The module text is the same; `machine_code` and `emitted_code` agree.
+`emit_instructions` reads 24,923,517 -> 23,997,530 in this container, a fall of
+925,987 (-3.72%), and CI's reading replaces it if it differs.
+`browser_compile_instructions` reads 453,713,751 -> 450,123,996 (-0.79%) over
+the tab's small-block free list, which belongs to the rustc that built the
+artifact, 1.98.1 here as on CI. On main before that list it read
+514,922,959 -> 511,333,204, so the saving is the same 3.6 million either way. The
+`kanso check` rows do not move, since they stop before codegen.
+
+The ratchet row `emitted_lines` sends the body line through `writeln!` again,
+and the emit row reads 24,766,221 under it.
+
+## 2026-10-08 — a dispatch stops dropping values that own nothing
+
+When the interpreter dispatches a call, `bind_moved` takes each argument a
+plain parameter binds and leaves `NoneV` in its place. The argument vector was
+then cleared with `args.clear()`, which hands every element to `Value`'s drop.
+`Value` has nineteen variants and its drop is an out-of-line function, so
+each placeholder cost a call that only found out there was nothing to free. On
+the interpreted corpus `dispatch_loop` made 1,384,579 of those calls, about 17
+instructions each.
+
+The vector is now emptied through `release`, which matches the variants that
+own nothing (a small int, a float, the booleans, `none`, `done` and a table
+slot) and forgets them, and drops the rest as before. `interp_instructions`
+reads 573,873,591 -> 568,708,684 in this container, a fall of 5,164,907
+(-0.90%), and CI's reading replaces it if it differs. Forgetting only `NoneV`
+read 570,633,594, so the other trivial variants account for a further 1.9
+million.
+
+Two neighbours were measured and are not built. Releasing the pooled
+frame's old bindings the same way, in place of `binds.clear()`, read
+578,197,383 with the argument change beside it: the pop loop over pairs cost
+more in `dispatch_loop` than the calls it saved. And in the browser's
+translator, adding up integer literals of eighteen digits or fewer in an
+`i64` without checks, ahead of the checked `i128` path, moved
+`browser_compile_instructions` from 450,123,996 to 452,683,338. The `i128`
+loop was not the cost.
+
+The ratchet row `arguments_released` puts `drop(arg)` back in the loop, and
+the interpreted row reads 576,822,655 under it.

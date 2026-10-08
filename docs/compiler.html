@@ -3841,6 +3841,14 @@ welfare                      77.37         82.09</code></pre>
 
 <p>Two smaller ideas were declined the same day. Keeping the interpreter's emptied argument vector for the next tail call cost 0.43% on the interpreted row, because many of the vectors it would have refilled end in an ordinary call. Setting the release link's unroll threshold to 600 or 4000 moved <code>runbench</code> by at most 2,445 instructions and grew the binary.</p>
 
+<h2 id="smallcosts"><span class="sec-num">201</span>three costs that bought nothing</h2>
+
+<p>The compiler that runs in the playground tab allocates through dlmalloc, Rust's allocator on wasm32, and most of its requests are a few dozen bytes. The tab now keeps a free list for each size up to 512 bytes, in steps of eight, and hands a freed block to the next request of its size before dlmalloc is asked. Compiling the browser corpus in the tab fell from 514.9 million to 453.7 million fuel. A block that grows and stays within its size class keeps its address.</p>
+
+<p>The emitter wrote each line of a function body through <code>writeln!</code>, which spent about 540 instructions running the formatter to join two spaces, a line of text and a newline. Those three pieces now go onto the buffer directly. The emitted module is byte for byte the same, and the emitter's own row fell 3.7%.</p>
+
+<p>When the interpreter dispatches a call it moves each bound argument into the new frame and leaves an empty placeholder behind. Clearing the argument vector then called the value type's drop on every placeholder, about 1.4 million calls on the interpreted corpus that freed nothing. The vector is now emptied through a helper that skips the call for values that own no memory, and the interpreted row fell 0.90%. Applying the same helper to the previous frame's bindings made the row worse, and was left out.</p>
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>
