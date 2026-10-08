@@ -23890,3 +23890,9 @@ The ratchet row `fixed_globals`, mutation
 the table, so every one of them is asked for and missed. With it applied the
 corpus reads 526,318,936, worse than before the table existed, because each
 global now pays for the miss as well as for `eval_node`.
+
+Integer literals were the next group, 122,017 of them. Sent from the door to a
+one-line out-of-line helper that builds the value, they read 533,252,591,
+thirty-two million worse than the table alone. That is the second time a
+literal added to the door has cost more than the whole door saves, and the
+cause is not isolated either time, so the door holds names only.
