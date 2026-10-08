@@ -24023,3 +24023,10 @@ The objective weighs the peak above the instructions: development welfare
 reads 91.33 against 91.30 with the projected rows. The ratchet row
 `callee_slots`, mutation `the_callee_cache_sized_for_speed`, gives the callees
 1,024 slots again and the run peaks at 705,757.
+
+CI's instruction rows for the change, which this host's gates reproduce:
+`compile_instructions` 26,181,647 -> 25,842,553, `entry_instructions`
+86,376,944 -> 85,213,654 and `library_instructions` 86,922,871 -> 85,769,613.
+`emit_instructions` rose, 23,391,657 -> 23,409,658, 18,001 instructions. The
+rise arrived with the change, and what in it moved the emitter is not
+isolated.
