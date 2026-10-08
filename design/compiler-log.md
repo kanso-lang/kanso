@@ -23640,38 +23640,55 @@ loop was not the cost.
 The ratchet row `arguments_released` puts `drop(arg)` back in the loop, and
 the interpreted row reads 576,822,655 under it.
 
-## 2026-10-08 — the tab emits only what its entry reaches
+## 2026-10-08 — the tab compiles only what its entry reaches
 
 The emitter wrote a dispatcher for every group in the program, and on a
 program with an entry `Written::finish` then pruned whatever nothing reached
 from it. On `bench/interp_corpus` the prune dropped 132 definitions and 127,415
 bytes of the 369,868 the tab had written, almost all of them std/list
 functions the corpus never calls. The text was held beside the program until
-the end of emission, which is the most the tab's compile holds.
+the end of emission, which is the most the tab's compile holds. Every analysis
+before the emitter also read those functions: inference, linearity, the beat
+loops, escape and demand each walked the whole of std/list.
 
-The tab now walks the names each body mentions, from the entry, and emits
-only the groups the walk reaches. The walk is `call_graph`, which the cohort
-brackets already use. Two kinds of call do not appear in it as a name: an
-interpolated value dispatching to `render/to_string`, and an operator reaching
-a user's arm. The render group and every operator group are seeded. If the
-module still names the dispatcher, twin, wrapper or wrapper record of a group
-the walk left out, the emitter emits again with nothing skipped, so a miss
-costs time and never a module that fails to link. Across the 148 programs in
-the tree that compile alone, the seeded walk needed that second pass on none.
-Before the operator seed it needed it on three, all of them user arms of `+`,
-`<` and `>`.
+The tab now walks the names each body mentions, from the entry, and takes
+every group the walk does not reach out of the program before any analysis
+runs. The walk is `call_graph`, which the cohort brackets already use. Some
+groups are reached without a body naming them. An interpolated value
+dispatches to `render`, a value-wrapped `print` renders through
+`render/to_string`, an operator finds a user's arm by asking whether the
+program declares one, and fused map columns stand in for `keys` and `values`
+only when the program declares neither. Those names are seeded.
+
+The first version of this skipped unreached groups in the emitter and kept
+them in the program, and it caught a miss by looking for a skipped group's
+symbols in the module. That check cannot work once the group is gone, because
+the emitter stops writing a call to something that is not there. The decisive
+case is an operator. With a user's `+` arm left out, the emitter asks whether
+`+` is declared, hears no, and sends two records down the numeric path. The
+module names nothing of `+` either way. So every question the emitter asks
+about a group by name now goes through one index, `group_named`, and a
+question about a left-out group sets a flag. A flagged module, a module naming
+a left-out group's symbols, and an emit that fails are all sent back with the
+program whole, so a miss costs a second emit and cannot change what the tab
+runs. A unit spec reads the emitter's source and fails if it scans its groups
+by name anywhere else. Across the 98 entry programs in the tree that compile
+alone, none needed the second emit.
 
 Native builds are unchanged and keep emitting every group. Turning the walk
 on for them as well moved `emit_instructions` from 23,994,397 to 15,189,091 on
 `pkg/codegen_corpus`, and the meta by about 0.01, because the emitting term
 is already near the top of its curve. That gain does not pay for renumbering
-every native module and re-reading the machine-code goldens, so it waits. The tab's module
-differs in the numbering of lambdas, constant cells and strings, and the
-browser differential agrees on all 575 programs it compares, with the same six
-known gaps.
+every native module and re-reading the machine-code goldens, so it waits. The
+tab's module differs from the dev tier's in the numbering of lambdas, constant
+cells and strings, and in what inference concludes once the unreached callers
+are gone. The browser differential agrees on all 575 programs it compares,
+with the same six known gaps.
 
-`browser_compile_instructions` reads 450,123,996 -> 433,427,683 (-3.71%) and
-`browser_compile_peak_bytes` 829,597 -> 698,157 (-15.8%), on rustc 1.98.1
-here as on CI. `browser_run_instructions` moves by 56, from the string table.
-The ratchet row `reached_groups` turns the walk off, and the rows read
-450,112,045 and 829,764 under it.
+`browser_compile_instructions` reads 450,123,996 -> 395,882,998 (-12.1%) and
+`browser_compile_peak_bytes` 829,597 -> 673,727 (-18.8%), on rustc 1.98.1
+here as on CI. Skipping in the emitter alone had reached 433,427,683 and
+698,157, so taking the groups out before the analyses is two thirds of the
+instruction saving. `browser_run_instructions` moves by 61. The ratchet row
+`reached_groups` turns the walk off and the browser rows go back up, and
+`left_out_asked` stops noting the question, which the `+` spec catches.

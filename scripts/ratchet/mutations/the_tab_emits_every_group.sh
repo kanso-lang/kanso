@@ -4,10 +4,10 @@
 # emitted again, the module is the same, and the browser compile row is the
 # witness.
 set -e
-kept='        true => reached_from_entry(program),'
+kept='            true => reached_from_entry(owned),'
 [ "$(grep -cxF "$kept" src/codegen.rs)" -eq 1 ] || {
   echo "the walk moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i 's/^        true => reached_from_entry(program),$/        true => None,/' src/codegen.rs
+sed -i 's/^            true => reached_from_entry(owned),$/            true => None,/' src/codegen.rs
 if grep -qxF "$kept" src/codegen.rs; then exit 1; fi

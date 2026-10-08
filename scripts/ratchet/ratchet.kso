@@ -4782,9 +4782,24 @@ reached_groups = row
   (breaking "the_tab_emits_every_group")
   release
 
+# The tab's walk leaves groups out of the program before any analysis reads
+# it, and the emitter asks about some groups by name rather than calling them.
+# A question about a left-out group has to send the program back whole. The
+# mutation stops noting the question, and the unit spec that leaves a `+` arm
+# out says nothing saw it.
+left_out_asked = row
+  "a question about a group the tab left out, answered unseen"
+  true
+  "cargo test --release --lib a_question_about_a_left_out_operator_is_noticed"
+  "specs (unit, golden, differential)"
+  (breaking "a_question_about_a_left_out_group_goes_unseen")
+  no_setup
+
+rows_c1zzzzzzz2 = text/concat rows_c1zzzzzzz3 [left_out_asked]
+
 rows_c1zzzzzzz3 = text/concat rows_c1zzzzzzz4 [reached_groups]
 
-rows_c = text/concat rows_c1zzzzzzz3 [itself]
+rows_c = text/concat rows_c1zzzzzzz2 [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
