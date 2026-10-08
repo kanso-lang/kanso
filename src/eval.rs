@@ -2211,7 +2211,32 @@ impl<'a> Interp<'a> {
         }
     }
 
+    /// A local whose place is kept answers here, and everything else goes to
+    /// `eval_node`.
+    ///
+    /// `eval_node` is one function holding every expression form, so its
+    /// frame is sized for the largest of them: it pushed six registers and
+    /// reserved 760 bytes on every call, and restored them on the way out.
+    /// The commonest expression is a local name, 653,358 of them on the
+    /// interpreted corpus, and reading one is a walk of a frame or two and a
+    /// clone. Answered here, it costs a call with no frame to speak of, and
+    /// the corpus fell from 539,217,785 instructions to 512,403,757. A name
+    /// that is global, or whose kept place no longer holds it, falls through
+    /// to `eval_node`, which asks again and walks.
     fn eval(&self, expr: &Expr, env: &Option<Rc<Env>>, frame: &Frame) -> EvalResult {
+        if let Expr::Ident(name, _, resolved) = expr {
+            let v = resolved.get();
+            if (3..1 << 16).contains(&v) {
+                if let Some(value) = lookup_at(env, name, v) {
+                    return Ok(value);
+                }
+            }
+        }
+        self.eval_node(expr, env, frame)
+    }
+
+    #[inline(never)]
+    fn eval_node(&self, expr: &Expr, env: &Option<Rc<Env>>, frame: &Frame) -> EvalResult {
         match expr {
             Expr::Int(n, _) => Ok(Value::int(n)),
             // A hole is a none until the block fills it, on every engine; the
