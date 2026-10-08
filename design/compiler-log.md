@@ -23883,8 +23883,9 @@ which is the read that stamps it.
 
 Measured in this container on the same 874 lines of output, outside the gate:
 512,403,757 -> 500,796,787 (-11,606,970, -2.27%) with the table alone, and
-498,287,606 with integer literals as well, below. CI's gate reading replaces
-these.
+498,287,606 with integer literals as well, below. CI's gate reading for the
+whole change is 513,401,792 -> 499,300,948 (-14,100,844, -2.75%), and four
+compile rows moved with the binary's layout by between 1,090 and 68,472.
 
 The ratchet row `fixed_globals`, mutation
 `a_fixed_global_read_through_the_whole_node`, keeps function references out of

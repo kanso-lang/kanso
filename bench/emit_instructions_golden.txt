@@ -403,4 +403,7 @@
 # 23,997,530 -> 23,393,086, a FALL of 604,444 (-2.5188%).
 # CI's reading with the interpreter's string value changed, which the
 # emitter does not run: 23,393,086 -> 23,392,747, a FALL of 339. Layout.
-emit_instructions=23392747
+# 2026-10-08: the change is in the interpreter, which the emitter never
+# reaches; the row moved with the binary's layout. CI's reading on kanso#1810:
+# 23,392,747 -> 23,391,657, a FALL of 1,090 (-0.0047%).
+emit_instructions=23391657
