@@ -1527,6 +1527,11 @@ pub struct Interp<'a> {
     /// by then the position may hold a later tie.
     ties: RefCell<Vec<Tie>>,
     tie_serial: Cell<i64>,
+    /// Bindings buffers a dispatch finished with, kept for the next one. A
+    /// dispatch that tries a second candidate after the first matched needs a
+    /// buffer beside the winner's, and it was allocated for that dispatch and
+    /// freed at its end.
+    spare_binds: RefCell<Vec<Bindings>>,
     /// The constants that reach themselves through a chain of mentions --
     /// the same set the emitter computes, so the two engines count the same
     /// cells. Every constant goes through `knotted`, but only these are the
@@ -1654,6 +1659,7 @@ impl<'a> Interp<'a> {
             knots: RefCell::new(Map::default()),
             ties: RefCell::new(Vec::new()),
             tie_serial: Cell::new(0),
+            spare_binds: RefCell::new(Vec::new()),
             cycles: std::cell::OnceCell::new(),
             in_place: std::cell::OnceCell::new(),
             moved: std::cell::OnceCell::new(),
@@ -3097,6 +3103,9 @@ impl<'a> Interp<'a> {
                 if decl.params.len() != args.len() {
                     continue;
                 }
+                if binds.capacity() == 0 {
+                    binds = self.spare_binds.borrow_mut().pop().unwrap_or_default();
+                }
                 if !match_params_into(&decl.params, &args, &mut score, &mut binds) {
                     continue;
                 }
@@ -3122,6 +3131,15 @@ impl<'a> Interp<'a> {
                             ));
                         }
                     }
+                }
+            }
+            // The buffer the losers matched into goes back for the next
+            // dispatch rather than to the allocator.
+            if binds.capacity() > 0 {
+                binds.clear();
+                let mut spare = self.spare_binds.borrow_mut();
+                if spare.len() < 64 {
+                    spare.push(std::mem::take(&mut binds));
                 }
             }
             match best {

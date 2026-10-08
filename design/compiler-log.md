@@ -23729,3 +23729,29 @@ The bindings vector takes the same move when the first candidate wins, and its
 growth is the other half of what `dispatch_loop` grows. It is not changed here:
 the winner's bindings become the environment frame, so a second buffer has to
 exist whenever a later candidate is tried.
+
+## 2026-10-08 — a dispatch hands its second bindings buffer back
+
+The entry before this one left the bindings vector alone because the winner's
+bindings become the environment frame. When the first candidate matches,
+`std::mem::take` moves its buffer into `best`, and any later candidate the
+dispatch tries matches into a new vector. That vector was allocated for the
+dispatch and freed at its end, whether the later candidate won or not.
+
+The interpreter now keeps a short list of those buffers, at most 64. A
+candidate that finds `binds` empty pops one from the list before it matches,
+and at the end of the dispatch whatever buffer is left in `binds` is cleared
+and pushed back. The winner's buffer still leaves with the frame, so the list
+only ever holds buffers no frame kept.
+
+Measured in this container on `bench/interp_corpus`, printing the same 874
+lines: `interp_instructions` 559,187,740 -> 553,555,448 (-1.01%), and
+`interp_allocs` 752,938 -> 714,647, 38,291 fewer calls to the allocator. The
+peak does not move. CI's readings replace these if they differ.
+
+Taking a buffer from the list at the start of every dispatch, in place of the
+`Vec::new()` that `binds.reserve` then grows, read 556,139,823. Most dispatches
+never try a second candidate, and each of those paid for a pop and a push back.
+
+The ratchet row `spare_binds` turns the hand-back off, so each buffer goes to
+the allocator as before, and the row reads 558,551,917.

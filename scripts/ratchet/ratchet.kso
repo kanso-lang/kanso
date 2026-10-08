@@ -4810,9 +4810,22 @@ scores_inline = row
 
 rows_c1zzzzzzz1 = text/concat rows_c1zzzzzzz2 [scores_inline]
 
+# A dispatch that tries a second candidate keeps the losers' bindings buffer
+# for the next dispatch instead of freeing it. The mutation frees it again, and
+# the interpreted row counts the allocations that come back.
+spare_binds = row
+  "a dispatch that frees its losers' bindings"
+  true
+  interp_gate
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_dispatch_frees_its_spare_binds")
+  release
+
+rows_c1zzzzzzz0 = text/concat rows_c1zzzzzzz1 [spare_binds]
+
 rows_c1zzzzzzz3 = text/concat rows_c1zzzzzzz4 [reached_groups]
 
-rows_c = text/concat rows_c1zzzzzzz1 [itself]
+rows_c = text/concat rows_c1zzzzzzz0 [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
