@@ -23774,6 +23774,13 @@ as before. Every string this corpus clones fits. `Text` dereferences to `str`
 and compares, orders and hashes as its `str` does, so the rest of the
 interpreter reads it the way it read the `String`.
 
+A map key holds a `Text` as well. With the value changed and the key left a
+`String`, putting a string key into a map converted one to the other, and an
+inline key allocated where the old code had moved its `String` across.
+`tests/a_shared_seed_is_copied_once.rs` caught it: 300 more laps of its
+builders cost 3,947 allocations against the 3,647 it pins, one more a lap.
+With both sides `Text` it reads 3,647 again.
+
 The width is fifteen because that is what fits beside a `String` without
 making `Text` bigger. The first version held 22 bytes. That cost `Text` the
 niche in `String`'s capacity field, `Text` grew to 32 bytes and `Value` to 40,

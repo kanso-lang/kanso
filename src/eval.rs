@@ -11,7 +11,7 @@ use std::rc::Rc;
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum MapKey {
     Int(Int),
-    Str(String),
+    Str(Text),
 }
 
 /// A map's entries, in key order.
@@ -3902,7 +3902,7 @@ impl<'a> Interp<'a> {
                     .map(|(key, value)| {
                         let key = match key {
                             MapKey::Int(n) => Value::int(n.clone()),
-                            MapKey::Str(s) => Value::Str(Text::from(s.clone())),
+                            MapKey::Str(s) => Value::Str(s.clone()),
                         };
                         Value::Record {
                             ty: Rc::from("entry"),
@@ -3923,7 +3923,7 @@ impl<'a> Interp<'a> {
                     .iter()
                     .map(|(key, _)| match key {
                         MapKey::Int(n) => Value::int(n.clone()),
-                        MapKey::Str(s) => Value::Str(Text::from(s.clone())),
+                        MapKey::Str(s) => Value::Str(s.clone()),
                     })
                     .collect();
                 Ok(Value::List(Rc::new(list)))
@@ -5347,7 +5347,7 @@ fn slice_range(len: usize, from: usize, to: usize) -> Option<std::ops::Range<usi
 fn map_key(value: Value, span: Span) -> Result<MapKey, RuntimeError> {
     match value {
         Value::Int(n) => Ok(MapKey::Int(n)),
-        Value::Str(s) => Ok(MapKey::Str(s.to_string())),
+        Value::Str(s) => Ok(MapKey::Str(s)),
         other => Err(RuntimeError {
             message: format!("{} is not usable as a map key", render_demanded(&other, true)),
             span,
