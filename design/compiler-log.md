@@ -23719,7 +23719,9 @@ from one to sixteen, and checks `beats` against the vector's comparison. With
 the spill left out of the comparison it fails on a thirteen-rank pair.
 
 `interp_instructions` reads 568,709,639 -> 559,187,740 in this container
-(-1.67%), with the corpus printing the same 874 lines; CI's reading replaces it.
+(-1.67%), with the corpus printing the same 874 lines, and CI read the same
+number. `interp_allocs` falls 873,371 -> 752,938, 120,433 fewer calls to the
+allocator, and the peak does not move.
 The ratchet row `scores_inline` gives the score a heap buffer at the start of
 every dispatch again, which puts back about 4.5 million of the 9.5.
 
