@@ -98,12 +98,131 @@ impl Value {
     }
 }
 
+/// The longest string a `Text` holds without a heap allocation. Fifteen bytes
+/// and a length fit beside the `String` that a longer one is, so a `Text` is
+/// the size of a `String` and `Value` stays at 32 bytes. At 22 the inline form
+/// no longer fit, `Value` grew to 40 bytes, and every move and drop of a value
+/// paid for it: the interpreted corpus ran 13 million instructions slower.
+const TEXT_INLINE: usize = 15;
+
+/// A string value. Reading a variable copies its value, and the strings an
+/// interpreted program holds are mostly a few bytes long, so copying a
+/// `String` was mostly the allocator's work. A string of up to
+/// `TEXT_INLINE` bytes is held in place and copies as plain bytes; a longer
+/// one is a `String` as before.
+pub struct Text(Held);
+
+enum Held {
+    Inline(u8, [u8; TEXT_INLINE]),
+    Heap(String),
+}
+
+impl Text {
+    pub fn as_str(&self) -> &str {
+        match &self.0 {
+            // Only `From<&str>` writes these bytes, copied whole from a
+            // `str`, so the first `len` of them are valid UTF-8.
+            Held::Inline(len, bytes) => unsafe {
+                std::str::from_utf8_unchecked(&bytes[..*len as usize])
+            },
+            Held::Heap(s) => s,
+        }
+    }
+
+    pub fn into_string(self) -> String {
+        match self.0 {
+            Held::Inline(..) => self.as_str().to_string(),
+            Held::Heap(s) => s,
+        }
+    }
+}
+
+// Written by hand: the derived `Clone` on the wrapper cost 5.7 million
+// instructions on the interpreted corpus inside `Value::clone`, and this one
+// costs what a bare enum's does.
+impl Clone for Text {
+    #[inline]
+    fn clone(&self) -> Text {
+        match &self.0 {
+            Held::Inline(len, bytes) => Text(Held::Inline(*len, *bytes)),
+            Held::Heap(s) => Text(Held::Heap(s.clone())),
+        }
+    }
+}
+
+impl From<&str> for Text {
+    fn from(s: &str) -> Text {
+        match s.len() <= TEXT_INLINE {
+            true => {
+                let mut bytes = [0; TEXT_INLINE];
+                bytes[..s.len()].copy_from_slice(s.as_bytes());
+                Text(Held::Inline(s.len() as u8, bytes))
+            }
+            false => Text(Held::Heap(s.to_string())),
+        }
+    }
+}
+
+impl From<String> for Text {
+    fn from(s: String) -> Text {
+        match s.len() <= TEXT_INLINE {
+            true => Text::from(s.as_str()),
+            false => Text(Held::Heap(s)),
+        }
+    }
+}
+
+impl std::ops::Deref for Text {
+    type Target = str;
+    fn deref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl PartialEq for Text {
+    fn eq(&self, other: &Text) -> bool {
+        self.as_str() == other.as_str()
+    }
+}
+
+impl Eq for Text {}
+
+impl PartialOrd for Text {
+    fn partial_cmp(&self, other: &Text) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Text {
+    fn cmp(&self, other: &Text) -> std::cmp::Ordering {
+        self.as_str().cmp(other.as_str())
+    }
+}
+
+impl std::hash::Hash for Text {
+    fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
+        self.as_str().hash(h)
+    }
+}
+
+impl std::fmt::Debug for Text {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Debug::fmt(self.as_str(), f)
+    }
+}
+
+impl std::fmt::Display for Text {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum Value {
     Int(Int),
     Float(f64),
     Map(Rc<Entries>),
-    Str(String),
+    Str(Text),
     True,
     False,
     NoneV,
@@ -281,7 +400,7 @@ pub fn err_read(info: &ErrInfo, field: &str) -> Value {
             None => Value::NoneV,
         },
         _ => match &info.origin {
-            Some(origin) => Value::Str(origin.to_string()),
+            Some(origin) => Value::Str(Text::from(origin.to_string())),
             None => Value::NoneV,
         },
     }
@@ -457,7 +576,7 @@ pub enum Desc {
 /// to 248, peak 2 MB to 260 MB, on the same bytes.
 fn read_value(found: Option<String>) -> Value {
     match found {
-        Some(text) => Value::Str(text),
+        Some(text) => Value::Str(Text::from(text)),
         None => Value::NoneV,
     }
 }
@@ -465,7 +584,11 @@ fn read_value(found: Option<String>) -> Value {
 /// What a finished process answers: its status and the two streams.
 fn ran_value(done: (i64, String, String)) -> Value {
     let (status, out, errs) = done;
-    Value::List(Rc::new(vec![Value::int(status), Value::Str(out), Value::Str(errs)]))
+    Value::List(Rc::new(vec![
+        Value::int(status),
+        Value::Str(Text::from(out)),
+        Value::Str(Text::from(errs)),
+    ]))
 }
 
 /// SplitMix64: a deterministic, seedable generator. A real run draws its
@@ -2183,7 +2306,7 @@ impl<'a> Interp<'a> {
                 // read settles a box holding the element or the miss
                 match index_value(container, key.clone(), *span)? {
                     Value::NoneV if *strict => Ok(Value::Desc(Rc::new(Desc::Settled(err_value(
-                        Value::Str(format!("missing index {}", render(self, &key, true))),
+                        Value::Str(format!("missing index {}", render(self, &key, true)).into()),
                         origin_at(frame, *span),
                     ))))),
                     found if *strict => Ok(Value::Desc(Rc::new(Desc::Settled(found)))),
@@ -2580,7 +2703,7 @@ impl<'a> Interp<'a> {
                 }
             }
         }
-        Ok(Value::Str(out))
+        Ok(Value::Str(Text::from(out)))
     }
 
     fn call(&self, callee: Value, args: Vec<Value>, span: Span, frame: &Frame) -> EvalResult {
@@ -3503,11 +3626,11 @@ impl<'a> Interp<'a> {
                             span,
                         });
                     };
-                    argv.push(text.clone());
+                    argv.push(text.to_string());
                 }
                 Ok(Value::Desc(Rc::new(match name {
-                    "start" => Desc::Start(cmd, argv),
-                    _ => Desc::Run(cmd, argv),
+                    "start" => Desc::Start(cmd.to_string(), argv),
+                    _ => Desc::Run(cmd.to_string(), argv),
                 })))
             }
             b"read_file" => {
@@ -3518,7 +3641,7 @@ impl<'a> Interp<'a> {
                         span,
                     });
                 };
-                Ok(Value::Desc(Rc::new(Desc::ReadFile(path))))
+                Ok(Value::Desc(Rc::new(Desc::ReadFile(path.to_string()))))
             }
             b"read_bytes" => {
                 let [path] = arity(args, name, span)?;
@@ -3528,14 +3651,14 @@ impl<'a> Interp<'a> {
                         span,
                     });
                 };
-                Ok(Value::Desc(Rc::new(Desc::ReadBytes(path))))
+                Ok(Value::Desc(Rc::new(Desc::ReadBytes(path.to_string()))))
             }
             b"write" => {
                 let [content] = arity(args, name, span)?;
                 let Value::Str(content) = content else {
                     return Err(RuntimeError { message: "write takes a string".to_string(), span });
                 };
-                Ok(Value::Desc(Rc::new(Desc::Write(content))))
+                Ok(Value::Desc(Rc::new(Desc::Write(content.to_string()))))
             }
             // `args`, `stdin` and `now` are the three builtins a program names
             // without calling, so `eval_ident` answers all three and this
@@ -3561,9 +3684,9 @@ impl<'a> Interp<'a> {
                     return Err(RuntimeError { message: format!("{name} takes a string"), span });
                 };
                 Ok(Value::Desc(Rc::new(match name {
-                    "exists" => Desc::Exists(path),
-                    "is_dir" => Desc::IsDir(path),
-                    _ => Desc::ListDir(path),
+                    "exists" => Desc::Exists(path.to_string()),
+                    "is_dir" => Desc::IsDir(path.to_string()),
+                    _ => Desc::ListDir(path.to_string()),
                 })))
             }
             b"env" => {
@@ -3571,7 +3694,7 @@ impl<'a> Interp<'a> {
                 let Value::Str(name) = name else {
                     return Err(RuntimeError { message: "env takes a string".to_string(), span });
                 };
-                Ok(Value::Desc(Rc::new(Desc::Env(name))))
+                Ok(Value::Desc(Rc::new(Desc::Env(name.to_string()))))
             }
             b"write_err" => {
                 let [content] = arity(args, name, span)?;
@@ -3581,7 +3704,7 @@ impl<'a> Interp<'a> {
                         span,
                     });
                 };
-                Ok(Value::Desc(Rc::new(Desc::WriteErr(content))))
+                Ok(Value::Desc(Rc::new(Desc::WriteErr(content.to_string()))))
             }
             b"make_dir" => {
                 let [path] = arity(args, name, span)?;
@@ -3591,7 +3714,7 @@ impl<'a> Interp<'a> {
                         span,
                     });
                 };
-                Ok(Value::Desc(Rc::new(Desc::MakeDir(path.clone()))))
+                Ok(Value::Desc(Rc::new(Desc::MakeDir(path.to_string()))))
             }
             b"listen" => {
                 let [port] = arity(args, name, span)?;
@@ -3638,7 +3761,7 @@ impl<'a> Interp<'a> {
                 match (&conn, &text) {
                     (Value::Int(conn), Value::Str(text)) => Ok(Value::Desc(Rc::new(Desc::Send(
                         conn.to_i64().unwrap_or(-1),
-                        text.clone(),
+                        text.to_string(),
                     )))),
                     (Value::Int(conn), Value::Bytes(raw)) => Ok(Value::Desc(Rc::new(
                         Desc::SendBytes(conn.to_i64().unwrap_or(-1), raw.clone()),
@@ -3662,13 +3785,13 @@ impl<'a> Interp<'a> {
             b"write_file" => {
                 let [path, content] = arity(args, name, span)?;
                 match (&path, &content) {
-                    (Value::Str(path), Value::Str(content)) => {
-                        Ok(Value::Desc(Rc::new(Desc::WriteFile(path.clone(), content.clone()))))
-                    }
+                    (Value::Str(path), Value::Str(content)) => Ok(Value::Desc(Rc::new(
+                        Desc::WriteFile(path.to_string(), content.to_string()),
+                    ))),
                     // bytes write back as they were read: the site's wasm
                     // module is read, digested and written under its new name
                     (Value::Str(path), Value::Bytes(raw)) => {
-                        Ok(Value::Desc(Rc::new(Desc::WriteBytes(path.clone(), raw.clone()))))
+                        Ok(Value::Desc(Rc::new(Desc::WriteBytes(path.to_string(), raw.clone()))))
                     }
                     _ => Err(RuntimeError {
                         message: "write_file takes a path and content strings".to_string(),
@@ -3713,7 +3836,7 @@ impl<'a> Interp<'a> {
             b"print" => {
                 let [text] = arity(args, name, span)?;
                 match text {
-                    Value::Str(s) => Ok(Value::Desc(Rc::new(Desc::Print(s, span)))),
+                    Value::Str(s) => Ok(Value::Desc(Rc::new(Desc::Print(s.to_string(), span)))),
                     // any other value renders through the same ambient
                     // to_string dispatch interpolation uses
                     other => {
@@ -3779,7 +3902,7 @@ impl<'a> Interp<'a> {
                     .map(|(key, value)| {
                         let key = match key {
                             MapKey::Int(n) => Value::int(n.clone()),
-                            MapKey::Str(s) => Value::Str(s.clone()),
+                            MapKey::Str(s) => Value::Str(Text::from(s.clone())),
                         };
                         Value::Record {
                             ty: Rc::from("entry"),
@@ -3800,7 +3923,7 @@ impl<'a> Interp<'a> {
                     .iter()
                     .map(|(key, _)| match key {
                         MapKey::Int(n) => Value::int(n.clone()),
-                        MapKey::Str(s) => Value::Str(s.clone()),
+                        MapKey::Str(s) => Value::Str(Text::from(s.clone())),
                     })
                     .collect();
                 Ok(Value::List(Rc::new(list)))
@@ -3841,7 +3964,9 @@ impl<'a> Interp<'a> {
                             Ok(b) => raw.push(b),
                             Err(_) => {
                                 return Ok(err_value(
-                                    Value::Str("to_bytes takes byte values (0-255)".to_string()),
+                                    Value::Str(Text::from(
+                                        "to_bytes takes byte values (0-255)".to_string(),
+                                    )),
                                     origin_at(frame, span),
                                 ))
                             }
@@ -3854,7 +3979,9 @@ impl<'a> Interp<'a> {
                             }
                             _ => {
                                 return Ok(err_value(
-                                    Value::Str("to_bytes takes byte values (0-255)".to_string()),
+                                    Value::Str(Text::from(
+                                        "to_bytes takes byte values (0-255)".to_string(),
+                                    )),
                                     origin_at(frame, span),
                                 ))
                             }
@@ -3895,9 +4022,9 @@ impl<'a> Interp<'a> {
                                     Ok(b) => raw.push(b),
                                     Err(_) => {
                                         return Ok(err_value(
-                                            Value::Str(
+                                            Value::Str(Text::from(
                                                 "utf8 takes byte values (0-255)".to_string(),
-                                            ),
+                                            )),
                                             origin_at(frame, span),
                                         ))
                                     }
@@ -3905,7 +4032,9 @@ impl<'a> Interp<'a> {
                                 bad if is_failure(bad) => return Ok(bad.clone()),
                                 _ => {
                                     return Ok(err_value(
-                                        Value::Str("utf8 takes byte values (0-255)".to_string()),
+                                        Value::Str(Text::from(
+                                            "utf8 takes byte values (0-255)".to_string(),
+                                        )),
                                         origin_at(frame, span),
                                     ))
                                 }
@@ -3921,9 +4050,9 @@ impl<'a> Interp<'a> {
                     }
                 };
                 match String::from_utf8(raw) {
-                    Ok(text) => Ok(Value::Str(text)),
+                    Ok(text) => Ok(Value::Str(Text::from(text))),
                     Err(_) => Ok(err_value(
-                        Value::Str("invalid utf-8".to_string()),
+                        Value::Str(Text::from("invalid utf-8".to_string())),
                         origin_at(frame, span),
                     )),
                 }
@@ -3945,7 +4074,7 @@ impl<'a> Interp<'a> {
                     });
                 };
                 match String::from_utf8((**raw).clone()) {
-                    Ok(text) => Ok(Value::Str(text)),
+                    Ok(text) => Ok(Value::Str(Text::from(text))),
                     Err(_) => Err(RuntimeError {
                         message: "built_text was handed bytes that are not text".to_string(),
                         span,
@@ -3966,8 +4095,10 @@ impl<'a> Interp<'a> {
                         span,
                     });
                 }
-                let list =
-                    text.split(sep.as_str()).map(|p| Value::Str(p.to_string())).collect::<Vec<_>>();
+                let list = text
+                    .split(sep.as_str())
+                    .map(|p| Value::Str(Text::from(p.to_string())))
+                    .collect::<Vec<_>>();
                 Ok(Value::List(Rc::new(list)))
             }
             b"chars" => {
@@ -3975,7 +4106,7 @@ impl<'a> Interp<'a> {
                 let Value::Str(text) = &text else {
                     return Err(RuntimeError { message: "chars takes a string".to_string(), span });
                 };
-                let list = text.chars().map(|c| Value::Str(c.to_string())).collect();
+                let list = text.chars().map(|c| Value::Str(Text::from(c.to_string()))).collect();
                 Ok(Value::List(Rc::new(list)))
             }
             b"char_code" => {
@@ -4003,9 +4134,9 @@ impl<'a> Interp<'a> {
                 };
                 let scalar = u32::try_from(n).ok().and_then(char::from_u32);
                 match scalar {
-                    Some(c) => Ok(Value::Str(c.to_string())),
+                    Some(c) => Ok(Value::Str(Text::from(c.to_string()))),
                     None => Ok(err_value(
-                        Value::Str("not a unicode scalar value".to_string()),
+                        Value::Str(Text::from("not a unicode scalar value".to_string())),
                         origin_at(frame, span),
                     )),
                 }
@@ -4040,7 +4171,9 @@ impl<'a> Interp<'a> {
                         },
                     }
                 }
-                Ok(Value::Str(parts.join(sep)))
+                Ok(Value::Str(
+                    parts.iter().map(Text::as_str).collect::<Vec<_>>().join(sep.as_str()).into(),
+                ))
             }
             b"append" => {
                 let [acc, x] = arity(args, name, span)?;
@@ -4200,7 +4333,7 @@ impl<'a> Interp<'a> {
                         let sliced = slice_range(all.len(), from, to)
                             .map(|r| all[r].iter().collect::<String>())
                             .unwrap_or_default();
-                        Ok(Value::Str(sliced))
+                        Ok(Value::Str(Text::from(sliced)))
                     }
                     _ => Err(RuntimeError {
                         message: "slice takes a list or string".to_string(),
@@ -4358,15 +4491,15 @@ impl<'a> Interp<'a> {
                 let [value] = arity(args, name, span)?;
                 let text = match &value {
                     Value::Str(s) => s.clone(),
-                    Value::Bytes(items) => match bytes_to_str(items) {
+                    Value::Bytes(items) => Text::from(match bytes_to_str(items) {
                         Some(s) => s,
                         None => {
                             return Ok(err_value(
-                                Value::Str("bytes are not an integer".to_string()),
+                                Value::Str(Text::from("bytes are not an integer".to_string())),
                                 origin_at(frame, span),
                             ))
                         }
-                    },
+                    }),
                     Value::Int(_) => return Ok(value),
                     _ => {
                         return Err(RuntimeError {
@@ -4388,7 +4521,7 @@ impl<'a> Interp<'a> {
                 Ok(match parsed {
                     Some(n) => Value::int(n),
                     None => err_value(
-                        Value::Str(format!("\"{text}\" is not an integer")),
+                        Value::Str(format!("\"{text}\" is not an integer").into()),
                         origin_at(frame, span),
                     ),
                 })
@@ -4397,15 +4530,15 @@ impl<'a> Interp<'a> {
                 let [value] = arity(args, name, span)?;
                 let text = match &value {
                     Value::Str(s) => s.clone(),
-                    Value::Bytes(items) => match bytes_to_str(items) {
+                    Value::Bytes(items) => Text::from(match bytes_to_str(items) {
                         Some(s) => s,
                         None => {
                             return Ok(err_value(
-                                Value::Str("bytes are not a number".to_string()),
+                                Value::Str(Text::from("bytes are not a number".to_string())),
                                 origin_at(frame, span),
                             ))
                         }
-                    },
+                    }),
                     Value::Int(n) => {
                         let approx = n.to_string().parse::<f64>().unwrap_or(f64::INFINITY);
                         return Ok(Value::Float(approx));
@@ -4424,7 +4557,7 @@ impl<'a> Interp<'a> {
                 Ok(match text.parse::<f64>() {
                     Ok(x) => Value::Float(x),
                     Err(_) => err_value(
-                        Value::Str(format!("\"{text}\" is not a number")),
+                        Value::Str(format!("\"{text}\" is not a number").into()),
                         origin_at(frame, span),
                     ),
                 })
@@ -4438,7 +4571,7 @@ impl<'a> Interp<'a> {
             }
             b"render_value" => {
                 let [v] = arity(args, name, span)?;
-                Ok(Value::Str(render(self, &v, false)))
+                Ok(Value::Str(Text::from(render(self, &v, false))))
             }
             b"length" => {
                 let [list] = arity(args, name, span)?;
@@ -4593,7 +4726,7 @@ impl<'a> Interp<'a> {
                     return Ok(Err(result));
                 }
                 match result {
-                    Value::Str(s) => s,
+                    Value::Str(s) => s.into_string(),
                     other => render(self, &other, false),
                 }
             }
@@ -5059,7 +5192,7 @@ fn resolve_tied(v: &Value, seen: &mut crate::hash::Set<usize>) {
 fn match_one(pattern: &Pattern, arg: &Value, binds: &mut Bindings) -> Option<u8> {
     match (pattern, arg) {
         (Pattern::IntLit(n, _), Value::Int(v)) if v == n => Some(0),
-        (Pattern::StrLit(s, _), Value::Str(v)) if s == v => Some(0),
+        (Pattern::StrLit(s, _), Value::Str(v)) if **s == **v => Some(0),
         (Pattern::Nullary(name, _), Value::True) if name == "true" => Some(0),
         (Pattern::Nullary(name, _), Value::False) if name == "false" => Some(0),
         (Pattern::Nullary(name, _), Value::NoneV) if name == "none" => Some(0),
@@ -5174,7 +5307,7 @@ pub fn index_value(container: Value, index: Value, span: Span) -> EvalResult {
         (Value::Str(text), Value::Int(i)) => {
             let idx = usize::try_from(i).ok();
             Ok(match idx.and_then(|i| i.checked_sub(1)).and_then(|i| text.chars().nth(i)) {
-                Some(c) => Value::Str(c.to_string()),
+                Some(c) => Value::Str(Text::from(c.to_string())),
                 None => Value::NoneV,
             })
         }
@@ -5214,7 +5347,7 @@ fn slice_range(len: usize, from: usize, to: usize) -> Option<std::ops::Range<usi
 fn map_key(value: Value, span: Span) -> Result<MapKey, RuntimeError> {
     match value {
         Value::Int(n) => Ok(MapKey::Int(n)),
-        Value::Str(s) => Ok(MapKey::Str(s)),
+        Value::Str(s) => Ok(MapKey::Str(s.to_string())),
         other => Err(RuntimeError {
             message: format!("{} is not usable as a map key", render_demanded(&other, true)),
             span,
@@ -5382,7 +5515,7 @@ pub fn bare_math(value: Value) -> Value {
 }
 
 fn math_failure(reason: &str) -> Value {
-    let text = Value::Str(reason.to_string());
+    let text = Value::Str(Text::from(reason.to_string()));
     let root = Value::Sub { ty: Rc::from(crate::MATH_FAILURE), inner: Rc::new(text) };
     Value::Sub { ty: Rc::from(crate::DIVIDE_BY_ZERO), inner: Rc::new(root) }
 }
@@ -5935,7 +6068,7 @@ fn render_seen(
         },
         Value::Str(s) => match quote_strings {
             true => format!("\"{s}\""),
-            false => s.clone(),
+            false => s.to_string(),
         },
         Value::True => "true".to_string(),
         Value::False => "false".to_string(),
@@ -6017,36 +6150,43 @@ impl<'a> Interp<'a> {
             Desc::Nil => Ok(Value::Done),
             Desc::Settled(v) => Ok(v.clone()),
             Desc::Args => {
-                let list = executor.args().into_iter().map(Value::Str).collect();
+                let list = executor
+                    .args()
+                    .into_iter()
+                    .map(|arg: String| Value::Str(Text::from(arg)))
+                    .collect();
                 Ok(Value::List(Rc::new(list)))
             }
             Desc::Stdin => Ok(match executor.stdin() {
-                Ok(text) => Value::Str(text),
-                Err(reason) => err_value(Value::Str(reason), Raised::default()),
+                Ok(text) => Value::Str(Text::from(text)),
+                Err(reason) => err_value(Value::Str(Text::from(reason)), Raised::default()),
             }),
             // The text, or `none` for a file that is not there — the std
             // wrapper names the second `file_not_found`, because a builtin
             // cannot name a type declared in kanso.
             Desc::ReadFile(path) => Ok(match executor.read_file(path) {
                 Ok(found) => read_value(found),
-                Err(reason) => err_value(Value::Str(reason), Raised::default()),
+                Err(reason) => err_value(Value::Str(Text::from(reason)), Raised::default()),
             }),
             Desc::ReadBytes(path) => Ok(match executor.read_bytes(path) {
                 Ok(Some(raw)) => Value::Bytes(Rc::new(raw)),
                 Ok(None) => Value::NoneV,
-                Err(reason) => err_value(Value::Str(reason), Raised::default()),
+                Err(reason) => err_value(Value::Str(Text::from(reason)), Raised::default()),
             }),
             // three answers in a list, which the std wrapper turns into a
             // record: a builtin cannot name a type declared in kanso.
             Desc::Run(cmd, argv) => Ok(match executor.run(cmd, argv) {
                 Ok(done) => ran_value(done),
-                Err(reason) => err_value(Value::Str(reason), Raised::default()),
+                Err(reason) => err_value(Value::Str(Text::from(reason)), Raised::default()),
             }),
             // Only reached outside a parallel group; step() starts and awaits.
             Desc::Await(handle) => Ok(match executor.finished(*handle) {
                 Ok(Some(done)) => ran_value(done),
-                Ok(None) => err_value(Value::Str("still running".to_string()), Raised::default()),
-                Err(reason) => err_value(Value::Str(reason), Raised::default()),
+                Ok(None) => err_value(
+                    Value::Str(Text::from("still running".to_string())),
+                    Raised::default(),
+                ),
+                Err(reason) => err_value(Value::Str(Text::from(reason)), Raised::default()),
             }),
             Desc::Write(text) => {
                 executor.write(text);
@@ -6057,7 +6197,7 @@ impl<'a> Interp<'a> {
                 Ok(Value::Done)
             }
             Desc::Env(name) => Ok(match executor.env(name) {
-                Some(value) => Value::Str(value),
+                Some(value) => Value::Str(Text::from(value)),
                 None => Value::NoneV,
             }),
             Desc::Now => Ok(Value::int(executor.now())),
@@ -6070,61 +6210,64 @@ impl<'a> Interp<'a> {
                 false => Value::False,
             }),
             Desc::ListDir(path) => Ok(match executor.list_dir(path) {
-                Ok(names) => Value::List(Rc::new(names.into_iter().map(Value::Str).collect())),
-                Err(reason) => err_value(Value::Str(reason), Raised::default()),
+                Ok(names) => Value::List(Rc::new(
+                    names.into_iter().map(|arg: String| Value::Str(Text::from(arg))).collect(),
+                )),
+                Err(reason) => err_value(Value::Str(Text::from(reason)), Raised::default()),
             }),
             Desc::MakeDir(path) => Ok(match executor.make_dir(path) {
                 Ok(()) => Value::Done,
-                Err(reason) => err_value(Value::Str(reason), Raised::default()),
+                Err(reason) => err_value(Value::Str(Text::from(reason)), Raised::default()),
             }),
             Desc::WriteFile(path, content) => Ok(match executor.write_file(path, content) {
                 Ok(()) => Value::Done,
-                Err(reason) => err_value(Value::Str(reason), Raised::default()),
+                Err(reason) => err_value(Value::Str(Text::from(reason)), Raised::default()),
             }),
             Desc::WriteBytes(path, raw) => Ok(match executor.write_bytes(path, raw) {
                 Ok(()) => Value::Done,
-                Err(reason) => err_value(Value::Str(reason), Raised::default()),
+                Err(reason) => err_value(Value::Str(Text::from(reason)), Raised::default()),
             }),
             Desc::Start(cmd, argv) => Ok(match executor.start(cmd, argv) {
                 Ok(handle) => Value::int(handle),
-                Err(reason) => err_value(Value::Str(reason), Raised::default()),
+                Err(reason) => err_value(Value::Str(Text::from(reason)), Raised::default()),
             }),
             Desc::Kill(handle) => Ok(match executor.kill(*handle) {
                 Ok(()) => Value::Done,
-                Err(reason) => err_value(Value::Str(reason), Raised::default()),
+                Err(reason) => err_value(Value::Str(Text::from(reason)), Raised::default()),
             }),
             Desc::Listen(port) => Ok(match executor.listen(*port) {
                 Ok(handle) => Value::int(handle),
-                Err(reason) => err_value(Value::Str(reason), Raised::default()),
+                Err(reason) => err_value(Value::Str(Text::from(reason)), Raised::default()),
             }),
             Desc::SocketPort(listener) => Ok(match executor.socket_port(*listener) {
                 Ok(port) => Value::int(port),
-                Err(reason) => err_value(Value::Str(reason), Raised::default()),
+                Err(reason) => err_value(Value::Str(Text::from(reason)), Raised::default()),
             }),
             Desc::Accept(listener) => Ok(match executor.accept(*listener) {
                 Ok(Some(handle)) => Value::int(handle),
                 // Reached only outside a parallel group, where no other fiber
                 // could ever connect; step() yields instead of arriving here.
-                Ok(None) => {
-                    err_value(Value::Str("nothing connected".to_string()), Raised::default())
-                }
-                Err(reason) => err_value(Value::Str(reason), Raised::default()),
+                Ok(None) => err_value(
+                    Value::Str(Text::from("nothing connected".to_string())),
+                    Raised::default(),
+                ),
+                Err(reason) => err_value(Value::Str(Text::from(reason)), Raised::default()),
             }),
             Desc::Receive(conn) => Ok(match executor.receive(*conn) {
-                Ok(text) => Value::Str(text),
-                Err(reason) => err_value(Value::Str(reason), Raised::default()),
+                Ok(text) => Value::Str(Text::from(text)),
+                Err(reason) => err_value(Value::Str(Text::from(reason)), Raised::default()),
             }),
             Desc::Send(conn, text) => Ok(match executor.send(*conn, text) {
                 Ok(()) => Value::Done,
-                Err(reason) => err_value(Value::Str(reason), Raised::default()),
+                Err(reason) => err_value(Value::Str(Text::from(reason)), Raised::default()),
             }),
             Desc::SendBytes(conn, raw) => Ok(match executor.send_bytes(*conn, raw) {
                 Ok(()) => Value::Done,
-                Err(reason) => err_value(Value::Str(reason), Raised::default()),
+                Err(reason) => err_value(Value::Str(Text::from(reason)), Raised::default()),
             }),
             Desc::CloseSocket(handle) => Ok(match executor.close_socket(*handle) {
                 Ok(()) => Value::Done,
-                Err(reason) => err_value(Value::Str(reason), Raised::default()),
+                Err(reason) => err_value(Value::Str(Text::from(reason)), Raised::default()),
             }),
         }
     }
@@ -6235,18 +6378,24 @@ impl<'a> Interp<'a> {
             Desc::Accept(listener) => match executor.accept(*listener) {
                 Ok(Some(handle)) => Ok(Step::Done(Value::int(handle))),
                 Ok(None) => Ok(Step::Blocked(1, desc.clone())),
-                Err(reason) => Ok(Step::Done(err_value(Value::Str(reason), Raised::default()))),
+                Err(reason) => {
+                    Ok(Step::Done(err_value(Value::Str(Text::from(reason)), Raised::default())))
+                }
             },
             // Same shape for a process: start it, then wait by yielding, so
             // the other statements of the group run while it does.
             Desc::Run(cmd, argv) => match executor.start(cmd, argv) {
                 Ok(handle) => Ok(Step::Blocked(1, Rc::new(Desc::Await(handle)))),
-                Err(reason) => Ok(Step::Done(err_value(Value::Str(reason), Raised::default()))),
+                Err(reason) => {
+                    Ok(Step::Done(err_value(Value::Str(Text::from(reason)), Raised::default())))
+                }
             },
             Desc::Await(handle) => match executor.finished(*handle) {
                 Ok(Some(done)) => Ok(Step::Done(ran_value(done))),
                 Ok(None) => Ok(Step::Blocked(1, desc.clone())),
-                Err(reason) => Ok(Step::Done(err_value(Value::Str(reason), Raised::default()))),
+                Err(reason) => {
+                    Ok(Step::Done(err_value(Value::Str(Text::from(reason)), Raised::default())))
+                }
             },
             Desc::Bind(inner, callee) => match self.step(inner, executor)? {
                 Step::Blocked(ms, cont) => {
@@ -6422,6 +6571,39 @@ mod tests {
                 a.iter().for_each(|r| x.push(*r));
                 b.iter().for_each(|r| y.push(*r));
                 assert_eq!(x.beats(&y), a > b, "{a:?} against {b:?}");
+            }
+        }
+    }
+
+    /// A short string lives inside the value without making it bigger. At 22
+    /// inline bytes `Text` lost the niche in `String`'s capacity and `Value`
+    /// grew to 40 bytes, which cost more than the allocations saved.
+    #[test]
+    fn a_string_value_is_no_bigger_than_a_string() {
+        assert_eq!(std::mem::size_of::<Text>(), std::mem::size_of::<String>());
+        assert_eq!(std::mem::size_of::<Value>(), 32);
+    }
+
+    /// A string reads back as it was given at every length either side of the
+    /// inline width, in one-byte and two-byte characters, and two strings
+    /// compare as their `str`s do whichever side of the width each one is.
+    #[test]
+    fn a_string_value_reads_back_what_it_was_given() {
+        let mut given = Vec::new();
+        for len in 0..=TEXT_INLINE + 4 {
+            given.push("k".repeat(len));
+            given.push("é".repeat(len / 2) + &"k".repeat(len % 2));
+        }
+        let held: Vec<Text> = given.iter().map(|s| Text::from(s.clone())).collect();
+        for (s, t) in given.iter().zip(&held) {
+            assert_eq!(t.as_str(), s);
+            assert_eq!(t.clone().as_str(), s);
+            assert_eq!(Text::from(s.as_str()).into_string(), *s);
+        }
+        for (s, t) in given.iter().zip(&held) {
+            for (r, u) in given.iter().zip(&held) {
+                assert_eq!(t.cmp(u), s.cmp(r), "{s:?} against {r:?}");
+                assert_eq!(t == u, s == r, "{s:?} against {r:?}");
             }
         }
     }

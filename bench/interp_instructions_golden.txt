@@ -649,5 +649,9 @@
 # buffer its losers matched into for the next dispatch, instead of freeing it.
 # Measured in this container: 559,187,740 -> 553,555,448, a FALL of 5,632,292
 # (-1.0072%). CI's reading replaces it if it differs.
-interp_instructions=553555448
+# 2026-10-08: a string of up to fifteen bytes is held inside the value, so
+# reading a string variable no longer allocates a copy. Measured in this
+# container: 553,555,448 -> 542,300,428, a FALL of 11,255,020 (-2.0332%).
+# CI's reading replaces it if it differs.
+interp_instructions=542300428
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

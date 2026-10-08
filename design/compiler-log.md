@@ -23757,3 +23757,50 @@ never try a second candidate, and each of those paid for a pop and a push back.
 
 The ratchet row `spare_binds` turns the hand-back off, so each buffer goes to
 the allocator as before, and the row reads 558,551,917.
+
+## 2026-10-08 — a short string is held inside the value
+
+Reading a variable in the interpreter clones its value, and `Value::Str` held a
+`String`, so every read of a string allocated a copy. On `bench/interp_corpus`
+that was 83,612 calls to `String::clone`, 7.9 million instructions inside the
+clone before the allocator and the matching free are counted. An entry on
+2026-09-18 found the strings this corpus copies average four bytes. An
+`Rc<str>` was measured afterwards and declined at 2.84 million instructions
+worse, because building one copies the bytes a second time.
+
+`Value::Str` now holds a `Text`. A string of up to fifteen bytes is kept in
+place, with its length, and copies as plain bytes; a longer one is a `String`
+as before. Every string this corpus clones fits. `Text` dereferences to `str`
+and compares, orders and hashes as its `str` does, so the rest of the
+interpreter reads it the way it read the `String`.
+
+The width is fifteen because that is what fits beside a `String` without
+making `Text` bigger. The first version held 22 bytes. That cost `Text` the
+niche in `String`'s capacity field, `Text` grew to 32 bytes and `Value` to 40,
+and every move and drop of every value paid for it: the corpus ran 566,595,621
+instructions, 13 million more than before, with the allocations gone. At
+fifteen, `Value` is 32 bytes again.
+
+Wrapping the two forms in a private enum inside a `pub struct Text`, so that no
+code outside it can build an inline string from bytes that are not UTF-8, read
+547,075,871: the derived `Clone` on the wrapper added 5.7 million instructions
+inside `Value::clone`. A `Clone` written by hand, matching the two forms and
+copying the inline one directly, reads the same as the bare enum did.
+
+Measured in this container, printing the same 874 lines:
+`interp_instructions` 553,555,448 -> 542,300,428 (-2.03%), and `interp_allocs`
+714,647 -> 636,769, 77,878 fewer calls to the allocator. The peak does not
+move. CI's readings replace these if they differ.
+
+Two unit specs pin the shape. One asserts that `Text` is the size of a `String`
+and `Value` is 32 bytes; it fails at an inline width of 22. The other reads
+strings back at every length from zero to nineteen bytes, in one-byte and
+two-byte characters, and checks that any two compare and order as their `str`s
+do; it fails when the inline read drops a byte. The ratchet row
+`short_strings` sets the inline width to zero, so every string but the empty
+one goes to the heap again, and the row reads 552,058,680.
+
+The browser engine links the interpreter, so its binary changed too, and
+`browser_compile_instructions` moved 395,882,998 -> 395,884,236, a rise of
+1,238 on a compile that never runs the interpreter. That is the wasm binary's
+layout, read on rustc 1.98.1 as CI builds it.
