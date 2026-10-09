@@ -4797,8 +4797,8 @@ left_out_asked = row
 
 rows_c1zzzzzzz2 = text/concat rows_c1zzzzzzz3 [left_out_asked]
 
-# A dispatch ranks its candidates into a `Score` held on the stack, twelve ranks
-# inline (2026-10-08). The mutation gives the score a heap buffer at the start
+# A dispatch ranks its candidates into two `Score`s held on the stack, twelve ranks
+# inline each (2026-10-08). The mutation gives each a heap buffer at the start
 # of every dispatch again, and the interpreted row is the witness.
 scores_inline = row
   "a dispatch that allocates its score"
