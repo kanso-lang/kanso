@@ -208,7 +208,12 @@ pub fn run rounds
 /// invites a decomposition. This file still does not offer one: what a round
 /// costs is two allocations, and which iterations of the dispatch loop they
 /// belong to is not something measured here.
-const PER_EXTRA_ROUND: u64 = 3_603;
+///
+/// 3,603 -> 2,403 on 2026-10-09, when a write the analysis proved in place
+/// stopped boxing its grown container in a new `Rc` and wrote through the
+/// pointer instead, handing back the `Rc` it was given. Four a round, which is
+/// one box for each push and each append in a round.
+const PER_EXTRA_ROUND: u64 = 2_403;
 
 fn kanso() -> PathBuf {
     let mut exe = std::env::current_exe().expect("the test binary has a path");
@@ -318,10 +323,11 @@ fn a_unique_container_is_extended_in_place() {
         "300 more rounds of the two builders cost {} allocations; extending \
          a unique container in place costs {PER_EXTRA_ROUND}. Every fixed \
          allocation is the same in both runs and cancels, so what is left is \
-         what the rounds cost. `push`, `put` and `append` in src/eval.rs take \
-         their container by value and hand it to `taken`, which is \
-         `Rc::try_unwrap` with the clone as its other arm. Read {small} at \
-         300 rounds and {large} at 600.",
+         what the rounds cost. `push`, `put` and `append` in src/eval.rs write \
+         through the container's pointer where the analysis proved it in \
+         place, and hand it to `taken` otherwise, which is `Rc::try_unwrap` \
+         with the clone as its other arm. Read {small} at 300 rounds and \
+         {large} at 600.",
         large - small
     );
 }

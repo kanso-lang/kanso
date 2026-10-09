@@ -3608,6 +3608,18 @@ impl<'a> Interp<'a> {
         unsafe { std::mem::take(&mut *slot) }
     }
 
+    /// The same proof, used to write through the pointer instead of taking
+    /// the contents out of it. The container stays in the allocation it was
+    /// born in, so a push hands back the `Rc` it was given rather than boxing
+    /// the vector afresh, and the dead binding's holder sees the grown vector
+    /// where `taken_in_place` left it an empty one -- which it never reads.
+    #[allow(clippy::mut_from_ref)]
+    fn written_in_place<T>(rc: &Rc<T>) -> &mut T {
+        // SAFETY: as `taken_in_place`. The `&mut` lives for one write, and no
+        // other reference into the container is live across it.
+        unsafe { &mut *(Rc::as_ptr(rc) as *mut T) }
+    }
+
     pub fn call_builtin(
         &self,
         name: &str,
@@ -3952,12 +3964,11 @@ impl<'a> Interp<'a> {
                 }
                 let Value::List(items) = list else { unreachable!("checked just above") };
                 let alone = Rc::strong_count(&items) == 2;
-                let mut next = match self.writes_in_place(span, frame)
-                    || (alone && self.moved_here(span, frame))
-                {
-                    true => Self::taken_in_place(&items),
-                    false => taken_to_grow(items, 1),
-                };
+                if self.writes_in_place(span, frame) || (alone && self.moved_here(span, frame)) {
+                    Self::written_in_place(&items).push(item);
+                    return Ok(Value::List(items));
+                }
+                let mut next = taken_to_grow(items, 1);
                 next.push(item);
                 Ok(Value::List(Rc::new(next)))
             }
@@ -3971,12 +3982,11 @@ impl<'a> Interp<'a> {
                 };
                 let key = map_key(key, span)?;
                 let alone = Rc::strong_count(&entries) == 2;
-                let mut next = match self.writes_in_place(span, frame)
-                    || (alone && self.moved_here(span, frame))
-                {
-                    true => Self::taken_in_place(&entries),
-                    false => taken(entries),
-                };
+                if self.writes_in_place(span, frame) || (alone && self.moved_here(span, frame)) {
+                    Self::written_in_place(&entries).insert(key, value);
+                    return Ok(Value::Map(entries));
+                }
+                let mut next = taken(entries);
                 next.insert(key, value);
                 Ok(Value::Map(Rc::new(next)))
             }
@@ -4282,27 +4292,42 @@ impl<'a> Interp<'a> {
                     _ => 1,
                 };
                 let alone = Rc::strong_count(&items) == 2;
-                let mut out = match self.writes_in_place(span, frame)
-                    || (alone && self.moved_here(span, frame))
-                {
-                    true => Self::taken_in_place(&items),
-                    false => taken_to_grow(items, grows_by),
-                };
-                match &x {
-                    Value::Str(s) => out.extend_from_slice(s.as_bytes()),
-                    Value::Bytes(more) => out.extend_from_slice(more),
+                let extend = |out: &mut Vec<u8>| match &x {
+                    Value::Str(s) => {
+                        out.extend_from_slice(s.as_bytes());
+                        Ok(())
+                    }
+                    Value::Bytes(more) => {
+                        out.extend_from_slice(more);
+                        Ok(())
+                    }
                     // The low byte, which is what the compiled engine takes:
                     // `x.payload & 0xff`. Matching it is the differential law;
                     // whether either engine should instead refuse a number
                     // above 255 here is a question this change does not answer.
-                    Value::Int(n) => out.push(low_byte(n)),
-                    _ => {
-                        return Err(RuntimeError {
-                            message: "append takes bytes and a string, bytes, or byte".to_string(),
-                            span,
-                        })
+                    Value::Int(n) => {
+                        out.push(low_byte(n));
+                        Ok(())
                     }
+                    _ => Err(RuntimeError {
+                        message: "append takes bytes and a string, bytes, or byte".to_string(),
+                        span,
+                    }),
+                };
+                let in_place =
+                    self.writes_in_place(span, frame) || (alone && self.moved_here(span, frame));
+                // Bytes appended to themselves would be read through the
+                // pointer being written, so that one call takes the contents.
+                let onto_itself = matches!(&x, Value::Bytes(more) if Rc::ptr_eq(more, &items));
+                if in_place && !onto_itself {
+                    extend(Self::written_in_place(&items))?;
+                    return Ok(Value::Bytes(items));
                 }
+                let mut out = match in_place {
+                    true => Self::taken_in_place(&items),
+                    false => taken_to_grow(items, grows_by),
+                };
+                extend(&mut out)?;
                 Ok(Value::Bytes(Rc::new(out)))
             }
             b"find2_below" => {
