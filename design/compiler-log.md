@@ -24416,5 +24416,9 @@ from 118,854,794 to 118,855,947 (+1,153). Those are CI's readings. This
 container read the narrow version 488,366 below CI on the release row and
 14,082 above it on the dev row, where on kanso#1816 the two had agreed, so
 neither codegen row was taken from here. The objective moves by less than
-the gate's 0.001 either way and the floor stays. The runtime rows, the lazy
-tier and the compile rows did not move.
+the gate's 0.001 either way and the floor stays. The work vein, which counts
+each benchmark's instructions, moved on four rows although none of them
+multiplies a bignum: encodebench +497, oneshot +308, livebench -371 and
+runbench -14, read by CI, with where the larger runtime's code landed. This
+container's counter sweep had read them unmoved. The allocation counters,
+the lazy tier and the compile rows did not move.

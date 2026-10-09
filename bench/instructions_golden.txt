@@ -737,8 +737,8 @@
 #   livebench 1,830,428,581 -> 1,706,880,197 (-123,548,384)
 #   runbench 1,221,877,776 -> 1,192,561,047 (-29,316,729)
 jsonbench 860548155
-encodebench 2384337486
-oneshot 13026784
+encodebench 2384337983
+oneshot 13027092
 basket 32404398
 widebench 28094257
 deepbench 370091233
@@ -748,8 +748,8 @@ indexbench 2458505
 scanbench 281713
 digestbench 5566701
 readbench 4578314
-livebench 1473485995
-runbench 1129589356
+livebench 1473485624
+runbench 1129589342
 # 2026-09-06 (the run program joins): `runbench 3043743748` is a NEW row and
 # nothing regressed to make it appear. It is the program Clay's gavel that day
 # made the objective's whole run-speed term, and the thirteen rows above it
@@ -820,3 +820,8 @@ runbench 1129589356
 # (-12.98%), jsonbench -14,711,850 (-1.67%), livebench -98,275, digestbench
 # -86,306, oneshot -98,366, encodebench -107,448, widebench -15,997,
 # pendbench -704, basket -5, and scanbench +49, the one rise.
+#
+# 2026-10-09: k_int_mul runs its rows over the shorter operand. No benchmark
+# multiplies a bignum, and four rows moved with where the larger runtime's
+# code landed. CI's rows: encodebench +497, oneshot +308, livebench -371,
+# runbench -14.
