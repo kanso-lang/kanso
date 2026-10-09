@@ -4957,7 +4957,22 @@ leader_slots = row
 
 rows_c1zzzzzzy3 = text/concat rows_c1zzzzzzy4 [lone_arm leader_slots]
 
-rows_c = text/concat rows_c1zzzzzzy3 [itself]
+# A push, put or append the analysis proved in place writes through the
+# container's pointer and hands back the `Rc` it was given, where it used to
+# take the contents out and box them afresh (2026-10-09). The mutation boxes
+# the pushed list again, and the shared-seed spec's per-lap allocation count
+# is the witness.
+kept_box = row
+  "a write in place that boxes its container afresh"
+  true
+  "cargo test --release --test a_shared_seed_is_copied_once"
+  "specs (unit, golden, differential)"
+  (breaking "a_write_in_place_boxes_afresh")
+  no_setup
+
+rows_c1zzzzzzy2 = text/concat rows_c1zzzzzzy3 [kept_box]
+
+rows_c = text/concat rows_c1zzzzzzy2 [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

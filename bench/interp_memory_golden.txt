@@ -281,7 +281,11 @@
 # are kept at their length, and a guard's statements sit behind a box, which
 # makes every expression 48 bytes. Read by the gate on this host, whose rustc
 # is the golden's, over the fixed-value table: 626,217 -> 626,007.
-interp_allocs=626007
+# 2026-10-09: a push, put or append the analysis proved in place writes
+# through the container's pointer and hands back the `Rc` it was given,
+# instead of taking the contents out and boxing them afresh. Read by the gate
+# on this host: 626,007 -> 587,281, a FALL of 38,726 (-6.19%).
+interp_allocs=587281
 #
 # 2026-09-18, kanso#1518 against main at kanso#1517, CI's sitting.
 # 951,438 -> 961,165, a RISE of
@@ -375,5 +379,7 @@ interp_allocs=626007
 # is the golden's, over the fixed-value table: 742,431 -> 709,847. The
 # interpreter's callee and frame tables then shrank to 256 slots each, which
 # the run holds throughout: 709,847 -> 687,319.
-interp_peak_bytes=687319
+# 2026-10-09: an in-place write keeps its container in the allocation it was
+# born in. Read by the gate on this host: 687,319 -> 687,159, a FALL of 160.
+interp_peak_bytes=687159
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

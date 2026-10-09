@@ -64,8 +64,11 @@ pub fn run rounds
 "#;
 
 /// What 300 extra laps of the three builders cost, fixed allocations
-/// cancelled by the subtraction.
-const PER_EXTRA_ROUND: u64 = 3_647;
+/// cancelled by the subtraction. It read 3,647 until 2026-10-09, when a write
+/// the analysis proved in place stopped boxing the grown container afresh and
+/// kept it in the allocation it was born in: one allocation a lap for each of
+/// the three builders, 900 in all.
+const PER_EXTRA_ROUND: u64 = 2_747;
 
 fn kanso() -> PathBuf {
     let mut exe = std::env::current_exe().expect("the test binary has a path");

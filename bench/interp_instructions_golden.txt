@@ -672,5 +672,11 @@
 # container, where main reads 500,281,043:
 # 500,281,043 -> 491,415,834, a FALL of 8,865,209 (-1.7720%).
 # CI's reading replaces it if it differs.
-interp_instructions=491415834
+# 2026-10-09: a push, put or append the analysis proved in place writes
+# through the container's pointer and hands back the `Rc` it was given, where
+# it took the contents out and boxed them afresh. Measured in this container,
+# where the base reads 491,415,834:
+# 491,415,834 -> 488,869,940, a FALL of 2,545,894 (-0.5181%).
+# CI's reading replaces it if it differs.
+interp_instructions=488869940
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

@@ -24098,3 +24098,40 @@ a key, most of them spills around an inlined map append; the number writer
 already takes `ryu_short`, warm-started from the last float's place count;
 and `s[i]` over multibyte text is 58 instructions a call, all of them from one
 phase written to keep indexing linear. The interpreted run was next in line.
+
+## 2026-10-09 — an in-place write keeps its container's allocation
+
+Where `linear::in_place_pushes` or `linear::moved_writes` proves that the only
+other holder of a list, map or byte buffer is a binding nobody reads again,
+the interpreter used to take the contents out of the shared `Rc` and box them
+in a new one: one allocation and one move for every push, put and append the
+analysis cleared. It now writes through the pointer, as the compiled engine
+has since kanso#1359, and hands back the `Rc` it was given. The dead binding
+sees the grown container where it used to see an empty one, and it never
+looks. An append of a byte buffer onto itself still takes the contents,
+because writing through the pointer would read the buffer it is extending.
+
+In this container, where the base reads its golden exactly:
+
+    interp_instructions   491,415,834 -> 488,869,940   (-2,545,894, -0.52%)
+    interp_allocs             626,007 ->     587,281   (-38,726, -6.19%)
+    interp_peak_bytes         687,319 ->     687,159   (-160)
+
+`tests/a_shared_seed_is_copied_once.rs` pins the allocations of 300 extra laps
+of three builders, and the number fell from 3,647 to 2,747: one box a lap for
+each builder. A ratchet row, `kept_box`, holds it. Its mutation
+`a_write_in_place_boxes_afresh` boxes the pushed list again, and the spec
+reads 3,047.
+
+Literal constants folded at their use, measured and declined. A zero-arity
+function whose whole body is one integer literal, such as runbench's
+`span = 400`, compiles to a lazily built cell that every use checks. Emitting
+the literal at each use removed the cell and its check, and the IR changed in
+just those lines. digestbench fell 25.3% and deepbench 0.17%, but runbench,
+the weighted row, rose 536,678 (+0.048%). Two things paid for it, and the fold
+controls neither. In the escape phase, once the loop's first bound was a
+constant, LLVM rewrote `n * 7` as a running offset beside a second
+down-counter, one more instruction per push: escapebench rose 1,249,393. In
+the rest of the run `_int_malloc`, `memcpy` and `free` rose by 3.4 million
+together with every allocation counter unchanged, which is the heap laid out
+differently once the cell's own allocation was gone.
