@@ -24410,7 +24410,8 @@ all fourteen lines red, and dropping the row's own word from the wide add
 turns twelve of them red.
 
 The runtime is compiled into every binary, so three veins moved. Each
-benchmark's machine code grew by 1,136 bytes. `codegen_instructions_release`
+benchmark's machine code grew by 1,136 bytes, and the text vein's total
+went from 4,595,198 to 4,611,102. `codegen_instructions_release`
 rose from 453,747,433 to 453,756,115 (+8,682) and `codegen_instructions_dev`
 from 118,854,794 to 118,855,947 (+1,153). Those are CI's readings. This
 container read the narrow version 488,366 below CI on the release row and
@@ -24418,7 +24419,9 @@ container read the narrow version 488,366 below CI on the release row and
 neither codegen row was taken from here. The objective moves by less than
 the gate's 0.001 either way and the floor stays. The work vein, which counts
 each benchmark's instructions, moved on four rows although none of them
-multiplies a bignum: encodebench +497, oneshot +308, livebench -371 and
-runbench -14, read by CI, with where the larger runtime's code landed. This
+multiplies a bignum: `work_encodebench` +497 to 2,384,337,983,
+`work_oneshot` +308 to 13,027,092, `work_livebench` -371 to 1,473,485,624
+and `work_runbench` -14 to 1,129,589,342, read by CI, with where the larger
+runtime's code landed. This
 container's counter sweep had read them unmoved. The allocation counters,
 the lazy tier and the compile rows did not move.
