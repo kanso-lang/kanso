@@ -4972,7 +4972,35 @@ kept_box = row
 
 rows_c1zzzzzzy2 = text/concat rows_c1zzzzzzy3 [kept_box]
 
-rows_c = text/concat rows_c1zzzzzzy2 [itself]
+# A native build emits only the groups its entry reaches, the walk the tab
+# has made since 2026-10-08 (2026-10-09). The mutation empties the walk's
+# answer, every imported group is emitted and pruned afterwards, and the emit
+# row is the witness.
+native_reached = row
+  "a native build emitting every group"
+  true
+  emit_gate
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_native_build_emits_every_group")
+  release
+
+rows_c1zzzzzzy1 = text/concat rows_c1zzzzzzy2 [native_reached]
+
+# A record carried in two words is boxed once per block, and once for the
+# whole body when the box is made in the entry block (2026-10-09). The
+# mutation boxes it again at every line that names it, and skip_shape's
+# allocations rise from 39 to 41.
+box_once = row
+  "a carried record boxed again at every use"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_carried_record_boxed_at_every_use")
+  no_setup
+
+rows_c1zzzzzzy0 = text/concat rows_c1zzzzzzy1 [box_once]
+
+rows_c = text/concat rows_c1zzzzzzy0 [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

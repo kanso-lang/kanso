@@ -24135,3 +24135,81 @@ down-counter, one more instruction per push: escapebench rose 1,249,393. In
 the rest of the run `_int_malloc`, `memcpy` and `free` rose by 3.4 million
 together with every allocation counter unchanged, which is the heap laid out
 differently once the cell's own allocation was gone.
+
+## 2026-10-09 — a native build emits only what its entry reaches
+
+Since 2026-10-08 the playground tab has dropped every function its entry
+cannot reach before inference, linearity and the emitter read the program.
+Native builds now do the same. Before this, a native build analysed and
+emitted every function the program imported, and the prune in
+`Written::finish` deleted the unreached ones from the module afterwards.
+The walk is the tab's: it follows the names each body mentions from the
+entry, and if the emitter asks for a function the walk left out, the
+function goes back in its place and the program is emitted again. The
+`only_reached` switch that kept native builds out of the walk is gone, since
+every caller now passes the same answer.
+
+Measured in this container against goldens that read their own rows exactly:
+
+    emit_instructions              23,409,658 ->   7,038,906   (-69.9%)
+    codegen_instructions_release  457,532,287 -> 453,259,243   (-0.93%)
+    codegen_instructions_dev      118,872,382 -> 118,868,910   (-3,472)
+    runbench                    1,129,588,781 -> 1,129,590,193 (+1,412)
+
+Both tiers handed clang the pruned module before this change, so neither
+fall comes from less text to parse. The release fall arrived with the
+module's one change, described below, and nothing here isolates it further.
+Eleven of the fourteen benchmark rows fall by about 347
+instructions each. runbench rises 1,412, deepbench 11,049 and pendbench 239;
+those three arrived with the change and nothing here isolates why.
+
+The module does change in one place. With fewer functions in the program,
+`list/drop` and `list/iter` qualify to return their record in two words
+instead of a pointer. The emitter turned
+such a value back into a box at every line that named it, so `list/drop`
+called `k_parsed_box` three times on one value, and skip_shape's allocation
+count rose from 35 to 41. The emitter now remembers the box it made for a
+carried value and reuses it for the rest of the block, and for the whole
+function when the box was made in the entry block, which every other block
+follows. skip_shape reads 39. The remaining four are two boxes the
+two-word return needs at its callers and two step records from `list/next`
+clones LLVM made differently. The mem golden pins the 39.
+
+Two ratchet rows hold this. `native_reached`, mutation
+`a_native_build_emits_every_group`, empties the walk's answer, and the emit
+row reads 23,606,376 against 7,038,906. The cache itself added 3,814 to the
+emit row. `box_once`, mutation
+`a_carried_record_boxed_at_every_use`, forgets each box as soon as it is
+made, and skip_shape's allocations go back to 41.
+
+Welfare rises from 90.2314 to 90.2519, and the floor holds it.
+
+Three interpreter and runtime ideas, measured and declined:
+
+Argument vectors pooled. The interpreter allocates a vector for every call's
+arguments, and mimalloc spends about 63 instructions to allocate and free one.
+A pool held in a `RefCell` cost about 45 instructions to take a vector and 40
+to give it back, which leaves little to win. Five variants on
+`bench/interp_corpus`, from a base of 539,217,785, read between 537,922,216
+and 543,162,566. That spread is the layout band this row has shown before, so
+none of the five is evidence of a gain. Releasing bound names one at a time
+instead of clearing the vector read 494,036,859 against 491,415,834.
+
+A two-way table of recent callees. After kanso#1813, `callee_missed` rose
+from 826,313 to 2,380,466 with the cache unchanged, because the cache keys a
+name by its address inside the source slice, and that address moves when the
+run allocates in a different order. Checking a second slot on a miss raised
+the row by 1,060,893 and the misses to 3,549,075. The misses are not pairs of
+names fighting over one slot, so a second way does not catch them.
+
+The run program's arena peak, one block lower. The peak is 3,670,032 bytes:
+two full 1 MiB blocks and the index phase's 1,572,880-byte string, which needs
+contiguous room. The data the run keeps is about 1.35 MB, of which 799,728
+bytes are list and map buffers sized for six items and ten pairs while the
+document's lists hold 3.5 and its maps 3. Smaller seeds moved nothing: the
+outgrown buffers came back from the byte-buffer classes at the same total.
+Sizing each container exactly would bring the kept data under one block on
+paper, but a trim at close copies into fresh space and leaves the old buffer
+behind, and the top-level decode never rewinds it. Exact sizing needs the
+size when the container is allocated, which means a two-pass decode or a
+scratch stack. Not built; a block lower would be worth about 0.17 welfare.
