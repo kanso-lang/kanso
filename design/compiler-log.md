@@ -24355,7 +24355,9 @@ generator lives outside the tree. Over 1,177 programs that touch no files,
 stdout and the exit code agreed on every one. stderr differed only in the
 path a trace names, `defs.kso` against `defs/defs.kso`, because the harness
 hands the module's one file under a shorter name than the interpreter reads
-it from. Three programs ran out of wasmi's two billion units of fuel.
+it from. Three programs ran out of wasmi's two billion units of fuel. Five
+more generators, the box, first-order, nesting, NaN and minus ones,
+added 2,240 programs, and every one agreed on the same terms.
 
 All three run in about a tenth of a second interpreted and over a second
 native. Each holds a group like this one, which doubles an accumulator a
@@ -24408,8 +24410,11 @@ all fourteen lines red, and dropping the row's own word from the wide add
 turns twelve of them red.
 
 The runtime is compiled into every binary, so three veins moved. Each
-benchmark's machine code grew by 1,136 bytes. The two codegen rows moved
-too, and the goldens carry CI's readings rather than this container's: on
-the narrow version of this change this container read release codegen
-488,366 below CI and dev 14,082 above it, where on kanso#1816 the two had
-agreed. The runtime rows, the lazy tier and the compile rows did not move.
+benchmark's machine code grew by 1,136 bytes. `codegen_instructions_release`
+rose from 453,747,433 to 453,756,115 (+8,682) and `codegen_instructions_dev`
+from 118,854,794 to 118,855,947 (+1,153). Those are CI's readings. This
+container read the narrow version 488,366 below CI on the release row and
+14,082 above it on the dev row, where on kanso#1816 the two had agreed, so
+neither codegen row was taken from here. The objective moves by less than
+the gate's 0.001 either way and the floor stays. The runtime rows, the lazy
+tier and the compile rows did not move.
