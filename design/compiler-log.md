@@ -24217,6 +24217,15 @@ the same site from `play`, through a record type of its own, and clang
 refuses it under the mutation with the error the first fixture was written
 for.
 
+`dead_cycle` went blind the same way. Its spec's summing program used to
+emit std/list's merge cycle and rely on the prune to strike it; the walk now
+leaves the merge out before anything is emitted. The prune still strikes a
+group that a body names and the module never calls, and the shortest one is a
+fused call: `text/to_float (text/slice ...)` is emitted as
+`k_b_to_float_slice`, so std/text's `to_float` survives the walk and nothing
+calls it. A third test builds that program; with every definition marked live
+the module defines `d_text/to_float_1` and the test goes red.
+
 Compiling the browser corpus in the tab rose 482,055 instructions with this
 change, from 396,233,999 to 396,716,054 (+0.12%), and the interpreted run fell
 32, to 488,869,908. The arm check is not the source of the first: a build with

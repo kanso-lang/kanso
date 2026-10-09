@@ -1983,7 +1983,7 @@ unbuilt_arm = row
 rows_b1u = text/concat rows_b1v [unbuilt_arm]
 
 # A cycle nothing reaches is not emitted. The mutation starts every definition
-# marked, and the spec's summing program defines the merge again.
+# marked, and the spec's fused-call program defines std/text's to_float again.
 dead_cycle = row
   "a cycle nothing reaches emitted"
   true
