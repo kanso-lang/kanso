@@ -238,8 +238,21 @@ enum Tok<'a> {
     Bytes(Vec<u8>),
 }
 
+/// Which bytes continue a name, as a table: the tokenizer asks once per byte
+/// of every name in the module.
+const NAME_CHAR: [bool; 256] = {
+    let mut t = [false; 256];
+    let mut c = 0;
+    while c < 256 {
+        let b = c as u8;
+        t[c] = b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.' | b'$' | b'-');
+        c += 1;
+    }
+    t
+};
+
 fn name_char(c: u8) -> bool {
-    c.is_ascii_alphanumeric() || matches!(c, b'_' | b'.' | b'$' | b'-')
+    NAME_CHAR[c as usize]
 }
 
 fn unescape(raw: &[u8]) -> Vec<u8> {
@@ -484,18 +497,33 @@ struct Locals {
     next: u32,
 }
 
+/// A temporary `t<k>` or a label `L<k>`, read in one pass: the prefix byte
+/// and `k`. Nine digits at most and no leading zero but `0` itself, so the
+/// same spelling always names the same slot.
+fn numbered(name: &str) -> Option<(u8, usize)> {
+    let (&prefix, digits) = name.as_bytes().split_first()?;
+    if !matches!(prefix, b't' | b'L') || digits.is_empty() || digits.len() > 9 {
+        return None;
+    }
+    if digits[0] == b'0' && digits.len() > 1 {
+        return None;
+    }
+    let mut k = 0usize;
+    for &d in digits {
+        if !d.is_ascii_digit() {
+            return None;
+        }
+        k = k * 10 + (d - b'0') as usize;
+    }
+    Some((prefix, k))
+}
+
 impl Locals {
     fn number(&mut self, name: &str) -> u32 {
-        let numbered = |prefix: char| {
-            name.strip_prefix(prefix)
-                .filter(|d| !d.is_empty() && d.len() <= 9 && !d.starts_with('0') || *d == "0")
-                .filter(|d| d.bytes().all(|b| b.is_ascii_digit()))
-                .and_then(|d| d.parse::<usize>().ok())
-        };
-        let table = match (numbered('t'), numbered('L')) {
-            (Some(k), _) => Some((&mut self.temps, k)),
-            (_, Some(k)) => Some((&mut self.labels, k)),
-            _ => None,
+        let table = match numbered(name) {
+            Some((b't', k)) => Some((&mut self.temps, k)),
+            Some((_, k)) => Some((&mut self.labels, k)),
+            None => None,
         };
         if let Some((table, k)) = table {
             if table.len() <= k {
@@ -558,8 +586,12 @@ impl<'t> P<'t, '_> {
     fn peek(&self) -> Option<&Tok<'t>> {
         self.t.get(self.i)
     }
+    /// The parser reads each token once and only forward, so a token is moved
+    /// out of the line rather than cloned: a name held as an owned string, and
+    /// every byte-string constant, was a copy per read.
     fn next(&mut self) -> Result<Tok<'t>, String> {
-        let t = self.t.get(self.i).cloned().ok_or("unexpected end of line")?;
+        let slot = self.t.get_mut(self.i).ok_or("unexpected end of line")?;
+        let t = std::mem::replace(slot, Tok::P(0));
         self.i += 1;
         Ok(t)
     }
