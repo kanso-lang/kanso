@@ -4931,7 +4931,33 @@ callee_slots = row
 
 rows_c1zzzzzzy4 = text/concat rows_c1zzzzzzy6 [callee_slots]
 
-rows_c = text/concat rows_c1zzzzzzy4 [itself]
+# A group of one arm whose parameters are bare names is bound without a
+# candidate loop: it wins whenever no argument is a failure, and nothing reads
+# its score (2026-10-09). The mutation scores it like a crowd again, and the
+# interpreted run's instruction count is the witness.
+lone_arm = row
+  "a lone arm scored like its rivals"
+  false
+  interp_gate
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_lone_arm_scored_like_its_rivals")
+  release
+
+# A candidate that takes the lead flips the index naming the best pair of
+# buffers, where it used to move an 80-byte tuple through an `Option`
+# (2026-10-09). The mutation moves the buffers instead, and the same witness
+# counts the moves.
+leader_index = row
+  "a leader moved rather than named"
+  false
+  interp_gate
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_leader_moved_rather_than_named")
+  release
+
+rows_c1zzzzzzy3 = text/concat rows_c1zzzzzzy4 [lone_arm leader_index]
+
+rows_c = text/concat rows_c1zzzzzzy3 [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

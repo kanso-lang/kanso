@@ -3175,7 +3175,7 @@ impl<'a> Interp<'a> {
         // outgoing candidate's vector in `score`, so what survives the
         // iteration already has capacity and `match_params_into` clears it
         // before the next candidate fills it.
-        let mut score = Score::default();
+        let mut scores: [Score; 2] = Default::default();
         // AND THE BINDINGS BUFFER COMES BACK TOO, when the frame it became is
         // the dispatcher's to take back. `bind_all` moves `binds` into
         // `Env::Many`, so unlike the score it cannot simply be kept -- the body
@@ -3232,7 +3232,6 @@ impl<'a> Interp<'a> {
                     *arg = self.force_thunk(taken)?;
                 }
             }
-            let mut best: Option<(Score, &FnDecl, Bindings)> = None;
             // One pair of buffers for the whole candidate list. `match_params`
             // used to build both at `Vec::with_capacity` on every candidate and
             // give up the moment a pattern refused, so a candidate that failed
@@ -3281,63 +3280,88 @@ impl<'a> Interp<'a> {
             // and takes it back below. What stays behind in the node is an
             // empty `Vec`, which owns no allocation, so the node is safe to
             // carry through a dispatch that never binds.
-            let mut binds: Bindings = match pool.as_mut().and_then(Rc::get_mut) {
+            let mut held_binds: Bindings = match pool.as_mut().and_then(Rc::get_mut) {
                 Some(Env::Many(slots, _)) => std::mem::take(slots),
                 _ => Vec::new(),
             };
-            binds.clear();
-            binds.reserve(args_len);
-            for decl in overloads.iter() {
+            held_binds.clear();
+            held_binds.reserve(args_len);
+            // TWO OF EACH BUFFER AND AN INDEX BETWEEN THEM. `cur` names the
+            // pair the next candidate matches into and the other pair holds
+            // the best so far, so a candidate that takes the lead flips the
+            // index rather than moving an 80-byte tuple of score, declaration
+            // and bindings through an `Option` -- which also put a drop of
+            // that `Option` on every dispatch. The scores stay with the loop,
+            // as the one score did; the bindings start each dispatch from the
+            // pooled frame's vector.
+            let mut pair: [Bindings; 2] = [held_binds, Vec::new()];
+            let mut cur = 0usize;
+            let mut best: Option<&FnDecl> = None;
+            // ONE ARM OF BARE NAMES HAS NOTHING TO CHOOSE. A name refuses a
+            // failure and takes anything else, so such an arm wins exactly
+            // when no argument is a failure, and with no rival its score is
+            // never read. Its bindings are the names in order, each holding
+            // `none` until `bind_moved` puts the argument there, which is
+            // what `match_params_into` would have pushed.
+            let lone = match overloads.as_slice() {
+                [decl]
+                    if decl.params.len() == args_len
+                        && decl.params.iter().all(|p| matches!(p, Pattern::Var(..)))
+                        && !args.iter().any(is_failure) =>
+                {
+                    Some(*decl)
+                }
+                _ => None,
+            };
+            if let Some(decl) = lone {
+                let binds = &mut pair[cur];
+                if binds.capacity() == 0 {
+                    *binds = self.spare_binds.borrow_mut().pop().unwrap_or_default();
+                }
+                for pattern in &decl.params {
+                    if let Pattern::Var(name, _) = pattern {
+                        binds.push((name.clone(), Value::NoneV));
+                    }
+                }
+                best = Some(decl);
+                cur ^= 1;
+            }
+            for decl in overloads.iter().filter(|_| lone.is_none()) {
                 if decl.params.len() != args.len() {
                     continue;
                 }
-                if binds.capacity() == 0 {
-                    binds = self.spare_binds.borrow_mut().pop().unwrap_or_default();
+                if pair[cur].capacity() == 0 {
+                    pair[cur] = self.spare_binds.borrow_mut().pop().unwrap_or_default();
                 }
-                if !match_params_into(&decl.params, &args, &mut score, &mut binds) {
+                if !match_params_into(&decl.params, &args, &mut scores[cur], &mut pair[cur]) {
                     continue;
                 }
-                let replace = match &best {
-                    Some((best_score, ..)) => score.beats(best_score),
+                let replace = match best {
+                    Some(_) => scores[cur].beats(&scores[cur ^ 1]),
                     None => true,
                 };
                 if replace {
-                    // The outgoing best's buffers become the working pair, so
-                    // a candidate that wins hands its vectors on rather than
-                    // leaving the next one to allocate from nothing.
-                    match best.take() {
-                        Some((was_score, _, was_binds)) => {
-                            let kept_score = std::mem::replace(&mut score, was_score);
-                            let kept_binds = std::mem::replace(&mut binds, was_binds);
-                            best = Some((kept_score, decl, kept_binds));
-                        }
-                        None => {
-                            best = Some((
-                                std::mem::take(&mut score),
-                                decl,
-                                std::mem::take(&mut binds),
-                            ));
-                        }
-                    }
+                    best = Some(decl);
+                    cur ^= 1;
                 }
             }
+            let [first, second] = pair;
+            let (mut binds, mut spare_binds) = match cur {
+                0 => (second, first),
+                _ => (first, second),
+            };
             // The buffer the losers matched into goes back for the next
             // dispatch rather than to the allocator.
-            if binds.capacity() > 0 {
-                binds.clear();
+            if spare_binds.capacity() > 0 {
+                spare_binds.clear();
                 let mut spare = self.spare_binds.borrow_mut();
                 if spare.len() < 64 {
-                    spare.push(std::mem::take(&mut binds));
+                    spare.push(spare_binds);
                 }
             }
             match best {
-                Some((won_score, decl, mut binds)) => {
+                Some(decl) => {
                     bind_moved(&decl.params, &mut args, &mut binds);
-                    // The winner's buffer comes back as the working one. The
-                    // two have the same job and only one of them is needed
-                    // next time round.
-                    score = won_score;
-                    score.clear();
                     // One frame for the whole parameter list. Pushing a node
                     // per binding made the chain as long as the arguments, and
                     // the walk paid for that on every name the body mentions.
