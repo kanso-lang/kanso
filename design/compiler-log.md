@@ -24343,3 +24343,85 @@ The compile sweep moved one row on this host: `entry_instructions`
 since the native entry path does not run the translation. The two codegen
 rows read what this container read for main in the entry above, so they
 stay at CI's values.
+
+## 2026-10-09 — a bignum multiplies with its shorter operand outside
+
+A differential run through the playground's own compile path found this. The
+harness hands a generated program to `docs/kanso.wasm` the way the tab does,
+compiles it with `kanso_compile_native`, runs the module against the wasm32
+runtime under wasmi, and compares stdout, stderr and the exit code with the
+interpreter's. It is a scratch test rather than a spec, because the
+generator lives outside the tree. Over 1,177 programs that touch no files,
+stdout and the exit code agreed on every one. stderr differed only in the
+path a trace names, `defs.kso` against `defs/defs.kso`, because the harness
+hands the module's one file under a shorter name than the interpreter reads
+it from. Three programs ran out of wasmi's two billion units of fuel. Five
+more generators, the box, first-order, nesting, NaN and minus ones,
+added 2,240 programs, and every one agreed on the same terms.
+
+All three run in about a tenth of a second interpreted and over a second
+native. Each holds a group like this one, which doubles an accumulator a
+hundred thousand times and never reads it:
+
+    fn acc46 n acc
+      5 + acc46 (n - 1) (acc * 2)
+
+The accumulator grows past 3,000 limbs, so each step multiplies a long
+number by a one-limb `2`. `k_int_mul` ran its schoolbook rows over the first
+operand and its columns over the second, which put the long number outside.
+Every limb then paid for a whole row, its setup and its carry, to multiply
+by a row one limb long: about 25 instructions a limb. It also cleared the
+result before the first row. num-bigint, under the interpreter, takes about
+three.
+
+`k_int_mul` now puts the shorter operand outside. The first row writes its
+products, where the later rows add to theirs, so the result is not cleared
+first. The two views are swapped by pointer, because a small int's limbs
+are stored inside its own view, and a swap by value leaves the short one
+pointing at the other view's storage. The algorithm and the count of limb
+products are unchanged.
+
+That alone took s900624 from 4,586,777,277 instructions to 1,084,873,711,
+with the multiply itself at 1,028,787,419, about 6.6 instructions a limb.
+The row then went two limbs at a time as one little-endian 64-bit word, with
+a 128-bit product, on x86-64 and arm64. A row that writes costs 4.0
+instructions a limb that way against 6.5, and one that adds 4.8 against 9.0.
+wasm32 has no 64 x 64 -> 128 multiply and keeps the limb loop. The first
+attempt at the wider row put the write and the add in one loop behind a test
+on the row number and read 1,498,505,558, slower than the narrow loop. As one
+inlined row called with the choice fixed at each site, it reads:
+
+    program    before          after
+    s900233    4,601,351,409   710,285,391
+    s900624    4,586,777,277   695,632,879
+    s901212    4,551,721,733   660,655,483
+
+The multiply falls from 3,919,227,713 to 639,546,587 on s900624. Each
+program prints the same bytes as before and as the interpreter, and through
+the tab all three now finish inside the fuel budget. A program that builds
+3^100000 three times, by repeated `acc * 3`, falls from 5,069,017,487 to
+3,214,914,845; it still costs more natively than interpreted, since
+num-bigint keeps 64-bit limbs where the runtime stores 32-bit ones.
+
+`tests/golden/micro/a_bignum_product_reads_the_same_from_either_side.kso`
+asks for seven products both ways round: long by one limb, by two limbs and
+by long, with every pairing of signs. Swapping the views by value turns
+all fourteen lines red, and dropping the row's own word from the wide add
+turns twelve of them red.
+
+The runtime is compiled into every binary, so three veins moved. Each
+benchmark's machine code grew by 1,136 bytes, and the text vein's total
+went from 4,595,198 to 4,611,102. `codegen_instructions_release`
+rose from 453,747,433 to 453,756,115 (+8,682) and `codegen_instructions_dev`
+from 118,854,794 to 118,855,947 (+1,153). Those are CI's readings. This
+container read the narrow version 488,366 below CI on the release row and
+14,082 above it on the dev row, where on kanso#1816 the two had agreed, so
+neither codegen row was taken from here. The objective moves by less than
+the gate's 0.001 either way and the floor stays. The work vein, which counts
+each benchmark's instructions, moved on four rows although none of them
+multiplies a bignum: `work_encodebench` +497 to 2,384,337,983,
+`work_oneshot` +308 to 13,027,092, `work_livebench` -371 to 1,473,485,624
+and `work_runbench` -14 to 1,129,589,342, read by CI, with where the larger
+runtime's code landed. This
+container's counter sweep had read them unmoved. The allocation counters,
+the lazy tier and the compile rows did not move.

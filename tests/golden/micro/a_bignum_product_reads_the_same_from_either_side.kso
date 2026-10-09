@@ -1,0 +1,20 @@
+# A product of two ints is the same number whichever operand is longer. The
+# native runtime multiplies with the shorter one on the outside, so each line
+# here asks for a product both ways round: a long number by a one-limb word,
+# by a two-limb word, and by another long number, with every pairing of signs.
+fn pow _ 0
+  1
+
+fn pow b e
+  b * pow b (e - 1)
+
+fn both x y
+  print "{x * y}" .> (_ -> print "{y * x}")
+
+pub play = both (pow 2 200 + 12345) 7
+  .> (_ -> both (pow 2 200 + 12345) 98765432109)
+  .> (_ -> both (pow 2 200 + 12345) (pow 3 50))
+  .> (_ -> both (0 - pow 7 90) (pow 3 41 + 1))
+  .> (_ -> both (0 - pow 7 90) (0 - 4294967296))
+  .> (_ -> both (pow 2 64) (pow 2 64))
+  .> (_ -> both (pow 2 96 - 1) (pow 2 32 - 1))
