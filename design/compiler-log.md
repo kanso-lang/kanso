@@ -24207,12 +24207,12 @@ row reads 23,606,376 against 7,035,904. `parsed_arms`, mutation
 `a_group_answering_other_values_goes_by_value`, skips the check, and both
 fixtures go red.
 
-The arm check has a cost in the tab. Compiling the browser corpus rose
-482,055 instructions, from 396,233,999 to 396,716,054 (+0.12%). The interpreted
-run fell 32, to 488,869,908. Both arrived with the check, and nothing here
-isolates which part of it. Welfare rises from 90.2314 to 90.2512. That is
-0.0004 below what the walk alone scored, and the floor is set to it, since the
-check is what makes the two std/list programs above print the right thing.
+Compiling the browser corpus in the tab rose 482,055 instructions with this
+change, from 396,233,999 to 396,716,054 (+0.12%), and the interpreted run fell
+32, to 488,869,908. The arm check is not the source of the first: a build with
+the check skipped reads 396,716,403, 349 more. The tab already used the walk,
+so its emitted modules are the same; what moved is the compiler's own code,
+and nothing here isolates where. Welfare rises from 90.2314 to 90.2512.
 
 Three interpreter and runtime ideas, measured and declined:
 
