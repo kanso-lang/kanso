@@ -307,6 +307,28 @@ impl<'a> Analysis<'a> {
             }
         }
         self.compute_returns_ty(ty);
+        // A group returns ty when one arm's tail produces it, and the other
+        // arms may answer anything. Only a failure crosses the two words
+        // intact: its first word is exactly K_ERR, which no packed word is.
+        // Anything else an arm answers is read back as a packed ty: `done`
+        // from `list/next` when a `take` runs out, or a `cursor` from the
+        // `iter` arm beside the one answering `capped`, which came back as
+        // a capped. The inference has one bit for every record, so it cannot
+        // tell those two apart, and the question is put to the arms
+        // themselves: each branch ends in ty, in `err`, or in a call to a
+        // group that answers nothing but failures, unless the arm as a whole
+        // answers nothing but failures. Until 2026-10-09 a program
+        // importing std/list never let `step` or `capped` go by value,
+        // because functions nobody called kept them boxed; once native
+        // builds dropped unreached functions, both programs answered wrong.
+        let answers_other = self.program.fns.iter().enumerate().any(|(i, f)| {
+            self.returns_ty.contains(&(f.name.as_str(), f.params.len()))
+                && !inference.returns.get(i).is_some_and(|set| set & !crate::infer::FAIL == 0)
+                && !matches!(f.body.last(), Some(Stmt::Expr(e)) if self.ends_in_ty(ty, e, inference))
+        });
+        if answers_other {
+            return false;
+        }
         // A function handed out as a value is called through a wrapper that
         // answers one boxed word, so no group returning ty may be one. A
         // constant named bare is evaluated where it is named, and codegen
@@ -506,6 +528,40 @@ impl<'a> Analysis<'a> {
                 true
             }
         }
+    }
+
+    /// Does every branch of `e` end in a ty value or a failure? A failure is
+    /// an `err`, or a call to a group whose every arm answers only failures,
+    /// such as json's `fail`. `produces_ty` asks whether one branch is a ty.
+    fn ends_in_ty(&self, ty: &str, e: &Expr, inference: &crate::infer::Inference) -> bool {
+        match e {
+            Expr::App { head, args, .. } => match head.as_ref() {
+                Expr::Ident(name, _, _) if name == "if" && args.len() == 3 => {
+                    self.ends_in_ty(ty, &args[1], inference)
+                        && self.ends_in_ty(ty, &args[2], inference)
+                }
+                Expr::Ident(name, _, _) if name == "err" => true,
+                Expr::Ident(name, _, _) => {
+                    self.produces_ty(ty, e) || self.fails_only(name, args.len(), inference)
+                }
+                _ => false,
+            },
+            _ => false,
+        }
+    }
+
+    fn fails_only(&self, name: &str, arity: usize, inference: &crate::infer::Inference) -> bool {
+        let mut arms = self
+            .program
+            .fns
+            .iter()
+            .enumerate()
+            .filter(|(_, f)| f.name == name && f.params.len() == arity)
+            .peekable();
+        arms.peek().is_some()
+            && arms.all(|(i, _)| {
+                inference.returns.get(i).is_some_and(|set| set & !crate::infer::FAIL == 0)
+            })
     }
 
     /// Does `e` evaluate to a ty value (a construction or a ty-returning call)?

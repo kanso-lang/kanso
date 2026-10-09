@@ -24149,40 +24149,60 @@ function goes back in its place and the program is emitted again. The
 `only_reached` switch that kept native builds out of the walk is gone, since
 every caller now passes the same answer.
 
-Measured in this container against goldens that read their own rows exactly:
+Measured against goldens that read their own rows exactly, with the two
+codegen rows taken from CI, whose clang and linker are the ones they count:
 
-    emit_instructions              23,409,658 ->   7,038,906   (-69.9%)
-    codegen_instructions_release  457,532,287 -> 453,259,243   (-0.93%)
-    codegen_instructions_dev      118,872,382 -> 118,868,910   (-3,472)
+    emit_instructions              23,409,658 ->   7,035,904   (-69.9%)
+    codegen_instructions_release  457,532,287 -> 453,747,433   (-0.83%)
+    codegen_instructions_dev      118,872,382 -> 118,854,794   (-17,588)
     runbench                    1,129,588,781 -> 1,129,590,193 (+1,412)
+    compile_instructions           25,842,553 ->  25,855,719   (+13,166)
 
 Both tiers handed clang the pruned module before this change, so neither
-fall comes from less text to parse. The release fall arrived with the
-module's one change, described below, and nothing here isolates it further.
-Eleven of the fourteen benchmark rows fall by about 347
+codegen fall comes from less text to parse, and nothing here isolates where
+they came from. Eleven of the fourteen benchmark rows fall by about 347
 instructions each. runbench rises 1,412, deepbench 11,049 and pendbench 239;
-those three arrived with the change and nothing here isolates why.
+those three arrived with the change and nothing here isolates why either.
+The compile, entry and library rows rise by 13,166, 43,783 and 43,734: the
+check described next, run once per record type.
 
-The module does change in one place. With fewer functions in the program,
-`list/drop` and `list/iter` qualify to return their record in two words
-instead of a pointer. The emitter turned
-such a value back into a box at every line that named it, so `list/drop`
-called `k_parsed_box` three times on one value, and skip_shape's allocation
-count rose from 35 to 41. The emitter now remembers the box it made for a
-carried value and reuses it for the rest of the block, and for the whole
-function when the box was made in the entry block, which every other block
-follows. skip_shape reads 39. The remaining four are two boxes the
-two-word return needs at its callers and two step records from `list/next`
-clones LLVM made differently. The mem golden pins the 39.
+The first push of this change was wrong, and the diagnostics differential
+said so: `list/to_list (list/take (list/repeat 5) 3)` failed natively with
+"no overload of `list/next` matches these arguments" and printed `[5 5 5]`
+in the interpreter. A fuzz batch of 300 programs found six more. Two faults,
+one cause. A record whose first field is an int may go back to its caller
+in two words instead of a pointer, and `escape` granted that to a group when
+any arm produced the record. The other arms were assumed to answer
+failures, which cross the two words intact. `list/next` answers `done`
+beside its `step`, and `list/iter` answers a `cursor` from one arm and a
+`capped` from another; both came back read as the record. Neither could
+happen while every program carried all of std/list, because functions
+nobody called kept `step` and `capped` boxed. The tab has walked since
+2026-10-08 and could have met the same thing.
 
-Two ratchet rows hold this. `native_reached`, mutation
+`escape` now asks each arm of a group that answers the record. Every branch
+of its tail must build the record, call a group that answers it, or end in
+`err` or a call to a group whose arms answer only failures, such as json's
+`fail`; an arm whose inference says it answers only failures passes as it
+stands. The inference cannot do this alone, because it has one bit for
+every record. Runbench keeps exactly the thirty-three two-word functions it
+had, and all six fuzz programs agree with the interpreter. Two micro
+fixtures hold the two faults, each red on the compiler before the check and
+green after it.
+
+While chasing the first fault I built a cache that boxed a two-word value
+once per block instead of once per use, which took skip_shape from 41
+allocations to 39. With the check in place `list/drop` no longer returns two
+words, skip_shape reads its old 35, and no golden sees the cache, so it is
+not in this change.
+
+Two ratchet rows hold the rest. `native_reached`, mutation
 `a_native_build_emits_every_group`, empties the walk's answer, and the emit
-row reads 23,606,376 against 7,038,906. The cache itself added 3,814 to the
-emit row. `box_once`, mutation
-`a_carried_record_boxed_at_every_use`, forgets each box as soon as it is
-made, and skip_shape's allocations go back to 41.
+row reads 23,606,376 against 7,035,904. `parsed_arms`, mutation
+`a_group_answering_other_values_goes_by_value`, skips the check, and both
+fixtures go red.
 
-Welfare rises from 90.2314 to 90.2519, and the floor holds it.
+Welfare rises from 90.2314 to 90.2516, and the floor holds it.
 
 Three interpreter and runtime ideas, measured and declined:
 

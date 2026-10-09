@@ -4986,21 +4986,21 @@ native_reached = row
 
 rows_c1zzzzzzy1 = text/concat rows_c1zzzzzzy2 [native_reached]
 
-# A record carried in two words is boxed once per block, and once for the
-# whole body when the box is made in the entry block (2026-10-09). The
-# mutation boxes it again at every line that names it, and skip_shape's
-# allocations rise from 39 to 41.
-box_once = row
-  "a carried record boxed again at every use"
+# A record goes back to its caller in two words only when every arm of its
+# group answers that record or a failure (2026-10-09). The mutation skips the
+# check, and the two micro fixtures built from `list/take` print the wrong
+# thing or fail.
+parsed_arms = row
+  "a group answering other values by value"
   true
-  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
   "specs (unit, golden, differential)"
-  (breaking "a_carried_record_boxed_at_every_use")
+  (breaking "a_group_answering_other_values_goes_by_value")
   no_setup
 
-rows_c1zzzzzzy0 = text/concat rows_c1zzzzzzy1 [box_once]
+rows_c1zzzzzzx9 = text/concat rows_c1zzzzzzy1 [parsed_arms]
 
-rows_c = text/concat rows_c1zzzzzzy0 [itself]
+rows_c = text/concat rows_c1zzzzzzx9 [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

@@ -2740,7 +2740,9 @@ fn emit_written(
     // every std function the program imported, and the emitter wrote them all
     // for the prune to drop. The tab did this first; native builds joined on
     // 2026-10-09, and on runbench the emit fell from 23,409,658 instructions
-    // to 7,035,092 with the module unchanged.
+    // to 7,038,906. A smaller program can let a record go back in two words
+    // where the whole one kept it boxed, which is why `escape` asks every arm
+    // of a group what it answers.
     let mut left_out: Vec<(usize, FnDecl)> = Vec::new();
     if let Given::Owned(owned) = &mut program {
         let reached = reached_from_entry(owned);
@@ -3263,11 +3265,6 @@ struct FnEmit {
     /// Operands living in the by-value convention, and the record type
     /// each one holds — boxing one back needs to name its type and its id.
     parsed: crate::hash::Map<String, (String, i64)>,
-    /// The box each carried operand was given, so a second line naming it
-    /// reads the same box. A box made in an arm is not there in its sibling,
-    /// so a label clears these, except for boxes made in the entry block,
-    /// which every block comes after. The flag says which those are.
-    boxed_here: crate::hash::Map<String, (String, bool)>,
     /// Err-origin prefix "{fn lazy_cells: Vec::new(), } at {file}" for the declaration being emitted.
     origin_prefix: String,
     /// Source file of the declaration being emitted, for keying push sites.
@@ -3386,7 +3383,6 @@ impl FnEmit {
             versions: HashMap::default(),
             sets: HashMap::default(),
             parsed: crate::hash::Map::default(),
-            boxed_here: crate::hash::Map::default(),
             origin_prefix: String::new(),
             hako: String::new(),
             file: crate::ast::unstamped(),
@@ -3642,9 +3638,6 @@ impl FnEmit {
     /// A failure rides in the same two words and comes back as itself: the
     /// runtime asks before it builds, which the inline build here did not.
     fn box_parsed(&mut self, e: &str) -> String {
-        if let Some((boxed, _)) = self.boxed_here.get(e) {
-            return boxed.clone();
-        }
         let (_, id) = self.parsed[e];
         let w0 = self.tmp();
         self.raw(&format!("{w0} = extractvalue %parsed {e}, 0"));
@@ -3652,8 +3645,6 @@ impl FnEmit {
         self.raw(&format!("{w1} = extractvalue %parsed {e}, 1"));
         let t = self.tmp();
         self.raw(&format!("{t} = call %KValue @k_parsed_box(i64 {id}, i64 {w0}, i64 {w1})"));
-        let in_entry = self.cur_label == "entry";
-        self.boxed_here.insert(e.to_string(), (t.to_string(), in_entry));
         t.to_string()
     }
 
@@ -3666,7 +3657,6 @@ impl FnEmit {
     fn start_block(&mut self, label: &str) {
         self.out.push_str(label);
         self.out.push_str(":\n");
-        self.boxed_here.retain(|_, (_, in_entry)| *in_entry);
         self.cur_label.clear();
         self.cur_label.push_str(label);
         if let Some(e) = self.arms_effects {
