@@ -3262,6 +3262,36 @@ KValue k_int_sub(KValue x, KValue y) {
     return k_big_addsub(&a, &b, b.n == 0 ? 0 : !b.neg);
 }
 
+/* One schoolbook row: d[0..ln] = l * m, or d[0..ln] += l * m when `add`.
+   Where the target has a 64 x 64 -> 128 multiply in hardware, two limbs go
+   at a time as one little-endian word: the product of a limb and a word, the
+   word already in the row and a carry under 2^32 fit in 128 bits, and the
+   carry out stays under 2^32. That is 4.0 instructions a limb against 6.5 for
+   a row that writes and 4.8 against 9.0 for one that adds. wasm32 has no such
+   multiply; clang lowers it to a call to compiler-rt's `__multi3`, so wasm32
+   keeps the limb-at-a-time loop. Both loops compute the same limbs. */
+static inline void k_mag_row(uint32_t* d, const uint32_t* l, long long ln, uint64_t m, int add) {
+    uint64_t c = 0;
+    long long j = 0;
+#if defined(__x86_64__) || defined(__aarch64__)
+    for (; j + 2 <= ln; j += 2) {
+        uint64_t w, h = 0;
+        memcpy(&w, l + j, 8);
+        if (add) memcpy(&h, d + j, 8);
+        unsigned __int128 t = (unsigned __int128)m * w + h + c;
+        uint64_t lo = (uint64_t)t;
+        memcpy(d + j, &lo, 8);
+        c = (uint64_t)(t >> 64);
+    }
+#endif
+    for (; j < ln; j++) {
+        uint64_t t = m * l[j] + (add ? d[j] : 0) + c;
+        d[j] = (uint32_t)t;
+        c = t >> 32;
+    }
+    d[ln] = (uint32_t)c;
+}
+
 /* Schoolbook, one row per limb of the SHORTER operand. A number that grows by
    doubling meets `acc * 2` once a step, and with the long operand outside each
    of its limbs paid a whole row's setup for a row one limb long: 25
@@ -3282,25 +3312,8 @@ KValue k_int_mul(KValue x, KValue y) {
     long long n = ln + sn;
     KBytes* r = k_big_room(n);
     uint32_t* d = k_big_limbs(r);
-    uint64_t carry = 0;
-    uint64_t m = s->d[0];
-    for (long long j = 0; j < ln; j++) {
-        uint64_t t = m * l->d[j] + carry;
-        d[j] = (uint32_t)t;
-        carry = t >> 32;
-    }
-    d[ln] = (uint32_t)carry;
-    for (long long i = 1; i < sn; i++) {
-        carry = 0;
-        m = s->d[i];
-        uint32_t* row = d + i;
-        for (long long j = 0; j < ln; j++) {
-            uint64_t t = m * l->d[j] + row[j] + carry;
-            row[j] = (uint32_t)t;
-            carry = t >> 32;
-        }
-        row[ln] = (uint32_t)carry;
-    }
+    k_mag_row(d, l->d, ln, s->d[0], 0);
+    for (long long i = 1; i < sn; i++) k_mag_row(d + i, l->d, ln, s->d[i], 1);
     return k_big_finish(r, a.neg != b.neg, n);
 }
 

@@ -24379,28 +24379,37 @@ are stored inside its own view, and a swap by value leaves the short one
 pointing at the other view's storage. The algorithm and the count of limb
 products are unchanged.
 
-    program    before (instructions)   after
-    s900233    4,601,351,409           1,099,518,428
-    s900624    4,586,777,277           1,084,873,711
-    s901212    4,551,721,733           1,049,888,511
+That alone took s900624 from 4,586,777,277 instructions to 1,084,873,711,
+with the multiply itself at 1,028,787,419, about 6.6 instructions a limb.
+The row then went two limbs at a time as one little-endian 64-bit word, with
+a 128-bit product, on x86-64 and arm64. A row that writes costs 4.0
+instructions a limb that way against 6.5, and one that adds 4.8 against 9.0.
+wasm32 has no 64 x 64 -> 128 multiply and keeps the limb loop. The first
+attempt at the wider row put the write and the add in one loop behind a test
+on the row number and read 1,498,505,558, slower than the narrow loop. As one
+inlined row called with the choice fixed at each site, it reads:
 
-Inside the multiply, s900624 fell from 3,919,227,713 to 1,028,787,419. Each
+    program    before          after
+    s900233    4,601,351,409   710,285,391
+    s900624    4,586,777,277   695,632,879
+    s901212    4,551,721,733   660,655,483
+
+The multiply falls from 3,919,227,713 to 639,546,587 on s900624. Each
 program prints the same bytes as before and as the interpreter, and through
-the tab all three now finish inside the fuel budget.
-
-One more variant was measured and not kept. Taking the limbs two at a time
-as a 64-bit word, with a 128-bit product, made the multiply slower:
-1,498,505,558 on s900624 against 1,028,787,419.
+the tab all three now finish inside the fuel budget. A program that builds
+3^100000 three times, by repeated `acc * 3`, falls from 5,069,017,487 to
+3,214,914,845; it still costs more natively than interpreted, since
+num-bigint keeps 64-bit limbs where the runtime stores 32-bit ones.
 
 `tests/golden/micro/a_bignum_product_reads_the_same_from_either_side.kso`
 asks for seven products both ways round: long by one limb, by two limbs and
 by long, with every pairing of signs. Swapping the views by value turns
-all fourteen lines red.
+all fourteen lines red, and dropping the row's own word from the wide add
+turns twelve of them red.
 
 The runtime is compiled into every binary, so three veins moved. Each
-benchmark's machine code grew by 560 bytes. `codegen_instructions_release`
-fell from 453,747,433 to 453,263,992 (-483,441), and
-`codegen_instructions_dev` rose from 118,854,794 to 118,870,067 (+15,273).
-The runtime rows, the lazy tier and the compile rows did not move, and the
-objective rose by two ten-thousandths. These are this container's readings,
-which matched CI's for both codegen rows on the entry above.
+benchmark's machine code grew by 1,136 bytes. The two codegen rows moved
+too, and the goldens carry CI's readings rather than this container's: on
+the narrow version of this change this container read release codegen
+488,366 below CI and dev 14,082 above it, where on kanso#1816 the two had
+agreed. The runtime rows, the lazy tier and the compile rows did not move.
