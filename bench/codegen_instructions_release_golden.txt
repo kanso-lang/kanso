@@ -393,4 +393,4 @@
 # before it has written anything, so the twins clang compiles are smaller.
 # CI's reading: codegen_instructions_release 503,519,717 -> 496,747,166, a
 # FALL of 6,772,551 (-1.345%).
-codegen_instructions_release=453747433
+codegen_instructions_release=453263992

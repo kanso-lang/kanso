@@ -3262,23 +3262,44 @@ KValue k_int_sub(KValue x, KValue y) {
     return k_big_addsub(&a, &b, b.n == 0 ? 0 : !b.neg);
 }
 
+/* Schoolbook, one row per limb of the SHORTER operand. A number that grows by
+   doubling meets `acc * 2` once a step, and with the long operand outside each
+   of its limbs paid a whole row's setup for a row one limb long: 25
+   instructions a limb, where the interpreter's num-bigint took about 3. The
+   first row writes its products where the others add theirs, so the result
+   is not cleared first; a row reads only limbs the row before it wrote. The
+   views are swapped by pointer, since a small int's limbs live inside its own
+   view. */
 KValue k_int_mul(KValue x, KValue y) {
     KBigView a, b;
     k_big_view(x, &a);
     k_big_view(y, &b);
     if (a.n == 0 || b.n == 0) return k_int(0);
-    long long n = a.n + b.n;
+    const KBigView* l = &a;
+    const KBigView* s = &b;
+    if (a.n < b.n) { l = &b; s = &a; }
+    long long ln = l->n, sn = s->n;
+    long long n = ln + sn;
     KBytes* r = k_big_room(n);
     uint32_t* d = k_big_limbs(r);
-    memset(d, 0, 4 * (size_t)n);
-    for (long long i = 0; i < a.n; i++) {
-        uint64_t carry = 0;
-        for (long long j = 0; j < b.n; j++) {
-            uint64_t t = (uint64_t)a.d[i] * b.d[j] + d[i + j] + carry;
-            d[i + j] = (uint32_t)t;
+    uint64_t carry = 0;
+    uint64_t m = s->d[0];
+    for (long long j = 0; j < ln; j++) {
+        uint64_t t = m * l->d[j] + carry;
+        d[j] = (uint32_t)t;
+        carry = t >> 32;
+    }
+    d[ln] = (uint32_t)carry;
+    for (long long i = 1; i < sn; i++) {
+        carry = 0;
+        m = s->d[i];
+        uint32_t* row = d + i;
+        for (long long j = 0; j < ln; j++) {
+            uint64_t t = m * l->d[j] + row[j] + carry;
+            row[j] = (uint32_t)t;
             carry = t >> 32;
         }
-        d[i + b.n] = (uint32_t)carry;
+        row[ln] = (uint32_t)carry;
     }
     return k_big_finish(r, a.neg != b.neg, n);
 }

@@ -24343,3 +24343,64 @@ The compile sweep moved one row on this host: `entry_instructions`
 since the native entry path does not run the translation. The two codegen
 rows read what this container read for main in the entry above, so they
 stay at CI's values.
+
+## 2026-10-09 — a bignum multiplies with its shorter operand outside
+
+A differential run through the playground's own compile path found this. The
+harness hands a generated program to `docs/kanso.wasm` the way the tab does,
+compiles it with `kanso_compile_native`, runs the module against the wasm32
+runtime under wasmi, and compares stdout, stderr and the exit code with the
+interpreter's. It is a scratch test rather than a spec, because the
+generator lives outside the tree. Over 1,177 programs that touch no files,
+stdout and the exit code agreed on every one. stderr differed only in the
+path a trace names, `defs.kso` against `defs/defs.kso`, because the harness
+hands the module's one file under a shorter name than the interpreter reads
+it from. Three programs ran out of wasmi's two billion units of fuel.
+
+All three run in about a tenth of a second interpreted and over a second
+native. Each holds a group like this one, which doubles an accumulator a
+hundred thousand times and never reads it:
+
+    fn acc46 n acc
+      5 + acc46 (n - 1) (acc * 2)
+
+The accumulator grows past 3,000 limbs, so each step multiplies a long
+number by a one-limb `2`. `k_int_mul` ran its schoolbook rows over the first
+operand and its columns over the second, which put the long number outside.
+Every limb then paid for a whole row, its setup and its carry, to multiply
+by a row one limb long: about 25 instructions a limb. It also cleared the
+result before the first row. num-bigint, under the interpreter, takes about
+three.
+
+`k_int_mul` now puts the shorter operand outside. The first row writes its
+products, where the later rows add to theirs, so the result is not cleared
+first. The two views are swapped by pointer, because a small int's limbs
+are stored inside its own view, and a swap by value leaves the short one
+pointing at the other view's storage. The algorithm and the count of limb
+products are unchanged.
+
+    program    before (instructions)   after
+    s900233    4,601,351,409           1,099,518,428
+    s900624    4,586,777,277           1,084,873,711
+    s901212    4,551,721,733           1,049,888,511
+
+Inside the multiply, s900624 fell from 3,919,227,713 to 1,028,787,419. Each
+program prints the same bytes as before and as the interpreter, and through
+the tab all three now finish inside the fuel budget.
+
+One more variant was measured and not kept. Taking the limbs two at a time
+as a 64-bit word, with a 128-bit product, made the multiply slower:
+1,498,505,558 on s900624 against 1,028,787,419.
+
+`tests/golden/micro/a_bignum_product_reads_the_same_from_either_side.kso`
+asks for seven products both ways round: long by one limb, by two limbs and
+by long, with every pairing of signs. Swapping the views by value turns
+all fourteen lines red.
+
+The runtime is compiled into every binary, so three veins moved. Each
+benchmark's machine code grew by 560 bytes. `codegen_instructions_release`
+fell from 453,747,433 to 453,263,992 (-483,441), and
+`codegen_instructions_dev` rose from 118,854,794 to 118,870,067 (+15,273).
+The runtime rows, the lazy tier and the compile rows did not move, and the
+objective rose by two ten-thousandths. These are this container's readings,
+which matched CI's for both codegen rows on the entry above.
