@@ -4943,19 +4943,19 @@ lone_arm = row
   (breaking "a_lone_arm_scored_like_its_rivals")
   release
 
-# A candidate that takes the lead flips the index naming the best pair of
-# buffers, where it used to move an 80-byte tuple through an `Option`
-# (2026-10-09). The mutation moves the buffers instead, and the same witness
-# counts the moves.
-leader_index = row
-  "a leader moved rather than named"
+# A candidate that takes the lead swaps two fixed slots of buffers, where it
+# used to move an 80-byte tuple through an `Option` (2026-10-09). The
+# mutation chooses the score's slot at run time, which is what an index
+# between the slots cost, and the same witness counts it.
+leader_slots = row
+  "a leader's slot chosen at run time"
   false
   interp_gate
   "cost goldens (deterministic ratchet, no clocks)"
-  (breaking "a_leader_moved_rather_than_named")
+  (breaking "a_leaders_slot_chosen_at_run_time")
   release
 
-rows_c1zzzzzzy3 = text/concat rows_c1zzzzzzy4 [lone_arm leader_index]
+rows_c1zzzzzzy3 = text/concat rows_c1zzzzzzy4 [lone_arm leader_slots]
 
 rows_c = text/concat rows_c1zzzzzzy3 [itself]
 

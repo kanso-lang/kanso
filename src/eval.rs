@@ -3286,16 +3286,18 @@ impl<'a> Interp<'a> {
             };
             held_binds.clear();
             held_binds.reserve(args_len);
-            // TWO OF EACH BUFFER AND AN INDEX BETWEEN THEM. `cur` names the
-            // pair the next candidate matches into and the other pair holds
-            // the best so far, so a candidate that takes the lead flips the
-            // index rather than moving an 80-byte tuple of score, declaration
-            // and bindings through an `Option` -- which also put a drop of
-            // that `Option` on every dispatch. The scores stay with the loop,
-            // as the one score did; the bindings start each dispatch from the
-            // pooled frame's vector.
+            // TWO OF EACH BUFFER IN FIXED SLOTS. The next candidate matches
+            // into slot 0 and slot 1 holds the best so far, so a candidate
+            // that takes the lead swaps the two slots rather than moving an
+            // 80-byte tuple of score, declaration and bindings through an
+            // `Option` -- which also put a drop of that `Option` on every
+            // dispatch. The slots are fixed rather than named by an index
+            // that flips: an index made every access to them computed, and
+            // that cost 3,766,635 instructions more on the interpreted corpus
+            // than the swaps it saved. The scores stay with the loop, as the
+            // one score did; the bindings start each dispatch from the pooled
+            // frame's vector.
             let mut pair: [Bindings; 2] = [held_binds, Vec::new()];
-            let mut cur = 0usize;
             let mut best: Option<&FnDecl> = None;
             // ONE ARM OF BARE NAMES HAS NOTHING TO CHOOSE. A name refuses a
             // failure and takes anything else, so such an arm wins exactly
@@ -3314,7 +3316,7 @@ impl<'a> Interp<'a> {
                 _ => None,
             };
             if let Some(decl) = lone {
-                let binds = &mut pair[cur];
+                let binds = &mut pair[0];
                 if binds.capacity() == 0 {
                     *binds = self.spare_binds.borrow_mut().pop().unwrap_or_default();
                 }
@@ -3324,32 +3326,29 @@ impl<'a> Interp<'a> {
                     }
                 }
                 best = Some(decl);
-                cur ^= 1;
+                pair.swap(0, 1);
             }
             for decl in overloads.iter().filter(|_| lone.is_none()) {
                 if decl.params.len() != args.len() {
                     continue;
                 }
-                if pair[cur].capacity() == 0 {
-                    pair[cur] = self.spare_binds.borrow_mut().pop().unwrap_or_default();
+                if pair[0].capacity() == 0 {
+                    pair[0] = self.spare_binds.borrow_mut().pop().unwrap_or_default();
                 }
-                if !match_params_into(&decl.params, &args, &mut scores[cur], &mut pair[cur]) {
+                if !match_params_into(&decl.params, &args, &mut scores[0], &mut pair[0]) {
                     continue;
                 }
                 let replace = match best {
-                    Some(_) => scores[cur].beats(&scores[cur ^ 1]),
+                    Some(_) => scores[0].beats(&scores[1]),
                     None => true,
                 };
                 if replace {
                     best = Some(decl);
-                    cur ^= 1;
+                    pair.swap(0, 1);
+                    scores.swap(0, 1);
                 }
             }
-            let [first, second] = pair;
-            let (mut binds, mut spare_binds) = match cur {
-                0 => (second, first),
-                _ => (first, second),
-            };
+            let [mut spare_binds, mut binds] = pair;
             // The buffer the losers matched into goes back for the next
             // dispatch rather than to the allocator.
             if spare_binds.capacity() > 0 {

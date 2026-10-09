@@ -24042,3 +24042,59 @@ runner of family 0x6 model 0x6a and this container read the same:
 `interp_instructions` 499,300,948 -> 500,281,043, a rise of 980,095
 (+0.1963%). Main reads 499,300,948 here, so the rise belongs to the change
 and not to the silicon. `startup_instructions` did not move.
+
+## 2026-10-09 — a lone arm of bare names is bound without a contest
+
+The interpreter's dispatcher spent 136 million of the corpus's 537 million
+instructions in `dispatch_loop` itself, about 850 a dispatch over 159,352
+dispatches. Two parts of that did no work for the answer.
+
+A group with one arm whose parameters are all bare names has nothing to
+choose between. A name refuses a failure and takes anything else, so the arm
+wins exactly when no argument is a failure, and with no rival its score is
+never read. Such a group now skips the candidate loop: the dispatcher checks
+the arguments for a failure, pushes the names, and binds as before. A group
+whose one arm holds a pattern, an annotation or a literal still goes through
+the loop, and so does a call that hands a bare-name arm a failure, which
+reaches the error path the same way it did.
+
+The second part was the bookkeeping for the leader. The best candidate so far
+was an `Option<(Score, &FnDecl, Bindings)>`, 80 bytes, and every candidate
+that took the lead moved its score and bindings into it and the old leader's
+buffers back out. The `Option` was dropped once a dispatch. The dispatcher
+now keeps two score buffers and two binding buffers in fixed slots: the next
+candidate matches into slot 0, slot 1 holds the leader, and a new leader
+swaps them.
+
+The first version named the leader's slot with an index that flipped, which
+avoided the swap. It was slower than the swap by 3,766,635 instructions,
+because every access through a computed slot paid for its address and its
+bounds check, and there are more accesses than swaps.
+
+In this container, where main reads its golden exactly:
+
+    interp_instructions   500,281,043
+    lone arm alone        496,212,125   (-4,068,918)
+    with a flipping index 495,182,469   (-1,029,656)
+    with fixed slots      491,415,834   (-3,766,635)
+
+-8,865,209 together, -1.77%. `interp_peak_bytes` and `interp_allocs` read
+their goldens. The browser rows do not move: neither the tab's compile nor
+the program it emits runs the interpreter's dispatcher. CI's reading
+replaces these if it differs.
+
+Two ratchet rows hold this, both on the interpreter's instruction gate.
+`lone_arm`, mutation `a_lone_arm_scored_like_its_rivals`, sends the lone arm
+through the loop again and reads 496,945,703. `leader_slots`, mutation
+`a_leaders_slot_chosen_at_run_time`, hands the score's swap a slot chosen at
+run time, which is the cost the index had, and reads 492,342,137.
+
+What led here. Priced against the objective as it stands, by lowering one
+golden row 1% at a time on a scratch tree, runbench is worth 0.045 points a
+percent, browser compilation 0.0033, the interpreted run 0.0025 and the
+compile row 0.0004. Runbench came first and its profile offered nothing new
+past what the log already declines: the decoder's key loop is 81 instructions
+a key, most of them spills around an inlined map append; the number writer
+already takes `ryu_short`, warm-started from the last float's place count;
+and `s[i]` over multibyte text is 58 instructions a call, all of them from one
+phase written to keep indexing linear. The interpreted run was next in line.

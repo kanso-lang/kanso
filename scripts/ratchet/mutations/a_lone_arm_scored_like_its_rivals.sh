@@ -6,4 +6,4 @@ set -e
 target='                    Some(*decl)'
 n=$(grep -cxF "$target" src/eval.rs)
 [ "$n" -eq 1 ] || { echo "the lone arm's answer moved or multiplied ($n); rewrite this" >&2; exit 1; }
-awk -v t="$target" '$0 == t { print "                    { let _ = decl; None }"; next } { print }' src/eval.rs > src/eval.rs.mut && mv src/eval.rs.mut src/eval.rs
+awk -v t="$target" '$0 == t { print "                    { let _ = decl; None::<&FnDecl> }"; next } { print }' src/eval.rs > src/eval.rs.mut && mv src/eval.rs.mut src/eval.rs
