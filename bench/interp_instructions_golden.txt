@@ -666,5 +666,11 @@
 # frame tables cut to 256 slots each, which trades instructions for peak. CI's
 # reading on kanso#1811, and this container's, where main reads 499,300,948:
 # 499,300,948 -> 500,281,043, a RISE of 980,095 (+0.1963%).
-interp_instructions=500281043
+# 2026-10-09: a group of one arm whose parameters are bare names is bound
+# without the candidate loop, and a new leader swaps two fixed slots of
+# buffers instead of moving a tuple through an `Option`. Measured in this
+# container, where main reads 500,281,043:
+# 500,281,043 -> 491,415,834, a FALL of 8,865,209 (-1.7720%).
+# CI's reading replaces it if it differs.
+interp_instructions=491415834
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
