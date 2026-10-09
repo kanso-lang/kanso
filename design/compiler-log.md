@@ -24214,6 +24214,16 @@ the check skipped reads 396,716,403, 349 more. The tab already used the walk,
 so its emitted modules are the same; what moved is the compiler's own code,
 and nothing here isolates where. Welfare rises from 90.2314 to 90.2512.
 
+The rows that rose, each by name and with the value it now reads:
+`browser_compile_instructions` 396,716,054; `entry_instructions` 85,257,437 and
+`library_instructions` 85,813,347, the arm check run once per record type;
+`module_calls` 130 and `module_lines` 1,284 in the modules vein, and
+`emitted_calls` 1,007 and `emitted_other_calls` 17,094 in the emitted veins,
+where the line counts fell to 10,055 and 144,096 because the walk drops what
+nothing calls. Of the benchmark rows, `work_runbench` reads 1,129,589,356,
+`work_pendbench` 190,397,733, `work_encodebench` 2,384,337,486 and `work_basket`
+32,404,398, all projected onto the recorded silicon as described above.
+
 Three interpreter and runtime ideas, measured and declined:
 
 Argument vectors pooled. The interpreter allocates a vector for every call's
