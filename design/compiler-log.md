@@ -24310,3 +24310,36 @@ the same way on every engine, 9 were rejected as malformed, and none
 diverged. 250 more went through the browser engine, which
 compiles in `docs/kanso.wasm` and runs on wasmi, against the native engine.
 All 250 agreed.
+
+## 2026-10-09 — the tab's translation reads the module more cheaply
+
+The playground compiles a program to native IR text and then translates that
+text to wasm (`src/ir_wasm.rs`). The translation tokenizes every line of the
+module and parses the tokens into instructions. On `bench/interp_corpus`,
+the program `browser_compile_instructions` compiles, that is 6,370 lines.
+Three costs in it were per byte or per token rather than per line:
+
+- `name_char` tested each byte of every name with `is_ascii_alphanumeric`
+  and a four-way match. It is now a 256-entry table.
+- `Locals::number` read a name like `t17` or `L4` with two `strip_prefix`
+  calls, two filters and `str::parse`, and asked both prefixes every time.
+  It is now one pass over the bytes that returns the prefix and the number,
+  with the same rule: nine digits at most and no leading zero except `0`.
+- `P::next` cloned each token out of the line, which copied every owned name
+  and byte string. The parser reads each token once and only forward, so the
+  token is now moved out with `mem::replace`.
+
+    browser_compile_instructions   396,716,054 -> 389,803,790   (-1.74%)
+    browser_run_instructions        33,510,708 ->  33,510,708
+
+The run rows are byte-identical, so the module the tab builds did not change.
+Natively, the same compile, emit and translation of the corpus read
+129,985,288 instructions before and 126,938,798 after, a fall of 2.3%.
+`browser_compile_instructions` is the one term in the objective still below
+its baseline (343,917,485), and this narrows the gap by about an eighth.
+
+The compile sweep moved one row on this host: `entry_instructions`
+85,257,437 -> 85,257,442, five instructions, from the compiler's own layout,
+since the native entry path does not run the translation. The two codegen
+rows read what this container read for main in the entry above, so they
+stay at CI's values.
