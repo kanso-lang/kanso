@@ -24155,14 +24155,19 @@ codegen rows taken from CI, whose clang and linker are the ones they count:
     emit_instructions              23,409,658 ->   7,035,904   (-69.9%)
     codegen_instructions_release  457,532,287 -> 453,747,433   (-0.83%)
     codegen_instructions_dev      118,872,382 -> 118,854,794   (-17,588)
-    runbench                    1,129,588,781 -> 1,129,590,193 (+1,412)
+    runbench                    1,129,588,781 -> 1,129,589,356   (+575)
     compile_instructions           25,842,553 ->  25,855,719   (+13,166)
 
 Both tiers handed clang the pruned module before this change, so neither
 codegen fall comes from less text to parse, and nothing here isolates where
-they came from. Eleven of the fourteen benchmark rows fall by about 347
-instructions each. runbench rises 1,412, deepbench 11,049 and pendbench 239;
-those three arrived with the change and nothing here isolates why either.
+they came from. The benchmark rows are pinned to one AMD part, and this
+container is Intel, so each was read here on main and on the branch and the
+difference added to main's golden. runbench rises 575, pendbench 700 and
+encodebench 117; jsonbench falls 301 and oneshot 480; the other nine move by
+two or less. An earlier draft of this entry compared this container's
+reading with the golden directly and reported eleven rows falling about 347
+each and deepbench rising 11,049. Those were the two machines differing, and
+main reads the same offsets here.
 The compile, entry and library rows rise by 13,166, 43,783 and 43,734: the
 check described next, run once per record type.
 
