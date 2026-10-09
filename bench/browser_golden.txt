@@ -10,7 +10,7 @@
 # 395,882,998 -> 396,604,174, a RISE of 721,176 (+0.18%), on rustc 1.98.1 as
 # CI builds it. The value change alone had moved it 1,238.
 # measured-on rustc=1.98.1
-browser_compile_instructions=396233999
+browser_compile_instructions=396716054
 browser_compile_peak_bytes=673727
 browser_run_instructions=33510708
 browser_run_peak_bytes=1310720

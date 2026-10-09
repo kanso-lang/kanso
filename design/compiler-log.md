@@ -24202,7 +24202,12 @@ row reads 23,606,376 against 7,035,904. `parsed_arms`, mutation
 `a_group_answering_other_values_goes_by_value`, skips the check, and both
 fixtures go red.
 
-Welfare rises from 90.2314 to 90.2516, and the floor holds it.
+The arm check has a cost in the tab. Compiling the browser corpus rose
+482,055 instructions, from 396,233,999 to 396,716,054 (+0.12%). The interpreted
+run fell 32, to 488,869,908. Both arrived with the check, and nothing here
+isolates which part of it. Welfare rises from 90.2314 to 90.2512. That is
+0.0004 below what the walk alone scored, and the floor is set to it, since the
+check is what makes the two std/list programs above print the right thing.
 
 Three interpreter and runtime ideas, measured and declined:
 
