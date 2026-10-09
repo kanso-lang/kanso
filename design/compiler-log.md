@@ -24207,6 +24207,16 @@ row reads 23,606,376 against 7,035,904. `parsed_arms`, mutation
 `a_group_answering_other_values_goes_by_value`, skips the check, and both
 fixtures go red.
 
+Two older rows had to move. `reached_groups`, the tab's walk, patched a line
+this change folded into the one both builds now share, so its mutation edits
+that line and the browser row reads 446,869,426 under it. `thunk_box` went
+blind: its fixture, a_lazy_record_call_nobody_reads_still_builds, reached a
+lazy cell's site through a function nobody calls, and native builds no longer
+emit such a function. a_lazy_record_call_somebody_makes_still_builds reaches
+the same site from `play`, through a record type of its own, and clang
+refuses it under the mutation with the error the first fixture was written
+for.
+
 Compiling the browser corpus in the tab rose 482,055 instructions with this
 change, from 396,233,999 to 396,716,054 (+0.12%), and the interpreted run fell
 32, to 488,869,908. The arm check is not the source of the first: a build with
