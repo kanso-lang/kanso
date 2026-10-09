@@ -24337,3 +24337,9 @@ Natively, the same compile, emit and translation of the corpus read
 129,985,288 instructions before and 126,938,798 after, a fall of 2.3%.
 `browser_compile_instructions` is the one term in the objective still below
 its baseline (343,917,485), and this narrows the gap by about an eighth.
+
+The compile sweep moved one row on this host: `entry_instructions`
+85,257,437 -> 85,257,442, five instructions, from the compiler's own layout,
+since the native entry path does not run the translation. The two codegen
+rows read what this container read for main in the entry above, so they
+stay at CI's values.
