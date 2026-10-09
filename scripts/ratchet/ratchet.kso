@@ -1983,7 +1983,7 @@ unbuilt_arm = row
 rows_b1u = text/concat rows_b1v [unbuilt_arm]
 
 # A cycle nothing reaches is not emitted. The mutation starts every definition
-# marked, and the spec's summing program defines the merge again.
+# marked, and the spec's fused-call program defines std/text's to_float again.
 dead_cycle = row
   "a cycle nothing reaches emitted"
   true
@@ -4972,7 +4972,35 @@ kept_box = row
 
 rows_c1zzzzzzy2 = text/concat rows_c1zzzzzzy3 [kept_box]
 
-rows_c = text/concat rows_c1zzzzzzy2 [itself]
+# A native build emits only the groups its entry reaches, the walk the tab
+# has made since 2026-10-08 (2026-10-09). The mutation empties the walk's
+# answer, every imported group is emitted and pruned afterwards, and the emit
+# row is the witness.
+native_reached = row
+  "a native build emitting every group"
+  true
+  emit_gate
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_native_build_emits_every_group")
+  release
+
+rows_c1zzzzzzy1 = text/concat rows_c1zzzzzzy2 [native_reached]
+
+# A record goes back to its caller in two words only when every arm of its
+# group answers that record or a failure (2026-10-09). The mutation skips the
+# check, and the two micro fixtures built from `list/take` print the wrong
+# thing or fail.
+parsed_arms = row
+  "a group answering other values by value"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_group_answering_other_values_goes_by_value")
+  no_setup
+
+rows_c1zzzzzzx9 = text/concat rows_c1zzzzzzy1 [parsed_arms]
+
+rows_c = text/concat rows_c1zzzzzzx9 [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

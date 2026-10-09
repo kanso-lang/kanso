@@ -1,0 +1,24 @@
+# A record built by a group that answers it in two registers, bound to a name
+# and handed to a parameter nobody reads, so the call goes into a lazy cell.
+# The cell's site is a `%KValue` function tail-calling a `%parsed` one, and it
+# has to box the pair before it returns it. a_lazy_record_call_nobody_reads
+# reached that site through a function nobody called; since 2026-10-09 a
+# native build drops such a function before the emitter sees it, and that
+# fixture stopped reaching the site at all. This one is called.
+import "std/text"
+
+type pt
+  x
+  y
+
+fn make n
+  pt n (n + 1)
+
+fn ignored _ _
+  text/to_int "12"
+
+fn caller n
+  made = make n
+  ignored made n
+
+pub play = print (caller 3)

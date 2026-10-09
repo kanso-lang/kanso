@@ -2439,17 +2439,16 @@ pub fn emit_ir_dev_owned(
     emit_ir_for(Given::Owned(program), convention, false)
 }
 
-/// `emit_ir_dev_owned` for the playground tab, which emits only the groups
-/// the entry can reach. The prune in `Written::finish` drops the rest from
-/// the module either way; on `bench/interp_corpus` that was 132 definitions
-/// and 127,415 bytes of text, a third of what the tab wrote, held beside the
-/// program at the most its compile ever holds. Native builds keep emitting
-/// every group, so their modules are unchanged.
+/// `emit_ir_dev_owned` for the playground tab. It emits only the groups the
+/// entry can reach, as every build does; the prune in `Written::finish` drops
+/// the rest from the module either way. On `bench/interp_corpus` that was 132
+/// definitions and 127,415 bytes of text, a third of what the tab wrote, held
+/// beside the program at the most its compile ever holds.
 pub fn emit_ir_tab_owned(
     program: Program,
     convention: ClosureConvention,
 ) -> Result<String, String> {
-    emit_written(Given::Owned(program), convention, false, true).map(Written::finish)
+    emit_written(Given::Owned(program), convention, false).map(Written::finish)
 }
 
 /// A group's name and arity, and a position in it.
@@ -2714,14 +2713,13 @@ fn emit_ir_for(
     convention: ClosureConvention,
     inline_helpers: bool,
 ) -> Result<String, String> {
-    emit_written(program, convention, inline_helpers, false).map(Written::finish)
+    emit_written(program, convention, inline_helpers).map(Written::finish)
 }
 
 fn emit_written(
     program: Given<'_>,
     convention: ClosureConvention,
     inline_helpers: bool,
-    only_reached: bool,
 ) -> Result<Written, String> {
     // The prune also answers the positions a group read as written and no
     // longer reads. A thunk handed to such a position is forced by
@@ -2737,16 +2735,17 @@ fn emit_written(
         None => (program, Vec::new()),
     };
     let mut program = program;
-    // The tab owns its program, so what the entry cannot reach leaves it
-    // before any analysis reads it: inference, linearity, the beat loops and
-    // the rest each walked every std function the program imported, and the
-    // emitter wrote them all for the prune to drop.
+    // What the entry cannot reach leaves an owned program before any analysis
+    // reads it: inference, linearity, the beat loops and the rest each walked
+    // every std function the program imported, and the emitter wrote them all
+    // for the prune to drop. The tab did this first; native builds joined on
+    // 2026-10-09, and on runbench the emit fell from 23,409,658 instructions
+    // to 7,038,906. A smaller program can let a record go back in two words
+    // where the whole one kept it boxed, which is why `escape` asks every arm
+    // of a group what it answers.
     let mut left_out: Vec<(usize, FnDecl)> = Vec::new();
     if let Given::Owned(owned) = &mut program {
-        let reached = match only_reached {
-            true => reached_from_entry(owned),
-            false => None,
-        };
+        let reached = reached_from_entry(owned);
         if let Some(reached) = reached {
             let reached: crate::hash::Set<String> = reached.iter().map(|n| n.to_string()).collect();
             for (at, decl) in std::mem::take(&mut owned.fns).into_iter().enumerate() {

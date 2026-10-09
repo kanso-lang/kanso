@@ -24135,3 +24135,140 @@ down-counter, one more instruction per push: escapebench rose 1,249,393. In
 the rest of the run `_int_malloc`, `memcpy` and `free` rose by 3.4 million
 together with every allocation counter unchanged, which is the heap laid out
 differently once the cell's own allocation was gone.
+
+## 2026-10-09 — a native build emits only what its entry reaches
+
+Since 2026-10-08 the playground tab has dropped every function its entry
+cannot reach before inference, linearity and the emitter read the program.
+Native builds now do the same. Before this, a native build analysed and
+emitted every function the program imported, and the prune in
+`Written::finish` deleted the unreached ones from the module afterwards.
+The walk is the tab's: it follows the names each body mentions from the
+entry, and if the emitter asks for a function the walk left out, the
+function goes back in its place and the program is emitted again. The
+`only_reached` switch that kept native builds out of the walk is gone, since
+every caller now passes the same answer.
+
+Measured against goldens that read their own rows exactly, with the two
+codegen rows taken from CI, whose clang and linker are the ones they count:
+
+    emit_instructions              23,409,658 ->   7,035,904   (-69.9%)
+    codegen_instructions_release  457,532,287 -> 453,747,433   (-0.83%)
+    codegen_instructions_dev      118,872,382 -> 118,854,794   (-17,588)
+    runbench                    1,129,588,781 -> 1,129,589,356   (+575)
+    compile_instructions           25,842,553 ->  25,855,719   (+13,166)
+
+Both tiers handed clang the pruned module before this change, so neither
+codegen fall comes from less text to parse, and nothing here isolates where
+they came from. The benchmark rows are pinned to one AMD part, and this
+container is Intel, so each was read here on main and on the branch and the
+difference added to main's golden. runbench rises 575, pendbench 700 and
+encodebench 117; jsonbench falls 301 and oneshot 480; the other nine move by
+two or less. An earlier draft of this entry compared this container's
+reading with the golden directly and reported eleven rows falling about 347
+each and deepbench rising 11,049. Those were the two machines differing, and
+main reads the same offsets here.
+The compile, entry and library rows rise by 13,166, 43,783 and 43,734: the
+check described next, run once per record type.
+
+The first push of this change was wrong, and the diagnostics differential
+said so: `list/to_list (list/take (list/repeat 5) 3)` failed natively with
+"no overload of `list/next` matches these arguments" and printed `[5 5 5]`
+in the interpreter. A fuzz batch of 300 programs found six more. Two faults,
+one cause. A record whose first field is an int may go back to its caller
+in two words instead of a pointer, and `escape` granted that to a group when
+any arm produced the record. The other arms were assumed to answer
+failures, which cross the two words intact. `list/next` answers `done`
+beside its `step`, and `list/iter` answers a `cursor` from one arm and a
+`capped` from another; both came back read as the record. Neither could
+happen while every program carried all of std/list, because functions
+nobody called kept `step` and `capped` boxed. The tab has walked since
+2026-10-08 and could have met the same thing.
+
+`escape` now asks each arm of a group that answers the record. Every branch
+of its tail must build the record, call a group that answers it, or end in
+`err` or a call to a group whose arms answer only failures, such as json's
+`fail`; an arm whose inference says it answers only failures passes as it
+stands. The inference cannot do this alone, because it has one bit for
+every record. Runbench keeps exactly the thirty-three two-word functions it
+had, and all six fuzz programs agree with the interpreter. Two micro
+fixtures hold the two faults, each red on the compiler before the check and
+green after it.
+
+While chasing the first fault I built a cache that boxed a two-word value
+once per block instead of once per use, which took skip_shape from 41
+allocations to 39. With the check in place `list/drop` no longer returns two
+words, skip_shape reads its old 35, and no golden sees the cache, so it is
+not in this change.
+
+Two ratchet rows hold the rest. `native_reached`, mutation
+`a_native_build_emits_every_group`, empties the walk's answer, and the emit
+row reads 23,606,376 against 7,035,904. `parsed_arms`, mutation
+`a_group_answering_other_values_goes_by_value`, skips the check, and both
+fixtures go red.
+
+Two older rows had to move. `reached_groups`, the tab's walk, patched a line
+this change folded into the one both builds now share, so its mutation edits
+that line and the browser row reads 446,869,426 under it. `thunk_box` went
+blind: its fixture, a_lazy_record_call_nobody_reads_still_builds, reached a
+lazy cell's site through a function nobody calls, and native builds no longer
+emit such a function. a_lazy_record_call_somebody_makes_still_builds reaches
+the same site from `play`, through a record type of its own, and clang
+refuses it under the mutation with the error the first fixture was written
+for.
+
+`dead_cycle` went blind the same way. Its spec's summing program used to
+emit std/list's merge cycle and rely on the prune to strike it; the walk now
+leaves the merge out before anything is emitted. The prune still strikes a
+group that a body names and the module never calls, and the shortest one is a
+fused call: `text/to_float (text/slice ...)` is emitted as
+`k_b_to_float_slice`, so std/text's `to_float` survives the walk and nothing
+calls it. A third test builds that program; with every definition marked live
+the module defines `d_text/to_float_1` and the test goes red.
+
+Compiling the browser corpus in the tab rose 482,055 instructions with this
+change, from 396,233,999 to 396,716,054 (+0.12%), and the interpreted run fell
+32, to 488,869,908. The arm check is not the source of the first: a build with
+the check skipped reads 396,716,403, 349 more. The tab already used the walk,
+so its emitted modules are the same; what moved is the compiler's own code,
+and nothing here isolates where. Welfare rises from 90.2314 to 90.2512.
+
+The rows that rose, each by name and with the value it now reads:
+`browser_compile_instructions` 396,716,054; `entry_instructions` 85,257,437 and
+`library_instructions` 85,813,347, the arm check run once per record type;
+`module_calls` 130 and `module_lines` 1,284 in the modules vein, and
+`emitted_calls` 1,007 and `emitted_other_calls` 17,094 in the emitted veins,
+where the line counts fell to 10,055 and 144,096 because the walk drops what
+nothing calls. Of the benchmark rows, `work_runbench` reads 1,129,589,356,
+`work_pendbench` 190,397,733, `work_encodebench` 2,384,337,486 and `work_basket`
+32,404,398, all projected onto the recorded silicon as described above.
+
+Three interpreter and runtime ideas, measured and declined:
+
+Argument vectors pooled. The interpreter allocates a vector for every call's
+arguments, and mimalloc spends about 63 instructions to allocate and free one.
+A pool held in a `RefCell` cost about 45 instructions to take a vector and 40
+to give it back, which leaves little to win. Five variants on
+`bench/interp_corpus`, from a base of 539,217,785, read between 537,922,216
+and 543,162,566. That spread is the layout band this row has shown before, so
+none of the five is evidence of a gain. Releasing bound names one at a time
+instead of clearing the vector read 494,036,859 against 491,415,834.
+
+A two-way table of recent callees. After kanso#1813, `callee_missed` rose
+from 826,313 to 2,380,466 with the cache unchanged, because the cache keys a
+name by its address inside the source slice, and that address moves when the
+run allocates in a different order. Checking a second slot on a miss raised
+the row by 1,060,893 and the misses to 3,549,075. The misses are not pairs of
+names fighting over one slot, so a second way does not catch them.
+
+The run program's arena peak, one block lower. The peak is 3,670,032 bytes:
+two full 1 MiB blocks and the index phase's 1,572,880-byte string, which needs
+contiguous room. The data the run keeps is about 1.35 MB, of which 799,728
+bytes are list and map buffers sized for six items and ten pairs while the
+document's lists hold 3.5 and its maps 3. Smaller seeds moved nothing: the
+outgrown buffers came back from the byte-buffer classes at the same total.
+Sizing each container exactly would bring the kept data under one block on
+paper, but a trim at close copies into fresh space and leaves the old buffer
+behind, and the top-level decode never rewinds it. Exact sizing needs the
+size when the container is allocated, which means a two-pass decode or a
+scratch stack. Not built; a block lower would be worth about 0.17 welfare.

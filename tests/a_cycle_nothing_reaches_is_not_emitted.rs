@@ -13,6 +13,14 @@
 //!
 //! Watched red with the prune counting mentions: the summing program's module
 //! defined `d_list/merge_5`.
+//!
+//! Since 2026-10-09 a native build walks from its entry before it emits, so a
+//! group no body names is never emitted and the prune has nothing to strike
+//! in the summing program. What it still strikes is a group a body names but
+//! the module never calls: `text/to_float (text/slice ...)` is emitted as one
+//! fused runtime call, so std/text's `to_float` survives the walk and is
+//! called by nothing. Watched red with every definition marked live: the
+//! module defined `d_text/to_float_1`.
 
 use std::process::Command;
 
@@ -61,4 +69,16 @@ fn a_program_that_sorts_keeps_the_merge() {
         built("sorted", "import \"std/list\"\n\nprint \"{list/sort [3 1 2]}\"\n");
     assert_eq!(native, oracle, "the engines disagree");
     assert!(module.contains(MERGE), "a program that sorts lost the merge");
+}
+
+const TO_FLOAT: &str = "@\"d_text/to_float_1\"(";
+
+#[test]
+fn a_library_function_only_a_fused_call_names_is_not_emitted() {
+    let (module, native, oracle) = built(
+        "fused",
+        "import \"std/text\"\n\ncs = \"x1.5\"\nprint \"{text/to_float (text/slice cs 2 4)}\"\n",
+    );
+    assert_eq!(native, oracle, "the engines disagree");
+    assert!(!module.contains(TO_FLOAT), "a fused call left the function it replaces in the module");
 }

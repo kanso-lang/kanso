@@ -1,0 +1,18 @@
+import "std/list"
+
+# `list/iter` answers a `capped` from one arm and a `cursor` from another,
+# and the inference has one bit for every record. A native build that left
+# the rest of std/list out of the program let `capped` go by value, and the
+# `take` below printed a capped inside a capped where the cursor should be.
+fn pairs acc _ 0
+  acc
+
+fn pairs acc k n
+  pairs (push acc [n k]) k (n - 1)
+
+fn shown z
+  taken = list/take [10 1000] z
+  last = (pairs [] z 3)[1]
+  "{last} {taken}"
+
+pub play = print (shown 1)
