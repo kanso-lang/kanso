@@ -1,0 +1,20 @@
+import "std/list"
+
+# Structural equality is blind to provenance: the same cyclic value reached
+# two ways is one value. A knot stores its self-mention as a cell where `tie`
+# stores the record itself, so the walk meets a cell against a record — it
+# forces, arrives at a pair of records it is already inside, and answers.
+#
+# The companion to equality_refuses_a_value_that_names_itself, and the reason
+# that refusal is scoped to a pair of CELLS: only there is the question
+# unanswerable.
+type node
+  id
+  peers
+
+k = node "a" [k]
+
+pub play =
+  tied = list/tie ["a"] (id ref -> node id [(ref id)])
+  q = tied["a"]
+  print "{k == q}" .> (_ -> print "{k.peers == q.peers}")

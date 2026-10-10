@@ -842,9 +842,7 @@ fn shape(e: &kanso::ast::Expr) -> &'static str {
         Join { .. } => "Join",
         Block(..) => "Block",
         Upcast { .. } => "Upcast",
-        Build(..) => "Build",
         Guard { .. } => "Guard",
-        Hole(..) => "Hole",
     }
 }
 
@@ -868,10 +866,8 @@ fn carries(census: &mut Census, what: &'static str, program: &str) {
     census.entry(what).or_default().insert(program.to_string());
 }
 
-/// Statements, walked as statements. `for_each_child` hands a `Set` inside a
-/// build block to its caller as the value being assigned, so a census that
-/// went through it alone would read every field assignment in the corpus as
-/// an ordinary expression and report `s:Set` as carried by nothing.
+/// Statements, walked as statements, so a census can say which statement
+/// shapes the corpus carries as well as which expressions.
 fn census_stmts(list: &[kanso::ast::Stmt], census: &mut Census, program: &str) {
     for st in list {
         match st {
@@ -884,10 +880,6 @@ fn census_stmts(list: &[kanso::ast::Stmt], census: &mut Census, program: &str) {
                 carries(census, "s:Expr", program);
                 census_expr(e, census, program);
             }
-            kanso::ast::Stmt::Set { value, .. } => {
-                carries(census, "s:Set", program);
-                census_expr(value, census, program);
-            }
         }
     }
 }
@@ -895,9 +887,7 @@ fn census_stmts(list: &[kanso::ast::Stmt], census: &mut Census, program: &str) {
 fn census_expr(e: &kanso::ast::Expr, census: &mut Census, program: &str) {
     carries(census, shape(e), program);
     match e {
-        kanso::ast::Expr::Block(list, _) | kanso::ast::Expr::Build(list, _) => {
-            census_stmts(list, census, program)
-        }
+        kanso::ast::Expr::Block(list, _) => census_stmts(list, census, program),
         kanso::ast::Expr::Guard { cond, early, rest, .. } => {
             census_expr(cond, census, program);
             census_expr(early, census, program);
@@ -1004,9 +994,7 @@ fn every_construct_is_carried_by_a_program_the_page_runs() {
         "Join",
         "Block",
         "Upcast",
-        "Build",
         "Guard",
-        "Hole",
         "p:IntLit",
         "p:StrLit",
         "p:Nullary",
@@ -1017,7 +1005,6 @@ fn every_construct_is_carried_by_a_program_the_page_runs() {
         "p:Keyed",
         "s:Bind",
         "s:Expr",
-        "s:Set",
     ];
     let never_imported: Vec<&str> =
         order.iter().copied().filter(|what| !renamed.contains_key(what)).collect();

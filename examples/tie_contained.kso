@@ -1,0 +1,29 @@
+import "std/list"
+
+type node
+  name
+  peer
+
+fn ping_pong label
+  linked = (id ref -> node id (ref (if (id == label) "pong" label)))
+  home (list/tie [label "pong"] linked) label
+
+fn home b:list/broken_link _
+  b
+
+fn home nodes label
+  nodes[label]
+
+fn round_trip n
+  n.peer.peer.name
+
+fn spin 0 acc
+  acc
+
+fn spin n acc
+  spin (n - 1) (acc + length (round_trip (ping_pong "ping")))
+
+knot = ping_pong "ping"
+print "one hop: {knot.peer.name}"
+  .> (_ -> print "back home: {round_trip knot}")
+  .> (_ -> print "two thousand more, all discarded: {spin 2000 0}")

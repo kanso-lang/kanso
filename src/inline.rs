@@ -170,7 +170,6 @@ pub fn apply_wrappers(program: &mut Program, alias: &HashMap<String, HashMap<usi
         for stmt in &mut decl.body {
             let expr = match stmt {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
-                Stmt::Set { value, .. } => value,
             };
             rewrite(expr, alias);
         }
@@ -201,7 +200,6 @@ fn for_each_child_mut(expr: &mut Expr, f: &mut dyn FnMut(&mut Expr)) {
     fn stmt_expr(s: &mut Stmt) -> &mut Expr {
         match s {
             Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
-            Stmt::Set { value, .. } => value,
         }
     }
     match expr {
@@ -233,7 +231,7 @@ fn for_each_child_mut(expr: &mut Expr, f: &mut dyn FnMut(&mut Expr)) {
                 f(stmt_expr(stmt));
             }
         }
-        Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
+        Expr::Block(stmts, _) => {
             for stmt in stmts.iter_mut() {
                 f(stmt_expr(stmt));
             }

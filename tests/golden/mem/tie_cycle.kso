@@ -1,0 +1,21 @@
+import "std/list"
+
+# The cohort gavel's cycles, made with `tie`: a pair of nodes that point at
+# each other, and a node whose peer is itself. Each call's nodes are one birth
+# cohort, as a `build` block's were, so the cycle costs what the block did and
+# no node outlives the call that made it.
+type node
+  id
+  peers
+
+fn other "a"
+  "b"
+
+fn other _
+  "a"
+
+pub play =
+  pair = list/tie ["a" "b"] (id ref -> node id [(ref (other id))])
+  graph = [pair["a"] pair["b"]]
+  ring = list/tie ["seed"] (id ref -> node id [(ref id)])
+  print "{graph}" .> (_ -> print "{ring["seed"]}")

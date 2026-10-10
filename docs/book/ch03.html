@@ -44,7 +44,7 @@ song <span class="o">=</span> <span class="f">track</span> <span class="s">"fish
 
 <p>this works for any record with a <code>title</code>, because a field reader is an ordinary arm and every type that has the field contributes one. nothing has to be imported to read a field — the reader is not a name in your file, so it can never collide with one.</p>
 
-<p>reading is where the dot stops. there is no <code>song.title = "…"</code> outside the one construct in the next section, because a record is a value and a value does not change under you. if you want a track with a different title, you build a track with a different title.</p>
+<p>reading is where the dot stops. there is no <code>song.title = "…"</code>, because a record is a value and a value does not change under you. if you want a track with a different title, you build a track with a different title.</p>
 
 <h2>taking a record apart</h2>
 
@@ -114,30 +114,41 @@ song <span class="o">=</span> <span class="f">track</span> <span class="s">"fish
 
 <p>ada's partner is bob and bob's partner is ada. neither can be built first, because each one needs the other to already exist. most languages answer this by making the field nullable and checking it forever after, or by building both halves empty and patching the links in a second pass.</p>
 
-<p>kanso gives the knot its own construct. inside a <code>build</code> block, and nowhere else, a field can be assigned after its record exists:</p>
+<p>kanso ties the knot with <code>list/tie</code>, from the standard library. you hand it a list of keys and a maker, a function of two arguments. <code>tie</code> calls the maker once for each key, passing the key and a function called <code>ref</code>; <code>ref k</code> stands for the node the maker builds for <code>k</code>. every record comes out whole, each field holding its final value, and <code>tie</code> answers a map from each key to its node:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">knot.kso</div>
-  <pre><code><span class="k">type</span> person
+  <pre><code><span class="k">import</span> <span class="s">"std/list"</span>
+
+<span class="k">type</span> person
   <span class="f">name</span>
   <span class="f">partner</span>
 
-<span class="f">build</span>
-  ada <span class="o">=</span> <span class="f">person</span> <span class="s">"ada"</span> _
-  bob <span class="o">=</span> <span class="f">person</span> <span class="s">"bob"</span> ada
-  <span class="f">ada</span><span class="o">.</span>partner <span class="o">=</span> <span class="f">bob</span>
+<span class="k">fn</span> <span class="f">met</span> <span class="s">"ada"</span> ref
+  <span class="f">person</span> <span class="s">"ada"</span> (<span class="f">ref</span> <span class="s">"bob"</span>)
+
+<span class="k">fn</span> <span class="f">met</span> name ref
+  <span class="f">person</span> name (<span class="f">ref</span> <span class="s">"ada"</span>)
+
+people <span class="o">=</span> <span class="f">list/tie</span> [<span class="s">"ada"</span> <span class="s">"bob"</span>] <span class="f">met</span>
+ada <span class="o">=</span> people[<span class="s">"ada"</span>]
 
 <span class="f">print</span> <span class="s">"<span class="i">{ada.name}</span> and <span class="i">{ada.partner.name}</span>"</span>
   <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"back where we started: <span class="i">{ada.partner.partner.name}</span>"</span>)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">output</div>
-    <pre><code></code></pre>
+    <pre><code>ada and bob
+back where we started: ada</code></pre>
   </div>
 </div>
 
-<p>the <code>_</code> is a hole: ada is built with her partner left open, and the assignment on the fourth line fills it. a hole is filled exactly once, through the name of the record built with it, before the block ends. the compiler refuses a block that leaves a hole open, fills one twice, fills one inside an <code>if</code> arm that may not run, or writes a field that was built with a value. <code>none</code> never holds a place here; it says a field is absent, and a field that is coming is a different thing. when the block ends the whole group freezes: nothing in it can be assigned again. the block answers nothing—what it built is in scope below it, under the names it gave, as ordinary immutable data that happens to contain a cycle. so you can walk the ring as far as you like—<code>((ada.partner).partner)</code> is ada again—and no code downstream has to defend against a half-built record, because a half-built record never leaves.</p>
+<p>the maker is an ordinary overloaded function: <code>met</code> builds ada with a link to bob, and everyone else with a link to ada. <code>ref "bob"</code> stands for bob before bob has been made, and <code>tie</code> fills the link in once every call has returned, so no code ever sees a record with a field still to come. the type can say <code>partner:person</code> instead of some nullable stand-in.</p>
 
-<p>the freeze buys two things. it is what lets the type say <code>partner:person</code> instead of some nullable stand-in, and it is what keeps the memory model simple, which ch10 returns to: everything a block creates is born together and released together, so a cycle costs the runtime no more than a straight line.</p>
+<p>a field can hold several links at once. <code>town name [(ref "birch") (ref "cedar")]</code> stores two references in one list field, and a map literal of references works the same way. the maker may store such a list but not read it: indexing it, measuring it or passing it to another function while the nodes are being made is refused, because each of those would look through a reference that is not filled in yet.</p>
+
+<p>a link can name a key that is not in the list. when the keys and the links are literals, as they are here, the compiler sees the missing key and refuses the program with <code>error[tie]</code>. when the keys are computed, the answer is only known at run time, and <code>tie</code> answers a <code>list/broken_link</code> naming the key in place of the map; a program that builds its keys from data takes that apart with an overload on <code>b:list/broken_link</code> before it reads a node.</p>
+
+<p>what comes back is ordinary immutable data that happens to contain a cycle. you can walk the ring as far as you like—<code>ada.partner.partner</code> is ada again—and nothing in it can be assigned. ch10 returns to the memory side: everything one call to <code>tie</code> creates is born together and released together, so a cycle costs the runtime no more than a straight line.</p>
 
 <h2>the only switch</h2>
 

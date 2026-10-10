@@ -22,9 +22,7 @@ BinOp	many
 Join	many
 Block	examples/if_blocks.kso tests/golden/micro/a_constant_whose_branches_bind.kso
 Upcast	examples/subtypes.kso tests/golden/micro/an_upcast_names_a_type_the_module_owns.kso tests/golden/runtime/a_widening_to_a_vowel_initial_type.kso
-Build	many
 Guard	many
-Hole	many
 p:IntLit	many
 p:StrLit	many
 p:Nullary	many
@@ -35,4 +33,3 @@ p:Ctor	many
 p:Keyed	many
 s:Bind	many
 s:Expr	many
-s:Set	many

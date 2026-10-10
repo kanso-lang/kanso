@@ -1,2 +1,0 @@
-[build_cycle/node "a" [build_cycle/node "b" [<cycle>]] build_cycle/node "b" [build_cycle/node "a" [<cycle>]]]
-build_cycle/node "seed" [<cycle>]

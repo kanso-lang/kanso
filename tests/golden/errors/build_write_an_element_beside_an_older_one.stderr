@@ -1,4 +1,0 @@
-error[build]: `second.link = ...` writes only block-born values: `second` is not a construction made in this `build` block, so it stays immutable
-  --> build_write_an_element_beside_an_older_one.kso:10:12
-  10 |     second.link = young
-                  ^

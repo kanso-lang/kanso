@@ -1867,12 +1867,6 @@ impl<'a> Interp<'a> {
         let mut env = env;
         for (index, stmt) in lead.iter().enumerate() {
             match stmt {
-                Stmt::Set { .. } => unreachable!("`set` parses only inside `build`"),
-                // the names a `build` binds are in scope for the rest of the
-                // body, so its statements run on this environment
-                Stmt::Expr(Expr::Build(inner, _)) => {
-                    self.run_stmts(inner, &mut env, &frame)?;
-                }
                 Stmt::Bind { pattern: Pattern::Var(name, _), expr }
                     if self.demand.is_lazy_bind(&decl.name, decl.params.len(), index) =>
                 {
@@ -2056,16 +2050,10 @@ impl<'a> Interp<'a> {
     }
 
     /// The statements of a block, threading the environment they build.
-    ///
-    /// A `build` runs through here on the caller's own environment rather than
-    /// a copy, because the names it binds are in scope after it.
     fn run_stmts(&self, stmts: &[Stmt], env: &mut Option<Rc<Env>>, frame: &Frame) -> EvalResult {
         let mut result = Value::NoneV;
         for stmt in stmts {
             match stmt {
-                Stmt::Expr(Expr::Build(inner, _)) => {
-                    result = self.run_stmts(inner, env, frame)?;
-                }
                 Stmt::Bind { pattern, expr } => {
                     let mut value = self.eval(expr, env, frame)?;
                     if !matches!(pattern, Pattern::Var(..)) {
@@ -2074,40 +2062,6 @@ impl<'a> Interp<'a> {
                     *env = self.destructure(pattern, value, env.clone(), expr.span())?;
                 }
                 Stmt::Expr(expr) => result = self.eval(expr, env, frame)?,
-                Stmt::Set { target, field, value, span } => {
-                    let current = lookup(env, &Name::new(target)).ok_or_else(|| RuntimeError {
-                        message: format!("`set` target `{target}` is not bound"),
-                        span: *span,
-                    })?;
-                    let current = self.force_thunk(current)?;
-                    // a constructor given a failure handed the failure
-                    // back, so the target is not a record to write to
-                    if is_failure(&current) {
-                        continue;
-                    }
-                    let Value::Record { ty, fields } = &current else {
-                        return Err(RuntimeError {
-                            message: format!(
-                                "`set` writes a record field, not {}",
-                                render(self, &current, true)
-                            ),
-                            span: *span,
-                        });
-                    };
-                    let decl = self.type_decl(ty).expect("constructed types are declared");
-                    let position = decl.fields.iter().position(|(f, _, _)| f == field);
-                    let Some(position) = position else {
-                        return Err(RuntimeError {
-                            message: format!("`{ty}` has no field `{field}`"),
-                            span: *span,
-                        });
-                    };
-                    let new = self.eval(value, env, frame)?;
-                    if is_failure(&new) {
-                        return Ok(new);
-                    }
-                    fields.borrow_mut()[position] = new;
-                }
             }
         }
         Ok(result)
@@ -2123,12 +2077,6 @@ impl<'a> Interp<'a> {
         let mut result = Value::NoneV;
         for (index, stmt) in body.iter().enumerate() {
             match stmt {
-                Stmt::Set { .. } => unreachable!("`set` parses only inside `build`"),
-                // the names a `build` binds are in scope for the rest of the
-                // body, so its statements run on this environment
-                Stmt::Expr(Expr::Build(inner, _)) => {
-                    result = self.run_stmts(inner, &mut env, frame)?;
-                }
                 Stmt::Bind { pattern: Pattern::Var(name, _), expr }
                     if self.demand.is_lazy_bind(&decl.name, decl.params.len(), index) =>
                 {
@@ -2270,9 +2218,6 @@ impl<'a> Interp<'a> {
     fn eval_node(&self, expr: &Expr, env: &Option<Rc<Env>>, frame: &Frame) -> EvalResult {
         match expr {
             Expr::Int(n, _) => Ok(Value::int(n)),
-            // A hole is a none until the block fills it, on every engine; the
-            // checker holds that the fill comes exactly once before the freeze.
-            Expr::Hole(_) => Ok(Value::NoneV),
             Expr::Upcast { expr: inner, ty, span } => {
                 let v = self.force_thunk(self.eval(inner, env, frame)?)?;
                 if is_failure(&v) {
@@ -2297,7 +2242,7 @@ impl<'a> Interp<'a> {
                     }
                 }
             }
-            Expr::Block(stmts, _) | Expr::Build(stmts, _) => self.eval_stmts(stmts, env, frame),
+            Expr::Block(stmts, _) => self.eval_stmts(stmts, env, frame),
             Expr::Float(x, _) => Ok(Value::Float(*x)),
             Expr::MapLit(pairs, span) => {
                 let mut entries = Entries::new();
@@ -5265,6 +5210,36 @@ fn bind_whole(whole: &Option<Box<(Name, crate::diag::Span)>>, arg: &Value, binds
 /// compares the field as it stands, and `(ring _ (ring d _))` matched native's
 /// node and missed the interpreter's cell. Records are rewritten in place, so
 /// the walk goes once through each and never through a cell.
+/// A field's value with its filled links in place of the cells that held
+/// them: the node itself, or a list or map literal of references rebuilt with
+/// the nodes. Native stores the node where the reference was, so a read of
+/// either never forces anything, and the interpreter counts the same.
+fn settled_link(v: &Value) -> Option<Value> {
+    let forced = |v: &Value| match v {
+        Value::Thunk(cell) => match &*cell.borrow() {
+            ThunkState::Forced(node) => Some(node.clone()),
+            _ => None,
+        },
+        _ => None,
+    };
+    match v {
+        Value::Thunk(_) => forced(v),
+        Value::List(items) if items.iter().any(|item| forced(item).is_some()) => {
+            Some(Value::List(Rc::new(
+                items.iter().map(|item| forced(item).unwrap_or_else(|| item.clone())).collect(),
+            )))
+        }
+        Value::Map(entries) if entries.iter().any(|(_, value)| forced(value).is_some()) => {
+            let mut settled = Entries::new();
+            for (key, value) in entries.iter() {
+                settled.insert(key.clone(), forced(value).unwrap_or_else(|| value.clone()));
+            }
+            Some(Value::Map(Rc::new(settled)))
+        }
+        _ => None,
+    }
+}
+
 fn resolve_tied(v: &Value, seen: &mut crate::hash::Set<usize>) {
     match v {
         Value::Record { fields, .. } => {
@@ -5274,12 +5249,9 @@ fn resolve_tied(v: &Value, seen: &mut crate::hash::Set<usize>) {
             let held: Vec<Value> = {
                 let mut fields = fields.borrow_mut();
                 for slot in fields.iter_mut() {
-                    let Value::Thunk(cell) = slot else { continue };
-                    let node = match &*cell.borrow() {
-                        ThunkState::Forced(node) => node.clone(),
-                        _ => continue,
-                    };
-                    *slot = node;
+                    if let Some(settled) = settled_link(slot) {
+                        *slot = settled;
+                    }
                 }
                 fields.clone()
             };

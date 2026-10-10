@@ -1,0 +1,4 @@
+error[syntax]: `build` is retired: make a cycle with `list/tie`, which calls a maker once for each key and hands it a `ref` to every node
+  --> a_build_block_is_retired.kso:9:3
+   9 |   build
+         ^
