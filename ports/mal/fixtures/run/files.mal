@@ -1,0 +1,10 @@
+;; slurp, read-string and load-file against files that sit beside the fixtures.
+(def! text (slurp "tests/data/test.txt"))
+(prn text)
+(println "characters:" (count (seq text)))
+(load-file "tests/data/computations.mal")
+(println "fib 15 =" (fib 15))
+(def! forms (read-string (str "(" (slurp "tests/data/inc.mal") ")")))
+(println "forms in inc.mal:" (count forms))
+(println "first form head:" (first (first forms)))
+(println (try* (slurp "tests/data/missing.txt") (catch* e e)))

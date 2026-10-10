@@ -1,0 +1,7 @@
+"A line of text\n"
+characters: 15
+fib 15 = 610
+forms in inc.mal: 3
+first form head: def!
+slurp: no such file: tests/data/missing.txt
+[exit 0]

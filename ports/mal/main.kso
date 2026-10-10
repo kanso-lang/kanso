@@ -1,0 +1,4 @@
+import "./lisp"
+import "std/os"
+
+os/args .> lisp/main

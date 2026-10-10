@@ -1,0 +1,21 @@
+user> #<macro>
+user> :yes
+user> (if x z y)
+user> #<macro>
+user> "16"
+user> (d (b a c))
+user> #<macro>
+user> inside when
+:result
+user> nil
+user> :b
+user> nil
+user> (1 2 3)
+user> (head 1 2 3 tail)
+user> [1 2 3 3]
+user> (cons (quote a) (cons b (concat c ())))
+user> #<macro>
+user> 9
+user> true
+user> false
+[exit 0]

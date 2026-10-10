@@ -1,0 +1,22 @@
+;; A tiny stack-machine interpreter written in mal, driven by a program held
+;; in a vector, with an atom for the machine's output log.
+
+(def! log (atom []))
+
+(def! emit! (fn* [x] (swap! log conj x)))
+
+(def! step (fn* [prog pc stack]
+  (if (>= pc (count prog))
+    stack
+    (let* [op (nth prog pc)]
+      (cond
+        (number? op) (step prog (+ pc 1) (cons op stack))
+        (= op :add) (step prog (+ pc 1) (cons (+ (nth stack 1) (first stack)) (rest (rest stack))))
+        (= op :mul) (step prog (+ pc 1) (cons (* (nth stack 1) (first stack)) (rest (rest stack))))
+        (= op :dup) (step prog (+ pc 1) (cons (first stack) stack))
+        (= op :print) (do (emit! (first stack)) (step prog (+ pc 1) (rest stack)))
+        "else" (throw {:bad-op op :at pc}))))))
+
+(println "result:" (step [2 3 :add :dup :mul :dup :print 10 :add] 0 ()))
+(println "log:" @log)
+(println "caught:" (try* (step [1 :nope] 0 ()) (catch* e e)))

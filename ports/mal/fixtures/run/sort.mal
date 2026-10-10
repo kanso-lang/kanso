@@ -1,0 +1,49 @@
+;; Quicksort and merge sort over lists, plus a check that both agree.
+
+(def! filter (fn* [pred xs]
+  (if (empty? xs)
+    ()
+    (if (pred (first xs))
+      (cons (first xs) (filter pred (rest xs)))
+      (filter pred (rest xs))))))
+
+(def! quicksort (fn* [xs]
+  (if (empty? xs)
+    ()
+    (let* [p (first xs)
+           more (rest xs)]
+      (concat (quicksort (filter (fn* [x] (< x p)) more))
+              (list p)
+              (quicksort (filter (fn* [x] (>= x p)) more)))))))
+
+(def! take (fn* [n xs]
+  (if (if (= n 0) true (empty? xs)) () (cons (first xs) (take (- n 1) (rest xs))))))
+
+(def! drop (fn* [n xs]
+  (if (if (= n 0) true (empty? xs)) xs (drop (- n 1) (rest xs)))))
+
+(def! merge (fn* [a b]
+  (cond
+    (empty? a) b
+    (empty? b) a
+    (<= (first a) (first b)) (cons (first a) (merge (rest a) b))
+    "else" (cons (first b) (merge a (rest b))))))
+
+(def! mergesort (fn* [xs]
+  (if (<= (count xs) 1)
+    xs
+    (let* [half (/ (count xs) 2)]
+      (merge (mergesort (take half xs)) (mergesort (drop half xs)))))))
+
+;; a small linear congruential generator, so the input is the same everywhere
+(def! lcg (fn* [seed n acc]
+  (if (= n 0)
+    acc
+    (let* [next (- (* seed 1103) (* 65537 (/ (* seed 1103) 65537)))]
+      (lcg (+ next 12345) (- n 1) (cons (- next (* 1000 (/ next 1000))) acc))))))
+
+(def! data (lcg 7 60 ()))
+(println "input:" data)
+(println "quick:" (quicksort data))
+(println "merge:" (mergesort data))
+(println "agree:" (= (quicksort data) (mergesort data)))

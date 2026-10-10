@@ -1,0 +1,28 @@
+# Native only. A map built by `put`, bound to a local name, and passed on in a
+# tail call gets slower with every iteration: the loop below is O(n^2) or worse
+# on `kanso play` / `kanso build`, while the interpreter finishes at once.
+#
+#   n = 4000   native 1.1 s
+#   n = 8000   native 5.2 s
+#   n = 16000  native 33-50 s      (--interp: 0.7 s)
+#
+# Should: run in linear time; the map never holds more than one key.
+# Writing `count_up (n - 1) (acc + 1) (put store 1 n)` (no local binding)
+# takes 0.01 s for n = 16000, so the binding itself is what triggers it.
+# The same shape with `push` on a list is fast. Threading the map inside a
+# record (`world (c + 1) (put store k n)`) is slow even with no local binding.
+#
+# Runtime counters (--release --counters, a record holding a 50-key map):
+#   n = 1000  alloc_bytes  21,735,616  evac_bytes  16,128,144
+#   n = 2000  alloc_bytes  86,637,184  evac_bytes  64,256,144
+#   n = 4000  alloc_bytes 345,939,456  evac_bytes 256,512,144
+# `length` of the map is 50 at the end, so whatever each beat evacuates is
+# growing with the iteration count, not with the map.
+fn count_up 0 acc _
+  acc
+
+fn count_up n acc store
+  store2 = put store 1 n
+  count_up (n - 1) (acc + 1) store2
+
+print "{count_up 8000 0 {}}"

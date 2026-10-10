@@ -1,0 +1,40 @@
+;; Counts the solutions to the n-queens problem for n = 1..7, and prints the
+;; first solution for 6 queens. A board is a list of column numbers, most
+;; recent row first.
+
+(def! abs (fn* [x] (if (< x 0) (- 0 x) x)))
+
+(def! safe? (fn* [col placed]
+  (let* [check (fn* [dist rows]
+                 (if (empty? rows)
+                   true
+                   (let* [c (first rows)]
+                     (if (if (= c col) true (= (abs (- c col)) dist))
+                       false
+                       (check (+ dist 1) (rest rows))))))]
+    (check 1 placed))))
+
+(def! range (fn* [lo hi]
+  (if (> lo hi) () (cons lo (range (+ lo 1) hi)))))
+
+(def! filter (fn* [pred xs]
+  (if (empty? xs)
+    ()
+    (if (pred (first xs))
+      (cons (first xs) (filter pred (rest xs)))
+      (filter pred (rest xs))))))
+
+(def! flat-map (fn* [f xs]
+  (apply concat (map f xs))))
+
+(def! solve (fn* [n row placed]
+  (if (> row n)
+    (list placed)
+    (flat-map (fn* [col] (solve n (+ row 1) (cons col placed)))
+              (filter (fn* [col] (safe? col placed)) (range 1 n))))))
+
+(def! report (fn* [n]
+  (println "queens" n "->" (count (solve n 1 ())) "solutions")))
+
+(map report (range 1 7))
+(println "first for 6:" (first (solve 6 1 ())))

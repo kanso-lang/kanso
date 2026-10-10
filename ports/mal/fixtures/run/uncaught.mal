@@ -1,0 +1,5 @@
+;; An exception that nothing catches ends a file run on stderr with status 1;
+;; output printed before it still appears.
+(println "before")
+(throw {:reason "nobody catches this"})
+(println "after")

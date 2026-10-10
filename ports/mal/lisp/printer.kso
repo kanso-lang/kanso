@@ -1,0 +1,85 @@
+import "std/list"
+import "std/text"
+
+# pr_str renders a value the way the reader would read it back when `readably`
+# is true, and as plain text for str and println when it is false. Atoms
+# render their current value, which lives in the world, so the world comes
+# along.
+fn pr_str true _ _
+  "true"
+
+fn pr_str false _ _
+  "false"
+
+fn pr_str s:string readably _
+  string_form s readably
+
+fn pr_str nil _ _
+  "nil"
+
+fn pr_str v:int _ _
+  "{v}"
+
+fn pr_str (sym name) _ _
+  name
+
+fn pr_str (kw name) _ _
+  ":{name}"
+
+fn pr_str (mlist items _) readably w
+  "({pr_items items readably w})"
+
+fn pr_str (mvec items _) readably w
+  "[{pr_items items readably w}]"
+
+fn pr_str (mmap table _) readably w
+  "\{{pr_entries table readably w}}"
+
+fn pr_str (atom_ref id) readably w
+  "(atom {pr_str (deref_atom id w) readably w})"
+
+fn pr_str (closure _ _ true _ _ _) _ _
+  "#<macro>"
+
+fn pr_str _:closure _ _
+  "#<function>"
+
+fn pr_str _:prim _ _
+  "#<function>"
+
+fn pr_items items readably w
+  shown = list/map items (v -> pr_str v readably w)
+  text/join (list/to_list shown) " "
+
+fn pr_entries table readably w
+  pairs = list/map (keys table) (key -> pr_pair key table readably w)
+  text/join (list/to_list pairs) " "
+
+fn pr_pair key table readably w
+  "{pr_str (decode_key key) readably w} {pr_str (arg table key) readably w}"
+
+fn string_form s true
+  "\"{escape s}\""
+
+fn string_form s false
+  s
+
+fn escape s
+  text/join (list/to_list (list/map (text/chars s) escape_char)) ""
+
+fn escape_char "\""
+  "\\\""
+
+fn escape_char "\\"
+  "\\\\"
+
+fn escape_char "\n"
+  "\\n"
+
+fn escape_char c
+  c
+
+# str and pr-str join their arguments; prn and println print them.
+fn join_shown args readably sep w
+  shown = list/map args (v -> pr_str v readably w)
+  text/join (list/to_list shown) sep

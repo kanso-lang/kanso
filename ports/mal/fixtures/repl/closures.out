@@ -1,0 +1,17 @@
+user> #<function>
+user> #<function>
+user> #<function>
+user> 1
+user> 2
+user> 1
+user> 3
+user> #<function>
+user> 15
+user> (101 102 103)
+user> [true true false]
+user> #<function>
+user> 26
+user> #<function>
+user> :bottom
+user> 3
+[exit 0]

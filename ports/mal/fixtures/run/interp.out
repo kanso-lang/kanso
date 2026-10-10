@@ -1,0 +1,4 @@
+result: (35)
+log: [25]
+caught: {:at 1 :bad-op :nope}
+[exit 0]

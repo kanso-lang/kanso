@@ -1,0 +1,527 @@
+import "std/list"
+import "std/text"
+
+# The core namespace. Every builtin is one arm of `builtin`, chosen by name,
+# and answers by handing its value to the continuation, so a builtin that has
+# to call back into mal (apply, map, swap!, eval) is no different from one
+# that does not.
+arith_names = ["*" "+" "-" "/" "<" "<=" "=" ">" ">="]
+
+atom_names = ["atom" "atom?" "deref" "reset!" "swap!"]
+
+coll_names = ["assoc" "contains?" "dissoc" "get" "hash-map" "keys" "vals"]
+
+core_globals = list/fold core_names {} registered
+
+core_names = list/fold name_groups [] text/concat
+
+io_names = ["pr-str" "println" "prn" "read-string" "readline" "slurp" "str"]
+
+misc_names = ["apply" "eval" "map" "meta" "throw" "time-ms" "with-meta"]
+
+name_groups = [arith_names atom_names coll_names io_names misc_names seq_names]
+  . text/concat [type_names]
+
+seq_names = ["concat" "conj" "cons" "count" "first" "list" "nth" "rest" "seq"]
+  . text/concat ["vec" "vector" "empty?"]
+
+type_names = ["false?" "fn?" "keyword" "keyword?" "list?" "macro?" "map?"]
+  . text/concat ["nil?" "number?" "sequential?" "string?" "symbol" "symbol?"]
+  . text/concat ["true?" "vector?"]
+
+fn registered acc name
+  put acc name (prim nil name)
+
+# --- arithmetic and comparison ----------------------------------------------
+fn builtin "+" args k w
+  return ret k (list/sum args) w if ints? args
+  throw k "+ takes numbers" w
+
+fn builtin "*" args k w
+  return ret k (list/fold args 1 (a b -> a * b)) w if ints? args
+  throw k "* takes numbers" w
+
+fn builtin "-" args k w
+  return throw k "- takes numbers" w if not ints? args or length args == 0
+  return ret k (0 - args[1]) w if length args == 1
+  ret k (list/fold (tail args) args[1] (a b -> a - b)) w
+
+fn builtin "/" args k w
+  return throw k "/ takes two numbers" w if not ints? args or length args != 2
+  return throw k "division by zero" w if args[2] == 0
+  ret k (args[1] / args[2]) w
+
+fn builtin "<" args k w
+  compare args k w (a b -> a < b)
+
+fn builtin "<=" args k w
+  compare args k w (a b -> a <= b)
+
+fn builtin ">" args k w
+  compare args k w (a b -> a > b)
+
+fn builtin ">=" args k w
+  compare args k w (a b -> a >= b)
+
+fn builtin "=" args k w
+  ret k (equal? (arg args 1) (arg args 2)) w
+
+# --- predicates -------------------------------------------------------------
+fn builtin "atom?" args k w
+  ret k (atom? (arg args 1)) w
+
+fn builtin "empty?" args k w
+  ret k (count_of (arg args 1) == 0) w
+
+fn builtin "false?" args k w
+  ret k (false? (arg args 1)) w
+
+fn builtin "fn?" args k w
+  ret k (fn? (arg args 1)) w
+
+fn builtin "keyword?" args k w
+  ret k (keyword? (arg args 1)) w
+
+fn builtin "list?" args k w
+  ret k (list? (arg args 1)) w
+
+fn builtin "macro?" args k w
+  ret k (macro? (arg args 1)) w
+
+fn builtin "map?" args k w
+  ret k (map? (arg args 1)) w
+
+fn builtin "nil?" args k w
+  ret k (arg args 1 == nil) w
+
+fn builtin "number?" args k w
+  ret k (int? (arg args 1)) w
+
+fn builtin "sequential?" args k w
+  ret k (sequential? (arg args 1)) w
+
+fn builtin "string?" args k w
+  ret k (string? (arg args 1)) w
+
+fn builtin "symbol?" args k w
+  ret k (symbol? (arg args 1)) w
+
+fn builtin "true?" args k w
+  ret k (true? (arg args 1)) w
+
+fn builtin "vector?" args k w
+  ret k (vector? (arg args 1)) w
+
+# --- strings and output -----------------------------------------------------
+fn builtin "keyword" args k w
+  ret k (to_keyword (arg args 1)) w
+
+fn builtin "pr-str" args k w
+  ret k (join_shown args true " " w) w
+
+fn builtin "println" args k w
+  ret k nil (emit w (join_shown args false " " w))
+
+fn builtin "prn" args k w
+  ret k nil (emit w (join_shown args true " " w))
+
+fn builtin "read-string" args k w
+  read_answer (read_str (arg args 1)) k w
+
+fn builtin "readline" args k w
+  wants_line k (arg args 1) w
+
+fn builtin "slurp" args k w
+  wants_file k (arg args 1) w
+
+fn builtin "str" args k w
+  ret k (join_shown args false "" w) w
+
+fn builtin "symbol" args k w
+  ret k (sym (arg args 1)) w
+
+fn builtin "time-ms" _ k w
+  wants_time k w
+
+fn builtin "throw" args k w
+  throw k (arg args 1) w
+
+# --- collections ------------------------------------------------------------
+fn builtin "assoc" args k w
+  assoc (arg args 1) (tail args) k w
+
+fn builtin "concat" args k w
+  joined = list/fold args [] (acc s -> text/concat acc (seq_items s))
+  ret k (mlist joined nil) w
+
+fn builtin "conj" args k w
+  conj (arg args 1) (tail args) k w
+
+fn builtin "cons" args k w
+  ret k (mlist (text/concat [(arg args 1)] (seq_items (arg args 2))) nil) w
+
+fn builtin "contains?" args k w
+  ret k (lookup (arg args 1) (arg args 2) != none) w
+
+fn builtin "count" args k w
+  ret k (count_of (arg args 1)) w
+
+fn builtin "dissoc" args k w
+  dissoc (arg args 1) (tail args) k w
+
+fn builtin "first" args k w
+  ret k (arg (seq_items (arg args 1)) 1) w
+
+fn builtin "get" args k w
+  ret k (or_nil (lookup (arg args 1) (arg args 2))) w
+
+fn builtin "hash-map" args k w
+  built (hash_map args) k w
+
+fn builtin "keys" args k w
+  ret k (mlist (map_keys (arg args 1)) nil) w
+
+fn builtin "list" args k w
+  ret k (mlist args nil) w
+
+fn builtin "nth" args k w
+  nth (seq_items (arg args 1)) (arg args 2) k w
+
+fn builtin "rest" args k w
+  ret k (mlist (tail (seq_items (arg args 1))) nil) w
+
+fn builtin "seq" args k w
+  ret k (to_seq (arg args 1)) w
+
+fn builtin "vals" args k w
+  ret k (mlist (map_vals (arg args 1)) nil) w
+
+fn builtin "vec" args k w
+  ret k (mvec (seq_items (arg args 1)) nil) w
+
+fn builtin "vector" args k w
+  ret k (mvec args nil) w
+
+# --- functions, atoms and metadata ------------------------------------------
+fn builtin "apply" args k w
+  spread = text/concat (text/slice args 2 (length args - 1)) (last_items args)
+  apply_fn (arg args 1) spread k w
+
+fn builtin "atom" args k w
+  ret k (atom_ref w.next_id) (new_atom (arg args 1) w)
+
+fn builtin "deref" args k w
+  deref (arg args 1) k w
+
+fn builtin "eval" args k w
+  ev (arg args 1) top k w
+
+fn builtin "map" args k w
+  xs = seq_items (arg args 2)
+  return ret k (mlist [] nil) w if length xs == 0
+  apply_fn (arg args 1) [xs[1]] (k_map [] (arg args 1) 2 k xs) w
+
+fn builtin "meta" args k w
+  ret k (meta_of (arg args 1)) w
+
+fn builtin "reset!" args k w
+  reset (arg args 1) (arg args 2) k w
+
+fn builtin "swap!" args k w
+  swap (arg args 1) (arg args 2) (text/slice args 3 (length args)) k w
+
+fn builtin "with-meta" args k w
+  ret k (with_meta_of (arg args 1) (arg args 2)) w
+
+fn builtin name _ k w
+  throw k "no builtin {name}" w
+
+# --- helpers ----------------------------------------------------------------
+fn compare args k w op
+  return throw k "comparison takes two numbers" w if not ints? args
+  return throw k "comparison takes two numbers" w if length args != 2
+  ret k (op args[1] args[2]) w
+
+fn ints? args
+  list/all? args int?
+
+fn int? _:int
+  true
+
+fn int? _
+  false
+
+fn string? _:string
+  true
+
+fn string? _
+  false
+
+fn symbol? _:sym
+  true
+
+fn symbol? _
+  false
+
+fn keyword? _:kw
+  true
+
+fn keyword? _
+  false
+
+fn list? _:mlist
+  true
+
+fn list? _
+  false
+
+fn vector? _:mvec
+  true
+
+fn vector? _
+  false
+
+fn sequential? _:seq
+  true
+
+fn sequential? _
+  false
+
+fn map? _:mmap
+  true
+
+fn map? _
+  false
+
+fn atom? _:atom_ref
+  true
+
+fn atom? _
+  false
+
+fn false? false
+  true
+
+fn false? _
+  false
+
+fn true? true
+  true
+
+fn true? _
+  false
+
+fn macro? (closure _ _ true _ _ _)
+  true
+
+fn macro? _
+  false
+
+fn fn? _:prim
+  true
+
+fn fn? (closure _ _ false _ _ _)
+  true
+
+fn fn? _
+  false
+
+fn to_keyword s:string
+  kw s
+
+fn to_keyword v
+  v
+
+fn count_of s:seq
+  length s.items
+
+fn count_of (mmap table _)
+  length table
+
+fn count_of s:string
+  length s
+
+fn count_of _
+  0
+
+fn last_items args
+  seq_items (arg args (length args))
+
+fn nth items i:int k w
+  return throw k "nth: index out of range" w if i < 0 or length items <= i
+  ret k (arg items (i + 1)) w
+
+fn nth _ _ k w
+  throw k "nth takes a sequence and a number" w
+
+fn conj (mlist items meta) xs k w
+  ret k (mlist (text/concat (reversed xs) items) meta) w
+
+fn conj (mvec items meta) xs k w
+  ret k (mvec (text/concat items xs) meta) w
+
+fn conj _ _ k w
+  throw k "conj takes a list or a vector" w
+
+fn reversed xs
+  list/fold xs [] (acc x -> text/concat [x] acc)
+
+fn to_seq s:seq
+  return nil if length s.items == 0
+  mlist s.items nil
+
+fn to_seq s:string
+  return nil if length s == 0
+  mlist (text/chars s) nil
+
+fn to_seq _
+  nil
+
+# --- hash-maps --------------------------------------------------------------
+fn hash_map items
+  return err "hash-map takes keys and values in pairs" if length items % 2 == 1
+  fill {} items 1
+
+fn fill acc items i
+  return mmap acc nil if length items < i
+  key = encode_key (arg items i)
+  return err "a hash-map key is a string or a keyword" if key == none
+  fill (put acc key items[i + 1]) items (i + 2)
+
+fn built e:err k w
+  throw k e.reason w
+
+fn built m k w
+  ret k m w
+
+fn assoc (mmap table meta) kvs k w
+  extra = hash_map kvs
+  merged (mmap table meta) extra k w
+
+fn assoc _ _ k w
+  throw k "assoc takes a hash-map" w
+
+fn merged (mmap table meta) (mmap extra _) k w
+  all = list/fold (keys extra) table (acc key -> put acc key extra[key])
+  ret k (mmap all meta) w
+
+fn merged _ e:err k w
+  throw k e.reason w
+
+fn dissoc (mmap table meta) names k w
+  gone = list/map names encode_key
+  kept = list/reject (keys table) (key -> list/any? gone (g -> g == key))
+  all = list/fold kept {} (acc key -> put acc key table[key])
+  ret k (mmap all meta) w
+
+fn dissoc _ _ k w
+  throw k "dissoc takes a hash-map" w
+
+fn lookup (mmap table _) key
+  coded = encode_key key
+  return none if coded == none
+  table[coded]
+
+fn lookup _ _
+  none
+
+fn map_keys (mmap table _)
+  list/to_list (list/map (keys table) decode_key)
+
+fn map_keys _
+  []
+
+fn map_vals (mmap table _)
+  values table
+
+fn map_vals _
+  []
+
+# --- equality ---------------------------------------------------------------
+fn equal? a:seq b:seq
+  same_items? a.items b.items 1
+
+fn equal? (mmap one _) (mmap two _)
+  return false if keys one != keys two
+  list/all? (keys one) (key -> equal? (arg one key) (arg two key))
+
+fn equal? (closure body env macro _ params rest) (closure b2 e2 m2 _ p2 r2)
+  closure body env macro nil params rest == closure b2 e2 m2 nil p2 r2
+
+fn equal? (prim _ name) (prim _ other)
+  name == other
+
+fn equal? a b
+  a == b
+
+fn same_items? one two i
+  return false if length one != length two
+  return true if length one < i
+  return false if not equal? (arg one i) (arg two i)
+  same_items? one two (i + 1)
+
+# --- atoms ------------------------------------------------------------------
+fn deref (atom_ref id) k w
+  ret k (deref_atom id w) w
+
+fn deref _ k w
+  throw k "deref takes an atom" w
+
+fn reset (atom_ref id) v k w
+  ret k v (set_atom id v w)
+
+fn reset _ _ k w
+  throw k "reset! takes an atom" w
+
+fn swap (atom_ref id) f extra k w
+  current = deref_atom id w
+  apply_fn f (text/concat [current] extra) (k_swap id k) w
+
+fn swap _ _ _ k w
+  throw k "swap! takes an atom" w
+
+# --- metadata ---------------------------------------------------------------
+fn meta_of (mlist _ meta)
+  meta
+
+fn meta_of (mvec _ meta)
+  meta
+
+fn meta_of (mmap _ meta)
+  meta
+
+fn meta_of (closure _ _ _ meta _ _)
+  meta
+
+fn meta_of (prim meta _)
+  meta
+
+fn meta_of _
+  nil
+
+fn with_meta_of (mlist items _) meta
+  mlist items meta
+
+fn with_meta_of (mvec items _) meta
+  mvec items meta
+
+fn with_meta_of (mmap table _) meta
+  mmap table meta
+
+fn with_meta_of (closure body env macro _ params rest) meta
+  closure body env macro meta params rest
+
+fn with_meta_of (prim _ name) meta
+  prim meta name
+
+fn with_meta_of v _
+  v
+
+fn read_answer blank k w
+  ret k nil w
+
+fn read_answer e:err k w
+  throw k e.reason w
+
+fn read_answer v k w
+  ret k v w

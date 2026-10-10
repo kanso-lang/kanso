@@ -1,0 +1,9 @@
+user> -3
+user> -3
+user> 9999999999800000000001
+user> -9223372036854775808
+user> 9223372036854775808
+user> true
+user> true
+user> 33
+[exit 0]

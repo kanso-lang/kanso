@@ -1,0 +1,16 @@
+user> Error: plain
+user> Error: {:code 42 :msg "structured"}
+user> 42
+user> "caught: 'nosuch' not found"
+user> "+ takes numbers"
+user> 2
+user> "inner rethrown"
+user> 42
+user> "division by zero"
+user> "reader: EOF"
+user> #<function>
+user> 5
+user> :div-zero
+user> Error: nth: index out of range
+user> :out-of-range
+[exit 0]

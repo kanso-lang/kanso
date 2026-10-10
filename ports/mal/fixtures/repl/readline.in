@@ -1,0 +1,8 @@
+(def! name (readline "your name? "))
+kanso
+(str "hello, " name)
+(def! n (read-string (readline "a number? ")))
+41
+(+ n 1)
+*host-language*
+(number? (time-ms))

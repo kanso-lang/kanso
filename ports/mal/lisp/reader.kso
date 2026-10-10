@@ -1,0 +1,262 @@
+import "std/text"
+
+# A form and the index of the token after it.
+type parsed
+  at
+  value
+
+# The line held nothing but whitespace and comments.
+type blank
+
+# Reading a line answers the form on it, `blank`, or an err naming what was
+# wrong. The err rides through every combinator below on its own arm.
+fn read_str s
+  tokens = tokenize s
+  first_form tokens
+
+fn first_form tokens
+  return blank if length tokens == 0
+  only (read_form tokens 1)
+
+fn only e:err
+  e
+
+fn only (parsed _ value)
+  value
+
+# --- tokens -----------------------------------------------------------------
+fn tokenize s
+  cs = text/chars s
+  scan cs 1 (length cs) []
+
+fn scan cs i n acc
+  return acc if n < i
+  lex (char_at cs i) cs i n acc
+
+fn lex " " cs i n acc
+  scan cs (i + 1) n acc
+
+fn lex "," cs i n acc
+  scan cs (i + 1) n acc
+
+fn lex "\n" cs i n acc
+  scan cs (i + 1) n acc
+
+fn lex "\t" cs i n acc
+  scan cs (i + 1) n acc
+
+fn lex "\r" cs i n acc
+  scan cs (i + 1) n acc
+
+fn lex ";" cs i n acc
+  scan cs (line_end cs i n) n acc
+
+fn lex "~" cs i n acc
+  return scan cs (i + 2) n (push acc "~@") if cs[i + 1] == "@"
+  scan cs (i + 1) n (push acc "~")
+
+fn lex "\"" cs i n acc
+  stop = string_end cs (i + 1) n
+  scan cs (stop + 1) n (push acc (piece cs i stop))
+
+fn lex c cs i n acc
+  return scan cs (i + 1) n (push acc c) if special? c
+  stop = atom_end cs i n
+  scan cs (stop + 1) n (push acc (piece cs i stop))
+
+fn char_at cs i
+  or_empty cs[i]
+
+fn or_empty none
+  ""
+
+fn or_empty c
+  c
+
+fn piece cs from to
+  text/join (text/slice cs from to) ""
+
+fn line_end cs i n
+  return i if n < i
+  return i if cs[i] == "\n"
+  line_end cs (i + 1) n
+
+# The index of the closing quote, or n when the string never closes; the
+# token then lacks its closing quote and the parser reports it.
+fn string_end cs i n
+  return n if n < i
+  return i if cs[i] == "\""
+  return string_end cs (i + 2) n if cs[i] == "\\"
+  string_end cs (i + 1) n
+
+fn atom_end cs i n
+  return n if n == i
+  return i if delimiter? (char_at cs (i + 1))
+  atom_end cs (i + 1) n
+
+fn delimiter? c
+  special? c or space? c or c == "\"" or c == ";"
+
+fn space? c
+  c == " " or c == "," or c == "\n" or c == "\t" or c == "\r"
+
+fn special? c
+  c == "(" or c == ")" or c == "[" or c == "]" or special_more? c
+
+fn special_more? c
+  c == "\{" or c == "}" or c == "'" or c == "`" or c == "^" or c == "@"
+
+# --- forms ------------------------------------------------------------------
+fn read_form tokens i
+  form_at tokens[i] tokens i
+
+fn form_at none _ _
+  err "EOF"
+
+fn form_at "(" tokens i
+  as_list (read_seq tokens (i + 1) ")" [])
+
+fn form_at "[" tokens i
+  as_vec (read_seq tokens (i + 1) "]" [])
+
+fn form_at "\{" tokens i
+  as_map (read_seq tokens (i + 1) "}" [])
+
+fn form_at ")" _ _
+  err "unbalanced ')'"
+
+fn form_at "]" _ _
+  err "unbalanced ']'"
+
+fn form_at "}" _ _
+  err "unbalanced '}'"
+
+fn form_at "'" tokens i
+  quoted "quote" (read_form tokens (i + 1))
+
+fn form_at "`" tokens i
+  quoted "quasiquote" (read_form tokens (i + 1))
+
+fn form_at "~" tokens i
+  quoted "unquote" (read_form tokens (i + 1))
+
+fn form_at "~@" tokens i
+  quoted "splice-unquote" (read_form tokens (i + 1))
+
+fn form_at "@" tokens i
+  quoted "deref" (read_form tokens (i + 1))
+
+fn form_at "^" tokens i
+  with_meta tokens (read_form tokens (i + 1))
+
+fn form_at tok _ i
+  parsed (i + 1) (read_atom tok)
+
+fn read_seq tokens i close acc
+  tok = tokens[i]
+  return err "EOF" if tok == none
+  return parsed (i + 1) acc if tok == close
+  more (read_form tokens i) tokens close acc
+
+fn more e:err _ _ _
+  e
+
+fn more (parsed at value) tokens close acc
+  read_seq tokens at close (push acc value)
+
+fn as_list e:err
+  e
+
+fn as_list (parsed at items)
+  parsed at (mlist items nil)
+
+fn as_vec e:err
+  e
+
+fn as_vec (parsed at items)
+  parsed at (mvec items nil)
+
+fn as_map e:err
+  e
+
+fn as_map (parsed at items)
+  parsed at (hash_map items)
+
+fn quoted _ e:err
+  e
+
+fn quoted name (parsed at value)
+  parsed at (mlist [(sym name) value] nil)
+
+# ^meta form reads as (with-meta form meta)
+fn with_meta _ e:err
+  e
+
+fn with_meta tokens (parsed at meta)
+  meta_target meta (read_form tokens at)
+
+fn meta_target _ e:err
+  e
+
+fn meta_target meta (parsed at value)
+  parsed at (mlist [(sym "with-meta") value meta] nil)
+
+# --- atoms ------------------------------------------------------------------
+fn read_atom "nil"
+  nil
+
+fn read_atom "true"
+  true
+
+fn read_atom "false"
+  false
+
+fn read_atom tok
+  cs = text/chars tok
+  atom_of (char_at cs 1) cs tok
+
+fn atom_of "\"" cs _
+  return err "EOF" if length cs < 2 or cs[length cs] != "\""
+  return err "EOF" if odd_escape? cs (length cs - 1)
+  unescape cs 2 (length cs - 1) []
+
+fn atom_of ":" _ tok
+  kw (text/slice tok 2 (length tok))
+
+fn atom_of "-" cs tok
+  return sym tok if length cs == 1
+  return sym tok if not all_digits? cs 2
+  text/to_int tok
+
+fn atom_of _ cs tok
+  return text/to_int tok if all_digits? cs 1
+  sym tok
+
+fn all_digits? cs i
+  return true if length cs < i
+  return false if not digit? (char_at cs i)
+  all_digits? cs (i + 1)
+
+fn digit? c
+  "0" <= c and c <= "9"
+
+# A string token ends in a quote that a backslash escapes when an odd number
+# of backslashes stands in front of it: "\" is unterminated, "\\" is not.
+fn odd_escape? cs i
+  run = backslashes cs i 0
+  run % 2 == 1
+
+fn backslashes cs i run
+  return run if cs[i] != "\\"
+  backslashes cs (i - 1) (run + 1)
+
+fn unescape cs i stop acc
+  return text/join acc "" if stop < i
+  return unescape cs (i + 1) stop (push acc cs[i]) if cs[i] != "\\"
+  unescape cs (i + 2) stop (push acc (escaped (char_at cs (i + 1))))
+
+fn escaped "n"
+  "\n"
+
+fn escaped c
+  c

@@ -1,0 +1,24 @@
+Mal [kanso-mal]
+mal-user> 3
+mal-user> #<function>
+mal-user> 3628800
+mal-user> {:a 2 :b 4}
+mal-user> {:macro #<function>}
+mal-user> "macro ran"
+mal-user> (if p y x)
+mal-user> (atom 0)
+mal-user> 5
+mal-user> 5
+mal-user> "hosted"
+mal-user> Uncaught exception: 'missing-symbol' not found
+mal-user> (10 20 30)
+mal-user> (1 2 3 4)
+mal-user> 3
+mal-user> "mal-in-kanso"
+mal-user> 42
+mal-user> nil
+mal-user> 5050
+mal-user> true
+mal-user> true
+mal-user> false
+mal-user> [exit 0]

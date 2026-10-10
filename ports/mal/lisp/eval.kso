@@ -1,0 +1,316 @@
+import "std/text"
+
+# --- ev: an expression and the environment to evaluate it in ----------------
+fn ev (sym name) env k w
+  found (find_name name env w) name k w
+
+fn ev (mlist items meta) env k w
+  return ret k (mlist items meta) w if length items == 0
+  ev_list items[1] items env k w
+
+fn ev (mvec items meta) env k w
+  return ret k (mvec items meta) w if length items == 0
+  ev items[1] env (k_vec [] env 2 items k meta) w
+
+fn ev (mmap table meta) env k w
+  names = keys table
+  return ret k (mmap table meta) w if length names == 0
+  ev (arg table (arg names 1)) env (k_hmap {} table env 1 k meta names) w
+
+fn ev v _ k w
+  ret k v w
+
+fn found none name k w
+  throw k "'{name}' not found" w
+
+fn found v _ k w
+  ret k v w
+
+# The special forms, one arm each, and then the two shapes of a call: a symbol
+# that may name a macro, and anything else.
+fn ev_list (sym "def!") items env k w
+  ev (arg items 3) env (k_def env k (name_of (arg items 2))) w
+
+fn ev_list (sym "defmacro!") items env k w
+  ev (arg items 3) env (k_defmacro env k (name_of (arg items 2))) w
+
+fn ev_list (sym "do") items env k w
+  do_step items 2 env k w
+
+fn ev_list (sym "fn*") items env k w
+  ret k (make_fn (arg items 2) (arg items 3) env) w
+
+fn ev_list (sym "if") items env k w
+  ev (arg items 2) env (k_if (arg items 4) env k (arg items 3)) w
+
+fn ev_list (sym "let*") items env k w
+  let_step (seq_items (arg items 2)) (arg items 3) (new_frame env) 1 k w
+
+fn ev_list (sym "macroexpand") items env k w
+  expand_step (arg items 2) env k w
+
+fn ev_list (sym "quasiquote") items env k w
+  ev (quasi (arg items 2)) env k w
+
+fn ev_list (sym "quasiquoteexpand") items _ k w
+  ret k (quasi (arg items 2)) w
+
+fn ev_list (sym "quote") items _ k w
+  ret k (arg items 2) w
+
+fn ev_list (sym "try*") items env k w
+  return ev (arg items 2) env k w if length items < 3
+  clause = seq_items items[3]
+  handler = k_try env (arg clause 3) k (name_of (arg clause 2))
+  ev (arg items 2) env handler w
+
+fn ev_list (sym name) items env k w
+  call_or_expand (find_name name env w) name items env k w
+
+fn ev_list head items env k w
+  ev head env (k_args [] env 2 items k) w
+
+fn call_or_expand none name _ _ k w
+  throw k "'{name}' not found" w
+
+fn call_or_expand m@(closure _ _ true _ _ _) _ items env k w
+  apply_fn m (tail items) (k_expand env k) w
+
+fn call_or_expand f _ items env k w
+  return apply_fn f [] k w if length items == 1
+  ev (arg items 2) env (k_args [f] env 3 items k) w
+
+# --- ret: a value for the innermost pending work ----------------------------
+fn ret halt v w
+  finished v w
+
+fn ret (k_args acc env i items k) v w
+  all = push acc v
+  return apply_fn (arg all 1) (tail all) k w if length items < i
+  ev (arg items i) env (k_args all env (i + 1) items k) w
+
+fn ret (k_def env k name) v w
+  bind_def env name v k w
+
+fn ret (k_defmacro env k name) v w
+  bind_def env name (as_macro v) k w
+
+fn ret (k_do env i items k) _ w
+  do_step items i env k w
+
+fn ret (k_do_def env i items k name) v w
+  do_step items i (extend env name v) k w
+
+fn ret (k_expand env k) v w
+  ev v env k w
+
+fn ret (k_hmap acc table env i k meta names) v w
+  all = put acc names[i] v
+  return ret k (mmap all meta) w if length names == i
+  next = k_hmap all table env (i + 1) k meta names
+  ev (arg table (arg names (i + 1))) env next w
+
+fn ret (k_if else_form env k then_form) v w
+  return ev else_form env k w if falsy? v
+  ev then_form env k w
+
+fn ret (k_let bindings body env i k) v w
+  next = extend env (name_of (arg bindings i)) v
+  let_step bindings body next (i + 2) k w
+
+fn ret (k_map acc f i k xs) v w
+  all = push acc v
+  return ret k (mlist all nil) w if length xs < i
+  apply_fn f [xs[i]] (k_map all f (i + 1) k xs) w
+
+fn ret (k_mexp env k) v w
+  expand_step v env k w
+
+fn ret (k_swap id k) v w
+  ret k v (set_atom id v w)
+
+fn ret (k_try _ _ k _) v w
+  ret k v w
+
+fn ret (k_vec acc env i items k meta) v w
+  all = push acc v
+  return ret k (mvec all meta) w if length items < i
+  ev (arg items i) env (k_vec all env (i + 1) items k meta) w
+
+# --- throw: unwind to the nearest try* --------------------------------------
+fn throw halt e w
+  threw e w
+
+fn throw (k_try env handler k name) e w
+  ev handler (extend (new_frame env) name e) k w
+
+fn throw frame_k e w
+  throw frame_k.k e w
+
+# --- calls ------------------------------------------------------------------
+fn apply_fn (prim _ name) args k w
+  builtin name args k w
+
+fn apply_fn (closure body env _ _ params rest) args k w
+  ev body (bind_args (new_frame env) params rest args 1) k w
+
+fn apply_fn f _ k w
+  throw k "{pr_str f true w} is not a function" w
+
+fn bind_args env params rest args i
+  return bind_rest env rest args i if length params < i
+  value = or_nil args[i]
+  bind_args (extend env (arg params i) value) params rest args (i + 1)
+
+fn bind_rest env nil _ _
+  env
+
+fn bind_rest env name args i
+  extend env name (mlist (text/slice args i (length args)) nil)
+
+# (fn* (a b & more) body): the names before & are bound one each, and the one
+# after it takes whatever is left as a list.
+fn make_fn params body env
+  names = list_names (seq_items params) 1 []
+  rest = rest_name (seq_items params)
+  closure body env false nil names rest
+
+fn list_names syms i acc
+  return acc if length syms < i
+  return acc if syms[i] == sym "&"
+  list_names syms (i + 1) (push acc (name_of (arg syms i)))
+
+fn rest_name syms
+  at = amp_at syms 1
+  return nil if at == 0
+  name_of (arg syms (at + 1))
+
+fn amp_at syms i
+  return 0 if length syms < i
+  return i if syms[i] == sym "&"
+  amp_at syms (i + 1)
+
+fn as_macro (closure body env _ meta params rest)
+  closure body env true meta params rest
+
+fn as_macro v
+  v
+
+fn bind_def top name v k w
+  ret k v (define top name v w)
+
+fn bind_def _ _ v k w
+  ret k v w
+
+# --- do and let* ------------------------------------------------------------
+fn do_step items i env k w
+  n = length items
+  return ret k nil w if n < i
+  return ev (arg items i) env k w if i == n
+  form = items[i]
+  return do_def (form_items form) items i env k w if local_def? form env
+  ev form env (k_do env (i + 1) items k) w
+
+fn local_def? (mlist parts _) (frame _ _)
+  parts[1] == sym "def!"
+
+fn local_def? _ _
+  false
+
+# A def! inside a do, in a local environment, binds for the rest of the do. A
+# fn* bound this way is tied to the frame that holds it, so it can recurse.
+fn do_def parts items i env k w
+  name = name_of (arg parts 2)
+  expr = arg parts 3
+  tied = extend env name (knot_fn expr)
+  return do_step items (i + 1) tied k w if fn_form? expr
+  ev expr env (k_do_def env (i + 1) items k name) w
+
+fn let_step bindings body env i k w
+  return ev body env k w if length bindings < i
+  expr = arg bindings (i + 1)
+  name = name_of (arg bindings i)
+  tied = extend env name (knot_fn expr)
+  return let_step bindings body tied (i + 2) k w if fn_form? expr
+  ev expr env (k_let bindings body env i k) w
+
+fn fn_form? (mlist parts _)
+  parts[1] == sym "fn*"
+
+fn fn_form? _
+  false
+
+fn knot_fn (mlist parts _)
+  make_fn (arg parts 2) (arg parts 3) knot
+
+fn knot_fn v
+  v
+
+# --- macroexpand ------------------------------------------------------------
+fn expand_step form env k w
+  expand_with (macro_of form env w) form env k w
+
+fn expand_with false form _ k w
+  ret k form w
+
+fn expand_with m form env k w
+  apply_fn m (tail (form_items form)) (k_mexp env k) w
+
+fn macro_of (mlist parts _) env w
+  return false if length parts == 0
+  macro_named parts[1] env w
+
+fn macro_of _ _ _
+  false
+
+fn macro_named (sym name) env w
+  is_macro (find_name name env w)
+
+fn macro_named _ _ _
+  false
+
+fn is_macro m@(closure _ _ true _ _ _)
+  m
+
+fn is_macro _
+  false
+
+# --- small helpers ----------------------------------------------------------
+fn arg xs i
+  or_nil xs[i]
+
+fn falsy? false
+  true
+
+fn falsy? nil
+  true
+
+fn falsy? _
+  false
+
+fn or_nil none
+  nil
+
+fn or_nil v
+  v
+
+fn name_of none
+  "nil"
+
+fn name_of (sym name)
+  name
+
+fn name_of v
+  "{v}"
+
+fn seq_items s:seq
+  s.items
+
+fn seq_items _
+  []
+
+fn form_items (mlist parts _)
+  parts
+
+fn tail xs
+  text/slice xs 2 (length xs)

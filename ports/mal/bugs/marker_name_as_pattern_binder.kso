@@ -1,0 +1,17 @@
+# `done` is the nullary the standard library declares for a finished effect.
+# Used as a parameter name inside a record pattern it is not a binder but the
+# literal `done`, so the arm below matches only a box whose field holds
+# `done`, and the call fails at run time. Run with `kanso play` (on all
+# engines). In the port the same shape was inside a module, where `kanso
+# check .` said ok.
+#
+# Should: either bind `done` to the field (as any other lower-case name in a
+# pattern does) or refuse the arm before running, naming the marker.
+# Does: error[runtime]: no overload of `total` matches these arguments
+type box
+  done
+
+fn total (box done)
+  length done
+
+print "{total (box [1 2 3])}"

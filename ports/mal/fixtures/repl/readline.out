@@ -1,0 +1,7 @@
+user> your name? "kanso"
+user> "hello, kanso"
+user> a number? 41
+user> 42
+user> "kanso"
+user> true
+[exit 0]

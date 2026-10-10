@@ -1,0 +1,9 @@
+# Appendix B documents `text/concat (list | string) (list | string)` and says
+# it "appends two lists—or two strings—into one". On strings every engine
+# stops with `error[runtime]: concat takes two lists`.
+#
+# Should print: abcd
+# Does: error[runtime]: concat takes two lists   (interpreter and native)
+import "std/text"
+
+print (text/concat "ab" "cd")

@@ -1,0 +1,166 @@
+;; mal, written in mal. Run it with the host:  mal examples/self_host/stepA_mal.mal
+;; Functions are host closures; a macro is a map {:macro f}, so the host's
+;; fn? and macro? cannot see it and the hosted ones below must.
+
+(load-file "examples/self_host/env.mal")
+(load-file "examples/self_host/core.mal")
+
+;; read
+(def! READ read-string)
+
+;; quasiquote
+(def! qq-loop (fn* [elt acc]
+  (if (if (list? elt) (= (first elt) 'splice-unquote) false)
+    (list 'concat (nth elt 1) acc)
+    (list 'cons (QUASIQUOTE elt) acc))))
+
+(def! qq-foldr (fn* [xs]
+  (if (empty? xs)
+    ()
+    (qq-loop (first xs) (qq-foldr (rest xs))))))
+
+(def! QUASIQUOTE (fn* [ast]
+  (cond
+    (vector? ast) (list 'vec (qq-foldr ast))
+    (map? ast) (list 'quote ast)
+    (symbol? ast) (list 'quote ast)
+    (not (list? ast)) ast
+    (= (first ast) 'unquote) (nth ast 1)
+    "else" (qq-foldr ast))))
+
+;; macros
+(def! hosted-macro? (fn* [x]
+  (if (map? x) (contains? x :macro) false)))
+
+(def! macro-fn (fn* [ast env]
+  (if (list? ast)
+    (if (symbol? (first ast))
+      (if (env-find env (str (first ast)))
+        (let* [f (env-get env (first ast))]
+          (if (hosted-macro? f) (get f :macro) nil)))))))
+
+(def! MACROEXPAND (fn* [ast env]
+  (let* [m (macro-fn ast env)]
+    (if m
+      (MACROEXPAND (apply m (rest ast)) env)
+      ast))))
+
+;; eval
+(def! eval-ast (fn* [ast env]
+  (cond
+    (symbol? ast) (env-get env ast)
+    (list? ast) (map (fn* [x] (EVAL x env)) ast)
+    (vector? ast) (vec (map (fn* [x] (EVAL x env)) ast))
+    (map? ast) (apply hash-map
+                 (apply concat
+                   (map (fn* [k] [k (EVAL (get ast k) env)]) (keys ast))))
+    "else" ast)))
+
+(def! LET (fn* [env binds]
+  (if (empty? binds)
+    env
+    (do
+      (env-set env (first binds) (EVAL (nth binds 1) env))
+      (LET env (rest (rest binds)))))))
+
+(def! last-of (fn* [xs] (nth xs (- (count xs) 1))))
+
+(def! EVAL (fn* [ast env]
+  (if (not (list? ast))
+    (eval-ast ast env)
+    (let* [ast (MACROEXPAND ast env)]
+      (if (not (list? ast))
+        (eval-ast ast env)
+        (if (empty? ast)
+          ast
+          (let* [a0 (first ast)]
+            (cond
+              (= 'def! a0)
+              (env-set env (nth ast 1) (EVAL (nth ast 2) env))
+
+              (= 'let* a0)
+              (EVAL (nth ast 2) (LET (new-env env) (nth ast 1)))
+
+              (= 'quote a0)
+              (nth ast 1)
+
+              (= 'quasiquoteexpand a0)
+              (QUASIQUOTE (nth ast 1))
+
+              (= 'quasiquote a0)
+              (EVAL (QUASIQUOTE (nth ast 1)) env)
+
+              (= 'defmacro! a0)
+              (env-set env (nth ast 1) {:macro (EVAL (nth ast 2) env)})
+
+              (= 'macroexpand a0)
+              (MACROEXPAND (nth ast 1) env)
+
+              (= 'try* a0)
+              (if (< (count ast) 3)
+                (EVAL (nth ast 1) env)
+                (try*
+                  (EVAL (nth ast 1) env)
+                  (catch* exc
+                    (let* [clause (nth ast 2)]
+                      (EVAL (nth clause 2)
+                            (new-env env [(nth clause 1)] [exc]))))))
+
+              (= 'do a0)
+              (last-of (eval-ast (rest ast) env))
+
+              (= 'if a0)
+              (if (EVAL (nth ast 1) env)
+                (EVAL (nth ast 2) env)
+                (if (> (count ast) 3) (EVAL (nth ast 3) env) nil))
+
+              (= 'fn* a0)
+              (let* [params (nth ast 1)
+                     body (nth ast 2)]
+                (fn* [& args] (EVAL body (new-env env params args))))
+
+              "else"
+              (let* [el (eval-ast ast env)]
+                (apply (first el) (rest el)))))))))))
+
+;; print
+(def! PRINT pr-str)
+
+;; repl
+(def! repl-env (new-env))
+
+(def! rep (fn* [line]
+  (PRINT (EVAL (READ line) repl-env))))
+
+(map (fn* [k] (env-set repl-env (symbol k) (get core_ns k))) (keys core_ns))
+(env-set repl-env 'eval (fn* [ast] (EVAL ast repl-env)))
+(env-set repl-env '*ARGV* (rest *ARGV*))
+(env-set repl-env '*host-language* (str "mal-in-" *host-language*))
+(env-set repl-env 'fn? (fn* [x] (if (map? x) false (fn? x))))
+(env-set repl-env 'macro? hosted-macro?)
+
+(rep "(def! not (fn* [a] (if a false true)))")
+(rep "(def! load-file (fn* (f) (eval (read-string (str \"(do \" (slurp f) \"\nnil)\")))))")
+(rep "(defmacro! cond (fn* (& xs) (if (> (count xs) 0) (list 'if (first xs) (if (> (count xs) 1) (nth xs 1) (throw \"odd number of forms to cond\")) (cons 'cond (rest (rest xs)))))))")
+
+(def! repl-loop (fn* [line]
+  (if line
+    (do
+      (if (not (= "" line))
+        (try*
+          (println (rep line))
+          (catch* exc
+            (println "Uncaught exception:" (if (string? exc) exc (pr-str exc))))))
+      (repl-loop (readline "mal-user> "))))))
+
+(cond
+  (= (first *ARGV*) "--no-repl")
+  nil
+
+  (empty? *ARGV*)
+  (do
+    (println (str "Mal [" *host-language* "-mal]"))
+    (repl-loop (readline "mal-user> ")))
+
+  "else"
+  (rep (str "(load-file \"" (first *ARGV*) "\")")))

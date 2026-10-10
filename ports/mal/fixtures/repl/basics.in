@@ -1,0 +1,22 @@
+(+ 1 2)
+(def! x (* 6 7))
+x
+(let* [a 1 b (+ a 1)] [a b {:sum (+ a b)}])
+"a string with \"quotes\" and a \\ backslash"
+(str "no " "quotes " :kw " " 'sym)
+(pr-str "with" :quotes)
+(do (println "printed" "line") (prn "readable" [1 2]) :done)
+; a comment line produces nothing
+
+(fn* [a] a)
+((fn* [a & more] [a more]) 1 2 3)
+(count "kanso")
+(undefined-thing 1)
+(1 2
+"unterminated
+(+ 1 "two")
+(/ 10 0)
+(nth [1 2] 5)
+{"b" 2 :a 1 "a" 3}
+(= [1 [2 3]] '(1 (2 3)))
+(if nil :then :else)

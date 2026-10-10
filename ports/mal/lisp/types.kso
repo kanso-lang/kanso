@@ -1,0 +1,48 @@
+# The values a mal program computes with. Integers, strings and the two
+# booleans are kanso's own; everything else is a record or a marker here.
+#
+# An atom is a reference, and kanso has no references, so an atom holds only
+# an id: the value lives in the world's `atoms` map and every reset! writes a
+# new world.
+type atom_ref
+  id
+
+# `env` is a frame, `top` for the global environment, or `knot` for a closure
+# that let* or a local def! bound to a name: such a closure has to see the
+# frame that holds it, and a value cannot contain itself, so the frame is put
+# back in when the name is looked up (see `hit` in env.kso).
+type closure
+  body
+  env
+  macro
+  meta
+  params
+  rest
+
+type kw
+  name
+
+type mlist
+  items
+  meta
+
+# Hash-map keys are strings or keywords and a kanso map key is a string or an
+# int, so a key is stored encoded: "s" or "k" in front of the text.
+type mmap
+  table
+  meta
+
+type mvec
+  items
+  meta
+
+type nil
+
+type prim
+  meta
+  name
+
+type sym
+  name
+
+type seq mlist mvec

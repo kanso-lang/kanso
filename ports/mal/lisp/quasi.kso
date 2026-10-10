@@ -1,0 +1,34 @@
+# quasiquote rewrites its argument into the calls that build it: a list
+# becomes nested cons and concat, so `(a ~b ~@c) reads as
+# (cons (quote a) (cons b (concat c ()))). The rewrite is pure; the machine
+# then evaluates what it answers.
+fn quasi (mlist parts meta)
+  return mlist [] nil if length parts == 0
+  return arg parts 2 if parts[1] == sym "unquote"
+  qq_fold parts (length parts) (mlist [] meta)
+
+fn quasi (mvec parts _)
+  mlist [(sym "vec") (qq_fold parts (length parts) (mlist [] nil))] nil
+
+fn quasi m:mmap
+  mlist [(sym "quote") m] nil
+
+fn quasi s:sym
+  mlist [(sym "quote") s] nil
+
+fn quasi v
+  v
+
+fn qq_fold parts i acc
+  return acc if i == 0
+  qq_fold parts (i - 1) (qq_elt (arg parts i) acc)
+
+fn qq_elt (mlist parts meta) acc
+  return mlist [(sym "concat") (arg parts 2) acc] nil if splice? parts
+  mlist [(sym "cons") (quasi (mlist parts meta)) acc] nil
+
+fn qq_elt elt acc
+  mlist [(sym "cons") (quasi elt) acc] nil
+
+fn splice? parts
+  length parts > 0 and parts[1] == sym "splice-unquote"

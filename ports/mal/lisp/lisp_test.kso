@@ -1,0 +1,93 @@
+# Unit tests for the pieces under the REPL: the reader and printer on their
+# own, and the machine on a source line with no effects. The runtest suites in
+# tests/ cover the language end to end; these pin the parts by name.
+test_atoms_keep_their_ids =
+  w = new_atom "first" (new_atom 1 (boot []))
+  deref_atom 1 w == 1 and deref_atom 2 w == "first"
+
+test_atoms_overwrite =
+  w = set_atom 5 "b" (set_atom 5 "a" (boot []))
+  deref_atom 5 w == "b"
+
+test_closures_capture =
+  src = "((fn* (a) ((fn* (b) (+ a b)) 10)) 5)"
+  shown_of src == "15"
+
+test_def_is_global = shown_of "(do (def! x 4) (* x x))" == "16"
+
+test_do_def_binds_for_the_rest_of_the_do =
+  src = "((fn* () (do (def! y 2) (+ y 1))))"
+  shown_of src == "3"
+
+test_errors_are_caught =
+  src = "(try* (throw \"no\") (catch* e (str e \"!\")))"
+  shown_of src == "\"no!\""
+
+test_hash_map_keys_decode = decode_key "ka" == kw "a" and decode_key "sa" == "a"
+
+test_hash_map_keys_encode = encode_key (kw "a") == "ka"
+
+test_hash_map_strings_encode = encode_key "a" == "sa"
+
+test_let_mutual_recursion =
+  f = "(fn* (n) (if (= n 0) :f (g (- n 1))))"
+  shown_of "(let* (f {f} g (fn* (n) (f n))) (f 3))" == ":f"
+
+test_macro_expands = shown_of "(macroexpand (cond a b))" == "(if a b (cond))"
+
+test_missing_name = shown_of "(nope)" == "Error: 'nope' not found"
+
+test_printer_escapes = round_trip "\"a\\\\b\\\"c\\nd\""
+
+test_quasiquote_splices = shown_of "`(1 ~@(list 2 3) 4)" == "(1 2 3 4)"
+
+test_reader_comments = shown_of "7 ; trailing comment" == "7"
+
+test_reader_keeps_vectors_and_maps =
+  src = "[1 (2 \"three\" :four) \{\"k\" [nil true false]}]"
+  round_trip src
+
+test_reader_negative_numbers = shown_of "(+ -3 -4)" == "-7"
+
+test_reader_reports_eof = read_failure "(1 2" == "EOF"
+
+test_reader_reports_unbalanced = read_failure ")" == "unbalanced ')'"
+
+test_reader_unterminated_string = read_failure "\"abc" == "EOF"
+
+test_str_is_not_readable = shown_of "(str \"a\" :b \"c\")" == "\"a:bc\""
+
+test_tail_calls_run_flat =
+  src = "(do (def! f (fn* (n) (if (= n 0) :done (f (- n 1))))) (f 5000))"
+  shown_of src == ":done"
+
+fn read_failure src
+  reason_of (read_str src)
+
+fn reason_of (err r)
+  r
+
+fn reason_of _
+  "read without failing"
+
+fn round_trip src
+  printed = shown_read (read_str src)
+  printed == src
+
+fn shown_read e:err
+  "Error: {e.reason}"
+
+fn shown_read form
+  pr_str form true (boot [])
+
+fn shown_of src
+  outcome_text (run_source src (boot []))
+
+fn outcome_text e:err
+  "Error: {e.reason}"
+
+fn outcome_text (finished v w)
+  pr_str v true w
+
+fn outcome_text (threw e w)
+  "Error: {error_text e w}"

@@ -1,0 +1,23 @@
+user> 3
+user> 42
+user> 42
+user> [1 2 {:sum 3}]
+user> "a string with \"quotes\" and a \\ backslash"
+user> "no quotes :kw sym"
+user> "\"with\" :quotes"
+user> printed line
+"readable" [1 2]
+:done
+user> user> user> #<function>
+user> [1 (2 3)]
+user> 5
+user> Error: 'undefined-thing' not found
+user> Error: EOF
+user> Error: EOF
+user> Error: + takes numbers
+user> Error: division by zero
+user> Error: nth: index out of range
+user> {:a 1 "a" 3 "b" 2}
+user> true
+user> :else
+[exit 0]

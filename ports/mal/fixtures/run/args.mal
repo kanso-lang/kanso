@@ -1,0 +1,10 @@
+;; Prints the arguments it was given, one per line, with their position.
+(def! show (fn* [i xs]
+  (if (empty? xs)
+    nil
+    (do
+      (println (str i ": " (first xs)))
+      (show (+ i 1) (rest xs))))))
+
+(println "argc" (count *ARGV*))
+(show 1 *ARGV*)

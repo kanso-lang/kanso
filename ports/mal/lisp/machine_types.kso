@@ -1,0 +1,138 @@
+# The evaluator is a CEK machine: an expression, an environment, and a
+# continuation that says what to do with the value. Each record here is one
+# kind of pending work, and every one of them keeps the rest of the
+# continuation in `k`, so a throw can walk outward to the nearest try*.
+#
+# Writing the continuation down as data, rather than leaving it on kanso's
+# stack, is what gives mal its tail calls, its try*/catch*, and a way to stop
+# in the middle of an evaluation to read a file.
+#
+# evaluating the operator and operands of a call, left to right
+type k_args
+  acc
+  env
+  i
+  items
+  k
+
+# waiting for a top-level or local def!
+type k_def
+  env
+  k
+  name
+
+# waiting for defmacro!'s function
+type k_defmacro
+  env
+  k
+  name
+
+# the forms of a do after the current one
+type k_do
+  env
+  i
+  items
+  k
+
+# a def! inside a do, whose binding the rest of the do should see
+type k_do_def
+  env
+  i
+  items
+  k
+  name
+
+# a macro answered its expansion; evaluate it where the call was
+type k_expand
+  env
+  k
+
+# the values of a hash-map literal, evaluated in key order
+type k_hmap
+  acc
+  table
+  env
+  i
+  k
+  meta
+  names
+
+type k_if
+  else_form
+  env
+  k
+  then_form
+
+# the binding forms of a let*, two at a time
+type k_let
+  bindings
+  body
+  env
+  i
+  k
+
+# `map` calling a mal function on each element in turn
+type k_map
+  acc
+  f
+  i
+  k
+  xs
+
+# macroexpand: keep expanding while the head is still a macro
+type k_mexp
+  env
+  k
+
+# swap! waiting for the function's answer to store in the atom
+type k_swap
+  id
+  k
+
+type k_try
+  env
+  handler
+  k
+  name
+
+type k_vec
+  acc
+  env
+  i
+  items
+  k
+  meta
+
+type halt
+
+# What the machine answers when it stops. It stops when the work is acc, when
+# an exception reaches the top, or when it needs the outside world.
+type finished
+  value
+  world
+
+type threw
+  error
+  world
+
+type wants_file
+  k
+  path
+  world
+
+type wants_line
+  k
+  prompt
+  world
+
+type wants_time
+  k
+  world
+
+# Everything a mal program can change. kanso values do not change, so the
+# machine hands a new world to every step that alters one.
+type world
+  atoms
+  globals
+  next_id
+  out

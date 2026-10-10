@@ -1,0 +1,19 @@
+user> {:a 1 "b" 2}
+user> 1
+user> 2
+user> nil
+user> {:a 1 :c 3 "b" 2}
+user> {"b" 2}
+user> {:a 1 "b" 2}
+user> true
+user> (:y :z)
+user> (2 1)
+user> {:k [1 2] "s" {:nested true}}
+user> true
+user> true
+user> 2
+user> {:x 1 :y 2}
+user> {:a 1}
+user> {:doc "meta"}
+user> Error: a hash-map key is a string or a keyword
+[exit 0]

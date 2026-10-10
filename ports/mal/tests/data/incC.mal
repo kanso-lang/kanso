@@ -1,0 +1,5 @@
+;; Test with comments
+(def! mymap {"a"
+             1})
+
+(prn "incC.mal finished")

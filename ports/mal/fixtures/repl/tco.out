@@ -1,0 +1,14 @@
+user> #<function>
+user> :done
+user> #<function>
+user> 200010000
+user> #<function>
+user> #<function>
+user> :pong
+user> #<function>
+user> 5000
+user> #<function>
+user> :out
+user> #<function>
+user> :caught
+[exit 0]

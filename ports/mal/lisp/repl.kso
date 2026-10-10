@@ -1,0 +1,292 @@
+import "std/io"
+import "std/list"
+import "std/os"
+import "std/regexp"
+import "std/text"
+import "std/time"
+
+# One case of a runtest-format file: an input line and the lines that follow
+# it saying what it should print (";/" a pattern) and answer (";=>").
+type case
+  expected
+  input
+  line_no
+  mode
+
+# How a case is run: evaluated by this interpreter, read and printed back
+# (the step 1 suite), or handed to the mal-in-mal `rep` loaded beforehand.
+type direct
+
+type hosted
+
+type read_back
+
+# A file run reads stdin only if the program calls readline.
+type unread
+
+type score_card
+  failed
+  passed
+
+# The parts of the core namespace that mal defines in mal. A string literal
+# cannot span lines, so the longer definitions are built up a piece at a time.
+cond_src = "{cond_head} {cond_then} {cond_odd} {cond_rest}"
+
+cond_head = "(defmacro! cond (fn* (& xs) (if (> (count xs) 0)"
+
+cond_odd = "(throw \"odd number of forms to cond\"))"
+
+cond_rest = "(cons 'cond (rest (rest xs)))))))"
+
+cond_then = "(list 'if (first xs) (if (> (count xs) 1) (nth xs 1)"
+
+load_file_src = "(def! load-file (fn* (f) (eval (read-string {load_file_body}"
+
+load_file_body = "(str \"(do \" (slurp f) \"\\nnil)\")))))"
+
+not_src = "(def! not (fn* (a) (if a false true)))"
+
+prelude = [not_src load_file_src cond_src "(def! *host-language* \"kanso\")"]
+
+# `mal` alone is the REPL over stdin; `mal file args...` runs a file with the
+# rest as *ARGV*; `mal --test file` checks a file of runtest cases.
+pub fn main argv
+  return io/stdin .> (input -> repl_all input) if length argv == 0
+  return run_tests argv[2] if argv[1] == "--test" and length argv == 2
+  return run_hosted argv[2] argv[4] if argv[1] == "--test" and length argv == 4
+  run_file argv[1] (text/slice argv 2 (length argv))
+
+fn repl_all input
+  repl (input_lines input) 1 (boot [])
+
+fn boot args
+  start = world no_cell core_globals 1 []
+  w = list/fold prelude start (acc src -> settled_world (run_source src acc))
+  argv = mlist args nil
+  define top "*ARGV*" argv w
+
+fn run_source src w
+  form = read_str src
+  ev form top halt w
+
+fn settled_world e:err
+  e
+
+fn settled_world (finished _ w)
+  without_output w
+
+fn settled_world (threw _ w)
+  without_output w
+
+fn input_lines input
+  all = text/split input "\n"
+  return text/slice all 1 (length all - 1) if all[length all] == ""
+  all
+
+# --- the REPL ---------------------------------------------------------------
+fn repl lines i w
+  return effect done if length lines < i
+  io/write "user> " .> (_ -> repl_line (line_at lines i) lines (i + 1) w)
+
+fn repl_line line lines i w
+  form = read_str line
+  repl_form form lines i w
+
+fn repl_form blank lines i w
+  repl lines i w
+
+fn repl_form e:err lines i w
+  print "Error: {e.reason}" .> (_ -> repl lines i w)
+
+fn repl_form form lines i w
+  settle (ev form top halt w) lines i (st ls j -> repl_report st ls j)
+
+fn repl_report (finished v w) lines i
+  flush w
+    .> (_ -> print (pr_str v true w))
+    .> (_ -> repl lines i (without_output w))
+
+fn repl_report (threw e w) lines i
+  flush w
+    .> (_ -> print "Error: {error_text e w}")
+    .> (_ -> repl lines i (without_output w))
+
+# --- the machine meets the world --------------------------------------------
+#
+# The machine is pure. When it stops to ask for a file, a line or the time,
+# `settle` performs that one effect, hands the answer back, and runs on until
+# the machine is finished or has thrown, then calls `then` with the final state.
+fn settle (wants_line k prompt w) unread _ then
+  waiting = wants_line k prompt w
+  io/stdin .> (input -> settle waiting (input_lines input) 1 then)
+
+fn settle (wants_file k path w) lines i then
+  flushed = without_output w
+  flush w
+    .> (_ -> os/read_file path)
+    .> (r -> settle (file_read r k flushed) lines i then)
+
+fn settle (wants_line k prompt w) lines i then
+  flushed = without_output w
+  shown = io/write (prompt_text prompt)
+  answer = arg lines i
+  flush w
+    .> (_ -> shown)
+    .> (_ -> settle (ret k answer flushed) lines (i + 1) then)
+
+fn settle (wants_time k w) lines i then
+  time/now .> (t -> settle (ret k t w) lines i then)
+
+fn settle e:err _ _ _
+  e
+
+fn settle st lines i then
+  then st lines i
+
+fn file_read (file_not_found path) k w
+  throw k "slurp: no such file: {path}" w
+
+fn file_read text k w
+  ret k text w
+
+fn prompt_text p:string
+  p
+
+fn prompt_text _
+  ""
+
+fn line_at lines i
+  or_empty lines[i]
+
+fn flush w
+  return effect done if length w.out == 0
+  io/write "{text/join w.out "\n"}\n"
+
+fn error_text e:string _
+  e
+
+fn error_text e w
+  pr_str e true w
+
+# --- running a file ---------------------------------------------------------
+fn run_file path args
+  w = boot args
+  call = mlist [(sym "load-file") path] nil
+  settle (ev call top halt w) unread 1 (st _ _ -> file_report st)
+
+fn file_report (finished _ w)
+  flush w
+
+fn file_report (threw e w)
+  flush w .> (_ -> io/write_err "Error: {error_text e w}\n") .> (_ -> os/exit 1)
+
+# --- runtest ----------------------------------------------------------------
+fn run_tests path
+  os/read_file! path .> (src -> check_all (input_lines src))
+
+fn check_all lines
+  read_only = list/any? lines (l -> l == ";>>> read-only=True")
+  mode = if read_only read_back direct
+  check_cases (cases_of lines 1 [] mode) 1 (boot []) (score_card 0 0)
+
+# `--test FILE --via HOST` runs the same cases through a mal written in mal:
+# HOST is loaded first, with "--no-repl" so it only defines `rep`.
+fn run_hosted path host
+  w = boot ["--no-repl"]
+  call = mlist [(sym "load-file") host] nil
+  loaded = settle (ev call top halt w) [] 1 (st _ _ -> effect st)
+  os/read_file! path .> (src -> loaded .> (st -> check_hosted src st))
+
+fn check_hosted src (finished _ w)
+  cases = cases_of (input_lines src) 1 [] hosted
+  check_cases cases 1 (without_output w) (score_card 0 0)
+
+fn check_hosted _ (threw e w)
+  print "Error loading the host: {error_text e w}"
+
+fn cases_of lines i acc mode
+  return acc if length lines < i
+  line = line_at lines i
+  return cases_of lines (i + 1) acc mode if skipped? line
+  stop = expect_end lines (i + 1)
+  expected = text/slice lines (i + 1) (stop - 1)
+  next = push acc (case expected line i mode)
+  cases_of lines stop next mode
+
+fn skipped? line
+  trimmed = text/trim line
+  trimmed == "" or text/slice trimmed 1 1 == ";"
+
+fn expect_end lines i
+  return i if length lines < i
+  return expect_end lines (i + 1) if expectation? (line_at lines i)
+  i
+
+fn expectation? line
+  text/slice line 1 2 == ";/" or text/slice line 1 3 == ";=>"
+
+fn check_cases cases j w score
+  return summary score if length cases < j
+  c = cases[j]
+  check_case c.mode c cases j w score
+
+fn check_case hosted c cases j w score
+  call = mlist [(sym "rep") c.input] nil
+  then = (st _ _ -> case_done st false c cases j score)
+  settle (ev call top halt w) [] 1 then
+
+fn check_case mode c cases j w score
+  check_form (read_str c.input) mode c cases j w score
+
+fn check_form blank _ c cases j w score
+  graded c [] cases j w score
+
+fn check_form e:err _ c cases j w score
+  graded c ["Error: {e.reason}"] cases j w score
+
+fn check_form form mode c cases j w score
+  run_form mode form c cases j w score
+
+fn run_form read_back form c cases j w score
+  graded c [(pr_str form true w)] cases j w score
+
+fn run_form _ form c cases j w score
+  settle (ev form top halt w) [] 1 (st _ _ -> case_done st true c cases j score)
+
+# A hosted case answers the string its `rep` printed, so it is shown as is.
+fn case_done (finished v w) readably c cases j score
+  got = push w.out (pr_str v readably w)
+  graded c got cases j (without_output w) score
+
+fn case_done (threw e w) _ c cases j score
+  got = push w.out "Error: {error_text e w}"
+  graded c got cases j (without_output w) score
+
+fn graded c got cases j w score
+  ok = agrees? c.expected got
+  passed = score_card score.failed (score.passed + 1)
+  return check_cases cases (j + 1) w passed if ok
+  report = "FAIL {c.line_no}: {c.input}\n  want: {c.expected}\n  got: {got}"
+  next = score_card (score.failed + 1) score.passed
+  print report .> (_ -> check_cases cases (j + 1) w next)
+
+# runtest searches the output for what the expectations describe, so a case
+# with no ";=>" line passes whatever value follows the output it named, and a
+# case with no expectations at all passes on any output.
+fn agrees? expected printed
+  got = list/fold printed [] (acc out -> text/concat acc (text/split out "\n"))
+  answers = list/any? expected (want -> text/slice want 1 3 == ";=>")
+  return false if length got < length expected
+  return false if answers and length got != length expected
+  list/all? (list/zip expected got) pair_agrees?
+
+fn pair_agrees? pair
+  line_agrees? (line_at pair 1) (line_at pair 2)
+
+fn line_agrees? want got
+  return text/slice want 4 (length want) == got if text/slice want 1 3 == ";=>"
+  pattern = "^{text/slice want 3 (length want)}$"
+  regexp/match? pattern got
+
+fn summary (score_card failed passed)
+  print "{passed} passed, {failed} failed"
