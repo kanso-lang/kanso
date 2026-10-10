@@ -24717,6 +24717,35 @@ with an error golden for a read of such a list in the maker; the graph fixture
 holds each node's neighbours as a list and drops the chain of records; ch03 or
 wherever `tie` is taught shows the list form.
 
+## 2026-10-10 — a directory called lib is an ordinary directory
+
+The beat analysis keeps an imported library's loops out of the carry tier,
+because a shared driver threads its caller's invariant source through the loop
+and carrying it would copy an unbounded value at every rewind. It recognised a
+library by its declaration's file name, which had to begin `std/` or `lib/`.
+Shipped modules are filed as `std/<module>/<file>`. Nothing shipped begins
+`lib/`, and every user directory called `lib` does, so a package kept in one
+compiled to a program that never reclaimed a block. The 2026-08-31 entries
+found this, measured it at five times the peak, and pinned it in
+`tests/a_program_is_not_its_directory.rs` with the instruction to delete the
+assertion when the two directories agreed.
+
+The `lib/` arm is gone and the `std/` arm stays. The arm had one user in the
+tree: the json beat unit test compiled `lib/json` as a root, and the arm made
+that root look like an installed module. The test now reads the library
+through `import "std/json"`, which is how a program meets it, and it still goes
+red when the `std/` arm is removed: `json/array_open` and `json/obj_open`
+become beats. The spec now asserts that `lib/app` and `elsewhere/app` both
+peak at 1,048,576, and with the arm put back the `lib/` side reads 5,242,880.
+
+I found it while building the fixtures for the lap carry. The evaluator
+fixture, imported as `./lib/fx`, held 4 MiB and never rewound.
+
+The tab compiler reads 661 fewer instructions, `browser_compile_instructions`
+388,181,803. CI moved one other row: `emit_instructions` falls 37, to
+7,062,299. Both codegen tiers held. The ratchet's mutation for this filter
+patched the old two-arm line, so it now patches the one-arm line.
+
 ## 2026-10-10 — a constant lives in storage the carry knows is permanent
 
 A map built before a carrying loop came out of the loop with keys the next
@@ -24787,3 +24816,15 @@ way. `encodebench` and `livebench` fall about 375,000 each with the smaller
 chunk, and `deepbench` falls 4.4 million. Release codegen falls 80,700
 instructions and dev codegen rises 29,476; each benchmark's text grows 192
 bytes.
+
+By key: `work_runbench` lands on 1,131,250,979, `work_oneshot` on 13,176,487,
+`work_jsonbench` on 860,548,891, `work_escapebench` on 39,045,280 and
+`work_widebench` on 28,094,541. `codegen_instructions_dev` lands on 118,896,772
+and `text` on 4,612,254 across the fourteen binaries. `carry_dedup` falls to 0
+wherever it counted: `run_carry_dedup` from 71, `encode_carry_dedup`,
+`oneshot_carry_dedup`, `wide_carry_dedup`, `digest_carry_dedup`,
+`read_carry_dedup` and `live_carry_dedup` from 3, and in the lazy tier
+`a_maps_two_columns_are_one_allocation_carry_dedup` from 1,998 and
+`a_nested_map_gives_back_its_entries_carry_dedup` from 29,990. A dedup is a
+copy the walk found it had already made; constants are no longer copied, so
+there is nothing to find twice.

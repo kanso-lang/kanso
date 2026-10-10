@@ -1,43 +1,29 @@
-//! The same sources, from two directories, do NOT compile to the same program.
+//! The same sources, from two directories, compile to the same program.
 //!
-//! This asserts what the compiler DOES, not what it should do — the same shape
-//! `tests/sha256_peak.rs` beside it uses, and for the same reason: the defect
-//! is real, the fix is not free, and a fact nothing pins is a fact that can be
-//! lost.
+//! The beat analysis keeps an imported library's loops out of the carry tier,
+//! and until 2026-10-10 it recognised a library by asking whether the
+//! declaration's `file` began `std/` or `lib/`. Shipped modules are filed as
+//! `std/<module>/<file>`, so the `lib/` arm matched nothing shipped and every
+//! user directory called `lib`: a package kept there compiled to a program
+//! that never reclaimed a block, five times the peak of the same package one
+//! directory over. This file pinned that defect, as a fact nothing else
+//! pinned, with the instruction to delete the assertion when the two agreed.
 //!
-//! The beat analysis decides which loops may rewind their arena by asking
-//! whether the declaration's `file` begins `std/` or `lib/`. `file` is the
-//! field error origins are built from — a path meant for a diagnostic, read as
-//! a semantic marker. So a package kept in a directory called `lib` compiles to
-//! a program that never reclaims a block, and the same package one directory
-//! over compiles to one that does. Five times the peak, from the name of
-//! a folder.
+//! WHY THE `lib/` ARM WAS THERE. The beat unit test for the json library
+//! compiled `lib/json` as a root, and the arm made that root behave like an
+//! installed module. The unit test now reads the library through
+//! `import "std/json"`, which is how a program meets it. Removing the whole
+//! exclusion was measured on 2026-08-31 and turned the digest quadratic; only
+//! the `lib/` arm goes here, and the `std/` exclusion stays.
 //!
-//! WHY IT IS STILL HERE. Removing the test was built and measured on
-//! 2026-08-31 and turned the digest quadratic: at 128 KB the peak falls from
-//! 1,262,485,520 bytes to 4,194,320 and the wall time rises from 1.3 seconds to
-//! 68. The second 2026-08-31 entry in design/compiler-log.md has the curve. So
-//! the fix is a real fix and its first draft was a bad trade, and the entry
-//! this file exists to make red is a better one.
+//! The run happens from the grandparent and names `lib/app` and
+//! `elsewhere/app` on the command line, because `current_dir(at)` with a bare
+//! `.` stamps `./main.kso` in both arms and the directory never reaches
+//! `file`. `churn` is a tail loop that builds a list it drops and hands the
+//! next turn a list it keeps, which is the shape that needs the carry tier.
 //!
-//! WHAT THE FIRST DRAFTS GOT WRONG, so they are not re-derived. A nineteen-byte
-//! message put both arms under the arena's 1 MiB first block, where every
-//! program reads the same peak. `current_dir(at)` with a bare `.` argument
-//! stamps `./main.kso` in both arms, so the directory name never reaches `file`
-//! at all — the run happens from the grandparent and names `lib/app` and
-//! `elsewhere/app` on the command line. And a `std/` import reads `std/` in
-//! BOTH arms and so answers the same either way, which is a passing test that
-//! proves nothing; the loop under test is the package's own.
-//!
-//! WHY THE LOOP IS FIVE LINES AND NOT THE DIGEST. Until 2026-09-23 the package
-//! was a copy of lib/sha256, whose block loop carried a list of eight words
-//! from one block to the next. kanso#1580 rewrote the digest to carry the
-//! eight words as eight scalar arguments, and a loop that carries no list
-//! needs no carry tier, so both arms read 1,048,576 and the copy stopped
-//! showing the defect. The defect had not moved. `churn` below is the shape
-//! the digest used to have and nothing else: a tail loop that builds a list
-//! it drops and hands the next turn a list it keeps. Under `lib/` it reads
-//! 5,242,880; anywhere else, one block.
+//! Watched red with `|| d.file.starts_with("lib/")` put back in `beat.rs`:
+//! the peak under `lib/` reads 5,242,880.
 
 use std::process::Command;
 
@@ -73,18 +59,12 @@ fn peak_under(where_it_sits: &str) -> u64 {
         .unwrap_or_else(|| panic!("no arena_peak_bytes for {where_it_sits}/app in:\n{said}"))
 }
 
-/// Both numbers are pinned exactly. The one under `lib/` is what the defect
-/// costs; the one beside it is what the same sources cost anywhere else. When
-/// the two agree, this assertion is the thing to delete.
+/// Both numbers are pinned, and they are the same number.
 #[test]
-fn the_directory_a_package_sits_in_changes_its_memory() {
+fn the_directory_a_package_sits_in_does_not_change_its_memory() {
     let in_lib = peak_under("lib");
     let elsewhere = peak_under("elsewhere");
 
-    assert_eq!(in_lib, 5_242_880, "the peak under lib/ moved");
+    assert_eq!(in_lib, 1_048_576, "the peak under lib/ moved");
     assert_eq!(elsewhere, 1_048_576, "the peak outside lib/ moved");
-    assert_ne!(
-        in_lib, elsewhere,
-        "the directory stopped changing the program — delete this spec and say so"
-    );
 }

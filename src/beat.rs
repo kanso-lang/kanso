@@ -218,12 +218,17 @@ pub fn beat_loops(program: &Program, inference: &infer::Inference, mut_sites: &M
     // rewind is a pointer reset, and a module loop that earned one keeps
     // it. Groups with a synthetic arm stay out of everything — a bare clone
     // is a second spelling the analyses cannot see through.
+    //
+    // A shipped module's file is named `std/<module>/<file>`, and that prefix
+    // is the whole test. It also asked for `lib/` until 2026-10-10, which no
+    // shipped file carries and every user directory called `lib` does; see
+    // tests/a_program_is_not_its_directory.rs.
     let has_synthetic: crate::hash::Set<&str> =
         program.fns.iter().filter(|d| d.synthetic).map(|d| d.name.as_str()).collect();
     let imported: crate::hash::Set<&str> = program
         .fns
         .iter()
-        .filter(|d| d.file.starts_with("std/") || d.file.starts_with("lib/"))
+        .filter(|d| d.file.starts_with("std/"))
         .map(|d| d.name.as_str())
         .collect();
     ids.retain(|(name, _), _| !has_synthetic.contains(name.as_str()));
@@ -2807,10 +2812,18 @@ mod tests {
         // accumulator can dangle across a rewind. The string scanners share
         // the licence but not the entry: they are reached by a tail call,
         // and a demoted entry buys a plain beat, never a carried one.
-        let program = crate::compile_module(std::path::Path::new("lib/json"), false).unwrap();
+        //
+        // Read through an import, which is how a program meets the library.
+        // Until 2026-10-10 this compiled lib/json as a root and leaned on the
+        // carry boundary matching `lib/` as well as `std/`, which every user
+        // directory called `lib` matched too.
+        let src =
+            "import \"std/json\"\n\nprint (json/encode [1 2])\nprint (json/decode \"[1 2]\")\n";
+        let program = crate::compile_entry("main.kso", src).unwrap();
         let inference = infer::infer(&program);
         let loops = beat_loops(&program, &inference, &crate::linear::in_place_pushes(&program));
-        let mut licensed: Vec<(String, usize)> = loops.ids.into_keys().collect();
+        let mut licensed: Vec<(String, usize)> =
+            loops.ids.into_keys().filter(|(n, _)| n.starts_with("json/")).collect();
         licensed.sort();
         // The escaper's four-group cycle qualified for a day on 2026-09-07:
         // it threads the encoder's byte builder by identity, the licence the
