@@ -3189,13 +3189,41 @@ void k_beat_iter_carry(void) {
    since constants stopped being copied. A stale position left by an
    earlier loop at the same depth only makes the first lap stage early, and the
    cohort and the chain still call `k_beat_iter_carry` directly. */
+/* How far the arena has moved since a stage left it at `at_arena` in the block
+   `at_blocks`: the rest of that block, every block opened since, and what the
+   newest holds. Counting the newest at its full size made a stage of every
+   block opened, and a block opens on the first pass after a stage that leaves
+   the mark near a block's end. A block the chain no longer holds was rewound
+   past, which is as far as a lap can go. */
+static size_t k_drift_since(const KCarry* kc) {
+    size_t n = (size_t)(k_arena - (const char*)(k_blocks + 1));
+    for (const KBlock* b = k_blocks->next; b; b = b->next) {
+        if ((const void*)b == kc->at_blocks)
+            return n + (size_t)((const char*)(b + 1) + b->cap - kc->at_arena);
+        n += b->cap;
+    }
+    return (size_t)-1;
+}
+
+/* The wait grows with what the last stage copied. Once a loop's live state
+   outgrows tenure (K_TEN_CAP), every stage copies all of it, and a fixed
+   quarter megabyte of drift made that copy once per quarter megabyte of
+   garbage: the lox port's F18 loop ran 130,000 passes in 2.7 s and 160,000 in
+   99 s, the evacuations rising from 5.8 million to 139 million. Waiting for
+   twice the copy keeps the copying proportional to the garbage it reclaims,
+   which is the rule a copying collector sizes its heap by. A loop whose stages
+   copy little waits the quarter megabyte it always did, and only such a loop
+   still stages when the arena opens a block. */
 void k_beat_lap_carry(void) {
     long long d = k_beat_depth - 1;
     if (d < 0 || d >= K_BEAT_MAX) { k_beat_iter_carry(); return; }
     KCarry* kc = &k_carries[d];
-    if (kc->at_blocks == (const void*)k_blocks && kc->at_arena
-        && (size_t)(k_arena - kc->at_arena) < (size_t)(1 << 18)
-        && !(k_beat_stack[d].reg_any & ~K_REG_VIEW)) {
+    size_t wait = (size_t)1 << 18;
+    if (kc->used_flag && 2 * kc->from.used > wait) wait = 2 * kc->from.used;
+    if (kc->at_arena && !(k_beat_stack[d].reg_any & ~K_REG_VIEW)
+        && (kc->at_blocks == (const void*)k_blocks
+                ? (size_t)(k_arena - kc->at_arena) < wait
+                : wait > ((size_t)1 << 18) && k_drift_since(kc) < wait)) {
         if (K_COUNTING) k_stat_beat_iters++;
         kc->skipped = 1;
         return;
