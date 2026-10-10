@@ -1,0 +1,155 @@
+import "std/list"
+import "std/text"
+
+# A DIMACS CNF reader.
+#
+#   c a comment line
+#   p cnf <variables> <clauses>
+#   1 -3 0
+#   2 3 -1 0
+#
+# A clause is a run of nonzero integers ended by a 0, and may span lines.
+# Comment lines may appear anywhere. A line holding `%` ends the formula,
+# which is how the SATLIB benchmark files are terminated.
+#
+# The answer is a `formula`, or a `malformed` naming the line at fault. Bad
+# input is something a caller should report, so it travels as a value.
+#
+# The walk carries the clauses read so far, the clause being read and the
+# header as separate arguments. They began as one record, which natively
+# cost time quadratic in the number of clauses (FRICTION.md, F20).
+pub type formula
+  clauses
+  declared
+  variables
+
+pub type malformed
+  line
+  reason
+
+type header
+  clauses
+  variables
+
+# the state before the `p cnf` line has been read
+type headless
+
+fn blank? b
+  b == 32 or b == 9 or b == 13
+
+fn close bs start stop acc
+  return acc if stop <= start
+  push acc (text/utf8 (text/slice bs start (stop - 1)))
+
+fn digit? b
+  47 < b and b < 58
+
+fn end_of _ _ headless last
+  malformed (if (last == 0) 1 last) "no `p cnf` header line"
+
+fn end_of clauses current (header declared variables) last
+  open = "the last clause is not ended by a 0"
+  return malformed last open if 0 < length current
+  return mismatch last declared (length clauses) if declared != length clauses
+  formula clauses declared variables
+
+fn header_line lines i clauses current headless line
+  found = header_of (words line) i
+  return found if malformed? found
+  lines_from lines (i + 1) i clauses current found
+
+fn header_line _ i _ _ _ _
+  malformed i "a second `p` line"
+
+fn header_of ws line
+  shape = "expected `p cnf <variables> <clauses>`"
+  return malformed line shape if length ws != 4 or ws[1] != "p"
+  other = "only the cnf format is read, not `{ws[2]}`"
+  return malformed line other if ws[2] != "cnf"
+  header_or (number_of ws[3] line) (number_of ws[4] line) line
+
+fn header_or (malformed line reason) _ _
+  malformed line reason
+
+fn header_or vars count line
+  return count if malformed? count
+  negative = "a negative count in the header"
+  return malformed line negative if vars < 0 or count < 0
+  header count vars
+
+fn lines_from lines i seen clauses current head
+  return end_of clauses current head seen if i < 1 or length lines < i
+  line = text/trim lines[i]
+  return lines_from lines (i + 1) seen clauses current head if line == ""
+  return end_of clauses current head seen if line == "%"
+  lead = text/slice line 1 1
+  return lines_from lines (i + 1) i clauses current head if lead == "c"
+  return header_line lines i clauses current head line if lead == "p"
+  read_words lines i clauses current head (words line) 1
+
+fn literal lines i clauses current h ws k 0
+  read_words lines i (push clauses current) [] h ws (k + 1)
+
+fn literal _ _ _ _ _ _ _ (malformed line reason)
+  malformed line reason
+
+fn literal lines i clauses current h ws k n
+  { variables } = h
+  magnitude = if (n < 0) (0 - n) n
+  return too_big i n variables if variables < magnitude
+  read_words lines i clauses (push current n) h ws (k + 1)
+
+fn malformed? (malformed _ _)
+  true
+
+fn malformed? _
+  false
+
+fn mismatch line declared found
+  said = "the header declares {declared} clauses but {found} were read"
+  malformed line said
+
+fn number_of word line
+  return malformed line "`{word}` is not a number" if not numeric? word
+  text/to_int word
+
+fn numeric? word
+  bs = text/bytes word
+  return false if length bs == 0
+  start = if (bs[1] == 45) 2 1
+  start <= length bs and list/all? (text/slice bs start (length bs)) digit?
+
+pub fn parse text
+  lines_from (text/split text "\n") 1 0 [] [] headless
+
+fn read_words _ i _ _ headless _ _
+  malformed i "a clause appears before the `p cnf` header"
+
+fn read_words lines i clauses current h ws k
+  return lines_from lines (i + 1) i clauses current h if k < 1 or length ws < k
+  word = ws[k]
+  literal lines i clauses current h ws k (number_of word i)
+
+# A formula written back out as DIMACS text, with a comment line on top.
+pub fn render comment vars clauses
+  head = ["c {comment}" "p cnf {vars} {length clauses}"]
+  body = list/to_list (list/map clauses clause_line)
+  text/join (text/concat head body) "\n"
+
+fn clause_line lits
+  text/join (list/to_list (list/map (push lits 0) (l -> "{l}"))) " "
+
+fn too_big line n variables
+  malformed line "literal {n} names a variable past the declared {variables}"
+
+# The whitespace-separated words of a line. Tabs separate words too, which
+# `text/split` on a single separator cannot say.
+fn words line
+  bs = text/bytes line
+  words_from bs 1 1 []
+
+fn words_from bs i start acc
+  return close bs start i acc if i < 1 or length bs < i
+  b = bs[i]
+  return words_from bs (i + 1) (i + 1) (close bs start i acc) if blank? b
+  words_from bs (i + 1) start acc

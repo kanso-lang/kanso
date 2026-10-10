@@ -1,0 +1,9 @@
+c kanso-sat: 20 variables, 45 clauses
+c restart policy: luby, 100 conflicts a unit
+c conflicts: 29
+c decisions: 35
+c learnt literals: 124 (16 removed by minimization)
+c propagations: 294
+c restarts: 0
+s UNSATISFIABLE
+[exit 20]

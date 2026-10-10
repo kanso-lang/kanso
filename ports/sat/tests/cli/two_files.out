@@ -1,0 +1,6 @@
+sat: a second file `tests/solve/tidy.cnf`
+usage: sat solve [--luby | --geometric] [file.cnf | -]
+       sat gen pigeonhole <holes>
+       sat gen queens <n>
+       sat gen random <variables> <clauses> <seed>
+[exit 1]

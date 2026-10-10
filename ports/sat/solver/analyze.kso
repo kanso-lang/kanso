@@ -1,0 +1,175 @@
+import "std/bits"
+import "std/text"
+
+# Conflict analysis to the first unique implication point.
+#
+# Starting from the conflicting clause, walk the trail backwards resolving on
+# the reason of each current-level literal met, until a single literal of the
+# current decision level remains. Its negation, with the lower-level literals
+# collected on the way, is the learnt clause: asserting after a backjump to
+# the highest level among the others.
+#
+# Every variable met has its activity bumped, and so does every learnt clause
+# that took part.
+type learned
+  clause
+  db
+  level
+  order
+  removed
+
+# a literal minimization could not remove
+type stays
+
+# the marks and the literals still to read, part way through a walk
+type pending
+  seen
+  stack
+
+# the state of the backward walk, kept between clauses
+type scanned
+  order
+  out
+  path
+  seen
+
+pub fn analyze tr db confl ord
+  { assigns size } = tr
+  unseen = vec_of (slots assigns) 0
+  walk tr db confl (scanned ord [0] 0 unseen) 0 size
+
+fn walk tr db confl state p index
+  { clauses } = db
+  c = slot clauses confl
+  bumped = bump_clause db confl
+  scanned order out path seen = scan tr c 1 p (decision_level tr) state
+  { trail } = tr
+  at = seek tr seen index
+  pl = slot trail at
+  v = pl / 2
+  { reason } = tr
+  return learned_from tr bumped order out seen pl if path == 1
+  next = scanned order out (path - 1) (set_at seen v 0)
+  r = slot reason v
+  walk tr bumped r next pl (at - 1)
+
+fn learned_from tr db order out seen pl
+  uip_first = text/concat [(neg pl)] (text/slice out 2 (length out))
+  { clauses } = db
+  abstract = abstraction tr uip_first 2 0
+  kept = minimize tr clauses seen uip_first 2 [(neg pl)] abstract
+  placed = second_highest tr kept
+  removed = length uip_first - length kept
+  learned placed db (backjump_level tr placed) order removed
+
+# Every literal of the clause but `p`, the one it forced (0 for the
+# conflicting clause, which forced nothing).
+fn scan tr c j p dl state
+  return state if j < 1 or length c < j
+  q = c[j]
+  return scan tr c (j + 1) p dl state if q == p
+  scan tr c (j + 1) p dl (meet tr q dl state)
+
+fn meet tr q dl (scanned order out path seen)
+  v = q / 2
+  { level } = tr
+  lv = slot level v
+  return scanned order out path seen if slot seen v == 1 or lv == 0
+  marked = set_at seen v 1
+  return scanned (bump_var order v) out (path + 1) marked if dl <= lv
+  scanned (bump_var order v) (push out q) path marked
+
+# The highest trail position at or below `at` whose variable is marked.
+fn seek tr seen at
+  { trail } = tr
+  l = slot trail at
+  return at if slot seen (l / 2) == 1
+  seek tr seen (at - 1)
+
+# A literal is dropped when it is implied by the rest of the clause: when
+# every literal of its reason is in the clause, fixed at level 0, or itself
+# implied the same way, recursively. This is minisat's deep minimization.
+#
+# The search is cut short with minisat's abstraction of the clause's
+# decision levels: a literal from a level no clause literal shares can never
+# be removed, so the walk gives up on meeting one.
+fn minimize tr cls seen lits i kept abstract
+  { reason } = tr
+  return kept if i < 1 or length lits < i
+  q = lits[i]
+  r = slot reason (q / 2)
+  return minimize tr cls seen lits (i + 1) (push kept q) abstract if r == 0
+  verdict = implied tr cls seen [q] abstract
+  return minimize tr cls verdict lits (i + 1) kept abstract if implied? verdict
+  minimize tr cls seen lits (i + 1) (push kept q) abstract
+
+# One bit per decision level, modulo 64: a cheap superset test.
+fn abstract_level tr v
+  { level } = tr
+  bits/shl 1 (slot level v % 64)
+
+fn abstraction tr lits i acc
+  return acc if i < 1 or length lits < i
+  l = lits[i]
+  abstraction tr lits (i + 1) (acc | abstract_level tr (l / 2))
+
+# The walk for one literal: `stack` holds implied literals whose reasons are
+# still to be read. The answer is the marks extended by everything shown
+# implied, or `stays`. On `stays` the caller keeps its own marks, so a
+# failed walk needs no undoing.
+fn implied tr cls seen stack abstract
+  { reason } = tr
+  return seen if length stack == 0
+  q = stack[length stack]
+  rest = text/slice stack 1 (length stack - 1)
+  c = slot cls (slot reason (q / 2))
+  step = reasons_of tr c 1 (pending seen rest) abstract
+  return stays if step == stays
+  pending marked more = step
+  implied tr cls marked more abstract
+
+fn implied? stays
+  false
+
+fn implied? _
+  true
+
+fn reasons_of tr c j step abstract
+  { level reason } = tr
+  return step if j < 1 or length c < j
+  p = c[j]
+  v = p / 2
+  pending seen stack = step
+  return reasons_of tr c (j + 1) step abstract if slot seen v == 1
+  return reasons_of tr c (j + 1) step abstract if slot level v == 0
+  shared = abstract_level tr v & abstract != 0
+  return stays if slot reason v == 0 or not shared
+  more = pending (set_at seen v 1) (push stack p)
+  reasons_of tr c (j + 1) more abstract
+
+# The literal of highest level after the first is moved to position 2, so it
+# is watched beside the asserting literal and is the first to be unassigned.
+fn second_highest tr lits
+  return lits if length lits < 3
+  swap lits 2 (highest tr lits 3 2)
+
+fn highest tr lits i best
+  { level } = tr
+  return best if i < 1 or length lits < i
+  a = lits[i]
+  b = lits[best]
+  highest tr lits (i + 1) (if (slot level (b / 2) < slot level (a / 2)) i best)
+
+fn backjump_level tr lits
+  { level } = tr
+  return 0 if length lits < 2
+  l = lits[2]
+  slot level (l / 2)
+
+# Positions a and b exchanged, a before b.
+fn swap c a b
+  x = c[a]
+  y = c[b]
+  front = push (text/slice c 1 (a - 1)) y
+  middle = push (text/concat front (text/slice c (a + 1) (b - 1))) x
+  text/concat middle (text/slice c (b + 1) (length c))

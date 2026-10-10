@@ -1,0 +1,38 @@
+import "../solver"
+import "std/list"
+import "std/text"
+
+fn literal_count lines
+  words = list/fold lines [] (acc l -> text/concat acc (text/split l " "))
+  length (list/to_list (list/reject words (w -> w == "v" or w == "0")))
+
+fn widest lines
+  list/max (list/to_list (list/map lines (l -> length l)))
+
+geometric_set = options "" solver/geometric
+
+one_file = options "f.cnf" solver/luby
+
+many = list/to_list (list/map (list/take list/naturals 300) (n -> 0 - n))
+
+second_file = unusable "sat: a second file `g.cnf`"
+
+test_option_flags = option "--geometric" unset == geometric_set
+
+test_option_one_file = option "f.cnf" unset == options "f.cnf" solver/luby
+
+test_option_second_file = option "g.cnf" one_file == second_file
+
+test_option_unknown = option "--fast" unset == unknown_option
+
+test_value_lines_end_in_zero = value_lines [1 -2] 1 "v" [] == ["v 1 -2 0"]
+
+test_value_lines_fit = widest wrapped <= 80
+
+test_value_lines_keep_every_literal = literal_count wrapped == 300
+
+unknown_option = unusable "sat: no option `--fast`"
+
+unset = options "" solver/luby
+
+wrapped = value_lines many 1 "v" []

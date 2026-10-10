@@ -1,0 +1,221 @@
+import "std/list"
+
+# The CDCL loop: propagate; on a conflict learn a clause and backjump; when
+# quiet, decide the most active unassigned variable; restart when the
+# conflict budget for this run is spent.
+pub type geometric
+
+pub type luby
+
+# The answer for a satisfiable formula: `model` maps each variable to 1 or -1.
+pub type satisfied
+  counts
+  model
+
+pub type unsatisfied
+  counts
+
+pub type stats
+  conflicts
+  decisions
+  learnt
+  propagations
+  removed
+  restarts
+
+type asserted
+  assigned
+  db
+
+# a run that spent its conflict budget and is about to begin again
+type restarting
+  solver
+
+type rewound
+  order
+  trail
+
+type solver
+  assigned
+  counts
+  db
+  max_learnts
+  order
+  vars
+
+# The literals of one input clause, sorted with duplicates removed: answers
+# none for a tautology or a clause already true at level 0, otherwise the
+# literals not already false.
+fn cleaned assigns ds
+  sorted = list/sort (list/to_list (list/map ds lit_of))
+  unique = dedup sorted 1 []
+  return none if tautology? unique 1
+  return none if list/any? unique (l -> value_of assigns l == 1)
+  list/to_list (list/select unique (l -> value_of assigns l == 0))
+
+fn dedup xs i acc
+  return acc if i < 1 or length xs < i
+  x = xs[i]
+  return dedup xs (i + 1) acc if 0 < length acc and acc[length acc] == x
+  dedup xs (i + 1) (push acc x)
+
+# sorted, so a literal and its negation sit next to each other
+fn tautology? lits i
+  return false if i < 1 or length lits < i + 1
+  a = lits[i]
+  b = lits[i + 1]
+  return true if a / 2 == b / 2
+  tautology? lits (i + 1)
+
+fn add_all (unsatisfied counts) _ _
+  unsatisfied counts
+
+fn add_all s clauses i
+  { assigned } = s
+  { assigns } = assigned
+  return s if i < 1 or length clauses < i
+  add_all (add_clause s (cleaned assigns clauses[i])) clauses (i + 1)
+
+fn add_clause s none
+  s
+
+fn add_clause s lits
+  solver assigned counts db max_learnts order vars = s
+  return unsatisfied counts if length lits == 0
+  return unit s lits[1] if length lits == 1
+  added grown _ = attach db lits false
+  solver assigned counts grown max_learnts order vars
+
+fn unit (solver assigned counts db max_learnts order vars) l
+  settle (solver (enqueue assigned l 0) counts db max_learnts order vars)
+
+# Propagate a unit found while loading: a conflict at level 0 refutes.
+fn settle (solver assigned counts db max_learnts order vars)
+  { clauses watches } = db
+  { propagations } = counts
+  swept = propagate assigned clauses watches propagations
+  propagated cls confl props tr wat = swept
+  fresh = rewatched db cls wat
+  tallied = with_props counts props
+  return unsatisfied tallied if confl != 0
+  solver tr tallied fresh max_learnts order vars
+
+fn rewatched (database activity _ inc learnts next _) cls wat
+  database activity cls inc learnts next wat
+
+fn with_props (stats conflicts decisions learnt _ removed restarts) props
+  stats conflicts decisions learnt props removed restarts
+
+# the luby sequence 1 1 2 1 1 2 4 1 1 2 1 1 2 4 8 ..., from x = 0
+fn luby_of x
+  luby_find x 1 0
+
+fn luby_find x size seq
+  return luby_find x (2 * size + 1) (seq + 1) if size < x + 1
+  luby_down x size seq
+
+fn luby_down x size seq
+  return power 2 seq if size - 1 == x
+  smaller = (size - 1) / 2
+  luby_down (x % smaller) smaller (seq - 1)
+
+fn power _ 0
+  1
+
+fn power b e
+  b * power b (e - 1)
+
+fn budget geometric 0
+  100
+
+fn budget geometric k
+  budget geometric (k - 1) * 3 / 2
+
+fn budget luby k
+  100 * luby_of k
+
+pub fn solve vars clauses strategy
+  start = solver
+    (fresh_assignment vars)
+    (stats 0 0 0 0 0 0)
+    (fresh_database vars)
+    0
+    (fresh_ordering vars)
+    vars
+  begin (add_all start clauses 1) (length clauses / 3 + 10) strategy
+
+fn begin (unsatisfied counts) _ _
+  unsatisfied counts
+
+fn begin (solver assigned counts db _ order vars) limit strategy
+  first = solver assigned counts db limit order vars
+  run_restarts (restarting first) 0 strategy
+
+fn run_restarts (restarting s) k strategy
+  run_restarts (search s (budget strategy k) 0) (k + 1) strategy
+
+fn run_restarts verdict _ _
+  verdict
+
+fn search s allowed spent
+  solver assigned counts db max_learnts order vars = s
+  { clauses watches } = db
+  { propagations } = counts
+  swept = propagate assigned clauses watches propagations
+  propagated cls confl props tr wat = swept
+  fresh = rewatched db cls wat
+  now = solver tr (with_props counts props) fresh max_learnts order vars
+  return quiet now allowed spent if confl == 0
+  conflicted now confl allowed spent
+
+fn conflicted s confl allowed spent
+  solver assigned counts db max_learnts order vars = s
+  stats conflicts decisions learnt propagations removed restarts = counts
+  at_root = stats (conflicts + 1) decisions learnt propagations removed restarts
+  return unsatisfied at_root if decision_level assigned == 0
+  learned clause grown back ord cut = analyze assigned db confl order
+  more = learnt + length clause
+  less = removed + cut
+  tallied = stats (conflicts + 1) decisions more propagations less restarts
+  rewound bumped tr = cancel_until assigned back ord
+  asserted after kept = learn tr (decay_clauses grown) clause
+  next_solver = solver after tallied kept max_learnts (decay_var bumped) vars
+  search next_solver allowed (spent + 1)
+
+fn learn tr db clause
+  first = clause[1]
+  return asserted (enqueue tr first 0) db if length clause == 1
+  added grown id = attach db clause true
+  asserted (enqueue tr first id) (bump_clause grown id)
+
+fn quiet s allowed spent
+  { assigned db max_learnts } = s
+  { learnts } = db
+  { size } = assigned
+  return restart s if allowed <= spent
+  trimmed = if (max_learnts <= length learnts - size) (reduce s) s
+  decide trimmed allowed spent
+
+fn restart (solver assigned counts db max_learnts order vars)
+  rewound ord tr = cancel_until assigned 0 order
+  stats conflicts decisions learnt propagations removed restarts = counts
+  tallied = stats conflicts decisions learnt propagations removed (restarts + 1)
+  restarting (solver tr tallied db (max_learnts * 11 / 10) ord vars)
+
+fn decide s allowed spent
+  solver assigned counts db max_learnts order vars = s
+  popped ord v = pop order
+  { assigns } = assigned
+  { phase } = ord
+  return finished assigned counts if v == 0
+  skipped = solver assigned counts db max_learnts ord vars
+  return decide skipped allowed spent if slot assigns v != 0
+  l = if (slot phase v == 1) (2 * v) (2 * v + 1)
+  stats conflicts decisions learnt propagations removed restarts = counts
+  tallied = stats conflicts (decisions + 1) learnt propagations removed restarts
+  tr = enqueue (new_level assigned) l 0
+  search (solver tr tallied db max_learnts ord vars) allowed spent
+
+fn finished assigned counts
+  { assigns } = assigned
+  satisfied counts assigns

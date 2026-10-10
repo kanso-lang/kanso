@@ -1,0 +1,119 @@
+# VSIDS: every variable carries an activity, bumped each time the variable
+# takes part in a conflict, with the bump growing geometrically so that old
+# bumps fade. Unassigned variables wait in a binary max-heap on activity, and
+# the next decision is the most active variable still unassigned.
+#
+# `heap` holds variables by heap position, 1-based, and `index` maps a
+# variable back to its position, 0 when it is not in the heap. `phase` is the
+# value each variable last held, which is the polarity it is decided with.
+type popped
+  order
+  var
+
+type ordering
+  activity
+  heap
+  inc
+  index
+  phase
+  size
+
+# A variable's activity is rescaled before it passes this, so that the
+# floats never overflow. 1e100, which no float literal can spell.
+big = ten_to 100 1.0
+
+fn bump_var (ordering activity heap inc index phase size) v
+  raised = slot activity v + inc
+  ord = ordering (set_at activity v raised) heap inc index phase size
+  return rescaled ord v if big < raised
+  at = slot index v
+  if (at == 0) ord (sift_up ord at)
+
+fn decay_var (ordering activity heap inc index phase size)
+  ordering activity heap (inc / 0.95) index phase size
+
+fn fresh_ordering vars
+  zeros = vec_of vars 0
+  start = ordering (vec_of vars 0.0) zeros 1.0 zeros (vec_of vars -1) 0
+  insert_all start 1 vars
+
+fn insert ord v
+  ordering activity heap inc index phase size = ord
+  return ord if slot index v != 0
+  at = size + 1
+  placed = set_at index v at
+  sift_up (ordering activity (set_at heap at v) inc placed phase at) at
+
+fn insert_all ord v vars
+  return ord if vars < v
+  insert_all (insert ord v) (v + 1) vars
+
+fn more_active? activity a b
+  slot activity b < slot activity a
+
+# Take the most active variable out of the heap: 0 when the heap is empty.
+fn pop (ordering activity heap inc index phase 0)
+  popped (ordering activity heap inc index phase 0) 0
+
+fn pop (ordering activity heap inc index phase size)
+  top = slot heap 1
+  last = slot heap size
+  index_moved = set_at (set_at index last 1) top 0
+  heap_moved = set_at heap 1 last
+  shrunk = ordering activity heap_moved inc index_moved phase (size - 1)
+  popped (sift_down shrunk 1) top
+
+# Every activity, and the increment, scaled down by 1e100 together. The
+# order between variables is unchanged, so the heap needs no repair.
+fn rescaled (ordering activity heap inc index phase size) v
+  scaled = scale activity 1 (slots activity)
+  ord = ordering scaled heap (inc / big) index phase size
+  at = slot index v
+  if (at == 0) ord (sift_up ord at)
+
+fn save_phase (ordering activity heap inc index phase size) l
+  v = l / 2
+  ord = ordering activity heap inc index (set_at phase v (sign_of l)) size
+  insert ord v
+
+fn scale activity i n
+  return activity if n < i
+  scale (set_at activity i (slot activity i / big)) (i + 1) n
+
+fn sift_down ord at
+  { size } = ord
+  return ord if size < 2 * at
+  sink ord at
+
+fn sink ord at
+  ordering activity heap inc index phase size = ord
+  x = slot heap at
+  child = bigger_child activity heap (2 * at) size
+  y = slot heap child
+  return ord if not more_active? activity y x
+  heap_swapped = set_at (set_at heap at y) child x
+  index_swapped = set_at (set_at index y at) x child
+  sift_down (ordering activity heap_swapped inc index_swapped phase size) child
+
+fn bigger_child activity heap c size
+  return c if size < c + 1
+  right = slot heap (c + 1)
+  left = slot heap c
+  if (more_active? activity right left) (c + 1) c
+
+fn sift_up ord at
+  ordering activity heap inc index phase size = ord
+  x = slot heap at
+  up = at / 2
+  return ord if at < 2
+  y = slot heap up
+  return ord if not more_active? activity x y
+  heap_swapped = set_at (set_at heap at y) up x
+  index_swapped = set_at (set_at index y at) x up
+  sift_up (ordering activity heap_swapped inc index_swapped phase size) up
+
+fn ten_to 0 x
+  x
+
+fn ten_to n x
+  ten_to (n - 1) (x * 10.0)

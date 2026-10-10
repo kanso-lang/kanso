@@ -1,0 +1,52 @@
+import "std/list"
+
+fn clause_count (family clauses _)
+  length clauses
+
+fn first_clause (family clauses _)
+  clauses[1]
+
+fn variables (family _ vars)
+  vars
+
+fn widths (family clauses _)
+  list/to_list (list/map clauses (c -> length c))
+
+# n + 1 "somewhere" clauses and n holes of C(n + 1, 2) "not both" clauses
+test_pigeonhole_counts = clause_count (pigeonhole 3) == 4 + 3 * 6
+
+test_pigeonhole_first = first_clause (pigeonhole 3) == [1 2 3]
+
+test_pigeonhole_variables = variables (pigeonhole 3) == 12
+
+# 4 rows, 4 row pairs-of-6, 4 column pairs-of-6, and the diagonal pairs
+test_queens_counts = clause_count (queens 4) == 4 + 24 + 24 + 28
+
+test_queens_one = clause_count (queens 1) == 1
+
+test_random_is_reproducible = random_ksat 20 50 3 9 == random_ksat 20 50 3 9
+
+test_random_seeds_differ = random_ksat 20 50 3 9 != random_ksat 20 50 3 10
+
+test_random_widths = list/all? (widths (random_ksat 20 50 3 9)) (w -> w == 3)
+
+test_random_variables_distinct = list/all? (clauses_of crowded) distinct?
+
+fn clauses_of (family clauses _)
+  clauses
+
+crowded = random_ksat 5 40 3 1
+
+fn distinct? c
+  a = magnitude c[1]
+  b = magnitude c[2]
+  d = magnitude c[3]
+  a != b and a != d and b != d
+
+# a clause shorter than three has no third literal, and a missing literal
+# is no variable at all
+fn magnitude none
+  0
+
+fn magnitude n
+  if (n < 0) (0 - n) n

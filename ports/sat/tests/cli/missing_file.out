@@ -1,0 +1,2 @@
+sat: no such file: tests/solve/no_such_file.cnf
+[exit 1]

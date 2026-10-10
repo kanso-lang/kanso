@@ -1,0 +1,31 @@
+import "std/list"
+
+# Checking an answer against the formula it answers, independently of the
+# search: every input clause must hold a literal the model makes true. The
+# answer is the 1-based positions of the clauses that do not.
+pub fn falsified model clauses
+  positions clauses 1 []
+    . list/select (i -> not holds? model clauses i)
+    . list/to_list
+
+fn holds? model clauses i
+  ds = clauses[i]
+  list/any? ds (d -> true_in? model d)
+
+fn positions xs i acc
+  return acc if i < 1 or length xs < i
+  positions xs (i + 1) (push acc i)
+
+fn true_in? model d
+  return slot model d == 1 if 0 < d
+  slot model (0 - d) == -1
+
+# The model as DIMACS literals, 1 to n, each signed by its value.
+pub fn literals model vars
+  positions_to vars 1 []
+    . list/map (v -> if (slot model v == 1) v (0 - v))
+    . list/to_list
+
+fn positions_to n i acc
+  return acc if n < i
+  positions_to n (i + 1) (push acc i)

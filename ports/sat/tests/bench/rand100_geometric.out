@@ -1,0 +1,9 @@
+c kanso-sat: 100 variables, 426 clauses
+c restart policy: geometric, 100 conflicts growing by half
+c conflicts: 764
+c decisions: 875
+c learnt literals: 5132 (1508 removed by minimization)
+c propagations: 18088
+c restarts: 3
+s UNSATISFIABLE
+[exit 20]

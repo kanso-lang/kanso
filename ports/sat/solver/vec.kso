@@ -1,0 +1,81 @@
+import "std/bits"
+import "std/text"
+
+# Arrays you can overwrite by position, which the language does not provide
+# (a list has no indexed update, and an int-keyed map is fast natively only
+# while no read precedes the write; see FRICTION.md F1 to F3).
+#
+# A vector is a tree of lists 32 wide, 1-based from the outside. A tree of
+# depth d holds 32^d slots, and writing a slot copies one list per level, so
+# a write costs about 32 * d element copies: 64 up to a thousand slots, 96
+# up to thirty-two thousand.
+type vec
+  depth
+  root
+  size
+
+fn extended (vec depth root size) x
+  return extended (vec (depth + 1) [root] size) x if size == span (depth + 1)
+  vec depth (put_in root depth size x) (size + 1)
+
+fn extended_to v n x
+  return v if n <= slots v
+  extended_to (extended v x) n x
+
+fn get_in node 1 idx
+  node[(idx & 31) + 1]
+
+fn get_in node d idx
+  child = node[digit idx d]
+  get_in child (d - 1) idx
+
+# the 1-based position, within a node at depth d, of the child holding idx
+fn digit idx d
+  (bits/shr idx (5 * d - 5) & 31) + 1
+
+fn put_in node 1 idx x
+  with_slot node ((idx & 31) + 1) x
+
+fn put_in node d idx x
+  at = digit idx d
+  child = if (at <= length node) node[at] []
+  with_slot node at (put_in child (d - 1) idx x)
+
+# x at position i, which is either a slot the list has or the one after
+fn with_slot xs i x
+  return push xs x if length xs < i
+  front = push (text/slice xs 1 (i - 1)) x
+  text/concat front (text/slice xs (i + 1) (length xs))
+
+fn set_at (vec depth root size) i x
+  vec depth (put_in root depth (i - 1) x) size
+
+fn slot (vec depth root _) i
+  get_in root depth (i - 1)
+
+fn slots (vec _ _ size)
+  size
+
+# how many slots one child at depth d covers: 32^(d - 1)
+fn span 1
+  1
+
+fn span 2
+  32
+
+fn span 3
+  1024
+
+fn span 4
+  32768
+
+fn span 5
+  1048576
+
+fn span d
+  32 * span (d - 1)
+
+fn vec_of n x
+  extended_to empty_vec n x
+
+empty_vec = vec 1 [] 0

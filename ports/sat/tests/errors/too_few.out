@@ -1,0 +1,2 @@
+sat: line 2: the header declares 2 clauses but 1 were read
+[exit 1]

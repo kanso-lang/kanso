@@ -1,0 +1,31 @@
+# PERFORMANCE BUG: naming a map read before writing the same map back turns
+# an in-place update into one whose cost grows with the number of writes.
+#
+# `inline` and `named` compute the same thing. The only difference is that
+# `named` binds `m[i]` to `v` on its own line before the `put`, which is the
+# shape the exhaustiveness checker pushes you toward (a read handed straight
+# to a function is refused, a read bound to a name is not).
+#
+# Measured on a release build with --counters, 20,000 updates over 100 keys:
+#   inline: 0.03 s, alloc_bytes=8,304,          put_mut_fast=95
+#   named:  51 s,   alloc_bytes=8,083,537,392,  held_peak_bytes=6,464,640,000
+# The interpreter runs either in 0.03 s. Expected: native costs the same for
+# both, as the interpreter does.
+pub fn fill m i n
+  return m if n < i
+  fill (put m i 0) (i + 1) n
+
+pub fn inline m k steps n
+  return m if steps == 0
+  i = k % n + 1
+  inline (put m i (m[i] + 1)) ((k * 7 + 3) % 1000003) (steps - 1) n
+
+pub fn named m k steps n
+  return m if steps == 0
+  i = k % n + 1
+  v = m[i]
+  named (put m i (v + 1)) ((k * 7 + 3) % 1000003) (steps - 1) n
+
+pub fn total m i n acc
+  return acc if n < i
+  total m (i + 1) n (acc + m[i])

@@ -1,0 +1,11 @@
+c kanso-sat: 0 variables, 0 clauses
+c restart policy: luby, 100 conflicts a unit
+c conflicts: 0
+c decisions: 0
+c learnt literals: 0 (0 removed by minimization)
+c propagations: 0
+c restarts: 0
+c model checked: all 0 clauses satisfied
+s SATISFIABLE
+v 0
+[exit 10]

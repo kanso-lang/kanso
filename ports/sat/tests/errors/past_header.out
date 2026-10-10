@@ -1,0 +1,2 @@
+sat: line 2: literal 3 names a variable past the declared 2
+[exit 1]

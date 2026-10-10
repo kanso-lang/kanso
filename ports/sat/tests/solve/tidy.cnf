@@ -1,0 +1,5 @@
+c a tautology, duplicate literals and a variable no clause mentions
+p cnf 4 3
+1 -1 2 0
+2 2 -3 2 0
+3 3 0

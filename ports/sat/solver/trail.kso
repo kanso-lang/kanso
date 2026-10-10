@@ -1,0 +1,60 @@
+import "std/text"
+
+# The assignment: every variable's value, the decision level it was set at
+# and the clause that forced it (0 for a decision), plus the trail that
+# records the order of assignment.
+#
+# `trail` holds literals by position, and `size` says how much of it is
+# live: backtracking lowers `size` and leaves the dead slots to be
+# overwritten. `lim` holds, for each decision level, the trail size at the
+# moment its decision was made. `qhead` is the next trail position
+# propagation has not yet looked at.
+type assignment
+  assigns
+  level
+  lim
+  qhead
+  reason
+  size
+  trail
+
+fn advance (assignment assigns level lim qhead reason size trail)
+  assignment assigns level lim (qhead + 1) reason size trail
+
+# Undo every assignment above decision level `to`. Each undone variable keeps
+# its last value as its saved phase and goes back into the decision heap.
+fn cancel_until tr to ord
+  { assigns level lim reason size trail } = tr
+  return rewound ord tr if length lim <= to
+  bound = lim[to + 1]
+  shorter = text/slice lim 1 to
+  cut = assignment assigns level shorter (bound + 1) reason bound trail
+  undo cut ord size
+
+fn decision_level (assignment _ _ lim _ _ _ _)
+  length lim
+
+fn enqueue (assignment assigns level lim qhead reason size trail) l cid
+  v = l / 2
+  at = size + 1
+  set = set_at assigns v (sign_of l)
+  leveled = set_at level v (length lim)
+  forced = set_at reason v cid
+  assignment set leveled lim qhead forced at (set_at trail at l)
+
+fn fresh_assignment vars
+  zeros = vec_of vars 0
+  assignment zeros zeros [] 1 zeros 0 (vec_of vars 0)
+
+fn new_level (assignment assigns level lim qhead reason size trail)
+  assignment assigns level (push lim size) qhead reason size trail
+
+# Positions above the live size, from `at` down, are unassigned one by one.
+fn undo tr ord at
+  { size trail } = tr
+  return rewound ord tr if at <= size
+  l = slot trail at
+  undo (unassign tr (l / 2)) (save_phase ord l) (at - 1)
+
+fn unassign (assignment assigns level lim qhead reason size trail) v
+  assignment (set_at assigns v 0) level lim qhead reason size trail

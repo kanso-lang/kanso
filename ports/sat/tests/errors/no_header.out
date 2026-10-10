@@ -1,0 +1,2 @@
+sat: line 2: a clause appears before the `p cnf` header
+[exit 1]

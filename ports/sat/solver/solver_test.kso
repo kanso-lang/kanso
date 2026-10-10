@@ -1,0 +1,84 @@
+import "std/text"
+
+# End-to-end answers on formulas small enough to check by hand, and the
+# pieces the search is assembled from.
+fn satisfies? (satisfied _ model) clauses
+  length (falsified model clauses) == 0
+
+fn satisfies? (unsatisfied _) _
+  false
+
+fn conflicts_of (satisfied (stats conflicts _ _ _ _ _) _)
+  conflicts
+
+fn conflicts_of (unsatisfied (stats conflicts _ _ _ _ _))
+  conflicts
+
+fn refuted? (unsatisfied _)
+  true
+
+fn refuted? _
+  false
+
+chain = [[1 2] [-1 2] [-2 3] [-3 -1]]
+
+contradiction = [[1] [-1]]
+
+# every assignment of three variables falsifies one of these eight clauses
+cube = text/concat cube_low cube_high
+
+cube_high = [[-1 2 3] [-1 2 -3] [-1 -2 3] [-1 -2 -3]]
+
+cube_low = [[1 2 3] [1 2 -3] [1 -2 3] [1 -2 -3]]
+
+test_chain_is_satisfied = satisfies? (solve 3 chain luby) chain
+
+test_cleaned_drops_duplicates = cleaned (vec_of 3 0) [1 1 -2] == [2 5]
+
+test_cleaned_drops_false_literals = cleaned two_true [1 -2] == [2]
+
+test_cleaned_skips_satisfied = cleaned (set_at (vec_of 3 0) 1 1) [1 -2] == none
+
+test_cleaned_skips_tautologies = cleaned (vec_of 3 0) [1 -1 2] == none
+
+test_contradiction_is_refuted = refuted? (solve 1 contradiction luby)
+
+test_cube_is_refuted = refuted? (solve 3 cube geometric)
+
+test_cube_needs_conflicts = 0 < conflicts_of (solve 3 cube luby)
+
+test_empty_clause_is_refuted = refuted? (solve 2 [[1 2] []] luby)
+
+test_falsified_names_positions = falsified all_false mixed == [1]
+
+test_geometric_budgets = list_of (&budget geometric) 4 == [100 150 225 337]
+
+test_literal_codes = lit_of 3 == 6 and lit_of -3 == 7 and dimacs_of 7 == -3
+
+test_literals_of_model = literals (set_at (vec_of 3 1) 2 -1) 3 == [1 -2 3]
+
+test_luby_sequence = list_of luby_of 15 == [1 1 2 1 1 2 4 1 1 2 1 1 2 4 8]
+
+test_negation_flips_sign = neg (lit_of 5) == lit_of -5
+
+test_no_clauses_is_satisfied = satisfies? (solve 2 [] luby) []
+
+test_unused_variable_is_assigned = literals lonely 3 == [1 -2 -3]
+
+all_false = vec_of 2 -1
+
+fn list_of f n
+  list_onto f 0 n []
+
+fn list_onto f i n acc
+  return acc if n <= i
+  list_onto f (i + 1) n (push acc (f i))
+
+fn model_of (satisfied _ model)
+  model
+
+lonely = model_of (solve 3 [[1]] luby)
+
+mixed = [[1] [-1] [2 -2]]
+
+two_true = set_at (vec_of 3 0) 2 1

@@ -1,0 +1,15 @@
+# name             generator arguments    solve flags   oracle
+php4               pigeonhole 4           --luby        yes
+php5               pigeonhole 5           --luby        yes
+php5_geometric     pigeonhole 5           --geometric   yes
+php6               pigeonhole 6           --luby        no
+queens3            queens 3               --luby        yes
+queens6            queens 6               --luby        yes
+queens8            queens 8               --luby        yes
+queens10           queens 10              --geometric   no
+rand50_sat         random 50 213 7        --luby        yes
+rand75_unsat       random 75 320 11       --luby        no
+rand100_unsat      random 100 426 1       --luby        no
+rand100_geometric  random 100 426 2       --geometric   no
+rand100_sat        random 100 426 21      --luby        no
+rand120_sat        random 120 511 5       --geometric   no

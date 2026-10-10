@@ -1,0 +1,3 @@
+test_grown_is_the_function = length (grown [] 5) == 1
+
+test_done_is_the_function = finished 1 == 2

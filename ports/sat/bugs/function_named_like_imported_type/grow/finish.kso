@@ -1,0 +1,7 @@
+# The same with the ambient marker `done`: `kanso run` calls this function,
+# `kanso test` reports "`<done>` is not callable".
+pub fn done x
+  x + 1
+
+pub fn finished x
+  done x

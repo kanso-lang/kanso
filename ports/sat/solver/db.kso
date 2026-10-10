@@ -1,0 +1,53 @@
+# The clause database. A clause is a list of literals under an id; learnt
+# clauses also carry an activity, bumped when they take part in a conflict,
+# and the least active half is thrown away when there are too many. An
+# original clause has activity -1.0, which marks it as not learnt.
+type database
+  activity
+  clauses
+  inc
+  learnts
+  next
+  watches
+
+type added
+  db
+  id
+
+fn attach (database activity clauses inc learnts next watches) c learnt
+  a = c[1]
+  b = c[2]
+  wa = slot watches a
+  linked = set_at watches a (push wa next)
+  wb = slot linked b
+  known = if learnt (push learnts next) learnts
+  rated = extended activity (if learnt 0.0 -1.0)
+  watching = set_at linked b (push wb next)
+  db = database rated (extended clauses c) inc known (next + 1) watching
+  added db next
+
+# 1e20, past which every clause activity is scaled down
+clause_big = ten_to 20 1.0
+
+# Only learnt clauses have an activity; an original clause is left alone.
+fn bump_clause db cid
+  database activity clauses inc learnts next watches = db
+  a = slot activity cid
+  return db if a < 0.0
+  raised = a + inc
+  bumped = set_at activity cid raised
+  kept = database bumped clauses inc learnts next watches
+  return kept if raised <= clause_big
+  scaled = scale_all bumped learnts 1
+  database scaled clauses (inc / clause_big) learnts next watches
+
+fn decay_clauses (database activity clauses inc learnts next watches)
+  database activity clauses (inc / 0.999) learnts next watches
+
+fn fresh_database vars
+  database empty_vec empty_vec 1.0 [] 1 (vec_of (2 * vars + 1) [])
+
+fn scale_all cact ids i
+  return cact if i < 1 or length ids < i
+  k = ids[i]
+  scale_all (set_at cact k (slot cact k / clause_big)) ids (i + 1)

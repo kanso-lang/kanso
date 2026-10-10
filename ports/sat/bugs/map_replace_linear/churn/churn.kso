@@ -1,0 +1,26 @@
+# PERFORMANCE BUG: on the native engines, overwriting a key that is already
+# in a map costs time linear in the map's size, even on the in-place path
+# (`put_mut_fast`, no allocation at all).
+#
+# 200,000 overwrites, release build:
+#   keys     native   interpreter
+#   1,000    0.55 s   0.32 s
+#   10,000   3.98 s   0.69 s
+#   40,000   14.1 s   0.34 s
+# k_map_replace in src/runtime.c finds the key by binary search in the
+# sorted view and then walks the pairs log backwards to patch it there too.
+#
+# Expected: the cost of an overwrite does not grow with the number of keys,
+# as on the interpreter.
+pub fn churn m k steps n
+  return m if steps == 0
+  i = k % n + 1
+  churn (put m i (m[i] + 1)) ((k * 7 + 3) % 1000003) (steps - 1) n
+
+pub fn fill m i n
+  return m if n < i
+  fill (put m i 0) (i + 1) n
+
+pub fn total m i n acc
+  return acc if n < i
+  total m (i + 1) n (acc + m[i])

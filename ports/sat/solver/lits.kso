@@ -1,0 +1,19 @@
+# Literals are ints: variable v is 2v when positive and 2v + 1 when negated,
+# so a literal's variable is a halving and its negation flips the low bit.
+# A variable's value is 1 (true), -1 (false) or 0 (unassigned).
+pub fn dimacs_of l
+  if (l % 2 == 0) (l / 2) (0 - l / 2)
+
+pub fn lit_of d
+  if (0 < d) (2 * d) (1 - 2 * d)
+
+fn neg l
+  if (l % 2 == 0) (l + 1) (l - 1)
+
+# the value a literal would give its variable
+fn sign_of l
+  if (l % 2 == 0) 1 -1
+
+fn value_of assigns l
+  a = slot assigns (l / 2)
+  if (l % 2 == 0) a (0 - a)

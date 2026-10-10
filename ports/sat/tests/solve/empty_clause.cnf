@@ -1,0 +1,4 @@
+c the empty clause cannot be satisfied
+p cnf 2 2
+1 2 0
+0

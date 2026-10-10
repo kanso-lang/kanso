@@ -1,0 +1,2 @@
+sat: line 1: only the cnf format is read, not `dnf`
+[exit 1]

@@ -1,0 +1,4 @@
+import "./cli"
+import "std/os"
+
+os/args .> cli/dispatch

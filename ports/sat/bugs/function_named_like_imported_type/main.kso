@@ -1,0 +1,4 @@
+import "./grow"
+
+a = grow/here 5
+print "{a} {length a} {grow/finished 1}"

@@ -1,0 +1,2 @@
+sat: line 1: expected `p cnf <variables> <clauses>`
+[exit 1]

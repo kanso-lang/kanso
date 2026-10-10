@@ -1,0 +1,54 @@
+# PERFORMANCE BUG: a loop that rewrites one path of a persistent binary tree
+# per step (14 new nodes a step, the tree itself 16,384 leaves) runs in
+# linear time up to some number of steps and then falls off a cliff.
+#
+# Release build with --counters, `n` steps:
+#   steps    time    evac_allocs      ten_blocks
+#   60,000   0.45 s  3,577,751        9
+#   80,000   11 s    227,591,487      8,222
+#   100,000  39 s    1,036,152,293    28,222
+# alloc_bytes grows linearly throughout (55 MB, 73 MB, 91 MB). Once
+# ten_blocks starts climbing, every step evacuates far more than the 14
+# nodes it built. The interpreter runs 20,000 steps in 1.5 s and grows
+# linearly.
+#
+# Expected: time linear in the number of steps, as the allocation count is.
+import "std/bits"
+
+type node
+  hi
+  lo
+
+pub fn churn t k steps n d
+  return t if steps == 0
+  i = k % n
+  t2 = set t d i (get t d i + 1)
+  churn t2 ((k * 7 + 3) % 1000003) (steps - 1) n d
+
+fn get (node hi lo) d i
+  half = bits/shl 1 (d - 1)
+  if (i < half) (get lo (d - 1) i) (get hi (d - 1) (i - half))
+
+fn get v _ _
+  v
+
+fn grow 0
+  0
+
+fn grow d
+  node (grow (d - 1)) (grow (d - 1))
+
+pub fn make d
+  grow d
+
+fn set (node hi lo) d i x
+  half = bits/shl 1 (d - 1)
+  return node hi (set lo (d - 1) i x) if i < half
+  node (set hi (d - 1) (i - half) x) lo
+
+fn set _ _ _ x
+  x
+
+pub fn total t d i n acc
+  return acc if n <= i
+  total t d (i + 1) n (acc + get t d i)

@@ -1,0 +1,9 @@
+c kanso-sat: 3 variables, 4 clauses
+c restart policy: geometric, 100 conflicts growing by half
+c conflicts: 0
+c decisions: 0
+c learnt literals: 0 (0 removed by minimization)
+c propagations: 3
+c restarts: 0
+s UNSATISFIABLE
+[exit 20]

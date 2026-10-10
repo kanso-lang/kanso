@@ -1,0 +1,6 @@
+import "./tree"
+
+d = 14
+n = 10000
+t = tree/churn (tree/make d) 1 100000 n d
+print "{tree/total t d 0 n 0}"

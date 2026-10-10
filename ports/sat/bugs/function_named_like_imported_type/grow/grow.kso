@@ -1,0 +1,24 @@
+import "std/list"
+
+# BUG: under `kanso test`, a module function that shares its name with a
+# library type is replaced by that type. Here `grown` (also `list/grown`,
+# the record behind `list/iterate`) and, in finish.kso, `done` (the ambient
+# marker an effect yields). `kanso run` calls the functions.
+#
+# Expected: `kanso test grow` passes both tests, as `kanso run main.kso`
+# (which prints `[[5] [5]] 2 2`) says it should; or, if the names are
+# taken, `kanso check` refuses the declarations.
+#
+# Actual: `kanso check` passes, `kanso run` is right, and `kanso test grow`
+# reports
+#   error[runtime]: length takes a list, string, or map, not list/grown [] 5
+#   error[runtime]: `<done>` is not callable
+pub fn grown v x
+  return [[x]] if length v == 0
+  push v [x]
+
+pub fn here x
+  grown (grown [] x) x
+
+pub fn total xs
+  list/sum xs

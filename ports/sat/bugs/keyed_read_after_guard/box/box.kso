@@ -1,0 +1,17 @@
+# BUG: a keyed read (`{ a } = x`) written below a `return ... if` guard does
+# not bind its names. `kanso check` reports "unknown name `a`" at the use.
+#
+# Expected: `kanso run main.kso` prints 6, the way it does when the keyed read
+# is moved above the guard, or when it is written positionally
+# (`box a b = x`), which both work.
+#
+# Actual: error[name]: unknown name `a`, at the line after the keyed read.
+type box
+  a
+  b
+
+pub fn f n
+  x = box n 2
+  return 0 if n == 1
+  { a } = x
+  a + 1

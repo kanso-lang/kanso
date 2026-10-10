@@ -1,0 +1,92 @@
+import "std/text"
+
+# Unit propagation over two watched literals.
+#
+# Every clause watches the literals in its first two positions, and `watches`
+# maps a literal to the clauses watching it. When a literal becomes false
+# only the clauses watching it are visited: each either finds another
+# literal to watch, is satisfied by its other watch, becomes unit and forces
+# that other watch, or is a conflict.
+#
+# minisat also swaps the two watches so the forced literal comes first. Here
+# a write is a copy, so a clause is written back only when the pair it
+# watches changes, and conflict analysis finds the forced literal by value
+# rather than by position.
+#
+# A clause deleted from the database is an empty list, and a visit that finds
+# one drops it from the watch list.
+# a clause about to change the pair it watches, not yet rebuilt
+type rewatch
+  cid
+  clause
+  k
+  other
+
+type propagated
+  clauses
+  conflict
+  props
+  trail
+  watches
+
+pub fn propagate tr cls wat props
+  { qhead size trail } = tr
+  return propagated cls 0 props tr wat if size < qhead
+  p = slot trail qhead
+  gone_false = neg p
+  watching = slot wat gone_false
+  visit (advance tr) cls wat watching 1 [] gone_false (props + 1)
+
+# `ws` is the watch list being visited and `kept` the watchers that stay.
+fn visit tr cls wat ws i kept fl props
+  { assigns } = tr
+  return propagate tr cls (set_at wat fl kept) props if i < 1 or length ws < i
+  cid = ws[i]
+  c = slot cls cid
+  return visit tr cls wat ws (i + 1) kept fl props if length c == 0
+  a = c[1]
+  b = c[2]
+  other = if (a == fl) b a
+  holds = value_of assigns other == 1
+  return visit tr cls wat ws (i + 1) (push kept cid) fl props if holds
+  k = unfalsified assigns c 3
+  next = rewatch cid c k other
+  return moved tr cls wat ws i kept fl props next if 0 < k
+  stuck tr cls wat ws i (push kept cid) fl props cid other
+
+# The clause found a new literal to watch and leaves this watch list.
+fn moved tr cls wat ws i kept fl props (rewatch cid c k other)
+  l = c[k]
+  watchers = slot wat l
+  watching = set_at wat l (push watchers cid)
+  stored = set_at cls cid (rewatched c other k fl)
+  visit tr stored watching ws (i + 1) kept fl props
+
+# Every literal but `first` is false: it is forced, or the clause is a
+# conflict and propagation stops with the rest of the watch list kept.
+fn stuck tr cls wat ws i kept fl props cid first
+  { assigns } = tr
+  open = value_of assigns first == 0
+  return forcing tr cls wat ws i kept fl props cid first if open
+  rest = text/slice ws (i + 1) (length ws)
+  propagated cls cid props (drained tr) (set_at wat fl (text/concat kept rest))
+
+fn forcing tr cls wat ws i kept fl props cid first
+  visit (enqueue tr first cid) cls wat ws (i + 1) kept fl props
+
+fn drained (assignment assigns level lim _ reason size trail)
+  assignment assigns level lim (size + 1) reason size trail
+
+# The clause with `other` and the literal at k watched, and the false
+# literal moved to k.
+fn rewatched c other k fl
+  l = c[k]
+  middle = push (text/slice c 3 (k - 1)) fl
+  text/concat (text/concat [other l] middle) (text/slice c (k + 1) (length c))
+
+# The first position from k on whose literal is not false, or 0.
+fn unfalsified assigns c k
+  return 0 if k < 1 or length c < k
+  l = c[k]
+  return k if value_of assigns l != -1
+  unfalsified assigns c (k + 1)

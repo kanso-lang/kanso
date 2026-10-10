@@ -1,0 +1,186 @@
+import "../dimacs"
+import "../gen"
+import "../solver"
+import "std/io"
+import "std/list"
+import "std/os"
+import "std/text"
+
+# The command line: `solve` reads DIMACS and answers in the SAT competition
+# format, `gen` writes one of the benchmark families as DIMACS.
+#
+# Exit status follows the competition convention: 10 for satisfiable, 20 for
+# unsatisfiable, and 1 for anything that is not an answer.
+type options
+  path
+  strategy
+
+# a command line that asks for something this program does not do
+type unusable
+  reason
+
+fn answer (file_not_found p) _
+  refuse "sat: no such file: {p}"
+
+fn answer text opts
+  report (dimacs/parse text) opts
+
+fn broken intro counts bad
+  first = bad[1]
+  failed = "c model check FAILED: clause {first} is false"
+  summary = text/concat intro (stat_lines counts)
+  lines = text/concat summary [failed "s UNKNOWN"]
+  print (text/join lines "\n") .> (_ -> os/exit 1)
+
+fn command "gen" rest
+  generate rest
+
+fn command "solve" rest
+  solve_with (read_options rest 1 (options "" solver/luby))
+
+fn command verb _
+  refuse "sat: no verb `{verb}`\n{usage}"
+
+fn count_of word
+  bs = text/bytes word
+  digits = 0 < length bs and list/all? bs (b -> 47 < b and b < 58)
+  return unusable "`{word}` is not a positive count" if not digits
+  n = text/to_int word
+  return n if 0 < n
+  unusable "`{word}` is not a positive count"
+
+pub fn dispatch args
+  return refuse usage if length args == 0
+  verb = args[1]
+  command verb (text/slice args 2 (length args))
+
+fn emit comment (family clauses vars)
+  print (dimacs/render comment vars clauses)
+
+fn generate rest
+  return refuse usage if length rest == 0
+  family = rest[1]
+  sizes = list/to_list (list/map (text/slice rest 2 (length rest)) count_of)
+  bad = list/find sizes unusable?
+  said = text/join rest " "
+  return generated family sizes said if bad == none
+  refuse_unusable bad
+
+fn generated "pigeonhole" sizes said
+  return refuse usage if length sizes != 1
+  n = sizes[1]
+  emit "pigeonhole principle: gen {said}" (gen/pigeonhole n)
+
+fn generated "queens" sizes said
+  return refuse usage if length sizes != 1
+  n = sizes[1]
+  emit "{n} queens: gen {said}" (gen/queens n)
+
+fn generated "random" sizes said
+  return refuse usage if length sizes != 3
+  vars = sizes[1]
+  count = sizes[2]
+  seed = sizes[3]
+  emit "random 3-SAT: gen {said}" (gen/random_ksat vars count 3 seed)
+
+fn generated _ _ _
+  refuse usage
+
+fn named solver/geometric
+  "c restart policy: geometric, 100 conflicts growing by half"
+
+fn named solver/luby
+  "c restart policy: luby, 100 conflicts a unit"
+
+fn option "--geometric" (options path _)
+  options path solver/geometric
+
+fn option "--luby" (options path _)
+  options path solver/luby
+
+fn option word (options "" strategy)
+  return unusable "sat: no option `{word}`" if bad_flag? word
+  options word strategy
+
+fn option word _
+  unusable "sat: a second file `{word}`"
+
+fn bad_flag? word
+  text/slice word 1 1 == "-" and word != "-"
+
+fn outcome (unsatisfied counts) intro _ _
+  summary = text/concat intro (stat_lines counts)
+  lines = text/concat summary ["s UNSATISFIABLE"]
+  print (text/join lines "\n") .> (_ -> os/exit 20)
+
+fn outcome (satisfied counts model) intro clauses vars
+  bad = solver/falsified model clauses
+  return broken intro counts bad if 0 < length bad
+  checked = "c model checked: all {length clauses} clauses satisfied"
+  summary = text/concat intro (stat_lines counts)
+  head = text/concat summary [checked "s SATISFIABLE"]
+  body = value_lines (solver/literals model vars) 1 "v" []
+  print (text/join (text/concat head body) "\n") .> (_ -> os/exit 10)
+
+fn read_options _ _ (unusable reason)
+  unusable reason
+
+fn read_options rest i opts
+  return opts if i < 1 or length rest < i
+  word = rest[i]
+  read_options rest (i + 1) (option word opts)
+
+fn refuse message
+  io/write_err "{message}\n" .> (_ -> os/exit 1)
+
+fn refuse_unusable (unusable reason)
+  refuse "sat: {reason}"
+
+fn report (formula clauses _ vars) (options _ strategy)
+  verdict = solver/solve vars clauses strategy
+  sized = "c kanso-sat: {vars} variables, {length clauses} clauses"
+  outcome verdict [sized (named strategy)] clauses vars
+
+fn report (malformed line reason) _
+  refuse "sat: line {line}: {reason}"
+
+fn solve_with (unusable reason)
+  refuse "{reason}\n{usage}"
+
+fn solve_with opts
+  { path } = opts
+  source = if (path == "" or path == "-") io/stdin (os/read_file path)
+  source .> (t -> answer t opts)
+
+fn stat_lines (stats conflicts decisions learnt propagations removed restarts)
+  c = "c conflicts: {conflicts}"
+  d = "c decisions: {decisions}"
+  l = "c learnt literals: {learnt} ({removed} removed by minimization)"
+  p = "c propagations: {propagations}"
+  r = "c restarts: {restarts}"
+  [c d l p r]
+
+fn unusable? (unusable _)
+  true
+
+fn unusable? _
+  false
+
+usage = text/join [usage_solve usage_php usage_queens usage_random] "\n"
+
+usage_php = "       sat gen pigeonhole <holes>"
+
+usage_queens = "       sat gen queens <n>"
+
+usage_random = "       sat gen random <variables> <clauses> <seed>"
+
+usage_solve = "usage: sat solve [--luby | --geometric] [file.cnf | -]"
+
+# The model as `v` lines no wider than 80 columns, ended by a 0.
+fn value_lines lits i line acc
+  return push acc "{line} 0" if i < 1 or length lits < i
+  l = lits[i]
+  word = " {l}"
+  wide = 77 < length line + length word
+  return value_lines lits (i + 1) "v{word}" (push acc line) if wide
+  value_lines lits (i + 1) "{line}{word}" acc

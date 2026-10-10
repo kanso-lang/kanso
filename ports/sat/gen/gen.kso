@@ -1,0 +1,102 @@
+import "std/list"
+import "std/text"
+
+# Benchmark formulas, generated rather than downloaded, so that every fixture
+# can be rebuilt from a command line.
+#
+# Each generator answers a `family`: its variable count and its clauses as
+# lists of DIMACS literals.
+pub type family
+  clauses
+  vars
+
+# the state of the random clause generator
+type drawing
+  clauses
+  seed
+
+fn each xs f
+  list/to_list (list/map xs f)
+
+fn flatten xss
+  list/fold xss [] (acc xs -> text/concat acc xs)
+
+fn ints a b
+  ints_onto [] a b
+
+fn ints_onto acc a b
+  return acc if b < a
+  ints_onto (push acc a) (a + 1) b
+
+# The two-literal clauses forbidding any two of `xs` from both being true.
+fn at_most_one xs
+  n = length xs
+  flatten (each (ints 1 n) (i -> each (ints (i + 1) n) (j -> forbid xs i j)))
+
+fn forbid xs i j
+  a = xs[i]
+  b = xs[j]
+  [(0 - a) (0 - b)]
+
+# The pigeonhole principle: n + 1 pigeons do not fit in n holes. It is
+# unsatisfiable for every n and hard for resolution, so the conflicts CDCL
+# needs grow exponentially with n. Variable (i - 1) * n + j says pigeon i
+# sits in hole j.
+pub fn pigeonhole n
+  housed = each (ints 1 (n + 1)) (i -> each (ints 1 n) (j -> (i - 1) * n + j))
+  holes = each (ints 1 n) (j -> each (ints 1 (n + 1)) (i -> (i - 1) * n + j))
+  apart = flatten (each holes at_most_one)
+  family (text/concat housed apart) (n * (n + 1))
+
+# n queens on an n by n board, none attacking another. Variable
+# (r - 1) * n + c says a queen stands on row r, column c. Satisfiable for
+# n = 1 and every n from 4 up.
+pub fn queens n
+  rows = each (ints 1 n) (r -> each (ints 1 n) (c -> (r - 1) * n + c))
+  columns = each (ints 1 n) (c -> each (ints 1 n) (r -> (r - 1) * n + c))
+  lines = flatten (each (text/concat rows columns) at_most_one)
+  diagonals = flatten (each (ints 1 n) (r -> diagonal_clauses n r))
+  family (text/concat (text/concat rows lines) diagonals) (n * n)
+
+fn diagonal_clauses n r
+  flatten (each (ints 1 n) (c -> attacks n r c))
+
+# the squares below (r, c) on its two diagonals
+fn attacks n r c
+  steps = ints 1 (n - r)
+  here = (r - 1) * n + c
+  right = list/select steps (d -> c + d <= n)
+  left = list/select steps (d -> 1 <= c - d)
+  falling = each right (d -> [(0 - here) (0 - ((r + d - 1) * n + c + d))])
+  rising = each left (d -> [(0 - here) (0 - ((r + d - 1) * n + c - d))])
+  text/concat falling rising
+
+# Uniform random k-SAT: each clause draws k distinct variables and a sign for
+# each. The generator is a fixed linear congruential sequence, so a seed names
+# one formula on every engine and every machine. Near 4.26 clauses per
+# variable, random 3-SAT sits at its satisfiability threshold, where it is
+# hardest.
+pub fn random_ksat vars count k seed
+  { clauses } = draw_clauses (drawing [] seed) vars count k
+  family clauses vars
+
+fn draw_clauses state vars count k
+  { clauses } = state
+  return state if count <= length clauses
+  draw_clauses (draw_clause state vars k []) vars count k
+
+fn draw_clause (drawing clauses seed) vars k lits
+  return drawing (push clauses lits) seed if k <= length lits
+  s1 = lcg_next seed
+  s2 = lcg_next s1
+  v = high s1 % vars + 1
+  taken = list/any? lits (l -> l == v or l == 0 - v)
+  return draw_clause (drawing clauses s2) vars k lits if taken
+  signed = if (high s2 % 2 == 0) v (0 - v)
+  draw_clause (drawing clauses s2) vars k (push lits signed)
+
+fn high s
+  s / 65536
+
+fn lcg_next s
+  (s * 1103515245 + 12345) % 2147483648

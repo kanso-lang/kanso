@@ -1,0 +1,3 @@
+import "./acc"
+
+print "{length (acc/flat [] 8000)}"

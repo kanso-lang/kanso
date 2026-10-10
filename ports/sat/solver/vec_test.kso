@@ -1,0 +1,28 @@
+# A vector filled with its own positions, 1 to n.
+fn counted_to v n
+  return v if n <= slots v
+  counted_to (extended v (slots v + 1)) n
+
+hundred = counted_to empty_vec 100
+
+test_deep_reads_back = slot thousands 1025 == 1025 and slot thousands 1 == 1
+
+test_deep_set = slot (set_at thousands 1500 0) 1500 == 0
+
+test_deep_set_leaves_neighbours = slot (set_at thousands 1500 0) 1499 == 1499
+
+test_extended_counts = slots hundred == 100
+
+test_extended_reads_back = slot hundred 1 == 1 and slot hundred 100 == 100
+
+test_set_at_leaves_others = slot (set_at hundred 33 0) 32 == 32
+
+test_set_at_middle = slot (set_at hundred 33 0) 33 == 0
+
+test_vec_of_last = slot (vec_of 129 7) 129 == 7
+
+test_vec_of_size = slots (vec_of 129 0) == 129
+
+thousands = counted_to empty_vec 2000
+
+test_extended_across_a_level = slots (extended (vec_of 32 0) 1) == 33

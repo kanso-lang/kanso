@@ -1,0 +1,69 @@
+import "std/text"
+
+# Throwing away learnt clauses. The learnts are ranked least useful first --
+# clauses longer than two before binary ones, and by activity among each --
+# and the first half goes, along with any later clause less active than an
+# even share of the increment. A clause that is the reason for a current
+# assignment stays, and so does every binary clause.
+#
+# A deleted clause becomes an empty list. Its watches are dropped lazily, by
+# the next propagation that visits them.
+type culled
+  clauses
+  learnts
+
+fn reduce (solver assigned counts db max_learnts order vars)
+  database activity clauses inc learnts next watches = db
+  ranked = sort_by learnts (a b -> less_useful? clauses activity a b)
+  extra = inc / length ranked
+  outcome = cull assigned activity ranked 1 extra clauses []
+  culled kept_clauses kept_learnts = outcome
+  trimmed = database activity kept_clauses inc kept_learnts next watches
+  solver assigned counts trimmed max_learnts order vars
+
+fn cull tr activity ranked i extra clauses kept
+  return culled clauses kept if i < 1 or length ranked < i
+  cid = ranked[i]
+  c = slot clauses cid
+  early = i <= length ranked / 2
+  idle = early or slot activity cid < extra
+  drop = 2 < length c and not locked? tr c cid and idle
+  emptied = set_at clauses cid []
+  return cull tr activity ranked (i + 1) extra emptied kept if drop
+  cull tr activity ranked (i + 1) extra clauses (push kept cid)
+
+fn less_useful? clauses activity a b
+  ca = slot clauses a
+  cb = slot clauses b
+  2 < length ca and (length cb == 2 or slot activity a < slot activity b)
+
+# A clause is the reason for an assignment when one of its watches is true
+# and was forced by it.
+fn locked? tr c cid
+  a = c[1]
+  b = c[2]
+  forced_by? tr a cid or forced_by? tr b cid
+
+fn forced_by? tr l cid
+  { assigns reason } = tr
+  slot reason (l / 2) == cid and value_of assigns l == 1
+
+# A stable merge sort under a caller's ordering: std/list sorts only by the
+# natural order of its elements.
+fn sort_by xs before?
+  sort_range xs 1 (length xs) before?
+
+fn sort_range xs lo hi before?
+  return [] if hi < lo
+  return [xs[lo]] if lo == hi
+  mid = (lo + hi) / 2
+  left = sort_range xs lo mid before?
+  merge_by left (sort_range xs (mid + 1) hi before?) 1 1 [] before?
+
+fn merge_by a b i j out before?
+  return text/concat out (text/slice b j (length b)) if length a < i
+  return text/concat out (text/slice a i (length a)) if length b < j
+  x = a[i]
+  y = b[j]
+  return merge_by a b i (j + 1) (push out y) before? if before? y x
+  merge_by a b (i + 1) j (push out x) before?

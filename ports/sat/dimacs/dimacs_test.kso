@@ -1,0 +1,49 @@
+fn clauses_of (formula clauses _ _)
+  clauses
+
+fn clauses_of _
+  []
+
+fn reason_of (malformed line reason)
+  "{line}: {reason}"
+
+fn reason_of _
+  "parsed"
+
+past_header = "2: literal 3 names a variable past the declared 2"
+
+test_clause_spans_lines = clauses_of (parse simple) == [[1 -3] [2 3 -1]]
+
+test_comments_anywhere = clauses_of (parse commented) == [[1] [-1 2]]
+
+test_header_counts = parse "p cnf 3 1\n1 2 3 0\n" == formula [[1 2 3]] 1 3
+
+test_literal_past_header = reason_of (parse "p cnf 2 1\n1 3 0\n") == past_header
+
+test_missing_header = reason_of (parse "1 2 0\n") == before_header
+
+before_header = "1: a clause appears before the `p cnf` header"
+
+test_no_header_at_all = reason_of (parse "c only a comment\n") == no_header
+
+no_header = "1: no `p cnf` header line"
+
+test_not_a_number = reason_of (parse "p cnf 2 1\n1 x 0\n") == not_number
+
+not_number = "2: `x` is not a number"
+
+test_percent_ends = clauses_of (parse "p cnf 1 1\n1 0\n%\n0\n") == [[1]]
+
+test_tabs_separate = clauses_of (parse "p cnf 2 1\n1\t-2\t0\n") == [[1 -2]]
+
+test_unterminated = reason_of (parse "p cnf 2 1\n1 2\n") == unterminated
+
+unterminated = "2: the last clause is not ended by a 0"
+
+test_wrong_count = reason_of (parse "p cnf 2 2\n1 2 0\n") == wrong_count
+
+wrong_count = "2: the header declares 2 clauses but 1 were read"
+
+commented = "c hello\np cnf 2 2\nc between\n1 0\n-1 2 0\n"
+
+simple = "p cnf 3 2\n1 -3\n0 2 3 -1 0\n"
