@@ -1,0 +1,4 @@
+error[syntax]: `if` takes 3 argument(s), and a list element is one atom — this reads as 4 separate elements. Write `(if …)` to call it, or `&if` to hold it (module an_if_in_a_list_is_one_call)
+  --> an_if_in_a_list_is_one_call.kso:7:4
+   7 |   [if b "x" "y"]
+          ^

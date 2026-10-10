@@ -1,0 +1,5 @@
+non-word:  o:
+not a W:   <none>
+non-digit: abc
+non-space: word
+between:   a-b

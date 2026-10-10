@@ -8172,7 +8172,10 @@ impl<'a> Backend<'a> {
                     branch_i1(f, ok);
                 }
                 f.bind(name, value);
-                f.record(value, known & !FAIL);
+                // a thunk passes the check above and can still force to an
+                // err, so its FAIL bit stays for the read that forces it
+                let kept = if known & crate::infer::THUNK != 0 { known } else { known & !FAIL };
+                f.record(value, kept);
             }
             Pattern::Annotated { name, ty, .. } => {
                 if ty.ends_with("[]") {

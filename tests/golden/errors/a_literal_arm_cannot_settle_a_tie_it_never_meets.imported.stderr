@@ -1,0 +1,4 @@
+error[dispatch]: these `pick` arms tie: each is the more specific one somewhere, and a call could match both — write the arm that is most specific in every position (module a_literal_arm_cannot_settle_a_tie_it_never_meets)
+  --> a_literal_arm_cannot_settle_a_tie_it_never_meets.kso:14:4
+  14 | fn pick op a:float64 b:float64
+          ^

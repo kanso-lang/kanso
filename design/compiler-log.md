@@ -24425,3 +24425,50 @@ and `work_runbench` -14 to 1,129,589,342, read by CI, with where the larger
 runtime's code landed. This
 container's counter sweep had read them unmoved. The allocation counters,
 the lazy tier and the compile rows did not move.
+
+## 2026-10-10 — four faults the ports found
+
+Twenty programs were ported to kanso to see where the language gets in a
+programmer's way, and their journals carry bug reductions as well as
+complaints. Four of the reductions are fixed here, each with the fixture that
+fails without its fix.
+
+**A tie settled by an arm that never meets it.** `check_arm_ties` calls two
+arms tied when each is more specific somewhere, unless a third arm covers
+both. It compared patterns by rank alone, so `"+"` and `"eq"` ranked equal,
+and an arm for `"eq"` could settle a tie that only `"+"` calls fall into.
+The lox port had two arms of `apply` that could both take `"+"` with two
+floats, settled on paper by an `"eq"` arm, and the two engines picked
+different arms at run time. The comparison now answers "disjoint" for
+patterns no single value matches: two different literals, a literal and a
+marker, a literal and a type that cannot hold it, a marker and a type it is
+not. A disjoint pair cannot tie and cannot settle anything.
+`errors/a_literal_arm_cannot_settle_a_tie_it_never_meets.kso` is the lox
+shape and passed `kanso check` on main;
+`micro/arms_that_never_meet_are_not_a_tie.kso` is the other direction, two
+arms main called tied that no call can reach together. The bc port's
+`option` group has a real tie the old rule hid, `"--quiet" opts` beside
+`arg (options ...)`, and the stricter check now reports it.
+
+**`[if b "x" "y"]`.** The checker refuses a named function written bare in a
+list literal, since a list element is one atom, but it read `if`'s count from
+a table that leaves `if` out, so the interpreter built a four-element list and
+native refused with no location. `call_shaped_at` now knows `if` takes three
+and reads the ambient builtins' counts. `errors/an_if_in_a_list_is_one_call.kso`.
+
+**`\D`, `\W` and `\S`.** std/regexp read an escape it did not know as the
+letter itself, so `o\W` matched an o and a capital W. The three negated
+classes are now the classes `\d`, `\w` and `\s` with the negation flag set.
+`micro/regexp_negated_class_escapes.kso`.
+
+**A name bound to a lazy err.** A match arm that binds a name sees a thunk,
+not what it forces to, so the thunk passes the arm's check and can still
+force to an err later. Native recorded every name a pattern bound as unable to
+fail, and a read that forced the thunk skipped its check: the toml port's
+reduction printed `size 6`, the err's payload read as a list length, where
+the interpreter stopped with `refused 5`. The pattern now keeps the FAIL bit
+on a name whose value is a thunk. Inference makes the same assumption in
+`bind_pattern`, but reverting it there leaves the fixture correct, so it is
+left alone until a program shows it matters.
+`runtime/a_name_bound_to_a_lazy_err_keeps_its_check.kso`; reverting the
+codegen line turns it red.

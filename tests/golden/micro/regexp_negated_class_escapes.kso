@@ -1,0 +1,11 @@
+# `\D`, `\W` and `\S` are the classes `\d`, `\w` and `\s` negated, as in
+# every dialect a programmer brings. The parser used to read an escape it did
+# not know as the letter itself, so `o\W` matched an o followed by a capital
+# W and nothing else.
+import "std/regexp"
+
+pub play = print "non-word:  {regexp/find "o\\W" "todo: x"}"
+  .> (_ -> print "not a W:   {regexp/find "o\\W" "toWn"}")
+  .> (_ -> print "non-digit: {regexp/find "\\D+" "123abc456"}")
+  .> (_ -> print "non-space: {regexp/find "\\S+" "  word  "}")
+  .> (_ -> print "between:   {regexp/find "a\\Db" "a1b a-b"}")
