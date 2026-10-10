@@ -164,6 +164,7 @@ static long long k_stat_ten_frees = 0;
    the fixture whose own comment said such a change would turn it red. Found
    on 2026-09-22 by making the change and running the vein. */
 static long long k_stat_ten_handups = 0;
+static long long k_stat_chain_finds = 0;
 static long long k_stat_utf8_zerocopy = 0;
 /* Characters counted by walking, which a string that can cache its count
    pays once and a builder pays on every read. Quadratic when a builder is
@@ -523,6 +524,57 @@ static KValue* k_map_sorted(KMap* m, long long* out_len);
 typedef struct KBlock { struct KBlock* next; size_t cap; struct KBlock* host; size_t pad; } KBlock;
 KBlock* k_blocks = NULL;
 static KBlock* k_spare = NULL;
+
+/* The live chain sorted by address, for the survival questions once the chain
+   is long. Each block's `pad` holds its position in the chain counted from the
+   oldest, so "is this block older than the mark's" is one compare. A program
+   whose arena only grows -- an interpreter that never frees its heap -- built
+   a chain of hundreds of blocks, and every survival check walked it: the lox
+   port's loop of 40,000 passes took 30.6 s with the lap carry and 1.9 s with
+   64 MiB blocks. Below K_BIDX_WALK blocks the walk is kept, because the hot
+   paths ask with a chain of one or two and a search would only cost them. */
+#define K_BIDX_WALK 8
+static KBlock** k_bidx = NULL;
+static long long k_bidx_n = 0, k_bidx_cap = 0;
+
+static void k_bidx_link(KBlock* b) {
+    b->pad = b->next ? b->next->pad + 1 : 0;
+    if (k_bidx_n == k_bidx_cap) {
+        k_bidx_cap = k_bidx_cap ? 2 * k_bidx_cap : 64;
+        k_bidx = realloc(k_bidx, sizeof(KBlock*) * (size_t)k_bidx_cap);
+        if (!k_bidx) { fputs("out of memory\n", stderr); exit(1); }
+    }
+    long long i = k_bidx_n;
+    while (i > 0 && k_bidx[i - 1] > b) { k_bidx[i] = k_bidx[i - 1]; i--; }
+    k_bidx[i] = b;
+    k_bidx_n++;
+}
+
+static void k_bidx_unlink(KBlock* b) {
+    long long i = 0;
+    while (i < k_bidx_n && k_bidx[i] != b) i++;
+    if (i == k_bidx_n) return;
+    for (; i + 1 < k_bidx_n; i++) k_bidx[i] = k_bidx[i + 1];
+    k_bidx_n--;
+}
+
+/* The live block holding q, or NULL. */
+static __attribute__((noinline)) KBlock* k_bidx_find(const char* q) {
+    if (K_COUNTING) k_stat_chain_finds++;
+    long long lo = 0, hi = k_bidx_n;
+    while (hi - lo > 1) {
+        long long mid = (lo + hi) / 2;
+        if ((const char*)k_bidx[mid] <= q) lo = mid; else hi = mid;
+    }
+    if (k_bidx_n == 0 || (const char*)k_bidx[lo] > q) return NULL;
+    KBlock* b = k_bidx[lo];
+    const char* start = (const char*)(b + 1);
+    return q >= start && q < start + b->cap ? b : NULL;
+}
+
+static inline int k_chain_long(void) {
+    return k_blocks && k_blocks->pad >= K_BIDX_WALK;
+}
 /* bytes held by the live chain, and the most it ever held: the process's
    deterministic peak, the number the one-shot welfare term watches */
 long long k_live_block_bytes = 0;
@@ -664,8 +716,8 @@ static void k_stats_dump(void) {
     fprintf(stderr, "buf_reuse=%lld\nheld_peak_bytes=%lld\n", k_stat_buf_reuse, k_stat_held_peak);
     fprintf(stderr, "view_allocs=%lld\nview_frees=%lld\n",
             k_stat_view_allocs, k_stat_view_frees);
-    fprintf(stderr, "ten_blocks=%lld\nten_frees=%lld\nten_handups=%lld\n",
-            k_stat_ten_blocks, k_stat_ten_frees, k_stat_ten_handups);
+    fprintf(stderr, "ten_blocks=%lld\nten_frees=%lld\nten_handups=%lld\nchain_finds=%lld\n",
+            k_stat_ten_blocks, k_stat_ten_frees, k_stat_ten_handups, k_stat_chain_finds);
     fprintf(stderr,
         "sh_str=%lld\nsh_rec=%lld\nsh_buf=%lld\nsh_map=%lld\nsh_bytes=%lld\n",
         k_stat_sh_str, k_stat_sh_rec, k_stat_sh_buf, k_stat_sh_map, k_stat_sh_bytes);
@@ -704,6 +756,7 @@ static void k_arena_push(size_t need) {
     }
     b->next = k_blocks;
     k_blocks = b;
+    k_bidx_link(b);
     k_live_block_bytes += (long long)b->cap;
     if (K_COUNTING && k_live_block_bytes > k_stat_peak_block_bytes) {
         k_stat_peak_block_bytes = k_live_block_bytes;
@@ -781,6 +834,7 @@ static __attribute__((noinline)) void* k_alloc_oversize(size_t n) {
     t->host = host;
     t->next = k_blocks;
     k_blocks = t;
+    k_bidx_link(t);
     k_arena = (char*)(t + 1);
     k_arena_left = t->cap;
     return p;
@@ -990,6 +1044,30 @@ static void k_viewreg_add(KMap* m) {
     k_viewreg_push(d, m);
 }
 
+static int k_frozen_holds(const void* p);
+static int k_survives(const void* p, KMark* m);
+static int k_frozen_n;
+
+/* The view goes to the beat whose rewind reclaims its map's header, asked from
+   the innermost depth out. Asking only the innermost mark, as
+   `k_born_this_beat` does, missed a map read inside a region call one depth
+   below the loop that built it: the header lay under the region's mark, so
+   the view was never registered, and mal's evaluator built 209,210 views at
+   two hundred thousand iterations and freed 10,519. A header in no arena
+   block -- a carry buffer, a tenure block -- registers at the innermost depth,
+   which rewinds no later than its storage goes; a frozen constant keeps its
+   view for the life of the program, as before. */
+static __attribute__((noinline)) void k_viewreg_own(KMap* m) {
+    if (k_frozen_n && k_frozen_holds(m)) return;
+    for (int d = k_beat_depth - 1; d >= 0; d--) {
+        if (d >= K_BEAT_MAX) continue;
+        if (!k_survives(m, &k_beat_stack[d])) {
+            k_viewreg_push(d, m);
+            return;
+        }
+    }
+}
+
 /* An accumulator whose storage was pushed outside the arena had, until now,
    nobody to release it. The growth path frees each buffer it outgrows, so a
    single list costs nothing; what leaked was the LAST buffer of every escaped
@@ -1110,6 +1188,7 @@ void k_beat_rewind_slow(KMark* m) {
     while (k_blocks != m->block) {
         KBlock* b = k_blocks;
         k_blocks = b->next;
+        k_bidx_unlink(b);
         if (b->host) {
             /* a tail goes back to the block it was cut from */
             b->host->cap += sizeof(KBlock) + b->cap;
@@ -1297,10 +1376,13 @@ typedef struct { char* data; size_t cap; size_t used; } KCarryBuf;
 /* at_arena and at_blocks record where the arena stood at this depth's last
    stage, so a chain step can tell how far its region has drifted since;
    they were one pair of globals shared by every depth until 2026-09-07, and
-   an inner chain read the outer chain's last stage as its own. */
+   an inner chain read the outer chain's last stage as its own.
+
+   skipped says a lap went by without staging since the last stage did. The
+   pop reads it: see k_beat_pop_slow. */
 typedef struct {
     KCarryBuf from; KCarryBuf to; int used_flag;
-    const char* at_arena; const void* at_blocks;
+    const char* at_arena; const void* at_blocks; int skipped;
 } KCarry;
 KCarry k_carries[K_BEAT_MAX];
 
@@ -1335,6 +1417,7 @@ __attribute__((always_inline)) void k_beat_push(void) {
             k_die("a beat mark and the arena disagree about the room that is left");
         }
         k_carries[k_beat_depth].used_flag = 0;
+        k_carries[k_beat_depth].skipped = 0;
         k_carries[k_beat_depth].from.used = 0;
         k_carries[k_beat_depth].to.used = 0;
         /* In range by the test above, so the new top is the mark just written
@@ -1399,6 +1482,12 @@ static int k_survives(const void* p, KMark* m) {
     const char* q = (const char*)p;
     KBlock* b = m ? m->block : k_blocks;
     const char* frontier = m ? m->ptr : k_arena;
+    if (__builtin_expect(k_chain_long(), 0) && b) {
+        const char* start = (const char*)(b + 1);
+        if (q >= start && q < frontier) return 1;
+        KBlock* at = k_bidx_find(q);
+        return at && at != b && at->pad < b->pad;
+    }
     for (; b; b = b->next) {
         const char* start = (const char*)(b + 1);
         const char* end = (b == (m ? m->block : k_blocks)) ? frontier : start + b->cap;
@@ -1469,6 +1558,11 @@ static int k_where(const void* p, KMark* m) {
         const char* start = (const char*)(mb + 1);
         if (q >= start && q < start + mb->cap)
             return q < m->ptr ? K_WHERE_BELOW : K_WHERE_ABOVE;
+    }
+    if (__builtin_expect(k_chain_long(), 0)) {
+        KBlock* at = k_bidx_find(q);
+        if (!at) return K_WHERE_OUTSIDE;
+        return mb && at->pad < mb->pad ? K_WHERE_BELOW : K_WHERE_ABOVE;
     }
     for (KBlock* b = k_blocks; b != mb; b = b->next) {
         const char* start = (const char*)(b + 1);
@@ -2551,9 +2645,14 @@ static KValue k_deep_copy(KValue v, KCopy* cp) {
    next carry instead of a malloc'd copy that has to be walked again. */
 static void k_repair_interior(KValue v, void* p, KCopy* cp) {
     switch (v.tag) {
+        /* A builder's storage and a malloc'd byte buffer are out of a
+           rewind's reach, which is why k_interior_survives passes them. A
+           deep walk comes here without asking it, and copying the storage
+           into the arena would turn a builder into a plain string that the
+           next append copies again. */
         case K_STR: {
             KStr* st = (KStr*)p;
-            if (k_survives_x(st->data, cp->mark)) break;
+            if (st->cap > 0 || k_survives_x(st->data, cp->mark)) break;
             char* d = k_copy_alloc(cp, (size_t)st->len + 1);
             memcpy(d, st->data, (size_t)st->len);
             d[st->len] = 0;
@@ -2564,7 +2663,7 @@ static void k_repair_interior(KValue v, void* p, KCopy* cp) {
         case K_BIG:
         case K_BYTES: {
             KBytes* b = (KBytes*)p;
-            if (k_survives_x(b->data, cp->mark)) break;
+            if (k_bytes_malloced(b) || k_survives_x(b->data, cp->mark)) break;
             unsigned char* d = k_copy_alloc(cp, (size_t)b->len);
             memcpy(d, b->data, (size_t)b->len);
             b->data = d;
@@ -2598,7 +2697,21 @@ static void k_repair_interior(KValue v, void* p, KCopy* cp) {
                 mp->sorted = NULL;
                 mp->sorted_len = 0;
             }
-            for (long long i = 0; i < 2 * mp->len; i++) mp->pairs[i] = k_deep_copy(mp->pairs[i], cp);
+            /* A sorted view is a second copy of the pairs, held outside the
+               walk's reach. When the walk moves a key or a value, the view
+               still names the old one, and a lookup that searches the view
+               reads storage the next stage at this depth writes over. */
+            int moved = 0;
+            for (long long i = 0; i < 2 * mp->len; i++) {
+                KValue nv = k_deep_copy(mp->pairs[i], cp);
+                moved |= nv.payload != mp->pairs[i].payload;
+                mp->pairs[i] = nv;
+            }
+            if (moved && mp->sorted && mp->sorted != mp->pairs) {
+                k_view_free(mp->sorted);
+                mp->sorted = NULL;
+                mp->sorted_len = 0;
+            }
             break;
         }
         case K_REC: {
@@ -2756,7 +2869,16 @@ static __attribute__((noinline)) KValue k_beat_pop_slow(KValue r, long long d,
         k_beat_rewind(&k_beat_stack[d]);
     } else {
         if (c->used_flag) {
-            KCopy cp = { NULL, NULL, 1, 0, k_carry_written };
+            /* The walk has no mark, so it counts every arena node as a
+               survivor and stops at one whose interior survives too. That
+               is sound while everything the result holds in the carry pair
+               sits under a node the walk reaches first. A lap that skipped
+               its stage breaks it: the lap builds fresh nodes in the arena
+               over values still in the pair, the walk stops at the fresh
+               node, and the next loop entered at this depth stages into
+               the same pair and writes over what the result still holds.
+               So a pop after a skipped lap walks the whole value. */
+            KCopy cp = { NULL, NULL, 1, 0, k_carry_written || c->skipped };
             k_ptrmap_begin(&k_copy_map);
             k_copy_map_live = 0;
             k_repaired_n = 0;
@@ -2775,6 +2897,7 @@ static __attribute__((noinline)) KValue k_beat_pop_slow(KValue r, long long d,
     if (rewound) k_ten_release(d);
     else k_ten_hand_up(d);
     c->used_flag = 0;
+    c->skipped = 0;
     return r;
 }
 
@@ -3037,8 +3160,48 @@ void k_beat_iter_carry(void) {
     c->from = c->to;
     c->to = swap;
     c->used_flag = 1;
+    c->skipped = 0;
     k_ten_on = 0;
     k_from_window(0);
+}
+
+/* A compiled loop's carry, which waits until the lap has left something worth
+   reclaiming. `k_beat_iter_carry` sizes every carried slot, copies it into the
+   carry pair and rewinds, and a loop whose laps are small paid that on every
+   one: mal's evaluator crosses a carrying edge about fifty times for each call
+   it runs, and copying the machine state at each of them made the loop ten
+   times slower than letting the arena grow. Here the rewind waits until the
+   arena has drifted a quarter megabyte past where the last stage left it, in
+   the same block, with nothing registered at the depth. That is the bind
+   chain's drift test, used for the same reason. Skipping is always sound: the
+   carried values stay where they are, and the next stage copies whatever is
+   still reachable. What the test bounds is the garbage held in the meantime.
+
+   The registries are asked because their storage is malloc'd, so the block
+   test cannot see it grow; skipping past a registered buffer held 49 KB more
+   permanent storage at the run program's peak. The view registry is not
+   asked. A view is never larger than its map, and its map is either part of
+   the drift or still live, so the views a skipped lap holds are bounded by
+   what the test already bounds. Asking it made every edge of a cycle that
+   sorts a map stage at once: 3,200,304 bytes copied where the lap rule copied
+   6,224, and mal ran fifteen times slower. The lap rule's figure is 6,128
+   since constants stopped being copied. A stale position left by an
+   earlier loop at the same depth only makes the first lap stage early, and the
+   cohort and the chain still call `k_beat_iter_carry` directly. */
+void k_beat_lap_carry(void) {
+    long long d = k_beat_depth - 1;
+    if (d < 0 || d >= K_BEAT_MAX) { k_beat_iter_carry(); return; }
+    KCarry* kc = &k_carries[d];
+    if (kc->at_blocks == (const void*)k_blocks && kc->at_arena
+        && (size_t)(k_arena - kc->at_arena) < (size_t)(1 << 18)
+        && !(k_beat_stack[d].reg_any & ~K_REG_VIEW)) {
+        if (K_COUNTING) k_stat_beat_iters++;
+        kc->skipped = 1;
+        return;
+    }
+    k_beat_iter_carry();
+    kc->at_arena = k_arena;
+    kc->at_blocks = (const void*)k_blocks;
 }
 
 /* A permanent object: malloc'd, so it lives outside the beat arena and
@@ -7252,6 +7415,7 @@ static KValue k_exec(KDesc* d) {
                 if (kc->at_blocks == (const void*)k_blocks
                     && kc->at_arena
                     && (size_t)(k_arena - kc->at_arena) < (size_t)(1 << 18)) {
+                    kc->skipped = 1;
                     cur = next;
                     continue;
                 }
@@ -8314,7 +8478,7 @@ static __attribute__((noinline, preserve_most)) void k_map_sort_build(KMap* m) {
         m->sorted = out;
         /* Born this beat means the header dies at the rewind, which is the
            only moment anything knows this view has become garbage. */
-        if (k_born_this_beat(m)) k_viewreg_add(m);
+        k_viewreg_own(m);
     }
 }
 
@@ -8493,7 +8657,7 @@ static inline void k_map_view_insert(KMap* m, KValue key, KValue val) {
         KValue* own = k_view_alloc(room);
         memcpy(own, m->sorted, sizeof(KValue) * 2 * (size_t)m->sorted_len);
         m->sorted = own;
-        if (k_born_this_beat(m)) k_viewreg_add(m);
+        k_viewreg_own(m);
     }
     k_map_view_insert_built(m, key, val);
 }
