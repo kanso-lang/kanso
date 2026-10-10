@@ -24739,8 +24739,8 @@ current loop's region. The map's keys moved into `spin`'s region, the map
 stayed in its caller's, and the outer loop's next rewind freed the keys under
 it.
 
-`k_alloc_const` now hands those constants out of 64 KiB chunks registered with
-the frozen ranges, so the walk counts them as surviving, and the walk stops at
+`k_alloc_const` now hands those constants out of chunks registered with the
+frozen ranges, so the walk counts them as surviving, and the walk stops at
 a node in one of those chunks without asking about its interior, since nothing
 writes to a constant after it is built. The one-character and wide caches
 keep their bytes inline, where they had a second `malloc`. A frozen CAF is
@@ -24763,4 +24763,27 @@ refuses a cluster for what growth would cost.
 Every runtime counter that moved fell. `evac_allocs` and `evac_bytes` fall on
 every benchmark, the run program's by 14,328 copies and 229,376 bytes, and
 `carry_dedup` goes to zero wherever it was counting the same literal reached
-twice.
+twice. The cohort pin in `tests/cohort.rs` falls 96 bytes, to 800,672, because
+three of the constants it used to copy are no longer copied.
+
+The chunks start at 4 KiB and double up to 64 KiB. The first build opened one
+64 KiB chunk, and CI showed the browser run taking one more 64 KiB page for it,
+1,310,720 to 1,376,256 bytes. Most programs hold a few dozen constants: the
+run program has seventy, in one chunk. With the small first chunk the browser
+peak stays at 1,310,720 and its run falls 26,483 instructions.
+
+The fix costs welfare 0.0065, which the floor gives up because the defect was
+a miscompile. `runbench` rises 1,647,148 instructions, 0.15%. The copy walk
+itself got cheaper by about 2.8 million: `k_copy_size`, `k_deep_copy`,
+`k_copy_map_put` and `k_copy_alloc` together. What rose is `realloc`, under
+`k_buf_perm_regrow`. That function makes the same 3,872 calls on both sides,
+and they cost 561,440 instructions before and 3,248,608 after, because realloc
+now copies buffers that it used to extend in place. The run makes seventy fewer
+small mallocs, which changes where glibc puts each accumulator's buffer. The
+location of the cost is measured. Why glibc places the buffers differently is
+not established. Opening the constant chunk before anything else is allocated
+left the count unchanged to the instruction, so the chunk does not sit in the
+way. `encodebench` and `livebench` fall about 375,000 each with the smaller
+chunk, and `deepbench` falls 4.4 million. Release codegen falls 80,700
+instructions and dev codegen rises 29,476; each benchmark's text grows 192
+bytes.

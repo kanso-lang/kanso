@@ -2967,29 +2967,36 @@ static __attribute__((noinline, preserve_most)) void* k_alloc_perm(size_t n) {
    Bounded by the program text and the caches: a bignum moved to permanent
    storage is the run's own data, so it stays on k_alloc_perm and out of the
    ranges every outside pointer is checked against. */
-#define K_CONST_CHUNK (64 * 1024)
+/* Chunks start at 4 KiB and double up to 64 KiB. A program with few
+   constants then holds one small chunk, which in the browser is the
+   difference between staying inside the pages it already had and taking one
+   more. */
+#define K_CONST_FIRST (4 * 1024)
 static char* k_const_at = NULL;
 static size_t k_const_left = 0;
 
+static void k_const_chunk(size_t size) {
+    char* chunk = malloc(size);
+    if (!chunk) { fputs("out of memory\n", stderr); exit(1); }
+    k_frozen_note(chunk, size);
+    if (k_const_n == k_const_cap) {
+        k_const_cap = k_const_cap ? 2 * k_const_cap : 8;
+        k_const_lo = realloc(k_const_lo, sizeof(const char*) * (size_t)k_const_cap);
+        k_const_hi = realloc(k_const_hi, sizeof(const char*) * (size_t)k_const_cap);
+        if (!k_const_lo || !k_const_hi) { fputs("out of memory\n", stderr); exit(1); }
+    }
+    k_const_lo[k_const_n] = chunk;
+    k_const_hi[k_const_n] = chunk + size;
+    k_const_n++;
+    k_const_at = chunk;
+    k_const_left = size;
+}
 static __attribute__((noinline, preserve_most)) void* k_alloc_const(size_t n) {
     if (K_COUNTING) k_stat_perm_allocs++;
     n = (n + 15) & ~(size_t)15;
     if (n > k_const_left) {
-        size_t size = n > K_CONST_CHUNK ? n : K_CONST_CHUNK;
-        char* chunk = malloc(size);
-        if (!chunk) { fputs("out of memory\n", stderr); exit(1); }
-        k_frozen_note(chunk, size);
-        if (k_const_n == k_const_cap) {
-            k_const_cap = k_const_cap ? 2 * k_const_cap : 8;
-            k_const_lo = realloc(k_const_lo, sizeof(const char*) * (size_t)k_const_cap);
-            k_const_hi = realloc(k_const_hi, sizeof(const char*) * (size_t)k_const_cap);
-            if (!k_const_lo || !k_const_hi) { fputs("out of memory\n", stderr); exit(1); }
-        }
-        k_const_lo[k_const_n] = chunk;
-        k_const_hi[k_const_n] = chunk + size;
-        k_const_n++;
-        k_const_at = chunk;
-        k_const_left = size;
+        size_t step = K_CONST_FIRST << (k_const_n < 4 ? k_const_n : 4);
+        k_const_chunk(n > step ? n : step);
     }
     void* p = k_const_at;
     k_const_at += n;
