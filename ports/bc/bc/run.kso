@@ -51,8 +51,8 @@ fn read_options argv i opts
 fn option "--mathlib" (options files _)
   options files true
 
-fn option "--quiet" opts
-  opts
+fn option "--quiet" (options files mathlib)
+  options files mathlib
 
 fn option arg (options files mathlib)
   return options (push files arg) mathlib if not flag? arg
