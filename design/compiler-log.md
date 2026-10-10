@@ -24872,3 +24872,33 @@ a dev build and a release build. On a tree carrying kanso#1827 and kanso#1824
 as well, the same 28 pass under the lap rule and with every edge staging. The
 twelve cost veins and the mem tier are unchanged apart from the new fixture's
 own file: no program in the corpus repairs a node below an enclosing mark.
+
+The list costs something when it is empty. `k_beat_iter_carry` now asks its
+depth for an outer mark and walks the nodes it repaired against it, and the
+pop does the same, at about fourteen instructions a call whether anything is
+pushed or not. deepbench stages 52,310 times and pops 52,003 times, so it pays
+the most, 0.40%. The runtime's text is 2,208 bytes larger in every binary,
+which the `text` total and both codegen rows carry. CI's rows, old to new:
+
+    work_deepbench               365,792,692 -> 367,269,411
+    work_basket                   32,375,114 ->  32,505,156
+    work_runbench              1,131,250,979 -> 1,131,470,937
+    work_pendbench               190,390,436 -> 190,396,306
+    work_livebench             1,472,859,260 -> 1,472,861,300
+    work_jsonbench               860,548,891 -> 860,549,545
+    work_encodebench           2,383,861,305 -> 2,383,861,896
+    work_digestbench               5,560,569 ->   5,561,143
+    work_indexbench                2,456,650 ->   2,457,185
+    work_scanbench                   268,468 ->     268,793
+    work_widebench                28,094,541 ->  28,094,810
+    work_readbench                 4,577,050 ->   4,577,104
+    work_oneshot                  13,176,487 ->  13,176,528
+    work_escapebench              39,045,280 ->  39,045,300
+    text                           4,612,254 ->   4,643,166
+    codegen_instructions_dev     118,896,762 -> 118,918,430
+    codegen_instructions_release 453,707,138 -> 453,994,118
+    browser_run_instructions      33,493,063 ->  33,507,353
+
+Welfare fell by less than a hundredth, and the floor moves down with it under
+the rule for a change that makes the language do what it says: the program
+crashed.
