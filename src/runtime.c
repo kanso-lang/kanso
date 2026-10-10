@@ -2615,13 +2615,16 @@ static int k_carry_at_holds(long long d, const void* p) {
    kept region's are, left the parent flushing headers that no longer held
    anything, and the diff port died freeing a pointer into the middle of an
    arena block. They are released here instead, while the headers are still
-   intact. */
-static void k_registries_drop_carried(long long d) {
-    long long kept = 0;
+   intact, and everything else hands up as the migrates below would hand it:
+   one pass over each registry, where a release pass followed by the migrate
+   cost deepbench 1,040,014 instructions. */
+static void k_viewreg_migrate_carried(int d) {
+    if (k_viewreg_n[d] == 0) return;
+    k_reg_any_at(d) &= ~K_REG_VIEW;
     for (long long i = 0; i < k_viewreg_n[d]; i++) {
         KMap* m = k_viewreg[d][i];
         if (!k_carry_at_holds(d, m)) {
-            k_viewreg[d][kept++] = m;
+            if (d > 0) k_viewreg_push(d - 1, m);
             continue;
         }
         if (m->sorted) {
@@ -2630,12 +2633,16 @@ static void k_registries_drop_carried(long long d) {
             m->sorted_len = 0;
         }
     }
-    k_viewreg_n[d] = kept;
-    kept = 0;
+    k_viewreg_n[d] = 0;
+}
+
+static void k_permreg_migrate_carried(int d) {
+    if (!k_permreg_any || k_permreg_n[d] == 0) return;
+    k_reg_any_at(d) &= ~K_REG_PERM;
     for (long long i = 0; i < k_permreg_n[d]; i++) {
         KValue** slot = k_permreg[d][i];
         if (!k_carry_at_holds(d, slot)) {
-            k_permreg[d][kept++] = slot;
+            if (d > 0) k_permreg_push(d - 1, slot);
             continue;
         }
         if (!*slot) continue;
@@ -2646,7 +2653,7 @@ static void k_registries_drop_carried(long long d) {
         free(b);
         *slot = NULL;
     }
-    k_permreg_n[d] = kept;
+    k_permreg_n[d] = 0;
 }
 
 static __attribute__((noinline)) KValue k_beat_pop_slow(KValue r, long long d,
@@ -2660,11 +2667,14 @@ static __attribute__((noinline)) KValue k_beat_pop_slow(KValue r, long long d,
             k_ptrmap_begin(&k_copy_map);
             k_copy_map_live = 0;
             r = k_deep_copy(r, &cp);
-            k_registries_drop_carried(d);
+            k_chunkreg_migrate((int)d);
+            k_viewreg_migrate_carried((int)d);
+            k_permreg_migrate_carried((int)d);
+        } else {
+            k_chunkreg_migrate((int)d);
+            k_viewreg_migrate((int)d);
+            k_permreg_migrate((int)d);
         }
-        k_chunkreg_migrate((int)d);
-        k_viewreg_migrate((int)d);
-        k_permreg_migrate((int)d);
     }
     if (rewound) k_ten_release(d);
     else k_ten_hand_up(d);
