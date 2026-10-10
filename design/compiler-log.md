@@ -25896,3 +25896,30 @@ work_encodebench on 2,393,936,650, work_oneshot on 13,190,150 and
 work_pendbench on 190,396,604. codegen_instructions_dev lands on 118,940,067
 and browser_run_instructions on 33,517,389. Welfare reads 90.4099 on CI's rows,
 the score already banked.
+
+## 2026-10-10 — the five port fixes land together
+
+kanso#1820, kanso#1822, kanso#1824, kanso#1825 and kanso#1827 each merged main
+and scored against the run program on their own. Each also moves the runbench
+row and the floor, so landing them one at a time would cost a CI round per pull
+request. This branch merges all five onto main and is measured as one tree.
+
+The fixes do not add up. Measured separately against main, their runbench
+deltas sum to -74,980,545, which would put the row at 1,170,062,384. The
+combined tree reads 1,152,573,228 in this container, 17,489,149 lower, so it is
+projected at 1,152,573,635 until CI reads it. The loop rewind (kanso#1824) and
+the lap carry (kanso#1827) both change what a rewound loop keeps, and the loop
+fixture `a_loop_entered_from_a_tail_cycle_gives_its_garbage_back` shows the
+overlap most plainly: with both fixes evac_allocs falls from 80,013 to 49 and
+evac_bytes from 1,920,368 to 1,232. Which of the two fixes accounts for the
+runbench difference is not isolated here.
+
+The run program's counters land on the combined tree as run_beat_iters on 47,564, run_buf_reuse on 132, run_bytes_malloc on 9,127, run_sh_buf on 119,108,240, run_str_scans on 1,021, run_ten_frees on 1, run_ten_handups on 1, run_view_allocs on 12, run_view_frees on 12. The mem
+fixtures the map fix moved land as fused_tally_alloc_bytes on 42,064, fused_tally_allocs on 66, fused_tally_view_allocs on 16, growing_map_alloc_bytes on 189,312, growing_map_allocs on 1,615, growing_map_held_peak_bytes on 55,408, growing_map_view_allocs on 12, growing_map_view_frees on 10. The benchmarks' work rows carry
+each fix's own delta onto main's row until CI measures them together:
+work_deepbench on 393,576,370, work_digestbench on 5,599,739, work_encodebench on 2,398,369,413, work_escapebench on 39,045,874, work_indexbench on 2,459,056, work_jsonbench on 860,559,605, work_livebench on 1,474,870,880, work_oneshot on 13,223,306, work_readbench on 4,577,564, work_scanbench on 270,158, work_widebench on 28,175,107. So do the compile and browser rows: compile_instructions on 25,938,043, entry_instructions on 85,762,025, library_instructions on 86,314,325, codegen_instructions_dev on 118,966,405, codegen_instructions_release on 454,110,241, browser_compile_instructions on 400,285,361, browser_compile_peak_bytes on 675,725, browser_run_instructions on 34,111,788. `text` totals
+4,853,950. Every mem fixture that predates the lap carry gains its
+`chain_finds=0` line.
+
+Welfare reads 91.0246 on these rows against the five floors banked separately,
+the highest of which was 90.6830, and the rise is banked.
