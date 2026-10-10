@@ -53,10 +53,41 @@
 # diagnostics. This program imports std/json, because what the project costs to
 # run includes the library it ships, and a decode the objective cannot see is a
 # decode nobody is paid to improve.
+# THE PHASES THE PORTS ADDED. Four shapes joined on 2026-10-10, each one a
+# cliff that a port of a real program fell off natively while the interpreter
+# ran it in a fraction of a second, and each one fixed by a pull request that
+# lands after this table does. The corpus-first gavel of 2026-09-05 asks for
+# exactly that order: the shape goes into the corpus first, measured on the
+# compiler that still has the cliff, so the fix scores as the win it is
+# instead of moving the floor.
+#
+# So these columns are main's, before any of the four fixes, measured the way
+# the table above was: each phase built alone and the empty program's
+# 6,662,610 taken off. Shares are of the whole program on the same sitting,
+# 1,245,042,917.
+#
+#   scatter  2,340 keys counted in scrambled order   50,901,814  4.09%
+#   bump     350 updates through a named read        53,247,360  4.28%
+#   machine  20,000 passes of a loop in a cycle       8,825,906  0.71%
+#   fold     800 pieces folded onto one string          858,398  0.07%
+#
+# `scatter` (kanso#1820) and `bump` (kanso#1822) are quadratic on main, and
+# their counts land each near the five per cent the stress shapes above were
+# given. `machine` (kanso#1824) and `fold` (kanso#1825) cost little to run
+# and a great deal to hold, so their counts are sized by memory instead: each
+# adds about one decoded document to the program's peak.
+#
+# They are not in bench/runbench_phases.txt. That file links each phase to a
+# per-benchmark counter from before 2026-09-06 so history can be rebuilt, and
+# nothing in that history ever measured these shapes.
+import "./bump"
 import "./deep"
 import "./escape"
+import "./fold"
 import "./index"
+import "./machine"
 import "./pend"
+import "./scatter"
 import "./split"
 import "std/io"
 import "std/json"
@@ -78,6 +109,14 @@ index_chars = 690000
 split_chars = 428
 
 digest_bytes = 15675
+
+scatter_keys = 2340
+
+bump_steps = 350
+
+machine_passes = 20000
+
+fold_pieces = 800
 
 fn decoded _ 0 sofar
   sofar
@@ -106,7 +145,9 @@ fn tally raw doc a b
   bulk = summed (decoded raw decode_rounds 0) (encoded doc encode_rounds 0)
   shapes = a + b + escape/total escape_lines + index/total index_chars
   scanned = split/total split_chars
-  bulk + shapes + scanned + digested raw digest_bytes
+  ported = scatter/total scatter_keys + bump/total bump_steps
+  ported2 = machine/total machine_passes + fold/total fold_pieces
+  bulk + shapes + scanned + ported + ported2 + digested raw digest_bytes
 
 fn shaped raw doc a
   pend/total pend_cards .> (b -> io/write "runbench {tally raw doc a b}\n")

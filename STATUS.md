@@ -7,7 +7,10 @@ is stale — say so.
 ## Waiting on Clay
 
 The decisions live in design/pending-gavels.md — the single ledger; this file
-only indexes it. **Blocking right now: zero.** The last blocking entry, whether
+only indexes it. **Blocking right now: zero.** The last blocking entry,
+whether four port fixes may lower the welfare floor, was filed and closed on
+2026-10-10 on a citation: the 2026-09-05 corpus-first gavel says a blind
+corpus is repaired and the fix scores, so no floor moves. The blocking entry before it, whether
 the wall's simultaneous-failure merge was meant to go, closed on 2026-09-27 on a
 citation: kanso#783 removed the merge on purpose on 2026-08-06, and the log
 entry "the wall's merge went on purpose, the day it was measured" carries the
@@ -48,9 +51,10 @@ kanso — sat here and was bounced on 2026-08-29: a performance question with no
 surface area is the implementer's, per the ledger's own charter, and the log
 carries the research mandate it left with.
 
-**One question is waiting** — zero blocking. It is whether `build` still earns
-its place beside `tie`, filed 2026-10-04 by the ruling that gave cyclic
-structures sized by data their spelling, `list/tie` and `list/tie!`. Clay
+**One question is waiting** — zero blocking. It is whether a list built from
+data may hold `tie` references, filed 2026-10-10. Two left the ledger the same
+day: `build` retires, ruled by Clay, and the four port fixes' floor question
+closed on the 2026-09-05 corpus-first gavel. Clay
 ruled three and directed four on 2026-09-30 in one sitting, and each is in
 design/compiler-log.md under its entry's name. The last two blocking entries
 were both about the wall `>>`, filed 2026-09-17 out of one reading of a book
@@ -89,9 +93,11 @@ entry cites the search behind it and proposes an answer, and a sitting can be a
 yes or a no rather than a fresh design conversation. On 2026-08-29 every
 remaining question was ruled in one pass.
 
-**The one open, not blocking** — whether `build` still earns its place beside
-`tie`, filed 2026-10-04 with a recommendation to retire it once `tie` is built
-and its compile-time check on literal data is pinned. The entry it replaces,
+**The one open, not blocking** — whether a list built from data may hold `tie`
+references, filed 2026-10-10 when the ruling that let a node hold its
+references in a list was built and stopped at lists written out in the
+constructor's field. Whether `build` still earned its place beside `tie`, filed
+2026-10-04, was ruled on 2026-10-10: `build` retires. The entry it replaces,
 what spelling "cyclic structures sized by data" needs, was filed 2026-09-18 and
 ruled on 2026-10-04: a data-sized cycle is tied with `list/tie`, and `list/tie!`
 insists. The iterating `build` block it had recommended went the same day, with
@@ -158,7 +164,7 @@ minted a day later does not satisfy.
 all but one entry. All six came off the same day: the float order, the
 one-engine fixture kind, the box through a parameter and escapebench's size,
 built, and the escape scan and the fixed heap start, each measured and declined.
-Two rows stand as of 2026-10-10. The `tie` row and the browser row came
+Three rows stand as of 2026-10-10, with the `build` retirement added the same day. The `tie` row and the browser row came
 off that day, both built: `list/tie` on every engine with its ten-thousand-ring
 memory fixture (log, 2026-10-05), and the browser as a third side of the
 objective (log, 2026-10-06). The 2026-10-07 integer ruling was built the day it
@@ -249,6 +255,16 @@ admitted; indexing, measuring, walking or passing that list during making is
 still refused. Owes: the check widened, an error golden for a read of such a
 list in the maker, the graph fixture holding each node's neighbours as a list,
 and the teaching example moved to the list form.
+
+### `build` retires, and `tie` is the one way to write a cycle (2026-10-10)
+
+The live log's "gavel: `build` retires, and `tie` is the one way to write a
+cycle". Owes: `build`, the hole `_` and the field write leave the parser, the
+checker and all three engines; the `error[build]` goldens and the build cycle
+fixture move to `tie` or go; every `build` in the corpora, samples, examples
+and lib is rewritten as a `tie`; ch03 teaches the cycle with `tie`; appendix A
+loses `error[build]`; a program that still writes `build` gets one diagnostic
+naming `list/tie`. The top-level constant knot stays.
 
 ### A welfare counter reads three parts per billion (2026-09-15)
 
@@ -551,7 +567,10 @@ else. Chains that tested for `none` after an effect migrate.
   - whether an err gains readers a lambda callback can use
 
 **One question waits in `design/pending-gavels.md`** — zero blocking, one
-open — with a recommendation. Recounted on 2026-10-04: the spelling of cyclic
+open — with a recommendation. Recounted again on 2026-10-10: `build` retires,
+and the floor question closed on the corpus-first gavel. Recounted on 2026-10-10: whether four port
+fixes may lower the welfare floor joined Blocking, and whether a list built
+from data may hold `tie` references joined Open. Recounted on 2026-10-04: the spelling of cyclic
 structures sized by data left Open ruled, `list/tie` and `list/tie!`, and
 whether `build` still earns its place beside `tie` joined it. Recounted on 2026-09-30:
 Clay ruled three entries and directed four in one sitting, and only the
