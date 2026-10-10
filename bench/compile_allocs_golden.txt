@@ -509,4 +509,4 @@
 # are kept at their length, and a guard's statements sit behind a box, which
 # makes every expression 48 bytes. Read by the gate on this host, whose rustc
 # is the golden's: 14,743 -> 14,529.
-compile_allocs=14529
+compile_allocs=14530

@@ -1,0 +1,36 @@
+# Two arms tie only when one call can match both. `none` and `s:string` can
+# never hold the same value, and neither can `none` and a `flag` record, so
+# these groups have no ambiguous call. The check used to rank positions
+# without asking whether they overlap, and refused both groups.
+type flag
+  long
+  takes
+
+fn show none _
+  "nothing"
+
+fn show s:string true
+  "loud {s}"
+
+fn show v _
+  "other {v}"
+
+fn told none _
+  "none"
+
+fn told (flag long true) true
+  "{long} valued attached"
+
+fn told (flag long true) false
+  "{long} valued"
+
+fn told (flag long false) true
+  "{long} switch attached"
+
+fn told (flag long false) false
+  "{long} switch"
+
+pub play =
+  print "{show none true} {show "a" true} {show 3 false}"
+  print (told (flag "x" true) false)
+  print (told none 1)

@@ -860,7 +860,16 @@ fn call_shaped_at(
             if bound.contains(name.as_str()) {
                 continue;
             }
-            let takes = arities.get(name.as_str()).copied().unwrap_or(0);
+            // `if` keeps no count in the builtin table, because its guard form
+            // spells the same word with another shape, but in a list it can
+            // only be the call: `[if b "x" "y"]` was four elements on the
+            // interpreter and a refusal with no line natively
+            let takes =
+                arities.get(name.as_str()).copied().unwrap_or_else(|| match name.as_str() {
+                    "if" => 3,
+                    n if AMBIENT.contains(&n) => builtin_arity(n).unwrap_or(0),
+                    _ => 0,
+                });
             if takes > 0 && following > 0 {
                 diags.push(Diagnostic::new(
                     "syntax",
@@ -2004,7 +2013,9 @@ fn demand_conflicts(
 /// Ruled 2026-10-04: a reference `list/tie` hands its maker is stored in a
 /// constructor's field and nowhere else, because the node it names may not be
 /// made yet. So every call of the maker's `ref` is an argument of a
-/// constructor. `ref` itself may go to a function the program declares, and
+/// constructor, or an element of a list or map literal that is one: a field
+/// may hold a collection, ruled 2026-10-10, and a literal that holds
+/// references reads none of them. `ref` itself may go to a function the program declares, and
 /// that function's parameter is then held to the same rule, which is how a
 /// read inside a helper the maker calls is found. A `ref` handed anywhere else
 /// is refused, since what happens to it there is out of this check's sight.
@@ -2139,8 +2150,9 @@ impl<'a> TieCheck<'a> {
                             "tie",
                             format!(
                                 "`{r}` answers a reference to a node that may not be made yet, \
-                                 so it goes straight into a constructor's field and is never \
-                                 read or kept anywhere else"
+                                 so it goes straight into a constructor's field, alone or in a \
+                                 list or map written there, and is never read or kept anywhere \
+                                 else"
                             ),
                             *span,
                         ));
@@ -2181,6 +2193,20 @@ impl<'a> TieCheck<'a> {
                 }
             }
             Expr::Ident(n, span, _) if n == r => self.handed(None, 0, r, *span),
+            // A list or map literal written as a field is storage, and so is
+            // each element in it, ruled 2026-10-10. A map's key is read to
+            // place the pair, so only its values may hold a reference.
+            Expr::List(items, _) if in_field => {
+                for item in items {
+                    self.reads(item, r, literal, true);
+                }
+            }
+            Expr::MapLit(pairs, _) if in_field => {
+                for (key, value) in pairs {
+                    self.reads(key, r, literal, false);
+                    self.reads(value, r, literal, true);
+                }
+            }
             _ => crate::for_each_child(e, |c| self.reads(c, r, literal, false)),
         }
     }
@@ -2276,11 +2302,62 @@ pub fn check_arm_ties(program: &Program, diags: &mut Vec<Diagnostic>) {
         }
         None
     };
+    let types: HashMap<&str, &crate::ast::TypeDecl> =
+        program.types.iter().map(|t| (t.name.as_str(), t)).collect();
+    // Two patterns no one value can match are disjoint, and the answer is
+    // None: `"+"` and `"eq"`, `none` and `s:string`, `none` and `(flag ..)`.
+    // Ranking alone called each of those pairs equal or ordered, which made
+    // an arm that could never match a call look as if it settled a tie that
+    // call fell into, and made two arms that never meet look tied.
     let compare = |pa: &Pattern, pb: &Pattern| -> Option<i64> {
         let rank = |p: &Pattern| p.rank() as i64;
+        let literal = |p: &Pattern| match p {
+            Pattern::IntLit(..) => Some(LitKind::Int),
+            Pattern::StrLit(..) => Some(LitKind::Str),
+            _ => None,
+        };
+        // a marker is one value of its own type: a concrete type that is not
+        // it, or a constructor of another type, holds nothing it could be
+        let marker_outside = |n: &str, ty: &str| match ty {
+            "int" | "float64" | "string" => true,
+            t if t.ends_with("[]") || t.contains('[') => true,
+            t => n != t && types.get(t).is_some_and(|d| d.members.is_empty() && d.parent.is_none()),
+        };
         match (pa, pb) {
             (Pattern::Annotated { ty: ta, .. }, Pattern::Annotated { ty: tb, .. }) => {
                 relation(ta, tb)
+            }
+            (Pattern::IntLit(a, _), Pattern::IntLit(b, _)) => (a == b).then_some(0),
+            (Pattern::StrLit(a, _), Pattern::StrLit(b, _)) => (a == b).then_some(0),
+            (Pattern::Nullary(a, _), Pattern::Nullary(b, _)) => (a == b).then_some(0),
+            (
+                Pattern::IntLit(..) | Pattern::StrLit(..),
+                Pattern::IntLit(..) | Pattern::StrLit(..),
+            )
+            | (
+                Pattern::IntLit(..) | Pattern::StrLit(..),
+                Pattern::Nullary(..) | Pattern::Ctor { .. },
+            )
+            | (
+                Pattern::Nullary(..) | Pattern::Ctor { .. },
+                Pattern::IntLit(..) | Pattern::StrLit(..),
+            ) => None,
+            (Pattern::Nullary(n, _), Pattern::Ctor { ty, .. })
+            | (Pattern::Ctor { ty, .. }, Pattern::Nullary(n, _))
+                if n.as_str() != ty.as_str() =>
+            {
+                None
+            }
+            (Pattern::Nullary(n, _), Pattern::Annotated { ty, .. })
+            | (Pattern::Annotated { ty, .. }, Pattern::Nullary(n, _))
+                if marker_outside(n, ty) =>
+            {
+                None
+            }
+            (lit, Pattern::Annotated { ty, .. }) | (Pattern::Annotated { ty, .. }, lit)
+                if literal(lit).is_some_and(|k| !type_admits(ty, k, &types)) =>
+            {
+                None
             }
             _ => match rank(pa) == rank(pb) {
                 true => Some(0),

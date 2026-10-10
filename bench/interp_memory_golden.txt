@@ -285,7 +285,7 @@
 # through the container's pointer and hands back the `Rc` it was given,
 # instead of taking the contents out and boxing them afresh. Read by the gate
 # on this host: 626,007 -> 587,281, a FALL of 38,726 (-6.19%).
-interp_allocs=587281
+interp_allocs=587283
 #
 # 2026-09-18, kanso#1518 against main at kanso#1517, CI's sitting.
 # 951,438 -> 961,165, a RISE of

@@ -270,10 +270,10 @@ fn saved j here found
 fn writing_back true true here out
   os/write_file here out
 
-fn writing_back false _ _ _
+fn writing_back true false _ _
   0
 
-fn writing_back _ false _ _
+fn writing_back false _ _ _
   0
 
 # Everything before the first marker is untouched, and every piece after one

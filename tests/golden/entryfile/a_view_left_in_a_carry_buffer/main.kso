@@ -1,0 +1,8 @@
+import "./diff"
+import "std/os"
+
+os/write_file "crash_x.txt" "a\nb\nc\nd\ne\nf\ng\n"
+  .> (_ -> os/write_file "crash_y.txt" "a\nB\nc\nd\ne\nf\nG\nh\n")
+  .> (_ -> os/read_file! "crash_x.txt")
+  .> (x -> os/read_file! "crash_y.txt" .> (y -> diff/both false x y))
+  .> (s -> print "status {s}")

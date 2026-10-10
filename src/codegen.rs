@@ -5383,6 +5383,64 @@ fn lift_around(
     merge(f, emitted, &moved, &rewound, &back);
 }
 
+/// Runs `rewind` unless one of the `failing` arguments is an err, and merges
+/// what the rewind changed back into `emitted`. Inference lets a slot that may
+/// hold a failure cross a rewind as a number does, because the err path never
+/// reads the slot again. The err does need its storage, though: one built in
+/// the lap lies above the mark, and the callee answers it by adding a hop,
+/// which the arena places over the record the err wraps. The carry path skips
+/// the rewind on an err in a carried slot; this is the same test for the
+/// arguments it does not carry.
+fn unless_failing(
+    f: &mut FnEmit,
+    emitted: &mut [String],
+    failing: &[usize],
+    rewind: &mut dyn FnMut(&mut FnEmit, &mut [String]),
+) {
+    if failing.is_empty() {
+        rewind(f, emitted);
+        return;
+    }
+    let mut any: Option<String> = None;
+    for &j in failing {
+        let t = inline_tag(f, &emitted[j]);
+        let b = f.tmp();
+        f.line_fmt(format_args!("{b} = icmp eq i64 {t}, {K_ERR}"));
+        any = Some(match any {
+            None => b.to_string(),
+            Some(prev) => {
+                let o = f.tmp();
+                f.line_fmt(format_args!("{o} = or i1 {prev}, {b}"));
+                o.to_string()
+            }
+        });
+    }
+    let any = any.expect("a failing argument was named");
+    let run = f.label();
+    let done = f.label();
+    let before = f.cur_label.clone();
+    f.line_fmt(format_args!("br i1 {any}, label %{done}, label %{run}"));
+    f.start_block(&run);
+    let old: Vec<String> = emitted.to_vec();
+    rewind(f, emitted);
+    let ran = f.cur_label.clone();
+    f.line_fmt(format_args!("br label %{done}"));
+    f.start_block(&done);
+    for j in 0..emitted.len() {
+        if emitted[j] == old[j] {
+            continue;
+        }
+        let set = f.set_of(&emitted[j]);
+        let v = f.tmp();
+        f.line_fmt(format_args!(
+            "{v} = phi %KValue [ {}, %{before} ], [ {}, %{ran} ]",
+            old[j], emitted[j]
+        ));
+        f.record(&v, set);
+        emitted[j] = v.to_string();
+    }
+}
+
 /// An `i1` saying both tags are the int tag, 0. A tag already known to be 0,
 /// a literal's or an unboxed parameter's, needs no compare, and two such
 /// need no `and`: `n + 1` used to write `icmp eq i64 0, 0` and an `and` for
@@ -8172,7 +8230,10 @@ impl<'a> Backend<'a> {
                     branch_i1(f, ok);
                 }
                 f.bind(name, value);
-                f.record(value, known & !FAIL);
+                // a thunk passes the check above and can still force to an
+                // err, so its FAIL bit stays for the read that forces it
+                let kept = if known & crate::infer::THUNK != 0 { known } else { known & !FAIL };
+                f.record(value, kept);
             }
             Pattern::Annotated { name, ty, .. } => {
                 if ty.ends_with("[]") {
@@ -8960,9 +9021,48 @@ impl<'a> Backend<'a> {
                         f.record(&t, DESC);
                         Ok(t.to_string())
                     }
-                    _ => Err(format!(
-                        "native backend: `{name}` as a bare value is not yet supported"
-                    )),
+                    _ => {
+                        // A record constructor handed over as a function is
+                        // the lambda that calls it, which the interpreter
+                        // already treats it as (lox F20).
+                        let fields = self
+                            .program
+                            .types
+                            .iter()
+                            .find(|t| t.name == name.as_str() && t.members.is_empty())
+                            .map(|t| t.fields.len());
+                        match fields {
+                            Some(n @ 1..=4) => {
+                                let span = expr.span();
+                                let params: Vec<(String, Span)> =
+                                    (0..n).map(|i| (format!("__field{i}"), span)).collect();
+                                let args = params
+                                    .iter()
+                                    .map(|(p, _)| {
+                                        Expr::Ident(
+                                            Name::new(p),
+                                            span,
+                                            crate::ast::Resolution::default(),
+                                        )
+                                    })
+                                    .collect();
+                                let lambda = Expr::Lambda {
+                                    params,
+                                    body: Box::new(Expr::App {
+                                        head: Box::new(expr.clone()),
+                                        args,
+                                        span,
+                                        piped: false,
+                                    }),
+                                    span,
+                                };
+                                self.emit_expr(f, &lambda)
+                            }
+                            _ => Err(format!(
+                                "native backend: `{name}` as a bare value is not yet supported"
+                            )),
+                        }
+                    }
                 }
             }
             Expr::App { head, args, piped, span } => {
@@ -9507,7 +9607,17 @@ impl<'a> Backend<'a> {
                                         emitted[j] = t.to_string();
                                     }
                                 };
-                                lift_around(f, &mut emitted, &lifted, &mut carry);
+                                let failing: Vec<usize> = (0..emitted.len())
+                                    .filter(|j| {
+                                        !positions.contains(j)
+                                            && !words_at.contains(j)
+                                            && packed[*j].is_none()
+                                            && f.set_of(&emitted[*j]) & infer::FAIL != 0
+                                    })
+                                    .collect();
+                                unless_failing(f, &mut emitted, &failing, &mut |f, emitted| {
+                                    lift_around(f, emitted, &lifted, &mut carry)
+                                });
                             }
                             None => {
                                 // everything this iteration allocated is
@@ -9527,8 +9637,17 @@ impl<'a> Backend<'a> {
                                                 && f.set_of(&emitted[j]) & infer::BIG != 0
                                         })
                                         .collect();
-                                    lift_around(f, &mut emitted, &lifted, &mut |f, _| {
-                                        f.line("call void @k_beat_iter()")
+                                    let failing: Vec<usize> = (0..emitted.len())
+                                        .filter(|&j| {
+                                            packed[j].is_none()
+                                                && !words_at.contains(&j)
+                                                && f.set_of(&emitted[j]) & infer::FAIL != 0
+                                        })
+                                        .collect();
+                                    unless_failing(f, &mut emitted, &failing, &mut |f, emitted| {
+                                        lift_around(f, emitted, &lifted, &mut |f, _| {
+                                            f.line("call void @k_beat_iter()")
+                                        })
                                     });
                                 }
                             }

@@ -19,9 +19,18 @@ fn read(rel: &str) -> String {
 /// `#   decode  98 rounds of lib/json over large.json  1,045,772,072  34.54%`.
 /// A row is a comment whose last field ends in `%` and whose first word after
 /// the hash is the phase.
+///
+/// Only the changeover table counts, the one that ends at its `the whole
+/// program` total. The map links a phase to the per-benchmark counter history
+/// carried before 2026-09-06, and a phase that joined the program later has no
+/// such counter and no place in the reconstruction. Those phases have a table
+/// of their own further down the header, which this stops before.
 fn shares_in_the_header(source: &str) -> Vec<(String, String)> {
     let mut out = Vec::new();
     for line in source.lines() {
+        if line.contains("the whole program") {
+            break;
+        }
         let Some(rest) = line.strip_prefix('#') else { continue };
         let fields: Vec<&str> = rest.split_whitespace().collect();
         let [phase, .., last] = fields.as_slice() else { continue };

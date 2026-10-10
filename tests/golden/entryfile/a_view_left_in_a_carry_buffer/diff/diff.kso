@@ -1,0 +1,205 @@
+# The diff port's reduction of a crash that only native code had. Myers'
+# search carries its two frontier maps through a loop and reads them, which
+# builds each map a sorted view; the map headers sit in the loop's carry
+# buffer, so the views register at the loop's depth. When the loop's beat
+# popped it copied its result out of the carry buffer and handed the
+# registrations up to the enclosing depth, which later flushed them after the
+# carry buffer had been reused: native freed a pointer into the middle of an
+# arena block. The three-step effect chain in `both` is what gives the
+# enclosing depth a flush late enough to see the reuse.
+import "std/io"
+import "std/list"
+import "std/text"
+
+type change
+  a_at
+  a_n
+  b_at
+  b_n
+
+type doc
+  eol
+  lines
+
+type walk
+  closed
+  i
+  j
+  open
+
+type removed
+
+type kept
+
+type inserted
+
+type snake
+  x0
+  x1
+  y0
+  y1
+
+type span
+  a
+  ahi
+  alo
+  b
+  bhi
+  blo
+
+type forward
+  vf
+
+type backward
+  vb
+
+fn parse content
+  pieces = text/split content "\n"
+  doc true (text/slice pieces 1 (length pieces - 1))
+
+fn emit_range out d i stop mark
+  return out if i > stop
+  emit_range (push out "{mark}{d.lines[i]}") d (i + 1) stop mark
+
+fn normal_change a b out c
+  head = push out "{c.a_at}"
+  old = emit_range head a c.a_at (c.a_at + c.a_n - 1) "< "
+  rule = if (c.a_n > 0 and c.b_n > 0) (push old "---") old
+  emit_range rule b c.b_at (c.b_at + c.b_n - 1) "> "
+
+pub fn both nested x y
+  a = parse x
+  b = parse y
+  cs = changes (script [1 2 3 4 5 6 7] [1 8 3 4 5 6 9 10])
+  out = list/fold cs [] (&normal_change a b)
+  body = text/join out "\n"
+  effect nested .> (_ -> io/write body) .> (_ -> effect 1)
+
+fn changes steps
+  close (list/fold steps (walk [] 1 1 none) advance)
+
+fn advance (walk closed i j open) kept
+  walk (shut closed open) (i + 1) (j + 1) none
+
+fn advance (walk closed i j open) removed
+  walk closed (i + 1) j (widen open i j 1 0)
+
+fn advance (walk closed i j open) inserted
+  walk closed i (j + 1) (widen open i j 0 1)
+
+fn close w
+  shut w.closed w.open
+
+fn shut closed none
+  closed
+
+fn shut closed c
+  push closed c
+
+fn widen none i j da db
+  change i da j db
+
+fn widen (change a_at a_n b_at b_n) _ _ da db
+  change a_at (a_n + da) b_at (b_n + db)
+
+fn script a b
+  compare [] (span a (length a) 0 b (length b) 0)
+
+fn compare acc p
+  lo = common_prefix p 0
+  hi = common_suffix p lo
+  inner = span p.a (p.ahi - hi) (p.alo + lo) p.b (p.bhi - hi) (p.blo + lo)
+  repeat (middle (repeat acc kept lo) inner) kept hi
+
+fn middle acc p
+  return repeat acc inserted (p.bhi - p.blo) if p.alo == p.ahi
+  return repeat acc removed (p.ahi - p.alo) if p.blo == p.bhi
+  split_at acc p (find_snake p)
+
+fn split_at acc p (snake x0 x1 y0 y1)
+  left = compare acc (span p.a x0 p.alo p.b y0 p.blo)
+  compare (repeat left kept (x1 - x0)) (span p.a p.ahi x1 p.b p.bhi y1)
+
+fn repeat acc _ 0
+  acc
+
+fn repeat acc mark n
+  repeat (push acc mark) mark (n - 1)
+
+fn common_prefix p k
+  return k if p.alo + k >= p.ahi or p.blo + k >= p.bhi
+  same = p.a[p.alo + k + 1] == p.b[p.blo + k + 1]
+  if same (common_prefix p (k + 1)) k
+
+fn common_suffix p lo
+  tail_run p lo 0
+
+fn tail_run p lo k
+  return k if p.ahi - k <= p.alo + lo or p.bhi - k <= p.blo + lo
+  same = p.a[p.ahi - k] == p.b[p.bhi - k]
+  if same (tail_run p lo (k + 1)) k
+
+fn find_snake p
+  round p { 1:0 } { 1:0 } 0
+
+fn round p vf vb d
+  after_forward p vb d (forward_pass p vf vb d (0 - d))
+
+fn after_forward _ _ _ (snake x0 x1 y0 y1)
+  snake x0 x1 y0 y1
+
+fn after_forward p vb d (forward vf)
+  after_backward p vf d (backward_pass p vf vb d (0 - d))
+
+fn after_backward _ _ _ (snake x0 x1 y0 y1)
+  snake x0 x1 y0 y1
+
+fn after_backward p vf d (backward vb)
+  round p vf vb (d + 1)
+
+fn start_x v d k
+  return v[k + 1] if k == 0 - d
+  return v[k - 1] + 1 if k == d
+  if (v[k - 1] < v[k + 1]) v[k + 1] (v[k - 1] + 1)
+
+fn forward_pass p vf vb d k
+  return forward vf if k > d
+  n = p.ahi - p.alo
+  m = p.bhi - p.blo
+  delta = n - m
+  x0 = start_x vf d k
+  x = slide_forward p x0 (x0 - k)
+  vf2 = put vf k x
+  back = delta - k
+  odd = delta % 2 != 0
+  reach = odd and back >= 1 - d and back <= d - 1
+  met = reach and x + vb[back] >= n
+  if met (absolute p x0 x (x0 - k) (x - k)) (forward_pass p vf2 vb d (k + 2))
+
+fn backward_pass p vf vb d k
+  return backward vb if k > d
+  n = p.ahi - p.alo
+  m = p.bhi - p.blo
+  delta = n - m
+  x0 = start_x vb d k
+  x = slide_backward p x0 (x0 - k)
+  vb2 = put vb k x
+  ahead = delta - k
+  even = delta % 2 == 0
+  reach = even and ahead >= 0 - d and ahead <= d
+  met = reach and x + vf[ahead] >= n
+  flipped = absolute p (n - x) (n - x0) (m - x + k) (m - x0 + k)
+  if met flipped (backward_pass p vf vb2 d (k + 2))
+
+fn absolute p x0 x1 y0 y1
+  snake (p.alo + x0) (p.alo + x1) (p.blo + y0) (p.blo + y1)
+
+fn slide_forward p x y
+  return x if p.alo + x >= p.ahi or p.blo + y >= p.bhi
+  same = p.a[p.alo + x + 1] == p.b[p.blo + y + 1]
+  if same (slide_forward p (x + 1) (y + 1)) x
+
+fn slide_backward p x y
+  return x if p.ahi - x <= p.alo or p.bhi - y <= p.blo
+  same = p.a[p.ahi - x] == p.b[p.bhi - y]
+  if same (slide_backward p (x + 1) (y + 1)) x
