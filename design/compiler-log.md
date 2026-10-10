@@ -24565,7 +24565,7 @@ merges first.
 
 The side costs the map header nothing. A view's buffer is preceded by a
 header slot whose first word is its capacity, and the second word, which
-was unused, now points to the side. The low bit of the map's view pointer
+was unused, now points to the side. A mark on the map's view pointer
 says a side is waiting, so a read that finds the bit clear asks nothing
 more, and the emitted fast put, which only tests the pointer for null,
 still takes the call when a view exists. The side is kept, emptied, after
@@ -24576,9 +24576,10 @@ and xsv's reproduction from 4.75 to 0.17. `tests/golden/mem/
 a_tally_of_scattered_keys_merges_its_view.kso` pins the shape: 4,000
 scrambled keys, each read before it is put, take 15 view allocations where
 main took 12, and hold 206,448 bytes at peak where main held 196,576.
-Two mem goldens move with it. `growing_map` takes one more view (15 to 16,
-alloc_bytes 41,536 to 42,064), and `fused_tally` two more (10 to 12),
-with held_peak_bytes 49,120 to 55,408 and alloc_bytes 181,952 to 189,312.
+Two mem goldens move with it. `fused_tally` takes one more allocation (65
+to 66, alloc_bytes 41,536 to 42,064), and `growing_map` two more (1,613 to
+1,615), with held_peak_bytes 49,120 to 55,408 and alloc_bytes 181,952 to
+189,312.
 `tests/golden/micro/a_map_written_out_of_order_past_its_room.kso` puts 211
 keys in scrambled order with reads, a length, a missing key and a print in
 between, and one in-place loop visits every key twice, so its second visit
@@ -24614,3 +24615,21 @@ nop added before its copy loop. Measured locally from one directory against
 a build of main's runtime, runbench is 207,423 instructions above main and
 livebench 903,510, down from 945,000 and 4,208,000. wasm32 keeps the low
 bit, because a 32-bit address can have its top bit set.
+
+CI's rows for this head, against main after the bignum loop rewind: work_runbench
+rises from 1,129,588,698 to 1,129,796,121 and work_livebench from 1,473,485,659
+to 1,474,389,169, the remains of the check described above. work_basket rises
+from 32,362,738 to 32,913,977, 1.7%, work_encodebench from 2,384,337,843 to
+2,384,348,674, work_oneshot from 13,027,085 to 13,041,113 and work_pendbench
+from 190,397,733 to 190,398,031. Every binary's text is 4,800 bytes larger,
+which sums to text 4,586,926 to 4,654,126. browser_run_instructions goes from
+33,510,708 to 33,519,681 and codegen_instructions_dev from 118,855,381 to
+118,877,223, both carrying the larger runtime. basket builds maps and reads
+them between puts, so it is the benchmark that meets the side; which of its
+maps grows one is not isolated here. The mem rows are the ones named above:
+fused_tally_allocs 65 to 66 and fused_tally_alloc_bytes 41,536 to 42,064;
+growing_map_allocs 1,613 to 1,615, growing_map_alloc_bytes 181,952 to 189,312
+and growing_map_held_peak_bytes 49,120 to 55,408. Welfare falls from
+90.25887870 to 90.25804143, and the trade, a benchmark corpus that never meets
+a mid-map key against ports that spend 95% of their time on one, has gone to
+Clay.
