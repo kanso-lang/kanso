@@ -151,39 +151,50 @@ quotes = map cities (c -> fetch_quote c)
 cheapest = first (sort quotes)
 print "four lookups fanned out, one answer fanned in: {cheapest} yen"
 `,
-  build: `# two objects that point at each other. in most languages this needs a
+  tie: `# two people who point at each other. in most languages this needs a
 # nullable field you check forever after, or a second pass that patches the
-# link once both halves exist. a build block lets the knot be tied, then
-# freezes what it named -- once the block ends nothing can be rewritten, so
-# the cycle is ordinary immutable data, in scope under the names it gave.
+# link once both halves exist. list/tie calls the maker once for each name
+# and hands it a ref that reaches any of the others by name, so every record
+# is built whole and the cycle is ordinary immutable data.
+import "std/list"
+
 type person
   name
   partner
 
-build
-  ada = person "ada" _
-  bob = person "bob" ada
-  ada.partner = bob
+fn other "ada"
+  "bob"
+
+fn other _
+  "ada"
+
+people = list/tie ["ada" "bob"] (name ref -> person name (ref (other name)))
+
+ada = people["ada"]
 
 print "{ada.name} <-> {ada.partner.name} <-> {ada.partner.partner.name}"
 `,
   contained: `# the same knot, but crossing call boundaries and then thrown away in
-# bulk. tie hands the cycle out as an ordinary return value, round_trip
-# walks two hops of it as an ordinary argument, and the loop builds two
-# thousand of them and keeps none. a build block's cohort is born and dies
-# inside one iteration, so the arena rewinds it whole -- no counting, no
-# collector, and peak memory does not move with the count.
+# bulk. ping_pong hands the cycle out as an ordinary return value,
+# round_trip walks two hops of it as an ordinary argument, and the loop
+# builds two thousand of them and keeps none. each call's nodes are born
+# and die inside one iteration, so the arena rewinds them whole -- no
+# counting, no collector, and peak memory does not move with the count.
+import "std/list"
+
 type node
   name
   peer
 
-fn tie label
-  build
-    here = node label _
-    there = node "pong" _
-    here.peer = there
-    there.peer = here
-  here
+fn ping_pong label
+  linked = (id ref -> node id (ref (if (id == label) "pong" label)))
+  home (list/tie [label "pong"] linked) label
+
+fn home b:list/broken_link _
+  b
+
+fn home nodes label
+  nodes[label]
 
 fn round_trip n
   n.peer.peer.name
@@ -192,9 +203,9 @@ fn spin 0 acc
   acc
 
 fn spin n acc
-  spin (n - 1) (acc + length (round_trip (tie "ping")))
+  spin (n - 1) (acc + length (round_trip (ping_pong "ping")))
 
-knot = tie "ping"
+knot = ping_pong "ping"
 print "one hop: {knot.peer.name}"
   .> (_ -> print "back home: {round_trip knot}")
   .> (_ -> print "two thousand more, all discarded: {spin 2000 0}")

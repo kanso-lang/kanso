@@ -1,8 +1,0 @@
-type cell
-  n
-
-pub play =
-  build
-    x = cell 1
-    set x n 2
-  print "{x.n}"

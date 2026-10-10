@@ -1677,7 +1677,6 @@ fn stmt_allocates(
     let e = match stmt {
         Stmt::Bind { expr, .. } => expr,
         Stmt::Expr(e) => e,
-        Stmt::Set { value, .. } => value,
     };
     expr_allocates(e, fn_names, allocating, seed_pass, site)
 }
@@ -1727,8 +1726,8 @@ fn expr_allocates(
     ];
     match e {
         Expr::List(..) | Expr::MapLit(..) | Expr::Lambda { .. } | Expr::Partial(..) => true,
-        Expr::Block(stmts, _) | Expr::Build(stmts, _) => stmts.iter().any(|st| match st {
-            Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
+        Expr::Block(stmts, _) => stmts.iter().any(|st| match st {
+            Stmt::Bind { expr, .. } | Stmt::Expr(expr) => {
                 expr_allocates(expr, fn_names, allocating, seed_pass, site)
             }
         }),
@@ -1800,7 +1799,7 @@ fn expr_allocates(
                     expr_allocates(guard_stmt_expr(s), fn_names, allocating, seed_pass, site)
                 })
         }
-        Expr::Ident(..) | Expr::Int(..) | Expr::Float(..) | Expr::Hole(..) => false,
+        Expr::Ident(..) | Expr::Int(..) | Expr::Float(..) => false,
     }
 }
 
@@ -1849,7 +1848,7 @@ fn marked_tails<'a>(e: &'a Expr, under: bool, out: &mut Vec<(&'a Expr, bool)>) {
 
 fn guard_stmt_expr(s: &Stmt) -> &Expr {
     match s {
-        Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expr,
+        Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
     }
 }
 
@@ -2224,7 +2223,7 @@ fn collect_names<'a>(e: &'a Expr, out: &mut HashSet<&'a str>) {
         Expr::Ident(n, _, _) | Expr::Partial(n, _) => {
             out.insert(n.as_str());
         }
-        Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
+        Expr::Block(stmts, _) => {
             for st in stmts {
                 collect_names(guard_stmt_expr(st), out);
             }
@@ -2271,7 +2270,7 @@ fn collect_names<'a>(e: &'a Expr, out: &mut HashSet<&'a str>) {
                 }
             }
         }
-        Expr::Int(..) | Expr::Float(..) | Expr::Hole(..) => {}
+        Expr::Int(..) | Expr::Float(..) => {}
     }
 }
 
@@ -2298,8 +2297,7 @@ impl<'a> ValueUses<'a> {
         let mut names = crate::hash::Set::default();
         for decl in &program.fns {
             for stmt in &decl.body {
-                let (Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. }) =
-                    stmt;
+                let (Stmt::Bind { expr, .. } | Stmt::Expr(expr)) = stmt;
                 collect_value_uses(expr, &mut names);
             }
         }
@@ -2318,10 +2316,9 @@ fn collect_value_uses<'a>(e: &'a Expr, out: &mut crate::hash::Set<&'a str>) {
         Expr::Ident(n, _, _) | Expr::Partial(n, _) => {
             out.insert(n.as_str());
         }
-        Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
+        Expr::Block(stmts, _) => {
             for st in stmts {
-                let (Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. }) =
-                    st;
+                let (Stmt::Bind { expr, .. } | Stmt::Expr(expr)) = st;
                 collect_value_uses(expr, out);
             }
         }
@@ -2374,7 +2371,7 @@ fn collect_value_uses<'a>(e: &'a Expr, out: &mut crate::hash::Set<&'a str>) {
                 }
             }
         }
-        Expr::Int(..) | Expr::Float(..) | Expr::Hole(..) => {}
+        Expr::Int(..) | Expr::Float(..) => {}
     }
 }
 
@@ -2382,10 +2379,8 @@ fn collect_value_uses<'a>(e: &'a Expr, out: &mut crate::hash::Set<&'a str>) {
 fn value_use(e: &Expr, name: &str) -> bool {
     match e {
         Expr::Ident(n, _, _) | Expr::Partial(n, _) => n == name,
-        Expr::Block(stmts, _) | Expr::Build(stmts, _) => stmts.iter().any(|st| match st {
-            Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
-                value_use(expr, name)
-            }
+        Expr::Block(stmts, _) => stmts.iter().any(|st| match st {
+            Stmt::Bind { expr, .. } | Stmt::Expr(expr) => value_use(expr, name),
         }),
         Expr::App { head, args, .. } => {
             let head_is_plain_name = matches!(head.as_ref(), Expr::Ident(..));
@@ -2412,7 +2407,7 @@ fn value_use(e: &Expr, name: &str) -> bool {
             TemplatePart::Interp(inner) => value_use(inner, name),
             TemplatePart::Lit(_) => false,
         }),
-        Expr::Int(..) | Expr::Float(..) | Expr::Hole(..) => false,
+        Expr::Int(..) | Expr::Float(..) => false,
     }
 }
 
@@ -2425,8 +2420,7 @@ mod the_value_use_index_answers_what_the_scan_answered {
     fn scanned(program: &Program, name: &str) -> bool {
         program.fns.iter().any(|d| {
             d.body.iter().any(|stmt| {
-                let (Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. }) =
-                    stmt;
+                let (Stmt::Bind { expr, .. } | Stmt::Expr(expr)) = stmt;
                 value_use(expr, name)
             })
         })
@@ -2444,8 +2438,7 @@ mod the_value_use_index_answers_what_the_scan_answered {
         for decl in &program.fns {
             every.insert(decl.name.as_str());
             for stmt in &decl.body {
-                let (Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. }) =
-                    stmt;
+                let (Stmt::Bind { expr, .. } | Stmt::Expr(expr)) = stmt;
                 collect_names_borrowed(expr, &mut every);
             }
         }
@@ -2479,11 +2472,9 @@ mod the_value_use_index_answers_what_the_scan_answered {
                     collect_names_borrowed(a, out);
                 }
             }
-            Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
+            Expr::Block(stmts, _) => {
                 for st in stmts {
-                    let (Stmt::Bind { expr, .. }
-                    | Stmt::Expr(expr)
-                    | Stmt::Set { value: expr, .. }) = st;
+                    let (Stmt::Bind { expr, .. } | Stmt::Expr(expr)) = st;
                     collect_names_borrowed(expr, out);
                 }
             }
@@ -2915,9 +2906,7 @@ mod tests {
 
     fn collect_idents(stmt: &crate::ast::Stmt, out: &mut crate::hash::Set<String>) {
         let e = match stmt {
-            crate::ast::Stmt::Bind { expr, .. }
-            | crate::ast::Stmt::Expr(expr)
-            | crate::ast::Stmt::Set { value: expr, .. } => expr,
+            crate::ast::Stmt::Bind { expr, .. } | crate::ast::Stmt::Expr(expr) => expr,
         };
         idents_in(e, out);
     }

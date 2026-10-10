@@ -1,11 +1,17 @@
+import "std/list"
+
 type person
   name
   partner
 
-build
-  ada = person "ada" _
-  bob = person "bob" ada
-  ada.partner = bob
+fn met "ada" ref
+  person "ada" (ref "bob")
+
+fn met name ref
+  person name (ref "ada")
+
+people = list/tie ["ada" "bob"] met
+ada = people["ada"]
 
 print "{ada.name} and {ada.partner.name}"
   .> (_ -> print "back where we started: {ada.partner.partner.name}")

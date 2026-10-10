@@ -25445,6 +25445,92 @@ and run_peak_bytes' baseline goes from 156,818,380 to 489,255,962. Both
 baselines are rounded up. The score is unchanged, and the four fixes now
 have something to score against.
 
+## 2026-10-10 — `build` retires, and `tie` is the one way to write a cycle
+
+The gavel of the same day retired the `build` block and everything that existed
+to serve it: the hole `_` in a construction's argument, the field write
+`a.f = v`, and the checker's proof that a write reaches only a record born in
+the block. This entry is the build.
+
+The parser no longer produces `Expr::Build`, `Expr::Hole` or `Stmt::Set`, and
+the three variants are gone from the AST, so every pass that matched them lost
+an arm. The checker loses the block-born walk and its cohort table. The
+interpreter loses its field write and the native backend loses the
+`k_set_field` call it emitted for one, along with the runtime function behind
+it. A program written for the old form meets one syntax diagnostic for each
+spelling, and each one names `list/tie`: a `build` header, a bare `_` where a
+value goes, and `a.f = v`. The wildcard pattern and a lambda's `_` parameter
+are read before the expression parser is asked, so they keep their meaning.
+
+The error corpus loses the twenty-six fixtures that pinned the block's own
+refusals and gains three for the retired spellings,
+`a_build_block_is_retired`, `a_hole_is_retired` and
+`a_field_write_is_retired`. Each was seen red with the diagnostic's wording
+changed. `uncertain_reads_are_not_counted` loses its block-bound case and
+keeps its other six. The micro corpus loses four fixtures that existed only for
+the block. `a_description_rides_in_a_field` now builds its record with the
+description in place, and the re-export spec for a door spelling loses its
+`build` position and keeps the other four. The ratchet loses the seven rows
+that disarmed a hole refusal, with their mutation scripts, and the construct
+census in `tests/golden/shapes.txt` loses `Build`, `Hole` and `s:Set`.
+
+The examples, the ch03 sample and the knot-equality golden were rewritten with
+`tie` earlier on this branch. The mem fixture that pinned a cycle's cost moves
+from `build_cycle` to `tie_cycle`, and `tie` costs more than the block did for
+the same two cycles: 38 allocations against 18, 2,096 bytes against 784,
+evac_allocs 15 against 13 and evac_bytes 560 against 496. sh_buf goes from 144
+to 928 and sh_map from 0 to 192, which are the key list and the map `tie`
+answers; sh_str falls from 192 to 176.
+
+ch03 teaches `tie` in the section on records that point at each other, and
+shows a field holding a list of references, which the same day's gavel "a field
+may hold a list of `tie` references" owes the book. Appendix A replaces its `error[build]` section with `error[tie]`, the check
+that refuses a literal link to a key the list does not hold. The playground's
+two knot samples are rewritten with `tie`, and the compiler page's account of
+the memory model now describes a cycle as a tie's birth cohort.
+design/build-blocks.md is deleted; the log keeps its history.
+
+Moving the cycle fixture onto `tie` found a disagreement between engines.
+The interpreter builds a tie's nodes with thunk cells and settles each record's
+fields once the knot is closed, but `resolve_tied` settled only a field that
+was itself a cell. A cell inside a list or a map held by a field stayed a cell,
+and every later read forced it again: `tie_cycle` counted 5 `thunk_forces` on
+the interpreter and 0 natively. `settled_link` now replaces a forced cell
+inside a list or map field with the node it holds, and the two engines agree on
+the fixture. The spec is `mem_corpus_interp_matches_the_semantic_counters` in
+`tests/oracle.rs`, which runs every mem fixture on the interpreter and compares
+its semantic counters with the golden's. With the list and map arms of
+`settled_link` removed it goes red on `tie_cycle`, reading 5 forces against 0.
+The mem golden alone stays green, because it is read off the native binary.
+
+`tests/compile_cost.rs` timed a `build_block` sample, which no longer parses,
+so the sample and its row in `bench/compile_golden.txt` are gone. A `tie`
+sample cannot take its place there, because the harness compiles a file with no
+imports and `tie` lives in `list`. Removing the passes that served the block
+moves the compile, entry, library, emit and interpreter rows and the size of
+every binary. On CI every one of them falls. compile_instructions lands on
+25,712,749, entry_instructions on 85,036,744, library_instructions on
+85,590,951, emit_instructions on 7,038,004 and interp_instructions on
+488,375,858. codegen_instructions_dev lands on 118,906,508 and
+codegen_instructions_release on 453,887,359. browser_compile_instructions
+lands on 388,285,810. Every binary is 448 bytes smaller, and the text total
+lands on 4,645,694. work_runbench lands on 1,245,043,177, as projected, with
+work_encodebench on 2,393,925,910, work_livebench on 1,472,860,747 and
+work_oneshot on 13,176,864. No row rises, so the floor does not have to move to
+admit the retirement, and the score rises from 90.24995 to 90.2512, which is
+banked.
+
+Three diagnostics lost their golden with the block. The unused-expression rule
+lives in two walks, the function body's and the block's, and
+a_build_body_line_goes_nowhere was the only program that reached either: in a
+body, consecutive expression lines fold into one effect group, and a binding
+after an expression line is refused first by "bindings precede the effects in a
+body". The indented-block rule never had a reachable program. It was counted as
+pinned by tests/golden/play/decls_after_statements.stderr, a file no test reads
+and whose fixture now runs and prints `first`. Dropping `build` from the
+message's wording took the stale copy out of agreement. All three are listed in
+tests/golden/unpinned_diagnostics.txt with the programs that were tried.
+
 ## 2026-10-10 — a pop after a skipped lap walks the whole result
 
 With the two carry faults of kanso#1834 fixed, the sat port still failed under
@@ -25638,6 +25724,19 @@ browser_compile_instructions on 391,826,076. The run program's emitted code
 reads one call and two lines more than this container wrote, so
 emitted_other_calls lands on 17,394 and emitted_other_lines on 146,698.
 Welfare reads 90.3105 on CI's rows, and the rise is banked.
+
+The conversion in `k_concat_arr_mut` made `k_b_adopt` redundant, and the
+ratchet found it on the carrier. Two rows mutated the adoption: "a join that
+never adopts its seed" removed it, and "a lazy seed taken for a builder"
+handed it the forced value. Both stayed green, because a seed the adoption
+misses now reaches the first join without room and is made into a builder
+there. Neither mechanism could be removed and seen red while the other stood.
+The two rows are replaced by "a first join that never makes its builder",
+which restores the old refusal in `k_concat_arr_mut`. Under it
+`a_fold_joins_onto_its_own_accumulator` prints nothing from native and the
+micro corpus goes red. `k_b_adopt` is left in place for now and goes in a
+change of its own, since removing it moves the text and codegen rows and
+needs CI to read them.
 
 ## 2026-10-10 — a loop entered from a tail cycle gives its garbage back
 
@@ -25924,6 +26023,23 @@ work_deepbench on 393,576,370, work_digestbench on 5,599,739, work_encodebench o
 Welfare reads 91.0246 on these rows against the five floors banked separately,
 the highest of which was 90.6830, and the rise is banked.
 
+Main moved under the branch when kanso#1837 retired `build`, and the carrier
+took main in a merge commit. The compiler's front end lost the passes `build`
+needed, so the rows the carrier's analysis had raised land below where they
+stood before the merge and above main's: compile_instructions lands on
+25,715,103 against main's 25,712,749, entry_instructions on 85,044,877 against
+85,036,744, and library_instructions on 85,599,176 against 85,590,951.
+interp_instructions lands on 488,792,115 against 488,375,858. The two codegen
+tiers land on 118,954,619 for codegen_instructions_dev and 454,407,182 for
+codegen_instructions_release, against main's 118,906,508 and 453,887,359.
+browser_compile_instructions lands on 390,036,773 against 388,285,810. Each
+runtime binary sheds 448 bytes with `build` gone, and `text` totals 4,826,814
+against main's 4,645,694. The work rows CI read on the merged tree are
+work_encodebench on 2,398,369,791, work_livebench on 1,474,871,454 and
+work_oneshot on 13,223,698; work_runbench lands on 1,152,754,428, against
+main's 1,245,043,177. Welfare reads 91.0337 on CI's rows against the floor of
+91.0317, and the rise is banked.
+
 ## 2026-10-10 — a lap waits for twice what the last stage copied
 
 Testing the combined tree on the lox port's F18 loop found two things the five
@@ -26061,3 +26177,34 @@ codegen_instructions_release at 454,306,200, browser_run_instructions at
 carrier alone, the release row falls by 120,818 and the dev row rises by
 3,943; every benchmark's runtime text grows 176 bytes, which is the spare
 list's accounting and its drop path.
+
+## 2026-10-10 — a counting loop keeps every pass's key; copying keys out measured and declined
+
+A loop that counts into a map it was handed, under a key it interpolates each
+pass, never rewinds. `put m k (m[k] + 1)` is an in-place put and replaces the
+count, so the key string is garbage once the put has found its slot. The beat
+licence refuses the loop anyway, because a key the put does store would be
+freed under the map by the next rewind. At 100,000 passes over ten keys the
+arena peak is 4,194,304 bytes, 32 bytes a pass. A loop that builds a new string
+value each pass into a map, `put m "body" "{m["body"]}{x}"`, keeps every
+version the same way: 105,913,696 bytes of arena at 100 passes of a one-megabyte
+string, 420,568,976 at 400, on main and on every branch in flight.
+
+The fix tried was to let the put copy a key it inserts out of the arena, and
+license the loop. The copy is registered with the map's pairs and freed when
+they are, so a function that builds a map of fresh keys in a loop does not leak
+across calls: peak RSS held at 10 MB from 2,000 to 200,000 calls. Inside a loop
+that rewinds, a put with a string key calls the runtime instead of the emitter's
+inline fast path, which would store the key uncopied. Routing every string-key
+put to the runtime whenever any beat was live cost jsonbench 16.6% and runbench
+8.2%; routing only the puts inside the newly licensed loop cost nothing
+measurable on the instruction rows. The counting loop's arena peak fell to
+1,048,576 bytes and stays there.
+
+It is declined on memory. Licensing the loop moves its map's pairs out of the
+arena into malloc'd storage, which the objective counts, and in the run program
+nothing came back from the arena to pay for it: run_peak_bytes rose from
+4,948,512 to 5,202,176, and welfare fell from 91.0318 to 91.0163. basket also
+read 901,269 more instructions. A version worth trying keeps the pairs in the arena and
+copies the key into the region below the loop's mark, which needs an allocation
+point the arena does not have.

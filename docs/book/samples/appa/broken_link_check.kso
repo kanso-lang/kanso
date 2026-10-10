@@ -1,0 +1,10 @@
+import "std/list"
+
+type person
+  name
+  partner
+
+pub play =
+  people = list/tie ["ada" "bob"] (name ref -> person name (ref "cy"))
+  ada = people["ada"]
+  print "{ada.name}"

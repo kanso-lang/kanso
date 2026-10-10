@@ -1,4 +1,0 @@
-error[syntax]: `build` answers nothing to bind `b` to — what it builds is in scope after it, under the names it gave
-  --> build_answers_nothing_to_bind.kso:2:3
-   2 |   b = build
-         ^
