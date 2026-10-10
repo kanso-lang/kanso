@@ -25054,5 +25054,8 @@ CI's rows, measured with main's constructor change merged in: the browser
 compile row rises 217,425 instructions to 388,494,007 and the browser run row
 1,119 to 33,508,472, dev codegen rises 139 to 118,918,569, and release codegen
 falls 8 to 453,994,110. Machine code grows on every benchmark, by 16 bytes on
-scanbench and 368 on runbench. Both changes are fixes to what programs print,
-so the floor follows them, from 90.25040 to 90.25021.
+scanbench and 368 on runbench. The work rows move with the change, and which
+branch costs what has not been isolated: encodebench grows by 10,064,560
+instructions, 0.42%, runbench by 68,142 and digestbench by 36,820, and
+livebench falls 259. Both changes are fixes to what programs print, so the
+floor follows them, from 90.25040 to 90.24995.
