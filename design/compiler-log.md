@@ -24650,11 +24650,24 @@ folded twice more, and a direct call of the named folder. Making
 over one lambda result then wrote into the same buffer, and both printed
 `[1][2][3]+5-6`.
 
-No benchmark folds a string, so every runtime vein agrees with main. The
-browser compile row rises from 388,182,464 to 391,515,764, 0.86%, and the
-browser run row falls 6, to 33,510,702. The rise does not come from the new
-pass: with `named_folder_joins` switched off the row reads 392,251,588, higher
-still, so it follows the wasm binary's layout rather than the work done. On
-this tree welfare falls from 90.25811251 to 90.25529644 before CI's compile
-rows are in, and the floor waits on Clay, since this is a memory fix rather
-than a ruled part of the language.
+No benchmark folds a string, so every allocation counter agrees with main.
+The runtime's join grows 320 bytes of machine code, and CI's rows move with
+it:
+
+- `text` grows 320 bytes a binary, to 4,593,438 in all.
+- `work_basket` lands on 32,404,790, `work_runbench` on 1,129,589,259,
+  `work_livebench` on 1,473,486,345, `work_encodebench` on 2,384,338,137,
+  `work_oneshot` on 13,027,190, `work_digestbench` on 5,566,917 and
+  `work_scanbench` on 281,806, each within 22,030 instructions of main.
+- The analysis costs `compile_instructions` 25,857,543,
+  `entry_instructions` 85,513,471 and `library_instructions` 86,066,360.
+  `emit_instructions` falls to 7,058,306, `interp_instructions` to
+  488,868,354, and both codegen rows fall.
+- `browser_compile_instructions` rises from 388,182,464 to 391,515,764,
+  0.86%, and the browser run row falls 6, to 33,510,702. The rise does not
+  come from the new pass: with `named_folder_joins` switched off the row reads
+  392,251,588, higher still, so it follows the wasm binary's layout rather
+  than the work done.
+
+Welfare falls from 90.25811251 to 90.25519022, and the floor waits on Clay,
+since this is a memory fix rather than a ruled part of the language.

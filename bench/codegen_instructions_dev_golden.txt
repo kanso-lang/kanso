@@ -304,4 +304,4 @@
 # and nothing else, under -nostdlib, so the row stops counting what the runner
 # image installed. CI's reading: codegen_instructions_dev 130,522,511 ->
 # 126,434,707, a FALL of 4,087,804 (-3.1319%).
-codegen_instructions_dev=118855381
+codegen_instructions_dev=118853814
