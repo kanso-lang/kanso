@@ -25639,6 +25639,19 @@ reads one call and two lines more than this container wrote, so
 emitted_other_calls lands on 17,394 and emitted_other_lines on 146,698.
 Welfare reads 90.3105 on CI's rows, and the rise is banked.
 
+The conversion in `k_concat_arr_mut` made `k_b_adopt` redundant, and the
+ratchet found it on the carrier. Two rows mutated the adoption: "a join that
+never adopts its seed" removed it, and "a lazy seed taken for a builder"
+handed it the forced value. Both stayed green, because a seed the adoption
+misses now reaches the first join without room and is made into a builder
+there. Neither mechanism could be removed and seen red while the other stood.
+The two rows are replaced by "a first join that never makes its builder",
+which restores the old refusal in `k_concat_arr_mut`. Under it
+`a_fold_joins_onto_its_own_accumulator` prints nothing from native and the
+micro corpus goes red. `k_b_adopt` is left in place for now and goes in a
+change of its own, since removing it moves the text and codegen rows and
+needs CI to read them.
+
 ## 2026-10-10 — a loop entered from a tail cycle gives its garbage back
 
 The lox and mal ports both ran their interpreters out of memory. A Lox `for`

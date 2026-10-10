@@ -4237,15 +4237,18 @@ seed_refused = row
   (breaking "a_builder_seed_refusing_what_is_not_a_string")
   release
 
-seed_unadopted = row
-  "a join that never adopts its seed"
+# The first join into a builder finds no room in a seed that is not a builder
+# yet, whether the seed was not a string, was bound lazily, or was a fold's
+# literal, and makes the builder there. The fold fixture dies without it.
+seed_unbuilt = row
+  "a first join that never makes its builder"
   true
   "cargo test --release --test golden micro_corpus_agrees_across_engines"
   "specs (unit, golden, differential)"
-  (breaking "a_join_that_never_adopts_its_seed")
+  (breaking "a_first_join_that_never_makes_its_builder")
   release
 
-rows_c1zzzzs = text/concat rows_c1zzzzu [seed_refused seed_unadopted]
+rows_c1zzzzs = text/concat rows_c1zzzzu [seed_refused seed_unbuilt]
 
 # A builtin in a program that declares a subtype unwraps its arguments, and
 # a lazy one is forced before the unwrap looks at it.
@@ -4259,18 +4262,6 @@ lazy_sub = row
 
 rows_c1zzzzv = text/concat rows_c1zzzzs [lazy_sub]
 
-# A seed bound lazily reaches a builder loop's first join as a thunk, and the
-# join asks about it as it arrived.
-lazy_seed = row
-  "a lazy seed taken for a builder"
-  true
-  "cargo test --release --test golden micro_corpus_agrees_across_engines"
-  "specs (unit, golden, differential)"
-  (breaking "a_lazy_seed_taken_for_a_builder")
-  release
-
-rows_c1zzzzx = text/concat rows_c1zzzzv [lazy_seed]
-
 # A group handed out as a function value keeps its record boxed, because the
 # wrapper a function value is called through answers one boxed word.
 fn_value_boxed = row
@@ -4281,7 +4272,7 @@ fn_value_boxed = row
   (breaking "a_function_value_returned_in_registers")
   release
 
-rows_c1zzzzy = text/concat rows_c1zzzzx [fn_value_boxed]
+rows_c1zzzzy = text/concat rows_c1zzzzv [fn_value_boxed]
 
 # An operator arm a module declares may build that module's records once the
 # module is imported, as any of its named functions may.
