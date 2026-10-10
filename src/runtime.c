@@ -191,6 +191,13 @@ static long long k_stat_sh_rec = 0;
 static long long k_stat_sh_buf = 0;
 static long long k_stat_sh_map = 0;
 static long long k_stat_sh_bytes = 0;
+/* Bytes of block the spare list holds at its fullest. A rewind hands its
+   blocks there and the next allocation takes them back, so a program whose
+   blocks are reused keeps this near one block; a block nothing can reuse
+   stays until the cohort ends, and this is the only counter that sees it,
+   since the arena's own peak counts only blocks in use. */
+static long long k_spare_bytes = 0;
+static long long k_stat_spare_peak = 0;
 static long long k_stat_bytes_freed = 0;
 static long long k_stat_buf_reuse = 0;
 /* A map's cached sorted view is malloc'd, so no rewind reclaims it and only an
@@ -721,6 +728,7 @@ static void k_stats_dump(void) {
     fprintf(stderr,
         "sh_str=%lld\nsh_rec=%lld\nsh_buf=%lld\nsh_map=%lld\nsh_bytes=%lld\n",
         k_stat_sh_str, k_stat_sh_rec, k_stat_sh_buf, k_stat_sh_map, k_stat_sh_bytes);
+    fprintf(stderr, "spare_peak_bytes=%lld\n", k_stat_spare_peak);
 }
 
 /* A one-shot boundary returns its garbage to the allocator. A cohort
@@ -737,7 +745,29 @@ static void k_spare_release(int keep) {
             continue;
         }
         *link = b->next;
+        if (K_COUNTING) k_spare_bytes -= (long long)b->cap;
         free(b);
+    }
+}
+
+/* An oversize block is the exact size of the value it was opened for, so a
+   value that grows a little each pass -- a string a loop appends to -- asks
+   for a few bytes more than any block the last rewind gave back. Every pass
+   opened a new block while the old ones waited in the spare list for the
+   cohort to end. A loop appending a byte a pass to a 1 MiB string held 777 MB
+   at 6,000 passes with an arena peak of 3 MB. So when an oversize request
+   misses, the oversize spares smaller than it are freed. Standard 1 MiB spares
+   are kept for the refills they serve. */
+static __attribute__((noinline, cold)) void k_spare_drop_short(size_t need) {
+    KBlock** link = &k_spare;
+    for (KBlock* b = *link; b; b = *link) {
+        if (b->cap > (size_t)(1 << 20) && b->cap < need) {
+            *link = b->next;
+            if (K_COUNTING) k_spare_bytes -= (long long)b->cap;
+            free(b);
+            continue;
+        }
+        link = &b->next;
     }
 }
 
@@ -747,7 +777,9 @@ static void k_arena_push(size_t need) {
     KBlock* b = *link;
     if (b) {
         *link = b->next;
+        if (K_COUNTING) k_spare_bytes -= (long long)b->cap;
     } else {
+        if (need > (size_t)(1 << 20)) k_spare_drop_short(need);
         b = malloc(sizeof(KBlock) + need);
         if (!b) { fputs("out of memory\n", stderr); exit(1); }
         b->cap = need;
@@ -1198,6 +1230,8 @@ void k_beat_rewind_slow(KMark* m) {
         k_live_block_bytes -= (long long)b->cap;
         b->next = k_spare;
         k_spare = b;
+        if (K_COUNTING) k_spare_bytes += (long long)b->cap;
+        if (K_COUNTING && k_spare_bytes > k_stat_spare_peak) k_stat_spare_peak = k_spare_bytes;
     }
     k_arena = m->ptr;
     k_arena_left = m->left;

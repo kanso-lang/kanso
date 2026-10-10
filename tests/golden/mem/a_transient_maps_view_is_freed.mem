@@ -51,3 +51,4 @@ sh_rec=0
 sh_buf=1600048
 sh_map=640000
 sh_bytes=0
+spare_peak_bytes=1048576

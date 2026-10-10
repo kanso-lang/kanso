@@ -1,0 +1,26 @@
+# A loop whose state is one string past a megabyte, one byte longer each pass.
+# A string that size gets an arena block of exactly its size, so each pass
+# asks for a block a little larger than the one the last rewind gave back.
+# Until 2026-10-10 those blocks waited in the spare list for the loop to end:
+# at 6,000 passes the program held 777 MB with an arena peak of 3 MB. The
+# spare list's peak below must not grow with the count.
+import "std/text"
+
+type state
+  count
+  body
+
+fn spin 0 st
+  st
+
+fn spin n st
+  whole = text/slice st.body 1 (length st.body)
+  spin (n - 1) (state (st.count + 1) "{whole}{st.count % 10}")
+
+fn seed 0 acc
+  acc
+
+fn seed n acc
+  seed (n - 1) "{acc}{acc}"
+
+pub play = print "{length (spin 400 (state 0 (seed 20 "x"))).body}"

@@ -25978,3 +25978,47 @@ runbench reads 180,786 instructions more for the wait's arithmetic and is
 projected at 1,152,754,421 until CI reads it. Welfare falls from 91.0246 to
 91.0239, which this fix pays to remove a regression the carried kanso#1824
 would otherwise ship.
+
+## 2026-10-10 — an oversize block that cannot be reused is freed when it misses
+
+A loop that appends a byte a pass to a one-megabyte string ran 6,000 passes
+with an arena peak of 3,157,760 bytes and a resident peak of 777 MB. The arena
+gives a value over a megabyte a block of exactly its size. When the loop
+rewinds, that block goes to the spare list, and the next pass asks for a block
+a few bytes larger, which no spare can serve. So every pass opened a new block,
+and the old ones stayed in the spare list until the loop ended. Valgrind
+counted 99 mallocs and 82 frees at 300 passes, nearly all of the frees at the
+loop's end. Main reaches 394 MB on the same program, and the five port fixes
+had roughly doubled it, because they rewind more often.
+
+`k_arena_push` now frees the oversize spares smaller than the request when an
+oversize request misses. The standard 1 MiB spares are kept, since they serve
+ordinary refills. The program's resident peak falls from 777 MB to 10 MB, and
+it runs in 0.96 seconds against 1.2.
+
+No counter could see this. `arena_peak_bytes` counts blocks in use and
+`arena_blocks` counts mallocs, and both read the same before and after: 752
+blocks and a peak of 3,157,760. A new counter, `spare_peak_bytes`, records the
+most the spare list held, and it is lower-is-better in the trend gate. It is
+counted only in counting builds, so no program pays for it. Every cost golden,
+every mem fixture and the two book samples that print counters gain the line
+and nothing else.
+
+`tests/golden/mem/a_string_that_grows_each_pass_reuses_its_block` is the
+reduction at 400 passes. Its spare_peak_bytes is 2,097,984; with the miss path
+left as it was, it reads 52,440,000. The run program's spare_peak_bytes is
+2,621,456. runbench reads 248 instructions more, measured in one worktree
+against the same tree without the fix, and is projected at 1,152,754,669.
+
+That last comparison corrects one in the entry above. The lap wait's 180,786
+was measured in a different worktree from the tree it was compared against,
+and this container's runbench changes with the length of the worktree's path.
+The carrier read in its own worktree gives 1,152,573,288, sixty instructions
+over the reading before the lap wait. CI's rows will settle both.
+
+A second shape retains far more and is not fixed here. When a loop builds the
+new string by interpolating the old one directly, as in `"{st.body}{x}"`, the
+arena peak grows a megabyte a pass on main (420,568,976 bytes at 400 passes)
+and half that on the carrier. Every version of the string stays in a block in
+use. Slicing the string first, as the fixture does, keeps the peak flat at
+3 MB.
