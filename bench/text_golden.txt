@@ -845,4 +845,4 @@ scanbench text=441001
 digestbench text=311241
 readbench text=270553
 livebench text=339961
-runbench text=607257
+runbench text=607689
