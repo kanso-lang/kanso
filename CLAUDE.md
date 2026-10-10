@@ -1,6 +1,6 @@
 # CLAUDE.md — kanso
 
-Guidance specific to this repo. General coding standards live in the global CLAUDE.md; this file holds what's particular to kanso. The first thing it holds is the writing voice, because the website and the book are the product, and they have to read like a person wrote them.
+Guidance for this repo. There is no global CLAUDE.md behind it (see "This file is the whole of it" below). The first thing it holds is the writing voice, because the website and the book are the product, and they have to read like a person wrote them.
 
 ## Writing voice
 
@@ -674,47 +674,24 @@ So, before an argument rests on a number:
 
 ### The welfare number only goes up
 
-- **TWO WELFARES AND A META cover production and development cost, because the
-  per-counter goldens cannot see a trade and one scalar could not hold
-  interpreter start-up.** Ruled 2026-09-16, built 2026-09-17.
-  `scripts/welfare/welfare.kso` scores a PRODUCTION number over
-  `run_instructions`, `run_peak_bytes` (the arena, held and permanent peaks
-  summed by `peak_of`) and `codegen_instructions_release`; a DEVELOPMENT number
-  over `compile_instructions`, `compile_allocs`, `compile_peak_bytes`,
-  `codegen_instructions_dev`, `emit_instructions`, `startup_instructions`,
-  `interp_instructions` and `interp_peak_bytes`; and a META over the two, which is the number CI gates
-  on and the only one carrying a floor. A weight is a share of ITS OWN side and
-  each side sums to one — `balanced?` refuses to score when one does not, which
-  is a refusal that exists because carrying the four pre-split weights over
-  unrenormalised scored production a fifth low and looked entirely plausible.
-  **THE TWO CODEGEN-SIDE ROWS ARE BOTH WEIGHED AND ONE IS EASY TO FORGET.** The
-  2026-09-15 exclusion took kanso's own process out of `codegen_instructions_*`,
-  and the emitter runs in that process, so `emit_instructions` carries the
-  compiler's own half of what a build costs. Weighing the child tree alone left
-  kanso#1480's 51,082,187-instruction saving invisible to every term in the
-  model, which is how the gap was found.
-  `bench/objective_sources.txt` is the list — FOURTEEN `<counter> <gate key>`
-  pairs for those eleven — and
-  `tests/the_objective_reads_what_the_gate_watches.rs` replays it, so the list
-  is checkable rather than remembered. **This sentence has now been wrong FOUR
-  times, and the fourth was wrong on the day it was written.** It said THIRTEEN
-  pairs when the file held fourteen, in the same paragraph that tells you not
-  to trust a count here — and the pull request landing the split said fourteen
-  in its own body while this line said thirteen. Read the file:
-  `grep -vcE '^\s*(#|$)' bench/objective_sources.txt`. Until 2026-09-06 it said fixpoint rounds, expression visits and
-  emitted lines, none of which the objective has weighed since the 2026-09-03
-  rebuild, and a session spent a round expecting a 4.5% rise in emitted lines
-  to cost welfare when the objective cannot see that vein at all. Until
-  2026-09-07 it then said TWENTY-EIGHT, an instruction row per benchmark and
-  twelve memory rows — the shape before Clay's 2026-09-06 gavel made the
-  runtime side one consolidated program, which turned twenty-five rows into
-  five. A session reading that hand-computed a trade over the wrong model, got
-  its sign wrong, and only the real `welfare` run caught it. Until 2026-09-17 it
-  then said FIVE and SEVEN, which was true for exactly the eleven days between
-  the consolidation gavel and the split gavel being built. Run
-  `kanso run scripts/welfare -- --counters` for the list, and a bare
-  `kanso run scripts/welfare` prints the meta with production and development
-  under it.
+- **THREE SIDES AND A META.** `scripts/welfare/welfare.kso` scores a
+  PRODUCTION side (the native run and release-tier codegen), a DEVELOPMENT side
+  (the front end, dev-tier codegen, the emitter, start-up, and the
+  interpreter's speed and memory) and a BROWSER side (compiling and running in
+  the tab), and a META over them, which is the number CI gates on and the only
+  one carrying a floor. The 2026-09-16 gavel made the first two because one
+  scalar could not hold interpreter start-up; the 2026-10-06 gavel added the
+  third. A weight is a share of ITS OWN side and each side sums to one;
+  `balanced?` refuses to score when one does not.
+  **Read the terms from the tree, never from this file.** `kanso run
+  scripts/welfare -- --counters` prints them, `bench/objective_sources.txt`
+  pairs each with the gate key it reads, and
+  `tests/the_objective_reads_what_the_gate_watches.rs` replays that file. A
+  count of pairs written here went stale five times, so none is written.
+  `emit_instructions` is the term most easily forgotten: the 2026-09-15
+  exclusion took kanso's own process out of `codegen_instructions_*`, and the
+  emitter runs in that process, so this row carries the compiler's own half of
+  what a build costs.
   **It is an
   index, not a percentage** — the ceiling is a hundred, where every term costs
   nothing, and the origin is arbitrary. Only its direction and the size of its
@@ -784,15 +761,7 @@ So, before an argument rests on a number:
   because a compiler that was imperceptible and is now noticeable has lost
   something real, while a decoder that was already the expensive part has only
   got worse at being expensive.
-- **Every environment kanso runs in is weighed, and none at zero.** Native,
-  the interpreter, both codegen tiers and the browser engine each carry terms
-  for CPU and memory, at a weight chosen for how much the environment matters
-  next to production. A small weight is a judgement; an absent term is the
-  model silently weighting that environment at zero. Clay, 2026-10-06: "you
-  can choose a pragmatic weight to apply to that versus actual production run
-  time and stuff but it doesn't have zero weight." An engine or tier added
-  later joins the objective in the pull request that adds it.
-- **The function is provisional and says so.** Seven deterministic terms are a
+- **The function is provisional and says so.** The deterministic terms are a
   model of what the project wants, not the thing itself; wall time is absent
   because it cannot be made deterministic, and what a model leaves out it
   implicitly weights at zero. Arguing the model is the intended way to change
@@ -800,7 +769,8 @@ So, before an argument rests on a number:
   beside the history of the code.
 - **Every environment kanso runs in has terms in the objective, and none sits
   at zero.** Ruled 2026-10-06, after the browser engine was found missing from
-  every term. Each environment gets a CPU term and a memory term at a weight
+  every term. Clay: "you can choose a pragmatic weight to apply to that versus
+  actual production run time and stuff but it doesn't have zero weight." Each environment gets a CPU term and a memory term at a weight
   chosen for how much it matters next to production; a weight may be small and
   may not be zero. An engine or tier added later joins the objective in the
   pull request that adds it, with a golden, a gate and a re-ratcheted floor.
@@ -834,10 +804,11 @@ So, before an argument rests on a number:
   is not argued a third time.
 
 ### Performance goldens are watched, not frozen
-- Two veins now: **runtime** (bench/cost_golden*.txt, tests/golden/mem/*.mem)
-  and **compilation** (bench/compile_golden.txt). The compile golden counts
-  both what the emitter wrote and what deciding it cost — fixpoint rounds and
-  expression visits — because the two move independently.
+- Three families: **runtime** (bench/cost_golden*.txt, tests/golden/mem/*.mem),
+  **compilation** (the compile gates named under "Goldens for everything"
+  above) and **browser** (bench/browser_golden.txt, gated by
+  `scripts/gates/browser_cost.sh`). A compile golden counts both what the
+  emitter wrote and what deciding it cost, because the two move independently.
 - **The goal is improvement over time, not a frozen line.** A feature may
   cost compile work to buy runtime work, or the reverse, and one metric
   worsening while another improves is a trade to state, not a failure.
