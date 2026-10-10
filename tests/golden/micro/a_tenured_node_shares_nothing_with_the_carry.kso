@@ -1,0 +1,42 @@
+import "std/list"
+
+# A loop that carries a fresh list, last lap's tree, and a new tree node that
+# wraps the fresh list.
+#
+# Each lap builds enough garbage that the carry copies its slots out and
+# rewinds. The copy walks the slots in order. The fresh list goes into the
+# carry pair. Last lap's tree has already been through one copy, so meeting it
+# switches the walk to tenured storage, and the new node and its wrap are
+# tenured after it. The wrap then reached the fresh list and was handed the
+# copy already in the pair. On the next lap the tenured tree survived and the
+# walk stopped there, and on the lap after that the pair was written over, so
+# every second wrap read a later lap's list: `[200]` where `[400]`, `[600]` and
+# `[800]` belong.
+type wrap
+  inner
+
+type node
+  below
+  w
+
+type leaf
+
+fn junk n
+  list/to_list (list/take (list/repeat 7) n)
+
+fn same t
+  t
+
+fn spin cur old t n
+  return t if n == 0 or length cur > 5 or old == 0
+  g = junk 20000
+  r = [(n * 100 + length g - 20000)]
+  spin r (same t) (node t (wrap r)) (n - 1)
+
+fn show leaf
+  ""
+
+fn show (node below (wrap xs))
+  "{xs}{show below}"
+
+pub play = print (show (spin [1] leaf leaf 9))
