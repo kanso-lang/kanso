@@ -25979,6 +25979,21 @@ projected at 1,152,754,421 until CI reads it. Welfare falls from 91.0246 to
 91.0239, which this fix pays to remove a regression the carried kanso#1824
 would otherwise ship.
 
+CI has now read the combined tree, lap wait included. runbench reads
+1,152,754,435, fourteen instructions over the projection, so the wait's
+180,786 holds. The rows the projections had carried land as follows.
+work_encodebench lands on 2,398,370,183, work_escapebench on 39,045,884,
+work_indexbench on 2,459,212, work_livebench on 1,474,870,796, work_oneshot on
+13,223,628 and work_scanbench on 270,249. work_basket falls to 30,812,505.
+compile_instructions lands on 25,832,558, entry_instructions on 85,436,280,
+library_instructions on 85,987,742, emit_instructions on 7,037,238 and
+interp_instructions on 489,012,183. codegen_instructions_dev lands on
+118,951,226 and codegen_instructions_release on 454,427,018.
+browser_compile_instructions lands on 391,401,241, browser_compile_peak_bytes
+on 675,725 and browser_run_instructions on 34,124,829. The run program's
+emitted code gains 29 lines, which moves emitted_other_branches to 16,399,
+emitted_other_calls to 17,406 and emitted_other_lines to 146,724, and `text`
+totals 4,833,086. Welfare reads 91.0317 on CI's rows, and the rise is banked.
 ## 2026-10-10 — an oversize block that cannot be reused is freed when it misses
 
 A loop that appends a byte a pass to a one-megabyte string ran 6,000 passes
@@ -26008,13 +26023,13 @@ and nothing else.
 reduction at 400 passes. Its spare_peak_bytes is 2,097,984; with the miss path
 left as it was, it reads 52,440,000. The run program's spare_peak_bytes is
 2,621,456. runbench reads 248 instructions more, measured in one worktree
-against the same tree without the fix, and is projected at 1,152,754,669.
+against the same tree without the fix, and is projected at 1,152,754,683.
 
-That last comparison corrects one in the entry above. The lap wait's 180,786
-was measured in a different worktree from the tree it was compared against,
-and this container's runbench changes with the length of the worktree's path.
-The carrier read in its own worktree gives 1,152,573,288, sixty instructions
-over the reading before the lap wait. CI's rows will settle both.
+One reading from this container does not agree with CI. Measured in the
+carrier's own worktree, runbench read 1,152,573,288, below the lap wait's
+figure; CI reads the carrier at 1,152,754,435, which agrees with the wait's
+cost. That stray reading is not explained here, and the projection above is
+taken from CI's row plus the 248.
 
 A second shape retains far more and is not fixed here. When a loop builds the
 new string by interpolating the old one directly, as in `"{st.body}{x}"`, the
