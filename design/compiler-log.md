@@ -25184,3 +25184,83 @@ run_arena_peak_bytes lands on 8,912,912 and run_held_peak_bytes on 3,222,256,
 and run_peak_bytes' baseline goes from 156,818,380 to 489,255,962. Both
 baselines are rounded up. The score is unchanged, and the four fixes now
 have something to score against.
+
+## 2026-10-10 — a loop entered from a tail cycle gives its garbage back
+
+The lox and mal ports both ran their interpreters out of memory. A Lox `for`
+loop of fifty thousand passes that builds two small objects per pass held
+3.0 GB at its peak natively, and mal's tail-recursive `sum2` kept 3.7 KB per
+iteration until exit. The interpreter under `--interp` ran the same programs
+in about 11 MB.
+
+Each port's machine loop is a self-recursive function, the shape the beat
+analysis rewinds, and neither rewound. The lox loop, `spin`, failed two
+tests. The first was its entry. `exec` tail-calls `spin` from its while arm,
+and `exec` sits in a tail cycle of its own, since a block runs its first
+statement and tail-calls itself on the rest. The analysis demoted a tail
+entry to a plain call only when the caller was in no tail cycle at all, on
+the reasoning that a plain call inside a cycle grows the stack. That holds
+only when the cycle runs through the demoted edge, which happens when the
+loop can reach its caller back by tail calls. `spin` returns its state to
+`exec` and never tail-calls it, so the plain call holds one frame while the
+loop runs and the caller returns before its cycle goes round again. The
+condition now asks exactly that: the entry is demoted unless the loop
+tail-reaches the caller.
+
+The second was the loop's own arguments. `spin` hands its body and condition
+on unchanged, and both come out of a record field, which inference reads as
+any value at all. A slot of unknown type was never carried through a
+rewind, in case it hid a growing accumulator behind a helper call. A
+parameter every self-tail-call passes on as itself cannot grow: it arrived at
+entry, lives below the mark, and the evacuation shares it rather than copying
+it. Such a position is now carried whatever its type.
+
+With both changes the lox loop rewinds every pass. At fifty thousand passes
+the release binary peaks at 77 MB, down from 3.0 GB, and runs in 1.17 s
+against 3.01 s. What remains is the port's own heap of instance fields, which
+it never frees by design. The fixture
+`a_loop_entered_from_a_tail_cycle_gives_its_garbage_back` builds the same
+shape in thirty lines and pins `arena_peak_bytes` at 1,048,576 for twenty
+thousand passes; main holds 3,145,728 for it.
+
+mal's machine is not fixed by this. Its `ev` is one member of a tail cycle
+with `ret`, `throw` and `settle`, which makes it a cluster, and a cluster
+carries only scalars and threaded parameters through its rewind. Carrying a
+heap value round a cluster is the next piece of work.
+
+No benchmark's run changed: every runtime cost vein agrees with its golden.
+The analysis is dearer to run, on CI's rows after merging main:
+`compile_instructions` rises to 25,861,592, `entry_instructions` to
+85,526,009 and `library_instructions` to 86,078,947, while
+`emit_instructions` falls to 7,032,277 and `interp_instructions` to
+488,876,843. `browser_compile_instructions` rises from 388,182,464 to
+390,287,782 with this tree's rustc. On main as it stood before kanso#1836,
+welfare fell from 90.25811251 to 90.25621395, because no benchmark ran a loop
+entered from a cycle.
+
+The floor question closed on the corpus-first gavel, and kanso#1836 put the
+shape into the run program as its `machine` phase: 20,000 passes of a loop in
+a cycle, measured on main before this fix at 8,825,906 instructions. Rewinding
+the loop costs instructions and gives memory back. With main merged in,
+work_runbench rises from 1,245,043,324 to 1,263,682,936, a projection from
+this container's 1,263,682,529 plus the 407 instructions by which CI read main
+above it; CI's row replaces it. run_arena_peak_bytes falls from 8,912,912 to
+6,815,760 and run_arena_blocks from 8 to 6. The rewind's own work shows in the
+rows that rise: run_beat_iters lands on 47,564, run_evac_allocs on 128,717,
+run_evac_bytes on 11,709,440, run_alloc_bytes on 326,929,762, run_allocs on
+1,773,139, run_sh_buf on 119,108,240 and run_buf_reuse on 134. Carried onto
+main's rows, compile_instructions lands on 25,861,786, entry_instructions on
+85,527,118, library_instructions on 86,078,794 and
+browser_compile_instructions on 390,599,325, all projected until CI reads
+them. The objective weighs the peak above the instructions: welfare rises from
+90.2499 to 90.3087 on those rows, and the rise is banked. The fix's own
+fixture, `a_loop_entered_from_a_tail_cycle_gives_its_garbage_back`, reads
+four fewer evacuations on main's runtime: evac_allocs lands on 80,013 and
+evac_bytes on 1,920,368.
+
+CI's rows replace the projection. work_runbench lands on 1,263,682,936, as
+projected. The rewind's code in the run program's machine phase shows in its
+emitted counts: emitted_other_calls lands on 17,405, emitted_other_branches on
+16,399 and emitted_other_lines on 146,723. `text` totals 4,652,398 and
+browser_compile_instructions lands on 390,597,579. Welfare reads 90.3087 on
+CI's rows, the score already banked.

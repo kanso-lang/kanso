@@ -2390,7 +2390,7 @@
 # `Expr` keeps its tag in a byte of its own. CI's reading on kanso#1811,
 # which this host's gate reproduces: 26,181,647 -> 25,842,553, a FALL of 339,094
 # (-1.2952%).
-compile_instructions=25832534
+compile_instructions=25861786
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

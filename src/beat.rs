@@ -349,9 +349,9 @@ fn grows_only_itself(
         })
 }
 
-/// Self-loops whose only defect is a tail entry, where every entering group
-/// is acyclic in the tail-call graph. Demoting those entries to plain calls
-/// costs each caller one bounded stack frame and lets the loop bracket.
+/// Self-loops whose only defect is a tail entry, where the loop cannot reach
+/// any entering group back by tail calls. Demoting those entries to plain
+/// calls costs each caller one bounded stack frame and lets the loop bracket.
 fn demotable_entries(
     program: &Program,
     inference: &infer::Inference,
@@ -361,8 +361,6 @@ fn demotable_entries(
     classes: &[(String, usize, Verdict)],
 ) -> Vec<(Group, Vec<Group>, Vec<usize>)> {
     let value_uses = ValueUses::of(program);
-    let mut cyclic: HashSet<Group> = HashSet::default();
-    // a group is cyclic when any tail path returns to it (self-edge or SCC)
     let mut tail_edges: Vec<(Group, Group)> = Vec::new();
     for decl in &program.fns {
         let from = (decl.name.clone(), decl.params.len());
@@ -370,14 +368,12 @@ fn demotable_entries(
             let Expr::App { head, args, piped: false, .. } = tail else { continue };
             let Expr::Ident(callee, _, _) = head.as_ref() else { continue };
             let to = (callee.to_string(), args.len());
-            if from == to {
-                cyclic.insert(from.clone());
-            }
             tail_edges.push((from.clone(), to));
         }
     }
-    for cluster in tail_cycles(&tail_edges) {
-        cyclic.extend(cluster);
+    let mut next: HashMap<&Group, Vec<&Group>> = HashMap::default();
+    for (from, to) in &tail_edges {
+        next.entry(from).or_default().push(to);
     }
     let mut out = Vec::new();
     for (name, arity, v) in classes {
@@ -391,7 +387,7 @@ fn demotable_entries(
         if crossing.len() > K_CARRY_MAX
             || crossing.iter().any(|&p| {
                 let set = group_param_set(program, inference, &name, arity, p);
-                accumulator_grows(program, &name, arity, p) || set == 0 || set & BYTES != 0
+                costly_to_carry(program, &name, arity, p, set)
             })
             || value_uses.has(&name)
             || !allocating.contains(name.as_str())
@@ -403,7 +399,13 @@ fn demotable_entries(
             .filter(|(from, to)| *to == group && *from != group)
             .map(|(from, _)| from.clone())
             .collect();
-        if !callers.is_empty() && callers.iter().all(|c| !cyclic.contains(c)) {
+        // A caller in a tail cycle of its own is safe to demote: the plain
+        // call holds one frame while the loop runs, and the caller returns
+        // before its cycle goes round again. Only a cycle through the demoted
+        // edge itself, which is the loop tail-reaching its caller, would
+        // stack a frame per lap.
+        let reached = tail_reach(&next, &group);
+        if !callers.is_empty() && callers.iter().all(|c| !reached.contains(c)) {
             let mut list: Vec<_> = callers.into_iter().collect();
             list.sort();
             out.push((group, list, crossing));
@@ -413,9 +415,70 @@ fn demotable_entries(
     out
 }
 
+/// Every group `from` reaches by tail calls alone, itself excluded unless a
+/// cycle returns to it.
+fn tail_reach<'a>(
+    next: &HashMap<&'a Group, Vec<&'a Group>>,
+    from: &'a Group,
+) -> HashSet<&'a Group> {
+    let mut seen: HashSet<&Group> = HashSet::default();
+    let mut stack = vec![from];
+    while let Some(at) = stack.pop() {
+        for &to in next.get(at).map(Vec::as_slice).unwrap_or(&[]) {
+            if seen.insert(to) {
+                stack.push(to);
+            }
+        }
+    }
+    seen
+}
+
 /// Mirrors the runtime's K_CARRY_MAX: how many crossing positions a carry
 /// beat may evacuate per iteration.
 const K_CARRY_MAX: usize = 8;
+
+/// Whether carrying a crossing position through the evacuation would cost
+/// more than the grow-only arena it replaces. A slot inference cannot type
+/// may hide a growing accumulator behind a helper call, and a byte builder
+/// rebuilt each iteration would deep-copy its whole buffer at every rewind,
+/// so neither is assumed cheap.
+///
+/// A position every self-tail-call hands on unchanged is neither. Its value
+/// arrived at entry and lives below the mark, so the evacuation shares it
+/// rather than copying it, and nothing rebuilds it. A loop over a record
+/// field's contents carries a slot inference reads as anything at all, and
+/// the interpreter loops in the lox and mal ports kept every iteration's
+/// garbage for that reason alone.
+fn costly_to_carry(program: &Program, name: &str, arity: usize, position: usize, set: Set) -> bool {
+    if handed_on(program, name, arity, position) {
+        return false;
+    }
+    accumulator_grows(program, name, arity, position) || set == 0 || set & BYTES != 0
+}
+
+/// Does every self-tail-call of the group pass this parameter on as itself?
+fn handed_on(program: &Program, name: &str, arity: usize, position: usize) -> bool {
+    let mut any = false;
+    for decl in program.fns.iter() {
+        if decl.name != name || decl.params.len() != arity {
+            continue;
+        }
+        for tail in tail_exprs(decl.body.last()) {
+            let Expr::App { head, args, piped: false, .. } = tail else { continue };
+            let Expr::Ident(callee, _, _) = head.as_ref() else { continue };
+            if callee != name || args.len() != arity {
+                continue;
+            }
+            let Some(Pattern::Var(own, _)) = decl.params.get(position) else { return false };
+            let Expr::Ident(passed, _, _) = &args[position] else { return false };
+            if passed != own {
+                return false;
+            }
+            any = true;
+        }
+    }
+    any
+}
 
 /// A carried position whose next value extends its own previous value —
 /// `push acc x`, `concat acc more`, `put acc k v` feeding the same slot —
@@ -622,30 +685,6 @@ fn crossing_positions(
     }
     out.sort_unstable();
     out
-}
-
-/// Groups belonging to any multi-group tail cycle.
-fn tail_cycles(edges: &[(Group, Group)]) -> Vec<Vec<Group>> {
-    let nodes: Vec<Group> = {
-        let mut set = HashSet::default();
-        for (a, b) in edges {
-            set.insert(a.clone());
-            set.insert(b.clone());
-        }
-        let mut v: Vec<_> = set.into_iter().collect();
-        v.sort();
-        v
-    };
-    let index: HashMap<&Group, usize> = nodes.iter().enumerate().map(|(i, n)| (n, i)).collect();
-    let mut adj = vec![Vec::new(); nodes.len()];
-    for (a, b) in edges {
-        adj[index[a]].push(index[b]);
-    }
-    sccs_of(&adj)
-        .into_iter()
-        .filter(|scc| scc.len() >= 2)
-        .map(|scc| scc.into_iter().map(|i| nodes[i].clone()).collect())
-        .collect()
 }
 
 /// Multi-group tail-call cycles that may rewind: every entry from outside is
@@ -1130,7 +1169,7 @@ fn blockers(
     let crossing = crossing_positions(program, inference, mut_sites, chains, name, arity);
     if let Some(&position) = crossing.iter().find(|&&p| {
         let set = group_param_set(program, inference, name, arity, p);
-        accumulator_grows(program, name, arity, p) || set == 0 || set & BYTES != 0
+        costly_to_carry(program, name, arity, p, set)
     }) {
         found.push(Verdict::ArgCrosses { position });
     }
@@ -1266,7 +1305,7 @@ fn classify(
         // ever assumed cheap to carry
         if let Some(&position) = crossing.iter().find(|&&p| {
             let set = group_param_set(program, inference, name, arity, p);
-            accumulator_grows(program, name, arity, p) || set == 0 || set & BYTES != 0
+            costly_to_carry(program, name, arity, p, set)
         }) {
             return Some(crate::beat::Verdict::ArgCrosses { position });
         }
@@ -2704,17 +2743,34 @@ mod tests {
     }
 
     #[test]
-    fn tail_entry_from_cyclic_caller_stays_ineligible() {
-        // ping and pong form a tail cycle; pong's entry into spin can never
-        // be demoted — a plain call inside a musttail cycle would grow the
-        // stack without bound.
+    fn tail_entry_from_cyclic_caller_is_demoted() {
+        // ping and pong form a tail cycle, and pong's last lap enters spin.
+        // The plain call holds pong's one frame while spin runs, and pong
+        // returns before the cycle could go round again, so the stack stays
+        // bounded. This read "stays ineligible" until 2026-10-10, which kept
+        // the loop of every tree-walking interpreter grow-only: their
+        // dispatcher is a tail cycle and every while loop is entered from it.
         let src = "main = print \"{ping 3}\"\n\nfn ping n\n  pong n\n\nfn pong 0\n  spin 2 0\n\nfn pong n\n  ping (n - 1)\n\nfn spin 0 acc\n  acc\n\nfn spin n acc\n  spin (n - 1) (acc + length \"beat {n}\")\n";
         let (program, inference) = compiled(src);
         let beats =
             super::beat_loops(&program, &inference, &crate::linear::in_place_pushes(&program));
 
-        assert!(!beats.ids.contains_key(&("spin".to_string(), 2)));
-        assert!(beats.demoted.is_empty());
+        assert!(beats.ids.contains_key(&("spin".to_string(), 2)));
+        assert!(beats.demoted.contains(&(("pong".to_string(), 1), ("spin".to_string(), 2))));
+    }
+
+    #[test]
+    fn tail_entry_the_loop_reaches_back_stays_ineligible() {
+        // spin leaves by a tail call to pong, and pong enters spin by one, so
+        // the entry is an edge of a tail cycle: demoting it would hold a
+        // frame for every lap round that cycle. Whatever the cluster
+        // analysis makes of the pair, that edge stays a tail call.
+        let src = "main = print \"{pong 3}\"\n\nfn pong 0\n  0\n\nfn pong n\n  spin n 0\n\nfn spin 0 acc\n  pong (acc - acc)\n\nfn spin n acc\n  spin (n - 1) (acc + length \"beat {n}\")\n";
+        let (program, inference) = compiled(src);
+        let beats =
+            super::beat_loops(&program, &inference, &crate::linear::in_place_pushes(&program));
+
+        assert!(!beats.demoted.contains(&(("pong".to_string(), 1), ("spin".to_string(), 2))));
     }
 
     #[test]
