@@ -1,0 +1,22 @@
+# Updating a map in place, with the old value read into a name on the line
+# before the write. `v = m[i]` then `put m i (v + 1)` is the same program as
+# `put m i (m[i] + 1)`, and until kanso#1822 the name counted as a second use of
+# the map, so every put copied it: 2,000 updates over 100 keys made 6,013
+# allocations and 88 MB, where the inline spelling made 8. mustache's context
+# stack and the kv store's counters are both written this way.
+fn fill m i n
+  return m if n < i
+  fill (put m i 0) (i + 1) n
+
+fn bumped m k steps n
+  return m if steps == 0
+  i = k % n + 1
+  v = m[i]
+  bumped (put m i (v + 1)) ((k * 7 + 3) % 1000003) (steps - 1) n
+
+fn summed m i n acc
+  return acc if n < i
+  summed m (i + 1) n (acc + m[i])
+
+pub fn total steps
+  summed (bumped (fill {} 1 100) 1 steps 100) 1 100 0
