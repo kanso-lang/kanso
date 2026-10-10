@@ -1086,6 +1086,15 @@ fn escaped _ at "w"
 fn escaped _ at "s"
   parsed (cls " \t\n\r" false) (at + 1)
 
+fn escaped _ at "D"
+  parsed (cls "0123456789" true) (at + 1)
+
+fn escaped _ at "W"
+  parsed (cls "{word_chars}" true) (at + 1)
+
+fn escaped _ at "S"
+  parsed (cls " \t\n\r" true) (at + 1)
+
 fn escaped _ at "b"
   parsed (edge "word") (at + 1)
 

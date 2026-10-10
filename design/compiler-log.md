@@ -24536,6 +24536,83 @@ The trend gate's names for what rose, each at the value it landed on:
 `the_length_of_an_indexed_character_needs_no_scan_beat_iters` 4,021;
 `two_bound_columns_are_one_allocation_beat_iters` 3,000.
 
+Taken together the two sides net to a fall in welfare of 0.0000025, from
+90.25702372 to 90.25702120. The floor is lowered by that much. Clay asked
+why the two engines stored integers differently, and there was no reason;
+this branch is the answer to that question, so the floor follows it.
+
+## 2026-10-10 — four faults the ports found
+
+Twenty programs were ported to kanso to see where the language gets in a
+programmer's way, and their journals carry bug reductions as well as
+complaints. Four of the reductions are fixed here, each with the fixture that
+fails without its fix.
+
+**A tie settled by an arm that never meets it.** `check_arm_ties` calls two
+arms tied when each is more specific somewhere, unless a third arm covers
+both. It compared patterns by rank alone, so `"+"` and `"eq"` ranked equal,
+and an arm for `"eq"` could settle a tie that only `"+"` calls fall into.
+The lox port had two arms of `apply` that could both take `"+"` with two
+floats, settled on paper by an `"eq"` arm, and the two engines picked
+different arms at run time. The comparison now answers "disjoint" for
+patterns no single value matches: two different literals, a literal and a
+marker, a literal and a type that cannot hold it, a marker and a type it is
+not. A disjoint pair cannot tie and cannot settle anything.
+`errors/a_literal_arm_cannot_settle_a_tie_it_never_meets.kso` is the lox
+shape and passed `kanso check` on main;
+`micro/arms_that_never_meet_are_not_a_tie.kso` is the other direction, two
+arms main called tied that no call can reach together. The bc port's
+`option` group has a real tie the old rule hid, `"--quiet" opts` beside
+`arg (options ...)`, and the stricter check now reports it. So does this
+repository's own `scripts/golden_prose`: `writing_back false _ _ _` and
+`writing_back _ false _ _` both take `false false`, settled on paper by the
+`true true` arm. Both answer 0, so the program never misbehaved; the third arm
+is now `true false`.
+
+**`[if b "x" "y"]`.** The checker refuses a named function written bare in a
+list literal, since a list element is one atom, but it read `if`'s count from
+a table that leaves `if` out, so the interpreter built a four-element list and
+native refused with no location. `call_shaped_at` now knows `if` takes three
+and reads the ambient builtins' counts. `errors/an_if_in_a_list_is_one_call.kso`.
+
+**`\D`, `\W` and `\S`.** std/regexp read an escape it did not know as the
+letter itself, so `o\W` matched an o and a capital W. The three negated
+classes are now the classes `\d`, `\w` and `\s` with the negation flag set.
+`micro/regexp_negated_class_escapes.kso`.
+
+**A name bound to a lazy err.** A match arm that binds a name sees a thunk,
+not what it forces to, so the thunk passes the arm's check and can still
+force to an err later. Native recorded every name a pattern bound as unable to
+fail, and a read that forced the thunk skipped its check: the toml port's
+reduction printed `size 6`, the err's payload read as a list length, where
+the interpreter stopped with `refused 5`. The pattern now keeps the FAIL bit
+on a name whose value is a thunk. Inference makes the same assumption in
+`bind_pattern`, but reverting it there leaves the fixture correct, so it is
+left alone until a program shows it matters.
+`runtime/a_name_bound_to_a_lazy_err_keeps_its_check.kso`; reverting the
+codegen line turns it red.
+
+Rows for this branch, from CI, against main as it stands after the bignum
+loop rewind. Every compile row that reads the larger regexp module or the
+checker's new disjointness test rises: compile_instructions from 25,829,822 to
+25,832,340, entry_instructions from 85,178,721 to 85,435,525,
+library_instructions from 85,734,452 to 85,988,213, and emit_instructions
+from 7,062,270 to 7,062,336. compile_allocs goes from 14,529 to 14,530. The
+interpreter's run asks the allocator twice more, interp_allocs 587,281 to
+587,283, with its peak unchanged. The browser compiles the same library and
+checker, and browser_compile_instructions rises from 387,724,060 to
+388,182,464.
+
+Four benchmark binaries changed. basket, scanbench and runbench grew and
+pendbench shrank by one call and three lines, which sums to
+emitted_other_branches 16,032 to 16,079, emitted_other_calls 17,104 to 17,128
+and emitted_other_lines 144,174 to 144,409. The text is 4,586,926 to 4,588,958
+summed, all of it in the three that grew. Runtime work rises in two of them:
+work_basket from 32,362,738 to 32,382,760 and work_runbench from 1,129,588,698
+to 1,129,588,845, 147 instructions. Which of the four fixes moved which binary
+is not isolated here. Welfare falls, and the floor follows under the
+2026-09-13 rule.
+
 ## 2026-10-10 — a loop entered from a tail cycle gives its garbage back
 
 The lox and mal ports both ran their interpreters out of memory. A Lox `for`

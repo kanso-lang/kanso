@@ -1,0 +1,9 @@
+# A list element is one atom, and the checker says so for a named function
+# written bare in a list. It did not say so for `if`: `[if b "x" "y"]` was
+# four elements on the interpreter, `<fn> true "x" "y"`, and a refusal with
+# no file or line natively. `if` takes three, so the bare form is refused
+# with the same message and both readings keep their spelling.
+fn pick b
+  [if b "x" "y"]
+
+pub play = print (pick true)

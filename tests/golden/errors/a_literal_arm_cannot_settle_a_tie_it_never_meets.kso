@@ -1,0 +1,20 @@
+# `"eq" a b` and `op a:float64 b:float64` tie: a call `pick "eq" 1.0 2.0`
+# matches both, and each is the more specific one somewhere. The `"+"` arm
+# is at least as specific as both everywhere else, but it can never match a
+# call whose first argument is "eq", so it settles nothing. The check used
+# to rank two literal patterns as equal whatever they held, took the `"+"`
+# arm for the settling one, and said nothing, and then the engines picked
+# different arms for the same call.
+fn pick "+" a:float64 b:float64
+  "plus {a + b}"
+
+fn pick "eq" a b
+  "literal arm: {a == b}"
+
+fn pick op a:float64 b:float64
+  "typed arm for {op}: {a + b}"
+
+fn pick op a b
+  "fallback {op} {a} {b}"
+
+pub play = print (pick "eq" 1.0 2.0)
