@@ -25114,3 +25114,15 @@ which the `text` total and both codegen rows carry. CI's rows, old to new:
 Welfare fell by less than a hundredth, and the floor moves down with it under
 the rule for a change that makes the language do what it says: the program
 crashed.
+
+**Main's repair list, merged into the lap carry.** The two branches touch
+different parts of the carry, and the code merged without a conflict. One golden
+moved. `a_node_repaired_by_an_inner_pop_outlives_the_outer_stage.mem` was
+written before the lap carry, when every edge staged, and under the lap carry
+the same program stages less: `evac_allocs` 237 -> 121, `evac_bytes` 8,288 ->
+4,128, `survive_slots` 82 -> 40, `allocs` 302 -> 246, `alloc_bytes` 7,088,284
+-> 7,086,268, and the new `chain_finds` row reads 0. Its output is unchanged.
+The fixture still does its job on the merged tree: with
+`k_pend_keep_repaired` returning at once, the program segfaults. The goldens
+both branches moved were combined as the sum of the two deltas, and CI's rows
+for the merged head follow.
