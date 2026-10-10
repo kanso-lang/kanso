@@ -1,0 +1,53 @@
+import "std/list"
+import "std/text"
+
+# Reproduction for FRICTION F27: a recursive scan that keeps some characters
+# of a string in an accumulator list.
+#
+#   kanso build main.kso && ./main if 800    (or arm, 400, 1600)
+#   kanso run main.kso --interp -- if 6400
+#
+# Expected: linear time on every engine. The interpreter does 32,000
+# characters in about 0.2 s with either form.
+# Actual, native dev build: 2,000 characters take 0.4 s, 4,000 take 6.8 s
+# (`if`) or 8.6 s (`arm`), and 8,000 had not finished after two minutes.
+# Callgrind puts about 85% of the instructions in the runtime's
+# k_survives_x, k_interior_survives and k_deep_copy.
+#
+# In the full site generator the two forms differ: with the `if` form,
+# `strip_tags` made an 80-page build take 27.6 s natively, and with the arm
+# form 0.6 s (A/B on the same tree). In this small program both forms are
+# slow, so the trigger depends on more than the form of the push, and I
+# could not narrow it further.
+pub fn main a
+  form = a[1]
+  n = a[2]
+  run form n
+
+fn run "if" n
+  print "{length (keep_if (chars_of n) 1 [])}"
+
+fn run _ n
+  print "{length (keep_arm (chars_of n) 1 [])}"
+
+fn chars_of n
+  count = text/to_int n
+  pieces = list/to_list (list/take (list/repeat "ab<x>") count)
+  text/chars (text/join pieces "")
+
+fn keep_if cs p acc
+  c = cs[p]
+  return acc if c == none
+  grown = if (c == "x") acc (push acc c)
+  keep_if cs (p + 1) grown
+
+fn keep_arm cs p acc
+  c = cs[p]
+  return acc if c == none
+  keep_arm cs (p + 1) (kept acc c (c == "x"))
+
+fn kept acc _ true
+  acc
+
+fn kept acc c false
+  push acc c

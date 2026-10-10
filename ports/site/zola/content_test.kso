@@ -1,0 +1,56 @@
+import "std/list"
+import "std/text"
+
+test_date_prefix =
+  d = date_prefix "2024-01-15-hello-world"
+  d.date == "2024-01-15" and d.stem == "hello-world"
+
+test_no_date_prefix =
+  d = date_prefix "2024-notes"
+  d.date == "" and d.stem == "2024-notes"
+
+test_section_path =
+  want = "/docs/getting-started/"
+  section_path "docs/Getting Started" == want
+
+test_root_path = section_path "" == "/"
+
+test_normal_path = normal_path "recipes//apple" == "/recipes/apple/"
+
+test_owner = owner_of "blog/2024/deep" { "blog":true } == "blog"
+
+test_owner_root = owner_of "misc" {} == ""
+
+fn content_of files
+  sorted_content pages sections = read_content files false
+  pages_and sections pages
+
+fn pages_and sections pages
+  ps = list/map pages (p -> "{p.rel}={p.path}")
+  ss = list/map sections (s -> "{s.rel}={s.path}")
+  text/concat (list/to_list ps) (list/to_list ss)
+
+test_read_content =
+  files = { "a/_index.md":"" "a/b/index.md":"" "a/x.md":"" "y.md":"" }
+  want = ["a/b/index.md=/a/b/" "a/x.md=/a/x/" "y.md=/y/"]
+  content_of files == text/concat want ["a/_index.md=/a/" "_index.md=/"]
+
+test_drafts_dropped =
+  files = { "d.md":"+++\ndraft = true\n+++\n" "e.md":"" }
+  content_of files == ["e.md=/e/" "_index.md=/"]
+
+test_slug_from_front_matter =
+  files = { "post.md":"+++\nslug = \"Hello There\"\n+++\n" }
+  content_of files == ["post.md=/hello-there/" "_index.md=/"]
+
+test_alias_paths =
+  shown = list/map ["/old/" "x.html" "a/b"] alias_path
+  list/to_list shown == ["old/index.html" "x.html" "a/b/index.html"]
+
+test_out_path =
+  root = out_path "/"
+  root == "index.html" and out_path "/a/" == "a/index.html"
+
+test_ancestors =
+  dirs = dirs_up "docs/reference" []
+  dirs == ["" "docs" "docs/reference"]

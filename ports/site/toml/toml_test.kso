@@ -1,0 +1,30 @@
+fn parsed src
+  pick (parse src)
+
+fn pick (err r)
+  { "error":r }
+
+fn pick m
+  m
+
+test_scalars =
+  m = parsed "a = 1\nb = \"two\"\nc = true\nd = 2.5\n"
+  m == { "a":1 "b":"two" "c":true "d":2.5 }
+
+test_table =
+  m = parsed "title = \"x\"\n\n[extra]\nauthor = 'me' # comment\n"
+  m == { "extra":{ "author":"me" } "title":"x" }
+
+test_array =
+  m = parsed "tags = [\"a\", \"b\",\n  \"c\",]\n"
+  m == { "tags":["a" "b" "c"] }
+
+test_inline =
+  m = parsed "taxonomies = [\{name = \"tags\"}, \{name = \"cats\", feed = 1}]"
+  m == { "taxonomies":[{ "name":"tags" } { "feed":1 "name":"cats" }] }
+
+test_date = parsed "date = 2024-01-15" == { "date":"2024-01-15" }
+
+test_dotted = parsed "a.b = 1\na.c = 2" == { "a":{ "b":1 "c":2 } }
+
+test_error = parsed "a = 1\nb = \n" == { "error":"line 2: expected a value" }

@@ -1,0 +1,146 @@
+import "../textkit"
+import "std/list"
+import "std/text"
+
+# A content file before rendering. `owner` is the content directory of the
+# section the page belongs to ("" for the root); `dir` is a section's own
+# directory.
+type raw_page
+  body
+  date
+  meta
+  owner
+  path
+  rel
+  slug
+
+type raw_section
+  body
+  dir
+  meta
+  path
+  rel
+
+# `2024-01-15-hello` gives a date and the stem `hello`.
+type date_stem
+  date
+  stem
+
+# The two kinds of content file, sorted out.
+type sorted_content
+  pages
+  sections
+
+# Split content files into sections (`_index.md`) and pages, reading their
+# front matter. Any file that fails to parse fails the whole build, named.
+fn read_content files drafts
+  rels = keys files
+  section_rels = list/to_list (list/select rels section_file?)
+  page_rels = list/to_list (list/reject rels section_file?)
+  sections = list/fold section_rels [] (acc rel -> with_section acc rel files)
+  dirs = list/fold section_rels {} (m rel -> put m (dir_of rel) true)
+  pages = list/fold page_rels [] (acc rel -> with_page acc rel files dirs)
+  shown = list/to_list (list/select pages (p -> drafts or not draft? p))
+  sorted_content shown (rooted sections)
+
+fn section_file? rel
+  name = basename rel
+  name == "_index.md"
+
+fn basename rel
+  parts = text/split rel "/"
+  parts[length parts]
+
+fn dir_of rel
+  parts = text/split rel "/"
+  text/join (text/slice parts 1 (length parts - 1)) "/"
+
+fn draft? p
+  flag? p.meta["draft"]
+
+# A front matter flag is set only by the value true; a missing key, or any
+# other value, leaves it unset.
+fn flag? true
+  true
+
+fn flag? none
+  false
+
+fn flag? _
+  false
+
+fn with_section acc rel files
+  source = files[rel]
+  front = split_front source
+  section_from acc rel front
+
+fn section_from _ rel (err r)
+  err "content/{rel}: {r}"
+
+fn section_from acc rel (fronted body meta)
+  dir = dir_of rel
+  push acc (raw_section body dir meta (section_path dir) rel)
+
+fn section_path ""
+  "/"
+
+fn section_path dir
+  parts = list/map (text/split dir "/") textkit/slugify
+  "/{text/join (list/to_list parts) "/"}/"
+
+# Zola builds a root section when content/_index.md is missing.
+fn rooted sections
+  has_root = list/any? sections (s -> s.dir == "")
+  if has_root sections (push sections (raw_section "" "" {} "/" "_index.md"))
+
+fn with_page acc rel files dirs
+  source = files[rel]
+  front = split_front source
+  page_from acc rel front dirs
+
+fn page_from _ rel (err r) _
+  err "content/{rel}: {r}"
+
+fn page_from acc rel (fronted body meta) dirs
+  dir = dir_of rel
+  bundle = basename rel == "index.md"
+  home = if bundle (dir_of dir) dir
+  stem = if bundle (basename dir) (textkit/replace (basename rel) ".md" "")
+  dated = date_prefix stem
+  date = page_date meta dated
+  slug = page_slug meta dated
+  path = page_path meta home slug
+  push acc (raw_page body date meta (owner_of home dirs) path rel slug)
+
+fn date_prefix stem
+  cs = text/chars stem
+  ok = length cs > 11 and cs[5] == "-" and cs[8] == "-"
+  sep = cs[11] == "-" or cs[11] == "_"
+  digits = list/all? (text/slice cs 1 4) textkit/digit?
+  dated = ok and sep and digits
+  rest = text/join (text/slice cs 12 (length cs)) ""
+  if dated (date_stem (text/slice stem 1 10) rest) (date_stem "" stem)
+
+fn page_date meta dated
+  given = meta["date"]
+  if (given == none) dated.date "{given}"
+
+fn page_slug meta dated
+  given = meta["slug"]
+  if (given == none) (textkit/slugify dated.stem) (textkit/slugify "{given}")
+
+fn page_path meta home slug
+  given = meta["path"]
+  return normal_path "{given}" if given != none
+  base = section_path home
+  "{base}{slug}/"
+
+fn normal_path p
+  inner = text/trim (textkit/replace p "//" "/")
+  front = if (textkit/starts_with? inner "/") inner "/{inner}"
+  if (textkit/ends_with? front "/") front "{front}/"
+
+# A page belongs to the nearest directory above it that has an _index.md.
+fn owner_of dir dirs
+  return dir if flag? dirs[dir] or dir == ""
+  owner_of (dir_of dir) dirs

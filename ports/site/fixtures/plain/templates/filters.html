@@ -1,0 +1,31 @@
+{%- set items = page.extra.items -%}
+{%- set count = 0 -%}
+<pre>
+title:      {{ page.title | truncate(length=12) }} / {{ page.title | wordcount }} words
+slug:       {{ page.title | slugify }}
+date:       {{ page.date | date(format="%Y/%m/%d %H:%M:%S %a %j") }}
+escape:     {{ page.extra.quote }} | {{ page.extra.quote | safe }}
+replace:    {{ "a-b-c" | replace(from="-", to="+") }}
+split:      {{ "x,y,,z" | split(pat=",") | length }} parts, last {{ "x,y,,z" | split(pat=",") | last }}
+colors:     {{ config.extra.colors | unique | join(sep=" ") }} / {{ config.extra.colors | reverse | first }} / {{ config.extra.colors | nth(n=1) }}
+sorted:     {{ items | sort(attribute="name") | map(attribute="name") | join(sep="") }}
+filtered:   {{ items | filter(attribute="group", value="x") | length }}
+grouped:    {% for g, members in items | group_by(attribute="group") %}{{ g }}={{ members | length }} {% endfor %}
+numbers:    {{ 7 / 2 }} {{ 7 % 4 }} {{ 2.5 * 2 }} {{ -3 | abs }} {{ 2.6 | round }} {{ "42" | int + 1 }} {{ "1.5" | float }}
+plural:     {{ 1 }} item{{ 1 | pluralize }}, {{ 3 }} item{{ 3 | pluralize }}
+json:       {{ items | first | json_encode }}
+urlencode:  {{ "a b/c?d" | urlencode }}
+breaks:     {{ "one\ntwo" | linebreaksbr }}
+concat:     {{ [1, 2] | concat(with=3) | join(sep=",") }} {{ "ab" ~ 1 ~ true }}
+range:      {% for i in range(start=1, end=10, step_by=3) %}{{ i }}{% if not loop.last %},{% endif %}{% endfor %}
+tests:      {{ 4 is even }} {{ 5 is odd }} {{ 9 is divisibleby(3) }} {{ "abc" is starting_with("ab") }} {{ items is iterable }} {{ nope is undefined }}
+in:         {{ "green" in config.extra.colors }} {{ "x" in "xyz" }} {{ "q" not in "xyz" }}
+logic:      {{ true and not false }} {{ false or 0 }} {{ 1 < 2 and 2 <= 2 and "a" < "b" }}
+{%- for i in items %}{% set_global count = count + i.n %}{% endfor %}
+global:     {{ count }}
+{%- filter upper %}
+filtered block: {{ page.slug }}
+{%- endfilter %}
+raw:        {% raw %}{{ not rendered }}{% endraw %}
+content:    {{ page.content | striptags | trim | linebreaksbr }}
+</pre>

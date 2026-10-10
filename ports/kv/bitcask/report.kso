@@ -1,0 +1,140 @@
+# Two views of a store's files for a person: `status`, which counts what
+# each data file holds and how much of it is still live, and `dump`, which
+# decodes every record and hint with the header bytes in hex.
+import "std/list"
+import "std/os"
+import "std/text"
+
+# The store's own files, in the order they were written: by number, and the
+# data file before its hint.
+pub fn store_files names
+  ids = list/sort (text/concat (file_ids names "data") (file_ids names "hint"))
+  unique = list/fold ids [] (acc id -> if (seen? acc id) acc (push acc id))
+  list/to_list (list/select (both_kinds unique) (n -> listed? names n))
+
+fn seen? acc id
+  list/any? acc (x -> x == id)
+
+fn listed? names n
+  list/any? names (x -> x == n)
+
+fn both_kinds ids
+  list/fold ids [] (acc id -> text/concat acc (names_for id))
+
+fn names_for id
+  ["{id}.bitcask.data" "{id}.bitcask.hint"]
+
+# Each named file's bytes, read one after another.
+pub fn read_files dir names
+  read_from dir names 1 {}
+
+fn read_from dir names i acc
+  read_one dir names[i] names i acc
+
+fn read_one _ none _ _ acc
+  effect acc
+
+fn read_one dir name names i acc
+  os/read_bytes! "{dir}/{name}"
+    .> (bs -> read_from dir names (i + 1) (put acc name (list/to_list bs)))
+
+fn held_bytes none
+  []
+
+fn held_bytes bs
+  bs
+
+pub fn status_lines st names files
+  per_file = list/to_list (list/map names (n -> status_of st files n))
+  push per_file "{plural (length (live_keys st)) "live key"}"
+
+fn status_of st files name
+  status_line st name (held_bytes files[name])
+
+fn status_line st name bs
+  kind = (text/split name ".")[3]
+  file_status st name bs kind
+
+fn file_status _ name bs "hint"
+  hints = length (hint_list (decode_hints bs))
+  "{name}: {plural (length bs) "byte"}, {plural hints "hint"}"
+
+fn file_status st name bs _
+  found = scan_bytes bs
+  id = id_of name
+  live = list/to_list (list/select found.records (r -> points_here? st id r))
+  dead = length bs - list/sum (list/map live _.size)
+  counts = "{plural (length found.records) "record"}, {length live} live"
+  "{name}: {plural (length bs) "byte"}, {counts}, {plural dead "byte"} dead"
+
+fn hint_list (bad_hint _)
+  []
+
+fn hint_list hs
+  hs
+
+fn points_here? st id r
+  where = st.keydir[r.key]
+  current? st where and same_place? where id r.offset
+
+fn same_place? none _ _
+  false
+
+fn same_place? (loc file offset _ _) id at
+  file == id and offset == at
+
+fn same_place? _ _ _
+  false
+
+pub fn dump_lines names files
+  list/fold names [] (acc n -> text/concat acc (dump_of files n))
+
+fn dump_of files name
+  dump_file name (held_bytes files[name])
+
+fn dump_file name bs
+  kind = (text/split name ".")[3]
+  head = "{name} ({length bs} bytes)"
+  text/concat [head] (dump_body kind bs)
+
+fn dump_body "hint" bs
+  hint_dump (decode_hints bs)
+
+fn dump_body _ bs
+  found = scan_bytes bs
+  lines = list/to_list (list/map found.records (r -> record_line bs r))
+  push_stop lines found.stop (length bs)
+
+fn hint_dump (bad_hint at)
+  ["  @{at} unreadable"]
+
+fn hint_dump hs
+  list/to_list (list/map hs hint_line)
+
+fn hint_line (hint key offset size stamp)
+  "  {key} -> @{offset} size {size} stamp {stamp}"
+
+fn record_line bs r
+  header = hex (text/slice bs (r.offset + 1) (r.offset + header_size))
+  "  @{r.offset} {header} {r.stamp} {describe r.key r.value}"
+
+fn describe key _:tombstone
+  "delete {key}"
+
+fn describe key value
+  "put {key} = {value}"
+
+fn push_stop lines (finished _) _
+  lines
+
+fn push_stop lines (torn at) n
+  push lines "  @{at} torn: {n - at} bytes do not make a record"
+
+fn push_stop lines (corrupt at) n
+  push lines "  @{at} checksum mismatch: {n - at} bytes are not trusted"
+
+pub fn plural 1 noun
+  "1 {noun}"
+
+pub fn plural n noun
+  "{n} {noun}s"

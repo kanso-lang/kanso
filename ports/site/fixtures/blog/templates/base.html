@@ -1,0 +1,21 @@
+{% import "macros.html" as m -%}
+<!doctype html>
+<html lang="{{ lang }}">
+<head>
+  <meta charset="utf-8">
+  <title>{% block title %}{{ config.title }}{% endblock title %}</title>
+  <link rel="stylesheet" href="{{ get_url(path="style.css") }}">
+  <link rel="alternate" type="application/atom+xml" href="{{ get_url(path="atom.xml") | safe }}">
+</head>
+<body>
+  <nav>
+    {%- for item in config.extra.menu %}
+    <a href="{{ item.url }}"{% if current_path == item.url %} class="here"{% endif %}>{{ item.name }}</a>
+    {%- endfor %}
+  </nav>
+  <main>
+    {%- block content %}{% endblock content %}
+  </main>
+  <footer>&copy; {{ config.extra.author }}</footer>
+</body>
+</html>

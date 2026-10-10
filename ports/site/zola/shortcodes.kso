@@ -1,0 +1,128 @@
+import "../tera"
+import "../textkit"
+import "std/list"
+import "std/text"
+
+# Where a shortcode call ends, and its `name(...)` source.
+type call_site
+  next
+  source
+
+# Shortcodes in markdown, before the markdown is rendered:
+#   {{ name(key=value) }}                      an inline call
+#   {% name(key=value) %} body {% end %}       a call with a body
+# Each renders `templates/shortcodes/name.html`. Fenced code is left alone.
+fn expand_shortcodes eng source
+  ls = textkit/lines source
+  pieces = outside_fences eng ls 1 false [] []
+  joined pieces "\n"
+
+fn outside_fences eng ls i in_fence chunk acc
+  line = ls[i]
+  return flush eng acc chunk in_fence if line == none
+  fence = textkit/starts_with? (text/trim line) "```"
+  more = push chunk line
+  return outside_fences eng ls (i + 1) in_fence more acc if not fence
+  flushed = flush eng acc chunk in_fence
+  outside_fences eng ls (i + 1) (not in_fence) [line] flushed
+
+# A finished run of lines: inside a fence it stays as it is, outside one
+# its shortcodes are expanded.
+fn flush _ acc chunk true
+  push acc (text/join chunk "\n")
+
+fn flush eng acc chunk false
+  words = text/join chunk "\n"
+  done_text = expand eng words
+  added acc done_text
+
+fn added acc x
+  push acc x
+
+fn expand eng words
+  cs = text/chars words
+  out = calls eng cs 1 []
+  joined out ""
+
+fn joined parts sep
+  text/join parts sep
+
+fn calls eng cs p acc
+  at = next_call cs p
+  return push acc (text/join (text/slice cs p (length cs)) "") if at == none
+  before = push acc (text/join (text/slice cs p (at - 1)) "")
+  call_at eng cs at before (cs[at + 1] == "%")
+
+fn next_call cs p
+  c = cs[p]
+  return none if c == none
+  opens = c == "\{" and (cs[p + 1] == "\{" or cs[p + 1] == "%")
+  if opens p (next_call cs (p + 1))
+
+fn call_at eng cs at acc false
+  inner = call_shape cs (at + 2) "}"
+  inline_call eng cs at acc inner
+
+fn call_at eng cs at acc true
+  inner = call_shape cs (at + 2) "%"
+  body_call eng cs at acc inner
+
+# `name(...)` then spaces then the closing `}}` or `%}`, or none when this
+# is not a shortcode.
+fn call_shape cs p close
+  start = skip_spaces cs p
+  name_end = name_run cs start
+  opens = name_end > start and cs[name_end] == "("
+  shut = if opens (paren_close cs (name_end + 1) 0) none
+  after = if (shut == none) none (skip_spaces cs (shut + 1))
+  closed = after != none and cs[after] == close and cs[after + 1] == "}"
+  source = text/join (text/slice cs start (if (shut == none) 0 shut)) ""
+  if closed (call_site (after + 2) source) none
+
+fn skip_spaces cs p
+  if (cs[p] == " ") (skip_spaces cs (p + 1)) p
+
+fn name_run cs p
+  c = cs[p]
+  word = c != none and (textkit/alnum? c or c == "_")
+  if word (name_run cs (p + 1)) p
+
+fn paren_close cs p depth
+  c = cs[p]
+  return none if c == none
+  return paren_close cs (string_end cs (p + 1) c) depth if c == "\"" or c == "'"
+  return p if c == ")" and depth == 0
+  deeper = if (c == "(") (depth + 1) depth
+  paren_close cs (p + 1) (if (c == ")") (deeper - 1) deeper)
+
+fn string_end cs p q
+  c = cs[p]
+  return p if c == none
+  if (c == q) (p + 1) (string_end cs (p + 1) q)
+
+fn inline_call eng cs at acc none
+  calls eng cs (at + 2) (push acc (text/join (text/slice cs at (at + 1)) ""))
+
+fn inline_call eng cs _ acc (call_site next source)
+  out = tera/shortcode eng source {} 1
+  calls eng cs next (push acc (called_out source out))
+
+fn body_call eng cs at acc none
+  calls eng cs (at + 2) (push acc (text/join (text/slice cs at (at + 1)) ""))
+
+fn body_call eng cs _ acc (call_site next source)
+  rest = text/join (text/slice cs next (length cs)) ""
+  end = textkit/index_of rest "\{% end %}" 1
+  return err "shortcode `{source}` has no `\{% end %}`" if end == none
+  body = text/slice rest 1 (end - 1)
+  out = tera/shortcode eng source { "body":(trimmed body) } 1
+  calls eng cs (next + end + 8) (push acc (called_out source out))
+
+fn trimmed s
+  text/trim s
+
+fn called_out source (err r)
+  err "shortcode `{source}`: {r}"
+
+fn called_out _ out
+  trimmed out

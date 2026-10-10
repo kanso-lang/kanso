@@ -1,0 +1,13 @@
+ok
+ 09 a1 df 41 65 53 f1 00 00 05 00 00 00 0c 63 61
+ 66 c3 a9 e6 8a b9 e8 8c b6 e3 83 a9 e3 83 86
+抹茶ラテ
+ok
+ok
+1.bitcask.data (31 bytes)
+  @0 09a1df416553f10000050000000c 1700000000 put café = 抹茶ラテ
+2.bitcask.data (23 bytes)
+  @0 a6a7a37a6553f100000000000009 1700000000 put  = empty-key
+3.bitcask.data (25 bytes)
+  @0 7ecb7bc16553f100000b00000000 1700000000 put empty-value = 
+[exit 0]

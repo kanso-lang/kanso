@@ -1,0 +1,5 @@
+import "std/text"
+
+test_crc_check_value = crc32 (text/bytes "123456789") == 3421780262
+
+test_crc_empty = crc32 [] == 0

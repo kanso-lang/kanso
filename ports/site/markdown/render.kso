@@ -1,0 +1,219 @@
+import "../textkit"
+import "std/list"
+import "std/text"
+
+# Link reference definitions, `[label]: url "title"`, come out of the text
+# before the blocks are read. They travel in the same map as the `@/` links,
+# under `ref:label`, which saves threading a second map through every inline
+# function.
+type found_defs
+  kept
+  refs
+
+type ref_def
+  title
+  url
+
+# A definition read from one line, under the key it is filed by.
+type filed
+  def
+  key
+
+# What a document renders to. `summary` is the html above a
+# `<!-- more -->` line, or none; `toc` is the headings, nested one level;
+# `broken` is every `@/` link that named no content file.
+pub type rendered
+  broken
+  html
+  summary
+  toc
+
+# A block's html and the state after it.
+type shaped
+  html
+  st
+
+# The state threaded through the blocks of one document.
+type sheet
+  broken
+  heads
+  parts
+  summary
+  used
+
+# Markdown to html. `links` maps content paths (`blog/post.md`) to their
+# permalinks, for `@/` links; `base` is the permalink heading anchors hang
+# from.
+pub fn render source links base
+  ls = textkit/lines source
+  found = definitions ls 1 false {} []
+  blocks = parse_blocks found.kept
+  known = merged_refs links found.refs
+  out = list/fold blocks (sheet [] [] [] none {}) (st b -> block st b known)
+  finish out base
+
+fn definitions ls i fenced refs kept
+  line = ls[i]
+  return found_defs kept refs if line == none
+  fencing = textkit/starts_with? (text/trim line) "```"
+  inside = if fencing (not fenced) fenced
+  def = if (fenced or fencing) none (definition line)
+  return definitions ls (i + 1) inside refs (push kept line) if def == none
+  definitions ls (i + 1) inside (put refs def.key def.def) kept
+
+fn merged_refs links refs
+  list/fold (keys refs) links (m k -> put m k refs[k])
+
+fn definition line
+  t = textkit/trim_start line
+  close = textkit/index_of t "]:" 1
+  opens = textkit/starts_with? t "[" and close != none
+  if opens (definition_at t close) none
+
+fn definition_at t close
+  label = textkit/lower (text/trim (text/slice t 2 (close - 1)))
+  rest = text/trim (text/slice t (close + 2) (length t))
+  space = textkit/index_of rest " " 1
+  cut = if (space == none) (length rest + 1) space
+  url = text/slice rest 1 (cut - 1)
+  after = text/trim (text/slice rest cut (length rest))
+  quoted = length after > 1 and textkit/starts_with? after "\""
+  title = if quoted (text/slice after 2 (length after - 1)) ""
+  if (url == "") none (filed (ref_def title url) "ref:{label}")
+
+fn finish (sheet broken heads parts summary _) base
+  toc = nest (list/to_list (list/map heads (h -> anchored h base))) []
+  rendered broken (text/join parts "") summary toc
+
+fn anchored h base
+  put h "permalink" "{base}#{h["id"]}"
+
+# Headings of the shallowest level present become the top of the table of
+# contents; anything deeper hangs under the one before it.
+fn nest heads acc
+  return acc if length heads == 0
+  top = list/min (list/map heads (h -> h["level"]))
+  list/fold heads [] (out h -> nest_one out h top)
+
+fn nest_one out h top
+  return push out (put h "children" []) if h["level"] <= top or length out == 0
+  last = out[length out]
+  kids = push last["children"] h
+  put_last out (put last "children" kids)
+
+fn put_last xs x
+  push (text/slice xs 1 (length xs - 1)) x
+
+fn add (sheet broken heads parts summary used) html
+  sheet broken heads (push parts html) summary used
+
+fn spans_of words links st
+  { broken } = st
+  out = inline words links (ink broken [])
+  html = text/join out.pieces ""
+  rebroken = sheet out.broken st.heads st.parts st.summary st.used
+  shaped html rebroken
+
+fn block st (para words) links
+  shaped html next = spans_of words links st
+  add next "<p>{html}</p>\n"
+
+fn block st (heading custom level words) links
+  shaped html next = spans_of words links st
+  plain = textkit/strip_tags html
+  base = if (custom == "") (textkit/slugify plain) custom
+  id = unique base next.used
+  head = { "id":id "level":level "title":plain }
+  sheet broken heads parts summary used = next
+  marked = sheet broken (push heads head) parts summary (put used id 1)
+  add marked "<h{level} id=\"{id}\">{html}</h{level}>\n"
+
+fn block st (fence body lang) _
+  code = textkit/escape_html body
+  return add st "<pre><code>{code}</code></pre>\n" if lang == ""
+  shown = "class=\"language-{lang}\" data-lang=\"{lang}\""
+  add st "<pre><code {shown}>{code}</code></pre>\n"
+
+fn block st (quote inner) links
+  opened = add st "<blockquote>\n"
+  out = list/fold inner opened (s b -> block s b links)
+  add out "</blockquote>\n"
+
+fn block st (bullets items loose ordered start) links
+  tag = if ordered "ol" "ul"
+  counted = ordered and start != 1
+  opening = if counted "<{tag} start=\"{start}\">\n" "<{tag}>\n"
+  out = list/fold items (add st opening) (s i -> list_item s i loose links)
+  add out "</{tag}>\n"
+
+fn block st (table aligns head rows) links
+  opened = add st "<table>\n<thead>\n<tr>\n"
+  headed = row_cells opened head aligns "th" links
+  body = add headed "</tr>\n</thead>\n<tbody>\n"
+  out = list/fold rows body (s r -> body_row s r aligns links)
+  add out "</tbody>\n</table>\n"
+
+fn block st (raw_html words) _
+  add st "{words}\n"
+
+fn block st rule _
+  add st "<hr />\n"
+
+fn block st more _
+  { broken heads parts used } = st
+  marked = sheet broken heads parts (text/join parts "") used
+  add marked "<span id=\"continue-reading\"></span>\n"
+
+fn body_row st r aligns links
+  out = row_cells (add st "<tr>\n") r aligns "td" links
+  add out "</tr>\n"
+
+fn row_cells st row aligns tag links
+  at = list/to_list (list/take list/naturals (length row))
+  list/fold at st (s i -> cell s row[i] (blank aligns[i]) tag links)
+
+fn blank none
+  ""
+
+fn blank s
+  s
+
+fn cell st none _ _ _
+  st
+
+fn cell st words align tag links
+  shaped html next = spans_of words links st
+  styled = if (align == "") "" " style=\"text-align: {align}\""
+  add next "<{tag}{styled}>{html}</{tag}>\n"
+
+fn list_item st inner true links
+  opened = add st "<li>\n"
+  out = list/fold inner opened (s b -> block s b links)
+  add out "</li>\n"
+
+fn list_item st inner false links
+  out = list/fold inner (add st "<li>") (s b -> tight s b links)
+  add (trim_newline out) "</li>\n"
+
+fn tight st (para words) links
+  shaped html next = spans_of words links st
+  add next html
+
+fn tight st b links
+  block (add st "\n") b links
+
+fn trim_newline (sheet broken heads parts summary used)
+  n = length parts
+  last = parts[n]
+  ends = n > 0 and textkit/ends_with? last "\n"
+  trimmed = if ends (text/slice last 1 (length last - 1)) last
+  kept = if (n > 0) (push (text/slice parts 1 (n - 1)) trimmed) parts
+  sheet broken heads kept summary used
+
+# `intro`, then `intro-1`, `intro-2`, the way Zola numbers repeats.
+fn unique base used
+  if (used[base] == none) base (numbered base used 1)
+
+fn numbered base used n
+  id = "{base}-{n}"
+  if (used[id] == none) id (numbered base used (n + 1))

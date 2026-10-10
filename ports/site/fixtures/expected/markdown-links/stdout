@@ -1,0 +1,8 @@
+<p>A <a href="https://example.com">plain link</a>, a <a href="/a" title="The A">titled one</a>, and
+<a href="/b">nested <em>emphasis</em></a>.</p>
+<p><img src="/i.png" alt="an image" /> and <img src="/t.png" alt="titled" title="T" />.</p>
+<p>Autolinks: <a href="https://kanso.dev/docs?a=1&amp;b=2">https://kanso.dev/docs?a=1&amp;b=2</a> and <a href="mailto:mail@example.com">mail@example.com</a>.</p>
+<p>Inline <span class="k">html</span> passes; a lone &lt; and &gt; are escaped.</p>
+<p>Entities: &copy; &#169; &amp; stay, and a bare &amp; is escaped.</p>
+<p>[not a link] and [also not](</p>
+<p>An internal <a href="@/blog/post.md">link</a> with no site to resolve it.</p>

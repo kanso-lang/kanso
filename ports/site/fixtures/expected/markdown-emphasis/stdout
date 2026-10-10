@@ -1,0 +1,6 @@
+<p><em>em</em> and <em>em</em> and <strong>strong</strong> and <strong>strong</strong>.</p>
+<p>Nested: <strong>bold with <em>em</em> inside</strong> and <em>em with <strong>bold</strong> inside</em>.</p>
+<p>snake_case_names stay as they are, and so does 2<em>3</em>4 sometimes.</p>
+<p>An * alone, a ** pair, and *unclosed emphasis.</p>
+<p><del>struck</del> and ~single~ tildes.</p>
+<p>Escapes: *not em*, _not em_, # not a heading, \ backslash.</p>

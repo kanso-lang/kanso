@@ -1,0 +1,5 @@
+{% macro post_item(page, show_date=true) -%}
+<li><a href="{{ page.permalink | safe }}">{{ page.title }}</a>
+{%- if show_date and page.date %} <time>{{ page.date | date(format="%b %e, %Y") }}</time>{% endif -%}
+</li>
+{%- endmacro post_item %}

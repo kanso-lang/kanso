@@ -1,0 +1,15 @@
+ok
+ok
+ok
+blue
+1.bitcask.data (23 bytes)
+  @0 977804c36553f100000600000003 1700000000 put colour = red
+2.bitcask.data (25 bytes)
+  @0 f0ce338f6553f13c000600000005 1700000060 put colour = green
+3.bitcask.data (24 bytes)
+  @0 4aae4a3a6553f178000600000004 1700000120 put colour = blue
+1.bitcask.data: 23 bytes, 1 record, 0 live, 23 bytes dead
+2.bitcask.data: 25 bytes, 1 record, 0 live, 25 bytes dead
+3.bitcask.data: 24 bytes, 1 record, 1 live, 0 bytes dead
+1 live key
+[exit 0]

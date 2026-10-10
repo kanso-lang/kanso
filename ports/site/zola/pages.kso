@@ -1,0 +1,194 @@
+import "../textkit"
+import "std/list"
+import "std/text"
+
+# What templates see: a map per page and per section, by content path.
+type views
+  pages
+  sections
+
+# Template values for every page and section. A section lists its pages in
+# its own order, and each page learns its neighbours in that order.
+fn views_of st
+  rels = keys st.sections
+  ordered = list/fold rels {} (m rel -> put m rel (ordered_pages st rel))
+  page_maps = list/fold rels {} (m rel -> with_neighbours m st ordered rel)
+  sections = list/fold rels {} (m r -> with_section m st page_maps ordered r)
+  views page_maps sections
+
+fn ordered_pages st rel
+  sec = st.sections[rel]
+  dir = sec.raw.dir
+  all = values st.pages
+  members = list/to_list (list/select all (c -> c.raw.owner == dir))
+  sorted_pages members (sort_key sec.raw.meta["sort_by"])
+
+fn sort_key none
+  "none"
+
+fn sort_key s
+  "{s}"
+
+fn sorted_pages xs "date"
+  textkit/sort_with xs newer?
+
+fn sorted_pages xs "weight"
+  textkit/sort_with xs lighter?
+
+fn sorted_pages xs "title"
+  textkit/sort_with xs (a b -> title_key a < title_key b)
+
+fn sorted_pages xs _
+  xs
+
+fn title_key c
+  textkit/lower (text_or c.raw.meta["title"] "")
+
+# Dated pages first, newest first; undated ones keep their path order.
+fn newer? a b
+  da = a.raw.date
+  db = b.raw.date
+  da != "" and (db == "" or db < da)
+
+# Lightest first; a page with no weight goes last.
+fn lighter? a b
+  wa = a.raw.meta["weight"]
+  wb = b.raw.meta["weight"]
+  wa != none and (wb == none or wa < wb)
+
+fn with_neighbours m st ordered rel
+  xs = ordered[rel]
+  dated = sort_key st.sections[rel].raw.meta["sort_by"] == "date"
+  at = list/to_list (list/take list/naturals (length xs))
+  list/fold at m (acc i -> put_page acc st xs i dated)
+
+fn put_page m st xs i dated
+  c = xs[i]
+  before = shallow st xs[i - 1]
+  after = shallow st xs[i + 1]
+  lower = if dated after before
+  higher = if dated before after
+  put m c.raw.rel (page_map st c lower higher)
+
+# A neighbour is a page without its own neighbours or content.
+fn shallow _ none
+  none
+
+fn shallow st c
+  rp = c.raw
+  base = { "path":rp.path "permalink":"{st.base}{rp.path}" "slug":rp.slug }
+  titled = put base "title" (text_or rp.meta["title"] "")
+  if (rp.date == "") titled (put titled "date" rp.date)
+
+fn page_map st c lower higher
+  rp = c.raw
+  meta = rp.meta
+  path = rp.path
+  core = { "content":c.html "path":path "slug":rp.slug }
+  linked = put core "permalink" "{st.base}{path}"
+  titled = put linked "title" (text_or meta["title"] "")
+  named = put titled "relative_path" rp.rel
+  counted = with_counts named c
+  tables = with_tables counted meta
+  optional = with_optional tables meta rp.date c.summary
+  around = with_shallow (with_shallow optional "lower" lower) "higher" higher
+  placed = put around "ancestors" (ancestors_of st rp.owner)
+  bundled = put placed "assets" (assets_of st rp)
+  put (put bundled "components" (components path)) "draft" (draft? rp)
+
+fn with_counts m c
+  timed = put m "reading_time" (reading_time c.words)
+  put (put timed "word_count" c.words) "toc" c.toc
+
+fn with_tables m meta
+  extra = put m "extra" (table_or meta["extra"])
+  put extra "taxonomies" (table_or meta["taxonomies"])
+
+fn with_optional m meta date summary
+  dated = if (date == "") m (put m "date" date)
+  described = with_value dated "description" meta["description"]
+  updated = with_value described "updated" meta["updated"]
+  weighted = with_value updated "weight" meta["weight"]
+  with_summary weighted summary
+
+fn with_summary m none
+  m
+
+fn with_summary m html
+  put m "summary" html
+
+fn with_value m _ none
+  m
+
+fn with_value m key v
+  put m key v
+
+fn with_shallow m _ none
+  m
+
+fn with_shallow m key v
+  put m key v
+
+fn reading_time words
+  (words + 199) / 200
+
+fn components path
+  list/to_list (list/reject (text/split path "/") (p -> p == ""))
+
+fn text_or none fallback
+  fallback
+
+fn text_or v _
+  "{v}"
+
+fn table_or none
+  {}
+
+fn table_or m
+  m
+
+fn with_section m st page_maps ordered rel
+  c = st.sections[rel]
+  rp = c.raw
+  mine = ordered[rel]
+  listed_pages = list/to_list (list/map mine (p -> page_maps[p.raw.rel]))
+  core = { "content":c.html "pages":listed_pages "path":rp.path }
+  linked = put core "permalink" "{st.base}{rp.path}"
+  titled = put linked "title" (text_or rp.meta["title"] "")
+  named = put titled "relative_path" rel
+  counted = with_counts named c
+  extra = put counted "extra" (table_or rp.meta["extra"])
+  described = with_value extra "description" rp.meta["description"]
+  put m rel (put described "subsections" (subsections_of st rp.dir))
+
+# The sections directly under a directory, as content paths.
+fn subsections_of st dir
+  all = list/to_list (list/map (values st.sections) (s -> s.raw))
+  inside = list/select all (s -> s.dir != dir and parent_dir s.dir == dir)
+  list/to_list (list/map inside (s -> s.rel))
+
+fn parent_dir dir
+  if (textkit/contains? dir "/") (dir_of dir) ""
+
+# The sections above a page, root first, as content paths.
+fn ancestors_of st dir
+  chain = dirs_up dir []
+  present = list/select chain (d -> st.sections[section_rel d] != none)
+  list/to_list (list/map present section_rel)
+
+fn dirs_up "" acc
+  text/concat [""] (reversed_dirs acc)
+
+fn dirs_up dir acc
+  dirs_up (parent_dir dir) (push acc dir)
+
+fn reversed_dirs xs
+  n = length xs
+  list/to_list (list/map (list/take list/naturals n) (i -> xs[n + 1 - i]))
+
+# The files beside a bundle's index.md, as paths under the site.
+fn assets_of st rp
+  bundle = basename rp.rel == "index.md"
+  dir = dir_of rp.rel
+  mine = list/select st.assets (a -> bundle and dir_of a == dir)
+  list/to_list (list/map mine (a -> "{rp.path}{basename a}"))

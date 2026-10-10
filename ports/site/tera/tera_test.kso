@@ -1,0 +1,159 @@
+import "std/list"
+
+fn parsed_all pairs
+  list/fold pairs {} with_template
+
+fn with_template m pair
+  name = pair[1]
+  src = pair[2]
+  put m name (parse_template name src)
+
+fn rendered name pairs ctx
+  eng = engine {} {} (parsed_all pairs)
+  surely (render eng name ctx)
+
+fn one src ctx
+  rendered "t" [["t" src]] ctx
+
+test_text = one "plain" {} == "plain"
+
+test_var = one "hi \{\{ name }}" { "name":"kanso" } == "hi kanso"
+
+test_escape = one "\{\{ x }}" { "x":"<b>" } == "&lt;b&gt;"
+
+test_safe = one "\{\{ x | safe }}" { "x":"<b>" } == "<b>"
+
+test_attr = one "\{\{ p.t }}" { "p":{ "t":"T" } } == "T"
+
+test_index = one "\{\{ xs[1] }}" { "xs":["a" "b"] } == "b"
+
+test_math = one "\{\{ 1 + 2 * 3 }}-\{\{ 7 / 2 }}-\{\{ 7 % 3 }}" {} == "7-3-1"
+
+test_concat = one "\{\{ \"a\" ~ n ~ \"b\" }}" { "n":1 } == "a1b"
+
+test_if =
+  want = "big"
+  src = "\{% if n > 1 %}big\{% else %}small\{% endif %}"
+  ctx = { "n":2 }
+  one src ctx == want
+
+test_elif =
+  src = "\{% if n == 1 %}a\{% elif n == 2 %}b\{% else %}c\{% endif %}"
+  one src { "n":2 } == "b"
+
+test_undefined_if = one "\{% if nope %}y\{% else %}n\{% endif %}" {} == "n"
+
+test_undefined_out =
+  want = "error: while rendering `t`: line 1: `nope` is not defined"
+  src = "\{\{ nope }}"
+  one src {} == want
+
+test_for =
+  want = "1a2b"
+  src = "\{% for x in xs %}\{\{ loop.index }}\{\{ x }}\{% endfor %}"
+  ctx = { "xs":["a" "b"] }
+  one src ctx == want
+
+test_for_else =
+  want = "empty"
+  src = "\{% for x in xs %}x\{% else %}empty\{% endfor %}"
+  ctx = { "xs":[] }
+  one src ctx == want
+
+test_for_map =
+  want = "a=1;b=2;"
+  src = "\{% for k, v in m %}\{\{ k }}=\{\{ v }};\{% endfor %}"
+  ctx = { "m":{ "a":1 "b":2 } }
+  one src ctx == want
+
+test_last =
+  want = "1,2,3"
+  comma = "\{% if not loop.last %},\{% endif %}"
+  src = "\{% for x in xs %}\{\{ x }}{comma}\{% endfor %}"
+  ctx = { "xs":[1 2 3] }
+  one src ctx == want
+
+test_set = one "\{% set y = x | upper %}\{\{ y }}" { "x":"a" } == "A"
+
+test_filters =
+  want = "hell0 w0rld"
+  src = "\{\{ \"Hello World\" | lower | replace(from=\"o\", to=\"0\") }}"
+  one src {} == want
+
+test_default = one "\{\{ nope | default(value=\"d\") }}" {} == "d"
+
+test_length = one "\{\{ xs | length }}" { "xs":[1 2 3] } == "3"
+
+test_join = one "\{\{ xs | join(sep=\", \") }}" { "xs":["a" "b"] } == "a, b"
+
+test_truncate = one "\{\{ s | truncate(length=3) }}" { "s":"abcdef" } == "abc…"
+
+test_date =
+  want = "March  5, 2024 (Tue)"
+  src = "\{\{ d | date(format=\"%B %e, %Y (%a)\") }}"
+  ctx = { "d":"2024-03-05" }
+  one src ctx == want
+
+test_sort =
+  want = "ab"
+  sorting = "sort(attribute=\"w\") | map(attribute=\"n\")"
+  src = "\{\{ xs | {sorting} | join(sep=\"\") }}"
+  ctx = { "xs":[{ "n":"b" "w":2 } { "n":"a" "w":1 }] }
+  one src ctx == want
+
+test_is_defined =
+  want = "yn"
+  yes = "\{% if x is defined %}y\{% endif %}"
+  src = "{yes}\{% if z is not defined %}n\{% endif %}"
+  ctx = { "x":1 }
+  one src ctx == want
+
+test_in = one "\{% if \"b\" in xs %}yes\{% endif %}" { "xs":["a" "b"] } == "yes"
+
+test_whitespace = one "a  \{\{- x -}}  b" { "x":"-" } == "a-b"
+
+test_inherit =
+  title = "\{% block title %}base\{% endblock %}"
+  base = "<{title}|\{% block body %}B\{% endblock %}>"
+  body = "\{% block body %}child+\{\{ super() }}\{% endblock %}"
+  child = "\{% extends \"base\" %}{body}"
+  rendered "child" [["base" base] ["child" child]] {} == "<base|child+B>"
+
+test_include =
+  want = "[1]"
+  pairs = [["a" "[\{% include \"b\" %}]"] ["b" "\{\{ v }}"]]
+  rendered "a" pairs { "v":1 } == want
+
+test_macro =
+  open = "\{% macro tag(name, cls=\"x\") %}"
+  lib = "{open}<\{\{ name }} class=\{\{ cls }}>\{% endmacro %}"
+  calls = "\{\{ m::tag(name=\"p\") }}\{\{ m::tag(name=\"i\", cls=\"y\") }}"
+  page = "\{% import \"lib\" as m %}{calls}"
+  rendered "page" [["lib" lib] ["page" page]] {} == "<p class=x><i class=y>"
+
+test_raw_render = one "\{% raw %}\{\{ x }}\{% endraw %}" {} == "\{\{ x }}"
+
+test_range =
+  want = "012"
+  src = "\{% for i in range(end=3) %}\{\{ i }}\{% endfor %}"
+  one src {} == want
+
+test_unknown_filter =
+  want = "error: while rendering `t`: line 1: unknown filter `wat`"
+  src = "\{\{ 1 | wat }}"
+  one src {} == want
+
+test_parse_error =
+  want = "error: template `t` line 1: the template ended before `\{% endif %}`"
+  src = "\{% if x %}"
+  one src {} == want
+
+test_negative_literal = one "\{\{ -3 | abs }} \{\{ -n }}" { "n":2 } == "3 -2"
+
+test_set_global =
+  loop = "\{% for x in xs %}\{% set_global t = t + x %}\{% endfor %}"
+  one "\{% set t = 0 %}{loop}\{\{ t }}" { "xs":[1 2 3] } == "6"
+
+test_missing_path =
+  want = "error: while rendering `t`: line 1: `a.b.c` is not defined"
+  one "\{\{ a.b.c }}" { "a":{} } == want

@@ -1,0 +1,139 @@
+import "../textkit"
+import "../toml"
+import "std/list"
+import "std/text"
+
+# A content file split at its front matter: the parsed header as a map and
+# the markdown body under it.
+type fronted
+  body
+  meta
+
+# A YAML level read so far, and the first line it did not take.
+type ylevel
+  map
+  next
+
+# `+++` fences TOML and `---` fences the YAML subset; a file with neither
+# has an empty header.
+fn split_front source
+  ls = textkit/lines source
+  fence = if (length ls > 0) (text/trim ls[1]) ""
+  fenced ls fence
+
+fn fenced ls "+++"
+  header_then ls "+++" (src -> toml/parse_at src 2)
+
+fn fenced ls "---"
+  header_then ls "---" yaml
+
+fn fenced ls _
+  fronted (text/join ls "\n") {}
+
+fn header_then ls fence reader
+  close = closing ls fence 2
+  return err "front matter opened with `{fence}` never closes" if close == none
+  header = text/join (text/slice ls 2 (close - 1)) "\n"
+  body = text/join (text/slice ls (close + 1) (length ls)) "\n"
+  meta = reader header
+  fronted body meta
+
+fn closing ls fence i
+  line = ls[i]
+  return none if line == none
+  if (text/trim line == fence) i (closing ls fence (i + 1))
+
+# The YAML a front matter needs: `key: value` lines, nested maps by
+# indentation, flow lists `[a, b]`, block lists of `- item` lines, quoted
+# and bare scalars, and comments.
+fn yaml header
+  ls = list/to_list (list/reject (textkit/lines header) blank_or_comment?)
+  top = mapping ls 1 0 {}
+  level_map top
+
+fn level_map (ylevel m _)
+  m
+
+fn blank_or_comment? line
+  t = text/trim line
+  t == "" or textkit/starts_with? t "#"
+
+fn indent_of none
+  0
+
+fn indent_of line
+  length line - length (textkit/trim_start line)
+
+fn mapping ls i depth m
+  line = ls[i]
+  return ylevel m i if line == none or indent_of line < depth
+  t = text/trim line
+  colon = textkit/index_of t ":" 1
+  return err "front matter: expected `key: value`, found `{t}`" if colon == none
+  key = text/trim (text/slice t 1 (colon - 1))
+  rest = text/trim (text/slice t (colon + 1) (length t))
+  entry_value ls (i + 1) depth m key rest
+
+fn entry_value ls i depth m key ""
+  line = ls[i]
+  deeper = line != none and indent_of line > depth
+  return mapping ls i depth (put m key "") if not deeper
+  nested ls i m key depth (textkit/starts_with? (text/trim line) "- ")
+
+fn entry_value ls i depth m key rest
+  mapping ls i depth (put m key (scalar rest))
+
+fn nested ls i m key depth true
+  items = block_list ls i (indent_of ls[i]) []
+  mapping ls items.next depth (put m key items.map)
+
+fn nested ls i m key depth false
+  inner = mapping ls i (indent_of ls[i]) {}
+  ylevel map next = inner
+  more_mapping ls next depth m key map
+
+fn more_mapping ls i depth m key inner
+  mapping ls i depth (put m key inner)
+
+fn block_list ls i depth acc
+  line = ls[i]
+  more = line != none and indent_of line == depth
+  item = more and textkit/starts_with? (text/trim line) "- "
+  return ylevel acc i if not item
+  word = text/trim (text/slice (text/trim line) 3 (length (text/trim line)))
+  block_list ls (i + 1) depth (push acc (scalar word))
+
+fn scalar word
+  t = text/trim word
+  first = text/slice t 1 1
+  return quoted_scalar t if first == "\"" or first == "'"
+  return flow t if first == "["
+  bare t
+
+fn quoted_scalar t
+  text/slice t 2 (length t - 1)
+
+fn flow t
+  inner = text/trim (text/slice t 2 (length t - 1))
+  if (inner == "") [] (list/to_list (list/map (text/split inner ",") scalar))
+
+fn bare "true"
+  true
+
+fn bare "false"
+  false
+
+fn bare t
+  number = list/all? (text/chars t) (c -> textkit/digit? c or c == "-")
+  dated = textkit/contains? t "-"
+  if (number and not dated and t != "") (whole t) t
+
+fn whole t
+  n = text/to_int t
+  int_or t n
+
+fn int_or t (err _)
+  t
+
+fn int_or _ n
+  n

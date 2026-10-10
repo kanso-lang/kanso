@@ -1,0 +1,49 @@
+# Writing bytes, and the file operations std/os does not have.
+#
+# os/write_file takes a string and writes it as UTF-8, so a byte above 0x7f
+# cannot reach the disk through it, and std/os has no append, remove or
+# rename (FRICTION.md F1, F2). Every write here goes through printf, whose
+# format string turns `\ooo` into the one byte it names. The format is
+# handed to sh as a positional parameter, so no byte is ever quoted.
+import "std/list"
+import "std/os"
+import "std/text"
+
+# Bytes per printf call. Each byte costs four characters of argument, and
+# Linux caps a single argument at 128 KiB.
+chunk = 4096
+
+pub fn append_bytes path bs
+  put_chunk path bs 1 ">>"
+
+pub fn replace_bytes path bs
+  put_chunk path bs 1 ">"
+
+pub fn remove_files paths
+  os/run "rm" (text/concat ["-f"] paths) .> ran
+
+# text/slice answers an empty list when `to` runs past the end, rather
+# than stopping at the end (FRICTION.md F10), so the last chunk is cut to
+# the length by hand.
+fn put_chunk path bs from op
+  to = if (length bs < from + chunk - 1) (length bs) (from + chunk - 1)
+  part = text/slice bs from to
+  script = "printf \"$1\" {op} \"$2\""
+  os/run "sh" ["-c" script "sh" (octal part) path]
+    .> ran
+    .> (_ -> rest_of path bs (to + 1))
+
+fn rest_of path bs from
+  if (length bs < from) (effect done) (put_chunk path bs from ">>")
+
+fn ran (process 0 _ _)
+  done
+
+fn ran (process status stderr _)
+  err "a file operation exited {status}: {stderr}"
+
+pub fn octal bs
+  text/join (list/to_list (list/map bs escape)) ""
+
+fn escape b
+  "\\{b / 64}{b / 8 % 8}{b % 8}"

@@ -1,0 +1,193 @@
+import "../textkit"
+import "std/list"
+import "std/text"
+
+# The pieces of a template between its delimiters.
+type t_expr
+  body
+  line
+
+type t_tag
+  body
+  line
+
+type t_text
+  words
+
+# One token inside `{{ }}` or `{% %}`: `kind` is name, str, int, float or
+# op.
+type tok
+  kind
+  line
+  word
+
+# Where the scanner is: the next character, the line it is on, whether the
+# text that follows has its leading space trimmed, and the pieces so far.
+type scan
+  acc
+  line
+  p
+  trim
+
+# Cut a template into text, `{{ expression }}` and `{% tag %}` pieces.
+# Comments go, and `-` beside a delimiter trims the space on that side.
+fn pieces name src
+  cs = text/chars src
+  cut name cs (scan [] 1 1 false)
+
+fn cut name cs st
+  { p } = st
+  at = next_open cs p
+  words = text/join (text/slice cs p (at - 1)) ""
+  text_done = add_text st words
+  return text_done.acc if cs[at] == none
+  opened name cs at text_done
+
+fn next_open cs p
+  c = cs[p]
+  return p if c == none
+  after = cs[p + 1]
+  opens = c == "\{" and (after == "\{" or after == "%" or after == "#")
+  if opens p (next_open cs (p + 1))
+
+fn add_text (scan acc line _ trim) words
+  kept = if trim (textkit/trim_start words) words
+  lines = line + newlines words
+  grown = textkit/kept_if acc (t_text kept) (kept != "")
+  scan grown lines 0 false
+
+fn newlines words
+  list/count (text/chars words) (c -> c == "\n")
+
+fn opened name cs at st
+  kind = cs[at + 1]
+  left = cs[at + 2] == "-"
+  start = if left (at + 3) (at + 2)
+  closing = close_of kind
+  end = find_close cs closing start
+  return fail name st.line "unclosed `\{{kind}`" if end == none
+  right = cs[end - 1] == "-"
+  stop = if right (end - 2) (end - 1)
+  body = text/trim (text/join (text/slice cs start stop) "")
+  trimmed = if left (trim_last st) st
+  piece_of name cs (end + 2) trimmed kind body right
+
+fn close_of "\{"
+  "}"
+
+fn close_of "%"
+  "%"
+
+fn close_of _
+  "#"
+
+fn find_close cs c p
+  return none if cs[p] == none
+  if (cs[p] == c and cs[p + 1] == "}") p (find_close cs c (p + 1))
+
+fn trim_last (scan acc line p trim)
+  n = length acc
+  last = acc[n]
+  scan (trim_text acc n last) line p trim
+
+fn trim_text acc n (t_text words)
+  stripped = textkit/trim_end words
+  front = text/slice acc 1 (n - 1)
+  if (stripped == "") front (push front (t_text stripped))
+
+fn trim_text acc _ _
+  acc
+
+fn piece_of name cs next st "\{" body right
+  { acc line } = st
+  advanced = scan (push acc (t_expr body line)) line next right
+  cut name cs (count_body advanced body)
+
+fn piece_of name cs next st "%" body right
+  { acc line } = st
+  advanced = scan (push acc (t_tag body line)) line next right
+  raw = body == "raw"
+  return verbatim name cs (count_body advanced body) if raw
+  cut name cs (count_body advanced body)
+
+fn piece_of name cs next st _ body right
+  { acc line } = st
+  cut name cs (count_body (scan acc line next right) body)
+
+fn count_body (scan acc line p trim) body
+  scan acc (line + newlines body) p trim
+
+# After `{% raw %}` everything up to `{% endraw %}` is text.
+fn verbatim name cs st
+  { p } = st
+  src = text/join (text/slice cs p (length cs)) ""
+  end = textkit/index_of src "\{% endraw %}" 1
+  return fail name st.line "`raw` without `endraw`" if end == none
+  words = text/slice src 1 (end - 1)
+  added = add_text st words
+  ended = push added.acc (t_tag "endraw" added.line)
+  cut name cs (scan ended added.line (p + end + 11) false)
+
+fn fail _ line message
+  err "line {line}: {message}"
+
+# The tokens of one expression or tag body.
+fn tokens name body line
+  lexed name (text/chars body) 1 line []
+
+fn lexed name cs p line acc
+  c = cs[p]
+  return acc if c == none
+  return lexed name cs (p + 1) line acc if textkit/space? c
+  token_at name cs c p line acc
+
+fn token_at name cs "\"" p line acc
+  quoted name cs "\"" p line acc
+
+fn token_at name cs "'" p line acc
+  quoted name cs "'" p line acc
+
+fn token_at name cs "`" p line acc
+  quoted name cs "`" p line acc
+
+fn token_at name cs c p line acc
+  return word_token name cs p line acc if textkit/letter? c or c == "_"
+  return number_token name cs p line acc if textkit/digit? c
+  two = text/join (text/slice cs p (p + 1)) ""
+  paired = push acc (tok "op" line two)
+  return lexed name cs (p + 2) line paired if pair_op? two
+  return lexed name cs (p + 1) line (push acc (tok "op" line c)) if single_op? c
+  fail name line "unexpected `{c}`"
+
+fn pair_op? s
+  s == "==" or s == "!=" or s == "<=" or s == ">=" or s == "::"
+
+fn single_op? c
+  textkit/contains? "()[],.|=<>+-*/%~:\{}" c
+
+fn quoted name cs q p line acc
+  end = text_end cs q (p + 1)
+  return fail name line "unterminated string" if end == none
+  words = text/join (text/slice cs (p + 1) (end - 1)) ""
+  lexed name cs (end + 1) line (push acc (tok "str" line words))
+
+fn text_end cs q p
+  return none if cs[p] == none
+  if (cs[p] == q) p (text_end cs q (p + 1))
+
+fn word_token name cs p line acc
+  end = run_end cs p (c -> textkit/alnum? c or c == "_")
+  words = text/join (text/slice cs p (end - 1)) ""
+  lexed name cs end line (push acc (tok "name" line words))
+
+fn number_token name cs p line acc
+  end = run_end cs p (c -> textkit/digit? c)
+  fraction = cs[end] == "." and textkit/digit? cs[end + 1]
+  stop = if fraction (run_end cs (end + 1) (c -> textkit/digit? c)) end
+  kind = if fraction "float" "int"
+  words = text/join (text/slice cs p (stop - 1)) ""
+  lexed name cs stop line (push acc (tok kind line words))
+
+fn run_end cs p keep
+  c = cs[p]
+  if (c != none and keep c) (run_end cs (p + 1) keep) p

@@ -1,0 +1,364 @@
+import "../textkit"
+import "std/list"
+import "std/text"
+
+# One `a.b = value` line, before it is placed in the document.
+type assignment
+  names
+  value
+
+# What a step of the parser hands back: the value it read and the position
+# just past it.
+type got
+  pos
+  value
+
+# A TOML subset, enough for site configuration and front matter: bare and
+# quoted names, dotted names, [table] headers, strings, integers, floats,
+# booleans, dates (kept as their text), arrays and inline tables.
+pub fn parse src
+  cs = text/chars src
+  doc cs 1 {} []
+
+# The same, for TOML that starts on line `first` of a larger file; errors
+# count lines from there.
+pub fn parse_at src first
+  shifted (parse src) (first - 1)
+
+fn shifted (err r) by
+  colon = textkit/index_of r ":" 1
+  line = text/to_int (text/slice r 6 (colon - 1))
+  err "line {numbered line by}{text/slice r colon (length r)}"
+
+fn shifted m _
+  m
+
+fn numbered (err _) _
+  "?"
+
+fn numbered n by
+  n + by
+
+fn doc cs p root path
+  q = skip_blank cs p
+  doc_at cs cs[q] q root path
+
+fn doc_at _ none _ root _
+  root
+
+fn doc_at cs "[" p root _
+  header cs (p + 1) root
+
+fn doc_at cs _ p root path
+  pair = key_value cs p
+  placed = place root path pair
+  doc_after cs pair placed path
+
+fn doc_after cs (got p _) root path
+  q = skip_space cs p
+  line_end cs cs[q] q root path
+
+fn line_end cs "#" p root path
+  doc cs (skip_comment cs p) root path
+
+fn line_end cs "\n" p root path
+  doc cs (p + 1) root path
+
+fn line_end _ none _ root _
+  root
+
+fn line_end cs c p _ _
+  fail cs p "expected a new line after the value, found `{c}`"
+
+fn header cs p root
+  names = key_path cs (skip_space cs p) []
+  header_close cs names root
+
+fn header_close cs (got p names) root
+  q = skip_space cs p
+  return fail cs q "expected `]` to close the table header" if cs[q] != "]"
+  doc cs (q + 1) (ensure_table root names) names
+
+fn ensure_table m names
+  return m if length names == 0
+  inner = table_or_new m[names[1]]
+  put m names[1] (ensure_table inner (rest names))
+
+fn table_or_new none
+  {}
+
+fn table_or_new m
+  m
+
+fn rest xs
+  text/slice xs 2 (length xs)
+
+fn place root path (got _ (assignment names v))
+  set_in root (text/concat path names) v
+
+fn set_in m names v
+  return put m names[1] v if length names == 1
+  inner = table_or_new m[names[1]]
+  put m names[1] (set_in inner (rest names) v)
+
+fn key_value cs p
+  names = key_path cs p []
+  after_key cs names
+
+fn after_key cs (got p names)
+  q = skip_space cs p
+  return fail cs q "expected `=` after the key" if cs[q] != "="
+  v = value cs (skip_space cs (q + 1))
+  paired_with names v
+
+fn paired_with names (got p v)
+  got p (assignment names v)
+
+fn key_path cs p acc
+  k = key cs p
+  key_more cs k acc
+
+fn key_more cs (got p k) acc
+  q = skip_space cs p
+  more = push acc k
+  if (cs[q] == ".") (key_path cs (skip_space cs (q + 1)) more) (got q more)
+
+fn key cs p
+  key_at cs cs[p] p
+
+fn key_at cs "\"" p
+  basic_string cs (p + 1) []
+
+fn key_at cs "'" p
+  literal_string cs (p + 1) p
+
+fn key_at cs none p
+  fail cs p "expected a key, found the end of the input"
+
+fn key_at cs _ p
+  q = bare_end cs p
+  return fail cs p "expected a key" if q == p
+  got q (text/join (text/slice cs p (q - 1)) "")
+
+fn bare_end cs p
+  if (bare? cs[p]) (bare_end cs (p + 1)) p
+
+fn bare? none
+  false
+
+fn bare? c
+  code = text/char_code c
+  alpha = 64 < code and code < 91 or 96 < code and code < 123
+  alpha or 47 < code and code < 58 or c == "_" or c == "-"
+
+fn value cs p
+  value_at cs cs[p] p
+
+fn value_at cs "\"" p
+  quoted cs p (text/slice cs p (p + 2) == ["\"" "\"" "\""])
+
+fn value_at cs "'" p
+  literal_string cs (p + 1) p
+
+fn value_at cs "[" p
+  array cs (skip_blank cs (p + 1)) []
+
+fn value_at cs "\{" p
+  inline_table cs (skip_space cs (p + 1)) {}
+
+fn value_at cs none p
+  fail cs p "expected a value, found the end of the input"
+
+fn value_at cs _ p
+  q = scalar_end cs p
+  return fail cs p "expected a value" if q == p
+  word = text/join (text/slice cs p (q - 1)) ""
+  scalar cs p q word
+
+fn scalar _ _ q "true"
+  got q true
+
+fn scalar _ _ q "false"
+  got q false
+
+fn scalar cs p q word
+  return got q word if date? word
+  digits = text/join (text/split word "_") ""
+  number cs p q digits (float? digits)
+
+fn number cs p q digits true
+  checked_number cs p q (text/to_float digits) digits
+
+fn number cs p q digits false
+  checked_number cs p q (text/to_int digits) digits
+
+fn checked_number cs p _ (err _) word
+  fail cs p "`{word}` is not a value"
+
+fn checked_number _ _ q n _
+  got q n
+
+fn float? word
+  list/any? (text/chars word) (c -> c == "." or c == "e" or c == "E")
+
+fn date? word
+  cs = text/chars word
+  length cs >= 10 and cs[5] == "-" and cs[8] == "-"
+
+fn scalar_end cs p
+  if (scalar_char? cs[p]) (scalar_end cs (p + 1)) p
+
+fn scalar_char? none
+  false
+
+fn scalar_char? c
+  bare? c or c == "+" or c == "." or c == ":"
+
+fn quoted cs p true
+  long_string cs (skip_first_newline cs (p + 3)) []
+
+fn quoted cs p false
+  basic_string cs (p + 1) []
+
+fn skip_first_newline cs p
+  if (cs[p] == "\n") (p + 1) p
+
+fn long_string cs p acc
+  return fail cs p "unterminated string" if cs[p] == none
+  closing = text/slice cs p (p + 2) == ["\"" "\"" "\""]
+  if closing (got (p + 3) (text/join acc "")) (long_char cs p acc)
+
+fn long_char cs p acc
+  return escaped cs p acc long_string if cs[p] == "\\"
+  long_string cs (p + 1) (push acc cs[p])
+
+fn basic_string cs p acc
+  basic_at cs cs[p] p acc
+
+fn basic_at cs none p _
+  fail cs p "unterminated string"
+
+fn basic_at cs "\n" p _
+  fail cs p "unterminated string"
+
+fn basic_at _ "\"" p acc
+  got (p + 1) (text/join acc "")
+
+fn basic_at cs "\\" p acc
+  escaped cs p acc basic_string
+
+fn basic_at cs c p acc
+  basic_string cs (p + 1) (push acc c)
+
+fn escaped cs p acc k
+  e = escape_of cs[p + 1]
+  return fail cs p "unknown escape `\\{cs[p + 1]}`" if e == ""
+  k cs (p + 2) (push acc e)
+
+fn escape_of "n"
+  "\n"
+
+fn escape_of "t"
+  "\t"
+
+fn escape_of "\""
+  "\""
+
+fn escape_of "\\"
+  "\\"
+
+fn escape_of "r"
+  "\r"
+
+fn escape_of none
+  ""
+
+fn escape_of _
+  ""
+
+fn literal_string cs p start
+  q = literal_end cs p
+  return fail cs start "unterminated string" if cs[q] != "'"
+  got (q + 1) (text/join (text/slice cs p (q - 1)) "")
+
+fn literal_end cs p
+  if (cs[p] == none or cs[p] == "'" or cs[p] == "\n") p (literal_end cs (p + 1))
+
+fn array cs p acc
+  return got (p + 1) acc if cs[p] == "]"
+  v = value cs p
+  array_more cs v acc
+
+fn array_more cs (got p v) acc
+  q = skip_blank cs p
+  more = push acc v
+  array_sep cs cs[q] q more
+
+fn array_sep cs "," p acc
+  array cs (skip_blank cs (p + 1)) acc
+
+fn array_sep _ "]" p acc
+  got (p + 1) acc
+
+fn array_sep cs none p _
+  fail cs p "unterminated array"
+
+fn array_sep cs _ p _
+  fail cs p "expected `,` or `]` in the array"
+
+fn inline_table cs p m
+  return got (p + 1) m if cs[p] == "}"
+  pair = key_value cs p
+  table_more cs pair m
+
+fn table_more cs (got p (assignment names v)) m
+  q = skip_space cs p
+  grown = set_in m names v
+  table_sep cs cs[q] q grown
+
+fn table_sep cs "," p m
+  inline_table cs (skip_space cs (p + 1)) m
+
+fn table_sep _ "}" p m
+  got (p + 1) m
+
+fn table_sep cs none p _
+  fail cs p "unterminated inline table"
+
+fn table_sep cs _ p _
+  fail cs p "expected `,` or `}` in the inline table"
+
+fn skip_space cs p
+  if (cs[p] == " " or cs[p] == "\t") (skip_space cs (p + 1)) p
+
+# spaces, new lines and comments: what may sit between entries
+fn skip_blank cs p
+  blank_at cs cs[p] p
+
+fn blank_at cs " " p
+  skip_blank cs (p + 1)
+
+fn blank_at cs "\t" p
+  skip_blank cs (p + 1)
+
+fn blank_at cs "\n" p
+  skip_blank cs (p + 1)
+
+fn blank_at cs "\r" p
+  skip_blank cs (p + 1)
+
+fn blank_at cs "#" p
+  skip_blank cs (skip_comment cs p)
+
+fn blank_at _ none p
+  p
+
+fn blank_at _ _ p
+  p
+
+fn skip_comment cs p
+  if (cs[p] == none or cs[p] == "\n") p (skip_comment cs (p + 1))
+
+fn fail cs p message
+  line = list/count (text/slice cs 1 (p - 1)) (c -> c == "\n") + 1
+  err "line {line}: {message}"

@@ -1,0 +1,21 @@
+test_file_ids_sorted_numerically =
+  names = ["10.bitcask.data" "2.bitcask.data" "2.bitcask.hint" "notes.txt"]
+  file_ids names "data" == [2 10]
+
+test_hint_ids = file_ids ["3.bitcask.hint" "3.bitcask.data"] "hint" == [3]
+
+test_store_files_pairs_data_with_hint =
+  names = ["2.bitcask.hint" "10.bitcask.data" "2.bitcask.data" "x"]
+  store_files names == ["2.bitcask.data" "2.bitcask.hint" "10.bitcask.data"]
+
+fn sample expiry
+  st = store 1 "db" expiry {} 100 1000 0
+  st . with_key "a" (loc 1 0 16 900) . with_key "b" gone
+
+test_live_keys_skip_deletes = live_keys (sample 0) == ["a"]
+
+test_expiry_hides_old_records = live_keys (sample 50) == []
+
+test_expiry_keeps_recent_records = live_keys (sample 100) == ["a"]
+
+test_plural = "{plural 1 "file"} {plural 2 "file"}" == "1 file 2 files"

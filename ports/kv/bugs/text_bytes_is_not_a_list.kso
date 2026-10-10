@@ -1,0 +1,13 @@
+# text/bytes answers int[] (appendix B), and a list of ints is what
+# text/concat and push take, so this should print [1 97] then [97 2].
+#
+# Interpreter (`kanso play <this> --interp`): stops at the first line with
+#   error[runtime]: concat takes two lists
+# Native (`kanso play <this>`): concat works, then `push` stops with
+#   error[runtime]: push takes a list and a value
+# `kanso check` passes it. text/slice of the same value works everywhere,
+# and wrapping it in list/to_list makes both calls work on both engines.
+import "std/text"
+joined = text/concat [1] (text/bytes "a")
+pushed = push (text/bytes "a") 2
+print "{joined}" .> (_ -> print "{pushed}")

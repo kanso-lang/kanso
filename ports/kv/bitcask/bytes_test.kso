@@ -1,0 +1,13 @@
+test_be16 = be16 258 == [1 2]
+
+test_be32 = be32 3421780262 == [203 244 57 38]
+
+test_be64 = be64 4294967296 == [0 0 0 1 0 0 0 0]
+
+test_read_be_round_trip = read_be (be64 1234567890123) 0 8 == 1234567890123
+
+test_read_be_offset = read_be [9 9 1 0] 2 2 == 256
+
+test_hex = hex [0 15 16 255] == "000f10ff"
+
+test_octal = octal [0 10 255] == "\\000\\012\\377"

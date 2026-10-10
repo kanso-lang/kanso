@@ -1,0 +1,21 @@
+# A chain of effects built with list/fold (FRICTION F27). Run from an empty
+# directory with `kanso play effect_fold_stack.kso` and with `--interp`.
+#
+# Expected: both engines write 100 files and print `wrote 100`, as the
+# interpreter does even at n = 5000.
+# Actual (native): error[runtime]: the program ran out of stack: recursion
+# went deeper than the stack holds -- already at n = 100; n = 60 works. In
+# the site generator the same shape, at about 100 writes, ended in a plain
+# segmentation fault instead of this message. Building the chain the other
+# way round, each write binding a function that builds the next, works on
+# every engine at any size.
+import "std/list"
+import "std/os"
+
+fn write_one e i
+  e .> (_ -> os/write_file "out/f{i}.txt" "file {i}")
+
+n = 100
+made = os/make_dir "out"
+written = list/fold (list/to_list (list/take list/naturals n)) made write_one
+written .> (_ -> print "wrote {n}")

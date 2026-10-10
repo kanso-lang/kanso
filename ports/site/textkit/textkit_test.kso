@@ -1,0 +1,44 @@
+test_lower = lower "Hello World" == "hello world"
+
+test_upper = upper "Hello" == "HELLO"
+
+test_capitalize = capitalize "hELLO there" == "Hello there"
+
+test_starts = starts_with? "+++\ntitle" "+++"
+
+test_ends = ends_with? "post.md" ".md"
+
+test_ends_short = not ends_with? "md" "post.md"
+
+test_index_of = index_of "a-b-c" "-" 3 == 4
+
+test_index_missing = index_of "abc" "x" 1 == none
+
+test_replace = replace "a--b--c" "--" "+" == "a+b+c"
+
+test_replace_delete = replace "a--b" "-" "" == "ab"
+
+test_trim_ends = "[{trim_start "  x "}][{trim_end " x  "}]" == "[x ][ x]"
+
+test_words = word_count "<p>one two</p>\nthree" == 3
+
+test_escape =
+  want = "&lt;a href=&quot;x&quot;&gt;&amp;&#x27;"
+  escape_html "<a href=\"x\">&'" == want
+
+test_strip = strip_tags "<p>Hi <em>there</em></p>" == "Hi there"
+
+test_slug = slugify "Hello, World! Café 2024" == "hello-world-cafe-2024"
+
+test_slug_edges = slugify "  --Rust & Go--  " == "rust-go"
+
+test_repeat = repeat "ab" 3 == "ababab"
+
+test_sort_with = sort_with [3 1 2] (a b -> a < b) == [1 2 3]
+
+test_sort_stable =
+  pairs = [["b" 1] ["a" 2] ["b" 0]]
+  sorted = sort_with pairs (x y -> x[1] < y[1])
+  sorted == [["a" 2] ["b" 1] ["b" 0]]
+
+test_clamped = clamped [1 2 3] 3 9 == [3]

@@ -1,0 +1,4 @@
+import "./zola"
+import "std/os"
+
+os/args .> zola/main

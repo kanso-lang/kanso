@@ -1,0 +1,11 @@
+ok
+ok
+ok
+kv: 1.bitcask.data: torn record at offset 32, file cut to 32 bytes
+a
+b
+ 5f 7b ba aa 65 53 f1 00 00 01 00 00 00 01 61 31
+ ed 5f b8 d3 65 53 f1 00 00 01 00 00 00 01 62 32
+a
+b
+[exit 0]

@@ -1,0 +1,36 @@
+<blockquote>
+<p>A quote</p>
+<ul>
+<li>with a list</li>
+<li>of two</li>
+</ul>
+<blockquote>
+<p>and a nested quote</p>
+</blockquote>
+</blockquote>
+<div class="raw">
+  *not markdown inside an html block*
+</div>
+<hr />
+<hr />
+<hr />
+<table>
+<thead>
+<tr>
+<th>Left</th>
+<th style="text-align: right">Right</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><em>a</em></td>
+<td style="text-align: right"><code>b</code></td>
+</tr>
+<tr>
+<td>c</td>
+<td style="text-align: right"></td>
+</tr>
+</tbody>
+</table>
+<p>Paragraph text</p>
+<h1 id="interrupted-by-a-heading">interrupted by a heading</h1>

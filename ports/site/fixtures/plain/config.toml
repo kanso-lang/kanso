@@ -1,0 +1,4 @@
+base_url = "https://plain.example"
+title = "Plain"
+[extra]
+colors = ["red", "green", "blue", "green"]

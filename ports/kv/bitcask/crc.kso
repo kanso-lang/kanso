@@ -1,0 +1,34 @@
+# CRC-32 as zlib computes it: the reflected polynomial 0xEDB88320, an
+# all-ones initial value and a final complement. Every data-file record
+# carries one over everything after the checksum field.
+import "std/bits"
+import "std/list"
+
+# Eight shifts of one byte through the polynomial give its table entry.
+fn crc_byte c 0
+  c
+
+fn crc_byte c k
+  shifted = bits/shr c 1
+  next = if (c & 1 == 1) (bits/xor 3988292384 shifted) shifted
+  crc_byte next (k - 1)
+
+pub fn crc32 bs
+  bits/xor (list/fold bs 4294967295 crc_step) 4294967295
+
+fn crc_step c b
+  mix table[(bits/xor c b & 255) + 1] (bits/shr c 8)
+
+# The index above is masked to a byte, so it is always 1 to 256 and the
+# table has 256 entries; the none arm is here because the checker cannot
+# see that.
+fn mix none _
+  err "crc table has no entry"
+
+fn mix t rest
+  bits/xor t rest
+
+table = list/naturals
+  . list/take 256
+  . list/map (n -> crc_byte (n - 1) 8)
+  . list/to_list

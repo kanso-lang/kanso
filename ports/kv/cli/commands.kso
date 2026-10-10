@@ -1,0 +1,102 @@
+# Commands, read from the command line or from a script on standard input.
+# A script holds one command per line, written as it would be on the command
+# line; blank lines and lines starting with # are skipped.
+import "std/list"
+import "std/text"
+
+type delete_cmd
+  key
+
+type dump_cmd
+
+type get_cmd
+  key
+
+type list_cmd
+
+type merge_cmd
+
+type put_cmd
+  key
+  value
+
+type status_cmd
+
+# A command and the script line it came from.
+type numbered
+  cmd
+  line
+
+type reading
+  cmds
+  line
+
+# A line that is not a command, and why.
+type bad_cmd
+  reason
+
+pub fn command_of words
+  verb_of words[1] words
+
+fn verb_of none _
+  bad_cmd "no command"
+
+fn verb_of "delete" words
+  keyed words (k -> delete_cmd k) "delete takes one key"
+
+fn verb_of "dump" words
+  bare words dump_cmd "dump"
+
+fn verb_of "get" words
+  keyed words (k -> get_cmd k) "get takes one key"
+
+fn verb_of "list" words
+  bare words list_cmd "list"
+
+fn verb_of "merge" words
+  bare words merge_cmd "merge"
+
+fn verb_of "put" words
+  if (length words < 3) (bad_cmd "put takes a key and a value") (put_of words)
+
+fn verb_of "status" words
+  bare words status_cmd "status"
+
+fn verb_of verb _
+  bad_cmd "unknown command `{verb}`"
+
+fn keyed words make why
+  if (length words == 2) (make (key_of words)) (bad_cmd why)
+
+fn key_of words
+  text/join (text/slice words 2 2) ""
+
+fn bare words cmd name
+  if (length words == 1) cmd (bad_cmd "{name} takes no arguments")
+
+# The value is everything after the key, spaces included.
+fn put_of words
+  put_cmd (key_of words) (text/join (text/slice words 3 (length words)) " ")
+
+# The commands in a script, each with its line number.
+pub fn script_of source
+  lines = text/split source "\n"
+  (list/fold lines (reading [] 0) read_line).cmds
+
+fn read_line (reading cmds n) raw
+  line = text/trim raw
+  more = push cmds (numbered (command_of (text/split line " ")) (n + 1))
+  reading (if (skipped? line) cmds more) (n + 1)
+
+fn skipped? line
+  line == "" or text/slice line 1 1 == "#"
+
+# The first command in a script that did not parse, or none.
+pub fn first_bad cmds
+  list/find cmds (c -> bad? c.cmd)
+
+fn bad? _:bad_cmd
+  true
+
+fn bad? _
+  false

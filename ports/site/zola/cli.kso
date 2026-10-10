@@ -1,0 +1,107 @@
+import "../markdown"
+import "std/io"
+import "std/os"
+import "std/text"
+
+# The command line, read once.
+type opts
+  base_url
+  drafts
+  out
+  root
+
+usage_build = "  site build [DIR] [-o OUT] [--drafts] [-u BASE_URL]"
+
+usage_check = "  site check [DIR] [--drafts]"
+
+usage_markdown = "  site markdown FILE"
+
+usage_text = "usage:\n{usage_build}\n{usage_check}\n{usage_markdown}"
+
+pub fn main argv
+  command argv[1] (text/slice argv 2 (length argv))
+
+fn command none _
+  print usage_text
+
+fn command "build" args
+  options = parsed_opts args 1 (opts "" false "" ".")
+  build_command options
+
+fn command "check" args
+  options = parsed_opts args 1 (opts "" false "" ".")
+  check_command options
+
+fn command "markdown" args
+  path = args[1]
+  return fail "markdown needs a file" if path == none
+  os/read_file! path .> (source -> io/write (markdown_html source))
+
+fn command "help" _
+  print usage_text
+
+fn command other _
+  fail "unknown command `{other}`\n{usage_text}"
+
+fn markdown_html source
+  out = markdown/render source {} ""
+  out.html
+
+fn parsed_opts args i o
+  a = args[i]
+  return o if a == none
+  flag args i o a
+
+fn flag args i (opts base_url drafts _ root) "-o"
+  parsed_opts args (i + 2) (opts base_url drafts (text_at args (i + 1)) root)
+
+fn flag args i (opts _ drafts out root) "-u"
+  parsed_opts args (i + 2) (opts (text_at args (i + 1)) drafts out root)
+
+fn flag args i (opts base_url _ out root) "--drafts"
+  parsed_opts args (i + 1) (opts base_url true out root)
+
+fn flag args i (opts base_url drafts out _) dir
+  parsed_opts args (i + 1) (opts base_url drafts out dir)
+
+fn text_at args i
+  found = args[i]
+  if (found == none) "" found
+
+fn output_of (opts _ _ "" root)
+  "{root}/public"
+
+fn output_of (opts _ _ out _)
+  out
+
+fn build_command o
+  load_site o.root .> (input -> built input o true)
+
+fn check_command o
+  load_site o.root .> (input -> built input o false)
+
+fn built (load_failed reason) _ _
+  fail reason
+
+fn built input o write
+  result = build input o.drafts o.base_url
+  reported result o write
+
+fn reported (err r) _ true
+  fail r
+
+fn reported (err r) _ false
+  fail r
+
+fn reported p o true
+  out = output_of o
+  report p.summary .> (_ -> write_plan o.root out p) .> (_ -> print "Done.")
+
+fn reported p _ false
+  report p.summary .> (_ -> print "Done.")
+
+fn report lines
+  print (text/join lines "\n")
+
+fn fail message
+  io/write_err "Error: {message}\n" .> (_ -> os/exit 1)

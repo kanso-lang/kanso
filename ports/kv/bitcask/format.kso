@@ -1,0 +1,135 @@
+# The two on-disk layouts. A data file is a run of records:
+#
+#   crc32 (4) | stamp (4) | key size (2) | value size (4) | key | value
+#
+# all big-endian, the checksum covering every byte after itself. A delete is
+# a record whose value size is 0xffffffff and which carries no value bytes.
+#
+# A hint file, written beside each data file a merge produces, holds one
+# entry per live record so that opening the store need not read the values:
+#
+#   stamp (4) | key size (2) | record size (4) | record offset (8) | key
+import "std/list"
+import "std/text"
+
+# The value a delete writes, standing where a string would.
+pub type tombstone
+
+# A record read back from a data file. `offset` is where it starts, 0-based;
+# `size` counts every byte of it.
+pub type record
+  key
+  offset
+  size
+  stamp
+  value
+
+# Why a scan stopped. Each carries the offset where the good bytes end.
+pub type corrupt
+  offset
+
+pub type finished
+  offset
+
+pub type torn
+  offset
+
+pub type stop corrupt finished torn
+
+# A hint entry: everything the key directory needs, without the value.
+pub type hint
+  key
+  offset
+  size
+  stamp
+
+# A hint file that does not parse. Opening falls back to the data file.
+pub type bad_hint
+  offset
+
+pub header_size = 14
+
+hint_header_size = 18
+
+deleted_size = 4294967295
+
+pub fn cat parts
+  list/fold parts [] append_all
+
+pub fn encode_record stamp key value
+  kb = utf8_bytes key
+  vfield = be32 (value_size value)
+  body = cat [(be32 stamp) (be16 (length kb)) vfield kb (value_bytes value)]
+  text/concat (be32 (crc32 body)) body
+
+fn value_bytes _:tombstone
+  []
+
+fn value_bytes v
+  utf8_bytes v
+
+fn value_size _:tombstone
+  deleted_size
+
+fn value_size v
+  length (utf8_bytes v)
+
+fn stored_length 4294967295
+  0
+
+fn stored_length n
+  n
+
+fn value_of 4294967295 _
+  tombstone
+
+fn value_of _ vb
+  text/utf8 vb
+
+# The record that starts at `offset`, or the reason there is none.
+pub fn decode_at bs offset
+  return finished offset if offset == length bs
+  return torn offset if length bs < offset + header_size
+  ksz = read_be bs (offset + 8) 2
+  vfield = read_be bs (offset + 10) 4
+  size = header_size + ksz + stored_length vfield
+  return torn offset if length bs < offset + size
+  whole = text/slice bs (offset + 5) (offset + size)
+  return corrupt offset if crc32 whole != read_be bs offset 4
+  key_at = offset + header_size
+  key = text/utf8 (text/slice bs (key_at + 1) (key_at + ksz))
+  vb = text/slice bs (key_at + ksz + 1) (offset + size)
+  record key offset size (read_be bs (offset + 4) 4) (value_of vfield vb)
+
+pub fn encode_hint (record key offset size stamp _)
+  kb = utf8_bytes key
+  cat [(be32 stamp) (be16 (length kb)) (be32 size) (be64 offset) kb]
+
+# The last entry of a hint file is not a key: its offset is the largest a
+# signed 64-bit field holds, and its size field is the CRC-32 of every byte
+# before it. A hint file without one was cut short while a merge wrote it.
+max_offset = 9223372036854775807
+
+pub fn hint_trailer bs
+  cat [(be32 0) (be16 0) (be32 (crc32 bs)) (be64 max_offset)]
+
+# Every entry in a hint file, in order, or bad_hint at the first place the
+# bytes stop making sense: a short entry, a missing trailer, or a trailer
+# whose checksum disagrees.
+pub fn decode_hints bs
+  hints_from bs 0 []
+
+fn hints_from bs at acc
+  return bad_hint at if length bs < at + hint_header_size
+  ksz = read_be bs (at + 4) 2
+  offset = read_be bs (at + 10) 8
+  size = read_be bs (at + 6) 4
+  next = at + hint_header_size + ksz
+  return trailer bs at size acc if offset == max_offset
+  return bad_hint at if length bs < next
+  key = text/utf8 (text/slice bs (at + hint_header_size + 1) next)
+  hints_from bs next (push acc (hint key offset size (read_be bs at 4)))
+
+fn trailer bs at crc acc
+  whole = at + hint_header_size == length bs
+  if (whole and crc32 (text/slice bs 1 at) == crc) acc (bad_hint at)

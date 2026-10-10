@@ -1,0 +1,28 @@
+# Binding patterns below a `return ... if` guard. Run with
+# `kanso play keyed_read_after_guard.kso`.
+#
+# Expected: prints `[1] 2`. The keyed read `{ acc line } = closed` binds two
+# names, exactly as it does when the guard line is deleted.
+# Actual: error[name]: unknown name `acc` and unknown name `line` at the
+# interpolation. Delete the guard and the program checks and prints.
+#
+# The other half: below the same guard, the positional pattern
+#   scan acc line _ _ = closed
+# is accepted and runs, although `_` in a binding pattern is refused
+# everywhere else with "`_` does not appear in binding patterns; omit fields
+# with a keyed read". So below a guard the keyed read the diagnostic
+# recommends does not work, and the form it forbids does.
+type scan
+  acc
+  line
+  p
+  trim
+
+fn go st
+  { p } = st
+  return "none" if p > 5
+  closed = scan [p] 2 (p + 1) false
+  { acc line } = closed
+  "{acc} {line}"
+
+print (go (scan [] 1 1 false))

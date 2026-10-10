@@ -1,0 +1,11 @@
+<h1 id="one">One</h1>
+<h2 id="two">Two</h2>
+<h3 id="three-with-code-and-a-link">Three with <code>code</code> and <a href="/x">a link</a></h3>
+<h4 id="intro">Intro</h4>
+<h4 id="intro-1">Intro</h4>
+<h5 id="my-id">Custom</h5>
+<h6 id="six">Six</h6>
+<p>####### seven hashes is a paragraph
+#not a heading</p>
+<h1 id="setext-one">Setext one</h1>
+<h2 id="setext-two">Setext two</h2>

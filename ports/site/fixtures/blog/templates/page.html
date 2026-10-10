@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}{{ page.title }} | {{ config.title }}{% endblock title %}
+{% block content %}
+<article>
+  <h1>{{ page.title }}</h1>
+  {%- if page.date %}
+  <p class="meta">{{ page.date | date(format="%A, %B %e, %Y") }}
+  {%- if page.updated %} (updated {{ page.updated }}){% endif %}
+  &middot; {{ page.word_count }} words, {{ page.reading_time }} min</p>
+  {%- endif %}
+  {%- if page.taxonomies.tags %}
+  <p class="tags">
+  {%- for tag in page.taxonomies.tags %}
+    <a href="{{ get_taxonomy_url(kind="tags", name=tag) | safe }}">#{{ tag | lower }}</a>
+  {%- endfor %}
+  </p>
+  {%- endif %}
+  {%- if page.toc | length > 1 %}
+  <nav class="toc">
+  {%- for h in page.toc %}
+    <a href="{{ h.permalink | safe }}">{{ h.title }}</a>
+    {%- for c in h.children %} / <a href="{{ c.permalink | safe }}">{{ c.title }}</a>{% endfor %}
+  {%- endfor %}
+  </nav>
+  {%- endif %}
+  {{ page.content | safe }}
+  {%- if page.summary %}
+  <!-- summary: {{ page.summary | striptags | trim | truncate(length=30) }} -->
+  {%- endif %}
+</article>
+<nav class="neighbours">
+  {%- if page.higher %}<a rel="prev" href="{{ page.higher.permalink | safe }}">{{ page.higher.title }}</a>{% endif %}
+  {%- if page.lower %}<a rel="next" href="{{ page.lower.permalink | safe }}">{{ page.lower.title }}</a>{% endif %}
+</nav>
+{%- if page.assets %}
+<!-- assets: {{ page.assets | join(sep=", ") }} -->
+{%- endif %}
+<!-- in: {{ page.ancestors | join(sep=" > ") }} -->
+{% endblock content %}

@@ -1,0 +1,13 @@
+# Reproduction (FRICTION F19): run `kanso check bugs/param_name_leak/kit`
+# (ok), then `kanso check bugs/param_name_leak/app`.
+#
+# Expected: ok. Inside kit, `keep?` is this function's parameter, and app's
+# own top-level `keep?` has nothing to do with it.
+# Actual: error[exhaustive]: this can be a none and `keep?` has no arm for
+# it (in kit.kso) (module .../app), pointing at line 13 below. Checking kit
+# on app's behalf resolves the parameter against app's function. Binding
+# `xs[1]` to a name first makes the check pass, and the program then prints
+# `kept true`, so the engines call the right function; only the checker
+# confuses the two.
+pub fn first_kept xs keep?
+  if (keep? xs[1]) "kept" "dropped"

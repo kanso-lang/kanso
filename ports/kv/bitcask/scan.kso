@@ -1,0 +1,31 @@
+# Reading a whole data file back into records. A scan runs until the bytes
+# end or stop making sense; what it read before that point is good, and the
+# offset where it stopped is where a torn write began.
+pub type scan
+  records
+  stop
+
+pub fn scan_bytes bs
+  scan_from bs 0 []
+
+fn scan_from bs offset acc
+  scanned bs (decode_at bs offset) acc
+
+fn scanned bs r:record acc
+  scan_from bs (r.offset + r.size) (push acc r)
+
+fn scanned _ s:stop acc
+  scan acc s
+
+# How many bytes of the file a scan vouched for.
+pub fn good_bytes (scan _ s)
+  s.offset
+
+pub fn clean? (scan _ s)
+  finished? s
+
+fn finished? _:finished
+  true
+
+fn finished? _
+  false

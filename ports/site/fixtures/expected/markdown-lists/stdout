@@ -1,0 +1,30 @@
+<ul>
+<li>alpha</li>
+<li>beta
+continued on a second line</li>
+<li>gamma
+<ol>
+<li>nested one</li>
+<li>nested two</li>
+</ol></li>
+<li>delta</li>
+</ul>
+<ul>
+<li>star bullets</li>
+</ul>
+<ul>
+<li>plus bullets</li>
+</ul>
+<ol start="7">
+<li>seven</li>
+<li>eight</li>
+</ol>
+<ul>
+<li>
+<p>loose one</p>
+</li>
+<li>
+<p>loose two</p>
+<p>with a second paragraph</p>
+</li>
+</ul>

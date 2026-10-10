@@ -1,0 +1,46 @@
+import "std/list"
+import "std/text"
+
+fn piece_shape (t_text w)
+  "T[{w}]"
+
+fn piece_shape (t_expr b l)
+  "E{l}[{b}]"
+
+fn piece_shape (t_tag b l)
+  "G{l}[{b}]"
+
+# A failure becomes its reason, so a test can compare it like any value.
+fn surely (err r)
+  "error: {r}"
+
+fn surely v
+  v
+
+fn cut_up src
+  parts = pieces "t" src
+  surely (text/join (list/to_list (list/map parts piece_shape)) "")
+
+test_pieces =
+  want = "T[a ]E1[x]T[ b\n]G2[if y]T[c]"
+  cut_up "a \{\{ x }} b\n\{% if y %}c" == want
+
+test_trim = cut_up "a  \{\{- x -}}  b" == "T[a]E1[x]T[b]"
+
+test_comment = cut_up "a\{# gone #}b" == "T[a]T[b]"
+
+test_raw =
+  want = "G1[raw]T[\{\{ x }}]G1[endraw]"
+  cut_up "\{% raw %}\{\{ x }}\{% endraw %}" == want
+
+fn kinds src
+  toks = tokens "t" src 1
+  shown = list/to_list (list/map toks (t -> "{t.kind}:{t.word}"))
+  surely (text/join shown " ")
+
+test_tokens =
+  front = "name:a op:. name:b op:| name:f op:( "
+  want = "{front}name:x op:= int:1 op:) op:== str:q"
+  kinds "a.b | f(x=1) == 'q'" == want
+
+test_float = kinds "2.5 - x" == "float:2.5 op:- name:x"

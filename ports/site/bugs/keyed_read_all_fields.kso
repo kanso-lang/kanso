@@ -1,0 +1,20 @@
+# A keyed read that names every field. Run with
+# `kanso play keyed_read_all_fields.kso`.
+#
+# Expected: `kanso check` refuses it, the way it refuses `_` in a positional
+# pattern, since the rule is about how the source is written ("a keyed read
+# omits at least one field; reading every field is the positional form").
+# Actual: `kanso check` passes on a module holding the same function (it did
+# on zola/front.kso), and the program fails when the line runs, with
+# error[runtime]: a keyed read omits at least one field; reading every field
+# is the positional form -- with no file or line under `kanso play`, and as
+# `zola:88:18` (module, not file) under `kanso test`.
+type ylevel
+  map
+  next
+
+fn shown level
+  { map next } = level
+  "{map} {next}"
+
+print (shown (ylevel {} 3))

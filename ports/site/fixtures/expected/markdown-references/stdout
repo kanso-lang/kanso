@@ -1,0 +1,4 @@
+<p>Full <a href="https://kanso.dev" title="The kanso site">reference</a>, collapsed <a href="https://www.getzola.org">Zola</a>, and shortcut <a href="/docs/">docs</a>.
+An image by reference: <img src="/logo.svg" alt="logo" />. An [unknown][nope] label stays text.</p>
+<pre><code>[not]: /a definition inside a fence
+</code></pre>

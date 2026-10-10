@@ -1,0 +1,28 @@
+ok
+ok
+ok
+deleted b
+merged 4 files into 1: kept 1, dropped 3
+3.bitcask.data
+4.bitcask.data
+6.bitcask.data
+6.bitcask.hint
+a
+3
+not found: b
+1.bitcask.data
+2.bitcask.data
+3.bitcask.data
+4.bitcask.data
+6.bitcask.data
+6.bitcask.hint
+1.bitcask.data: 16 bytes, 1 record, 0 live, 16 bytes dead
+2.bitcask.data: 16 bytes, 1 record, 0 live, 16 bytes dead
+3.bitcask.data: 16 bytes, 1 record, 0 live, 16 bytes dead
+4.bitcask.data: 15 bytes, 1 record, 0 live, 15 bytes dead
+6.bitcask.data: 16 bytes, 1 record, 1 live, 0 bytes dead
+6.bitcask.hint: 37 bytes, 1 hint
+1 live key
+3
+not found: b
+[exit 1]

@@ -1,0 +1,46 @@
+# Big-endian integers as lists of bytes, the way every field on disk is laid
+# out. A byte is an int from 0 to 255; a run of bytes is a list of them.
+import "std/bits"
+import "std/list"
+import "std/text"
+
+pub fn be16 n
+  [(byte_at n 8) (n & 255)]
+
+pub fn be32 n
+  [(byte_at n 24) (byte_at n 16) (byte_at n 8) (n & 255)]
+
+pub fn be64 n
+  text/concat (be32 (bits/shr n 32)) (be32 (n & 4294967295))
+
+fn byte_at n shift
+  bits/shr n shift & 255
+
+# The unsigned number held in `width` bytes starting at 0-based `offset`.
+# The caller has already checked that the bytes are there.
+pub fn read_be bs offset width
+  field = text/slice bs (offset + 1) (offset + width)
+  list/fold field 0 (acc b -> acc * 256 + b)
+
+# `bs` added to the end of `acc`. Growing a list with text/concat copies
+# the whole list each time and, natively, keeps every copy until the
+# enclosing fold ends (bugs/concat_accumulator_memory.kso); push reuses the
+# list in place.
+pub fn append_all acc bs
+  list/fold bs acc push
+
+# The UTF-8 bytes of a string, as a plain list. text/bytes answers something
+# the interpreter's concat and the native push refuse as a list
+# (bugs/text_bytes_is_not_a_list.kso); to_list makes it an ordinary one.
+pub fn utf8_bytes s
+  list/to_list (text/bytes s)
+
+# Two lowercase hex digits per byte, no separators.
+pub fn hex bs
+  text/join (list/to_list (list/map bs hex_byte)) ""
+
+fn hex_byte b
+  "{digit (bits/shr b 4)}{digit (b & 15)}"
+
+fn digit n
+  text/slice "0123456789abcdef" (n + 1) (n + 1)

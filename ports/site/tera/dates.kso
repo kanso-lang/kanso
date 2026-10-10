@@ -1,0 +1,132 @@
+import "std/list"
+import "std/text"
+
+# A calendar date and time read from `YYYY-MM-DD` with an optional
+# `THH:MM:SS` (or a space) after it.
+type stamp
+  day
+  hour
+  minute
+  month
+  second
+  year
+
+month_names = ["January" "February" "March" "April" "May" "June" "July"]
+
+month_names_late = ["August" "September" "October" "November" "December"]
+
+day_names = ["Sunday" "Monday" "Tuesday" "Wednesday" "Thursday" "Friday"]
+
+# strftime, for the directives a site template uses: %Y %y %m %d %e %B %b
+# %A %a %H %M %S %j and %%.
+fn formatted s format line
+  t = stamp_of s
+  return err "line {line}: `{s}` is not a date" if t == none
+  cs = text/chars format
+  text/join (directives cs 1 t []) ""
+
+fn stamp_of s
+  ok = length s >= 10 and text/slice s 5 5 == "-" and text/slice s 8 8 == "-"
+  if ok (parsed_stamp s) none
+
+fn parsed_stamp s
+  year = number_in s 1 4
+  month = number_in s 6 7
+  day = number_in s 9 10
+  timed = length s >= 19
+  hour = if timed (number_in s 12 13) 0
+  minute = if timed (number_in s 15 16) 0
+  second = if timed (number_in s 18 19) 0
+  stamp day hour minute month second year
+
+fn number_in s from to
+  n = text/to_int (text/slice s from to)
+  surely_int n
+
+fn surely_int (err _)
+  0
+
+fn surely_int n
+  n
+
+fn directives cs p t acc
+  c = cs[p]
+  return acc if c == none
+  return directives cs (p + 1) t (push acc c) if c != "%"
+  directives cs (p + 2) t (push acc (directive cs[p + 1] t))
+
+fn directive "Y" t
+  "{t.year}"
+
+fn directive "y" t
+  two_digits (t.year % 100)
+
+fn directive "m" t
+  two_digits t.month
+
+fn directive "d" t
+  two_digits t.day
+
+fn directive "e" t
+  if (t.day < 10) " {t.day}" "{t.day}"
+
+fn directive "B" t
+  month_name t.month
+
+fn directive "b" t
+  text/slice (month_name t.month) 1 3
+
+fn directive "A" t
+  weekday t
+
+fn directive "a" t
+  text/slice (weekday t) 1 3
+
+fn directive "H" t
+  two_digits t.hour
+
+fn directive "M" t
+  two_digits t.minute
+
+fn directive "S" t
+  two_digits t.second
+
+fn directive "j" t
+  n = day_of_year t
+  if (n < 10) "00{n}" (if (n < 100) "0{n}" "{n}")
+
+fn directive "%" _
+  "%"
+
+fn directive none _
+  "%"
+
+fn directive c _
+  "%{c}"
+
+fn two_digits n
+  if (n < 10) "0{n}" "{n}"
+
+fn month_name m
+  names = text/concat month_names month_names_late
+  found = names[m]
+  if (found == none) "?" found
+
+# Sakamoto's method; 0 is Sunday.
+fn weekday t
+  offsets = [0 3 2 5 0 3 5 1 4 6 2 4]
+  y = if (t.month < 3) (t.year - 1) t.year
+  found_shift = offsets[t.month]
+  shift = if (found_shift == none) 0 found_shift
+  k = (y + y / 4 - y / 100 + y / 400 + shift + t.day) % 7
+  found = text/concat day_names ["Saturday"]
+  name = found[k + 1]
+  if (name == none) "?" name
+
+fn day_of_year t
+  lengths = [31 (if (leap? t.year) 29 28) 31 30 31 30 31 31 30 31 30 31]
+  before = list/sum (text/slice lengths 1 (t.month - 1))
+  before + t.day
+
+fn leap? y
+  y % 4 == 0 and y % 100 != 0 or y % 400 == 0

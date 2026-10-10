@@ -1,0 +1,10 @@
+ok
+deleted k
+ b1 4b 02 93 65 53 f1 00 00 01 ff ff ff ff 6b
+not found: k
+not found: k
+1.bitcask.data (16 bytes)
+  @0 4d2c86136553f100000100000001 1700000000 put k = v
+2.bitcask.data (15 bytes)
+  @0 b14b02936553f1000001ffffffff 1700000000 delete k
+[exit 0]

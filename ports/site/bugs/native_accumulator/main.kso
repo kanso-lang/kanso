@@ -1,0 +1,4 @@
+import "./scan"
+import "std/os"
+
+os/args .> scan/main

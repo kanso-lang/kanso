@@ -1,0 +1,4 @@
+<h1>{{ page.title }}</h1>
+{{ page.content | safe }}
+{%- if page.extra.rating is defined %}<p>{{ page.extra.rating }}/5</p>{% endif %}
+<p>{{ page.lower.title | default(value="(first)") }} | {{ page.higher.title | default(value="(last)") }}</p>

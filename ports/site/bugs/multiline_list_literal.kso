@@ -1,0 +1,19 @@
+# A list literal spread over lines (FRICTION F7). Run with
+# `kanso play multiline_list_literal.kso`.
+#
+# With three short elements the checker answers "needless continuation: this
+# statement fits on one line", which says the wrapped form is the legal one
+# for a statement that does not fit. Add the fourth, long element below so
+# the statement no longer fits, and the answer becomes
+#   error[syntax]: expected an expression   (at the end of the long line)
+# so a wrapped list literal is never legal, and a list whose one-line form
+# passes 80 columns has no legal spelling. Expected: either the wrapped form
+# parses, or the first diagnostic does not suggest that it would.
+import "std/text"
+
+parts = [
+  "<ul>"
+  "<li>a</li>"
+  "plain string that is long enough to need wrapping across lines ok"
+]
+print (text/join parts "\n")

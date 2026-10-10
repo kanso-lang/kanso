@@ -1,0 +1,74 @@
+import "std/list"
+
+fn md source
+  out = render source { "blog/a.md":"/blog/a/" } "/p/"
+  out.html
+
+test_para = md "Hello *world*" == "<p>Hello <em>world</em></p>\n"
+
+test_strong =
+  want = "<p><strong>a</strong> <strong>b</strong></p>\n"
+  md "**a** __b__" == want
+
+test_heading_ids =
+  out = md "# Intro\n\n## Intro"
+  out == "<h1 id=\"intro\">Intro</h1>\n<h2 id=\"intro-1\">Intro</h2>\n"
+
+test_heading_markup = md "### A *b*" == "<h3 id=\"a-b\">A <em>b</em></h3>\n"
+
+test_custom_id = md "## Setup \{#go}" == "<h2 id=\"go\">Setup</h2>\n"
+
+test_code_span = md "`a < b`" == "<p><code>a &lt; b</code></p>\n"
+
+test_fence = md "```\nx < 1\n```" == "<pre><code>x &lt; 1\n</code></pre>\n"
+
+test_link = md "[x](/a \"T\")" == "<p><a href=\"/a\" title=\"T\">x</a></p>\n"
+
+test_internal =
+  want = "<p><a href=\"/blog/a/#t\">a</a></p>\n"
+  md "[a](@/blog/a.md#t)" == want
+
+test_broken =
+  out = render "[a](@/nope.md)" {} ""
+  out.broken == ["@/nope.md"]
+
+test_image =
+  want = "<p><img src=\"/i.png\" alt=\"a b\" /></p>\n"
+  md "![a *b*](/i.png)" == want
+
+test_autolink =
+  want = "<p><a href=\"https://a.b\">https://a.b</a></p>\n"
+  md "<https://a.b>" == want
+
+test_ordered = md "3. x" == "<ol start=\"3\">\n<li>x</li>\n</ol>\n"
+
+test_quote = md "> a\n> b" == "<blockquote>\n<p>a\nb</p>\n</blockquote>\n"
+
+test_rule = md "a\n\n---\n\nb" == "<p>a</p>\n<hr />\n<p>b</p>\n"
+
+test_setext = md "Title\n=====" == "<h1 id=\"title\">Title</h1>\n"
+
+test_escapes = md "\\*a\\* & <b>t</b>" == "<p>*a* &amp; <b>t</b></p>\n"
+
+test_hard_break = md "a  \nb" == "<p>a<br />\nb</p>\n"
+
+test_del = md "~~gone~~" == "<p><del>gone</del></p>\n"
+
+test_html_block = md "<div>\n*x*\n</div>" == "<div>\n*x*\n</div>\n"
+
+test_summary =
+  out = render "one\n\n<!-- more -->\n\ntwo" {} ""
+  out.summary == "<p>one</p>\n"
+
+test_no_summary =
+  out = render "one" {} ""
+  out.summary == none
+
+test_toc =
+  out = render "# A\n## B\n## C\n# D" {} "/p/"
+  shape = list/map out.toc (h -> "{h["title"]}{length h["children"]}")
+  list/to_list shape == ["A2" "D0"]
+
+test_toc_link =
+  out = render "## Go" {} "/p/"
+  out.toc[1]["permalink"] == "/p/#go"

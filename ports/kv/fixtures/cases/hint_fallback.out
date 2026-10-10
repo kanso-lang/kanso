@@ -1,0 +1,9 @@
+ok
+ok
+merged 1 file into 1: kept 2, dropped 0
+kv: 2.bitcask.hint: unreadable at offset 19, scanning the data file
+a
+bb
+kv: 2.bitcask.hint: unreadable at offset 19, scanning the data file
+22
+[exit 0]

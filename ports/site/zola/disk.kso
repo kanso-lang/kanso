@@ -1,0 +1,122 @@
+import "../textkit"
+import "std/list"
+import "std/os"
+import "std/text"
+
+# A site that could not be read, and why. It is data rather than an err: an
+# err raised here could only be read by a `.?` in another module.
+type load_failed
+  reason
+
+# Reading a site from disk and writing its output. Everything here is an
+# effect; the build between the two is pure.
+fn load_site root
+  os/read_file "{root}/config.toml" .> (text -> with_config_text root text)
+
+fn with_config_text root (file_not_found _)
+  effect (load_failed "no config.toml in `{root}`")
+
+fn with_config_text root config_text
+  walk "{root}/content" .> (rels -> with_content_rels root config_text rels)
+
+fn with_content_rels root config_text rels
+  docs = list/to_list (list/select rels markdown?)
+  assets = list/to_list (list/reject rels markdown?)
+  read_all "{root}/content" docs
+    .> (files -> with_files root config_text files assets)
+
+fn markdown? rel
+  textkit/ends_with? rel ".md"
+
+fn with_files root config_text files assets
+  walk "{root}/templates"
+    .> (names -> read_all "{root}/templates" names)
+    .> (templates -> with_templates root config_text files assets templates)
+
+fn with_templates root config_text files assets templates
+  walk "{root}/static"
+    .> (statics -> loaded assets config_text files statics templates)
+
+fn loaded assets config_text files statics templates
+  effect (site_input assets config_text files statics templates)
+
+# Every file under a directory, as paths relative to it, sorted; a missing
+# directory has none. Names starting with a dot are skipped.
+fn walk root
+  os/is_dir root .> (there -> walk_if root there)
+
+fn walk_if _ false
+  effect []
+
+fn walk_if root true
+  walk_dir root "" []
+
+fn walk_dir root rel acc
+  here = if (rel == "") root "{root}/{rel}"
+  os/list_dir here .> (names -> walk_names root rel names 1 acc)
+
+fn walk_names root rel names i acc
+  name = names[i]
+  return effect acc if name == none
+  child = if (rel == "") name "{rel}/{name}"
+  hidden = textkit/starts_with? name "."
+  return walk_names root rel names (i + 1) acc if hidden
+  os/is_dir "{root}/{child}"
+    .> (d -> walk_step root child d acc)
+    .> (grown -> walk_names root rel names (i + 1) grown)
+
+fn walk_step root child true acc
+  walk_dir root child acc
+
+fn walk_step _ child false acc
+  effect (push acc child)
+
+fn read_all root rels
+  read_from root rels 1 {}
+
+fn read_from root rels i m
+  rel = rels[i]
+  return effect m if rel == none
+  os/read_file! "{root}/{rel}"
+    .> (text -> read_from root rels (i + 1) (put m rel text))
+
+# Write every file of a plan under `out`, making directories first, then
+# copy the static files and page assets.
+fn write_plan root out p
+  { copies files } = p
+  file_paths = list/map files (f -> f.path)
+  copy_paths = list/map copies (c -> c.to)
+  targets = text/concat (list/to_list file_paths) (list/to_list copy_paths)
+  dirs = list/fold targets {} (m path -> put m (parent_of "{out}/{path}") true)
+  made_dirs (keys dirs) 1
+    .> (_ -> written out files 1)
+    .> (_ -> copied_all root out copies 1)
+
+# Each step binds a function that builds the next step, so the chain is
+# built as the executor walks it. The obvious `list/fold` over the files,
+# which builds the whole chain first, overflows the native stack at about a
+# hundred writes (bugs/effect_fold_stack.kso).
+fn made_dirs dirs i
+  d = dirs[i]
+  return effect done if d == none
+  os/make_dir d .> (_ -> made_dirs dirs (i + 1))
+
+fn written out files i
+  f = files[i]
+  return effect done if f == none
+  write_one out f .> (_ -> written out files (i + 1))
+
+fn copied_all root out copies i
+  c = copies[i]
+  return effect done if c == none
+  copy_one root out c .> (_ -> copied_all root out copies (i + 1))
+
+fn parent_of path
+  parts = text/split path "/"
+  text/join (text/slice parts 1 (length parts - 1)) "/"
+
+fn write_one out (out_file body _ path)
+  os/write_file "{out}/{path}" body
+
+fn copy_one root out (copied from to)
+  os/read_bytes! "{root}/{from}" .> (bytes -> os/write_file "{out}/{to}" bytes)

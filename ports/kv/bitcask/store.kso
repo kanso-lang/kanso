@@ -1,0 +1,158 @@
+# An open store: the key directory in memory, and which file takes the
+# next write. Opening reads every data file oldest first, or its hint file
+# where a merge left one, and the newest record for a key wins.
+import "std/io"
+import "std/list"
+import "std/os"
+import "std/text"
+
+# A key the directory has seen deleted. The map cannot drop a key, so a
+# delete leaves this where the location was (FRICTION.md F9).
+pub type gone
+
+# Where a key's newest record lives: which file, at what offset, how many
+# bytes, and the stamp it was written with.
+pub type loc
+  file
+  offset
+  size
+  stamp
+
+pub type store
+  active
+  dir
+  expiry
+  keydir
+  limit
+  now
+  size
+
+pub fn data_path dir id
+  "{dir}/{id}.bitcask.data"
+
+pub fn hint_path dir id
+  "{dir}/{id}.bitcask.hint"
+
+# A store whose records older than `expiry` seconds before `now` read as
+# absent; an expiry of 0 keeps everything. `now` is also the stamp every
+# write carries.
+pub fn open dir limit expiry now
+  empty = store 0 dir expiry {} limit now 0
+  os/make_dir dir .> (_ -> os/list_dir dir) .> (names -> loaded empty names)
+
+fn loaded empty names
+  ids = file_ids names "data"
+  hints = list/to_h (list/to_list (list/map (file_ids names "hint") marked))
+  newest = list/fold ids 0 (a b -> if (a < b) b a)
+  load_each (reshaped empty (newest + 1) {} 0) ids hints 1
+
+fn marked id
+  [id true]
+
+# The numbered files of one kind in a directory listing, oldest first.
+pub fn file_ids names kind
+  numbered = list/select names (n -> kind_of? n kind)
+  list/sort (list/to_list (list/map numbered id_of))
+
+fn kind_of? name kind
+  parts = text/split name "."
+  length parts == 3 and parts[2] == "bitcask" and parts[3] == kind
+
+fn id_of name
+  text/to_int (text/slice name 1 (dot_at name 1 - 1))
+
+fn dot_at name i
+  if (text/slice name i i == ".") i (dot_at name (i + 1))
+
+fn load_each st ids hints i
+  load_next st ids[i] ids hints i
+
+fn load_next st none _ _ _
+  effect st
+
+fn load_next st id ids hints i
+  load_file st id hints[id] .> (next -> load_each next ids hints (i + 1))
+
+fn load_file st id true
+  os/read_bytes! (hint_path st.dir id)
+    .> (bs -> hinted st id (decode_hints (list/to_list bs)))
+
+fn load_file st id none
+  load_data st id
+
+fn hinted st id (bad_hint at)
+  say "{id}.bitcask.hint: unreadable at offset {at}, scanning the data file"
+    .> (_ -> load_data st id)
+
+fn hinted st id hs
+  effect (list/fold hs st (s h -> from_hint s id h))
+
+fn from_hint st id (hint key offset size stamp)
+  with_key st key (loc id offset size stamp)
+
+fn load_data st id
+  os/read_bytes! (data_path st.dir id)
+    .> (bs -> recovered st id (list/to_list bs))
+
+fn recovered st id bs
+  found = scan_bytes bs
+  next = list/fold found.records st (s r -> from_record s id r)
+  newest = id == st.active - 1
+  if (clean? found) (effect next) (repaired next id bs found newest)
+
+fn from_record st id r
+  with_key st r.key (located r.value id r)
+
+fn located _:tombstone _ _
+  gone
+
+fn located _ id r
+  loc id r.offset r.size r.stamp
+
+# Only the newest data file was being appended to, so only its last record
+# can have been cut short by a crash. That file is cut back to its last good
+# record and the store carries on. Damage anywhere else is not a torn write,
+# so the bytes are left for someone to look at, and the records after the
+# damage are not read.
+fn repaired st id bs found true
+  path = data_path st.dir id
+  good = good_bytes found
+  replace_bytes path (text/slice bs 1 good)
+    .> (_ -> say "{damage_note id found}, file cut to {good} bytes")
+    .> (_ -> st)
+
+fn repaired st id bs found false
+  lost = length bs - good_bytes found
+  say "{damage_note id found}, {lost} bytes after it not read" .> (_ -> st)
+
+fn damage_note id (scan _ (torn at))
+  "{id}.bitcask.data: torn record at offset {at}"
+
+fn damage_note id (scan _ (corrupt at))
+  "{id}.bitcask.data: checksum mismatch at offset {at}"
+
+fn say line
+  io/write_err "kv: {line}\n"
+
+pub fn with_key st key where
+  reshaped st st.active (put st.keydir key where) st.size
+
+# The same store with a different active file, directory or size: every
+# change a store goes through is one of these three.
+pub fn reshaped (store _ dir expiry _ limit now _) active keydir size
+  store active dir expiry keydir limit now size
+
+# The live keys, sorted.
+pub fn live_keys st
+  list/to_list (list/select (keys st.keydir) (k -> current? st st.keydir[k]))
+
+# Whether a directory entry names a value a get should answer: not a
+# delete, and not older than the expiry allows.
+pub fn current? _ none
+  false
+
+pub fn current? st (loc _ _ _ stamp)
+  st.expiry == 0 or st.now - st.expiry <= stamp
+
+pub fn current? _ _
+  false

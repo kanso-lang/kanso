@@ -1,0 +1,160 @@
+import "../markdown"
+import "../tera"
+import "../textkit"
+import "../toml"
+import "std/list"
+import "std/text"
+
+# A file the build writes, relative to the output directory, and its
+# sitemap entry or `unlisted`.
+type out_file
+  body
+  listing
+  path
+
+type unlisted
+
+# A file the build copies: from a path under the site, to a path under the
+# output directory.
+type copied
+  from
+  to
+
+# Everything the build needs that has been read from disk.
+pub type site_input
+  assets
+  config_text
+  files
+  statics
+  templates
+
+# What the build will do: write `files`, copy `copies`, and say `summary`.
+pub type plan
+  copies
+  files
+  summary
+
+# A page or section after its markdown is rendered.
+type cooked
+  html
+  raw
+  summary
+  toc
+  words
+
+# The state of the build that templates read: the content files that are
+# not markdown, the base URL, the config, and the rendered pages and
+# sections by content path.
+type site
+  assets
+  base
+  config
+  pages
+  sections
+
+pub fn site_input_of assets config_text files statics templates
+  site_input assets config_text files statics templates
+
+# The whole build, from what was read to what will be written.
+pub fn build input drafts base_override
+  config = config_of input.config_text base_override
+  with_config input drafts config
+
+fn config_of source base_override
+  parsed = toml/parse source
+  configured parsed base_override
+
+fn configured (err r) _
+  err "config.toml: {r}"
+
+fn configured m base_override
+  given = if (base_override == "") m["base_url"] base_override
+  return err "config.toml: `base_url` is required" if given == none
+  put m "base_url" (strip_slash "{given}")
+
+fn strip_slash s
+  if (textkit/ends_with? s "/") (text/slice s 1 (length s - 1)) s
+
+fn with_config input drafts config
+  content = read_content input.files drafts
+  templates = parsed_templates input.templates
+  with_content input config content templates
+
+fn parsed_templates sources
+  all = put_all shipped_templates sources
+  list/fold (keys all) {} (m name -> with_template m name all)
+
+fn put_all base extra
+  list/fold (keys extra) base (m k -> put m k extra[k])
+
+fn with_template m name sources
+  source = sources[name]
+  t = tera/parse_template name source
+  put m name t
+
+fn with_content input config (sorted_content pages sections) templates
+  base = config["base_url"]
+  links = link_map pages sections base
+  short = tera/engine_of host_filters (url_functions base links) templates
+  cooked_pages = list/fold pages {} (m p -> cook_page m p short links base)
+  cooked_sections = list/fold sections {} (m s -> cook_section m s short links)
+  st = site input.assets base config cooked_pages cooked_sections
+  outputs input st templates
+
+fn link_map pages sections base
+  with_pages = list/fold pages {} (m p -> put m p.rel "{base}{p.path}")
+  list/fold sections with_pages (m s -> put m s.rel "{base}{s.path}")
+
+# The functions shortcodes may call before the site exists: URLs only.
+fn url_functions base links
+  { "get_url":(args -> get_url base links args) }
+
+fn get_url base links args
+  path = args["path"]
+  return err "`get_url` needs `path`" if path == none
+  internal = textkit/starts_with? path "@/"
+  return linked_url links path if internal
+  slashed = textkit/starts_with? path "/"
+  tail = if slashed (text/slice path 2 (length path)) path
+  "{base}/{tail}"
+
+fn linked_url links path
+  rel = text/slice path 3 (length path)
+  found = links[rel]
+  if (found == none) (err "`get_url` found no content file `{rel}`") found
+
+fn cook_page m p eng links base
+  html = cooked_markdown p.rel p.body eng links "{base}{p.path}"
+  put m p.rel (cooked_from html p)
+
+fn cook_section m s eng links
+  permalink = links[s.rel]
+  html = cooked_markdown s.rel s.body eng links permalink
+  put m s.rel (cooked_from html s)
+
+fn cooked_from (err r) _
+  err r
+
+fn cooked_from out raw
+  { html summary toc } = out
+  words = textkit/word_count html
+  cooked html raw summary toc words
+
+fn cooked_markdown rel body eng links permalink
+  expanded = expand_shortcodes eng body
+  rendered = markdown_of expanded links permalink
+  checked_links rel rendered
+
+fn markdown_of (err r) _ _
+  err r
+
+fn markdown_of source links permalink
+  markdown/render source links permalink
+
+fn checked_links rel (err r)
+  err "content/{rel}: {r}"
+
+fn checked_links rel out
+  { broken } = out
+  return out if length broken == 0
+  err "content/{rel}: broken internal link `{broken[1]}`"

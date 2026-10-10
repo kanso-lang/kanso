@@ -1,0 +1,7 @@
+ok
+ok
+kv: 1.bitcask.data: checksum mismatch at offset 16, file cut to 16 bytes
+a
+1.bitcask.data (16 bytes)
+  @0 5f7bbaaa6553f100000100000001 1700000000 put a = 1
+[exit 0]

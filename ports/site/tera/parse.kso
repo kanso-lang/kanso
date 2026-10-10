@@ -1,0 +1,356 @@
+import "../textkit"
+import "std/list"
+import "std/text"
+
+type branch
+  body
+  cond
+
+type macro_def
+  body
+  params
+
+type n_block
+  body
+  name
+
+type n_filter
+  args
+  body
+  line
+  name
+
+type n_for
+  body
+  key
+  line
+  name
+  otherwise
+  source
+
+type n_if
+  branches
+  otherwise
+
+type n_include
+  line
+  name
+
+type n_out
+  expr
+  line
+
+type n_set
+  expr
+  global
+  name
+
+type n_text
+  words
+
+# A parsed template. `parent` is the name it extends, or "".
+pub type template
+  blocks
+  imports
+  macros
+  name
+  nodes
+  parent
+
+# The head of a for tag, carried to its closing tag.
+type looped
+  key
+  line
+  name
+  source
+
+# What a tag says, read once: its keyword, its tokens and its line.
+type tag_head
+  line
+  toks
+  word
+
+pub fn parse_template name src
+  chunks = pieces name src
+  lines = list/count (text/chars src) (c -> c == "\n") + 1
+  located name lines (whole name chunks)
+
+# Every parse error names its template and a line; one found at the end of
+# the input takes the last line.
+fn located name lines (err r)
+  lined = textkit/starts_with? r "line "
+  err (if lined "template `{name}` {r}" "template `{name}` line {lines}: {r}")
+
+fn located _ _ t
+  t
+
+fn whole name chunks
+  body = body_of chunks 1 [] []
+  top_level name chunks body
+
+fn top_level name chunks (parsed p nodes)
+  extra = chunks[p]
+  return fail_chunk extra "this tag has no opening tag" if extra != none
+  parent = parent_of nodes
+  imports = list/fold nodes {} (m n -> imported m n)
+  macros = list/fold nodes {} (m n -> defined m n)
+  kept = list/to_list (list/reject nodes declaration?)
+  template (blocks_in nodes {}) imports macros name kept parent
+
+fn fail_chunk (t_tag body line) message
+  err "line {line}: `{body}`: {message}"
+
+fn fail_chunk _ message
+  err message
+
+# A body runs until one of the `stops` keywords, which it leaves unread.
+fn body_of chunks p stops acc
+  c = chunks[p]
+  return end_of_input stops acc p if c == none
+  chunk chunks p stops acc c
+
+fn end_of_input stops acc p
+  return parsed p acc if length stops == 0
+  err "the template ended before `\{% {stops[length stops]} %}`"
+
+fn chunk chunks p stops acc (t_text words)
+  body_of chunks (p + 1) stops (push acc (n_text words))
+
+fn chunk chunks p stops acc (t_expr body line)
+  toks = tokens "" body line
+  e = expression toks
+  out_node chunks p stops acc e line
+
+fn chunk chunks p stops acc (t_tag body line)
+  toks = tokens "" body line
+  head = head_of toks line
+  tag chunks p stops acc head
+
+fn out_node chunks p stops acc e line
+  body_of chunks (p + 1) stops (push acc (n_out e line))
+
+fn head_of toks line
+  word = if (length toks > 0) toks[1].word ""
+  tag_head line toks word
+
+fn stop? stops word
+  list/any? stops (s -> s == word)
+
+fn tag chunks p stops acc head
+  return parsed p acc if stop? stops head.word
+  tag_at chunks p stops acc head head.word
+
+fn tag_at chunks p stops acc head "if"
+  cond = expression (rest head.toks)
+  first = body_of chunks (p + 1) ["elif" "else" "endif"] []
+  if_more chunks first [] cond stops acc
+
+fn tag_at chunks p stops acc head "for"
+  loop_head chunks p stops acc head (rest head.toks)
+
+fn tag_at chunks p stops acc head "set"
+  assigned chunks p stops acc head false
+
+fn tag_at chunks p stops acc head "set_global"
+  assigned chunks p stops acc head true
+
+fn tag_at chunks p stops acc head "block"
+  name = word_of head.toks 2
+  inner = body_of chunks (p + 1) ["endblock"] []
+  closed_with chunks inner stops acc (b -> n_block b name)
+
+fn tag_at chunks p stops acc head "filter"
+  ts = rest head.toks
+  name = word_of ts 1
+  args = maybe_args ts 2
+  inner = body_of chunks (p + 1) ["endfilter"] []
+  filter_block chunks inner stops acc name args head.line
+
+fn tag_at chunks p stops acc head "macro"
+  ts = rest head.toks
+  name = word_of ts 1
+  params = args_of ts 3
+  inner = body_of chunks (p + 1) ["endmacro"] []
+  macro_block chunks inner stops acc name params
+
+fn tag_at chunks p stops acc head "extends"
+  name = word_of head.toks 2
+  body_of chunks (p + 1) stops (push acc (n_include head.line "extends:{name}"))
+
+fn tag_at chunks p stops acc head "include"
+  name = word_of head.toks 2
+  body_of chunks (p + 1) stops (push acc (n_include head.line name))
+
+fn tag_at chunks p stops acc head "import"
+  file = word_of head.toks 2
+  alias = word_of head.toks 4
+  marker = n_include head.line "import:{alias}:{file}"
+  body_of chunks (p + 1) stops (push acc marker)
+
+fn tag_at chunks p stops acc _ "raw"
+  inner = body_of chunks (p + 1) ["endraw"] []
+  closed_with chunks inner stops acc (b -> n_block b "")
+
+fn tag_at _ _ _ _ head word
+  err "line {head.line}: unknown tag `{word}`"
+
+fn rest xs
+  text/slice xs 2 (length xs)
+
+fn word_of ts i
+  t = ts[i]
+  if (t == none) "" t.word
+
+# After the closing tag of a body: wrap the body and carry on.
+fn closed_with chunks (parsed p body) stops acc wrap
+  body_of chunks (p + 1) stops (push acc (wrap body))
+
+fn if_more chunks (parsed p body) branches cond stops acc
+  toks = tokens "" (tag_body chunks[p]) 0
+  head = head_of toks (tag_line chunks[p])
+  grown = push branches (branch body cond)
+  if_next chunks p grown stops acc head head.word
+
+fn if_next chunks p branches stops acc head "elif"
+  cond = expression (rest head.toks)
+  inner = body_of chunks (p + 1) ["elif" "else" "endif"] []
+  if_more chunks inner branches cond stops acc
+
+fn if_next chunks p branches stops acc _ "else"
+  inner = body_of chunks (p + 1) ["endif"] []
+  if_done chunks inner branches stops acc
+
+fn if_next chunks p branches stops acc _ _
+  body_of chunks (p + 1) stops (push acc (n_if branches []))
+
+fn if_done chunks (parsed p otherwise) branches stops acc
+  body_of chunks (p + 1) stops (push acc (n_if branches otherwise))
+
+fn tag_body none
+  ""
+
+fn tag_body (t_tag body _)
+  body
+
+fn tag_body _
+  ""
+
+fn tag_line none
+  0
+
+fn tag_line (t_tag _ line)
+  line
+
+fn tag_line _
+  0
+
+# `for x in xs` or `for k, v in map`.
+fn loop_head chunks p stops acc head ts
+  pair = word_of ts 2 == ","
+  key = if pair (word_of ts 1) ""
+  name = if pair (word_of ts 3) (word_of ts 1)
+  at = if pair 4 2
+  bad = word_of ts at != "in"
+  return err "line {head.line}: expected `in` in the for tag" if bad
+  source = expression (text/slice ts (at + 1) (length ts))
+  inner = body_of chunks (p + 1) ["else" "endfor"] []
+  loop_body chunks inner stops acc (looped key head.line name source)
+
+fn loop_body chunks (parsed p body) stops acc head
+  loop_end chunks p body stops acc head (tag_body chunks[p])
+
+fn loop_end chunks p body stops acc head "else"
+  inner = body_of chunks (p + 1) ["endfor"] []
+  loop_done chunks inner body stops acc head
+
+fn loop_end chunks p body stops acc for_head _
+  looped key line name source = for_head
+  made = n_for body key line name [] source
+  body_of chunks (p + 1) stops (push acc made)
+
+fn loop_done chunks (parsed p otherwise) body stops acc for_head
+  looped key line name source = for_head
+  made = n_for body key line name otherwise source
+  body_of chunks (p + 1) stops (push acc made)
+
+fn assigned chunks p stops acc head global
+  ts = rest head.toks
+  name = word_of ts 1
+  bad = word_of ts 2 != "="
+  return err "line {head.line}: expected `=` in the set tag" if bad
+  value = expression (text/slice ts 3 (length ts))
+  set_node chunks p stops acc name value global
+
+fn set_node chunks p stops acc name value global
+  body_of chunks (p + 1) stops (push acc (n_set value global name))
+
+fn filter_block chunks (parsed p body) stops acc name (parsed _ args) line
+  body_of chunks (p + 1) stops (push acc (n_filter args body line name))
+
+fn macro_block chunks (parsed p body) stops acc name (parsed _ params)
+  made = n_block [(macro_def body params)] "macro:{name}"
+  body_of chunks (p + 1) stops (push acc made)
+
+fn parent_of nodes
+  found = list/find nodes extends?
+  parent_name found
+
+fn parent_name (n_include _ name)
+  text/slice name 9 (length name)
+
+fn parent_name _
+  ""
+
+fn extends? (n_include _ name)
+  textkit/starts_with? name "extends:"
+
+fn extends? _
+  false
+
+fn declaration? (n_include _ name)
+  textkit/starts_with? name "extends:" or textkit/starts_with? name "import:"
+
+fn declaration? (n_block _ name)
+  textkit/starts_with? name "macro:"
+
+fn declaration? _
+  false
+
+fn imported m (n_include _ name)
+  return m if not textkit/starts_with? name "import:"
+  spec = text/slice name 8 (length name)
+  colon = textkit/index_of spec ":" 1
+  alias = text/slice spec 1 (colon - 1)
+  put m alias (text/slice spec (colon + 1) (length spec))
+
+fn imported m _
+  m
+
+fn defined m (n_block body name)
+  return m if not textkit/starts_with? name "macro:"
+  put m (text/slice name 7 (length name)) body[1]
+
+fn defined m _
+  m
+
+# Every named block, however deeply nested, by name.
+fn blocks_in nodes m
+  list/fold nodes m (acc n -> block_found acc n)
+
+fn block_found m (n_block body name)
+  named = name != "" and not textkit/starts_with? name "macro:"
+  inner = blocks_in body m
+  if named (put inner name body) inner
+
+fn block_found m (n_if branches otherwise)
+  inner = list/fold branches m (acc b -> blocks_in b.body acc)
+  blocks_in otherwise inner
+
+fn block_found m (n_for body _ _ _ otherwise _)
+  blocks_in otherwise (blocks_in body m)
+
+fn block_found m (n_filter _ body _ _)
+  blocks_in body m
+
+fn block_found m _
+  m

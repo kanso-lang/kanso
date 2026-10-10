@@ -1,0 +1,16 @@
+ok
+ok
+merged 1 file into 1: kept 2, dropped 0
+ 65 53 f1 00 00 05 00 00 00 14 00 00 00 00 00 00
+ 00 00 61 6c 70 68 61 65 53 f1 00 00 04 00 00 00
+ 13 00 00 00 00 00 00 00 14 62 65 74 61 00 00 00
+ 00 00 00 b4 15 92 ed 7f ff ff ff ff ff ff ff
+kv: 2.bitcask.hint: unreadable at offset 45, scanning the data file
+2
+kv: 2.bitcask.hint: unreadable at offset 45, scanning the data file
+2.bitcask.data (39 bytes)
+  @0 8cdda9c36553f100000500000001 1700000000 put alpha = 1
+  @20 f07c0df66553f100000400000001 1700000000 put beta = 2
+2.bitcask.hint (63 bytes)
+  @45 unreadable
+[exit 0]

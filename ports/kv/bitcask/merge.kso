@@ -1,0 +1,130 @@
+# Merging rewrites every file up to and including the active one into new
+# files holding only the newest record for each live key, writes a hint
+# file beside each, and then removes the files it read. Deletes vanish with
+# the records they shadowed, because no older file is left for them to
+# shadow.
+#
+# The new files are numbered after the active one, so if the process stops
+# before the old files are removed, opening the store reads old then new and
+# the merged copies still win.
+import "std/list"
+import "std/os"
+import "std/text"
+
+# What a merge did, and the store as it stands afterwards.
+pub type merged
+  dropped
+  files_in
+  files_out
+  kept
+  store
+
+# A live record waiting to be copied, ordered by where it sits now.
+type held
+  file
+  key
+  offset
+  size
+
+# A merge output file being filled: its data bytes and its hint bytes.
+type outfile
+  data
+  hints
+  id
+
+type packing
+  current
+  finished
+  keydir
+
+fn < (held f _ o _) (held g _ p _)
+  f < g or f == g and o < p
+
+pub fn merge st
+  os/list_dir st.dir .> (names -> merge_listed st names)
+
+fn merge_listed st names
+  ids = file_ids names "data"
+  old = list/to_list (list/select ids (id -> id <= st.active))
+  read_all st.dir old 1 {} .> (files -> rewrite st old files)
+
+fn read_all dir ids i acc
+  read_next dir ids[i] ids i acc
+
+fn read_next _ none _ _ acc
+  effect acc
+
+fn read_next dir id ids i acc
+  os/read_bytes! (data_path dir id)
+    .> (bs -> read_all dir ids (i + 1) (put acc id (list/to_list bs)))
+
+fn rewrite st old files
+  order = list/sort (list/to_list (list/map (live_keys st) (k -> held_at st k)))
+  start = packing (outfile [] [] (st.active + 1)) [] {}
+  packed = list/fold order start (p h -> packed_one st.limit files p h)
+  outs = all_outs packed
+  total = list/sum (list/map old (id -> records_in files[id]))
+  kept = length order
+  after = reshaped st (last_id outs st.active + 1) packed.keydir 0
+  summary = merged (total - kept) (length old) (length outs) kept after
+  write_outs st.dir outs 1
+    .> (_ -> remove_files (old_paths st.dir old))
+    .> (_ -> summary)
+
+fn held_at st key
+  where = st.keydir[key]
+  held where.file key where.offset where.size
+
+fn records_in none
+  0
+
+fn records_in bs
+  length (scan_bytes bs).records
+
+# One live record copied byte for byte into the output file being filled,
+# or into a fresh one when it would carry that file past the limit.
+fn packed_one limit files p (held file key offset size)
+  bs = text/slice (source_of files[file]) (offset + 1) (offset + size)
+  room = with_room p limit size
+  out = room.current
+  r = decode_at bs 0
+  at = length out.data
+  hint_bytes = encode_hint (record key at size r.stamp r.value)
+  data = append_all out.data bs
+  grown = outfile data (append_all out.hints hint_bytes) out.id
+  packing grown room.finished (put room.keydir key (loc out.id at size r.stamp))
+
+fn source_of none
+  []
+
+fn source_of bs
+  bs
+
+fn with_room p limit n
+  out = p.current
+  return p if length out.data == 0 or length out.data + n <= limit
+  packing (outfile [] [] (out.id + 1)) (push p.finished out) p.keydir
+
+# Every output file that holds a record. The one still being filled is
+# empty only when nothing was live.
+fn all_outs p
+  if (length p.current.data == 0) p.finished (push p.finished p.current)
+
+fn last_id outs otherwise
+  list/fold outs otherwise (_ o -> o.id)
+
+fn write_outs dir outs i
+  write_out dir outs[i] outs i
+
+fn write_out _ none _ _
+  effect done
+
+fn write_out dir out outs i
+  hints = text/concat out.hints (hint_trailer out.hints)
+  replace_bytes (data_path dir out.id) out.data
+    .> (_ -> replace_bytes (hint_path dir out.id) hints)
+    .> (_ -> write_outs dir outs (i + 1))
+
+fn old_paths dir ids
+  datas = list/to_list (list/map ids (id -> data_path dir id))
+  text/concat datas (list/to_list (list/map ids (id -> hint_path dir id)))

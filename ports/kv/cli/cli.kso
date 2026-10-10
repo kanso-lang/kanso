@@ -1,0 +1,180 @@
+# The command line. `kv DIR COMMAND ...` runs one command against the store
+# in DIR; `kv DIR` with no command runs a script read from standard input,
+# keeping the store open between its lines.
+import "../bitcask"
+import "std/io"
+import "std/list"
+import "std/os"
+import "std/text"
+import "std/time"
+
+# Where the command line put the store, how large a data file may grow, and
+# the words of the command, if there was one.
+type options
+  dir
+  expiry
+  limit
+  words
+
+# A command's effect on the store, and whether it found what it looked for.
+type after
+  found
+  store
+
+# A get whose record failed its checks.
+type damage
+  reason
+
+default_limit = 2147483648
+
+usage = "{usage_line}\n{options_line}\n{commands_line}\n{script_line}"
+
+usage_line = "usage: kv [OPTIONS] DIR [COMMAND [ARGS...]]"
+
+options_line = "options: --max-file-size BYTES (default 2 GiB), --expiry SECS"
+
+commands_line = "commands: put KEY VALUE, get KEY, delete KEY, {more_commands}"
+
+more_commands = "list, merge, status, dump"
+
+script_line = "with no command, kv reads commands from standard input"
+
+pub fn main argv
+  started (options_of argv)
+
+# Flags come before the directory. Anything after the directory is the
+# command.
+fn options_of argv
+  flags argv 1 default_limit 0
+
+fn flags argv i limit expiry
+  flag_at argv argv[i] i limit expiry
+
+fn flag_at _ none _ _ _
+  bad_cmd usage
+
+fn flag_at argv "--expiry" i limit _
+  with_expiry argv i limit (number argv[i + 1])
+
+fn flag_at argv "--max-file-size" i _ expiry
+  with_limit argv i (number argv[i + 1]) expiry
+
+fn flag_at argv dir i limit expiry
+  options dir expiry limit (text/slice argv (i + 1) (length argv))
+
+fn with_expiry _ _ _ (bad_cmd reason)
+  bad_cmd reason
+
+fn with_expiry argv i limit n
+  flags argv (i + 2) limit n
+
+fn with_limit _ _ (bad_cmd reason) _
+  bad_cmd reason
+
+fn with_limit argv i n expiry
+  flags argv (i + 2) n expiry
+
+fn number none
+  bad_cmd "a flag is missing its number"
+
+fn number word
+  counted word (text/to_int word)
+
+fn counted word (err _)
+  bad_cmd "`{word}` is not a number"
+
+fn counted _ n
+  n
+
+fn started (bad_cmd reason)
+  fail reason
+
+fn started opts
+  time/now .> (ms -> opened opts (ms / 1000))
+
+fn opened opts now
+  bitcask/open opts.dir opts.limit opts.expiry now
+    .> (st -> run_words st opts.words)
+
+fn run_words st words
+  return one_command st (command_of words) if length words > 0
+  io/stdin .> (source -> run_script st (script_of source))
+
+fn one_command _ (bad_cmd reason)
+  fail reason
+
+fn one_command st cmd
+  execute st cmd .> (a -> if a.found (effect done) (os/exit 1))
+
+fn fail reason
+  io/write_err "kv: {reason}\n" .> (_ -> os/exit 2)
+
+# A script is read whole and checked before any of it runs, so a typo on
+# line nine does not leave the first eight applied.
+fn run_script st cmds
+  bad = first_bad cmds
+  return run_each st cmds 1 if bad == none
+  fail "line {bad.line}: {bad.cmd.reason}"
+
+fn run_each st cmds i
+  run_next st cmds[i] cmds i
+
+fn run_next _ none _ _
+  effect done
+
+fn run_next st (numbered cmd _) cmds i
+  execute st cmd .> (a -> run_each a.store cmds (i + 1))
+
+fn execute st (put_cmd key value)
+  bitcask/put_value st key value .> (next -> said "ok" next true)
+
+fn execute st (get_cmd key)
+  bitcask/get_value st key .? damaged .> (v -> fetched st key v)
+
+fn execute st (delete_cmd key)
+  return said "not found: {key}" st false if not bitcask/has? st key
+  bitcask/delete_key st key .> (next -> said "deleted {key}" next true)
+
+fn execute st list_cmd
+  print_lines (bitcask/live_keys st) st
+
+fn execute st merge_cmd
+  bitcask/merge st .> report_merge
+
+fn execute st status_cmd
+  os/list_dir st.dir
+    .> (names -> listed st (bitcask/store_files names) bitcask/status_lines)
+
+fn execute st dump_cmd
+  os/list_dir st.dir .> (names -> listed st (bitcask/store_files names) dump_of)
+
+fn damaged (err reason)
+  damage reason
+
+fn fetched st key _:bitcask/missing
+  said "not found: {key}" st false
+
+fn fetched st key (damage reason)
+  said "damaged: {key}: {reason}" st false
+
+fn fetched st _ value
+  said value st true
+
+fn report_merge m
+  files = "{bitcask/plural m.files_in "file"} into {m.files_out}"
+  records = "kept {m.kept}, dropped {m.dropped}"
+  said "merged {files}: {records}" m.store true
+
+fn listed st names view
+  bitcask/read_files st.dir names
+    .> (files -> print_lines (view st names files) st)
+
+fn dump_of _ names files
+  bitcask/dump_lines names files
+
+fn print_lines xs st
+  return effect (after true st) if length xs == 0
+  print (text/join xs "\n") .> (_ -> after true st)
+
+fn said line st found
+  print line .> (_ -> after found st)

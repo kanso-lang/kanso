@@ -1,0 +1,6 @@
+ok
+ok
+kv: 1.bitcask.data: torn record at offset 28, file cut to 28 bytes
+not found: second
+value-one
+[exit 0]

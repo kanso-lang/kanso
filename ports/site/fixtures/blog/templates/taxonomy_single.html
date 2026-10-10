@@ -1,0 +1,5 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>{{ taxonomy.name | capitalize }}: {{ term.name }}</h1>
+<p>{{ term.pages | map(attribute="title") | join(sep=" / ") }}</p>
+{% endblock content %}

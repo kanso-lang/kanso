@@ -1,0 +1,315 @@
+import "../textkit"
+import "std/list"
+import "std/text"
+
+# Where a link or image points, and the position just past its `)`.
+type dest
+  next
+  title
+  url
+
+# An `@/` link that named no content file.
+type unresolved
+  link
+
+# The state of an inline pass: the html pieces so far and the internal
+# links (`@/...`) that named no page.
+type ink
+  broken
+  pieces
+
+fn emit (ink broken pieces) s
+  ink broken (push pieces s)
+
+fn noted (ink broken pieces) url
+  ink (push broken url) pieces
+
+# Inline markup of one block's text: escapes, code spans, emphasis,
+# strikethrough, links, images, autolinks, raw tags and entities.
+fn inline words links st
+  spans (text/chars words) 1 links st
+
+fn spans cs p links st
+  span_at cs cs[p] p links st
+
+fn span_at _ none _ _ st
+  st
+
+fn span_at cs "\\" p links st
+  c = cs[p + 1]
+  return spans cs (p + 2) links (emit (trim_tail st) "<br />\n") if c == "\n"
+  escapable = c != none and punctuation? c
+  return spans cs (p + 2) links (emit st (textkit/escape_html c)) if escapable
+  spans cs (p + 1) links (emit st "\\")
+
+fn span_at cs "`" p links st
+  run = count_run cs "`" p
+  close = find_run cs "`" run (p + run)
+  return spans cs (p + run) links (emit st (repeat_tick run)) if close == none
+  body = text/join (text/slice cs (p + run) (close - 1)) ""
+  code = "<code>{textkit/escape_html (code_trim body)}</code>"
+  spans cs (close + run) links (emit st code)
+
+fn span_at cs "*" p links st
+  emphasis cs p "*" links st
+
+fn span_at cs "_" p links st
+  intraword = textkit/alnum? cs[p - 1]
+  return spans cs (p + 1) links (emit st "_") if intraword
+  emphasis cs p "_" links st
+
+fn span_at cs "~" p links st
+  double = cs[p + 1] == "~"
+  close = if double (find_pair cs "~" (p + 2)) none
+  return spans cs (p + 1) links (emit st "~") if close == none
+  wrapped cs p close 2 "del" links st
+
+fn span_at cs "!" p links st
+  return spans cs (p + 1) links (emit st "!") if cs[p + 1] != "["
+  image cs p (bracket_end cs (p + 2) 0) links st
+
+fn span_at cs "[" p links st
+  link cs p (bracket_end cs (p + 1) 0) links st
+
+fn span_at cs "<" p links st
+  close = text_find cs ">" (p + 1)
+  return spans cs (p + 1) links (emit st "&lt;") if close == none
+  inner = text/join (text/slice cs (p + 1) (close - 1)) ""
+  angle cs p close inner links st
+
+fn span_at cs "&" p links st
+  return spans cs (p + 1) links (emit st "&amp;") if not entity? cs p
+  close = text_find cs ";" p
+  word = text/join (text/slice cs p close) ""
+  spans cs (close + 1) links (emit st word)
+
+fn span_at cs "\n" p links st
+  hard = cs[p - 1] == " " and cs[p - 2] == " "
+  return spans cs (p + 1) links (emit (trim_tail st) "<br />\n") if hard
+  spans cs (p + 1) links (emit st "\n")
+
+fn span_at cs c p links st
+  spans cs (p + 1) links (emit st (textkit/escape_html c))
+
+fn trim_tail (ink broken pieces)
+  ink broken (drop_spaces pieces (length pieces))
+
+fn drop_spaces pieces n
+  keep = n > 0 and pieces[n] == " "
+  if keep (drop_spaces pieces (n - 1)) (text/slice pieces 1 n)
+
+fn punctuation? c
+  textkit/contains? "!\"#$%&'()*+,-./:;<=>?@[\\]^_`\{|}~" c
+
+fn count_run cs c p
+  if (cs[p] == c) (count_run cs c (p + 1) + 1) 0
+
+fn repeat_tick n
+  textkit/repeat "`" n
+
+# A closing run of exactly `n` of `c` at or after `p`.
+fn find_run cs c n p
+  return none if cs[p] == none
+  here = count_run cs c p
+  return p if here == n
+  find_run cs c n (p + here + if (here == 0) 1 0)
+
+fn code_trim body
+  padded = length body > 2 and textkit/starts_with? body " "
+  both = padded and textkit/ends_with? body " "
+  if both (text/slice body 2 (length body - 1)) body
+
+fn text_find cs c p
+  return none if cs[p] == none
+  if (cs[p] == c) p (text_find cs c (p + 1))
+
+# `*x*` and `**x**`, and the same with underscores. A closer must follow a
+# character that is not a space, and an opener must precede one.
+fn emphasis cs p c links st
+  double = cs[p + 1] == c
+  width = if double 2 1
+  opens = cs[p + width] != none and not textkit/space? cs[p + width]
+  close = if opens (emphasis_close cs c double (p + width)) none
+  literal = emit st (textkit/repeat c width)
+  return spans cs (p + width) links literal if close == none
+  tag = if double "strong" "em"
+  wrapped cs p close width tag links st
+
+fn emphasis_close cs c true p
+  find_pair cs c p
+
+fn emphasis_close cs c false p
+  find_single cs c p
+
+fn find_pair cs c p
+  return none if cs[p] == none
+  hit = cs[p] == c and cs[p + 1] == c and not textkit/space? cs[p - 1]
+  if hit p (find_pair cs c (p + 1))
+
+fn find_single cs c p
+  here = cs[p]
+  return none if here == none
+  pair = here == c and cs[p + 1] == c
+  return find_single cs c (skip_pair cs c (p + 2)) if pair
+  return find_single cs c (skip_code cs p) if here == "`"
+  if (here == c and not textkit/space? cs[p - 1]) p (find_single cs c (p + 1))
+
+fn skip_pair cs c p
+  close = find_pair cs c p
+  if (close == none) p (close + 2)
+
+fn skip_code cs p
+  run = count_run cs "`" p
+  close = find_run cs "`" run (p + run)
+  if (close == none) (p + run) (close + run)
+
+fn wrapped cs p close width tag links st
+  inner = text/slice cs (p + width) (close - 1)
+  opened = emit st "<{tag}>"
+  body = spans inner 1 links opened
+  spans cs (close + width) links (emit body "</{tag}>")
+
+# The `]` that closes the bracket opened just before `p`, minding nesting,
+# escapes and code spans.
+fn bracket_end cs p depth
+  c = cs[p]
+  return none if c == none
+  return bracket_end cs (p + 2) depth if c == "\\"
+  return bracket_end cs (skip_code cs p) depth if c == "`"
+  return bracket_end cs (p + 1) (depth + 1) if c == "["
+  return p if c == "]" and depth == 0
+  bracket_end cs (p + 1) (if (c == "]") (depth - 1) depth)
+
+fn link cs p none links st
+  spans cs (p + 1) links (emit st "[")
+
+fn link cs p close links st
+  found = target_of cs p close links
+  linked cs p close found links st
+
+fn linked cs p _ none links st
+  spans cs (p + 1) links (emit st "[")
+
+fn linked cs p close (dest next title url) links st
+  label = text/slice cs (p + 1) (close - 1)
+  resolved = resolve url links
+  tag = "<a href=\"{href resolved}\"{titled title}>"
+  opened = emit (record_broken st resolved) tag
+  body = spans label 1 links opened
+  spans cs next links (emit body "</a>")
+
+fn image cs p none links st
+  spans cs (p + 1) links (emit st "!")
+
+fn image cs p close links st
+  found = target_of cs (p + 1) close links
+  pictured cs p close found links st
+
+fn pictured cs p _ none links st
+  spans cs (p + 1) links (emit st "!")
+
+fn pictured cs p close (dest next title url) links st
+  alt = textkit/strip_tags (inline_html (text/slice cs (p + 2) (close - 1)))
+  resolved = resolve url links
+  tag = "<img src=\"{href resolved}\" alt=\"{attr alt}\"{titled title} />"
+  spans cs next links (emit (record_broken st resolved) tag)
+
+fn inline_html cs
+  text/join (spans cs 1 {} (ink [] [])).pieces ""
+
+# Where `[text]` at `open`..`close` points: `(url "title")` right after
+# it, or a reference `[text][label]`, `[text][]` or `[text]` defined
+# elsewhere in the document. None when it is not a link at all.
+fn target_of cs open close links
+  after = cs[close + 1]
+  return destination cs (close + 1) if after == "("
+  return labelled cs open close links if after == "["
+  shortcut = text/join (text/slice cs (open + 1) (close - 1)) ""
+  referenced links shortcut (close + 1)
+
+fn labelled cs open close links
+  end = text_find cs "]" (close + 2)
+  return none if end == none
+  given = text/join (text/slice cs (close + 2) (end - 1)) ""
+  own = text/join (text/slice cs (open + 1) (close - 1)) ""
+  label = if (given == "") own given
+  referenced links label (end + 1)
+
+fn referenced links label next
+  found = links["ref:{textkit/lower (text/trim label)}"]
+  if (found == none) none (dest next found.title found.url)
+
+# `(url "title")` right after a closing bracket, or none.
+fn destination cs p
+  return none if cs[p] != "("
+  close = text_find cs ")" p
+  return none if close == none
+  inner = text/trim (text/join (text/slice cs (p + 1) (close - 1)) "")
+  space = textkit/index_of inner " " 1
+  split_target inner space (close + 1)
+
+fn split_target inner none next
+  dest next "" inner
+
+fn split_target inner space next
+  url = text/slice inner 1 (space - 1)
+  rest = text/trim (text/slice inner (space + 1) (length inner))
+  quoted = length rest > 1 and textkit/starts_with? rest "\""
+  title = if quoted (text/slice rest 2 (length rest - 1)) ""
+  dest next title url
+
+fn titled ""
+  ""
+
+fn titled title
+  " title=\"{attr title}\""
+
+fn attr s
+  textkit/escape_html s
+
+# `@/blog/post.md` names a content file; anything else is a URL already.
+fn resolve url links
+  internal = textkit/starts_with? url "@/"
+  if internal (lookup url links) url
+
+fn lookup url links
+  bare = text/slice url 3 (length url)
+  hash = textkit/index_of bare "#" 1
+  file = if (hash == none) bare (text/slice bare 1 (hash - 1))
+  anchor = if (hash == none) "" (text/slice bare hash (length bare))
+  found = links[file]
+  if (found == none) (unresolved url) "{found}{anchor}"
+
+fn record_broken st (unresolved url)
+  noted st url
+
+fn record_broken st _
+  st
+
+fn href (unresolved url)
+  attr url
+
+fn href url
+  attr url
+
+fn angle cs p close inner links st
+  return autolink cs close inner "" links st if textkit/contains? inner "://"
+  mail = textkit/contains? inner "@" and not textkit/contains? inner " "
+  return autolink cs close inner "mailto:" links st if mail
+  tag = tag_like? inner
+  return spans cs (close + 1) links (emit st "<{inner}>") if tag
+  spans cs (p + 1) links (emit st "&lt;")
+
+fn autolink cs close inner scheme links st
+  a = "<a href=\"{attr scheme}{attr inner}\">{textkit/escape_html inner}</a>"
+  spans cs (close + 1) links (emit st a)
+
+fn tag_like? inner
+  first = text/slice inner 1 1
+  textkit/letter? first or first == "/" or first == "!"
+
+fn entity? cs p
+  close = text_find cs ";" (p + 1)
+  return false if close == none or close - p > 10 or close - p < 3
+  word = text/slice cs (p + 1) (close - 1)
+  list/all? word (c -> textkit/alnum? c or c == "#")

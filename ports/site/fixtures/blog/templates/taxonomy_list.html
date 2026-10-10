@@ -1,0 +1,5 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>{{ taxonomy.name | capitalize }}</h1>
+<p>{% for term in terms %}{{ term.name }}{% if not loop.last %}, {% endif %}{% endfor %}</p>
+{% endblock content %}

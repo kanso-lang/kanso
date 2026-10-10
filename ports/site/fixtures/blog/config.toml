@@ -1,0 +1,17 @@
+# The sample site every engine builds.
+base_url = "https://example.com/"
+title = "Kanso Notes"
+description = "A small site built by a port of Zola"
+generate_feeds = true
+taxonomies = [
+  { name = "tags" },
+  { name = "categories" },
+]
+
+[extra]
+author = "Mai Sato"
+menu = [
+  { name = "Home", url = "/" },
+  { name = "Blog", url = "/blog/" },
+  { name = "Docs", url = "/docs/" },
+]

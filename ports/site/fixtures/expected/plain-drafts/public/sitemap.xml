@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    <url>
+        <loc>http://localhost:1111/</loc>
+    </url>
+    <url>
+        <loc>http://localhost:1111/hidden/kept/</loc>
+        <lastmod>2024-02-29T23:59:58</lastmod>
+    </url>
+    <url>
+        <loc>http://localhost:1111/notes/</loc>
+    </url>
+    <url>
+        <loc>http://localhost:1111/notes/mango/</loc>
+        <lastmod>2024-06-01</lastmod>
+    </url>
+    <url>
+        <loc>http://localhost:1111/notes/zebra/</loc>
+        <lastmod>2023-11-05</lastmod>
+    </url>
+    <url>
+        <loc>http://localhost:1111/recipes/apple-pie/</loc>
+    </url>
+</urlset>

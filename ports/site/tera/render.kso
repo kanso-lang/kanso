@@ -1,0 +1,660 @@
+import "../textkit"
+import "std/list"
+import "std/text"
+
+# What the host hands the engine: its parsed templates by name, and the
+# filters and functions it adds to the built-in ones. A host filter is a
+# function of the value and the argument map; a host function takes the
+# argument map alone. Either may answer an err.
+pub type engine
+  filters
+  functions
+  templates
+
+# Text the engine will not escape again.
+pub type markup string
+
+# A name or attribute the context does not have. It is falsy, `default`
+# replaces it, `is defined` asks about it, and printing it is an error.
+type missing
+  path
+
+# The parts of a for tag that each iteration needs.
+type for_shape
+  body
+  key
+  name
+  otherwise
+
+# What a render can see besides the context: the blocks of the inheritance
+# chain by name (most derived first), which block is being rendered and at
+# what depth of that chain, the macro imports, and the template's name.
+type scope
+  blocks
+  depth
+  engine
+  imports
+  name
+  slot
+
+# The output side of a render: the context as `set` has left it, the names
+# set with `set_global`, and the text so far.
+type pen
+  ctx
+  globals
+  parts
+
+# An engine over parsed templates, with the host's extra filters and
+# functions.
+pub fn engine_of host_filters host_functions parsed_templates
+  engine host_filters host_functions parsed_templates
+
+# Raw text as markup, for a host that hands rendered html to a template.
+pub fn trusted s
+  markup s
+
+# A shortcode call from markdown, `name(key=value, ...)`, rendered through
+# the template `shortcodes/name.html` with its arguments as the context. A
+# body shortcode also gets `body`.
+pub fn shortcode eng call_src extra line
+  toks = tokens "" call_src line
+  e = expression toks
+  run_shortcode eng e extra
+
+fn run_shortcode eng (e_call args line name) extra
+  e = scope {} 0 eng {} "shortcode" ""
+  vals = eval_args e {} args
+  ctx = merged vals extra
+  shortcode_page eng "shortcodes/{name}.html" ctx line
+
+fn run_shortcode _ _ _
+  err "a shortcode is written `name(key=value)`"
+
+fn shortcode_page eng name ctx _
+  t = eng.templates[name]
+  return err "there is no template `{name}`" if t == none
+  render eng name ctx
+
+pub fn has_template? eng name
+  eng.templates[name] != none
+
+pub fn render eng name ctx
+  t = eng.templates[name]
+  return err "template `{name}` was not found" if t == none
+  out = from_template eng t ctx
+  in_template name out
+
+fn in_template name (err r)
+  err "while rendering `{name}`: {r}"
+
+fn in_template _ s
+  s
+
+fn from_template eng t ctx
+  chain = ancestry eng t [t]
+  run_chain eng chain ctx
+
+fn ancestry eng t acc
+  return acc if t.parent == ""
+  up = eng.templates[t.parent]
+  return err "parent template `{t.parent}` was not found" if up == none
+  ancestry eng up (push acc up)
+
+fn run_chain eng chain ctx
+  root = chain[length chain]
+  blocks = list/fold chain {} stack_blocks
+  imports = list/fold chain {} (m t -> merged m t.imports)
+  e = scope blocks 0 eng imports root.name ""
+  written e root.nodes ctx
+
+fn written e body ctx
+  out = run e body (pen ctx {} [])
+  text/join out.parts ""
+
+fn stack_blocks m t
+  list/fold (keys t.blocks) m (acc k -> stacked acc k t.blocks)
+
+fn stacked m k blocks
+  body = blocks[k]
+  put m k (push (listed m[k]) body)
+
+fn listed none
+  []
+
+fn listed xs
+  xs
+
+fn merged m extra
+  list/fold (keys extra) m (acc k -> put acc k extra[k])
+
+fn run e body st
+  list/fold body st (s n -> node e s n)
+
+fn emit (pen ctx globals parts) s
+  pen ctx globals (push parts s)
+
+fn node _ st (n_text words)
+  emit st words
+
+fn node e st (n_out expr line)
+  v = eval e st.ctx expr
+  shown = display v line
+  emit st shown
+
+fn node e st (n_if branches otherwise)
+  chosen = choose e st.ctx branches 1
+  run e (chosen_body chosen otherwise) st
+
+fn node e st (n_for body key line name otherwise source)
+  v = eval e st.ctx source
+  items = iterable v line
+  looped_over e st items (for_shape body key name otherwise)
+
+fn node e st (n_set expr global name)
+  v = eval e st.ctx expr
+  set_in st name v global
+
+fn node e st (n_block body name)
+  return run e body st if name == ""
+  chain = e.blocks[name]
+  bodies = if (chain == none) [body] chain
+  in_block e st name bodies 1
+
+fn node e st (n_include line name)
+  t = e.engine.templates[name]
+  return err "line {line}: no template `{name}` to include" if t == none
+  run e t.nodes st
+
+fn node e st (n_filter args body line name)
+  inner = run e body (pen st.ctx st.globals [])
+  shown = text/join inner.parts ""
+  vals = eval_args e st.ctx args
+  result = apply_filter e name (markup shown) vals line
+  shown_result = display result line
+  emit st shown_result
+
+fn set_in (pen ctx globals parts) name v false
+  pen (put ctx name v) globals parts
+
+fn set_in (pen ctx globals parts) name v true
+  pen (put ctx name v) (put globals name v) parts
+
+fn in_block e st name bodies depth
+  inner = scope e.blocks depth e.engine e.imports e.name name
+  body = bodies[depth]
+  run inner body st
+
+fn choose e ctx branches i
+  b = branches[i]
+  return none if b == none
+  v = eval e ctx b.cond
+  picked e ctx branches i (truthy? v)
+
+fn picked _ _ branches i true
+  branches[i].body
+
+fn picked e ctx branches i false
+  choose e ctx branches (i + 1)
+
+fn chosen_body none otherwise
+  otherwise
+
+fn chosen_body body _
+  body
+
+fn looped_over e st items form
+  return run e form.otherwise st if length items == 0
+  n = length items
+  at = list/to_list (list/take list/naturals n)
+  done_loop = list/fold at st (s i -> iteration e s items[i] i n form)
+  pen _ globals parts = done_loop
+  pen (merged st.ctx globals) globals parts
+
+fn iteration _ st none _ _ _
+  st
+
+fn iteration e st item i n form
+  { body key name } = form
+  first = i == 1
+  last = i == n
+  loop = { "first":first "index":i "index0":(i - 1) "last":last "length":n }
+  seen = merged st.ctx st.globals
+  bound = bind_item (put seen "loop" loop) key name item
+  out = run e body (pen bound st.globals st.parts)
+  pen st.ctx out.globals out.parts
+
+fn bind_item ctx "" name item
+  put ctx name item
+
+fn bind_item ctx key name item
+  put (put ctx key item[1]) name item[2]
+
+# What a for loop walks: a list's items, a map's [key value] pairs in key
+# order, or a string's characters.
+fn iterable (missing path) line
+  err "line {line}: `{path}` is not defined, so it cannot be looped over"
+
+fn iterable xs:[]some _
+  xs
+
+fn iterable m:map[string some] _
+  list/to_list (list/map (keys m) (k -> [k m[k]]))
+
+fn iterable s:string _
+  text/chars s
+
+fn iterable v line
+  err "line {line}: cannot loop over `{v}`"
+
+# What `{{ }}` prints: text escaped, markup as it is.
+fn display none _
+  ""
+
+fn display (missing path) line
+  err "line {line}: `{path}` is not defined"
+
+fn display m:markup _
+  m
+
+fn display s:string _
+  textkit/escape_html s
+
+fn display _:map[string some] line
+  err "line {line}: cannot print a map"
+
+fn display v _
+  textkit/escape_html (as_text v)
+
+# The plain text of a value, for filters that work on text.
+fn as_text true
+  "true"
+
+fn as_text false
+  "false"
+
+fn as_text none
+  ""
+
+fn as_text m:markup
+  "{m}"
+
+fn as_text s:string
+  s
+
+fn as_text xs:[]some
+  inner = list/to_list (list/map xs as_text)
+  "[{text/join inner ", "}]"
+
+fn as_text v
+  "{v}"
+
+fn truthy? none
+  false
+
+fn truthy? true
+  true
+
+fn truthy? false
+  false
+
+fn truthy? (missing _)
+  false
+
+fn truthy? m:markup
+  "{m}" != ""
+
+fn truthy? s:string
+  s != ""
+
+fn truthy? n:int
+  n != 0
+
+fn truthy? x:float64
+  x != 0.0
+
+fn truthy? xs:[]some
+  length xs > 0
+
+fn truthy? m:map[string some]
+  length m > 0
+
+fn truthy? _
+  true
+
+fn eval _ _ (e_lit v)
+  v
+
+fn eval _ ctx (e_var _ name)
+  found = ctx[name]
+  if (found == none) (missing name) found
+
+fn eval e ctx (e_attr key line target)
+  base = eval e ctx target
+  found = attr_of base key
+  named_missing found (e_attr key line target)
+
+fn eval e ctx (e_index key line target)
+  base = eval e ctx target
+  k = eval e ctx key
+  index_into base k line
+
+fn eval e ctx (e_filter args line name target)
+  v = eval e ctx target
+  vals = eval_args e ctx args
+  apply_filter e name v vals line
+
+fn eval e ctx (e_call args line name)
+  vals = eval_args e ctx args
+  call e ctx name vals line
+
+fn eval e ctx (e_macro args line name space)
+  vals = eval_args e ctx args
+  call_macro e space name vals line
+
+fn eval e ctx (e_bin left _ "and" right)
+  l = eval e ctx left
+  and_then e ctx (truthy? l) right
+
+fn eval e ctx (e_bin left _ "or" right)
+  l = eval e ctx left
+  or_else e ctx (truthy? l) right
+
+fn eval e ctx (e_bin left line op right)
+  l = eval e ctx left
+  r = eval e ctx right
+  binary op l r line
+
+fn eval e ctx (e_not operand)
+  v = eval e ctx operand
+  not truthy? v
+
+fn eval e ctx (e_neg operand)
+  v = eval e ctx operand
+  binary "-" 0 v 0
+
+fn eval e ctx (e_test args line name negate target)
+  v = eval e ctx target
+  vals = eval_args e ctx args
+  answer = check_test name v vals line
+  flip? answer negate
+
+fn eval e ctx (e_list items)
+  list/to_list (list/map items (x -> eval e ctx x))
+
+fn and_then _ _ false _
+  false
+
+fn and_then e ctx true right
+  r = eval e ctx right
+  truthy? r
+
+fn or_else _ _ true _
+  true
+
+fn or_else e ctx false right
+  r = eval e ctx right
+  truthy? r
+
+fn flip? answer negate
+  if negate (not answer) answer
+
+# Arguments become a map; a bare value is filed under its position, "1"
+# for the first.
+fn eval_args e ctx args
+  n = length args
+  at = list/to_list (list/take list/naturals n)
+  list/fold at {} (m i -> put m (arg_key args[i] i) (eval e ctx args[i].value))
+
+fn arg_key none i
+  "{i}"
+
+fn arg_key (arg "" _) i
+  "{i}"
+
+fn arg_key (arg key _) _
+  key
+
+# A missing attribute is reported by the whole path that reached it.
+fn named_missing (missing _) expr
+  missing (path_text expr)
+
+fn named_missing v _
+  v
+
+fn path_text (e_var _ name)
+  name
+
+fn path_text (e_attr key _ target)
+  "{path_text target}.{key}"
+
+fn path_text (e_index _ _ target)
+  "{path_text target}[...]"
+
+fn path_text _
+  "(value)"
+
+fn attr_of (missing path) key
+  missing "{path}.{key}"
+
+fn attr_of m:map[string some] key
+  found = m[key]
+  if (found == none) (missing key) found
+
+fn attr_of xs:[]some key
+  n = text/to_int key
+  found = xs[n + 1]
+  if (found == none) (missing key) found
+
+fn attr_of _ key
+  missing key
+
+fn index_into xs:[]some n:int _
+  found = xs[n + 1]
+  if (found == none) (missing "[{n}]") found
+
+fn index_into m:map[string some] k:string _
+  found = m[k]
+  if (found == none) (missing k) found
+
+fn index_into (missing path) _ _
+  missing path
+
+fn index_into _ k line
+  err "line {line}: cannot index with `{k}`"
+
+fn binary "==" l r _
+  same? l r
+
+fn binary "!=" l r _
+  not same? l r
+
+fn binary "~" l r _
+  "{as_text l}{as_text r}"
+
+fn binary "in" l r _
+  contains? r l
+
+fn binary op l r line
+  gap = "{gap_of l}{gap_of r}"
+  return err "line {line}: `{gap}` is not defined" if gap != ""
+  arith op l r line
+
+fn gap_of (missing path)
+  path
+
+fn gap_of _
+  ""
+
+fn arith op l:int r:int line
+  integer op l r line
+
+fn arith op l r line
+  numbers = number? l and number? r
+  return floating op (text/to_float l) (text/to_float r) line if numbers
+  texts = text? l and text? r
+  return ordered op (as_text l) (as_text r) line if texts
+  err "line {line}: cannot apply `{op}` to `{as_text l}` and `{as_text r}`"
+
+fn integer "/" _ 0 line
+  err "line {line}: division by zero"
+
+fn integer "%" _ 0 line
+  err "line {line}: division by zero"
+
+fn integer "+" l r _
+  l + r
+
+fn integer "-" l r _
+  l - r
+
+fn integer "*" l r _
+  l * r
+
+fn integer "/" l r _
+  l / r
+
+fn integer "%" l r _
+  l % r
+
+fn integer op l r line
+  ordered op l r line
+
+fn floating "+" l r _
+  l + r
+
+fn floating "-" l r _
+  l - r
+
+fn floating "*" l r _
+  l * r
+
+fn floating "/" l r _
+  l / r
+
+fn floating op l r line
+  ordered op l r line
+
+fn ordered "<" l r _
+  l < r
+
+fn ordered ">" l r _
+  r < l
+
+fn ordered "<=" l r _
+  l <= r
+
+fn ordered ">=" l r _
+  r <= l
+
+fn ordered op _ _ line
+  err "line {line}: `{op}` does not apply here"
+
+fn number? _:int
+  true
+
+fn number? _:float64
+  true
+
+fn number? _
+  false
+
+fn text? _:markup
+  true
+
+fn text? _:string
+  true
+
+fn text? _
+  false
+
+fn same? l r
+  plain l == plain r
+
+fn plain m:markup
+  "{m}"
+
+fn plain v
+  v
+
+fn contains? xs:[]some v
+  list/any? xs (x -> same? x v)
+
+fn contains? m:map[string some] k
+  m[as_text k] != none
+
+fn contains? s v
+  textkit/contains? (as_text s) (as_text v)
+
+fn call e ctx "super" _ line
+  next = e.depth + 1
+  bodies = e.blocks[e.slot]
+  above = if (bodies == none) none bodies[next]
+  return err "line {line}: `super()` has no parent block" if above == none
+  inner = scope e.blocks next e.engine e.imports e.name e.slot
+  out = run inner above (pen ctx {} [])
+  markup (text/join out.parts "")
+
+fn call _ _ "range" args line
+  end = args["end"]
+  start = args["start"]
+  step = args["step_by"]
+  return err "line {line}: `range` needs `end`" if end == none
+  counted (if (start == none) 0 start) end (if (step == none) 1 step) []
+
+fn call _ _ "throw" args line
+  err "line {line}: {as_text args["message"]}"
+
+fn call e _ name args line
+  f = e.engine.functions[name]
+  host_function f name args line
+
+fn host_function none name _ line
+  err "line {line}: unknown function `{name}`"
+
+fn host_function f _ args line
+  answered (f args) line
+
+fn answered (err r) line
+  err "line {line}: {r}"
+
+fn answered v _
+  v
+
+fn counted at end step acc
+  return acc if at >= end
+  counted (at + step) end step (push acc at)
+
+fn call_macro e space name vals line
+  file = if (space == "self") e.name e.imports[space]
+  t = if (file == none) none e.engine.templates[file]
+  return err "line {line}: no macros imported as `{space}`" if t == none
+  def = t.macros[name]
+  return err "line {line}: `{space}` has no macro `{name}`" if def == none
+  n = length def.params
+  at = list/to_list (list/take list/naturals n)
+  ctx = list/fold at {} (m i -> param m def.params[i] vals i)
+  inner = scope {} 0 e.engine t.imports file ""
+  markup (written inner def.body ctx)
+
+# A macro parameter takes its argument by name, then by position, then
+# its default.
+fn param m none _ _
+  m
+
+fn param m (arg "" (e_var _ name)) vals i
+  put m name (first_of vals[name] vals["{i}"] (missing name))
+
+fn param m (arg key (e_lit v)) vals i
+  put m key (first_of vals[key] vals["{i}"] v)
+
+fn param m _ _ _
+  m
+
+fn first_of none none fallback
+  fallback
+
+fn first_of none b _
+  b
+
+fn first_of a _ _
+  a

@@ -1,0 +1,18 @@
+# Not an engine bug, a checker behaviour worth a reproduction (FRICTION F6).
+# Run with `kanso play split_err_contagion.kso`.
+#
+# Expected: `replace` never hands text/split an empty separator (the first arm
+# takes that case), so the nested call should check and print `a*b`.
+# Actual: error[exhaustive]: this can be an err and `replace` has no arm for
+# it, at the inner call. The general arm calls split with a string the
+# checker cannot see into, so every caller of replace inherits the err.
+import "std/text"
+
+fn replace s "" _
+  s
+
+fn replace s from to
+  parts = text/split s from
+  text/join parts to
+
+print (replace (replace "a-b" "-" "+") "+" "*")

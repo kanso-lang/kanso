@@ -1,0 +1,23 @@
+ok
+ok
+ok
+ok
+ok
+ok
+deleted four
+merged 4 files into 2: kept 4, dropped 3
+5.bitcask.data: 47 bytes, 2 records, 2 live, 0 bytes dead
+5.bitcask.hint: 62 bytes, 2 hints
+6.bitcask.data: 43 bytes, 2 records, 2 live, 0 bytes dead
+6.bitcask.hint: 61 bytes, 2 hints
+4 live keys
+5.bitcask.data
+5.bitcask.hint
+6.bitcask.data
+6.bitcask.hint
+five
+one
+three
+two
+uno
+[exit 0]

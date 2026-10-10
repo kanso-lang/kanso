@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>{{ section.title }}</h1>
+{{ section.content | safe }}
+{%- set blog = get_section(path="blog/_index.md") %}
+<h2>Recent</h2>
+<ul>
+{%- for page in blog.pages | slice(end=2) %}
+  {{ m::post_item(page=page) }}
+{%- endfor %}
+</ul>
+<p>{{ blog.pages | length }} posts, {{ section.pages | length }} page here: {{ section.pages | map(attribute="title") | join(sep=", ") }}.</p>
+{% endblock content %}

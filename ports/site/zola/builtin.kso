@@ -1,0 +1,109 @@
+# The templates Zola ships inside its binary. A site overrides any of them
+# with a file of the same name in templates/. A string literal may not pass
+# the 80th column and there is no multi-line literal, so each template is
+# stitched from one constant per line.
+xml_head = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+
+sitemap_xmlns = "http://www.sitemaps.org/schemas/sitemap/0.9"
+
+sitemap_open = "<urlset xmlns=\"{sitemap_xmlns}\">\n"
+
+sitemap_loop = "\{%- for entry in entries %}\n    <url>\n"
+
+sitemap_loc = "        <loc>\{\{ entry.permalink | safe }}</loc>\n"
+
+sitemap_if = "        \{%- if entry.updated %}\n"
+
+sitemap_mod = "        <lastmod>\{\{ entry.updated }}</lastmod>\n"
+
+sitemap_end = "        \{%- endif %}\n    </url>\n\{%- endfor %}\n</urlset>\n"
+
+sitemap_entries = "{sitemap_loop}{sitemap_loc}{sitemap_if}{sitemap_mod}"
+
+sitemap_template = "{xml_head}{sitemap_open}{sitemap_entries}{sitemap_end}"
+
+robots_agent = "User-agent: *\nDisallow:\nAllow: /\n"
+
+robots_map = "Sitemap: \{\{ get_url(path=\"sitemap.xml\") }}\n"
+
+robots_template = "{robots_agent}{robots_map}"
+
+alias_head = "<!doctype html>\n<html lang=\"en\">\n<head>\n"
+
+alias_meta = "    <meta charset=\"utf-8\">\n"
+
+alias_canon = "    <link rel=\"canonical\" href=\"\{\{ url | safe }}\">\n"
+
+alias_wait = "content=\"0; url=\{\{ url | safe }}\""
+
+alias_refresh = "    <meta http-equiv=\"refresh\" {alias_wait}>\n"
+
+alias_title = "    <title>Redirect</title>\n</head>\n<body>\n"
+
+alias_anchor = "<a href=\"\{\{ url | safe }}\">Click here</a>"
+
+alias_link = "    <p>{alias_anchor} to be redirected.</p>\n"
+
+alias_close = "</body>\n</html>\n"
+
+alias_top = "{alias_head}{alias_meta}{alias_canon}{alias_refresh}"
+
+alias_template = "{alias_top}{alias_title}{alias_link}{alias_close}"
+
+atom_ns = "xmlns=\"http://www.w3.org/2005/Atom\""
+
+atom_open = "<feed {atom_ns} xml:lang=\"\{\{ lang }}\">\n"
+
+atom_title = "    <title>\{\{ config.title }}</title>\n"
+
+atom_feed_type = "rel=\"self\" type=\"application/atom+xml\""
+
+atom_self = "    <link href=\"\{\{ feed_url | safe }}\" {atom_feed_type}/>\n"
+
+atom_home = "    <link href=\"\{\{ config.base_url | safe }}\"/>\n"
+
+atom_last = "\{\{ last_updated | date(format=stamp) }}"
+
+atom_updated = "    <updated>{atom_last}</updated>\n"
+
+atom_id = "    <id>\{\{ feed_url | safe }}</id>\n"
+
+atom_loop = "    \{%- for page in pages %}\n    <entry>\n"
+
+atom_entry_title = "        <title>\{\{ page.title }}</title>\n"
+
+atom_date = "\{\{ page.date | date(format=stamp) }}"
+
+atom_published = "        <published>{atom_date}</published>\n"
+
+atom_href = "href=\"\{\{ page.permalink | safe }}\""
+
+atom_link = "        <link {atom_href} type=\"text/html\"/>\n"
+
+atom_entry_id = "        <id>\{\{ page.permalink | safe }}</id>\n"
+
+atom_body = "<content type=\"html\">\{\{ page.content }}</content>"
+
+atom_content = "        {atom_body}\n"
+
+atom_close = "    </entry>\n    \{%- endfor %}\n</feed>\n"
+
+atom_stamp = "\{% set stamp = \"%Y-%m-%dT%H:%M:%S+00:00\" -%}\n"
+
+atom_head = "{atom_stamp}{xml_head}{atom_open}{atom_title}"
+
+atom_links = "{atom_self}{atom_home}{atom_updated}{atom_id}"
+
+atom_entry = "{atom_loop}{atom_entry_title}{atom_published}{atom_link}"
+
+atom_entry_end = "{atom_entry_id}{atom_content}{atom_close}"
+
+atom_template = "{atom_head}{atom_links}{atom_entry}{atom_entry_end}"
+
+shipped_feed = { "atom.xml":atom_template }
+
+shipped_alias = put shipped_feed "internal/alias.html" alias_template
+
+shipped_robots = put shipped_alias "robots.txt" robots_template
+
+shipped_templates = put shipped_robots "sitemap.xml" sitemap_template

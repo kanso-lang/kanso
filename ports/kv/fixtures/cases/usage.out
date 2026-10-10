@@ -1,0 +1,15 @@
+kv: usage: kv [OPTIONS] DIR [COMMAND [ARGS...]]
+options: --max-file-size BYTES (default 2 GiB), --expiry SECS
+commands: put KEY VALUE, get KEY, delete KEY, list, merge, status, dump
+with no command, kv reads commands from standard input
+[exit 2]
+kv: unknown command `frobnicate`
+[exit 2]
+kv: put takes a key and a value
+[exit 2]
+kv: list takes no arguments
+[exit 2]
+kv: `lots` is not a number
+[exit 2]
+kv: a flag is missing its number
+[exit 2]

@@ -1,0 +1,219 @@
+import "std/list"
+import "std/text"
+
+# std/text answers chars, slice, split, join and trim; everything a
+# generator does to text beyond that lives here.
+pub fn lower s
+  text/join (list/to_list (list/map (text/chars s) lower_char)) ""
+
+fn lower_char c
+  code = text/char_code c
+  if (64 < code and code < 91) (text/from_code (code + 32)) c
+
+pub fn upper s
+  text/join (list/to_list (list/map (text/chars s) upper_char)) ""
+
+fn upper_char c
+  code = text/char_code c
+  if (96 < code and code < 123) (text/from_code (code - 32)) c
+
+# The first letter upper case and the rest lower, the way Tera's
+# `capitalize` reads.
+pub fn capitalize ""
+  ""
+
+pub fn capitalize s
+  "{upper (text/slice s 1 1)}{lower (text/slice s 2 (length s))}"
+
+pub fn starts_with? s prefix
+  text/slice s 1 (length prefix) == prefix
+
+pub fn ends_with? s suffix
+  n = length s
+  m = length suffix
+  m <= n and text/slice s (n - m + 1) n == suffix
+
+pub fn digit? none
+  false
+
+pub fn digit? c
+  code = text/char_code c
+  47 < code and code < 58
+
+pub fn letter? none
+  false
+
+pub fn letter? c
+  code = text/char_code c
+  64 < code and code < 91 or 96 < code and code < 123
+
+pub fn alnum? none
+  false
+
+pub fn alnum? c
+  digit? c or letter? c
+
+pub fn space? none
+  false
+
+pub fn space? c
+  c == " " or c == "\t" or c == "\n" or c == "\r"
+
+# The position of the first `needle` at or after `from` in `s`, or none.
+pub fn index_of s needle from
+  cs = text/chars s
+  find_at cs (text/chars needle) from (length cs - length needle + 1)
+
+pub fn find_at cs ns p last
+  return none if p > last
+  if (text/slice cs p (p + length ns - 1) == ns) p (find_at cs ns (p + 1) last)
+
+pub fn contains? s needle
+  index_of s needle 1 != none
+
+# Every occurrence of `from` becomes `to`. Written as a scan rather than
+# `text/join (text/split s from) to`, because split answers an err for an
+# empty separator and the checker then holds every caller of replace to an
+# err arm.
+pub fn replace s "" _
+  s
+
+pub fn replace s from to
+  cs = text/chars s
+  fs = text/chars from
+  text/join (swap cs fs to 1 (length cs - length fs + 1) []) ""
+
+fn swap cs fs to p last acc
+  return text/concat acc (text/slice cs p (length cs)) if p > last
+  hit = text/slice cs p (p + length fs - 1) == fs
+  return swap cs fs to (p + length fs) last (push acc to) if hit
+  swap cs fs to (p + 1) last (push acc cs[p])
+
+pub fn trim_start s
+  cs = text/chars s
+  text/join (text/slice cs (first_solid cs 1) (length cs)) ""
+
+pub fn trim_end s
+  cs = text/chars s
+  text/join (text/slice cs 1 (last_solid cs (length cs))) ""
+
+fn first_solid cs p
+  if (p <= length cs and space? cs[p]) (first_solid cs (p + 1)) p
+
+fn last_solid cs p
+  if (p > 0 and space? cs[p]) (last_solid cs (p - 1)) p
+
+pub fn repeat s n
+  text/join (list/to_list (list/take (list/repeat s) n)) ""
+
+pub fn lines s
+  text/split (replace s "\r\n" "\n") "\n"
+
+pub fn words s
+  pieces = text/split (replace (replace s "\n" " ") "\t" " ") " "
+  list/to_list (list/reject pieces (w -> w == ""))
+
+pub fn word_count s
+  length (words (strip_tags s))
+
+# Text safe to place between tags or inside a quoted attribute.
+pub fn escape_html s
+  text/join (list/to_list (list/map (text/chars s) escape_char)) ""
+
+fn escape_char "&"
+  "&amp;"
+
+fn escape_char "<"
+  "&lt;"
+
+fn escape_char ">"
+  "&gt;"
+
+fn escape_char "\""
+  "&quot;"
+
+fn escape_char "'"
+  "&#x27;"
+
+fn escape_char c
+  c
+
+pub fn escape_xml s
+  text/join (list/to_list (list/map (text/chars s) xml_char)) ""
+
+fn xml_char "'"
+  "&apos;"
+
+fn xml_char c
+  escape_char c
+
+# Everything between a `<` and the next `>` goes.
+pub fn strip_tags s
+  text/join (outside_tags (text/chars s) 1 false []) ""
+
+# The push sits in its own arm rather than in `if cond acc (push acc c)`.
+# With the `if`, native builds of this function copied the list on every
+# character and an 80-page site took 27 s instead of 0.6 s (FRICTION F27).
+fn outside_tags cs p inside acc
+  c = cs[p]
+  return acc if c == none
+  next = if inside (c != ">") (c == "<")
+  outside_tags cs (p + 1) next (kept_if acc c (not (inside or next)))
+
+pub fn kept_if acc c true
+  push acc c
+
+pub fn kept_if acc _ false
+  acc
+
+# Zola's slugs: lower case ASCII letters and digits, every other run of
+# characters one dash, no dash at either end. A handful of Latin letters
+# with marks are folded to their base letter first.
+pub fn slugify s
+  cs = list/to_list (list/map (text/chars (lower s)) fold_mark)
+  text/join (slug_chars cs 1 [] false) ""
+
+fn slug_chars cs p acc gap
+  c = cs[p]
+  return acc if c == none
+  return slug_chars cs (p + 1) acc true if not alnum? c
+  lead = kept_if acc "-" (gap and length acc > 0)
+  slug_chars cs (p + 1) (push lead c) false
+
+fn fold_mark c
+  folded = marks[c]
+  if (folded == none) c folded
+
+marks = { "à":"a" "á":"a" "â":"a" "ä":"a" "ç":"c" "è":"e" "é":"e" "ê":"e" }
+
+# A stable merge sort under a comparator: `goes_first? a b` is true when `a`
+# must come first.
+pub fn sort_with xs goes_first?
+  halves xs 1 (length xs) goes_first?
+
+fn halves xs lo hi goes_first?
+  return [] if hi < lo
+  return [xs[lo]] if hi == lo
+  mid = (lo + hi) / 2
+  left = halves xs lo mid goes_first?
+  right = halves xs (mid + 1) hi goes_first?
+  meld left right 1 1 goes_first? []
+
+fn meld left right i j goes_first? acc
+  return text/concat acc (text/slice right j (length right)) if i > length left
+  return text/concat acc (text/slice left i (length left)) if j > length right
+  r = right[j]
+  l = left[i]
+  meld_pick left right i j goes_first? acc (goes_first? r l)
+
+fn meld_pick left right i j goes_first? acc true
+  meld left right i (j + 1) goes_first? (push acc right[j])
+
+fn meld_pick left right i j goes_first? acc false
+  meld left right (i + 1) j goes_first? (push acc left[i])
+
+# `text/slice` answers nothing at all when `to` runs past the end; this
+# clamps `to` first, the way most languages slice.
+pub fn clamped xs from to
+  n = length xs
+  text/slice xs from (if (to > n) n to)

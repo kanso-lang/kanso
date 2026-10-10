@@ -1,0 +1,6 @@
+<h1>{{ section.title | upper }}</h1>
+<ol>
+{%- for p in section.pages %}
+<li>{{ p.title | title }} → {{ p.path }}{% if p.draft %} (draft){% endif %}</li>
+{%- endfor %}
+</ol>

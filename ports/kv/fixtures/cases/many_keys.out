@@ -1,0 +1,16 @@
+deleted key7
+1.bitcask.data: 4089 bytes, 165 records, 54 live, 2701 bytes dead
+2.bitcask.data: 4090 bytes, 162 records, 54 live, 2666 bytes dead
+3.bitcask.data: 4080 bytes, 155 records, 51 live, 2652 bytes dead
+4.bitcask.data: 3127 bytes, 119 records, 40 live, 2007 bytes dead
+199 live keys
+merged 4 files into 2: kept 199, dropped 402
+5.bitcask.data: 4072 bytes, 153 records, 153 live, 0 bytes dead
+5.bitcask.hint: 3584 bytes, 153 hints
+6.bitcask.data: 1288 bytes, 46 records, 46 live, 0 bytes dead
+6.bitcask.hint: 1122 bytes, 46 hints
+199 live keys
+value200
+not found: key7
+199
+[exit 0]

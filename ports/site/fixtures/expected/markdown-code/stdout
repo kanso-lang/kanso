@@ -1,0 +1,9 @@
+<p>Inline <code>a &lt;b&gt; &amp; c</code>, double <code>a ` b</code>, and padded <code>`x`</code>.</p>
+<pre><code>plain &lt;fence&gt;
+</code></pre>
+<pre><code class="language-python" data-lang="python">def f(x):
+    return x * 2
+</code></pre>
+<pre><code class="language-html" data-lang="html">&lt;p class=&quot;x&quot;&gt;&amp;amp;&lt;/p&gt;
+</code></pre>
+<p>An unclosed `backtick stays literal.</p>

@@ -1,0 +1,365 @@
+import "std/list"
+import "std/text"
+
+type arg
+  key
+  value
+
+type e_attr
+  key
+  line
+  target
+
+type e_bin
+  left
+  line
+  op
+  right
+
+type e_call
+  args
+  line
+  name
+
+type e_filter
+  args
+  line
+  name
+  target
+
+type e_index
+  key
+  line
+  target
+
+type e_list
+  items
+
+type e_lit
+  value
+
+type e_macro
+  args
+  line
+  name
+  space
+
+type e_neg
+  operand
+
+type e_not
+  operand
+
+type e_test
+  args
+  line
+  name
+  negated
+  target
+
+type e_var
+  line
+  name
+
+# A parse step's answer: the position of the next token and what was read.
+type parsed
+  pos
+  value
+
+# A whole expression from a token list, refusing tokens left over.
+fn expression ts
+  read = or_expr ts 1
+  all_read ts read
+
+fn all_read ts (parsed p v)
+  t = ts[p]
+  return v if t == none
+  fail_at t "unexpected `{t.word}`"
+
+fn fail_at none message
+  err "at the end of the expression: {message}"
+
+fn fail_at t message
+  err "line {t.line}: {message}"
+
+fn word_at ts p
+  t = ts[p]
+  if (t == none) "" t.word
+
+fn kind_at ts p
+  t = ts[p]
+  if (t == none) "" t.kind
+
+fn line_at ts p
+  t = ts[p]
+  if (t == none) (line_at ts (p - 1)) t.line
+
+fn expect_op ts p word
+  return p + 1 if word_at ts p == word and kind_at ts p == "op"
+  t = ts[p]
+  return err "expected `{word}` at the end of the expression" if t == none
+  fail_at t "expected `{word}`, found `{t.word}`"
+
+fn keyword? ts p word
+  kind_at ts p == "name" and word_at ts p == word
+
+fn or_expr ts p
+  left = and_expr ts p
+  or_more ts left
+
+fn or_more ts (parsed p left)
+  return parsed p left if not keyword? ts p "or"
+  right = and_expr ts (p + 1)
+  or_more ts (joined "or" left right (line_at ts p))
+
+fn and_expr ts p
+  left = not_expr ts p
+  and_more ts left
+
+fn and_more ts (parsed p left)
+  return parsed p left if not keyword? ts p "and"
+  right = not_expr ts (p + 1)
+  and_more ts (joined "and" left right (line_at ts p))
+
+fn joined op left (parsed p right) line
+  parsed p (e_bin left line op right)
+
+fn not_expr ts p
+  not_or_compare ts p (keyword? ts p "not")
+
+fn not_or_compare ts p true
+  inner = not_expr ts (p + 1)
+  negated inner
+
+fn not_or_compare ts p false
+  compare ts p
+
+fn negated (parsed p v)
+  parsed p (e_not v)
+
+fn compare ts p
+  left = concat_expr ts p
+  compare_more ts left
+
+fn compare_more ts (parsed p left)
+  op = word_at ts p
+  line = line_at ts p
+  return is_test ts (p + 1) left line if keyword? ts p "is"
+  return in_test ts (p + 1) left line false if keyword? ts p "in"
+  not_in = keyword? ts p "not" and keyword? ts (p + 1) "in"
+  return in_test ts (p + 2) left line true if not_in
+  return parsed p left if not comparison? op or kind_at ts p != "op"
+  right = concat_expr ts (p + 1)
+  joined op left right line
+
+fn comparison? op
+  list/any? ["==" "!=" "<" ">" "<=" ">="] (o -> o == op)
+
+fn in_test ts p left line negate
+  right = concat_expr ts p
+  member = joined "in" left right line
+  if negate (negated member) member
+
+fn is_test ts p left line
+  negate = keyword? ts p "not"
+  at = if negate (p + 1) p
+  name = word_at ts at
+  unnamed = kind_at ts at != "name"
+  return fail_at ts[at] "expected a test name after `is`" if unnamed
+  args = maybe_args ts (at + 1)
+  tested args left line name negate
+
+fn tested (parsed p args) left line name negate
+  parsed p (e_test args line name negate left)
+
+fn concat_expr ts p
+  left = add_expr ts p
+  binary_more ts left ["~"] add_expr
+
+fn add_expr ts p
+  left = mul_expr ts p
+  binary_more ts left ["+" "-"] mul_expr
+
+fn mul_expr ts p
+  left = unary ts p
+  binary_more ts left ["*" "/" "%"] unary
+
+fn binary_more ts (parsed p left) ops next
+  op = word_at ts p
+  hit = kind_at ts p == "op" and list/any? ops (o -> o == op)
+  return parsed p left if not hit
+  right = next ts (p + 1)
+  binary_more ts (joined op left right (line_at ts p)) ops next
+
+fn unary ts p
+  minus = kind_at ts p == "op" and word_at ts p == "-"
+  minus_or_filtered ts p minus
+
+fn minus_or_filtered ts p true
+  number = kind_at ts (p + 1) == "int" or kind_at ts (p + 1) == "float"
+  signed_or_negated ts p number
+
+# `-3` is a number, so `-3 | abs` filters the number; `-x` negates.
+fn signed_or_negated ts p true
+  t = ts[p + 1]
+  signed = tok t.kind t.line "-{t.word}"
+  value = primary_at ts p t.kind signed
+  base = postfix_more ts (parsed (p + 2) value.value)
+  filters ts base
+
+fn signed_or_negated ts p false
+  inner = unary ts (p + 1)
+  negative inner
+
+fn minus_or_filtered ts p false
+  filtered ts p
+
+fn negative (parsed p v)
+  parsed p (e_neg v)
+
+fn filtered ts p
+  base = postfix ts p
+  filters ts base
+
+fn filters ts (parsed p v)
+  piped = kind_at ts p == "op" and word_at ts p == "|"
+  return parsed p v if not piped
+  at = p + 1
+  unnamed = kind_at ts at != "name"
+  return fail_at ts[at] "expected a filter name after `|`" if unnamed
+  args = maybe_args ts (at + 1)
+  filters ts (filter_of args v (word_at ts at) (line_at ts at))
+
+fn filter_of (parsed p args) v name line
+  parsed p (e_filter args line name v)
+
+fn postfix ts p
+  base = primary ts p
+  postfix_more ts base
+
+fn postfix_more ts (parsed p v)
+  op = if (kind_at ts p == "op") (word_at ts p) ""
+  return attribute ts (p + 1) v if op == "."
+  return subscript ts (p + 1) v if op == "["
+  parsed p v
+
+fn attribute ts p v
+  t = ts[p]
+  key = kind_at ts p == "name" or kind_at ts p == "int"
+  return fail_at t "expected a name after `.`" if t == none or not key
+  postfix_more ts (parsed (p + 1) (e_attr t.word t.line v))
+
+fn subscript ts p v
+  key = or_expr ts p
+  closed_subscript ts key v
+
+fn closed_subscript ts (parsed p key) v
+  after = expect_op ts p "]"
+  postfix_more ts (parsed after (e_index key (line_at ts p) v))
+
+fn primary ts p
+  t = ts[p]
+  return err "an expression ended too early" if t == none
+  primary_at ts p t.kind t
+
+fn primary_at _ p "str" t
+  parsed (p + 1) (e_lit t.word)
+
+fn primary_at _ p "int" t
+  parsed (p + 1) (e_lit (text/to_int t.word))
+
+fn primary_at _ p "float" t
+  parsed (p + 1) (e_lit (text/to_float t.word))
+
+fn primary_at ts p "name" t
+  name_at ts p t.word t
+
+fn primary_at ts p _ t
+  punct ts p t t.word
+
+fn punct ts p _ "("
+  inner = or_expr ts (p + 1)
+  grouped ts inner
+
+fn punct ts p _ "["
+  listed ts (p + 1) []
+
+fn punct _ _ t word
+  fail_at t "unexpected `{word}`"
+
+fn grouped ts (parsed p v)
+  parsed (expect_op ts p ")") v
+
+fn listed ts p acc
+  return parsed (p + 1) (e_list acc) if word_at ts p == "]"
+  item = or_expr ts p
+  list_more ts item acc
+
+fn list_more ts (parsed p v) acc
+  more = push acc v
+  return listed ts (p + 1) more if word_at ts p == ","
+  parsed (expect_op ts p "]") (e_list more)
+
+fn name_at _ p "true" _
+  parsed (p + 1) (e_lit true)
+
+fn name_at _ p "false" _
+  parsed (p + 1) (e_lit false)
+
+fn name_at _ p "True" _
+  parsed (p + 1) (e_lit true)
+
+fn name_at _ p "False" _
+  parsed (p + 1) (e_lit false)
+
+fn name_at ts p word t
+  name_then ts p word t.line (word_at ts (p + 1))
+
+fn name_then ts p word line "("
+  args = args_of ts (p + 2)
+  called args word line
+
+fn name_then ts p word line "::"
+  macro_call ts p word line
+
+fn name_then _ p word line _
+  parsed (p + 1) (e_var line word)
+
+fn called (parsed p args) name line
+  parsed p (e_call args line name)
+
+fn macro_call ts p space line
+  name = word_at ts (p + 2)
+  opens = word_at ts (p + 3) == "("
+  return fail_at ts[p] "expected `{space}::name(...)`" if not opens
+  args = args_of ts (p + 4)
+  macro_of args space name line
+
+fn macro_of (parsed p args) space name line
+  parsed p (e_macro args line name space)
+
+fn maybe_args ts p
+  opens = kind_at ts p == "op" and word_at ts p == "("
+  if opens (args_of ts (p + 1)) (parsed p [])
+
+# Arguments after `(`: `key=value` or a bare value, separated by commas.
+fn args_of ts p
+  return parsed (p + 1) [] if word_at ts p == ")"
+  keyed = kind_at ts p == "name" and word_at ts (p + 1) == "="
+  start = if keyed (p + 2) p
+  key = if keyed (word_at ts p) ""
+  value = or_expr ts start
+  arg_more ts value key []
+
+fn arg_more ts (parsed p v) key acc
+  more = push acc (arg key v)
+  return parsed (expect_op ts p ")") more if word_at ts p != ","
+  next_arg ts (p + 1) more
+
+fn next_arg ts p acc
+  return parsed (p + 1) acc if word_at ts p == ")"
+  keyed = kind_at ts p == "name" and word_at ts (p + 1) == "="
+  start = if keyed (p + 2) p
+  key = if keyed (word_at ts p) ""
+  value = or_expr ts start
+  arg_more ts value key acc

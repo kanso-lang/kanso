@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Docs | {{ super() }}{% endblock title %}
+{% block content %}
+<h1>{{ section.title }}</h1>
+{{ section.content | safe }}
+<ol>
+{%- for page in section.pages %}
+  <li value="{{ page.weight }}"><a href="{{ page.permalink | safe }}">{{ page.title }}</a></li>
+{%- endfor %}
+</ol>
+{%- for sub in section.subsections %}
+{%- set s = get_section(path=sub) %}
+<h2>{{ s.title }}</h2>
+<ul>
+{%- for page in s.pages %}
+  <li>{{ loop.index }}. {{ page.title }}{% if loop.last %} (last){% endif %}</li>
+{%- endfor %}
+</ul>
+{%- endfor %}
+{% endblock content %}

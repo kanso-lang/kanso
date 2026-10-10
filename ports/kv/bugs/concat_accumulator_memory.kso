@@ -1,0 +1,19 @@
+# Growing a list by text/concat inside a fold. Each step appends 25 ints,
+# so the answer is 4000 * 25 = 100000 elements, under a megabyte of data.
+#
+# Built with `kanso build --release`, this prints 100000 with a peak
+# resident set of 3.1 GB (VmHWM, sampled from /proc). At n = 8000 the
+# process is killed by signal 9 after 22 seconds. On the interpreter
+# n = 8000 finishes, in 25 seconds: the time is quadratic there, and the
+# memory is quadratic natively, as if no intermediate list were freed
+# until the fold ends.
+#
+# The same fold written with push, `list/fold chunk acc push`, builds the
+# 200000-element list for n = 8000 in 0.3 seconds on both engines.
+import "std/list"
+import "std/text"
+chunk = [1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25]
+n = 4000
+ns = list/take list/naturals n
+grown = list/fold ns [] (acc _ -> text/concat acc chunk)
+print "{length grown}"

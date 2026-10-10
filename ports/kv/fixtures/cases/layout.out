@@ -1,0 +1,5 @@
+ok
+ 5f 7b ba aa 65 53 f1 00 00 01 00 00 00 01 61 31
+1.bitcask.data (16 bytes)
+  @0 5f7bbaaa6553f100000100000001 1700000000 put a = 1
+[exit 0]

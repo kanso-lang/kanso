@@ -1,0 +1,8 @@
+import "../kit"
+
+# An unrelated function of this module that happens to share the name.
+fn keep? n:int
+  n > 2
+
+pub fn go xs
+  "{kit/first_kept xs (x -> x == "a")} {keep? 3}"

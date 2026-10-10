@@ -1,0 +1,365 @@
+import "../markdown"
+import "../tera"
+import "../textkit"
+import "std/list"
+import "std/text"
+
+# Every file the build writes and copies, and the lines it reports.
+fn outputs input st templates
+  vw = views_of st
+  links = link_map_of st
+  eng = tera/engine_of host_filters (site_functions st vw links) templates
+  page_files = keys vw.pages
+    . list/fold [] (acc rel -> page_file acc st vw eng rel)
+  with_sections = keys vw.sections
+    . list/fold page_files (acc rel -> section_file acc st vw eng rel)
+  with_terms = taxonomy_files with_sections st vw eng
+  with_aliases = values vw.pages
+    . list/fold with_terms (acc p -> alias_files acc st eng p)
+  with_extras = extra_files with_aliases st vw eng templates
+  finished input st vw with_extras
+
+fn link_map_of st
+  with_pages = list/fold (values st.pages) {} (m c -> linked_rel m st c)
+  list/fold (values st.sections) with_pages (m c -> linked_rel m st c)
+
+fn linked_rel m st c
+  put m c.raw.rel "{st.base}{c.raw.path}"
+
+host_filters = { "markdown":markdown_filter }
+
+fn markdown_filter v _
+  out = markdown/render "{v}" {} ""
+  out.html
+
+fn site_functions st vw links
+  urls = { "get_page":(a -> get_page vw a) }
+  sections = put urls "get_section" (a -> get_section vw a)
+  more = put sections "get_taxonomy_url" (a -> taxonomy_url st a)
+  put more "get_url" (a -> get_url st.base links a)
+
+fn get_page vw args
+  path = args["path"]
+  found = if (path == none) none vw.pages[path]
+  if (found == none) (err "`get_page` found no page `{path}`") found
+
+fn get_section vw args
+  path = args["path"]
+  found = if (path == none) none vw.sections[path]
+  if (found == none) (err "`get_section` found no section `{path}`") found
+
+fn taxonomy_url st args
+  kind = args["kind"]
+  name = args["name"]
+  incomplete = kind == none or name == none
+  return err "`get_taxonomy_url` needs `kind` and `name`" if incomplete
+  "{st.base}/{textkit/slugify kind}/{textkit/slugify name}/"
+
+# Where a path's page lands: `/blog/a/` is blog/a/index.html.
+fn out_path "/"
+  "index.html"
+
+fn out_path path
+  "{text/slice path 2 (length path)}index.html"
+
+fn section_rel ""
+  "_index.md"
+
+fn section_rel dir
+  "{dir}/_index.md"
+
+fn context st path extra
+  base = { "config":st.config "current_path":path "lang":"en" }
+  with_url = put base "current_url" "{st.base}{path}"
+  list/fold (keys extra) with_url (m k -> put m k extra[k])
+
+fn template_name none fallback
+  fallback
+
+fn template_name given _
+  "{given}"
+
+fn entry_of st path ""
+  { "permalink":"{st.base}{path}" }
+
+fn entry_of st path updated
+  { "permalink":"{st.base}{path}" "updated":updated }
+
+fn page_file acc st vw eng rel
+  c = st.pages[rel]
+  rp = c.raw
+  owner = st.sections[section_rel rp.owner]
+  fallback = template_name owner.raw.meta["page_template"] "page.html"
+  name = template_name rp.meta["template"] fallback
+  ctx = context st rp.path { "page":vw.pages[rel] }
+  body = tera/render eng name ctx
+  lastmod = first_given rp.meta["updated"] rp.date
+  listing = entry_of st rp.path lastmod
+  added acc "content/{rel}" (out_path rp.path) body listing
+
+fn first_given none b
+  "{b}"
+
+fn first_given a _
+  "{a}"
+
+fn added _ who _ (err r) _
+  err "{who}: {r}"
+
+fn added acc _ path body listing
+  push acc (out_file body listing path)
+
+fn section_file acc st vw eng rel
+  c = st.sections[rel]
+  rp = c.raw
+  return acc if off? rp.meta["render"]
+  fallback = if (rp.dir == "") "index.html" "section.html"
+  name = template_name rp.meta["template"] fallback
+  section = vw.sections[rel]
+  by = rp.meta["paginate_by"]
+  paged = by != none and by > 0
+  return paginated acc st eng rel name section by if paged
+  ctx = context st rp.path { "section":section }
+  body = tera/render eng name ctx
+  added acc "content/{rel}" (out_path rp.path) body (entry_of st rp.path "")
+
+# A paginated section writes one file per pager: the section's own path for
+# the first, `page/N/` for the rest, and a redirect from `page/1/`.
+fn paginated acc st eng rel name section by
+  all = pages_of section
+  n = if (length all == 0) 1 ((length all + by - 1) / by)
+  at = list/to_list (list/take list/naturals n)
+  path = section["path"]
+  pagers = list/fold at acc (a i -> pager_file a st eng rel name section by n i)
+  redirect = alias_body eng (pager_url st path 1)
+  first = "{text/slice path 2 (length path)}page/1/index.html"
+  added pagers "content/{rel}" first redirect unlisted
+
+fn pager_url st path 1
+  "{st.base}{path}"
+
+fn pager_url st path i
+  "{st.base}{path}page/{i}/"
+
+fn pager_path path 1
+  path
+
+fn pager_path path i
+  "{path}page/{i}/"
+
+fn pager_file acc st eng rel name section by n i
+  path = section["path"]
+  chunk = textkit/clamped (pages_of section) ((i - 1) * by + 1) (i * by)
+  urls = { "first":(pager_url st path 1) "last":(pager_url st path n) }
+  counts = { "current_index":i "number_pagers":n "paginate_by":by }
+  sized = put (merged urls counts) "total_pages" (length (pages_of section))
+  linked = put (put sized "pages" chunk) "base_url" "{st.base}{path}page/"
+  before = if (i > 1) (put linked "previous" (pager_url st path (i - 1))) linked
+  paginator = if (i < n) (put before "next" (pager_url st path (i + 1))) before
+  here = pager_path path i
+  ctx = context st here { "paginator":paginator "section":section }
+  body = tera/render eng name ctx
+  added acc "content/{rel}" (out_path here) body (entry_of st here "")
+
+fn pages_of section
+  listed_or_new section["pages"]
+
+fn merged a b
+  list/fold (keys b) a (m k -> put m k b[k])
+
+fn alias_body eng url
+  tera/render eng "internal/alias.html" { "url":url }
+
+fn alias_files acc st eng page
+  meta = st.pages[page["relative_path"]].raw.meta
+  aliases = page_aliases meta["aliases"]
+  list/fold aliases acc (a alias -> alias_file a eng page alias)
+
+fn page_aliases none
+  []
+
+fn page_aliases xs
+  xs
+
+fn alias_file acc eng page alias
+  target = page["permalink"]
+  body = alias_body eng target
+  added acc "alias `{alias}`" (alias_path alias) body unlisted
+
+fn alias_path alias
+  cleaned = text/trim (textkit/replace "/{alias}" "//" "/")
+  inner = text/slice cleaned 2 (length cleaned)
+  html = textkit/ends_with? inner ".html"
+  slashed = if (textkit/ends_with? inner "/") inner "{inner}/"
+  if html inner "{slashed}index.html"
+
+# One listing per taxonomy and one page per term. A term lists its pages
+# newest first.
+fn taxonomy_files acc st vw eng
+  kinds = taxonomy_kinds st.config["taxonomies"]
+  list/fold kinds acc (a kind -> taxonomy_kind a st vw eng kind)
+
+fn taxonomy_kinds none
+  []
+
+fn taxonomy_kinds xs
+  list/to_list (list/map xs (t -> "{t["name"]}"))
+
+fn taxonomy_kind acc st vw eng kind
+  dated = textkit/sort_with (values vw.pages) newer_map?
+  terms = list/fold dated {} (m p -> file_terms m kind p)
+  slug = textkit/slugify kind
+  path = "/{slug}/"
+  permalink = "{st.base}{path}"
+  taxonomy = { "name":kind "path":path "permalink":permalink "slug":slug }
+  term_list = keys terms
+    . list/map (n -> term_value st path n terms)
+    . list/to_list
+  list_name = taxonomy_template eng "{kind}/list.html" "taxonomy_list.html"
+  ctx = context st path { "taxonomy":taxonomy "terms":term_list }
+  body = tera/render eng list_name ctx
+  listing = entry_of st path ""
+  listed = added acc "taxonomy `{kind}`" (out_path path) body listing
+  list/fold term_list listed (a t -> term_file a st eng kind taxonomy t)
+
+fn newer_map? a b
+  da = date_or_blank a["date"]
+  db = date_or_blank b["date"]
+  da != "" and (db == "" or db < da)
+
+fn date_or_blank none
+  ""
+
+fn date_or_blank d
+  d
+
+fn file_terms m kind p
+  names = term_names p["taxonomies"][kind]
+  list/fold names m (acc n -> put acc n (push (listed_or_new acc[n]) p))
+
+fn term_names none
+  []
+
+fn term_names xs:[]some
+  list/to_list (list/map xs (x -> "{x}"))
+
+fn term_names x
+  ["{x}"]
+
+fn listed_or_new none
+  []
+
+fn listed_or_new xs
+  xs
+
+fn term_value st base name terms
+  pages = terms[name]
+  slug = textkit/slugify name
+  path = "{base}{slug}/"
+  core = { "name":name "page_count":(length pages) "pages":pages "path":path }
+  put (put core "permalink" "{st.base}{path}") "slug" slug
+
+fn taxonomy_template eng specific general
+  if (has_template? eng specific) specific general
+
+fn has_template? eng name
+  tera/has_template? eng name
+
+fn term_file acc st eng kind taxonomy term
+  name = taxonomy_template eng "{kind}/single.html" "taxonomy_single.html"
+  path = term["path"]
+  ctx = context st path { "taxonomy":taxonomy "term":term }
+  body = tera/render eng name ctx
+  added acc "taxonomy `{kind}`" (out_path path) body (entry_of st path "")
+
+# The files every site gets: robots.txt, the sitemap, a 404 page when there
+# is a template for it, and the feed when the config asks for one.
+fn extra_files acc st vw eng templates
+  robots = tera/render eng "robots.txt" (context st "/" {})
+  with_robots = added acc "robots.txt" "robots.txt" robots unlisted
+  with_404 = not_found with_robots st eng (templates["404.html"] != none)
+  with_feed = feed with_404 st vw eng (feed_on? st.config)
+  sitemap with_feed st eng
+
+fn not_found acc _ _ false
+  acc
+
+fn not_found acc st eng true
+  body = tera/render eng "404.html" (context st "/404.html" {})
+  added acc "404.html" "404.html" body unlisted
+
+fn feed_on? config
+  on? config["generate_feeds"] or on? config["generate_feed"]
+
+fn on? none
+  false
+
+fn on? true
+  true
+
+fn on? _
+  false
+
+fn off? none
+  false
+
+fn off? false
+  true
+
+fn off? _
+  false
+
+fn feed acc _ _ _ false
+  acc
+
+fn feed acc st vw eng true
+  dated = list/select (values vw.pages) (p -> date_or_blank p["date"] != "")
+  pages = textkit/sort_with (list/to_list dated) newer_map?
+  limit = st.config["feed_limit"]
+  shown = if (limit == none) pages (textkit/clamped pages 1 limit)
+  newest = shown[1]
+  last = if (newest == none) "1970-01-01" (latest newest)
+  feed_url = "{st.base}/atom.xml"
+  extra = { "feed_url":feed_url "last_updated":last "pages":shown }
+  body = tera/render eng "atom.xml" (context st "/atom.xml" extra)
+  added acc "atom.xml" "atom.xml" body unlisted
+
+fn latest page
+  updated = page["updated"]
+  if (updated == none) page["date"] updated
+
+fn sitemap acc st eng
+  listed = list/to_list (list/select acc (f -> f.listing != unlisted))
+  found = list/to_list (list/map listed (f -> f.listing))
+  urls = textkit/sort_with found by_permalink?
+  ctx = context st "/sitemap.xml" { "entries":urls }
+  body = tera/render eng "sitemap.xml" ctx
+  added acc "sitemap.xml" "sitemap.xml" body unlisted
+
+fn by_permalink? a b
+  a["permalink"] < b["permalink"]
+
+# Static files and the files beside a page bundle's index.md are copied; a
+# bundle's files land beside the page.
+fn finished input st vw files
+  statics = list/map input.statics (rel -> copied "static/{rel}" rel)
+  assets = list/map input.assets (rel -> asset_copy vw rel)
+  copies = text/concat (list/to_list statics) (list/to_list assets)
+  summary = summary_lines st files copies
+  plan copies files summary
+
+fn asset_copy vw rel
+  copied "content/{rel}" (asset_target vw rel)
+
+fn asset_target vw rel
+  bundle = vw.pages["{dir_of rel}/index.md"]
+  return rel if bundle == none
+  path = bundle["path"]
+  "{text/slice path 2 (length path)}{basename rel}"
+
+fn summary_lines st files copies
+  pages = length st.pages
+  sections = length st.sections
+  made = "-> Creating {pages} pages (0 orphan) and {sections} sections"
+  wrote = "-> Writing {length files} files and copying {length copies}"
+  ["Building site..." made wrote]

@@ -1,0 +1,63 @@
+import "std/list"
+import "std/text"
+
+# put "a" "1" at stamp 100, laid out byte by byte; the checksum is zlib's.
+test_record_layout =
+  bs = encode_record 100 "a" "1"
+  hex bs == "f0d72d98000000640001000000016131"
+
+test_record_round_trip =
+  bs = encode_record 7 "key" "value"
+  decode_at bs 0 == record "key" 0 22 7 "value"
+
+test_tombstone_round_trip =
+  bs = encode_record 9 "gone" tombstone
+  decode_at bs 0 == record "gone" 0 18 9 tombstone
+
+test_tombstone_size_field =
+  bs = encode_record 9 "k" tombstone
+  hex (text/slice bs 11 14) == "ffffffff"
+
+test_end_of_bytes = decode_at (encode_record 1 "k" "v") 16 == finished 16
+
+test_short_header = decode_at [1 2 3] 0 == torn 0
+
+test_short_body =
+  bs = encode_record 1 "key" "value"
+  decode_at (text/slice bs 1 20) 0 == torn 0
+
+test_flipped_bit =
+  bs = encode_record 1 "key" "value"
+  bad = text/concat (text/slice bs 1 20) [0 0]
+  decode_at bad 0 == corrupt 0
+
+test_scan_two =
+  bs = text/concat (encode_record 1 "a" "x") (encode_record 2 "b" "y")
+  found = scan_bytes bs
+  length found.records == 2 and clean? found
+
+test_scan_torn_tail =
+  bs = text/concat (encode_record 1 "a" "x") (encode_record 2 "b" "y")
+  found = scan_bytes (text/slice bs 1 25)
+  length found.records == 1 and good_bytes found == 16
+
+fn hint_file records
+  body = cat (list/to_list (list/map records encode_hint))
+  text/concat body (hint_trailer body)
+
+test_hint_round_trip =
+  bs = hint_file [(record "key" 40 22 7 "value") (record "" 62 14 8 "")]
+  decode_hints bs == [(hint "key" 40 22 7) (hint "" 62 14 8)]
+
+test_hint_empty_file_has_a_trailer = decode_hints (hint_file []) == []
+
+test_hint_short = decode_hints [0 0 0 1 0] == bad_hint 0
+
+test_hint_without_trailer =
+  bs = encode_hint (record "key" 40 22 7 "value")
+  decode_hints bs == bad_hint 21
+
+test_hint_flipped_bit =
+  bs = hint_file [(record "key" 40 22 7 "value")]
+  bad = text/concat [0 0 0 8] (text/slice bs 5 (length bs))
+  decode_hints bad == bad_hint 21

@@ -1,0 +1,407 @@
+import "../textkit"
+import "std/list"
+import "std/math"
+import "std/text"
+
+# A value and the key it sorts by.
+type sort_pair
+  item
+  key
+
+# The built-in filters. A filter the engine does not know is looked up in
+# the host's table before it is refused. Only `default` may be handed a
+# name the context does not have.
+fn apply_filter e name v args line
+  return builtin e name v args line if name == "default"
+  undefined_or e name v args line
+
+fn undefined_or _ name (missing path) _ line
+  err "line {line}: `{path}` is not defined (filter `{name}`)"
+
+fn undefined_or e name v args line
+  builtin e name v args line
+
+fn builtin _ "default" v args _
+  fallback = args["value"]
+  if (absent? v) (if (fallback == none) "" fallback) v
+
+fn builtin _ "safe" v _ _
+  markup (as_text v)
+
+fn builtin _ "escape" v _ _
+  markup (textkit/escape_html (as_text v))
+
+fn builtin _ "upper" v _ _
+  textkit/upper (as_text v)
+
+fn builtin _ "lower" v _ _
+  textkit/lower (as_text v)
+
+fn builtin _ "capitalize" v _ _
+  textkit/capitalize (as_text v)
+
+fn builtin _ "title" v _ _
+  ws = text/split (as_text v) " "
+  text/join (list/to_list (list/map ws textkit/capitalize)) " "
+
+fn builtin _ "trim" v _ _
+  text/trim (as_text v)
+
+fn builtin _ "slugify" v _ _
+  textkit/slugify (as_text v)
+
+fn builtin _ "striptags" v _ _
+  textkit/strip_tags (as_text v)
+
+fn builtin _ "wordcount" v _ _
+  textkit/word_count (as_text v)
+
+fn builtin _ "length" v _ line
+  measured v line
+
+fn builtin _ "reverse" v _ _
+  reversed v
+
+fn builtin _ "first" v _ line
+  xs = seq v line
+  edge xs 1
+
+fn builtin _ "last" v _ line
+  xs = seq v line
+  edge xs (length xs)
+
+fn builtin _ "nth" v args line
+  xs = seq v line
+  n = args["n"]
+  edge xs (if (n == none) 0 (n + 1))
+
+fn builtin _ "join" v args line
+  sep = args["sep"]
+  xs = seq v line
+  parts = list/to_list (list/map xs as_text)
+  text/join parts (if (sep == none) "" sep)
+
+fn builtin _ "truncate" v args _
+  s = as_text v
+  n = args["length"]
+  limit = if (n == none) 255 n
+  ending = args["end"]
+  tail = if (ending == none) "…" ending
+  if (length s > limit) "{text/slice s 1 limit}{tail}" s
+
+fn builtin _ "replace" v args line
+  from = args["from"]
+  to = args["to"]
+  incomplete = from == none or to == none
+  return err "line {line}: `replace` needs `from` and `to`" if incomplete
+  textkit/replace (as_text v) from to
+
+fn builtin _ "split" v args line
+  pat = args["pat"]
+  bad = pat == none or pat == ""
+  return err "line {line}: `split` needs a non-empty `pat`" if bad
+  pieces_of (as_text v) pat
+
+fn builtin _ "date" v args line
+  format = args["format"]
+  formatted (as_text v) (if (format == none) "%Y-%m-%d" format) line
+
+fn builtin _ "sort" v args line
+  key = args["attribute"]
+  xs = seq v line
+  sorted_by xs (if (key == none) "" key)
+
+fn builtin _ "map" v args line
+  key = args["attribute"]
+  return err "line {line}: `map` needs `attribute`" if key == none
+  xs = seq v line
+  list/to_list (list/map xs (x -> attr_path x key))
+
+fn builtin _ "filter" v args line
+  key = args["attribute"]
+  want = args["value"]
+  return err "line {line}: `filter` needs `attribute`" if key == none
+  xs = seq v line
+  list/to_list (list/select xs (x -> matches? (attr_path x key) want))
+
+fn builtin _ "group_by" v args line
+  key = args["attribute"]
+  return err "line {line}: `group_by` needs `attribute`" if key == none
+  xs = seq v line
+  list/fold xs {} (m x -> grouped m (as_text (attr_path x key)) x)
+
+fn builtin _ "slice" v args line
+  xs = seq v line
+  from = args["start"]
+  to = args["end"]
+  start = if (from == none) 1 (from + 1)
+  stop = if (to == none) (length xs) to
+  textkit/clamped xs start stop
+
+fn builtin _ "concat" v args line
+  more = args["with"]
+  xs = seq v line
+  return xs if more == none
+  appended xs more
+
+fn builtin _ "unique" v _ line
+  xs = seq v line
+  list/fold xs [] (acc x -> textkit/kept_if acc x (not contains? acc x))
+
+fn builtin _ "int" v _ _
+  as_int v
+
+fn builtin _ "float" v _ _
+  text/to_float (as_text v)
+
+fn builtin _ "abs" v _ _
+  if (v < 0) (0 - v) v
+
+fn builtin _ "round" v _ _
+  math/round (text/to_float (as_text v))
+
+fn builtin _ "pluralize" v args _
+  plural = args["plural"]
+  if (v == 1) "" (if (plural == none) "s" plural)
+
+fn builtin _ "linebreaksbr" v _ _
+  markup (textkit/replace (as_text v) "\n" "<br>")
+
+fn builtin _ "urlencode" v _ _
+  url_encoded (as_text v)
+
+fn builtin _ "json_encode" v _ _
+  markup (json v)
+
+fn builtin _ "as_str" v _ _
+  as_text v
+
+fn builtin e name v args line
+  f = e.engine.filters[name]
+  host_filter f name v args line
+
+# A host filter is a function, and a function cannot be compared with `==`,
+# so its absence is a dispatch rather than a test.
+fn host_filter none name _ _ line
+  err "line {line}: unknown filter `{name}`"
+
+fn host_filter f _ v args line
+  answered (f v args) line
+
+fn absent? none
+  true
+
+fn absent? (missing _)
+  true
+
+fn absent? _
+  false
+
+fn measured xs:[]some _
+  length xs
+
+fn measured m:map[string some] _
+  length m
+
+fn measured v _
+  length (as_text v)
+
+fn reversed xs:[]some
+  n = length xs
+  list/to_list (list/map (list/take list/naturals n) (i -> xs[n + 1 - i]))
+
+fn reversed v
+  cs = text/chars (as_text v)
+  text/join (reversed cs) ""
+
+fn seq xs:[]some _
+  xs
+
+fn seq v line
+  err "line {line}: expected a list, found `{as_text v}`"
+
+fn edge xs i
+  found = xs[i]
+  if (found == none) (missing "[{i - 1}]") found
+
+fn pieces_of s pat
+  text/split s pat
+
+fn appended xs more:[]some
+  text/concat xs more
+
+fn appended xs more
+  push xs more
+
+fn grouped m k x
+  put m k (push (listed m[k]) x)
+
+fn matches? v want
+  same? v want
+
+fn as_int n:int
+  n
+
+fn as_int v
+  text/to_int (text/trim (as_text v))
+
+# A dotted attribute path into a value: `extra.order`.
+fn attr_path v ""
+  v
+
+fn attr_path v path
+  steps = text/split path "."
+  list/fold steps v (acc k -> attr_of acc k)
+
+# Sorting by an attribute, stable, by merging. Values of one kind compare
+# as themselves; anything else compares by its text.
+fn sorted_by xs key
+  pairs = list/to_list (list/map xs (x -> sort_pair x (attr_path x key)))
+  sorted = merged_sort pairs (length pairs)
+  list/to_list (list/map sorted (k -> k.item))
+
+fn merged_sort xs n
+  return xs if n < 2
+  half = n / 2
+  left = merged_sort (text/slice xs 1 half) half
+  right = merged_sort (text/slice xs (half + 1) n) (n - half)
+  merge_runs left right 1 1 []
+
+fn merge_runs left right i j acc
+  a = left[i]
+  b = right[j]
+  return text/concat acc (drop_keys right j) if a == none
+  return text/concat acc (drop_keys left i) if b == none
+  merge_step left right i j acc (before? b.key a.key)
+
+fn merge_step left right i j acc false
+  merge_runs left right (i + 1) j (push acc left[i])
+
+fn merge_step left right i j acc true
+  merge_runs left right i (j + 1) (push acc right[j])
+
+fn drop_keys xs from
+  text/slice xs from (length xs)
+
+fn before? a:int b:int
+  a < b
+
+fn before? a:string b:string
+  a < b
+
+fn before? a b
+  number = number? a and number? b
+  return text/to_float a < text/to_float b if number
+  as_text a < as_text b
+
+fn url_encoded s
+  bytes = text/bytes s
+  text/join (list/to_list (list/map bytes url_byte)) ""
+
+fn url_byte b
+  c = text/from_code b
+  safe = b < 128 and (textkit/alnum? c or textkit/contains? "-_.~/" c)
+  if safe c "%{hex2 b}"
+
+fn hex2 b
+  digits = "0123456789ABCDEF"
+  hi = b / 16
+  lo = b % 16
+  "{text/slice digits (hi + 1) (hi + 1)}{text/slice digits (lo + 1) (lo + 1)}"
+
+# Enough JSON for a template: strings, numbers, booleans, lists and maps.
+fn json none
+  "null"
+
+fn json true
+  "true"
+
+fn json false
+  "false"
+
+fn json m:markup
+  json_string "{m}"
+
+fn json s:string
+  json_string s
+
+fn json xs:[]some
+  "[{text/join (list/to_list (list/map xs json)) ","}]"
+
+fn json m:map[string some]
+  fields = list/map (keys m) (k -> "{json_string k}:{json m[k]}")
+  "\{{text/join (list/to_list fields) ","}}"
+
+fn json (missing _)
+  "null"
+
+fn json v
+  "{v}"
+
+fn json_string s
+  body = list/to_list (list/map (text/chars s) json_char)
+  "\"{text/join body ""}\""
+
+fn json_char "\""
+  "\\\""
+
+fn json_char "\\"
+  "\\\\"
+
+fn json_char "\n"
+  "\\n"
+
+fn json_char "\t"
+  "\\t"
+
+fn json_char c
+  c
+
+# `is` tests.
+fn check_test "odd" n:int _ _
+  n % 2 == 1
+
+fn check_test "even" n:int _ _
+  n % 2 == 0
+
+fn check_test "divisibleby" n:int args line
+  d = args["1"]
+  return err "line {line}: `divisibleby` needs a number" if d == none or d == 0
+  n % d == 0
+
+fn check_test "defined" v _ _
+  not absent? v
+
+fn check_test "undefined" v _ _
+  absent? v
+
+fn check_test "string" v _ _
+  text? v
+
+fn check_test "number" v _ _
+  number? v
+
+fn check_test "iterable" v _ _
+  listy? v
+
+fn check_test "starting_with" v args _
+  textkit/starts_with? (as_text v) (as_text args["1"])
+
+fn check_test "ending_with" v args _
+  textkit/ends_with? (as_text v) (as_text args["1"])
+
+fn check_test "containing" v args _
+  needle = args["1"]
+  contains? v needle
+
+fn check_test name _ _ line
+  err "line {line}: unknown test `{name}`"
+
+fn listy? _:[]some
+  true
+
+fn listy? _:map[string some]
+  true
+
+fn listy? _
+  false

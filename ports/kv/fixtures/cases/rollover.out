@@ -1,0 +1,14 @@
+ok
+ok
+ok
+ok
+ok
+1.bitcask.data: 50 bytes, 2 records, 2 live, 0 bytes dead
+2.bitcask.data: 50 bytes, 2 records, 2 live, 0 bytes dead
+3.bitcask.data: 25 bytes, 1 record, 1 live, 0 bytes dead
+5 live keys
+1.bitcask.data
+2.bitcask.data
+3.bitcask.data
+0123456789
+[exit 0]

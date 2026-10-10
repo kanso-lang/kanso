@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}#{{ term.name }} | {{ super() }}{% endblock title %}
+{% block content %}
+<h1>Tagged “{{ term.name }}”</h1>
+<ul>
+{%- for page in term.pages %}
+  {{ m::post_item(page=page) }}
+{%- endfor %}
+</ul>
+{% endblock content %}

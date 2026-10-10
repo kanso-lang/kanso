@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    <url>
+        <loc>https://plain.example/</loc>
+    </url>
+    <url>
+        <loc>https://plain.example/hidden/kept/</loc>
+        <lastmod>2024-02-29T23:59:58</lastmod>
+    </url>
+    <url>
+        <loc>https://plain.example/notes/</loc>
+    </url>
+    <url>
+        <loc>https://plain.example/notes/zebra/</loc>
+        <lastmod>2023-11-05</lastmod>
+    </url>
+    <url>
+        <loc>https://plain.example/recipes/apple-pie/</loc>
+    </url>
+</urlset>

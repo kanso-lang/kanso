@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}{{ section.title }} | {{ super() }}{% endblock title %}
+{% block content %}
+<h1>{{ section.title }}</h1>
+{{ section.content | safe }}
+{%- if paginator %}
+<ul>
+{%- for page in paginator.pages %}
+  {{ m::post_item(page=page) }}
+{%- endfor %}
+</ul>
+<p class="pager">Page {{ paginator.current_index }} of {{ paginator.number_pagers }}
+{%- if paginator.previous %} <a href="{{ paginator.previous | safe }}">newer</a>{% endif %}
+{%- if paginator.next %} <a href="{{ paginator.next | safe }}">older</a>{% endif %}</p>
+{%- else %}
+<ul>
+{%- for page in section.pages %}
+  {{ m::post_item(page=page, show_date=false) }}
+{%- endfor %}
+</ul>
+{%- endif %}
+{% endblock content %}

@@ -1,0 +1,28 @@
+ok
+ok
+ok
+deleted b
+ok
+1.bitcask.data
+2.bitcask.data
+3.bitcask.data
+4.bitcask.data
+5.bitcask.data
+merged 5 files into 1: kept 2, dropped 3
+7.bitcask.data
+7.bitcask.hint
+7.bitcask.data (32 bytes)
+  @0 b175db866553f100000100000001 1700000000 put a = 3
+  @16 1d272ca76553f100000100000001 1700000000 put c = 4
+7.bitcask.hint (56 bytes)
+  a -> @0 size 16 stamp 1700000000
+  c -> @16 size 16 stamp 1700000000
+ 65 53 f1 00 00 01 00 00 00 10 00 00 00 00 00 00
+ 00 00 61 65 53 f1 00 00 01 00 00 00 10 00 00 00
+ 00 00 00 00 10 63 00 00 00 00 00 00 bb 0b ed 7c
+ 7f ff ff ff ff ff ff ff
+a
+c
+3
+not found: b
+[exit 1]

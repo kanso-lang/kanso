@@ -1,0 +1,59 @@
+# The three operations on a key. A put and a delete each append one record
+# to the active file and point the key directory at it; a get follows the
+# directory to the record and checks it before trusting it.
+import "std/list"
+import "std/os"
+
+# What a get answers for a key the store does not hold.
+pub type missing
+  key
+
+pub fn put_value st key value
+  write_record st key value
+
+pub fn delete_key st key
+  write_record st key tombstone
+
+fn write_record st key value
+  stamp = st.now
+  bs = encode_record stamp key value
+  room = rolled st (length bs)
+  where = located value room.active (record key room.size (length bs) stamp 0)
+  append_bytes (data_path room.dir room.active) bs
+    .> (_ -> grown (with_key room key where) (length bs))
+
+# A record that would carry the active file past its limit starts the next
+# file instead. A record larger than the limit still goes somewhere: into a
+# file of its own.
+fn rolled st n
+  return st if st.size == 0 or st.size + n <= st.limit
+  reshaped st (st.active + 1) st.keydir 0
+
+fn grown st n
+  reshaped st st.active st.keydir (st.size + n)
+
+pub fn has? st key
+  current? st st.keydir[key]
+
+pub fn get_value st key
+  where = st.keydir[key]
+  if (current? st where) (fetch st key where) (effect (missing key))
+
+fn fetch st key (loc file offset _ _)
+  os/read_bytes! (data_path st.dir file)
+    .> (bs -> checked key (decode_at (list/to_list bs) offset))
+
+fn fetch _ key _
+  effect (missing key)
+
+fn checked key (record found _ _ _ value)
+  if (found == key) value (err "the directory points {key} at {found}")
+
+fn checked _ (corrupt at)
+  err "checksum mismatch at offset {at}"
+
+fn checked _ (torn at)
+  err "record cut short at offset {at}"
+
+fn checked _ (finished at)
+  err "no record at offset {at}"

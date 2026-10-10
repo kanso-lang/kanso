@@ -1,0 +1,41 @@
+fn meta_of source
+  parts = split_front source
+  meta_or parts
+
+fn meta_or (err r)
+  { "error":r }
+
+fn meta_or (fronted _ meta)
+  meta
+
+fn body_of_front source
+  parts = split_front source
+  body_or parts
+
+fn body_or (err r)
+  "error: {r}"
+
+fn body_or (fronted body _)
+  body
+
+test_toml = meta_of "+++\ntitle = \"Hi\"\n+++\nbody" == { "title":"Hi" }
+
+test_toml_body = body_of_front "+++\ntitle = \"Hi\"\n+++\nbody" == "body"
+
+test_none = meta_of "just text" == {}
+
+test_unclosed =
+  want = { "error":"front matter opened with `+++` never closes" }
+  meta_of "+++\na = 1\n" == want
+
+test_yaml =
+  src = "---\ntitle: \"Hi\"\ntags: [a, b]\ndraft: false\n---\nx"
+  meta_of src == { "draft":false "tags":["a" "b"] "title":"Hi" }
+
+test_yaml_nested =
+  src = "---\ntaxonomies:\n  tags:\n    - x\n    - y\nweight: 3\n---\n"
+  meta_of src == { "taxonomies":{ "tags":["x" "y"] } "weight":3 }
+
+test_yaml_date =
+  meta = meta_of "---\ndate: 2024-01-02\n---\n"
+  meta == { "date":"2024-01-02" }

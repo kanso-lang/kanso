@@ -1,0 +1,378 @@
+import "../textkit"
+import "std/list"
+import "std/text"
+
+type bullets
+  items
+  loose
+  ordered
+  start
+
+type fence
+  body
+  lang
+
+type heading
+  id
+  level
+  words
+
+type more
+
+type para
+  words
+
+type quote
+  inner
+
+type raw_html
+  words
+
+type rule
+
+type table
+  aligns
+  head
+  rows
+
+# How a list is marked and numbered, decided by its first item.
+type listing
+  mark
+  ordered
+  start
+
+# What a block reader hands back: the block and the index of the first line
+# it did not take.
+type took
+  block
+  next
+
+# The block structure of a document, one line at a time. Lines are already
+# split; nothing here looks inside a line beyond deciding what it starts.
+fn parse_blocks ls
+  read_blocks ls 1 []
+
+fn read_blocks ls i acc
+  read_line ls i ls[i] acc
+
+fn read_line _ _ none acc
+  acc
+
+fn read_line ls i line acc
+  step = read_block ls i line (kind_of line)
+  read_more ls step acc
+
+fn read_more _ none acc
+  acc
+
+fn read_more ls (took none next) acc
+  read_blocks ls next acc
+
+fn read_more ls (took b next) acc
+  read_blocks ls next (push acc b)
+
+fn kind_of line
+  t = textkit/trim_start line
+  return "blank" if t == ""
+  return "more" if t == "<!-- more -->"
+  return "fence" if fence_mark line != ""
+  return "heading" if heading_level t > 0
+  return "rule" if rule? t
+  return "quote" if textkit/starts_with? t ">"
+  return "item" if item_width line > 0
+  return "table" if textkit/starts_with? t "|"
+  return "html" if html_start? t
+  "para"
+
+fn read_block _ i _ "blank"
+  took none (i + 1)
+
+fn read_block _ i _ "more"
+  took more (i + 1)
+
+fn read_block ls i line "fence"
+  mark = fence_mark line
+  lang = text/trim (text/slice line (length mark + 1) (length line))
+  fence_body ls (i + 1) mark lang []
+
+fn read_block _ i line "heading"
+  took (atx (text/trim line)) (i + 1)
+
+fn read_block _ i _ "rule"
+  took rule (i + 1)
+
+fn read_block ls i _ "quote"
+  quote_lines ls i []
+
+fn read_block ls i line "item"
+  ordered = ordered? line
+  start = if ordered (list_start line) 1
+  list_items ls i (listing (marker_of line) ordered start) []
+
+fn read_block ls i _ "table"
+  table_lines ls i []
+
+fn read_block ls i _ "html"
+  html_lines ls i []
+
+fn read_block ls i _ _
+  para_lines ls i []
+
+fn fence_mark none
+  ""
+
+fn fence_mark line
+  return "```" if textkit/starts_with? line "```"
+  return "~~~" if textkit/starts_with? line "~~~"
+  ""
+
+fn fence_body ls i mark lang acc
+  line = ls[i]
+  return took (fence (closed acc) lang) i if line == none
+  ends = textkit/starts_with? (text/trim line) mark
+  return took (fence (closed acc) lang) (i + 1) if ends
+  fence_body ls (i + 1) mark lang (push acc line)
+
+fn closed lines
+  if (length lines == 0) "" "{text/join lines "\n"}\n"
+
+fn heading_level t
+  hashes = count_lead (text/chars t) "#" 1
+  after = text/slice t (hashes + 1) (hashes + 1)
+  if (hashes < 7 and (after == " " or after == "")) hashes 0
+
+fn count_lead cs c p
+  if (cs[p] == c) (count_lead cs c (p + 1)) (p - 1)
+
+fn atx t
+  level = heading_level t
+  body = text/trim (strip_closing (text/slice t (level + 1) (length t)))
+  custom_id level body (textkit/index_of body "\{#" 1)
+
+fn custom_id level body none
+  heading "" level body
+
+fn custom_id level body at
+  close = textkit/ends_with? body "}"
+  id = text/slice body (at + 2) (length body - 1)
+  words = text/trim (text/slice body 1 (at - 1))
+  if close (heading id level words) (heading "" level body)
+
+fn strip_closing body
+  trimmed = textkit/trim_end body
+  cs = text/chars trimmed
+  n = count_tail cs "#" (length cs)
+  keep = length cs - n
+  cut = n > 0 and (keep == 0 or cs[keep] == " ")
+  if cut (text/slice trimmed 1 keep) trimmed
+
+fn count_tail cs c p
+  if (p > 0 and cs[p] == c) (count_tail cs c (p - 1)) (length cs - p)
+
+fn rule? t
+  cs = list/to_list (list/reject (text/chars t) (c -> c == " "))
+  first = cs[1]
+  same = list/all? cs (c -> c == first)
+  marked = first == "-" or first == "*" or first == "_"
+  length cs >= 3 and same and marked
+
+fn quote_lines ls i acc
+  line = ls[i]
+  return took (quote (parse_blocks acc)) i if line == none
+  t = textkit/trim_start line
+  return took (quote (parse_blocks acc)) i if not textkit/starts_with? t ">"
+  quote_lines ls (i + 1) (push acc (unquote t))
+
+fn unquote t
+  rest = text/slice t 2 (length t)
+  if (textkit/starts_with? rest " ") (text/slice rest 2 (length rest)) rest
+
+# A line that opens with a tag: `<` and a name of letters and digits, then
+# a space, `>` or `/`. `<https://...>` is an autolink and does not count.
+fn html_start? t
+  cs = text/chars t
+  name = count_name cs 2
+  after = cs[name + 2]
+  closes = after == " " or after == ">" or after == "/" or after == none
+  cs[1] == "<" and textkit/letter? cs[2] and closes
+
+fn count_name cs p
+  if (textkit/alnum? cs[p]) (count_name cs (p + 1) + 1) 0
+
+fn html_lines ls i acc
+  line = ls[i]
+  stop = line == none or text/trim line == ""
+  return took (raw_html (text/join acc "\n")) i if stop
+  html_lines ls (i + 1) (push acc line)
+
+# Paragraph lines run until a blank line or a line that starts another
+# block. A paragraph followed by a line of `=` or `-` is a heading.
+fn para_lines ls i acc
+  line = ls[i]
+  return took (para (text/join acc "\n")) i if line == none
+  t = text/trim line
+  return setext acc 1 i if length acc > 0 and underline? t "="
+  return setext acc 2 i if length acc > 0 and underline? t "-"
+  return took (para (text/join acc "\n")) i if interrupts? acc line
+  para_lines ls (i + 1) (push acc (textkit/trim_start line))
+
+fn interrupts? acc line
+  kind = kind_of line
+  length acc > 0 and kind != "para" and kind != "table"
+
+fn underline? t c
+  length t > 0 and list/all? (text/chars t) (x -> x == c)
+
+fn setext acc level i
+  words = text/trim (text/join acc " ")
+  took (heading "" level words) (i + 1)
+
+# The width of a list marker and the space after it, or 0 when the line
+# does not start an item.
+fn item_width line
+  cs = text/chars line
+  lead = count_lead cs " " 1
+  return 0 if lead > 3
+  marker_width cs (lead + 1) lead
+
+fn marker_width cs p lead
+  c = cs[p]
+  bullet = c == "-" or c == "*" or c == "+"
+  return spaced cs (p + 1) (lead + 1) if bullet
+  digits = count_digits cs p
+  closer = cs[p + digits]
+  number = digits > 0 and (closer == "." or closer == ")")
+  if number (spaced cs (p + digits + 1) (lead + digits + 1)) 0
+
+fn count_digits cs p
+  if (textkit/digit? cs[p]) (count_digits cs (p + 1) + 1) 0
+
+fn spaced cs p width
+  c = cs[p]
+  return width + 1 if c == " "
+  if (c == none) width 0
+
+fn ordered? line
+  t = textkit/trim_start line
+  textkit/digit? (text/slice t 1 1)
+
+fn list_start line
+  t = textkit/trim_start line
+  digits = count_digits (text/chars t) 1
+  text/to_int (text/slice t 1 digits)
+
+# Items of one list. Each item's lines are dedented by its marker width and
+# parsed again as blocks, which is how nested lists come out.
+fn list_items ls i shape acc
+  line = ls[i]
+  width = item_width line
+  first = text/slice line (width + 1) (length line)
+  item = item_lines ls (i + 1) width [first]
+  more_items ls item shape acc
+
+# Items continue while the next line has the same marker; a blank line
+# between two items keeps the list going and makes it loose.
+fn more_items ls (took lines next) shape acc
+  line = ls[next]
+  gap = line != none and text/trim line == ""
+  spaced_on = push acc (push lines "")
+  resumes = gap and same_item? ls[next + 1] shape
+  return list_items ls (next + 1) shape spaced_on if resumes
+  grown = push acc lines
+  return list_items ls next shape grown if same_item? line shape
+  finish_list shape grown next
+
+fn same_item? none _
+  false
+
+fn same_item? line shape
+  item_width line > 0 and marker_of line == shape.mark
+
+# A bullet's character, or an ordered item's closing `.` or `)`.
+fn marker_of line
+  t = textkit/trim_start line
+  first = text/slice t 1 1
+  return first if not textkit/digit? first
+  digits = count_digits (text/chars t) 1
+  text/slice t (digits + 1) (digits + 1)
+
+fn finish_list (listing _ ordered start) items next
+  loose = list/any? items (lines -> gapped? lines)
+  parsed = list/to_list (list/map items parse_blocks)
+  took (bullets parsed loose ordered start) next
+
+fn gapped? lines
+  list/any? lines (l -> text/trim l == "")
+
+fn item_lines ls i width acc
+  line = ls[i]
+  return took acc i if line == none
+  t = text/trim line
+  return item_gap ls i width acc if t == ""
+  indent = length line - length (textkit/trim_start line)
+  inside = indent >= width or indent >= 2
+  return item_lines ls (i + 1) width (push acc (dedent line width)) if inside
+  return took acc i if kind_of line != "para"
+  item_lines ls (i + 1) width (push acc t)
+
+fn item_gap ls i width acc
+  after = ls[i + 1]
+  return took acc i if after == none
+  indent = length after - length (textkit/trim_start after)
+  stays = text/trim after != "" and (indent >= width or indent >= 2)
+  if stays (item_lines ls (i + 1) width (push acc "")) (took acc i)
+
+fn dedent line width
+  indent = length line - length (textkit/trim_start line)
+  cut = if (indent < width) indent width
+  text/slice line (cut + 1) (length line)
+
+# GitHub tables: a header row, a delimiter row of dashes, then body rows.
+fn table_lines ls i acc
+  line = ls[i]
+  stop = line == none or not textkit/starts_with? (text/trim line) "|"
+  return as_table acc i if stop
+  table_lines ls (i + 1) (push acc (text/trim line))
+
+fn as_table rows i
+  delim = rows[2]
+  is_table = length rows >= 2 and delimiter? delim
+  return took (para (text/join rows "\n")) i if not is_table
+  aligns = list/to_list (list/map (cells delim) align_of)
+  head = cells rows[1]
+  width = length head
+  body = text/slice rows 3 (length rows)
+    . list/map (r -> pad_row (cells r) width)
+    . list/to_list
+  took (table aligns head body) i
+
+fn delimiter? none
+  false
+
+fn delimiter? row
+  inner = list/to_list (list/reject (text/chars row) (c -> c == " "))
+  list/all? inner (c -> c == "|" or c == "-" or c == ":")
+
+# A body row has exactly as many cells as the header: extra ones go and
+# missing ones are empty.
+fn pad_row row width
+  n = length row
+  return textkit/clamped row 1 width if n >= width
+  pad_row (push row "") width
+
+fn cells none
+  []
+
+fn cells row
+  inner = text/slice row 2 (length row - trailing_bar row)
+  list/to_list (list/map (text/split inner "|") text/trim)
+
+fn trailing_bar row
+  if (textkit/ends_with? row "|" and length row > 1) 1 0
+
+fn align_of spec
+  left = textkit/starts_with? spec ":"
+  right = textkit/ends_with? spec ":"
+  return "center" if left and right
+  return "left" if left
+  if right "right" ""
