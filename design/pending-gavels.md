@@ -52,40 +52,35 @@ went to the log rather than here.
 
 ## Open, not blocking
 
-### Does `build` still earn its place beside `tie`?
+### May a list built from data hold `tie` references?
 
-**Cited:** the live log's "gavel: a data-sized cycle is tied with `list/tie`,
-and `list/tie!` insists" (2026-10-04), which leaves this open; `docs/book/ch03.html`,
-whose "two records that point at each other" teaches `build` as the way to make
-a cycle; `docs/book/appa.html`'s `error[build]` family; the build-hole gavel of
-2026-09-16; and the mem vein's `build_cycle.kso`. Searched the log, the archive
-and the ledger for any ruling on retiring `build`: none.
+**Cited:** the live log's "gavel: a field may hold a list of `tie` references"
+(2026-10-10), which admits a list or map literal and whose Owes asks the graph
+fixture to drop its chain of records; "a `tie` node holds its references in a
+list", which built it; `tests/golden/micro/a_graph_tied_from_a_map_of_edges`.
+Searched the log, the archive, the ledger and the tests for a ruling on a list
+of references a call builds: none.
 
-**The question.** `tie` makes any cycle `build` makes. With literal data the
-ada-and-bob ring is
+**The question.** The graph fixture reads each town's roads from a map, so the
+number of references a node holds is data. A literal cannot hold a number of
+elements decided at run time, so under the ruling's text the fixture still
+needs its chain of `road` records. The natural spelling is
 
-    pair = list/tie! ["ada" "bob"] (n ref -> person n (ref (other n)))
+    town name (list/map (roads_of edges[name]) ref)
 
-and the compiler can see the whole graph, so a broken link is refused at check
-the way an unfilled hole is. If that holds, `build` has nothing left that only
-it can do, and kanso has two ways to write a cycle. Clay, 2026-10-04: "it would
-seem that you don't need build anymore because you can use tie with inline data
-structures... the only issue is then I'm not sure if you can get the static
-analysis to tell you at compile time if there's a problem. in that case build
-would be useful."
+which hands `ref` to `list/map`. The check refuses that today, because what a
+function from std does with `ref` is out of its sight. `list/map` stores each
+answer and reads none of them, so the same argument that admitted the literal
+would admit this call.
 
-1. **Retire `build`** once `tie` is built and its compile-time check on literal
-   data is pinned. Chapter 3 teaches the cycle with `tie`, the `error[build]`
-   family and the hole `_` leave the language, and the build goldens move to
-   `tie`. One way to write a cycle.
-2. **Keep both.** `build` for a fixed handful of nodes written by hand, `tie`
-   for nodes counted from data. Two spellings, each with a case the other
-   handles less directly.
+1. **Admit `list/map xs ref`, and `list/map xs (k -> ref k)`, written as a
+   field.** The check names `list/map` as a function that stores what its
+   function answers, and the graph fixture drops its chain.
+2. **Leave it at literals.** A node whose links come from data keeps the chain.
 
-**Recommendation: 1, decided after `tie` lands.** The only argument for keeping
-`build` is earlier error detection, and with literal data `tie` gives the same
-detection. The ruling should wait for the build so it rests on the check
-working rather than on the expectation that it will.
+**Recommendation: 1.** A graph read from data is the case `tie` exists for,
+and `list/map` is the one call that builds such a list without reading what it
+holds.
 
 ## Stale — the July campaign's unclosed letters (GAVELS.md, retired here)
 

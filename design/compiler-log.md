@@ -24613,6 +24613,578 @@ to 1,129,588,845, 147 instructions. Which of the four fixes moved which binary
 is not isolated here. Welfare falls, and the floor follows under the
 2026-09-13 rule.
 
+## 2026-10-10 — two native crashes the ports found in the arena
+
+The toml port grew a list by calling a helper that pushed onto it, and the
+native binary died at sixty-four elements, dev and release alike. Sixty-three
+worked on every engine, and so did pushing directly in the tail call.
+
+The pop that hands a loop's result back to its caller asks whether the
+result's interior survives the rewind. For a list of `K_ISV_MIN` (64) or more
+elements it asks a memo table, `k_isv_list`, keyed against the outermost
+beat's mark, and the table is opened when that mark's position differs from
+the one it last saw. Both start as NULL. A program whose outermost beat began
+before the arena held anything compares NULL with NULL, never opens the
+table, and the first lookup grows zero slots to zero and probes with a mask
+of all ones. gdb put the fault on that probe. A list grown through a helper
+reaches the branch because the carry repairs the list's interior every
+iteration rather than copying it, so the list header is old and the pop asks
+the memo about it. The table now opens on its first use as well as on a new
+mark.
+
+The fault needs an entry file, because an entry's statements are what leave
+the arena empty when the first beat begins; the same functions run from a
+`play` did not crash. `tests/golden/entryfile/a_list_pushed_through_a_helper_past_sixty_four`
+builds a 64-element list first and a 1,000-element one after it, and
+`tests/entry_file.rs` checks native against the interpreter. Removing the
+new condition turns the spec red on the crash itself.
+
+The first suspect was the arena's free shelf. The carry's copy of a list has
+room for exactly its length, so every push after a carry grows the list, and
+the outgrown storage is donated to the shelf when its capacity is a power of
+two. Tracing every grow showed that storage was ordinary arena memory, and at
+64 elements the last grow is from a capacity of 63, which the shelf does not
+keep. That change was reverted.
+
+The port's other native report, an arm that ran with an err when its sibling
+had `_` in the same position, is the lazy-err check from the entry before
+this one: `grown` is a thunk that forces to the err, and with that change the
+binary stops at `refused 5` as the interpreter does.
+
+The diff port's native binary died on a three-step effect chain after two
+file reads, sometimes as "ran out of stack" and sometimes as `free(): invalid
+pointer`. valgrind put the bad free in `k_beat_rewind_slow`, on an address
+13,328 bytes inside an arena block, and a trace of the view registry showed
+the path. Myers' search carries its two frontier maps through a loop and
+reads them, which builds each map a sorted view. The headers live in the
+loop's carry buffer, which is outside the arena, so `k_born_this_beat` calls
+them new and the views register at the loop's depth. When the loop's beat
+popped it copied its result out of the carry buffer and then migrated every
+registration to the enclosing depth, the same as it would for a region it
+keeps. A later loop at the same depth overwrote the carry buffer, and when
+the enclosing depth finally rewound it flushed a header that held other
+data. A map at the same address was registered again at the loop's depth
+before the end, which is what the trace caught.
+
+On a pop that copies out of the carry pair, entries whose header lies in
+that depth's carry buffers are now released then and there, while the
+headers are still intact, and the rest migrate as before. The permanent-
+storage registry has the same shape, since it registers a field inside a
+header, and gets the same treatment. The port's own reduction, a 217-line
+module and an eight-line entry, is the fixture:
+`tests/golden/entryfile/a_view_left_in_a_carry_buffer`, run from a scratch
+directory because it writes two files. Removing the release turns the spec
+red on the crash. The diff port's `check.sh` passes all 54 fixtures on the
+three engines with this compiler. Three smaller programs that carry and read
+maps did not reproduce the crash, because their puts happened in place and
+left the maps in the arena.
+
+The two fixes cost a little everywhere the runtime is measured, most of it in
+the second registry pass a carried pop now makes. On CI's rows:
+
+- `text` grows 1,472 bytes a binary, to 4,609,566 in all.
+- `work_deepbench` rises 103,990 to 370,195,223 and `work_runbench` 14,986 to
+  1,129,603,831. `work_encodebench` lands on 2,384,338,163,
+  `work_oneshot` on 13,027,293, `work_widebench` on 28,094,348,
+  `work_indexbench` on 2,458,507 and `work_scanbench` on 281,715, each within
+  a few hundred instructions of main.
+- `codegen_instructions_dev` rises to 118,867,296 and
+  `codegen_instructions_release` to 453,787,838.
+- `browser_run_instructions` rises to 33,519,546.
+
+Welfare falls from 90.25811251 to 90.25801113, and the floor follows under the
+2026-09-13 rule: two programs that crashed natively now run.
+
+## 2026-10-10 — gavel: a field may hold a list of `tie` references
+
+Clay, on whether a node built by `list/tie` may hold its links as a list: "of
+course field can be an array". The 2026-10-04 gavel "a data-sized cycle is tied
+with `list/tie`, and `list/tie!` insists" says a reference may be stored in a
+constructor's field and nothing else. The build read that strictly: a list
+literal is not a field, so `node id [(ref "b") (ref "c")]` was refused, and the
+graph fixture held each node's edges as a chain of one-reference records ending
+in a `no_road` marker.
+
+**The clarification.** A field may hold any value, and a list of references in
+a field is storage. The 2026-10-04 rule was about reading, and a list that
+holds references reads none of them. A list or map literal whose elements are
+references, written as a constructor's argument, is admitted. Everything the
+rule refused stays refused: during making, nothing may index, measure, walk or
+pass that list anywhere, because each of those reads through it.
+
+Owes: the check admits a collection literal of references as a field's value,
+with an error golden for a read of such a list in the maker; the graph fixture
+holds each node's neighbours as a list and drops the chain of records; ch03 or
+wherever `tie` is taught shows the list form.
+
+## 2026-10-10 — a directory called lib is an ordinary directory
+
+The beat analysis keeps an imported library's loops out of the carry tier,
+because a shared driver threads its caller's invariant source through the loop
+and carrying it would copy an unbounded value at every rewind. It recognised a
+library by its declaration's file name, which had to begin `std/` or `lib/`.
+Shipped modules are filed as `std/<module>/<file>`. Nothing shipped begins
+`lib/`, and every user directory called `lib` does, so a package kept in one
+compiled to a program that never reclaimed a block. The 2026-08-31 entries
+found this, measured it at five times the peak, and pinned it in
+`tests/a_program_is_not_its_directory.rs` with the instruction to delete the
+assertion when the two directories agreed.
+
+The `lib/` arm is gone and the `std/` arm stays. The arm had one user in the
+tree: the json beat unit test compiled `lib/json` as a root, and the arm made
+that root look like an installed module. The test now reads the library
+through `import "std/json"`, which is how a program meets it, and it still goes
+red when the `std/` arm is removed: `json/array_open` and `json/obj_open`
+become beats. The spec now asserts that `lib/app` and `elsewhere/app` both
+peak at 1,048,576, and with the arm put back the `lib/` side reads 5,242,880.
+
+I found it while building the fixtures for the lap carry. The evaluator
+fixture, imported as `./lib/fx`, held 4 MiB and never rewound.
+
+The tab compiler reads 661 fewer instructions, `browser_compile_instructions`
+388,181,803. CI moved one other row: `emit_instructions` falls 37, to
+7,062,299. Both codegen tiers held. The ratchet's mutation for this filter
+patched the old two-arm line, so it now patches the one-arm line.
+
+## 2026-10-10 — a constant lives in storage the carry knows is permanent
+
+A map built before a carrying loop came out of the loop with keys the next
+round's rewind freed. `tests/golden/micro/a_map_kept_across_a_carried_loop_keeps_its_keys`
+is the shape: `spin` carries a map made by its caller, an outer loop calls
+`spin` four times, and native printed `<none> <none>` where the interpreter
+prints both values. Main has the defect; it does not depend on the lap carry.
+
+The keys were string literals. The runtime builds a literal once, in malloc'd
+storage, and hands the same string out for the rest of the run, and does the
+same for one-character strings, for marker records with no fields and for
+closures over nothing. None of that storage lies in an arena block, and the
+copy walk answers "does this survive the rewind" for an outside pointer by
+asking whether it is a short token, a tenure block or a frozen CAF. A literal
+is none of those, so the walk took it for something it had to rescue, which
+wasted a copy at every stage and did damage in one place. When a surviving
+node points at something that does not survive, the walk leaves the node
+where it is, copies what it points at, and settles the copy in the
+current loop's region. The map's keys moved into `spin`'s region, the map
+stayed in its caller's, and the outer loop's next rewind freed the keys under
+it.
+
+`k_alloc_const` now hands those constants out of chunks registered with the
+frozen ranges, so the walk counts them as surviving, and the walk stops at
+a node in one of those chunks without asking about its interior, since nothing
+writes to a constant after it is built. The one-character and wide caches
+keep their bytes inline, where they had a second `malloc`. A frozen CAF is
+left out of the short stop: a proven in-place push can move a frozen list's
+items out of frozen storage, and pendbench does exactly that, so a frozen list
+still gets the repair it needs. Bignums moved to permanent storage stay on
+`k_alloc_perm`, because they are the run's data and every outside pointer is
+checked against the frozen ranges.
+
+This is also why grammar_check died in `k_deep_copy` on the lap carry branch
+with the growth lookthrough taken out, the crash the 2026-10-10 lap carry
+entry left unexplained. The capture loop carried `caps`, a map from the
+grammar file whose keys `"1"` to `"4"` come from the one-character cache.
+The first stage repaired the map by moving its keys into the loop's region,
+the region was reclaimed, and the next stage copied a key whose header the
+arena had reused. With constants registered, that build of grammar_check
+passes with the lookthrough removed. The lookthrough stays, because it
+refuses a cluster for what growth would cost.
+
+Every runtime counter that moved fell. `evac_allocs` and `evac_bytes` fall on
+every benchmark, the run program's by 14,328 copies and 229,376 bytes, and
+`carry_dedup` goes to zero wherever it was counting the same literal reached
+twice. The cohort pin in `tests/cohort.rs` falls 96 bytes, to 800,672, because
+three of the constants it used to copy are no longer copied.
+
+The chunks start at 4 KiB and double up to 64 KiB. The first build opened one
+64 KiB chunk, and CI showed the browser run taking one more 64 KiB page for it,
+1,310,720 to 1,376,256 bytes. Most programs hold a few dozen constants: the
+run program has seventy, in one chunk. With the small first chunk the browser
+peak stays at 1,310,720 and its run falls 26,483 instructions.
+
+The fix costs welfare 0.0065, which the floor gives up because the defect was
+a miscompile. `runbench` rises 1,647,148 instructions, 0.15%. The copy walk
+itself got cheaper by about 2.8 million: `k_copy_size`, `k_deep_copy`,
+`k_copy_map_put` and `k_copy_alloc` together. What rose is `realloc`, under
+`k_buf_perm_regrow`. That function makes the same 3,872 calls on both sides,
+and they cost 561,440 instructions before and 3,248,608 after, because realloc
+now copies buffers that it used to extend in place. The run makes seventy fewer
+small mallocs, which changes where glibc puts each accumulator's buffer. The
+location of the cost is measured. Why glibc places the buffers differently is
+not established. Opening the constant chunk before anything else is allocated
+left the count unchanged to the instruction, so the chunk does not sit in the
+way. `encodebench` and `livebench` fall about 375,000 each with the smaller
+chunk, and `deepbench` falls 4.4 million. Release codegen falls 80,700
+instructions and dev codegen rises 29,466; each benchmark's text grows 192
+bytes.
+
+By key: `work_runbench` lands on 1,131,250,979, `work_oneshot` on 13,176,487,
+`work_jsonbench` on 860,548,891, `work_escapebench` on 39,045,280 and
+`work_widebench` on 28,094,541. `codegen_instructions_dev` lands on 118,896,762
+and `text` on 4,612,254 across the fourteen binaries. `carry_dedup` falls to 0
+wherever it counted: `run_carry_dedup` from 71, `encode_carry_dedup`,
+`oneshot_carry_dedup`, `wide_carry_dedup`, `digest_carry_dedup`,
+`read_carry_dedup` and `live_carry_dedup` from 3, and in the lazy tier
+`a_maps_two_columns_are_one_allocation_carry_dedup` from 1,998 and
+`a_nested_map_gives_back_its_entries_carry_dedup` from 29,990. A dedup is a
+copy the walk found it had already made; constants are no longer copied, so
+there is nothing to find twice.
+
+## 2026-10-10 — a node an inner pop repairs stays on the outer loop's list
+
+The lox port's `tests/functions.lox` crashed natively once kanso#1824 let its
+evaluator loops carry. The cause is older than that branch. A record built
+before the evaluator's loop held a string in the outer loop's tenure block.
+An inner loop returned a value that reached the record, and its pop copied
+the result out of its carry pair. The pop's walk counts nothing outside the
+arena as a survivor, so it copied the string to the arena's frontier and
+repaired the record in place to point at the copy. The frontier was in the
+evaluator's lap. At the evaluator's next stage the walk reached the record
+through an older node whose own fields all survived, stopped there, and
+rewound the lap with the copy in it. The record then pointed at freed memory.
+
+Main's compiler crashes on the reduction too, so the bug did not need
+kanso#1824. `tests/golden/mem/a_node_repaired_by_an_inner_pop_outlives_the_outer_stage`
+is three nested loops and a box built before the middle one. Built against
+main's runtime it segfaults, and its stdout golden fails.
+
+The pop now keeps the nodes it repaired that lie below the enclosing mark, on
+a list beside `k_repaired`. Each stage walks the entries below its own mark as
+extra roots before it rewinds, sized with the carried slots, so a node that
+points above the mark is repaired into the carry and settled back under the
+raised mark like any other. That makes the node safe for the depth that
+staged and not for the one outside it, so an entry below the outer mark stays
+on the list, and so does a node the stage itself repaired below the outer
+mark. A rewind frees what lies above its mark, and the list must not keep an
+address that has been handed out again. While the list holds anything, a bit
+in `k_buf_dirty` sends every rewind to the slow path, and the slow path drops
+the entries above its mark, and a rewind to the outermost mark clears the list,
+since no stage outside it will revisit anything. The fast path reads nothing
+new.
+
+I first tried narrowing the pop's walk instead: an enclosing depth's tenure
+outlives the pop, so the pop could leave a pointer into it alone. That fixed
+`functions.lox` and broke `binary_trees.lox`. The lox interpreter writes into
+tenured environment maps in place, so an enclosing tenure node can hold a
+pointer into the inner carry pair, and the copy-out has to see it.
+
+With the fix, main's compiler passes all 28 lox fixtures on the interpreter,
+a dev build and a release build. On a tree carrying kanso#1827 and kanso#1824
+as well, the same 28 pass under the lap rule and with every edge staging. The
+twelve cost veins and the mem tier are unchanged apart from the new fixture's
+own file: no program in the corpus repairs a node below an enclosing mark.
+
+The list costs something when it is empty. `k_beat_iter_carry` now asks its
+depth for an outer mark and walks the nodes it repaired against it, and the
+pop does the same, at about fourteen instructions a call whether anything is
+pushed or not. deepbench stages 52,310 times and pops 52,003 times, so it pays
+the most, 0.40%. The runtime's text is 2,208 bytes larger in every binary,
+which the `text` total and both codegen rows carry. CI's rows, old to new:
+
+    work_deepbench               365,792,692 -> 367,269,411
+    work_basket                   32,375,114 ->  32,505,156
+    work_runbench              1,131,250,979 -> 1,131,470,937
+    work_pendbench               190,390,436 -> 190,396,306
+    work_livebench             1,472,859,260 -> 1,472,861,300
+    work_jsonbench               860,548,891 -> 860,549,545
+    work_encodebench           2,383,861,305 -> 2,383,861,896
+    work_digestbench               5,560,569 ->   5,561,143
+    work_indexbench                2,456,650 ->   2,457,185
+    work_scanbench                   268,468 ->     268,793
+    work_widebench                28,094,541 ->  28,094,810
+    work_readbench                 4,577,050 ->   4,577,104
+    work_oneshot                  13,176,487 ->  13,176,528
+    work_escapebench              39,045,280 ->  39,045,300
+    text                           4,612,254 ->   4,643,166
+    codegen_instructions_dev     118,896,762 -> 118,918,430
+    codegen_instructions_release 453,707,138 -> 453,994,118
+    browser_run_instructions      33,493,063 ->  33,507,353
+
+Welfare fell by less than a hundredth, and the floor moves down with it under
+the rule for a change that makes the language do what it says: the program
+crashed.
+
+## 2026-10-10 — a `tie` node holds its references in a list
+
+Built the gavel "a field may hold a list of `tie` references". The maker check
+in `src/check.rs` walked a constructor's arguments with a flag saying each one
+was a field, and handed every other expression's children down with the flag
+cleared. A list literal was one of those other expressions, so `ref` called
+inside `town "ash" [(ref "birch") (ref "cedar")]` was refused as a read. A list
+literal or map literal that is itself a field now passes the flag to its
+elements, and for a map to its values only, since a key is read to place its
+pair. Anything else that holds the list is refused as before: binding it to a
+name first, measuring it, indexing it or handing it to a function.
+
+Neither engine needed a change. The interpreter's `resolve_tied` and native's
+`k_tie_resolve` already walk lists and maps when they swap each cell for its
+node, because a record field's value was always allowed to be any value once
+the tie returned.
+
+The diagnostic now says the reference goes straight into a field "alone or in a
+list or map written there", and the four tie goldens that quote it moved with
+it. `tests/golden/micro/a_graph_holds_its_roads_in_a_list` keeps each town's
+roads as a list and a map of named roads beside it, and prints the same text on
+the interpreter, a dev build and a release build; the compiler on main refuses
+it at `town "ash" [(ref "birch") ...]`.
+`tests/golden/errors/a_tie_maker_measures_a_list_of_references` binds the list
+to a name and measures it, and is refused at both references.
+
+`a_graph_tied_from_a_map_of_edges` keeps its chain of `road` records. Its edges
+come from a map, so its list of references would be built by a call, `list/map
+names ref` or a fold, and a reference handed to a function from std is out of
+the check's sight. The gavel's text admits a literal, and the ruling's own
+Owes asked for this fixture to drop the chain, which it cannot do under that
+text. That question has gone to the ledger as "May a list built from data hold
+`tie` references?". `docs/compiler.html` §193 says which form each case takes.
+
+The book teaches cyclic structures with `build` and does not mention `tie`, so
+the place `tie` is taught is its own comment in `lib/list/list.kso`. That
+comment now names the list form and shows `node id [(ref "b") (ref "c")]`.
+
+CI's rows for this branch, with main's repair list merged in. The check walks
+two more expression kinds in a constructor's arguments, and `lib/list/list.kso`
+carries two more comment lines, which every compile of the library lexes:
+
+    compile_instructions             25,832,340 ->  25,832,534
+    entry_instructions               85,435,525 ->  85,436,634
+    library_instructions             85,988,213 ->  85,988,060
+    browser_compile_instructions    388,181,803 -> 388,192,201
+
+The ruling is a part of the language, so the floor follows whatever these cost.
+
+## 2026-10-10 — a constructor handed over as a function builds
+
+The lox port found that a record constructor passed where a function is wanted
+checks and runs on the interpreter and stops the native build with "`pair` as
+a bare value is not yet supported" (lox F20). The port wrapped each one in a
+lambda, `(l o r -> logical l o r)`, which is what native now does by itself.
+When codegen lowers a name that is not a function group, a builtin or one of
+the words with a value of its own, and the name is a record type with one to
+four fields, it lowers the lambda that calls the constructor. Four is the
+native lambda's limit, so a record of five or more fields handed over is still
+refused at build with the same message.
+
+`tests/golden/micro/a_constructor_handed_over_as_a_function` hands a
+one-field constructor to `list/map`, a two-field one to a function that calls
+it and a three-field one to another, and prints the same line on the
+interpreter, a dev build and a release build. The compiler on main refuses to
+build it. The ratchet row "a constructor refused as a value" puts the refusal
+back and the micro corpus goes red.
+
+`tests/a_type_name_as_a_bare_value.rs` had pinned the refusal for a
+two-field record printed bare. It now pins that both engines print `<fn>`.
+
+CI's rows for this branch, with main's repair list merged in. Two rows moved,
+both by the size of the new lowering in the emitter:
+
+    emit_instructions                7,062,299 ->   7,062,491
+    browser_compile_instructions   388,181,803 -> 388,266,184
+
+Welfare falls from 90.2505 to 90.2504, and the floor follows it down under the
+rule for a change that makes the language do what it says: a program that
+checks and runs on the interpreter now builds natively.
+
+The tie-list ruling landed first. Carried over it, the browser compile row
+lands at 388,276,582, the constructor's 84,381 on top of main's 388,192,201,
+and the floor at 90.25039901483147.
+
+
+## 2026-10-10 — two values a carry handed back while they were still held
+
+The lap carry (kanso#1827) let the toml port parse a comment holding a
+control character and then lose the error it meant to report. The program
+died with an unhandled err whose record had no type, born in `toml/fail`.
+The interpreter printed `toml/toml_error 10 1 "control character 7 in
+comment" "a = 1 # xy"`.
+
+The bug is older than the lap carry. `end_at` reads the byte after a `#`,
+calls `skip_comment`, and hands what comes back to `newline_at` in tail
+position. The two form a loop that rewinds the arena on the edge back into
+`newline_at`. The cursor crosses that rewind uncopied, because inference
+counts a slot that holds an int or an err as one that may cross a rewind
+the way a number does. On the lap that meets the control character,
+`skip_comment` answers an err wrapping a `parse_failure` record, and both
+were built in the lap's own storage. The rewind handed that storage back,
+`newline_at` answered the err by adding a hop to it, and the hop was
+allocated over the record. A hardware watchpoint on the record's type word
+caught `k_err_hop` writing it. Main has the same hole: the fixture below
+dies on main's compiler in the same way. toml reached it only once #1827
+admitted its loop, which main refused because the loop's carried byte may
+be bytes.
+
+The carry path already had the answer. `k_beat_iter_carry` returns without
+rewinding when a carried slot holds an err, since the callee only passes
+the failure on. A plain rewind asked nothing of the arguments it lets
+cross. Codegen now tests each argument whose set includes a failure, and
+skips the rewind when one of them is an err. That applies on a carrying
+edge too, for the arguments the carry does not take. The test is a tag
+compare and a branch at each rewinding edge where such an argument exists.
+
+`tests/golden/micro/an_err_built_in_a_lap_outlives_its_rewind.kso` is the
+toml loop cut down to three functions. Main's compiler prints `unhandled err
+... record born in f/skip`. With the test in place it prints `failed at 3:
+stopped` on both engines and in a release build.
+
+The toml port's `many-tables` document showed the second fault once the
+first was fixed: the last header's path came back as the path of a key read
+two lines later. A carry stage copies its slots in order, and the first time
+the walk meets a node that has already been through one copy it switches to
+tenured storage for the rest of the stage. A node copied into the carry pair
+before that switch could then be shared by a node tenured after it, through
+the map that makes a node shared twice copy once. The tenured parent
+survived the next stage, the stage's walk stopped there because everything
+the parent held directly survived too, and the stage after that wrote over
+the pair the shared node lay in. Main has this one as well. When the map
+answers with a copy in the pair and the walk is tenuring, the node is now
+copied again into tenure and the map points at that copy from then on.
+
+`tests/golden/micro/a_tenured_node_shares_nothing_with_the_carry.kso` builds
+the shape directly: a loop carrying a fresh list, last lap's tree, and a new
+tree node wrapping the list, with enough garbage per lap that every lap
+stages. Main's compiler prints `[200]` in three places where `[400]`, `[600]`
+and `[800]` belong.
+
+Neither fix moves an allocation counter. The test before a rewind adds a
+compare and a branch at each rewinding edge with an argument that may be an
+err, which the emitted code shows: runbench gains 22 branches and 125 lines,
+the decoder 4 branches and 15 lines, and seven other benchmarks between 2 and
+13 branches.
+
+CI's rows, measured with main's constructor change merged in. The code the
+compiler writes grows with the new tests: emitted_branches lands on 1,105 and
+emitted_lines on 10,070 for the decoder, emitted_other_branches on 16,143 and
+emitted_other_lines on 144,731 across the other benchmarks, and the machine
+code total, text, on 4,644,478 bytes, from 16 bytes more on scanbench to 368
+on runbench. The work rows move with the change, and which branch costs what
+has not been isolated: work_encodebench lands on 2,393,926,456, up 10,064,560
+or 0.42%; work_runbench on 1,131,539,079, up 68,142; work_digestbench on
+5,597,963, up 36,820; work_jsonbench on 860,549,995 and work_oneshot on
+13,176,892, up 450 and 364; and livebench falls 259. Building costs a little
+more: codegen_instructions_dev lands on 118,918,569, up 139, and release
+codegen falls 8 to 453,994,110. In the browser, browser_compile_instructions
+lands on 388,494,007, up 217,425, and browser_run_instructions on 33,508,472,
+up 1,119. Both changes fix what programs print, so the floor follows them,
+from 90.25040 to 90.24995.
+
+## 2026-10-10 — gavel: `build` retires, and `tie` is the one way to write a cycle
+
+Clay, on the ledger entry "Does `build` still earn its place beside `tie`?":
+"retire build". The entry recommended it once `tie` was built and its
+compile-time check on literal data was pinned, and both are on main: `list/tie`
+runs on every engine (log, 2026-10-05), a broken link in literal data is
+refused at check, and ten thousand tied rings dropped in a loop hold one arena
+block.
+
+**What leaves the language.** The `build` block, the hole `_` that only a
+`build` block could fill, the field write that filled it, and the
+`error[build]` family that policed all three. A cycle is written with
+`list/tie` or `list/tie!`, whether its nodes are two names in the source or a
+graph read from a file. The 2026-10-01 gavel's reason for there being no loop
+construct is unaffected, and so is the top-level constant knot
+(`ring = node 1 ring`), which is a separate construct and is not part of this
+ruling.
+
+**Why.** `tie` does everything `build` did. With literal keys and links the
+compiler sees the whole graph and refuses a broken link before the program
+runs, which was the one thing `build` caught earlier, and a tied call's nodes
+are one birth cohort, so the birthday theorem and the cohort's memory
+guarantee hold as they did for a block. Two spellings of one thing is what
+kanso declines to offer.
+
+Owes: the parser, the checker and all three engines drop `build`, `_` and the
+field write; the `error[build]` goldens and `tests/golden/mem/build_cycle.kso`
+move to `tie` or go; every `build` in the corpora, the samples, the examples
+and lib is rewritten as a `tie`; ch03's "two records that point at each other"
+teaches the cycle with `tie`; appendix A loses `error[build]`; the compiler
+page and the playground stop offering it. A program that still writes `build`
+gets one diagnostic naming `list/tie` as the replacement.
+
+## 2026-10-10 — the four port fixes' floor question closes on the corpus-first gavel
+
+The ledger's Blocking entry "May four port fixes lower the welfare floor?",
+filed today, asked whether kanso#1820, kanso#1822, kanso#1824 and kanso#1825
+may each lower the floor by a few thousandths. Each fixes a native cliff a port
+journal found (sat's map put loop, lox's loop entered from a tail cycle,
+`list/tally` over many distinct strings, mustache's fold onto its accumulator),
+and each pays only in compile rows because no benchmark contains its shape.
+
+That is the case the archive's 2026-09-05 "gavel: corpus first — a blind
+corpus is repaired, never excused" ruled. Clay declined, then, the
+recommendation to move the floor with "the corpus is blind" as the reason:
+**the remedy is to add the benchmark the objective could not see, measure its
+baseline on the pre-fix code, land the fix on top, and let it score**, so the
+floor rises rather than falls. The entry's search looked for a ruling on fixes
+that make native finish what the interpreter finishes and missed this one,
+because the ruling is about what the corpus can see. The entry leaves the
+ledger in this commit on that citation.
+
+So no floor moves for these four. Each PR promotes its fix's shape into the
+benchmark corpus as a run-speed or run-memory phase under the granted-baseline
+machinery, with its baseline measured on main without the fix, and banks the
+rise with `--set`. The entry's option 1 also asked to widen the 2026-09-13
+exception to every change that lets native finish a program the interpreter
+finishes; under corpus-first such a change scores as a gain once the corpus
+holds its shape, so the widening is not needed, and it is not made here.
+
+## 2026-10-10 — four port shapes join the run program, measured before their fixes
+
+The corpus-first gavel, applied today to kanso#1820, kanso#1822, kanso#1824 and
+kanso#1825, says none of the four lowers the floor: the shape each fixes goes
+into the benchmark corpus first, measured on the compiler without the fix, and
+the fix then scores against it. This entry is the first half. The run program
+gains four phases, each the PR's own reduced fixture with its count lifted into
+a parameter, and nothing in the compiler changes. The columns are
+instructions on main with each phase built alone, less the empty program's
+6,662,610, and the shares are of the whole program's 1,245,042,917.
+
+    scatter  2,340 keys counted in scrambled order   50,901,814  4.09%
+    bump     350 updates through a named read        53,247,360  4.28%
+    machine  20,000 passes of a loop in a cycle       8,825,906  0.71%
+    fold     800 pieces folded onto one string          858,398  0.07%
+
+`scatter` counts keys that arrive out of order (kanso#1820), `bump` updates a
+map through a read named on the line before the write (kanso#1822), `machine`
+runs a loop entered from inside a tail cycle (kanso#1824), and `fold` folds
+pieces onto a string (kanso#1825). The counts follow the rule the header
+already states for the stress shapes: `scatter` and `bump` are quadratic on
+main, and each count lands its phase near five per cent of the program.
+`machine` and `fold` cost little in instructions and a great deal in memory,
+so their counts are sized to add about one decoded document to the peak.
+
+The header keeps its changeover table as it was. That table is the mix
+bench/runbench_phases.txt replays when history from before 2026-09-06 is
+reconstructed, and a phase with no counter in that history has no place in it.
+The four new phases have a table of their own below it, and
+`tests/the_phase_map_matches_the_run_programs_header.rs` now stops reading at
+the changeover table's total.
+
+Every row the run program carries moves, because it now does more work. In the
+run vein, run_allocs lands on 1,773,132, run_alloc_bytes on 326,862,802,
+run_arena_blocks on 8, run_perm_allocs on 97, run_beat_iters on 27,564,
+run_put_mut_grow on 15, run_str_scans on 229 and run_str_scan_bytes on
+17,932,036. The shape counters follow the new values the phases build:
+run_sh_str lands on 10,188,896, run_sh_rec on 1,500,528, run_sh_buf on
+119,041,376 and run_sh_map on 11,200. `scatter` reads its map between puts, so
+the run now builds and frees sorted views: run_view_allocs and run_view_frees
+are both 360. The run program's machine code grows to 602,217 bytes, which
+moves the text total to 4,651,966, and its emitted code to 684 defines, 6,519
+calls, 5,938 branches and 50,994 lines, which moves emitted_other_defines to
+2,002, emitted_other_calls to 17,393, emitted_other_branches to 16,393 and
+emitted_other_lines to 146,696.
+
+A counter that measures something new is re-based so that landing it costs the
+floor nothing, as the codegen rows were on 2026-10-07 when their gates began
+counting the clang the benchmarks use. `run_instructions` and `run_peak_bytes`
+keep their ratio to their baselines: each baseline is multiplied by the reading
+with the phases over the reading without them, both on main's compiler.
+work_runbench lands on 1,245,043,324 on CI, against main's 1,131,539,079,
+so run_instructions' baseline goes from 3,043,743,748 to 3,349,060,500. The run peak, which the objective reads as the arena, held and
+permanent peaks summed, goes from 3,899,936 bytes to 12,167,368:
+run_arena_peak_bytes lands on 8,912,912 and run_held_peak_bytes on 3,222,256,
+and run_peak_bytes' baseline goes from 156,818,380 to 489,255,962. Both
+baselines are rounded up. The score is unchanged, and the four fixes now
+have something to score against.
+
 ## 2026-10-10 — a fold that joins onto its accumulator writes in place
 
 The mustache port renders a template by folding over its pieces, and its
@@ -24669,5 +25241,27 @@ it:
   392,251,588, higher still, so it follows the wasm binary's layout rather
   than the work done.
 
-Welfare falls from 90.25811251 to 90.25519022, and the floor waits on Clay,
-since this is a memory fix rather than a ruled part of the language.
+On main as it stood before kanso#1836, welfare fell from 90.25811251 to
+90.25519022 on those rows, because no benchmark folded a string.
+
+The floor question closed on the corpus-first gavel, and kanso#1836 put the
+shape into the run program as its `fold` phase: 800 pieces folded onto one
+string, measured on main before this fix at 858,398 instructions. With main
+merged in, runbench falls from 1,245,043,324 to 1,244,977,121, a projection
+from this container's 1,244,976,714 plus the 407 instructions by which CI read
+main above it; CI's row replaces it. The phase's memory is where the fix pays.
+run_arena_peak_bytes falls from 8,912,912 to 7,864,336, run_arena_blocks from
+8 to 7, run_alloc_bytes from 326,862,802 to 325,331,283, run_allocs from
+1,773,132 to 1,772,340 and run_sh_str from 10,188,896 to 8,648,960. Two run
+counters rise with the fix: run_str_scans goes from 229 to 1,021 while
+run_str_scan_bytes falls to 17,930,429, and run_bytes_malloc rises by 7 to
+9,127. Nothing here isolates which step of the in-place join each comes from.
+The rows the runtime's 320 bytes moved above
+carry onto main's values: `text` totals 4,656,446, work_basket lands on
+32,527,186, work_livebench on 1,472,861,727, work_encodebench on
+2,393,926,750, work_oneshot on 13,176,997, work_digestbench on 5,598,179 and
+work_scanbench on 268,886. The analysis's rows carry the same way:
+compile_instructions lands on 25,857,737, entry_instructions on 85,514,580,
+library_instructions on 86,066,207 and browser_compile_instructions on
+391,827,307. All of these are projected until CI reads them. Welfare rises from 90.2499
+to 90.3104 on those rows, and the rise is banked.

@@ -1,0 +1,14 @@
+# A loop that grows a list through a helper carries the list across its
+# rewind every iteration. When the loop ends, the pop that hands the list to
+# the caller asks whether its elements survive, and a list of sixty-four or
+# more asks a memo table. A program whose outermost beat began on an empty
+# arena never opened that table, and the first lookup read wild memory.
+fn helper xs i
+  push xs i
+
+fn grow xs i n
+  return xs if n < i
+  grow (helper xs i) (i + 1) n
+
+pub fn lists n
+  length (grow [] 1 n)

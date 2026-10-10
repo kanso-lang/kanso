@@ -1,0 +1,26 @@
+import "std/list"
+
+# A record constructor passed where a function is wanted. The interpreter
+# always ran this; native refused to build it until 2026-10-10, so the lox
+# port wrapped every constructor it handed to its parser in a lambda (F20).
+type tag
+  label
+
+type pair
+  left
+  right
+
+type span
+  from
+  text
+  to
+
+fn combine make a b
+  make a b
+
+fn three make
+  make 1 "mid" 9
+
+pub play =
+  tags = list/to_list (list/map ["a" "b"] tag)
+  print "{tags} {combine pair 1 2} {three span}"

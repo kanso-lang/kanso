@@ -250,5 +250,5 @@
 # 1,018 -> 1,003, branches 1,136 -> 1,094, lines 10,188 -> 10,111.
 defines=106
 calls=1007
-branches=1101
-lines=10055
+branches=1105
+lines=10070

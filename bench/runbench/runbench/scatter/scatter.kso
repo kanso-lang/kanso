@@ -1,0 +1,22 @@
+# Counting keys that arrive in no particular order, which the sat port does for
+# every clause it reads and `list/tally` does for any list of strings. A map
+# read between its puts keeps a sorted view, and a key that lands in the middle
+# of a large view used to be inserted by moving every key after it one slot
+# along, so the count was quadratic in the number of distinct keys: 40,000 of
+# them took 4.9 seconds natively against the interpreter's 0.2 (kanso#1820).
+fn bump none
+  1
+
+fn bump n
+  n + 1
+
+fn scatter m 0 _
+  m
+
+fn scatter m n span
+  k = n * 1999 % span
+  scatter (put m k (bump m[k])) (n - 1) span
+
+pub fn total n
+  counts = scatter {} n (n + 1)
+  length counts
