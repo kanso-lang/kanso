@@ -24746,51 +24746,6 @@ The tab compiler reads 661 fewer instructions, `browser_compile_instructions`
 7,062,299. Both codegen tiers held. The ratchet's mutation for this filter
 patched the old two-arm line, so it now patches the one-arm line.
 
-<<<<<<< HEAD
-## 2026-10-10 — a node an inner pop repairs stays on the outer loop's list
-
-The lox port's `tests/functions.lox` crashed natively once kanso#1824 let its
-evaluator loops carry. The cause is older than that branch. A record built
-before the evaluator's loop held a string in the outer loop's tenure block.
-An inner loop returned a value that reached the record, and its pop copied
-the result out of its carry pair. The pop's walk counts nothing outside the
-arena as a survivor, so it copied the string to the arena's frontier and
-repaired the record in place to point at the copy. The frontier was in the
-evaluator's lap. At the evaluator's next stage the walk reached the record
-through an older node whose own fields all survived, stopped there, and
-rewound the lap with the copy in it. The record then pointed at freed memory.
-
-Main's compiler crashes on the reduction too, so the bug did not need
-kanso#1824. `tests/golden/mem/a_node_repaired_by_an_inner_pop_outlives_the_outer_stage`
-is three nested loops and a box built before the middle one. Built against
-main's runtime it segfaults, and its stdout golden fails.
-
-The pop now keeps the nodes it repaired that lie below the enclosing mark, on
-a list beside `k_repaired`. Each stage walks the entries below its own mark as
-extra roots before it rewinds, sized with the carried slots, so a node that
-points above the mark is repaired into the carry and settled back under the
-raised mark like any other. That makes the node safe for the depth that
-staged and not for the one outside it, so an entry below the outer mark stays
-on the list, and so does a node the stage itself repaired below the outer
-mark. A rewind frees what lies above its mark, and the list must not keep an
-address that has been handed out again. While the list holds anything, a bit
-in `k_buf_dirty` sends every rewind to the slow path, and the slow path drops
-the entries above its mark, and a rewind to the outermost mark clears the list,
-since no stage outside it will revisit anything. The fast path reads nothing
-new.
-
-I first tried narrowing the pop's walk instead: an enclosing depth's tenure
-outlives the pop, so the pop could leave a pointer into it alone. That fixed
-`functions.lox` and broke `binary_trees.lox`. The lox interpreter writes into
-tenured environment maps in place, so an enclosing tenure node can hold a
-pointer into the inner carry pair, and the copy-out has to see it.
-
-With the fix, main's compiler passes all 28 lox fixtures on the interpreter,
-a dev build and a release build. On a tree carrying kanso#1827 and kanso#1824
-as well, the same 28 pass under the lap rule and with every edge staging. The
-twelve cost veins and the mem tier are unchanged apart from the new fixture's
-own file: no program in the corpus repairs a node below an enclosing mark.
-=======
 ## 2026-10-10 — a constant lives in storage the carry knows is permanent
 
 A map built before a carrying loop came out of the loop with keys the next
@@ -24873,4 +24828,47 @@ wherever it counted: `run_carry_dedup` from 71, `encode_carry_dedup`,
 `a_nested_map_gives_back_its_entries_carry_dedup` from 29,990. A dedup is a
 copy the walk found it had already made; constants are no longer copied, so
 there is nothing to find twice.
->>>>>>> origin/main
+
+## 2026-10-10 — a node an inner pop repairs stays on the outer loop's list
+
+The lox port's `tests/functions.lox` crashed natively once kanso#1824 let its
+evaluator loops carry. The cause is older than that branch. A record built
+before the evaluator's loop held a string in the outer loop's tenure block.
+An inner loop returned a value that reached the record, and its pop copied
+the result out of its carry pair. The pop's walk counts nothing outside the
+arena as a survivor, so it copied the string to the arena's frontier and
+repaired the record in place to point at the copy. The frontier was in the
+evaluator's lap. At the evaluator's next stage the walk reached the record
+through an older node whose own fields all survived, stopped there, and
+rewound the lap with the copy in it. The record then pointed at freed memory.
+
+Main's compiler crashes on the reduction too, so the bug did not need
+kanso#1824. `tests/golden/mem/a_node_repaired_by_an_inner_pop_outlives_the_outer_stage`
+is three nested loops and a box built before the middle one. Built against
+main's runtime it segfaults, and its stdout golden fails.
+
+The pop now keeps the nodes it repaired that lie below the enclosing mark, on
+a list beside `k_repaired`. Each stage walks the entries below its own mark as
+extra roots before it rewinds, sized with the carried slots, so a node that
+points above the mark is repaired into the carry and settled back under the
+raised mark like any other. That makes the node safe for the depth that
+staged and not for the one outside it, so an entry below the outer mark stays
+on the list, and so does a node the stage itself repaired below the outer
+mark. A rewind frees what lies above its mark, and the list must not keep an
+address that has been handed out again. While the list holds anything, a bit
+in `k_buf_dirty` sends every rewind to the slow path, and the slow path drops
+the entries above its mark, and a rewind to the outermost mark clears the list,
+since no stage outside it will revisit anything. The fast path reads nothing
+new.
+
+I first tried narrowing the pop's walk instead: an enclosing depth's tenure
+outlives the pop, so the pop could leave a pointer into it alone. That fixed
+`functions.lox` and broke `binary_trees.lox`. The lox interpreter writes into
+tenured environment maps in place, so an enclosing tenure node can hold a
+pointer into the inner carry pair, and the copy-out has to see it.
+
+With the fix, main's compiler passes all 28 lox fixtures on the interpreter,
+a dev build and a release build. On a tree carrying kanso#1827 and kanso#1824
+as well, the same 28 pass under the lap rule and with every edge staging. The
+twelve cost veins and the mem tier are unchanged apart from the new fixture's
+own file: no program in the corpus repairs a node below an enclosing mark.
