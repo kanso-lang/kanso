@@ -24902,3 +24902,52 @@ which the `text` total and both codegen rows carry. CI's rows, old to new:
 Welfare fell by less than a hundredth, and the floor moves down with it under
 the rule for a change that makes the language do what it says: the program
 crashed.
+
+## 2026-10-10 — a `tie` node holds its references in a list
+
+Built the gavel "a field may hold a list of `tie` references". The maker check
+in `src/check.rs` walked a constructor's arguments with a flag saying each one
+was a field, and handed every other expression's children down with the flag
+cleared. A list literal was one of those other expressions, so `ref` called
+inside `town "ash" [(ref "birch") (ref "cedar")]` was refused as a read. A list
+literal or map literal that is itself a field now passes the flag to its
+elements, and for a map to its values only, since a key is read to place its
+pair. Anything else that holds the list is refused as before: binding it to a
+name first, measuring it, indexing it or handing it to a function.
+
+Neither engine needed a change. The interpreter's `resolve_tied` and native's
+`k_tie_resolve` already walk lists and maps when they swap each cell for its
+node, because a record field's value was always allowed to be any value once
+the tie returned.
+
+The diagnostic now says the reference goes straight into a field "alone or in a
+list or map written there", and the four tie goldens that quote it moved with
+it. `tests/golden/micro/a_graph_holds_its_roads_in_a_list` keeps each town's
+roads as a list and a map of named roads beside it, and prints the same text on
+the interpreter, a dev build and a release build; the compiler on main refuses
+it at `town "ash" [(ref "birch") ...]`.
+`tests/golden/errors/a_tie_maker_measures_a_list_of_references` binds the list
+to a name and measures it, and is refused at both references.
+
+`a_graph_tied_from_a_map_of_edges` keeps its chain of `road` records. Its edges
+come from a map, so its list of references would be built by a call, `list/map
+names ref` or a fold, and a reference handed to a function from std is out of
+the check's sight. The gavel's text admits a literal, and the ruling's own
+Owes asked for this fixture to drop the chain, which it cannot do under that
+text. That question has gone to the ledger as "May a list built from data hold
+`tie` references?". `docs/compiler.html` §193 says which form each case takes.
+
+The book teaches cyclic structures with `build` and does not mention `tie`, so
+the place `tie` is taught is its own comment in `lib/list/list.kso`. That
+comment now names the list form and shows `node id [(ref "b") (ref "c")]`.
+
+CI's rows for this branch, with main's repair list merged in. The check walks
+two more expression kinds in a constructor's arguments, and `lib/list/list.kso`
+carries two more comment lines, which every compile of the library lexes:
+
+    compile_instructions             25,832,340 ->  25,832,534
+    entry_instructions               85,435,525 ->  85,436,634
+    library_instructions             85,988,213 ->  85,988,060
+    browser_compile_instructions    388,181,803 -> 388,192,201
+
+The ruling is a part of the language, so the floor follows whatever these cost.
