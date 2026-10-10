@@ -25126,3 +25126,39 @@ The fixture still does its job on the merged tree: with
 `k_pend_keep_repaired` returning at once, the program segfaults. The goldens
 both branches moved were combined as the sum of the two deltas, and CI's rows
 for the merged head follow.
+
+CI's rows for the merged head. The projection from the two branches' deltas was
+close but not exact: each benchmark's text is 672 bytes larger than the sum, basket
+runs 129,985 instructions fewer, deepbench 104,915 more and runbench 14,885 more.
+Against main, every row that worsened, with the value it landed on:
+
+    run_ten_frees                                6 ->               1
+    run_ten_handups                              2 ->               1
+    compile_instructions                25,832,340 ->      25,858,191
+    entry_instructions                  85,435,525 ->      85,514,540
+    library_instructions                85,988,213 ->      86,067,450
+    codegen_instructions_dev           118,918,430 ->     118,945,861
+    codegen_instructions_release       453,994,118 ->     454,057,202
+    browser_compile_instructions       388,181,803 ->     390,304,777
+    browser_compile_peak_bytes             673,727 ->         675,725
+    browser_run_instructions            33,507,353 ->      34,098,461
+    work_digestbench                     5,561,143 ->       5,562,545
+    work_encodebench                 2,383,861,896 ->   2,383,883,896
+    work_escapebench                    39,045,300 ->      39,045,867
+    work_indexbench                      2,457,185 ->       2,459,004
+    work_jsonbench                     860,549,545 ->     860,559,280
+    work_livebench                   1,472,861,300 ->   1,472,863,852
+    work_oneshot                        13,176,528 ->      13,207,890
+    work_readbench                       4,577,104 ->       4,577,539
+    work_scanbench                         268,793 ->         270,025
+    text                                 4,643,166 ->       4,763,230
+
+The lap carry stages once per 256KB of drift where it staged at every edge, which
+is what the work rows above pay for; the runtime grows by the chain index and the
+lap bookkeeping, which is the text row. Against that, runbench falls to
+1,129,571,152, basket to 30,405,533 and deepbench to 366,705,890, the run
+program evacuates 6,441,632 bytes where it evacuated 9,789,344, and the browser
+run peaks at 1,179,648 bytes. `run_ten_frees` and `run_ten_handups` count work on
+tenured blocks, and they fall because the program now tenures one block where it
+tenured six. Welfare rises from 90.2505 to 90.2618, and the floor is raised to
+hold it.
