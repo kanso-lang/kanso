@@ -24592,23 +24592,23 @@ left alone until a program shows it matters.
 `runtime/a_name_bound_to_a_lazy_err_keeps_its_check.kso`; reverting the
 codegen line turns it red.
 
-Rows for this branch against main as it stands after the bignum loop rewind,
-each the branch's CI change added to main's. The front end does a little less
-work on the library and a little more on everything that reads the larger
-regexp module: compile_instructions falls from 25,829,822 to 25,792,419, while
-entry_instructions rises from 85,178,721 to 85,305,369 and
-library_instructions from 85,734,452 to 85,858,787, both of which compile
-std/regexp. compile_allocs goes from 14,529 to 14,530. The interpreter's run
-asks the allocator twice more, interp_allocs 587,281 to 587,283, with its peak
-unchanged. The browser compiles the same library and its checker, and
-browser_compile_instructions rises from 387,724,060 to 388,183,702.
+Rows for this branch, from CI, against main as it stands after the bignum
+loop rewind. Every compile row that reads the larger regexp module or the
+checker's new disjointness test rises: compile_instructions from 25,829,822 to
+25,832,340, entry_instructions from 85,178,721 to 85,435,525,
+library_instructions from 85,734,452 to 85,988,213, and emit_instructions
+from 7,062,270 to 7,062,336. compile_allocs goes from 14,529 to 14,530. The
+interpreter's run asks the allocator twice more, interp_allocs 587,281 to
+587,283, with its peak unchanged. The browser compiles the same library and
+checker, and browser_compile_instructions rises from 387,724,060 to
+388,182,464.
 
 Four benchmark binaries changed. basket, scanbench and runbench grew and
 pendbench shrank by one call and three lines, which sums to
 emitted_other_branches 16,032 to 16,079, emitted_other_calls 17,104 to 17,128
-and emitted_other_lines 144,174 to 144,409. The text is 4,586,926 to 4,588,894
+and emitted_other_lines 144,174 to 144,409. The text is 4,586,926 to 4,588,958
 summed, all of it in the three that grew. Runtime work rises in two of them:
-work_basket from 32,362,738 to 32,386,763 and work_runbench from 1,129,588,698
+work_basket from 32,362,738 to 32,382,760 and work_runbench from 1,129,588,698
 to 1,129,588,845, 147 instructions. Which of the four fixes moved which binary
 is not isolated here. Welfare falls, and the floor follows under the
 2026-09-13 rule.
