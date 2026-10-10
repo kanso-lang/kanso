@@ -1,0 +1,12 @@
+section dir
+  text "+ "
+  escaped name
+  text "/\n"
+  section children
+    partial entry (indent "  ")
+inverted dir
+  text "- "
+  escaped name
+  text " ("
+  escaped size
+  text " bytes)\n"

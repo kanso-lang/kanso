@@ -1,0 +1,376 @@
+import "std/list"
+import "std/text"
+
+# The scanner works on the template's bytes. Positions are 1-based, like
+# every index in kanso, and a delimiter is a list of bytes.
+#
+# Where the scanner stands, the line that position is on, and the tag pair
+# in force there.
+type scanner
+  close
+  line
+  open
+  pos
+
+# What reading one run of nodes produced: the nodes, where the scanner
+# stopped, and the last byte of source inside the run, which is where the raw
+# text a section lambda receives ends.
+type stretch
+  scanner
+  last
+  nodes
+
+# How a tag sits on its line. The text before it ends at `last`, the scanner
+# resumes at `resume`, and `indent` is the whitespace a standalone tag stood
+# behind (a partial indents its lines with it).
+type spot
+  indent
+  last
+  resume
+
+# A section, block or parent being read: the name its closing tag must
+# repeat, and where its opening tag stood, for the message when it never
+# closes.
+type opened
+  name
+  start
+
+# The run a template's top level reads, which no closing tag ends.
+type top
+
+# One tag: what its sigil was (0 for a plain variable), the trimmed words
+# inside it, its line, and the positions of its first byte and the byte
+# after it.
+type tag
+  content
+  line
+  sigil
+  start
+  stop
+
+# What each tag does, by the byte after the opening delimiter: 33 `!`
+# comment, 35 `#` section, 36 `$` block, 38 `&` unescaped, 47 `/` close,
+# 60 `<` parent, 61 `=` set delimiters, 62 `>` partial, 94 `^` inverted,
+# 123 `{` unescaped; anything else (sigil 0) is a variable. A tag that opens
+# a run reads its children first, and the reading carries on after them.
+fn act 47 cs _ top _ t _
+  fail cs t.start "`/{t.content}` closes a section that was never opened"
+
+fn act 47 cs cur (opened name at) acc t s
+  return stretch (moved cs cur s.resume) s.last acc if t.content == name
+  fail cs t.start "`/{t.content}` closes `{name}`, opened at {place cs at}"
+
+fn act 33 cs cur until acc _ s
+  onward cs cur s until acc
+
+fn act 35 cs cur until acc t s
+  inner = read_run cs (moved cs cur s.resume) (opened t.content t.start) []
+  sectioned cs cur until acc t s inner
+
+fn act 36 cs cur until acc t s
+  inner = read_run cs (moved cs cur s.resume) (opened t.content t.start) []
+  blocked cs until acc t inner
+
+fn act 38 cs cur until acc t s
+  onward cs cur s until (push acc (var_node false t.line (path t.content)))
+
+fn act 60 cs cur until acc t s
+  inner = read_run cs (moved cs cur s.resume) (opened t.content t.start) []
+  parented cs until acc t s inner
+
+fn act 61 cs cur until acc t s
+  words = list/to_list (list/reject (text/split t.content " ") (w -> w == ""))
+  why = "a delimiter change names two tags, as in `=<% %>=`"
+  return fail cs t.start why if length words != 2
+  line = cur.line + newlines cs cur.pos (s.resume - 1)
+  next = scanner (text/bytes words[2]) line (text/bytes words[1]) s.resume
+  read_run cs next until acc
+
+fn act 62 cs cur until acc t s
+  onward cs cur s until (push acc (partial_of t.content s.indent))
+
+fn act 94 cs cur until acc t s
+  inner = read_run cs (moved cs cur s.resume) (opened t.content t.start) []
+  inverted cs until acc t inner
+
+fn act 123 cs cur until acc t s
+  onward cs cur s until (push acc (var_node false t.line (path t.content)))
+
+fn act _ cs cur until acc t s
+  onward cs cur s until (push acc (var_node true t.line (path t.content)))
+
+# Reading backwards from just before a tag: the line it sits on starts here
+# if only spaces and tabs stand between the line's start and the tag.
+fn back _ 0
+  1
+
+fn back cs i
+  behind cs i cs[i]
+
+fn behind _ _ none
+  none
+
+fn behind _ i 10
+  i + 1
+
+fn behind cs i 9
+  back cs (i - 1)
+
+fn behind cs i 32
+  back cs (i - 1)
+
+fn behind _ _ _
+  none
+
+fn blocked cs until acc t (stretch after _ nodes)
+  read_run cs after until (push acc (block_node nodes t.content))
+
+# `{{{name}}}` ends with one more brace than its delimiter, and `{{=a b=}}`
+# with an equals sign. The bytes go through a string because the interpreter's
+# text/concat refuses a list that text/bytes built (bugs/concat_rejects_*).
+fn closer 61 close
+  text/bytes "={text/utf8 close}"
+
+fn closer 123 close
+  text/bytes "}{text/utf8 close}"
+
+fn closer _ close
+  close
+
+fn delims_of cur
+  delims (text/utf8 cur.close) (text/utf8 cur.open)
+
+fn column_of cs at
+  column_back cs at (at - 1)
+
+fn column_back _ at 0
+  at
+
+fn column_back cs at i
+  return at - i if cs[i] == 10
+  column_back cs at (i - 1)
+
+fn fail cs at reason
+  err (parse_error (column_of cs at) (line_of cs at) reason)
+
+fn find_tag cs p delim
+  return none if length delim < 1
+  q = text/find2 cs p delim[1] delim[1]
+  found cs q delim
+
+fn finish (stretch _ _ nodes)
+  nodes
+
+fn finish e@(err _)
+  e
+
+fn found cs q delim
+  return none if q > length cs
+  return q if text/slice cs q (q + length delim - 1) == delim
+  find_tag cs (q + 1) delim
+
+fn inline t
+  spot "" (t.start - 1) t.stop
+
+fn inverted cs until acc t (stretch after _ nodes)
+  node = inverted_node nodes t.line (path t.content)
+  read_run cs after until (push acc node)
+
+# Reading forwards from just after a tag: where the next line begins, if only
+# spaces and tabs stand between the tag and the line's end. The end of the
+# template ends a line too.
+fn line_end cs p
+  ahead cs p cs[p]
+
+fn ahead _ p none
+  p
+
+fn ahead _ p 10
+  p + 1
+
+fn ahead cs p 13
+  if (cs[p + 1] == 10) (p + 2) none
+
+fn ahead cs p 9
+  line_end cs (p + 1)
+
+fn ahead cs p 32
+  line_end cs (p + 1)
+
+fn ahead _ _ _
+  none
+
+fn line_of cs at
+  list/count (text/slice cs 1 (at - 1)) (b -> b == 10) + 1
+
+fn moved cs cur p
+  scanner cur.close (cur.line + newlines cs cur.pos (p - 1)) cur.open p
+
+fn newlines cs a b
+  list/count (text/slice cs a b) (c -> c == 10)
+
+fn onward cs cur s until acc
+  read_run cs (moved cs cur s.resume) until acc
+
+fn on_tag _ _ _ _ e@(err _)
+  e
+
+fn on_tag cs cur until acc t
+  s = spot_of cs t (standalone? t.sigil)
+  act t.sigil cs cur until (with_text acc cs cur.pos s.last) t s
+
+default_delims = delims "}}" "\{\{"
+
+pub fn parse template
+  parse_with template default_delims
+
+pub fn parse_with template d
+  cs = text/bytes template
+  start = scanner (text/bytes d.close) 1 (text/bytes d.open) 1
+  finish (read_run cs start top [])
+
+fn parented cs until acc t s (stretch after _ nodes)
+  blocks = list/fold nodes {} (m n -> with_block m n)
+  read_run cs after until (push acc (parent_node blocks s.indent t.content))
+
+fn partial_of name indent
+  return partial_node false indent name if text/slice name 1 1 != "*"
+  partial_node true indent (text/trim (text/slice name 2 (length name)))
+
+# A path written back the way the template spelled it.
+fn dotted parts
+  return "." if length parts == 0
+  text/join parts "."
+
+# `.` is the top of the context stack; every other name is a dotted path.
+fn path "."
+  []
+
+fn path name
+  text/split name "."
+
+# A standalone tag needs blanks on both sides of it on its line: `back` found
+# the line's start, or none, and `line_end` where the next line begins, or
+# none.
+fn placed _ t none none
+  inline t
+
+fn placed _ t none _
+  inline t
+
+fn placed _ t _ none
+  inline t
+
+fn placed cs t first resume
+  spot (piece cs first (t.start - 1)) (first - 1) resume
+
+# "line 3, column 5" for a byte position.
+fn place cs at
+  "line {line_of cs at}, column {column_of cs at}"
+
+fn piece cs a b
+  text/utf8 (text/slice cs a b)
+
+fn read_run cs cur until acc
+  at_tag cs cur until acc (find_tag cs cur.pos cur.open)
+
+fn at_tag cs cur top acc none
+  stretch cur (length cs) (with_text acc cs cur.pos (length cs))
+
+fn at_tag cs _ until _ none
+  unclosed cs until
+
+fn at_tag cs cur until acc q
+  on_tag cs cur until acc (read_tag cs cur q)
+
+fn unclosed cs (opened name at)
+  fail cs at "section `{name}` is never closed"
+
+fn read_tag cs cur q
+  after = q + length cur.open
+  sigil = sigil_of cs[after]
+  from = if (sigil == 0) after (after + 1)
+  marker = closer sigil cur.close
+  tag_at cs cur q from sigil marker (find_tag cs from marker)
+
+fn sectioned cs cur until acc t s (stretch after last nodes)
+  raw = piece cs s.resume last
+  node = section_node nodes (delims_of cur) t.line (path t.content) raw
+  read_run cs after until (push acc node)
+
+fn sigil? 33
+  true
+
+fn sigil? 35
+  true
+
+fn sigil? 36
+  true
+
+fn sigil? 38
+  true
+
+fn sigil? 47
+  true
+
+fn sigil? 60
+  true
+
+fn sigil? 61
+  true
+
+fn sigil? 62
+  true
+
+fn sigil? 94
+  true
+
+fn sigil? 123
+  true
+
+fn sigil? _
+  false
+
+fn sigil_of none
+  0
+
+fn sigil_of c
+  if (sigil? c) c 0
+
+fn spot_of cs t true
+  placed cs t (back cs (t.start - 1)) (line_end cs t.stop)
+
+fn spot_of _ t false
+  inline t
+
+# Tags that produce no text of their own may stand alone on a line, and then
+# the whole line goes, newline and all.
+fn standalone? 0
+  false
+
+fn standalone? 38
+  false
+
+fn standalone? 123
+  false
+
+fn standalone? _
+  true
+
+fn tag_at cs cur q _ _ _ none
+  fail cs q "tag `{text/utf8 cur.open}` is never closed"
+
+fn tag_at cs cur q from sigil marker stop
+  content = text/trim (piece cs from (stop - 1))
+  line = cur.line + newlines cs cur.pos (q - 1)
+  tag content line sigil q (stop + length marker)
+
+fn with_block m (block_node children name)
+  put m name children
+
+fn with_block m _
+  m
+
+fn with_text acc cs a b
+  return acc if b < a
+  push acc (text_node (piece cs a b))

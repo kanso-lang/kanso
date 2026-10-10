@@ -1,0 +1,9 @@
+{"name": "kanso", "children": [
+  {"name": "lib", "dir": true, "children": [
+    {"name": "json", "dir": true, "children": [
+      {"name": "json.kso", "dir": false, "size": 3120},
+      {"name": "value.kso", "dir": false, "size": 4410}]},
+    {"name": "text", "dir": true, "children": [
+      {"name": "text.kso", "dir": false, "size": 2950}]}]},
+  {"name": "README.md", "dir": false, "size": 812}
+]}

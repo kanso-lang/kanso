@@ -1,0 +1,8 @@
+Listing of kanso/
++ lib/
+  + json/
+    - json.kso (3120 bytes)
+    - value.kso (4410 bytes)
+  + text/
+    - text.kso (2950 bytes)
+- README.md (812 bytes)

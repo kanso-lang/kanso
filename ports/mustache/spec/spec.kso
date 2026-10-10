@@ -1,0 +1,75 @@
+import "../mustache"
+import "std/json"
+import "std/list"
+import "std/text"
+
+# One test's line in the report, and whether it passed.
+type outcome
+  line
+  passed
+
+fn outcome_of t
+  data = with_lambdas t["data"]
+  template = text_of t["template"]
+  got = mustache/render template data (partials_of t["partials"])
+  verdict (text_of t["name"]) got (text_of t["expected"])
+
+fn partials_of none
+  {}
+
+fn partials_of m
+  m
+
+# The report for a suite in the spec's JSON form: a line per test, then a
+# count. A failure shows what was wanted and what came out, JSON-quoted so
+# that whitespace is visible.
+pub fn run_suite source
+  suite (json/decode source)
+
+fn suite (err r)
+  "cannot read the suite: {r}\n"
+
+fn suite doc
+  outcomes = list/to_list (list/map (tests_of doc["tests"]) outcome_of)
+  lines = list/to_list (list/map outcomes _.line)
+  passed = list/count outcomes _.passed
+  failed = length outcomes - passed
+  "{text/join lines "\n"}\n{passed} passed, {failed} failed\n"
+
+fn text_of none
+  ""
+
+fn text_of s
+  s
+
+fn tests_of none
+  []
+
+fn tests_of xs
+  xs
+
+fn verdict name (err r) _
+  outcome "FAIL {name}: {r.reason} (line {r.line})" false
+
+fn verdict name got want
+  return outcome "ok   {name}" true if got == want
+  shown = "\n  want {json/encode want}\n  got  {json/encode got}"
+  outcome "FAIL {name}{shown}" false
+
+# Swap each `{"__tag__": "code", "kanso": name}` object for the lambda the
+# registry holds under that name.
+fn with_lambdas none
+  none
+
+fn with_lambdas m:map[string some]
+  return named m["kanso"] if m["__tag__"] == "code"
+  list/fold (entries m) {} (acc pair -> with_entry acc pair)
+
+fn with_lambdas xs:[]some
+  list/to_list (list/map xs with_lambdas)
+
+fn with_lambdas v
+  v
+
+fn with_entry acc (entry k v)
+  put acc k (with_lambdas v)

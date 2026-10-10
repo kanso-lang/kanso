@@ -1,0 +1,10 @@
+{
+  "invoice": {"number": 1042, "total": 47.5, "currency": "EUR", "paid": false,
+              "terms": 30, "notes": ["Thank you for your order.", "Prices include VAT."]},
+  "customer": {"name": "Mori & Daughters",
+               "address": {"street": "3 Tea Lane", "city": "Uji", "postcode": "611-0021"}},
+  "lines": [
+    {"qty": 2, "item": "Gyokuro 50g", "unit": 12.0, "total": 24.0},
+    {"qty": 1, "item": "Kyusu pot", "unit": 23.5, "total": 23.5}
+  ]
+}

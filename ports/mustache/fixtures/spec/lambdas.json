@@ -1,0 +1,121 @@
+{
+  "overview": "Lambdas are functions in the data. An interpolated lambda's answer is rendered as a template with the default tags; a section lambda receives the section's raw text and its answer is rendered with the tags in force at the section. kanso functions are pure, so a lambda receives and returns a state value that the render threads through every call.",
+  "tests": [
+    {
+      "name": "Interpolation",
+      "data": {
+        "lambda": {
+          "__tag__": "code",
+          "kanso": "world"
+        }
+      },
+      "template": "Hello, {{lambda}}!",
+      "expected": "Hello, world!"
+    },
+    {
+      "name": "Interpolation - Expansion",
+      "data": {
+        "planet": "world",
+        "lambda": {
+          "__tag__": "code",
+          "kanso": "planet"
+        }
+      },
+      "template": "Hello, {{lambda}}!",
+      "expected": "Hello, world!"
+    },
+    {
+      "name": "Interpolation - Alternate Delimiters",
+      "data": {
+        "planet": "world",
+        "lambda": {
+          "__tag__": "code",
+          "kanso": "planet_alt"
+        }
+      },
+      "template": "{{= | | =}}\nHello, (|&lambda|)!",
+      "expected": "Hello, (|planet| => world)!"
+    },
+    {
+      "name": "Interpolation - Multiple Calls",
+      "data": {
+        "lambda": {
+          "__tag__": "code",
+          "kanso": "count"
+        }
+      },
+      "template": "{{lambda}} == {{{lambda}}} == {{lambda}}",
+      "expected": "1 == 2 == 3"
+    },
+    {
+      "name": "Escaping",
+      "data": {
+        "lambda": {
+          "__tag__": "code",
+          "kanso": "gt"
+        }
+      },
+      "template": "<{{lambda}}{{{lambda}}}",
+      "expected": "<&gt;>"
+    },
+    {
+      "name": "Section",
+      "data": {
+        "x": "Error!",
+        "lambda": {
+          "__tag__": "code",
+          "kanso": "yes_if_x"
+        }
+      },
+      "template": "<{{#lambda}}{{x}}{{/lambda}}>",
+      "expected": "<yes>"
+    },
+    {
+      "name": "Section - Expansion",
+      "data": {
+        "planet": "Earth",
+        "lambda": {
+          "__tag__": "code",
+          "kanso": "section_expand"
+        }
+      },
+      "template": "<{{#lambda}}-{{/lambda}}>",
+      "expected": "<-Earth->"
+    },
+    {
+      "name": "Section - Alternate Delimiters",
+      "data": {
+        "planet": "Earth",
+        "lambda": {
+          "__tag__": "code",
+          "kanso": "section_alt"
+        }
+      },
+      "template": "{{= | | =}}<|#lambda|-|/lambda|>",
+      "expected": "<-{{planet}} => Earth->"
+    },
+    {
+      "name": "Section - Multiple Calls",
+      "data": {
+        "lambda": {
+          "__tag__": "code",
+          "kanso": "underscores"
+        }
+      },
+      "template": "{{#lambda}}FILE{{/lambda}} != {{#lambda}}LINE{{/lambda}}",
+      "expected": "__FILE__ != __LINE__"
+    },
+    {
+      "name": "Inverted Section",
+      "data": {
+        "static": "static",
+        "lambda": {
+          "__tag__": "code",
+          "kanso": "false"
+        }
+      },
+      "template": "<{{^lambda}}{{static}}{{/lambda}}>",
+      "expected": "<>"
+    }
+  ]
+}

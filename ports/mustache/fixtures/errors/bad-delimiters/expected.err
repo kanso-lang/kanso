@@ -1,0 +1,1 @@
+mustache: fixtures/errors/bad-delimiters/template.mustache: line 2, column 1: a delimiter change names two tags, as in `=<% %>=`

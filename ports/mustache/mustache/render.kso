@@ -1,0 +1,303 @@
+import "std/json"
+import "std/list"
+import "std/text"
+
+# What a lambda hands back: the text it produced and the state the next
+# lambda call will see.
+pub type answer
+  state
+  text
+
+# A lambda in the data. `call` takes three arguments: the section's raw text
+# ("" when the lambda is interpolated), the render's lambda state, and a
+# function that renders a piece of template text in the current context and
+# answers the string, the way mustache.js hands a section lambda `render`. It
+# answers an `answer`, whose text is rendered again as a template. kanso
+# functions are pure, so a lambda that counts its calls says so through the
+# state rather than through a variable it mutates. Lambdas called inside the
+# helper see the state but cannot change it.
+pub type lambda
+  call
+
+# What a render carries besides the data: the blocks a parent template has
+# overridden, the partials by name, and the caller's settings.
+type scope
+  blocks
+  partials
+  settings
+
+# How to render. `html` false turns `{{name}}` into `{{{name}}}`, for output
+# that is not HTML. `strict` makes a name missing from the data an error
+# rather than an empty string, as the Ruby gem's `raise_on_context_miss`
+# does; it covers variables and sections, and leaves inverted sections alone,
+# because asking whether a name is absent is what they are for.
+pub type settings
+  html
+  strict
+
+# What a render threads from node to node: partials parsed so far, the state
+# lambdas see, and the bytes written. The bytes grow with text/append, which
+# extends the buffer in place; an interpolated "{written}{s}" copied the whole
+# output on every node and made a large render quadratic
+# (bugs/interpolation_accumulator_slow_native.kso). The cache maps a partial's
+# name and indentation to its nodes, so a partial used once per list item is
+# parsed once.
+type sink
+  cache
+  state
+  written
+
+# Constructors for the two types a caller builds: a lambda wraps a function
+# of the raw text, the state and the render helper, and that function answers
+# with `answered`.
+pub fn answered state s
+  answer state s
+
+fn emit acc s
+  sink acc.cache acc.state (text/append acc.written s)
+
+pub fn escape s
+  text/join (list/to_list (list/map (text/chars s) escape_char)) ""
+
+fn escaped_if true s
+  escape s
+
+fn escaped_if false s
+  s
+
+fn escape_char "\""
+  "&quot;"
+
+fn escape_char "&"
+  "&amp;"
+
+fn escape_char "<"
+  "&lt;"
+
+fn escape_char ">"
+  "&gt;"
+
+fn escape_char c
+  c
+
+pub fn lambda_of f
+  lambda f
+
+fn missed? none (settings _ true)
+  true
+
+fn missed? _ _
+  false
+
+pub fn settings_of html strict
+  settings html strict
+
+fn expanded e@(err _) _ _ _
+  e
+
+fn expanded nodes ctx e acc
+  blank = sink acc.cache acc.state (text/bytes "")
+  out = render_nodes nodes ctx e blank
+  text/utf8 out.written
+
+fn expander d ctx e acc
+  (t -> expanded (parse_with t d) ctx e acc)
+
+fn falsey? none
+  true
+
+fn falsey? false
+  true
+
+fn falsey? _:json/json_null
+  true
+
+fn falsey? xs:[]some
+  length xs == 0
+
+fn falsey? _
+  false
+
+# Every line of a partial takes the indentation its standalone tag stood
+# behind, except the empty piece after a final newline, which is no line.
+fn indented source ""
+  source
+
+fn indented source indent
+  lines = text/split source "\n"
+  shifted = text/join (list/to_list (list/map lines (l -> "{indent}{l}"))) "\n"
+  return shifted if text/slice source (length source) (length source) != "\n"
+  text/slice shifted 1 (length shifted - length indent)
+
+fn inherit none _ _ _ _ _ acc
+  acc
+
+fn inherit source name blocks indent ctx e acc
+  merged = list/fold (entries blocks) e.blocks (m b -> unless_set m b)
+  key = "<{name}\n{indent}"
+  inner = scope merged e.partials e.settings
+  parsed_once acc.cache[key] key source indent ctx inner acc
+
+fn interpolate none _ _ _ acc
+  acc
+
+fn interpolate _:json/json_null _ _ _ acc
+  acc
+
+fn interpolate (lambda call) escaped ctx e acc
+  said = call "" acc.state (expander default_delims ctx e acc)
+  fresh = sink acc.cache said.state (text/bytes "")
+  inner = render_parsed (parse said.text) ctx e fresh
+  interpolate_rendered inner (escaped and e.settings.html) acc
+
+fn interpolate v escaped _ e acc
+  emit acc (escaped_if (escaped and e.settings.html) "{v}")
+
+fn interpolate_rendered (sink cache state written) escaped acc
+  shown = escaped_if escaped (text/utf8 written)
+  sink cache state (text/append acc.written shown)
+
+# The value a dotted name resolves to, or none. The first part is looked for
+# down the context stack, top first; every later part only inside the value
+# the part before it found.
+pub fn lookup ctx parts
+  return ctx[length ctx] if length parts < 1
+  descend (find_key ctx (length ctx) parts[1]) parts 2
+
+fn descend v parts i
+  return v if i < 1 or length parts < i
+  descend (key_in v parts[i]) parts (i + 1)
+
+fn find_key _ 0 _
+  none
+
+fn find_key ctx i key
+  found_key ctx i key (key_in ctx[i] key)
+
+fn found_key ctx i key none
+  find_key ctx (i - 1) key
+
+fn found_key _ _ _ v
+  v
+
+fn key_in none _
+  none
+
+fn key_in m:map[string some] key
+  m[key]
+
+fn key_in _ _
+  none
+
+fn overridden none children
+  children
+
+fn overridden nodes _
+  nodes
+
+fn partial none _ _ _ acc
+  acc
+
+fn partial name indent ctx e acc
+  include e.partials[name] ">{name}\n{indent}" indent ctx e acc
+
+fn include none _ _ _ _ acc
+  acc
+
+fn include source key indent ctx e acc
+  parsed_once acc.cache[key] key source indent ctx e acc
+
+# A partial's nodes come from the cache when an earlier use parsed them, and
+# go into it otherwise.
+fn parsed_once none key source indent ctx e acc
+  remembered (parse (indented source indent)) key ctx e acc
+
+fn parsed_once nodes _ _ _ ctx e acc
+  render_nodes nodes ctx e acc
+
+fn remembered e@(err _) _ _ _ _
+  e
+
+fn remembered nodes key ctx e acc
+  kept = sink (put acc.cache key nodes) acc.state acc.written
+  render_nodes nodes ctx e kept
+
+fn partial_name false name _
+  name
+
+fn partial_name true name ctx
+  lookup ctx (text/split name ".")
+
+# Render a template against data, with partials a map from name to source.
+pub fn render template data partials
+  render_with template data partials (settings true false)
+
+pub fn render_with template data partials s
+  rendered (parse template) data partials s
+
+fn rendered e@(err _) _ _ _
+  e
+
+fn rendered nodes data partials s
+  start = sink {} 0 (text/bytes "")
+  finished = render_parsed nodes [data] (scope {} partials s) start
+  text/utf8 finished.written
+
+fn render_node (block_node children name) ctx e acc
+  render_nodes (overridden e.blocks[name] children) ctx e acc
+
+fn render_node (inverted_node children _ name) ctx e acc
+  if (falsey? (lookup ctx name)) (render_nodes children ctx e acc) acc
+
+fn render_node (parent_node blocks indent name) ctx e acc
+  inherit e.partials[name] name blocks indent ctx e acc
+
+fn render_node (partial_node dynamic indent name) ctx e acc
+  partial (partial_name dynamic name ctx) indent ctx e acc
+
+fn render_node (section_node children d line name raw) ctx e acc
+  v = lookup ctx name
+  return err (context_miss line (dotted name)) if missed? v e.settings
+  section v children d raw ctx e acc
+
+fn render_node (text_node s) _ _ acc
+  emit acc s
+
+fn render_node (var_node escaped line name) ctx e acc
+  v = lookup ctx name
+  return err (context_miss line (dotted name)) if missed? v e.settings
+  interpolate v escaped ctx e acc
+
+fn render_nodes nodes ctx e acc
+  list/fold nodes acc (a n -> render_node n ctx e a)
+
+fn render_parsed e@(err _) _ _ _
+  e
+
+fn render_parsed nodes ctx e acc
+  render_nodes nodes ctx e acc
+
+fn section none _ _ _ _ _ acc
+  acc
+
+fn section false _ _ _ _ _ acc
+  acc
+
+fn section _:json/json_null _ _ _ _ _ acc
+  acc
+
+fn section (lambda call) _ d raw ctx e acc
+  said = call raw acc.state (expander d ctx e acc)
+  after = sink acc.cache said.state acc.written
+  render_parsed (parse_with said.text d) ctx e after
+
+fn section xs:[]some children _ _ ctx e acc
+  list/fold xs acc (a x -> render_nodes children (push ctx x) e a)
+
+fn section v children _ _ ctx e acc
+  render_nodes children (push ctx v) e acc
+
+# An outer template's override wins over one nearer the block, so a block
+# already set stays set.
+fn unless_set m (entry name nodes)
+  if (m[name] == none) (put m name nodes) m

@@ -1,0 +1,6 @@
+ok   Render helper - Section
+ok   Render helper - Lists
+ok   Render helper - Alternate Delimiters
+ok   Render helper - Answer is rendered again
+ok   Render helper - Interpolation
+5 passed, 0 failed

@@ -1,0 +1,73 @@
+import "../mustache"
+import "std/list"
+import "std/text"
+
+# The spec writes each lambda as source code in several languages, under
+# `{"__tag__": "code", "ruby": "...", "js": "..."}`. The fixtures here add a
+# `"kanso"` key naming one of the functions below, and the runner swaps the
+# tagged object for the lambda before rendering.
+#
+# A lambda takes the section's raw text ("" when it is interpolated) and the
+# render's lambda state, and answers the text and the next state.
+fn named none
+  none
+
+fn named "count"
+  mustache/lambda_of (_ calls _ -> mustache/answered (calls + 1) "{calls + 1}")
+
+fn named "false"
+  answering (_ -> false)
+
+fn named "gt"
+  answering (_ -> ">")
+
+fn named "planet"
+  answering (_ -> "\{\{planet}}")
+
+fn named "planet_alt"
+  answering (_ -> "|planet| => \{\{planet}}")
+
+fn named "section_alt"
+  answering (s -> "{s}\{\{planet}} => |planet|{s}")
+
+fn named "section_expand"
+  answering (s -> "{s}\{\{planet}}{s}")
+
+fn named "underscores"
+  answering (s -> "__{s}__")
+
+fn named "world"
+  answering (_ -> "world")
+
+fn named "yes_if_x"
+  answering (s -> if (s == "\{\{x}}") "yes" "no")
+
+fn named _
+  none
+
+# Most lambdas ignore the state and the render helper.
+fn answering f
+  mustache/lambda_of (s calls _ -> mustache/answered calls (f s))
+
+# These two are this port's, not the spec's: they use the render helper to
+# work on what the section renders to rather than on its source.
+fn named "shout"
+  rendering (s -> upper s)
+
+fn named "wordcount"
+  rendering (s -> "{length (words s)} words")
+
+fn rendering f
+  mustache/lambda_of (s calls expand -> mustache/answered calls (f (expand s)))
+
+# std/text has no case conversion, so this is ASCII only.
+fn upper s
+  text/join (list/to_list (list/map (text/chars s) upper_char)) ""
+
+fn upper_char c
+  code = text/char_code c
+  return c if code < 97 or 122 < code
+  text/from_code (code - 32)
+
+fn words s
+  list/to_list (list/reject (text/split s " ") (w -> w == ""))

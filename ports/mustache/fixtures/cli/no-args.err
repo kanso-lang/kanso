@@ -1,0 +1,3 @@
+usage: mustache spec <suite.json>
+       mustache render <template> <data> [partials]
+       mustache tokens <template>

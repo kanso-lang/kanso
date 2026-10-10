@@ -1,0 +1,23 @@
+partial header
+text "<main>\n  <h2>"
+escaped shop.name
+text " &mdash; "
+escaped count
+text " teas</h2>\n"
+section teas
+  text "  <section class=\"tea\">\n    <h3>"
+  escaped name
+  text "</h3>\n    <p>"
+  raw blurb
+  text "</p>\n"
+  section tags
+    text "    <span class=\"tag\">"
+    escaped .
+    text "</span>\n"
+  inverted tags
+    text "    <span class=\"tag none\">untagged</span>\n"
+  text "  </section>\n"
+inverted teas
+  text "  <p>Nothing steeping today.</p>\n"
+text "</main>\n"
+partial footer

@@ -1,0 +1,18 @@
+# A private type named `run` in a file that imports nothing.
+#
+# Should: build a `run` record and print it. The file never imports std/os,
+# and appendix b says only eight names are ambient; `run` is not one of them.
+#
+# Does: `kanso play std_name_leaks_without_import.kso` refuses with
+#   error[arity]: `run` takes 2 argument(s), got 3
+#   error[type]: `run` takes a string here, not an int
+# The compiler resolves `run` to std/os's `pub fn run cmd argv`. The same
+# happens for `cursor` (std/list's pub type) in a file that imports std/list
+# for list/count: a private type of the module is taken over by a foreign one.
+type run
+  a
+  b
+  c
+
+r = run 1 2 3
+print "{r}"

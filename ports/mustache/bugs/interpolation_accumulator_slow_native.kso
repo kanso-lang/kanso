@@ -1,0 +1,19 @@
+# Accumulating a string by interpolation, one short piece at a time.
+#
+# Should: run in time roughly linear in the pieces, or at worst no slower
+# natively than on the interpreter. This is how a template renderer builds
+# its output: `"{acc}{piece}"` in a fold.
+#
+# Does: 40,000 pieces (589 KB of output) take 1.9 s on the interpreter
+# (`kanso play --interp`) and 21.6 s natively (`kanso build --release`, or
+# `kanso play`), of which 20.3 s is system time. Doubling the pieces from
+# 10,000 to 20,000 to 40,000 takes native from 0.42 s to 1.6 s to 21.6 s.
+# The native runtime appears to allocate a fresh buffer from the kernel for
+# every intermediate string once they pass some size.
+import "std/list"
+
+fn piece acc i
+  "{acc}<li>{i}</li>\n"
+
+built = list/fold (list/take list/naturals 40000) "" piece
+print "{length built}"

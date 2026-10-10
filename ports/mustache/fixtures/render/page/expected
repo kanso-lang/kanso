@@ -1,0 +1,25 @@
+<!doctype html>
+<title>Ensō | Today's &lt;pot&gt; &amp; cups</title>
+<h1>Today's &lt;pot&gt; &amp; cups</h1>
+<main>
+  <h2>Ensō &mdash; 3 teas</h2>
+  <section class="tea">
+    <h3>Sencha</h3>
+    <p><em>grassy</em>, bright</p>
+    <span class="tag">green</span>
+    <span class="tag">steamed</span>
+  </section>
+  <section class="tea">
+    <h3>Hōjicha</h3>
+    <p>roasted & low in caffeine</p>
+    <span class="tag none">untagged</span>
+  </section>
+  <section class="tea">
+    <h3>Genmaicha &quot;popcorn tea&quot;</h3>
+    <p>with toasted rice</p>
+    <span class="tag">green</span>
+  </section>
+</main>
+<footer>
+  Kyoto, open 9–17
+</footer>

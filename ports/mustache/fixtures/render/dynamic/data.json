@@ -1,0 +1,5 @@
+{"widgets": [
+  {"kind": "button", "label": "Brew"},
+  {"kind": "link", "label": "Menu", "href": "/menu?tea=sencha&size=s"},
+  {"kind": "slider", "label": "Strength"}
+]}

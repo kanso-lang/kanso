@@ -1,0 +1,21 @@
+{{> header}}
+<main>
+  <h2>{{shop.name}} &mdash; {{count}} teas</h2>
+  {{! the list, or a note when it is empty }}
+  {{#teas}}
+  <section class="tea">
+    <h3>{{name}}</h3>
+    <p>{{{blurb}}}</p>
+    {{#tags}}
+    <span class="tag">{{.}}</span>
+    {{/tags}}
+    {{^tags}}
+    <span class="tag none">untagged</span>
+    {{/tags}}
+  </section>
+  {{/teas}}
+  {{^teas}}
+  <p>Nothing steeping today.</p>
+  {{/teas}}
+</main>
+{{> footer}}

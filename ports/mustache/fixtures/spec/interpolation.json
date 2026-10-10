@@ -1,0 +1,372 @@
+{
+  "overview": "Interpolation tags insert a value from the context stack. {{name}} HTML-escapes it; {{{name}}} and {{&name}} do not. Dotted names walk into nested maps.",
+  "tests": [
+    {
+      "name": "No Interpolation",
+      "data": {},
+      "template": "Hello from {Mustache}!\n",
+      "expected": "Hello from {Mustache}!\n"
+    },
+    {
+      "name": "Basic Interpolation",
+      "data": {
+        "subject": "world"
+      },
+      "template": "Hello, {{subject}}!\n",
+      "expected": "Hello, world!\n"
+    },
+    {
+      "name": "No Re-interpolation",
+      "data": {
+        "template": "{{planet}}",
+        "planet": "Earth"
+      },
+      "template": "{{template}}: {{planet}}",
+      "expected": "{{planet}}: Earth"
+    },
+    {
+      "name": "HTML Escaping",
+      "data": {
+        "forbidden": "& \" < >"
+      },
+      "template": "These characters should be HTML escaped: {{forbidden}}\n",
+      "expected": "These characters should be HTML escaped: &amp; &quot; &lt; &gt;\n"
+    },
+    {
+      "name": "Triple Mustache",
+      "data": {
+        "forbidden": "& \" < >"
+      },
+      "template": "These characters should not be HTML escaped: {{{forbidden}}}\n",
+      "expected": "These characters should not be HTML escaped: & \" < >\n"
+    },
+    {
+      "name": "Ampersand",
+      "data": {
+        "forbidden": "& \" < >"
+      },
+      "template": "These characters should not be HTML escaped: {{&forbidden}}\n",
+      "expected": "These characters should not be HTML escaped: & \" < >\n"
+    },
+    {
+      "name": "Basic Integer Interpolation",
+      "data": {
+        "mph": 85
+      },
+      "template": "\"{{mph}} miles an hour!\"",
+      "expected": "\"85 miles an hour!\""
+    },
+    {
+      "name": "Triple Mustache Integer Interpolation",
+      "data": {
+        "mph": 85
+      },
+      "template": "\"{{{mph}}} miles an hour!\"",
+      "expected": "\"85 miles an hour!\""
+    },
+    {
+      "name": "Ampersand Integer Interpolation",
+      "data": {
+        "mph": 85
+      },
+      "template": "\"{{&mph}} miles an hour!\"",
+      "expected": "\"85 miles an hour!\""
+    },
+    {
+      "name": "Basic Decimal Interpolation",
+      "data": {
+        "power": 1.21
+      },
+      "template": "\"{{power}} jiggawatts!\"",
+      "expected": "\"1.21 jiggawatts!\""
+    },
+    {
+      "name": "Triple Mustache Decimal Interpolation",
+      "data": {
+        "power": 1.21
+      },
+      "template": "\"{{{power}}} jiggawatts!\"",
+      "expected": "\"1.21 jiggawatts!\""
+    },
+    {
+      "name": "Ampersand Decimal Interpolation",
+      "data": {
+        "power": 1.21
+      },
+      "template": "\"{{&power}} jiggawatts!\"",
+      "expected": "\"1.21 jiggawatts!\""
+    },
+    {
+      "name": "Basic Null Interpolation",
+      "data": {
+        "cannot": null
+      },
+      "template": "I ({{cannot}}) be seen!",
+      "expected": "I () be seen!"
+    },
+    {
+      "name": "Triple Mustache Null Interpolation",
+      "data": {
+        "cannot": null
+      },
+      "template": "I ({{{cannot}}}) be seen!",
+      "expected": "I () be seen!"
+    },
+    {
+      "name": "Ampersand Null Interpolation",
+      "data": {
+        "cannot": null
+      },
+      "template": "I ({{&cannot}}) be seen!",
+      "expected": "I () be seen!"
+    },
+    {
+      "name": "Basic Context Miss Interpolation",
+      "data": {},
+      "template": "I ({{cannot}}) be seen!",
+      "expected": "I () be seen!"
+    },
+    {
+      "name": "Triple Mustache Context Miss Interpolation",
+      "data": {},
+      "template": "I ({{{cannot}}}) be seen!",
+      "expected": "I () be seen!"
+    },
+    {
+      "name": "Ampersand Context Miss Interpolation",
+      "data": {},
+      "template": "I ({{&cannot}}) be seen!",
+      "expected": "I () be seen!"
+    },
+    {
+      "name": "Dotted Names - Basic Interpolation",
+      "data": {
+        "person": {
+          "name": "Joe"
+        }
+      },
+      "template": "\"{{person.name}}\" == \"{{#person}}{{name}}{{/person}}\"",
+      "expected": "\"Joe\" == \"Joe\""
+    },
+    {
+      "name": "Dotted Names - Triple Mustache Interpolation",
+      "data": {
+        "person": {
+          "name": "Joe"
+        }
+      },
+      "template": "\"{{{person.name}}}\" == \"{{#person}}{{{name}}}{{/person}}\"",
+      "expected": "\"Joe\" == \"Joe\""
+    },
+    {
+      "name": "Dotted Names - Ampersand Interpolation",
+      "data": {
+        "person": {
+          "name": "Joe"
+        }
+      },
+      "template": "\"{{&person.name}}\" == \"{{#person}}{{&name}}{{/person}}\"",
+      "expected": "\"Joe\" == \"Joe\""
+    },
+    {
+      "name": "Dotted Names - Arbitrary Depth",
+      "data": {
+        "a": {
+          "b": {
+            "c": {
+              "d": {
+                "e": {
+                  "name": "Phil"
+                }
+              }
+            }
+          }
+        }
+      },
+      "template": "\"{{a.b.c.d.e.name}}\" == \"Phil\"",
+      "expected": "\"Phil\" == \"Phil\""
+    },
+    {
+      "name": "Dotted Names - Broken Chains",
+      "data": {
+        "a": {}
+      },
+      "template": "\"{{a.b.c}}\" == \"\"",
+      "expected": "\"\" == \"\""
+    },
+    {
+      "name": "Dotted Names - Broken Chain Resolution",
+      "data": {
+        "a": {
+          "b": {}
+        },
+        "c": {
+          "name": "Jim"
+        }
+      },
+      "template": "\"{{a.b.c.name}}\" == \"\"",
+      "expected": "\"\" == \"\""
+    },
+    {
+      "name": "Dotted Names - Initial Resolution",
+      "data": {
+        "a": {
+          "b": {
+            "c": {
+              "d": {
+                "e": {
+                  "name": "Phil"
+                }
+              }
+            }
+          }
+        },
+        "b": {
+          "c": {
+            "d": {
+              "e": {
+                "name": "Wrong"
+              }
+            }
+          }
+        }
+      },
+      "template": "\"{{#a}}{{b.c.d.e.name}}{{/a}}\" == \"Phil\"",
+      "expected": "\"Phil\" == \"Phil\""
+    },
+    {
+      "name": "Dotted Names - Context Precedence",
+      "data": {
+        "a": {
+          "b": {}
+        },
+        "b": {
+          "c": "ERROR"
+        }
+      },
+      "template": "{{#a}}{{b.c}}{{/a}}",
+      "expected": ""
+    },
+    {
+      "name": "Dotted Names are never single keys",
+      "data": {
+        "a.b": "c"
+      },
+      "template": "{{a.b}}",
+      "expected": ""
+    },
+    {
+      "name": "Dotted Names - No Masking",
+      "data": {
+        "a.b": "c",
+        "a": {
+          "b": "d"
+        }
+      },
+      "template": "{{a.b}}",
+      "expected": "d"
+    },
+    {
+      "name": "Implicit Iterators - Basic Interpolation",
+      "data": "world",
+      "template": "Hello, {{.}}!\n",
+      "expected": "Hello, world!\n"
+    },
+    {
+      "name": "Implicit Iterators - HTML Escaping",
+      "data": "& \" < >",
+      "template": "These characters should be HTML escaped: {{.}}\n",
+      "expected": "These characters should be HTML escaped: &amp; &quot; &lt; &gt;\n"
+    },
+    {
+      "name": "Implicit Iterators - Triple Mustache",
+      "data": "& \" < >",
+      "template": "These characters should not be HTML escaped: {{{.}}}\n",
+      "expected": "These characters should not be HTML escaped: & \" < >\n"
+    },
+    {
+      "name": "Implicit Iterators - Ampersand",
+      "data": "& \" < >",
+      "template": "These characters should not be HTML escaped: {{&.}}\n",
+      "expected": "These characters should not be HTML escaped: & \" < >\n"
+    },
+    {
+      "name": "Implicit Iterators - Basic Integer Interpolation",
+      "data": 85,
+      "template": "\"{{.}} miles an hour!\"",
+      "expected": "\"85 miles an hour!\""
+    },
+    {
+      "name": "Interpolation - Surrounding Whitespace",
+      "data": {
+        "string": "---"
+      },
+      "template": "| {{string}} |",
+      "expected": "| --- |"
+    },
+    {
+      "name": "Triple Mustache - Surrounding Whitespace",
+      "data": {
+        "string": "---"
+      },
+      "template": "| {{{string}}} |",
+      "expected": "| --- |"
+    },
+    {
+      "name": "Ampersand - Surrounding Whitespace",
+      "data": {
+        "string": "---"
+      },
+      "template": "| {{&string}} |",
+      "expected": "| --- |"
+    },
+    {
+      "name": "Interpolation - Standalone",
+      "data": {
+        "string": "---"
+      },
+      "template": "  {{string}}\n",
+      "expected": "  ---\n"
+    },
+    {
+      "name": "Triple Mustache - Standalone",
+      "data": {
+        "string": "---"
+      },
+      "template": "  {{{string}}}\n",
+      "expected": "  ---\n"
+    },
+    {
+      "name": "Ampersand - Standalone",
+      "data": {
+        "string": "---"
+      },
+      "template": "  {{&string}}\n",
+      "expected": "  ---\n"
+    },
+    {
+      "name": "Interpolation With Padding",
+      "data": {
+        "string": "---"
+      },
+      "template": "|{{ string }}|",
+      "expected": "|---|"
+    },
+    {
+      "name": "Triple Mustache With Padding",
+      "data": {
+        "string": "---"
+      },
+      "template": "|{{{ string }}}|",
+      "expected": "|---|"
+    },
+    {
+      "name": "Ampersand With Padding",
+      "data": {
+        "string": "---"
+      },
+      "template": "|{{& string }}|",
+      "expected": "|---|"
+    }
+  ]
+}

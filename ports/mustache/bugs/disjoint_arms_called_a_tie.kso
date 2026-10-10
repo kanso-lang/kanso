@@ -1,0 +1,23 @@
+# Two arms whose first positions can never hold the same value.
+#
+# Should: compile, since no value is both `none` and a string, and print
+# "nothing loud a other 3". Chapter 03 says arms are rejected when "dispatch
+# could never tell them apart"; these can always be told apart by the first
+# argument alone.
+#
+# Does: `kanso play disjoint_arms_called_a_tie.kso` refuses with
+#   error[dispatch]: these `show` arms tie: each is the more specific one
+#   somewhere, and a call could match both
+# pointing at the string arm. The ranking compares position by position
+# (none beats string in the first, true beats _ in the second) without
+# asking whether the two first positions overlap at all.
+fn show none _
+  "nothing"
+
+fn show s:string true
+  "loud {s}"
+
+fn show v _
+  "other {v}"
+
+print "{show none true} {show "a" true} {show 3 false}"

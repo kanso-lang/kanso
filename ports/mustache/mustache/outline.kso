@@ -1,0 +1,51 @@
+import "std/json"
+import "std/list"
+import "std/text"
+
+fn headed line children pad
+  text/concat [line] (lines_of children "{pad}  ")
+
+fn lines_of nodes pad
+  list/fold nodes [] (acc n -> text/concat acc (node_lines n pad))
+
+fn node_lines (block_node children name) pad
+  headed "{pad}block {name}" children pad
+
+fn node_lines (inverted_node children _ name) pad
+  headed "{pad}inverted {dotted name}" children pad
+
+fn node_lines (parent_node blocks indent name) pad
+  overrides = list/fold (entries blocks) [] (acc b -> override_lines acc b pad)
+  text/concat ["{pad}parent {name}{shown_indent indent}"] overrides
+
+fn node_lines (partial_node true indent name) pad
+  ["{pad}partial *{name}{shown_indent indent}"]
+
+fn node_lines (partial_node false indent name) pad
+  ["{pad}partial {name}{shown_indent indent}"]
+
+fn node_lines (section_node children _ _ name _) pad
+  headed "{pad}section {dotted name}" children pad
+
+fn node_lines (text_node s) pad
+  ["{pad}text {json/encode s}"]
+
+fn node_lines (var_node true _ name) pad
+  ["{pad}escaped {dotted name}"]
+
+fn node_lines (var_node false _ name) pad
+  ["{pad}raw {dotted name}"]
+
+# The parsed tree as text, one node per line and children indented under
+# their parent, the way the Ruby gem's `--tokens` shows what it read.
+pub fn outline nodes
+  text/join (lines_of nodes "") "\n"
+
+fn override_lines acc (entry name children) pad
+  text/concat acc (headed "{pad}  block {name}" children "{pad}  ")
+
+fn shown_indent ""
+  ""
+
+fn shown_indent indent
+  " (indent {json/encode indent})"

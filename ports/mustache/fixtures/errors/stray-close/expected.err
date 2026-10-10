@@ -1,0 +1,1 @@
+mustache: fixtures/errors/stray-close/template.mustache: line 2, column 8: `/x` closes a section that was never opened

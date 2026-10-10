@@ -1,0 +1,9 @@
+{{#dir}}
++ {{name}}/
+  {{#children}}
+  {{>entry}}
+  {{/children}}
+{{/dir}}
+{{^dir}}
+- {{name}} ({{size}} bytes)
+{{/dir}}

@@ -1,0 +1,25 @@
+# A foreign marker named by its qualified spelling in an arm's pattern, in a
+# file whose only other use of the import is a call.
+#
+# Should: compile and print "false". The arm `fn null? json/json_null` does
+# claim json_null (add `{null? json/json_null}` to the print and the program
+# runs and prints "false true"), so the import is in use.
+#
+# Does: `kanso play qualified_marker_in_pattern.kso` refuses with
+#   error[unused]: unused import "std/json"
+# A qualified name in a pattern does not count as a use of the import. Delete
+# the import and the message turns into `unused binding json/json_null`: the
+# same pattern is now read as a fresh binding with a slash in its name. One
+# spelling means two different things depending on an import line, and
+# neither diagnostic says which reading the compiler took. The bare spelling
+# `fn null? json_null` gets the same unused-import refusal. What works is
+# ascribing the wildcard: `fn null? _:json/json_null`.
+import "std/json"
+
+fn null? json/json_null
+  true
+
+fn null? _
+  false
+
+print "{null? 5}"

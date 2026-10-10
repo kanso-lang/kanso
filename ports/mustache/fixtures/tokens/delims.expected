@@ -1,0 +1,10 @@
+section a.b
+  text "["
+  raw x
+  text "|"
+  raw y
+  text "|"
+  escaped .
+  text "]"
+text "\n"
+partial *kind

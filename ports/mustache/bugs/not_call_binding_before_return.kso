@@ -1,0 +1,23 @@
+# A binding whose value is `not` applied to a parenthesised call, followed by
+# a `return` guard, in a function that answers an effect.
+#
+# Should: compile and print "hey! true". The binding sits with the bindings
+# and the guard follows it, which is the order canonical form asks for.
+#
+# Does: `kanso play not_call_binding_before_return.kso` refuses with
+#   error[formatting]: a `return` sits with the bindings, before the effect
+#   chain
+# pointing at the return. Writing `odd = not flag` (a name rather than a
+# call) or `odd = known? s` (no `not`) is accepted, so the `not (...)` line is
+# being read as the start of the effect chain.
+import "std/io"
+
+fn known? f
+  f == "a" or f == "b"
+
+fn shout s
+  odd = not (known? s)
+  return io/write "empty\n" if length s < 1
+  io/write "{s}! {odd}\n"
+
+shout "hey"

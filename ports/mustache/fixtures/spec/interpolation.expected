@@ -1,0 +1,43 @@
+ok   No Interpolation
+ok   Basic Interpolation
+ok   No Re-interpolation
+ok   HTML Escaping
+ok   Triple Mustache
+ok   Ampersand
+ok   Basic Integer Interpolation
+ok   Triple Mustache Integer Interpolation
+ok   Ampersand Integer Interpolation
+ok   Basic Decimal Interpolation
+ok   Triple Mustache Decimal Interpolation
+ok   Ampersand Decimal Interpolation
+ok   Basic Null Interpolation
+ok   Triple Mustache Null Interpolation
+ok   Ampersand Null Interpolation
+ok   Basic Context Miss Interpolation
+ok   Triple Mustache Context Miss Interpolation
+ok   Ampersand Context Miss Interpolation
+ok   Dotted Names - Basic Interpolation
+ok   Dotted Names - Triple Mustache Interpolation
+ok   Dotted Names - Ampersand Interpolation
+ok   Dotted Names - Arbitrary Depth
+ok   Dotted Names - Broken Chains
+ok   Dotted Names - Broken Chain Resolution
+ok   Dotted Names - Initial Resolution
+ok   Dotted Names - Context Precedence
+ok   Dotted Names are never single keys
+ok   Dotted Names - No Masking
+ok   Implicit Iterators - Basic Interpolation
+ok   Implicit Iterators - HTML Escaping
+ok   Implicit Iterators - Triple Mustache
+ok   Implicit Iterators - Ampersand
+ok   Implicit Iterators - Basic Integer Interpolation
+ok   Interpolation - Surrounding Whitespace
+ok   Triple Mustache - Surrounding Whitespace
+ok   Ampersand - Surrounding Whitespace
+ok   Interpolation - Standalone
+ok   Triple Mustache - Standalone
+ok   Ampersand - Standalone
+ok   Interpolation With Padding
+ok   Triple Mustache With Padding
+ok   Ampersand With Padding
+42 passed, 0 failed

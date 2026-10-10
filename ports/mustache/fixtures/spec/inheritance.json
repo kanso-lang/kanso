@@ -1,0 +1,204 @@
+{
+  "overview": "A block tag {{$name}} renders its own content unless a parent tag overrides it. A parent tag {{<name}} renders the partial name with the blocks it contains overriding the partial's own; an override written further out wins over one written nearer the block.",
+  "tests": [
+    {
+      "name": "Default",
+      "data": {},
+      "template": "{{$title}}Default title{{/title}}\n",
+      "expected": "Default title\n"
+    },
+    {
+      "name": "Variable",
+      "data": {
+        "bar": "baz"
+      },
+      "template": "{{$foo}}default {{bar}} content{{/foo}}\n",
+      "expected": "default baz content\n"
+    },
+    {
+      "name": "Triple Mustache",
+      "data": {
+        "bar": "<baz>"
+      },
+      "template": "{{$foo}}default {{{bar}}} content{{/foo}}\n",
+      "expected": "default <baz> content\n"
+    },
+    {
+      "name": "Sections",
+      "data": {
+        "bar": {
+          "baz": "qux"
+        }
+      },
+      "template": "{{$foo}}default {{#bar}}{{baz}}{{/bar}} content{{/foo}}\n",
+      "expected": "default qux content\n"
+    },
+    {
+      "name": "Negative Sections",
+      "data": {
+        "baz": "three"
+      },
+      "template": "{{$foo}}default {{^bar}}{{baz}}{{/bar}} content{{/foo}}\n",
+      "expected": "default three content\n"
+    },
+    {
+      "name": "Mustache Injection",
+      "data": {
+        "bar": {
+          "baz": "{{qux}}"
+        }
+      },
+      "template": "{{$foo}}default {{#bar}}{{baz}}{{/bar}} content{{/foo}}\n",
+      "expected": "default {{qux}} content\n"
+    },
+    {
+      "name": "Inherit",
+      "data": {},
+      "template": "{{<include}}{{/include}}",
+      "partials": {
+        "include": "{{$foo}}default content{{/foo}}"
+      },
+      "expected": "default content"
+    },
+    {
+      "name": "Overridden content",
+      "data": {},
+      "template": "{{<super}}{{$title}}sub template title{{/title}}{{/super}}",
+      "partials": {
+        "super": "...{{$title}}Default title{{/title}}..."
+      },
+      "expected": "...sub template title..."
+    },
+    {
+      "name": "Data does not override block",
+      "data": {
+        "var": "var in data"
+      },
+      "template": "{{<include}}{{$var}}var in template{{/var}}{{/include}}",
+      "partials": {
+        "include": "{{$var}}var in include{{/var}}"
+      },
+      "expected": "var in template"
+    },
+    {
+      "name": "Data does not override block default",
+      "data": {
+        "var": "var in data"
+      },
+      "template": "{{<include}}{{/include}}",
+      "partials": {
+        "include": "{{$var}}var in include{{/var}}"
+      },
+      "expected": "var in include"
+    },
+    {
+      "name": "Overridden parent",
+      "data": {},
+      "template": "test {{<parent}}{{$stuff}}override{{/stuff}}{{/parent}}",
+      "partials": {
+        "parent": "{{$stuff}}...{{/stuff}}"
+      },
+      "expected": "test override"
+    },
+    {
+      "name": "Two overridden parents",
+      "data": {},
+      "template": "test {{<parent}}{{$stuff}}override1{{/stuff}}{{/parent}} {{<parent}}{{$stuff}}override2{{/stuff}}{{/parent}}\n",
+      "partials": {
+        "parent": "|{{$stuff}}...{{/stuff}}{{$default}} default{{/default}}|"
+      },
+      "expected": "test |override1 default| |override2 default|\n"
+    },
+    {
+      "name": "Inherit indentation",
+      "data": {},
+      "template": "{{<parent}}{{$nineties}}hammer time{{/nineties}}{{/parent}}",
+      "partials": {
+        "parent": "stop:\n  {{$nineties}}collaborate and listen{{/nineties}}\n"
+      },
+      "expected": "stop:\n  hammer time\n"
+    },
+    {
+      "name": "Only one override",
+      "data": {},
+      "template": "{{<parent}}{{$stuff2}}override two{{/stuff2}}{{/parent}}",
+      "partials": {
+        "parent": "{{$stuff}}new default one{{/stuff}}, {{$stuff2}}new default two{{/stuff2}}"
+      },
+      "expected": "new default one, override two"
+    },
+    {
+      "name": "Parent template",
+      "data": {},
+      "template": "{{>parent}}|{{<parent}}{{/parent}}",
+      "partials": {
+        "parent": "{{$foo}}default content{{/foo}}"
+      },
+      "expected": "default content|default content"
+    },
+    {
+      "name": "Recursion",
+      "data": {},
+      "template": "{{<parent}}{{$foo}}override{{/foo}}{{/parent}}",
+      "partials": {
+        "parent": "{{$foo}}default content{{/foo}} {{$bar}}{{<parent2}}{{/parent2}}{{/bar}}",
+        "parent2": "{{$foo}}parent2 default content{{/foo}} {{<parent}}{{$bar}}don't recurse{{/bar}}{{/parent}}"
+      },
+      "expected": "override override override don't recurse"
+    },
+    {
+      "name": "Multi-level inheritance",
+      "data": {},
+      "template": "{{<parent}}{{$a}}c{{/a}}{{/parent}}",
+      "partials": {
+        "parent": "{{<older}}{{$a}}p{{/a}}{{/older}}",
+        "older": "{{<grandParent}}{{$a}}o{{/a}}{{/grandParent}}",
+        "grandParent": "{{$a}}g{{/a}}"
+      },
+      "expected": "c"
+    },
+    {
+      "name": "Multi-level inheritance, no sub child",
+      "data": {},
+      "template": "{{<parent}}{{/parent}}",
+      "partials": {
+        "parent": "{{<older}}{{$a}}p{{/a}}{{/older}}",
+        "older": "{{<grandParent}}{{$a}}o{{/a}}{{/grandParent}}",
+        "grandParent": "{{$a}}g{{/a}}"
+      },
+      "expected": "p"
+    },
+    {
+      "name": "Text inside parent",
+      "data": {},
+      "template": "{{<parent}} asdfasd {{$foo}}hmm{{/foo}} asdfasdfasdf {{/parent}}",
+      "partials": {
+        "parent": "{{$foo}}default content{{/foo}}"
+      },
+      "expected": "hmm"
+    },
+    {
+      "name": "Text inside parent (2)",
+      "data": {},
+      "template": "{{<parent}} asdfasd asdfasdfasdf {{/parent}}",
+      "partials": {
+        "parent": "{{$foo}}default content{{/foo}}"
+      },
+      "expected": "default content"
+    },
+    {
+      "name": "Block scope",
+      "data": {
+        "fruit": "apples",
+        "nested": {
+          "fruit": "bananas"
+        }
+      },
+      "template": "{{<parent}}{{$block}}I say {{fruit}}.{{/block}}{{/parent}}",
+      "partials": {
+        "parent": "{{#nested}}{{$block}}You say {{fruit}}.{{/block}}{{/nested}}"
+      },
+      "expected": "I say bananas."
+    }
+  ]
+}

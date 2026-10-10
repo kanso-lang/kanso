@@ -1,0 +1,1 @@
+{"greeting": "{{#polite}}Good evening{{/polite}}{{^polite}}Hey{{/polite}}", "name": "{{first}} the tanuki"}

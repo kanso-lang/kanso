@@ -1,0 +1,1 @@
+mustache: fixtures/errors/unclosed-tag/template.mustache: line 1, column 4: tag `{{` is never closed

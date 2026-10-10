@@ -1,0 +1,74 @@
+{
+  "overview": "Not part of the mustache spec: lambdas in this port receive a third argument that renders template text in the current context, the way mustache.js passes `render` to a section lambda.",
+  "tests": [
+    {
+      "name": "Render helper - Section",
+      "desc": "A lambda can render its section in the current context before working on it.",
+      "data": {
+        "name": "mugi",
+        "shout": {
+          "__tag__": "code",
+          "kanso": "shout"
+        }
+      },
+      "template": "{{#shout}}hi, {{name}}!{{/shout}}",
+      "expected": "HI, MUGI!"
+    },
+    {
+      "name": "Render helper - Lists",
+      "desc": "The helper renders nested sections too.",
+      "data": {
+        "items": [
+          "tea",
+          "cake",
+          "more tea"
+        ],
+        "wc": {
+          "__tag__": "code",
+          "kanso": "wordcount"
+        }
+      },
+      "template": "<{{#wc}}{{#items}}{{.}} {{/items}}{{/wc}}>",
+      "expected": "<4 words>"
+    },
+    {
+      "name": "Render helper - Alternate Delimiters",
+      "desc": "The helper renders with the tags in force at the section.",
+      "data": {
+        "name": "mugi",
+        "shout": {
+          "__tag__": "code",
+          "kanso": "shout"
+        }
+      },
+      "template": "{{=<% %>=}}<%#shout%><%name%> {{x}}<%/shout%>",
+      "expected": "MUGI {{X}}"
+    },
+    {
+      "name": "Render helper - Answer is rendered again",
+      "desc": "Whatever the lambda answers is rendered as a template, so tags that came out of the data are read a second time.",
+      "data": {
+        "code": "{{x}}",
+        "X": "twice",
+        "shout": {
+          "__tag__": "code",
+          "kanso": "shout"
+        }
+      },
+      "template": "{{#shout}}{{code}}{{/shout}}",
+      "expected": "twice"
+    },
+    {
+      "name": "Render helper - Interpolation",
+      "desc": "An interpolated lambda gets the helper too; with no section text there is nothing to render.",
+      "data": {
+        "shout": {
+          "__tag__": "code",
+          "kanso": "shout"
+        }
+      },
+      "template": "[{{shout}}]",
+      "expected": "[]"
+    }
+  ]
+}

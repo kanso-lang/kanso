@@ -1,0 +1,21 @@
+Invoice {{invoice.number}} for {{customer.name}}
+{{#customer.address}}
+  {{street}}
+  {{city}} {{postcode}}
+{{/customer.address}}
+
+{{#lines}}
+- {{qty}} x {{item}} @ {{unit}} = {{total}}
+{{/lines}}
+{{^lines}}
+(no lines)
+{{/lines}}
+
+{{=<% %>=}}
+Literal braces stay put: {{not a tag}}
+Total: <%invoice.total%> <%invoice.currency%>
+<%#invoice.paid%>Paid, thank you.<%/invoice.paid%><%^invoice.paid%>Due within <%invoice.terms%> days.<%/invoice.paid%>
+<%={{ }}=%>
+{{#invoice.notes}}
+* {{.}}
+{{/invoice.notes}}

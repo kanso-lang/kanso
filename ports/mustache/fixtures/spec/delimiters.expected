@@ -1,0 +1,15 @@
+ok   Pair Behavior
+ok   Special Characters
+ok   Sections
+ok   Inverted Sections
+ok   Partial Inheritence
+ok   Post-Partial Behavior
+ok   Surrounding Whitespace
+ok   Outlying Whitespace (Inline)
+ok   Standalone Tag
+ok   Indented Standalone Tag
+ok   Standalone Line Endings
+ok   Standalone Without Previous Line
+ok   Standalone Without Newline
+ok   Pair with Padding
+14 passed, 0 failed

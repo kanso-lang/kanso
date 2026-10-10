@@ -1,0 +1,9 @@
+parent article
+  block body
+    text "<p>"
+    escaped lede
+    text "</p>"
+  block title
+    escaped headline
+    text " | "
+    escaped site

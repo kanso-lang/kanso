@@ -1,0 +1,124 @@
+import "std/json"
+import "std/testing"
+
+fn at? line column (parse_error c l _)
+  l == line and c == column
+
+# A counter: each call answers one more than the last.
+fn count_up _ calls _
+  answered (calls + 1) "{calls + 1}"
+
+fn fails_at? template line column
+  testing/when_failed (render template {} {}) (r -> at? line column r)
+
+# `render` answers an err for a template it cannot read, and `==` wants a
+# value, so a test dispatches on the result before comparing it.
+fn renders? template data want
+  same? (render template data {}) want
+
+fn renders_with? template data partials want
+  same? (render template data partials) want
+
+fn same? (err _) _
+  false
+
+fn same? got want
+  got == want
+
+fn shows? template want
+  same? (outlined (parse template)) want
+
+fn outlined (err e)
+  err e
+
+fn outlined nodes
+  outline nodes
+
+fn wrapping s _ _
+  answered 0 "<b>{s}</b>"
+
+test_comment_is_dropped = renders? "a\{\{! not this }}b" {} "ab"
+
+test_counter_lambda_threads_state =
+  data = { "n":(lambda_of count_up) }
+  renders? "\{\{n}} \{\{n}} \{\{#n}}x\{\{/n}}" data "1 2 3"
+
+test_dotted_name =
+  data = json/decode "\{\"a\": \{\"b\": \{\"c\": 7}}}"
+  renders? "\{\{a.b.c}}" data "7"
+
+test_dotted_name_does_not_walk_back_up =
+  data = json/decode "\{\"a\": \{\"b\": \{}}, \"c\": 1}"
+  renders? "[\{\{a.b.c}}]" data "[]"
+
+test_escape_leaves_apostrophes =
+  escaped = escape "<a href='x'>&\""
+  escaped == "&lt;a href='x'&gt;&amp;&quot;"
+
+test_escapes_html = renders? "\{\{x}}" { "x":"<&\">" } "&lt;&amp;&quot;&gt;"
+
+test_hello = renders? "Hello, \{\{name}}!" { "name":"world" } "Hello, world!"
+
+test_inner_name_shadows_outer =
+  data = json/decode "\{\"x\": \"outer\", \"s\": \{\"x\": \"inner\"}}"
+  renders? "\{\{#s}}\{\{x}}\{\{/s}} \{\{x}}" data "inner outer"
+
+test_inverted_on_missing = renders? "\{\{^nope}}shown\{\{/nope}}" {} "shown"
+
+test_list_section =
+  data = json/decode "\{\"xs\": [1, 2, 3]}"
+  renders? "\{\{#xs}}<\{\{.}}>\{\{/xs}}" data "<1><2><3>"
+
+test_missing_is_empty = renders? "[\{\{nope}}]" {} "[]"
+
+test_mismatched_close_points_at_the_close = fails_at? "\{\{#a}}\n  \{\{/b}}" 2 3
+
+test_outline_nests_sections =
+  want = "section a\n  escaped b.c\n  text \"!\"\npartial p"
+  shows? "\{\{#a}}\{\{b.c}}!\{\{/a}}\{\{>p}}" want
+
+test_parse_keeps_text_and_tags =
+  nodes = parse "Hi \{\{&who}}"
+  nodes == [(text_node "Hi ") (var_node false 1 ["who"])]
+
+test_partial_used_twice_from_the_cache =
+  partials = { "p":"(\{\{.}})" }
+  data = json/decode "[1, 2, 3]"
+  renders_with? "\{\{#.}}\{\{>p}}\{\{/.}}" data partials "(1)(2)(3)"
+
+test_partial_indentation =
+  partials = { "p":"a\nb\n" }
+  renders_with? "x\n  \{\{>p}}\ny" {} partials "x\n  a\n  b\ny"
+
+test_section_lambda_gets_raw_text =
+  data = { "b":(lambda_of wrapping) "name":"kanso" }
+  renders? "\{\{#b}}hi \{\{name}}\{\{/b}}" data "<b>hi kanso</b>"
+
+test_set_delimiters_reach_to_the_end =
+  template = "\{\{=| |=}}|x| \{\{x}} |=<< >>=|<<x>>"
+  renders? template { "x":1 } "1 \{\{x}} 1"
+
+test_standalone_section_line =
+  template = "a\n  \{\{#t}}\nb\n  \{\{/t}}\nc\n"
+  renders? template { "t":true } "a\nb\nc\n"
+
+test_triple_does_not_escape = renders? "\{\{\{x}}}" { "x":"<b>" } "<b>"
+
+test_unclosed_section_points_at_the_open = fails_at? "x\n\{\{#a}}\n" 2 1
+
+test_unclosed_section_fails = testing/failed? (render "\{\{#a}}" {} {})
+
+test_unclosed_tag_points_at_the_tag = fails_at? "ab \{\{x" 1 4
+
+test_no_escape_setting =
+  plain = settings_of false false
+  same? (render_with "\{\{x}}" { "x":"<&>" } {} plain) "<&>"
+
+test_strict_names_the_miss =
+  strict = settings_of true true
+  got = render_with "a\n\{\{#s}}\{\{y}}\{\{/s}}" { "s":true } {} strict
+  testing/when_failed got (r -> r == context_miss 2 "y")
+
+test_strict_spares_inverted_sections =
+  strict = settings_of true true
+  same? (render_with "\{\{^gone}}ok\{\{/gone}}" {} {} strict) "ok"

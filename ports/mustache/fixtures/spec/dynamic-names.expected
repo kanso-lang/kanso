@@ -1,0 +1,19 @@
+ok   Basic Behavior - Partial
+ok   Basic Behavior - Name Resolution
+ok   Context Misses - Partial
+ok   Failed Lookup - Partial
+ok   Context
+ok   Dotted Names
+ok   Dotted Names - Operator Precedence
+ok   Dotted Names - Failed Lookup
+ok   Dotted names - Context Stacking
+ok   Dotted names - Context Stacking Under Repetition
+ok   Recursion
+ok   Surrounding Whitespace
+ok   Inline Indentation
+ok   Standalone Line Endings
+ok   Standalone Without Previous Line
+ok   Standalone Without Newline
+ok   Standalone Indentation
+ok   Padding Whitespace
+18 passed, 0 failed

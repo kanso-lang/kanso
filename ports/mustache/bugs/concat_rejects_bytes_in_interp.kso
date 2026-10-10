@@ -1,0 +1,13 @@
+# text/concat on a byte list that text/bytes produced.
+#
+# Should: print "[1 97]" on every engine. Appendix b says text/concat
+# "appends two lists", and text/bytes answers an int[].
+#
+# Does: native (`kanso play`) prints [1 97]; the interpreter
+# (`kanso play --interp`, and so `kanso test`) stops with
+#   error[runtime]: concat takes two lists
+# Any operand that came from text/bytes trips it, on either side, so a byte
+# list is a list to the checker and to native code but not to the oracle.
+import "std/text"
+
+print "{text/concat [1] (text/bytes "a")}"

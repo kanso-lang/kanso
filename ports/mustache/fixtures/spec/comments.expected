@@ -1,0 +1,13 @@
+ok   Inline
+ok   Multiline
+ok   Standalone
+ok   Indented Standalone
+ok   Standalone Line Endings
+ok   Standalone Without Previous Line
+ok   Standalone Without Newline
+ok   Multiline Standalone
+ok   Indented Multiline Standalone
+ok   Indented Inline
+ok   Surrounding Whitespace
+ok   Variable Name Collision
+12 passed, 0 failed

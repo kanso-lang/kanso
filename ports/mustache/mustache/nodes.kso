@@ -1,0 +1,62 @@
+# A parsed template is a list of the nodes below, and a section's children
+# are another such list.
+#
+# `{{$name}}…{{/name}}`: a block a parent may override (inheritance).
+pub type block_node
+  children
+  name
+
+# The tag pair in force where a section opened. A lambda's answer for that
+# section is parsed again with these, so they travel with the node.
+pub type delims
+  close
+  open
+
+# `{{^name}}…{{/name}}`. `line` is where the tag stood, for strict mode.
+pub type inverted_node
+  children
+  line
+  name
+
+# `{{<name}}…{{/name}}`: render the partial `name` with these blocks
+# overriding its own. Only the block children of the tag count.
+pub type parent_node
+  blocks
+  indent
+  name
+
+# `{{>name}}`, or `{{>*name}}` when the name is looked up in the data.
+pub type partial_node
+  dynamic
+  indent
+  name
+
+# `{{#name}}…{{/name}}`. `raw` is the unrendered source between the tags,
+# which is what a lambda receives.
+pub type section_node
+  children
+  delims
+  line
+  name
+  raw
+
+pub type text_node
+  content
+
+# `{{name}}` escapes and `{{{name}}}` / `{{&name}}` do not.
+pub type var_node
+  escaped
+  line
+  name
+
+# A name strict mode could not find in the data, and the line it was on.
+pub type context_miss
+  line
+  name
+
+# What went wrong while reading a template, and where: the line, and the
+# byte column within it, of the tag at fault.
+pub type parse_error
+  column
+  line
+  reason

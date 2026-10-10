@@ -1,0 +1,10 @@
+{
+  "title": "Today's <pot> & cups",
+  "count": 3,
+  "shop": {"name": "Ensō", "city": "Kyoto", "hours": "9–17"},
+  "teas": [
+    {"name": "Sencha", "blurb": "<em>grassy</em>, bright", "tags": ["green", "steamed"]},
+    {"name": "Hōjicha", "blurb": "roasted & low in caffeine", "tags": []},
+    {"name": "Genmaicha \"popcorn tea\"", "blurb": "with toasted rice", "tags": ["green"]}
+  ]
+}

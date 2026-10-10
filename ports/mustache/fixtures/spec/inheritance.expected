@@ -1,0 +1,22 @@
+ok   Default
+ok   Variable
+ok   Triple Mustache
+ok   Sections
+ok   Negative Sections
+ok   Mustache Injection
+ok   Inherit
+ok   Overridden content
+ok   Data does not override block
+ok   Data does not override block default
+ok   Overridden parent
+ok   Two overridden parents
+ok   Inherit indentation
+ok   Only one override
+ok   Parent template
+ok   Recursion
+ok   Multi-level inheritance
+ok   Multi-level inheritance, no sub child
+ok   Text inside parent
+ok   Text inside parent (2)
+ok   Block scope
+21 passed, 0 failed

@@ -1,0 +1,109 @@
+{
+  "overview": "Set Delimiter tags change the tag pair for the rest of the template, or until the next change. They do not reach into partials.",
+  "tests": [
+    {
+      "name": "Pair Behavior",
+      "data": {
+        "text": "Hey!"
+      },
+      "template": "{{=<% %>=}}(<%text%>)",
+      "expected": "(Hey!)"
+    },
+    {
+      "name": "Special Characters",
+      "data": {
+        "text": "It worked!"
+      },
+      "template": "({{=[ ]=}}[text])",
+      "expected": "(It worked!)"
+    },
+    {
+      "name": "Sections",
+      "data": {
+        "section": true,
+        "data": "I got interpolated."
+      },
+      "template": "[\n{{#section}}\n  {{data}}\n  |data|\n{{/section}}\n\n{{= | | =}}\n|#section|\n  {{data}}\n  |data|\n|/section|\n]\n",
+      "expected": "[\n  I got interpolated.\n  |data|\n\n  {{data}}\n  I got interpolated.\n]\n"
+    },
+    {
+      "name": "Inverted Sections",
+      "data": {
+        "section": false,
+        "data": "I got interpolated."
+      },
+      "template": "[\n{{^section}}\n  {{data}}\n  |data|\n{{/section}}\n\n{{= | | =}}\n|^section|\n  {{data}}\n  |data|\n|/section|\n]\n",
+      "expected": "[\n  I got interpolated.\n  |data|\n\n  {{data}}\n  I got interpolated.\n]\n"
+    },
+    {
+      "name": "Partial Inheritence",
+      "data": {
+        "value": "yes"
+      },
+      "template": "[ {{>include}} ]\n{{= | | =}}\n[ |>include| ]\n",
+      "partials": {
+        "include": ".{{value}}."
+      },
+      "expected": "[ .yes. ]\n[ .yes. ]\n"
+    },
+    {
+      "name": "Post-Partial Behavior",
+      "data": {
+        "value": "yes"
+      },
+      "template": "[ {{>include}} ]\n[ .{{value}}.  .|value|. ]\n",
+      "partials": {
+        "include": ".{{value}}. {{= | | =}} .|value|."
+      },
+      "expected": "[ .yes.  .yes. ]\n[ .yes.  .|value|. ]\n"
+    },
+    {
+      "name": "Surrounding Whitespace",
+      "data": {},
+      "template": "| {{=@ @=}} |",
+      "expected": "|  |"
+    },
+    {
+      "name": "Outlying Whitespace (Inline)",
+      "data": {},
+      "template": " | {{=@ @=}}\n",
+      "expected": " | \n"
+    },
+    {
+      "name": "Standalone Tag",
+      "data": {},
+      "template": "Begin.\n{{=@ @=}}\nEnd.\n",
+      "expected": "Begin.\nEnd.\n"
+    },
+    {
+      "name": "Indented Standalone Tag",
+      "data": {},
+      "template": "Begin.\n  {{=@ @=}}\nEnd.\n",
+      "expected": "Begin.\nEnd.\n"
+    },
+    {
+      "name": "Standalone Line Endings",
+      "data": {},
+      "template": "|\r\n{{= @ @ =}}\r\n|",
+      "expected": "|\r\n|"
+    },
+    {
+      "name": "Standalone Without Previous Line",
+      "data": {},
+      "template": "  {{=@ @=}}\n=",
+      "expected": "="
+    },
+    {
+      "name": "Standalone Without Newline",
+      "data": {},
+      "template": "=\n  {{=@ @=}}",
+      "expected": "=\n"
+    },
+    {
+      "name": "Pair with Padding",
+      "data": {},
+      "template": "|{{= @   @ =}}|",
+      "expected": "||"
+    }
+  ]
+}

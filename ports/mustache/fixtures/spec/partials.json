@@ -1,0 +1,131 @@
+{
+  "overview": "Partial tags render another template, by name, in the current context. A standalone partial tag indents every line of the partial by its own indentation.",
+  "tests": [
+    {
+      "name": "Basic Behavior",
+      "data": {},
+      "template": "\"{{>text}}\"",
+      "partials": {
+        "text": "from partial"
+      },
+      "expected": "\"from partial\""
+    },
+    {
+      "name": "Failed Lookup",
+      "data": {},
+      "template": "\"{{>text}}\"",
+      "partials": {},
+      "expected": "\"\""
+    },
+    {
+      "name": "Context",
+      "data": {
+        "text": "content"
+      },
+      "template": "\"{{>partial}}\"",
+      "partials": {
+        "partial": "*{{text}}*"
+      },
+      "expected": "\"*content*\""
+    },
+    {
+      "name": "Recursion",
+      "data": {
+        "content": "X",
+        "nodes": [
+          {
+            "content": "Y",
+            "nodes": []
+          }
+        ]
+      },
+      "template": "{{>node}}",
+      "partials": {
+        "node": "{{content}}<{{#nodes}}{{>node}}{{/nodes}}>"
+      },
+      "expected": "X<Y<>>"
+    },
+    {
+      "name": "Nested",
+      "data": {
+        "a": "hello",
+        "b": "world"
+      },
+      "template": "{{>outer}}",
+      "partials": {
+        "outer": "*{{a}} {{>inner}}*",
+        "inner": "{{b}}!"
+      },
+      "expected": "*hello world!*"
+    },
+    {
+      "name": "Surrounding Whitespace",
+      "data": {},
+      "template": "| {{>partial}} |",
+      "partials": {
+        "partial": "\t|\t"
+      },
+      "expected": "| \t|\t |"
+    },
+    {
+      "name": "Inline Indentation",
+      "data": {
+        "data": "|"
+      },
+      "template": "  {{data}}  {{> partial}}\n",
+      "partials": {
+        "partial": ">\n>"
+      },
+      "expected": "  |  >\n>\n"
+    },
+    {
+      "name": "Standalone Line Endings",
+      "data": {},
+      "template": "|\r\n{{>partial}}\r\n|",
+      "partials": {
+        "partial": ">"
+      },
+      "expected": "|\r\n>|"
+    },
+    {
+      "name": "Standalone Without Previous Line",
+      "data": {},
+      "template": "  {{>partial}}\n>",
+      "partials": {
+        "partial": ">\n>"
+      },
+      "expected": "  >\n  >>"
+    },
+    {
+      "name": "Standalone Without Newline",
+      "data": {},
+      "template": ">\n  {{>partial}}",
+      "partials": {
+        "partial": ">\n>"
+      },
+      "expected": ">\n  >\n  >"
+    },
+    {
+      "name": "Standalone Indentation",
+      "data": {
+        "content": "<\n->"
+      },
+      "template": "\\\n {{>partial}}\n/\n",
+      "partials": {
+        "partial": "|\n{{{content}}}\n|\n"
+      },
+      "expected": "\\\n |\n <\n->\n |\n/\n"
+    },
+    {
+      "name": "Padding Whitespace",
+      "data": {
+        "boolean": true
+      },
+      "template": "|{{> partial }}|",
+      "partials": {
+        "partial": "[]"
+      },
+      "expected": "|[]|"
+    }
+  ]
+}

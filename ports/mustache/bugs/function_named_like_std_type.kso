@@ -1,0 +1,23 @@
+# A function of this file, named like a type std/list exports, passed as a
+# value.
+#
+# Should: call this file's function and print "2" on every engine, or
+# refuse the name at compile time (as the `run` case in
+# std_name_leaks_without_import.kso does).
+#
+# Does: the engines disagree. Native (`kanso play`) prints 2. The
+# interpreter (`kanso play --interp`, and so `kanso test`) stops with
+#   error[runtime]: `counting` has 1 field(s), got 2 (construction is
+#   positional, fields alphabetical)
+# because it takes the value `counting` to be std/list's record constructor
+# `counting at`. Nothing at compile time says the name is shared.
+import "std/list"
+
+fn apply f
+  f 1 1
+
+fn counting a b
+  a + b
+
+total = list/sum [(apply counting)]
+print "{total}"

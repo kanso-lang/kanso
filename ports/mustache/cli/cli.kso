@@ -1,0 +1,146 @@
+import "../mustache"
+import "../spec"
+import "std/io"
+import "std/json"
+import "std/list"
+import "std/os"
+import "std/path"
+import "std/text"
+
+fn checked_partials (err r)
+  fail "partials are not JSON: {r.reason} at byte {r.position}"
+
+fn checked_partials m
+  effect m
+
+fn command "render" argv s
+  return usage if length argv < 3
+  partials = partials_source argv[2] argv[4]
+  os/read_file argv[2] .> (t -> read_template argv[2] t argv[3] partials s)
+
+fn command "spec" argv _
+  return usage if length argv < 2
+  os/read_file argv[2] .> suite_report
+
+fn command "tokens" argv _
+  return usage if length argv < 2
+  os/read_file argv[2] .> (source -> tokens_of argv[2] source)
+
+fn command _ _ _
+  usage
+
+# Each input is checked as it arrives: a missing file, then JSON that does
+# not parse. One function per step, because each step has one thing that can
+# go wrong and an arm can claim it in one position only.
+fn decoded_data _ _ (err r) _ _
+  fail "data is not JSON: {r.reason} at byte {r.position}"
+
+fn decoded_data name template d partials s
+  partials .> (p -> output name (mustache/render_with template d p s))
+
+fn fail message
+  io/write_err "mustache: {message}\n" .> (_ -> os/exit 1)
+
+fn json_partials (file_not_found f)
+  fail "no such file: {f}"
+
+fn json_partials source
+  checked_partials (json/decode source)
+
+# Read every `*.mustache` file in a directory, one after another, into a map
+# from the name without its extension to the source.
+fn loaded dir names i acc
+  return effect acc if i < 1 or length names < i
+  name = names[i]
+  os/read_file! (path/join dir name)
+    .> (src -> loaded dir names (i + 1) (put acc (path/stem name) src))
+
+fn flag? a
+  text/slice a 1 2 == "--"
+
+fn has? flags name
+  list/any? flags (f -> f == name)
+
+# `not (known? f)` written inline in `main` trips a formatting rule
+# (bugs/not_call_binding_before_return.kso), so the negation lives here.
+fn unknown_flag? f
+  not (f == "--no-escape" or f == "--strict")
+
+# The command line:
+#   spec <suite.json>                          run a suite in the spec's format
+#   render <template> <data.json> [partials]   print one rendering
+#   tokens <template>                          print the parsed tree
+# Partials are a JSON object of name to source, or a directory of
+# `name.mustache` files; without one, the template's own directory. Two
+# options apply to render: --strict makes a name missing from the data an
+# error, and --no-escape stops {{name}} from escaping HTML.
+pub fn main argv
+  flags = list/to_list (list/select argv flag?)
+  args = list/to_list (list/reject argv flag?)
+  stray = list/find flags unknown_flag?
+  raw = has? flags "--no-escape"
+  return usage if length args < 1
+  return fail "unknown option {stray}" if stray != none
+  command args[1] args (mustache/settings_of (not raw) (has? flags "--strict"))
+
+fn output name (err r:mustache/context_miss)
+  fail "{name}: line {r.line}: `{r.name}` is not in the data"
+
+fn output name (err r)
+  fail "{name}: line {r.line}, column {r.column}: {r.reason}"
+
+fn output _ s
+  io/write s
+
+fn partials_at dir true
+  os/list_dir dir .> (names -> loaded dir (templates_in names) 1 {})
+
+fn partials_at file false
+  os/read_file file .> json_partials
+
+fn partials_from p
+  os/is_dir p .> (dir? -> partials_at p dir?)
+
+fn partials_source template none
+  partials_from (path/dirname template)
+
+fn partials_source _ given
+  partials_from given
+
+fn read_data _ _ (file_not_found f) _ _
+  fail "no such file: {f}"
+
+fn read_data name template data partials s
+  decoded_data name template (json/decode data) partials s
+
+fn read_template _ (file_not_found f) _ _ _
+  fail "no such file: {f}"
+
+fn read_template name template data_path partials s
+  os/read_file data_path .> (d -> read_data name template d partials s)
+
+fn shown_tokens name (err r)
+  fail "{name}: line {r.line}, column {r.column}: {r.reason}"
+
+fn shown_tokens _ nodes
+  print (mustache/outline nodes)
+
+fn suite_report (file_not_found f)
+  fail "no such file: {f}"
+
+fn suite_report source
+  io/write (spec/run_suite source)
+
+fn templates_in names
+  list/to_list (list/select names (n -> path/extension n == "mustache"))
+
+fn tokens_of _ (file_not_found f)
+  fail "no such file: {f}"
+
+fn tokens_of name source
+  shown_tokens name (mustache/parse source)
+
+usage = io/write_err "usage: mustache spec <suite.json>\n"
+  .> (_ -> io/write_err "       mustache render <template> <data> [partials]\n")
+  .> (_ -> io/write_err "       mustache tokens <template>\n")
+  .> (_ -> os/exit 2)
