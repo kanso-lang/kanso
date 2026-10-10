@@ -25978,3 +25978,19 @@ runbench reads 180,786 instructions more for the wait's arithmetic and is
 projected at 1,152,754,421 until CI reads it. Welfare falls from 91.0246 to
 91.0239, which this fix pays to remove a regression the carried kanso#1824
 would otherwise ship.
+
+CI has now read the combined tree, lap wait included. runbench reads
+1,152,754,435, fourteen instructions over the projection, so the wait's
+180,786 holds. The rows the projections had carried land as follows.
+work_encodebench lands on 2,398,370,183, work_escapebench on 39,045,884,
+work_indexbench on 2,459,212, work_livebench on 1,474,870,796, work_oneshot on
+13,223,628 and work_scanbench on 270,249. work_basket falls to 30,812,505.
+compile_instructions lands on 25,832,558, entry_instructions on 85,436,280,
+library_instructions on 85,987,742, emit_instructions on 7,037,238 and
+interp_instructions on 489,012,183. codegen_instructions_dev lands on
+118,951,226 and codegen_instructions_release on 454,427,018.
+browser_compile_instructions lands on 391,401,241, browser_compile_peak_bytes
+on 675,725 and browser_run_instructions on 34,124,829. The run program's
+emitted code gains 29 lines, which moves emitted_other_branches to 16,399,
+emitted_other_calls to 17,406 and emitted_other_lines to 146,724, and `text`
+totals 4,833,086. Welfare reads 91.0317 on CI's rows, and the rise is banked.
