@@ -24515,15 +24515,18 @@ that the extra caller cost them their inlining there. That reading has not
 been isolated: the measurement shows the row moving with the attribute and
 nothing else.
 
-The native compile rows in this entry's goldens are projections: CI's rows from
-the first push, carried onto main by the branch's own delta, from a build
-without the attribute. The next CI run measures the tree as it stands, and
-its rows replace them.
+CI's rows for the tree as pushed: `compile_instructions` 25,855,719 to
+25,829,822, `entry_instructions` 85,257,442 to 85,178,721 and
+`library_instructions` 85,813,347 to 85,734,452, all lower; `emit_instructions`
+7,035,904 to 7,062,270, 26,366 or 0.37% higher, and `interp_instructions`
+488,869,908 to 488,913,120. The emit row is where the attribute shows on
+native: the codegen pass runs the helpers it inlined. The runtime rows are the
+projection exactly.
 
 The trend gate's names for what rose, each at the value it landed on:
 `basket_alloc_bytes` 7,522,273; `basket_allocs` 27,264; `basket_buf_reuse`
 119; `basket_sh_buf` 689,952; `branches` 53; `calls` 88; `lines` 1,589;
-`interp_instructions` 488,909,159; `emit_instructions` 7,040,683;
+`interp_instructions` 488,913,120; `emit_instructions` 7,062,270;
 `work_basket` 32,362,738; `emitted_other_branches` 16,032;
 `emitted_other_calls` 17,104; `emitted_other_lines` 144,174; `text`
 4,586,926; `a_map_whose_keys_arrived_in_order_is_its_own_view_beat_iters`
