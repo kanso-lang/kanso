@@ -627,6 +627,9 @@ impl<'a> Analysis<'a> {
         match body {
             // an arm that declines to write hands the accumulator back
             Expr::Ident(n, _, _) if n == acc => true,
+            // `"{acc}{piece}"` joins onto the accumulator and mentions it
+            // nowhere else, so its result is the accumulator extended
+            Expr::Str(..) => joins_onto(body, acc),
             Expr::App { head, args, .. } => match head.as_ref() {
                 // the wrapper: the same folder, applied where it stands
                 Expr::Lambda { params, body: inner, .. } => {
@@ -1506,6 +1509,7 @@ fn string_builders_with(analysis: &Analysis, program: &Program) -> (Sites, Slots
             walk_for_builder(analysis, decl, e, &mut sites, &mut accs);
         }
     }
+    named_folder_joins(analysis, program, &mut sites);
     // A parameter that forwards the accumulator on is carrying one too, so it
     // joins the set whose callers convert a seed — the conversion moves out to
     // where the value enters the cycle, rather than happening on every hop.
@@ -1699,6 +1703,20 @@ fn walk_for_builder(
     if matches!(e, Expr::Lambda { .. }) {
         return;
     }
+    // except a fold's own folder, which runs once per element on the
+    // accumulator the fold owns: a join onto that accumulator writes into it
+    if let Expr::App { head, args, .. } = e {
+        if matches!(head.as_ref(), Expr::Ident(n, _, _) if a.folds.contains(n.as_str()))
+            && args.len() == 3
+            && a.fold_owns_accumulator(args, decl, None)
+        {
+            if let Expr::Lambda { params, body, .. } = &args[2] {
+                if let Some((acc, _)) = params.first() {
+                    mark_folder_joins(decl, body, acc, sites);
+                }
+            }
+        }
+    }
     if let Expr::Str(parts, span) = e {
         if parts.len() > 1 {
             if let Some(TemplatePart::Interp(Expr::Ident(name, _, _))) = parts.first() {
@@ -1712,6 +1730,133 @@ fn walk_for_builder(
     for child in child_exprs(e) {
         walk_for_builder(a, decl, child, sites, accs);
     }
+}
+
+/// Is `e` a template that starts with `acc` and mentions it nowhere else?
+fn joins_onto(e: &Expr, acc: &str) -> bool {
+    let Expr::Str(parts, _) = e else { return false };
+    parts.len() > 1
+        && matches!(parts.first(), Some(TemplatePart::Interp(Expr::Ident(n, _, _))) if n == acc)
+        && count_in_expr(acc, e) == 1
+}
+
+/// The joins in a validated folder's body that extend its accumulator, along
+/// the paths `body_is_folder` accepts: the body itself, either arm of a
+/// conditional, and a wrapper applied where it stands.
+fn mark_folder_joins(
+    decl: &FnDecl,
+    body: &Expr,
+    acc: &str,
+    sites: &mut HashSet<(std::sync::Arc<str>, usize, usize)>,
+) {
+    match body {
+        Expr::Str(_, span) if joins_onto(body, acc) => {
+            sites.insert((decl.file.clone(), span.line as usize, span.col as usize));
+        }
+        Expr::App { head, args, .. } => match head.as_ref() {
+            Expr::Lambda { params, body: inner, .. } => {
+                if let Some((inner_acc, _)) = params.first() {
+                    mark_folder_joins(decl, inner, inner_acc, sites);
+                }
+            }
+            Expr::Ident(n, _, _) if n == "if" && args.len() == 3 => {
+                mark_folder_joins(decl, &args[1], acc, sites);
+                mark_folder_joins(decl, &args[2], acc, sites);
+            }
+            _ => {}
+        },
+        _ => {}
+    }
+}
+
+/// Joins in a function handed to a fold by name, `fold xs "" piece`, where
+/// `piece acc i` answers `"{acc}..."`. The fold applies it once per element to
+/// the accumulator it owns, as it would a lambda, so the join may write into
+/// that accumulator on the same terms: every arm's last expression joins onto
+/// its first parameter and mentions it nowhere else, every direct call hands
+/// that argument over, and every place the name is used as a value is the
+/// folder of a fold whose seed nothing else holds.
+fn named_folder_joins(
+    a: &Analysis,
+    program: &Program,
+    sites: &mut HashSet<(std::sync::Arc<str>, usize, usize)>,
+) {
+    for decl in real_fns(program) {
+        if decl.params.len() != 2 || !a.escapes_as_value(&decl.name, 2) {
+            continue;
+        }
+        let arms: Vec<&FnDecl> =
+            real_fns(program).filter(|d| d.name == decl.name && d.params.len() == 2).collect();
+        // each group once, from its first arm
+        if !std::ptr::eq(arms[0], decl) {
+            continue;
+        }
+        let joins: Option<Vec<&Expr>> = arms
+            .iter()
+            .map(|d| {
+                let Some(Pattern::Var(acc, _)) = d.params.first() else { return None };
+                let [Stmt::Expr(last)] = d.body.as_slice() else { return None };
+                joins_onto(last, acc).then_some(last)
+            })
+            .collect();
+        let Some(joins) = joins else { continue };
+        if !a.call_sites_hand_over(&decl.name, 2, 0) || !only_folded(a, program, &decl.name) {
+            continue;
+        }
+        for (d, join) in arms.iter().zip(joins) {
+            if let Expr::Str(_, span) = join {
+                sites.insert((d.file.clone(), span.line as usize, span.col as usize));
+            }
+        }
+    }
+}
+
+/// Is every mention of `name` that is not the head of a call the folder of
+/// a fold whose seed nothing else holds?
+fn only_folded(a: &Analysis, program: &Program, name: &str) -> bool {
+    fn walk(a: &Analysis, ctx: &FnDecl, e: &Expr, name: &str, ok: &mut bool) {
+        if !*ok {
+            return;
+        }
+        match e {
+            Expr::Ident(n, _, _) if n == name => *ok = false,
+            Expr::App { head, args, .. } => {
+                let folded = matches!(head.as_ref(), Expr::Ident(f, _, _) if a.folds.contains(f.as_str()))
+                    && args.len() == 3
+                    && matches!(&args[2], Expr::Ident(n, _, _) if n == name);
+                if folded {
+                    if !a.unique_in(&args[1], ctx, None) {
+                        *ok = false;
+                    }
+                    walk(a, ctx, &args[0], name, ok);
+                    walk(a, ctx, &args[1], name, ok);
+                    return;
+                }
+                match head.as_ref() {
+                    // a partial application keeps what it was given
+                    Expr::Ident(n, _, _) if n == name && args.len() != 2 => *ok = false,
+                    Expr::Ident(n, _, _) if n == name => {}
+                    _ => walk(a, ctx, head, name, ok),
+                }
+                for arg in args {
+                    walk(a, ctx, arg, name, ok);
+                }
+            }
+            _ => crate::for_each_child(e, |c| walk(a, ctx, c, name, ok)),
+        }
+    }
+    let mut ok = true;
+    for &d in a.mentions.mentioning(name) {
+        let decl = &program.fns[d];
+        for stmt in &decl.body {
+            let e = match stmt {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
+                Stmt::Set { value, .. } => value,
+            };
+            walk(a, decl, e, name, &mut ok);
+        }
+    }
+    ok
 }
 
 /// The parameter index of `name`, when every caller hands it over and this
