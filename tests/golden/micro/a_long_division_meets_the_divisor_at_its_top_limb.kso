@@ -1,0 +1,26 @@
+# Long division by numbers of two and three 64-bit limbs, the native
+# runtime's digit. Each dividend is (v - 1) * 2^64 + a low limb, so after
+# the first quotient digit the remainder's top limb equals the divisor's,
+# where the digit estimate takes its special case; the others sit just under
+# and just over a multiple of the divisor, where the estimate is too large
+# and the add-back runs. Every line prints a quotient and a remainder.
+fn pow _ 0
+  1
+
+fn pow b e
+  b * pow b (e - 1)
+
+fn split u v
+  print "{u / v} {u % v}"
+
+fn edges v
+  split ((v - 1) * pow 2 64 + 12345) v
+    .> (_ -> split ((v - 1) * pow 2 128 + pow 2 64 - 1) v)
+    .> (_ -> split (v * (pow 2 64 - 1) - 1) v)
+    .> (_ -> split (v * (pow 2 64 - 1) + 1) v)
+    .> (_ -> split (0 - (v * pow 2 70 + 3)) v)
+
+pub play = edges (pow 2 127 + 1)
+  .> (_ -> edges (pow 2 128 - 1))
+  .> (_ -> edges (pow 2 191 + pow 2 64 - 1))
+  .> (_ -> edges (pow 2 192 - pow 2 100))
