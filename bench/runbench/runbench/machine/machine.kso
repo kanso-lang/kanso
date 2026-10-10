@@ -1,0 +1,43 @@
+# The shape of a tree-walking interpreter, which is what the lox and mal ports
+# are. `exec` is a tail cycle: a block runs its first statement and tail-calls
+# itself on the rest. A loop statement enters `spin` from inside that cycle,
+# carrying the machine's state and the statement it repeats, and each pass
+# makes a new state and a string the next pass drops. Until kanso#1824 the
+# entry from the cycle kept the loop from rewinding, so every pass stayed in
+# the arena: the lox port's for-loop held 3 GB at fifty thousand passes. This
+# phase is the one that prices run memory, and the arena's peak should not grow
+# with its count.
+type state
+  count
+  note
+
+type repeat
+  body
+  times
+
+type bump
+
+type block
+  first
+  rest
+
+fn exec (repeat body times) st
+  spin body times st
+
+fn exec (block first rest) st
+  exec rest (exec first st)
+
+fn exec bump st
+  state (st.count + 1) "pass {st.count}"
+
+fn exec _ st
+  st
+
+fn spin _ 0 st
+  st
+
+fn spin body n st
+  spin body (n - 1) (exec body st)
+
+pub fn total n
+  (exec (block (repeat bump n) none) (state 0 "")).count

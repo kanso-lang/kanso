@@ -1,0 +1,15 @@
+import "std/list"
+
+# A fold whose folder answers `"{acc}..."`, which is how the mustache port
+# renders a section and how most programs build a string out of a list. Once
+# the fold owns its accumulator, each step can write onto the end of it.
+# Until kanso#1825 each step copied the whole string so far, so the bytes a
+# fold allocated grew with the square of its length.
+fn piece acc i
+  "{acc}<{i}>"
+
+fn upto n
+  list/take (list/iterate 1 (i -> i + 1)) n
+
+pub fn total n
+  length (list/fold (upto n) "" piece)
