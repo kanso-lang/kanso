@@ -24814,12 +24814,12 @@ not established. Opening the constant chunk before anything else is allocated
 left the count unchanged to the instruction, so the chunk does not sit in the
 way. `encodebench` and `livebench` fall about 375,000 each with the smaller
 chunk, and `deepbench` falls 4.4 million. Release codegen falls 80,700
-instructions and dev codegen rises 29,476; each benchmark's text grows 192
+instructions and dev codegen rises 29,466; each benchmark's text grows 192
 bytes.
 
 By key: `work_runbench` lands on 1,131,250,979, `work_oneshot` on 13,176,487,
 `work_jsonbench` on 860,548,891, `work_escapebench` on 39,045,280 and
-`work_widebench` on 28,094,541. `codegen_instructions_dev` lands on 118,896,772
+`work_widebench` on 28,094,541. `codegen_instructions_dev` lands on 118,896,762
 and `text` on 4,612,254 across the fourteen binaries. `carry_dedup` falls to 0
 wherever it counted: `run_carry_dedup` from 71, `encode_carry_dedup`,
 `oneshot_carry_dedup`, `wide_carry_dedup`, `digest_carry_dedup`,

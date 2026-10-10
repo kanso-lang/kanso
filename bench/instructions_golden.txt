@@ -743,7 +743,7 @@ basket 32375114
 widebench 28094541
 deepbench 365792692
 escapebench 39045280
-pendbench 190390473
+pendbench 190390436
 indexbench 2456650
 scanbench 268468
 digestbench 5560569
