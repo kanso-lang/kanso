@@ -24679,3 +24679,18 @@ three engines with this compiler. Three smaller programs that carry and read
 maps did not reproduce the crash, because their puts happened in place and
 left the maps in the arena.
 
+The two fixes cost a little everywhere the runtime is measured, most of it in
+the second registry pass a carried pop now makes. On CI's rows:
+
+- `text` grows 1,472 bytes a binary, to 4,609,566 in all.
+- `work_deepbench` rises 103,990 to 370,195,223 and `work_runbench` 14,986 to
+  1,129,603,831. `work_encodebench` lands on 2,384,338,163,
+  `work_oneshot` on 13,027,293, `work_widebench` on 28,094,348,
+  `work_indexbench` on 2,458,507 and `work_scanbench` on 281,715, each within
+  a few hundred instructions of main.
+- `codegen_instructions_dev` rises to 118,867,296 and
+  `codegen_instructions_release` to 453,787,838.
+- `browser_run_instructions` rises to 33,519,546.
+
+Welfare falls from 90.25811251 to 90.25801113, and the floor follows under the
+2026-09-13 rule: two programs that crashed natively now run.
