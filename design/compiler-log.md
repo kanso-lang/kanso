@@ -24657,5 +24657,11 @@ carries only scalars and threaded parameters through its rewind. Carrying a
 heap value round a cluster is the next piece of work.
 
 No benchmark's run changed: every runtime cost vein agrees with its golden.
-The analysis is dearer to run. browser_compile_instructions rises from
-387,724,060 to 389,828,140 with this tree's rustc.
+The analysis is dearer to run, on CI's rows after merging main:
+`compile_instructions` rises to 25,861,592, `entry_instructions` to
+85,526,009 and `library_instructions` to 86,078,947, while
+`emit_instructions` falls to 7,032,277 and `interp_instructions` to
+488,876,843. `browser_compile_instructions` rises from 388,182,464 to
+390,287,782 with this tree's rustc. Welfare falls from 90.25811251 to
+90.25621395, and the floor waits on Clay, since this is a memory fix rather than
+a ruled part of the language.
