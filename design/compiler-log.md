@@ -24842,11 +24842,14 @@ this corpus than it saved, because its maps sit below the innermost mark, and
 was dropped.
 
 CI's rows for the three pieces together, against main. The work rows that fall
-are runbench, 1,129,603,831 to 1,127,640,368, and basket, 32,382,758 to
-30,339,466. The ones that rise are encodebench by 2,866 to 2,384,341,029,
-oneshot by 2,810 to 13,030,103, indexbench by 514 to 2,459,021, scanbench by
-309 to 282,024 and livebench by 3,146 to 1,473,488,334: none of them carries a
-cluster, and the rise is the larger runtime each binary links. `text` grows
+are `work_runbench`, 1,129,603,831 to 1,127,640,368, and `work_basket`,
+32,382,758 to 30,339,466. The ones that rise are `work_encodebench` by 2,866 to
+2,384,341,029, `work_oneshot` by 2,810 to 13,030,103, `work_indexbench` by 514
+to 2,459,021, `work_scanbench` by 309 to 282,024 and `work_livebench` by 3,146
+to 1,473,488,334: none of them carries a cluster, and the rise is the larger
+runtime each binary links. The run program's tenure falls with its staging:
+`run_ten_blocks` from 6 to 1, `run_ten_frees` from 6 to 1 and
+`run_ten_handups` from 2 to 1. `text` grows
 1,072 bytes in every binary, to 4,624,574 in all. `codegen_instructions_dev`
 rises 8,776 to 118,876,072, `compile_instructions` 25,851 to 25,858,191,
 `entry_instructions` 79,015 to 85,514,540 and `library_instructions` 79,237 to
