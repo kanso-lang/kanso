@@ -24571,3 +24571,21 @@ A put that replaces a key already in the map still walks the pairs log
 backwards to find its last write, so a tally whose keys repeat pays for
 the distance back to that key's last occurrence. That walk is untouched
 here.
+
+The first round of CI put welfare 0.0000 below its floor, and all of the
+fall was in the run program: runbench rose from 1,129,588,698 to
+1,130,533,679. Callgrind on both builds put the whole difference in one
+function, `k_b_columns`, which `keys` and `values` reach on every call, and
+its disassembly showed why. It asks `k_map_sorted` for the view, and the
+check before that call grew from one test (is there a view?) to two (is
+there a view, and does it have a side?), five instructions where main had
+two. The side mark was the pointer's low bit.
+
+The mark now sits in the pointer's top bit. A 64-bit address never sets it,
+so read as a signed number the view pointer is positive with no side, zero
+with no view and negative with a side, and one test against zero asks both
+questions. `k_b_columns` came back to main's instructions with one alignment
+nop added before its copy loop. Measured locally from one directory against
+a build of main's runtime, runbench is 207,423 instructions above main and
+livebench 903,510, down from 945,000 and 4,208,000. wasm32 keeps the low
+bit, because a 32-bit address can have its top bit set.

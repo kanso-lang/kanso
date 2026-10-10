@@ -8017,11 +8017,20 @@ static long long k_view_cap(KValue* view) {
    right at a time, where the interpreter took 0.2.
 
    The side lives in the second word of the view's header slot, which the
-   capacity leaves unused, and the map says it has one by setting the low bit
-   of its view pointer. So a header pays nothing for it, and a read that finds
-   the bit clear has nothing more to ask. In a side buffer the same word holds
-   the side's length. */
+   capacity leaves unused, and the map says it has one by setting the top bit
+   of its view pointer. So a header pays nothing for it, and read as a signed
+   number the pointer answers both of a reader's questions at once: positive
+   is a view with no side, zero is no view, negative is a view with a side.
+   `keys` and `values` ask on every call, and the low bit cost them two
+   instructions a call, 706,000 on the run program. A 64-bit address has its
+   top bit clear, which the mark needs. A 32-bit one may not, so wasm32 marks
+   the low bit and asks the two questions separately. In a side buffer the
+   same word holds the side's length. */
+#if UINTPTR_MAX > 0xffffffffu
+#define K_VIEW_SIDE ((uintptr_t)1 << 63)
+#else
 #define K_VIEW_SIDE ((uintptr_t)1)
+#endif
 static inline long long* k_view_word(KValue* view) {
     return (long long*)((char*)view - sizeof(KValue)) + 1;
 }
@@ -8153,8 +8162,18 @@ static __attribute__((noinline, preserve_most)) void k_map_sort_build(KMap* m) {
     }
 }
 
+/* No view yet, or one with a side to fold in: either way the build runs. */
+static inline int k_view_stale(KValue* view) {
+    uintptr_t p = (uintptr_t)view;
+#if UINTPTR_MAX > 0xffffffffu
+    return (intptr_t)p <= 0;
+#else
+    return !p || (p & K_VIEW_SIDE);
+#endif
+}
+
 static inline KValue* k_map_sorted(KMap* m, long long* out_len) {
-    if (__builtin_expect(!m->sorted || ((uintptr_t)m->sorted & K_VIEW_SIDE), 0)) k_map_sort_build(m);
+    if (__builtin_expect(k_view_stale(m->sorted), 0)) k_map_sort_build(m);
     if (out_len) *out_len = m->sorted_len;
     return m->sorted;
 }
