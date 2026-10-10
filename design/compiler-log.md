@@ -24907,25 +24907,27 @@ raising the threshold past any chain reads 0 with every other counter equal,
 and the ratchet row "a long chain walked instead of searched" makes that
 mutation.
 
-CI's rows for the branch with the index in it, against main: `runbench`
-1,129,603,831 to 1,127,606,416, `codegen_instructions_release` 453,787,838 to
-453,817,435, `codegen_instructions_dev` 118,867,296 to 118,894,574 and
-`emit_instructions` 7,062,299 to 7,058,075. The browser compiles in 390,304,777
-instructions, up 2,122,974, and runs in 34,093,107, up 573,561, which is 54,971
-more than the branch read before the index. Every benchmark's machine code is
-8,112 bytes larger than main's, so `text` rises to 4,723,134 in all. Moving the index's two branches out of line
-saved 960 of those bytes and was not kept, so most of the growth is somewhere
-other than the index; where has not been measured. The book's two counters
-samples gain the `chain_finds=0` line.
+CI's rows for the branch with the index in it, after main's constant storage
+merged in, against main: `work_runbench` 1,131,250,979 to 1,129,336,309,
+`codegen_instructions_release` 453,707,138 to 453,867,566,
+`codegen_instructions_dev` 118,896,762 to 118,918,413 and `emit_instructions`
+7,062,299 to 7,058,075. The browser compiles in 390,304,777 instructions, up
+2,122,974, and `browser_run_instructions` lands on 34,089,215, up 596,152. Every
+benchmark's machine code is about 7,900 bytes larger than main's, so `text`
+rises to 4,722,910 in all. Moving the index's two branches out of line saved
+960 of those bytes and was not kept, so most of the growth is somewhere other
+than the index; where has not been measured. The book's two counters samples
+gain the `chain_finds=0` line.
 
 Nine of the fourteen work rows rise, and `runbench`, `pendbench`, `widebench`,
-`deepbench` and `basket` fall. The rises are small: `work_oneshot` lands on 13,053,486,
-up 26,193, `work_encodebench` on 2,384,359,324, `work_jsonbench` on 860,557,868,
-`work_livebench` on 1,473,489,151, `work_digestbench` on 5,568,075,
-`work_indexbench` on 2,460,024, `work_scanbench` on 282,883, `work_readbench`
-on 4,578,727 and `work_escapebench` on 39,045,592. None of those nine
-runs a loop the lap carry admits, and what moved them has not been isolated.
-Only `runbench` is weighed.
+`deepbench` and `basket` fall. The rises are small: `work_oneshot` lands on
+13,207,117, up 30,630, `work_encodebench` on 2,383,882,573, `work_jsonbench` on
+860,558,623, `work_livebench` on 1,472,862,368, `work_digestbench` on
+5,561,968, `work_indexbench` on 2,458,407, `work_scanbench` on 269,663,
+`work_readbench` on 4,577,482 and `work_escapebench` on 39,045,847. None of
+those nine runs a loop the lap carry admits, and what moved them has not been
+isolated. `basket` falls by 1,969,638 to 30,405,476, and its survivor slots
+drop from 16,002 to 6 in the same change. Welfare rises to 90.26 and the floor is raised to hold it.
 
 ## 2026-10-10 — a directory called lib is an ordinary directory
 
