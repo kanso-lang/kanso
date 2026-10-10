@@ -1376,10 +1376,13 @@ typedef struct { char* data; size_t cap; size_t used; } KCarryBuf;
 /* at_arena and at_blocks record where the arena stood at this depth's last
    stage, so a chain step can tell how far its region has drifted since;
    they were one pair of globals shared by every depth until 2026-09-07, and
-   an inner chain read the outer chain's last stage as its own. */
+   an inner chain read the outer chain's last stage as its own.
+
+   skipped says a lap went by without staging since the last stage did. The
+   pop reads it: see k_beat_pop_slow. */
 typedef struct {
     KCarryBuf from; KCarryBuf to; int used_flag;
-    const char* at_arena; const void* at_blocks;
+    const char* at_arena; const void* at_blocks; int skipped;
 } KCarry;
 KCarry k_carries[K_BEAT_MAX];
 
@@ -1414,6 +1417,7 @@ __attribute__((always_inline)) void k_beat_push(void) {
             k_die("a beat mark and the arena disagree about the room that is left");
         }
         k_carries[k_beat_depth].used_flag = 0;
+        k_carries[k_beat_depth].skipped = 0;
         k_carries[k_beat_depth].from.used = 0;
         k_carries[k_beat_depth].to.used = 0;
         /* In range by the test above, so the new top is the mark just written
@@ -2838,7 +2842,16 @@ static __attribute__((noinline)) KValue k_beat_pop_slow(KValue r, long long d,
         k_beat_rewind(&k_beat_stack[d]);
     } else {
         if (c->used_flag) {
-            KCopy cp = { NULL, NULL, 1, 0, k_carry_written };
+            /* The walk has no mark, so it counts every arena node as a
+               survivor and stops at one whose interior survives too. That
+               is sound while everything the result holds in the carry pair
+               sits under a node the walk reaches first. A lap that skipped
+               its stage breaks it: the lap builds fresh nodes in the arena
+               over values still in the pair, the walk stops at the fresh
+               node, and the next loop entered at this depth stages into
+               the same pair and writes over what the result still holds.
+               So a pop after a skipped lap walks the whole value. */
+            KCopy cp = { NULL, NULL, 1, 0, k_carry_written || c->skipped };
             k_ptrmap_begin(&k_copy_map);
             k_copy_map_live = 0;
             k_repaired_n = 0;
@@ -2857,6 +2870,7 @@ static __attribute__((noinline)) KValue k_beat_pop_slow(KValue r, long long d,
     if (rewound) k_ten_release(d);
     else k_ten_hand_up(d);
     c->used_flag = 0;
+    c->skipped = 0;
     return r;
 }
 
@@ -3119,6 +3133,7 @@ void k_beat_iter_carry(void) {
     c->from = c->to;
     c->to = swap;
     c->used_flag = 1;
+    c->skipped = 0;
     k_ten_on = 0;
     k_from_window(0);
 }
@@ -3154,6 +3169,7 @@ void k_beat_lap_carry(void) {
         && (size_t)(k_arena - kc->at_arena) < (size_t)(1 << 18)
         && !(k_beat_stack[d].reg_any & ~K_REG_VIEW)) {
         if (K_COUNTING) k_stat_beat_iters++;
+        kc->skipped = 1;
         return;
     }
     k_beat_iter_carry();
@@ -7372,6 +7388,7 @@ static KValue k_exec(KDesc* d) {
                 if (kc->at_blocks == (const void*)k_blocks
                     && kc->at_arena
                     && (size_t)(k_arena - kc->at_arena) < (size_t)(1 << 18)) {
+                    kc->skipped = 1;
                     cur = next;
                     continue;
                 }

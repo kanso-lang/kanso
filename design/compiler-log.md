@@ -25162,3 +25162,34 @@ run peaks at 1,179,648 bytes. `run_ten_frees` and `run_ten_handups` count work o
 tenured blocks, and they fall because the program now tenures one block where it
 tenured six. Welfare rises from 90.2505 to 90.2618, and the floor is raised to
 hold it.
+
+## 2026-10-10 — a pop after a skipped lap walks the whole result
+
+With the two carry faults of kanso#1834 fixed, the sat port still failed under
+the lap carry: `rand75_unsat` reported a satisfying assignment, and mal's
+self-hosted runs died with a segmentation fault. Both came back right with the
+pop's copy-out made deep, so the search went there.
+
+When a carrying loop returns, `k_beat_pop_slow` copies its result out of the
+loop's storage. That walk has no mark, so it counts every arena node as a
+survivor, and it stops at a node whose direct interior survives as well. Under
+the old rule every lap staged, so whatever the result held in the depth's carry
+pair sat under the pair's own nodes, and the walk reached and copied it. The
+lap carry lets laps go by without staging. Such a lap builds its new nodes in
+the arena, around values that are still in the pair. The pop's walk meets the
+fresh outer node first, finds its interior fresh too, and stops. The value in
+the pair is left where it was. The next loop entered at the same depth stages
+into the same pair and writes over it.
+
+`tests/golden/micro/a_pop_after_a_skipped_lap_keeps_what_the_lap_built.kso` is
+the shape in a dozen lines: a loop that wraps a box four times, of which only
+the first lap stages, followed by a loop at the same depth that builds twenty
+thousand elements a lap. The second loop's list replaced the first loop's
+innermost box, and the program printed `<<<record>>>` where the interpreter
+prints `<<<<[1 2 3]>>>>`.
+
+The carry now records when a lap skipped its stage, in the lap carry's drift
+test and in the chain's. A stage clears the record, and so does the push that
+opens a depth. A pop that finds it set walks the whole result, as it already
+did when a write had reached the carry. A pop after a loop whose last lap
+staged is unchanged.
