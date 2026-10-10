@@ -26276,3 +26276,25 @@ record_reuse_shape_evac_allocs 5, record_reuse_shape_evac_bytes 144 and
 record_reuse_shape_sh_rec 192; and, projected, work_encodebench 2,398,370,134,
 work_livebench 1,474,871,692 and work_oneshot 13,223,551. Each record row is a
 record built fresh above the mark where it used to be written below it.
+
+The branch took the spare fix after that fix took the carrier, and each
+conflicted row is projected as this branch's CI delta on the spare fix's row.
+Measured against the spare fix, the rows that end worse are
+codegen_instructions_dev on 118,960,395, codegen_instructions_release on
+454,289,201, work_basket on 30,873,237, work_livebench on 1,474,872,350 and
+`text` on 4,830,398, 80 bytes a binary for the mark check. basket_alloc_bytes
+lands on 7,522,257. Three mem fixtures that keep a record across a cycle read
+it as a fresh allocation where they used to reuse it.
+a_cycle_that_sorts_a_map_each_step_still_waits_for_its_lap_alloc_bytes lands
+on 12,160,432,
+a_cycle_that_sorts_a_map_each_step_still_waits_for_its_lap_evac_bytes on 6,160
+and a_cycle_that_sorts_a_map_each_step_still_waits_for_its_lap_sh_rec on
+2,560,192. a_long_chain_answers_survival_from_its_index_alloc_bytes lands on
+19,672,832, a_long_chain_answers_survival_from_its_index_chain_finds on 95,601,
+a_long_chain_answers_survival_from_its_index_evac_bytes on 608 and
+a_long_chain_answers_survival_from_its_index_sh_rec on 608.
+an_evaluator_carrying_any_value_round_its_cycle_rewinds_alloc_bytes lands on
+4,115,408, an_evaluator_carrying_any_value_round_its_cycle_rewinds_allocs on
+91,445 and an_evaluator_carrying_any_value_round_its_cycle_rewinds_sh_rec on
+2,561,216. CI's reading
+replaces the projected rows.
