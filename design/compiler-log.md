@@ -2050,4 +2050,4 @@ both files since 2026-09-18, and
 - **OPEN** the cap has no gate. It was restored by hand on 2026-09-17 and again
   today, and both times it had run to many times the limit. A spec that counts
   the live file's headings and fails above forty would hold it. That spec is
-  `tests/`, so it is cloud's, and it is filed as an issue.
+  `tests/`, so it is cloud's: #1854.
