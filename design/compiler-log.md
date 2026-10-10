@@ -24905,10 +24905,19 @@ CI's rows for the branch with the index in it, against main: `runbench`
 `emit_instructions` 7,062,299 to 7,058,075. The browser compiles in 390,304,777
 instructions, up 2,122,974, and runs in 34,093,107, up 573,561, which is 54,971
 more than the branch read before the index. Every benchmark's machine code is
-8,112 bytes larger than main's. Moving the index's two branches out of line
+8,112 bytes larger than main's, so `text` rises to 4,723,134 in all. Moving the index's two branches out of line
 saved 960 of those bytes and was not kept, so most of the growth is somewhere
 other than the index; where has not been measured. The book's two counters
 samples gain the `chain_finds=0` line.
+
+Nine of the fourteen work rows rise, and `runbench`, `pendbench`, `widebench`,
+`deepbench` and `basket` fall. The rises are small: `work_oneshot` lands on 13,053,486,
+up 26,193, `work_encodebench` on 2,384,359,324, `work_jsonbench` on 860,557,868,
+`work_livebench` on 1,473,489,151, `work_digestbench` on 5,568,075,
+`work_indexbench` on 2,460,024, `work_scanbench` on 282,883, `work_readbench`
+on 4,578,727 and `work_escapebench` on 39,045,592. None of those nine
+runs a loop the lap carry admits, and what moved them has not been isolated.
+Only `runbench` is weighed.
 
 ## 2026-10-10 — a directory called lib is an ordinary directory
 
