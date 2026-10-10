@@ -1,0 +1,32 @@
+# `spin` carries a map that was built before it started, and a carried slot is
+# copied at a rewind unless it already lies below the mark. The map does, but
+# its keys are string literals, which the runtime builds once in malloc'd
+# storage the carry did not recognise as permanent. So the copy took the keys
+# for garbage it had to rescue, moved them into the loop's own region and
+# pointed the old map at them there. The next round's rewind freed that region
+# under a map that was still live, and native printed `<none> <none>` where
+# the interpreter prints both values.
+fn keep m _
+  m
+
+fn spin n m last
+  return m if n == 0
+  spin (n - 1) (keep m last) "step {n} of the lap"
+
+fn noise n acc
+  return acc if n == 0
+  noise (n - 1) "{n} and some more bytes"
+
+fn round m
+  spun = spin 20000 m ""
+  junk = noise 20000 ""
+  "{spun["a"]} {spun["b"]} {length junk}"
+
+fn rounds k m acc
+  return acc if k == 0
+  rounds (k - 1) m (round m)
+
+fn named n
+  "value {n}"
+
+pub play = print (rounds 4 { "a":(named 1) "b":(named 2) } "")

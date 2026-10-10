@@ -24541,6 +24541,294 @@ Taken together the two sides net to a fall in welfare of 0.0000025, from
 why the two engines stored integers differently, and there was no reason;
 this branch is the answer to that question, so the floor follows it.
 
+## 2026-10-10 — four faults the ports found
+
+Twenty programs were ported to kanso to see where the language gets in a
+programmer's way, and their journals carry bug reductions as well as
+complaints. Four of the reductions are fixed here, each with the fixture that
+fails without its fix.
+
+**A tie settled by an arm that never meets it.** `check_arm_ties` calls two
+arms tied when each is more specific somewhere, unless a third arm covers
+both. It compared patterns by rank alone, so `"+"` and `"eq"` ranked equal,
+and an arm for `"eq"` could settle a tie that only `"+"` calls fall into.
+The lox port had two arms of `apply` that could both take `"+"` with two
+floats, settled on paper by an `"eq"` arm, and the two engines picked
+different arms at run time. The comparison now answers "disjoint" for
+patterns no single value matches: two different literals, a literal and a
+marker, a literal and a type that cannot hold it, a marker and a type it is
+not. A disjoint pair cannot tie and cannot settle anything.
+`errors/a_literal_arm_cannot_settle_a_tie_it_never_meets.kso` is the lox
+shape and passed `kanso check` on main;
+`micro/arms_that_never_meet_are_not_a_tie.kso` is the other direction, two
+arms main called tied that no call can reach together. The bc port's
+`option` group has a real tie the old rule hid, `"--quiet" opts` beside
+`arg (options ...)`, and the stricter check now reports it. So does this
+repository's own `scripts/golden_prose`: `writing_back false _ _ _` and
+`writing_back _ false _ _` both take `false false`, settled on paper by the
+`true true` arm. Both answer 0, so the program never misbehaved; the third arm
+is now `true false`.
+
+**`[if b "x" "y"]`.** The checker refuses a named function written bare in a
+list literal, since a list element is one atom, but it read `if`'s count from
+a table that leaves `if` out, so the interpreter built a four-element list and
+native refused with no location. `call_shaped_at` now knows `if` takes three
+and reads the ambient builtins' counts. `errors/an_if_in_a_list_is_one_call.kso`.
+
+**`\D`, `\W` and `\S`.** std/regexp read an escape it did not know as the
+letter itself, so `o\W` matched an o and a capital W. The three negated
+classes are now the classes `\d`, `\w` and `\s` with the negation flag set.
+`micro/regexp_negated_class_escapes.kso`.
+
+**A name bound to a lazy err.** A match arm that binds a name sees a thunk,
+not what it forces to, so the thunk passes the arm's check and can still
+force to an err later. Native recorded every name a pattern bound as unable to
+fail, and a read that forced the thunk skipped its check: the toml port's
+reduction printed `size 6`, the err's payload read as a list length, where
+the interpreter stopped with `refused 5`. The pattern now keeps the FAIL bit
+on a name whose value is a thunk. Inference makes the same assumption in
+`bind_pattern`, but reverting it there leaves the fixture correct, so it is
+left alone until a program shows it matters.
+`runtime/a_name_bound_to_a_lazy_err_keeps_its_check.kso`; reverting the
+codegen line turns it red.
+
+Rows for this branch, from CI, against main as it stands after the bignum
+loop rewind. Every compile row that reads the larger regexp module or the
+checker's new disjointness test rises: compile_instructions from 25,829,822 to
+25,832,340, entry_instructions from 85,178,721 to 85,435,525,
+library_instructions from 85,734,452 to 85,988,213, and emit_instructions
+from 7,062,270 to 7,062,336. compile_allocs goes from 14,529 to 14,530. The
+interpreter's run asks the allocator twice more, interp_allocs 587,281 to
+587,283, with its peak unchanged. The browser compiles the same library and
+checker, and browser_compile_instructions rises from 387,724,060 to
+388,182,464.
+
+Four benchmark binaries changed. basket, scanbench and runbench grew and
+pendbench shrank by one call and three lines, which sums to
+emitted_other_branches 16,032 to 16,079, emitted_other_calls 17,104 to 17,128
+and emitted_other_lines 144,174 to 144,409. The text is 4,586,926 to 4,588,958
+summed, all of it in the three that grew. Runtime work rises in two of them:
+work_basket from 32,362,738 to 32,382,760 and work_runbench from 1,129,588,698
+to 1,129,588,845, 147 instructions. Which of the four fixes moved which binary
+is not isolated here. Welfare falls, and the floor follows under the
+2026-09-13 rule.
+
+## 2026-10-10 — two native crashes the ports found in the arena
+
+The toml port grew a list by calling a helper that pushed onto it, and the
+native binary died at sixty-four elements, dev and release alike. Sixty-three
+worked on every engine, and so did pushing directly in the tail call.
+
+The pop that hands a loop's result back to its caller asks whether the
+result's interior survives the rewind. For a list of `K_ISV_MIN` (64) or more
+elements it asks a memo table, `k_isv_list`, keyed against the outermost
+beat's mark, and the table is opened when that mark's position differs from
+the one it last saw. Both start as NULL. A program whose outermost beat began
+before the arena held anything compares NULL with NULL, never opens the
+table, and the first lookup grows zero slots to zero and probes with a mask
+of all ones. gdb put the fault on that probe. A list grown through a helper
+reaches the branch because the carry repairs the list's interior every
+iteration rather than copying it, so the list header is old and the pop asks
+the memo about it. The table now opens on its first use as well as on a new
+mark.
+
+The fault needs an entry file, because an entry's statements are what leave
+the arena empty when the first beat begins; the same functions run from a
+`play` did not crash. `tests/golden/entryfile/a_list_pushed_through_a_helper_past_sixty_four`
+builds a 64-element list first and a 1,000-element one after it, and
+`tests/entry_file.rs` checks native against the interpreter. Removing the
+new condition turns the spec red on the crash itself.
+
+The first suspect was the arena's free shelf. The carry's copy of a list has
+room for exactly its length, so every push after a carry grows the list, and
+the outgrown storage is donated to the shelf when its capacity is a power of
+two. Tracing every grow showed that storage was ordinary arena memory, and at
+64 elements the last grow is from a capacity of 63, which the shelf does not
+keep. That change was reverted.
+
+The port's other native report, an arm that ran with an err when its sibling
+had `_` in the same position, is the lazy-err check from the entry before
+this one: `grown` is a thunk that forces to the err, and with that change the
+binary stops at `refused 5` as the interpreter does.
+
+The diff port's native binary died on a three-step effect chain after two
+file reads, sometimes as "ran out of stack" and sometimes as `free(): invalid
+pointer`. valgrind put the bad free in `k_beat_rewind_slow`, on an address
+13,328 bytes inside an arena block, and a trace of the view registry showed
+the path. Myers' search carries its two frontier maps through a loop and
+reads them, which builds each map a sorted view. The headers live in the
+loop's carry buffer, which is outside the arena, so `k_born_this_beat` calls
+them new and the views register at the loop's depth. When the loop's beat
+popped it copied its result out of the carry buffer and then migrated every
+registration to the enclosing depth, the same as it would for a region it
+keeps. A later loop at the same depth overwrote the carry buffer, and when
+the enclosing depth finally rewound it flushed a header that held other
+data. A map at the same address was registered again at the loop's depth
+before the end, which is what the trace caught.
+
+On a pop that copies out of the carry pair, entries whose header lies in
+that depth's carry buffers are now released then and there, while the
+headers are still intact, and the rest migrate as before. The permanent-
+storage registry has the same shape, since it registers a field inside a
+header, and gets the same treatment. The port's own reduction, a 217-line
+module and an eight-line entry, is the fixture:
+`tests/golden/entryfile/a_view_left_in_a_carry_buffer`, run from a scratch
+directory because it writes two files. Removing the release turns the spec
+red on the crash. The diff port's `check.sh` passes all 54 fixtures on the
+three engines with this compiler. Three smaller programs that carry and read
+maps did not reproduce the crash, because their puts happened in place and
+left the maps in the arena.
+
+The two fixes cost a little everywhere the runtime is measured, most of it in
+the second registry pass a carried pop now makes. On CI's rows:
+
+- `text` grows 1,472 bytes a binary, to 4,609,566 in all.
+- `work_deepbench` rises 103,990 to 370,195,223 and `work_runbench` 14,986 to
+  1,129,603,831. `work_encodebench` lands on 2,384,338,163,
+  `work_oneshot` on 13,027,293, `work_widebench` on 28,094,348,
+  `work_indexbench` on 2,458,507 and `work_scanbench` on 281,715, each within
+  a few hundred instructions of main.
+- `codegen_instructions_dev` rises to 118,867,296 and
+  `codegen_instructions_release` to 453,787,838.
+- `browser_run_instructions` rises to 33,519,546.
+
+Welfare falls from 90.25811251 to 90.25801113, and the floor follows under the
+2026-09-13 rule: two programs that crashed natively now run.
+
+## 2026-10-10 — gavel: a field may hold a list of `tie` references
+
+Clay, on whether a node built by `list/tie` may hold its links as a list: "of
+course field can be an array". The 2026-10-04 gavel "a data-sized cycle is tied
+with `list/tie`, and `list/tie!` insists" says a reference may be stored in a
+constructor's field and nothing else. The build read that strictly: a list
+literal is not a field, so `node id [(ref "b") (ref "c")]` was refused, and the
+graph fixture held each node's edges as a chain of one-reference records ending
+in a `no_road` marker.
+
+**The clarification.** A field may hold any value, and a list of references in
+a field is storage. The 2026-10-04 rule was about reading, and a list that
+holds references reads none of them. A list or map literal whose elements are
+references, written as a constructor's argument, is admitted. Everything the
+rule refused stays refused: during making, nothing may index, measure, walk or
+pass that list anywhere, because each of those reads through it.
+
+Owes: the check admits a collection literal of references as a field's value,
+with an error golden for a read of such a list in the maker; the graph fixture
+holds each node's neighbours as a list and drops the chain of records; ch03 or
+wherever `tie` is taught shows the list form.
+
+## 2026-10-10 — a directory called lib is an ordinary directory
+
+The beat analysis keeps an imported library's loops out of the carry tier,
+because a shared driver threads its caller's invariant source through the loop
+and carrying it would copy an unbounded value at every rewind. It recognised a
+library by its declaration's file name, which had to begin `std/` or `lib/`.
+Shipped modules are filed as `std/<module>/<file>`. Nothing shipped begins
+`lib/`, and every user directory called `lib` does, so a package kept in one
+compiled to a program that never reclaimed a block. The 2026-08-31 entries
+found this, measured it at five times the peak, and pinned it in
+`tests/a_program_is_not_its_directory.rs` with the instruction to delete the
+assertion when the two directories agreed.
+
+The `lib/` arm is gone and the `std/` arm stays. The arm had one user in the
+tree: the json beat unit test compiled `lib/json` as a root, and the arm made
+that root look like an installed module. The test now reads the library
+through `import "std/json"`, which is how a program meets it, and it still goes
+red when the `std/` arm is removed: `json/array_open` and `json/obj_open`
+become beats. The spec now asserts that `lib/app` and `elsewhere/app` both
+peak at 1,048,576, and with the arm put back the `lib/` side reads 5,242,880.
+
+I found it while building the fixtures for the lap carry. The evaluator
+fixture, imported as `./lib/fx`, held 4 MiB and never rewound.
+
+The tab compiler reads 661 fewer instructions, `browser_compile_instructions`
+388,181,803. CI moved one other row: `emit_instructions` falls 37, to
+7,062,299. Both codegen tiers held. The ratchet's mutation for this filter
+patched the old two-arm line, so it now patches the one-arm line.
+
+## 2026-10-10 — a constant lives in storage the carry knows is permanent
+
+A map built before a carrying loop came out of the loop with keys the next
+round's rewind freed. `tests/golden/micro/a_map_kept_across_a_carried_loop_keeps_its_keys`
+is the shape: `spin` carries a map made by its caller, an outer loop calls
+`spin` four times, and native printed `<none> <none>` where the interpreter
+prints both values. Main has the defect; it does not depend on the lap carry.
+
+The keys were string literals. The runtime builds a literal once, in malloc'd
+storage, and hands the same string out for the rest of the run, and does the
+same for one-character strings, for marker records with no fields and for
+closures over nothing. None of that storage lies in an arena block, and the
+copy walk answers "does this survive the rewind" for an outside pointer by
+asking whether it is a short token, a tenure block or a frozen CAF. A literal
+is none of those, so the walk took it for something it had to rescue, which
+wasted a copy at every stage and did damage in one place. When a surviving
+node points at something that does not survive, the walk leaves the node
+where it is, copies what it points at, and settles the copy in the
+current loop's region. The map's keys moved into `spin`'s region, the map
+stayed in its caller's, and the outer loop's next rewind freed the keys under
+it.
+
+`k_alloc_const` now hands those constants out of chunks registered with the
+frozen ranges, so the walk counts them as surviving, and the walk stops at
+a node in one of those chunks without asking about its interior, since nothing
+writes to a constant after it is built. The one-character and wide caches
+keep their bytes inline, where they had a second `malloc`. A frozen CAF is
+left out of the short stop: a proven in-place push can move a frozen list's
+items out of frozen storage, and pendbench does exactly that, so a frozen list
+still gets the repair it needs. Bignums moved to permanent storage stay on
+`k_alloc_perm`, because they are the run's data and every outside pointer is
+checked against the frozen ranges.
+
+This is also why grammar_check died in `k_deep_copy` on the lap carry branch
+with the growth lookthrough taken out, the crash the 2026-10-10 lap carry
+entry left unexplained. The capture loop carried `caps`, a map from the
+grammar file whose keys `"1"` to `"4"` come from the one-character cache.
+The first stage repaired the map by moving its keys into the loop's region,
+the region was reclaimed, and the next stage copied a key whose header the
+arena had reused. With constants registered, that build of grammar_check
+passes with the lookthrough removed. The lookthrough stays, because it
+refuses a cluster for what growth would cost.
+
+Every runtime counter that moved fell. `evac_allocs` and `evac_bytes` fall on
+every benchmark, the run program's by 14,328 copies and 229,376 bytes, and
+`carry_dedup` goes to zero wherever it was counting the same literal reached
+twice. The cohort pin in `tests/cohort.rs` falls 96 bytes, to 800,672, because
+three of the constants it used to copy are no longer copied.
+
+The chunks start at 4 KiB and double up to 64 KiB. The first build opened one
+64 KiB chunk, and CI showed the browser run taking one more 64 KiB page for it,
+1,310,720 to 1,376,256 bytes. Most programs hold a few dozen constants: the
+run program has seventy, in one chunk. With the small first chunk the browser
+peak stays at 1,310,720 and its run falls 26,483 instructions.
+
+The fix costs welfare 0.0065, which the floor gives up because the defect was
+a miscompile. `runbench` rises 1,647,148 instructions, 0.15%. The copy walk
+itself got cheaper by about 2.8 million: `k_copy_size`, `k_deep_copy`,
+`k_copy_map_put` and `k_copy_alloc` together. What rose is `realloc`, under
+`k_buf_perm_regrow`. That function makes the same 3,872 calls on both sides,
+and they cost 561,440 instructions before and 3,248,608 after, because realloc
+now copies buffers that it used to extend in place. The run makes seventy fewer
+small mallocs, which changes where glibc puts each accumulator's buffer. The
+location of the cost is measured. Why glibc places the buffers differently is
+not established. Opening the constant chunk before anything else is allocated
+left the count unchanged to the instruction, so the chunk does not sit in the
+way. `encodebench` and `livebench` fall about 375,000 each with the smaller
+chunk, and `deepbench` falls 4.4 million. Release codegen falls 80,700
+instructions and dev codegen rises 29,466; each benchmark's text grows 192
+bytes.
+
+By key: `work_runbench` lands on 1,131,250,979, `work_oneshot` on 13,176,487,
+`work_jsonbench` on 860,548,891, `work_escapebench` on 39,045,280 and
+`work_widebench` on 28,094,541. `codegen_instructions_dev` lands on 118,896,762
+and `text` on 4,612,254 across the fourteen binaries. `carry_dedup` falls to 0
+wherever it counted: `run_carry_dedup` from 71, `encode_carry_dedup`,
+`oneshot_carry_dedup`, `wide_carry_dedup`, `digest_carry_dedup`,
+`read_carry_dedup` and `live_carry_dedup` from 3, and in the lazy tier
+`a_maps_two_columns_are_one_allocation_carry_dedup` from 1,998 and
+`a_nested_map_gives_back_its_entries_carry_dedup` from 29,990. A dedup is a
+copy the walk found it had already made; constants are no longer copied, so
+there is nothing to find twice.
+
 ## 2026-10-10 — a map's view takes keys out of order without moving itself
 
 Three ports found the same cliff from three directions. xsv's

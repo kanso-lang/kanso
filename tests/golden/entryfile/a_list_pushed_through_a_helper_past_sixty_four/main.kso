@@ -1,0 +1,4 @@
+import "./grow"
+
+print "{grow/lists 64}"
+print "{grow/lists 1000}"

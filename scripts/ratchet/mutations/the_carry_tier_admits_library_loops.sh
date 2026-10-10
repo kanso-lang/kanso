@@ -2,8 +2,8 @@
 # scan_counters had no row of its own until this one. bench/scanbench walks a
 # subject once, matching at every position and keeping nothing, and its peak
 # grows with the subject because regexp/walked's scratch survives to the end:
-# beat_loops drops every group whose file begins "std/" or "lib/" from the
-# carry tier, and regexp/walked is one of them. This mutation clears that
+# beat_loops drops every group whose file begins "std/" from the carry tier
+# ("lib/" too until 2026-10-10, which a user's own lib directory matched), and regexp/walked is one of them. This mutation clears that
 # filter, so library loops are admitted.
 #
 # WHAT IT MOVES, measured 2026-09-16 on this benchmark: beat_iters 15 -> 16 and
@@ -20,7 +20,7 @@
 # the gate runs scanbench-counters alone -- so the row costs a build, not a
 # hang.
 set -e
-A='        .filter(|d| d.file.starts_with("std/") || d.file.starts_with("lib/"))' \
+A='        .filter(|d| d.file.starts_with("std/"))' \
 awk '
   !hit && $0 == ENVIRON["A"] { print "        .filter(|_d| false)"; hit = 1; next }
   { print }

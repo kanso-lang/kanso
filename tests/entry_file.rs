@@ -377,3 +377,71 @@ fn a_packed_record_keeps_its_int_across_the_entry() {
     );
     assert_eq!(interp, native, "the engines disagree on a packed record");
 }
+
+/// A list grown through a helper is carried across the loop's rewind, and the
+/// pop that hands it back asks whether its elements survive. At sixty-four
+/// elements that question goes through a memo table, and a program whose
+/// first beat began on an empty arena found the table unopened: native died
+/// reading wild memory, reported as running out of stack. The module layout is
+/// the reproduction, since an entry file's statements are what leave the arena
+/// empty when the first beat begins.
+#[test]
+fn a_list_pushed_through_a_helper_survives_sixty_four() {
+    let fixture = "tests/golden/entryfile/a_list_pushed_through_a_helper_past_sixty_four/main.kso";
+    let answer = |engine: &[&str]| {
+        let done = Command::new(env!("CARGO_BIN_EXE_kanso"))
+            .arg("run")
+            .arg(fixture)
+            .args(engine)
+            .current_dir(env!("CARGO_MANIFEST_DIR"))
+            .output()
+            .expect("kanso runs");
+        (
+            String::from_utf8_lossy(&done.stdout).into_owned(),
+            String::from_utf8_lossy(&done.stderr).into_owned(),
+        )
+    };
+
+    let (native, complaint) = answer(&[]);
+    let (interp, _) = answer(&["--interp"]);
+
+    assert_eq!(complaint, "", "native died growing a list past sixty-four through a helper");
+    assert_eq!(native, "64\n1000\n");
+    assert_eq!(interp, native, "the engines disagree on a list grown through a helper");
+}
+
+/// A loop that carries maps and reads them builds each one a sorted view, and
+/// with the map headers in the loop's carry buffer the views register at the
+/// loop's depth. The pop that copied the loop's result out of the carry buffer
+/// handed those registrations up to the enclosing depth, which flushed them
+/// after the buffer had been reused; native freed a pointer into the middle of
+/// an arena block. The program writes and reads two files, so it runs from a
+/// directory of its own.
+#[test]
+fn a_view_left_in_a_carry_buffer_is_not_handed_up() {
+    let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/golden/entryfile/a_view_left_in_a_carry_buffer/main.kso");
+    let scratch = std::env::temp_dir().join(format!("kanso-carried-view-{}", std::process::id()));
+    std::fs::create_dir_all(&scratch).expect("scratch directory");
+    let answer = |engine: &[&str]| {
+        let done = Command::new(env!("CARGO_BIN_EXE_kanso"))
+            .arg("run")
+            .arg(&fixture)
+            .args(engine)
+            .current_dir(&scratch)
+            .output()
+            .expect("kanso runs");
+        (
+            String::from_utf8_lossy(&done.stdout).into_owned(),
+            String::from_utf8_lossy(&done.stderr).into_owned(),
+        )
+    };
+
+    let (native, complaint) = answer(&[]);
+    let (interp, _) = answer(&["--interp"]);
+    let _ = std::fs::remove_dir_all(&scratch);
+
+    assert_eq!(complaint, "", "native died flushing a view a carry buffer held");
+    assert_eq!(native, "2\n< b\n---\n> B\n7\n< g\n---\n> G\n> hstatus 1\n");
+    assert_eq!(interp, native, "the engines disagree on the carried diff");
+}

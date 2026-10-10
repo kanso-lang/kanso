@@ -411,4 +411,4 @@
 # `Expr` keeps its tag in a byte of its own. CI's reading on kanso#1811,
 # which this host's gate reproduces: 23,391,657 -> 23,409,658, a RISE of 18,001
 # (+0.0770%).
-emit_instructions=7062270
+emit_instructions=7062299
