@@ -25923,3 +25923,44 @@ work_deepbench on 393,576,370, work_digestbench on 5,599,739, work_encodebench o
 
 Welfare reads 91.0246 on these rows against the five floors banked separately,
 the highest of which was 90.6830, and the rise is banked.
+
+## 2026-10-10 — a lap waits for twice what the last stage copied
+
+Testing the combined tree on the lox port's F18 loop found two things the five
+fixes did not do on their own. Peak memory fell as expected: at 40,000 passes
+the loop held 45 MB against main's 2,333 MB. But past about 135,000 passes the
+run slowed sharply, from 2.7 seconds at 130,000 to 99 seconds at 160,000. Stack
+samples put the time in `k_copy_size` and `k_deep_copy` under
+`k_beat_lap_carry`, and the counters showed evac_allocs jumping from 5.8
+million at 130,000 passes to 139 million at 140,000. Tenure stops at
+`K_TEN_CAP`, 64 MiB, and lox's heap map keeps every object it allocates, so
+from that point on every stage copied the whole live state, once per quarter
+megabyte of drift.
+
+A smaller program then showed a worse case. The loop of
+`a_loop_entered_from_a_tail_cycle_gives_its_garbage_back`, with a map in its
+state that keeps one entry a pass, ran 20,000 passes in 0.01 seconds on main
+and in 3.2 seconds with kanso#1824 alone, allocating 9.5 GB. kanso#1824 is what
+makes this loop rewind at all. Each stage copies the map out of the arena, the
+next put copies it back, and that copy is a quarter megabyte of drift on its
+own, so a stage followed almost every pass.
+
+`k_beat_lap_carry` now waits for twice what the last stage copied before it
+stages again, and never less than the quarter megabyte it waited before.
+Copying then stays proportional to the drift it answers, which is how a copying
+collector sizes its heap. When the arena has opened blocks since the last stage
+and the wait has grown past the quarter megabyte, the drift is measured across
+them: the rest of the old block, every block between, and what the newest
+holds. A loop whose stages copy little behaves as it did, including staging
+when the arena opens a block. The first version counted the newest block at
+its full size, and with a 2 MiB block that staged on most passes.
+
+`tests/golden/mem/a_growing_map_in_a_rewound_loop_waits_for_its_copy` is that
+small program at 20,000 passes. Its alloc_bytes is 44,612,576; without the wait
+it reads 9,165,495,888. No other mem fixture and no cost golden moves. On the
+lox loop, 160,000 passes now take 5.3 seconds and 320,000 take 34. Time still
+grows faster than the pass count past 160,000, and that is not explained here.
+runbench reads 180,786 instructions more for the wait's arithmetic and is
+projected at 1,152,754,421 until CI reads it. Welfare falls from 91.0246 to
+91.0239, which this fix pays to remove a regression the carried kanso#1824
+would otherwise ship.
