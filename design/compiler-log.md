@@ -24425,3 +24425,76 @@ and `work_runbench` -14 to 1,129,589,342, read by CI, with where the larger
 runtime's code landed. This
 container's counter sweep had read them unmoved. The allocation counters,
 the lazy tier and the compile rows did not move.
+
+## 2026-10-10 — native bignums store 64-bit limbs
+
+Clay asked why the runtime's bignum limbs were 32 bits wide when the
+interpreter's num-bigint uses 64. Nothing recorded a reason. The 32-bit form
+came in with the bignum itself, `baaa3b0e`, and it is the convenient one in
+portable C: a limb product fits a `uint64_t`, and Knuth's division needs a
+64-by-32 divide, which C has. Both native targets multiply 64 by 64 into 128
+bits in one instruction, so the convenience was costing division, printing
+and multi-limb products.
+
+The runtime now stores 64-bit limbs behind an eight-byte sign word. A limb
+product is an `unsigned __int128` multiply, which wasm32 lowers to
+compiler-rt's `__multi3`, and `wasm/shim.c` already supplies that. A
+quotient digit comes from `k_div_2by1`, which is one `divq` on x86-64 and
+Hacker's Delight's `divlu` elsewhere. That keeps any 128-bit division out of
+the runtime, since wasm32's compiler-rt has no `__udivti3`. Printing divides
+by 10^19 a pass and reading digits takes nineteen at a time. The copy and
+rewind paths can leave a bignum's bytes at any alignment, so a limb is read
+through a type that promises none.
+
+Instructions on the dev tier, before and after, each program printing the
+same bytes on both and on the interpreter:
+
+    program                               before        after
+    3000! printed                         12,994,553     7,889,063
+    digit sum of 1500!, by % 10 and / 10  42,436,815    10,657,709
+    gcd of the 4000th and 3999th Fibonacci
+      numbers, 3,998 remainders           30,223,900    19,554,376
+    2 doubled 60,000 times                238,579,642   237,443,192
+    3^30000 by repeated `acc * 3`          96,093,717    95,517,656
+
+The last two barely move because x86-64 already multiplied a long number by
+one limb two 32-bit limbs at a time. The interpreter takes 395, 149 and 143
+ms on the first three, and the native binaries 11, 30 and 16.
+
+The limb functions were checked against GMP before any of this was trusted.
+A harness pulls `k_mag_cmp`, `k_mag_add`, `k_mag_sub`, `k_mag_row`,
+`k_div_2by1` and `k_mag_divmod` out of `src/runtime.c` as text and compares
+them with `__gmpn_tdiv_qr`, `__gmpn_mul`, `__gmpn_add` and `__gmpn_sub` on
+operands from one to 300 limbs. The operands are built to hit the corners:
+all-ones limbs, dividends just under and just over a multiple of the
+divisor, and dividends of the form (v - 1) * 2^64k plus low limbs, where the
+remainder's top limb equals the divisor's after the first quotient digit.
+It runs twice, once as x86-64 compiles it and once with the `divq` branch
+removed, which is the code arm64 and wasm32 run. Both read 10,000,000 cases
+and no failures. Removing the add-back's decrement fails 30,614 cases in
+200,000, a wrong correction in the portable divide fails 105,409, and a
+wrong estimate in the equal-top case fails 92,732. Skipping the refinement
+loop in the equal-top case fails none; the add-back corrects every estimate
+it leaves one too large, and no generated case left one two too large.
+
+A differential fuzzer built 150 programs of random bignum arithmetic, each
+with twelve operand triples from one to 4,000 bits, and ran each on the
+interpreter, the dev binary and the release binary. All 150 agree.
+`tests/golden/micro/a_long_division_meets_the_divisor_at_its_top_limb.kso`
+divides at two- and three-limb divisors with the dividends above. Giving the
+equal-top estimate a wrong digit turns its first lines red.
+
+The entry before this one said a program building 3^100000 three times
+cost more natively than interpreted because of the limb width. That was a
+guess, and the change it predicted has now been made: the program's
+instructions moved from 3,038,963,635 to 3,033,193,581, under 0.2%, and the
+binary still takes about 1.3 seconds against the interpreter's 0.44. The
+gap is memory. The binary peaks at 1,949,852 KB with 487,053 minor page
+faults, where the interpreter peaks at 10,044 KB with 348. The loop
+`pw (acc * 3) (n - 1)` is a self tail call that allocates nothing but its
+bignum, and `beat.rs` gives a loop a rewind only when it allocates, counting
+arithmetic as free. So every intermediate power stays in the arena until
+the loop ends. s900624 from the entry before, which doubles an accumulator
+inside a non-tail recursion, peaks at 618,392 KB with 154,187 faults for the
+same reason. The claim also went into a Readwise summary and a reply to
+Clay; both are corrected.
