@@ -24862,3 +24862,7 @@ the check's sight. The gavel's text admits a literal, and the ruling's own
 Owes asked for this fixture to drop the chain, which it cannot do under that
 text. That question has gone to the ledger as "May a list built from data hold
 `tie` references?". `docs/compiler.html` §193 says which form each case takes.
+
+The book teaches cyclic structures with `build` and does not mention `tie`, so
+the place `tie` is taught is its own comment in `lib/list/list.kso`. That
+comment now names the list form and shows `node id [(ref "b") (ref "c")]`.
