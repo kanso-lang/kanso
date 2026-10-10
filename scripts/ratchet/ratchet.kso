@@ -4631,6 +4631,16 @@ tie_check = row
 
 rows_c1zzzzzzzd = text/concat rows_c1zzzzzzze [tie_check]
 
+# A record constructor handed over as a function lowers to the lambda that
+# calls it on native, as the interpreter treats it (2026-10-10, lox F20).
+ctor_value = row
+  "a constructor refused as a value"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_constructor_refused_as_a_value")
+  release
+
 # Native `tie` rewrites every field holding one of its cells to hold the node
 # before the cells go back to the free list (2026-10-05).
 tie_resolves = row
@@ -4641,7 +4651,7 @@ tie_resolves = row
   (breaking "a_native_tie_that_frees_cells_still_in_its_graph")
   release
 
-rows_c1zzzzzzzc = text/concat rows_c1zzzzzzzd [tie_resolves]
+rows_c1zzzzzzzc = text/concat rows_c1zzzzzzzd [tie_resolves ctor_value]
 
 # The interpreter rewrites the fields holding a tie's cells to hold the nodes,
 # as native does; a `ref` names its tie by serial, so one called after its tie

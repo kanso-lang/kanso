@@ -24828,3 +24828,22 @@ wherever it counted: `run_carry_dedup` from 71, `encode_carry_dedup`,
 `a_nested_map_gives_back_its_entries_carry_dedup` from 29,990. A dedup is a
 copy the walk found it had already made; constants are no longer copied, so
 there is nothing to find twice.
+
+## 2026-10-10 — a constructor handed over as a function builds
+
+The lox port found that a record constructor passed where a function is wanted
+checks and runs on the interpreter and stops the native build with "`pair` as
+a bare value is not yet supported" (lox F20). The port wrapped each one in a
+lambda, `(l o r -> logical l o r)`, which is what native now does by itself.
+When codegen lowers a name that is not a function group, a builtin or one of
+the words with a value of its own, and the name is a record type with one to
+four fields, it lowers the lambda that calls the constructor. Four is the
+native lambda's limit, so a record of five or more fields handed over is still
+refused at build with the same message.
+
+`tests/golden/micro/a_constructor_handed_over_as_a_function` hands a
+one-field constructor to `list/map`, a two-field one to a function that calls
+it and a three-field one to another, and prints the same line on the
+interpreter, a dev build and a release build. The compiler on main refuses to
+build it. The ratchet row "a constructor refused as a value" puts the refusal
+back and the micro corpus goes red.
