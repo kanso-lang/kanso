@@ -24746,6 +24746,7 @@ The tab compiler reads 661 fewer instructions, `browser_compile_instructions`
 7,062,299. Both codegen tiers held. The ratchet's mutation for this filter
 patched the old two-arm line, so it now patches the one-arm line.
 
+<<<<<<< HEAD
 ## 2026-10-10 — a node an inner pop repairs stays on the outer loop's list
 
 The lox port's `tests/functions.lox` crashed natively once kanso#1824 let its
@@ -24789,3 +24790,87 @@ a dev build and a release build. On a tree carrying kanso#1827 and kanso#1824
 as well, the same 28 pass under the lap rule and with every edge staging. The
 twelve cost veins and the mem tier are unchanged apart from the new fixture's
 own file: no program in the corpus repairs a node below an enclosing mark.
+=======
+## 2026-10-10 — a constant lives in storage the carry knows is permanent
+
+A map built before a carrying loop came out of the loop with keys the next
+round's rewind freed. `tests/golden/micro/a_map_kept_across_a_carried_loop_keeps_its_keys`
+is the shape: `spin` carries a map made by its caller, an outer loop calls
+`spin` four times, and native printed `<none> <none>` where the interpreter
+prints both values. Main has the defect; it does not depend on the lap carry.
+
+The keys were string literals. The runtime builds a literal once, in malloc'd
+storage, and hands the same string out for the rest of the run, and does the
+same for one-character strings, for marker records with no fields and for
+closures over nothing. None of that storage lies in an arena block, and the
+copy walk answers "does this survive the rewind" for an outside pointer by
+asking whether it is a short token, a tenure block or a frozen CAF. A literal
+is none of those, so the walk took it for something it had to rescue, which
+wasted a copy at every stage and did damage in one place. When a surviving
+node points at something that does not survive, the walk leaves the node
+where it is, copies what it points at, and settles the copy in the
+current loop's region. The map's keys moved into `spin`'s region, the map
+stayed in its caller's, and the outer loop's next rewind freed the keys under
+it.
+
+`k_alloc_const` now hands those constants out of chunks registered with the
+frozen ranges, so the walk counts them as surviving, and the walk stops at
+a node in one of those chunks without asking about its interior, since nothing
+writes to a constant after it is built. The one-character and wide caches
+keep their bytes inline, where they had a second `malloc`. A frozen CAF is
+left out of the short stop: a proven in-place push can move a frozen list's
+items out of frozen storage, and pendbench does exactly that, so a frozen list
+still gets the repair it needs. Bignums moved to permanent storage stay on
+`k_alloc_perm`, because they are the run's data and every outside pointer is
+checked against the frozen ranges.
+
+This is also why grammar_check died in `k_deep_copy` on the lap carry branch
+with the growth lookthrough taken out, the crash the 2026-10-10 lap carry
+entry left unexplained. The capture loop carried `caps`, a map from the
+grammar file whose keys `"1"` to `"4"` come from the one-character cache.
+The first stage repaired the map by moving its keys into the loop's region,
+the region was reclaimed, and the next stage copied a key whose header the
+arena had reused. With constants registered, that build of grammar_check
+passes with the lookthrough removed. The lookthrough stays, because it
+refuses a cluster for what growth would cost.
+
+Every runtime counter that moved fell. `evac_allocs` and `evac_bytes` fall on
+every benchmark, the run program's by 14,328 copies and 229,376 bytes, and
+`carry_dedup` goes to zero wherever it was counting the same literal reached
+twice. The cohort pin in `tests/cohort.rs` falls 96 bytes, to 800,672, because
+three of the constants it used to copy are no longer copied.
+
+The chunks start at 4 KiB and double up to 64 KiB. The first build opened one
+64 KiB chunk, and CI showed the browser run taking one more 64 KiB page for it,
+1,310,720 to 1,376,256 bytes. Most programs hold a few dozen constants: the
+run program has seventy, in one chunk. With the small first chunk the browser
+peak stays at 1,310,720 and its run falls 26,483 instructions.
+
+The fix costs welfare 0.0065, which the floor gives up because the defect was
+a miscompile. `runbench` rises 1,647,148 instructions, 0.15%. The copy walk
+itself got cheaper by about 2.8 million: `k_copy_size`, `k_deep_copy`,
+`k_copy_map_put` and `k_copy_alloc` together. What rose is `realloc`, under
+`k_buf_perm_regrow`. That function makes the same 3,872 calls on both sides,
+and they cost 561,440 instructions before and 3,248,608 after, because realloc
+now copies buffers that it used to extend in place. The run makes seventy fewer
+small mallocs, which changes where glibc puts each accumulator's buffer. The
+location of the cost is measured. Why glibc places the buffers differently is
+not established. Opening the constant chunk before anything else is allocated
+left the count unchanged to the instruction, so the chunk does not sit in the
+way. `encodebench` and `livebench` fall about 375,000 each with the smaller
+chunk, and `deepbench` falls 4.4 million. Release codegen falls 80,700
+instructions and dev codegen rises 29,466; each benchmark's text grows 192
+bytes.
+
+By key: `work_runbench` lands on 1,131,250,979, `work_oneshot` on 13,176,487,
+`work_jsonbench` on 860,548,891, `work_escapebench` on 39,045,280 and
+`work_widebench` on 28,094,541. `codegen_instructions_dev` lands on 118,896,762
+and `text` on 4,612,254 across the fourteen binaries. `carry_dedup` falls to 0
+wherever it counted: `run_carry_dedup` from 71, `encode_carry_dedup`,
+`oneshot_carry_dedup`, `wide_carry_dedup`, `digest_carry_dedup`,
+`read_carry_dedup` and `live_carry_dedup` from 3, and in the lazy tier
+`a_maps_two_columns_are_one_allocation_carry_dedup` from 1,998 and
+`a_nested_map_gives_back_its_entries_carry_dedup` from 29,990. A dedup is a
+copy the walk found it had already made; constants are no longer copied, so
+there is nothing to find twice.
+>>>>>>> origin/main
