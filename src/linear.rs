@@ -1837,7 +1837,6 @@ fn only_folded(a: &Analysis, program: &Program, name: &str) -> bool {
         for stmt in &decl.body {
             let e = match stmt {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
-                Stmt::Set { value, .. } => value,
             };
             walk(a, decl, e, name, &mut ok);
         }

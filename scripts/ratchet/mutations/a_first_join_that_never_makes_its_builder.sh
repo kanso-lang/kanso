@@ -8,7 +8,7 @@
 # the micro corpus's builder and fold fixtures go red.
 set -e
 f=src/runtime.c
-grep -q '^KValue k_concat_arr_mut(long long n, const KValue\* parts) {$' "$f"
+grep -q '^KValue k_concat_arr_mut(long long n, const KValue\* parts) {$' src/runtime.c
 grep -qx '    if (acc->cap <= 0) {' "$f" || {
   echo "the first join's conversion moved; this mutation needs rewriting" >&2
   exit 1
