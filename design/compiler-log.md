@@ -24791,11 +24791,9 @@ every edge, which copies 4,754,864 bytes where the lap rule copies 3,488.
 
 Two cost veins move with the lap rule. The run program's `evac_bytes` falls
 from 10,018,720 to 6,671,008 and its tenure from six blocks to one, and the
-basket program's carried rewinds stage less often. `text` grows 144 bytes in
-each binary for the new function, to 4,611,582 in all. The tab compiler reads
-`browser_compile_instructions` 390,296,998, up 2,114,534 on main; 1,710,393 of
-that arrived with the lambda-edge refusal. `browser_compile_peak_bytes` reads
-675,725 and `browser_run_instructions` 33,520,883.
+basket program's carried rewinds stage less often. Of the tab compiler's rise
+in `browser_compile_instructions`, 1,710,393 arrived with the lambda-edge
+refusal. The next entry prices the whole change on CI's rows.
 
 ## 2026-10-10 — a map's view belongs to the beat that frees the map
 
@@ -24842,6 +24840,23 @@ them in glibc's `free`. The browser side of welfare rises from 83.42 to 83.55.
 A fast path that registered a head-block header without the walk cost more on
 this corpus than it saved, because its maps sit below the innermost mark, and
 was dropped.
+
+CI's rows for the three pieces together, against main. The work rows that fall
+are runbench, 1,129,603,831 to 1,127,640,368, and basket, 32,382,758 to
+30,339,466. The ones that rise are encodebench by 2,866 to 2,384,341,029,
+oneshot by 2,810 to 13,030,103, indexbench by 514 to 2,459,021, scanbench by
+309 to 282,024 and livebench by 3,146 to 1,473,488,334: none of them carries a
+cluster, and the rise is the larger runtime each binary links. `text` grows
+1,072 bytes in every binary, to 4,624,574 in all. `codegen_instructions_dev`
+rises 8,776 to 118,876,072, `compile_instructions` 25,851 to 25,858,191,
+`entry_instructions` 79,015 to 85,514,540 and `library_instructions` 79,237 to
+86,067,450, for the slot checks and the lambda-edge marking in `beat.rs`.
+`codegen_instructions_release` falls 15,674 to 453,772,164, `emit_instructions`
+4,229 to 7,058,107 and `interp_instructions` 47,893 to 488,865,227. The tab
+reads `browser_compile_instructions` 390,305,438, up 2,122,974, with
+`browser_compile_peak_bytes` up 1,998 to 675,725, `browser_run_instructions` up
+518,590 to 34,038,136 and `browser_run_peak_bytes` down 131,072 to 1,179,648.
+Welfare rises from 90.25801113 to 90.26974705, and the floor follows it.
 
 While building the fixtures I found that a file imported from a
 subdirectory, `import "./lib/fx"`, loses its cycle's rewind: the evaluator
