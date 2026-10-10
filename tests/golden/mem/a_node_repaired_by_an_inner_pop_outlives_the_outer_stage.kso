@@ -1,0 +1,72 @@
+# Three nested loops, each carrying something, and a record older than the
+# middle loop that the innermost loop's result reaches.
+#
+# `outer` carries `keep`, so after its first stage the string lives in the
+# outer loop's carry storage. Each lap of `outer` builds `box keep` and hands
+# it to `middle`, which starts after the box exists: the box lies below the
+# middle loop's mark. `inner` returns the box inside a list, and when it pops
+# it copies its result out of its own carry pair. That walk reaches the box,
+# finds its field pointing at storage it does not count as a survivor, and
+# repairs the box in place, copying the string to the arena's frontier. The
+# frontier is in the middle loop's lap.
+#
+# The middle loop's next stage walks `wrap`, then `pair`, whose only field is
+# the box, which lies below the mark, so the walk stops there and never looks
+# inside the box. Then it rewinds the lap and frees the string the box now
+# points at. Until 2026-10-10 the next lap's allocations wrote over it and
+# this program read the box's name out of freed memory and crashed. The pop
+# now keeps the nodes it repaired below the enclosing mark, and the middle
+# loop's stage visits them before it rewinds.
+#
+# `big` makes each lap allocate a few hundred kilobytes, so the loops stage
+# under the lap carry's drift rule as well as at every edge. `junk` and
+# `cover` put new bytes over the freed copy before anything reads it.
+type box
+  name
+
+type pair
+  b
+
+type wrap
+  p
+  n
+
+type lap
+  k
+  text
+  prev
+
+# A string of a few hundred kilobytes, so a lap that builds one drifts
+# far enough for its loop to stage.
+fn big t
+  a = "{t}{t}{t}{t}{t}{t}{t}{t}"
+  b = "{a}{a}{a}{a}{a}{a}{a}{a}"
+  c = "{b}{b}{b}{b}{b}{b}{b}{b}"
+  "{c}{c}{c}{c}{c}{c}{c}{c}"
+
+fn inner 0 b acc
+  [b acc]
+
+fn inner k b acc
+  junk = "{k} overwrote the bytes the box named {k} {k} {k} {k} {k} {k}"
+  inner (k - 1) b (lap (k + length (big junk) * 0) junk acc)
+
+fn middle 0 w total
+  cover = length (big "the last arm allocates over what the stage gave back")
+  "{w.p.b.name} {total + cover * 0}"
+
+fn middle j w total
+  got = inner j w.p.b 0
+  drift = length (big "middle lap {j} drifts the arena past the lap mark")
+  kept = total + length got + drift * 0
+  middle (j - 1) (wrap w.p j) kept
+
+fn outer 0 _ acc
+  acc
+
+fn outer i keep acc
+  r = middle 4 (wrap (pair (box keep)) 0) 0
+  drift = length (big "outer lap {i} drifts the arena past the lap mark")
+  outer (i - 1) "{keep}." "{acc}{r}, {drift} bytes of drift\n"
+
+pub play = print (outer 2 "name" "")

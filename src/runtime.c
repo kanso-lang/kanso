@@ -1094,8 +1094,11 @@ static void k_chunkreg_migrate(int d) {
     k_reg_any_at(d) &= ~K_REG_CHUNK;
 }
 
+static long long k_pend_n;
+static void k_pend_drop_above(KMark* m);
 void k_beat_rewind_slow(KMark* m) {
     if (m == &k_beat_none) return;
+    if (k_pend_n) k_pend_drop_above(m);
     k_buf_flush();
     long long d = m - k_beat_stack;
     if (d >= 0 && d < K_BEAT_MAX) {
@@ -2282,6 +2285,66 @@ static void k_repaired_note(KValue v) {
     k_repaired[k_repaired_n++] = v;
 }
 
+/* Nodes a repair wrote into that lie below an enclosing loop's mark. A pop
+   copies its result out of the carry pair into the arena at the frontier, and
+   a node the walk meets that survives but points at storage the pop retires is
+   repaired in place. The frontier is in the enclosing loop's lap. When the
+   repaired node is older than that loop's mark, it now points above the mark,
+   and the enclosing loop's next stage rewinds the copy away. That stage's walk
+   prunes at a survivor whose immediate interior survives, so it does not reach
+   the node from the carried slots, and the node is left pointing at freed
+   memory. The lox port's function calls did this: a record built before the
+   evaluator's loop held a string in the outer loop's carry storage, an inner
+   loop's pop copied the string to the frontier, and the evaluator's next stage
+   gave it back.
+
+   So the pop keeps the nodes it repaired below the enclosing mark here, and
+   every stage revisits the ones below its own mark as extra roots before it
+   rewinds. A stage copies what such a node points at into the carry and
+   settles it back under its raised mark, which makes the node safe for that
+   depth and not for the one outside it, so a node below the outer mark stays
+   on the list for the outer stage. A rewind frees what lies above its mark,
+   and the entries there go with it: while the list holds anything,
+   `K_BUF_PEND` in `k_buf_dirty` sends every rewind to the slow path, which
+   drops them. */
+#define K_BUF_PEND 2
+static KValue* k_pend = NULL;
+static long long k_pend_n = 0, k_pend_cap = 0;
+
+static void k_pend_push(KValue v) {
+    if (k_pend_n == k_pend_cap) {
+        k_pend_cap = k_pend_cap ? k_pend_cap * 2 : 64;
+        k_pend = realloc(k_pend, sizeof(KValue) * (size_t)k_pend_cap);
+        if (!k_pend) { fputs("out of memory\n", stderr); exit(1); }
+    }
+    k_pend[k_pend_n++] = v;
+    k_buf_dirty |= K_BUF_PEND;
+}
+
+static int k_pend_below(KValue v, KMark* m) {
+    return k_where((const void*)(intptr_t)v.payload, m) == K_WHERE_BELOW;
+}
+
+/* A rewind to the outermost mark clears the list. What lies above that mark
+   is freed by the rewind, and no stage outside it will ever revisit what lies
+   below. */
+static void k_pend_drop_above(KMark* m) {
+    if (m == &k_beat_stack[0]) { k_pend_n = 0; return; }
+    long long w = 0;
+    for (long long i = 0; i < k_pend_n; i++)
+        if (k_pend_below(k_pend[i], m)) k_pend[w++] = k_pend[i];
+    k_pend_n = w;
+}
+
+/* Keep the nodes this walk repaired that the rewind of depth `d - 1` could
+   still strand: the ones below its mark. */
+static void k_pend_keep_repaired(long long d) {
+    if (d <= 0 || d > K_BEAT_MAX) return;
+    KMark* outer = &k_beat_stack[d - 1];
+    for (long long i = 0; i < k_repaired_n; i++)
+        if (k_pend_below(k_repaired[i], outer)) k_pend_push(k_repaired[i]);
+}
+
 /* Tenuring is sticky, and it is never unset within one evacuation. A promoted
    node's fresh descendants must land beside it — leave one in the pair and the
    pair overwrites it two laps later while the tenured parent still points at
@@ -2688,7 +2751,10 @@ static __attribute__((noinline)) KValue k_beat_pop_slow(KValue r, long long d,
             KCopy cp = { NULL, NULL, 1, 0, k_carry_written };
             k_ptrmap_begin(&k_copy_map);
             k_copy_map_live = 0;
+            k_repaired_n = 0;
             r = k_deep_copy(r, &cp);
+            k_pend_keep_repaired(d);
+            k_repaired_n = 0;
             k_chunkreg_migrate((int)d);
             k_viewreg_migrate_carried((int)d);
             k_permreg_migrate_carried((int)d);
@@ -2899,6 +2965,28 @@ void k_carry_stage_kept(KValue v) {
 }
 
 
+/* The stage's half of the list above: walk the nodes below this stage's mark
+   as roots, so the ones that point above it are repaired into the carry, and
+   keep the old entries the outer rewind could still strand. An entry this walk
+   repaired is left off here, because `k_pend_keep_repaired` adds it back from
+   the repaired list. */
+static void k_pend_revisit(KMark* m, KCopy* cp) {
+    long long d = k_beat_depth - 1;
+    KMark* outer = d > 0 ? &k_beat_stack[d - 1] : NULL;
+    long long n = k_pend_n;
+    for (long long i = 0; i < n; i++)
+        if (k_pend_below(k_pend[i], m)) k_deep_copy(k_pend[i], cp);
+    long long w = 0;
+    for (long long i = 0; i < n; i++) {
+        const void* p = (const void*)(intptr_t)k_pend[i].payload;
+        if (!outer || !k_pend_below(k_pend[i], outer)) continue;
+        KPtrSlot* slot = k_ptrmap_at(&k_copy_map, p, &k_copy_map_live);
+        if (slot->gen == k_copy_map.gen && slot->key == p) continue;
+        k_pend[w++] = k_pend[i];
+    }
+    k_pend_n = w;
+}
+
 void k_beat_iter_carry(void) {
     if (K_COUNTING) k_stat_beat_iters++;
     if (k_beat_depth <= 0 || k_beat_depth > K_BEAT_MAX) return;
@@ -2916,6 +3004,8 @@ void k_beat_iter_carry(void) {
     k_copy_seen_live = 0;
     for (long long i = 0; i < k_carry_n; i++)
         if (!k_carry_kept[i]) need += k_copy_size(k_carry_slots[i], m);
+    for (long long i = 0; i < k_pend_n; i++)
+        if (k_pend_below(k_pend[i], m)) need += k_copy_size(k_pend[i], m);
     if (c->to.cap < need) {
         free(c->to.data);
         c->to.data = malloc(need ? need : 16);
@@ -2931,6 +3021,8 @@ void k_beat_iter_carry(void) {
     k_repaired_n = 0;
     for (long long i = 0; i < k_carry_n; i++)
         if (!k_carry_kept[i]) k_carry_slots[i] = k_deep_copy(k_carry_slots[i], &cp);
+    if (k_pend_n) k_pend_revisit(m, &cp);
+    k_pend_keep_repaired(k_beat_depth - 1);
     k_beat_rewind(m);
     k_repaired_settle(m);
     KCarryBuf swap = c->from;
@@ -7548,7 +7640,7 @@ static void k_buf_donate(KValue* items) {
 static void k_buf_flush(void) {
     if (!k_buf_dirty) return;
     memset(k_buf_free, 0, sizeof(k_buf_free));
-    k_buf_dirty = 0;
+    k_buf_dirty = k_pend_n ? K_BUF_PEND : 0;
 }
 
 /* Naming the value is the difference between "something here is wrong" and
