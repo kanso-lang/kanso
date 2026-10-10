@@ -1,0 +1,20 @@
+import "std/list"
+
+# A fold whose folder answers `"{acc}..."` writes each piece onto the end of
+# the accumulator it was handed, once the fold owns that accumulator. Without
+# that, every step copies the whole string so far, and a fold of 2,000 short
+# pieces allocates bytes in proportion to the square of its length. Both
+# spellings are here: the folder written as a lambda, and the folder named.
+fn piece acc i
+  "{acc}<{i}>"
+
+fn upto n
+  list/take (list/iterate 1 (i -> i + 1)) n
+
+fn by_name n
+  list/fold (upto n) "" piece
+
+fn by_lambda n
+  list/fold (upto n) "" (acc i -> "{acc}[{i}]")
+
+pub play = print "{length (by_name 2000)} {length (by_lambda 2000)}"

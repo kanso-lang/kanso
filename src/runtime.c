@@ -4090,7 +4090,15 @@ KValue k_concat_arr_mut(long long n, const KValue* parts) {
         if (!k_not_failure(parts[i])) return parts[i];
     }
     KStr* acc = k_as_str(parts[0]);
-    if (acc->cap <= 0) k_die("a string builder was expected here");
+    /* A fold's folder joins onto the accumulator the fold hands it, and the
+       seed arrives as whatever the caller wrote, usually a literal. The first
+       join makes the builder; every later one finds it. */
+    if (acc->cap <= 0) {
+        KValue built = k_b_str_builder(parts[0]);
+        KValue* writable = (KValue*)parts;
+        writable[0] = built;
+        acc = k_as_str(built);
+    }
     long long extra = 0;
     for (long long i = 1; i < n; i++) extra += k_as_str(parts[i])->len;
     long long want = (long long)acc->len + extra;

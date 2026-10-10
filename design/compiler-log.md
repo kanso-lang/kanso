@@ -24612,3 +24612,49 @@ work_basket from 32,362,738 to 32,382,760 and work_runbench from 1,129,588,698
 to 1,129,588,845, 147 instructions. Which of the four fixes moved which binary
 is not isolated here. Welfare falls, and the floor follows under the
 2026-09-13 rule.
+
+## 2026-10-10 — a fold that joins onto its accumulator writes in place
+
+The mustache port renders a template by folding over its pieces, and its
+folder answers `"{acc}{piece}"`. Natively, every step copied the whole string
+built so far, so 20,000 pieces held 2.77 GB before the program finished. The
+interpreter was not affected.
+
+The string-builder analysis already wrote a join in place when the
+accumulator is carried by a recursive function. A lambda handed to a fold was
+never looked at, because `walk_for_builder` stops at every lambda. A fold's
+folder runs once per element on the accumulator the fold threads through, so
+when `fold_owns_accumulator` says the fold owns its seed, a join onto the
+folder's first parameter has the same shape as the recursive case. The walk
+now marks those joins: in the folder's body, in either arm of an `if`, and
+through the wrapper lambda that `body_is_folder` already accepts.
+
+A folder passed by name, as in `list/fold xs "" piece`, is handled the same
+way under three conditions. Every arm of `piece` must end in a join onto its
+first parameter. Every direct call of `piece` must hand that argument over.
+Every use of the name as a value must be the folder of a fold whose seed
+nothing else holds. A partial application of `piece` keeps what it was given,
+so it disqualifies the group.
+
+The runtime's in-place join stopped the program when its accumulator was not
+already a builder. A fold's seed is usually a literal, so `k_concat_arr_mut`
+now converts it on the first join, the way a builder parameter's caller does.
+
+`tests/golden/mem/a_fold_that_joins_onto_its_accumulator_grows_one_string`
+folds 2,000 pieces with a named folder and with a lambda. `alloc_bytes` falls
+from 21,839,568 to 1,221,150 and `arena_peak_bytes` from 22,020,096 to
+2,097,152. `tests/golden/micro/a_fold_joins_onto_its_own_accumulator` covers
+the ways the string can be shared: a seed bound to a name, one fold's result
+folded twice more, and a direct call of the named folder. Making
+`fold_owns_accumulator` answer yes unconditionally turns it red. The two folds
+over one lambda result then wrote into the same buffer, and both printed
+`[1][2][3]+5-6`.
+
+No benchmark folds a string, so every runtime vein agrees with main. The
+browser compile row rises from 388,182,464 to 391,515,764, 0.86%, and the
+browser run row falls 6, to 33,510,702. The rise does not come from the new
+pass: with `named_folder_joins` switched off the row reads 392,251,588, higher
+still, so it follows the wasm binary's layout rather than the work done. On
+this tree welfare falls from 90.25811251 to 90.25529644 before CI's compile
+rows are in, and the floor waits on Clay, since this is a memory fix rather
+than a ruled part of the language.
