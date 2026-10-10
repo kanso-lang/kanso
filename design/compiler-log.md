@@ -24515,3 +24515,40 @@ Taken together the two sides net to a fall in welfare of 0.0000025, from
 90.25702372 to 90.25702120. The floor is lowered by that much. Clay asked
 why the two engines stored integers differently, and there was no reason;
 this branch is the answer to that question, so the floor follows it.
+
+## 2026-10-10 — a read named before the write keeps the write in place
+
+Three ports hit the same cliff. The sat solver, the toml parser and the lox
+interpreter each read a map entry into a name and then wrote the map:
+
+```
+v = m[i]
+bump (put m i (v + 1)) ...
+```
+
+Written inline as `put m i (m[i] + 1)`, the put happens in place. Written
+with the name, `linear.rs` counted `v = m[i]` as a second use of `m`, so `m`
+was not unique at the put and every put copied the map. The sat port's
+reduction, 20,000 steps over 100 keys, ran in 27.5 seconds natively with the
+name and 0.010 seconds without it.
+
+The two programs are the same as far as the map is concerned. The read
+answers an element, and `v` is used only as an operand of the put's own
+arguments, which are evaluated before the put writes. `effective_uses` now
+discounts a binding's mentions of the map when the bound name meets three
+conditions: neither the name nor the map is rebound in the block, the
+binding does not hold the map itself, and every later mention of the name is
+reached from the sibling arguments of a `put`, `push` or `append` on that
+map through arithmetic and comparison alone. A mention anywhere else (inside
+a lambda, a list, another call, or a second binding such as `w = v * 2`)
+could force the read after the write, and the binding still counts. A loop's
+bindings usually sit under its `return ... if` guard, so the search goes down
+through the guard's rest.
+
+`tests/golden/mem/a_read_named_before_the_write_stays_in_place.kso` is the
+sat reduction at 2,000 steps. Its golden pins 8 allocations; the compiler
+before this change made 6,013 on it.
+`tests/golden/micro/a_read_named_before_a_write_sees_the_old_value.kso`
+covers the other side: a name used after the write, a name stored in the
+list the put writes, and a name that feeds a second binding all keep the
+copy, and each line prints the old value beside the new on every engine.
