@@ -24847,3 +24847,6 @@ it and a three-field one to another, and prints the same line on the
 interpreter, a dev build and a release build. The compiler on main refuses to
 build it. The ratchet row "a constructor refused as a value" puts the refusal
 back and the micro corpus goes red.
+
+`tests/a_type_name_as_a_bare_value.rs` had pinned the refusal for a
+two-field record printed bare. It now pins that both engines print `<fn>`.
