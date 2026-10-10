@@ -1,0 +1,18 @@
+import "std/list"
+
+# Ruled 2026-10-10: a field may hold a list of references, and a list literal
+# written as a constructor's argument is storage. This maker binds the list to
+# a name and measures it, which reads through it while the nodes are being
+# made, so the references in it are refused where they are asked for.
+type station
+  name
+  links
+  count
+
+fn make k ref
+  links = [(ref "a") (ref "b")]
+  station k links (length links)
+
+pub play =
+  ring = list/tie ["a" "b"] make
+  print "{length ring}"

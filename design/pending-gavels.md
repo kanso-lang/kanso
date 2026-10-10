@@ -50,7 +50,83 @@ went to the log rather than here.
 
 ## Blocking — a fixture, gate, or merge is waiting
 
+### May four port fixes lower the welfare floor?
+
+**Cited:** CLAUDE.md's "The welfare number only goes up", whose 2026-09-13
+exception lets a change that builds a ruled part of the language lower the
+floor without asking, and keeps every other fall with Clay. Searched the live
+log, the archive and the ledger for a ruling on fixes that make the native
+engines finish programs the interpreter already finishes: none. The nearest
+case is kanso#1830, which lowered the floor under the exception because the
+program crashed.
+
+**The question.** Four pull requests fix native-only failures that port
+journals reported. Each is green apart from the floor, and each costs welfare
+through compile rows, not through any runtime vein.
+
+- **kanso#1822, a read named before the write keeps the write in place.**
+  `v = m[i]` followed by `put m i (v + 1)` copied the map on every put. sat's
+  reduction falls from 27.5 s to 0.010 s natively. Welfare 90.25888 to
+  90.25499, down 0.00389.
+- **kanso#1824, a loop entered from a tail cycle gives its garbage back.** The
+  lox port's 50,000-pass loop peaked at 3.0 GB natively and now peaks at
+  77 MB (lox F18). Welfare 90.25811 to 90.25621, down 0.00190.
+- **kanso#1820, a map's view takes keys out of order without moving itself.**
+  `list/tally` over 40,000 distinct strings falls from 4.95 s to 0.21 s, and
+  xsv's cardinality count and ugit's diff hit the same cliff. With main merged
+  in, welfare 90.25153 to 90.25054, down 0.00099. That is inside the 0.001
+  band the gate allows for disagreement between hosts, so CI passes it, but
+  every term here is deterministic and the fall is real.
+- **kanso#1825, a fold that joins onto its accumulator writes in place.**
+  The mustache port held 2.77 GB rendering 20,000 pieces (mustache F14).
+  Welfare 90.25811 to 90.25519, down 0.00292.
+
+None of the four changes what a program prints. The figures are each
+branch's own score against its own floor, and the four falls add to about a
+hundredth of a point.
+
+1. **Lower the floor for all four**, and widen the exception to cover any
+   change that lets a native engine finish a program the interpreter
+   finishes, so the next one does not wait.
+2. **Lower it for these four only.**
+3. **Hold them** until each pays for its compile cost elsewhere.
+
+**Recommendation: 1.** Two of the four are programs that run out of memory
+natively and finish on the interpreter, which is a divergence between engines
+of the kind the differential law forbids. The other two turn runs of 27 s and
+5 s into 10 ms and 0.2 s. Each fall is a few thousandths of a point.
+
 ## Open, not blocking
+
+### May a list built from data hold `tie` references?
+
+**Cited:** the live log's "gavel: a field may hold a list of `tie` references"
+(2026-10-10), which admits a list or map literal and whose Owes asks the graph
+fixture to drop its chain of records; "a `tie` node holds its references in a
+list", which built it; `tests/golden/micro/a_graph_tied_from_a_map_of_edges`.
+Searched the log, the archive, the ledger and the tests for a ruling on a list
+of references a call builds: none.
+
+**The question.** The graph fixture reads each town's roads from a map, so the
+number of references a node holds is data. A literal cannot hold a number of
+elements decided at run time, so under the ruling's text the fixture still
+needs its chain of `road` records. The natural spelling is
+
+    town name (list/map (roads_of edges[name]) ref)
+
+which hands `ref` to `list/map`. The check refuses that today, because what a
+function from std does with `ref` is out of its sight. `list/map` stores each
+answer and reads none of them, so the same argument that admitted the literal
+would admit this call.
+
+1. **Admit `list/map xs ref`, and `list/map xs (k -> ref k)`, written as a
+   field.** The check names `list/map` as a function that stores what its
+   function answers, and the graph fixture drops its chain.
+2. **Leave it at literals.** A node whose links come from data keeps the chain.
+
+**Recommendation: 1.** A graph read from data is the case `tie` exists for,
+and `list/map` is the one call that builds such a list without reading what it
+holds.
 
 ### Does `build` still earn its place beside `tie`?
 

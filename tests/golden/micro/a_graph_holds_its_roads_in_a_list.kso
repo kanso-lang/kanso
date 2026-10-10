@@ -1,0 +1,41 @@
+import "std/list"
+
+# Ruled 2026-10-10: a field may hold a list of `tie` references. Each town
+# keeps its roads as a list, and a map of named roads beside it, both written
+# as the constructor's arguments. The graph has a cycle (ash, cedar, ash) and
+# a town two roads lead to, and `trail` follows every road to a depth.
+type town
+  name
+  roads
+  named
+
+fn make "ash" ref
+  town "ash" [(ref "birch") (ref "cedar")] { "north":(ref "birch") }
+
+fn make "birch" ref
+  town "birch" [(ref "cedar")] { "east":(ref "cedar") }
+
+fn make name ref
+  town name [(ref "ash")] { "home":(ref "ash") }
+
+fn trail (town name _ _) 0
+  name
+
+fn trail (town name roads _) depth
+  "{name} ({list/fold roads "" (acc t -> "{acc} {trail t (depth - 1)}")} )"
+
+fn north none
+  "nothing north"
+
+fn north (town name _ _)
+  name
+
+fn from none
+  "no such town"
+
+fn from t
+  "{trail t 3}; north of ash is {north t.named["north"]}"
+
+pub play =
+  towns = list/tie ["ash" "birch" "cedar"] make
+  print (from towns["ash"])

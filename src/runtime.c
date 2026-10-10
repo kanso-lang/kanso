@@ -2481,8 +2481,16 @@ static KValue k_deep_copy(KValue v, KCopy* cp) {
         return v;
     }
     {
+        /* A node copied into the pair before the walk began tenuring is not a
+           copy a tenured parent may share. The tenured parent survives the
+           next stage, whose walk prunes at it, and the pair is overwritten the
+           stage after; so the parent copies the node again, into tenure, and
+           the map hands that copy to whatever asks next. The first copy stays
+           where its first holder put it, and the next stage walks that holder. */
         KPtrSlot* slot = k_ptrmap_at(&k_copy_map, p, &k_copy_map_live);
-        if (slot->gen == k_copy_map.gen && slot->key == p) {
+        if (slot->gen == k_copy_map.gen && slot->key == p
+            && !(cp->in_ten && cp->buf && (char*)slot->val >= cp->buf->data
+                 && (char*)slot->val < cp->buf->data + cp->buf->cap)) {
             if (K_COUNTING) k_stat_carry_dedup++;
             KValue out = v;
             out.payload = k_ptr(slot->val);

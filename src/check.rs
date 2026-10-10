@@ -2013,7 +2013,9 @@ fn demand_conflicts(
 /// Ruled 2026-10-04: a reference `list/tie` hands its maker is stored in a
 /// constructor's field and nowhere else, because the node it names may not be
 /// made yet. So every call of the maker's `ref` is an argument of a
-/// constructor. `ref` itself may go to a function the program declares, and
+/// constructor, or an element of a list or map literal that is one: a field
+/// may hold a collection, ruled 2026-10-10, and a literal that holds
+/// references reads none of them. `ref` itself may go to a function the program declares, and
 /// that function's parameter is then held to the same rule, which is how a
 /// read inside a helper the maker calls is found. A `ref` handed anywhere else
 /// is refused, since what happens to it there is out of this check's sight.
@@ -2148,8 +2150,9 @@ impl<'a> TieCheck<'a> {
                             "tie",
                             format!(
                                 "`{r}` answers a reference to a node that may not be made yet, \
-                                 so it goes straight into a constructor's field and is never \
-                                 read or kept anywhere else"
+                                 so it goes straight into a constructor's field, alone or in a \
+                                 list or map written there, and is never read or kept anywhere \
+                                 else"
                             ),
                             *span,
                         ));
@@ -2190,6 +2193,20 @@ impl<'a> TieCheck<'a> {
                 }
             }
             Expr::Ident(n, span, _) if n == r => self.handed(None, 0, r, *span),
+            // A list or map literal written as a field is storage, and so is
+            // each element in it, ruled 2026-10-10. A map's key is read to
+            // place the pair, so only its values may hold a reference.
+            Expr::List(items, _) if in_field => {
+                for item in items {
+                    self.reads(item, r, literal, true);
+                }
+            }
+            Expr::MapLit(pairs, _) if in_field => {
+                for (key, value) in pairs {
+                    self.reads(key, r, literal, false);
+                    self.reads(value, r, literal, true);
+                }
+            }
             _ => crate::for_each_child(e, |c| self.reads(c, r, literal, false)),
         }
     }

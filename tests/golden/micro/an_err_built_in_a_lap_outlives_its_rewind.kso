@@ -1,0 +1,41 @@
+import "std/text"
+
+# A loop whose cursor may be an err, and an err built inside the lap.
+#
+# `walk` and `look` call each other in tail position, so the pair rewinds
+# the arena on the edge back into `walk`. The cursor crosses that rewind as
+# a number, which needs nothing copied. On the lap that meets the `x` after
+# the `#`, `skip` answers an err instead, holding a record built in the
+# lap's own storage, and `walk` passes it on through its index. A rewind
+# taken on that edge handed the record's storage back, the err picked up a
+# hop on its way out and the hop was written over the record, and the
+# caller met a record with no type: the err arm below did not match it and
+# the program died with an unhandled err.
+type failure
+  at
+  why
+
+fn skip cs p
+  return err (failure p "stopped") if cs[p + 1] == 120
+  p + 1
+
+fn walk cs p
+  look cs cs[p] p
+
+fn look _ none p
+  p
+
+fn look cs 35 p
+  q = skip cs p
+  walk cs q
+
+fn look cs _ p
+  walk cs (p + 1)
+
+fn report (err (failure at why))
+  "failed at {at}: {why}"
+
+fn report v
+  "reached {v}"
+
+pub play = print (report (walk (text/bytes "ab#xc") 1))
