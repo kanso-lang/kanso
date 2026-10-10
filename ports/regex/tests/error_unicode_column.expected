@@ -1,0 +1,5 @@
+--- stderr
+regex: error parsing regexp: invalid escape sequence: `\p`
+  日本\p{Han}
+    ^
+--- exit 2

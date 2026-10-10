@@ -1,0 +1,23 @@
+pattern:    ^(?:cat|dog|[a-c]|d)+$
+parsed:     cat{bot{}plus{alt{cat{lit{c}lit{a}lit{t}}cat{lit{d}lit{o}lit{g}}cc{a-c}lit{d}}}eot{}}
+simplified: cat{bot{}plus{alt{cat{lit{c}lit{a}lit{t}}cat{lit{d}lit{o}lit{g}}cc{a-d}}}eot{}}
+groups:     none
+program:
+1. save 0
+2. assert bot{}
+3. split 4 8
+4. char c
+5. char a
+6. char t
+7. jmp 14
+8. split 9 13
+9. char d
+10. char o
+11. char g
+12. jmp 14
+13. class cc{a-d}
+14. split 3 15
+15. assert eot{}
+16. save 1
+17. match
+--- exit 0

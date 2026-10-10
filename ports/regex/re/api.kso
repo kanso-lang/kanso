@@ -1,0 +1,166 @@
+import "std/list"
+import "std/text"
+
+# The module's public surface. A record's fields do not cross an import, so
+# everything a caller needs to read comes out through a function here: slot
+# lists of plain ints, counts, and rendered text.
+pub type regexp
+  names
+  prog
+  tree
+
+# All the matches in one subject, and the steps it took to find them.
+pub type matches
+  hits
+  steps
+
+# Where a find_all has got to: the matches so far, where the last one ended,
+# the offset to search from next, and the steps spent.
+type sweep
+  acc
+  last
+  pos
+  spent
+
+# A pattern compiled for matching, or an err whose reason is a syntax_error.
+pub fn compile pattern
+  built pattern (parse pattern)
+
+fn built _ e@(err _)
+  e
+
+fn built pattern t
+  large = err (syntax_error 1 "expression too large" pattern)
+  return large if max_insts < size t.node
+  simple = tree t.names (simplify t.node)
+  assembled t (assemble simple)
+
+fn assembled _ e@(err _)
+  e
+
+fn assembled t p
+  regexp t.names p t
+
+# The same pattern, matching leftmost-longest as POSIX does rather than
+# leftmost-first as Perl does: of the matches starting at the leftmost
+# possible position, the longest.
+pub fn longest r
+  regexp r.names (longest_program r.prog) r.tree
+
+# The text a syntax error is reported with, in Go's words, and the column
+# (counted in code points from 1) it points at.
+pub fn message (err (syntax_error _ code text))
+  "error parsing regexp: {code}: `{text}`"
+
+pub fn column (err (syntax_error at _ _))
+  at
+
+# The pattern as parsed, after simplification, and as a program.
+pub fn parsed_text r
+  dump r.tree.node
+
+pub fn simplified_text r
+  dump (simplify r.tree.node)
+
+pub fn program_text r
+  listing r.prog
+
+# How many capture groups the pattern has, and their names, "" for a group
+# without one. Group 0, the whole match, is not counted.
+pub fn group_count r
+  length r.names
+
+pub fn group_names r
+  r.names
+
+# A subject as code points, and the text between two offsets of one.
+pub fn codes s
+  list/to_list (list/map (text/chars s) text/char_code)
+
+pub fn between cps from to
+  text/join (list/to_list (list/map (text/slice cps (from + 1) to) glyph)) ""
+
+fn glyph cp
+  text/from_code cp
+
+# The leftmost-first match starting at or after offset `start`, as Go's
+# FindSubmatchIndex gives it: start and end offsets for the whole match and
+# then for each group, -1 for a group that took no part. No match is [].
+pub fn search r cps start
+  slots_of r (execute r.prog cps start)
+
+pub fn search_steps r cps start
+  steps_of (execute r.prog cps start)
+
+fn slots_of r (found caps _)
+  numbers = list/take list/naturals r.prog.slots
+  list/to_list (list/map numbers (i -> slot_value caps[i - 1]))
+
+fn slots_of _ (lost _)
+  []
+
+fn steps_of (found _ steps)
+  steps
+
+fn steps_of (lost steps)
+  steps
+
+fn slot_value none
+  -1
+
+fn slot_value n
+  n
+
+# Every non-overlapping match, left to right. An empty match right where the
+# previous match ended is skipped, as in RE2 and Go, and the search moves one
+# code point on after any empty match.
+pub fn find_all r cps
+  all_from r cps (sweep [] -1 0 0)
+
+fn all_from r cps w
+  return matches w.acc w.spent if length cps < w.pos
+  ran = execute r.prog cps w.pos
+  next_match r cps w ran (slots_of r ran)
+
+fn next_match _ _ w (lost cost) _
+  matches w.acc (w.spent + cost)
+
+fn next_match r cps w (found _ cost) slots
+  from = slots[1]
+  to = slots[2]
+  total = w.spent + cost
+  return all_from r cps (sweep (push w.acc slots) to to total) if to != w.pos
+  kept = if (from == w.last) w.acc (push w.acc slots)
+  all_from r cps (sweep kept to (w.pos + 1) total)
+
+pub fn hits m
+  m.hits
+
+pub fn steps_taken m
+  m.steps
+
+# The first match alone, in the same shape find_all answers.
+pub fn first_match r cps
+  ran = execute r.prog cps 0
+  one = slots_of r ran
+  matches (if (one == []) [] [one]) (steps_of ran)
+
+# Reading one hit: offsets of the whole match, and of group i, -1 when the
+# group took no part in the match.
+pub fn hit_start h
+  offset h[1]
+
+pub fn hit_end h
+  offset h[2]
+
+pub fn group_start h i
+  offset h[2 * i + 1]
+
+pub fn group_end h i
+  offset h[2 * i + 2]
+
+fn offset none
+  -1
+
+fn offset n
+  n

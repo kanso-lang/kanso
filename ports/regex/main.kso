@@ -1,0 +1,4 @@
+import "./grep"
+import "std/os"
+
+os/args .> grep/run

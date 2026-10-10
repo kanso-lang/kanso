@@ -1,0 +1,3 @@
+-n
+^$
+tests/data/poem.txt

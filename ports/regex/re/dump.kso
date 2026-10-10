@@ -1,0 +1,103 @@
+import "std/list"
+import "std/text"
+
+# A one-line rendering of a tree, in the style of the dumps Go's regexp/syntax
+# tests use: lit{a} cat{...} star{...} cc{a-z}. A lazy loop is written with an
+# `n` in front, nstar{...}, and a counted one carries its bounds, rep{2,5 ...}.
+pub fn dump (alt branches)
+  "alt\{{dump_all branches}}"
+
+pub fn dump any_char
+  "dot\{}"
+
+pub fn dump any_not_nl
+  "dnl\{}"
+
+pub fn dump begin_line
+  "bol\{}"
+
+pub fn dump begin_text
+  "bot\{}"
+
+pub fn dump (capture index "" body)
+  "cap{index}\{{dump body}}"
+
+pub fn dump (capture index name body)
+  "cap{index}<{name}>\{{dump body}}"
+
+pub fn dump (cat parts)
+  "cat\{{dump_all parts}}"
+
+pub fn dump (cls spans)
+  "cc\{{text/join (list/to_list (list/map spans span_text)) " "}}"
+
+pub fn dump (count_loop greedy max min body)
+  "{lazy_mark greedy}rep\{{min},{bound max} {dump body}}"
+
+pub fn dump empty
+  "emp\{}"
+
+pub fn dump end_line
+  "eol\{}"
+
+pub fn dump end_text
+  "eot\{}"
+
+pub fn dump (lit cp)
+  "lit\{{cp_text cp}}"
+
+pub fn dump no_match
+  "no\{}"
+
+pub fn dump not_word_boundary
+  "nwb\{}"
+
+pub fn dump (plus greedy body)
+  "{lazy_mark greedy}plus\{{dump body}}"
+
+pub fn dump (quest greedy body)
+  "{lazy_mark greedy}quest\{{dump body}}"
+
+pub fn dump (star greedy body)
+  "{lazy_mark greedy}star\{{dump body}}"
+
+pub fn dump word_boundary
+  "wb\{}"
+
+fn dump_all nodes
+  text/join (list/to_list (list/map nodes dump)) ""
+
+fn lazy_mark true
+  ""
+
+fn lazy_mark false
+  "n"
+
+fn bound -1
+  ""
+
+fn bound n
+  "{n}"
+
+fn span_text s
+  return cp_text s.first if s.first == s.last
+  "{cp_text s.first}-{cp_text s.last}"
+
+# Printable ASCII other than the dump's own punctuation is shown as itself;
+# everything else as hex, 0x7b for `{`.
+pub fn cp_text cp
+  shown = 33 <= cp and cp <= 126 and cp != 123 and cp != 125 and cp != 45
+  if shown (text/from_code cp) (hex cp)
+
+pub fn hex cp
+  "0x{hex_digits cp ""}"
+
+fn hex_digits 0 ""
+  "0"
+
+fn hex_digits 0 acc
+  acc
+
+fn hex_digits n acc
+  digit = text/slice "0123456789abcdef" (n % 16 + 1) (n % 16 + 1)
+  hex_digits (n / 16) "{digit}{acc}"

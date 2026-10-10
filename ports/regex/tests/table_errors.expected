@@ -1,0 +1,36 @@
+(ab	x	error parsing regexp: missing closing ): `(ab`
+ab)	x	error parsing regexp: unexpected ): `ab)`
+a**	x	error parsing regexp: invalid nested repetition operator: `**`
+a*+	x	error parsing regexp: invalid nested repetition operator: `*+`
+a{2}{3}	x	error parsing regexp: invalid nested repetition operator: `{2}{3}`
+*a	x	error parsing regexp: missing argument to repetition operator: `*`
++	x	error parsing regexp: missing argument to repetition operator: `+`
+[z-a]	x	error parsing regexp: invalid character class range: `z-a`
+[a	x	error parsing regexp: missing closing ]: `[a`
+\q	x	error parsing regexp: invalid escape sequence: `\q`
+x\	x	error parsing regexp: trailing backslash at end of expression: ``
+(?=x)	x	error parsing regexp: invalid or unsupported Perl syntax: `(?=`
+(?!x)	x	error parsing regexp: invalid or unsupported Perl syntax: `(?!`
+(?<=x)	x	error parsing regexp: invalid named capture: `(?<=x)`
+(?P<1a>a)	x	no match
+(?P<>a)	x	error parsing regexp: invalid named capture: `(?P<>`
+a{1001}	x	error parsing regexp: invalid repeat count: `{1001}`
+a{2,1}	x	error parsing regexp: invalid repeat count: `{2,1}`
+\8	x	error parsing regexp: invalid escape sequence: `\8`
+[[:foo:]]	x	error parsing regexp: invalid character class range: `[:foo:]`
+\x{110000}	x	error parsing regexp: invalid escape sequence: `\x{110000`
+(?z)	x	error parsing regexp: invalid or unsupported Perl syntax: `(?z`
+(?i-)	x	error parsing regexp: invalid or unsupported Perl syntax: `(?i-)`
+(?)	x	(0 0) (1 1)
+[\d-z]	x	no match
+(a{1000}){1000}	x	error parsing regexp: invalid repeat count: `{1000}`
+((a{10}){10}){10}	x	no match
+((a{10}){10}){100}	x	error parsing regexp: invalid repeat count: `{100}`
+a{2}{3}	x	error parsing regexp: invalid nested repetition operator: `{2}{3}`
+(?i)(?P<x>a)(?:b	x	error parsing regexp: missing closing ): `(?i)(?P<x>a)(?:b`
+[[:alpha:]-z]	-	(0 1)
+\x{ZZ}	x	error parsing regexp: invalid escape sequence: `\x{Z`
+\xZ	x	error parsing regexp: invalid escape sequence: `\xZ`
+(?P<name	x	error parsing regexp: invalid named capture: `(?P<name`
+(?P=name)	x	error parsing regexp: invalid or unsupported Perl syntax: `(?P`
+--- exit 0

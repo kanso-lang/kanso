@@ -1,0 +1,4 @@
+-o
+--
+-?\d+(?:\.\d+)?(?:e\d+)?|0x[[:xdigit:]]+
+tests/data/poem.txt

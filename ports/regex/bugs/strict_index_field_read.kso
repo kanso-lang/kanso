@@ -1,0 +1,21 @@
+# `xs[i]!` answers an effect (book ch02, ch04), so reading a field of what it
+# answers should be refused by `kanso check` the way `length os/args` is
+# ("this is an effect ... open it with `.>`").
+#
+# should: error[effect] at check time, pointing at `s.first`.
+# does:   no compile-time refusal; every engine stops at run time with
+#         error[runtime]: `.` reads a field of a record, not <io>
+#         Inside a module (re/classes.kso in this port) `kanso check` said
+#         ok and `kanso test` printed the location as `re:60:24`, the
+#         module directory rather than the file.
+#
+# run: kanso play bugs/strict_index_field_read.kso
+type span
+  first
+  last
+
+fn first_of spans
+  s = spans[1]!
+  s.first
+
+print "{first_of [(span 1 2)]}"

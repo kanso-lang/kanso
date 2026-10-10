@@ -1,0 +1,245 @@
+import "std/list"
+import "std/text"
+
+# Compilation of a simplified tree to a Pike VM program: a list of
+# instructions addressed by position, starting at 1. A split names two
+# targets and prefers the first, which is how greed and alternation order
+# reach the matcher.
+pub type i_any
+
+pub type i_any_nl
+
+pub type i_assert
+  kind
+
+pub type i_char
+  cp
+
+pub type i_class
+  spans
+
+pub type i_fail
+
+pub type i_jmp
+  to
+
+pub type i_match
+
+pub type i_save
+  slot
+
+pub type i_split
+  first
+  second
+
+pub type program
+  anchored
+  code
+  longest
+  slots
+
+max_insts = 20000
+
+# The same program, asked for the leftmost-longest match instead.
+pub fn longest_program p
+  program p.anchored p.code true p.slots
+
+# The whole program brackets the pattern with the saves of group 0 and ends
+# in a match. A pattern that can only match at the start of the text is
+# marked anchored, so the matcher does not try it anywhere else.
+pub fn assemble t
+  body = emit t.node 2
+  code = push (text/concat [(i_save 0)] (push body (i_save 1))) i_match
+  program (anchored? t.node) code false (2 * (length t.names + 1))
+
+# An upper bound on the instructions a parsed tree compiles to, counted
+# before counted repetition is expanded, so a pattern too large to compile
+# is refused before it is built.
+pub fn size (alt branches)
+  list/fold branches 0 (n b -> n + size b + 2)
+
+pub fn size (capture _ _ body)
+  size body + 2
+
+pub fn size (cat parts)
+  list/fold parts 0 (n p -> n + size p)
+
+pub fn size (count_loop _ max min body)
+  bigger max min * (size body + 1)
+
+pub fn size (plus _ body)
+  size body + 1
+
+pub fn size (quest _ body)
+  size body + 1
+
+pub fn size (star _ body)
+  size body + 2
+
+pub fn size _
+  1
+
+fn anchored? none
+  false
+
+fn anchored? begin_text
+  true
+
+fn anchored? (cat parts)
+  anchored? parts[1]
+
+fn anchored? (capture _ _ body)
+  anchored? body
+
+fn anchored? (alt branches)
+  list/all? branches anchored?
+
+fn anchored? (plus _ body)
+  anchored? body
+
+fn anchored? _
+  false
+
+# emit answers the instructions for one node, given the address its first
+# instruction will have.
+fn emit none _
+  []
+
+fn emit (lit cp) _
+  [(i_char cp)]
+
+fn emit (cls spans) _
+  [(i_class spans)]
+
+fn emit any_char _
+  [i_any]
+
+fn emit any_not_nl _
+  [i_any_nl]
+
+fn emit empty _
+  []
+
+fn emit no_match _
+  [i_fail]
+
+fn emit (cat parts) at
+  list/fold parts [] (acc p -> text/concat acc (emit p (at + length acc)))
+
+fn emit (capture index _ body) at
+  inner = emit body (at + 1)
+  closing = push inner (i_save (2 * index + 1))
+  text/concat [(i_save (2 * index))] closing
+
+# a|b|c: split to a, else split to b, else c; each branch but the last jumps
+# past the rest.
+fn emit (alt branches) at
+  branch_chain branches 1 at
+
+# x*: L: split L+1, out; x; jmp L.  A lazy loop swaps the split's targets.
+# When x can match the empty string it is compiled as (x+)? instead, as Go
+# does: in the plain loop an empty pass through x arrives back at L, which
+# the matcher has already visited at this position, and that thread, with
+# the captures it set, would be dropped.
+fn emit (star greedy body) at
+  return emit (quest greedy (plus greedy body)) at if nullable? body
+  inner = emit body (at + 1)
+  out = at + length inner + 2
+  text/concat [(choice greedy (at + 1) out)] (push inner (i_jmp at))
+
+# x+: L: x; split L, out.
+fn emit (plus greedy body) at
+  inner = emit body at
+  out = at + length inner + 1
+  push inner (choice greedy at out)
+
+# x?: split L+1, out; x.
+fn emit (quest greedy body) at
+  inner = emit body (at + 1)
+  out = at + length inner + 1
+  text/concat [(choice greedy (at + 1) out)] inner
+
+fn emit edge:anchor _
+  [(i_assert edge)]
+
+fn nullable? (alt branches)
+  list/any? branches nullable?
+
+fn nullable? (capture _ _ body)
+  nullable? body
+
+fn nullable? (cat parts)
+  list/all? parts nullable?
+
+fn nullable? (plus _ body)
+  nullable? body
+
+fn nullable? (quest _ _)
+  true
+
+fn nullable? (star _ _)
+  true
+
+fn nullable? empty
+  true
+
+fn nullable? _:anchor
+  true
+
+fn nullable? _
+  false
+
+fn choice true stay leave
+  i_split stay leave
+
+fn choice false stay leave
+  i_split leave stay
+
+fn branch_chain bs i at
+  return emit bs[i] at if i == length bs
+  inner = emit bs[i] (at + 1)
+  rest = branch_chain bs (i + 1) (at + length inner + 2)
+  out = at + length inner + 2 + length rest
+  head = [(i_split (at + 1) (at + length inner + 2))]
+  text/concat head (text/concat (push inner (i_jmp out)) rest)
+
+# The program as text, one instruction a line, for --dump.
+pub fn listing p
+  lines = list/fold p.code [] (acc i -> push acc (line (length acc + 1) i))
+  text/join lines "\n"
+
+fn line n inst
+  "{n}. {inst_text inst}"
+
+fn inst_text none
+  ""
+
+fn inst_text i_any
+  "any"
+
+fn inst_text i_any_nl
+  "any-but-newline"
+
+fn inst_text (i_assert kind)
+  "assert {dump kind}"
+
+fn inst_text (i_char cp)
+  "char {cp_text cp}"
+
+fn inst_text (i_class spans)
+  "class {dump (cls spans)}"
+
+fn inst_text i_fail
+  "fail"
+
+fn inst_text (i_jmp to)
+  "jmp {to}"
+
+fn inst_text i_match
+  "match"
+
+fn inst_text (i_save slot)
+  "save {slot}"
+
+fn inst_text (i_split first second)
+  "split {first} {second}"

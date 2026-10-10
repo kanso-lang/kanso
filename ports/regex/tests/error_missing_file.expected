@@ -1,0 +1,3 @@
+--- stderr
+regex: tests/data/nope.txt: no such file
+--- exit 2

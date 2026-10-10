@@ -1,0 +1,4 @@
+-o
+-n
+\b[a-z]{5}\b
+tests/data/poem.txt

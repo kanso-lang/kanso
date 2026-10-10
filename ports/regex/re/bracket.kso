@@ -1,0 +1,109 @@
+import "std/text"
+
+# Bracket expressions: [abc] [^a-z] [[:alpha:]\d_-]. `open` is the position
+# of the `[`, `first` the position of the first item, where a `]` is an
+# ordinary character rather than the end.
+fn bracket cs at st
+  neg = cs[at + 1] == "^"
+  first = if neg (at + 2) (at + 1)
+  members cs at st neg first first []
+
+fn members cs open st neg first i acc
+  member cs[i] cs open st neg first i acc
+
+fn member none cs open _ _ _ _ _
+  fail open "missing closing ]" (chunk cs open (length cs))
+
+fn member "]" cs open st neg first i acc
+  return ranged cs open st neg first acc (point_item cs i "]") if i == first
+  got (i + 1) (class_node acc neg st.flags.fold) st
+
+fn member "[" cs open st neg first i acc
+  return posix_item cs open st neg first i acc if cs[i + 1] == ":"
+  ranged cs open st neg first acc (point_item cs i "[")
+
+fn member "\\" cs open st neg first i acc
+  c = cs[i + 1]
+  return perl_item cs open st neg first i acc c if perl? c
+  ranged cs open st neg first acc (class_escape cs i)
+
+fn member c cs open st neg first i acc
+  ranged cs open st neg first acc (point_item cs i c)
+
+fn point_item _ i c
+  esc (i + 1) (text/char_code c)
+
+fn class_escape cs i
+  escape_char cs i
+
+# The class is complete: merge what was collected, fold it under (?i), and
+# negate it last, so that (?i)[^k] excludes k, K and the Kelvin sign alike.
+fn class_node acc neg fold
+  merged = normalize acc
+  folded = if fold (fold_spans merged) merged
+  spans = if neg (negate folded) folded
+  if (spans == []) no_match (cls spans)
+
+# \d \s \w and their negations inside brackets. A `-` after one is an
+# ordinary character, as in Go: [\d-z] is digits, a dash and z.
+fn perl_item cs open st neg first i acc c
+  members cs open st neg first (i + 2) (text/concat acc (perl_spans c))
+
+# [:name:] and [:^name:]. A `[:` with no `:]` after it is two characters.
+fn posix_item cs open st neg first i acc
+  close = colon_bracket cs (i + 2)
+  return ranged cs open st neg first acc (point_item cs i "[") if close == 0
+  inner = chunk cs (i + 2) (close - 1)
+  negated = text/slice inner 1 1 == "^"
+  name = if negated (text/slice inner 2 (length inner)) inner
+  posix_spans cs open st neg first i close acc negated (posix name)
+
+fn posix_spans cs _ _ _ _ i close _ _ none
+  fail i "invalid character class range" (chunk cs i (close + 1))
+
+fn posix_spans cs open st neg first _ close acc negated spans
+  chosen = if negated (negate spans) spans
+  members cs open st neg first (close + 2) (text/concat acc chosen)
+
+fn colon_bracket cs i
+  return 0 if length cs < i + 1
+  return i if cs[i] == ":" and cs[i + 1] == "]"
+  colon_bracket cs (i + 1)
+
+# A single character, which may be the start of a range a-z.
+fn ranged _ _ _ _ _ _ e@(err _)
+  e
+
+fn ranged cs open st neg first acc (esc at lo)
+  dash = cs[at] == "-" and cs[at + 1] != "]" and cs[at + 1] != none
+  return members cs open st neg first at (push acc (span lo lo)) if not dash
+  range_end cs open st neg first acc at lo (range_point cs (at + 1))
+
+fn range_point cs i
+  end_point cs i cs[i]
+
+fn end_point _ i none
+  fail i "missing closing ]" ""
+
+fn end_point cs i "\\"
+  return fail i "invalid character class range" "" if perl? cs[i + 1]
+  escape_char cs i
+
+fn end_point cs i c
+  point_item cs i c
+
+fn range_end _ _ _ _ _ _ _ _ e@(err _)
+  e
+
+fn range_end cs open st neg first acc dash lo (esc at hi)
+  start = start_of cs dash
+  bad = fail start "invalid character class range" (chunk cs start (at - 1))
+  return bad if hi < lo
+  members cs open st neg first at (push acc (span lo hi))
+
+# Where the range began: one character before the dash, or the backslash of
+# an escape that ends there.
+fn start_of cs dash
+  back = dash - 1
+  return back - 1 if cs[back - 1] == "\\"
+  back

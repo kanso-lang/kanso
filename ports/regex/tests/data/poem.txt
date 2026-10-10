@@ -1,0 +1,13 @@
+The quick brown fox jumps over the lazy dog.
+THE QUICK BROWN FOX, again, in capitals.
+Sphinx of black quartz, judge my vow!
+Pack my box with five dozen liquor jugs.
+  indented line with trailing spaces   
+
+Café crème, naïve façade, déjà vu.
+Ελληνικά: Σίσυφος, σοφία.
+Русский текст: Жёлтый ёж.
+日本語のテキスト、カタカナ。
+tab	separated	values	here
+numbers: 3.14159 2.71828 1e10 -42 0x1F
+email: someone@example.com, other.person+tag@mail.example.org

@@ -1,0 +1,103 @@
+import "std/list"
+import "std/text"
+
+# Matching, through the public surface: every match as its slot list. A
+# failing comparison answers a record holding both sides, which the test
+# runner prints, rather than a bare false.
+type differs
+  actual
+  expected
+
+fn finds pattern subject
+  shown_hits (compile pattern) subject
+
+fn shown_hits e@(err _) _
+  message e
+
+fn shown_hits r subject
+  "{hits (find_all r (codes subject))}"
+
+fn pike_steps pattern subject
+  counted_steps (compile pattern) subject
+
+fn counted_steps (err _) _
+  -1
+
+fn counted_steps r subject
+  steps_taken (find_all r (codes subject))
+
+fn back_steps pattern subject
+  backtracked (compile pattern) subject
+
+fn backtracked (err _) _
+  -1
+
+fn backtracked r subject
+  backtrack_steps r (codes subject) 10000000
+
+fn same actual expected
+  if (actual == expected) true (differs actual expected)
+
+fn run_of n
+  text/join (list/to_list (list/take (list/repeat "a") n)) ""
+
+test_leftmost_first = same (finds "a|ab" "ab") "[[0 1]]"
+
+test_longer_branch_first = same (finds "ab|a" "ab") "[[0 2]]"
+
+test_greedy_star = same (finds "a*" "aaa") "[[0 3]]"
+
+test_lazy_star = same (finds "a*?" "aaa") "[[0 0] [1 1] [2 2] [3 3]]"
+
+test_empty_after_match_skipped = same (finds "a*" "baaab") "[[0 0] [1 4] [5 5]]"
+
+test_captures = same (finds "(a+)(b)?" "aab") "[[0 3 0 2 2 3]]"
+
+test_unset_group = same (finds "(a)|(b)" "b") "[[0 1 -1 -1 0 1]]"
+
+test_last_iteration_wins = same (finds "(a|b)+" "ab") "[[0 2 1 2]]"
+
+test_empty_loop_keeps_group = same (finds "(a*)*" "b") "[[0 0 0 0] [1 1 1 1]]"
+
+test_match_counted = same (finds "a\{2,3}" "aaaaaaa") "[[0 3] [3 6]]"
+
+test_anchored_once = same (finds "^a" "aaa") "[[0 1]]"
+
+test_end_anchor = same (finds "a$" "aaa") "[[2 3]]"
+
+test_multiline = same (finds "(?m)^a" "a\na") "[[0 1] [2 3]]"
+
+test_word_boundary = same (finds "\\bx\\b" "x xx x") "[[0 1] [5 6]]"
+
+test_not_word_boundary = same (finds "\\Bx" "x xx") "[[3 4]]"
+
+test_dot_skips_newline = same (finds "a.b" "a\nb axb") "[[4 7]]"
+
+test_fold = same (finds "(?i)straße" "STRASSE Straße") "[[8 14]]"
+
+test_match_fold_kelvin = same (finds "(?i)k+" "kKK") "[[0 3]]"
+
+test_match_negated_class = same (finds "[^a-c]+" "abxyzc") "[[2 5]]"
+
+test_unicode_offsets = same (finds "é+" "café éé") "[[3 4] [5 7]]"
+
+test_bad_pattern = same (finds "a(" "a") "{prefix}missing closing ): `a(`"
+
+prefix = "error parsing regexp: "
+
+# (a*)*b against runs of a's: each extra a costs the Pike VM eleven more
+# steps and roughly doubles the backtracker's. The numbers are pinned
+# exactly; they are the same on every engine.
+nested = "(a*)*b"
+
+test_pike_steps_10 = pike_steps nested (run_of 10) == 120
+
+test_pike_steps_20 = pike_steps nested (run_of 20) == 230
+
+test_pike_steps_30 = pike_steps nested (run_of 30) == 340
+
+test_backtrack_steps_12 = back_steps nested (run_of 12) == 40968
+
+test_backtrack_steps_13 = back_steps nested (run_of 13) == 81929
+
+test_backtrack_steps_on_a_match = back_steps nested "aab" == 11

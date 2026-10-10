@@ -1,0 +1,5 @@
+--- stderr
+regex: error parsing regexp: missing closing ): `(fox`
+  (fox
+  ^
+--- exit 2

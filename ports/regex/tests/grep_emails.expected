@@ -1,0 +1,7 @@
+someone@example.com [7-26]
+  1: someone [7-14]
+  2: example.com [15-26]
+other.person+tag@mail.example.org [28-61]
+  1: other.person+tag [28-44]
+  2: mail.example.org [45-61]
+--- exit 0

@@ -1,0 +1,63 @@
+import "../re"
+import "std/io"
+import "std/list"
+import "std/os"
+import "std/text"
+
+# [-L] --table [FILE]: each line is PATTERN, a tab, and a subject in which "\n"
+# stands for a newline. Each line comes back with a tab and every match, as
+# (start end group-1-start group-1-end ...) with - for a group that did not
+# take part, or the error the pattern draws. oracle/table.go prints the same
+# format from Go's regexp, so the two outputs can be compared with diff.
+fn table options words
+  source = if (length words == 1) (os/read_file words[1]) io/stdin
+  source .> (body -> tabulate options body)
+
+fn tabulate _ (file_not_found path)
+  io/write_err "regex: {path}: no such file\n" .> (_ -> os/exit 2)
+
+fn tabulate options body
+  cases = list/reject (split_lines body) comment?
+  rows = list/to_list (list/map cases (line -> row options line))
+  print (text/join rows "\n")
+
+fn comment? line
+  line == "" or text/slice line 1 1 == "#"
+
+fn row options line
+  parts = text/split line "\t"
+  subject = text/join (text/slice parts 2 (length parts)) "\t"
+  "{line}\t{judged options parts[1] (unescaped subject)}"
+
+fn judged _ none _
+  "no pattern"
+
+fn judged options pattern subject
+  verdict (compiled options pattern) subject
+
+fn unescaped subject
+  text/join (text/split subject "\\n") "\n"
+
+fn verdict e@(err _) _
+  re/message e
+
+fn verdict r subject
+  hits = re/hits (re/find_all r (re/codes subject))
+  return "no match" if hits == []
+  text/join (list/to_list (list/map hits (h -> slots_text r h))) " "
+
+fn slots_text r h
+  count = re/group_count r
+  groups = list/to_list (list/take list/naturals count)
+  whole = bounds (re/hit_start h) (re/hit_end h)
+  inner = list/fold groups whole (acc i -> "{acc} {group_bounds h i}")
+  "({inner})"
+
+fn group_bounds h i
+  bounds (re/group_start h i) (re/group_end h i)
+
+fn bounds -1 _
+  "- -"
+
+fn bounds from to
+  "{from} {to}"

@@ -1,0 +1,4 @@
+--steps
+-c
+(a|b)*c
+tests/data/poem.txt

@@ -1,0 +1,139 @@
+# A backtracking matcher, kept only to be measured against the Pike VM. It
+# tries the pattern at each start position and, at each choice, follows the
+# preferred alternative to the end before trying the next, the way Perl,
+# Python and PCRE do. It answers only whether the pattern matches.
+#
+# Each node is handed a position and a continuation `k`, the rest of the
+# match. A step is one node tried at one position. A search that would take
+# more steps than its budget stops and says so, which is the point: on
+# (a*)*b the number of steps doubles with every `a`.
+type tried
+  ok
+  steps
+
+type gave_up
+  steps
+
+# The steps a backtracking search for `r` in `cps` takes, or -1 if it would
+# take more than `budget`.
+pub fn backtrack_steps r cps budget
+  outcome_of (from_each (simplify r.tree.node) cps 0 0 budget)
+
+fn outcome_of (tried _ steps)
+  steps
+
+fn outcome_of (gave_up _)
+  -1
+
+fn from_each pat cps start steps budget
+  attempt = bt pat cps start steps budget (_ s -> tried true s)
+  next_start pat cps start budget attempt
+
+fn next_start pat cps start budget (tried false steps)
+  return tried false steps if length cps <= start
+  from_each pat cps (start + 1) steps budget
+
+fn next_start _ _ _ _ result
+  result
+
+# A failed attempt hands its step count to the alternative; a success or a
+# search over budget ends the choice.
+fn otherwise (tried false steps) alternative
+  alternative steps
+
+fn otherwise result _
+  result
+
+fn bt pat cps pos steps budget k
+  return gave_up steps if budget < steps
+  try_node pat cps pos (steps + 1) budget k
+
+fn try_node (alt branches) cps pos steps budget k
+  branch branches 1 cps pos steps budget k
+
+fn try_node (capture _ _ body) cps pos steps budget k
+  bt body cps pos steps budget k
+
+fn try_node (cat parts) cps pos steps budget k
+  sequence_of parts 1 cps pos steps budget k
+
+fn try_node (cls spans) cps pos steps _ k
+  consumed (in_class? spans cps[pos + 1]) pos steps k
+
+fn try_node (lit c) cps pos steps _ k
+  consumed (cps[pos + 1] == c) pos steps k
+
+fn try_node (plus greedy body) cps pos steps budget k
+  bt body cps pos steps budget (p s -> looping greedy body cps p s budget k)
+
+fn try_node (quest true body) cps pos steps budget k
+  otherwise (bt body cps pos steps budget k) (s -> k pos s)
+
+fn try_node (quest false body) cps pos steps budget k
+  otherwise (k pos steps) (s -> bt body cps pos s budget k)
+
+fn try_node (star greedy body) cps pos steps budget k
+  looping greedy body cps pos steps budget k
+
+fn try_node any_char cps pos steps _ k
+  consumed (pos < length cps) pos steps k
+
+fn try_node any_not_nl cps pos steps _ k
+  consumed (pos < length cps and cps[pos + 1] != 10) pos steps k
+
+fn try_node empty _ pos steps _ k
+  k pos steps
+
+fn try_node no_match _ _ steps _ _
+  tried false steps
+
+fn try_node edge:anchor cps pos steps _ k
+  return k pos steps if holds? edge cps (length cps) pos
+  tried false steps
+
+fn consumed true pos steps k
+  k (pos + 1) steps
+
+fn consumed false _ steps _
+  tried false steps
+
+fn in_class? _ none
+  false
+
+fn in_class? spans cp
+  contains? spans cp
+
+# One more pass through a loop's body, or leave it, in the order greed
+# prefers. A pass that consumed nothing ends the loop, or (a*)* would never
+# stop.
+fn looping true body cps pos steps budget k
+  onward = (p s -> more true body cps pos p s budget k)
+  otherwise (bt body cps pos steps budget onward) (s -> k pos s)
+
+fn looping false body cps pos steps budget k
+  onward = (p s -> more false body cps pos p s budget k)
+  otherwise (k pos steps) (s -> bt body cps pos s budget onward)
+
+fn more greedy body cps from pos steps budget k
+  return tried false steps if pos == from
+  looping greedy body cps pos steps budget k
+
+fn sequence_of parts i cps pos steps budget k
+  part parts i cps pos steps budget k parts[i]
+
+fn part _ _ _ pos steps _ k none
+  k pos steps
+
+fn part parts i cps pos steps budget k pat
+  rest = (p s -> sequence_of parts (i + 1) cps p s budget k)
+  bt pat cps pos steps budget rest
+
+fn branch branches i cps pos steps budget k
+  option branches i cps pos steps budget k branches[i]
+
+fn option _ _ _ _ steps _ _ none
+  tried false steps
+
+fn option branches i cps pos steps budget k pat
+  first = bt pat cps pos steps budget k
+  otherwise first (s -> branch branches (i + 1) cps pos s budget k)

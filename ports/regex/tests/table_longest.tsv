@@ -1,0 +1,14 @@
+# Leftmost-longest matching, as `regex -L` and Go's Longest() do it.
+a|ab	ab
+ab|a	ab
+(a|ab)(c|bcd)(d*)	abcd
+a*?	aaa
+a+?	aaa
+(a+?)(a*)	aaaa
+cat|category	category catalogue
+\w+?	word
+x*y*	xxyy
+(a|b)*?c	ababc
+a{2,3}?	aaaaaaa
+(?:a|aa)*	aaaa
+.*?b	aabab

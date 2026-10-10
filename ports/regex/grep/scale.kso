@@ -1,0 +1,49 @@
+import "../re"
+import "std/list"
+import "std/text"
+
+# --scale PATTERN UNIT TAIL N...: for each N, matches PATTERN against UNIT
+# repeated N times and then TAIL, and prints the steps the Pike VM took
+# beside the steps a backtracking matcher takes on the same subject. The
+# step counts are deterministic, so the table is the same on every engine
+# and can be checked byte for byte.
+budget = 1000000
+
+fn scale words
+  scale_with words (re/compile (arg words 1))
+
+fn scale_with words e@(err _)
+  refuse (arg words 1) e
+
+fn scale_with words r
+  unit = arg words 2
+  tail = arg words 3
+  sizes = text/slice words 4 (length words)
+  head = "pattern {arg words 1}, subject {unit} x n then \"{tail}\""
+  rows = list/to_list (list/map sizes (size -> scale_row r unit tail size))
+  left = "{right "n" 8}{right "match" 7}"
+  columns = "{left}{right "pike" 10}{right "backtrack" 12}"
+  print (text/join (push (text/concat [head columns] rows) note) "\n")
+
+note = "backtracking stops at {budget} steps, and is skipped past n = 64"
+
+fn scale_row r unit tail size
+  n = text/to_int size
+  subject = text/join (list/to_list (list/take (list/repeat unit) n)) ""
+  cps = re/codes "{subject}{tail}"
+  first = re/first_match r cps
+  answer = if (re/hits first == []) "no" "yes"
+  pike = re/steps_taken first
+  back = if (n <= 64) (shown_steps (re/backtrack_steps r cps budget)) "skipped"
+  "{right size 8}{right answer 7}{right "{pike}" 10}{right back 12}"
+
+fn shown_steps -1
+  "> {budget}"
+
+fn shown_steps n
+  "{n}"
+
+fn right s width
+  fill = width - length s
+  spaces = text/join (list/to_list (list/take (list/repeat " ") fill)) ""
+  "{spaces}{s}"

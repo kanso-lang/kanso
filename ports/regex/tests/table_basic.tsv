@@ -1,0 +1,101 @@
+# literals and concatenation
+abc	xxabcxxabc
+abc	ab
+a	banana
+	abc
+x*	
+# alternation, leftmost-first
+a|ab	ab
+ab|a	ab
+cat|dog|bird	hotdog catbird
+(a|ab)(c|bcd)(d*)	abcd
+# character classes
+[abc]+	xxcabbaxx
+[^abc]+	abcxyzabc
+[a-c-]+	a-b-c-d
+[]a]+	a]]a
+[^]a]+	a]xyz
+[a-zA-Z0-9_]+	foo_Bar9 baz
+\d+	tel 555-1234
+\D+	12ab34
+\s+	a \t b
+\S+	 hi there 
+\w+	héllo wörld
+\W+	a, b; c
+[\d\s]+	12 34x
+[^\d\s]+	12 ab 34
+[[:alpha:]]+	ab12cd
+[[:^alpha:]]+	ab12cd
+[[:digit:][:upper:]]+	abC9Dx
+[[:punct:]]+	a!?b...
+\x41\x{42}	xABx
+[\x{263a}-\x{263c}]	a☺☻b
+.	☺x
+.+	a\nbc
+(?s).+	a\nbc
+# anchors
+^abc	abcabc
+abc$	abcabc
+^$	
+^	abc
+$	abc
+(?m)^\w+	one\ntwo\nthree
+(?m)\w+$	one\ntwo\nthree
+(?m)^$	a\n\nb
+\Aab	abab
+ab\z	abab
+\bfoo\b	foo foobar barfoo foo
+\Boo\B	foo food
+\b	ab cd
+# repetition
+a*	baaa
+a+	baaab
+a?	ba
+a*?	aaa
+a+?	aaa
+a??b	ab
+(a+)(a*)	aaaa
+(a+?)(a*)	aaaa
+a{2}	aaaaa
+a{2,}	aaaaa
+a{2,3}	aaaaaaa
+a{2,3}?	aaaaaaa
+a{0}b	ab
+(ab){1,2}	ababab
+a{,3}	a{,3}
+x{2}y{0,1}z	xxz xxyz
+(a{2}){2}	aaaaa
+# captures
+(a)(b)(c)	abc
+(a)|(b)	b
+(a(b)?)+	aba
+((a)|b)+	ab
+(a*)+	b
+(a*)*	b
+(a|b)*	abab
+(?:a(b))+	abab
+(?P<word>\w+)@(?<host>\w+)	me@here you@there
+(a)?b	b
+# case folding
+(?i)hello	HeLLo hello HELLO
+(?i)[a-c]+	xABCabcx
+(?i)k	kK\x{212a}
+(?i)[^k]+	kKxyzk
+(?i)ſ	sS
+(?i:a)b	Ab AB
+a(?i)b	aB AB
+(?i)σ	ΣσςΣ
+(?i)é	É
+(?i)Ж	жЖ
+# flags
+(?U)a+	aaa
+(?U)a+?	aaa
+(?m-s).	a
+(?i)(?-i)a	A
+# unicode
+日本	こんにちは日本語
+[ぁ-ん]+	こんにちは日本語
+# empty matches in find-all
+a*	baaab
+\b	a b
+(?:)	ab

@@ -1,0 +1,7 @@
+pattern (a|b)*?c, subject ab x n then "c"
+       n  match      pike   backtrack
+      10    yes       195          63
+     100    yes      1815     skipped
+    1000    yes     18015     skipped
+backtracking stops at 1000000 steps, and is skipped past n = 64
+--- exit 0

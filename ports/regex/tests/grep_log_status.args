@@ -1,0 +1,3 @@
+--groups
+"(?P<method>GET|POST|DELETE) (?P<path>/\S*) HTTP/[\d.]+" (?P<status>[45]\d\d)
+tests/data/access.log

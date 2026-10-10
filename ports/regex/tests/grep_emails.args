@@ -1,0 +1,3 @@
+--groups
+([\w.+]+)@((?:\w+\.)+\w+)
+tests/data/poem.txt

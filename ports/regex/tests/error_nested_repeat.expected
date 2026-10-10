@@ -1,0 +1,5 @@
+--- stderr
+regex: error parsing regexp: invalid nested repetition operator: `+*`
+  fo+*
+    ^
+--- exit 2

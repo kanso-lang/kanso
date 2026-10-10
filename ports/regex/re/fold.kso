@@ -1,0 +1,62 @@
+import "std/list"
+import "std/text"
+
+# Simple case folding. A rule says that the code points from `first` to
+# `last` have partners `delta` away; the single-code-point rules cover the
+# letters whose fold orbit has three members, such as k, K and the Kelvin
+# sign. This is the Latin, Greek and Cyrillic part of Unicode's CaseFolding
+# table, not all of it; README.md says what is left out.
+type rule
+  delta
+  first
+  last
+
+# A list literal cannot continue onto a second line, so the table is written
+# in rows and joined.
+latin = [(rule 32 65 90) (rule -32 97 122) (rule 32 192 214) (rule 32 216 222)]
+
+latin_low = [(rule -32 224 246) (rule -32 248 254) (rule 121 255 255)]
+
+greek = [(rule 32 913 929) (rule 32 931 939) (rule -32 945 961)]
+
+greek_low = [(rule -32 963 971) (rule -121 376 376)]
+
+cyrillic = [(rule 80 1024 1039) (rule 32 1040 1071) (rule -32 1072 1103)]
+
+cyrillic_low = [(rule -80 1104 1119)]
+
+# Orbits of three: k K and the Kelvin sign, s S and long s, a-ring and the
+# angstrom sign, micro and mu, and the three sigmas.
+odd = [[75 107 8490] [83 115 383] [197 229 8491] [181 924 956] [931 962 963]]
+
+rules = [latin latin_low greek greek_low cyrillic cyrillic_low]
+  . list/fold [] text/concat
+
+# A class together with every case partner of every code point in it. The
+# result is normalized, so folding twice gives what folding once gave.
+pub fn fold_spans spans
+  extra = list/fold spans [] (acc s -> text/concat acc (partners s))
+  normalize (text/concat spans extra)
+
+# Every code point a single one folds to, itself included.
+pub fn fold_orbit cp
+  fold_spans [(span cp cp)]
+
+fn partners s
+  shifted = list/fold rules [] (acc r -> moved acc s r)
+  list/fold odd shifted (acc orbit -> orbit_of acc s orbit)
+
+fn moved acc s r
+  lo = bigger s.first r.first
+  hi = smaller s.last r.last
+  if (lo <= hi) (push acc (span (lo + r.delta) (hi + r.delta))) acc
+
+fn orbit_of acc s orbit
+  touched = list/any? orbit (cp -> s.first <= cp and cp <= s.last)
+  if touched (text/concat acc (list/to_list (list/map orbit point))) acc
+
+fn point cp
+  span cp cp
+
+fn smaller a b
+  if (a < b) a b

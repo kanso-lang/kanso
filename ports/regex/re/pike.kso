@@ -1,0 +1,217 @@
+# The Pike VM: every thread of the program advances over the subject in
+# lockstep, one code point at a time, so the work is bounded by the length of
+# the subject times the length of the program, whatever the pattern.
+#
+# Threads are kept in priority order. At each position a thread that reaches
+# `match` records its captures and cuts off every thread below it, which is
+# what makes the answer leftmost-first, the one a backtracking matcher would
+# give, without backtracking.
+#
+# Positions are offsets between code points, 0 to n; the code point after
+# offset `pos` is cps[pos + 1].
+type thread
+  caps
+  pc
+
+# The threads that will run at one position, the program counters already
+# among them, and the running count of steps for the whole search.
+type queue
+  seen
+  steps
+  threads
+
+# Work still to do while following jumps, splits and saves from one thread:
+# a stack of program counters, each with the captures it carries.
+type pending
+  caps
+  pc
+  rest
+
+type bottom
+
+# The best match so far, before there is one.
+type unmatched
+
+# What does not change during a search: the program, the subject as code
+# points, its length, and the offset the search began at. Kept in one record
+# so that the loops below take few parameters; see FRICTION.md F17.
+type haystack
+  cps
+  n
+  prog
+  start
+
+# What one position's run hands on: the queue for the next position and the
+# best match so far, which is none until a thread reaches `match`.
+type stage
+  matched
+  next
+
+pub type found
+  caps
+  steps
+
+pub type lost
+  steps
+
+# A search for the leftmost-first match of the program in `cps`, starting at
+# offset `start`. Steps count every instruction a thread executes, including
+# the jumps and splits followed while adding it, so the count is a property
+# of the program and the subject and is the same on every engine.
+pub fn execute prog cps start
+  scan (haystack cps (length cps) prog start) start (queue {} 0 []) unmatched
+
+fn scan s pos q matched
+  seeded = seed s pos q matched
+  ran = tick s pos seeded 1 (queue {} seeded.steps []) matched
+  over = pos == s.n or ran.next.threads == [] and stopped? s pos ran
+  return outcome ran.matched ran.next.steps if over
+  scan s (pos + 1) ran.next ran.matched
+
+# No thread is left, and none will be started: either a match was found, or
+# the program only starts at the first position.
+fn stopped? s pos ran
+  ran.matched != unmatched or s.prog.anchored and s.start <= pos
+
+fn outcome unmatched steps
+  lost steps
+
+fn outcome caps steps
+  found caps steps
+
+# A new thread starts at every position until something has matched; the
+# new one comes last, below every thread that started earlier.
+fn seed s pos q unmatched
+  return q if s.prog.anchored and s.start < pos
+  visit s pos q (pending {} 1 bottom)
+
+fn seed _ _ q _
+  q
+
+fn tick s pos clist i next matched
+  run s pos clist i next matched clist.threads[i]
+
+fn run _ _ _ _ next matched none
+  stage matched next
+
+# In leftmost-first mode the first thread to match wins and cuts off those
+# below it. In leftmost-longest mode a match is kept only if it starts
+# earlier, or starts as early and runs longer, than the one held, and
+# threads that started after the held match are dropped.
+fn run s pos clist i next matched t
+  ticked = queue next.seen (next.steps + 1) next.threads
+  inst = s.prog.code[t.pc]
+  wants_longest = s.prog.longest
+  return stage t.caps ticked if inst == i_match and not wants_longest
+  kept = longer matched t.caps
+  return tick s pos clist (i + 1) ticked kept if inst == i_match
+  return tick s pos clist (i + 1) ticked matched if outrun? matched t.caps
+  advanced = advance s pos ticked t inst
+  tick s pos clist (i + 1) advanced matched
+
+fn longer unmatched caps
+  caps
+
+fn longer held caps
+  earlier = cap_at caps 0 < cap_at held 0
+  further = cap_at caps 0 == cap_at held 0 and cap_at held 1 < cap_at caps 1
+  if (earlier or further) caps held
+
+fn outrun? unmatched _
+  false
+
+fn outrun? held caps
+  cap_at held 0 < cap_at caps 0
+
+fn cap_at caps k
+  offset caps[k]
+
+# A thread on a consuming instruction moves past the code point at `pos`, or
+# dies there.
+fn advance s pos next t inst
+  return next if s.n <= pos
+  return next if not fits? inst s.cps[pos + 1]
+  visit s (pos + 1) next (pending t.caps (t.pc + 1) bottom)
+
+fn fits? _ none
+  false
+
+fn fits? inst cp
+  accepts? inst cp
+
+fn accepts? (i_char c) cp
+  c == cp
+
+fn accepts? (i_class spans) cp
+  contains? spans cp
+
+fn accepts? i_any _
+  true
+
+fn accepts? i_any_nl cp
+  cp != 10
+
+fn accepts? _ _
+  false
+
+# Adds a thread at `pc` to the queue for position `pos`, following every jump,
+# split, save and assertion on the way, depth first so that a split's
+# preferred side is added first. A program counter already in the queue was
+# reached by a thread of higher priority, so the later arrival is dropped.
+fn visit _ _ q bottom
+  q
+
+fn visit s pos q cell
+  return visit s pos q cell.rest if marked? q.seen[cell.pc]
+  marked = queue (put q.seen cell.pc true) (q.steps + 1) q.threads
+  follow s pos marked cell s.prog.code[cell.pc]
+
+fn follow s pos q (pending _ _ rest) none
+  visit s pos q rest
+
+fn follow s pos q (pending caps _ rest) (i_jmp to)
+  visit s pos q (pending caps to rest)
+
+fn follow s pos q (pending caps _ rest) (i_split first second)
+  visit s pos q (pending caps first (pending caps second rest))
+
+fn follow s pos q (pending caps pc rest) (i_save slot)
+  visit s pos q (pending (put caps slot pos) (pc + 1) rest)
+
+fn follow s pos q (pending caps pc rest) (i_assert kind)
+  return visit s pos q rest if not holds? kind s.cps s.n pos
+  visit s pos q (pending caps (pc + 1) rest)
+
+fn follow s pos q (pending caps pc rest) _
+  waiting = queue q.seen q.steps (push q.threads (thread caps pc))
+  visit s pos waiting rest
+
+fn marked? none
+  false
+
+fn marked? flag
+  flag
+
+fn holds? begin_text _ _ pos
+  pos == 0
+
+fn holds? end_text _ n pos
+  pos == n
+
+fn holds? begin_line cps _ pos
+  pos == 0 or cps[pos] == 10
+
+fn holds? end_line cps n pos
+  pos == n or cps[pos + 1] == 10
+
+fn holds? word_boundary cps _ pos
+  word_at? cps[pos] != word_at? cps[pos + 1]
+
+fn holds? not_word_boundary cps _ pos
+  word_at? cps[pos] == word_at? cps[pos + 1]
+
+fn word_at? none
+  false
+
+fn word_at? cp
+  word_char? cp

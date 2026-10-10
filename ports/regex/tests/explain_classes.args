@@ -1,0 +1,2 @@
+--explain
+[^\d\s[:punct:]]\W\b

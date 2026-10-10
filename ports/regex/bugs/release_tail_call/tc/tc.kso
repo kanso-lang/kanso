@@ -1,0 +1,11 @@
+# should: in `kanso build main.kso --release`, both calls below are
+#         `musttail call` in main.ll, as they are in a dev build.
+# does:   they are plain `call preserve_nonecc`; see ../README. Removing the
+#         parameter `t` (six parameters) brings `musttail` back.
+pub fn ping p q r s t n pos
+  return pos if pos == n
+  pong p q r s t n (pos + 1)
+
+fn pong p q r s t n pos
+  return pos + length p + length q + length r + length s + length t if pos == n
+  ping p q r s t n (pos + 1)

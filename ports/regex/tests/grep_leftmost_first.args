@@ -1,0 +1,4 @@
+-o
+-n
+\d+|\d+(?:\.\d+){3}|\d+/\w+/\d+
+tests/data/access.log

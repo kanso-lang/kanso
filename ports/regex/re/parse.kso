@@ -1,0 +1,457 @@
+import "std/list"
+import "std/text"
+
+# The parser: pattern text in, a tree of ast.kso nodes out, or an err whose
+# reason is a syntax_error saying what is wrong and where.
+#
+# The pattern is read as a list of one-character strings, so every decision
+# below is an arm on a literal character. Each step answers a `got`: the
+# position after what it read, the node it built, and the parser state as it
+# stands afterwards. The state holds what flows sideways through a pattern:
+# the capture groups opened so far, the nesting depth, and the flags, which a
+# `(?i)` changes for the rest of the enclosing group.
+#
+# The messages are Go's regexp/syntax messages, which are RE2's.
+pub type syntax_error
+  at
+  code
+  frag
+
+pub type tree
+  names
+  node
+
+type braces
+  at
+  max
+  min
+
+type esc
+  at
+  cp
+
+type flags
+  dot_nl
+  fold
+  multi
+  ungreedy
+
+type got
+  at
+  node
+  st
+
+# A flag group such as (?i) changes the state and matches nothing. It is not
+# a node, so it cannot be repeated: (?i)* is missing its argument, as in RE2.
+type flag_change
+
+type item_class
+  at
+  spans
+
+# What the last piece of a sequence was, which decides whether a repetition
+# operator may follow it.
+type fresh
+
+type repeatable
+
+type after_loop
+  from
+
+type state
+  caps
+  depth
+  flags
+
+max_depth = 1000
+
+max_repeat = 1000
+
+plain = flags false false false false
+
+# The whole pattern. Anything left over after the top-level alternation can
+# only be a `)` that closes nothing.
+pub fn parse pattern
+  cs = text/chars pattern
+  finish cs (alternation cs 1 (state [] 0 plain))
+
+fn finish _ e@(err _)
+  e
+
+fn finish cs g
+  return tree g.st.caps g.node if length cs < g.at
+  fail g.at "unexpected )" (text/join cs "")
+
+fn fail at code text
+  err (syntax_error at code text)
+
+# The pattern text from one position to another, inclusive. text/slice
+# answers nothing at all for a range that runs off the end, so `to` is
+# clamped first.
+fn chunk cs from to
+  text/join (text/slice cs from (smaller to (length cs))) ""
+
+# alternation := sequence ("|" sequence)*
+fn alternation cs at st
+  more_branches cs (sequence cs at st [] fresh) []
+
+fn more_branches _ e@(err _) _
+  e
+
+fn more_branches cs g branches
+  all = push branches g.node
+  return got g.at (branched all) g.st if cs[g.at] != "|"
+  more_branches cs (sequence cs (g.at + 1) g.st [] fresh) all
+
+fn joined parts
+  return empty if parts == []
+  if (length parts == 1) parts[1] (cat parts)
+
+fn branched branches
+  if (length branches == 1) branches[1] (alt branches)
+
+# sequence := piece*, ending before "|" or ")" or the end of the pattern.
+fn sequence cs at st acc prev
+  piece cs[at] cs at st acc prev
+
+fn piece none _ at st acc _
+  got at (joined acc) st
+
+fn piece "|" _ at st acc _
+  got at (joined acc) st
+
+fn piece ")" _ at st acc _
+  got at (joined acc) st
+
+fn piece "*" cs at st acc prev
+  quantify cs at (at + 1) st acc prev 0 -1
+
+fn piece "+" cs at st acc prev
+  quantify cs at (at + 1) st acc prev 1 -1
+
+fn piece "?" cs at st acc prev
+  quantify cs at (at + 1) st acc prev 0 1
+
+fn piece "\{" cs at st acc prev
+  counted cs at st acc prev (brace cs (at + 1) [] [] false)
+
+fn piece c cs at st acc _
+  appended cs acc (atom c cs at st)
+
+fn appended _ _ e@(err _)
+  e
+
+fn appended cs acc (got at flag_change st)
+  sequence cs at st acc fresh
+
+fn appended cs acc g
+  sequence cs g.at g.st (push acc g.node) repeatable
+
+# A `{` that does not spell a count is an ordinary character, as in RE2: a{,3}
+# matches the five characters literally.
+fn counted cs at st acc _ none
+  appended cs acc (literal cs at st "\{")
+
+fn counted cs at st acc prev b
+  quantify cs at b.at st acc prev b.min b.max
+
+fn quantify cs op at _ _ fresh _ _
+  fail op "missing argument to repetition operator" (chunk cs op (op_end cs at))
+
+fn quantify cs _ at _ _ (after_loop from) _ _
+  fail from "invalid nested repetition operator" (chunk cs from (op_end cs at))
+
+fn quantify cs op at st acc _ least most
+  bad = fail op "invalid repeat count" (chunk cs op (at - 1))
+  return bad if too_many? least most
+  last = acc[length acc]
+  return bad if max_repeat < weight last * bigger least most
+  lazy = cs[at] == "?"
+  next = if lazy (at + 1) at
+  greedy = lazy == st.flags.ungreedy
+  front = text/slice acc 1 (length acc - 1)
+  wrapped = looped last least most greedy
+  sequence cs next st (push front wrapped) (after_loop op)
+
+fn too_many? least most
+  max_repeat < least or max_repeat < most or -1 < most and most < least
+
+# How many copies of its innermost piece a node stands for once counted
+# repetition is expanded. Go refuses a nesting whose counts multiply past
+# 1000, (a{100}){100} among them, and so does this parser.
+fn weight none
+  1
+
+fn weight (count_loop _ max min body)
+  bigger max min * weight body
+
+fn weight (capture _ _ body)
+  weight body
+
+fn weight (cat parts)
+  list/fold parts 1 (w p -> bigger w (weight p))
+
+fn weight (alt branches)
+  list/fold branches 1 (w b -> bigger w (weight b))
+
+fn weight (star _ body)
+  weight body
+
+fn weight (plus _ body)
+  weight body
+
+fn weight (quest _ body)
+  weight body
+
+fn weight _
+  1
+
+fn op_end cs at
+  if (cs[at] == "?") at (at - 1)
+
+fn looped none _ _ _
+  empty
+
+fn looped body least most greedy
+  shaped least most greedy body
+
+fn shaped 0 -1 greedy body
+  star greedy body
+
+fn shaped 1 -1 greedy body
+  plus greedy body
+
+fn shaped 0 1 greedy body
+  quest greedy body
+
+fn shaped least most greedy body
+  count_loop greedy most least body
+
+# {n} {n,} {n,m}: the digits so far are collected as characters, `comma`
+# says whether the comma has been seen. Anything else answers none, and the
+# caller reads the `{` as a literal.
+fn brace cs at low high comma
+  brace_char cs[at] cs at low high comma
+
+fn brace_char "," cs at low high false
+  brace cs (at + 1) low high true
+
+fn brace_char "}" _ at low high comma
+  braced (at + 1) low high comma
+
+fn brace_char none _ _ _ _ _
+  none
+
+fn brace_char c cs at low high comma
+  return none if not digit? c
+  return brace cs (at + 1) low (push high c) true if comma
+  brace cs (at + 1) (push low c) high false
+
+fn braced at low high comma
+  return none if low == []
+  return braces at (number low) (number low) if not comma
+  return braces at -1 (number low) if high == []
+  braces at (number high) (number low)
+
+fn digit? c
+  c != none and "0" <= c and c <= "9"
+
+# Digit strings are short and already checked, so this cannot fail; it reads
+# them a character at a time rather than through text/to_int, whose err the
+# checker would ask every caller to handle.
+fn number ds
+  list/fold ds 0 (n d -> n * 10 + text/char_code d - 48)
+
+# atom := group | class | "." | "^" | "$" | escape | literal
+fn atom "(" cs at st
+  group cs at st
+
+fn atom "[" cs at st
+  bracket cs at st
+
+fn atom "." _ at st
+  got (at + 1) (dot st.flags.dot_nl) st
+
+fn atom "^" _ at st
+  got (at + 1) (caret st.flags.multi) st
+
+fn atom "$" _ at st
+  got (at + 1) (dollar st.flags.multi) st
+
+fn atom "\\" cs at st
+  escape cs at st cs[at + 1]
+
+fn atom c cs at st
+  literal cs at st c
+
+fn dot true
+  any_char
+
+fn dot false
+  any_not_nl
+
+fn caret true
+  begin_line
+
+fn caret false
+  begin_text
+
+fn dollar true
+  end_line
+
+fn dollar false
+  end_text
+
+fn literal _ at st c
+  got (at + 1) (char_node (text/char_code c) st.flags) st
+
+# Under (?i) a letter becomes the class of its case partners. A code point
+# with no partners stays a literal.
+fn char_node cp f
+  return lit cp if not f.fold
+  orbit = fold_orbit cp
+  if (orbit == [(span cp cp)]) (lit cp) (cls orbit)
+
+# Escapes outside brackets. Inside brackets the same single-character escapes
+# apply, through escape_char.
+fn escape _ at _ none
+  fail at "trailing backslash at end of expression" ""
+
+fn escape _ at st "A"
+  got (at + 2) begin_text st
+
+fn escape _ at st "z"
+  got (at + 2) end_text st
+
+fn escape _ at st "b"
+  got (at + 2) word_boundary st
+
+fn escape _ at st "B"
+  got (at + 2) not_word_boundary st
+
+fn escape cs at st "Q"
+  quoted cs (at + 2) st []
+
+fn escape cs at st c
+  return perl_class cs at st (perl_spans c) if perl? c
+  escaped cs st (escape_char cs at)
+
+fn escaped _ _ e@(err _)
+  e
+
+fn escaped _ st (esc at cp)
+  got at (char_node cp st.flags) st
+
+fn perl_class _ at st spans
+  got (at + 2) (cls spans) st
+
+fn perl? none
+  false
+
+fn perl? c
+  list/any? ["d" "D" "s" "S" "w" "W"] (p -> p == c)
+
+fn perl_spans "d"
+  digits
+
+fn perl_spans "D"
+  negate digits
+
+fn perl_spans "s"
+  spaces
+
+fn perl_spans "S"
+  negate spaces
+
+fn perl_spans "w"
+  word_chars
+
+fn perl_spans _
+  negate word_chars
+
+# \Q...\E: everything between is literal, and a missing \E runs to the end.
+fn quoted cs at st acc
+  return got (length cs + 1) (cat acc) st if length cs < at
+  return got (at + 2) (cat acc) st if cs[at] == "\\" and cs[at + 1] == "E"
+  quoted_char cs at st acc cs[at]
+
+fn quoted_char _ at st acc none
+  got at (cat acc) st
+
+fn quoted_char cs at st acc c
+  one = char_node (text/char_code c) st.flags
+  quoted cs (at + 1) st (push acc one)
+
+# One escaped character starting at the backslash: its code point and the
+# position after it.
+fn escape_char cs at
+  single cs at cs[at + 1]
+
+fn single _ at none
+  fail at "trailing backslash at end of expression" ""
+
+fn single _ at "n"
+  esc (at + 2) 10
+
+fn single _ at "t"
+  esc (at + 2) 9
+
+fn single _ at "r"
+  esc (at + 2) 13
+
+fn single _ at "f"
+  esc (at + 2) 12
+
+fn single _ at "v"
+  esc (at + 2) 11
+
+fn single _ at "a"
+  esc (at + 2) 7
+
+fn single cs at "x"
+  hex_escape cs at cs[at + 2]
+
+fn single _ at c
+  return esc (at + 2) (text/char_code c) if punctuation? c
+  fail at "invalid escape sequence" "\\{c}"
+
+fn punctuation? c
+  code = text/char_code c
+  code < 128 and not contains? word_chars code and 32 < code
+
+# \x41 takes exactly two hex digits; \x{263a} takes one to eight.
+fn hex_escape cs at "\{"
+  hex_braced cs at (at + 3) 0 0
+
+fn hex_escape cs at none
+  fail at "invalid escape sequence" (chunk cs at (at + 1))
+
+fn hex_escape cs at _
+  hi = hex_value cs[at + 2]
+  lo = hex_value cs[at + 3]
+  return fail at "invalid escape sequence" (chunk cs at (at + 3)) if hi < 0
+  return fail at "invalid escape sequence" (chunk cs at (at + 3)) if lo < 0
+  esc (at + 4) (hi * 16 + lo)
+
+fn hex_braced cs from at value count
+  c = cs[at]
+  return hex_close cs from at value count if c == "}"
+  v = hex_value c
+  return fail from "invalid escape sequence" (chunk cs from at) if v < 0
+  return fail from "invalid escape sequence" (chunk cs from at) if 7 < count
+  hex_braced cs from (at + 1) (value * 16 + v) (count + 1)
+
+fn hex_close cs from at value count
+  bad = count == 0 or max_cp < value
+  return fail from "invalid escape sequence" (chunk cs from (at - 1)) if bad
+  esc (at + 1) value
+
+fn hex_value none
+  -1
+
+fn hex_value c
+  code = text/char_code c
+  return code - 48 if 48 <= code and code <= 57
+  return code - 87 if 97 <= code and code <= 102
+  return code - 55 if 65 <= code and code <= 70
+  -1

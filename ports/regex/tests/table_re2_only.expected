@@ -1,0 +1,3 @@
+(?P<n>a)(?P<n>b)	ab	error parsing regexp: duplicate capture group name: `n`
+(?<x>a)|(?P<x>b)	b	error parsing regexp: duplicate capture group name: `x`
+--- exit 0

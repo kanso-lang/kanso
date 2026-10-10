@@ -1,0 +1,3 @@
+--- stderr
+usage: regex [-Lcinov] [--groups] [--steps] PATTERN [FILE]
+--- exit 2

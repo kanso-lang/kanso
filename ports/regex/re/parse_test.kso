@@ -1,0 +1,135 @@
+# The parser's trees, written as the dump format, and its error messages.
+fn tree_of pattern
+  shape (parse pattern)
+
+fn shape e@(err _)
+  message e
+
+fn shape t
+  dump t.node
+
+fn simple_of pattern
+  simple_shape (parse pattern)
+
+fn simple_shape e@(err _)
+  message e
+
+fn simple_shape t
+  dump (simplify t.node)
+
+test_literals = tree_of "abc" == "cat\{lit\{a}lit\{b}lit\{c}}"
+
+test_alternation_is_flat = tree_of "a|b|c" == "alt\{lit\{a}lit\{b}lit\{c}}"
+
+test_empty_branch = tree_of "a|" == "alt\{lit\{a}emp\{}}"
+
+test_star_binds_tightest = tree_of "ab*" == "cat\{lit\{a}star\{lit\{b}}}"
+
+test_lazy = tree_of "a+?" == "nplus\{lit\{a}}"
+
+test_ungreedy_flag_swaps = tree_of "(?U)a+?" == "plus\{lit\{a}}"
+
+test_counted = tree_of "a\{2,5}" == "rep\{2,5 lit\{a}}"
+
+test_counted_open = tree_of "a\{2,}" == "rep\{2, lit\{a}}"
+
+test_brace_without_count_is_literal = tree_of "a\{,3}" == literal_braces
+
+literal_braces = "cat\{lit\{a}lit\{0x7b}lit\{,}lit\{3}lit\{0x7d}}"
+
+test_capture_numbering = tree_of "(a)(?:b)(c)" == captures
+
+captures = "cat\{cap1\{lit\{a}}lit\{b}cap2\{lit\{c}}}"
+
+test_named = tree_of "(?P<x>a)" == "cap1<x>\{lit\{a}}"
+
+test_named_short = tree_of "(?<x>a)" == "cap1<x>\{lit\{a}}"
+
+test_class = tree_of "[a-cx]" == "cc\{a-c x}"
+
+test_negated_class = tree_of "[^\\x00-\\x\{10FFFF}a]" == "no\{}"
+
+test_class_leading_bracket = tree_of "[]a]" == "cc\{] a}"
+
+test_class_dash_ends = tree_of "[-a-]" == "cc\{0x2d a}"
+
+test_perl_class = tree_of "\\d" == "cc\{0-9}"
+
+test_posix_class = tree_of "[[:xdigit:]]" == "cc\{0-9 A-F a-f}"
+
+test_fold_literal = tree_of "(?i)k" == "cc\{K k 0x212a}"
+
+test_fold_leaves_digits = tree_of "(?i)1" == "lit\{1}"
+
+test_dot = tree_of "." == "dnl\{}"
+
+test_dot_all = tree_of "(?s)." == "dot\{}"
+
+test_anchors = tree_of "^$" == "cat\{bot\{}eot\{}}"
+
+test_multiline_anchors = tree_of "(?m)^$" == "cat\{bol\{}eol\{}}"
+
+test_flags_end_with_group = tree_of "((?i)a)b" == "cat\{cap1\{cc\{A a}}lit\{b}}"
+
+test_quote = simple_of "\\Qa.b\\E." == "cat\{lit\{a}lit\{.}lit\{b}dnl\{}}"
+
+test_hex = tree_of "\\x41\\x\{1F600}" == "cat\{lit\{A}lit\{0x1f600}}"
+
+test_simplify_counted = simple_of "a\{2,4}" == expanded_counted
+
+expanded_counted = "cat\{lit\{a}lit\{a}quest\{cat\{lit\{a}quest\{lit\{a}}}}}"
+
+test_simplify_open_count = simple_of "a\{3,}" == open_count
+
+open_count = "cat\{lit\{a}lit\{a}plus\{lit\{a}}}"
+
+test_simplify_zero_count = simple_of "ab\{0}c" == "cat\{lit\{a}lit\{c}}"
+
+test_simplify_merges_chars = simple_of "a|b|[x-z]|cd" == merged_chars
+
+merged_chars = "alt\{cc\{a-b x-z}cat\{lit\{c}lit\{d}}}"
+
+test_simplify_star_star = simple_of "(?:a*)*" == "star\{lit\{a}}"
+
+fn fails_with? pattern expected
+  tree_of pattern == "error parsing regexp: {expected}"
+
+test_error_missing_paren = fails_with? "(a" "missing closing ): `(a`"
+
+test_error_unexpected_paren = fails_with? "a)" "unexpected ): `a)`"
+
+test_error_nested_repeat = fails_with? "a**" nested_repeat
+
+nested_repeat = "invalid nested repetition operator: `**`"
+
+test_error_missing_argument = fails_with? "|*" missing_argument
+
+missing_argument = "missing argument to repetition operator: `*`"
+
+test_error_range = fails_with? "[z-a]" "invalid character class range: `z-a`"
+
+test_error_escape = fails_with? "\\q" "invalid escape sequence: `\\q`"
+
+test_error_bracket = fails_with? "[ab" "missing closing ]: `[ab`"
+
+test_error_perl = fails_with? "(?!a)" perl_text
+
+perl_text = "invalid or unsupported Perl syntax: `(?!`"
+
+test_error_repeat_count = fails_with? "a\{1001}" "{bad_count}: `\{1001}`"
+
+bad_count = "invalid repeat count"
+
+test_error_nested_count = fails_with? "(a\{100})\{20}" "{bad_count}: `\{20}`"
+
+test_error_trailing_backslash = fails_with? "a\\" trailing
+
+trailing = "trailing backslash at end of expression: ``"
+
+test_error_named = fails_with? "(?P<a-b>c)" "invalid named capture: `(?P<a-b>`"
+
+test_error_duplicate = fails_with? "(?P<n>a)(?P<n>b)" duplicate
+
+duplicate = "duplicate capture group name: `n`"
+
+test_error_column = column (parse "ab[") == 3

@@ -1,0 +1,20 @@
+pattern:    (?P<year>\d{4})-(?P<month>\d\d)
+parsed:     cat{cap1<year>{rep{4,4 cc{0-9}}}lit{0x2d}cap2<month>{cat{cc{0-9}cc{0-9}}}}
+simplified: cat{cap1<year>{cat{cc{0-9}cc{0-9}cc{0-9}cc{0-9}}}lit{0x2d}cap2<month>{cat{cc{0-9}cc{0-9}}}}
+groups:     1<year> 2<month>
+program:
+1. save 0
+2. save 2
+3. class cc{0-9}
+4. class cc{0-9}
+5. class cc{0-9}
+6. class cc{0-9}
+7. save 3
+8. char 0x2d
+9. save 4
+10. class cc{0-9}
+11. class cc{0-9}
+12. save 5
+13. save 1
+14. match
+--- exit 0

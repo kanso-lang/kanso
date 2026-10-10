@@ -1,0 +1,174 @@
+import "../re"
+import "std/io"
+import "std/list"
+import "std/os"
+import "std/text"
+
+# A small grep over the engine.
+#
+#   regex [-L] [-c] [-i] [-n] [-o] [-v] [--groups] [--steps] PATTERN [FILE]
+#   regex --explain PATTERN
+#   regex --scale PATTERN UNIT TAIL N...
+#   regex [-L] --table [FILE]
+#
+# Lines come from FILE, or from standard input when there is none. The exit
+# status is grep's: 0 when a line was selected, 1 when none was, 2 for a bad
+# pattern, a missing file or a bad command line.
+type progress
+  line
+  out
+  selected
+  steps
+
+# Options come before the words; a `--` ends them, so that a pattern can
+# begin with a dash.
+pub fn run argv
+  split_at = dashes argv 1
+  front = text/slice argv 1 (split_at - 1)
+  back = text/slice argv (split_at + 1) (length argv)
+  options = list/to_list (list/select front option?)
+  words = text/concat (list/to_list (list/reject front option?)) back
+  return usage if list/any? options (o -> not known? o)
+  chosen options words
+
+# Where the `--` is, or one past the end.
+fn dashes argv i
+  return i if length argv < i or argv[i] == "--"
+  dashes argv (i + 1)
+
+fn option? word
+  1 < length word and text/slice word 1 1 == "-"
+
+fn known? o
+  list/any? flags (f -> f == o)
+
+flags = text/concat short_flags long_flags
+
+long_flags = ["--explain" "--groups" "--scale" "--steps" "--table"]
+
+short_flags = ["-L" "-c" "-i" "-n" "-o" "-v"]
+
+fn has? options o
+  list/any? options (x -> x == o)
+
+fn chosen options words
+  return table options words if has? options "--table"
+  return scale words if has? options "--scale" and 3 < length words
+  return explain words[1] if has? options "--explain" and length words == 1
+  return usage if 2 < length words
+  begin options words words[1]
+
+fn begin _ _ none
+  usage
+
+fn begin options words source
+  pattern = if (has? options "-i") "(?i){source}" source
+  searched options source (compiled options pattern) words
+
+usage = io/write_err usage_text .> (_ -> os/exit 2)
+
+usage_text = "usage: regex [-Lcinov] [--groups] [--steps] PATTERN [FILE]\n"
+
+# A pattern that does not parse is reported the way grep reports a bad
+# expression, with a caret under the column it points at.
+fn refuse pattern e@(err _)
+  pad = text/join (list/to_list (list/take (list/repeat " ") (re/column e))) ""
+  lines = ["regex: {re/message e}" "  {pattern}" " {pad}^" ""]
+  io/write_err (text/join lines "\n") .> (_ -> os/exit 2)
+
+# -L asks for the leftmost-longest match, as POSIX grep finds it.
+fn compiled options pattern
+  posixly options (re/compile pattern)
+
+fn posixly _ e@(err _)
+  e
+
+fn posixly options r
+  if (has? options "-L") (re/longest r) r
+
+fn searched _ source e@(err _) _
+  refuse source e
+
+fn searched options _ r words
+  source = if (length words == 2) (os/read_file words[2]) io/stdin
+  source .> (body -> grep options r body)
+
+fn grep _ _ (file_not_found path)
+  io/write_err "regex: {path}: no such file\n" .> (_ -> os/exit 2)
+
+fn grep options r body
+  start = progress 1 [] 0 0
+  final = list/fold (split_lines body) start (t l -> scanned options r t l)
+  report options final
+
+# The lines of a file, without the newline that ends the last one.
+fn split_lines body
+  return [] if body == ""
+  parts = text/split body "\n"
+  last = parts[length parts]
+  if (last == "") (text/slice parts 1 (length parts - 1)) parts
+
+fn scanned options r t line
+  cps = re/codes line
+  every = has? options "-o" or has? options "--groups"
+  found = if every (re/find_all r cps) (re/first_match r cps)
+  hits = re/hits found
+  matched = hits != []
+  picked = matched != has? options "-v"
+  shown = if picked (rendered options r t.line line cps hits) []
+  count = if picked (t.selected + 1) t.selected
+  spent = t.steps + re/steps_taken found
+  progress (t.line + 1) (text/concat t.out shown) count spent
+
+fn rendered options r n line cps hits
+  prefix = if (has? options "-n") "{n}:" ""
+  return [] if has? options "-c"
+  return grouped prefix r cps hits if has? options "--groups"
+  return only prefix cps hits if has? options "-o" and not has? options "-v"
+  ["{prefix}{line}"]
+
+# -o prints each non-empty match on a line of its own, as grep -o does.
+fn only prefix cps hits
+  shown = list/reject hits (h -> re/hit_start h == re/hit_end h)
+  list/to_list (list/map shown (h -> "{prefix}{matched_text cps h}"))
+
+fn matched_text cps h
+  re/between cps (re/hit_start h) (re/hit_end h)
+
+# --groups prints each match, then each group under it.
+fn grouped prefix r cps hits
+  list/fold hits [] (acc h -> text/concat acc (group_lines prefix r cps h))
+
+fn group_lines prefix r cps h
+  head = "{prefix}{matched_text cps h} [{re/hit_start h}-{re/hit_end h}]"
+  names = re/group_names r
+  list/fold names [head] (acc n -> push acc (group_line cps h (length acc) n))
+
+fn group_line cps h i name
+  from = re/group_start h i
+  to = re/group_end h i
+  return "  {label i name}: unset" if from < 0
+  "  {label i name}: {re/between cps from to} [{from}-{to}]"
+
+fn report options t
+  counted = if (has? options "-c") (push t.out "{t.selected}") t.out
+  lines = if (has? options "--steps") (push counted "steps: {t.steps}") counted
+  body = if (lines == []) "" "{text/join lines "\n"}\n"
+  io/write body .> (_ -> finish t.selected)
+
+fn finish 0
+  os/exit 1
+
+fn finish _
+  effect done
+
+# The i-th command-line word. Callers check the count first; the checker
+# cannot see that, so a missing word reads as "".
+fn arg words i
+  or_empty words[i]
+
+fn or_empty none
+  ""
+
+fn or_empty s
+  s

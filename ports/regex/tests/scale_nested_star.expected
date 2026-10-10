@@ -1,0 +1,10 @@
+pattern (a*)*b, subject a x n then ""
+       n  match      pike   backtrack
+       1     no        21          17
+       2     no        32          38
+       4     no        54         160
+       8     no        98        2564
+      12     no       142       40968
+      16     no       186      655372
+backtracking stops at 1000000 steps, and is skipped past n = 64
+--- exit 0

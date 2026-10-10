@@ -1,0 +1,162 @@
+import "std/list"
+import "std/text"
+
+# Rewrites a parsed tree into the smaller set of shapes the compiler handles:
+# counted repetition becomes copies and nested optionals, nested sequences
+# and alternations are flattened, empty pieces drop out, and an alternation
+# of single characters becomes one class. What comes out has no count_loop.
+pub fn simplify (alt branches)
+  kept = list/to_list (list/reject (flat_alt branches) (b -> b == no_match))
+  merged = merge_chars kept 1 []
+  return no_match if merged == []
+  if (length merged == 1) merged[1] (alt merged)
+
+pub fn simplify (capture index name body)
+  capture index name (simplify body)
+
+pub fn simplify (cat parts)
+  kept = list/to_list (list/reject (flat_cat parts) (p -> p == empty))
+  return no_match if list/any? kept (p -> p == no_match)
+  return empty if kept == []
+  if (length kept == 1) kept[1] (cat kept)
+
+pub fn simplify (count_loop greedy max min body)
+  expanded greedy max min (simplify body)
+
+pub fn simplify (plus greedy body)
+  plus_of greedy (simplify body)
+
+pub fn simplify (quest greedy body)
+  quest_of greedy (simplify body)
+
+pub fn simplify (star greedy body)
+  star_of greedy (simplify body)
+
+pub fn simplify other
+  other
+
+fn flat_cat parts
+  list/fold parts [] (acc p -> text/concat acc (cat_parts (simplify p)))
+
+fn cat_parts (cat parts)
+  parts
+
+fn cat_parts other
+  [other]
+
+fn flat_alt branches
+  list/fold branches [] (acc b -> text/concat acc (alt_parts (simplify b)))
+
+fn alt_parts (alt branches)
+  branches
+
+fn alt_parts other
+  [other]
+
+# Neighbouring branches that each match exactly one character can be tried
+# in any order, so a|b|[x-z] is the class [abx-z]. Branches further apart
+# keep their order, which leftmost-first matching depends on.
+fn merge_chars bs i out
+  merge_one bs i out bs[i]
+
+fn merge_one _ _ out none
+  out
+
+fn merge_one bs i out b
+  prev = out[length out]
+  both_chars = char_spans prev != [] and char_spans b != []
+  return merge_chars bs (i + 1) (push out b) if not both_chars
+  front = text/slice out 1 (length out - 1)
+  both = cls (normalize (text/concat (char_spans prev) (char_spans b)))
+  merge_chars bs (i + 1) (push front both)
+
+fn char_spans (lit cp)
+  [(span cp cp)]
+
+fn char_spans (cls spans)
+  spans
+
+fn char_spans _
+  []
+
+# x* of something that matches only the empty string is that empty string,
+# and a loop of a loop collapses when the two agree on greed.
+fn star_of _ empty
+  empty
+
+fn star_of _ no_match
+  empty
+
+fn star_of greedy (star inner body)
+  return star greedy body if inner == greedy
+  star greedy (star inner body)
+
+fn star_of greedy (plus inner body)
+  return star greedy body if inner == greedy
+  star greedy (plus inner body)
+
+fn star_of greedy (quest inner body)
+  return star greedy body if inner == greedy
+  star greedy (quest inner body)
+
+fn star_of greedy body
+  star greedy body
+
+fn plus_of _ empty
+  empty
+
+fn plus_of _ no_match
+  no_match
+
+fn plus_of greedy (plus inner body)
+  return plus greedy body if inner == greedy
+  plus greedy (plus inner body)
+
+fn plus_of greedy (star inner body)
+  return star greedy body if inner == greedy
+  plus greedy (star inner body)
+
+fn plus_of greedy body
+  plus greedy body
+
+fn quest_of _ empty
+  empty
+
+fn quest_of _ no_match
+  empty
+
+fn quest_of greedy (quest inner body)
+  return quest greedy body if inner == greedy
+  quest greedy (quest inner body)
+
+fn quest_of greedy (star inner body)
+  return star greedy body if inner == greedy
+  quest greedy (star inner body)
+
+fn quest_of greedy body
+  quest greedy body
+
+# x{n,m}: n copies of x, then m-n optional copies nested so that each one is
+# tried only if the one before it matched: x{2,4} is xx(x(x)?)?. x{n,} is
+# n-1 copies and then x+.
+fn expanded _ 0 0 _
+  empty
+
+fn expanded greedy -1 0 body
+  star_of greedy body
+
+fn expanded greedy -1 min body
+  simplify (cat (push (copies body (min - 1)) (plus_of greedy body)))
+
+fn expanded greedy max min body
+  tail = optionals greedy body (max - min)
+  simplify (cat (push (copies body min) tail))
+
+fn copies body n
+  list/to_list (list/take (list/repeat body) n)
+
+fn optionals _ _ 0
+  empty
+
+fn optionals greedy body n
+  quest_of greedy (cat [body (optionals greedy body (n - 1))])

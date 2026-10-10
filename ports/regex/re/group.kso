@@ -1,0 +1,117 @@
+import "std/list"
+import "std/text"
+
+# Parenthesized groups: captures, named captures, non-capturing groups and
+# flag groups. `at` points at the opening parenthesis throughout.
+fn group cs at st
+  whole = text/join cs ""
+  return fail at "expression nests too deeply" whole if max_depth <= st.depth
+  opened cs at st cs[at + 1]
+
+fn opened cs at st "?"
+  question cs at st cs[at + 2]
+
+fn opened cs at st none
+  capture_group cs at st (at + 1) ""
+
+fn opened cs at st _
+  capture_group cs at st (at + 1) ""
+
+fn capture_group cs at st body name
+  index = length st.caps + 1
+  inner = state (push st.caps name) (st.depth + 1) st.flags
+  closed cs at st (alternation cs body inner) (n -> capture index name n)
+
+# After the body, the group must be closed. The flags go back to what they
+# were outside the group; the captures opened inside stay opened.
+fn closed _ _ _ e@(err _) _
+  e
+
+fn closed cs open outer g wrap
+  missing = fail open "missing closing )" (text/join cs "")
+  return missing if cs[g.at] != ")"
+  got (g.at + 1) (wrap g.node) (state g.st.caps outer.depth outer.flags)
+
+fn question cs at st "P"
+  return named cs at st (at + 4) if cs[at + 3] == "<"
+  perl_syntax cs at (at + 2)
+
+fn question cs at st "<"
+  named cs at st (at + 3)
+
+fn question cs at _ "="
+  perl_syntax cs at (at + 2)
+
+fn question cs at _ "!"
+  perl_syntax cs at (at + 2)
+
+fn question cs at _ none
+  perl_syntax cs at (at + 1)
+
+fn question cs at st _
+  flag_group cs at st (at + 2) st.flags true false false
+
+fn perl_syntax cs at to
+  fail at "invalid or unsupported Perl syntax" (chunk cs at to)
+
+# (?P<name>re) and (?<name>re). A name is one or more word characters and
+# may be used once. Without a `>` the whole rest of the pattern is quoted in
+# the error, as Go does; with one, the group's opening up to the `>`.
+fn named cs at st from
+  close = name_close cs from
+  name = chunk cs from (close - 1)
+  return fail at "invalid named capture" (chunk cs at (length cs)) if close == 0
+  return bad_name cs at close if not valid_name? name
+  taken = list/any? st.caps (n -> n == name)
+  return fail at "duplicate capture group name" name if taken
+  capture_group cs at st (close + 1) name
+
+fn name_close cs i
+  return 0 if length cs < i
+  return i if cs[i] == ">"
+  name_close cs (i + 1)
+
+fn valid_name? name
+  name != "" and list/all? (codes name) (c -> contains? word_chars c)
+
+fn bad_name cs at i
+  fail at "invalid named capture" (chunk cs at i)
+
+# (?flags) and (?flags:re), where flags are i m s U, optionally after a `-`
+# that turns the following ones off. `on` says which side of the `-` we are
+# on, `off_seen` whether a `-` has appeared, and `any` whether a flag letter
+# has appeared since the last sign.
+fn flag_group cs at st i f on off_seen any
+  flag_char cs[i] cs at st i f on off_seen any
+
+fn flag_char ")" cs at st i f _ off_seen any
+  return perl_syntax cs at i if off_seen and not any
+  got (i + 1) flag_change (state st.caps st.depth f)
+
+fn flag_char ":" cs at st i f _ off_seen any
+  return perl_syntax cs at i if off_seen and not any
+  inner = state st.caps (st.depth + 1) f
+  closed cs at st (alternation cs (i + 1) inner) (n -> n)
+
+fn flag_char "-" cs at st i f _ off_seen _
+  return perl_syntax cs at i if off_seen
+  flag_group cs at st (i + 1) f false true false
+
+fn flag_char none cs at _ i _ _ _ _
+  perl_syntax cs at i
+
+fn flag_char c cs at st i f on off_seen _
+  return perl_syntax cs at i if not list/any? ["i" "m" "s" "U"] (x -> x == c)
+  flag_group cs at st (i + 1) (set_flag f c on) on off_seen true
+
+fn set_flag f "i" v
+  flags f.dot_nl v f.multi f.ungreedy
+
+fn set_flag f "m" v
+  flags f.dot_nl f.fold v f.ungreedy
+
+fn set_flag f "s" v
+  flags v f.fold f.multi f.ungreedy
+
+fn set_flag f _ v
+  flags f.dot_nl f.fold f.multi v

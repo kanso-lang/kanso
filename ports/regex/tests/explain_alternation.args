@@ -1,0 +1,2 @@
+--explain
+^(?:cat|dog|[a-c]|d)+$

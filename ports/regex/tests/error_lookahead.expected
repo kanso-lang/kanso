@@ -1,0 +1,5 @@
+--- stderr
+regex: error parsing regexp: invalid or unsupported Perl syntax: `(?=`
+  fox(?=es)
+     ^
+--- exit 2

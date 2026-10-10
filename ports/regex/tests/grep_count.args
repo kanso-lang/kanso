@@ -1,0 +1,3 @@
+-c
+[[:upper:]]{2,}
+tests/data/poem.txt

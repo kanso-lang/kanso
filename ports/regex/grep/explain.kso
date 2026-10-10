@@ -1,0 +1,31 @@
+import "../re"
+import "std/list"
+import "std/text"
+
+# --explain PATTERN: the pattern as parsed, as simplified, and as a program.
+fn explain none
+  usage
+
+fn explain pattern
+  explained pattern (re/compile pattern)
+
+fn explained pattern e@(err _)
+  refuse pattern e
+
+fn explained pattern r
+  head = ["pattern:    {pattern}" "parsed:     {re/parsed_text r}"]
+  middle = ["simplified: {re/simplified_text r}" "groups:     {group_list r}"]
+  lines = text/concat (text/concat head middle) ["program:" (re/program_text r)]
+  print (text/join lines "\n")
+
+fn group_list r
+  names = re/group_names r
+  return "none" if names == []
+  labels = list/fold names [] (acc n -> push acc (label (length acc + 1) n))
+  text/join labels " "
+
+fn label i ""
+  "{i}"
+
+fn label i name
+  "{i}<{name}>"

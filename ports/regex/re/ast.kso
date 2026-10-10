@@ -1,0 +1,80 @@
+# The parsed form of a pattern. The parser builds these, `simplify` rewrites
+# them into a smaller set, and `compile` turns that set into a program.
+#
+# A literal holds one code point. A class holds a sorted list of disjoint
+# spans, already negated and case-folded by the time it is built, so nothing
+# downstream needs to know how it was written.
+pub type alt
+  branches
+
+pub type any_char
+
+pub type any_not_nl
+
+pub type begin_line
+
+pub type begin_text
+
+pub type capture
+  index
+  name
+  node
+
+pub type cat
+  parts
+
+pub type count_loop
+  greedy
+  max
+  min
+  node
+
+pub type cls
+  spans
+
+pub type empty
+
+pub type end_line
+
+pub type end_text
+
+pub type lit
+  cp
+
+pub type no_match
+
+pub type not_word_boundary
+
+pub type plus
+  greedy
+  node
+
+pub type quest
+  greedy
+  node
+
+# One inclusive run of code points. `first` and `last` are named so that
+# alphabetical field order is also reading order: `span 97 122` is a to z.
+pub type span
+  first
+  last
+
+pub type star
+  greedy
+  node
+
+pub type word_boundary
+
+# A typeset is one line of at most eighty columns, so the twenty node kinds
+# are named in groups and the groups joined.
+pub type anchor begin_line begin_text end_line end_text word_edge
+
+pub type leaf any_char any_not_nl cls empty lit no_match
+
+pub type compound alt capture cat
+
+pub type loop count_loop plus quest star
+
+pub type node anchor compound leaf loop
+
+pub type word_edge not_word_boundary word_boundary

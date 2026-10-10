@@ -1,0 +1,15 @@
+test_lines_drop_final_newline = split_lines "a\nb\n" == ["a" "b"]
+
+test_lines_keep_blank_lines = split_lines "a\n\nb" == ["a" "" "b"]
+
+test_lines_of_nothing = split_lines "" == []
+
+test_option = option? "-o" and not option? "-" and not option? "fox"
+
+test_known_options = known? "--steps" and not known? "-z"
+
+test_right_aligns = right "42" 5 == "   42"
+
+test_label_plain = label 2 "" == "2"
+
+test_label_named = label 1 "year" == "1<year>"

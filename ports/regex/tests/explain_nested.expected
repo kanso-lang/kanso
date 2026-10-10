@@ -1,0 +1,17 @@
+pattern:    (a*)*b
+parsed:     cat{star{cap1{star{lit{a}}}}lit{b}}
+simplified: cat{star{cap1{star{lit{a}}}}lit{b}}
+groups:     1
+program:
+1. save 0
+2. split 3 9
+3. save 2
+4. split 5 7
+5. char a
+6. jmp 4
+7. save 3
+8. split 3 9
+9. char b
+10. save 1
+11. match
+--- exit 0

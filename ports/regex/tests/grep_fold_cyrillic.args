@@ -1,0 +1,4 @@
+-o
+-i
+ж\S*|ё\S*
+tests/data/poem.txt

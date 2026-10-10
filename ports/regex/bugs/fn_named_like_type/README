@@ -1,0 +1,10 @@
+Run from this directory:
+
+    kanso test m
+
+m/m.kso declares `type found` with two fields; m/m_test.kso declares
+`fn found a b`. Put in the same file, the two are refused with "the name
+`found` is already taken". Split between a module file and its test file,
+nothing is reported and every call to `found` with two arguments builds the
+record. In the regex port this turned 21 tests red at once with messages
+that showed records where strings were expected.

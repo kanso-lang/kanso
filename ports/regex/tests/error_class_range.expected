@@ -1,0 +1,5 @@
+--- stderr
+regex: error parsing regexp: invalid character class range: `z-a`
+  [z-a]
+   ^
+--- exit 2

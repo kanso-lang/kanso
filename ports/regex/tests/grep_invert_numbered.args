@@ -1,0 +1,4 @@
+-v
+-n
+\w
+tests/data/poem.txt

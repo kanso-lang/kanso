@@ -1,0 +1,8 @@
+# A record type in the module's code, and a helper of the same name and
+# arity in the module's test file (m_test.kso). See that file.
+type found
+  left
+  right
+
+pub fn probe x
+  found x 2

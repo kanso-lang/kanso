@@ -1,0 +1,25 @@
+gapped = normalize [(span 7 8) (span 1 3)]
+
+merged_sample = normalize [(span 5 9) (span 1 3) (span 4 4)]
+
+test_negate_round_trips = negate (negate gapped) == gapped
+
+test_negate_fills_gaps = negate gapped == [(span 0 0) (span 4 6) (span 9 top)]
+
+top = max_cp
+
+test_normalize_keeps_gaps = gapped == [(span 1 3) (span 7 8)]
+
+test_normalize_merges = merged_sample == [(span 1 9)]
+
+test_contains = contains? gapped 2 and not contains? gapped 5
+
+test_fold_ascii = fold_spans [(span 97 99)] == [(span 65 67) (span 97 99)]
+
+kelvin = [(span 75 75) (span 107 107) (span 8490 8490)]
+
+test_fold_kelvin = fold_orbit 107 == kelvin
+
+test_fold_sigma = fold_orbit 962 == [(span 931 931) (span 962 963)]
+
+test_fold_digits_alone = fold_spans digits == digits

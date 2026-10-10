@@ -1,0 +1,16 @@
+pattern:    (?i)x{2,4}?y
+parsed:     cat{nrep{2,4 cc{X x}}cc{Y y}}
+simplified: cat{cc{X x}cc{X x}nquest{cat{cc{X x}nquest{cc{X x}}}}cc{Y y}}
+groups:     none
+program:
+1. save 0
+2. class cc{X x}
+3. class cc{X x}
+4. split 8 5
+5. class cc{X x}
+6. split 8 7
+7. class cc{X x}
+8. class cc{Y y}
+9. save 1
+10. match
+--- exit 0

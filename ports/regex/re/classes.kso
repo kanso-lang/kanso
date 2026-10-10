@@ -1,0 +1,135 @@
+import "std/list"
+import "std/text"
+
+# Character classes are sorted lists of disjoint spans over the code points
+# 0 to 1114111. Every way of writing a class -- a bracket expression, a Perl
+# escape, a POSIX name, a case-folded literal -- ends here as one list, so the
+# compiler and the matcher see a single shape.
+#
+# std/list's sort orders numbers and strings but not records, and takes no
+# key, so a span is packed into one int for sorting: `first` in the high bits,
+# `last` in the low twenty-one.
+max_cp = 1114111
+
+shift = 2097152
+
+pub fn contains? spans cp
+  inside? spans cp 1
+
+# Spans are sorted, so the walk stops at the first span that starts past the
+# code point.
+fn inside? spans cp i
+  within? spans cp i spans[i]
+
+fn within? _ _ _ none
+  false
+
+fn within? spans cp i s
+  return false if cp < s.first
+  return true if cp <= s.last
+  inside? spans cp (i + 1)
+
+fn bigger a b
+  if (a < b) b a
+
+fn packed s
+  s.first * shift + s.last
+
+fn unpacked none
+  none
+
+fn unpacked n
+  span (n / shift) (n % shift)
+
+pub fn normalize spans
+  sorted = list/sort (list/to_list (list/map spans packed))
+  merge_from sorted 2 (unpacked sorted[1]) []
+
+fn merge_from _ _ none out
+  out
+
+fn merge_from xs i cur out
+  return push out cur if length xs < i
+  next = unpacked xs[i]
+  if (next.first <= cur.last + 1)
+    merge_from xs (i + 1) (span cur.first (bigger cur.last next.last)) out
+    merge_from xs (i + 1) next (push out cur)
+
+# The complement of a normalized class: every gap between its spans, and the
+# stretches before the first and after the last.
+pub fn negate spans
+  gaps spans 1 0 []
+
+fn gaps spans i from out
+  gap spans i from out spans[i]
+
+fn gap _ _ from out none
+  tail_gap out from
+
+fn gap spans i from out s
+  grown = if (from < s.first) (push out (span from (s.first - 1))) out
+  gaps spans (i + 1) (s.last + 1) grown
+
+fn tail_gap out from
+  if (from <= max_cp) (push out (span from max_cp)) out
+
+pub fn union a b
+  normalize (text/concat a b)
+
+# The Perl escapes, ASCII-only as in RE2: \d \s \w. Their capital forms are
+# the negations and are built by the parser.
+pub digits = [(span 48 57)]
+
+pub spaces = [(span 9 10) (span 12 13) (span 32 32)]
+
+pub word_chars = [(span 48 57) (span 65 90) (span 95 95) (span 97 122)]
+
+pub fn word_char? cp
+  contains? word_chars cp
+
+# The POSIX names RE2 accepts inside brackets, as in [[:alpha:]]. A name that
+# is not one of these answers none, and the parser reports it.
+pub fn posix "alnum"
+  [(span 48 57) (span 65 90) (span 97 122)]
+
+pub fn posix "alpha"
+  [(span 65 90) (span 97 122)]
+
+pub fn posix "ascii"
+  [(span 0 127)]
+
+pub fn posix "blank"
+  [(span 9 9) (span 32 32)]
+
+pub fn posix "cntrl"
+  [(span 0 31) (span 127 127)]
+
+pub fn posix "digit"
+  digits
+
+pub fn posix "graph"
+  [(span 33 126)]
+
+pub fn posix "lower"
+  [(span 97 122)]
+
+pub fn posix "print"
+  [(span 32 126)]
+
+pub fn posix "punct"
+  [(span 33 47) (span 58 64) (span 91 96) (span 123 126)]
+
+pub fn posix "space"
+  [(span 9 13) (span 32 32)]
+
+pub fn posix "upper"
+  [(span 65 90)]
+
+pub fn posix "word"
+  word_chars
+
+pub fn posix "xdigit"
+  [(span 48 57) (span 65 70) (span 97 102)]
+
+pub fn posix _
+  none

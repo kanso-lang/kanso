@@ -1,0 +1,13 @@
+"POST /api/login HTTP/1.1" 401 [46-76]
+  1<method>: POST [47-51]
+  2<path>: /api/login [52-62]
+  3<status>: 401 [73-76]
+"GET /missing HTTP/1.1" 404 [46-73]
+  1<method>: GET [47-50]
+  2<path>: /missing [51-59]
+  3<status>: 404 [70-73]
+"DELETE /api/item/7 HTTP/2" 500 [43-74]
+  1<method>: DELETE [44-50]
+  2<path>: /api/item/7 [51-62]
+  3<status>: 500 [71-74]
+--- exit 0

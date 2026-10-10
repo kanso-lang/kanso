@@ -1,0 +1,6 @@
+# Where the port follows RE2's C++ library rather than Go's regexp. RE2
+# refuses a capture name used twice; Go 1.24 accepts it. Expected output
+# for these lines comes from the port, checked by hand against RE2's
+# documented behaviour, not from oracle/table.go.
+(?P<n>a)(?P<n>b)	ab
+(?<x>a)|(?P<x>b)	b

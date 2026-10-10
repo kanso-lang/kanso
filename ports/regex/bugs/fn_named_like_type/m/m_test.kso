@@ -1,0 +1,9 @@
+# should: error[name] "the name `found` is already taken", which is what the
+#         checker says when the function and the type share a file.
+# does:   `kanso check m` says ok and `kanso test m` prints
+#         "test_helper_runs ... FAILED (returned false)": `found 1 2` below
+#         builds the record declared in m.kso, and the helper never runs.
+fn found a b
+  a + b
+
+test_helper_runs = found 1 2 == 3
