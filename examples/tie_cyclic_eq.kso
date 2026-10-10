@@ -1,14 +1,18 @@
+import "std/list"
+
 type node
   id
   peer
 
 fn ring_of first second
-  build
-    a = node first _
-    b = node second _
-    a.peer = b
-    b.peer = a
-  a
+  linked = (id ref -> node id (ref (if (id == first) second first)))
+  around (list/tie [first second] linked) first
+
+fn around b:list/broken_link _
+  b
+
+fn around nodes key
+  nodes[key]
 
 ring1 = ring_of 1 2
 
