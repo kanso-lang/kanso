@@ -1,0 +1,11 @@
+# `build` retired on 2026-10-10, and `list/tie` makes every cycle it made. A
+# program written for the old form meets one diagnostic naming the
+# replacement.
+type node
+  id
+  next
+
+pub play =
+  build
+    a = node 1 none
+  print "{a.id}"

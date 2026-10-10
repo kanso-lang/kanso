@@ -1,0 +1,2 @@
+[tie_cycle/node "a" [tie_cycle/node "b" [<cycle>]] tie_cycle/node "b" [tie_cycle/node "a" [<cycle>]]]
+tie_cycle/node "seed" [<cycle>]

@@ -58,8 +58,7 @@ pub fn parse_play(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
         // `fn`, `type` and `import` declare; a binding is part of the run,
         // exactly as in an entry file. That keeps the relaxed form a
         // relaxation and never a new restriction: a bound name cannot
-        // collide with a parameter, and a `build` block keeps the statement
-        // form it has everywhere else. A constant several functions share is
+        // collide with a parameter. A constant several functions share is
         // a library's job — needing one is where a little program graduates
         // to `kanso run`.
         let declares =
@@ -790,7 +789,7 @@ fn parse_body(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
     // a construct owns the deeper lines beneath it, so the leading run is
     // walked at the top indent and skips past a block's body
     // each unit is a leading line plus whatever it owns beneath it, so a
-    // `build` or `if` header travels with its body rather than alone
+    // an `if` header travels with its body rather than alone
     let mut units: Vec<std::ops::Range<usize>> = Vec::new();
     let lead_end = {
         let mut i = 0;
@@ -900,7 +899,7 @@ fn parse_effect_body(body: &[Line], lead_binds: &[Line]) -> Result<Vec<Stmt>, Di
     Ok(stmts)
 }
 
-/// The leading bindings, where a `build` or `if` header owns the indented
+/// The leading bindings, where an `if` header owns the indented
 /// lines beneath it exactly as it does in the effect tail — including the
 /// `else` at its own indent and the stray-continuation fallback.
 fn parse_lead_stmts(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
@@ -1017,9 +1016,6 @@ fn parse_effect_tail(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
         idx = end;
     }
     let has_surface = units.iter().enumerate().any(|(i, u)| match u {
-        // a `build` is a construction site, not a line of the effect surface:
-        // it binds names for what follows rather than joining a group
-        Stmt::Expr(Expr::Build(..)) => false,
         Stmt::Expr(_) => i + 1 < units.len(),
         _ => false,
     });
@@ -1047,37 +1043,9 @@ fn parse_effect_tail(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
                 }
                 binds.push(Stmt::Bind { pattern, expr });
             }
-            // a `build` binds names for the rest of the body, so it keeps its
-            // place among the bindings rather than joining a group of effects
-            // — where it would be an expression again and the names it gave
-            // would go with it
-            Stmt::Expr(e @ Expr::Build(..)) => {
-                if !effects.is_empty() {
-                    return Err(Diagnostic::new(
-                        "formatting",
-                        "a `build` binds, and bindings precede the effects in a \
-                         body: move it above them"
-                            .to_string(),
-                        expr_span(&e),
-                    ));
-                }
-                binds.push(Stmt::Expr(e));
-            }
             Stmt::Expr(e) => {
                 reject_never_effect(&e, is_final)?;
                 effects.push(e);
-            }
-            // the same refusal check_merged's walk gives a set in a fn body —
-            // this path reaches the statement first, and a panic is not a
-            // diagnostic
-            Stmt::Set { target, field, span, .. } => {
-                return Err(Diagnostic::new(
-                    "build",
-                    format!(
-                        "`{target}.{field} = ...` writes a field, and only a `build` block may do that"
-                    ),
-                    span,
-                ));
             }
         }
     }
@@ -1110,12 +1078,12 @@ fn parse_block_construct(
             [(Tok::Ident(_), _, _), (Tok::Bind, _, _), (Tok::Ident(w), _, _)] if w == "build"
         );
     if head_is_build {
-        return parse_build(head, children, else_children);
+        return parse_build(head);
     }
     if !head_is_if {
         return Err(Diagnostic::new(
             "syntax",
-            "only `if` and `build` open an indented block; other calls take \
+            "only `if` opens an indented block; other calls take \
              indented arguments on the line's own indent plus two"
                 .to_string(),
             head_span(head),
@@ -1202,7 +1170,6 @@ fn parse_block_construct(
         Stmt::Bind { pattern, expr } => {
             Ok(Stmt::Bind { pattern, expr: extend(expr, branch_args)? })
         }
-        Stmt::Set { .. } => unreachable!("`set` lifts only inside `build`"),
     }
 }
 
@@ -1210,66 +1177,18 @@ fn span_of_stmt_head(line: &Line) -> Span {
     head_span(line)
 }
 
-/// The body runs top to bottom, and the names it binds are in scope after it.
-fn parse_build(
-    head: &Line,
-    children: &[Line],
-    else_children: Option<&[Line]>,
-) -> Result<Stmt, Diagnostic> {
-    if else_children.is_some() {
-        return Err(Diagnostic::new(
-            "syntax",
-            "`build` has no `else` — it is a construction site, not a branch".to_string(),
-            head_span(head),
-        ));
-    }
-    let stmts = parse_build_body(children)?;
-    if let [(Tok::Ident(name), nspan, _), (Tok::Bind, _, _), _] = head.tokens.as_slice() {
-        return Err(Diagnostic::new(
-            "syntax",
-            format!(
-                "`build` answers nothing to bind `{name}` to — what it builds is \
-                 in scope after it, under the names it gave"
-            ),
-            *nspan,
-        ));
-    }
-    Ok(Stmt::Expr(Expr::Build(stmts, head_span(head))))
-}
-
-fn parse_build_body(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
-    let is_else =
-        |line: &Line| matches!(line.tokens.as_slice(), [(Tok::Ident(w), _, _)] if w == "else");
-    let mut stmts = Vec::new();
-    let mut idx = 0;
-    while idx < body.len() {
-        let line = &body[idx];
-        let base = line.indent;
-        let mut j = idx + 1;
-        while j < body.len() && body[j].indent > base {
-            j += 1;
-        }
-        if j == idx + 1 {
-            stmts.push(parse_stmt(line)?);
-            idx = j;
-            continue;
-        }
-        let inner = &body[idx + 1..j];
-        let (else_lines, end) = match j < body.len() && body[j].indent == base && is_else(&body[j])
-        {
-            true => {
-                let mut k = j + 1;
-                while k < body.len() && body[k].indent > base {
-                    k += 1;
-                }
-                (Some(&body[j + 1..k]), k)
-            }
-            false => (None, j),
-        };
-        stmts.push(parse_block_construct(line, inner, else_lines)?);
-        idx = end;
-    }
-    Ok(stmts)
+/// `build` was retired on 2026-10-10: `list/tie` makes every cycle it made,
+/// and a broken link in literal data is still refused before the program
+/// runs. The word is kept as a diagnostic so a program written for the old
+/// form is told what replaced it.
+fn parse_build(head: &Line) -> Result<Stmt, Diagnostic> {
+    Err(Diagnostic::new(
+        "syntax",
+        "`build` is retired: make a cycle with `list/tie`, which calls a maker \
+         once for each key and hands it a `ref` to every node"
+            .to_string(),
+        head_span(head),
+    ))
 }
 
 /// A bare line in an effect group must at least plausibly be a description.
@@ -1279,7 +1198,6 @@ fn reject_never_effect(e: &Expr, is_final: bool) -> Result<(), Diagnostic> {
     let never = matches!(
         e,
         Expr::Int(..)
-            | Expr::Hole(..)
             | Expr::Float(..)
             | Expr::Str(..)
             | Expr::List(..)
@@ -1319,11 +1237,9 @@ fn logical_if(cond: Expr, then_e: Expr, else_e: Expr, span: Span) -> Expr {
 fn expr_span(e: &Expr) -> Span {
     match e {
         Expr::Int(_, s)
-        | Expr::Hole(s)
         | Expr::Partial(_, s)
         | Expr::Field { span: s, .. }
         | Expr::Upcast { span: s, .. }
-        | Expr::Build(_, s)
         | Expr::Float(_, s)
         | Expr::MapLit(_, s)
         | Expr::Str(_, s)
@@ -1361,20 +1277,21 @@ fn parse_stmt(line: &Line) -> Result<Stmt, Diagnostic> {
         p.expect_done()?;
         return Ok(Stmt::Expr(expr));
     };
-    // `a.next = b` writes a field. Mutation lives in a build block and nowhere
-    // else, which the checker enforces exactly as it does for the older form.
+    // `a.next = b` would write a field, and no value is ever written after it
+    // is made. Said here, where the shape is plain, rather than as a pattern
+    // the binding parser cannot read.
     if let [(Tok::Ident(target), _, _), (Tok::Dot, _, _), (Tok::Ident(field), span, _)] =
         &line.tokens[..i]
     {
-        let mut rhs = P::new(&line.tokens[i + 1..], line.number);
-        let value = rhs.parse_expr()?;
-        rhs.expect_done()?;
-        return Ok(Stmt::Set {
-            target: target.to_string(),
-            field: field.to_string(),
-            value,
-            span: *span,
-        });
+        return Err(Diagnostic::new(
+            "syntax",
+            format!(
+                "`{target}.{field} = ...` writes a field, and a value is never \
+                 written after it is made: give the field its value where \
+                 `{target}` is built, or make a cycle with `list/tie`"
+            ),
+            *span,
+        ));
     }
     let mut lhs = P::new(&line.tokens[..i], line.number);
     let pattern = lhs.parse_bind_target()?;
@@ -2092,11 +2009,11 @@ impl<'a> P<'a> {
     }
 
     fn starts_atom(&self) -> bool {
-        // `_.name` is an atom, and since the 2026-08-24 ruling a bare `_` is
-        // one too: the hole a construction leaves for a field its `build`
-        // block fills. The wildcard pattern and a lambda's `_` parameter are
-        // read by the pattern parser and the lambda lookahead before this is
-        // asked.
+        // `_.name` is an atom, and a bare `_` is read as one so that it meets
+        // the diagnostic for the retired hole rather than a parse error about
+        // something else. The wildcard pattern and a lambda's `_` parameter
+        // are read by the pattern parser and the lambda lookahead before this
+        // is asked.
         if matches!(self.peek(), Some(Tok::Underscore)) {
             return true;
         }
@@ -2245,13 +2162,18 @@ impl<'a> P<'a> {
         // identifier — 3,788 of the front end's allocation blocks — for the
         // three arms that go on to want it, and for every arm that does not.
         match self.toks.get(self.pos).map(|(t, _, _)| t) {
-            // A bare `_` in expression position is a hole: a field a `build`
-            // block fills later, ruled 2026-08-24. Where it may stand is the
-            // checker's question, so the parser hands every one on.
-            Some(Tok::Underscore) => {
-                self.pos += 1;
-                Ok(Expr::Hole(span))
-            }
+            // A bare `_` in expression position was a hole for a field a
+            // `build` block filled later. The block retired on 2026-10-10 and
+            // the hole with it; a program that still writes one is told how a
+            // cycle is made now.
+            Some(Tok::Underscore) => Err(Diagnostic::new(
+                "syntax",
+                "`_` stands for a value nothing gives: every field is given its \
+                 value where the record is built, and a cycle is made with \
+                 `list/tie`"
+                    .to_string(),
+                span,
+            )),
             Some(Tok::Int(n)) => {
                 self.pos += 1;
                 Ok(Expr::Int(n.clone(), span))

@@ -1,8 +1,0 @@
-type node
-  id
-  peers
-
-pub play =
-  a = node 1 []
-  a.peers = []
-  print "{a}"

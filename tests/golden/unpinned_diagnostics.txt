@@ -66,7 +66,18 @@ expected a constant name
 # keeps a deeper line only under `if`, `x = if`, `else`, `build` or
 # `x = build`; under anything else the line is folded into its head as one
 # more argument. So `parse_block_construct` is only ever handed a head it
-# already accepts, and `else` is taken by its callers first.
+# already accepts, and `else` is taken by its callers first. `build` still
+# keeps its lines after its retirement on 2026-10-10, so that the head reaches
+# the parser whole and is refused with the sentence that names `list/tie`.
+#
+# It left this list once without being reached. The play verb's change added
+# tests/golden/play/decls_after_statements.stderr, which held the message, and
+# the scan counted it as a pin. No test reads that file: tests/play_verb.rs
+# names greeting, no_exports, no_local_imports and wrong_verb, and running the
+# fixture today prints `first` with nothing on stderr. When `build` retired and
+# the message lost the word, the stale copy stopped matching, and the scan said
+# so.
+only `if` opens an indented block; other calls take
 #
 # The unused-expression rule left this list on 2026-08-27, and its excuse is
 # the third here to be shown wrong by a program. The reasoning above it —
@@ -82,6 +93,25 @@ expected a constant name
 # The lesson is the one the top of this file already states, sharpened: an
 # excuse that reasons about which check speaks first has to name WHICH walk it
 # is reasoning about, because a second one may not have the rule at all.
+#
+# The rule is back on this list, in both walks, because `build` was the only
+# way into either of them. Its retirement on 2026-10-10 deleted
+# a_build_body_line_goes_nowhere with it. The two walks are now out of reach
+# for one reason each, and each was tried with a program:
+#
+#   the function-body walk   consecutive expression lines fold into one
+#                            effect group, and a binding after an expression
+#                            line is refused first by "bindings precede the
+#                            effects in a body"
+#   the block walk           a branch is a block only when it binds a name,
+#                            the bindings come first, and its bare lines fold
+#                            the same way; an expression line before a nested
+#                            `if` folds with it too
+#
+# Two texts, because the walks break the source line in different places and
+# the scan reads a message up to its first break.
+unused expression: every non-final line binds a name (sequence
+unused expression: every non-final line binds a name
 
 # The inline-constant message left this list on 2026-08-20: the claim that
 # the lexer's folding made it unreachable missed heads that OPEN blocks —

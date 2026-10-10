@@ -3,11 +3,7 @@ type node
   peer
 
 fn ring_from head tail
-  build
-    a = node head _
-    b = node tail 0
-    a.peer = b
-  a
+  node head (node tail 0)
 
 ring = ring_from 1 2
 

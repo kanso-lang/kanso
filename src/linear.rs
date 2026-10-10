@@ -111,7 +111,7 @@ pub fn moved_writes(program: &Program) -> HashSet<(std::sync::Arc<str>, usize, u
     for decl in real_fns(program) {
         for stmt in &decl.body {
             let e = match stmt {
-                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expr,
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
             };
             walk_for_moved(decl, e, &mut out);
         }
@@ -241,7 +241,6 @@ impl<'a> Mentions<'a> {
             for stmt in &decl.body {
                 let e = match stmt {
                     Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
-                    Stmt::Set { value, .. } => value,
                 };
                 m.walk(e, d);
             }
@@ -473,7 +472,6 @@ impl<'a> Analysis<'a> {
                 let e = match stmt {
                     Stmt::Bind { expr, .. } => expr,
                     Stmt::Expr(e) => e,
-                    Stmt::Set { value, .. } => value,
                 };
                 self.callsites_unique(caller, e, name, arity, i)
             })
@@ -840,7 +838,6 @@ fn collect_pushes(
         let e = match stmt {
             Stmt::Bind { expr, .. } => expr,
             Stmt::Expr(e) => e,
-            Stmt::Set { value, .. } => value,
         };
         walk_for_push(a, decl, e, out);
     }
@@ -993,7 +990,6 @@ fn effective_uses(var: &str, body: &[Stmt]) -> usize {
         let e = match stmt {
             Stmt::Bind { expr, .. } => expr,
             Stmt::Expr(e) => e,
-            Stmt::Set { value, .. } => value,
         };
         discounted += consumed_sibling_uses(var, e);
     }
@@ -1129,7 +1125,6 @@ fn count_uses(var: &str, body: &[Stmt]) -> usize {
         let e = match stmt {
             Stmt::Bind { expr, .. } => expr,
             Stmt::Expr(e) => e,
-            Stmt::Set { value, .. } => value,
         };
         n += count_in_expr(var, e);
     }
@@ -1178,9 +1173,7 @@ fn count_in_expr(var: &str, e: &Expr) -> usize {
         let after: usize = rest
             .iter()
             .map(|st| match st {
-                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
-                    count_in_expr(var, expr)
-                }
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => count_in_expr(var, expr),
             })
             .sum();
         return here + count_in_expr(var, cond) + count_in_expr(var, early).max(after);
@@ -1196,13 +1189,13 @@ fn child_exprs(e: &Expr) -> Kids<'_> {
         Expr::Index { base: a, index: b, .. }
         | Expr::BinOp { lhs: a, rhs: b, .. }
         | Expr::Join { lhs: a, rhs: b, .. } => Kids::Two(Some(a), Some(b)),
-        Expr::Block(stmts, _) | Expr::Build(stmts, _) => Kids::Stmts(stmts.iter()),
+        Expr::Block(stmts, _) => Kids::Stmts(stmts.iter()),
         Expr::App { head, args, .. } => Kids::Head(Some(head), args.iter()),
         Expr::Guard { cond, early, rest, .. } => Kids::Guard(Some(cond), Some(early), rest.iter()),
         Expr::List(items, _) => Kids::Exprs(items.iter()),
         Expr::MapLit(pairs, _) => Kids::Pairs(None, pairs.iter()),
         Expr::Str(parts, _) => Kids::Parts(parts.iter()),
-        Expr::Partial(..) | Expr::Int(..) | Expr::Float(..) | Expr::Ident(..) | Expr::Hole(..) => {
+        Expr::Partial(..) | Expr::Int(..) | Expr::Float(..) | Expr::Ident(..) => {
             Kids::Two(None, None)
         }
     }
@@ -1223,7 +1216,7 @@ enum Kids<'a> {
 
 fn stmt_expr(st: &Stmt) -> &Expr {
     match st {
-        Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expr,
+        Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
     }
 }
 
@@ -1276,7 +1269,6 @@ fn reusable_records_with(
         for stmt in &decl.body {
             let e = match stmt {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
-                Stmt::Set { value, .. } => value,
             };
             walk_for_reuse(analysis, decl, e, &types, &mut out);
         }
@@ -1336,7 +1328,6 @@ fn sole_finished_record(a: &Analysis, decl: &FnDecl, args: &[Expr]) -> Option<St
             .iter()
             .map(|s| match s {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) => count_in_expr(name, expr),
-                Stmt::Set { value, .. } => count_in_expr(name, value),
             })
             .sum();
         // read here and nowhere else, or somebody outlives the constructor
@@ -1388,7 +1379,7 @@ struct Handover<'a> {
 /// guards, added to the parameters the caller already put in the set.
 fn collect_bound_names(e: &Expr, out: &mut HashSet<String>) {
     match e {
-        Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
+        Expr::Block(stmts, _) => {
             for stmt in stmts {
                 if let Stmt::Bind { pattern: Pattern::Var(n, _), .. } = stmt {
                     out.insert(n.to_string());
@@ -1504,7 +1495,6 @@ fn string_builders_with(analysis: &Analysis, program: &Program) -> (Sites, Slots
         for stmt in &decl.body {
             let e = match stmt {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
-                Stmt::Set { value, .. } => value,
             };
             walk_for_builder(analysis, decl, e, &mut sites, &mut accs);
         }
@@ -1570,7 +1560,6 @@ fn carried_args(a: &Analysis, program: &Program, joins: &Sites, accs: Slots) -> 
         for stmt in &decl.body {
             let e = match stmt {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
-                Stmt::Set { value, .. } => value,
             };
             collect_carried(&carrying, &built, decl, e, &mut out);
         }
@@ -1605,7 +1594,6 @@ fn called_somewhere(program: &Program, name: &str, arity: usize) -> bool {
         d.body.iter().any(|s| {
             let e = match s {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
-                Stmt::Set { value, .. } => value,
             };
             in_expr(e, name, arity)
         })
@@ -1631,14 +1619,12 @@ fn forwards_into(carrying: &Slots, decl: &FnDecl, name: &str) -> bool {
         .iter()
         .map(|s| match s {
             Stmt::Bind { expr, .. } | Stmt::Expr(expr) => count_in_expr(name, expr),
-            Stmt::Set { value, .. } => count_in_expr(name, value),
         })
         .sum();
     let mut found = false;
     for stmt in &decl.body {
         let e = match stmt {
             Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
-            Stmt::Set { value, .. } => value,
         };
         walk_forwards(carrying, e, name, &mut found);
     }
@@ -1870,7 +1856,6 @@ fn builder_param(a: &Analysis, decl: &FnDecl, name: &str, here: &Expr) -> Option
         .iter()
         .map(|s| match s {
             Stmt::Bind { expr, .. } | Stmt::Expr(expr) => count_in_expr(name, expr),
-            Stmt::Set { value, .. } => count_in_expr(name, value),
         })
         .sum();
     match inside == everywhere && a.callers_hand_over(&decl.name, arity, i) {
@@ -1966,7 +1951,6 @@ mod tests {
             d.body.iter().any(|s| {
                 let e = match s {
                     Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
-                    Stmt::Set { value, .. } => value,
                 };
                 mentioned_as_value(e, name, arity)
             })
