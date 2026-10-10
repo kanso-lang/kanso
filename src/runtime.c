@@ -3139,65 +3139,76 @@ KValue k_none(void) { KValue v; v.tag = K_NONE; v.payload = 0; return v; }
 
 /* ---- integers past a machine word ---------------------------------------
    An int that outgrows a word is a bignum: tag K_BIG, payload a KBytes whose
-   bytes are a sign word (0 or 1) and then the magnitude in 32-bit limbs, least
-   significant first, the top limb nonzero. The form is canonical, as the
-   interpreter's `Int` keeps it: a K_BIG never holds a number a K_INT can, so
-   two equal ints always share a tag. The bytes sit in the arena behind their
-   header, which is the layout the copy and rewind paths already carry for
-   bytes, and a bignum takes those paths beside K_BYTES. Every operation here
-   accepts either kind and answers the canonical one. */
+   bytes are a sign word (0 or 1, eight bytes) and then the magnitude in 64-bit
+   limbs, least significant first, the top limb nonzero. The form is
+   canonical, as the interpreter's `Int` keeps it: a K_BIG never holds a number
+   a K_INT can, so two equal ints always share a tag. The bytes sit in the
+   arena behind their header, which is the layout the copy and rewind paths
+   already carry for bytes, and a bignum takes those paths beside K_BYTES.
+   Those paths copy bytes wherever their allocator puts them, so a limb is read
+   and written through a type that promises no alignment. Every operation here
+   accepts either kind and answers the canonical one.
 
-typedef struct { int neg; long long n; const uint32_t* d; uint32_t tmp[2]; } KBigView;
+   The limbs are as wide as num-bigint's, which the interpreter uses: a limb
+   product is one 64 x 64 -> 128 multiply. wasm32 has no such instruction and
+   compiler-rt's `__multi3` stands in, which wasm/shim.c supplies; there is no
+   128-bit division anywhere here, since that helper is one wasm32's
+   compiler-rt lacks, and a quotient digit comes from `k_div_2by1`. */
 
-/* The sign and magnitude of an int of either kind. A small int's limbs are
+typedef uint64_t KLimb;
+typedef uint64_t KLimbU __attribute__((aligned(1)));
+typedef unsigned __int128 KWide;
+
+typedef struct { int neg; long long n; const KLimbU* d; KLimb tmp[1]; } KBigView;
+
+/* The sign and magnitude of an int of either kind. A small int's limb is
    written into the view itself, so a view is used where it was filled. */
 static void k_big_view(KValue v, KBigView* o) {
     if (v.tag == K_BIG) {
         KBytes* b = (KBytes*)(intptr_t)v.payload;
-        uint32_t sign;
-        memcpy(&sign, b->data, 4);
+        uint64_t sign;
+        memcpy(&sign, b->data, 8);
         o->neg = (int)sign;
-        o->n = (b->len - 4) / 4;
-        o->d = (const uint32_t*)(b->data + 4);
+        o->n = (b->len - 8) / 8;
+        o->d = (const KLimbU*)(b->data + 8);
         return;
     }
     long long x = v.payload;
     uint64_t m = x < 0 ? (uint64_t)0 - (uint64_t)x : (uint64_t)x;
     o->neg = x < 0;
-    o->tmp[0] = (uint32_t)m;
-    o->tmp[1] = (uint32_t)(m >> 32);
-    o->n = m == 0 ? 0 : (o->tmp[1] ? 2 : 1);
+    o->tmp[0] = m;
+    o->n = m != 0;
     o->d = o->tmp;
 }
 
 /* Room for a result of up to `n` limbs, in the arena where it will stay. */
 static KBytes* k_big_room(long long n) {
-    KBytes* b = k_alloc(sizeof(KBytes) + 4 + 4 * (size_t)(n > 0 ? n : 1));
+    KBytes* b = k_alloc(sizeof(KBytes) + 8 + 8 * (size_t)(n > 0 ? n : 1));
     b->data = (const unsigned char*)(b + 1);
     b->cap = 0;
     return b;
 }
 
-static inline uint32_t* k_big_limbs(KBytes* b) { return (uint32_t*)(b + 1) + 1; }
+static inline KLimbU* k_big_limbs(KBytes* b) { return (KLimbU*)((unsigned char*)(b + 1) + 8); }
 
 /* Finish a result written into `b`'s limbs: strip leading zero limbs, and
    answer a small int when the number fits one, the arena bytes then going
    unused. */
 static KValue k_big_finish(KBytes* b, int neg, long long n) {
-    uint32_t* d = k_big_limbs(b);
+    KLimbU* d = k_big_limbs(b);
     while (n > 0 && d[n - 1] == 0) n--;
-    if (n <= 2) {
-        uint64_t m = n == 0 ? 0 : (n == 1 ? d[0] : ((uint64_t)d[1] << 32) | d[0]);
+    if (n <= 1) {
+        uint64_t m = n == 0 ? 0 : d[0];
         if (!neg && m <= (uint64_t)INT64_MAX) return k_int((long long)m);
         if (neg && m <= (uint64_t)1 << 63) return k_int((long long)((uint64_t)0 - m));
     }
-    uint32_t sign = neg ? 1 : 0;
-    memcpy((unsigned char*)(b + 1), &sign, 4);
-    b->len = 4 + 4 * n;
+    uint64_t sign = neg ? 1 : 0;
+    memcpy((unsigned char*)(b + 1), &sign, 8);
+    b->len = 8 + 8 * n;
     KValue v; v.tag = K_BIG; v.payload = k_ptr(b); return v;
 }
 
-static int k_mag_cmp(const uint32_t* a, long long an, const uint32_t* b, long long bn) {
+static int k_mag_cmp(const KLimbU* a, long long an, const KLimbU* b, long long bn) {
     if (an != bn) return an < bn ? -1 : 1;
     for (long long i = an - 1; i >= 0; i--)
         if (a[i] != b[i]) return a[i] < b[i] ? -1 : 1;
@@ -3205,29 +3216,30 @@ static int k_mag_cmp(const uint32_t* a, long long an, const uint32_t* b, long lo
 }
 
 /* r = a + b; r has room for max(an, bn) + 1 limbs. */
-static long long k_mag_add(uint32_t* r, const uint32_t* a, long long an, const uint32_t* b, long long bn) {
-    if (an < bn) { const uint32_t* t = a; a = b; b = t; long long tn = an; an = bn; bn = tn; }
-    uint64_t carry = 0;
+static long long k_mag_add(KLimbU* r, const KLimbU* a, long long an, const KLimbU* b, long long bn) {
+    if (an < bn) { const KLimbU* t = a; a = b; b = t; long long tn = an; an = bn; bn = tn; }
+    KLimb carry = 0;
     long long i = 0;
-    for (; i < bn; i++) { uint64_t s = (uint64_t)a[i] + b[i] + carry; r[i] = (uint32_t)s; carry = s >> 32; }
-    for (; i < an; i++) { uint64_t s = (uint64_t)a[i] + carry; r[i] = (uint32_t)s; carry = s >> 32; }
-    r[i] = (uint32_t)carry;
+    for (; i < bn; i++) { KWide s = (KWide)a[i] + b[i] + carry; r[i] = (KLimb)s; carry = (KLimb)(s >> 64); }
+    for (; i < an; i++) { KLimb s = a[i] + carry; carry = s < carry; r[i] = s; }
+    r[i] = carry;
     return an + 1;
 }
 
 /* r = a - b where a >= b; r has room for an limbs. */
-static long long k_mag_sub(uint32_t* r, const uint32_t* a, long long an, const uint32_t* b, long long bn) {
-    int64_t borrow = 0;
+static long long k_mag_sub(KLimbU* r, const KLimbU* a, long long an, const KLimbU* b, long long bn) {
+    KLimb borrow = 0;
     long long i = 0;
     for (; i < bn; i++) {
-        int64_t d = (int64_t)a[i] - b[i] - borrow;
-        borrow = d < 0;
-        r[i] = (uint32_t)(d + (borrow ? ((int64_t)1 << 32) : 0));
+        KLimb x = a[i], y = b[i];
+        KLimb t = x - y;
+        r[i] = t - borrow;
+        borrow = (x < y) | (t < borrow);
     }
     for (; i < an; i++) {
-        int64_t d = (int64_t)a[i] - borrow;
-        borrow = d < 0;
-        r[i] = (uint32_t)(d + (borrow ? ((int64_t)1 << 32) : 0));
+        KLimb x = a[i];
+        r[i] = x - borrow;
+        borrow = x < borrow;
     }
     return an;
 }
@@ -3237,7 +3249,7 @@ static long long k_mag_sub(uint32_t* r, const uint32_t* a, long long an, const u
 static KValue k_big_addsub(const KBigView* a, const KBigView* b, int bneg) {
     long long n = (a->n > b->n ? a->n : b->n) + 1;
     KBytes* r = k_big_room(n);
-    uint32_t* d = k_big_limbs(r);
+    KLimbU* d = k_big_limbs(r);
     if (a->neg == bneg) {
         long long rn = k_mag_add(d, a->d, a->n, b->d, b->n);
         return k_big_finish(r, a->neg, rn);
@@ -3262,44 +3274,25 @@ KValue k_int_sub(KValue x, KValue y) {
     return k_big_addsub(&a, &b, b.n == 0 ? 0 : !b.neg);
 }
 
-/* One schoolbook row: d[0..ln] = l * m, or d[0..ln] += l * m when `add`.
-   Where the target has a 64 x 64 -> 128 multiply in hardware, two limbs go
-   at a time as one little-endian word: the product of a limb and a word, the
-   word already in the row and a carry under 2^32 fit in 128 bits, and the
-   carry out stays under 2^32. That is 4.0 instructions a limb against 6.5 for
-   a row that writes and 4.8 against 9.0 for one that adds. wasm32 has no such
-   multiply; clang lowers it to a call to compiler-rt's `__multi3`, so wasm32
-   keeps the limb-at-a-time loop. Both loops compute the same limbs. */
-static inline void k_mag_row(uint32_t* d, const uint32_t* l, long long ln, uint64_t m, int add) {
-    uint64_t c = 0;
-    long long j = 0;
-#if defined(__x86_64__) || defined(__aarch64__)
-    for (; j + 2 <= ln; j += 2) {
-        uint64_t w, h = 0;
-        memcpy(&w, l + j, 8);
-        if (add) memcpy(&h, d + j, 8);
-        unsigned __int128 t = (unsigned __int128)m * w + h + c;
-        uint64_t lo = (uint64_t)t;
-        memcpy(d + j, &lo, 8);
-        c = (uint64_t)(t >> 64);
+/* One schoolbook row: d[0..ln] = l * m, or d[0..ln] += l * m when `add`. A
+   limb's product, the limb already in the row and the carry fit in 128 bits:
+   (2^64 - 1)^2 + 2(2^64 - 1) is 2^128 - 1. */
+static inline void k_mag_row(KLimbU* d, const KLimbU* l, long long ln, KLimb m, int add) {
+    KLimb c = 0;
+    for (long long j = 0; j < ln; j++) {
+        KWide t = (KWide)m * l[j] + (add ? d[j] : 0) + c;
+        d[j] = (KLimb)t;
+        c = (KLimb)(t >> 64);
     }
-#endif
-    for (; j < ln; j++) {
-        uint64_t t = m * l[j] + (add ? d[j] : 0) + c;
-        d[j] = (uint32_t)t;
-        c = t >> 32;
-    }
-    d[ln] = (uint32_t)c;
+    d[ln] = c;
 }
 
 /* Schoolbook, one row per limb of the SHORTER operand. A number that grows by
    doubling meets `acc * 2` once a step, and with the long operand outside each
-   of its limbs paid a whole row's setup for a row one limb long: 25
-   instructions a limb, where the interpreter's num-bigint took about 3. The
-   first row writes its products where the others add theirs, so the result
-   is not cleared first; a row reads only limbs the row before it wrote. The
-   views are swapped by pointer, since a small int's limbs live inside its own
-   view. */
+   of its limbs paid a whole row's setup for a row one limb long. The first row
+   writes its products where the others add theirs, so the result is not
+   cleared first; a row reads only limbs the row before it wrote. The views are
+   swapped by pointer, since a small int's limb lives inside its own view. */
 KValue k_int_mul(KValue x, KValue y) {
     KBigView a, b;
     k_big_view(x, &a);
@@ -3311,70 +3304,117 @@ KValue k_int_mul(KValue x, KValue y) {
     long long ln = l->n, sn = s->n;
     long long n = ln + sn;
     KBytes* r = k_big_room(n);
-    uint32_t* d = k_big_limbs(r);
+    KLimbU* d = k_big_limbs(r);
     k_mag_row(d, l->d, ln, s->d[0], 0);
     for (long long i = 1; i < sn; i++) k_mag_row(d + i, l->d, ln, s->d[i], 1);
     return k_big_finish(r, a.neg != b.neg, n);
 }
 
+/* The quotient of the two-limb number hi:lo by d, and its remainder, where
+   hi < d so the quotient fits a limb. x86-64 divides 128 bits by 64 in one
+   instruction under exactly that condition. Elsewhere it is Hacker's
+   Delight's divlu, two half-width digits each estimated from the divisor's
+   top half and corrected at most twice, in 64-bit arithmetic only. */
+static inline KLimb k_div_2by1(KLimb hi, KLimb lo, KLimb d, KLimb* rem) {
+#if defined(__x86_64__)
+    KLimb q, r;
+    __asm__("divq %4" : "=a"(q), "=d"(r) : "a"(lo), "d"(hi), "rm"(d));
+    *rem = r;
+    return q;
+#else
+    const uint64_t b = (uint64_t)1 << 32;
+    int s = __builtin_clzll(d);
+    d <<= s;
+    uint64_t vn1 = d >> 32, vn0 = d & 0xFFFFFFFFu;
+    uint64_t un32 = s ? (hi << s) | (lo >> (64 - s)) : hi;
+    uint64_t un10 = lo << s;
+    uint64_t un1 = un10 >> 32, un0 = un10 & 0xFFFFFFFFu;
+    uint64_t q1 = un32 / vn1, rhat = un32 - q1 * vn1;
+    while (q1 >= b || q1 * vn0 > b * rhat + un1) {
+        q1--;
+        rhat += vn1;
+        if (rhat >= b) break;
+    }
+    uint64_t un21 = un32 * b + un1 - q1 * d;
+    uint64_t q0 = un21 / vn1;
+    rhat = un21 - q0 * vn1;
+    while (q0 >= b || q0 * vn0 > b * rhat + un0) {
+        q0--;
+        rhat += vn1;
+        if (rhat >= b) break;
+    }
+    *rem = (un21 * b + un0 - q0 * d) >> s;
+    return q1 * b + q0;
+#endif
+}
+
 /* Magnitude division, u / v, for u at least as long as v and v nonzero:
-   the quotient into q (un - vn + 1 limbs) and the remainder into r (vn
-   limbs). Knuth's algorithm D with 32-bit digits, as Hacker's Delight
-   writes it. */
-static void k_mag_divmod(uint32_t* q, uint32_t* r, const uint32_t* u, long long m, const uint32_t* v, long long n) {
+   the quotient into q (m - n + 1 limbs) and the remainder into r (n limbs).
+   Knuth's algorithm D with 64-bit digits, as Hacker's Delight writes it, the
+   multiply-and-subtract done in unsigned arithmetic with the borrow carried
+   by hand. */
+static void k_mag_divmod(KLimbU* q, KLimbU* r, const KLimbU* u, long long m, const KLimbU* v, long long n) {
     if (n == 1) {
-        uint64_t rem = 0;
-        for (long long i = m - 1; i >= 0; i--) {
-            uint64_t cur = (rem << 32) | u[i];
-            q[i] = (uint32_t)(cur / v[0]);
-            rem = cur % v[0];
-        }
-        r[0] = (uint32_t)rem;
+        KLimb rem = 0;
+        for (long long i = m - 1; i >= 0; i--) q[i] = k_div_2by1(rem, u[i], v[0], &rem);
+        r[0] = rem;
         return;
     }
-    const uint64_t base = (uint64_t)1 << 32;
-    int s = __builtin_clz(v[n - 1]);
-    uint32_t* vn = malloc(4 * (size_t)n);
-    uint32_t* un = malloc(4 * (size_t)(m + 1));
+    int s = __builtin_clzll(v[n - 1]);
+    KLimb* vn = malloc(8 * (size_t)n);
+    KLimb* un = malloc(8 * (size_t)(m + 1));
     for (long long i = n - 1; i > 0; i--)
-        vn[i] = (v[i] << s) | (s ? (uint32_t)((uint64_t)v[i - 1] >> (32 - s)) : 0);
+        vn[i] = (v[i] << s) | (s ? v[i - 1] >> (64 - s) : 0);
     vn[0] = v[0] << s;
-    un[m] = s ? (uint32_t)((uint64_t)u[m - 1] >> (32 - s)) : 0;
+    un[m] = s ? u[m - 1] >> (64 - s) : 0;
     for (long long i = m - 1; i > 0; i--)
-        un[i] = (u[i] << s) | (s ? (uint32_t)((uint64_t)u[i - 1] >> (32 - s)) : 0);
+        un[i] = (u[i] << s) | (s ? u[i - 1] >> (64 - s) : 0);
     un[0] = u[0] << s;
+    KLimb vtop = vn[n - 1], vnext = vn[n - 2];
     for (long long j = m - n; j >= 0; j--) {
-        uint64_t num = ((uint64_t)un[j + n] << 32) | un[j + n - 1];
-        uint64_t qhat = num / vn[n - 1];
-        uint64_t rhat = num - qhat * vn[n - 1];
-        while (qhat >= base || qhat * vn[n - 2] > ((rhat << 32) | un[j + n - 2])) {
+        KLimb qhat, rhat;
+        int rbig = 0;
+        if (un[j + n] >= vtop) {
+            /* the top digits are equal, and the estimate is the largest digit */
+            qhat = ~(KLimb)0;
+            rhat = un[j + n - 1] + vtop;
+            rbig = rhat < vtop;
+        } else {
+            qhat = k_div_2by1(un[j + n], un[j + n - 1], vtop, &rhat);
+        }
+        while (!rbig && (KWide)qhat * vnext > (((KWide)rhat << 64) | un[j + n - 2])) {
             qhat--;
-            rhat += vn[n - 1];
-            if (rhat >= base) break;
+            KLimb was = rhat;
+            rhat += vtop;
+            rbig = rhat < was;
         }
-        int64_t k = 0, t;
+        KLimb carry = 0, borrow = 0;
         for (long long i = 0; i < n; i++) {
-            uint64_t p = qhat * vn[i];
-            t = (int64_t)un[i + j] - k - (int64_t)(p & 0xFFFFFFFFu);
-            un[i + j] = (uint32_t)t;
-            k = (int64_t)(p >> 32) - (t >> 32);
+            KWide p = (KWide)qhat * vn[i] + carry;
+            carry = (KLimb)(p >> 64);
+            KLimb lo = (KLimb)p, x = un[i + j];
+            KLimb t = x - lo;
+            un[i + j] = t - borrow;
+            borrow = (x < lo) | (t < borrow);
         }
-        t = (int64_t)un[j + n] - k;
-        un[j + n] = (uint32_t)t;
-        q[j] = (uint32_t)qhat;
-        if (t < 0) {
+        KLimb x = un[j + n];
+        KLimb t = x - carry;
+        un[j + n] = t - borrow;
+        int under = (x < carry) | (t < borrow);
+        q[j] = qhat;
+        if (under) {
             q[j]--;
-            uint64_t c = 0;
+            KLimb c = 0;
             for (long long i = 0; i < n; i++) {
-                uint64_t w = (uint64_t)un[i + j] + vn[i] + c;
-                un[i + j] = (uint32_t)w;
-                c = w >> 32;
+                KWide w = (KWide)un[i + j] + vn[i] + c;
+                un[i + j] = (KLimb)w;
+                c = (KLimb)(w >> 64);
             }
-            un[j + n] += (uint32_t)c;
+            un[j + n] += c;
         }
     }
     for (long long i = 0; i < n - 1; i++)
-        r[i] = (un[i] >> s) | (s ? (uint32_t)((uint64_t)un[i + 1] << (32 - s)) : 0);
+        r[i] = (un[i] >> s) | (s ? un[i + 1] << (64 - s) : 0);
     r[n - 1] = un[n - 1] >> s;
     free(vn);
     free(un);
@@ -3419,16 +3459,16 @@ double k_int_to_f(KValue x) {
     if (x.tag == K_INT) return (double)x.payload;
     KBigView a;
     k_big_view(x, &a);
-    long long bits = a.n * 32 - __builtin_clz(a.d[a.n - 1]);
+    long long bits = a.n * 64 - __builtin_clzll(a.d[a.n - 1]);
     long long shift = bits - 64;
     uint64_t top = 0;
     for (int k = 0; k < 64; k++) {
         long long bit = shift + k;
-        if (a.d[bit / 32] >> (bit % 32) & 1) top |= (uint64_t)1 << k;
+        if (a.d[bit / 64] >> (bit % 64) & 1) top |= (uint64_t)1 << k;
     }
     int sticky = 0;
     for (long long bit = 0; bit < shift && !sticky; bit++)
-        if (a.d[bit / 32] >> (bit % 32) & 1) sticky = 1;
+        if (a.d[bit / 64] >> (bit % 64) & 1) sticky = 1;
     double d = ldexp((double)(top | (uint64_t)sticky), (int)(shift > 2000 ? 2000 : shift));
     return a.neg ? -d : d;
 }
@@ -3442,39 +3482,38 @@ KValue k_int_of_whole_f(double d) {
     int exp = (int)((bits >> 52) & 0x7FF);
     uint64_t mant = (bits & (((uint64_t)1 << 52) - 1)) | ((uint64_t)1 << 52);
     long long e = exp - 1075; /* d = mant * 2^e, and e > 0 past 2^63 */
-    long long n = (53 + e + 31) / 32 + 1;
+    long long n = (53 + e + 63) / 64 + 1;
     KBytes* r = k_big_room(n);
-    uint32_t* l = k_big_limbs(r);
-    memset(l, 0, 4 * (size_t)n);
+    KLimbU* l = k_big_limbs(r);
+    for (long long i = 0; i < n; i++) l[i] = 0;
     for (int k = 0; k < 53; k++) {
         if (!(mant >> k & 1)) continue;
         long long bit = k + e;
-        l[bit / 32] |= (uint32_t)1 << (bit % 32);
+        l[bit / 64] |= (KLimb)1 << (bit % 64);
     }
     return k_big_finish(r, neg, n);
 }
 
-/* The decimal digits of a bignum, sign first, into a fresh arena string. */
+/* The decimal digits of a bignum, sign first, into a fresh arena string. Each
+   pass divides by 10^19, the largest power of ten a limb holds, and writes
+   the remainder's nineteen digits. */
 KValue k_str_n(const char* data, long long len);
 static KValue k_big_render(KValue x) {
     KBigView a;
     k_big_view(x, &a);
-    uint32_t* w = malloc(4 * (size_t)a.n);
-    memcpy(w, a.d, 4 * (size_t)a.n);
+    const KLimb ten19 = 10000000000000000000ull;
+    KLimb* w = malloc(8 * (size_t)a.n);
+    for (long long i = 0; i < a.n; i++) w[i] = a.d[i];
     long long wn = a.n;
-    /* ten decimal digits per 32 bits is generous, plus a sign */
-    long long cap = a.n * 10 + 2;
+    /* twenty decimal digits per 64 bits is generous, plus a sign */
+    long long cap = a.n * 20 + 2;
     char* buf = malloc((size_t)cap);
     long long at = cap;
     while (wn > 0) {
-        uint64_t rem = 0;
-        for (long long i = wn - 1; i >= 0; i--) {
-            uint64_t cur = (rem << 32) | w[i];
-            w[i] = (uint32_t)(cur / 1000000000u);
-            rem = cur % 1000000000u;
-        }
+        KLimb rem = 0;
+        for (long long i = wn - 1; i >= 0; i--) w[i] = k_div_2by1(rem, w[i], ten19, &rem);
         while (wn > 0 && w[wn - 1] == 0) wn--;
-        for (int k = 0; k < 9; k++) {
+        for (int k = 0; k < 19; k++) {
             buf[--at] = (char)('0' + rem % 10);
             rem /= 10;
             if (wn == 0 && rem == 0) break;
@@ -3487,26 +3526,27 @@ static KValue k_big_render(KValue x) {
     return out;
 }
 
-/* The int a run of decimal digits spells, with an optional leading '-'. */
+/* The int a run of decimal digits spells, with an optional leading '-'. The
+   digits go nineteen at a time, each chunk scaling what came before. */
 KValue k_int_of_digits(const char* s, long long len) {
     int neg = 0;
     if (len > 0 && (s[0] == '-' || s[0] == '+')) { neg = s[0] == '-'; s++; len--; }
-    long long n = len / 9 + 2;
+    long long n = len / 19 + 2;
     KBytes* r = k_big_room(n);
-    uint32_t* d = k_big_limbs(r);
+    KLimbU* d = k_big_limbs(r);
     long long dn = 0;
     long long i = 0;
     while (i < len) {
-        long long take = len - i < 9 ? len - i : 9;
-        uint32_t chunk = 0, scale = 1;
-        for (long long k = 0; k < take; k++) { chunk = chunk * 10 + (uint32_t)(s[i + k] - '0'); scale *= 10; }
-        uint64_t carry = chunk;
+        long long take = len - i < 19 ? len - i : 19;
+        KLimb chunk = 0, scale = 1;
+        for (long long k = 0; k < take; k++) { chunk = chunk * 10 + (KLimb)(s[i + k] - '0'); scale *= 10; }
+        KLimb carry = chunk;
         for (long long k = 0; k < dn; k++) {
-            uint64_t t = (uint64_t)d[k] * scale + carry;
-            d[k] = (uint32_t)t;
-            carry = t >> 32;
+            KWide t = (KWide)d[k] * scale + carry;
+            d[k] = (KLimb)t;
+            carry = (KLimb)(t >> 64);
         }
-        if (carry) d[dn++] = (uint32_t)carry;
+        if (carry) d[dn++] = carry;
         i += take;
     }
     return k_big_finish(r, neg, dn);
