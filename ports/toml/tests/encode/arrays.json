@@ -1,0 +1,26 @@
+{
+  "ints": [
+    {"type": "integer", "value": "1"},
+    {"type": "integer", "value": "2"}
+  ],
+  "empty": [],
+  "nested": [
+    [{"type": "integer", "value": "1"}],
+    [{"type": "string", "value": "a"}, {"type": "float", "value": "0.5"}]
+  ],
+  "mixed": [
+    {"type": "integer", "value": "1"},
+    {"name": {"type": "string", "value": "inline"}, "deep": {"x": {"type": "integer", "value": "2"}}}
+  ],
+  "products": [
+    {"name": {"type": "string", "value": "Hammer"}},
+    {},
+    {
+      "name": {"type": "string", "value": "Nail"},
+      "dims": {"w": {"type": "integer", "value": "1"}},
+      "variants": [
+        {"color": {"type": "string", "value": "gray"}}
+      ]
+    }
+  ]
+}

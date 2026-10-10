@@ -1,0 +1,80 @@
+import "std/list"
+import "std/os"
+import "std/path"
+import "std/text"
+
+# What a ref file holds: the name of another ref, or an object id. A ref
+# that does not exist holds a value of none.
+pub type ref_value
+  symbolic
+  value
+
+# A ref after it has been followed: the ref that really holds the value, and
+# the value it holds.
+pub type ref_at
+  name
+  value
+
+fn ref_path name
+  "{root}/{name}"
+
+# Follow symbolic refs to the end: HEAD on a branch answers the branch's
+# ref and the commit it points at.
+pub fn get_ref name
+  read_ref name true
+
+# One step only: HEAD on a branch answers the symbolic value itself.
+pub fn get_ref_raw name
+  read_ref name false .> (at -> effect at.value)
+
+fn read_ref name deref
+  os/read_file (ref_path name) .> (content -> followed name deref content)
+
+fn followed name _ (file_not_found _)
+  effect (ref_at name (ref_value false none))
+
+fn followed name deref content
+  line = text/trim content
+  return effect (ref_at name (ref_value false line)) if not symbolic? line
+  target = after line "ref: "
+  return read_ref target true if deref
+  effect (ref_at name (ref_value true target))
+
+fn symbolic? line
+  starts_with? line "ref: "
+
+# Point a ref somewhere. With `deref`, writing to HEAD on a branch moves the
+# branch; without it, HEAD itself is rewritten.
+pub fn update_ref name value deref
+  read_ref name deref .> (at -> written at.name value)
+
+fn written name (ref_value true target)
+  ref_written name "ref: {target}\n"
+
+fn written name (ref_value false oid)
+  ref_written name "{oid}\n"
+
+fn ref_written name content
+  full = ref_path name
+  os/make_dir (path/dirname full) .> (_ -> os/write_file full content)
+
+pub fn delete_ref name
+  removed (ref_path name)
+
+# Every ref there is, by name: HEAD and MERGE_HEAD when they exist, then the
+# files under refs/, sorted.
+pub ref_names = files_under "{root}/refs" .> with_heads
+
+fn with_heads names
+  under = list/to_list (list/map names (n -> "refs/{n}"))
+  os/exists (ref_path "HEAD")
+    .> (h -> os/exists (ref_path "MERGE_HEAD") .> (m -> heads h m under))
+
+fn heads true true under
+  effect (text/concat ["HEAD" "MERGE_HEAD"] under)
+
+fn heads true false under
+  effect (push [] "HEAD" . (hs -> text/concat hs under))
+
+fn heads _ _ under
+  effect under

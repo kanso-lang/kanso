@@ -1,0 +1,5 @@
+TOML parse error at line 1, column 12
+  |
+1 | a = "no end
+  |            ^
+newline in a single-line string

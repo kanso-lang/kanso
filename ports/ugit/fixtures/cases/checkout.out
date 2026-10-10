@@ -1,0 +1,68 @@
+Initialized empty ugit repository in .ugit/
+[master (root-commit) f0f3b79] on master
+Switched to a new branch 'side'
+fatal: a branch named 'side' already exists
+[exit 128]
+[side 2b56f47] on side
+.:
+dir
+shared.txt
+./dir:
+side.txt
+Switched to branch 'master'
+.:
+main.txt
+shared.txt
+shared
+Already on 'master'
+Switched to branch 'side'
+.:
+dir
+shared.txt
+./dir:
+side.txt
+Switched to branch 'master'
+error: Your local changes to the following files would be overwritten by checkout:
+	shared.txt
+Aborting
+[exit 1]
+edited
+shared
+fatal: pathspec 'nothere.txt' did not match any file(s) known to ugit
+[exit 128]
+error: The following untracked working tree files would be overwritten by checkout:
+	dir/side.txt
+Aborting
+[exit 1]
+error: Your local changes to the following files would be overwritten by checkout:
+	main.txt
+Aborting
+[exit 1]
+On branch master
+
+Changes not staged for commit:
+	modified:   main.txt
+
+Untracked files:
+	main2.txt
+
+no changes added to commit
+HEAD is now at f0f3b79 on master
+HEAD detached at f0f3b79
+
+Untracked files:
+	main2.txt
+
+nothing added to commit but untracked files present
+* (HEAD detached at f0f3b79)
+  master
+  side
+Switched to branch 'side'
+On branch side
+
+Untracked files:
+	main2.txt
+
+nothing added to commit but untracked files present
+fatal: ambiguous argument 'nowhere': unknown revision
+[exit 128]

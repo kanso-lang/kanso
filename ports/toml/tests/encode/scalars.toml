@@ -1,0 +1,14 @@
+big = 9223372036854775807
+float = 3.25
+float_exp = 1000000.0
+float_whole = 2.0
+inf = -inf
+integer = -42
+ld = 1979-05-27
+ldt = 1979-05-27T07:32:00
+lt = 07:32:00.123
+nan = nan
+no = false
+odt = 1979-05-27T07:32:00.5+01:30
+string = "hello"
+yes = true

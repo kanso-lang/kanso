@@ -1,0 +1,9 @@
+[[fruit]]
+name = "apple"
+[fruit.color]
+red = true
+
+[[fruit]]
+name = "lime"
+[fruit.color]
+green = true

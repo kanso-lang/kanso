@@ -1,0 +1,76 @@
+import "../store"
+import "std/list"
+import "std/os"
+import "std/text"
+import "std/time"
+
+default_author = "ugit <ugit@example.com>"
+
+# Record the index as a commit on top of HEAD. During a merge the commit
+# has the merged-in commit as its second parent, and the message ugit
+# wrote into MERGE_MSG serves when -m is not given.
+fn commit_cmd args
+  given = flag (parsed args ["-m"]) "-m"
+  store/note "MERGE_MSG" .> (saved -> looked .> (v -> committing given saved v))
+
+fn committing none none _
+  failure "Aborting commit due to empty commit message.\n" 1
+
+fn committing none saved v
+  committing (without_trailing_newline saved) none v
+
+fn committing message _ v
+  return nothing_to_commit v if v.merging == none and no_changes? v
+  store/read_index
+    .> store/write_tree
+    .> (tree -> recorded message tree (parents_of v))
+    .> (oid -> concluded v message oid)
+
+fn no_changes? v
+  length (changes v.head_files v.index) == 0
+
+# git answers an empty commit with the status, and fails.
+fn nothing_to_commit v
+  say (status_text v) .> (_ -> effect 1)
+
+fn parents_of v
+  list/to_list (list/reject [v.head v.merging] (p -> p == none))
+
+fn recorded message tree parents
+  author = os/env "UGIT_AUTHOR"
+  time/now .> (ms -> author .> (who -> authored who message tree parents ms))
+
+fn authored none message tree parents ms
+  authored default_author message tree parents ms
+
+fn authored who message tree parents ms
+  store/put_commit (store/new_commit who message parents (ms / 1000) tree)
+
+fn concluded v message oid
+  store/update_ref "HEAD" (store/direct oid) true
+    .> (_ -> store/delete_ref "MERGE_HEAD")
+    .> (_ -> store/drop_note "MERGE_MSG")
+    .> (_ -> say (commit_line v message oid))
+
+fn commit_line v message oid
+  "[{branch_label v.branch}{root_label v.head} {short oid}] {subject message}\n"
+
+fn branch_label none
+  "detached HEAD"
+
+fn branch_label b
+  b
+
+fn root_label none
+  " (root-commit)"
+
+fn root_label _
+  ""
+
+fn subject message
+  lines = text/split message "\n"
+  lines[1]
+
+fn without_trailing_newline s
+  return s if not text/slice s (length s) (length s) == "\n"
+  text/slice s 1 (length s - 1)

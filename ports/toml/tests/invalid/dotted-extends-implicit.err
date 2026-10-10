@@ -1,0 +1,5 @@
+TOML parse error at line 5, column 1
+  |
+5 | b.c.d.k.t = 1
+  | ^
+table `b` is defined by a header; dotted keys cannot add to it

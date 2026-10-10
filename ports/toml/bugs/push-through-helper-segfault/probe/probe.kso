@@ -1,0 +1,23 @@
+# Growing a list by calling a helper that pushes onto it crashes native code
+# once the list reaches 64 elements.
+#
+# Run from this directory: kanso run main.kso --interp (right); kanso build
+#  main.kso && ./main (crash). A one-file version run with `kanso play` does
+#  not crash, so the module layout is part of the reproduction.
+#
+# Expected: `lists 64` prints 64 on every engine.
+# Actual: the interpreter prints 64; the dev and release builds die with a
+# segmentation fault (exit 139). 63 elements work on every engine. Pushing
+# directly in the tail call (`grow (push xs i) (i + 1) n`) does not crash.
+#
+# Found while measuring whether `push` stays in place through a helper, to
+# decide how the TOML decoder should hold its state.
+fn helper xs i
+  push xs i
+
+fn grow xs i n
+  return xs if n < i
+  grow (helper xs i) (i + 1) n
+
+pub fn lists n
+  length (grow [] 1 n)

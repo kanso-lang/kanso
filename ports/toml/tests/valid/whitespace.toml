@@ -1,0 +1,5 @@
+   indented   =   "lots of space"
+	tabbed	=	"tabs"
+[  spaced  ]
+  inside = 1
+	[ "tab header" ]

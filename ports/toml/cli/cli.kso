@@ -1,0 +1,103 @@
+import "../toml"
+import "std/io"
+import "std/json"
+import "std/os"
+
+# toml decode [FILE]      TOML in, toml-test JSON out
+# toml encode [FILE]      toml-test JSON in, TOML out
+# toml get FILE PATH      one value, by a path such as `servers.alpha.ip`
+# With no FILE, decode and encode read standard input.
+pub fn run argv
+  command argv[1] argv[2] argv[3]
+
+fn command "decode" none none
+  io/stdin .> (source -> decoded (toml/decode source))
+
+fn command "encode" none none
+  io/stdin .> encoded
+
+fn command "decode" path none
+  os/read_bytes path .> read_toml
+
+fn command "encode" path none
+  os/read_file path .> encoded
+
+fn command "get" path query
+  os/read_bytes path .> (r -> got r query)
+
+fn command none _ _
+  usage
+
+fn command _ _ _
+  usage
+
+usage = io/write_err "usage: toml decode|encode [FILE] | toml get FILE PATH\n"
+  .> (_ -> os/exit 2)
+
+fn read_toml (file_not_found path)
+  missing path
+
+fn read_toml bs
+  decoded (toml/decode_bytes bs)
+
+fn decoded (err e)
+  io/write_err (toml/error_report e) .> (_ -> os/exit 1)
+
+fn decoded tree
+  print (toml/to_json tree)
+
+fn encoded (file_not_found path)
+  missing path
+
+fn encoded source
+  tagged = json/decode source
+  tree = toml/from_tagged tagged
+  document = toml/encode tree
+  written document
+
+fn written (err e)
+  io/write_err "toml: cannot encode: {why e}\n" .> (_ -> os/exit 1)
+
+fn written document
+  io/write document
+
+fn got (file_not_found path) _
+  missing path
+
+fn got bs query
+  doc = toml/decode_bytes bs
+  looked_up doc query
+
+fn looked_up (err e) _
+  io/write_err (toml/error_report e) .> (_ -> os/exit 1)
+
+fn looked_up doc query
+  value = toml/lookup doc query
+  found value query
+
+fn found none query
+  io/write_err "toml: nothing at `{query}`\n" .> (_ -> os/exit 1)
+
+fn found (err e) query
+  where = "toml: bad path `{query}` at column {e.column}: {e.message}\n"
+  io/write_err where .> (_ -> os/exit 2)
+
+fn found m:map[string some] _
+  io/write (toml/value_toml m)
+
+fn found value _
+  print (toml/value_toml value)
+
+# The reasons an encode can fail: input that is not JSON, JSON that is not in
+# the toml-test shape, and a value text/to_int or text/to_float refused.
+fn why r:json/parse_failure
+  "invalid JSON at byte {r.position}: {r.reason}"
+
+fn why r:toml/tagged_error
+  r.message
+
+fn why r
+  "{r}"
+
+fn missing path
+  io/write_err "toml: no such file: {path}\n" .> (_ -> os/exit 2)

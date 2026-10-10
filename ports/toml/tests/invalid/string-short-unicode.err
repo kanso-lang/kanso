@@ -1,0 +1,5 @@
+TOML parse error at line 1, column 10
+  |
+1 | a = "\u12"
+  |          ^
+expected a hex digit in a unicode escape

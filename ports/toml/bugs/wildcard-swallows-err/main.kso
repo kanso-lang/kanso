@@ -1,0 +1,3 @@
+import "./probe"
+
+print probe/demo_a .> (_ -> print probe/demo_b)

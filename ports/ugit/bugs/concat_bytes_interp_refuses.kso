@@ -1,0 +1,13 @@
+# Run with: kanso play concat_bytes_interp_refuses.kso
+#      and: kanso play concat_bytes_interp_refuses.kso --interp
+#
+# Should: print [97 98 0] on every engine -- text/bytes answers a list of
+# ints, and text/concat appends two lists.
+# Does: the native engines print [97 98 0]; the interpreter, which is meant
+# to be the oracle, stops with `error[runtime]: concat takes two lists`.
+# The same happens with both arguments from text/bytes, and with the list
+# first. Found writing store/store_test.kso, where `kanso test` (which runs
+# on the interpreter) failed a test the compiled program would have passed.
+import "std/text"
+
+print "{text/concat (text/bytes "ab") [0]}"

@@ -1,0 +1,53 @@
+import "../steps"
+import "std/list"
+import "std/os"
+import "std/text"
+
+# Every file below `dir`, as paths relative to it, sorted. The repository's
+# own directory is never part of the working tree.
+pub fn files_under dir
+  walk_dir dir ""
+
+fn walk_dir dir prefix
+  os/list_dir (inside dir prefix) .> (names -> visited dir prefix names)
+
+fn visited dir prefix names
+  steps/gathered (visible prefix names) (n -> visit dir prefix n)
+    .> (groups -> effect (list/fold groups [] text/concat))
+
+fn visible "" names
+  list/to_list (list/reject names (n -> n == root))
+
+fn visible _ names
+  names
+
+fn inside dir ""
+  dir
+
+fn inside dir prefix
+  "{dir}/{prefix}"
+
+fn visit dir prefix name
+  rel = "{prefix}{name}"
+  os/is_dir "{dir}/{rel}" .> (d -> descended d dir rel)
+
+fn descended true dir rel
+  walk_dir dir "{rel}/"
+
+fn descended false _ rel
+  effect [rel]
+
+# Remove a file, and then any directories it leaves empty. kanso's std/os can
+# create directories and files but not remove them, so this runs rm and rmdir.
+pub fn removed file
+  os/run "rm" ["-f" file] .> (_ -> pruned (parent_of file))
+
+fn pruned ""
+  effect done
+
+fn pruned dir
+  os/run "rmdir" ["-p" "--ignore-fail-on-non-empty" dir] .> (_ -> effect done)
+
+fn parent_of file
+  parts = text/split file "/"
+  text/join (text/slice parts 1 (length parts - 1)) "/"

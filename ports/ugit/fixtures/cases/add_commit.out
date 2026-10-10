@@ -1,0 +1,55 @@
+Initialized empty ugit repository in .ugit/
+Nothing specified, nothing added.
+fatal: pathspec 'missing.txt' did not match any files
+[exit 128]
+On branch master
+
+No commits yet
+
+nothing to commit (create/copy files and use "ugit add" to track)
+[exit 1]
+On branch master
+
+No commits yet
+
+Changes to be committed:
+	new file:   one.txt
+
+Untracked files:
+	docs/notes/a.md
+	docs/readme.md
+On branch master
+
+No commits yet
+
+Changes to be committed:
+	new file:   docs/notes/a.md
+	new file:   docs/readme.md
+	new file:   one.txt
+[master (root-commit) 9945f78] first commit
+On branch master
+nothing to commit, working tree clean
+[exit 1]
+commit 9945f7801e8f56fd17ae3b19e68c69d009b6cbb77e337e4008eeb9cc79d04103 (HEAD -> master)
+Author: A U Thor <author@example.com>
+Date:   Tue Nov 14 22:14:20 2023 +0000
+
+    first commit
+
+    with a body that spans
+    two lines
+On branch master
+
+Changes to be committed:
+	deleted:    docs/notes/a.md
+	new file:   two.txt
+Aborting commit due to empty commit message.
+[exit 1]
+[master d2b69d9] remove a note, add two
+d2b69d9 (HEAD -> master) remove a note, add two
+9945f78 first commit
+tree 3cff857ab467410398dd88abb63a5439154f015a2cac2cdcabdd1a77159cbfe6
+parent 9945f7801e8f56fd17ae3b19e68c69d009b6cbb77e337e4008eeb9cc79d04103
+author A U Thor <author@example.com> 1700000120 +0000
+
+remove a note, add two

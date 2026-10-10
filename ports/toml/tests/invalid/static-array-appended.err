@@ -1,0 +1,5 @@
+TOML parse error at line 3, column 3
+  |
+3 | [[fruits]]
+  |   ^
+`fruits` is already defined and is not an array of tables

@@ -1,0 +1,29 @@
+[table-1]
+key1 = "some string"
+key2 = 123
+
+[table-2]
+key1 = "another string"
+key2 = 456
+
+[dog."tater.man"]
+type.name = "pug"
+
+[a.b.c]
+[ d.e.f ]
+[ g .  h  . i ]
+[ j . "ʞ" . 'l' ]
+
+# x, y and z are created implicitly; w is defined after its child
+[x.y.z.w]
+[x]
+defined = "after"
+
+[empty]
+
+[fruit]
+apple.color = "red"
+apple.taste.sweet = true
+
+[fruit.apple.texture]
+smooth = true

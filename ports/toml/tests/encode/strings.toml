@@ -1,0 +1,5 @@
+backslash = "C:\\path"
+controls = "tab\there\nnew line\u0001\u007f"
+empty = ""
+quote = "say \"hi\""
+unicode = "簡素 😀"

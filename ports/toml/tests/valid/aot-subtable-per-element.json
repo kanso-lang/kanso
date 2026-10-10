@@ -1,0 +1,16 @@
+{
+  "fruit": [
+    {
+      "color": {
+        "red": {"type": "bool", "value": "true"}
+      },
+      "name": {"type": "string", "value": "apple"}
+    },
+    {
+      "color": {
+        "green": {"type": "bool", "value": "true"}
+      },
+      "name": {"type": "string", "value": "lime"}
+    }
+  ]
+}

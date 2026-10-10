@@ -1,0 +1,31 @@
+{
+  "": {"type": "string", "value": "blank"},
+  "-": {"type": "string", "value": "dash"},
+  "1234": {"type": "string", "value": "value"},
+  "127.0.0.1": {"type": "string", "value": "value"},
+  "3": {
+    "14159": {"type": "string", "value": "pi"}
+  },
+  "A\t": {"type": "string", "value": "escaped key"},
+  "_": {"type": "string", "value": "underscore"},
+  "bare-key": {"type": "string", "value": "value"},
+  "bare_key": {"type": "string", "value": "value"},
+  "character encoding": {"type": "string", "value": "value"},
+  "fruit": {
+    "flavor": {"type": "string", "value": "banana"}
+  },
+  "inf": {"type": "string", "value": "the word inf"},
+  "key": {"type": "string", "value": "value"},
+  "key2": {"type": "string", "value": "value"},
+  "name": {"type": "string", "value": "Orange"},
+  "physical": {
+    "color": {"type": "string", "value": "orange"},
+    "shape": {"type": "string", "value": "round"}
+  },
+  "quoted \"value\"": {"type": "string", "value": "value"},
+  "site": {
+    "google.com": {"type": "bool", "value": "true"}
+  },
+  "true": {"type": "string", "value": "the word true"},
+  "ʎǝʞ": {"type": "string", "value": "value"}
+}

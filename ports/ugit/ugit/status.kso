@@ -1,0 +1,71 @@
+import "std/list"
+import "std/text"
+
+fn status_cmd _
+  looked .> (v -> say (status_text v))
+
+fn status_text v
+  staged = changes v.head_files v.index
+  unstaged = changes v.index (tracked_work v)
+  loose = untracked v
+  to_commit = listed "Changes to be committed:" (list/map staged shown)
+  not_staged = listed "Changes not staged for commit:" (list/map unstaged shown)
+  new_files = listed "Untracked files:" (list/map loose (p -> "\t{p}\n"))
+  sections = list/reject [to_commit not_staged new_files] (s -> s == "")
+  body = text/join (list/to_list sections) "\n"
+  closing = summary (length staged) (length unstaged) (length loose) v.head
+  "{where v}{merge_note v.merging}{first_commit v.head}{spaced body}{closing}"
+
+fn where v
+  on_branch v.branch v.head
+
+fn on_branch none head
+  "HEAD detached at {short head}\n"
+
+fn on_branch b _
+  "On branch {b}\n"
+
+fn merge_note none
+  ""
+
+fn merge_note oid
+  """
+    You are merging {short oid}.
+      (fix conflicts, add them, and run "ugit commit")
+  """
+
+fn first_commit none
+  "\nNo commits yet\n"
+
+fn first_commit _
+  ""
+
+fn spaced ""
+  ""
+
+fn spaced body
+  "\n{body}"
+
+fn listed title lines
+  all = list/to_list lines
+  return "" if length all == 0
+  "{title}\n{text/join all ""}"
+
+fn shown (change kind path)
+  label = "{kind}:"
+  "\t{label}{text/slice "            " 1 (12 - length label)}{path}\n"
+
+fn summary 0 0 0 none
+  "\nnothing to commit (create/copy files and use \"ugit add\" to track)\n"
+
+fn summary 0 0 0 _
+  "nothing to commit, working tree clean\n"
+
+fn summary 0 0 _ _
+  "\nnothing added to commit but untracked files present\n"
+
+fn summary 0 _ _ _
+  "\nno changes added to commit\n"
+
+fn summary _ _ _ _
+  ""

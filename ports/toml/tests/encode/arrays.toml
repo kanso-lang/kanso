@@ -1,0 +1,18 @@
+empty = []
+ints = [1, 2]
+mixed = [1, { deep = { x = 2 }, name = "inline" }]
+nested = [[1], ["a", 0.5]]
+
+[[products]]
+name = "Hammer"
+
+[[products]]
+
+[[products]]
+name = "Nail"
+
+[products.dims]
+w = 1
+
+[[products.variants]]
+color = "gray"

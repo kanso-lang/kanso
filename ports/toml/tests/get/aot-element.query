@@ -1,0 +1,2 @@
+valid/array-of-tables.toml
+fruits[1].varieties[0].name

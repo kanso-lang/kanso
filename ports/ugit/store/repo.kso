@@ -1,0 +1,42 @@
+import "std/os"
+
+# A new repository: an object store, a place for branches and tags, and
+# HEAD on a master branch that has no commits yet.
+pub created = os/make_dir "{root}/objects"
+  .> (_ -> os/make_dir "{root}/refs/heads")
+  .> (_ -> os/make_dir "{root}/refs/tags")
+  .> (_ -> os/write_file "{root}/HEAD" "ref: refs/heads/master\n")
+
+# The two kinds of ref value, for callers outside this module, which may
+# read a ref_value's fields but not build one.
+pub fn direct oid
+  ref_value false oid
+
+pub fn symbolic_to name
+  ref_value true name
+
+pub fn new_commit author message parents time tree
+  commit author message parents time tree
+
+# A working-tree file, stored as a blob; yields the blob's id.
+pub fn stored_blob file
+  os/read_file! file .> (content -> put_object "blob" content)
+
+# Small files ugit keeps beside its refs: MERGE_MSG while a merge waits.
+pub fn note name
+  os/read_file "{root}/{name}" .> (content -> effect (found_note content))
+
+fn found_note (file_not_found _)
+  none
+
+fn found_note content
+  content
+
+pub fn write_note name content
+  os/write_file "{root}/{name}" content
+
+pub fn drop_note name
+  removed "{root}/{name}"
+
+pub fn logged_as c oid
+  logged c oid

@@ -1,0 +1,27 @@
+# Calling a continuation in tail position keeps a stack frame, so a loop
+# written in continuation-passing style runs out of stack.
+#
+# Run from this directory: kanso run main.kso --interp (stack diagnostic);
+#  kanso build main.kso && ./main (segfault)
+#
+# Expected: `cps 100000` prints 5000050000 on every engine. Appendix A says "a
+# tail call costs no stack at all", and `then (acc + i)` and the lambda's
+# `loop next (i + 1) n` are both in tail position.
+# Actual: the interpreter stops at 10,000 steps with "error[runtime]: the
+# program ran out of stack"; the dev build prints the answer at 10,000 and
+# dies with a segmentation fault (exit 139) at 100,000, where the interpreter
+# gives the diagnostic. So the engines also disagree about how they fail.
+#
+# Where it bit: continuation-passing was the way to keep `put` in place in
+# compiled code (a `put` passed straight into a tail call does not copy), so
+# the TOML decoder's insertion steps took a `then`. A 300 KB document then
+# overflowed the interpreter's stack.
+fn loop acc i n
+  return acc if n < i
+  step acc i (next -> loop next (i + 1) n)
+
+fn step acc i then
+  then (acc + i)
+
+pub fn cps n
+  loop 0 1 n

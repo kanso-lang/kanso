@@ -1,0 +1,11 @@
+{
+  "key": {"type": "string", "value": "value"},
+  "other": {"type": "string", "value": "# not a comment"},
+  "section": {
+    "arr": [
+      {"type": "integer", "value": "1"},
+      {"type": "integer", "value": "2"}
+    ],
+    "tab": {"type": "string", "value": "tab before the equals"}
+  }
+}

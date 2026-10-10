@@ -1,0 +1,20 @@
+top = "first"
+
+[empty]
+
+["needs quotes"]
+"" = "empty key"
+"a.b" = "dotted key"
+"ünï" = "non-ascii key"
+
+[only_tables]
+
+[only_tables.inner]
+x = 1
+
+[server]
+host = "example.com"
+port = 8080
+
+[server.tls]
+enabled = true

@@ -1,0 +1,29 @@
+Initialized empty ugit repository in .ugit/
+938d806cb1ca09e203d2da40129a47e5fac33fe6645793323230de70bdb1fbf6
+blob
+hello
+hello
+fatal: object 938d806cb1ca09e203d2da40129a47e5fac33fe6645793323230de70bdb1fbf6 is a blob, not a tree
+[exit 128]
+usage: ugit cat-file (-t | -p | <kind>) <object>
+[exit 129]
+usage: ugit hash-object <file>
+[exit 129]
+686102d9fbac3e6824088ef9258c6ca264de67759178afff7ac38fbefadda1b6
+blob 938d806cb1ca09e203d2da40129a47e5fac33fe6645793323230de70bdb1fbf6 hello.txt
+tree 196a4b27c8840023dc595610aa070f64e64355a4b608f98e1761d5bbf8d16393 src
+tree
+[master (root-commit) b2eda4c] plumbing
+b2eda4c68649f4f6d7fdaabc60a8ba8d6f714a28f08d6478028f83d15b0175d7
+b2eda4c68649f4f6d7fdaabc60a8ba8d6f714a28f08d6478028f83d15b0175d7
+b2eda4c68649f4f6d7fdaabc60a8ba8d6f714a28f08d6478028f83d15b0175d7
+b2eda4c68649f4f6d7fdaabc60a8ba8d6f714a28f08d6478028f83d15b0175d7
+tree 686102d9fbac3e6824088ef9258c6ca264de67759178afff7ac38fbefadda1b6
+author A U Thor <author@example.com> 1700000060 +0000
+
+plumbing
+fatal: ambiguous argument '0000': unknown revision
+[exit 128]
+fatal: ambiguous argument 'zz': unknown revision
+[exit 128]
+7

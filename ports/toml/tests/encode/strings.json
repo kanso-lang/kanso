@@ -1,0 +1,7 @@
+{
+  "quote": {"type": "string", "value": "say \"hi\""},
+  "backslash": {"type": "string", "value": "C:\\path"},
+  "controls": {"type": "string", "value": "tab\there\nnew line\u0001\u007f"},
+  "unicode": {"type": "string", "value": "簡素 😀"},
+  "empty": {"type": "string", "value": ""}
+}

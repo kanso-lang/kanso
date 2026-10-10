@@ -1,0 +1,52 @@
+import "../store"
+import "std/list"
+import "std/text"
+
+# ugit branch                list branches, the current one starred
+# ugit branch <name> [<rev>] start a branch at HEAD or at <rev>
+fn branch_cmd args
+  words = words_of (parsed args [])
+  return misuse "branch [<name> [<commit>]]" if length words > 2
+  return branch_listing if length words == 0
+  created_ref "refs/heads" words "branch"
+
+branch_listing = looked
+  .> (v -> names_under "refs/heads/" .> (ns -> say (branch_list v ns)))
+
+fn branch_list v names
+  detached = if (v.branch == none) "* (HEAD detached at {short v.head})\n" ""
+  lines = list/map names (n -> "{if (n == v.branch) "*" " "} {n}\n")
+  "{detached}{text/join (list/to_list lines) ""}"
+
+# ugit tag                   list tags
+# ugit tag <name> [<rev>]    tag HEAD or <rev>
+fn tag_cmd args
+  words = words_of (parsed args [])
+  return misuse "tag [<name> [<commit>]]" if length words > 2
+  return tag_listing if length words == 0
+  created_ref "refs/tags" words "tag"
+
+tag_listing = names_under "refs/tags/"
+  .> (ns -> say (text/join (list/to_list (list/map ns (n -> "{n}\n"))) ""))
+
+# Short names of the refs under a prefix, sorted.
+fn names_under prefix
+  store/ref_names .> (all -> effect (short_names_in all prefix))
+
+fn short_names_in names prefix
+  chosen = list/select names (n -> store/starts_with? n prefix)
+  list/to_list (list/map chosen store/short_name)
+
+fn created_ref dir words what
+  name = words[1]
+  full = "{dir}/{name}"
+  start = if (length words == 2) words[2] "HEAD"
+  store/get_ref full .> (at -> creating full name what start at.value.value)
+
+fn creating full _ _ start none
+  store/resolve start
+    .> (oid -> store/update_ref full (store/direct oid) false)
+    .> (_ -> effect 0)
+
+fn creating _ name what _ _
+  failure "fatal: a {what} named '{name}' already exists\n" 128

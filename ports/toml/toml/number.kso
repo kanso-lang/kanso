@@ -1,0 +1,259 @@
+import "std/list"
+import "std/text"
+
+# Numbers, dates and times are first read as one token: every byte that could
+# belong to any of them. The token is then classified and checked as a whole,
+# and a failure inside it points at the offending byte. `base` is the position
+# of the token's first byte, so token index `i` is byte `base + i - 1`.
+fn token_byte? 43
+  true
+
+fn token_byte? 46
+  true
+
+fn token_byte? 58
+  true
+
+fn token_byte? none
+  false
+
+fn token_byte? c
+  bare? c
+
+fn token_end cs p
+  if (token_byte? cs[p]) (token_end cs (p + 1)) p
+
+# A space joins a date to a time when a time follows: `1979-05-27 07:32:00`.
+fn spaced_end cs p q
+  date = q - p == 10 and cs[p + 4] == 45 and cs[q] == 32
+  time = digit? cs[q + 1] 10 and digit? cs[q + 2] 10 and cs[q + 3] == 58
+  if (date and time) (token_end cs (q + 1)) q
+
+fn scalar cs p
+  q = token_end cs p
+  stop = spaced_end cs p q
+  tok = text/slice cs p (stop - 1)
+  spelling = text/utf8 tok
+  v = named_float spelling tok p
+  parsed stop v
+
+fn named_float "+inf" _ _
+  text/to_float "inf"
+
+fn named_float "+nan" _ _
+  text/to_float "nan"
+
+fn named_float "-inf" _ _
+  text/to_float "-inf"
+
+fn named_float "-nan" _ _
+  text/to_float "nan"
+
+fn named_float "inf" _ _
+  text/to_float "inf"
+
+fn named_float "nan" _ _
+  text/to_float "nan"
+
+fn named_float _ tok base
+  return date_time tok base if dated? tok or timed? tok
+  return based_int tok base if tok[1] == 48 and based? tok[2]
+  return dec_float tok base if list/any? tok (b -> float_mark? b)
+  dec_int tok base
+
+# Four digits and a dash begin a date, two digits and a colon a time.
+# `6.5E-1` has its dash in the same place as a date's, so the digits matter.
+fn dated? tok
+  tok[5] == 45 and digits? tok 1 4
+
+fn timed? tok
+  tok[3] == 58 and digits? tok 1 2
+
+fn float_mark? 46
+  true
+
+fn float_mark? 69
+  true
+
+fn float_mark? 101
+  true
+
+fn float_mark? _
+  false
+
+# Digits, with an underscore allowed only between two of them.
+fn digit? none _
+  false
+
+fn digit? c radix
+  below? (hex_digit c) radix
+
+fn below? none _
+  false
+
+fn below? d radix
+  d < radix
+
+# The index just past a run of digits that starts at `i`, or a failure.
+fn digit_run tok i radix base
+  return fail (base + i - 1) "expected a digit" if not digit? tok[i] radix
+  run_more tok (i + 1) radix base
+
+fn run_more tok i radix base
+  run_at tok tok[i] i radix base
+
+fn run_at tok 95 i radix base
+  between = digit? tok[i + 1] radix
+  why = "an underscore must sit between digits"
+  return fail (base + i - 1) why if not between
+  run_more tok (i + 2) radix base
+
+fn run_at _ none i _ _
+  i
+
+fn run_at tok c i radix base
+  if (digit? c radix) (run_more tok (i + 1) radix base) i
+
+# The value of the digits from `i` to `last`, skipping underscores. The run
+# has already been checked.
+fn digits_value tok i last radix
+  digits = list/reject (text/slice tok i last) (b -> b == 95)
+  list/fold digits 0 (acc c -> acc * radix + digit_of c)
+
+fn digit_of c
+  return c - 48 if c < 58
+  return c - 55 if c < 71
+  c - 87
+
+fn sign_width 43
+  1
+
+fn sign_width 45
+  1
+
+fn sign_width none
+  0
+
+fn sign_width _
+  0
+
+# Leftover bytes after a run mean the token was not this kind of number. The
+# answer is the index of the run's last byte.
+fn run_last tok e base what
+  extra = e <= length tok
+  why = "invalid character {byte_text tok[e]} in {what}"
+  return fail (base + e - 1) why if extra
+  e - 1
+
+fn byte_text none
+  "end of input"
+
+fn byte_text c
+  "`{text/utf8 [c]}`"
+
+# Integers.
+fn dec_int tok base
+  i = sign_width tok[1] + 1
+  e = digit_run tok i 10 base
+  dec_int_end tok i e base
+
+fn dec_int_end tok i e base
+  last = run_last tok e base "integer"
+  dec_int_value tok i last base
+
+fn dec_int_value tok i last base
+  zero_led = tok[i] == 48 and last > i
+  return fail (base + i - 1) "leading zeros are not allowed" if zero_led
+  magnitude = digits_value tok i last 10
+  value = if (tok[1] == 45) (0 - magnitude) magnitude
+  in_range value base
+
+fn in_range v base
+  ok = -9223372036854775808 <= v and v <= 9223372036854775807
+  if ok v (fail base "integer does not fit in 64 bits")
+
+fn based? 98
+  true
+
+fn based? 111
+  true
+
+fn based? 120
+  true
+
+fn based? none
+  false
+
+fn based? _
+  false
+
+fn radix_of 98
+  2
+
+fn radix_of 111
+  8
+
+fn radix_of none
+  16
+
+fn radix_of _
+  16
+
+fn based_int tok base
+  radix = radix_of tok[2]
+  e = digit_run tok 3 radix base
+  based_end tok e radix base
+
+fn based_end tok e radix base
+  last = run_last tok e base "integer"
+  based_value tok last radix base
+
+fn based_value tok last radix base
+  in_range (digits_value tok 3 last radix) base
+
+# Floats: a whole part, then a fraction, an exponent, or both.
+fn dec_float tok base
+  i = sign_width tok[1] + 1
+  e = digit_run tok i 10 base
+  float_whole tok i e base
+
+fn float_whole tok i e base
+  zero_led = tok[i] == 48 and e > i + 1
+  return fail (base + i - 1) "leading zeros are not allowed" if zero_led
+  float_part tok tok[e] e base
+
+fn float_part tok 46 e base
+  f = digit_run tok (e + 1) 10 base
+  float_exp tok f base
+
+fn float_part tok none e base
+  float_exp tok e base
+
+fn float_part tok _ e base
+  float_exp tok e base
+
+fn float_exp tok e base
+  exponent_at tok tok[e] e base
+
+fn exponent_at tok 69 e base
+  exponent tok (e + 1) base
+
+fn exponent_at tok 101 e base
+  exponent tok (e + 1) base
+
+fn exponent_at tok none e _
+  float_text tok (e - 1)
+
+fn exponent_at _ c e base
+  fail (base + e - 1) "invalid character {byte_text c} in float"
+
+fn exponent tok i base
+  j = i + sign_width tok[i]
+  k = digit_run tok j 10 base
+  last = run_last tok k base "float"
+  float_text tok last
+
+fn float_text tok last
+  digits = list/to_list (list/reject (text/slice tok 1 last) (b -> b == 95))
+  spelling = text/utf8 digits
+  text/to_float spelling

@@ -1,0 +1,21 @@
+{
+  "top": {"type": "string", "value": "first"},
+  "server": {
+    "host": {"type": "string", "value": "example.com"},
+    "port": {"type": "integer", "value": "8080"},
+    "tls": {
+      "enabled": {"type": "bool", "value": "true"}
+    }
+  },
+  "empty": {},
+  "only_tables": {
+    "inner": {
+      "x": {"type": "integer", "value": "1"}
+    }
+  },
+  "needs quotes": {
+    "a.b": {"type": "string", "value": "dotted key"},
+    "": {"type": "string", "value": "empty key"},
+    "ünï": {"type": "string", "value": "non-ascii key"}
+  }
+}

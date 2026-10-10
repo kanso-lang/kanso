@@ -1,0 +1,14 @@
+import "std/list"
+
+# Effects one after another over a list. kanso runs bare lines side by side
+# and only a bind puts one effect after another, so a loop over effects is a
+# fold whose accumulator is the chain built so far.
+#
+# `each` runs `f` on every element in order and yields done.
+pub fn each xs f
+  list/fold xs (effect done) (acc x -> acc .> (_ -> f x))
+
+# `gathered` runs `f` on every element in order and yields the list of what
+# each one yielded.
+pub fn gathered xs f
+  list/fold xs (effect []) (acc x -> acc .> (got -> f x .> (v -> push got v)))

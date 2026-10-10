@@ -1,0 +1,90 @@
+import "../delta"
+import "../steps"
+import "../store"
+import "std/os"
+import "std/text"
+
+# One side of a comparison: a map from path to blob id, and whether the
+# contents are in the working tree (read from disk) or in the store.
+type side
+  files
+  work
+
+fn stored files
+  side files false
+
+fn on_disk files
+  side files true
+
+# ugit diff            the index against the working tree
+# ugit diff --cached   HEAD (or a commit) against the index
+# ugit diff <rev>      a commit against the working tree
+# ugit diff <a> <b>    one commit against another
+fn diff_cmd args
+  line = parsed args []
+  looked .> (v -> diff_for v (on? line "--cached") (words_of line))
+
+fn diff_for v cached words
+  return diff_two words[1] words[2] if length words == 2
+  return misuse "diff [--cached] [<commit> [<commit>]]" if length words > 2
+  return diff_against v (words_of_rev words) (stored v.index) if cached
+  return diff_against v words[1] (on_disk (tracked_work v)) if length words == 1
+  shown_diff (stored v.index) (on_disk (tracked_work v))
+
+fn words_of_rev words
+  if (length words == 0) "HEAD" words[1]
+
+fn diff_against v "HEAD" later
+  return shown_diff (stored {}) later if v.head == none
+  shown_diff (stored v.head_files) later
+
+fn diff_against _ rev later
+  commit_files rev .> (files -> shown_diff (stored files) later)
+
+fn diff_two a b
+  later = commit_files b
+  commit_files a .> (fa -> later .> (fb -> shown_diff (stored fa) (stored fb)))
+
+fn commit_files rev
+  store/resolve rev .> store/files_of_commit
+
+fn shown_diff before after
+  diff_text before after .> say
+
+# The unified diff of every path that differs, in path order.
+fn diff_text before after
+  paths = changes before.files after.files
+  steps/gathered paths (c -> file_diff c before after)
+    .> (parts -> effect (text/join parts ""))
+
+fn file_diff (change kind path) before after
+  read_side before path
+    .> (a -> read_side after path .> (b -> effect (file_text kind path a b)))
+
+fn read_side s path
+  fetched s.work path s.files[path]
+
+fn fetched _ _ none
+  effect ""
+
+fn fetched work path oid
+  from_side work path oid
+
+fn from_side true path _
+  os/read_file! path
+
+fn from_side false _ oid
+  store/get_object oid "blob"
+
+fn file_text kind path a b
+  body = delta/hunks (delta/lines_of a) (delta/lines_of b)
+  "diff --ugit a/{path} b/{path}\n{headers kind path}{body}"
+
+fn headers "new file" path
+  "new file\n--- /dev/null\n+++ b/{path}\n"
+
+fn headers "deleted" path
+  "deleted file\n--- a/{path}\n+++ /dev/null\n"
+
+fn headers _ path
+  "--- a/{path}\n+++ b/{path}\n"

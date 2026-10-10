@@ -1,0 +1,261 @@
+import "std/list"
+import "std/text"
+
+# The document is kept flat while it is read: one index from each path to a
+# slot recording what lives there and how it came to exist. The nested maps a
+# caller sees are built once, at the end. (A map updated inside a record is
+# copied on every update, and in compiled code so is a map updated inside
+# another map, so a nested tree rebuilt on each line made reading quadratic.)
+#
+# A path is a list of segments: a string for a key, an int for an element of an
+# array of tables. `[[a]]` twice and then `b = 1` puts `b` at ["a" 2 "b"].
+type slot
+  kind
+  path
+  value
+
+# How a table came to exist, which decides what may be added to it later.
+#   header    [a] named it
+#   implicit  [a.b] passed through it; a later [a] may still name it once
+#   dotted    a.b = 1 created it; only more dotted keys may add to it
+#   inline    {…} wrote it whole; nothing may add to it
+#   leaf      a value that is not a table
+#   aot       [[a]] made it; `count` elements so far
+type aot
+  count
+
+type dotted
+
+type header
+
+type implicit
+
+type inline
+
+type leaf
+
+# What a slot holds when it is a table or an array of tables rather than a
+# value; its contents are the slots below it.
+type aot_mark
+
+type table_mark
+
+# Which kind of header is being read.
+type array_header
+
+type table_header
+
+# A path as an index key. Each key is quoted and each index bracketed and
+# padded, so two different paths never share a spelling, and sorting the
+# spellings puts every table directly before everything inside it, with array
+# elements in order.
+fn path_key path
+  text/utf8 (list/fold path (text/bytes "") segment_onto)
+
+fn segment_onto acc n:int
+  text/append acc "[{padded n 10}]"
+
+fn segment_onto acc k
+  quoted_onto acc k
+
+# The dotted path of the first `n` keys, for messages.
+fn key_path names n
+  parts = list/to_list (list/map (text/slice names 1 n) shown_key)
+  text/join parts "."
+
+fn shown_key k
+  if (bare_text? k) k "\"{k}\""
+
+fn bare_text? k
+  bs = text/bytes k
+  length bs > 0 and list/all? bs (b -> bare? b)
+
+# Key/value pairs: `a.b.c = v` in the table at `base`. Every key before the
+# last names a table that dotted keys may extend; the last must be new.
+fn insert_kv slots base names v p
+  insert_at slots base names 1 v p
+
+fn insert_at slots base names i v p
+  return slots if i < 1 or length names < i
+  here = push base names[i]
+  key = path_key here
+  existing = stored slots key
+  return set_new slots key here names i existing v p if i == length names
+  dotted_step slots key here names i existing v p
+
+fn set_new slots key here _ _ none v _
+  store slots key (slot (kind_of v) here v)
+
+fn set_new _ _ _ names i _ _ p
+  fail p "duplicate key `{key_path names i}`"
+
+fn kind_of _:map[string some]
+  inline
+
+fn kind_of _
+  leaf
+
+fn dotted_step slots key here names i none v p
+  made = store slots key (slot dotted here table_mark)
+  insert_at made here names (i + 1) v p
+
+fn dotted_step slots _ here names i (slot dotted _ _) v p
+  insert_at slots here names (i + 1) v p
+
+fn dotted_step _ _ _ names i existing _ p
+  fail p (not_extendable names i existing)
+
+fn not_extendable names i (slot inline _ _)
+  "inline table `{key_path names i}` cannot be extended"
+
+fn not_extendable names i (slot (aot _) _ _)
+  "`{key_path names i}` is an array of tables; dotted keys cannot add to it"
+
+fn not_extendable names i (slot leaf _ _)
+  "`{key_path names i}` is not a table"
+
+fn not_extendable names i _
+  path = key_path names i
+  "table `{path}` is defined by a header; dotted keys cannot add to it"
+
+# Headers: [a.b.c] and [[a.b.c]]. Reading one takes two passes over the keys.
+# The first only looks: it finds the path the header names, walking into the
+# newest element of any array of tables on the way, and refuses a header that
+# would break a rule. The second writes what the first found.
+fn header_path slots base names i p mode
+  return base if i < 1 or length names < i
+  here = push base names[i]
+  existing = stored slots (path_key here)
+  return header_target here names i p mode existing if i == length names
+  through = walk_through here names i p existing
+  header_path slots through names (i + 1) p mode
+
+fn walk_through here _ _ _ none
+  here
+
+fn walk_through here _ _ _ (slot (aot count) _ _)
+  push here count
+
+fn walk_through _ names i p (slot inline _ _)
+  fail p "inline table `{key_path names i}` cannot be extended"
+
+fn walk_through _ names i p (slot leaf _ _)
+  fail p "`{key_path names i}` is not a table"
+
+fn walk_through here _ _ _ _
+  here
+
+fn header_target here names i p array_header existing
+  array_target here names i p existing
+
+fn header_target here names i p table_header existing
+  table_target here names i p existing
+
+fn table_target here _ _ _ none
+  here
+
+fn table_target here _ _ _ (slot implicit _ _)
+  here
+
+fn table_target _ names i p (slot dotted _ _)
+  fail p "table `{key_path names i}` is already defined by dotted keys"
+
+fn table_target _ names i p (slot inline _ _)
+  fail p "inline table `{key_path names i}` cannot be redefined"
+
+fn table_target _ names i p (slot header _ _)
+  fail p "table `{key_path names i}` is defined more than once"
+
+fn table_target _ names i p (slot (aot _) _ _)
+  fail p "`{key_path names i}` is an array of tables, not a table"
+
+fn table_target _ names i p _
+  fail p "`{key_path names i}` already holds a value"
+
+fn array_target here _ _ _ none
+  push here 1
+
+fn array_target here _ _ _ (slot (aot count) _ _)
+  push here (count + 1)
+
+fn array_target _ names i p _
+  why = "is already defined and is not an array of tables"
+  fail p "`{key_path names i}` {why}"
+
+# The second pass. Every table the path walks through that has no slot yet is
+# made implicit; then the target is defined. For [[a]], `target` ends in the
+# new element's index, and the array's own slot records the count.
+fn open_header slots target table_header
+  opened = open_through slots target 1 (length target - 1)
+  store opened (path_key target) (slot header target table_mark)
+
+fn open_header slots target array_header
+  opened = open_through slots target 1 (length target - 2)
+  open_array opened target
+
+fn open_array slots target
+  return slots if length target < 2
+  element = text/slice target 1 (length target - 1)
+  made = slot (aot target[length target]) element aot_mark
+  marked = store slots (path_key element) made
+  store marked (path_key target) (slot header target table_mark)
+
+fn open_through slots target j stop
+  return slots if j < 1 or length target < j or stop < j
+  stepped = segment_step slots target j target[j]
+  open_through stepped target (j + 1) stop
+
+fn segment_step slots _ _ _:int
+  slots
+
+fn segment_step slots target j _
+  prefix = text/slice target 1 j
+  key = path_key prefix
+  existing = stored slots key
+  made_implicit slots key prefix existing
+
+fn made_implicit slots key prefix none
+  store slots key (slot implicit prefix table_mark)
+
+fn made_implicit slots _ _ _
+  slots
+
+# Building the tree. The slots are sorted by path key, which lays the tree out
+# depth-first: each table's own slot, then everything below it, then its next
+# sibling. A run of slots that all sit below one entry is that entry's
+# contents. (`std/list` has `group_by`, which reads the map it is filling
+# between writes and so slows down on wide tables in compiled code.)
+fn build_tree slots
+  spelled = list/map (stored_values slots) (s -> path_key s.path)
+  ordered = list/sort (list/to_list spelled)
+  items = list/to_list (list/map ordered (k -> stored slots k))
+  members {} items 1 1
+
+# The entries at `depth` among `items`, which all share the first `depth - 1`
+# segments of their paths, as one map.
+fn members m items i depth
+  return m if i < 1 or length items < i
+  own = items[i]
+  j = run_end items (i + 1) depth
+  below = text/slice items (i + 1) (j - 1)
+  members (put m own.path[depth] (node_of own below depth)) items j depth
+
+# The first item from `j` on that is not below the entry at `depth`.
+fn run_end items j depth
+  return j if j < 1 or length items < j
+  if (depth < length items[j].path) (run_end items (j + 1) depth) j
+
+fn node_of (slot _ _ table_mark) below depth
+  members {} below 1 (depth + 1)
+
+fn node_of (slot _ _ aot_mark) below depth
+  elements [] below 1 (depth + 1)
+
+fn node_of (slot _ _ v) _ _
+  v
+
+fn elements tables items i depth
+  return tables if i < 1 or length items < i
+  j = run_end items (i + 1) depth
+  below = text/slice items (i + 1) (j - 1)
+  elements (push tables (members {} below 1 (depth + 1))) items j depth

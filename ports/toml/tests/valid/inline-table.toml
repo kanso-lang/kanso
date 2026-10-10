@@ -1,0 +1,15 @@
+name = { first = "Tom", last = "Preston-Werner" }
+point = { x = 1, y = 2 }
+animal = { type.name = "pug" }
+empty = {}
+spaced = {   }
+nested = { a = { b = { c = 1 } }, d = [1, 2] }
+dotted = { a.b = 1, a.c = 2, d = 3 }
+points = [ { x = 1, y = 2, z = 3 },
+           { x = 7, y = 8, z = 9 },
+           { x = 2, y = 4, z = 8 } ]
+quoted = { "a b" = 1, 'c.d' = 2 }
+multiline_array_inside = { list = [
+  1,
+  2,
+] }

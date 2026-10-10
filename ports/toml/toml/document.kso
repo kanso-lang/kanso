@@ -1,0 +1,64 @@
+# The document is read a line at a time. `current` is the path of the table
+# the latest header opened, and every key/value pair lands there. `slots` is
+# the flat index table.kso keeps; the tree is built from it at the end.
+fn parse_document cs p current slots
+  q = skip_blank cs p
+  line_at_doc cs cs[q] q current slots
+
+fn line_at_doc _ none _ _ slots
+  build_tree slots
+
+fn line_at_doc cs 10 p current slots
+  parse_document cs (p + 1) current slots
+
+fn line_at_doc cs 13 p current slots
+  next = crlf cs p
+  parse_document cs next current slots
+
+fn line_at_doc cs 35 p current slots
+  next = line_end cs p
+  parse_document cs next current slots
+
+fn line_at_doc cs 91 p _ slots
+  return header_line cs (p + 2) slots array_header if cs[p + 1] == 91
+  header_line cs (p + 1) slots table_header
+
+fn line_at_doc cs _ p current slots
+  keyed = parse_key cs p
+  pair_key cs p keyed current slots
+
+fn pair_key cs start (parsed p names) current slots
+  at = expect_equals cs p
+  item = parse_value cs at
+  pair_value cs start names item current slots
+
+fn pair_value cs start names (parsed p v) current slots
+  next = line_end cs p
+  grown = insert_kv slots current names v start
+  resume cs current grown next
+
+# Bound in this order so that, when both fail, the failure further up the line
+# is the one reported: a call keeps its first failing argument.
+fn resume cs current slots p
+  parse_document cs p current slots
+
+fn header_line cs p slots mode
+  start = skip_blank cs p
+  keyed = parse_key cs start
+  header_names cs start keyed slots mode
+
+fn header_names cs start (parsed p names) slots mode
+  q = skip_blank cs p
+  closed_at = header_close cs q mode
+  target = header_path slots [] names 1 start mode
+  next = line_end cs closed_at
+  grown = open_header slots target mode
+  resume cs target grown next
+
+fn header_close cs p array_header
+  return p + 2 if cs[p] == 93 and cs[p + 1] == 93
+  fail p "expected `]]` to close an array-of-tables header"
+
+fn header_close cs p table_header
+  return p + 1 if cs[p] == 93
+  fail p "expected `]` to close a table header"

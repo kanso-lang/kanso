@@ -1,0 +1,100 @@
+import "std/list"
+import "std/text"
+
+# A commit: the tree it records, the commits it follows, who made it and
+# when (seconds since the epoch, always UTC), and why.
+pub type commit
+  author
+  message
+  parents
+  time
+  tree
+
+# A commit together with its own id, as history walks hand them out.
+pub type logged
+  commit
+  oid
+
+pub fn put_commit c
+  put_object "commit" (commit_text c)
+
+fn commit_text (commit author message parents time tree)
+  lines = list/map parents (p -> "parent {p}\n")
+  parent_lines = text/join (list/to_list lines) ""
+  "tree {tree}\n{parent_lines}author {author} {time} +0000\n\n{message}\n"
+
+pub fn get_commit oid
+  get_object oid "commit" .> (content -> effect (parsed_commit content))
+
+# Header lines, a blank line, then the message.
+pub fn parsed_commit content
+  pieces = text/split content "\n\n"
+  top = pieces[1]
+  header = text/split top "\n"
+  body = text/join (text/slice pieces 2 (length pieces)) "\n\n"
+  blank = commit "" (without_newline body) [] 0 ""
+  list/fold header blank header_line
+
+fn header_line c line
+  words = text/split line " "
+  rest = text/join (text/slice words 2 (length words)) " "
+  key = words[1]
+  with_field c key rest
+
+fn with_field (commit a m ps t _) "tree" oid
+  commit a m ps t oid
+
+fn with_field (commit a m ps t tree) "parent" oid
+  commit a m (push ps oid) t tree
+
+fn with_field (commit _ m ps _ tree) "author" rest
+  words = text/split rest " "
+  n = length words
+  who = text/join (text/slice words 1 (n - 2)) " "
+  seconds = words[n - 1]
+  commit who m ps (text/to_int seconds) tree
+
+fn with_field c _ _
+  c
+
+fn without_newline body
+  return body if not ends_with_newline? body
+  text/slice body 1 (length body - 1)
+
+fn ends_with_newline? body
+  text/slice body (length body) (length body) == "\n"
+
+# Every commit reachable from `oids`, each once, in the order the original
+# ugit walks them: a commit's first parent comes straight after it, and
+# its other parents wait at the back of the queue.
+pub fn history oids
+  walking oids {} []
+
+fn walking queue seen acc
+  return effect acc if length queue == 0
+  oid = queue[1]
+  rest = text/slice queue 2 (length queue)
+  return walking rest seen acc if seen[oid] != none
+  get_commit oid .> (c -> visited c oid rest seen acc)
+
+fn visited c oid rest seen acc
+  firsts = text/slice c.parents 1 1
+  others = text/slice c.parents 2 (length c.parents)
+  queue = text/concat (text/concat firsts rest) others
+  walking queue (put seen oid true) (push acc (logged c oid))
+
+# The nearest commit both `a` and `b` descend from, or none.
+pub fn merge_base a b
+  history [a]
+    .> (mine -> history [b] .> (theirs -> effect (shared mine theirs)))
+
+fn shared mine theirs
+  ids = list/fold mine {} (m l -> put m l.oid true)
+  found = list/find theirs (l -> ids[l.oid] != none)
+  oid_of found
+
+fn oid_of none
+  none
+
+fn oid_of (logged _ oid)
+  oid

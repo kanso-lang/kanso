@@ -1,0 +1,105 @@
+import "std/list"
+import "std/os"
+import "std/text"
+
+# A name as a user types it, turned into an object id: "@" is HEAD; a ref
+# is looked for as written, then under refs/, refs/tags/ and refs/heads/;
+# anything else is taken as an object id or an unambiguous prefix of one.
+# A trailing `^` or `~n` walks back first parents, as in git.
+pub fn resolve "@"
+  resolve "HEAD"
+
+pub fn resolve name
+  bare = text/slice name 1 (length name - 1)
+  return back_from bare 1 name if ends_caret? name
+  parts = text/split name "~"
+  return back_from parts[1] (steps_in parts[2]) name if length parts == 2
+  candidates = [name "refs/{name}" "refs/tags/{name}" "refs/heads/{name}"]
+  first_ref candidates name
+
+fn ends_caret? name
+  length name > 1 and text/slice name (length name) (length name) == "^"
+
+fn steps_in ""
+  1
+
+fn steps_in count
+  text/to_int count
+
+fn back_from base n whole
+  resolve base .> (oid -> walked_back oid n whole)
+
+fn walked_back oid 0 _
+  effect oid
+
+fn walked_back oid n whole
+  get_commit oid .> (c -> parent_or_fail c.parents[1] n whole)
+
+fn parent_or_fail none _ whole
+  err "ambiguous argument '{whole}': no such ancestor"
+
+fn parent_or_fail parent n whole
+  walked_back parent (n - 1) whole
+
+fn first_ref candidates name
+  return by_prefix name if length candidates == 0
+  first = candidates[1]
+  rest = text/slice candidates 2 (length candidates)
+  get_ref first .> (at -> ref_or_next at.value rest name)
+
+fn ref_or_next (ref_value _ none) rest name
+  first_ref rest name
+
+fn ref_or_next (ref_value _ oid) _ _
+  effect oid
+
+fn by_prefix name
+  return unknown name if length name < 4 or not hex? name
+  os/list_dir "{root}/objects" .> (ids -> unique name (with_prefix ids name))
+
+fn with_prefix ids name
+  list/to_list (list/select ids (id -> starts_with? id name))
+
+fn unique name matches
+  return unknown name if length matches == 0
+  return err "short object id {name} is ambiguous" if length matches > 1
+  effect matches[1]
+
+fn unknown name
+  err "ambiguous argument '{name}': unknown revision"
+
+fn hex? name
+  list/all? (text/chars name) (c -> contains? "0123456789abcdef" c)
+
+# The branch HEAD is on, as a short name, or none when HEAD is detached.
+pub current_branch = get_ref_raw "HEAD" .> (v -> effect (branch_of v))
+
+fn branch_of (ref_value true target)
+  short_name target
+
+fn branch_of _
+  none
+
+pub fn short_name name
+  return after name "refs/heads/" if starts_with? name "refs/heads/"
+  return after name "refs/tags/" if starts_with? name "refs/tags/"
+  name
+
+# What HEAD's commit records, as a flat map from path to blob id; empty
+# before the first commit.
+pub head_files = get_ref "HEAD" .> (at -> files_of_commit at.value.value)
+
+pub fn files_of_commit none
+  effect {}
+
+pub fn files_of_commit oid
+  get_commit oid .> (c -> read_tree c.tree)
+
+# The working tree as a flat map from path to the id its blob would have.
+pub work_ids = files_under "." .> (paths -> hashed_files paths)
+
+fn hashed_files paths
+  list/fold paths (effect {}) (acc p -> acc .> (m -> hashed_into m p))
+
+fn hashed_into m p
+  os/read_file! p .> (content -> effect (put m p (object_id "blob" content)))

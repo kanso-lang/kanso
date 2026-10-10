@@ -1,0 +1,171 @@
+import "std/list"
+import "std/text"
+
+# What every step of the parser answers: how far it got, and what it found.
+type parsed
+  pos
+  value
+
+# A failure names the byte it stopped at. The public error turns the byte into
+# a line and a column once, in `decode`, so no step has to track either.
+type parse_failure
+  pos
+  reason
+
+# Tab and space are the only blanks inside a line.
+fn blank? 9
+  true
+
+fn blank? 32
+  true
+
+fn blank? none
+  false
+
+fn blank? _
+  false
+
+# Tab is the one control character TOML lets text carry.
+fn control? 9
+  false
+
+fn control? 127
+  true
+
+fn control? c
+  c < 32
+
+# A carriage return is legal only as the first half of CRLF.
+fn crlf cs p
+  why = "carriage return not followed by newline"
+  if (cs[p + 1] == 10) (p + 2) (fail p why)
+
+fn end_at _ none p
+  p
+
+fn end_at _ 10 p
+  p + 1
+
+fn end_at cs 13 p
+  crlf cs p
+
+fn end_at cs 35 p
+  q = skip_comment cs p
+  newline_at cs q
+
+fn end_at cs _ p
+  fail p "expected newline or end of input, found {shown cs p}"
+
+# Where `p` is a cursor that may already be a failure, reading the byte under it
+# would be an index on an err; a call carries the failure past instead.
+fn newline_at cs p
+  end_at cs cs[p] p
+
+fn fail p reason
+  err (parse_failure p reason)
+
+# After a key/value pair or a header: blanks, an optional comment, and then the
+# line has to end.
+fn line_end cs p
+  q = skip_blank cs p
+  end_at cs cs[q] q
+
+# The 1-based column of byte `p`, counted in characters rather than bytes.
+fn column_of cs p
+  start = line_start cs p
+  lead = text/slice cs start (p - 1)
+  list/count lead (b -> not continuation? b) + 1
+
+fn continuation? b
+  127 < b and b < 192
+
+fn line_of cs p
+  list/count (text/slice cs 1 (p - 1)) (b -> b == 10) + 1
+
+fn line_start cs p
+  return 1 if p < 2
+  if (cs[p - 1] == 10) p (line_start cs (p - 1))
+
+# The text of the line holding byte `p`, without its line ending.
+fn line_text cs p
+  start = line_start cs p
+  stop = text/find2 cs start 10 10
+  last = if (cs[stop - 1] == 13) (stop - 2) (stop - 1)
+  piece = text/slice cs start last
+  readable piece (text/utf8 piece)
+
+# A line that is not UTF-8 is shown with each byte past ASCII as `?`.
+fn readable piece (err _)
+  ascii = list/map piece (b -> if (b < 128) b 63)
+  text/utf8 (list/to_list ascii)
+
+fn readable _ line
+  line
+
+# The character under `p`, for a message: printable text quoted, the rest by
+# name.
+fn shown cs p
+  shown_byte cs cs[p] p
+
+fn shown_byte _ none _
+  "end of input"
+
+fn shown_byte _ 9 _
+  "tab"
+
+fn shown_byte _ 10 _
+  "newline"
+
+fn shown_byte _ 13 _
+  "carriage return"
+
+fn shown_byte cs c p
+  return "control character {c}" if control? c
+  "`{text/utf8 (text/slice cs p (p + utf8_width c - 1))}`"
+
+fn skip_blank cs p
+  if (blank? cs[p]) (skip_blank cs (p + 1)) p
+
+# p is on the `#`. The comment ends before the newline, which the caller reads.
+fn skip_comment cs p
+  comment_at cs cs[p + 1] (p + 1)
+
+fn comment_at _ none p
+  p
+
+fn comment_at _ 10 p
+  p
+
+fn comment_at _ 13 p
+  p
+
+fn comment_at cs c p
+  return fail p "control character {c} in comment" if control? c
+  comment_at cs cs[p + 1] (p + 1)
+
+# Blanks, newlines and comments, as they may sit between array elements.
+fn skip_space cs p
+  space_at cs cs[p] p
+
+fn space_at cs 9 p
+  skip_space cs (p + 1)
+
+fn space_at cs 10 p
+  skip_space cs (p + 1)
+
+fn space_at cs 13 p
+  q = crlf cs p
+  skip_space cs q
+
+fn space_at cs 32 p
+  skip_space cs (p + 1)
+
+fn space_at cs 35 p
+  q = skip_comment cs p
+  skip_space cs q
+
+fn space_at _ none p
+  p
+
+fn space_at _ _ p
+  p

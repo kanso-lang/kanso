@@ -1,0 +1,20 @@
+str1 = """
+Roses are red
+Violets are blue"""
+
+str2 = """\
+       The quick brown \
+       fox jumps over \
+       the lazy dog.\
+       """
+
+str3 = """Here are two quotation marks: "". Simple enough."""
+str4 = """Here are three quotation marks: ""\"."""
+str5 = """Here are fifteen quotation marks: ""\"""\"""\"""\"""\"."""
+str6 = """"This," she said, "is just a pointless statement.""""
+empty = """"""
+no_newline_trim = """   spaces kept"""
+escaped = """tab:\t unicode:\u00e9"""
+trimmed_blank_lines = """first \
+
+    second"""

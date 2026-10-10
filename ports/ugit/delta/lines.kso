@@ -1,0 +1,29 @@
+import "std/list"
+import "std/text"
+
+# A file's lines, each one keeping the newline that ended it. The last line
+# of a file that does not end in a newline is the only one without, so two
+# files that differ only in that newline differ in exactly one line.
+pub fn lines_of ""
+  []
+
+pub fn lines_of content
+  pieces = text/split content "\n"
+  ended = text/slice pieces 1 (length pieces - 1)
+    . list/map (p -> "{p}\n")
+    . list/to_list
+  closing ended pieces[length pieces]
+
+fn closing ended ""
+  ended
+
+# split never answers an empty list, but the checker cannot see that.
+fn closing ended none
+  ended
+
+fn closing ended tail
+  push ended tail
+
+# The other direction: lines back into the text of a file.
+pub fn unlines xs
+  text/join xs ""

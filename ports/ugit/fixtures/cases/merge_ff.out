@@ -1,0 +1,17 @@
+Initialized empty ugit repository in .ugit/
+[master (root-commit) d407a55] v1
+Switched to a new branch 'feature'
+[feature 0b250c8] v2
+Switched to branch 'master'
+Updating d407a55..0b250c8
+Fast-forward
+0b250c8 (HEAD -> master, feature) v2
+d407a55 v1
+v2
+added
+Already up to date.
+0b250c8ab5084e2adf08b233be3fd834d649a9e73621a711517884b287e7a6b1
+usage: ugit merge <commit>
+[exit 129]
+fatal: ambiguous argument 'nowhere': unknown revision
+[exit 128]

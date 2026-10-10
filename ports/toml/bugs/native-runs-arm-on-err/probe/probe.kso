@@ -1,0 +1,40 @@
+# Compiled code runs an arm's body with an err in a bound parameter when a
+# sibling arm has `_` in that position. The interpreter does not.
+#
+# Run from this directory: kanso run main.kso --interp (right); kanso build
+#  main.kso && ./main (wrong). `kanso play` on a one-file version shows it
+#  too.
+#
+# `checked [] 5` answers an err. `pick 125 grown` should not run any body: the
+# matching arm binds `xs`, and chapter 04 says a function handed an err as an
+# argument never runs.
+#
+# Expected (and what the interpreter prints): an endpoint report for
+# "refused 5".
+# Actual, dev and release builds: `size 6`. The `125` arm ran, and
+# `length` was handed the err and answered a number.
+#
+# Renaming the sibling's `_` to a bound, used name (`fn pick _ xs` with
+# `"other {length xs}"`) makes the compiled code agree with the interpreter.
+# This is the same rule as bugs/wildcard-swallows-err: a `_` parameter accepts
+# an err. Here it leaks into the arm next to it, and only in compiled code.
+#
+# Where it bit: the TOML decoder's `inline_delim cs 125 p slots` arm built the
+# inline table from a failed insertion on the release build, and reported
+# "`.` reads a field of a record, not <value>" instead of "duplicate key `b`".
+fn checked xs n
+  return err "refused {n}" if n > 2
+  push xs n
+
+fn pick 125 xs
+  "size {size_of xs}"
+
+fn pick _ _
+  "other"
+
+fn size_of xs
+  length xs
+
+pub fn demo n
+  grown = checked [] n
+  pick 125 grown

@@ -1,0 +1,38 @@
+Initialized empty ugit repository in .ugit/
+[master (root-commit) e4648da] three files
+On branch master
+nothing to commit, working tree clean
+On branch master
+
+Changes to be committed:
+	modified:   a.txt
+
+Changes not staged for commit:
+	modified:   a.txt
+	deleted:    b.txt
+
+Untracked files:
+	d.txt
+	sub/e.txt
+On branch master
+
+Changes to be committed:
+	modified:   a.txt
+	deleted:    b.txt
+
+Changes not staged for commit:
+	modified:   a.txt
+
+Untracked files:
+	d.txt
+	sub/e.txt
+On branch master
+
+Changes to be committed:
+	modified:   a.txt
+	deleted:    b.txt
+	new file:   d.txt
+	new file:   sub/e.txt
+[master 37b933c] everything
+On branch master
+nothing to commit, working tree clean

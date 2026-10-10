@@ -1,0 +1,13 @@
+import "std/text"
+
+# std/text has split, slice and join, and nothing that asks where one
+# string sits in another; these are the three questions ugit asks.
+pub fn starts_with? s prefix
+  text/slice s 1 (length prefix) == prefix
+
+# What follows `prefix` in `s`, which is known to start with it.
+pub fn after s prefix
+  text/slice s (length prefix + 1) (length s)
+
+pub fn contains? s piece
+  length (text/split s piece) > 1

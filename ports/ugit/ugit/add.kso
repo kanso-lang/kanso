@@ -1,0 +1,60 @@
+import "../store"
+import "std/list"
+import "std/text"
+
+# Stage paths. A directory stages every file below it, and a tracked file
+# that is gone from the working tree is staged as deleted -- so `ugit add .`
+# records the whole working tree, deletions included.
+fn add_cmd args
+  specs = list/to_list (list/map (words_of (parsed args [])) normal)
+  return failure "Nothing specified, nothing added.\n" 0 if length specs == 0
+  store/files_under "."
+    .> (paths -> store/read_index .> (idx -> staging specs paths idx))
+
+fn staging specs paths idx
+  unmatched = list/find specs (s -> not matched_any? s paths (keys idx))
+  return no_match unmatched if unmatched != none
+  chosen = list/to_list (list/select paths (p -> covered? specs p))
+  gone = list/select (keys idx) (p -> covered? specs p and not listed? paths p)
+  kept = without idx (list/to_list gone)
+  list/fold chosen (effect kept) (acc p -> acc .> (m -> blob_into m p))
+    .> store/write_index
+    .> (_ -> effect 0)
+
+fn no_match spec
+  failure "fatal: pathspec '{spec}' did not match any files\n" 128
+
+fn blob_into m p
+  store/stored_blob p .> (oid -> effect (put m p oid))
+
+fn matched_any? spec paths tracked
+  list/any? paths (p -> under? spec p) or list/any? tracked (p -> under? spec p)
+
+fn covered? specs p
+  list/any? specs (s -> under? s p)
+
+# A pathspec names a file, or a directory and everything below it; "" is
+# the whole tree.
+fn under? "" _
+  true
+
+fn under? spec p
+  p == spec or store/starts_with? p "{spec}/"
+
+fn normal "."
+  ""
+
+fn normal spec
+  trimmed = if (store/starts_with? spec "./") (store/after spec "./") spec
+  if (ends_slash? trimmed) (text/slice trimmed 1 (length trimmed - 1)) trimmed
+
+fn ends_slash? s
+  length s > 0 and text/slice s (length s) (length s) == "/"
+
+# A map without some of its keys. Maps have put and no remove, so this
+# builds a new one from the entries that stay.
+fn without m gone
+  list/fold (entries m) {} (acc e -> kept_unless acc e gone)
+
+fn kept_unless acc (entry k v) gone
+  if (listed? gone k) acc (put acc k v)

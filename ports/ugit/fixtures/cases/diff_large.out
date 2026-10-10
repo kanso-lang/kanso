@@ -1,0 +1,33 @@
+Initialized empty ugit repository in .ugit/
+[master (root-commit) 3d9e676] big
+26
+diff --ugit a/big.txt b/big.txt
+--- a/big.txt
++++ b/big.txt
+@@ -14,7 +14,7 @@
+ line 14
+ line 15
+ line 16
+-line 17
++line seventeen
+ line 18
+ line 19
+ line 20
+@@ -497,7 +497,6 @@
+ line 497
+ line 498
+ line 499
+-line 500
+ line 501
+ line 502
+ line 503
+[master f310645] edits
+ line 501
+ line 502
+ line 503
+@@ -2997,4 +2996,5 @@
+ line 2997
+ line 2998
+ line 2999
++line 2999.5
+ line 3000

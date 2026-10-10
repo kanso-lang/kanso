@@ -1,0 +1,27 @@
+{
+  "a": {
+    "b": {
+      "c": {"type": "integer", "value": "1"},
+      "d": {"type": "integer", "value": "2"}
+    },
+    "e": {"type": "integer", "value": "3"}
+  },
+  "arr": {
+    "list": [
+      {
+        "p": {
+          "q": {"type": "string", "value": "inside an array table"}
+        }
+      }
+    ]
+  },
+  "tbl": {
+    "x": {
+      "w": {
+        "deep": {"type": "bool", "value": "true"}
+      },
+      "y": {"type": "integer", "value": "1"},
+      "z": {"type": "integer", "value": "2"}
+    }
+  }
+}

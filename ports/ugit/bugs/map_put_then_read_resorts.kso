@@ -1,0 +1,19 @@
+# Run with: time kanso play map_put_then_read_resorts.kso
+#      and: time kanso play map_put_then_read_resorts.kso --interp
+#
+# Should: run in time linear (or n log n) in the number of operations on
+# every engine; each step is one put and one read on a map of at most
+# 20,000 int keys.
+# Does: the interpreter finishes in 0.06 s; `kanso play` natively takes
+# 7.7 s (2.3 s user), and the gap grows with the square of the map. callgrind on the
+# port's Myers diff (delta/myers.kso, which alternates `put v k x` with
+# `v[k + 1]` reads) puts 80% of all instructions in k_map_sort_build,
+# k_msort_cmp and k_key_cmp: a read after a put re-sorts the whole map.
+# On a 3,000-line file with 60 changed lines `ugit diff` takes 3.3 s as a
+# dev binary, 4.0 s as a release binary, and 0.4 s on the interpreter.
+fn walk m i n acc
+  return acc if n < i
+  grown = put m i (i * 2)
+  walk grown (i + 1) n (acc + grown[i - 1 + 1])
+
+print "{walk {} 1 20000 0}"

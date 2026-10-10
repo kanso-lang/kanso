@@ -1,0 +1,14 @@
+# Run from bugs/import_above_invocation/app:
+#   kanso run .        fails: cannot resolve import "../../shared"
+#   kanso run "$PWD"   prints "shared"
+#
+# Should: resolve the same import the same way however the entry directory
+# is spelled on the command line. Does: resolve_import walks `../` lexically
+# up the path it was given, so from a relative `.` it runs out of
+# components one level early and looks for `../shared` beside the working
+# directory instead of `shared` beside `app`. inner/ imports "../../shared":
+# one `../` from inner/ is app/, the second is the directory holding app/
+# and shared/.
+import "./inner"
+
+inner/hello

@@ -1,0 +1,58 @@
+import "std/list"
+import "std/text"
+
+# What `from_tagged` answers when the JSON is not in the toml-test shape.
+pub type tagged_error
+  message
+
+# The toml-test encoder's input: JSON in which every scalar is a
+# {"type": …, "value": …} object. The answer is the value tree `decode` would
+# have produced, ready for `encode`.
+pub fn from_tagged m:map[string some]
+  kind = m["type"]
+  spelled = m["value"]
+  return table_of m if length m != 2
+  tagged_or_table m kind spelled
+
+pub fn from_tagged xs:[]some
+  list/to_list (list/map xs from_tagged)
+
+pub fn from_tagged v
+  err (tagged_error "expected an object or an array, found {v}")
+
+fn table_of m
+  list/transform_values m from_tagged
+
+fn tagged_or_table _ kind:string spelled:string
+  scalar_of kind spelled
+
+fn tagged_or_table m _ _
+  table_of m
+
+fn scalar_of "bool" "false"
+  false
+
+fn scalar_of "bool" "true"
+  true
+
+fn scalar_of "float" spelled
+  text/to_float spelled
+
+fn scalar_of "integer" spelled
+  text/to_int spelled
+
+fn scalar_of "string" spelled
+  spelled
+
+fn scalar_of kind spelled
+  cs = text/bytes spelled
+  read = scalar cs 1
+  checked_scalar kind spelled cs read
+
+fn checked_scalar kind spelled cs (parsed stop v)
+  whole = stop == length cs + 1
+  return v if whole and type_name v == kind
+  err (tagged_error "`{spelled}` is not a valid {kind}")
+
+fn checked_scalar kind spelled _ (err _)
+  err (tagged_error "`{spelled}` is not a valid {kind}")

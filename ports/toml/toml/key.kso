@@ -1,0 +1,58 @@
+import "std/text"
+
+# A bare key is ASCII letters, digits, `_` and `-`.
+fn bare? 45
+  true
+
+fn bare? 95
+  true
+
+fn bare? none
+  false
+
+fn bare? c
+  in? c 48 57 or in? c 65 90 or in? c 97 122
+
+fn bare_end cs p
+  if (bare? cs[p]) (bare_end cs (p + 1)) p
+
+fn bare_key cs p
+  q = bare_end cs p
+  return fail p "expected a key, found {shown cs p}" if q == p
+  parsed q (text/utf8 (text/slice cs p (q - 1)))
+
+# A key is one or more simple keys joined by dots, with blanks allowed around
+# each dot. The answer is the list of simple keys.
+fn parse_key cs p
+  first = simple_key cs p
+  key_rest cs first []
+
+fn key_dot cs 46 p names
+  q = skip_blank cs (p + 1)
+  next = simple_key cs q
+  key_rest cs next names
+
+fn key_dot _ none p names
+  parsed p names
+
+fn key_dot _ _ p names
+  parsed p names
+
+fn key_rest cs (parsed p k) names
+  q = skip_blank cs p
+  key_dot cs cs[q] q (push names k)
+
+fn simple_key cs p
+  simple_key_at cs cs[p] p
+
+fn simple_key_at cs 34 p
+  line_string cs (p + 1) 34
+
+fn simple_key_at cs 39 p
+  line_string cs (p + 1) 39
+
+fn simple_key_at _ none p
+  fail p "expected a key, found end of input"
+
+fn simple_key_at cs _ p
+  bare_key cs p

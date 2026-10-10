@@ -1,0 +1,57 @@
+{
+  "a": {
+    "b": {
+      "c": {}
+    }
+  },
+  "d": {
+    "e": {
+      "f": {}
+    }
+  },
+  "dog": {
+    "tater.man": {
+      "type": {
+        "name": {"type": "string", "value": "pug"}
+      }
+    }
+  },
+  "empty": {},
+  "fruit": {
+    "apple": {
+      "color": {"type": "string", "value": "red"},
+      "taste": {
+        "sweet": {"type": "bool", "value": "true"}
+      },
+      "texture": {
+        "smooth": {"type": "bool", "value": "true"}
+      }
+    }
+  },
+  "g": {
+    "h": {
+      "i": {}
+    }
+  },
+  "j": {
+    "ʞ": {
+      "l": {}
+    }
+  },
+  "table-1": {
+    "key1": {"type": "string", "value": "some string"},
+    "key2": {"type": "integer", "value": "123"}
+  },
+  "table-2": {
+    "key1": {"type": "string", "value": "another string"},
+    "key2": {"type": "integer", "value": "456"}
+  },
+  "x": {
+    "defined": {"type": "string", "value": "after"},
+    "y": {
+      "z": {
+        "w": {}
+      }
+    }
+  }
+}

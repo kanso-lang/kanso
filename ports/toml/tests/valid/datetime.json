@@ -1,0 +1,23 @@
+{
+  "in_array": [
+    {"type": "date-local", "value": "1979-05-27"},
+    {"type": "time-local", "value": "07:32:00"},
+    {"type": "datetime", "value": "1979-05-27T07:32:00Z"}
+  ],
+  "ld1": {"type": "date-local", "value": "1979-05-27"},
+  "ldt1": {"type": "datetime-local", "value": "1979-05-27T07:32:00"},
+  "ldt2": {"type": "datetime-local", "value": "1979-05-27T00:32:00.999999"},
+  "ldt3": {"type": "datetime-local", "value": "1979-05-27T07:32:00"},
+  "leap": {"type": "date-local", "value": "2000-02-29"},
+  "leap4": {"type": "date-local", "value": "2024-02-29"},
+  "lt1": {"type": "time-local", "value": "07:32:00"},
+  "lt2": {"type": "time-local", "value": "00:32:00.999999"},
+  "lt3": {"type": "time-local", "value": "23:59:60"},
+  "odt1": {"type": "datetime", "value": "1979-05-27T07:32:00Z"},
+  "odt2": {"type": "datetime", "value": "1979-05-27T00:32:00-07:00"},
+  "odt3": {"type": "datetime", "value": "1979-05-27T00:32:00.999999-07:00"},
+  "odt4": {"type": "datetime", "value": "1979-05-27T07:32:00Z"},
+  "odt5": {"type": "datetime", "value": "1979-05-27T07:32:00Z"},
+  "odt6": {"type": "datetime", "value": "1987-07-05T17:45:56.6+05:30"},
+  "spaced_date": {"type": "date-local", "value": "1979-05-27"}
+}

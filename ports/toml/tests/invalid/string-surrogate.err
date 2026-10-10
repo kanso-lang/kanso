@@ -1,0 +1,5 @@
+TOML parse error at line 1, column 6
+  |
+1 | a = "\uD800"
+  |      ^
+escape names 55296, which is not a unicode scalar

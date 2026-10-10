@@ -1,0 +1,73 @@
+import "std/list"
+import "std/text"
+
+# A persistent search tree from path keys to slots.
+#
+# A map would be the obvious choice, and it is what the first two versions of
+# this decoder used. But in compiled code a map that is read between writes
+# sorts all of its pairs again on the next read, so checking a key before
+# adding it costs a sort per line. This tree costs a few comparisons per read
+# and a few new branches per write on every engine.
+#
+# It is ordered by a hash of the key first, which spreads keys that arrive in
+# order (as a document's paths do) across the tree without any rebalancing.
+type branch
+  hash
+  key
+  left
+  right
+  value
+
+type no_branch
+
+# The polynomial alone keeps keys of one length in their spelled order, which
+# for "k1", "k2", … is the order they arrive in, and the tree degenerates into
+# a list. Knuth's multiplicative step scatters them.
+fn key_hash key
+  poly = list/fold (text/bytes key) 5381 (h b -> (h * 33 + b) % 4294967291)
+  poly * 2654435761 % 4294967296
+
+fn before? hash key (branch h k _ _ _)
+  hash < h or hash == h and key < k
+
+fn stored t key
+  search t (key_hash key) key
+
+fn search no_branch _ _
+  none
+
+fn search t:branch hash key
+  return t.value if hash == t.hash and key == t.key
+  if (before? hash key t) (search t.left hash key) (search t.right hash key)
+
+fn store t key value
+  insert t (key_hash key) key value
+
+fn insert no_branch hash key value
+  branch hash key no_branch no_branch value
+
+fn insert (branch h k l r v) hash key value
+  return branch h k l r value if hash == h and key == k
+  here = branch h k l r v
+  return branch h k (insert l hash key value) r v if before? hash key here
+  branch h k l (insert r hash key value) v
+
+# Every value in the tree, in no order a caller should rely on. The walk keeps
+# its own list of subtrees still to visit, so every `push` is an argument to a
+# tail call: pushing onto a list a helper handed back crashes compiled code
+# once the list reaches 64 elements (bugs/push-through-helper-segfault).
+fn stored_values t
+  walk [t] 1 []
+
+fn walk todo i acc
+  return acc if i < 1 or length todo < i
+  visit todo i acc todo[i]
+
+fn visit todo i acc no_branch
+  walk todo (i + 1) acc
+
+fn visit todo i acc (branch _ _ l r v)
+  also_right (push todo l) r i (push acc v)
+
+fn also_right todo r i acc
+  walk (push todo r) (i + 1) acc

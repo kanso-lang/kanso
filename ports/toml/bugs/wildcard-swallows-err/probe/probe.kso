@@ -1,0 +1,30 @@
+# A `_` parameter accepts an err and the body runs; a named parameter makes the
+# call short-circuit as chapter 04 describes ("when one shows up as an
+# argument, the function body never runs").
+#
+# Run from this directory: kanso run main.kso; kanso run main.kso --interp
+#  (both show it)
+#
+# Expected: demo_a reports the err "boom 1" at the endpoint, like demo_b.
+# Actual: demo_a prints "ignored body ran with 5" and "boom 1" is lost. Every
+# engine agrees, so the failure disappears silently everywhere.
+#
+# Where it bit: a parser step `fn float_done tok _` whose second argument was
+# the result of a validation step. The validation failed, the body ran anyway,
+# and `text/to_float` raised a different, worse error about the same input.
+fn boom n
+  err "boom {n}"
+
+fn ignores x _
+  "ignored body ran with {x}"
+
+fn binds x y
+  "binding body ran with {x} {y}"
+
+pub demo_a =
+  e = boom 1
+  ignores 5 e
+
+pub demo_b =
+  e = boom 2
+  binds 5 e

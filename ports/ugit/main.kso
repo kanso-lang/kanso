@@ -1,0 +1,4 @@
+import "./ugit"
+import "std/os"
+
+os/args .> ugit/run

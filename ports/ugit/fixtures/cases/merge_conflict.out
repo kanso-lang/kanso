@@ -1,0 +1,79 @@
+Initialized empty ugit repository in .ugit/
+[master (root-commit) 62054b2] letters
+Switched to a new branch 'upper'
+[upper ed932c0] upper b and e
+Switched to branch 'master'
+[master 0881a78] spell b
+Auto-merging letters.txt
+CONFLICT (content): Merge conflict in letters.txt
+Automatic merge failed; fix conflicts and then commit the result.
+[exit 1]
+a
+<<<<<<< HEAD
+bee
+=======
+B
+>>>>>>> upper
+c
+d
+E
+Merge branch 'upper'
+On branch master
+You are merging ed932c0.
+  (fix conflicts, add them, and run "ugit commit")
+
+Changes not staged for commit:
+	modified:   letters.txt
+
+no changes added to commit
+diff --ugit a/letters.txt b/letters.txt
+--- a/letters.txt
++++ b/letters.txt
+@@ -1,5 +1,9 @@
+ a
++<<<<<<< HEAD
+ bee
++=======
++B
++>>>>>>> upper
+ c
+ d
+-e
++E
+fatal: You have not concluded your merge (MERGE_HEAD exists).
+[exit 128]
+On branch master
+You are merging ed932c0.
+  (fix conflicts, add them, and run "ugit commit")
+
+Changes to be committed:
+	modified:   letters.txt
+[master 02da0db] Merge branch 'upper'
+02da0db (HEAD -> master) Merge branch 'upper'
+0881a78 spell b
+62054b2 letters
+ed932c0 (upper) upper b and e
+commit 02da0db048c4d38692736cc47b79becef7a424ff875e0dd492005ae6297f8b84 (HEAD -> master)
+Merge: 0881a78 ed932c0
+Author: A U Thor <author@example.com>
+Date:   Tue Nov 14 22:17:20 2023 +0000
+
+    Merge branch 'upper'
+
+diff --ugit a/letters.txt b/letters.txt
+--- a/letters.txt
++++ b/letters.txt
+@@ -1,5 +1,5 @@
+ a
+-bee
++Bee
+ c
+ d
+-e
++E
+On branch master
+nothing to commit, working tree clean
+HEAD
+index
+objects
+refs

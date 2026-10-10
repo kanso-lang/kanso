@@ -1,0 +1,132 @@
+import "../store"
+import "std/io"
+import "std/os"
+import "std/text"
+
+# The whole program: from the arguments to one description of what to do.
+# Every command yields its exit status as a value. Failures raised in the
+# store -- a name that does not resolve, an object that is not there --
+# arrive here as errs, and the rescue turns them into git's "fatal:" line.
+# os/exit stays outside the rescue, because an exit is itself an err from
+# std/os and the rescue would catch it.
+pub fn run argv
+  rest = text/slice argv 2 (length argv)
+  command argv[1] rest .? fatal .> finish
+
+fn fatal (err reason)
+  io/write_err "fatal: {reason}\n" .> (_ -> effect 128)
+
+fn finish 0
+  effect done
+
+fn finish code:int
+  os/exit code
+
+fn finish _
+  effect done
+
+fn command none _
+  failure usage 1
+
+fn command "init" args
+  init_cmd args
+
+fn command "help" _
+  say usage
+
+fn command "--help" _
+  say usage
+
+fn command name args
+  os/is_dir store/root .> (there -> in_repo there name args)
+
+fn in_repo false _ _
+  failure "fatal: not a ugit repository: {store/root}\n" 128
+
+fn in_repo true name args
+  dispatch name args
+
+fn dispatch "add" args
+  add_cmd args
+
+fn dispatch "branch" args
+  branch_cmd args
+
+fn dispatch "cat-file" args
+  cat_file_cmd args
+
+fn dispatch "checkout" args
+  checkout_cmd args
+
+fn dispatch "commit" args
+  commit_cmd args
+
+fn dispatch "diff" args
+  diff_cmd args
+
+fn dispatch "hash-object" args
+  hash_object_cmd args
+
+fn dispatch "log" args
+  log_cmd args
+
+fn dispatch "merge" args
+  merge_cmd args
+
+fn dispatch "merge-base" args
+  merge_base_cmd args
+
+fn dispatch "reset" args
+  reset_cmd args
+
+fn dispatch "rev-parse" args
+  rev_parse_cmd args
+
+fn dispatch "show" args
+  show_cmd args
+
+fn dispatch "status" args
+  status_cmd args
+
+fn dispatch "tag" args
+  tag_cmd args
+
+fn dispatch "write-tree" _
+  write_tree_cmd
+
+fn dispatch name _
+  failure "ugit: '{name}' is not a ugit command. See 'ugit help'.\n" 1
+
+usage = """
+  usage: ugit <command> [<args>]
+
+    init                    create an empty repository in .ugit
+    add <path>...           stage files (a directory stages all below it)
+    commit -m <message>     record the staged tree
+    status                  show staged, unstaged and untracked changes
+    diff [--cached] [<rev> [<rev>]]
+                            show changes as a unified diff
+    log [--oneline] [<rev>] show history
+    show [<rev>]            show a commit and its changes
+    branch [<name> [<rev>]] list branches, or create one
+    tag [<name> [<rev>]]    list tags, or create one
+    checkout [-b] <rev>     switch branches, or detach HEAD at a commit
+    checkout -- <path>...   restore files from the index
+    merge <rev>             merge another line of history into HEAD
+    reset [--hard] <rev>    move the branch, resetting the index (and files)
+
+  plumbing: hash-object, cat-file, write-tree, rev-parse, merge-base
+"""
+
+# Output, then a status.
+fn say message
+  io/write message .> (_ -> effect 0)
+
+fn fatal_says message
+  failure "fatal: {message}\n" 128
+
+fn failure message code
+  io/write_err message .> (_ -> effect code)
+
+fn short oid
+  text/slice oid 1 7

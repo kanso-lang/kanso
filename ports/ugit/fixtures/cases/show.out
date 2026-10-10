@@ -1,0 +1,75 @@
+Initialized empty ugit repository in .ugit/
+[master (root-commit) c67edb1] add f
+[master 085d383] grow f, add g
+commit 085d3830c8293b5676ffae21d8d5dcac9fca0f26398ae86efdf4471bb194fda6 (HEAD -> master, tag: grown)
+Author: A U Thor <author@example.com>
+Date:   Tue Nov 14 22:15:20 2023 +0000
+
+    grow f, add g
+
+diff --ugit a/f.txt b/f.txt
+--- a/f.txt
++++ b/f.txt
+@@ -1 +1,2 @@
+ first line
++second line
+diff --ugit a/g.txt b/g.txt
+new file
+--- /dev/null
++++ b/g.txt
+@@ -0,0 +1 @@
++g
+commit 085d3830c8293b5676ffae21d8d5dcac9fca0f26398ae86efdf4471bb194fda6 (HEAD -> master, tag: grown)
+Author: A U Thor <author@example.com>
+Date:   Tue Nov 14 22:15:20 2023 +0000
+
+    grow f, add g
+
+diff --ugit a/f.txt b/f.txt
+--- a/f.txt
++++ b/f.txt
+@@ -1 +1,2 @@
+ first line
++second line
+diff --ugit a/g.txt b/g.txt
+new file
+--- /dev/null
++++ b/g.txt
+@@ -0,0 +1 @@
++g
+commit 085d3830c8293b5676ffae21d8d5dcac9fca0f26398ae86efdf4471bb194fda6 (HEAD -> master, tag: grown)
+Author: A U Thor <author@example.com>
+Date:   Tue Nov 14 22:15:20 2023 +0000
+
+    grow f, add g
+
+diff --ugit a/f.txt b/f.txt
+--- a/f.txt
++++ b/f.txt
+@@ -1 +1,2 @@
+ first line
++second line
+diff --ugit a/g.txt b/g.txt
+new file
+--- /dev/null
++++ b/g.txt
+@@ -0,0 +1 @@
++g
+fatal: ambiguous argument 'nothing': unknown revision
+[exit 128]
+commit c67edb18bd61718944610d98f995bb99201f7c784a94f292a9b80a3135c95f01
+Author: A U Thor <author@example.com>
+Date:   Tue Nov 14 22:14:20 2023 +0000
+
+    add f
+
+diff --ugit a/f.txt b/f.txt
+new file
+--- /dev/null
++++ b/f.txt
+@@ -0,0 +1 @@
++first line
+fatal: ambiguous argument 'HEAD^^': no such ancestor
+[exit 128]
+fatal: ambiguous argument 'HEAD~5': no such ancestor
+[exit 128]

@@ -1,0 +1,30 @@
+Initialized empty ugit repository in .ugit/
+[master (root-commit) 201947d] one
+[master 07f72c5] two
+201947d (HEAD -> master) one
+On branch master
+
+Changes not staged for commit:
+	modified:   n.txt
+
+Untracked files:
+	extra.txt
+	loose.txt
+
+no changes added to commit
+local edit
+HEAD is now at 201947d one
+On branch master
+
+Untracked files:
+	extra.txt
+	loose.txt
+
+nothing added to commit but untracked files present
+one
+extra.txt
+loose.txt
+n.txt
+HEAD is now at 201947d one
+usage: ugit reset [--hard] [<commit>]
+[exit 129]

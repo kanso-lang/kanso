@@ -1,0 +1,15 @@
+# A comment on the first line
+   # an indented comment
+
+key = "value" # a comment after a value
+other = "# not a comment"   # but this is
+
+[section] # after a header
+arr = [ # after the bracket
+  1, # after an element
+  # on its own line
+  2,
+] # after the array
+tab	= "tab before the equals"	# and tabs around the comment
+# a comment holding unicode: 日本語 and é and a tab:	done
+# the last line is a comment with no newline

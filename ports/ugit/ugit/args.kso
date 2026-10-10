@@ -1,0 +1,38 @@
+import "std/list"
+import "std/text"
+
+# A command line after its options have been picked out: `flags` maps each
+# option to its value (true for a bare switch), `words` is everything else
+# in order, and `waiting` is an option still owed its value, or none.
+type command_line
+  flags
+  waiting
+  words
+
+# `valued` lists the options that take the next word as their value.
+fn parsed args valued
+  list/fold args (command_line {} none []) (got w -> took got w valued)
+
+fn took (command_line flags none words) word valued
+  return command_line flags none (push words word) if not option? word
+  return command_line flags word words if listed? valued word
+  command_line (put flags word true) none words
+
+fn took (command_line flags waiting words) word _
+  command_line (put flags waiting word) none words
+
+fn option? word
+  length word > 1 and text/slice word 1 1 == "-"
+
+fn listed? xs x
+  list/any? xs (y -> y == x)
+
+# An option's value: a string, true for a switch given bare, none if absent.
+fn flag line name
+  line.flags[name]
+
+fn on? line name
+  line.flags[name] != none
+
+fn words_of line
+  line.words

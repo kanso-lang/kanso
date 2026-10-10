@@ -1,0 +1,7 @@
+{
+  "a": {"type": "integer", "value": "1"},
+  "b": {"type": "string", "value": "two"},
+  "t": {
+    "c": {"type": "string", "value": "x\ny"}
+  }
+}

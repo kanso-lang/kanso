@@ -1,0 +1,72 @@
+import "../store"
+import "std/list"
+import "std/text"
+
+# Everything most commands look at before they act, read once: the branch
+# HEAD is on (none when detached), the commit HEAD names (none before the
+# first commit) and the files it records, the index, the working tree as
+# blob ids, and the commit being merged in (none outside a merge).
+type view
+  branch
+  head
+  head_files
+  index
+  merging
+  work
+
+# One path whose content differs between two snapshots.
+type change
+  kind
+  path
+
+looked = store/current_branch
+  .> (b -> store/get_ref "HEAD" .> (at -> with_head b at.value.value))
+
+fn with_head b head
+  store/files_of_commit head
+    .> (hf -> store/read_index .> (idx -> with_index b head hf idx))
+
+fn with_index b head hf idx
+  in_merge = store/get_ref "MERGE_HEAD"
+  store/work_ids .> (work -> in_merge .> (m -> viewed b head hf idx m work))
+
+fn viewed b head hf idx m work
+  effect (view b head hf idx m.value.value work)
+
+# How `to` differs from `from`, path by path in sorted order.
+fn changes from to
+  every = keys (store/merged from to)
+  found = list/map every (p -> compared p from[p] to[p])
+  list/to_list (list/reject found same?)
+
+fn compared _ none none
+  none
+
+fn compared p none _
+  change "new file" p
+
+fn compared p _ none
+  change "deleted" p
+
+fn compared p a b
+  if (a == b) none (change "modified" p)
+
+fn same? none
+  true
+
+fn same? _
+  false
+
+# What the working tree has that the index does not track.
+fn untracked v
+  list/to_list (list/reject (keys v.work) (p -> v.index[p] != none))
+
+# Tracked paths whose content differs anywhere between HEAD, the index and
+# the working tree: what a checkout or merge must not overwrite.
+fn dirty v
+  staged = changes v.head_files v.index
+  unstaged = changes v.index (tracked_work v)
+  list/sort (list/to_list (list/map (text/concat staged unstaged) _.path))
+
+fn tracked_work v
+  list/fold (keys v.index) {} (m p -> put m p v.work[p])

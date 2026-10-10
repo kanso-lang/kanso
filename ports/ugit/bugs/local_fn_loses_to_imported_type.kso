@@ -1,0 +1,16 @@
+# Run with: kanso play local_fn_loses_to_imported_type.kso
+#
+# Should: call the file's own private `step`, print "3 3" -- or refuse the
+# program because `step` is ambiguous with std/list's pub type `step`.
+# Does: prints "3 list/step 1 2". The bare name resolves to std/list's
+# exported record constructor, the local function is never called, and no
+# diagnostic says so. In a module directory the same collision surfaces as
+# `error[arity]: step has 2 field(s), got 6`, which names a type the author
+# never wrote. Found in delta/myers.kso, where a helper called `step` built
+# list/step records instead of edits.
+import "std/list"
+
+fn step a b
+  a + b
+
+print "{list/sum [1 2]} {step 1 2}"

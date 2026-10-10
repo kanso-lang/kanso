@@ -1,0 +1,3 @@
+import "./probe"
+
+print "{probe/bare_n 20000}" .> (_ -> print "{probe/boxed_n 20000}")

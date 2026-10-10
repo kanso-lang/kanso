@@ -1,0 +1,5 @@
+TOML parse error at line 4, column 2
+  |
+4 | [fruit.apple]
+  |  ^
+table `fruit.apple` is already defined by dotted keys

@@ -1,0 +1,12 @@
+{
+  "empty": {"type": "string", "value": ""},
+  "escapes": {"type": "string", "value": "backspace\b tab\t newline\n formfeed\f return\r quote\" backslash\\"},
+  "hash": {"type": "string", "value": "a # inside a string"},
+  "plain": {"type": "string", "value": "I'm a string."},
+  "quotes": {"type": "string", "value": "You can \"quote\" me."},
+  "spaces": {"type": "string", "value": "  leading and trailing  "},
+  "tab": {"type": "string", "value": "a\tliteral tab"},
+  "unicode4": {"type": "string", "value": "é α 简"},
+  "unicode8": {"type": "string", "value": "😀 A"},
+  "utf8": {"type": "string", "value": "kanso 簡素 ñ"}
+}

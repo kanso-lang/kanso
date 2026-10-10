@@ -1,0 +1,7 @@
+test_epoch = git_date 0 == "Thu Jan 1 00:00:00 1970 +0000"
+
+test_a_known_second = git_date 1700000000 == "Tue Nov 14 22:13:20 2023 +0000"
+
+test_leap_day = git_date 951782400 == "Tue Feb 29 00:00:00 2000 +0000"
+
+test_end_of_a_year = git_date 1704067199 == "Sun Dec 31 23:59:59 2023 +0000"

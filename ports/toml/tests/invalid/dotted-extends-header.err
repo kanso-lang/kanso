@@ -1,0 +1,5 @@
+TOML parse error at line 5, column 1
+  |
+5 | apple.taste = "sweet"
+  | ^
+table `apple` is defined by a header; dotted keys cannot add to it

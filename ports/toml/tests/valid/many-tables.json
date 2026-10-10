@@ -1,0 +1,4804 @@
+{
+  "host": [
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "0.5"},
+        "mem": {"type": "integer", "value": "0"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "0"},
+        "seen": {"type": "datetime", "value": "2024-01-01T10:00:00Z"}
+      },
+      "name": {"type": "string", "value": "host-000"},
+      "port": {"type": "integer", "value": "8000"},
+      "tags": [
+        {"type": "string", "value": "t0"},
+        {"type": "string", "value": "t0"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "1.5"},
+        "mem": {"type": "integer", "value": "64"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "0"},
+        "seen": {"type": "datetime", "value": "2024-01-02T10:01:00Z"}
+      },
+      "name": {"type": "string", "value": "host-001"},
+      "port": {"type": "integer", "value": "8001"},
+      "tags": [
+        {"type": "string", "value": "t1"},
+        {"type": "string", "value": "t1"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "2.5"},
+        "mem": {"type": "integer", "value": "128"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "0"},
+        "seen": {"type": "datetime", "value": "2024-01-03T10:02:00Z"}
+      },
+      "name": {"type": "string", "value": "host-002"},
+      "port": {"type": "integer", "value": "8002"},
+      "tags": [
+        {"type": "string", "value": "t2"},
+        {"type": "string", "value": "t2"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "3.5"},
+        "mem": {"type": "integer", "value": "192"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "0"},
+        "seen": {"type": "datetime", "value": "2024-01-04T10:03:00Z"}
+      },
+      "name": {"type": "string", "value": "host-003"},
+      "port": {"type": "integer", "value": "8003"},
+      "tags": [
+        {"type": "string", "value": "t3"},
+        {"type": "string", "value": "t3"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "4.5"},
+        "mem": {"type": "integer", "value": "256"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "0"},
+        "seen": {"type": "datetime", "value": "2024-01-05T10:04:00Z"}
+      },
+      "name": {"type": "string", "value": "host-004"},
+      "port": {"type": "integer", "value": "8004"},
+      "tags": [
+        {"type": "string", "value": "t4"},
+        {"type": "string", "value": "t4"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "5.5"},
+        "mem": {"type": "integer", "value": "320"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "0"},
+        "seen": {"type": "datetime", "value": "2024-01-06T10:05:00Z"}
+      },
+      "name": {"type": "string", "value": "host-005"},
+      "port": {"type": "integer", "value": "8005"},
+      "tags": [
+        {"type": "string", "value": "t5"},
+        {"type": "string", "value": "t5"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "6.5"},
+        "mem": {"type": "integer", "value": "384"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "0"},
+        "seen": {"type": "datetime", "value": "2024-01-07T10:06:00Z"}
+      },
+      "name": {"type": "string", "value": "host-006"},
+      "port": {"type": "integer", "value": "8006"},
+      "tags": [
+        {"type": "string", "value": "t6"},
+        {"type": "string", "value": "t6"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "7.5"},
+        "mem": {"type": "integer", "value": "448"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "0"},
+        "seen": {"type": "datetime", "value": "2024-01-08T10:07:00Z"}
+      },
+      "name": {"type": "string", "value": "host-007"},
+      "port": {"type": "integer", "value": "8007"},
+      "tags": [
+        {"type": "string", "value": "t0"},
+        {"type": "string", "value": "t7"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "0.5"},
+        "mem": {"type": "integer", "value": "512"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "0"},
+        "seen": {"type": "datetime", "value": "2024-01-09T10:08:00Z"}
+      },
+      "name": {"type": "string", "value": "host-008"},
+      "port": {"type": "integer", "value": "8008"},
+      "tags": [
+        {"type": "string", "value": "t1"},
+        {"type": "string", "value": "t8"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "1.5"},
+        "mem": {"type": "integer", "value": "576"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "0"},
+        "seen": {"type": "datetime", "value": "2024-01-10T10:09:00Z"}
+      },
+      "name": {"type": "string", "value": "host-009"},
+      "port": {"type": "integer", "value": "8009"},
+      "tags": [
+        {"type": "string", "value": "t2"},
+        {"type": "string", "value": "t9"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "2.5"},
+        "mem": {"type": "integer", "value": "640"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "0"},
+        "seen": {"type": "datetime", "value": "2024-01-11T10:10:00Z"}
+      },
+      "name": {"type": "string", "value": "host-010"},
+      "port": {"type": "integer", "value": "8010"},
+      "tags": [
+        {"type": "string", "value": "t3"},
+        {"type": "string", "value": "t10"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "3.5"},
+        "mem": {"type": "integer", "value": "704"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "0"},
+        "seen": {"type": "datetime", "value": "2024-01-12T10:11:00Z"}
+      },
+      "name": {"type": "string", "value": "host-011"},
+      "port": {"type": "integer", "value": "8011"},
+      "tags": [
+        {"type": "string", "value": "t4"},
+        {"type": "string", "value": "t0"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "4.5"},
+        "mem": {"type": "integer", "value": "768"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "0"},
+        "seen": {"type": "datetime", "value": "2024-01-13T10:12:00Z"}
+      },
+      "name": {"type": "string", "value": "host-012"},
+      "port": {"type": "integer", "value": "8012"},
+      "tags": [
+        {"type": "string", "value": "t5"},
+        {"type": "string", "value": "t1"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "5.5"},
+        "mem": {"type": "integer", "value": "832"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "0"},
+        "seen": {"type": "datetime", "value": "2024-01-14T10:13:00Z"}
+      },
+      "name": {"type": "string", "value": "host-013"},
+      "port": {"type": "integer", "value": "8013"},
+      "tags": [
+        {"type": "string", "value": "t6"},
+        {"type": "string", "value": "t2"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "6.5"},
+        "mem": {"type": "integer", "value": "896"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "0"},
+        "seen": {"type": "datetime", "value": "2024-01-15T10:14:00Z"}
+      },
+      "name": {"type": "string", "value": "host-014"},
+      "port": {"type": "integer", "value": "8014"},
+      "tags": [
+        {"type": "string", "value": "t0"},
+        {"type": "string", "value": "t3"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "7.5"},
+        "mem": {"type": "integer", "value": "960"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "0"},
+        "seen": {"type": "datetime", "value": "2024-01-16T10:15:00Z"}
+      },
+      "name": {"type": "string", "value": "host-015"},
+      "port": {"type": "integer", "value": "8015"},
+      "tags": [
+        {"type": "string", "value": "t1"},
+        {"type": "string", "value": "t4"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "0.5"},
+        "mem": {"type": "integer", "value": "1024"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "0"},
+        "seen": {"type": "datetime", "value": "2024-01-17T10:16:00Z"}
+      },
+      "name": {"type": "string", "value": "host-016"},
+      "port": {"type": "integer", "value": "8016"},
+      "tags": [
+        {"type": "string", "value": "t2"},
+        {"type": "string", "value": "t5"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "1.5"},
+        "mem": {"type": "integer", "value": "1088"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "0"},
+        "seen": {"type": "datetime", "value": "2024-01-18T10:17:00Z"}
+      },
+      "name": {"type": "string", "value": "host-017"},
+      "port": {"type": "integer", "value": "8017"},
+      "tags": [
+        {"type": "string", "value": "t3"},
+        {"type": "string", "value": "t6"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "2.5"},
+        "mem": {"type": "integer", "value": "1152"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "0"},
+        "seen": {"type": "datetime", "value": "2024-01-19T10:18:00Z"}
+      },
+      "name": {"type": "string", "value": "host-018"},
+      "port": {"type": "integer", "value": "8018"},
+      "tags": [
+        {"type": "string", "value": "t4"},
+        {"type": "string", "value": "t7"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "3.5"},
+        "mem": {"type": "integer", "value": "1216"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "0"},
+        "seen": {"type": "datetime", "value": "2024-01-20T10:19:00Z"}
+      },
+      "name": {"type": "string", "value": "host-019"},
+      "port": {"type": "integer", "value": "8019"},
+      "tags": [
+        {"type": "string", "value": "t5"},
+        {"type": "string", "value": "t8"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "4.5"},
+        "mem": {"type": "integer", "value": "1280"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "1"},
+        "seen": {"type": "datetime", "value": "2024-01-21T10:20:00Z"}
+      },
+      "name": {"type": "string", "value": "host-020"},
+      "port": {"type": "integer", "value": "8020"},
+      "tags": [
+        {"type": "string", "value": "t6"},
+        {"type": "string", "value": "t9"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "5.5"},
+        "mem": {"type": "integer", "value": "1344"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "1"},
+        "seen": {"type": "datetime", "value": "2024-01-22T10:21:00Z"}
+      },
+      "name": {"type": "string", "value": "host-021"},
+      "port": {"type": "integer", "value": "8021"},
+      "tags": [
+        {"type": "string", "value": "t0"},
+        {"type": "string", "value": "t10"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "6.5"},
+        "mem": {"type": "integer", "value": "1408"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "1"},
+        "seen": {"type": "datetime", "value": "2024-01-23T10:22:00Z"}
+      },
+      "name": {"type": "string", "value": "host-022"},
+      "port": {"type": "integer", "value": "8022"},
+      "tags": [
+        {"type": "string", "value": "t1"},
+        {"type": "string", "value": "t0"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "7.5"},
+        "mem": {"type": "integer", "value": "1472"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "1"},
+        "seen": {"type": "datetime", "value": "2024-01-24T10:23:00Z"}
+      },
+      "name": {"type": "string", "value": "host-023"},
+      "port": {"type": "integer", "value": "8023"},
+      "tags": [
+        {"type": "string", "value": "t2"},
+        {"type": "string", "value": "t1"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "0.5"},
+        "mem": {"type": "integer", "value": "1536"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "1"},
+        "seen": {"type": "datetime", "value": "2024-01-25T10:24:00Z"}
+      },
+      "name": {"type": "string", "value": "host-024"},
+      "port": {"type": "integer", "value": "8024"},
+      "tags": [
+        {"type": "string", "value": "t3"},
+        {"type": "string", "value": "t2"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "1.5"},
+        "mem": {"type": "integer", "value": "1600"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "1"},
+        "seen": {"type": "datetime", "value": "2024-01-26T10:25:00Z"}
+      },
+      "name": {"type": "string", "value": "host-025"},
+      "port": {"type": "integer", "value": "8025"},
+      "tags": [
+        {"type": "string", "value": "t4"},
+        {"type": "string", "value": "t3"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "2.5"},
+        "mem": {"type": "integer", "value": "1664"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "1"},
+        "seen": {"type": "datetime", "value": "2024-01-27T10:26:00Z"}
+      },
+      "name": {"type": "string", "value": "host-026"},
+      "port": {"type": "integer", "value": "8026"},
+      "tags": [
+        {"type": "string", "value": "t5"},
+        {"type": "string", "value": "t4"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "3.5"},
+        "mem": {"type": "integer", "value": "1728"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "1"},
+        "seen": {"type": "datetime", "value": "2024-01-28T10:27:00Z"}
+      },
+      "name": {"type": "string", "value": "host-027"},
+      "port": {"type": "integer", "value": "8027"},
+      "tags": [
+        {"type": "string", "value": "t6"},
+        {"type": "string", "value": "t5"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "4.5"},
+        "mem": {"type": "integer", "value": "1792"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "1"},
+        "seen": {"type": "datetime", "value": "2024-01-01T10:28:00Z"}
+      },
+      "name": {"type": "string", "value": "host-028"},
+      "port": {"type": "integer", "value": "8028"},
+      "tags": [
+        {"type": "string", "value": "t0"},
+        {"type": "string", "value": "t6"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "5.5"},
+        "mem": {"type": "integer", "value": "1856"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "1"},
+        "seen": {"type": "datetime", "value": "2024-01-02T10:29:00Z"}
+      },
+      "name": {"type": "string", "value": "host-029"},
+      "port": {"type": "integer", "value": "8029"},
+      "tags": [
+        {"type": "string", "value": "t1"},
+        {"type": "string", "value": "t7"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "6.5"},
+        "mem": {"type": "integer", "value": "1920"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "1"},
+        "seen": {"type": "datetime", "value": "2024-01-03T10:30:00Z"}
+      },
+      "name": {"type": "string", "value": "host-030"},
+      "port": {"type": "integer", "value": "8030"},
+      "tags": [
+        {"type": "string", "value": "t2"},
+        {"type": "string", "value": "t8"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "7.5"},
+        "mem": {"type": "integer", "value": "1984"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "1"},
+        "seen": {"type": "datetime", "value": "2024-01-04T10:31:00Z"}
+      },
+      "name": {"type": "string", "value": "host-031"},
+      "port": {"type": "integer", "value": "8031"},
+      "tags": [
+        {"type": "string", "value": "t3"},
+        {"type": "string", "value": "t9"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "0.5"},
+        "mem": {"type": "integer", "value": "2048"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "1"},
+        "seen": {"type": "datetime", "value": "2024-01-05T10:32:00Z"}
+      },
+      "name": {"type": "string", "value": "host-032"},
+      "port": {"type": "integer", "value": "8032"},
+      "tags": [
+        {"type": "string", "value": "t4"},
+        {"type": "string", "value": "t10"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "1.5"},
+        "mem": {"type": "integer", "value": "2112"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "1"},
+        "seen": {"type": "datetime", "value": "2024-01-06T10:33:00Z"}
+      },
+      "name": {"type": "string", "value": "host-033"},
+      "port": {"type": "integer", "value": "8033"},
+      "tags": [
+        {"type": "string", "value": "t5"},
+        {"type": "string", "value": "t0"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "2.5"},
+        "mem": {"type": "integer", "value": "2176"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "1"},
+        "seen": {"type": "datetime", "value": "2024-01-07T10:34:00Z"}
+      },
+      "name": {"type": "string", "value": "host-034"},
+      "port": {"type": "integer", "value": "8034"},
+      "tags": [
+        {"type": "string", "value": "t6"},
+        {"type": "string", "value": "t1"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "3.5"},
+        "mem": {"type": "integer", "value": "2240"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "1"},
+        "seen": {"type": "datetime", "value": "2024-01-08T10:35:00Z"}
+      },
+      "name": {"type": "string", "value": "host-035"},
+      "port": {"type": "integer", "value": "8035"},
+      "tags": [
+        {"type": "string", "value": "t0"},
+        {"type": "string", "value": "t2"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "4.5"},
+        "mem": {"type": "integer", "value": "2304"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "1"},
+        "seen": {"type": "datetime", "value": "2024-01-09T10:36:00Z"}
+      },
+      "name": {"type": "string", "value": "host-036"},
+      "port": {"type": "integer", "value": "8036"},
+      "tags": [
+        {"type": "string", "value": "t1"},
+        {"type": "string", "value": "t3"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "5.5"},
+        "mem": {"type": "integer", "value": "2368"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "1"},
+        "seen": {"type": "datetime", "value": "2024-01-10T10:37:00Z"}
+      },
+      "name": {"type": "string", "value": "host-037"},
+      "port": {"type": "integer", "value": "8037"},
+      "tags": [
+        {"type": "string", "value": "t2"},
+        {"type": "string", "value": "t4"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "6.5"},
+        "mem": {"type": "integer", "value": "2432"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "1"},
+        "seen": {"type": "datetime", "value": "2024-01-11T10:38:00Z"}
+      },
+      "name": {"type": "string", "value": "host-038"},
+      "port": {"type": "integer", "value": "8038"},
+      "tags": [
+        {"type": "string", "value": "t3"},
+        {"type": "string", "value": "t5"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "7.5"},
+        "mem": {"type": "integer", "value": "2496"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "1"},
+        "seen": {"type": "datetime", "value": "2024-01-12T10:39:00Z"}
+      },
+      "name": {"type": "string", "value": "host-039"},
+      "port": {"type": "integer", "value": "8039"},
+      "tags": [
+        {"type": "string", "value": "t4"},
+        {"type": "string", "value": "t6"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "0.5"},
+        "mem": {"type": "integer", "value": "2560"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "2"},
+        "seen": {"type": "datetime", "value": "2024-01-13T10:40:00Z"}
+      },
+      "name": {"type": "string", "value": "host-040"},
+      "port": {"type": "integer", "value": "8040"},
+      "tags": [
+        {"type": "string", "value": "t5"},
+        {"type": "string", "value": "t7"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "1.5"},
+        "mem": {"type": "integer", "value": "2624"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "2"},
+        "seen": {"type": "datetime", "value": "2024-01-14T10:41:00Z"}
+      },
+      "name": {"type": "string", "value": "host-041"},
+      "port": {"type": "integer", "value": "8041"},
+      "tags": [
+        {"type": "string", "value": "t6"},
+        {"type": "string", "value": "t8"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "2.5"},
+        "mem": {"type": "integer", "value": "2688"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "2"},
+        "seen": {"type": "datetime", "value": "2024-01-15T10:42:00Z"}
+      },
+      "name": {"type": "string", "value": "host-042"},
+      "port": {"type": "integer", "value": "8042"},
+      "tags": [
+        {"type": "string", "value": "t0"},
+        {"type": "string", "value": "t9"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "3.5"},
+        "mem": {"type": "integer", "value": "2752"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "2"},
+        "seen": {"type": "datetime", "value": "2024-01-16T10:43:00Z"}
+      },
+      "name": {"type": "string", "value": "host-043"},
+      "port": {"type": "integer", "value": "8043"},
+      "tags": [
+        {"type": "string", "value": "t1"},
+        {"type": "string", "value": "t10"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "4.5"},
+        "mem": {"type": "integer", "value": "2816"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "2"},
+        "seen": {"type": "datetime", "value": "2024-01-17T10:44:00Z"}
+      },
+      "name": {"type": "string", "value": "host-044"},
+      "port": {"type": "integer", "value": "8044"},
+      "tags": [
+        {"type": "string", "value": "t2"},
+        {"type": "string", "value": "t0"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "5.5"},
+        "mem": {"type": "integer", "value": "2880"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "2"},
+        "seen": {"type": "datetime", "value": "2024-01-18T10:45:00Z"}
+      },
+      "name": {"type": "string", "value": "host-045"},
+      "port": {"type": "integer", "value": "8045"},
+      "tags": [
+        {"type": "string", "value": "t3"},
+        {"type": "string", "value": "t1"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "6.5"},
+        "mem": {"type": "integer", "value": "2944"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "2"},
+        "seen": {"type": "datetime", "value": "2024-01-19T10:46:00Z"}
+      },
+      "name": {"type": "string", "value": "host-046"},
+      "port": {"type": "integer", "value": "8046"},
+      "tags": [
+        {"type": "string", "value": "t4"},
+        {"type": "string", "value": "t2"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "7.5"},
+        "mem": {"type": "integer", "value": "3008"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "2"},
+        "seen": {"type": "datetime", "value": "2024-01-20T10:47:00Z"}
+      },
+      "name": {"type": "string", "value": "host-047"},
+      "port": {"type": "integer", "value": "8047"},
+      "tags": [
+        {"type": "string", "value": "t5"},
+        {"type": "string", "value": "t3"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "0.5"},
+        "mem": {"type": "integer", "value": "3072"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "2"},
+        "seen": {"type": "datetime", "value": "2024-01-21T10:48:00Z"}
+      },
+      "name": {"type": "string", "value": "host-048"},
+      "port": {"type": "integer", "value": "8048"},
+      "tags": [
+        {"type": "string", "value": "t6"},
+        {"type": "string", "value": "t4"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "1.5"},
+        "mem": {"type": "integer", "value": "3136"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "2"},
+        "seen": {"type": "datetime", "value": "2024-01-22T10:49:00Z"}
+      },
+      "name": {"type": "string", "value": "host-049"},
+      "port": {"type": "integer", "value": "8049"},
+      "tags": [
+        {"type": "string", "value": "t0"},
+        {"type": "string", "value": "t5"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "2.5"},
+        "mem": {"type": "integer", "value": "3200"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "2"},
+        "seen": {"type": "datetime", "value": "2024-01-23T10:50:00Z"}
+      },
+      "name": {"type": "string", "value": "host-050"},
+      "port": {"type": "integer", "value": "8050"},
+      "tags": [
+        {"type": "string", "value": "t1"},
+        {"type": "string", "value": "t6"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "3.5"},
+        "mem": {"type": "integer", "value": "3264"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "2"},
+        "seen": {"type": "datetime", "value": "2024-01-24T10:51:00Z"}
+      },
+      "name": {"type": "string", "value": "host-051"},
+      "port": {"type": "integer", "value": "8051"},
+      "tags": [
+        {"type": "string", "value": "t2"},
+        {"type": "string", "value": "t7"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "4.5"},
+        "mem": {"type": "integer", "value": "3328"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "2"},
+        "seen": {"type": "datetime", "value": "2024-01-25T10:52:00Z"}
+      },
+      "name": {"type": "string", "value": "host-052"},
+      "port": {"type": "integer", "value": "8052"},
+      "tags": [
+        {"type": "string", "value": "t3"},
+        {"type": "string", "value": "t8"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "5.5"},
+        "mem": {"type": "integer", "value": "3392"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "2"},
+        "seen": {"type": "datetime", "value": "2024-01-26T10:53:00Z"}
+      },
+      "name": {"type": "string", "value": "host-053"},
+      "port": {"type": "integer", "value": "8053"},
+      "tags": [
+        {"type": "string", "value": "t4"},
+        {"type": "string", "value": "t9"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "6.5"},
+        "mem": {"type": "integer", "value": "3456"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "2"},
+        "seen": {"type": "datetime", "value": "2024-01-27T10:54:00Z"}
+      },
+      "name": {"type": "string", "value": "host-054"},
+      "port": {"type": "integer", "value": "8054"},
+      "tags": [
+        {"type": "string", "value": "t5"},
+        {"type": "string", "value": "t10"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "7.5"},
+        "mem": {"type": "integer", "value": "3520"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "2"},
+        "seen": {"type": "datetime", "value": "2024-01-28T10:55:00Z"}
+      },
+      "name": {"type": "string", "value": "host-055"},
+      "port": {"type": "integer", "value": "8055"},
+      "tags": [
+        {"type": "string", "value": "t6"},
+        {"type": "string", "value": "t0"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "0.5"},
+        "mem": {"type": "integer", "value": "3584"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "2"},
+        "seen": {"type": "datetime", "value": "2024-01-01T10:56:00Z"}
+      },
+      "name": {"type": "string", "value": "host-056"},
+      "port": {"type": "integer", "value": "8056"},
+      "tags": [
+        {"type": "string", "value": "t0"},
+        {"type": "string", "value": "t1"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "1.5"},
+        "mem": {"type": "integer", "value": "3648"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "2"},
+        "seen": {"type": "datetime", "value": "2024-01-02T10:57:00Z"}
+      },
+      "name": {"type": "string", "value": "host-057"},
+      "port": {"type": "integer", "value": "8057"},
+      "tags": [
+        {"type": "string", "value": "t1"},
+        {"type": "string", "value": "t2"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "2.5"},
+        "mem": {"type": "integer", "value": "3712"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "2"},
+        "seen": {"type": "datetime", "value": "2024-01-03T10:58:00Z"}
+      },
+      "name": {"type": "string", "value": "host-058"},
+      "port": {"type": "integer", "value": "8058"},
+      "tags": [
+        {"type": "string", "value": "t2"},
+        {"type": "string", "value": "t3"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "3.5"},
+        "mem": {"type": "integer", "value": "3776"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "2"},
+        "seen": {"type": "datetime", "value": "2024-01-04T10:59:00Z"}
+      },
+      "name": {"type": "string", "value": "host-059"},
+      "port": {"type": "integer", "value": "8059"},
+      "tags": [
+        {"type": "string", "value": "t3"},
+        {"type": "string", "value": "t4"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "4.5"},
+        "mem": {"type": "integer", "value": "3840"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "3"},
+        "seen": {"type": "datetime", "value": "2024-01-05T10:00:00Z"}
+      },
+      "name": {"type": "string", "value": "host-060"},
+      "port": {"type": "integer", "value": "8060"},
+      "tags": [
+        {"type": "string", "value": "t4"},
+        {"type": "string", "value": "t5"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "5.5"},
+        "mem": {"type": "integer", "value": "3904"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "3"},
+        "seen": {"type": "datetime", "value": "2024-01-06T10:01:00Z"}
+      },
+      "name": {"type": "string", "value": "host-061"},
+      "port": {"type": "integer", "value": "8061"},
+      "tags": [
+        {"type": "string", "value": "t5"},
+        {"type": "string", "value": "t6"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "6.5"},
+        "mem": {"type": "integer", "value": "3968"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "3"},
+        "seen": {"type": "datetime", "value": "2024-01-07T10:02:00Z"}
+      },
+      "name": {"type": "string", "value": "host-062"},
+      "port": {"type": "integer", "value": "8062"},
+      "tags": [
+        {"type": "string", "value": "t6"},
+        {"type": "string", "value": "t7"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "7.5"},
+        "mem": {"type": "integer", "value": "4032"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "3"},
+        "seen": {"type": "datetime", "value": "2024-01-08T10:03:00Z"}
+      },
+      "name": {"type": "string", "value": "host-063"},
+      "port": {"type": "integer", "value": "8063"},
+      "tags": [
+        {"type": "string", "value": "t0"},
+        {"type": "string", "value": "t8"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "0.5"},
+        "mem": {"type": "integer", "value": "4096"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "3"},
+        "seen": {"type": "datetime", "value": "2024-01-09T10:04:00Z"}
+      },
+      "name": {"type": "string", "value": "host-064"},
+      "port": {"type": "integer", "value": "8064"},
+      "tags": [
+        {"type": "string", "value": "t1"},
+        {"type": "string", "value": "t9"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "1.5"},
+        "mem": {"type": "integer", "value": "4160"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "3"},
+        "seen": {"type": "datetime", "value": "2024-01-10T10:05:00Z"}
+      },
+      "name": {"type": "string", "value": "host-065"},
+      "port": {"type": "integer", "value": "8065"},
+      "tags": [
+        {"type": "string", "value": "t2"},
+        {"type": "string", "value": "t10"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "2.5"},
+        "mem": {"type": "integer", "value": "4224"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "3"},
+        "seen": {"type": "datetime", "value": "2024-01-11T10:06:00Z"}
+      },
+      "name": {"type": "string", "value": "host-066"},
+      "port": {"type": "integer", "value": "8066"},
+      "tags": [
+        {"type": "string", "value": "t3"},
+        {"type": "string", "value": "t0"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "3.5"},
+        "mem": {"type": "integer", "value": "4288"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "3"},
+        "seen": {"type": "datetime", "value": "2024-01-12T10:07:00Z"}
+      },
+      "name": {"type": "string", "value": "host-067"},
+      "port": {"type": "integer", "value": "8067"},
+      "tags": [
+        {"type": "string", "value": "t4"},
+        {"type": "string", "value": "t1"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "4.5"},
+        "mem": {"type": "integer", "value": "4352"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "3"},
+        "seen": {"type": "datetime", "value": "2024-01-13T10:08:00Z"}
+      },
+      "name": {"type": "string", "value": "host-068"},
+      "port": {"type": "integer", "value": "8068"},
+      "tags": [
+        {"type": "string", "value": "t5"},
+        {"type": "string", "value": "t2"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "5.5"},
+        "mem": {"type": "integer", "value": "4416"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "3"},
+        "seen": {"type": "datetime", "value": "2024-01-14T10:09:00Z"}
+      },
+      "name": {"type": "string", "value": "host-069"},
+      "port": {"type": "integer", "value": "8069"},
+      "tags": [
+        {"type": "string", "value": "t6"},
+        {"type": "string", "value": "t3"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "6.5"},
+        "mem": {"type": "integer", "value": "4480"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "3"},
+        "seen": {"type": "datetime", "value": "2024-01-15T10:10:00Z"}
+      },
+      "name": {"type": "string", "value": "host-070"},
+      "port": {"type": "integer", "value": "8070"},
+      "tags": [
+        {"type": "string", "value": "t0"},
+        {"type": "string", "value": "t4"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "7.5"},
+        "mem": {"type": "integer", "value": "4544"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "3"},
+        "seen": {"type": "datetime", "value": "2024-01-16T10:11:00Z"}
+      },
+      "name": {"type": "string", "value": "host-071"},
+      "port": {"type": "integer", "value": "8071"},
+      "tags": [
+        {"type": "string", "value": "t1"},
+        {"type": "string", "value": "t5"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "0.5"},
+        "mem": {"type": "integer", "value": "4608"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "3"},
+        "seen": {"type": "datetime", "value": "2024-01-17T10:12:00Z"}
+      },
+      "name": {"type": "string", "value": "host-072"},
+      "port": {"type": "integer", "value": "8072"},
+      "tags": [
+        {"type": "string", "value": "t2"},
+        {"type": "string", "value": "t6"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "1.5"},
+        "mem": {"type": "integer", "value": "4672"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "3"},
+        "seen": {"type": "datetime", "value": "2024-01-18T10:13:00Z"}
+      },
+      "name": {"type": "string", "value": "host-073"},
+      "port": {"type": "integer", "value": "8073"},
+      "tags": [
+        {"type": "string", "value": "t3"},
+        {"type": "string", "value": "t7"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "2.5"},
+        "mem": {"type": "integer", "value": "4736"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "3"},
+        "seen": {"type": "datetime", "value": "2024-01-19T10:14:00Z"}
+      },
+      "name": {"type": "string", "value": "host-074"},
+      "port": {"type": "integer", "value": "8074"},
+      "tags": [
+        {"type": "string", "value": "t4"},
+        {"type": "string", "value": "t8"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "3.5"},
+        "mem": {"type": "integer", "value": "4800"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "3"},
+        "seen": {"type": "datetime", "value": "2024-01-20T10:15:00Z"}
+      },
+      "name": {"type": "string", "value": "host-075"},
+      "port": {"type": "integer", "value": "8075"},
+      "tags": [
+        {"type": "string", "value": "t5"},
+        {"type": "string", "value": "t9"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "4.5"},
+        "mem": {"type": "integer", "value": "4864"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "3"},
+        "seen": {"type": "datetime", "value": "2024-01-21T10:16:00Z"}
+      },
+      "name": {"type": "string", "value": "host-076"},
+      "port": {"type": "integer", "value": "8076"},
+      "tags": [
+        {"type": "string", "value": "t6"},
+        {"type": "string", "value": "t10"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "5.5"},
+        "mem": {"type": "integer", "value": "4928"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "3"},
+        "seen": {"type": "datetime", "value": "2024-01-22T10:17:00Z"}
+      },
+      "name": {"type": "string", "value": "host-077"},
+      "port": {"type": "integer", "value": "8077"},
+      "tags": [
+        {"type": "string", "value": "t0"},
+        {"type": "string", "value": "t0"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "6.5"},
+        "mem": {"type": "integer", "value": "4992"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "3"},
+        "seen": {"type": "datetime", "value": "2024-01-23T10:18:00Z"}
+      },
+      "name": {"type": "string", "value": "host-078"},
+      "port": {"type": "integer", "value": "8078"},
+      "tags": [
+        {"type": "string", "value": "t1"},
+        {"type": "string", "value": "t1"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "7.5"},
+        "mem": {"type": "integer", "value": "5056"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "3"},
+        "seen": {"type": "datetime", "value": "2024-01-24T10:19:00Z"}
+      },
+      "name": {"type": "string", "value": "host-079"},
+      "port": {"type": "integer", "value": "8079"},
+      "tags": [
+        {"type": "string", "value": "t2"},
+        {"type": "string", "value": "t2"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "0.5"},
+        "mem": {"type": "integer", "value": "5120"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "4"},
+        "seen": {"type": "datetime", "value": "2024-01-25T10:20:00Z"}
+      },
+      "name": {"type": "string", "value": "host-080"},
+      "port": {"type": "integer", "value": "8080"},
+      "tags": [
+        {"type": "string", "value": "t3"},
+        {"type": "string", "value": "t3"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "1.5"},
+        "mem": {"type": "integer", "value": "5184"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "4"},
+        "seen": {"type": "datetime", "value": "2024-01-26T10:21:00Z"}
+      },
+      "name": {"type": "string", "value": "host-081"},
+      "port": {"type": "integer", "value": "8081"},
+      "tags": [
+        {"type": "string", "value": "t4"},
+        {"type": "string", "value": "t4"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "2.5"},
+        "mem": {"type": "integer", "value": "5248"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "4"},
+        "seen": {"type": "datetime", "value": "2024-01-27T10:22:00Z"}
+      },
+      "name": {"type": "string", "value": "host-082"},
+      "port": {"type": "integer", "value": "8082"},
+      "tags": [
+        {"type": "string", "value": "t5"},
+        {"type": "string", "value": "t5"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "3.5"},
+        "mem": {"type": "integer", "value": "5312"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "4"},
+        "seen": {"type": "datetime", "value": "2024-01-28T10:23:00Z"}
+      },
+      "name": {"type": "string", "value": "host-083"},
+      "port": {"type": "integer", "value": "8083"},
+      "tags": [
+        {"type": "string", "value": "t6"},
+        {"type": "string", "value": "t6"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "4.5"},
+        "mem": {"type": "integer", "value": "5376"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "4"},
+        "seen": {"type": "datetime", "value": "2024-01-01T10:24:00Z"}
+      },
+      "name": {"type": "string", "value": "host-084"},
+      "port": {"type": "integer", "value": "8084"},
+      "tags": [
+        {"type": "string", "value": "t0"},
+        {"type": "string", "value": "t7"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "5.5"},
+        "mem": {"type": "integer", "value": "5440"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "4"},
+        "seen": {"type": "datetime", "value": "2024-01-02T10:25:00Z"}
+      },
+      "name": {"type": "string", "value": "host-085"},
+      "port": {"type": "integer", "value": "8085"},
+      "tags": [
+        {"type": "string", "value": "t1"},
+        {"type": "string", "value": "t8"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "6.5"},
+        "mem": {"type": "integer", "value": "5504"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "4"},
+        "seen": {"type": "datetime", "value": "2024-01-03T10:26:00Z"}
+      },
+      "name": {"type": "string", "value": "host-086"},
+      "port": {"type": "integer", "value": "8086"},
+      "tags": [
+        {"type": "string", "value": "t2"},
+        {"type": "string", "value": "t9"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "7.5"},
+        "mem": {"type": "integer", "value": "5568"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "4"},
+        "seen": {"type": "datetime", "value": "2024-01-04T10:27:00Z"}
+      },
+      "name": {"type": "string", "value": "host-087"},
+      "port": {"type": "integer", "value": "8087"},
+      "tags": [
+        {"type": "string", "value": "t3"},
+        {"type": "string", "value": "t10"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "0.5"},
+        "mem": {"type": "integer", "value": "5632"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "4"},
+        "seen": {"type": "datetime", "value": "2024-01-05T10:28:00Z"}
+      },
+      "name": {"type": "string", "value": "host-088"},
+      "port": {"type": "integer", "value": "8088"},
+      "tags": [
+        {"type": "string", "value": "t4"},
+        {"type": "string", "value": "t0"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "1.5"},
+        "mem": {"type": "integer", "value": "5696"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "4"},
+        "seen": {"type": "datetime", "value": "2024-01-06T10:29:00Z"}
+      },
+      "name": {"type": "string", "value": "host-089"},
+      "port": {"type": "integer", "value": "8089"},
+      "tags": [
+        {"type": "string", "value": "t5"},
+        {"type": "string", "value": "t1"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "2.5"},
+        "mem": {"type": "integer", "value": "5760"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "4"},
+        "seen": {"type": "datetime", "value": "2024-01-07T10:30:00Z"}
+      },
+      "name": {"type": "string", "value": "host-090"},
+      "port": {"type": "integer", "value": "8090"},
+      "tags": [
+        {"type": "string", "value": "t6"},
+        {"type": "string", "value": "t2"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "3.5"},
+        "mem": {"type": "integer", "value": "5824"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "4"},
+        "seen": {"type": "datetime", "value": "2024-01-08T10:31:00Z"}
+      },
+      "name": {"type": "string", "value": "host-091"},
+      "port": {"type": "integer", "value": "8091"},
+      "tags": [
+        {"type": "string", "value": "t0"},
+        {"type": "string", "value": "t3"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "4.5"},
+        "mem": {"type": "integer", "value": "5888"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "4"},
+        "seen": {"type": "datetime", "value": "2024-01-09T10:32:00Z"}
+      },
+      "name": {"type": "string", "value": "host-092"},
+      "port": {"type": "integer", "value": "8092"},
+      "tags": [
+        {"type": "string", "value": "t1"},
+        {"type": "string", "value": "t4"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "5.5"},
+        "mem": {"type": "integer", "value": "5952"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "4"},
+        "seen": {"type": "datetime", "value": "2024-01-10T10:33:00Z"}
+      },
+      "name": {"type": "string", "value": "host-093"},
+      "port": {"type": "integer", "value": "8093"},
+      "tags": [
+        {"type": "string", "value": "t2"},
+        {"type": "string", "value": "t5"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "6.5"},
+        "mem": {"type": "integer", "value": "6016"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "4"},
+        "seen": {"type": "datetime", "value": "2024-01-11T10:34:00Z"}
+      },
+      "name": {"type": "string", "value": "host-094"},
+      "port": {"type": "integer", "value": "8094"},
+      "tags": [
+        {"type": "string", "value": "t3"},
+        {"type": "string", "value": "t6"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "7.5"},
+        "mem": {"type": "integer", "value": "6080"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "4"},
+        "seen": {"type": "datetime", "value": "2024-01-12T10:35:00Z"}
+      },
+      "name": {"type": "string", "value": "host-095"},
+      "port": {"type": "integer", "value": "8095"},
+      "tags": [
+        {"type": "string", "value": "t4"},
+        {"type": "string", "value": "t7"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "0.5"},
+        "mem": {"type": "integer", "value": "6144"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "4"},
+        "seen": {"type": "datetime", "value": "2024-01-13T10:36:00Z"}
+      },
+      "name": {"type": "string", "value": "host-096"},
+      "port": {"type": "integer", "value": "8096"},
+      "tags": [
+        {"type": "string", "value": "t5"},
+        {"type": "string", "value": "t8"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "1.5"},
+        "mem": {"type": "integer", "value": "6208"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "4"},
+        "seen": {"type": "datetime", "value": "2024-01-14T10:37:00Z"}
+      },
+      "name": {"type": "string", "value": "host-097"},
+      "port": {"type": "integer", "value": "8097"},
+      "tags": [
+        {"type": "string", "value": "t6"},
+        {"type": "string", "value": "t9"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "2.5"},
+        "mem": {"type": "integer", "value": "6272"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "4"},
+        "seen": {"type": "datetime", "value": "2024-01-15T10:38:00Z"}
+      },
+      "name": {"type": "string", "value": "host-098"},
+      "port": {"type": "integer", "value": "8098"},
+      "tags": [
+        {"type": "string", "value": "t0"},
+        {"type": "string", "value": "t10"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "3.5"},
+        "mem": {"type": "integer", "value": "6336"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "4"},
+        "seen": {"type": "datetime", "value": "2024-01-16T10:39:00Z"}
+      },
+      "name": {"type": "string", "value": "host-099"},
+      "port": {"type": "integer", "value": "8099"},
+      "tags": [
+        {"type": "string", "value": "t1"},
+        {"type": "string", "value": "t0"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "4.5"},
+        "mem": {"type": "integer", "value": "6400"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "5"},
+        "seen": {"type": "datetime", "value": "2024-01-17T10:40:00Z"}
+      },
+      "name": {"type": "string", "value": "host-100"},
+      "port": {"type": "integer", "value": "8100"},
+      "tags": [
+        {"type": "string", "value": "t2"},
+        {"type": "string", "value": "t1"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "5.5"},
+        "mem": {"type": "integer", "value": "6464"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "5"},
+        "seen": {"type": "datetime", "value": "2024-01-18T10:41:00Z"}
+      },
+      "name": {"type": "string", "value": "host-101"},
+      "port": {"type": "integer", "value": "8101"},
+      "tags": [
+        {"type": "string", "value": "t3"},
+        {"type": "string", "value": "t2"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "6.5"},
+        "mem": {"type": "integer", "value": "6528"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "5"},
+        "seen": {"type": "datetime", "value": "2024-01-19T10:42:00Z"}
+      },
+      "name": {"type": "string", "value": "host-102"},
+      "port": {"type": "integer", "value": "8102"},
+      "tags": [
+        {"type": "string", "value": "t4"},
+        {"type": "string", "value": "t3"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "7.5"},
+        "mem": {"type": "integer", "value": "6592"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "5"},
+        "seen": {"type": "datetime", "value": "2024-01-20T10:43:00Z"}
+      },
+      "name": {"type": "string", "value": "host-103"},
+      "port": {"type": "integer", "value": "8103"},
+      "tags": [
+        {"type": "string", "value": "t5"},
+        {"type": "string", "value": "t4"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "0.5"},
+        "mem": {"type": "integer", "value": "6656"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "5"},
+        "seen": {"type": "datetime", "value": "2024-01-21T10:44:00Z"}
+      },
+      "name": {"type": "string", "value": "host-104"},
+      "port": {"type": "integer", "value": "8104"},
+      "tags": [
+        {"type": "string", "value": "t6"},
+        {"type": "string", "value": "t5"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "1.5"},
+        "mem": {"type": "integer", "value": "6720"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "5"},
+        "seen": {"type": "datetime", "value": "2024-01-22T10:45:00Z"}
+      },
+      "name": {"type": "string", "value": "host-105"},
+      "port": {"type": "integer", "value": "8105"},
+      "tags": [
+        {"type": "string", "value": "t0"},
+        {"type": "string", "value": "t6"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "2.5"},
+        "mem": {"type": "integer", "value": "6784"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "5"},
+        "seen": {"type": "datetime", "value": "2024-01-23T10:46:00Z"}
+      },
+      "name": {"type": "string", "value": "host-106"},
+      "port": {"type": "integer", "value": "8106"},
+      "tags": [
+        {"type": "string", "value": "t1"},
+        {"type": "string", "value": "t7"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "3.5"},
+        "mem": {"type": "integer", "value": "6848"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "5"},
+        "seen": {"type": "datetime", "value": "2024-01-24T10:47:00Z"}
+      },
+      "name": {"type": "string", "value": "host-107"},
+      "port": {"type": "integer", "value": "8107"},
+      "tags": [
+        {"type": "string", "value": "t2"},
+        {"type": "string", "value": "t8"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "4.5"},
+        "mem": {"type": "integer", "value": "6912"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "5"},
+        "seen": {"type": "datetime", "value": "2024-01-25T10:48:00Z"}
+      },
+      "name": {"type": "string", "value": "host-108"},
+      "port": {"type": "integer", "value": "8108"},
+      "tags": [
+        {"type": "string", "value": "t3"},
+        {"type": "string", "value": "t9"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "5.5"},
+        "mem": {"type": "integer", "value": "6976"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "5"},
+        "seen": {"type": "datetime", "value": "2024-01-26T10:49:00Z"}
+      },
+      "name": {"type": "string", "value": "host-109"},
+      "port": {"type": "integer", "value": "8109"},
+      "tags": [
+        {"type": "string", "value": "t4"},
+        {"type": "string", "value": "t10"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "6.5"},
+        "mem": {"type": "integer", "value": "7040"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "5"},
+        "seen": {"type": "datetime", "value": "2024-01-27T10:50:00Z"}
+      },
+      "name": {"type": "string", "value": "host-110"},
+      "port": {"type": "integer", "value": "8110"},
+      "tags": [
+        {"type": "string", "value": "t5"},
+        {"type": "string", "value": "t0"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "7.5"},
+        "mem": {"type": "integer", "value": "7104"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "5"},
+        "seen": {"type": "datetime", "value": "2024-01-28T10:51:00Z"}
+      },
+      "name": {"type": "string", "value": "host-111"},
+      "port": {"type": "integer", "value": "8111"},
+      "tags": [
+        {"type": "string", "value": "t6"},
+        {"type": "string", "value": "t1"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "0.5"},
+        "mem": {"type": "integer", "value": "7168"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "5"},
+        "seen": {"type": "datetime", "value": "2024-01-01T10:52:00Z"}
+      },
+      "name": {"type": "string", "value": "host-112"},
+      "port": {"type": "integer", "value": "8112"},
+      "tags": [
+        {"type": "string", "value": "t0"},
+        {"type": "string", "value": "t2"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "1.5"},
+        "mem": {"type": "integer", "value": "7232"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "5"},
+        "seen": {"type": "datetime", "value": "2024-01-02T10:53:00Z"}
+      },
+      "name": {"type": "string", "value": "host-113"},
+      "port": {"type": "integer", "value": "8113"},
+      "tags": [
+        {"type": "string", "value": "t1"},
+        {"type": "string", "value": "t3"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "2.5"},
+        "mem": {"type": "integer", "value": "7296"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "5"},
+        "seen": {"type": "datetime", "value": "2024-01-03T10:54:00Z"}
+      },
+      "name": {"type": "string", "value": "host-114"},
+      "port": {"type": "integer", "value": "8114"},
+      "tags": [
+        {"type": "string", "value": "t2"},
+        {"type": "string", "value": "t4"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "3.5"},
+        "mem": {"type": "integer", "value": "7360"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "5"},
+        "seen": {"type": "datetime", "value": "2024-01-04T10:55:00Z"}
+      },
+      "name": {"type": "string", "value": "host-115"},
+      "port": {"type": "integer", "value": "8115"},
+      "tags": [
+        {"type": "string", "value": "t3"},
+        {"type": "string", "value": "t5"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "4.5"},
+        "mem": {"type": "integer", "value": "7424"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "5"},
+        "seen": {"type": "datetime", "value": "2024-01-05T10:56:00Z"}
+      },
+      "name": {"type": "string", "value": "host-116"},
+      "port": {"type": "integer", "value": "8116"},
+      "tags": [
+        {"type": "string", "value": "t4"},
+        {"type": "string", "value": "t6"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "5.5"},
+        "mem": {"type": "integer", "value": "7488"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "5"},
+        "seen": {"type": "datetime", "value": "2024-01-06T10:57:00Z"}
+      },
+      "name": {"type": "string", "value": "host-117"},
+      "port": {"type": "integer", "value": "8117"},
+      "tags": [
+        {"type": "string", "value": "t5"},
+        {"type": "string", "value": "t7"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "6.5"},
+        "mem": {"type": "integer", "value": "7552"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "5"},
+        "seen": {"type": "datetime", "value": "2024-01-07T10:58:00Z"}
+      },
+      "name": {"type": "string", "value": "host-118"},
+      "port": {"type": "integer", "value": "8118"},
+      "tags": [
+        {"type": "string", "value": "t6"},
+        {"type": "string", "value": "t8"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "7.5"},
+        "mem": {"type": "integer", "value": "7616"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "5"},
+        "seen": {"type": "datetime", "value": "2024-01-08T10:59:00Z"}
+      },
+      "name": {"type": "string", "value": "host-119"},
+      "port": {"type": "integer", "value": "8119"},
+      "tags": [
+        {"type": "string", "value": "t0"},
+        {"type": "string", "value": "t9"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "0.5"},
+        "mem": {"type": "integer", "value": "7680"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "6"},
+        "seen": {"type": "datetime", "value": "2024-01-09T10:00:00Z"}
+      },
+      "name": {"type": "string", "value": "host-120"},
+      "port": {"type": "integer", "value": "8120"},
+      "tags": [
+        {"type": "string", "value": "t1"},
+        {"type": "string", "value": "t10"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "1.5"},
+        "mem": {"type": "integer", "value": "7744"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "6"},
+        "seen": {"type": "datetime", "value": "2024-01-10T10:01:00Z"}
+      },
+      "name": {"type": "string", "value": "host-121"},
+      "port": {"type": "integer", "value": "8121"},
+      "tags": [
+        {"type": "string", "value": "t2"},
+        {"type": "string", "value": "t0"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "2.5"},
+        "mem": {"type": "integer", "value": "7808"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "6"},
+        "seen": {"type": "datetime", "value": "2024-01-11T10:02:00Z"}
+      },
+      "name": {"type": "string", "value": "host-122"},
+      "port": {"type": "integer", "value": "8122"},
+      "tags": [
+        {"type": "string", "value": "t3"},
+        {"type": "string", "value": "t1"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "3.5"},
+        "mem": {"type": "integer", "value": "7872"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "6"},
+        "seen": {"type": "datetime", "value": "2024-01-12T10:03:00Z"}
+      },
+      "name": {"type": "string", "value": "host-123"},
+      "port": {"type": "integer", "value": "8123"},
+      "tags": [
+        {"type": "string", "value": "t4"},
+        {"type": "string", "value": "t2"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "4.5"},
+        "mem": {"type": "integer", "value": "7936"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "6"},
+        "seen": {"type": "datetime", "value": "2024-01-13T10:04:00Z"}
+      },
+      "name": {"type": "string", "value": "host-124"},
+      "port": {"type": "integer", "value": "8124"},
+      "tags": [
+        {"type": "string", "value": "t5"},
+        {"type": "string", "value": "t3"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "5.5"},
+        "mem": {"type": "integer", "value": "8000"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "6"},
+        "seen": {"type": "datetime", "value": "2024-01-14T10:05:00Z"}
+      },
+      "name": {"type": "string", "value": "host-125"},
+      "port": {"type": "integer", "value": "8125"},
+      "tags": [
+        {"type": "string", "value": "t6"},
+        {"type": "string", "value": "t4"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "6.5"},
+        "mem": {"type": "integer", "value": "8064"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "6"},
+        "seen": {"type": "datetime", "value": "2024-01-15T10:06:00Z"}
+      },
+      "name": {"type": "string", "value": "host-126"},
+      "port": {"type": "integer", "value": "8126"},
+      "tags": [
+        {"type": "string", "value": "t0"},
+        {"type": "string", "value": "t5"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "7.5"},
+        "mem": {"type": "integer", "value": "8128"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "6"},
+        "seen": {"type": "datetime", "value": "2024-01-16T10:07:00Z"}
+      },
+      "name": {"type": "string", "value": "host-127"},
+      "port": {"type": "integer", "value": "8127"},
+      "tags": [
+        {"type": "string", "value": "t1"},
+        {"type": "string", "value": "t6"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "0.5"},
+        "mem": {"type": "integer", "value": "8192"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "6"},
+        "seen": {"type": "datetime", "value": "2024-01-17T10:08:00Z"}
+      },
+      "name": {"type": "string", "value": "host-128"},
+      "port": {"type": "integer", "value": "8128"},
+      "tags": [
+        {"type": "string", "value": "t2"},
+        {"type": "string", "value": "t7"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "1.5"},
+        "mem": {"type": "integer", "value": "8256"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "6"},
+        "seen": {"type": "datetime", "value": "2024-01-18T10:09:00Z"}
+      },
+      "name": {"type": "string", "value": "host-129"},
+      "port": {"type": "integer", "value": "8129"},
+      "tags": [
+        {"type": "string", "value": "t3"},
+        {"type": "string", "value": "t8"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "2.5"},
+        "mem": {"type": "integer", "value": "8320"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "6"},
+        "seen": {"type": "datetime", "value": "2024-01-19T10:10:00Z"}
+      },
+      "name": {"type": "string", "value": "host-130"},
+      "port": {"type": "integer", "value": "8130"},
+      "tags": [
+        {"type": "string", "value": "t4"},
+        {"type": "string", "value": "t9"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "3.5"},
+        "mem": {"type": "integer", "value": "8384"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "6"},
+        "seen": {"type": "datetime", "value": "2024-01-20T10:11:00Z"}
+      },
+      "name": {"type": "string", "value": "host-131"},
+      "port": {"type": "integer", "value": "8131"},
+      "tags": [
+        {"type": "string", "value": "t5"},
+        {"type": "string", "value": "t10"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "4.5"},
+        "mem": {"type": "integer", "value": "8448"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "6"},
+        "seen": {"type": "datetime", "value": "2024-01-21T10:12:00Z"}
+      },
+      "name": {"type": "string", "value": "host-132"},
+      "port": {"type": "integer", "value": "8132"},
+      "tags": [
+        {"type": "string", "value": "t6"},
+        {"type": "string", "value": "t0"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "5.5"},
+        "mem": {"type": "integer", "value": "8512"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "6"},
+        "seen": {"type": "datetime", "value": "2024-01-22T10:13:00Z"}
+      },
+      "name": {"type": "string", "value": "host-133"},
+      "port": {"type": "integer", "value": "8133"},
+      "tags": [
+        {"type": "string", "value": "t0"},
+        {"type": "string", "value": "t1"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "6.5"},
+        "mem": {"type": "integer", "value": "8576"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "6"},
+        "seen": {"type": "datetime", "value": "2024-01-23T10:14:00Z"}
+      },
+      "name": {"type": "string", "value": "host-134"},
+      "port": {"type": "integer", "value": "8134"},
+      "tags": [
+        {"type": "string", "value": "t1"},
+        {"type": "string", "value": "t2"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "7.5"},
+        "mem": {"type": "integer", "value": "8640"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "6"},
+        "seen": {"type": "datetime", "value": "2024-01-24T10:15:00Z"}
+      },
+      "name": {"type": "string", "value": "host-135"},
+      "port": {"type": "integer", "value": "8135"},
+      "tags": [
+        {"type": "string", "value": "t2"},
+        {"type": "string", "value": "t3"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "0.5"},
+        "mem": {"type": "integer", "value": "8704"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "6"},
+        "seen": {"type": "datetime", "value": "2024-01-25T10:16:00Z"}
+      },
+      "name": {"type": "string", "value": "host-136"},
+      "port": {"type": "integer", "value": "8136"},
+      "tags": [
+        {"type": "string", "value": "t3"},
+        {"type": "string", "value": "t4"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "1.5"},
+        "mem": {"type": "integer", "value": "8768"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "6"},
+        "seen": {"type": "datetime", "value": "2024-01-26T10:17:00Z"}
+      },
+      "name": {"type": "string", "value": "host-137"},
+      "port": {"type": "integer", "value": "8137"},
+      "tags": [
+        {"type": "string", "value": "t4"},
+        {"type": "string", "value": "t5"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "2.5"},
+        "mem": {"type": "integer", "value": "8832"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "6"},
+        "seen": {"type": "datetime", "value": "2024-01-27T10:18:00Z"}
+      },
+      "name": {"type": "string", "value": "host-138"},
+      "port": {"type": "integer", "value": "8138"},
+      "tags": [
+        {"type": "string", "value": "t5"},
+        {"type": "string", "value": "t6"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "3.5"},
+        "mem": {"type": "integer", "value": "8896"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "6"},
+        "seen": {"type": "datetime", "value": "2024-01-28T10:19:00Z"}
+      },
+      "name": {"type": "string", "value": "host-139"},
+      "port": {"type": "integer", "value": "8139"},
+      "tags": [
+        {"type": "string", "value": "t6"},
+        {"type": "string", "value": "t7"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "4.5"},
+        "mem": {"type": "integer", "value": "8960"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "7"},
+        "seen": {"type": "datetime", "value": "2024-01-01T10:20:00Z"}
+      },
+      "name": {"type": "string", "value": "host-140"},
+      "port": {"type": "integer", "value": "8140"},
+      "tags": [
+        {"type": "string", "value": "t0"},
+        {"type": "string", "value": "t8"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "5.5"},
+        "mem": {"type": "integer", "value": "9024"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "7"},
+        "seen": {"type": "datetime", "value": "2024-01-02T10:21:00Z"}
+      },
+      "name": {"type": "string", "value": "host-141"},
+      "port": {"type": "integer", "value": "8141"},
+      "tags": [
+        {"type": "string", "value": "t1"},
+        {"type": "string", "value": "t9"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "6.5"},
+        "mem": {"type": "integer", "value": "9088"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "7"},
+        "seen": {"type": "datetime", "value": "2024-01-03T10:22:00Z"}
+      },
+      "name": {"type": "string", "value": "host-142"},
+      "port": {"type": "integer", "value": "8142"},
+      "tags": [
+        {"type": "string", "value": "t2"},
+        {"type": "string", "value": "t10"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "7.5"},
+        "mem": {"type": "integer", "value": "9152"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "7"},
+        "seen": {"type": "datetime", "value": "2024-01-04T10:23:00Z"}
+      },
+      "name": {"type": "string", "value": "host-143"},
+      "port": {"type": "integer", "value": "8143"},
+      "tags": [
+        {"type": "string", "value": "t3"},
+        {"type": "string", "value": "t0"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "0.5"},
+        "mem": {"type": "integer", "value": "9216"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "7"},
+        "seen": {"type": "datetime", "value": "2024-01-05T10:24:00Z"}
+      },
+      "name": {"type": "string", "value": "host-144"},
+      "port": {"type": "integer", "value": "8144"},
+      "tags": [
+        {"type": "string", "value": "t4"},
+        {"type": "string", "value": "t1"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "1.5"},
+        "mem": {"type": "integer", "value": "9280"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "7"},
+        "seen": {"type": "datetime", "value": "2024-01-06T10:25:00Z"}
+      },
+      "name": {"type": "string", "value": "host-145"},
+      "port": {"type": "integer", "value": "8145"},
+      "tags": [
+        {"type": "string", "value": "t5"},
+        {"type": "string", "value": "t2"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "2.5"},
+        "mem": {"type": "integer", "value": "9344"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "7"},
+        "seen": {"type": "datetime", "value": "2024-01-07T10:26:00Z"}
+      },
+      "name": {"type": "string", "value": "host-146"},
+      "port": {"type": "integer", "value": "8146"},
+      "tags": [
+        {"type": "string", "value": "t6"},
+        {"type": "string", "value": "t3"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "3.5"},
+        "mem": {"type": "integer", "value": "9408"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "7"},
+        "seen": {"type": "datetime", "value": "2024-01-08T10:27:00Z"}
+      },
+      "name": {"type": "string", "value": "host-147"},
+      "port": {"type": "integer", "value": "8147"},
+      "tags": [
+        {"type": "string", "value": "t0"},
+        {"type": "string", "value": "t4"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "4.5"},
+        "mem": {"type": "integer", "value": "9472"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "7"},
+        "seen": {"type": "datetime", "value": "2024-01-09T10:28:00Z"}
+      },
+      "name": {"type": "string", "value": "host-148"},
+      "port": {"type": "integer", "value": "8148"},
+      "tags": [
+        {"type": "string", "value": "t1"},
+        {"type": "string", "value": "t5"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "5.5"},
+        "mem": {"type": "integer", "value": "9536"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "7"},
+        "seen": {"type": "datetime", "value": "2024-01-10T10:29:00Z"}
+      },
+      "name": {"type": "string", "value": "host-149"},
+      "port": {"type": "integer", "value": "8149"},
+      "tags": [
+        {"type": "string", "value": "t2"},
+        {"type": "string", "value": "t6"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "6.5"},
+        "mem": {"type": "integer", "value": "9600"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "7"},
+        "seen": {"type": "datetime", "value": "2024-01-11T10:30:00Z"}
+      },
+      "name": {"type": "string", "value": "host-150"},
+      "port": {"type": "integer", "value": "8150"},
+      "tags": [
+        {"type": "string", "value": "t3"},
+        {"type": "string", "value": "t7"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "7.5"},
+        "mem": {"type": "integer", "value": "9664"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "7"},
+        "seen": {"type": "datetime", "value": "2024-01-12T10:31:00Z"}
+      },
+      "name": {"type": "string", "value": "host-151"},
+      "port": {"type": "integer", "value": "8151"},
+      "tags": [
+        {"type": "string", "value": "t4"},
+        {"type": "string", "value": "t8"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "0.5"},
+        "mem": {"type": "integer", "value": "9728"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "7"},
+        "seen": {"type": "datetime", "value": "2024-01-13T10:32:00Z"}
+      },
+      "name": {"type": "string", "value": "host-152"},
+      "port": {"type": "integer", "value": "8152"},
+      "tags": [
+        {"type": "string", "value": "t5"},
+        {"type": "string", "value": "t9"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "1.5"},
+        "mem": {"type": "integer", "value": "9792"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "7"},
+        "seen": {"type": "datetime", "value": "2024-01-14T10:33:00Z"}
+      },
+      "name": {"type": "string", "value": "host-153"},
+      "port": {"type": "integer", "value": "8153"},
+      "tags": [
+        {"type": "string", "value": "t6"},
+        {"type": "string", "value": "t10"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "2.5"},
+        "mem": {"type": "integer", "value": "9856"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "7"},
+        "seen": {"type": "datetime", "value": "2024-01-15T10:34:00Z"}
+      },
+      "name": {"type": "string", "value": "host-154"},
+      "port": {"type": "integer", "value": "8154"},
+      "tags": [
+        {"type": "string", "value": "t0"},
+        {"type": "string", "value": "t0"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "3.5"},
+        "mem": {"type": "integer", "value": "9920"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "7"},
+        "seen": {"type": "datetime", "value": "2024-01-16T10:35:00Z"}
+      },
+      "name": {"type": "string", "value": "host-155"},
+      "port": {"type": "integer", "value": "8155"},
+      "tags": [
+        {"type": "string", "value": "t1"},
+        {"type": "string", "value": "t1"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "4.5"},
+        "mem": {"type": "integer", "value": "9984"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "7"},
+        "seen": {"type": "datetime", "value": "2024-01-17T10:36:00Z"}
+      },
+      "name": {"type": "string", "value": "host-156"},
+      "port": {"type": "integer", "value": "8156"},
+      "tags": [
+        {"type": "string", "value": "t2"},
+        {"type": "string", "value": "t2"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "5.5"},
+        "mem": {"type": "integer", "value": "10048"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "7"},
+        "seen": {"type": "datetime", "value": "2024-01-18T10:37:00Z"}
+      },
+      "name": {"type": "string", "value": "host-157"},
+      "port": {"type": "integer", "value": "8157"},
+      "tags": [
+        {"type": "string", "value": "t3"},
+        {"type": "string", "value": "t3"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "6.5"},
+        "mem": {"type": "integer", "value": "10112"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "7"},
+        "seen": {"type": "datetime", "value": "2024-01-19T10:38:00Z"}
+      },
+      "name": {"type": "string", "value": "host-158"},
+      "port": {"type": "integer", "value": "8158"},
+      "tags": [
+        {"type": "string", "value": "t4"},
+        {"type": "string", "value": "t4"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "7.5"},
+        "mem": {"type": "integer", "value": "10176"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "7"},
+        "seen": {"type": "datetime", "value": "2024-01-20T10:39:00Z"}
+      },
+      "name": {"type": "string", "value": "host-159"},
+      "port": {"type": "integer", "value": "8159"},
+      "tags": [
+        {"type": "string", "value": "t5"},
+        {"type": "string", "value": "t5"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "0.5"},
+        "mem": {"type": "integer", "value": "10240"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "8"},
+        "seen": {"type": "datetime", "value": "2024-01-21T10:40:00Z"}
+      },
+      "name": {"type": "string", "value": "host-160"},
+      "port": {"type": "integer", "value": "8160"},
+      "tags": [
+        {"type": "string", "value": "t6"},
+        {"type": "string", "value": "t6"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "1.5"},
+        "mem": {"type": "integer", "value": "10304"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "8"},
+        "seen": {"type": "datetime", "value": "2024-01-22T10:41:00Z"}
+      },
+      "name": {"type": "string", "value": "host-161"},
+      "port": {"type": "integer", "value": "8161"},
+      "tags": [
+        {"type": "string", "value": "t0"},
+        {"type": "string", "value": "t7"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "2.5"},
+        "mem": {"type": "integer", "value": "10368"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "8"},
+        "seen": {"type": "datetime", "value": "2024-01-23T10:42:00Z"}
+      },
+      "name": {"type": "string", "value": "host-162"},
+      "port": {"type": "integer", "value": "8162"},
+      "tags": [
+        {"type": "string", "value": "t1"},
+        {"type": "string", "value": "t8"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "3.5"},
+        "mem": {"type": "integer", "value": "10432"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "8"},
+        "seen": {"type": "datetime", "value": "2024-01-24T10:43:00Z"}
+      },
+      "name": {"type": "string", "value": "host-163"},
+      "port": {"type": "integer", "value": "8163"},
+      "tags": [
+        {"type": "string", "value": "t2"},
+        {"type": "string", "value": "t9"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "4.5"},
+        "mem": {"type": "integer", "value": "10496"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "8"},
+        "seen": {"type": "datetime", "value": "2024-01-25T10:44:00Z"}
+      },
+      "name": {"type": "string", "value": "host-164"},
+      "port": {"type": "integer", "value": "8164"},
+      "tags": [
+        {"type": "string", "value": "t3"},
+        {"type": "string", "value": "t10"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "5.5"},
+        "mem": {"type": "integer", "value": "10560"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "8"},
+        "seen": {"type": "datetime", "value": "2024-01-26T10:45:00Z"}
+      },
+      "name": {"type": "string", "value": "host-165"},
+      "port": {"type": "integer", "value": "8165"},
+      "tags": [
+        {"type": "string", "value": "t4"},
+        {"type": "string", "value": "t0"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "6.5"},
+        "mem": {"type": "integer", "value": "10624"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "8"},
+        "seen": {"type": "datetime", "value": "2024-01-27T10:46:00Z"}
+      },
+      "name": {"type": "string", "value": "host-166"},
+      "port": {"type": "integer", "value": "8166"},
+      "tags": [
+        {"type": "string", "value": "t5"},
+        {"type": "string", "value": "t1"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "7.5"},
+        "mem": {"type": "integer", "value": "10688"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "8"},
+        "seen": {"type": "datetime", "value": "2024-01-28T10:47:00Z"}
+      },
+      "name": {"type": "string", "value": "host-167"},
+      "port": {"type": "integer", "value": "8167"},
+      "tags": [
+        {"type": "string", "value": "t6"},
+        {"type": "string", "value": "t2"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "0.5"},
+        "mem": {"type": "integer", "value": "10752"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "8"},
+        "seen": {"type": "datetime", "value": "2024-01-01T10:48:00Z"}
+      },
+      "name": {"type": "string", "value": "host-168"},
+      "port": {"type": "integer", "value": "8168"},
+      "tags": [
+        {"type": "string", "value": "t0"},
+        {"type": "string", "value": "t3"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "1.5"},
+        "mem": {"type": "integer", "value": "10816"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "8"},
+        "seen": {"type": "datetime", "value": "2024-01-02T10:49:00Z"}
+      },
+      "name": {"type": "string", "value": "host-169"},
+      "port": {"type": "integer", "value": "8169"},
+      "tags": [
+        {"type": "string", "value": "t1"},
+        {"type": "string", "value": "t4"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "2.5"},
+        "mem": {"type": "integer", "value": "10880"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "8"},
+        "seen": {"type": "datetime", "value": "2024-01-03T10:50:00Z"}
+      },
+      "name": {"type": "string", "value": "host-170"},
+      "port": {"type": "integer", "value": "8170"},
+      "tags": [
+        {"type": "string", "value": "t2"},
+        {"type": "string", "value": "t5"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "3.5"},
+        "mem": {"type": "integer", "value": "10944"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "8"},
+        "seen": {"type": "datetime", "value": "2024-01-04T10:51:00Z"}
+      },
+      "name": {"type": "string", "value": "host-171"},
+      "port": {"type": "integer", "value": "8171"},
+      "tags": [
+        {"type": "string", "value": "t3"},
+        {"type": "string", "value": "t6"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "4.5"},
+        "mem": {"type": "integer", "value": "11008"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "8"},
+        "seen": {"type": "datetime", "value": "2024-01-05T10:52:00Z"}
+      },
+      "name": {"type": "string", "value": "host-172"},
+      "port": {"type": "integer", "value": "8172"},
+      "tags": [
+        {"type": "string", "value": "t4"},
+        {"type": "string", "value": "t7"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "5.5"},
+        "mem": {"type": "integer", "value": "11072"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "8"},
+        "seen": {"type": "datetime", "value": "2024-01-06T10:53:00Z"}
+      },
+      "name": {"type": "string", "value": "host-173"},
+      "port": {"type": "integer", "value": "8173"},
+      "tags": [
+        {"type": "string", "value": "t5"},
+        {"type": "string", "value": "t8"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "6.5"},
+        "mem": {"type": "integer", "value": "11136"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "8"},
+        "seen": {"type": "datetime", "value": "2024-01-07T10:54:00Z"}
+      },
+      "name": {"type": "string", "value": "host-174"},
+      "port": {"type": "integer", "value": "8174"},
+      "tags": [
+        {"type": "string", "value": "t6"},
+        {"type": "string", "value": "t9"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "7.5"},
+        "mem": {"type": "integer", "value": "11200"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "8"},
+        "seen": {"type": "datetime", "value": "2024-01-08T10:55:00Z"}
+      },
+      "name": {"type": "string", "value": "host-175"},
+      "port": {"type": "integer", "value": "8175"},
+      "tags": [
+        {"type": "string", "value": "t0"},
+        {"type": "string", "value": "t10"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "0.5"},
+        "mem": {"type": "integer", "value": "11264"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "8"},
+        "seen": {"type": "datetime", "value": "2024-01-09T10:56:00Z"}
+      },
+      "name": {"type": "string", "value": "host-176"},
+      "port": {"type": "integer", "value": "8176"},
+      "tags": [
+        {"type": "string", "value": "t1"},
+        {"type": "string", "value": "t0"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "1.5"},
+        "mem": {"type": "integer", "value": "11328"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "8"},
+        "seen": {"type": "datetime", "value": "2024-01-10T10:57:00Z"}
+      },
+      "name": {"type": "string", "value": "host-177"},
+      "port": {"type": "integer", "value": "8177"},
+      "tags": [
+        {"type": "string", "value": "t2"},
+        {"type": "string", "value": "t1"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "2.5"},
+        "mem": {"type": "integer", "value": "11392"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "8"},
+        "seen": {"type": "datetime", "value": "2024-01-11T10:58:00Z"}
+      },
+      "name": {"type": "string", "value": "host-178"},
+      "port": {"type": "integer", "value": "8178"},
+      "tags": [
+        {"type": "string", "value": "t3"},
+        {"type": "string", "value": "t2"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "3.5"},
+        "mem": {"type": "integer", "value": "11456"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "8"},
+        "seen": {"type": "datetime", "value": "2024-01-12T10:59:00Z"}
+      },
+      "name": {"type": "string", "value": "host-179"},
+      "port": {"type": "integer", "value": "8179"},
+      "tags": [
+        {"type": "string", "value": "t4"},
+        {"type": "string", "value": "t3"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "4.5"},
+        "mem": {"type": "integer", "value": "11520"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "9"},
+        "seen": {"type": "datetime", "value": "2024-01-13T10:00:00Z"}
+      },
+      "name": {"type": "string", "value": "host-180"},
+      "port": {"type": "integer", "value": "8180"},
+      "tags": [
+        {"type": "string", "value": "t5"},
+        {"type": "string", "value": "t4"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "5.5"},
+        "mem": {"type": "integer", "value": "11584"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "9"},
+        "seen": {"type": "datetime", "value": "2024-01-14T10:01:00Z"}
+      },
+      "name": {"type": "string", "value": "host-181"},
+      "port": {"type": "integer", "value": "8181"},
+      "tags": [
+        {"type": "string", "value": "t6"},
+        {"type": "string", "value": "t5"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "6.5"},
+        "mem": {"type": "integer", "value": "11648"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "9"},
+        "seen": {"type": "datetime", "value": "2024-01-15T10:02:00Z"}
+      },
+      "name": {"type": "string", "value": "host-182"},
+      "port": {"type": "integer", "value": "8182"},
+      "tags": [
+        {"type": "string", "value": "t0"},
+        {"type": "string", "value": "t6"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "7.5"},
+        "mem": {"type": "integer", "value": "11712"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "9"},
+        "seen": {"type": "datetime", "value": "2024-01-16T10:03:00Z"}
+      },
+      "name": {"type": "string", "value": "host-183"},
+      "port": {"type": "integer", "value": "8183"},
+      "tags": [
+        {"type": "string", "value": "t1"},
+        {"type": "string", "value": "t7"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "0.5"},
+        "mem": {"type": "integer", "value": "11776"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "9"},
+        "seen": {"type": "datetime", "value": "2024-01-17T10:04:00Z"}
+      },
+      "name": {"type": "string", "value": "host-184"},
+      "port": {"type": "integer", "value": "8184"},
+      "tags": [
+        {"type": "string", "value": "t2"},
+        {"type": "string", "value": "t8"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "1.5"},
+        "mem": {"type": "integer", "value": "11840"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "9"},
+        "seen": {"type": "datetime", "value": "2024-01-18T10:05:00Z"}
+      },
+      "name": {"type": "string", "value": "host-185"},
+      "port": {"type": "integer", "value": "8185"},
+      "tags": [
+        {"type": "string", "value": "t3"},
+        {"type": "string", "value": "t9"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "2.5"},
+        "mem": {"type": "integer", "value": "11904"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "9"},
+        "seen": {"type": "datetime", "value": "2024-01-19T10:06:00Z"}
+      },
+      "name": {"type": "string", "value": "host-186"},
+      "port": {"type": "integer", "value": "8186"},
+      "tags": [
+        {"type": "string", "value": "t4"},
+        {"type": "string", "value": "t10"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "3.5"},
+        "mem": {"type": "integer", "value": "11968"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "9"},
+        "seen": {"type": "datetime", "value": "2024-01-20T10:07:00Z"}
+      },
+      "name": {"type": "string", "value": "host-187"},
+      "port": {"type": "integer", "value": "8187"},
+      "tags": [
+        {"type": "string", "value": "t5"},
+        {"type": "string", "value": "t0"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "4.5"},
+        "mem": {"type": "integer", "value": "12032"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "9"},
+        "seen": {"type": "datetime", "value": "2024-01-21T10:08:00Z"}
+      },
+      "name": {"type": "string", "value": "host-188"},
+      "port": {"type": "integer", "value": "8188"},
+      "tags": [
+        {"type": "string", "value": "t6"},
+        {"type": "string", "value": "t1"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "5.5"},
+        "mem": {"type": "integer", "value": "12096"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "9"},
+        "seen": {"type": "datetime", "value": "2024-01-22T10:09:00Z"}
+      },
+      "name": {"type": "string", "value": "host-189"},
+      "port": {"type": "integer", "value": "8189"},
+      "tags": [
+        {"type": "string", "value": "t0"},
+        {"type": "string", "value": "t2"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "6.5"},
+        "mem": {"type": "integer", "value": "12160"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "9"},
+        "seen": {"type": "datetime", "value": "2024-01-23T10:10:00Z"}
+      },
+      "name": {"type": "string", "value": "host-190"},
+      "port": {"type": "integer", "value": "8190"},
+      "tags": [
+        {"type": "string", "value": "t1"},
+        {"type": "string", "value": "t3"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "7.5"},
+        "mem": {"type": "integer", "value": "12224"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "9"},
+        "seen": {"type": "datetime", "value": "2024-01-24T10:11:00Z"}
+      },
+      "name": {"type": "string", "value": "host-191"},
+      "port": {"type": "integer", "value": "8191"},
+      "tags": [
+        {"type": "string", "value": "t2"},
+        {"type": "string", "value": "t4"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "0.5"},
+        "mem": {"type": "integer", "value": "12288"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "9"},
+        "seen": {"type": "datetime", "value": "2024-01-25T10:12:00Z"}
+      },
+      "name": {"type": "string", "value": "host-192"},
+      "port": {"type": "integer", "value": "8192"},
+      "tags": [
+        {"type": "string", "value": "t3"},
+        {"type": "string", "value": "t5"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "1.5"},
+        "mem": {"type": "integer", "value": "12352"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "9"},
+        "seen": {"type": "datetime", "value": "2024-01-26T10:13:00Z"}
+      },
+      "name": {"type": "string", "value": "host-193"},
+      "port": {"type": "integer", "value": "8193"},
+      "tags": [
+        {"type": "string", "value": "t4"},
+        {"type": "string", "value": "t6"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "2.5"},
+        "mem": {"type": "integer", "value": "12416"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "9"},
+        "seen": {"type": "datetime", "value": "2024-01-27T10:14:00Z"}
+      },
+      "name": {"type": "string", "value": "host-194"},
+      "port": {"type": "integer", "value": "8194"},
+      "tags": [
+        {"type": "string", "value": "t5"},
+        {"type": "string", "value": "t7"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "3.5"},
+        "mem": {"type": "integer", "value": "12480"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "9"},
+        "seen": {"type": "datetime", "value": "2024-01-28T10:15:00Z"}
+      },
+      "name": {"type": "string", "value": "host-195"},
+      "port": {"type": "integer", "value": "8195"},
+      "tags": [
+        {"type": "string", "value": "t6"},
+        {"type": "string", "value": "t8"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "4.5"},
+        "mem": {"type": "integer", "value": "12544"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "9"},
+        "seen": {"type": "datetime", "value": "2024-01-01T10:16:00Z"}
+      },
+      "name": {"type": "string", "value": "host-196"},
+      "port": {"type": "integer", "value": "8196"},
+      "tags": [
+        {"type": "string", "value": "t0"},
+        {"type": "string", "value": "t9"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "5.5"},
+        "mem": {"type": "integer", "value": "12608"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "9"},
+        "seen": {"type": "datetime", "value": "2024-01-02T10:17:00Z"}
+      },
+      "name": {"type": "string", "value": "host-197"},
+      "port": {"type": "integer", "value": "8197"},
+      "tags": [
+        {"type": "string", "value": "t1"},
+        {"type": "string", "value": "t10"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "6.5"},
+        "mem": {"type": "integer", "value": "12672"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "9"},
+        "seen": {"type": "datetime", "value": "2024-01-03T10:18:00Z"}
+      },
+      "name": {"type": "string", "value": "host-198"},
+      "port": {"type": "integer", "value": "8198"},
+      "tags": [
+        {"type": "string", "value": "t2"},
+        {"type": "string", "value": "t0"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "7.5"},
+        "mem": {"type": "integer", "value": "12736"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "9"},
+        "seen": {"type": "datetime", "value": "2024-01-04T10:19:00Z"}
+      },
+      "name": {"type": "string", "value": "host-199"},
+      "port": {"type": "integer", "value": "8199"},
+      "tags": [
+        {"type": "string", "value": "t3"},
+        {"type": "string", "value": "t1"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "0.5"},
+        "mem": {"type": "integer", "value": "12800"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "10"},
+        "seen": {"type": "datetime", "value": "2024-01-05T10:20:00Z"}
+      },
+      "name": {"type": "string", "value": "host-200"},
+      "port": {"type": "integer", "value": "8200"},
+      "tags": [
+        {"type": "string", "value": "t4"},
+        {"type": "string", "value": "t2"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "1.5"},
+        "mem": {"type": "integer", "value": "12864"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "10"},
+        "seen": {"type": "datetime", "value": "2024-01-06T10:21:00Z"}
+      },
+      "name": {"type": "string", "value": "host-201"},
+      "port": {"type": "integer", "value": "8201"},
+      "tags": [
+        {"type": "string", "value": "t5"},
+        {"type": "string", "value": "t3"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "2.5"},
+        "mem": {"type": "integer", "value": "12928"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "10"},
+        "seen": {"type": "datetime", "value": "2024-01-07T10:22:00Z"}
+      },
+      "name": {"type": "string", "value": "host-202"},
+      "port": {"type": "integer", "value": "8202"},
+      "tags": [
+        {"type": "string", "value": "t6"},
+        {"type": "string", "value": "t4"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "3.5"},
+        "mem": {"type": "integer", "value": "12992"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "10"},
+        "seen": {"type": "datetime", "value": "2024-01-08T10:23:00Z"}
+      },
+      "name": {"type": "string", "value": "host-203"},
+      "port": {"type": "integer", "value": "8203"},
+      "tags": [
+        {"type": "string", "value": "t0"},
+        {"type": "string", "value": "t5"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "4.5"},
+        "mem": {"type": "integer", "value": "13056"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "10"},
+        "seen": {"type": "datetime", "value": "2024-01-09T10:24:00Z"}
+      },
+      "name": {"type": "string", "value": "host-204"},
+      "port": {"type": "integer", "value": "8204"},
+      "tags": [
+        {"type": "string", "value": "t1"},
+        {"type": "string", "value": "t6"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "5.5"},
+        "mem": {"type": "integer", "value": "13120"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "10"},
+        "seen": {"type": "datetime", "value": "2024-01-10T10:25:00Z"}
+      },
+      "name": {"type": "string", "value": "host-205"},
+      "port": {"type": "integer", "value": "8205"},
+      "tags": [
+        {"type": "string", "value": "t2"},
+        {"type": "string", "value": "t7"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "6.5"},
+        "mem": {"type": "integer", "value": "13184"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "10"},
+        "seen": {"type": "datetime", "value": "2024-01-11T10:26:00Z"}
+      },
+      "name": {"type": "string", "value": "host-206"},
+      "port": {"type": "integer", "value": "8206"},
+      "tags": [
+        {"type": "string", "value": "t3"},
+        {"type": "string", "value": "t8"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "7.5"},
+        "mem": {"type": "integer", "value": "13248"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "10"},
+        "seen": {"type": "datetime", "value": "2024-01-12T10:27:00Z"}
+      },
+      "name": {"type": "string", "value": "host-207"},
+      "port": {"type": "integer", "value": "8207"},
+      "tags": [
+        {"type": "string", "value": "t4"},
+        {"type": "string", "value": "t9"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "0.5"},
+        "mem": {"type": "integer", "value": "13312"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "10"},
+        "seen": {"type": "datetime", "value": "2024-01-13T10:28:00Z"}
+      },
+      "name": {"type": "string", "value": "host-208"},
+      "port": {"type": "integer", "value": "8208"},
+      "tags": [
+        {"type": "string", "value": "t5"},
+        {"type": "string", "value": "t10"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "1.5"},
+        "mem": {"type": "integer", "value": "13376"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "10"},
+        "seen": {"type": "datetime", "value": "2024-01-14T10:29:00Z"}
+      },
+      "name": {"type": "string", "value": "host-209"},
+      "port": {"type": "integer", "value": "8209"},
+      "tags": [
+        {"type": "string", "value": "t6"},
+        {"type": "string", "value": "t0"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "2.5"},
+        "mem": {"type": "integer", "value": "13440"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "10"},
+        "seen": {"type": "datetime", "value": "2024-01-15T10:30:00Z"}
+      },
+      "name": {"type": "string", "value": "host-210"},
+      "port": {"type": "integer", "value": "8210"},
+      "tags": [
+        {"type": "string", "value": "t0"},
+        {"type": "string", "value": "t1"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "3.5"},
+        "mem": {"type": "integer", "value": "13504"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "10"},
+        "seen": {"type": "datetime", "value": "2024-01-16T10:31:00Z"}
+      },
+      "name": {"type": "string", "value": "host-211"},
+      "port": {"type": "integer", "value": "8211"},
+      "tags": [
+        {"type": "string", "value": "t1"},
+        {"type": "string", "value": "t2"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "4.5"},
+        "mem": {"type": "integer", "value": "13568"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "10"},
+        "seen": {"type": "datetime", "value": "2024-01-17T10:32:00Z"}
+      },
+      "name": {"type": "string", "value": "host-212"},
+      "port": {"type": "integer", "value": "8212"},
+      "tags": [
+        {"type": "string", "value": "t2"},
+        {"type": "string", "value": "t3"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "5.5"},
+        "mem": {"type": "integer", "value": "13632"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "10"},
+        "seen": {"type": "datetime", "value": "2024-01-18T10:33:00Z"}
+      },
+      "name": {"type": "string", "value": "host-213"},
+      "port": {"type": "integer", "value": "8213"},
+      "tags": [
+        {"type": "string", "value": "t3"},
+        {"type": "string", "value": "t4"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "6.5"},
+        "mem": {"type": "integer", "value": "13696"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "10"},
+        "seen": {"type": "datetime", "value": "2024-01-19T10:34:00Z"}
+      },
+      "name": {"type": "string", "value": "host-214"},
+      "port": {"type": "integer", "value": "8214"},
+      "tags": [
+        {"type": "string", "value": "t4"},
+        {"type": "string", "value": "t5"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "7.5"},
+        "mem": {"type": "integer", "value": "13760"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "10"},
+        "seen": {"type": "datetime", "value": "2024-01-20T10:35:00Z"}
+      },
+      "name": {"type": "string", "value": "host-215"},
+      "port": {"type": "integer", "value": "8215"},
+      "tags": [
+        {"type": "string", "value": "t5"},
+        {"type": "string", "value": "t6"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "0.5"},
+        "mem": {"type": "integer", "value": "13824"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "10"},
+        "seen": {"type": "datetime", "value": "2024-01-21T10:36:00Z"}
+      },
+      "name": {"type": "string", "value": "host-216"},
+      "port": {"type": "integer", "value": "8216"},
+      "tags": [
+        {"type": "string", "value": "t6"},
+        {"type": "string", "value": "t7"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "1.5"},
+        "mem": {"type": "integer", "value": "13888"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "10"},
+        "seen": {"type": "datetime", "value": "2024-01-22T10:37:00Z"}
+      },
+      "name": {"type": "string", "value": "host-217"},
+      "port": {"type": "integer", "value": "8217"},
+      "tags": [
+        {"type": "string", "value": "t0"},
+        {"type": "string", "value": "t8"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "2.5"},
+        "mem": {"type": "integer", "value": "13952"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "10"},
+        "seen": {"type": "datetime", "value": "2024-01-23T10:38:00Z"}
+      },
+      "name": {"type": "string", "value": "host-218"},
+      "port": {"type": "integer", "value": "8218"},
+      "tags": [
+        {"type": "string", "value": "t1"},
+        {"type": "string", "value": "t9"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "3.5"},
+        "mem": {"type": "integer", "value": "14016"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "10"},
+        "seen": {"type": "datetime", "value": "2024-01-24T10:39:00Z"}
+      },
+      "name": {"type": "string", "value": "host-219"},
+      "port": {"type": "integer", "value": "8219"},
+      "tags": [
+        {"type": "string", "value": "t2"},
+        {"type": "string", "value": "t10"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "4.5"},
+        "mem": {"type": "integer", "value": "14080"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "11"},
+        "seen": {"type": "datetime", "value": "2024-01-25T10:40:00Z"}
+      },
+      "name": {"type": "string", "value": "host-220"},
+      "port": {"type": "integer", "value": "8220"},
+      "tags": [
+        {"type": "string", "value": "t3"},
+        {"type": "string", "value": "t0"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "5.5"},
+        "mem": {"type": "integer", "value": "14144"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "11"},
+        "seen": {"type": "datetime", "value": "2024-01-26T10:41:00Z"}
+      },
+      "name": {"type": "string", "value": "host-221"},
+      "port": {"type": "integer", "value": "8221"},
+      "tags": [
+        {"type": "string", "value": "t4"},
+        {"type": "string", "value": "t1"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "6.5"},
+        "mem": {"type": "integer", "value": "14208"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "11"},
+        "seen": {"type": "datetime", "value": "2024-01-27T10:42:00Z"}
+      },
+      "name": {"type": "string", "value": "host-222"},
+      "port": {"type": "integer", "value": "8222"},
+      "tags": [
+        {"type": "string", "value": "t5"},
+        {"type": "string", "value": "t2"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "7.5"},
+        "mem": {"type": "integer", "value": "14272"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "11"},
+        "seen": {"type": "datetime", "value": "2024-01-28T10:43:00Z"}
+      },
+      "name": {"type": "string", "value": "host-223"},
+      "port": {"type": "integer", "value": "8223"},
+      "tags": [
+        {"type": "string", "value": "t6"},
+        {"type": "string", "value": "t3"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "0.5"},
+        "mem": {"type": "integer", "value": "14336"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "11"},
+        "seen": {"type": "datetime", "value": "2024-01-01T10:44:00Z"}
+      },
+      "name": {"type": "string", "value": "host-224"},
+      "port": {"type": "integer", "value": "8224"},
+      "tags": [
+        {"type": "string", "value": "t0"},
+        {"type": "string", "value": "t4"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "1.5"},
+        "mem": {"type": "integer", "value": "14400"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "11"},
+        "seen": {"type": "datetime", "value": "2024-01-02T10:45:00Z"}
+      },
+      "name": {"type": "string", "value": "host-225"},
+      "port": {"type": "integer", "value": "8225"},
+      "tags": [
+        {"type": "string", "value": "t1"},
+        {"type": "string", "value": "t5"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "2.5"},
+        "mem": {"type": "integer", "value": "14464"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "11"},
+        "seen": {"type": "datetime", "value": "2024-01-03T10:46:00Z"}
+      },
+      "name": {"type": "string", "value": "host-226"},
+      "port": {"type": "integer", "value": "8226"},
+      "tags": [
+        {"type": "string", "value": "t2"},
+        {"type": "string", "value": "t6"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "3.5"},
+        "mem": {"type": "integer", "value": "14528"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "11"},
+        "seen": {"type": "datetime", "value": "2024-01-04T10:47:00Z"}
+      },
+      "name": {"type": "string", "value": "host-227"},
+      "port": {"type": "integer", "value": "8227"},
+      "tags": [
+        {"type": "string", "value": "t3"},
+        {"type": "string", "value": "t7"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "4.5"},
+        "mem": {"type": "integer", "value": "14592"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "11"},
+        "seen": {"type": "datetime", "value": "2024-01-05T10:48:00Z"}
+      },
+      "name": {"type": "string", "value": "host-228"},
+      "port": {"type": "integer", "value": "8228"},
+      "tags": [
+        {"type": "string", "value": "t4"},
+        {"type": "string", "value": "t8"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "5.5"},
+        "mem": {"type": "integer", "value": "14656"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "11"},
+        "seen": {"type": "datetime", "value": "2024-01-06T10:49:00Z"}
+      },
+      "name": {"type": "string", "value": "host-229"},
+      "port": {"type": "integer", "value": "8229"},
+      "tags": [
+        {"type": "string", "value": "t5"},
+        {"type": "string", "value": "t9"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "6.5"},
+        "mem": {"type": "integer", "value": "14720"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "11"},
+        "seen": {"type": "datetime", "value": "2024-01-07T10:50:00Z"}
+      },
+      "name": {"type": "string", "value": "host-230"},
+      "port": {"type": "integer", "value": "8230"},
+      "tags": [
+        {"type": "string", "value": "t6"},
+        {"type": "string", "value": "t10"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "7.5"},
+        "mem": {"type": "integer", "value": "14784"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "11"},
+        "seen": {"type": "datetime", "value": "2024-01-08T10:51:00Z"}
+      },
+      "name": {"type": "string", "value": "host-231"},
+      "port": {"type": "integer", "value": "8231"},
+      "tags": [
+        {"type": "string", "value": "t0"},
+        {"type": "string", "value": "t0"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "0.5"},
+        "mem": {"type": "integer", "value": "14848"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "11"},
+        "seen": {"type": "datetime", "value": "2024-01-09T10:52:00Z"}
+      },
+      "name": {"type": "string", "value": "host-232"},
+      "port": {"type": "integer", "value": "8232"},
+      "tags": [
+        {"type": "string", "value": "t1"},
+        {"type": "string", "value": "t1"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "1.5"},
+        "mem": {"type": "integer", "value": "14912"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "11"},
+        "seen": {"type": "datetime", "value": "2024-01-10T10:53:00Z"}
+      },
+      "name": {"type": "string", "value": "host-233"},
+      "port": {"type": "integer", "value": "8233"},
+      "tags": [
+        {"type": "string", "value": "t2"},
+        {"type": "string", "value": "t2"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "2.5"},
+        "mem": {"type": "integer", "value": "14976"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "11"},
+        "seen": {"type": "datetime", "value": "2024-01-11T10:54:00Z"}
+      },
+      "name": {"type": "string", "value": "host-234"},
+      "port": {"type": "integer", "value": "8234"},
+      "tags": [
+        {"type": "string", "value": "t3"},
+        {"type": "string", "value": "t3"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "3.5"},
+        "mem": {"type": "integer", "value": "15040"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "11"},
+        "seen": {"type": "datetime", "value": "2024-01-12T10:55:00Z"}
+      },
+      "name": {"type": "string", "value": "host-235"},
+      "port": {"type": "integer", "value": "8235"},
+      "tags": [
+        {"type": "string", "value": "t4"},
+        {"type": "string", "value": "t4"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "4.5"},
+        "mem": {"type": "integer", "value": "15104"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "11"},
+        "seen": {"type": "datetime", "value": "2024-01-13T10:56:00Z"}
+      },
+      "name": {"type": "string", "value": "host-236"},
+      "port": {"type": "integer", "value": "8236"},
+      "tags": [
+        {"type": "string", "value": "t5"},
+        {"type": "string", "value": "t5"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "5.5"},
+        "mem": {"type": "integer", "value": "15168"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "11"},
+        "seen": {"type": "datetime", "value": "2024-01-14T10:57:00Z"}
+      },
+      "name": {"type": "string", "value": "host-237"},
+      "port": {"type": "integer", "value": "8237"},
+      "tags": [
+        {"type": "string", "value": "t6"},
+        {"type": "string", "value": "t6"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "6.5"},
+        "mem": {"type": "integer", "value": "15232"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "11"},
+        "seen": {"type": "datetime", "value": "2024-01-15T10:58:00Z"}
+      },
+      "name": {"type": "string", "value": "host-238"},
+      "port": {"type": "integer", "value": "8238"},
+      "tags": [
+        {"type": "string", "value": "t0"},
+        {"type": "string", "value": "t7"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "7.5"},
+        "mem": {"type": "integer", "value": "15296"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "11"},
+        "seen": {"type": "datetime", "value": "2024-01-16T10:59:00Z"}
+      },
+      "name": {"type": "string", "value": "host-239"},
+      "port": {"type": "integer", "value": "8239"},
+      "tags": [
+        {"type": "string", "value": "t1"},
+        {"type": "string", "value": "t8"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "0.5"},
+        "mem": {"type": "integer", "value": "15360"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "12"},
+        "seen": {"type": "datetime", "value": "2024-01-17T10:00:00Z"}
+      },
+      "name": {"type": "string", "value": "host-240"},
+      "port": {"type": "integer", "value": "8240"},
+      "tags": [
+        {"type": "string", "value": "t2"},
+        {"type": "string", "value": "t9"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "1.5"},
+        "mem": {"type": "integer", "value": "15424"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "12"},
+        "seen": {"type": "datetime", "value": "2024-01-18T10:01:00Z"}
+      },
+      "name": {"type": "string", "value": "host-241"},
+      "port": {"type": "integer", "value": "8241"},
+      "tags": [
+        {"type": "string", "value": "t3"},
+        {"type": "string", "value": "t10"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "2.5"},
+        "mem": {"type": "integer", "value": "15488"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "12"},
+        "seen": {"type": "datetime", "value": "2024-01-19T10:02:00Z"}
+      },
+      "name": {"type": "string", "value": "host-242"},
+      "port": {"type": "integer", "value": "8242"},
+      "tags": [
+        {"type": "string", "value": "t4"},
+        {"type": "string", "value": "t0"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "3.5"},
+        "mem": {"type": "integer", "value": "15552"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "12"},
+        "seen": {"type": "datetime", "value": "2024-01-20T10:03:00Z"}
+      },
+      "name": {"type": "string", "value": "host-243"},
+      "port": {"type": "integer", "value": "8243"},
+      "tags": [
+        {"type": "string", "value": "t5"},
+        {"type": "string", "value": "t1"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "4.5"},
+        "mem": {"type": "integer", "value": "15616"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "12"},
+        "seen": {"type": "datetime", "value": "2024-01-21T10:04:00Z"}
+      },
+      "name": {"type": "string", "value": "host-244"},
+      "port": {"type": "integer", "value": "8244"},
+      "tags": [
+        {"type": "string", "value": "t6"},
+        {"type": "string", "value": "t2"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "5.5"},
+        "mem": {"type": "integer", "value": "15680"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "12"},
+        "seen": {"type": "datetime", "value": "2024-01-22T10:05:00Z"}
+      },
+      "name": {"type": "string", "value": "host-245"},
+      "port": {"type": "integer", "value": "8245"},
+      "tags": [
+        {"type": "string", "value": "t0"},
+        {"type": "string", "value": "t3"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "6.5"},
+        "mem": {"type": "integer", "value": "15744"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "12"},
+        "seen": {"type": "datetime", "value": "2024-01-23T10:06:00Z"}
+      },
+      "name": {"type": "string", "value": "host-246"},
+      "port": {"type": "integer", "value": "8246"},
+      "tags": [
+        {"type": "string", "value": "t1"},
+        {"type": "string", "value": "t4"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "7.5"},
+        "mem": {"type": "integer", "value": "15808"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "12"},
+        "seen": {"type": "datetime", "value": "2024-01-24T10:07:00Z"}
+      },
+      "name": {"type": "string", "value": "host-247"},
+      "port": {"type": "integer", "value": "8247"},
+      "tags": [
+        {"type": "string", "value": "t2"},
+        {"type": "string", "value": "t5"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "0.5"},
+        "mem": {"type": "integer", "value": "15872"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "12"},
+        "seen": {"type": "datetime", "value": "2024-01-25T10:08:00Z"}
+      },
+      "name": {"type": "string", "value": "host-248"},
+      "port": {"type": "integer", "value": "8248"},
+      "tags": [
+        {"type": "string", "value": "t3"},
+        {"type": "string", "value": "t6"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "1.5"},
+        "mem": {"type": "integer", "value": "15936"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "12"},
+        "seen": {"type": "datetime", "value": "2024-01-26T10:09:00Z"}
+      },
+      "name": {"type": "string", "value": "host-249"},
+      "port": {"type": "integer", "value": "8249"},
+      "tags": [
+        {"type": "string", "value": "t4"},
+        {"type": "string", "value": "t7"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "2.5"},
+        "mem": {"type": "integer", "value": "16000"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "12"},
+        "seen": {"type": "datetime", "value": "2024-01-27T10:10:00Z"}
+      },
+      "name": {"type": "string", "value": "host-250"},
+      "port": {"type": "integer", "value": "8250"},
+      "tags": [
+        {"type": "string", "value": "t5"},
+        {"type": "string", "value": "t8"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "3.5"},
+        "mem": {"type": "integer", "value": "16064"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "12"},
+        "seen": {"type": "datetime", "value": "2024-01-28T10:11:00Z"}
+      },
+      "name": {"type": "string", "value": "host-251"},
+      "port": {"type": "integer", "value": "8251"},
+      "tags": [
+        {"type": "string", "value": "t6"},
+        {"type": "string", "value": "t9"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "4.5"},
+        "mem": {"type": "integer", "value": "16128"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "12"},
+        "seen": {"type": "datetime", "value": "2024-01-01T10:12:00Z"}
+      },
+      "name": {"type": "string", "value": "host-252"},
+      "port": {"type": "integer", "value": "8252"},
+      "tags": [
+        {"type": "string", "value": "t0"},
+        {"type": "string", "value": "t10"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "5.5"},
+        "mem": {"type": "integer", "value": "16192"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "12"},
+        "seen": {"type": "datetime", "value": "2024-01-02T10:13:00Z"}
+      },
+      "name": {"type": "string", "value": "host-253"},
+      "port": {"type": "integer", "value": "8253"},
+      "tags": [
+        {"type": "string", "value": "t1"},
+        {"type": "string", "value": "t0"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "6.5"},
+        "mem": {"type": "integer", "value": "16256"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "12"},
+        "seen": {"type": "datetime", "value": "2024-01-03T10:14:00Z"}
+      },
+      "name": {"type": "string", "value": "host-254"},
+      "port": {"type": "integer", "value": "8254"},
+      "tags": [
+        {"type": "string", "value": "t2"},
+        {"type": "string", "value": "t1"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "7.5"},
+        "mem": {"type": "integer", "value": "16320"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "12"},
+        "seen": {"type": "datetime", "value": "2024-01-04T10:15:00Z"}
+      },
+      "name": {"type": "string", "value": "host-255"},
+      "port": {"type": "integer", "value": "8255"},
+      "tags": [
+        {"type": "string", "value": "t3"},
+        {"type": "string", "value": "t2"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "0.5"},
+        "mem": {"type": "integer", "value": "16384"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "12"},
+        "seen": {"type": "datetime", "value": "2024-01-05T10:16:00Z"}
+      },
+      "name": {"type": "string", "value": "host-256"},
+      "port": {"type": "integer", "value": "8256"},
+      "tags": [
+        {"type": "string", "value": "t4"},
+        {"type": "string", "value": "t3"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "1.5"},
+        "mem": {"type": "integer", "value": "16448"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "12"},
+        "seen": {"type": "datetime", "value": "2024-01-06T10:17:00Z"}
+      },
+      "name": {"type": "string", "value": "host-257"},
+      "port": {"type": "integer", "value": "8257"},
+      "tags": [
+        {"type": "string", "value": "t5"},
+        {"type": "string", "value": "t4"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "2.5"},
+        "mem": {"type": "integer", "value": "16512"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "12"},
+        "seen": {"type": "datetime", "value": "2024-01-07T10:18:00Z"}
+      },
+      "name": {"type": "string", "value": "host-258"},
+      "port": {"type": "integer", "value": "8258"},
+      "tags": [
+        {"type": "string", "value": "t6"},
+        {"type": "string", "value": "t5"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "3.5"},
+        "mem": {"type": "integer", "value": "16576"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "12"},
+        "seen": {"type": "datetime", "value": "2024-01-08T10:19:00Z"}
+      },
+      "name": {"type": "string", "value": "host-259"},
+      "port": {"type": "integer", "value": "8259"},
+      "tags": [
+        {"type": "string", "value": "t0"},
+        {"type": "string", "value": "t6"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "4.5"},
+        "mem": {"type": "integer", "value": "16640"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "13"},
+        "seen": {"type": "datetime", "value": "2024-01-09T10:20:00Z"}
+      },
+      "name": {"type": "string", "value": "host-260"},
+      "port": {"type": "integer", "value": "8260"},
+      "tags": [
+        {"type": "string", "value": "t1"},
+        {"type": "string", "value": "t7"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "5.5"},
+        "mem": {"type": "integer", "value": "16704"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "13"},
+        "seen": {"type": "datetime", "value": "2024-01-10T10:21:00Z"}
+      },
+      "name": {"type": "string", "value": "host-261"},
+      "port": {"type": "integer", "value": "8261"},
+      "tags": [
+        {"type": "string", "value": "t2"},
+        {"type": "string", "value": "t8"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "6.5"},
+        "mem": {"type": "integer", "value": "16768"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "13"},
+        "seen": {"type": "datetime", "value": "2024-01-11T10:22:00Z"}
+      },
+      "name": {"type": "string", "value": "host-262"},
+      "port": {"type": "integer", "value": "8262"},
+      "tags": [
+        {"type": "string", "value": "t3"},
+        {"type": "string", "value": "t9"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "7.5"},
+        "mem": {"type": "integer", "value": "16832"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "13"},
+        "seen": {"type": "datetime", "value": "2024-01-12T10:23:00Z"}
+      },
+      "name": {"type": "string", "value": "host-263"},
+      "port": {"type": "integer", "value": "8263"},
+      "tags": [
+        {"type": "string", "value": "t4"},
+        {"type": "string", "value": "t10"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "0.5"},
+        "mem": {"type": "integer", "value": "16896"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "13"},
+        "seen": {"type": "datetime", "value": "2024-01-13T10:24:00Z"}
+      },
+      "name": {"type": "string", "value": "host-264"},
+      "port": {"type": "integer", "value": "8264"},
+      "tags": [
+        {"type": "string", "value": "t5"},
+        {"type": "string", "value": "t0"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "1.5"},
+        "mem": {"type": "integer", "value": "16960"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "13"},
+        "seen": {"type": "datetime", "value": "2024-01-14T10:25:00Z"}
+      },
+      "name": {"type": "string", "value": "host-265"},
+      "port": {"type": "integer", "value": "8265"},
+      "tags": [
+        {"type": "string", "value": "t6"},
+        {"type": "string", "value": "t1"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "2.5"},
+        "mem": {"type": "integer", "value": "17024"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "13"},
+        "seen": {"type": "datetime", "value": "2024-01-15T10:26:00Z"}
+      },
+      "name": {"type": "string", "value": "host-266"},
+      "port": {"type": "integer", "value": "8266"},
+      "tags": [
+        {"type": "string", "value": "t0"},
+        {"type": "string", "value": "t2"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "3.5"},
+        "mem": {"type": "integer", "value": "17088"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "13"},
+        "seen": {"type": "datetime", "value": "2024-01-16T10:27:00Z"}
+      },
+      "name": {"type": "string", "value": "host-267"},
+      "port": {"type": "integer", "value": "8267"},
+      "tags": [
+        {"type": "string", "value": "t1"},
+        {"type": "string", "value": "t3"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "4.5"},
+        "mem": {"type": "integer", "value": "17152"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "13"},
+        "seen": {"type": "datetime", "value": "2024-01-17T10:28:00Z"}
+      },
+      "name": {"type": "string", "value": "host-268"},
+      "port": {"type": "integer", "value": "8268"},
+      "tags": [
+        {"type": "string", "value": "t2"},
+        {"type": "string", "value": "t4"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "5.5"},
+        "mem": {"type": "integer", "value": "17216"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "13"},
+        "seen": {"type": "datetime", "value": "2024-01-18T10:29:00Z"}
+      },
+      "name": {"type": "string", "value": "host-269"},
+      "port": {"type": "integer", "value": "8269"},
+      "tags": [
+        {"type": "string", "value": "t3"},
+        {"type": "string", "value": "t5"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "6.5"},
+        "mem": {"type": "integer", "value": "17280"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "13"},
+        "seen": {"type": "datetime", "value": "2024-01-19T10:30:00Z"}
+      },
+      "name": {"type": "string", "value": "host-270"},
+      "port": {"type": "integer", "value": "8270"},
+      "tags": [
+        {"type": "string", "value": "t4"},
+        {"type": "string", "value": "t6"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "7.5"},
+        "mem": {"type": "integer", "value": "17344"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "13"},
+        "seen": {"type": "datetime", "value": "2024-01-20T10:31:00Z"}
+      },
+      "name": {"type": "string", "value": "host-271"},
+      "port": {"type": "integer", "value": "8271"},
+      "tags": [
+        {"type": "string", "value": "t5"},
+        {"type": "string", "value": "t7"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "0.5"},
+        "mem": {"type": "integer", "value": "17408"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "13"},
+        "seen": {"type": "datetime", "value": "2024-01-21T10:32:00Z"}
+      },
+      "name": {"type": "string", "value": "host-272"},
+      "port": {"type": "integer", "value": "8272"},
+      "tags": [
+        {"type": "string", "value": "t6"},
+        {"type": "string", "value": "t8"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "1.5"},
+        "mem": {"type": "integer", "value": "17472"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "13"},
+        "seen": {"type": "datetime", "value": "2024-01-22T10:33:00Z"}
+      },
+      "name": {"type": "string", "value": "host-273"},
+      "port": {"type": "integer", "value": "8273"},
+      "tags": [
+        {"type": "string", "value": "t0"},
+        {"type": "string", "value": "t9"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "2.5"},
+        "mem": {"type": "integer", "value": "17536"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "13"},
+        "seen": {"type": "datetime", "value": "2024-01-23T10:34:00Z"}
+      },
+      "name": {"type": "string", "value": "host-274"},
+      "port": {"type": "integer", "value": "8274"},
+      "tags": [
+        {"type": "string", "value": "t1"},
+        {"type": "string", "value": "t10"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "3.5"},
+        "mem": {"type": "integer", "value": "17600"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "13"},
+        "seen": {"type": "datetime", "value": "2024-01-24T10:35:00Z"}
+      },
+      "name": {"type": "string", "value": "host-275"},
+      "port": {"type": "integer", "value": "8275"},
+      "tags": [
+        {"type": "string", "value": "t2"},
+        {"type": "string", "value": "t0"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "4.5"},
+        "mem": {"type": "integer", "value": "17664"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "13"},
+        "seen": {"type": "datetime", "value": "2024-01-25T10:36:00Z"}
+      },
+      "name": {"type": "string", "value": "host-276"},
+      "port": {"type": "integer", "value": "8276"},
+      "tags": [
+        {"type": "string", "value": "t3"},
+        {"type": "string", "value": "t1"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "5.5"},
+        "mem": {"type": "integer", "value": "17728"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "13"},
+        "seen": {"type": "datetime", "value": "2024-01-26T10:37:00Z"}
+      },
+      "name": {"type": "string", "value": "host-277"},
+      "port": {"type": "integer", "value": "8277"},
+      "tags": [
+        {"type": "string", "value": "t4"},
+        {"type": "string", "value": "t2"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "6.5"},
+        "mem": {"type": "integer", "value": "17792"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "13"},
+        "seen": {"type": "datetime", "value": "2024-01-27T10:38:00Z"}
+      },
+      "name": {"type": "string", "value": "host-278"},
+      "port": {"type": "integer", "value": "8278"},
+      "tags": [
+        {"type": "string", "value": "t5"},
+        {"type": "string", "value": "t3"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "7.5"},
+        "mem": {"type": "integer", "value": "17856"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "13"},
+        "seen": {"type": "datetime", "value": "2024-01-28T10:39:00Z"}
+      },
+      "name": {"type": "string", "value": "host-279"},
+      "port": {"type": "integer", "value": "8279"},
+      "tags": [
+        {"type": "string", "value": "t6"},
+        {"type": "string", "value": "t4"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "0.5"},
+        "mem": {"type": "integer", "value": "17920"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "14"},
+        "seen": {"type": "datetime", "value": "2024-01-01T10:40:00Z"}
+      },
+      "name": {"type": "string", "value": "host-280"},
+      "port": {"type": "integer", "value": "8280"},
+      "tags": [
+        {"type": "string", "value": "t0"},
+        {"type": "string", "value": "t5"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "1.5"},
+        "mem": {"type": "integer", "value": "17984"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "14"},
+        "seen": {"type": "datetime", "value": "2024-01-02T10:41:00Z"}
+      },
+      "name": {"type": "string", "value": "host-281"},
+      "port": {"type": "integer", "value": "8281"},
+      "tags": [
+        {"type": "string", "value": "t1"},
+        {"type": "string", "value": "t6"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "2.5"},
+        "mem": {"type": "integer", "value": "18048"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "14"},
+        "seen": {"type": "datetime", "value": "2024-01-03T10:42:00Z"}
+      },
+      "name": {"type": "string", "value": "host-282"},
+      "port": {"type": "integer", "value": "8282"},
+      "tags": [
+        {"type": "string", "value": "t2"},
+        {"type": "string", "value": "t7"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "3.5"},
+        "mem": {"type": "integer", "value": "18112"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "14"},
+        "seen": {"type": "datetime", "value": "2024-01-04T10:43:00Z"}
+      },
+      "name": {"type": "string", "value": "host-283"},
+      "port": {"type": "integer", "value": "8283"},
+      "tags": [
+        {"type": "string", "value": "t3"},
+        {"type": "string", "value": "t8"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "4.5"},
+        "mem": {"type": "integer", "value": "18176"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "14"},
+        "seen": {"type": "datetime", "value": "2024-01-05T10:44:00Z"}
+      },
+      "name": {"type": "string", "value": "host-284"},
+      "port": {"type": "integer", "value": "8284"},
+      "tags": [
+        {"type": "string", "value": "t4"},
+        {"type": "string", "value": "t9"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "5.5"},
+        "mem": {"type": "integer", "value": "18240"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "14"},
+        "seen": {"type": "datetime", "value": "2024-01-06T10:45:00Z"}
+      },
+      "name": {"type": "string", "value": "host-285"},
+      "port": {"type": "integer", "value": "8285"},
+      "tags": [
+        {"type": "string", "value": "t5"},
+        {"type": "string", "value": "t10"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "6.5"},
+        "mem": {"type": "integer", "value": "18304"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "14"},
+        "seen": {"type": "datetime", "value": "2024-01-07T10:46:00Z"}
+      },
+      "name": {"type": "string", "value": "host-286"},
+      "port": {"type": "integer", "value": "8286"},
+      "tags": [
+        {"type": "string", "value": "t6"},
+        {"type": "string", "value": "t0"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "7.5"},
+        "mem": {"type": "integer", "value": "18368"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "14"},
+        "seen": {"type": "datetime", "value": "2024-01-08T10:47:00Z"}
+      },
+      "name": {"type": "string", "value": "host-287"},
+      "port": {"type": "integer", "value": "8287"},
+      "tags": [
+        {"type": "string", "value": "t0"},
+        {"type": "string", "value": "t1"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "0.5"},
+        "mem": {"type": "integer", "value": "18432"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "14"},
+        "seen": {"type": "datetime", "value": "2024-01-09T10:48:00Z"}
+      },
+      "name": {"type": "string", "value": "host-288"},
+      "port": {"type": "integer", "value": "8288"},
+      "tags": [
+        {"type": "string", "value": "t1"},
+        {"type": "string", "value": "t2"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "1.5"},
+        "mem": {"type": "integer", "value": "18496"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "14"},
+        "seen": {"type": "datetime", "value": "2024-01-10T10:49:00Z"}
+      },
+      "name": {"type": "string", "value": "host-289"},
+      "port": {"type": "integer", "value": "8289"},
+      "tags": [
+        {"type": "string", "value": "t2"},
+        {"type": "string", "value": "t3"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "2.5"},
+        "mem": {"type": "integer", "value": "18560"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "14"},
+        "seen": {"type": "datetime", "value": "2024-01-11T10:50:00Z"}
+      },
+      "name": {"type": "string", "value": "host-290"},
+      "port": {"type": "integer", "value": "8290"},
+      "tags": [
+        {"type": "string", "value": "t3"},
+        {"type": "string", "value": "t4"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "3.5"},
+        "mem": {"type": "integer", "value": "18624"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "14"},
+        "seen": {"type": "datetime", "value": "2024-01-12T10:51:00Z"}
+      },
+      "name": {"type": "string", "value": "host-291"},
+      "port": {"type": "integer", "value": "8291"},
+      "tags": [
+        {"type": "string", "value": "t4"},
+        {"type": "string", "value": "t5"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "4.5"},
+        "mem": {"type": "integer", "value": "18688"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "14"},
+        "seen": {"type": "datetime", "value": "2024-01-13T10:52:00Z"}
+      },
+      "name": {"type": "string", "value": "host-292"},
+      "port": {"type": "integer", "value": "8292"},
+      "tags": [
+        {"type": "string", "value": "t5"},
+        {"type": "string", "value": "t6"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "5.5"},
+        "mem": {"type": "integer", "value": "18752"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "14"},
+        "seen": {"type": "datetime", "value": "2024-01-14T10:53:00Z"}
+      },
+      "name": {"type": "string", "value": "host-293"},
+      "port": {"type": "integer", "value": "8293"},
+      "tags": [
+        {"type": "string", "value": "t6"},
+        {"type": "string", "value": "t7"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "6.5"},
+        "mem": {"type": "integer", "value": "18816"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "14"},
+        "seen": {"type": "datetime", "value": "2024-01-15T10:54:00Z"}
+      },
+      "name": {"type": "string", "value": "host-294"},
+      "port": {"type": "integer", "value": "8294"},
+      "tags": [
+        {"type": "string", "value": "t0"},
+        {"type": "string", "value": "t8"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "7.5"},
+        "mem": {"type": "integer", "value": "18880"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "14"},
+        "seen": {"type": "datetime", "value": "2024-01-16T10:55:00Z"}
+      },
+      "name": {"type": "string", "value": "host-295"},
+      "port": {"type": "integer", "value": "8295"},
+      "tags": [
+        {"type": "string", "value": "t1"},
+        {"type": "string", "value": "t9"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "0.5"},
+        "mem": {"type": "integer", "value": "18944"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "14"},
+        "seen": {"type": "datetime", "value": "2024-01-17T10:56:00Z"}
+      },
+      "name": {"type": "string", "value": "host-296"},
+      "port": {"type": "integer", "value": "8296"},
+      "tags": [
+        {"type": "string", "value": "t2"},
+        {"type": "string", "value": "t10"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "1.5"},
+        "mem": {"type": "integer", "value": "19008"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "14"},
+        "seen": {"type": "datetime", "value": "2024-01-18T10:57:00Z"}
+      },
+      "name": {"type": "string", "value": "host-297"},
+      "port": {"type": "integer", "value": "8297"},
+      "tags": [
+        {"type": "string", "value": "t3"},
+        {"type": "string", "value": "t0"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "2.5"},
+        "mem": {"type": "integer", "value": "19072"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "14"},
+        "seen": {"type": "datetime", "value": "2024-01-19T10:58:00Z"}
+      },
+      "name": {"type": "string", "value": "host-298"},
+      "port": {"type": "integer", "value": "8298"},
+      "tags": [
+        {"type": "string", "value": "t4"},
+        {"type": "string", "value": "t1"}
+      ]
+    },
+    {
+      "limits": {
+        "cpu": {"type": "float", "value": "3.5"},
+        "mem": {"type": "integer", "value": "19136"}
+      },
+      "meta": {
+        "rack": {"type": "integer", "value": "14"},
+        "seen": {"type": "datetime", "value": "2024-01-20T10:59:00Z"}
+      },
+      "name": {"type": "string", "value": "host-299"},
+      "port": {"type": "integer", "value": "8299"},
+      "tags": [
+        {"type": "string", "value": "t5"},
+        {"type": "string", "value": "t2"}
+      ]
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "string": {"type": "string", "value": "hello"},
+  "integer": {"type": "integer", "value": "-42"},
+  "big": {"type": "integer", "value": "9223372036854775807"},
+  "float": {"type": "float", "value": "3.25"},
+  "float_exp": {"type": "float", "value": "1e+06"},
+  "float_whole": {"type": "float", "value": "2"},
+  "inf": {"type": "float", "value": "-inf"},
+  "nan": {"type": "float", "value": "nan"},
+  "yes": {"type": "bool", "value": "true"},
+  "no": {"type": "bool", "value": "false"},
+  "odt": {"type": "datetime", "value": "1979-05-27T07:32:00.5+01:30"},
+  "ldt": {"type": "datetime-local", "value": "1979-05-27t07:32:00"},
+  "ld": {"type": "date-local", "value": "1979-05-27"},
+  "lt": {"type": "time-local", "value": "07:32:00.123"}
+}

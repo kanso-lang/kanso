@@ -1,0 +1,54 @@
+import "std/list"
+
+fn kinds xs
+  list/to_list (list/map xs (c -> "{c.kind} {c.path}"))
+
+test_options_take_their_values =
+  line = parsed ["-m" "hello world" "file.txt" "--cached"] ["-m"]
+  flag line "-m" == "hello world" and on? line "--cached"
+
+test_words_keep_their_order = words_of (parsed ["b" "-x" "a"] []) == ["b" "a"]
+
+test_an_option_owed_a_value_at_the_end_is_dropped =
+  line = parsed ["-m"] ["-m"]
+  flag line "-m" == none
+
+test_changes_name_every_kind =
+  before = { "edited":"2" "gone":"3" "kept":"1" }
+  after = { "born":"4" "edited":"9" "kept":"1" }
+  want = ["new file born" "modified edited" "deleted gone"]
+  kinds (changes before after) == want
+
+test_no_changes_between_equal_maps = changes { "a":"1" } { "a":"1" } == []
+
+test_untouched_by_theirs_keeps_ours =
+  want = ours_stand "p"
+  decided "p" "base" "mine" "base" == want
+
+test_untouched_by_us_takes_theirs =
+  want = theirs_win "theirs" "p"
+  decided "p" "base" "base" "theirs" == want
+
+test_deleted_by_them_unchanged_by_us =
+  want = theirs_win absent "p"
+  decided "p" "base" "base" absent == want
+
+test_same_change_both_sides = decided "p" "b" "x" "x" == ours_stand "p"
+
+test_edit_against_delete_conflicts =
+  want = modify_delete "mine" "p" absent
+  decided "p" "base" "mine" absent == want
+
+test_both_edited_is_a_text_merge =
+  want = both_changed "b" "o" "p" "t"
+  decided "p" "b" "o" "t" == want
+
+test_head_label_names_its_branch = label_for "HEAD" "main" == "HEAD -> main"
+
+test_detached_head_label = label_for "HEAD" none == "HEAD"
+
+test_tags_say_so = label_for "refs/tags/v1" "main" == "tag: v1"
+
+test_current_branch_is_not_repeated = label_for "refs/heads/main" "main" == none
+
+test_subject_is_the_first_line = subject "one\n\ntwo" == "one"

@@ -1,0 +1,50 @@
+# A TOML document is UTF-8, and a decoder is required to reject one that is
+# not. `text/utf8` would say no, but not where; this walk says where.
+fn in? none _ _
+  false
+
+fn in? b lo hi
+  lo <= b and b <= hi
+
+fn four cs p lo hi
+  ok = in? cs[p + 1] lo hi and in? cs[p + 2] 128 191 and in? cs[p + 3] 128 191
+  if ok 4 0
+
+fn three cs p lo hi
+  ok = in? cs[p + 1] lo hi and in? cs[p + 2] 128 191
+  if ok 3 0
+
+fn two cs p
+  if (in? cs[p + 1] 128 191) 2 0
+
+# The position of the first byte that does not start a well-formed sequence,
+# or 0 when there is none.
+fn utf8_error cs p
+  utf8_at cs cs[p] p
+
+fn utf8_at _ none _
+  0
+
+fn utf8_at cs c p
+  n = width_at cs c p
+  if (n == 0) p (utf8_error cs (p + n))
+
+# The ranges are RFC 3629's table: no overlong forms, no surrogates, nothing
+# past U+10FFFF.
+fn width_at cs c p
+  return 1 if c < 128
+  return two cs p if 193 < c and c < 224
+  return three cs p 160 191 if c == 224
+  return three cs p 128 159 if c == 237
+  return three cs p 128 191 if 224 < c and c < 240
+  return four cs p 144 191 if c == 240
+  return four cs p 128 143 if c == 244
+  return four cs p 128 191 if 240 < c and c < 244
+  0
+
+# How many bytes the character led by `c` takes, for showing it in a message.
+fn utf8_width c
+  return 1 if c < 128
+  return 2 if c < 224
+  return 3 if c < 240
+  4

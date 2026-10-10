@@ -1,0 +1,8 @@
+{
+  "indented": {"type": "string", "value": "lots of space"},
+  "spaced": {
+    "inside": {"type": "integer", "value": "1"}
+  },
+  "tab header": {},
+  "tabbed": {"type": "string", "value": "tabs"}
+}

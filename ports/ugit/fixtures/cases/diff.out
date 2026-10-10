@@ -1,0 +1,210 @@
+Initialized empty ugit repository in .ugit/
+[master (root-commit) 92ebd97] base
+diff --ugit a/numbers.txt b/numbers.txt
+--- a/numbers.txt
++++ b/numbers.txt
+@@ -1,6 +1,6 @@
+ 1
+ 2
+-3
++three
+ 4
+ 5
+ 6
+@@ -11,5 +11,6 @@
+ 11
+ 12
+ 13
+-14
++fourteen
+ 15
++16
+diff --ugit a/numbers.txt b/numbers.txt
+--- a/numbers.txt
++++ b/numbers.txt
+@@ -1,6 +1,6 @@
+ 1
+ 2
+-3
++three
+ 4
+ 5
+ 6
+@@ -11,5 +11,6 @@
+ 11
+ 12
+ 13
+-14
++fourteen
+ 15
++16
+diff --ugit a/gone.txt b/gone.txt
+deleted file
+--- a/gone.txt
++++ /dev/null
+@@ -1 +0,0 @@
+-bye
+diff --ugit a/numbers.txt b/numbers.txt
+--- a/numbers.txt
++++ b/numbers.txt
+@@ -1,6 +1,6 @@
+ 1
+ 2
+-3
++three
+ 4
+ 5
+ 6
+@@ -11,5 +11,6 @@
+ 11
+ 12
+ 13
+-14
++fourteen
+ 15
++16
+diff --ugit a/tail.txt b/tail.txt
+new file
+--- /dev/null
++++ b/tail.txt
+@@ -0,0 +1 @@
++no newline at the end
+\ No newline at end of file
+[master 5478535] second
+diff --ugit a/gone.txt b/gone.txt
+deleted file
+--- a/gone.txt
++++ /dev/null
+@@ -1 +0,0 @@
+-bye
+diff --ugit a/numbers.txt b/numbers.txt
+--- a/numbers.txt
++++ b/numbers.txt
+@@ -1,6 +1,6 @@
+ 1
+ 2
+-3
++three
+ 4
+ 5
+ 6
+@@ -11,5 +11,6 @@
+ 11
+ 12
+ 13
+-14
++fourteen
+ 15
++16
+diff --ugit a/tail.txt b/tail.txt
+new file
+--- /dev/null
++++ b/tail.txt
+@@ -0,0 +1 @@
++no newline at the end
+\ No newline at end of file
+diff --ugit a/gone.txt b/gone.txt
+deleted file
+--- a/gone.txt
++++ /dev/null
+@@ -1 +0,0 @@
+-bye
+diff --ugit a/numbers.txt b/numbers.txt
+--- a/numbers.txt
++++ b/numbers.txt
+@@ -1,6 +1,6 @@
+ 1
+ 2
+-3
++three
+ 4
+ 5
+ 6
+@@ -11,5 +11,6 @@
+ 11
+ 12
+ 13
+-14
++fourteen
+ 15
++16
+diff --ugit a/tail.txt b/tail.txt
+new file
+--- /dev/null
++++ b/tail.txt
+@@ -0,0 +1 @@
++no newline at the end
+\ No newline at end of file
+diff --ugit a/gone.txt b/gone.txt
+deleted file
+--- a/gone.txt
++++ /dev/null
+@@ -1 +0,0 @@
+-bye
+diff --ugit a/numbers.txt b/numbers.txt
+--- a/numbers.txt
++++ b/numbers.txt
+@@ -1,6 +1,6 @@
+ 1
+ 2
+-3
++three
+ 4
+ 5
+ 6
+@@ -11,5 +11,6 @@
+ 11
+ 12
+ 13
+-14
++fourteen
+ 15
++16
+diff --ugit a/tail.txt b/tail.txt
+new file
+--- /dev/null
++++ b/tail.txt
+@@ -0,0 +1 @@
++no newline at the end
+\ No newline at end of file
+diff --ugit a/tail.txt b/tail.txt
+--- a/tail.txt
++++ b/tail.txt
+@@ -1 +1 @@
+-no newline at the end
+\ No newline at end of file
++no newline at the end, still
+diff --ugit a/gone.txt b/gone.txt
+deleted file
+--- a/gone.txt
++++ /dev/null
+@@ -1 +0,0 @@
+-bye
+diff --ugit a/numbers.txt b/numbers.txt
+--- a/numbers.txt
++++ b/numbers.txt
+@@ -1,6 +1,6 @@
+ 1
+ 2
+-3
++three
+ 4
+ 5
+ 6
+@@ -11,5 +11,6 @@
+ 11
+ 12
+ 13
+-14
++fourteen
+ 15
++16
+diff --ugit a/tail.txt b/tail.txt
+new file
+--- /dev/null
++++ b/tail.txt
+@@ -0,0 +1 @@
++no newline at the end
+\ No newline at end of file
+usage: ugit diff [--cached] [<commit> [<commit>]]
+[exit 129]

@@ -1,0 +1,2 @@
+toml: bad path `servers..alpha` at column 9: expected a key, found `.`
+[exit 2]

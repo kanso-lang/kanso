@@ -1,0 +1,181 @@
+import "../delta"
+import "../store"
+import "std/io"
+import "std/list"
+import "std/text"
+
+# A path missing from one of the three commits. A map read answers none,
+# which a generic parameter refuses, and three none-able parameters would
+# need eight arms; `known` turns none into this marker at the read.
+type absent
+
+# What a three-way merge decides for one path, from its blob id in the
+# merge base (b), in HEAD (h) and in the commit merged in (o).
+#
+# HEAD's version stands: nothing to do.
+type ours_stand
+  path
+
+# The other side's version replaces HEAD's; an id of none deletes the file.
+type theirs_win
+  oid
+  path
+
+# Both sides changed the file: merge the text.
+type both_changed
+  base
+  ours
+  path
+  theirs
+
+# One side changed the file and the other deleted it.
+type modify_delete
+  ours
+  path
+  theirs
+
+# The merge as it goes: how many paths conflict, the index being built,
+# and the lines to print.
+type merging
+  conflicts
+  index
+  notes
+
+fn merge_cmd args
+  words = words_of (parsed args [])
+  return misuse "merge <commit>" if length words != 1
+  looked .> (v -> merge_into v words[1])
+
+fn merge_into v rev
+  return pending_merge if v.merging != none
+  return fatal_says "nothing to merge into: no commits yet" if v.head == none
+  store/resolve rev .> (other -> based v rev other)
+
+fn based v rev other
+  store/merge_base v.head other .> (base -> by_base v rev other base)
+
+pending_merge = fatal_says "{unconcluded} (MERGE_HEAD exists)."
+
+unconcluded = "You have not concluded your merge"
+
+fn by_base _ _ _ none
+  fatal_says "refusing to merge unrelated histories"
+
+fn by_base v rev other base
+  return say "Already up to date.\n" if base == other
+  return fast_forward v other if base == v.head
+  blocked = dirty v
+  return refused local_changes blocked "merge" if length blocked > 0
+  theirs = store/files_of_commit other
+  store/files_of_commit base
+    .> (bf -> theirs .> (of -> three_way v rev other bf of))
+
+fn fast_forward v other
+  head = store/update_ref "HEAD" (store/direct other) true
+  moved v other head "Updating {short v.head}..{short other}\nFast-forward\n"
+
+fn three_way v rev other bf of
+  every = keys (store/merged (store/merged bf v.head_files) of)
+  hf = v.head_files
+  decisions = list/map every (p -> decision p bf hf of)
+  start = merging 0 v.index []
+  list/fold decisions (effect start) (acc d -> acc .> (m -> applied m d rev))
+    .> (m -> settled v rev other m)
+
+fn decision p bf hf of
+  decided p (known bf[p]) (known hf[p]) (known of[p])
+
+fn decided p b h o
+  return ours_stand p if h == o or b == o
+  return theirs_win o p if b == h
+  return modify_delete h p o if h == absent or o == absent
+  both_changed b h p o
+
+fn known none
+  absent
+
+fn known x
+  x
+
+fn applied (merging n idx notes) (theirs_win absent path) _
+  store/removed path .> (_ -> effect (merging n (without idx [path]) notes))
+
+fn applied (merging n idx notes) (theirs_win oid path) _
+  store/get_object oid "blob"
+    .> (content -> written_file path content)
+    .> (_ -> effect (merging n (put idx path oid) notes))
+
+fn applied (merging n idx notes) (modify_delete absent path o) rev
+  note = orphaned path "HEAD" rev
+  store/get_object o "blob"
+    .> (content -> written_file path content)
+    .> (_ -> effect (merging (n + 1) idx (push notes note)))
+
+fn applied (merging n idx notes) (modify_delete _ path absent) rev
+  effect (merging (n + 1) idx (push notes (orphaned path rev "HEAD")))
+
+fn orphaned path gone_in kept_in
+  said = "{path} deleted in {gone_in} and modified in {kept_in}"
+  left = "Version {kept_in} of {path} left in tree"
+  "CONFLICT (modify/delete): {said}. {left}.\n"
+
+fn applied m (both_changed b h path o) rev
+  ours = blob_text h
+  theirs = blob_text o
+  blob_text b
+    .> (bt -> ours .> (ht -> theirs .> (ot -> blended m path bt ht ot rev)))
+    .> (blend -> effect blend)
+
+# HEAD's version stands.
+fn applied m (ours_stand _) _
+  effect m
+
+fn blob_text absent
+  effect ""
+
+fn blob_text oid
+  store/get_object oid "blob"
+
+# Merge the three texts line by line. A clean result is staged; one with
+# conflicts goes into the working tree with markers, and the index keeps
+# HEAD's version until the user adds the resolved file.
+fn blended (merging n idx notes) path bt ht ot rev
+  chunks = delta/merge3 (text_lines bt) (text_lines ht) (text_lines ot)
+  merged_text = delta/rendered chunks "HEAD" rev
+  told = push notes "Auto-merging {path}\n"
+  clean = delta/conflicts chunks == 0
+  return clean_blend (merging n idx told) path merged_text if clean
+  kind = if (bt == "") "add/add" "content"
+  note = "CONFLICT ({kind}): Merge conflict in {path}\n"
+  noted = merging (n + 1) idx (push told note)
+  written_file path merged_text .> (_ -> effect noted)
+
+fn text_lines text
+  delta/lines_of text
+
+fn clean_blend (merging n idx notes) path merged_text
+  store/put_object "blob" merged_text
+    .> (oid -> written_file path merged_text .> (_ -> staged_as oid))
+    .> (oid -> effect (merging n (put idx path oid) notes))
+
+fn staged_as oid
+  effect oid
+
+fn settled v rev other (merging 0 idx notes)
+  store/write_index idx
+    .> (_ -> store/write_tree idx)
+    .> (tree -> recorded (merge_message rev) tree [v.head other])
+    .> (oid -> store/update_ref "HEAD" (store/direct oid) true)
+    .> (_ -> say "{text/join notes ""}Merge made by the 'ugit' strategy.\n")
+
+fn settled _ rev other (merging _ idx notes)
+  store/write_index idx
+    .> (_ -> store/update_ref "MERGE_HEAD" (store/direct other) false)
+    .> (_ -> store/write_note "MERGE_MSG" "{merge_message rev}\n")
+    .> (_ -> io/write "{text/join notes ""}{unmerged}")
+    .> (_ -> effect 1)
+
+unmerged = "Automatic merge failed; fix conflicts and then commit the result.\n"
+
+fn merge_message rev
+  "Merge branch '{rev}'"

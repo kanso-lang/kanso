@@ -1,0 +1,60 @@
+import "../store"
+import "std/os"
+
+# The commands that expose the store directly, as git's plumbing does.
+fn init_cmd _
+  os/is_dir store/root .> initialized
+
+fn initialized true
+  say "Reinitialized existing ugit repository in {store/root}/\n"
+
+fn initialized false
+  store/created
+    .> (_ -> say "Initialized empty ugit repository in {store/root}/\n")
+
+fn hash_object_cmd args
+  one_word args "hash-object <file>" (f -> store/stored_blob f .> said_line)
+
+fn said_line text
+  say "{text}\n"
+
+# cat-file -t names an object's kind, cat-file -p prints any object, and
+# cat-file <kind> prints one that must be of that kind.
+fn cat_file_cmd args
+  line = parsed args []
+  words = words_of line
+  return misuse "cat-file (-t | -p | <kind>) <object>" if length words == 0
+  return kind_named words[1] if on? line "-t"
+  return pretty words[1] if on? line "-p"
+  return misuse "cat-file <kind> <object>" if length words != 2
+  store/resolve words[2] .> (oid -> printed oid words[1])
+
+fn kind_named name
+  store/resolve name .> store/kind_of .> said_line
+
+fn pretty name
+  store/resolve name .> (oid -> store/kind_of oid .> (k -> printed oid k))
+
+fn printed oid kind
+  store/get_object oid kind .> say
+
+write_tree_cmd = store/read_index .> store/write_tree .> said_line
+
+fn rev_parse_cmd args
+  one_word args "rev-parse <name>" (name -> store/resolve name .> said_line)
+
+fn merge_base_cmd args
+  words = words_of (parsed args [])
+  return misuse "merge-base <commit> <commit>" if length words != 2
+  store/resolve words[1]
+    .> (a -> store/resolve words[2] .> (b -> store/merge_base a b))
+    .> said_line
+
+# A command that takes exactly one word.
+fn one_word args shape f
+  words = words_of (parsed args [])
+  return misuse shape if length words != 1
+  f words[1]
+
+fn misuse shape
+  failure "usage: ugit {shape}\n" 129

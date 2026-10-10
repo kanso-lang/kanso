@@ -1,0 +1,126 @@
+import "../steps"
+import "../store"
+import "std/list"
+import "std/text"
+
+# A ref and the commit it names, for decorating log lines.
+type pointer
+  name
+  oid
+
+fn log_cmd args
+  line = parsed args []
+  words = words_of line
+  return misuse "log [--oneline] [<commit>]" if length words > 1
+  looked .> (v -> log_from v (start_of words) (on? line "--oneline"))
+
+fn start_of words
+  if (length words == 0) "HEAD" words[1]
+
+fn log_from v "HEAD" oneline
+  return no_commits_yet v if v.head == none
+  log_from v v.head oneline
+
+fn log_from v rev oneline
+  store/resolve rev
+    .> (oid -> store/history [oid])
+    .> (commits -> labels_of v .> (labels -> log_said commits labels oneline))
+
+fn log_said commits labels oneline
+  say (log_text commits labels oneline)
+
+fn no_commits_yet v
+  said = "your current branch '{v.branch}' does not have any commits yet"
+  failure "fatal: {said}\n" 128
+
+fn log_text commits labels true
+  text/join (list/to_list (list/map commits (l -> one_line l labels))) ""
+
+fn log_text commits labels false
+  text/join (list/to_list (list/map commits (l -> log_entry l labels))) "\n"
+
+fn one_line l labels
+  "{short l.oid}{decoration labels[l.oid]} {subject l.commit.message}\n"
+
+# The full entry git prints: id and refs, merge parents, author, date, and
+# the message indented four spaces.
+fn log_entry l labels
+  c = l.commit
+  head = "commit {l.oid}{decoration labels[l.oid]}\n{merge_line c.parents}"
+  "{head}Author: {c.author}\nDate:   {git_date c.time}\n\n{indented c.message}"
+
+fn merge_line parents
+  return "" if length parents < 2
+  "Merge: {text/join (list/to_list (list/map parents short)) " "}\n"
+
+fn indented message
+  lines = text/split message "\n"
+  text/join (list/to_list (list/map lines (s -> padded s))) ""
+
+fn padded ""
+  "\n"
+
+fn padded s
+  "    {s}\n"
+
+fn decoration none
+  ""
+
+fn decoration names
+  " ({text/join names ", "})"
+
+# For every commit some ref names, the labels git puts beside it: HEAD
+# first (with the branch it is on), then branches, then tags.
+fn labels_of v
+  store/ref_names
+    .> (names -> steps/gathered names (n -> pointed n))
+    .> (ps -> effect (list/fold ps {} (m p -> labelled m p v.branch)))
+
+fn pointed name
+  store/get_ref name .> (at -> effect (pointer name at.value.value))
+
+fn labelled m (pointer name oid) branch
+  label = label_for name branch
+  return m if label == none or oid == none
+  put m oid (push (existing m[oid]) label)
+
+fn existing none
+  []
+
+fn existing labels
+  labels
+
+fn label_for "HEAD" none
+  "HEAD"
+
+fn label_for "HEAD" branch
+  "HEAD -> {branch}"
+
+fn label_for "MERGE_HEAD" _
+  none
+
+fn label_for name branch
+  short_name = store/short_name name
+  return none if short_name == branch
+  return "tag: {short_name}" if store/starts_with? name "refs/tags/"
+  short_name
+
+# A commit's entry followed by what it changed against its first parent.
+fn show_cmd args
+  words = words_of (parsed args [])
+  return misuse "show [<commit>]" if length words > 1
+  looked .> (v -> shown_commit v (start_of words))
+
+fn shown_commit v rev
+  store/resolve rev
+    .> (oid -> store/get_commit oid .> (c -> with_parent v oid c))
+
+fn with_parent v oid c
+  parent = c.parents[1]
+  after = store/read_tree c.tree
+  store/files_of_commit parent
+    .> (b -> after .> (a -> diff_text (stored b) (stored a)))
+    .> (d -> labels_of v .> (labels -> said_entry oid c labels d))
+
+fn said_entry oid c labels d
+  say "{log_entry (store/logged_as c oid) labels}{spaced d}"

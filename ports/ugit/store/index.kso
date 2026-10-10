@@ -1,0 +1,18 @@
+import "std/json"
+import "std/os"
+
+# The staging area: a map from path to the blob id that the next commit
+# will record for it. It is kept as JSON, as the original ugit keeps it.
+index_file = "{root}/index"
+
+# An index that was never written is empty.
+pub read_index = os/read_file index_file .> decoded
+
+fn decoded (file_not_found _)
+  effect {}
+
+fn decoded content
+  effect (json/decode content)
+
+pub fn write_index files
+  os/write_file index_file (json/encode files)

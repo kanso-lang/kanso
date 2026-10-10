@@ -1,0 +1,212 @@
+import "std/text"
+
+# Strings come in four kinds: basic and literal, each on one line or across
+# several. `q` is the quote that opened the string, 34 for basic and 39 for
+# literal, and only a basic string reads escapes.
+fn string_value cs p q
+  triple = cs[p + 1] == q and cs[p + 2] == q
+  if triple (block_string cs (p + 3) q) (line_string cs (p + 1) q)
+
+# One line.
+fn line_string cs p q
+  line_run cs p p (text/bytes "") q
+
+fn line_run cs p start acc q
+  line_at cs cs[p] p start acc q
+
+fn line_at cs 34 p start acc 34
+  closed cs p start acc 1
+
+fn line_at cs 39 p start acc 39
+  closed cs p start acc 1
+
+fn line_at cs 92 p start acc 34
+  kept = text/append acc (text/slice cs start (p - 1))
+  esc = escape cs (p + 1)
+  line_escaped cs esc kept
+
+fn line_at _ none p _ _ _
+  fail p "unterminated string"
+
+fn line_at _ 10 p _ _ _
+  fail p "newline in a single-line string"
+
+fn line_at _ 13 p _ _ _
+  fail p "newline in a single-line string"
+
+fn line_at cs c p start acc q
+  return fail p "control character {c} in string" if control? c
+  line_run cs (p + 1) start acc q
+
+fn line_escaped cs (parsed p bs) acc
+  line_run cs p p (text/append acc bs) 34
+
+# The string's bytes run from `start` to just before `p`, and the closing
+# delimiter is `width` bytes long.
+fn closed cs p start acc width
+  whole = text/append acc (text/slice cs start (p - 1))
+  parsed (p + width) (text/utf8 whole)
+
+# Several lines. A newline straight after the opening delimiter is not part of
+# the string.
+fn block_string cs p q
+  start = first_line cs p
+  block_run cs start start (text/bytes "") q
+
+fn first_line cs p
+  return p + 1 if cs[p] == 10
+  return p + 2 if cs[p] == 13 and cs[p + 1] == 10
+  p
+
+fn block_run cs p start acc q
+  block_at cs cs[p] p start acc q
+
+fn block_at cs 34 p start acc 34
+  block_quotes cs p start acc 34 (quote_count cs p 34)
+
+fn block_at cs 39 p start acc 39
+  block_quotes cs p start acc 39 (quote_count cs p 39)
+
+fn block_at cs 92 p start acc 34
+  kept = text/append acc (text/slice cs start (p - 1))
+  block_escape cs (p + 1) kept
+
+fn block_at _ none p _ _ _
+  fail p "unterminated multi-line string"
+
+fn block_at cs 10 p start acc q
+  block_run cs (p + 1) start acc q
+
+# A CRLF inside the string is read as a plain newline, as toml-rs reads it.
+fn block_at cs 13 p start acc q
+  next = crlf cs p
+  kept = text/append (text/append acc (text/slice cs start (p - 1))) 10
+  block_run cs next next kept q
+
+fn block_at cs c p start acc q
+  return fail p "control character {c} in string" if control? c
+  block_run cs (p + 1) start acc q
+
+# One or two quotes are content. Three close the string, and up to two more
+# directly before them belong to the content.
+fn block_quotes cs p start acc q n
+  return block_run cs (p + n) start acc q if n < 3
+  return fail (p + 5) "too many quotes closing a multi-line string" if n > 5
+  closed cs (p + n - 3) start acc 3
+
+fn quote_count cs p q
+  if (cs[p] == q) (1 + quote_count cs (p + 1) q) 0
+
+# A backslash that ends a line trims the newline and every blank and newline
+# after it.
+fn block_escape cs p acc
+  q = skip_blank cs p
+  trim_at cs cs[q] p q acc
+
+fn trim_at cs 10 _ q acc
+  next = skip_lines cs q
+  block_run cs next next acc 34
+
+fn trim_at cs 13 _ q acc
+  next = skip_lines cs q
+  block_run cs next next acc 34
+
+fn trim_at _ none p _ _
+  fail p "unterminated multi-line string"
+
+fn trim_at cs _ p _ acc
+  esc = escape cs p
+  block_escaped cs esc acc
+
+fn block_escaped cs (parsed p bs) acc
+  block_run cs p p (text/append acc bs) 34
+
+fn skip_lines cs p
+  lines_at cs cs[p] p
+
+fn lines_at cs 9 p
+  skip_lines cs (p + 1)
+
+fn lines_at cs 10 p
+  skip_lines cs (p + 1)
+
+fn lines_at cs 13 p
+  next = crlf cs p
+  skip_lines cs next
+
+fn lines_at cs 32 p
+  skip_lines cs (p + 1)
+
+fn lines_at _ none p
+  p
+
+fn lines_at _ _ p
+  p
+
+# Escapes. `p` is just past the backslash, and the answer is the bytes the
+# escape stands for: one byte, or the character a unicode escape names.
+fn escape cs p
+  escape_at cs cs[p] p
+
+fn escape_at _ 34 p
+  parsed (p + 1) 34
+
+fn escape_at cs 85 p
+  unicode cs (p + 1) 8
+
+fn escape_at _ 92 p
+  parsed (p + 1) 92
+
+fn escape_at _ 98 p
+  parsed (p + 1) 8
+
+fn escape_at _ 102 p
+  parsed (p + 1) 12
+
+fn escape_at _ 110 p
+  parsed (p + 1) 10
+
+fn escape_at _ 114 p
+  parsed (p + 1) 13
+
+fn escape_at _ 116 p
+  parsed (p + 1) 9
+
+fn escape_at cs 117 p
+  unicode cs (p + 1) 4
+
+fn escape_at _ none p
+  fail p "unterminated string"
+
+fn escape_at cs _ p
+  fail (p - 1) "invalid escape sequence: backslash before {shown cs p}"
+
+fn unicode cs p n
+  code = hex_value cs p (p + n - 1) 0
+  unicode_scalar p n code
+
+fn unicode_scalar p n code
+  ok = code < 55296 or in? code 57344 1114111
+  why = "escape names {code}, which is not a unicode scalar"
+  return fail (p - 2) why if not ok
+  ch = text/from_code code
+  parsed (p + n) ch
+
+fn hex_value cs p last acc
+  return acc if p > last
+  hex_more cs p last acc (hex_digit cs[p])
+
+fn hex_more _ p _ _ none
+  fail p "expected a hex digit in a unicode escape"
+
+fn hex_more cs p last acc d
+  hex_value cs (p + 1) last (acc * 16 + d)
+
+fn hex_digit none
+  none
+
+fn hex_digit c
+  return c - 48 if in? c 48 57
+  return c - 55 if in? c 65 70
+  return c - 87 if in? c 97 102
+  none

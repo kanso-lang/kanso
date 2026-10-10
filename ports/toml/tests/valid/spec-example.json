@@ -1,0 +1,38 @@
+{
+  "database": {
+    "data": [
+      [
+        {"type": "string", "value": "delta"},
+        {"type": "string", "value": "phi"}
+      ],
+      [
+        {"type": "float", "value": "3.14"}
+      ]
+    ],
+    "enabled": {"type": "bool", "value": "true"},
+    "ports": [
+      {"type": "integer", "value": "8000"},
+      {"type": "integer", "value": "8001"},
+      {"type": "integer", "value": "8002"}
+    ],
+    "temp_targets": {
+      "case": {"type": "float", "value": "72.0"},
+      "cpu": {"type": "float", "value": "79.5"}
+    }
+  },
+  "owner": {
+    "dob": {"type": "datetime", "value": "1979-05-27T07:32:00-08:00"},
+    "name": {"type": "string", "value": "Tom Preston-Werner"}
+  },
+  "servers": {
+    "alpha": {
+      "ip": {"type": "string", "value": "10.0.0.1"},
+      "role": {"type": "string", "value": "frontend"}
+    },
+    "beta": {
+      "ip": {"type": "string", "value": "10.0.0.2"},
+      "role": {"type": "string", "value": "backend"}
+    }
+  },
+  "title": {"type": "string", "value": "TOML Example"}
+}

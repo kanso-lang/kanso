@@ -1,0 +1,39 @@
+Initialized empty ugit repository in .ugit/
+fatal: your current branch 'master' does not have any commits yet
+[exit 128]
+[master (root-commit) 59b792f] commit number 1
+[master 916b1bc] commit number 2
+[master 34439a6] commit number 3
+commit 34439a634be50b589a2ded115053f0afdda6f7b7b2c87b0d5b4df1e4a9254ba1 (HEAD -> master)
+Author: A U Thor <author@example.com>
+Date:   Tue Nov 14 22:16:20 2023 +0000
+
+    commit number 3
+
+commit 916b1bce664ec867b753e461a6b4a91d0f9ad1bc86a082b7fe13d8fb17a22668
+Author: A U Thor <author@example.com>
+Date:   Tue Nov 14 22:15:20 2023 +0000
+
+    commit number 2
+
+commit 59b792f3027fa21c1c473cbed6ad87f5fb96c3b2324b515cb965220637e53214
+Author: A U Thor <author@example.com>
+Date:   Tue Nov 14 22:14:20 2023 +0000
+
+    commit number 1
+34439a6 (HEAD -> master, older, tag: v1.0) commit number 3
+916b1bc commit number 2
+59b792f commit number 1
+34439a6 (HEAD -> master, older, tag: v1.0) commit number 3
+916b1bc commit number 2
+59b792f (tag: start) commit number 1
+59b792f (tag: start) commit number 1
+HEAD is now at 59b792f commit number 1
+34439a6 (master, older, tag: v1.0) commit number 3
+916b1bc commit number 2
+59b792f (HEAD, tag: start) commit number 1
+59b792f (HEAD, tag: start) commit number 1
+fatal: ambiguous argument 'nowhere': unknown revision
+[exit 128]
+usage: ugit log [--oneline] [<commit>]
+[exit 129]

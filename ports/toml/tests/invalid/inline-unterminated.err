@@ -1,0 +1,5 @@
+TOML parse error at line 1, column 11
+  |
+1 | a = {b = 1
+  |           ^
+expected `,` or `}` in inline table, found newline

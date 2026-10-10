@@ -1,0 +1,22 @@
+# Run with: kanso play keyed_read_of_every_field_is_a_runtime_error.kso
+# (and with --interp; both engines agree).
+#
+# Should: be refused by `kanso check`, the way chapter 03 says the keyed
+# form is refused when it names every field ("a keyed read must omit at
+# least one field"), or else just run and print "1 2".
+# Does: running it stops with
+# `error[runtime]: a keyed read omits at least one field; reading every
+# field is the positional form`. A canonical-form rule arrives as a
+# runtime failure. In the port's module (ugit/date.kso had
+# `{ day month year } = civil days`) `kanso check` answered ok, and only
+# `kanso test` found it. (`kanso check` on this one-file play program
+# stops earlier, at the library-versus-statements rule.)
+type pair
+  left
+  right
+
+fn both p
+  { left right } = p
+  "{left} {right}"
+
+print (both (pair 1 2))

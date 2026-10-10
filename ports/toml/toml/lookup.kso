@@ -1,0 +1,60 @@
+import "std/text"
+
+# Reads one value out of a decoded document by a path spelled the way TOML
+# spells keys, with `[n]` for an array element: `servers.alpha.ip`,
+# `products[2].name`, `site."google.com"`. Indexes count from zero, as they do
+# in toml-rs and jq. The answer is none when nothing is there, and an err
+# holding a toml_error when the path itself does not parse.
+pub fn lookup doc path
+  cs = text/bytes path
+  steps = path_steps cs 1 []
+  finish cs (along doc steps)
+
+# `steps` may be a failure to parse the path; a call carries it to `finish`,
+# which turns it into a toml_error, without reading it.
+fn along doc steps
+  follow doc steps 1
+
+fn path_steps cs p steps
+  return steps if p < 1 or length cs < p
+  step_at cs cs[p] p steps
+
+fn step_at cs 91 p steps
+  q = plain_digits cs (p + 1)
+  return fail (p + 1) "expected an index inside `[ ]`" if q == p + 1
+  return fail q "expected `]`" if cs[q] != 93
+  index = text/to_int (text/utf8 (text/slice cs (p + 1) (q - 1)))
+  path_steps cs (q + 1) (push steps index)
+
+fn step_at cs 46 p steps
+  return fail p "a path cannot start with `.`" if length steps == 0
+  keyed = simple_key cs (p + 1)
+  after_key cs keyed steps
+
+fn step_at cs _ p steps
+  return fail p "expected `.` or `[` between steps" if length steps > 0
+  keyed = simple_key cs p
+  after_key cs keyed steps
+
+fn after_key cs (parsed p k) steps
+  path_steps cs p (push steps k)
+
+fn follow v steps i
+  return v if i < 1 or length steps < i
+  next = step_into v steps[i]
+  follow_next next steps (i + 1)
+
+fn follow_next none _ _
+  none
+
+fn follow_next v steps i
+  follow v steps i
+
+fn step_into m:map[string some] k:string
+  m[k]
+
+fn step_into xs:[]some n:int
+  xs[n + 1]
+
+fn step_into _ _
+  none

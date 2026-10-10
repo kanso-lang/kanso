@@ -1,0 +1,211 @@
+import "std/testing"
+import "std/text"
+
+# `decode` answers an err for a bad document and `==` wants a value, so a test
+# dispatches on what it decoded before comparing.
+fn decodes? source want
+  same? (decode source) want
+
+fn same? (err _) _
+  false
+
+fn same? got want
+  got == want
+
+fn absent? none
+  true
+
+fn absent? (err _)
+  false
+
+fn absent? _
+  false
+
+# Where a bad document is reported, as "line:column message".
+fn refused source
+  testing/when_failed (decode source) (r -> "{r.line}:{r.column} {r.message}")
+
+fn refused? source want
+  refused source == want
+
+test_bare_pair = decodes? "a = 1" { "a":1 }
+
+test_string = decodes? "s = \"hi\\tthere\"" { "s":"hi\tthere" }
+
+test_unicode_escapes = decodes? "s = \"\\u00e9\\U0001F600\"" { "s":"é😀" }
+
+test_literal_string = decodes? "s = 'C:\\path'" { "s":"C:\\path" }
+
+test_multiline_trims_newline = decodes? "s = \"\"\"\nab\"\"\"" { "s":"ab" }
+
+test_line_ending_backslash =
+  source = "s = \"\"\"a \\\n   b\"\"\""
+  decodes? source { "s":"a b" }
+
+test_integers =
+  source = "a = +1_000\nb = 0xff\nc = 0o17\nd = 0b101\ne = -0"
+  decodes? source { "a":1000 "b":255 "c":15 "d":5 "e":0 }
+
+test_integer_limits =
+  source = "a = 9223372036854775807\nb = -9223372036854775808"
+  decodes? source { "a":9223372036854775807 "b":-9223372036854775808 }
+
+test_floats =
+  source = "a = 3.25\nb = -1e2\nc = 6.5E-1\nd = 1_0.5"
+  decodes? source { "a":3.25 "b":-100.0 "c":0.65 "d":10.5 }
+
+test_special_floats =
+  inf = text/to_float "inf"
+  decodes? "a = inf\nb = -inf" { "a":inf "b":(0.0 - inf) }
+
+test_booleans = decodes? "t = true\nf = false" { "f":false "t":true }
+
+test_local_date = decodes? "d = 1979-05-27" { "d":(local_date 27 5 1979) }
+
+test_local_time =
+  want = local_time "5" 7 32 0
+  decodes? "t = 07:32:00.5" { "t":want }
+
+test_offset_datetime =
+  want = offset_datetime (local_date 27 5 1979) -480 (local_time "" 7 32 0)
+  decodes? "o = 1979-05-27T07:32:00-08:00" { "o":want }
+
+test_utc_datetime =
+  want = offset_datetime (local_date 27 5 1979) utc (local_time "" 7 32 0)
+  decodes? "o = 1979-05-27 07:32:00z" { "o":want }
+
+test_leap_day = decodes? "d = 2024-02-29" { "d":(local_date 29 2 2024) }
+
+test_datetime_text =
+  dt = offset_datetime (local_date 5 7 1987) 330 (local_time "6" 17 45 56)
+  datetime_text dt == "1987-07-05T17:45:56.6+05:30"
+
+test_dotted_keys = decodes? "a.b.c = 1" { "a":{ "b":{ "c":1 } } }
+
+test_header_then_pairs = decodes? "[t]\nx = 1\ny = 2" { "t":{ "x":1 "y":2 } }
+
+test_implicit_then_defined =
+  source = "[a.b]\nx = 1\n[a]\ny = 2"
+  decodes? source { "a":{ "b":{ "x":1 } "y":2 } }
+
+test_array_of_tables =
+  source = "[[p]]\nn = 1\n[[p]]\n[[p]]\nn = 3"
+  decodes? source { "p":[{ "n":1 } {} { "n":3 }] }
+
+test_nested_array_of_tables =
+  source = "[[a]]\n[[a.b]]\nx = 1\n[[a.b]]\nx = 2"
+  decodes? source { "a":[{ "b":[{ "x":1 } { "x":2 }] }] }
+
+test_inline_table =
+  want = { "t":{ "x":1 "y":{ "z":2 } } }
+  decodes? "t = \{ x = 1, y.z = 2 }" want
+
+test_arrays = decodes? "a = [ 1, [2, 3], \"x\", ]" { "a":[1 [2 3] "x"] }
+
+test_empty_document = decodes? "" {}
+
+test_error_duplicate_key = refused? "a = 1\na = 2" "2:1 duplicate key `a`"
+
+test_error_unterminated_string = refused? "a = \"abc" "1:9 unterminated string"
+
+test_error_trailing_text =
+  want = "1:7 expected newline or end of input, found `2`"
+  refused? "a = 1 2" want
+
+test_error_column_counts_characters =
+  want = "1:1 expected a key, found `é`"
+  refused? "é = 1" want
+
+test_error_bad_date =
+  want = "1:13 invalid date: no day 29 in that month"
+  refused? "d = 2023-02-29" want
+
+test_error_table_twice =
+  want = "2:2 table `a` is defined more than once"
+  refused? "[a]\n[a]" want
+
+test_error_inline_closed =
+  want = "2:1 inline table `a` cannot be extended"
+  refused? "a = \{}\na.b = 1" want
+
+test_error_dotted_into_header =
+  why = "table `b` is defined by a header; dotted keys cannot add to it"
+  refused? "[a.b]\n[a]\nb.c = 1" "3:1 {why}"
+
+test_error_static_array =
+  why = "`a` is already defined and is not an array of tables"
+  refused? "a = []\n[[a]]" "2:3 {why}"
+
+test_error_overflow =
+  want = "1:5 integer does not fit in 64 bits"
+  refused? "a = 9223372036854775808" want
+
+test_invalid_utf8 =
+  bad = decode_bytes (text/to_bytes [97 32 61 32 34 255 34])
+  testing/when_failed bad (r -> r.column == 6 and r.message == "invalid UTF-8")
+
+test_error_report =
+  report = testing/when_failed (decode "a = \{b = 1,}") error_report
+  head = "TOML parse error at line 1, column 12\n  |\n"
+  body = "1 | a = \{b = 1,}\n  |            ^\ntrailing comma in inline table\n"
+  report == "{head}{body}"
+
+test_utf8_error_finds_the_byte = utf8_error [104 105 195 40] 1 == 3
+
+test_utf8_rejects_surrogates = utf8_error [237 160 128] 1 == 1
+
+test_utf8_accepts_four_byte = utf8_error (text/bytes "😀") 1 == 0
+
+test_path_keys_differ = path_key ["a.b"] != path_key ["a" "b"]
+
+test_path_key_marks_indexes = path_key ["a" 2 "b"] == "\"a\"[0000000002]\"b\""
+
+test_path_keys_sort_numerically = path_key ["a" 9] < path_key ["a" 10]
+
+# A sibling never sorts between a table and its contents.
+test_path_keys_keep_subtrees_together =
+  parent = path_key ["a"]
+  child = path_key ["a" "b"]
+  sibling = path_key ["a b"]
+  parent < child and (sibling < parent or child < sibling)
+
+test_key_path_quotes = key_path ["a" "b c" "d"] 3 == "a.\"b c\".d"
+
+test_index_keeps_values =
+  t = store (store (store no_branch "x" 1) "y" 2) "x" 3
+  stored t "x" == 3 and stored t "y" == 2 and stored t "z" == none
+
+test_encode_document =
+  doc = { "a":1 "t":{ "s":"x\"y" } }
+  same? (encode doc) "a = 1\n\n[t]\ns = \"x\\\"y\"\n"
+
+test_encode_array_of_tables =
+  doc = { "p":[{ "n":1 } {}] }
+  same? (encode doc) "[[p]]\nn = 1\n\n[[p]]\n"
+
+test_encode_quotes_keys = same? (encode { "a b":true }) "\"a b\" = true\n"
+
+test_encode_round_trip =
+  source = "x = [1, 2.5, \"s\", 1979-05-27]\n[t]\ny = \{ z = false }\n"
+  first = decode source
+  again = encode first
+  decodes? again first
+
+test_lookup_nested = same? (lookup { "a":{ "b":[10 20] } } "a.b[1]") 20
+
+test_lookup_missing = absent? (lookup { "a":1 } "a.b")
+
+test_lookup_quoted = same? (lookup { "a.b":{ "c":1 } } "\"a.b\".c") 1
+
+test_bad_path =
+  found = lookup {} "a..b"
+  testing/when_failed found (r -> r.column == 3)
+
+test_type_names =
+  names = [(type_name "s") (type_name 1) (type_name 1.5) (type_name true)]
+  names == ["string" "integer" "float" "bool"]
+
+test_from_tagged =
+  number = { "type":"integer" "value":"7" }
+  flag = { "type":"bool" "value":"true" }
+  same? (from_tagged { "a":number "b":[flag] }) { "a":7 "b":[true] }

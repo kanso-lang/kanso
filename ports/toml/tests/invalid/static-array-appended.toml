@@ -1,0 +1,4 @@
+fruits = []
+
+[[fruits]]
+name = "apple"

@@ -1,0 +1,38 @@
+import "../store"
+import "std/list"
+
+# ugit reset <rev>          move the branch to <rev> and reset the index
+# ugit reset --hard <rev>   ... and the working tree, discarding changes
+fn reset_cmd args
+  line = parsed args []
+  words = words_of line
+  return misuse "reset [--hard] [<commit>]" if length words > 1
+  rev = if (length words == 1) words[1] "HEAD"
+  hard = on? line "--hard"
+  store/resolve rev
+    .> (oid -> store/get_commit oid .> (c -> resetting oid c hard))
+
+fn resetting oid c hard
+  target = store/read_tree c.tree
+  target .> (files -> looked .> (v -> reset_to v oid c files hard))
+
+fn reset_to v oid c target true
+  moved_head = store/update_ref "HEAD" (store/direct oid) true
+  retree (as_found v) target
+    .> (_ -> store/write_index target)
+    .> (_ -> moved_head)
+    .> (_ -> say "HEAD is now at {short oid} {subject c.message}\n")
+
+fn reset_to _ oid _ target false
+  store/write_index target
+    .> (_ -> store/update_ref "HEAD" (store/direct oid) true)
+    .> (_ -> effect 0)
+
+# `retree` rewrites the paths where HEAD and the target differ. A hard
+# reset must rewrite every tracked path where the working tree differs, so
+# it hands retree a view whose "HEAD" is the working tree's tracked files.
+# The index retree writes is then replaced by the target's.
+fn as_found v
+  tracked = keys (store/merged v.head_files v.index)
+  found = list/fold tracked {} (m p -> indexed m p v.work[p])
+  view v.branch v.head found {} v.merging v.work

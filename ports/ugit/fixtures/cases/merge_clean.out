@@ -1,0 +1,49 @@
+Initialized empty ugit repository in .ugit/
+[master (root-commit) d237ca3] base
+[master f26ce36] master: title, new file
+Switched to branch 'feature'
+[feature 0ead0e1] feature: ending, notes, drop old
+Switched to branch 'master'
+Auto-merging story.txt
+Merge made by the 'ugit' strategy.
+TITLE
+
+alpha
+beta
+gamma
+delta
+epsilon
+
+THE END
+notes, and more
+master file
+master.txt
+notes.txt
+story.txt
+On branch master
+nothing to commit, working tree clean
+commit a13a462e319b38a571d8e438e0c08d2949492c32139350ae7f972c68fe104d3d (HEAD -> master)
+Merge: f26ce36 0ead0e1
+Author: A U Thor <author@example.com>
+Date:   Tue Nov 14 22:17:20 2023 +0000
+
+    Merge branch 'feature'
+
+commit f26ce36aaca7e3622ab1560968c01e902c80e452e002223e1ed17d2ac281a008
+Author: A U Thor <author@example.com>
+Date:   Tue Nov 14 22:15:20 2023 +0000
+
+    master: title, new file
+
+commit d237ca37cb0dc308c256e2f289eeaa1f7b8c5fb410c482857af288ee259af850
+Author: A U Thor <author@example.com>
+Date:   Tue Nov 14 22:14:20 2023 +0000
+
+    base
+
+commit 0ead0e1c84cc6163d089a377b36b52b2d5307c9cdf1148c5f79799c4fbb5c81a (feature)
+Author: A U Thor <author@example.com>
+Date:   Tue Nov 14 22:16:20 2023 +0000
+
+    feature: ending, notes, drop old
+0ead0e1c84cc6163d089a377b36b52b2d5307c9cdf1148c5f79799c4fbb5c81a

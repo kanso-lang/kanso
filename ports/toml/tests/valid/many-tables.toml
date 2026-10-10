@@ -1,0 +1,3003 @@
+# Three hundred array-of-tables entries, each with a sub-table, an inline
+# table and an array: enough slots to cross every size where the native
+# engines once misbehaved (64 elements, re-sorting maps, deep trees).
+
+[[host]]
+name = "host-000"
+port = 8000
+tags = ["t0", "t0"]
+limits = { cpu = 0.5, mem = 0 }
+
+[host.meta]
+rack = 0
+seen = 2024-01-01T10:00:00Z
+
+[[host]]
+name = "host-001"
+port = 8001
+tags = ["t1", "t1"]
+limits = { cpu = 1.5, mem = 64 }
+
+[host.meta]
+rack = 0
+seen = 2024-01-02T10:01:00Z
+
+[[host]]
+name = "host-002"
+port = 8002
+tags = ["t2", "t2"]
+limits = { cpu = 2.5, mem = 128 }
+
+[host.meta]
+rack = 0
+seen = 2024-01-03T10:02:00Z
+
+[[host]]
+name = "host-003"
+port = 8003
+tags = ["t3", "t3"]
+limits = { cpu = 3.5, mem = 192 }
+
+[host.meta]
+rack = 0
+seen = 2024-01-04T10:03:00Z
+
+[[host]]
+name = "host-004"
+port = 8004
+tags = ["t4", "t4"]
+limits = { cpu = 4.5, mem = 256 }
+
+[host.meta]
+rack = 0
+seen = 2024-01-05T10:04:00Z
+
+[[host]]
+name = "host-005"
+port = 8005
+tags = ["t5", "t5"]
+limits = { cpu = 5.5, mem = 320 }
+
+[host.meta]
+rack = 0
+seen = 2024-01-06T10:05:00Z
+
+[[host]]
+name = "host-006"
+port = 8006
+tags = ["t6", "t6"]
+limits = { cpu = 6.5, mem = 384 }
+
+[host.meta]
+rack = 0
+seen = 2024-01-07T10:06:00Z
+
+[[host]]
+name = "host-007"
+port = 8007
+tags = ["t0", "t7"]
+limits = { cpu = 7.5, mem = 448 }
+
+[host.meta]
+rack = 0
+seen = 2024-01-08T10:07:00Z
+
+[[host]]
+name = "host-008"
+port = 8008
+tags = ["t1", "t8"]
+limits = { cpu = 0.5, mem = 512 }
+
+[host.meta]
+rack = 0
+seen = 2024-01-09T10:08:00Z
+
+[[host]]
+name = "host-009"
+port = 8009
+tags = ["t2", "t9"]
+limits = { cpu = 1.5, mem = 576 }
+
+[host.meta]
+rack = 0
+seen = 2024-01-10T10:09:00Z
+
+[[host]]
+name = "host-010"
+port = 8010
+tags = ["t3", "t10"]
+limits = { cpu = 2.5, mem = 640 }
+
+[host.meta]
+rack = 0
+seen = 2024-01-11T10:10:00Z
+
+[[host]]
+name = "host-011"
+port = 8011
+tags = ["t4", "t0"]
+limits = { cpu = 3.5, mem = 704 }
+
+[host.meta]
+rack = 0
+seen = 2024-01-12T10:11:00Z
+
+[[host]]
+name = "host-012"
+port = 8012
+tags = ["t5", "t1"]
+limits = { cpu = 4.5, mem = 768 }
+
+[host.meta]
+rack = 0
+seen = 2024-01-13T10:12:00Z
+
+[[host]]
+name = "host-013"
+port = 8013
+tags = ["t6", "t2"]
+limits = { cpu = 5.5, mem = 832 }
+
+[host.meta]
+rack = 0
+seen = 2024-01-14T10:13:00Z
+
+[[host]]
+name = "host-014"
+port = 8014
+tags = ["t0", "t3"]
+limits = { cpu = 6.5, mem = 896 }
+
+[host.meta]
+rack = 0
+seen = 2024-01-15T10:14:00Z
+
+[[host]]
+name = "host-015"
+port = 8015
+tags = ["t1", "t4"]
+limits = { cpu = 7.5, mem = 960 }
+
+[host.meta]
+rack = 0
+seen = 2024-01-16T10:15:00Z
+
+[[host]]
+name = "host-016"
+port = 8016
+tags = ["t2", "t5"]
+limits = { cpu = 0.5, mem = 1024 }
+
+[host.meta]
+rack = 0
+seen = 2024-01-17T10:16:00Z
+
+[[host]]
+name = "host-017"
+port = 8017
+tags = ["t3", "t6"]
+limits = { cpu = 1.5, mem = 1088 }
+
+[host.meta]
+rack = 0
+seen = 2024-01-18T10:17:00Z
+
+[[host]]
+name = "host-018"
+port = 8018
+tags = ["t4", "t7"]
+limits = { cpu = 2.5, mem = 1152 }
+
+[host.meta]
+rack = 0
+seen = 2024-01-19T10:18:00Z
+
+[[host]]
+name = "host-019"
+port = 8019
+tags = ["t5", "t8"]
+limits = { cpu = 3.5, mem = 1216 }
+
+[host.meta]
+rack = 0
+seen = 2024-01-20T10:19:00Z
+
+[[host]]
+name = "host-020"
+port = 8020
+tags = ["t6", "t9"]
+limits = { cpu = 4.5, mem = 1280 }
+
+[host.meta]
+rack = 1
+seen = 2024-01-21T10:20:00Z
+
+[[host]]
+name = "host-021"
+port = 8021
+tags = ["t0", "t10"]
+limits = { cpu = 5.5, mem = 1344 }
+
+[host.meta]
+rack = 1
+seen = 2024-01-22T10:21:00Z
+
+[[host]]
+name = "host-022"
+port = 8022
+tags = ["t1", "t0"]
+limits = { cpu = 6.5, mem = 1408 }
+
+[host.meta]
+rack = 1
+seen = 2024-01-23T10:22:00Z
+
+[[host]]
+name = "host-023"
+port = 8023
+tags = ["t2", "t1"]
+limits = { cpu = 7.5, mem = 1472 }
+
+[host.meta]
+rack = 1
+seen = 2024-01-24T10:23:00Z
+
+[[host]]
+name = "host-024"
+port = 8024
+tags = ["t3", "t2"]
+limits = { cpu = 0.5, mem = 1536 }
+
+[host.meta]
+rack = 1
+seen = 2024-01-25T10:24:00Z
+
+[[host]]
+name = "host-025"
+port = 8025
+tags = ["t4", "t3"]
+limits = { cpu = 1.5, mem = 1600 }
+
+[host.meta]
+rack = 1
+seen = 2024-01-26T10:25:00Z
+
+[[host]]
+name = "host-026"
+port = 8026
+tags = ["t5", "t4"]
+limits = { cpu = 2.5, mem = 1664 }
+
+[host.meta]
+rack = 1
+seen = 2024-01-27T10:26:00Z
+
+[[host]]
+name = "host-027"
+port = 8027
+tags = ["t6", "t5"]
+limits = { cpu = 3.5, mem = 1728 }
+
+[host.meta]
+rack = 1
+seen = 2024-01-28T10:27:00Z
+
+[[host]]
+name = "host-028"
+port = 8028
+tags = ["t0", "t6"]
+limits = { cpu = 4.5, mem = 1792 }
+
+[host.meta]
+rack = 1
+seen = 2024-01-01T10:28:00Z
+
+[[host]]
+name = "host-029"
+port = 8029
+tags = ["t1", "t7"]
+limits = { cpu = 5.5, mem = 1856 }
+
+[host.meta]
+rack = 1
+seen = 2024-01-02T10:29:00Z
+
+[[host]]
+name = "host-030"
+port = 8030
+tags = ["t2", "t8"]
+limits = { cpu = 6.5, mem = 1920 }
+
+[host.meta]
+rack = 1
+seen = 2024-01-03T10:30:00Z
+
+[[host]]
+name = "host-031"
+port = 8031
+tags = ["t3", "t9"]
+limits = { cpu = 7.5, mem = 1984 }
+
+[host.meta]
+rack = 1
+seen = 2024-01-04T10:31:00Z
+
+[[host]]
+name = "host-032"
+port = 8032
+tags = ["t4", "t10"]
+limits = { cpu = 0.5, mem = 2048 }
+
+[host.meta]
+rack = 1
+seen = 2024-01-05T10:32:00Z
+
+[[host]]
+name = "host-033"
+port = 8033
+tags = ["t5", "t0"]
+limits = { cpu = 1.5, mem = 2112 }
+
+[host.meta]
+rack = 1
+seen = 2024-01-06T10:33:00Z
+
+[[host]]
+name = "host-034"
+port = 8034
+tags = ["t6", "t1"]
+limits = { cpu = 2.5, mem = 2176 }
+
+[host.meta]
+rack = 1
+seen = 2024-01-07T10:34:00Z
+
+[[host]]
+name = "host-035"
+port = 8035
+tags = ["t0", "t2"]
+limits = { cpu = 3.5, mem = 2240 }
+
+[host.meta]
+rack = 1
+seen = 2024-01-08T10:35:00Z
+
+[[host]]
+name = "host-036"
+port = 8036
+tags = ["t1", "t3"]
+limits = { cpu = 4.5, mem = 2304 }
+
+[host.meta]
+rack = 1
+seen = 2024-01-09T10:36:00Z
+
+[[host]]
+name = "host-037"
+port = 8037
+tags = ["t2", "t4"]
+limits = { cpu = 5.5, mem = 2368 }
+
+[host.meta]
+rack = 1
+seen = 2024-01-10T10:37:00Z
+
+[[host]]
+name = "host-038"
+port = 8038
+tags = ["t3", "t5"]
+limits = { cpu = 6.5, mem = 2432 }
+
+[host.meta]
+rack = 1
+seen = 2024-01-11T10:38:00Z
+
+[[host]]
+name = "host-039"
+port = 8039
+tags = ["t4", "t6"]
+limits = { cpu = 7.5, mem = 2496 }
+
+[host.meta]
+rack = 1
+seen = 2024-01-12T10:39:00Z
+
+[[host]]
+name = "host-040"
+port = 8040
+tags = ["t5", "t7"]
+limits = { cpu = 0.5, mem = 2560 }
+
+[host.meta]
+rack = 2
+seen = 2024-01-13T10:40:00Z
+
+[[host]]
+name = "host-041"
+port = 8041
+tags = ["t6", "t8"]
+limits = { cpu = 1.5, mem = 2624 }
+
+[host.meta]
+rack = 2
+seen = 2024-01-14T10:41:00Z
+
+[[host]]
+name = "host-042"
+port = 8042
+tags = ["t0", "t9"]
+limits = { cpu = 2.5, mem = 2688 }
+
+[host.meta]
+rack = 2
+seen = 2024-01-15T10:42:00Z
+
+[[host]]
+name = "host-043"
+port = 8043
+tags = ["t1", "t10"]
+limits = { cpu = 3.5, mem = 2752 }
+
+[host.meta]
+rack = 2
+seen = 2024-01-16T10:43:00Z
+
+[[host]]
+name = "host-044"
+port = 8044
+tags = ["t2", "t0"]
+limits = { cpu = 4.5, mem = 2816 }
+
+[host.meta]
+rack = 2
+seen = 2024-01-17T10:44:00Z
+
+[[host]]
+name = "host-045"
+port = 8045
+tags = ["t3", "t1"]
+limits = { cpu = 5.5, mem = 2880 }
+
+[host.meta]
+rack = 2
+seen = 2024-01-18T10:45:00Z
+
+[[host]]
+name = "host-046"
+port = 8046
+tags = ["t4", "t2"]
+limits = { cpu = 6.5, mem = 2944 }
+
+[host.meta]
+rack = 2
+seen = 2024-01-19T10:46:00Z
+
+[[host]]
+name = "host-047"
+port = 8047
+tags = ["t5", "t3"]
+limits = { cpu = 7.5, mem = 3008 }
+
+[host.meta]
+rack = 2
+seen = 2024-01-20T10:47:00Z
+
+[[host]]
+name = "host-048"
+port = 8048
+tags = ["t6", "t4"]
+limits = { cpu = 0.5, mem = 3072 }
+
+[host.meta]
+rack = 2
+seen = 2024-01-21T10:48:00Z
+
+[[host]]
+name = "host-049"
+port = 8049
+tags = ["t0", "t5"]
+limits = { cpu = 1.5, mem = 3136 }
+
+[host.meta]
+rack = 2
+seen = 2024-01-22T10:49:00Z
+
+[[host]]
+name = "host-050"
+port = 8050
+tags = ["t1", "t6"]
+limits = { cpu = 2.5, mem = 3200 }
+
+[host.meta]
+rack = 2
+seen = 2024-01-23T10:50:00Z
+
+[[host]]
+name = "host-051"
+port = 8051
+tags = ["t2", "t7"]
+limits = { cpu = 3.5, mem = 3264 }
+
+[host.meta]
+rack = 2
+seen = 2024-01-24T10:51:00Z
+
+[[host]]
+name = "host-052"
+port = 8052
+tags = ["t3", "t8"]
+limits = { cpu = 4.5, mem = 3328 }
+
+[host.meta]
+rack = 2
+seen = 2024-01-25T10:52:00Z
+
+[[host]]
+name = "host-053"
+port = 8053
+tags = ["t4", "t9"]
+limits = { cpu = 5.5, mem = 3392 }
+
+[host.meta]
+rack = 2
+seen = 2024-01-26T10:53:00Z
+
+[[host]]
+name = "host-054"
+port = 8054
+tags = ["t5", "t10"]
+limits = { cpu = 6.5, mem = 3456 }
+
+[host.meta]
+rack = 2
+seen = 2024-01-27T10:54:00Z
+
+[[host]]
+name = "host-055"
+port = 8055
+tags = ["t6", "t0"]
+limits = { cpu = 7.5, mem = 3520 }
+
+[host.meta]
+rack = 2
+seen = 2024-01-28T10:55:00Z
+
+[[host]]
+name = "host-056"
+port = 8056
+tags = ["t0", "t1"]
+limits = { cpu = 0.5, mem = 3584 }
+
+[host.meta]
+rack = 2
+seen = 2024-01-01T10:56:00Z
+
+[[host]]
+name = "host-057"
+port = 8057
+tags = ["t1", "t2"]
+limits = { cpu = 1.5, mem = 3648 }
+
+[host.meta]
+rack = 2
+seen = 2024-01-02T10:57:00Z
+
+[[host]]
+name = "host-058"
+port = 8058
+tags = ["t2", "t3"]
+limits = { cpu = 2.5, mem = 3712 }
+
+[host.meta]
+rack = 2
+seen = 2024-01-03T10:58:00Z
+
+[[host]]
+name = "host-059"
+port = 8059
+tags = ["t3", "t4"]
+limits = { cpu = 3.5, mem = 3776 }
+
+[host.meta]
+rack = 2
+seen = 2024-01-04T10:59:00Z
+
+[[host]]
+name = "host-060"
+port = 8060
+tags = ["t4", "t5"]
+limits = { cpu = 4.5, mem = 3840 }
+
+[host.meta]
+rack = 3
+seen = 2024-01-05T10:00:00Z
+
+[[host]]
+name = "host-061"
+port = 8061
+tags = ["t5", "t6"]
+limits = { cpu = 5.5, mem = 3904 }
+
+[host.meta]
+rack = 3
+seen = 2024-01-06T10:01:00Z
+
+[[host]]
+name = "host-062"
+port = 8062
+tags = ["t6", "t7"]
+limits = { cpu = 6.5, mem = 3968 }
+
+[host.meta]
+rack = 3
+seen = 2024-01-07T10:02:00Z
+
+[[host]]
+name = "host-063"
+port = 8063
+tags = ["t0", "t8"]
+limits = { cpu = 7.5, mem = 4032 }
+
+[host.meta]
+rack = 3
+seen = 2024-01-08T10:03:00Z
+
+[[host]]
+name = "host-064"
+port = 8064
+tags = ["t1", "t9"]
+limits = { cpu = 0.5, mem = 4096 }
+
+[host.meta]
+rack = 3
+seen = 2024-01-09T10:04:00Z
+
+[[host]]
+name = "host-065"
+port = 8065
+tags = ["t2", "t10"]
+limits = { cpu = 1.5, mem = 4160 }
+
+[host.meta]
+rack = 3
+seen = 2024-01-10T10:05:00Z
+
+[[host]]
+name = "host-066"
+port = 8066
+tags = ["t3", "t0"]
+limits = { cpu = 2.5, mem = 4224 }
+
+[host.meta]
+rack = 3
+seen = 2024-01-11T10:06:00Z
+
+[[host]]
+name = "host-067"
+port = 8067
+tags = ["t4", "t1"]
+limits = { cpu = 3.5, mem = 4288 }
+
+[host.meta]
+rack = 3
+seen = 2024-01-12T10:07:00Z
+
+[[host]]
+name = "host-068"
+port = 8068
+tags = ["t5", "t2"]
+limits = { cpu = 4.5, mem = 4352 }
+
+[host.meta]
+rack = 3
+seen = 2024-01-13T10:08:00Z
+
+[[host]]
+name = "host-069"
+port = 8069
+tags = ["t6", "t3"]
+limits = { cpu = 5.5, mem = 4416 }
+
+[host.meta]
+rack = 3
+seen = 2024-01-14T10:09:00Z
+
+[[host]]
+name = "host-070"
+port = 8070
+tags = ["t0", "t4"]
+limits = { cpu = 6.5, mem = 4480 }
+
+[host.meta]
+rack = 3
+seen = 2024-01-15T10:10:00Z
+
+[[host]]
+name = "host-071"
+port = 8071
+tags = ["t1", "t5"]
+limits = { cpu = 7.5, mem = 4544 }
+
+[host.meta]
+rack = 3
+seen = 2024-01-16T10:11:00Z
+
+[[host]]
+name = "host-072"
+port = 8072
+tags = ["t2", "t6"]
+limits = { cpu = 0.5, mem = 4608 }
+
+[host.meta]
+rack = 3
+seen = 2024-01-17T10:12:00Z
+
+[[host]]
+name = "host-073"
+port = 8073
+tags = ["t3", "t7"]
+limits = { cpu = 1.5, mem = 4672 }
+
+[host.meta]
+rack = 3
+seen = 2024-01-18T10:13:00Z
+
+[[host]]
+name = "host-074"
+port = 8074
+tags = ["t4", "t8"]
+limits = { cpu = 2.5, mem = 4736 }
+
+[host.meta]
+rack = 3
+seen = 2024-01-19T10:14:00Z
+
+[[host]]
+name = "host-075"
+port = 8075
+tags = ["t5", "t9"]
+limits = { cpu = 3.5, mem = 4800 }
+
+[host.meta]
+rack = 3
+seen = 2024-01-20T10:15:00Z
+
+[[host]]
+name = "host-076"
+port = 8076
+tags = ["t6", "t10"]
+limits = { cpu = 4.5, mem = 4864 }
+
+[host.meta]
+rack = 3
+seen = 2024-01-21T10:16:00Z
+
+[[host]]
+name = "host-077"
+port = 8077
+tags = ["t0", "t0"]
+limits = { cpu = 5.5, mem = 4928 }
+
+[host.meta]
+rack = 3
+seen = 2024-01-22T10:17:00Z
+
+[[host]]
+name = "host-078"
+port = 8078
+tags = ["t1", "t1"]
+limits = { cpu = 6.5, mem = 4992 }
+
+[host.meta]
+rack = 3
+seen = 2024-01-23T10:18:00Z
+
+[[host]]
+name = "host-079"
+port = 8079
+tags = ["t2", "t2"]
+limits = { cpu = 7.5, mem = 5056 }
+
+[host.meta]
+rack = 3
+seen = 2024-01-24T10:19:00Z
+
+[[host]]
+name = "host-080"
+port = 8080
+tags = ["t3", "t3"]
+limits = { cpu = 0.5, mem = 5120 }
+
+[host.meta]
+rack = 4
+seen = 2024-01-25T10:20:00Z
+
+[[host]]
+name = "host-081"
+port = 8081
+tags = ["t4", "t4"]
+limits = { cpu = 1.5, mem = 5184 }
+
+[host.meta]
+rack = 4
+seen = 2024-01-26T10:21:00Z
+
+[[host]]
+name = "host-082"
+port = 8082
+tags = ["t5", "t5"]
+limits = { cpu = 2.5, mem = 5248 }
+
+[host.meta]
+rack = 4
+seen = 2024-01-27T10:22:00Z
+
+[[host]]
+name = "host-083"
+port = 8083
+tags = ["t6", "t6"]
+limits = { cpu = 3.5, mem = 5312 }
+
+[host.meta]
+rack = 4
+seen = 2024-01-28T10:23:00Z
+
+[[host]]
+name = "host-084"
+port = 8084
+tags = ["t0", "t7"]
+limits = { cpu = 4.5, mem = 5376 }
+
+[host.meta]
+rack = 4
+seen = 2024-01-01T10:24:00Z
+
+[[host]]
+name = "host-085"
+port = 8085
+tags = ["t1", "t8"]
+limits = { cpu = 5.5, mem = 5440 }
+
+[host.meta]
+rack = 4
+seen = 2024-01-02T10:25:00Z
+
+[[host]]
+name = "host-086"
+port = 8086
+tags = ["t2", "t9"]
+limits = { cpu = 6.5, mem = 5504 }
+
+[host.meta]
+rack = 4
+seen = 2024-01-03T10:26:00Z
+
+[[host]]
+name = "host-087"
+port = 8087
+tags = ["t3", "t10"]
+limits = { cpu = 7.5, mem = 5568 }
+
+[host.meta]
+rack = 4
+seen = 2024-01-04T10:27:00Z
+
+[[host]]
+name = "host-088"
+port = 8088
+tags = ["t4", "t0"]
+limits = { cpu = 0.5, mem = 5632 }
+
+[host.meta]
+rack = 4
+seen = 2024-01-05T10:28:00Z
+
+[[host]]
+name = "host-089"
+port = 8089
+tags = ["t5", "t1"]
+limits = { cpu = 1.5, mem = 5696 }
+
+[host.meta]
+rack = 4
+seen = 2024-01-06T10:29:00Z
+
+[[host]]
+name = "host-090"
+port = 8090
+tags = ["t6", "t2"]
+limits = { cpu = 2.5, mem = 5760 }
+
+[host.meta]
+rack = 4
+seen = 2024-01-07T10:30:00Z
+
+[[host]]
+name = "host-091"
+port = 8091
+tags = ["t0", "t3"]
+limits = { cpu = 3.5, mem = 5824 }
+
+[host.meta]
+rack = 4
+seen = 2024-01-08T10:31:00Z
+
+[[host]]
+name = "host-092"
+port = 8092
+tags = ["t1", "t4"]
+limits = { cpu = 4.5, mem = 5888 }
+
+[host.meta]
+rack = 4
+seen = 2024-01-09T10:32:00Z
+
+[[host]]
+name = "host-093"
+port = 8093
+tags = ["t2", "t5"]
+limits = { cpu = 5.5, mem = 5952 }
+
+[host.meta]
+rack = 4
+seen = 2024-01-10T10:33:00Z
+
+[[host]]
+name = "host-094"
+port = 8094
+tags = ["t3", "t6"]
+limits = { cpu = 6.5, mem = 6016 }
+
+[host.meta]
+rack = 4
+seen = 2024-01-11T10:34:00Z
+
+[[host]]
+name = "host-095"
+port = 8095
+tags = ["t4", "t7"]
+limits = { cpu = 7.5, mem = 6080 }
+
+[host.meta]
+rack = 4
+seen = 2024-01-12T10:35:00Z
+
+[[host]]
+name = "host-096"
+port = 8096
+tags = ["t5", "t8"]
+limits = { cpu = 0.5, mem = 6144 }
+
+[host.meta]
+rack = 4
+seen = 2024-01-13T10:36:00Z
+
+[[host]]
+name = "host-097"
+port = 8097
+tags = ["t6", "t9"]
+limits = { cpu = 1.5, mem = 6208 }
+
+[host.meta]
+rack = 4
+seen = 2024-01-14T10:37:00Z
+
+[[host]]
+name = "host-098"
+port = 8098
+tags = ["t0", "t10"]
+limits = { cpu = 2.5, mem = 6272 }
+
+[host.meta]
+rack = 4
+seen = 2024-01-15T10:38:00Z
+
+[[host]]
+name = "host-099"
+port = 8099
+tags = ["t1", "t0"]
+limits = { cpu = 3.5, mem = 6336 }
+
+[host.meta]
+rack = 4
+seen = 2024-01-16T10:39:00Z
+
+[[host]]
+name = "host-100"
+port = 8100
+tags = ["t2", "t1"]
+limits = { cpu = 4.5, mem = 6400 }
+
+[host.meta]
+rack = 5
+seen = 2024-01-17T10:40:00Z
+
+[[host]]
+name = "host-101"
+port = 8101
+tags = ["t3", "t2"]
+limits = { cpu = 5.5, mem = 6464 }
+
+[host.meta]
+rack = 5
+seen = 2024-01-18T10:41:00Z
+
+[[host]]
+name = "host-102"
+port = 8102
+tags = ["t4", "t3"]
+limits = { cpu = 6.5, mem = 6528 }
+
+[host.meta]
+rack = 5
+seen = 2024-01-19T10:42:00Z
+
+[[host]]
+name = "host-103"
+port = 8103
+tags = ["t5", "t4"]
+limits = { cpu = 7.5, mem = 6592 }
+
+[host.meta]
+rack = 5
+seen = 2024-01-20T10:43:00Z
+
+[[host]]
+name = "host-104"
+port = 8104
+tags = ["t6", "t5"]
+limits = { cpu = 0.5, mem = 6656 }
+
+[host.meta]
+rack = 5
+seen = 2024-01-21T10:44:00Z
+
+[[host]]
+name = "host-105"
+port = 8105
+tags = ["t0", "t6"]
+limits = { cpu = 1.5, mem = 6720 }
+
+[host.meta]
+rack = 5
+seen = 2024-01-22T10:45:00Z
+
+[[host]]
+name = "host-106"
+port = 8106
+tags = ["t1", "t7"]
+limits = { cpu = 2.5, mem = 6784 }
+
+[host.meta]
+rack = 5
+seen = 2024-01-23T10:46:00Z
+
+[[host]]
+name = "host-107"
+port = 8107
+tags = ["t2", "t8"]
+limits = { cpu = 3.5, mem = 6848 }
+
+[host.meta]
+rack = 5
+seen = 2024-01-24T10:47:00Z
+
+[[host]]
+name = "host-108"
+port = 8108
+tags = ["t3", "t9"]
+limits = { cpu = 4.5, mem = 6912 }
+
+[host.meta]
+rack = 5
+seen = 2024-01-25T10:48:00Z
+
+[[host]]
+name = "host-109"
+port = 8109
+tags = ["t4", "t10"]
+limits = { cpu = 5.5, mem = 6976 }
+
+[host.meta]
+rack = 5
+seen = 2024-01-26T10:49:00Z
+
+[[host]]
+name = "host-110"
+port = 8110
+tags = ["t5", "t0"]
+limits = { cpu = 6.5, mem = 7040 }
+
+[host.meta]
+rack = 5
+seen = 2024-01-27T10:50:00Z
+
+[[host]]
+name = "host-111"
+port = 8111
+tags = ["t6", "t1"]
+limits = { cpu = 7.5, mem = 7104 }
+
+[host.meta]
+rack = 5
+seen = 2024-01-28T10:51:00Z
+
+[[host]]
+name = "host-112"
+port = 8112
+tags = ["t0", "t2"]
+limits = { cpu = 0.5, mem = 7168 }
+
+[host.meta]
+rack = 5
+seen = 2024-01-01T10:52:00Z
+
+[[host]]
+name = "host-113"
+port = 8113
+tags = ["t1", "t3"]
+limits = { cpu = 1.5, mem = 7232 }
+
+[host.meta]
+rack = 5
+seen = 2024-01-02T10:53:00Z
+
+[[host]]
+name = "host-114"
+port = 8114
+tags = ["t2", "t4"]
+limits = { cpu = 2.5, mem = 7296 }
+
+[host.meta]
+rack = 5
+seen = 2024-01-03T10:54:00Z
+
+[[host]]
+name = "host-115"
+port = 8115
+tags = ["t3", "t5"]
+limits = { cpu = 3.5, mem = 7360 }
+
+[host.meta]
+rack = 5
+seen = 2024-01-04T10:55:00Z
+
+[[host]]
+name = "host-116"
+port = 8116
+tags = ["t4", "t6"]
+limits = { cpu = 4.5, mem = 7424 }
+
+[host.meta]
+rack = 5
+seen = 2024-01-05T10:56:00Z
+
+[[host]]
+name = "host-117"
+port = 8117
+tags = ["t5", "t7"]
+limits = { cpu = 5.5, mem = 7488 }
+
+[host.meta]
+rack = 5
+seen = 2024-01-06T10:57:00Z
+
+[[host]]
+name = "host-118"
+port = 8118
+tags = ["t6", "t8"]
+limits = { cpu = 6.5, mem = 7552 }
+
+[host.meta]
+rack = 5
+seen = 2024-01-07T10:58:00Z
+
+[[host]]
+name = "host-119"
+port = 8119
+tags = ["t0", "t9"]
+limits = { cpu = 7.5, mem = 7616 }
+
+[host.meta]
+rack = 5
+seen = 2024-01-08T10:59:00Z
+
+[[host]]
+name = "host-120"
+port = 8120
+tags = ["t1", "t10"]
+limits = { cpu = 0.5, mem = 7680 }
+
+[host.meta]
+rack = 6
+seen = 2024-01-09T10:00:00Z
+
+[[host]]
+name = "host-121"
+port = 8121
+tags = ["t2", "t0"]
+limits = { cpu = 1.5, mem = 7744 }
+
+[host.meta]
+rack = 6
+seen = 2024-01-10T10:01:00Z
+
+[[host]]
+name = "host-122"
+port = 8122
+tags = ["t3", "t1"]
+limits = { cpu = 2.5, mem = 7808 }
+
+[host.meta]
+rack = 6
+seen = 2024-01-11T10:02:00Z
+
+[[host]]
+name = "host-123"
+port = 8123
+tags = ["t4", "t2"]
+limits = { cpu = 3.5, mem = 7872 }
+
+[host.meta]
+rack = 6
+seen = 2024-01-12T10:03:00Z
+
+[[host]]
+name = "host-124"
+port = 8124
+tags = ["t5", "t3"]
+limits = { cpu = 4.5, mem = 7936 }
+
+[host.meta]
+rack = 6
+seen = 2024-01-13T10:04:00Z
+
+[[host]]
+name = "host-125"
+port = 8125
+tags = ["t6", "t4"]
+limits = { cpu = 5.5, mem = 8000 }
+
+[host.meta]
+rack = 6
+seen = 2024-01-14T10:05:00Z
+
+[[host]]
+name = "host-126"
+port = 8126
+tags = ["t0", "t5"]
+limits = { cpu = 6.5, mem = 8064 }
+
+[host.meta]
+rack = 6
+seen = 2024-01-15T10:06:00Z
+
+[[host]]
+name = "host-127"
+port = 8127
+tags = ["t1", "t6"]
+limits = { cpu = 7.5, mem = 8128 }
+
+[host.meta]
+rack = 6
+seen = 2024-01-16T10:07:00Z
+
+[[host]]
+name = "host-128"
+port = 8128
+tags = ["t2", "t7"]
+limits = { cpu = 0.5, mem = 8192 }
+
+[host.meta]
+rack = 6
+seen = 2024-01-17T10:08:00Z
+
+[[host]]
+name = "host-129"
+port = 8129
+tags = ["t3", "t8"]
+limits = { cpu = 1.5, mem = 8256 }
+
+[host.meta]
+rack = 6
+seen = 2024-01-18T10:09:00Z
+
+[[host]]
+name = "host-130"
+port = 8130
+tags = ["t4", "t9"]
+limits = { cpu = 2.5, mem = 8320 }
+
+[host.meta]
+rack = 6
+seen = 2024-01-19T10:10:00Z
+
+[[host]]
+name = "host-131"
+port = 8131
+tags = ["t5", "t10"]
+limits = { cpu = 3.5, mem = 8384 }
+
+[host.meta]
+rack = 6
+seen = 2024-01-20T10:11:00Z
+
+[[host]]
+name = "host-132"
+port = 8132
+tags = ["t6", "t0"]
+limits = { cpu = 4.5, mem = 8448 }
+
+[host.meta]
+rack = 6
+seen = 2024-01-21T10:12:00Z
+
+[[host]]
+name = "host-133"
+port = 8133
+tags = ["t0", "t1"]
+limits = { cpu = 5.5, mem = 8512 }
+
+[host.meta]
+rack = 6
+seen = 2024-01-22T10:13:00Z
+
+[[host]]
+name = "host-134"
+port = 8134
+tags = ["t1", "t2"]
+limits = { cpu = 6.5, mem = 8576 }
+
+[host.meta]
+rack = 6
+seen = 2024-01-23T10:14:00Z
+
+[[host]]
+name = "host-135"
+port = 8135
+tags = ["t2", "t3"]
+limits = { cpu = 7.5, mem = 8640 }
+
+[host.meta]
+rack = 6
+seen = 2024-01-24T10:15:00Z
+
+[[host]]
+name = "host-136"
+port = 8136
+tags = ["t3", "t4"]
+limits = { cpu = 0.5, mem = 8704 }
+
+[host.meta]
+rack = 6
+seen = 2024-01-25T10:16:00Z
+
+[[host]]
+name = "host-137"
+port = 8137
+tags = ["t4", "t5"]
+limits = { cpu = 1.5, mem = 8768 }
+
+[host.meta]
+rack = 6
+seen = 2024-01-26T10:17:00Z
+
+[[host]]
+name = "host-138"
+port = 8138
+tags = ["t5", "t6"]
+limits = { cpu = 2.5, mem = 8832 }
+
+[host.meta]
+rack = 6
+seen = 2024-01-27T10:18:00Z
+
+[[host]]
+name = "host-139"
+port = 8139
+tags = ["t6", "t7"]
+limits = { cpu = 3.5, mem = 8896 }
+
+[host.meta]
+rack = 6
+seen = 2024-01-28T10:19:00Z
+
+[[host]]
+name = "host-140"
+port = 8140
+tags = ["t0", "t8"]
+limits = { cpu = 4.5, mem = 8960 }
+
+[host.meta]
+rack = 7
+seen = 2024-01-01T10:20:00Z
+
+[[host]]
+name = "host-141"
+port = 8141
+tags = ["t1", "t9"]
+limits = { cpu = 5.5, mem = 9024 }
+
+[host.meta]
+rack = 7
+seen = 2024-01-02T10:21:00Z
+
+[[host]]
+name = "host-142"
+port = 8142
+tags = ["t2", "t10"]
+limits = { cpu = 6.5, mem = 9088 }
+
+[host.meta]
+rack = 7
+seen = 2024-01-03T10:22:00Z
+
+[[host]]
+name = "host-143"
+port = 8143
+tags = ["t3", "t0"]
+limits = { cpu = 7.5, mem = 9152 }
+
+[host.meta]
+rack = 7
+seen = 2024-01-04T10:23:00Z
+
+[[host]]
+name = "host-144"
+port = 8144
+tags = ["t4", "t1"]
+limits = { cpu = 0.5, mem = 9216 }
+
+[host.meta]
+rack = 7
+seen = 2024-01-05T10:24:00Z
+
+[[host]]
+name = "host-145"
+port = 8145
+tags = ["t5", "t2"]
+limits = { cpu = 1.5, mem = 9280 }
+
+[host.meta]
+rack = 7
+seen = 2024-01-06T10:25:00Z
+
+[[host]]
+name = "host-146"
+port = 8146
+tags = ["t6", "t3"]
+limits = { cpu = 2.5, mem = 9344 }
+
+[host.meta]
+rack = 7
+seen = 2024-01-07T10:26:00Z
+
+[[host]]
+name = "host-147"
+port = 8147
+tags = ["t0", "t4"]
+limits = { cpu = 3.5, mem = 9408 }
+
+[host.meta]
+rack = 7
+seen = 2024-01-08T10:27:00Z
+
+[[host]]
+name = "host-148"
+port = 8148
+tags = ["t1", "t5"]
+limits = { cpu = 4.5, mem = 9472 }
+
+[host.meta]
+rack = 7
+seen = 2024-01-09T10:28:00Z
+
+[[host]]
+name = "host-149"
+port = 8149
+tags = ["t2", "t6"]
+limits = { cpu = 5.5, mem = 9536 }
+
+[host.meta]
+rack = 7
+seen = 2024-01-10T10:29:00Z
+
+[[host]]
+name = "host-150"
+port = 8150
+tags = ["t3", "t7"]
+limits = { cpu = 6.5, mem = 9600 }
+
+[host.meta]
+rack = 7
+seen = 2024-01-11T10:30:00Z
+
+[[host]]
+name = "host-151"
+port = 8151
+tags = ["t4", "t8"]
+limits = { cpu = 7.5, mem = 9664 }
+
+[host.meta]
+rack = 7
+seen = 2024-01-12T10:31:00Z
+
+[[host]]
+name = "host-152"
+port = 8152
+tags = ["t5", "t9"]
+limits = { cpu = 0.5, mem = 9728 }
+
+[host.meta]
+rack = 7
+seen = 2024-01-13T10:32:00Z
+
+[[host]]
+name = "host-153"
+port = 8153
+tags = ["t6", "t10"]
+limits = { cpu = 1.5, mem = 9792 }
+
+[host.meta]
+rack = 7
+seen = 2024-01-14T10:33:00Z
+
+[[host]]
+name = "host-154"
+port = 8154
+tags = ["t0", "t0"]
+limits = { cpu = 2.5, mem = 9856 }
+
+[host.meta]
+rack = 7
+seen = 2024-01-15T10:34:00Z
+
+[[host]]
+name = "host-155"
+port = 8155
+tags = ["t1", "t1"]
+limits = { cpu = 3.5, mem = 9920 }
+
+[host.meta]
+rack = 7
+seen = 2024-01-16T10:35:00Z
+
+[[host]]
+name = "host-156"
+port = 8156
+tags = ["t2", "t2"]
+limits = { cpu = 4.5, mem = 9984 }
+
+[host.meta]
+rack = 7
+seen = 2024-01-17T10:36:00Z
+
+[[host]]
+name = "host-157"
+port = 8157
+tags = ["t3", "t3"]
+limits = { cpu = 5.5, mem = 10048 }
+
+[host.meta]
+rack = 7
+seen = 2024-01-18T10:37:00Z
+
+[[host]]
+name = "host-158"
+port = 8158
+tags = ["t4", "t4"]
+limits = { cpu = 6.5, mem = 10112 }
+
+[host.meta]
+rack = 7
+seen = 2024-01-19T10:38:00Z
+
+[[host]]
+name = "host-159"
+port = 8159
+tags = ["t5", "t5"]
+limits = { cpu = 7.5, mem = 10176 }
+
+[host.meta]
+rack = 7
+seen = 2024-01-20T10:39:00Z
+
+[[host]]
+name = "host-160"
+port = 8160
+tags = ["t6", "t6"]
+limits = { cpu = 0.5, mem = 10240 }
+
+[host.meta]
+rack = 8
+seen = 2024-01-21T10:40:00Z
+
+[[host]]
+name = "host-161"
+port = 8161
+tags = ["t0", "t7"]
+limits = { cpu = 1.5, mem = 10304 }
+
+[host.meta]
+rack = 8
+seen = 2024-01-22T10:41:00Z
+
+[[host]]
+name = "host-162"
+port = 8162
+tags = ["t1", "t8"]
+limits = { cpu = 2.5, mem = 10368 }
+
+[host.meta]
+rack = 8
+seen = 2024-01-23T10:42:00Z
+
+[[host]]
+name = "host-163"
+port = 8163
+tags = ["t2", "t9"]
+limits = { cpu = 3.5, mem = 10432 }
+
+[host.meta]
+rack = 8
+seen = 2024-01-24T10:43:00Z
+
+[[host]]
+name = "host-164"
+port = 8164
+tags = ["t3", "t10"]
+limits = { cpu = 4.5, mem = 10496 }
+
+[host.meta]
+rack = 8
+seen = 2024-01-25T10:44:00Z
+
+[[host]]
+name = "host-165"
+port = 8165
+tags = ["t4", "t0"]
+limits = { cpu = 5.5, mem = 10560 }
+
+[host.meta]
+rack = 8
+seen = 2024-01-26T10:45:00Z
+
+[[host]]
+name = "host-166"
+port = 8166
+tags = ["t5", "t1"]
+limits = { cpu = 6.5, mem = 10624 }
+
+[host.meta]
+rack = 8
+seen = 2024-01-27T10:46:00Z
+
+[[host]]
+name = "host-167"
+port = 8167
+tags = ["t6", "t2"]
+limits = { cpu = 7.5, mem = 10688 }
+
+[host.meta]
+rack = 8
+seen = 2024-01-28T10:47:00Z
+
+[[host]]
+name = "host-168"
+port = 8168
+tags = ["t0", "t3"]
+limits = { cpu = 0.5, mem = 10752 }
+
+[host.meta]
+rack = 8
+seen = 2024-01-01T10:48:00Z
+
+[[host]]
+name = "host-169"
+port = 8169
+tags = ["t1", "t4"]
+limits = { cpu = 1.5, mem = 10816 }
+
+[host.meta]
+rack = 8
+seen = 2024-01-02T10:49:00Z
+
+[[host]]
+name = "host-170"
+port = 8170
+tags = ["t2", "t5"]
+limits = { cpu = 2.5, mem = 10880 }
+
+[host.meta]
+rack = 8
+seen = 2024-01-03T10:50:00Z
+
+[[host]]
+name = "host-171"
+port = 8171
+tags = ["t3", "t6"]
+limits = { cpu = 3.5, mem = 10944 }
+
+[host.meta]
+rack = 8
+seen = 2024-01-04T10:51:00Z
+
+[[host]]
+name = "host-172"
+port = 8172
+tags = ["t4", "t7"]
+limits = { cpu = 4.5, mem = 11008 }
+
+[host.meta]
+rack = 8
+seen = 2024-01-05T10:52:00Z
+
+[[host]]
+name = "host-173"
+port = 8173
+tags = ["t5", "t8"]
+limits = { cpu = 5.5, mem = 11072 }
+
+[host.meta]
+rack = 8
+seen = 2024-01-06T10:53:00Z
+
+[[host]]
+name = "host-174"
+port = 8174
+tags = ["t6", "t9"]
+limits = { cpu = 6.5, mem = 11136 }
+
+[host.meta]
+rack = 8
+seen = 2024-01-07T10:54:00Z
+
+[[host]]
+name = "host-175"
+port = 8175
+tags = ["t0", "t10"]
+limits = { cpu = 7.5, mem = 11200 }
+
+[host.meta]
+rack = 8
+seen = 2024-01-08T10:55:00Z
+
+[[host]]
+name = "host-176"
+port = 8176
+tags = ["t1", "t0"]
+limits = { cpu = 0.5, mem = 11264 }
+
+[host.meta]
+rack = 8
+seen = 2024-01-09T10:56:00Z
+
+[[host]]
+name = "host-177"
+port = 8177
+tags = ["t2", "t1"]
+limits = { cpu = 1.5, mem = 11328 }
+
+[host.meta]
+rack = 8
+seen = 2024-01-10T10:57:00Z
+
+[[host]]
+name = "host-178"
+port = 8178
+tags = ["t3", "t2"]
+limits = { cpu = 2.5, mem = 11392 }
+
+[host.meta]
+rack = 8
+seen = 2024-01-11T10:58:00Z
+
+[[host]]
+name = "host-179"
+port = 8179
+tags = ["t4", "t3"]
+limits = { cpu = 3.5, mem = 11456 }
+
+[host.meta]
+rack = 8
+seen = 2024-01-12T10:59:00Z
+
+[[host]]
+name = "host-180"
+port = 8180
+tags = ["t5", "t4"]
+limits = { cpu = 4.5, mem = 11520 }
+
+[host.meta]
+rack = 9
+seen = 2024-01-13T10:00:00Z
+
+[[host]]
+name = "host-181"
+port = 8181
+tags = ["t6", "t5"]
+limits = { cpu = 5.5, mem = 11584 }
+
+[host.meta]
+rack = 9
+seen = 2024-01-14T10:01:00Z
+
+[[host]]
+name = "host-182"
+port = 8182
+tags = ["t0", "t6"]
+limits = { cpu = 6.5, mem = 11648 }
+
+[host.meta]
+rack = 9
+seen = 2024-01-15T10:02:00Z
+
+[[host]]
+name = "host-183"
+port = 8183
+tags = ["t1", "t7"]
+limits = { cpu = 7.5, mem = 11712 }
+
+[host.meta]
+rack = 9
+seen = 2024-01-16T10:03:00Z
+
+[[host]]
+name = "host-184"
+port = 8184
+tags = ["t2", "t8"]
+limits = { cpu = 0.5, mem = 11776 }
+
+[host.meta]
+rack = 9
+seen = 2024-01-17T10:04:00Z
+
+[[host]]
+name = "host-185"
+port = 8185
+tags = ["t3", "t9"]
+limits = { cpu = 1.5, mem = 11840 }
+
+[host.meta]
+rack = 9
+seen = 2024-01-18T10:05:00Z
+
+[[host]]
+name = "host-186"
+port = 8186
+tags = ["t4", "t10"]
+limits = { cpu = 2.5, mem = 11904 }
+
+[host.meta]
+rack = 9
+seen = 2024-01-19T10:06:00Z
+
+[[host]]
+name = "host-187"
+port = 8187
+tags = ["t5", "t0"]
+limits = { cpu = 3.5, mem = 11968 }
+
+[host.meta]
+rack = 9
+seen = 2024-01-20T10:07:00Z
+
+[[host]]
+name = "host-188"
+port = 8188
+tags = ["t6", "t1"]
+limits = { cpu = 4.5, mem = 12032 }
+
+[host.meta]
+rack = 9
+seen = 2024-01-21T10:08:00Z
+
+[[host]]
+name = "host-189"
+port = 8189
+tags = ["t0", "t2"]
+limits = { cpu = 5.5, mem = 12096 }
+
+[host.meta]
+rack = 9
+seen = 2024-01-22T10:09:00Z
+
+[[host]]
+name = "host-190"
+port = 8190
+tags = ["t1", "t3"]
+limits = { cpu = 6.5, mem = 12160 }
+
+[host.meta]
+rack = 9
+seen = 2024-01-23T10:10:00Z
+
+[[host]]
+name = "host-191"
+port = 8191
+tags = ["t2", "t4"]
+limits = { cpu = 7.5, mem = 12224 }
+
+[host.meta]
+rack = 9
+seen = 2024-01-24T10:11:00Z
+
+[[host]]
+name = "host-192"
+port = 8192
+tags = ["t3", "t5"]
+limits = { cpu = 0.5, mem = 12288 }
+
+[host.meta]
+rack = 9
+seen = 2024-01-25T10:12:00Z
+
+[[host]]
+name = "host-193"
+port = 8193
+tags = ["t4", "t6"]
+limits = { cpu = 1.5, mem = 12352 }
+
+[host.meta]
+rack = 9
+seen = 2024-01-26T10:13:00Z
+
+[[host]]
+name = "host-194"
+port = 8194
+tags = ["t5", "t7"]
+limits = { cpu = 2.5, mem = 12416 }
+
+[host.meta]
+rack = 9
+seen = 2024-01-27T10:14:00Z
+
+[[host]]
+name = "host-195"
+port = 8195
+tags = ["t6", "t8"]
+limits = { cpu = 3.5, mem = 12480 }
+
+[host.meta]
+rack = 9
+seen = 2024-01-28T10:15:00Z
+
+[[host]]
+name = "host-196"
+port = 8196
+tags = ["t0", "t9"]
+limits = { cpu = 4.5, mem = 12544 }
+
+[host.meta]
+rack = 9
+seen = 2024-01-01T10:16:00Z
+
+[[host]]
+name = "host-197"
+port = 8197
+tags = ["t1", "t10"]
+limits = { cpu = 5.5, mem = 12608 }
+
+[host.meta]
+rack = 9
+seen = 2024-01-02T10:17:00Z
+
+[[host]]
+name = "host-198"
+port = 8198
+tags = ["t2", "t0"]
+limits = { cpu = 6.5, mem = 12672 }
+
+[host.meta]
+rack = 9
+seen = 2024-01-03T10:18:00Z
+
+[[host]]
+name = "host-199"
+port = 8199
+tags = ["t3", "t1"]
+limits = { cpu = 7.5, mem = 12736 }
+
+[host.meta]
+rack = 9
+seen = 2024-01-04T10:19:00Z
+
+[[host]]
+name = "host-200"
+port = 8200
+tags = ["t4", "t2"]
+limits = { cpu = 0.5, mem = 12800 }
+
+[host.meta]
+rack = 10
+seen = 2024-01-05T10:20:00Z
+
+[[host]]
+name = "host-201"
+port = 8201
+tags = ["t5", "t3"]
+limits = { cpu = 1.5, mem = 12864 }
+
+[host.meta]
+rack = 10
+seen = 2024-01-06T10:21:00Z
+
+[[host]]
+name = "host-202"
+port = 8202
+tags = ["t6", "t4"]
+limits = { cpu = 2.5, mem = 12928 }
+
+[host.meta]
+rack = 10
+seen = 2024-01-07T10:22:00Z
+
+[[host]]
+name = "host-203"
+port = 8203
+tags = ["t0", "t5"]
+limits = { cpu = 3.5, mem = 12992 }
+
+[host.meta]
+rack = 10
+seen = 2024-01-08T10:23:00Z
+
+[[host]]
+name = "host-204"
+port = 8204
+tags = ["t1", "t6"]
+limits = { cpu = 4.5, mem = 13056 }
+
+[host.meta]
+rack = 10
+seen = 2024-01-09T10:24:00Z
+
+[[host]]
+name = "host-205"
+port = 8205
+tags = ["t2", "t7"]
+limits = { cpu = 5.5, mem = 13120 }
+
+[host.meta]
+rack = 10
+seen = 2024-01-10T10:25:00Z
+
+[[host]]
+name = "host-206"
+port = 8206
+tags = ["t3", "t8"]
+limits = { cpu = 6.5, mem = 13184 }
+
+[host.meta]
+rack = 10
+seen = 2024-01-11T10:26:00Z
+
+[[host]]
+name = "host-207"
+port = 8207
+tags = ["t4", "t9"]
+limits = { cpu = 7.5, mem = 13248 }
+
+[host.meta]
+rack = 10
+seen = 2024-01-12T10:27:00Z
+
+[[host]]
+name = "host-208"
+port = 8208
+tags = ["t5", "t10"]
+limits = { cpu = 0.5, mem = 13312 }
+
+[host.meta]
+rack = 10
+seen = 2024-01-13T10:28:00Z
+
+[[host]]
+name = "host-209"
+port = 8209
+tags = ["t6", "t0"]
+limits = { cpu = 1.5, mem = 13376 }
+
+[host.meta]
+rack = 10
+seen = 2024-01-14T10:29:00Z
+
+[[host]]
+name = "host-210"
+port = 8210
+tags = ["t0", "t1"]
+limits = { cpu = 2.5, mem = 13440 }
+
+[host.meta]
+rack = 10
+seen = 2024-01-15T10:30:00Z
+
+[[host]]
+name = "host-211"
+port = 8211
+tags = ["t1", "t2"]
+limits = { cpu = 3.5, mem = 13504 }
+
+[host.meta]
+rack = 10
+seen = 2024-01-16T10:31:00Z
+
+[[host]]
+name = "host-212"
+port = 8212
+tags = ["t2", "t3"]
+limits = { cpu = 4.5, mem = 13568 }
+
+[host.meta]
+rack = 10
+seen = 2024-01-17T10:32:00Z
+
+[[host]]
+name = "host-213"
+port = 8213
+tags = ["t3", "t4"]
+limits = { cpu = 5.5, mem = 13632 }
+
+[host.meta]
+rack = 10
+seen = 2024-01-18T10:33:00Z
+
+[[host]]
+name = "host-214"
+port = 8214
+tags = ["t4", "t5"]
+limits = { cpu = 6.5, mem = 13696 }
+
+[host.meta]
+rack = 10
+seen = 2024-01-19T10:34:00Z
+
+[[host]]
+name = "host-215"
+port = 8215
+tags = ["t5", "t6"]
+limits = { cpu = 7.5, mem = 13760 }
+
+[host.meta]
+rack = 10
+seen = 2024-01-20T10:35:00Z
+
+[[host]]
+name = "host-216"
+port = 8216
+tags = ["t6", "t7"]
+limits = { cpu = 0.5, mem = 13824 }
+
+[host.meta]
+rack = 10
+seen = 2024-01-21T10:36:00Z
+
+[[host]]
+name = "host-217"
+port = 8217
+tags = ["t0", "t8"]
+limits = { cpu = 1.5, mem = 13888 }
+
+[host.meta]
+rack = 10
+seen = 2024-01-22T10:37:00Z
+
+[[host]]
+name = "host-218"
+port = 8218
+tags = ["t1", "t9"]
+limits = { cpu = 2.5, mem = 13952 }
+
+[host.meta]
+rack = 10
+seen = 2024-01-23T10:38:00Z
+
+[[host]]
+name = "host-219"
+port = 8219
+tags = ["t2", "t10"]
+limits = { cpu = 3.5, mem = 14016 }
+
+[host.meta]
+rack = 10
+seen = 2024-01-24T10:39:00Z
+
+[[host]]
+name = "host-220"
+port = 8220
+tags = ["t3", "t0"]
+limits = { cpu = 4.5, mem = 14080 }
+
+[host.meta]
+rack = 11
+seen = 2024-01-25T10:40:00Z
+
+[[host]]
+name = "host-221"
+port = 8221
+tags = ["t4", "t1"]
+limits = { cpu = 5.5, mem = 14144 }
+
+[host.meta]
+rack = 11
+seen = 2024-01-26T10:41:00Z
+
+[[host]]
+name = "host-222"
+port = 8222
+tags = ["t5", "t2"]
+limits = { cpu = 6.5, mem = 14208 }
+
+[host.meta]
+rack = 11
+seen = 2024-01-27T10:42:00Z
+
+[[host]]
+name = "host-223"
+port = 8223
+tags = ["t6", "t3"]
+limits = { cpu = 7.5, mem = 14272 }
+
+[host.meta]
+rack = 11
+seen = 2024-01-28T10:43:00Z
+
+[[host]]
+name = "host-224"
+port = 8224
+tags = ["t0", "t4"]
+limits = { cpu = 0.5, mem = 14336 }
+
+[host.meta]
+rack = 11
+seen = 2024-01-01T10:44:00Z
+
+[[host]]
+name = "host-225"
+port = 8225
+tags = ["t1", "t5"]
+limits = { cpu = 1.5, mem = 14400 }
+
+[host.meta]
+rack = 11
+seen = 2024-01-02T10:45:00Z
+
+[[host]]
+name = "host-226"
+port = 8226
+tags = ["t2", "t6"]
+limits = { cpu = 2.5, mem = 14464 }
+
+[host.meta]
+rack = 11
+seen = 2024-01-03T10:46:00Z
+
+[[host]]
+name = "host-227"
+port = 8227
+tags = ["t3", "t7"]
+limits = { cpu = 3.5, mem = 14528 }
+
+[host.meta]
+rack = 11
+seen = 2024-01-04T10:47:00Z
+
+[[host]]
+name = "host-228"
+port = 8228
+tags = ["t4", "t8"]
+limits = { cpu = 4.5, mem = 14592 }
+
+[host.meta]
+rack = 11
+seen = 2024-01-05T10:48:00Z
+
+[[host]]
+name = "host-229"
+port = 8229
+tags = ["t5", "t9"]
+limits = { cpu = 5.5, mem = 14656 }
+
+[host.meta]
+rack = 11
+seen = 2024-01-06T10:49:00Z
+
+[[host]]
+name = "host-230"
+port = 8230
+tags = ["t6", "t10"]
+limits = { cpu = 6.5, mem = 14720 }
+
+[host.meta]
+rack = 11
+seen = 2024-01-07T10:50:00Z
+
+[[host]]
+name = "host-231"
+port = 8231
+tags = ["t0", "t0"]
+limits = { cpu = 7.5, mem = 14784 }
+
+[host.meta]
+rack = 11
+seen = 2024-01-08T10:51:00Z
+
+[[host]]
+name = "host-232"
+port = 8232
+tags = ["t1", "t1"]
+limits = { cpu = 0.5, mem = 14848 }
+
+[host.meta]
+rack = 11
+seen = 2024-01-09T10:52:00Z
+
+[[host]]
+name = "host-233"
+port = 8233
+tags = ["t2", "t2"]
+limits = { cpu = 1.5, mem = 14912 }
+
+[host.meta]
+rack = 11
+seen = 2024-01-10T10:53:00Z
+
+[[host]]
+name = "host-234"
+port = 8234
+tags = ["t3", "t3"]
+limits = { cpu = 2.5, mem = 14976 }
+
+[host.meta]
+rack = 11
+seen = 2024-01-11T10:54:00Z
+
+[[host]]
+name = "host-235"
+port = 8235
+tags = ["t4", "t4"]
+limits = { cpu = 3.5, mem = 15040 }
+
+[host.meta]
+rack = 11
+seen = 2024-01-12T10:55:00Z
+
+[[host]]
+name = "host-236"
+port = 8236
+tags = ["t5", "t5"]
+limits = { cpu = 4.5, mem = 15104 }
+
+[host.meta]
+rack = 11
+seen = 2024-01-13T10:56:00Z
+
+[[host]]
+name = "host-237"
+port = 8237
+tags = ["t6", "t6"]
+limits = { cpu = 5.5, mem = 15168 }
+
+[host.meta]
+rack = 11
+seen = 2024-01-14T10:57:00Z
+
+[[host]]
+name = "host-238"
+port = 8238
+tags = ["t0", "t7"]
+limits = { cpu = 6.5, mem = 15232 }
+
+[host.meta]
+rack = 11
+seen = 2024-01-15T10:58:00Z
+
+[[host]]
+name = "host-239"
+port = 8239
+tags = ["t1", "t8"]
+limits = { cpu = 7.5, mem = 15296 }
+
+[host.meta]
+rack = 11
+seen = 2024-01-16T10:59:00Z
+
+[[host]]
+name = "host-240"
+port = 8240
+tags = ["t2", "t9"]
+limits = { cpu = 0.5, mem = 15360 }
+
+[host.meta]
+rack = 12
+seen = 2024-01-17T10:00:00Z
+
+[[host]]
+name = "host-241"
+port = 8241
+tags = ["t3", "t10"]
+limits = { cpu = 1.5, mem = 15424 }
+
+[host.meta]
+rack = 12
+seen = 2024-01-18T10:01:00Z
+
+[[host]]
+name = "host-242"
+port = 8242
+tags = ["t4", "t0"]
+limits = { cpu = 2.5, mem = 15488 }
+
+[host.meta]
+rack = 12
+seen = 2024-01-19T10:02:00Z
+
+[[host]]
+name = "host-243"
+port = 8243
+tags = ["t5", "t1"]
+limits = { cpu = 3.5, mem = 15552 }
+
+[host.meta]
+rack = 12
+seen = 2024-01-20T10:03:00Z
+
+[[host]]
+name = "host-244"
+port = 8244
+tags = ["t6", "t2"]
+limits = { cpu = 4.5, mem = 15616 }
+
+[host.meta]
+rack = 12
+seen = 2024-01-21T10:04:00Z
+
+[[host]]
+name = "host-245"
+port = 8245
+tags = ["t0", "t3"]
+limits = { cpu = 5.5, mem = 15680 }
+
+[host.meta]
+rack = 12
+seen = 2024-01-22T10:05:00Z
+
+[[host]]
+name = "host-246"
+port = 8246
+tags = ["t1", "t4"]
+limits = { cpu = 6.5, mem = 15744 }
+
+[host.meta]
+rack = 12
+seen = 2024-01-23T10:06:00Z
+
+[[host]]
+name = "host-247"
+port = 8247
+tags = ["t2", "t5"]
+limits = { cpu = 7.5, mem = 15808 }
+
+[host.meta]
+rack = 12
+seen = 2024-01-24T10:07:00Z
+
+[[host]]
+name = "host-248"
+port = 8248
+tags = ["t3", "t6"]
+limits = { cpu = 0.5, mem = 15872 }
+
+[host.meta]
+rack = 12
+seen = 2024-01-25T10:08:00Z
+
+[[host]]
+name = "host-249"
+port = 8249
+tags = ["t4", "t7"]
+limits = { cpu = 1.5, mem = 15936 }
+
+[host.meta]
+rack = 12
+seen = 2024-01-26T10:09:00Z
+
+[[host]]
+name = "host-250"
+port = 8250
+tags = ["t5", "t8"]
+limits = { cpu = 2.5, mem = 16000 }
+
+[host.meta]
+rack = 12
+seen = 2024-01-27T10:10:00Z
+
+[[host]]
+name = "host-251"
+port = 8251
+tags = ["t6", "t9"]
+limits = { cpu = 3.5, mem = 16064 }
+
+[host.meta]
+rack = 12
+seen = 2024-01-28T10:11:00Z
+
+[[host]]
+name = "host-252"
+port = 8252
+tags = ["t0", "t10"]
+limits = { cpu = 4.5, mem = 16128 }
+
+[host.meta]
+rack = 12
+seen = 2024-01-01T10:12:00Z
+
+[[host]]
+name = "host-253"
+port = 8253
+tags = ["t1", "t0"]
+limits = { cpu = 5.5, mem = 16192 }
+
+[host.meta]
+rack = 12
+seen = 2024-01-02T10:13:00Z
+
+[[host]]
+name = "host-254"
+port = 8254
+tags = ["t2", "t1"]
+limits = { cpu = 6.5, mem = 16256 }
+
+[host.meta]
+rack = 12
+seen = 2024-01-03T10:14:00Z
+
+[[host]]
+name = "host-255"
+port = 8255
+tags = ["t3", "t2"]
+limits = { cpu = 7.5, mem = 16320 }
+
+[host.meta]
+rack = 12
+seen = 2024-01-04T10:15:00Z
+
+[[host]]
+name = "host-256"
+port = 8256
+tags = ["t4", "t3"]
+limits = { cpu = 0.5, mem = 16384 }
+
+[host.meta]
+rack = 12
+seen = 2024-01-05T10:16:00Z
+
+[[host]]
+name = "host-257"
+port = 8257
+tags = ["t5", "t4"]
+limits = { cpu = 1.5, mem = 16448 }
+
+[host.meta]
+rack = 12
+seen = 2024-01-06T10:17:00Z
+
+[[host]]
+name = "host-258"
+port = 8258
+tags = ["t6", "t5"]
+limits = { cpu = 2.5, mem = 16512 }
+
+[host.meta]
+rack = 12
+seen = 2024-01-07T10:18:00Z
+
+[[host]]
+name = "host-259"
+port = 8259
+tags = ["t0", "t6"]
+limits = { cpu = 3.5, mem = 16576 }
+
+[host.meta]
+rack = 12
+seen = 2024-01-08T10:19:00Z
+
+[[host]]
+name = "host-260"
+port = 8260
+tags = ["t1", "t7"]
+limits = { cpu = 4.5, mem = 16640 }
+
+[host.meta]
+rack = 13
+seen = 2024-01-09T10:20:00Z
+
+[[host]]
+name = "host-261"
+port = 8261
+tags = ["t2", "t8"]
+limits = { cpu = 5.5, mem = 16704 }
+
+[host.meta]
+rack = 13
+seen = 2024-01-10T10:21:00Z
+
+[[host]]
+name = "host-262"
+port = 8262
+tags = ["t3", "t9"]
+limits = { cpu = 6.5, mem = 16768 }
+
+[host.meta]
+rack = 13
+seen = 2024-01-11T10:22:00Z
+
+[[host]]
+name = "host-263"
+port = 8263
+tags = ["t4", "t10"]
+limits = { cpu = 7.5, mem = 16832 }
+
+[host.meta]
+rack = 13
+seen = 2024-01-12T10:23:00Z
+
+[[host]]
+name = "host-264"
+port = 8264
+tags = ["t5", "t0"]
+limits = { cpu = 0.5, mem = 16896 }
+
+[host.meta]
+rack = 13
+seen = 2024-01-13T10:24:00Z
+
+[[host]]
+name = "host-265"
+port = 8265
+tags = ["t6", "t1"]
+limits = { cpu = 1.5, mem = 16960 }
+
+[host.meta]
+rack = 13
+seen = 2024-01-14T10:25:00Z
+
+[[host]]
+name = "host-266"
+port = 8266
+tags = ["t0", "t2"]
+limits = { cpu = 2.5, mem = 17024 }
+
+[host.meta]
+rack = 13
+seen = 2024-01-15T10:26:00Z
+
+[[host]]
+name = "host-267"
+port = 8267
+tags = ["t1", "t3"]
+limits = { cpu = 3.5, mem = 17088 }
+
+[host.meta]
+rack = 13
+seen = 2024-01-16T10:27:00Z
+
+[[host]]
+name = "host-268"
+port = 8268
+tags = ["t2", "t4"]
+limits = { cpu = 4.5, mem = 17152 }
+
+[host.meta]
+rack = 13
+seen = 2024-01-17T10:28:00Z
+
+[[host]]
+name = "host-269"
+port = 8269
+tags = ["t3", "t5"]
+limits = { cpu = 5.5, mem = 17216 }
+
+[host.meta]
+rack = 13
+seen = 2024-01-18T10:29:00Z
+
+[[host]]
+name = "host-270"
+port = 8270
+tags = ["t4", "t6"]
+limits = { cpu = 6.5, mem = 17280 }
+
+[host.meta]
+rack = 13
+seen = 2024-01-19T10:30:00Z
+
+[[host]]
+name = "host-271"
+port = 8271
+tags = ["t5", "t7"]
+limits = { cpu = 7.5, mem = 17344 }
+
+[host.meta]
+rack = 13
+seen = 2024-01-20T10:31:00Z
+
+[[host]]
+name = "host-272"
+port = 8272
+tags = ["t6", "t8"]
+limits = { cpu = 0.5, mem = 17408 }
+
+[host.meta]
+rack = 13
+seen = 2024-01-21T10:32:00Z
+
+[[host]]
+name = "host-273"
+port = 8273
+tags = ["t0", "t9"]
+limits = { cpu = 1.5, mem = 17472 }
+
+[host.meta]
+rack = 13
+seen = 2024-01-22T10:33:00Z
+
+[[host]]
+name = "host-274"
+port = 8274
+tags = ["t1", "t10"]
+limits = { cpu = 2.5, mem = 17536 }
+
+[host.meta]
+rack = 13
+seen = 2024-01-23T10:34:00Z
+
+[[host]]
+name = "host-275"
+port = 8275
+tags = ["t2", "t0"]
+limits = { cpu = 3.5, mem = 17600 }
+
+[host.meta]
+rack = 13
+seen = 2024-01-24T10:35:00Z
+
+[[host]]
+name = "host-276"
+port = 8276
+tags = ["t3", "t1"]
+limits = { cpu = 4.5, mem = 17664 }
+
+[host.meta]
+rack = 13
+seen = 2024-01-25T10:36:00Z
+
+[[host]]
+name = "host-277"
+port = 8277
+tags = ["t4", "t2"]
+limits = { cpu = 5.5, mem = 17728 }
+
+[host.meta]
+rack = 13
+seen = 2024-01-26T10:37:00Z
+
+[[host]]
+name = "host-278"
+port = 8278
+tags = ["t5", "t3"]
+limits = { cpu = 6.5, mem = 17792 }
+
+[host.meta]
+rack = 13
+seen = 2024-01-27T10:38:00Z
+
+[[host]]
+name = "host-279"
+port = 8279
+tags = ["t6", "t4"]
+limits = { cpu = 7.5, mem = 17856 }
+
+[host.meta]
+rack = 13
+seen = 2024-01-28T10:39:00Z
+
+[[host]]
+name = "host-280"
+port = 8280
+tags = ["t0", "t5"]
+limits = { cpu = 0.5, mem = 17920 }
+
+[host.meta]
+rack = 14
+seen = 2024-01-01T10:40:00Z
+
+[[host]]
+name = "host-281"
+port = 8281
+tags = ["t1", "t6"]
+limits = { cpu = 1.5, mem = 17984 }
+
+[host.meta]
+rack = 14
+seen = 2024-01-02T10:41:00Z
+
+[[host]]
+name = "host-282"
+port = 8282
+tags = ["t2", "t7"]
+limits = { cpu = 2.5, mem = 18048 }
+
+[host.meta]
+rack = 14
+seen = 2024-01-03T10:42:00Z
+
+[[host]]
+name = "host-283"
+port = 8283
+tags = ["t3", "t8"]
+limits = { cpu = 3.5, mem = 18112 }
+
+[host.meta]
+rack = 14
+seen = 2024-01-04T10:43:00Z
+
+[[host]]
+name = "host-284"
+port = 8284
+tags = ["t4", "t9"]
+limits = { cpu = 4.5, mem = 18176 }
+
+[host.meta]
+rack = 14
+seen = 2024-01-05T10:44:00Z
+
+[[host]]
+name = "host-285"
+port = 8285
+tags = ["t5", "t10"]
+limits = { cpu = 5.5, mem = 18240 }
+
+[host.meta]
+rack = 14
+seen = 2024-01-06T10:45:00Z
+
+[[host]]
+name = "host-286"
+port = 8286
+tags = ["t6", "t0"]
+limits = { cpu = 6.5, mem = 18304 }
+
+[host.meta]
+rack = 14
+seen = 2024-01-07T10:46:00Z
+
+[[host]]
+name = "host-287"
+port = 8287
+tags = ["t0", "t1"]
+limits = { cpu = 7.5, mem = 18368 }
+
+[host.meta]
+rack = 14
+seen = 2024-01-08T10:47:00Z
+
+[[host]]
+name = "host-288"
+port = 8288
+tags = ["t1", "t2"]
+limits = { cpu = 0.5, mem = 18432 }
+
+[host.meta]
+rack = 14
+seen = 2024-01-09T10:48:00Z
+
+[[host]]
+name = "host-289"
+port = 8289
+tags = ["t2", "t3"]
+limits = { cpu = 1.5, mem = 18496 }
+
+[host.meta]
+rack = 14
+seen = 2024-01-10T10:49:00Z
+
+[[host]]
+name = "host-290"
+port = 8290
+tags = ["t3", "t4"]
+limits = { cpu = 2.5, mem = 18560 }
+
+[host.meta]
+rack = 14
+seen = 2024-01-11T10:50:00Z
+
+[[host]]
+name = "host-291"
+port = 8291
+tags = ["t4", "t5"]
+limits = { cpu = 3.5, mem = 18624 }
+
+[host.meta]
+rack = 14
+seen = 2024-01-12T10:51:00Z
+
+[[host]]
+name = "host-292"
+port = 8292
+tags = ["t5", "t6"]
+limits = { cpu = 4.5, mem = 18688 }
+
+[host.meta]
+rack = 14
+seen = 2024-01-13T10:52:00Z
+
+[[host]]
+name = "host-293"
+port = 8293
+tags = ["t6", "t7"]
+limits = { cpu = 5.5, mem = 18752 }
+
+[host.meta]
+rack = 14
+seen = 2024-01-14T10:53:00Z
+
+[[host]]
+name = "host-294"
+port = 8294
+tags = ["t0", "t8"]
+limits = { cpu = 6.5, mem = 18816 }
+
+[host.meta]
+rack = 14
+seen = 2024-01-15T10:54:00Z
+
+[[host]]
+name = "host-295"
+port = 8295
+tags = ["t1", "t9"]
+limits = { cpu = 7.5, mem = 18880 }
+
+[host.meta]
+rack = 14
+seen = 2024-01-16T10:55:00Z
+
+[[host]]
+name = "host-296"
+port = 8296
+tags = ["t2", "t10"]
+limits = { cpu = 0.5, mem = 18944 }
+
+[host.meta]
+rack = 14
+seen = 2024-01-17T10:56:00Z
+
+[[host]]
+name = "host-297"
+port = 8297
+tags = ["t3", "t0"]
+limits = { cpu = 1.5, mem = 19008 }
+
+[host.meta]
+rack = 14
+seen = 2024-01-18T10:57:00Z
+
+[[host]]
+name = "host-298"
+port = 8298
+tags = ["t4", "t1"]
+limits = { cpu = 2.5, mem = 19072 }
+
+[host.meta]
+rack = 14
+seen = 2024-01-19T10:58:00Z
+
+[[host]]
+name = "host-299"
+port = 8299
+tags = ["t5", "t2"]
+limits = { cpu = 3.5, mem = 19136 }
+
+[host.meta]
+rack = 14
+seen = 2024-01-20T10:59:00Z

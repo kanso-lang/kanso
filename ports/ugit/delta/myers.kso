@@ -1,0 +1,90 @@
+# Myers' O(ND) difference algorithm, the one GNU diff and git use. It finds a
+# shortest edit script by walking diagonals: `v` maps a diagonal k to the
+# furthest x reached on it with d edits, and the trace keeps one `v` per d so
+# the path can be walked back once the far corner is reached.
+#
+# Round d reads only what round d-1 wrote, so each round reads one map and
+# writes a fresh one. Reading and writing the same map in turn would be the
+# textbook form, but the compiled engines re-sort a map on the first read
+# after a put (bugs/map_put_then_read_resorts.kso), and that made a diff of
+# a 3,000-line file take seconds.
+#
+# One line of the new file that the old one did not have.
+pub type added
+  line
+  new
+
+# One line of the old file that the new one does not keep.
+pub type dropped
+  line
+  old
+
+# A line both files share, with its position in each.
+pub type kept
+  line
+  new
+  old
+
+# The edit script that turns `a` into `b`, in file order.
+pub fn edits a b
+  n = length a
+  m = length b
+  trace = forward a b n m 0 (put {} 1 0) []
+  backward a b trace (length trace - 1) n m [] . reversed
+
+fn forward a b n m d v trace
+  sweep a b n m d (0 - d) v {} (push trace v)
+
+# k walks the diagonals -d, -d+2, ..., d, reading `v` and writing `next`.
+fn sweep a b n m d k v next trace
+  return forward a b n m (d + 1) next trace if d < k
+  x = slide a b n m (start_x v d k) k
+  return trace if n <= x and m <= x - k
+  sweep a b n m d (k + 2) v (put next k x) trace
+
+# Step down from diagonal k+1 (an insertion) or right from k-1 (a deletion),
+# whichever got further.
+fn start_x v d k
+  if (from_above? v d k) v[k + 1] (v[k - 1] + 1)
+
+fn from_above? v d k
+  k == 0 - d or k != d and v[k - 1] < v[k + 1]
+
+# Follow the diagonal while the lines agree.
+fn slide a b n m x k
+  return x if n <= x or m <= x - k
+  return x if a[x + 1] != b[x - k + 1]
+  slide a b n m (x + 1) k
+
+fn backward a _ _ 0 x _ acc
+  diagonal a 0 0 x x acc
+
+fn backward a b trace d x y acc
+  v = trace[d + 1]
+  k = x - y
+  prev_k = if (from_above? v d k) (k + 1) (k - 1)
+  prev_x = v[prev_k]
+  prev_y = prev_x - prev_k
+  lead_x = if (prev_k == k + 1) prev_x (prev_x + 1)
+  lead_y = lead_x - k
+  slid = diagonal a lead_x lead_y x y acc
+  edited = push slid (edit_at a b prev_k k lead_x lead_y)
+  backward a b trace (d - 1) prev_x prev_y edited
+
+fn edit_at a b prev_k k x y
+  return added b[y] y if prev_k == k + 1
+  dropped a[x] x
+
+# The shared lines from (x, y) back down to (lead_x, lead_y), newest first.
+fn diagonal a lead_x lead_y x y acc
+  return acc if x <= lead_x
+  diagonal a lead_x lead_y (x - 1) (y - 1) (push acc (kept a[x] y x))
+
+fn reversed xs
+  turned xs (length xs) []
+
+fn turned _ 0 acc
+  acc
+
+fn turned xs i acc
+  turned xs (i - 1) (push acc xs[i])

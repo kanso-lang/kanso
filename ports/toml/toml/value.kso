@@ -1,0 +1,154 @@
+import "std/text"
+
+# A value is chosen by its first byte: 34 `"`, 39 `'`, 43 `+`, 45 `-`, 91 `[`,
+# 102 `f`, 105 `i`, 110 `n`, 116 `t`, 123 `{`, and digits.
+fn parse_value cs p
+  value_at cs cs[p] p
+
+fn value_at cs 34 p
+  string_value cs p 34
+
+fn value_at cs 39 p
+  string_value cs p 39
+
+fn value_at cs 91 p
+  parse_array cs (p + 1)
+
+fn value_at cs 102 p
+  word cs p "false" false
+
+fn value_at cs 116 p
+  word cs p "true" true
+
+fn value_at cs 123 p
+  parse_inline cs (p + 1)
+
+fn value_at _ none p
+  fail p "expected a value, found end of input"
+
+fn value_at cs c p
+  return scalar cs p if number_start? c
+  fail p "expected a value, found {shown cs p}"
+
+fn number_start? 43
+  true
+
+fn number_start? 45
+  true
+
+fn number_start? 105
+  true
+
+fn number_start? 110
+  true
+
+fn number_start? c
+  in? c 48 57
+
+fn word cs p spelled v
+  n = length spelled
+  found = text/slice cs p (p + n - 1)
+  misspelled = found != text/bytes spelled
+  return fail p "expected a value, found {shown cs p}" if misspelled
+  parsed (p + n) v
+
+# Arrays: values separated by commas, with blanks, newlines and comments
+# anywhere between them, and a trailing comma allowed.
+fn parse_array cs p
+  q = skip_space cs p
+  array_open cs q []
+
+fn array_open cs p items
+  array_open_at cs cs[p] p items
+
+fn array_open_at _ 93 p items
+  parsed (p + 1) items
+
+fn array_open_at _ none p _
+  fail p "unterminated array"
+
+fn array_open_at cs _ p items
+  item = parse_value cs p
+  array_after cs item items
+
+fn array_after cs (parsed p v) items
+  q = skip_space cs p
+  array_delim cs cs[q] q (push items v)
+
+fn array_delim cs 44 p items
+  q = skip_space cs (p + 1)
+  array_open cs q items
+
+fn array_delim _ 93 p items
+  parsed (p + 1) items
+
+fn array_delim _ none p _
+  fail p "unterminated array"
+
+fn array_delim cs _ p _
+  fail p "expected `,` or `]` in array, found {shown cs p}"
+
+# Inline tables: `{ k = v, k = v }` on one line, with no trailing comma. Keys
+# may be dotted. The pairs are gathered the way a document's are, in a flat
+# index of slots, and the table is built when the brace closes.
+fn parse_inline cs p
+  q = skip_blank cs p
+  inline_open cs cs[q] q
+
+fn inline_open _ 125 p
+  parsed (p + 1) {}
+
+fn inline_open _ none p
+  fail p "unterminated inline table"
+
+fn inline_open cs _ p
+  inline_entry cs p no_branch
+
+fn inline_entry cs p slots
+  keyed = parse_key cs p
+  inline_key cs p keyed slots
+
+fn inline_key cs start (parsed p names) slots
+  at = expect_equals cs p
+  item = parse_value cs at
+  inline_value cs start names item slots
+
+fn inline_value cs start names (parsed p v) slots
+  q = skip_blank cs p
+  grown = insert_kv slots [] names v start
+  inline_after cs q grown
+
+# A one-arm gate: `grown` may be a failure, and `inline_delim` has arms that
+# ignore their last argument with `_`. Compiled code runs such a group's
+# matching arm even when the argument is an err (bugs/native-runs-arm-on-err),
+# so the failure has to stop here, where every parameter is named.
+fn inline_after cs q slots
+  inline_delim cs cs[q] q slots
+
+fn inline_delim cs 44 p slots
+  q = skip_blank cs (p + 1)
+  inline_next cs cs[q] q slots
+
+fn inline_delim _ 125 p slots
+  parsed (p + 1) (build_tree slots)
+
+fn inline_delim _ none p _
+  fail p "unterminated inline table"
+
+fn inline_delim cs _ p _
+  fail p "expected `,` or `}` in inline table, found {shown cs p}"
+
+fn inline_next _ 125 p _
+  fail p "trailing comma in inline table"
+
+fn inline_next _ none p _
+  fail p "unterminated inline table"
+
+fn inline_next cs _ p slots
+  inline_entry cs p slots
+
+# After a key: blanks, `=`, blanks. The answer is where the value starts.
+fn expect_equals cs p
+  q = skip_blank cs p
+  return fail q "expected `=` after a key, found {shown cs q}" if cs[q] != 61
+  skip_blank cs (q + 1)

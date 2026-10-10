@@ -1,0 +1,204 @@
+import "std/list"
+import "std/text"
+
+# The four date-and-time values TOML has, kept as typed records rather than
+# strings so a caller can dispatch on which one it got.
+pub type local_date
+  day
+  month
+  year
+
+# `fraction` is the digits after the decimal point exactly as written, so
+# `07:32:00.999999` keeps all six. It is "" when there were none.
+pub type local_time
+  fraction
+  hour
+  minute
+  second
+
+pub type local_datetime
+  date
+  time
+
+# `offset` is `utc` for `Z`, or minutes east of UTC.
+pub type offset_datetime
+  date
+  offset
+  time
+
+pub type utc
+
+# Reading. The token arrives whole from `scalar`; `base` is the byte position
+# of its first character.
+fn date_time tok base
+  return time_only tok base if tok[3] == 58
+  date = date_part tok base
+  after_date tok date base
+
+fn digits? tok i n
+  piece = text/slice tok i (i + n - 1)
+  length piece == n and list/all? piece (b -> in? b 48 57)
+
+fn number_at tok i n
+  list/fold (text/slice tok i (i + n - 1)) 0 (acc b -> acc * 10 + b - 48)
+
+fn date_part tok base
+  dashes = tok[5] == 45 and tok[8] == 45
+  shape = digits? tok 1 4 and dashes and digits? tok 6 2 and digits? tok 9 2
+  return fail base "invalid date: expected YYYY-MM-DD" if not shape
+  year = number_at tok 1 4
+  month = number_at tok 6 2
+  day = number_at tok 9 2
+  no_month = month < 1 or 12 < month
+  return fail (base + 5) "invalid date: no month {month}" if no_month
+  no_day = day < 1 or days_in year month < day
+  return fail (base + 8) "invalid date: no day {day} in that month" if no_day
+  local_date day month year
+
+fn days_in year 2
+  if (leap? year) 29 28
+
+fn days_in _ 4
+  30
+
+fn days_in _ 6
+  30
+
+fn days_in _ 9
+  30
+
+fn days_in _ 11
+  30
+
+fn days_in _ _
+  31
+
+fn leap? year
+  year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)
+
+fn separator? 32
+  true
+
+fn separator? 84
+  true
+
+fn separator? 116
+  true
+
+fn separator? none
+  false
+
+fn separator? _
+  false
+
+fn after_date tok date base
+  return date if length tok == 10
+  between = separator? tok[11]
+  why = "expected `T` or a space between date and time"
+  return fail (base + 10) why if not between
+  timed = time_part tok 12 base
+  date_with_time tok date timed base
+
+fn date_with_time tok date (parsed i time) base
+  return local_datetime date time if length tok < i
+  offset = offset_at tok tok[i] i base
+  offset_datetime date offset time
+
+fn time_only tok base
+  timed = time_part tok 1 base
+  time_alone tok timed base
+
+fn time_alone tok (parsed i time) base
+  extra = i <= length tok
+  return fail (base + i - 1) "unexpected characters after the time" if extra
+  time
+
+# HH:MM:SS, then an optional fraction. Seconds may be 60, for a leap second.
+fn time_part tok i base
+  colons = tok[i + 2] == 58 and tok[i + 5] == 58
+  numbers = digits? tok (i + 3) 2 and digits? tok (i + 6) 2
+  shape = digits? tok i 2 and colons and numbers
+  at = base + i - 1
+  return fail at "invalid time: expected HH:MM:SS" if not shape
+  hour = number_at tok i 2
+  minute = number_at tok (i + 3) 2
+  second = number_at tok (i + 6) 2
+  return fail at "invalid time: no hour {hour}" if 23 < hour
+  return fail (at + 3) "invalid time: no minute {minute}" if 59 < minute
+  return fail (at + 6) "invalid time: no second {second}" if 60 < second
+  fraction_at tok tok[i + 8] (i + 8) (local_time "" hour minute second) base
+
+fn fraction_at tok 46 i (local_time _ hour minute second) base
+  e = plain_digits tok (i + 1)
+  none_read = e == i + 1
+  return fail (base + i - 1) "expected digits after the point" if none_read
+  fraction = text/utf8 (text/slice tok (i + 1) (e - 1))
+  parsed e (local_time fraction hour minute second)
+
+fn fraction_at _ none i time _
+  parsed i time
+
+fn fraction_at _ _ i time _
+  parsed i time
+
+fn plain_digits tok i
+  if (digit? tok[i] 10) (plain_digits tok (i + 1)) i
+
+fn offset_at tok 43 i base
+  numeric_offset tok i 1 base
+
+fn offset_at tok 45 i base
+  numeric_offset tok i -1 base
+
+fn offset_at tok 90 i base
+  zulu tok i base
+
+fn offset_at tok 122 i base
+  zulu tok i base
+
+fn offset_at _ none i base
+  fail (base + i - 1) "invalid offset: expected `Z` or ±HH:MM"
+
+fn offset_at _ _ i base
+  fail (base + i - 1) "invalid offset: expected `Z` or ±HH:MM"
+
+fn zulu tok i base
+  why = "unexpected characters after the offset"
+  if (i == length tok) utc (fail (base + i) why)
+
+fn numeric_offset tok i sign base
+  digits = digits? tok (i + 1) 2 and tok[i + 3] == 58 and digits? tok (i + 4) 2
+  shape = digits and length tok == i + 5
+  why = "invalid offset: expected `Z` or ±HH:MM"
+  return fail (base + i - 1) why if not shape
+  hours = number_at tok (i + 1) 2
+  minutes = number_at tok (i + 4) 2
+  wide = 23 < hours or 59 < minutes
+  return fail (base + i - 1) "invalid offset: out of range" if wide
+  sign * (hours * 60 + minutes)
+
+# Writing, in RFC 3339 form with an upper-case `T` and `Z`.
+pub fn date_text (local_date day month year)
+  "{padded year 4}-{padded month 2}-{padded day 2}"
+
+pub fn time_text (local_time fraction hour minute second)
+  whole = "{padded hour 2}:{padded minute 2}:{padded second 2}"
+  if (fraction == "") whole "{whole}.{fraction}"
+
+pub fn datetime_text (local_datetime date time)
+  "{date_text date}T{time_text time}"
+
+pub fn datetime_text (offset_datetime date offset time)
+  "{date_text date}T{time_text time}{offset_text offset}"
+
+fn offset_text utc
+  "Z"
+
+fn offset_text minutes
+  sign = if (minutes < 0) "-" "+"
+  size = if (minutes < 0) (0 - minutes) minutes
+  "{sign}{padded (size / 60) 2}:{padded (size % 60) 2}"
+
+fn padded n width
+  written = "{n}"
+  if (length written < width) (padded "0{written}" width) written

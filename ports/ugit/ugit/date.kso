@@ -1,0 +1,40 @@
+import "std/text"
+
+type civil_date
+  day
+  month
+  year
+
+# Seconds since the epoch, printed the way git prints a date in UTC:
+# "Tue Nov 14 22:13:20 2023 +0000". ugit records every time in UTC, so
+# there is no zone to look up.
+pub fn git_date secs
+  days = secs / 86400
+  of_day = secs % 86400
+  civil_date day month year = civil days
+  clock = "{two (of_day / 3600)}:{two (of_day % 3600 / 60)}:{two (of_day % 60)}"
+  "{weekday days} {month_name month} {day} {clock} {year} +0000"
+
+# Howard Hinnant's days-to-civil conversion, for days on or after 1970.
+fn civil days
+  z = days + 719468
+  era = z / 146097
+  doe = z - era * 146097
+  yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365
+  doy = doe - (365 * yoe + yoe / 4 - yoe / 100)
+  mp = (5 * doy + 2) / 153
+  month = if (mp < 10) (mp + 3) (mp - 9)
+  year = yoe + era * 400 + if (month <= 2) 1 0
+  civil_date (doy - (153 * mp + 2) / 5 + 1) month year
+
+fn two n
+  if (n < 10) "0{n}" "{n}"
+
+# 1970-01-01 was a Thursday.
+fn weekday days
+  names = ["Sun" "Mon" "Tue" "Wed" "Thu" "Fri" "Sat"]
+  names[(days + 4) % 7 + 1]
+
+fn month_name m
+  names = text/split "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec" " "
+  names[m]

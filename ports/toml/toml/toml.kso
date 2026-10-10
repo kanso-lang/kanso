@@ -1,0 +1,43 @@
+import "std/list"
+import "std/text"
+
+# What a failed decode answers: where the document went wrong and why. `text`
+# is the offending line, so a caller can draw a caret under `column`.
+pub type toml_error
+  column
+  line
+  message
+  text
+
+# Reads a TOML document into plain values: a map for every table, a list for
+# every array, and strings, ints, floats, booleans and the four date-time
+# records for the rest. A malformed document answers an err holding a
+# toml_error.
+pub fn decode s
+  decode_bytes (text/bytes s)
+
+pub fn decode_bytes cs
+  bad = utf8_error cs 1
+  start = if (cs[1] == 239 and cs[2] == 187 and cs[3] == 191) 4 1
+  tree = if (bad > 0) (fail bad "invalid UTF-8") (read_document cs start)
+  finish cs tree
+
+fn read_document cs start
+  parse_document cs start [] no_branch
+
+fn finish cs (err (parse_failure p reason))
+  err (toml_error (column_of cs p) (line_of cs p) reason (line_text cs p))
+
+fn finish _ tree
+  tree
+
+fn spaces n
+  text/join (list/to_list (list/take (list/repeat " ") n)) ""
+
+# How toml-rs reports a failure, line and caret included.
+pub fn error_report (toml_error column line message source)
+  number = "{line}"
+  gutter = spaces (length number)
+  caret = spaces (column - 1)
+  head = "TOML parse error at line {line}, column {column}\n{gutter} |\n"
+  "{head}{number} | {source}\n{gutter} | {caret}^\n{message}\n"

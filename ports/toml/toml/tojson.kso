@@ -1,0 +1,135 @@
+import "std/list"
+import "std/text"
+
+# The toml-test convention: a table is a JSON object, an array is a JSON
+# array, and every other value is {"type": …, "value": …} with the value
+# written as a string. Keys come out sorted, two spaces to a level.
+pub fn to_json v
+  text/utf8 (json_onto (text/bytes "") v 0)
+
+fn json_onto acc true _
+  tag_onto acc "bool" "true"
+
+fn json_onto acc false _
+  tag_onto acc "bool" "false"
+
+fn json_onto acc xs:[]some depth
+  return text/append acc "[]" if length xs == 0
+  items = items_onto (text/append acc "[") xs 1 (depth + 1)
+  text/append (indent_onto (text/append items "\n") depth) "]"
+
+fn json_onto acc m:map[string some] depth
+  return text/append acc "\{}" if length m == 0
+  fields = fields_onto (text/append acc "\{") (entries m) 1 (depth + 1)
+  text/append (indent_onto (text/append fields "\n") depth) "}"
+
+fn json_onto acc v _
+  tag_onto acc (type_name v) (value_text v)
+
+# Each item opens with the separator it needs: a newline before the first, a
+# comma and a newline before the rest. (Writing a comma after every item and
+# trimming the last means slicing the whole buffer at every closing bracket.)
+fn items_onto acc xs i depth
+  return acc if i < 1 or length xs < i
+  opened = indent_onto (text/append acc (separator i)) depth
+  items_onto (json_onto opened xs[i] depth) xs (i + 1) depth
+
+fn fields_onto acc es i depth
+  return acc if i < 1 or length es < i
+  opened = indent_onto (text/append acc (separator i)) depth
+  fields_onto (field_onto opened es[i] depth) es (i + 1) depth
+
+fn separator 1
+  "\n"
+
+fn separator _
+  ",\n"
+
+fn field_onto acc (entry k v) depth
+  json_onto (text/append (quoted_onto acc k) ": ") v depth
+
+fn indent_onto acc 0
+  acc
+
+fn indent_onto acc n
+  indent_onto (text/append acc "  ") (n - 1)
+
+fn tag_onto acc kind spelled
+  typed = text/append (quoted_onto (text/append acc "\{\"type\": ") kind) ", "
+  valued = quoted_onto (text/append typed "\"value\": ") spelled
+  text/append valued "}"
+
+# The toml-test name for a scalar's type.
+pub fn type_name _:string
+  "string"
+
+pub fn type_name _:int
+  "integer"
+
+pub fn type_name _:float64
+  "float"
+
+pub fn type_name _:local_date
+  "date-local"
+
+pub fn type_name _:local_datetime
+  "datetime-local"
+
+pub fn type_name _:local_time
+  "time-local"
+
+pub fn type_name _:offset_datetime
+  "datetime"
+
+pub fn type_name _
+  "bool"
+
+# A scalar's value as toml-test writes it.
+fn value_text d:local_date
+  date_text d
+
+fn value_text t:local_time
+  time_text t
+
+fn value_text d:local_datetime
+  datetime_text d
+
+fn value_text d:offset_datetime
+  datetime_text d
+
+fn value_text v
+  "{v}"
+
+# A JSON string. The same escapes serve a TOML basic string, so the encoder
+# writes its strings through here too.
+fn quoted_onto acc s
+  body = list/fold (text/bytes s) (text/append acc 34) escape_byte
+  text/append body 34
+
+fn escape_byte acc 8
+  text/append acc "\\b"
+
+fn escape_byte acc 9
+  text/append acc "\\t"
+
+fn escape_byte acc 10
+  text/append acc "\\n"
+
+fn escape_byte acc 12
+  text/append acc "\\f"
+
+fn escape_byte acc 13
+  text/append acc "\\r"
+
+fn escape_byte acc 34
+  text/append acc "\\\""
+
+fn escape_byte acc 92
+  text/append acc "\\\\"
+
+fn escape_byte acc b
+  return text/append acc b if not control? b
+  hex = "0123456789abcdef"
+  high = text/slice hex (b / 16 + 1) (b / 16 + 1)
+  low = text/slice hex (b % 16 + 1) (b % 16 + 1)
+  text/append acc "\\u00{high}{low}"

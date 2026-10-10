@@ -1,0 +1,9 @@
+{
+  "emoji": {"type": "string", "value": "😀 and 🎌"},
+  "escaped": {"type": "string", "value": "日本"},
+  "mixed": {"type": "string", "value": "raw ü"},
+  "táble": {
+    "kéy": {"type": "string", "value": "välue"}
+  },
+  "日本語": {"type": "string", "value": "にほんご"}
+}

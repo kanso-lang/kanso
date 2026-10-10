@@ -1,0 +1,124 @@
+import "std/list"
+import "std/text"
+
+# An edit with the count of old and new lines that came before it, which is
+# what a hunk header is made from.
+type placed
+  edit
+  new
+  old
+
+# A run of edits printed together: positions `from` to `to` in the placed list.
+type span
+  from
+  to
+
+# Lines of context printed around each change, as in `diff -u`.
+context = 3
+
+# The unified diff that turns `a` into `b`, hunks only: the caller writes the
+# `---` and `+++` lines, because only it knows the file names. Two equal
+# inputs answer "".
+pub fn hunks a b
+  ps = placed_edits (edits a b)
+  spans = merged (list/to_list (list/map (change_points ps) (i -> around ps i)))
+  text/join (list/to_list (list/map spans (s -> hunk ps s))) ""
+
+fn placed_edits es
+  list/fold es [] (acc e -> push acc (advanced e acc[length acc]))
+
+# The first edit has nothing before it.
+fn advanced e none
+  placed e 0 0
+
+fn advanced e (placed (added _ _) n o)
+  placed e (n + 1) o
+
+fn advanced e (placed (dropped _ _) n o)
+  placed e n (o + 1)
+
+fn advanced e (placed (kept _ _ _) n o)
+  placed e (n + 1) (o + 1)
+
+fn change_points ps
+  list/select (positions (length ps)) (i -> moved? ps[i])
+
+# Every position asked about is in range; the arm is for the checker.
+fn moved? none
+  false
+
+fn moved? (placed (kept _ _ _) _ _)
+  false
+
+fn moved? _
+  true
+
+fn around ps i
+  span (lower i) (upper ps i)
+
+fn lower i
+  if (i - context < 1) 1 (i - context)
+
+fn upper ps i
+  if (length ps < i + context) (length ps) (i + context)
+
+# Spans that touch or overlap become one hunk.
+fn merged spans
+  list/fold spans [] joined
+
+fn joined acc (span from to)
+  return [(span from to)] if length acc == 0
+  span prev_from prev_to = acc[length acc]
+  return push acc (span from to) if prev_to + 1 < from
+  push (text/slice acc 1 (length acc - 1)) (span prev_from to)
+
+fn hunk ps (span from to)
+  inside = text/slice ps from to
+  { new:new_before old:old_before } = ps[from]
+  olds = list/count inside (p -> old_side? p.edit)
+  news = list/count inside (p -> new_side? p.edit)
+  head = "@@ -{range old_before olds} +{range new_before news} @@\n"
+  body = text/join (list/to_list (list/map inside (p -> marked p.edit))) ""
+  "{head}{body}"
+
+fn old_side? (added _ _)
+  false
+
+fn old_side? _
+  true
+
+fn new_side? (dropped _ _)
+  false
+
+fn new_side? _
+  true
+
+# A count of one is left implicit, and an empty side names the line before it.
+fn range before 0
+  "{before},0"
+
+fn range before 1
+  "{before + 1}"
+
+fn range before count
+  "{before + 1},{count}"
+
+fn marked (added line _)
+  terminated "+" line
+
+fn marked (dropped line _)
+  terminated "-" line
+
+fn marked (kept line _ _)
+  terminated " " line
+
+fn terminated sign line
+  return "{sign}{line}" if ends_line? line
+  "{sign}{line}\n\\ No newline at end of file\n"
+
+pub fn ends_line? line
+  text/slice line (length line) (length line) == "\n"
+
+# 1 to n, as a list.
+pub fn positions n
+  list/to_list (list/take list/naturals n)

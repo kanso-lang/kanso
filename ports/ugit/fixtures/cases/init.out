@@ -1,0 +1,47 @@
+fatal: not a ugit repository: .ugit
+[exit 128]
+Initialized empty ugit repository in .ugit/
+Reinitialized existing ugit repository in .ugit/
+HEAD
+objects
+refs
+ref: refs/heads/master
+usage: ugit <command> [<args>]
+
+  init                    create an empty repository in .ugit
+  add <path>...           stage files (a directory stages all below it)
+  commit -m <message>     record the staged tree
+  status                  show staged, unstaged and untracked changes
+  diff [--cached] [<rev> [<rev>]]
+                          show changes as a unified diff
+  log [--oneline] [<rev>] show history
+  show [<rev>]            show a commit and its changes
+  branch [<name> [<rev>]] list branches, or create one
+  tag [<name> [<rev>]]    list tags, or create one
+  checkout [-b] <rev>     switch branches, or detach HEAD at a commit
+  checkout -- <path>...   restore files from the index
+  merge <rev>             merge another line of history into HEAD
+  reset [--hard] <rev>    move the branch, resetting the index (and files)
+
+plumbing: hash-object, cat-file, write-tree, rev-parse, merge-base
+[exit 1]
+usage: ugit <command> [<args>]
+
+  init                    create an empty repository in .ugit
+  add <path>...           stage files (a directory stages all below it)
+  commit -m <message>     record the staged tree
+  status                  show staged, unstaged and untracked changes
+  diff [--cached] [<rev> [<rev>]]
+                          show changes as a unified diff
+  log [--oneline] [<rev>] show history
+  show [<rev>]            show a commit and its changes
+  branch [<name> [<rev>]] list branches, or create one
+  tag [<name> [<rev>]]    list tags, or create one
+  checkout [-b] <rev>     switch branches, or detach HEAD at a commit
+  checkout -- <path>...   restore files from the index
+  merge <rev>             merge another line of history into HEAD
+  reset [--hard] <rev>    move the branch, resetting the index (and files)
+
+plumbing: hash-object, cat-file, write-tree, rev-parse, merge-base
+ugit: 'frobnicate' is not a ugit command. See 'ugit help'.
+[exit 1]

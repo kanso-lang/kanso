@@ -1,0 +1,62 @@
+{
+  "animal": {
+    "type": {
+      "name": {"type": "string", "value": "pug"}
+    }
+  },
+  "dotted": {
+    "a": {
+      "b": {"type": "integer", "value": "1"},
+      "c": {"type": "integer", "value": "2"}
+    },
+    "d": {"type": "integer", "value": "3"}
+  },
+  "empty": {},
+  "multiline_array_inside": {
+    "list": [
+      {"type": "integer", "value": "1"},
+      {"type": "integer", "value": "2"}
+    ]
+  },
+  "name": {
+    "first": {"type": "string", "value": "Tom"},
+    "last": {"type": "string", "value": "Preston-Werner"}
+  },
+  "nested": {
+    "a": {
+      "b": {
+        "c": {"type": "integer", "value": "1"}
+      }
+    },
+    "d": [
+      {"type": "integer", "value": "1"},
+      {"type": "integer", "value": "2"}
+    ]
+  },
+  "point": {
+    "x": {"type": "integer", "value": "1"},
+    "y": {"type": "integer", "value": "2"}
+  },
+  "points": [
+    {
+      "x": {"type": "integer", "value": "1"},
+      "y": {"type": "integer", "value": "2"},
+      "z": {"type": "integer", "value": "3"}
+    },
+    {
+      "x": {"type": "integer", "value": "7"},
+      "y": {"type": "integer", "value": "8"},
+      "z": {"type": "integer", "value": "9"}
+    },
+    {
+      "x": {"type": "integer", "value": "2"},
+      "y": {"type": "integer", "value": "4"},
+      "z": {"type": "integer", "value": "8"}
+    }
+  ],
+  "quoted": {
+    "a b": {"type": "integer", "value": "1"},
+    "c.d": {"type": "integer", "value": "2"}
+  },
+  "spaced": {}
+}

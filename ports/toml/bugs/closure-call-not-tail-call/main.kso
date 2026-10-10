@@ -1,0 +1,3 @@
+import "./probe"
+
+print "{probe/cps 100000}"

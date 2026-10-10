@@ -1,0 +1,126 @@
+import "std/list"
+import "std/text"
+
+# A stretch of the merged file that needs no decision.
+pub type clean
+  lines
+
+# A stretch the two sides changed in different ways.
+pub type conflict
+  ours
+  theirs
+
+# Where the walk stands in each of the three files.
+type place
+  base
+  ours
+  theirs
+
+# The three files, and where each base line landed on the two sides.
+type inputs
+  base
+  mo
+  mt
+  ours
+  theirs
+
+# The three-way merge of `diff3`: lines that neither side touched anchor the
+# walk, and between two anchors each side either kept the base, or made a
+# change the other side did not, or both changed it alike -- or they
+# disagree, which is a conflict. The answer is a list of chunks in order.
+pub fn merge3 base ours theirs
+  given = inputs base (matches base ours) (matches base theirs) ours theirs
+  walk given (place 1 1 1) []
+
+# For each base line kept on the other side, where it landed there.
+fn matches a b
+  list/fold (edits a b) {} matched
+
+fn matched m (kept _ new old)
+  put m old new
+
+fn matched m _
+  m
+
+fn walk given at acc
+  walked given at acc (next_anchor given at.base)
+
+# The first base line at or after b that both sides kept.
+fn next_anchor given b
+  return none if length given.base < b
+  return b if given.mo[b] != none and given.mt[b] != none
+  next_anchor given (b + 1)
+
+fn walked given at acc none
+  { base ours theirs } = given
+  ends = place (length base + 1) (length ours + 1) (length theirs + 1)
+  tidied acc (between given at ends)
+
+fn walked given at acc l
+  next = place l given.mo[l] given.mt[l]
+  anchor = clean (text/slice given.base l l)
+  return walk given (stepped at) (tidied acc anchor) if next == at
+  walk given next (tidied acc (between given at next))
+
+fn stepped (place b o t)
+  place (b + 1) (o + 1) (t + 1)
+
+# The chunk from `at` up to, not including, `next`.
+fn between given (place b o t) (place nb no nt)
+  from_base = text/slice given.base b (nb - 1)
+  from_ours = text/slice given.ours o (no - 1)
+  from_theirs = text/slice given.theirs t (nt - 1)
+  settled from_base from_ours from_theirs
+
+fn settled from_base from_ours from_theirs
+  return clean from_ours if from_ours == from_theirs
+  return clean from_theirs if from_ours == from_base
+  return clean from_ours if from_theirs == from_base
+  conflict from_ours from_theirs
+
+# Adjacent clean chunks become one, and empty ones vanish.
+fn tidied acc (clean lines)
+  return acc if length lines == 0
+  joined_to acc[length acc] acc lines
+
+fn tidied acc chunk
+  push acc chunk
+
+fn joined_to none acc lines
+  push acc (clean lines)
+
+fn joined_to (clean before) acc lines
+  push (text/slice acc 1 (length acc - 1)) (clean (text/concat before lines))
+
+# After a conflict.
+fn joined_to _ acc lines
+  push acc (clean lines)
+
+# The merged text, with git's conflict markers.
+pub fn rendered chunks ours_label theirs_label
+  pieces = list/map chunks (c -> piece c ours_label theirs_label)
+  text/join (list/to_list pieces) ""
+
+fn piece (clean lines) _ _
+  unlines lines
+
+fn piece (conflict ours theirs) ours_label theirs_label
+  mine = closed (unlines ours)
+  yours = closed (unlines theirs)
+  "<<<<<<< {ours_label}\n{mine}=======\n{yours}>>>>>>> {theirs_label}\n"
+
+# A side that ends without a newline still needs one before the next marker.
+fn closed ""
+  ""
+
+fn closed text
+  if (ends_line? text) text "{text}\n"
+
+pub fn conflicts chunks
+  list/count chunks conflicted?
+
+fn conflicted? (conflict _ _)
+  true
+
+fn conflicted? _
+  false

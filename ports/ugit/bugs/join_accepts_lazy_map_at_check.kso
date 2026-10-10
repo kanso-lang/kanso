@@ -1,0 +1,12 @@
+# Run with: kanso check join_accepts_lazy_map_at_check.kso, then kanso play.
+#
+# Should: either join the mapped strings ("a!b!") on every engine, or have
+# `kanso check` refuse the call the way it refuses other type mismatches.
+# Does: `kanso check` answers ok, and every engine then stops at run time
+# with `error[runtime]: join takes a list of strings and a separator`.
+# list/map answers a lazy sequence; text/join wants a realised list, so the
+# working spelling is text/join (list/to_list (list/map xs f)) "".
+import "std/list"
+import "std/text"
+
+print (text/join (list/map ["a" "b"] (s -> "{s}!")) "")

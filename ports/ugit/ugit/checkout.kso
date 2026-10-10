@@ -1,0 +1,131 @@
+import "../steps"
+import "../store"
+import "std/list"
+import "std/os"
+import "std/path"
+import "std/text"
+
+# ugit checkout <branch>            switch to a branch
+# ugit checkout <commit>            detach HEAD at a commit
+# ugit checkout -b <name> [<rev>]   start a branch and switch to it
+# ugit checkout -- <path>...        throw away unstaged changes to files
+fn checkout_cmd args
+  line = parsed args ["-b"]
+  words = words_of line
+  fresh = flag line "-b"
+  return new_branch fresh words if fresh != none
+  return looked .> (v -> restored v words) if on? line "--"
+  return misuse "checkout [-b <branch>] <commit>" if length words != 1
+  target = words[1]
+  store/get_ref "refs/heads/{target}" .> (at -> switching target at.value.value)
+
+fn switching name none
+  store/resolve name .> (oid -> store/get_commit oid .> (c -> detaching oid c))
+
+fn switching name oid
+  looked .> (v -> to_branch v name oid)
+
+fn to_branch v name oid
+  return say "Already on '{name}'\n" if v.branch == name
+  head = store/update_ref "HEAD" (store/symbolic_to "refs/heads/{name}") false
+  moved v oid head "Switched to branch '{name}'\n"
+
+fn detaching oid c
+  head = store/update_ref "HEAD" (store/direct oid) false
+  note = "HEAD is now at {short oid} {subject c.message}\n"
+  looked .> (v -> moved v oid head note)
+
+fn new_branch true _
+  misuse "checkout -b <branch> [<commit>]"
+
+fn new_branch name words
+  return misuse "checkout -b <branch> [<commit>]" if length words > 1
+  start = if (length words == 1) words[1] "HEAD"
+  full = "refs/heads/{name}"
+  store/get_ref full .> (at -> branching name full start at.value.value)
+
+fn branching name full start none
+  store/resolve start .> (oid -> looked .> (v -> started v name full oid))
+
+fn branching name _ _ _
+  failure "fatal: a branch named '{name}' already exists\n" 128
+
+fn started v name full oid
+  head = store/update_ref full (store/direct oid) false
+    .> (_ -> store/update_ref "HEAD" (store/symbolic_to full) false)
+  moved v oid head "Switched to a new branch '{name}'\n"
+
+# Make the working tree and the index show commit `oid`, then run `head`
+# (which repoints HEAD) and print `note`. A file with local changes is left
+# alone when both commits agree on it; when they do not, the switch is
+# refused before anything is touched, as is one that would overwrite an
+# untracked file.
+fn moved v oid head note
+  store/files_of_commit oid .> (target -> moving v target head note)
+
+fn moving v target head note
+  blocked = selected (dirty v) (p -> differs? v target p)
+  return refused local_changes blocked "checkout" if length blocked > 0
+  clobbered = selected (untracked v) (p -> lost? v target p)
+  return refused untracked_files clobbered "checkout" if length clobbered > 0
+  retree v target .> (_ -> head) .> (_ -> say note)
+
+local_changes = "Your local changes to the following files"
+
+untracked_files = "The following untracked working tree files"
+
+fn differs? v target p
+  v.head_files[p] != target[p]
+
+fn lost? v target p
+  target[p] != none and target[p] != v.work[p]
+
+fn selected xs keep?
+  list/to_list (list/select xs keep?)
+
+fn refused what paths by
+  names = text/join (list/to_list (list/map paths (p -> "\t{p}\n"))) ""
+  failure "error: {what} would be overwritten by {by}:\n{names}Aborting\n" 1
+
+# Copy files back out of the index, over whatever the working tree has.
+fn restored v paths
+  unknown = list/find paths (p -> v.index[p] == none)
+  return unknown_path unknown if unknown != none
+  steps/each paths (p -> placed p v.index[p] v.work[p]) .> (_ -> effect 0)
+
+fn unknown_path p
+  fatal_says "pathspec '{p}' did not match any file(s) known to ugit"
+
+# Bring the working tree and index from v's HEAD to `target`: paths the two
+# commits agree on keep whatever the index and working tree hold.
+fn retree v target
+  every = keys (store/merged v.head_files target)
+  moving_paths = selected every (p -> differs? v target p)
+  steps/each moving_paths (p -> placed p target[p] v.work[p])
+    .> (_ -> store/write_index (next_index v target))
+
+fn placed _ none none
+  effect done
+
+fn placed p none _
+  store/removed p
+
+fn placed p oid current
+  return effect done if oid == current
+  store/get_object oid "blob" .> (content -> written_file p content)
+
+fn written_file p content
+  os/make_dir (path/dirname p) .> (_ -> os/write_file p content)
+
+fn next_index v target
+  every = keys (store/merged v.index target)
+  list/fold every {} (m p -> indexed m p (chosen_id v target p))
+
+fn chosen_id v target p
+  if (v.head_files[p] == target[p]) v.index[p] target[p]
+
+fn indexed m _ none
+  m
+
+fn indexed m p oid
+  put m p oid

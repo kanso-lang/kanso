@@ -1,0 +1,49 @@
+import "std/os"
+import "std/sha256"
+import "std/text"
+
+# Every object is stored under the hash of its own bytes: its kind, a NUL,
+# then its content. The kind travels with the object so that asking for a
+# tree and getting a blob is caught rather than parsed.
+nul = text/from_code 0
+
+pub root = ".ugit"
+
+pub fn object_id kind data
+  sha256/hex (text/bytes (framed kind data))
+
+fn framed kind data
+  "{kind}{nul}{data}"
+
+fn object_path oid
+  "{root}/objects/{oid}"
+
+# Store an object and yield its id. Writing an object that is already there
+# writes the same bytes again, which is harmless.
+pub fn put_object kind data
+  oid = object_id kind data
+  os/write_file (object_path oid) (framed kind data) .> (_ -> effect oid)
+
+# The content of an object, which must be of the kind asked for.
+pub fn get_object oid kind
+  os/read_file (object_path oid) .> (stored -> unframed oid kind stored)
+
+fn unframed oid _ (file_not_found _)
+  err "not a valid object name {oid}"
+
+fn unframed oid kind stored
+  pieces = text/split stored nul
+  found = pieces[1]
+  return err "object {oid} is a {found}, not a {kind}" if found != kind
+  text/join (text/slice pieces 2 (length pieces)) nul
+
+# The kind of an object, for cat-file -t.
+pub fn kind_of oid
+  os/read_file (object_path oid) .> (stored -> kind_in oid stored)
+
+fn kind_in oid (file_not_found _)
+  err "not a valid object name {oid}"
+
+fn kind_in _ stored
+  pieces = text/split stored nul
+  pieces[1]

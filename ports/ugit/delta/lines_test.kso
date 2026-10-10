@@ -1,0 +1,7 @@
+test_empty_has_no_lines = lines_of "" == []
+
+test_lines_keep_newlines = lines_of "a\nb\n" == ["a\n" "b\n"]
+
+test_unterminated_last_line = lines_of "a\nb" == ["a\n" "b"]
+
+test_round_trip = unlines (lines_of "x\n\ny") == "x\n\ny"

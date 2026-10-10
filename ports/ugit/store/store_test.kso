@@ -1,0 +1,29 @@
+import "std/text"
+
+sample = commit
+  "A U Thor <a@example.com>"
+  "first\n\nbody"
+  ["p1" "p2"]
+  1700000000
+  "t"
+
+test_commit_text_layout =
+  want = "tree t\nparent p1\nparent p2\nauthor A U Thor <a@example.com> "
+  text/slice (commit_text sample) 1 (length want) == want
+
+test_commit_round_trips = parsed_commit (commit_text sample) == sample
+
+test_root_commit_has_no_parents =
+  c = commit "x <y>" "m" [] 5 "t"
+  (parsed_commit (commit_text c)).parents == []
+
+# printf 'blob\0hi' | sha256sum
+test_blob_id_hashes_kind_and_content =
+  want = "f5d5942369def9d41445239ed05afe2b282af2ae2028842ed16402c3c3eb7832"
+  object_id "blob" "hi" == want
+
+test_ids_differ_by_kind = object_id "blob" "x" != object_id "tree" "x"
+
+test_merging_prefers_the_second =
+  later = { "b":"3" }
+  merged { "a":"1" "b":"2" } later == { "a":"1" "b":"3" }

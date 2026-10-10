@@ -1,0 +1,12 @@
+{
+  "apos15": {"type": "string", "value": "Here are fifteen apostrophes: '''''''''''''''"},
+  "empty": {"type": "string", "value": ""},
+  "lines": {"type": "string", "value": "The first newline is\ntrimmed in raw strings.\n   All other whitespace\n   is preserved.\n"},
+  "quot15": {"type": "string", "value": "Here are fifteen quotation marks: \"\"\"\"\"\"\"\"\"\"\"\"\"\"\""},
+  "quoted": {"type": "string", "value": "Tom \"Dubs\" Preston-Werner"},
+  "regex": {"type": "string", "value": "<\\i\\c*\\s*>"},
+  "regex2": {"type": "string", "value": "I [dw]on't need \\d{2} apples"},
+  "str": {"type": "string", "value": "'That,' she said, 'is still pointless.'"},
+  "winpath": {"type": "string", "value": "C:\\Users\\nodejs\\templates"},
+  "winpath2": {"type": "string", "value": "\\\\ServerX\\admin$\\system32\\"}
+}

@@ -1,0 +1,14 @@
+a.b.c = 1
+a.b.d = 2
+a.e = 3
+
+[tbl]
+x.y = 1
+x.z = 2
+
+[tbl.x.w]
+deep = true
+
+[arr]
+[[arr.list]]
+p.q = "inside an array table"

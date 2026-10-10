@@ -1,0 +1,19 @@
+Initialized empty ugit repository in .ugit/
+fatal: ambiguous argument 'HEAD': unknown revision
+[exit 128]
+[master (root-commit) 1b3d2d9] x
+* master
+fatal: a branch named 'topic' already exists
+[exit 128]
+  fix
+* master
+  topic
+1b3d2d92e8ab5a726e6f694dd69c12e4a70785b7db6c4f7a4d0e0b9dfc64a152
+fatal: a tag named 'v1' already exists
+[exit 128]
+v1
+1b3d2d92e8ab5a726e6f694dd69c12e4a70785b7db6c4f7a4d0e0b9dfc64a152
+usage: ugit branch [<name> [<commit>]]
+[exit 129]
+fatal: ambiguous argument 'nosuchthing': unknown revision
+[exit 128]

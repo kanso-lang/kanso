@@ -1,0 +1,23 @@
+{
+  "bin1": {"type": "integer", "value": "214"},
+  "bin2": {"type": "integer", "value": "5"},
+  "hex1": {"type": "integer", "value": "3735928559"},
+  "hex2": {"type": "integer", "value": "3735928559"},
+  "hex3": {"type": "integer", "value": "3735928559"},
+  "hex4": {"type": "integer", "value": "255"},
+  "hex_max": {"type": "integer", "value": "9223372036854775807"},
+  "int1": {"type": "integer", "value": "99"},
+  "int2": {"type": "integer", "value": "42"},
+  "int3": {"type": "integer", "value": "0"},
+  "int4": {"type": "integer", "value": "-17"},
+  "int5": {"type": "integer", "value": "1000"},
+  "int6": {"type": "integer", "value": "5349221"},
+  "int7": {"type": "integer", "value": "5349221"},
+  "int8": {"type": "integer", "value": "12345"},
+  "max": {"type": "integer", "value": "9223372036854775807"},
+  "min": {"type": "integer", "value": "-9223372036854775808"},
+  "minus_zero": {"type": "integer", "value": "0"},
+  "oct1": {"type": "integer", "value": "342391"},
+  "oct2": {"type": "integer", "value": "493"},
+  "plus_zero": {"type": "integer", "value": "0"}
+}

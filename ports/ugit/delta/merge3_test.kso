@@ -1,0 +1,38 @@
+fn conflicts_in old ours theirs
+  conflicts (merge3 (lines_of old) (lines_of ours) (lines_of theirs))
+
+fn merged old ours theirs
+  rendered (merge3 (lines_of old) (lines_of ours) (lines_of theirs)) "HEAD" "b"
+
+abcde = "a\nb\nc\nd\ne\n"
+
+test_untouched_merges_to_itself = merged abcde abcde abcde == abcde
+
+test_ours_changes = merged abcde "a\nB\nc\nd\ne\n" abcde == "a\nB\nc\nd\ne\n"
+
+test_theirs_changes = merged abcde abcde "a\nb\nc\nD\ne\n" == "a\nb\nc\nD\ne\n"
+
+test_separate_changes_combine =
+  got = merged abcde "a\nB\nc\nd\ne\n" "a\nb\nc\nD\ne\n"
+  got == "a\nB\nc\nD\ne\n"
+
+test_same_change_on_both_sides =
+  got = merged abcde "a\nX\nc\nd\ne\n" "a\nX\nc\nd\ne\n"
+  got == "a\nX\nc\nd\ne\n"
+
+test_clashing_changes_conflict =
+  got = merged abcde "a\nours\nc\nd\ne\n" "a\ntheirs\nc\nd\ne\n"
+  want = "a\n<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> b\nc\nd\ne\n"
+  got == want
+
+test_one_conflict = conflicts_in abcde "1\nb\nc\nd\n5\n" "1\nb\nc\nd\n6\n" == 1
+
+test_both_append_differently =
+  got = merged "a\n" "a\nx\n" "a\ny\n"
+  got == "a\n<<<<<<< HEAD\nx\n=======\ny\n>>>>>>> b\n"
+
+test_deletion_against_untouched = merged abcde "a\ne\n" abcde == "a\ne\n"
+
+test_missing_newline_still_gets_a_marker_line =
+  got = merged "a\n" "a\nx" "a\ny"
+  got == "a\n<<<<<<< HEAD\nx\n=======\ny\n>>>>>>> b\n"

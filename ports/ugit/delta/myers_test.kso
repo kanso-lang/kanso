@@ -1,0 +1,41 @@
+import "std/list"
+import "std/text"
+
+fn changed? (kept _ _ _)
+  false
+
+fn changed? _
+  true
+
+fn script a b
+  list/to_list (list/map (edits a b) spelled)
+
+fn spelled (added line _)
+  "+{line}"
+
+fn spelled (dropped line _)
+  "-{line}"
+
+fn spelled (kept line _ _)
+  " {line}"
+
+test_identical_files_keep_everything = script ["a" "b"] ["a" "b"] == [" a" " b"]
+
+test_both_empty = edits [] [] == []
+
+test_all_new = script [] ["x" "y"] == ["+x" "+y"]
+
+test_all_gone = script ["x" "y"] [] == ["-x" "-y"]
+
+test_one_changed_line =
+  want = [" a" "-b" "+B" " c"]
+  script ["a" "b" "c"] ["a" "B" "c"] == want
+
+# The example from Myers' paper: ABCABBA to CBABAC takes five edits.
+test_paper_example_is_shortest =
+  got = edits (text/chars "ABCABBA") (text/chars "CBABAC")
+  list/count got changed? == 5
+
+test_positions_are_one_based =
+  want = [(added "z" 1) (kept "a" 2 1)]
+  edits ["a"] ["z" "a"] == want

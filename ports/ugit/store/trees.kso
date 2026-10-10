@@ -1,0 +1,77 @@
+import "../steps"
+import "std/list"
+import "std/text"
+
+# A file in a tree under construction: its blob.
+type leaf
+  oid
+
+# A directory in a tree under construction: its files, keyed by the path
+# below it.
+type branch
+  files
+
+# A tree object is one line per entry -- kind, id, name -- sorted by name.
+# Directories are trees of their own, so a flat map of paths becomes a tree
+# of trees, written leaves first.
+pub fn write_tree files
+  shaped = list/fold (entries files) {} filed
+  steps/gathered (entries shaped) written_entry
+    .> (lines -> put_object "tree" (text/join lines ""))
+
+fn filed acc (entry file oid)
+  parts = text/split file "/"
+  top = parts[1]
+  below = text/join (text/slice parts 2 (length parts)) "/"
+  put acc top (filed_under acc[top] below oid)
+
+fn filed_under none "" oid
+  leaf oid
+
+fn filed_under none below oid
+  branch (put {} below oid)
+
+fn filed_under (branch files) below oid
+  branch (put files below oid)
+
+fn written_entry (entry name (leaf oid))
+  effect "blob {oid} {name}\n"
+
+fn written_entry (entry name (branch files))
+  write_tree files .> (oid -> effect "tree {oid} {name}\n")
+
+# The other way: a tree, read back into a flat map from path to blob id.
+pub fn read_tree oid
+  files_in oid ""
+
+fn files_in oid prefix
+  get_object oid "tree" .> (content -> listed_files content prefix)
+
+fn listed_files content prefix
+  steps/gathered (tree_lines content) (l -> line_files l prefix)
+    .> (maps -> effect (list/fold maps {} merged))
+
+fn tree_lines content
+  list/to_list (list/reject (text/split content "\n") (l -> l == ""))
+
+fn line_files line prefix
+  parts = text/split line " "
+  kind = parts[1]
+  oid = parts[2]
+  name = text/join (text/slice parts 3 (length parts)) " "
+  entry_files kind oid "{prefix}{name}"
+
+fn entry_files "blob" oid file
+  effect (put {} file oid)
+
+fn entry_files "tree" oid dir
+  files_in oid "{dir}/"
+
+fn entry_files kind _ _
+  err "unknown tree entry kind {kind}"
+
+pub fn merged into from
+  list/fold (entries from) into with_entry
+
+fn with_entry m (entry k v)
+  put m k v

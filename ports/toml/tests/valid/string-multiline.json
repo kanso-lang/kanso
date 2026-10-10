@@ -1,0 +1,12 @@
+{
+  "empty": {"type": "string", "value": ""},
+  "escaped": {"type": "string", "value": "tab:\t unicode:é"},
+  "no_newline_trim": {"type": "string", "value": "   spaces kept"},
+  "str1": {"type": "string", "value": "Roses are red\nViolets are blue"},
+  "str2": {"type": "string", "value": "The quick brown fox jumps over the lazy dog."},
+  "str3": {"type": "string", "value": "Here are two quotation marks: \"\". Simple enough."},
+  "str4": {"type": "string", "value": "Here are three quotation marks: \"\"\"."},
+  "str5": {"type": "string", "value": "Here are fifteen quotation marks: \"\"\"\"\"\"\"\"\"\"\"\"\"\"\"."},
+  "str6": {"type": "string", "value": "\"This,\" she said, \"is just a pointless statement.\""},
+  "trimmed_blank_lines": {"type": "string", "value": "first second"}
+}

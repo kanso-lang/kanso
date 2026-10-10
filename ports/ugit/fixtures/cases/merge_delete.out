@@ -1,0 +1,29 @@
+Initialized empty ugit repository in .ugit/
+[master (root-commit) 3102a26] base
+Switched to a new branch 'other'
+[other ebd375b] other: delete two, add both.txt
+Switched to branch 'master'
+[master b9f5fe0] master: edit contested, add both.txt
+Auto-merging both.txt
+CONFLICT (add/add): Merge conflict in both.txt
+CONFLICT (modify/delete): contested.txt deleted in other and modified in HEAD. Version HEAD of contested.txt left in tree.
+Automatic merge failed; fix conflicts and then commit the result.
+[exit 1]
+both.txt
+contested.txt
+stays.txt
+<<<<<<< HEAD
+from master
+=======
+from other
+>>>>>>> other
+contested, edited on master
+On branch master
+You are merging ebd375b.
+  (fix conflicts, add them, and run "ugit commit")
+
+Changes to be committed:
+	deleted:    doomed.txt
+
+Changes not staged for commit:
+	modified:   both.txt

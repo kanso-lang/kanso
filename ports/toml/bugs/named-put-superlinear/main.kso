@@ -1,0 +1,3 @@
+import "./probe"
+
+print "{probe/inline_n 2000}" .> (_ -> print "{probe/named_n 2000}")
