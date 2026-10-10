@@ -24716,3 +24716,51 @@ Owes: the check admits a collection literal of references as a field's value,
 with an error golden for a read of such a list in the maker; the graph fixture
 holds each node's neighbours as a list and drops the chain of records; ch03 or
 wherever `tie` is taught shows the list form.
+
+## 2026-10-10 — a constant lives in storage the carry knows is permanent
+
+A map built before a carrying loop came out of the loop with keys the next
+round's rewind freed. `tests/golden/micro/a_map_kept_across_a_carried_loop_keeps_its_keys`
+is the shape: `spin` carries a map made by its caller, an outer loop calls
+`spin` four times, and native printed `<none> <none>` where the interpreter
+prints both values. Main has the defect; it does not depend on the lap carry.
+
+The keys were string literals. The runtime builds a literal once, in malloc'd
+storage, and hands the same string out for the rest of the run, and does the
+same for one-character strings, for marker records with no fields and for
+closures over nothing. None of that storage lies in an arena block, and the
+copy walk answers "does this survive the rewind" for an outside pointer by
+asking whether it is a short token, a tenure block or a frozen CAF. A literal
+is none of those, so the walk took it for something it had to rescue, which
+wasted a copy at every stage and did damage in one place. When a surviving
+node points at something that does not survive, the walk leaves the node
+where it is, copies what it points at, and settles the copy in the
+current loop's region. The map's keys moved into `spin`'s region, the map
+stayed in its caller's, and the outer loop's next rewind freed the keys under
+it.
+
+`k_alloc_const` now hands those constants out of 64 KiB chunks registered with
+the frozen ranges, so the walk counts them as surviving, and the walk stops at
+a node in one of those chunks without asking about its interior, since nothing
+writes to a constant after it is built. The one-character and wide caches
+keep their bytes inline, where they had a second `malloc`. A frozen CAF is
+left out of the short stop: a proven in-place push can move a frozen list's
+items out of frozen storage, and pendbench does exactly that, so a frozen list
+still gets the repair it needs. Bignums moved to permanent storage stay on
+`k_alloc_perm`, because they are the run's data and every outside pointer is
+checked against the frozen ranges.
+
+This is also why grammar_check died in `k_deep_copy` on the lap carry branch
+with the growth lookthrough taken out, the crash the 2026-10-10 lap carry
+entry left unexplained. The capture loop carried `caps`, a map from the
+grammar file whose keys `"1"` to `"4"` come from the one-character cache.
+The first stage repaired the map by moving its keys into the loop's region,
+the region was reclaimed, and the next stage copied a key whose header the
+arena had reused. With constants registered, that build of grammar_check
+passes with the lookthrough removed. The lookthrough stays, because it
+refuses a cluster for what growth would cost.
+
+Every runtime counter that moved fell. `evac_allocs` and `evac_bytes` fall on
+every benchmark, the run program's by 14,328 copies and 229,376 bytes, and
+`carry_dedup` goes to zero wherever it was counting the same literal reached
+twice.
