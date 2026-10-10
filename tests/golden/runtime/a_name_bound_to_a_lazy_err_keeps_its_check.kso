@@ -1,0 +1,22 @@
+# `grown` is a lazy binding that forces to an err. The `125` arm binds it to
+# `xs`, which a match may do, since the match sees the thunk and not the err,
+# and `size_of` forces it. The err has to come out of that read on every
+# engine. Native used to drop the FAIL bit from any name a pattern bound, so
+# `size_of` forced the thunk and read the err's payload as a list's length,
+# and the program printed `size 6`.
+fn checked xs n
+  return err "refused {n}" if n > 2
+  push xs n
+
+fn pick 125 xs
+  "size {size_of xs}"
+
+fn pick _ _
+  "other"
+
+fn size_of xs
+  length xs
+
+pub play =
+  grown = checked [] 5
+  print (pick 125 grown)
