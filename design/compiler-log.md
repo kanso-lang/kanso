@@ -25049,3 +25049,10 @@ compare and a branch at each rewinding edge with an argument that may be an
 err, which the emitted code shows: runbench gains 22 branches and 125 lines,
 the decoder 4 branches and 15 lines, and seven other benchmarks between 2 and
 13 branches.
+
+CI's rows, measured with main's constructor change merged in: the browser
+compile row rises 217,425 instructions to 388,494,007 and the browser run row
+1,119 to 33,508,472, dev codegen rises 139 to 118,918,569, and release codegen
+falls 8 to 453,994,110. Machine code grows on every benchmark, by 16 bytes on
+scanbench and 368 on runbench. Both changes are fixes to what programs print,
+so the floor follows them, from 90.25040 to 90.25021.
