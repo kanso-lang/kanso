@@ -4629,7 +4629,17 @@ tie_check = row
   (breaking "a_tie_reference_read_anywhere")
   release
 
-rows_c1zzzzzzzd = text/concat rows_c1zzzzzzze [tie_check]
+# A list or map literal written as a field may hold a tie's references
+# (2026-10-10).
+tie_list = row
+  "a tie list read as a reference"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_tie_list_read_as_a_reference")
+  release
+
+rows_c1zzzzzzzd = text/concat rows_c1zzzzzzze [tie_check tie_list]
 
 # A record constructor handed over as a function lowers to the lambda that
 # calls it on native, as the interpreter treats it (2026-10-10, lox F20).
