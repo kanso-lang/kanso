@@ -1,0 +1,22 @@
+# `step` builds a small map each time round and hands it to `probe`, a loop of
+# its own, which asks the map's length at the end. Its keys arrive out of
+# order, so `length` builds a sorted view, and the view is malloc'd. It is
+# released when the beat whose rewind frees the map's header rewinds. Until
+# 2026-10-10 a view was registered only when its map was born in the innermost
+# beat, and this map was born one beat further out, in `step`: every view was
+# built and none was freed. mal's evaluator held 80 bytes an iteration this
+# way. `view_frees` below must equal `view_allocs`.
+fn probe m 0 acc
+  acc + length m
+
+fn probe m i acc
+  probe m (i - 1) (acc + length "x{i}")
+
+fn step 0 total
+  total
+
+fn step n total
+  m = put (put (put {} "k{n % 5}" n) "a" 1) "z{n % 3}" 2
+  step (n - 1) (total + probe m 3 0)
+
+pub play = print "{step 20000 0}"

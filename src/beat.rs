@@ -349,9 +349,9 @@ fn grows_only_itself(
         })
 }
 
-/// Self-loops whose only defect is a tail entry, where every entering group
-/// is acyclic in the tail-call graph. Demoting those entries to plain calls
-/// costs each caller one bounded stack frame and lets the loop bracket.
+/// Self-loops whose only defect is a tail entry, where the loop cannot reach
+/// any entering group back by tail calls. Demoting those entries to plain
+/// calls costs each caller one bounded stack frame and lets the loop bracket.
 fn demotable_entries(
     program: &Program,
     inference: &infer::Inference,
@@ -361,8 +361,6 @@ fn demotable_entries(
     classes: &[(String, usize, Verdict)],
 ) -> Vec<(Group, Vec<Group>, Vec<usize>)> {
     let value_uses = ValueUses::of(program);
-    let mut cyclic: HashSet<Group> = HashSet::default();
-    // a group is cyclic when any tail path returns to it (self-edge or SCC)
     let mut tail_edges: Vec<(Group, Group)> = Vec::new();
     for decl in &program.fns {
         let from = (decl.name.clone(), decl.params.len());
@@ -370,14 +368,12 @@ fn demotable_entries(
             let Expr::App { head, args, piped: false, .. } = tail else { continue };
             let Expr::Ident(callee, _, _) = head.as_ref() else { continue };
             let to = (callee.to_string(), args.len());
-            if from == to {
-                cyclic.insert(from.clone());
-            }
             tail_edges.push((from.clone(), to));
         }
     }
-    for cluster in tail_cycles(&tail_edges) {
-        cyclic.extend(cluster);
+    let mut next: HashMap<&Group, Vec<&Group>> = HashMap::default();
+    for (from, to) in &tail_edges {
+        next.entry(from).or_default().push(to);
     }
     let mut out = Vec::new();
     for (name, arity, v) in classes {
@@ -391,7 +387,7 @@ fn demotable_entries(
         if crossing.len() > K_CARRY_MAX
             || crossing.iter().any(|&p| {
                 let set = group_param_set(program, inference, &name, arity, p);
-                accumulator_grows(program, &name, arity, p) || set == 0 || set & BYTES != 0
+                costly_to_carry(program, &name, arity, p, set)
             })
             || value_uses.has(&name)
             || !allocating.contains(name.as_str())
@@ -403,7 +399,13 @@ fn demotable_entries(
             .filter(|(from, to)| *to == group && *from != group)
             .map(|(from, _)| from.clone())
             .collect();
-        if !callers.is_empty() && callers.iter().all(|c| !cyclic.contains(c)) {
+        // A caller in a tail cycle of its own is safe to demote: the plain
+        // call holds one frame while the loop runs, and the caller returns
+        // before its cycle goes round again. Only a cycle through the demoted
+        // edge itself, which is the loop tail-reaching its caller, would
+        // stack a frame per lap.
+        let reached = tail_reach(&next, &group);
+        if !callers.is_empty() && callers.iter().all(|c| !reached.contains(c)) {
             let mut list: Vec<_> = callers.into_iter().collect();
             list.sort();
             out.push((group, list, crossing));
@@ -413,9 +415,70 @@ fn demotable_entries(
     out
 }
 
+/// Every group `from` reaches by tail calls alone, itself excluded unless a
+/// cycle returns to it.
+fn tail_reach<'a>(
+    next: &HashMap<&'a Group, Vec<&'a Group>>,
+    from: &'a Group,
+) -> HashSet<&'a Group> {
+    let mut seen: HashSet<&Group> = HashSet::default();
+    let mut stack = vec![from];
+    while let Some(at) = stack.pop() {
+        for &to in next.get(at).map(Vec::as_slice).unwrap_or(&[]) {
+            if seen.insert(to) {
+                stack.push(to);
+            }
+        }
+    }
+    seen
+}
+
 /// Mirrors the runtime's K_CARRY_MAX: how many crossing positions a carry
 /// beat may evacuate per iteration.
 const K_CARRY_MAX: usize = 8;
+
+/// Whether carrying a crossing position through the evacuation would cost
+/// more than the grow-only arena it replaces. A slot inference cannot type
+/// may hide a growing accumulator behind a helper call, and a byte builder
+/// rebuilt each iteration would deep-copy its whole buffer at every rewind,
+/// so neither is assumed cheap.
+///
+/// A position every self-tail-call hands on unchanged is neither. Its value
+/// arrived at entry and lives below the mark, so the evacuation shares it
+/// rather than copying it, and nothing rebuilds it. A loop over a record
+/// field's contents carries a slot inference reads as anything at all, and
+/// the interpreter loops in the lox and mal ports kept every iteration's
+/// garbage for that reason alone.
+fn costly_to_carry(program: &Program, name: &str, arity: usize, position: usize, set: Set) -> bool {
+    if handed_on(program, name, arity, position) {
+        return false;
+    }
+    accumulator_grows(program, name, arity, position) || set == 0 || set & BYTES != 0
+}
+
+/// Does every self-tail-call of the group pass this parameter on as itself?
+fn handed_on(program: &Program, name: &str, arity: usize, position: usize) -> bool {
+    let mut any = false;
+    for decl in program.fns.iter() {
+        if decl.name != name || decl.params.len() != arity {
+            continue;
+        }
+        for tail in tail_exprs(decl.body.last()) {
+            let Expr::App { head, args, piped: false, .. } = tail else { continue };
+            let Expr::Ident(callee, _, _) = head.as_ref() else { continue };
+            if callee != name || args.len() != arity {
+                continue;
+            }
+            let Some(Pattern::Var(own, _)) = decl.params.get(position) else { return false };
+            let Expr::Ident(passed, _, _) = &args[position] else { return false };
+            if passed != own {
+                return false;
+            }
+            any = true;
+        }
+    }
+    any
+}
 
 /// A carried position whose next value extends its own previous value —
 /// `push acc x`, `concat acc more`, `put acc k v` feeding the same slot —
@@ -624,30 +687,6 @@ fn crossing_positions(
     out
 }
 
-/// Groups belonging to any multi-group tail cycle.
-fn tail_cycles(edges: &[(Group, Group)]) -> Vec<Vec<Group>> {
-    let nodes: Vec<Group> = {
-        let mut set = HashSet::default();
-        for (a, b) in edges {
-            set.insert(a.clone());
-            set.insert(b.clone());
-        }
-        let mut v: Vec<_> = set.into_iter().collect();
-        v.sort();
-        v
-    };
-    let index: HashMap<&Group, usize> = nodes.iter().enumerate().map(|(i, n)| (n, i)).collect();
-    let mut adj = vec![Vec::new(); nodes.len()];
-    for (a, b) in edges {
-        adj[index[a]].push(index[b]);
-    }
-    sccs_of(&adj)
-        .into_iter()
-        .filter(|scc| scc.len() >= 2)
-        .map(|scc| scc.into_iter().map(|i| nodes[i].clone()).collect())
-        .collect()
-}
-
 /// Multi-group tail-call cycles that may rewind: every entry from outside is
 /// a plain call, no member is used as a value, some member allocates, and at
 /// every tail edge inside the cluster each argument is a pure scalar in the
@@ -675,13 +714,22 @@ fn eligible_clusters(
         groups.iter().enumerate().map(|(i, (name, arity))| ((name.as_str(), *arity), i)).collect();
     // tail edges: (caller group, callee group, decl index, args)
     let mut edges: Vec<(usize, usize, usize, &Vec<Expr>)> = Vec::new();
+    // the edges among those that a piped lambda's body makes: see lambda_tails
+    let mut through_lambda: HashSet<(usize, usize)> = HashSet::default();
     for (di, decl) in program.fns.iter().enumerate() {
         let from = index[&(decl.name.as_str(), decl.params.len())];
-        for tail in tail_exprs(decl.body.last()) {
+        let mut tails = Vec::new();
+        if let Some(Stmt::Expr(e)) = decl.body.last() {
+            marked_tails(e, false, &mut tails);
+        }
+        for (tail, under) in tails {
             let Expr::App { head, args, piped: false, .. } = tail else { continue };
             let Expr::Ident(callee, _, _) = head.as_ref() else { continue };
             if let Some(&to) = index.get(&(callee.as_str(), args.len())) {
                 edges.push((from, to, di, args));
+                if under {
+                    through_lambda.insert((from, to));
+                }
             }
         }
     }
@@ -721,11 +769,23 @@ fn eligible_clusters(
         if let Some(carried) =
             cluster_edges_ok(program, inference, mut_sites, chains, &groups, &members, &edges)
         {
-            // A demoted entry buys a plain beat and nothing more. A carried
-            // slot is evacuated at every rewind, and a cluster reached only
-            // by a tail call is one whose cost nobody has measured — the
-            // json string scanner pays 8 GB of copies for the licence.
-            if !entries.is_empty() && !carried.is_empty() {
+            // A cluster reached by a tail call carries its slots like any
+            // other. They were refused until 2026-10-10 because a carried
+            // slot was evacuated at every rewind and the json string scanner
+            // paid 8 GB of copies for the licence; the rewind now waits until
+            // the lap has left a quarter megabyte behind (k_beat_lap_carry),
+            // and mal's evaluator, a cluster of about forty groups entered
+            // by a tail call, is the program that needed it.
+            //
+            // An edge inside the cluster that runs through a piped lambda
+            // still refuses a carrying cluster. golden_prose walks its
+            // directory tree through `os/is_dir here .> (d -> entered ...)`,
+            // the lambda runs from `k_exec` after `onward` has returned, and
+            // carrying across it freed a string the chain still held: the
+            // gate died in `k_concat_arr`.
+            if !carried.is_empty()
+                && through_lambda.iter().any(|(f, t)| members.contains(f) && members.contains(t))
+            {
                 continue;
             }
             out.push(Cluster {
@@ -848,6 +908,7 @@ fn cluster_edges_ok(
     let mut carried: HashMap<Group, Vec<usize>> = HashMap::default();
     for (_, to, di, args) in &inner {
         let decl = &program.fns[*di];
+        let locals = local_binds(decl);
         for (i, arg) in args.iter().enumerate() {
             let s = slot_set(*to, i);
             if (s != 0 && s & !FAIL & !CROSSES == 0)
@@ -858,10 +919,22 @@ fn cluster_edges_ok(
             }
             // a byte builder rebuilt each iteration would deep-copy its
             // whole buffer at every rewind: growth wearing a carry — and a
-            // slot inference can't type may hide the same shape
-            if s & BYTES != 0 || s == 0 {
+            // slot inference can't type may hide the same shape. A slot that
+            // may hold any value, bytes among the rest, is carried: an
+            // interpreter's value register is that slot, and refusing it
+            // kept mal's machine from rewinding at all
+            if (s & !FAIL) == BYTES || s == 0 {
                 return None;
             }
+            // read through a name the body bound: `grown = push acc x` handed
+            // on as `grown` grows the slot exactly as `push acc x` would.
+            // grammar_check's capture loop does that, and carrying it died
+            // in k_deep_copy once a carrying cluster could be entered by a
+            // tail call
+            let arg = match arg {
+                Expr::Ident(n, _, _) => locals.get(n.as_str()).copied().unwrap_or(arg),
+                _ => arg,
+            };
             if let Expr::App { head: ah, args: aargs, .. } = arg {
                 if let Expr::Ident(op, _, _) = ah.as_ref() {
                     let own = decl.params.get(i).and_then(|p| match p {
@@ -1130,7 +1203,7 @@ fn blockers(
     let crossing = crossing_positions(program, inference, mut_sites, chains, name, arity);
     if let Some(&position) = crossing.iter().find(|&&p| {
         let set = group_param_set(program, inference, name, arity, p);
-        accumulator_grows(program, name, arity, p) || set == 0 || set & BYTES != 0
+        costly_to_carry(program, name, arity, p, set)
     }) {
         found.push(Verdict::ArgCrosses { position });
     }
@@ -1266,7 +1339,7 @@ fn classify(
         // ever assumed cheap to carry
         if let Some(&position) = crossing.iter().find(|&&p| {
             let set = group_param_set(program, inference, name, arity, p);
-            accumulator_grows(program, name, arity, p) || set == 0 || set & BYTES != 0
+            costly_to_carry(program, name, arity, p, set)
         }) {
             return Some(crate::beat::Verdict::ArgCrosses { position });
         }
@@ -1740,6 +1813,38 @@ fn tail_exprs(last: Option<&Stmt>) -> Vec<&Expr> {
     let mut out = Vec::new();
     expand_tail(e, &mut out);
     out
+}
+
+/// `expand_tail`'s walk, each tail marked with whether a piped literal lambda
+/// led to it. Such a tail is the caller's own when the pipe inlines, and it is
+/// not when the piped value is an effect description: `k_exec` calls the
+/// lambda later, as a closure, after the caller has returned the description.
+/// A cluster that carries slots across such an edge rewinds under values the
+/// chain runner still holds.
+fn marked_tails<'a>(e: &'a Expr, under: bool, out: &mut Vec<(&'a Expr, bool)>) {
+    if let Expr::Guard { early, rest, .. } = e {
+        marked_tails(early, under, out);
+        if let Some(Stmt::Expr(last)) = rest.last() {
+            marked_tails(last, under, out);
+        }
+        return;
+    }
+    if let Expr::App { head, args, piped, .. } = e {
+        if !piped && matches!(head.as_ref(), Expr::Ident(n, _, _) if n == "if") && args.len() == 3 {
+            marked_tails(&args[1], under, out);
+            marked_tails(&args[2], under, out);
+            return;
+        }
+        if *piped && args.len() == 1 {
+            if let Expr::Lambda { params, body, .. } = head.as_ref() {
+                if params.len() == 1 {
+                    marked_tails(body, true, out);
+                    return;
+                }
+            }
+        }
+    }
+    out.push((e, under));
 }
 
 fn guard_stmt_expr(s: &Stmt) -> &Expr {
@@ -2647,6 +2752,22 @@ mod tests {
     }
 
     #[test]
+    fn a_cluster_growing_its_carried_list_through_a_name_stays_out() {
+        // grammar_check's capture loop: `grown = push acc x` handed on as
+        // `grown` grows the carried slot as `push acc x` would, and growth in
+        // a carried slot refuses the cluster. The name hid it until
+        // 2026-10-10, and once a carrying cluster could be entered by a tail
+        // call the gate died in k_deep_copy.
+        let src = "fn each acc at\n  stepping acc at (at > 3)\n\nfn stepping acc _ true\n  acc\n\nfn stepping acc at false\n  grown = push acc \"x{at}\"\n  each grown (at + 1)\n\nfn start acc\n  each acc 1\n\nmain = print \"{length (start [])}\"\n";
+        let (program, inference) = compiled(src);
+        let beats =
+            super::beat_loops(&program, &inference, &crate::linear::in_place_pushes(&program));
+
+        assert!(!beats.ids.contains_key(&("each".to_string(), 2)));
+        assert!(!beats.ids.contains_key(&("stepping".to_string(), 3)));
+    }
+
+    #[test]
     fn a_cluster_the_entering_caller_is_reached_from_stays_grow_only() {
         // counted enters the cycle by a tail call and the cycle reaches it
         // back, so the entry recurs: demoting it would retain a frame per
@@ -2704,17 +2825,34 @@ mod tests {
     }
 
     #[test]
-    fn tail_entry_from_cyclic_caller_stays_ineligible() {
-        // ping and pong form a tail cycle; pong's entry into spin can never
-        // be demoted — a plain call inside a musttail cycle would grow the
-        // stack without bound.
+    fn tail_entry_from_cyclic_caller_is_demoted() {
+        // ping and pong form a tail cycle, and pong's last lap enters spin.
+        // The plain call holds pong's one frame while spin runs, and pong
+        // returns before the cycle could go round again, so the stack stays
+        // bounded. This read "stays ineligible" until 2026-10-10, which kept
+        // the loop of every tree-walking interpreter grow-only: their
+        // dispatcher is a tail cycle and every while loop is entered from it.
         let src = "main = print \"{ping 3}\"\n\nfn ping n\n  pong n\n\nfn pong 0\n  spin 2 0\n\nfn pong n\n  ping (n - 1)\n\nfn spin 0 acc\n  acc\n\nfn spin n acc\n  spin (n - 1) (acc + length \"beat {n}\")\n";
         let (program, inference) = compiled(src);
         let beats =
             super::beat_loops(&program, &inference, &crate::linear::in_place_pushes(&program));
 
-        assert!(!beats.ids.contains_key(&("spin".to_string(), 2)));
-        assert!(beats.demoted.is_empty());
+        assert!(beats.ids.contains_key(&("spin".to_string(), 2)));
+        assert!(beats.demoted.contains(&(("pong".to_string(), 1), ("spin".to_string(), 2))));
+    }
+
+    #[test]
+    fn tail_entry_the_loop_reaches_back_stays_ineligible() {
+        // spin leaves by a tail call to pong, and pong enters spin by one, so
+        // the entry is an edge of a tail cycle: demoting it would hold a
+        // frame for every lap round that cycle. Whatever the cluster
+        // analysis makes of the pair, that edge stays a tail call.
+        let src = "main = print \"{pong 3}\"\n\nfn pong 0\n  0\n\nfn pong n\n  spin n 0\n\nfn spin 0 acc\n  pong (acc - acc)\n\nfn spin n acc\n  spin (n - 1) (acc + length \"beat {n}\")\n";
+        let (program, inference) = compiled(src);
+        let beats =
+            super::beat_loops(&program, &inference, &crate::linear::in_place_pushes(&program));
+
+        assert!(!beats.demoted.contains(&(("pong".to_string(), 1), ("spin".to_string(), 2))));
     }
 
     #[test]
@@ -2809,9 +2947,7 @@ mod tests {
         // list accumulators — those stay out. The two encoders thread a byte
         // builder by pointer identity, which is exactly what the chain
         // license admits: raw bytes hold no pointers, so nothing in the
-        // accumulator can dangle across a rewind. The string scanners share
-        // the licence but not the entry: they are reached by a tail call,
-        // and a demoted entry buys a plain beat, never a carried one.
+        // accumulator can dangle across a rewind.
         //
         // Read through an import, which is how a program meets the library.
         // Until 2026-10-10 this compiled lib/json as a root and leaned on the
@@ -2837,12 +2973,30 @@ mod tests {
         // `keys` and `values` since 2026-09-27. That call is a region, which
         // reclaims them once per nested map, and the loops allocate nothing
         // else an iteration outlives.
+        //
+        // The string scanners joined on 2026-10-10, when a cluster entered by
+        // a tail call began to carry its slots. That is this library read on
+        // its own: a program that imports std/json emits no carried rewind
+        // in them, and decoding five 300,000-character strings with an
+        // escape every three characters read 78,278,587 instructions with
+        // the licence and without it.
+        let scanners: Vec<(String, usize)> = [
+            ("json/str_chars", 3),
+            ("json/str_low", 5),
+            ("json/str_pair", 4),
+            ("json/str_run", 4),
+            ("json/str_surrogate", 4),
+            ("json/str_unicode", 3),
+            ("json/string_scan", 3),
+        ]
+        .into_iter()
+        .map(|(n, a)| (n.to_string(), a))
+        .collect();
         assert_eq!(
-            licensed,
-            Vec::<(String, usize)>::new(),
-            "no loop in the library rewinds: the escaper and the encoders \
-             allocate nothing an iteration outlives, and scanners threading \
-             records or lists stay on the grow-only arena"
+            licensed, scanners,
+            "the string scanners are the library's only beats: the escaper \
+             and the encoders allocate nothing an iteration outlives, and \
+             scanners threading records or lists stay on the grow-only arena"
         );
         let regions: Vec<usize> = loops.regions.iter().map(|(_, line, _)| *line).collect();
         assert_eq!(

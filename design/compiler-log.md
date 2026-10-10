@@ -24717,6 +24717,218 @@ with an error golden for a read of such a list in the maker; the graph fixture
 holds each node's neighbours as a list and drops the chain of records; ch03 or
 wherever `tie` is taught shows the list form.
 
+## 2026-10-10 — a carried rewind waits for the lap to leave something behind
+
+The mal port ran out of memory natively. Its tail-recursive `sum2` held
+729 MB at two hundred thousand iterations, where the interpreter holds a few
+megabytes. kanso#1824's entry left it there: mal's evaluator is one tail cycle
+of about forty groups, and a cycle carried only scalars and threaded
+parameters through its rewind.
+
+Two refusals in `beat.rs` kept the cycle from rewinding at all. A carried slot
+whose type set included bytes was refused, in case it hid a byte builder that
+would be copied whole at every rewind. mal's value register can hold anything,
+so its set includes bytes. A cluster entered by a tail call was refused if it
+carried any slot, because the json string scanner once paid 8 GB of copies for
+that licence. mal's evaluator is entered by a tail call. A slot that can only
+be bytes is still refused, and so is a slot inference cannot type.
+
+Lifting the bytes refusal admitted one cycle that must stay out. golden_prose
+walks its directory tree through `os/is_dir here .> (d -> entered ...)`, and
+`expand_tail` reads a tail inside a piped lambda as the caller's own, which is
+true when the pipe inlines and false when the piped value is an effect: `k_exec`
+calls the lambda later, after `onward` has returned its description. Carrying
+the cycle's slots across that edge freed strings a pending continuation still
+held, and the gate died in `k_concat_arr`; the runtime reports any segfault as
+running out of stack, which is what it printed. A carrying cluster with an edge
+through a piped lambda is now refused, and golden_prose goes red without that
+refusal.
+
+Lifting the entry refusal admitted a second. grammar_check's capture loop is a
+three-member cluster entered by a tail call, and it grows its carried list with
+`grown = push acc x` and hands on `grown`. Growth in a carried slot refuses a
+cluster, but the check read only the argument itself, so `push acc x` written in
+place was refused and the same push behind a name was carried. The gate died in
+`k_deep_copy` under `k_repair_interior`, reading a heap pointer of 6, with the
+lap rule and with a stage at every edge alike. The check now reads through a
+name the body bound. grammar_check runs again, and
+`a_cluster_growing_its_carried_list_through_a_name_stays_out` fails without the
+lookthrough. I could not reduce the crash itself: a thirty-line copy of the
+loop, with nested capture maps and sliced group text, carries and rewinds
+cleanly. Why carrying that list corrupts a node is still open. The lookthrough
+costs the tab compiler 8,440 instructions, to 390,305,438.
+
+Lifting the refusals alone made mal ten times slower. A cluster rewinds at
+every edge between its members, and mal crosses about fifty edges for each
+call it evaluates. Each rewind sized the carried slots, copied them into the
+carry pair and reset the arena: 0.47 s at ten thousand iterations against
+0.067 s with no rewind at all. Near eighteen thousand iterations tenure
+opened its tenth block and the copy per rewind began to grow with the count,
+so forty thousand iterations took 7.2 s.
+
+Compiled loops now call `k_beat_lap_carry` in place of `k_beat_iter_carry`. It
+stages only once the arena has drifted a quarter megabyte past where the last
+stage left it, in the same block, with nothing in the depth's registries. That
+is the test the bind chain already applies to its own steps. Skipping a stage
+is always sound, since the carried values stay where they are and the next
+stage copies whatever is still reachable; the test bounds the garbage held in
+between. The registries are asked because their storage is malloc'd and the
+block test cannot see it grow. A first version that skipped while more than
+256 KiB of the block remained raised the run program's `perm_peak_bytes` from
+32,200 to 81,544, and pend's 450 KB laps pushed it into a second arena block.
+The cohort pop and the chain still call `k_beat_iter_carry` directly.
+
+mal at two hundred thousand iterations now runs in 0.68 s at 21 MB, against
+1.15 s and 729 MB. It still grows by about 80 bytes an iteration: 209,210 map
+views are built and 10,519 freed, because a view is registered for release only
+when its map was allocated in the current beat. The next entry fixes that.
+
+`tests/golden/mem/an_evaluator_carrying_any_value_round_its_cycle_rewinds`
+builds the shape in forty lines and pins `arena_peak_bytes` at 1,048,576 for
+twenty thousand steps; main's compiler holds 4,194,304 for it and never
+rewinds. Putting either refusal back turns it red, and so does staging at
+every edge, which copies 4,754,864 bytes where the lap rule copies 3,488.
+
+Two cost veins move with the lap rule. The run program's `evac_bytes` falls
+from 10,018,720 to 6,671,008 and its tenure from six blocks to one, and the
+basket program's carried rewinds stage less often. Of the tab compiler's rise
+in `browser_compile_instructions`, 1,710,393 arrived with the lambda-edge
+refusal. The next entry prices the whole change on CI's rows.
+
+The ratchet's tenure-sharing row gated on the run program's counters, and with
+one tenure block there instead of six the mutation stopped moving them. It now
+gates on the mem corpus, where
+`an_inner_beat_opens_its_tenure_in_the_block_outside` goes red.
+
+## 2026-10-10 — a map's view belongs to the beat that frees the map
+
+A map read by key, rendered, compared or measured gets a sorted view, and the
+view is malloc'd. It is released when the beat whose rewind reclaims the map's
+header rewinds. Until today the view was registered for release only when the
+map was born in the innermost beat. A map built in an outer loop and read
+inside an inner one was never registered, so its view was never freed. mal's
+evaluator builds its environments in its tail cycle and looks symbols up one
+region call further in, and at two hundred thousand iterations it built
+209,210 views and freed 10,519.
+
+`k_viewreg_own` now asks each depth from the innermost outward whether its
+rewind reclaims the header, and registers the view at the first that does. A
+header outside every arena block, in a carry buffer or a tenure block,
+registers at the innermost depth, which rewinds no later than that storage is
+released. A frozen constant keeps its view for the life of the program.
+
+That alone made mal fifteen times slower. The lap carry stages whenever a
+registry at its depth holds anything, and mal's views now registered at the
+cycle's own depth, so every edge staged again. The view registry no longer
+forces a stage. A view is never larger than its map, and the map is either
+garbage the drift test already counts or still live, so a skipped lap holds no
+more view memory than the test bounds.
+
+mal now holds 9 MB at two hundred thousand iterations and at four hundred
+thousand, where lap carry alone held 21 MB and 39 MB. It runs in 0.63 s and
+1.26 s, the same as lap carry alone.
+
+Two fixtures pin the two halves.
+`a_view_built_one_beat_down_is_freed_by_the_beat_that_built_its_map` builds
+twenty thousand views one beat below their maps and frees all of them; with
+the old registration it frees none and holds 2,240,000 bytes of views.
+`a_cycle_that_sorts_a_map_each_step_still_waits_for_its_lap` copies 6,224
+bytes in its carried rewinds; letting the view registry force a stage copies
+3,200,304.
+Merged with main's constant storage it copies 6,128, since the constants it
+names are no longer copied, and its one tenure block is gone. The evaluator
+fixture's lap rule copies 3,360 where it copied 3,488, for the same reason.
+
+The native cost veins and the lazy tier do not move: no benchmark builds a
+view one beat below its map. The tab's run does. `bench/interp_corpus` builds
+1,320 views and now frees them all, so `browser_run_instructions` rises
+517,253 to 34,038,136 and `browser_run_peak_bytes` falls 131,072 to 1,179,648.
+Natively the same corpus costs 336,930 more instructions, about 240,000 of
+them in glibc's `free`. The browser side of welfare rises from 83.42 to 83.55.
+A fast path that registered a head-block header without the walk cost more on
+this corpus than it saved, because its maps sit below the innermost mark, and
+was dropped.
+
+CI's rows for the three pieces together, against main. The work rows that fall
+are `work_runbench`, 1,129,603,831 to 1,127,640,368, and `work_basket`,
+32,382,758 to 30,339,466. The ones that rise are `work_encodebench` by 2,866 to
+2,384,341,029, `work_oneshot` by 2,810 to 13,030,103, `work_indexbench` by 514
+to 2,459,021, `work_scanbench` by 309 to 282,024 and `work_livebench` by 3,146
+to 1,473,488,334: none of them carries a cluster, and the rise is the larger
+runtime each binary links. The run program's tenure falls with its staging:
+`run_ten_blocks` from 6 to 1, `run_ten_frees` from 6 to 1 and
+`run_ten_handups` from 2 to 1. `text` grows
+1,072 bytes in every binary, to 4,624,574 in all. `codegen_instructions_dev`
+rises 8,776 to 118,876,072, `compile_instructions` 25,851 to 25,858,191,
+`entry_instructions` 79,015 to 85,514,540 and `library_instructions` 79,237 to
+86,067,450, for the slot checks and the lambda-edge marking in `beat.rs`.
+`codegen_instructions_release` falls 15,674 to 453,772,164, `emit_instructions`
+4,229 to 7,058,107 and `interp_instructions` 47,893 to 488,865,227. The tab
+reads `browser_compile_instructions` 390,305,438, up 2,122,974, with
+`browser_compile_peak_bytes` up 1,998 to 675,725, `browser_run_instructions` up
+518,590 to 34,038,136 and `browser_run_peak_bytes` down 131,072 to 1,179,648.
+Welfare rises from 90.25801113 to 90.26974705, and the floor follows it.
+
+While building the fixtures I found that a file imported from a
+subdirectory, `import "./lib/fx"`, loses its cycle's rewind: the evaluator
+fixture above holds 4 MiB and never rewinds that way, and 1 MiB with 40,002
+rewinds imported as `./fx`. Self-loops are unaffected. main reproduces it.
+That is the next piece.
+
+## 2026-10-10 — a survival question about an old block asks an index
+
+The lap carry made the lox port's F18 loop quadratic. Its 40,000 passes took
+2.5 s on main and 30.6 s on this branch, and 80,000 took 152 s. Memory was the
+same on both, 2.3 GB at 40,000 passes, because lox's heap only grows; F18
+itself is still open.
+
+The time was in the survival checks. `k_survives` and `k_where` answer "does
+this pointer outlive the rewind" by finding the arena block that holds it, and
+they found it by walking the chain of blocks from the mark's block towards the
+oldest. Lox holds every object it ever made, so by pass 10,000 the chain was
+375 one-megabyte blocks long, and every check on an old object walked most of
+it. Main asked few of those questions in this program. The lap carry admits
+the clusters lox's evaluator runs in, so each stage and each carried pop asks
+one for every carried node, and the walk grew with the heap. Rebuilding with
+64 MiB blocks put the 40,000 passes at 1.9 s, which isolated the walk.
+
+The live chain is now also kept sorted by address, and each block's header
+records its position in the chain. Once the chain is longer than eight blocks
+the two questions binary-search the index and compare positions. Shorter
+chains keep the walk, so the programs in the benchmark corpus, none of which
+reach eight blocks, take the same path as before. Lox runs 10,000, 20,000 and
+40,000 passes in 0.47, 0.97 and 2.12 s, against main's 0.58, 1.26 and 2.48.
+mal's 200,000 iterations still run in 0.66 s at 9 MB.
+
+`chain_finds` counts the questions the index answered, and is zero on every
+benchmark. `tests/golden/mem/a_long_chain_answers_survival_from_its_index`
+keeps fifteen blocks of rows live under a carrying loop and reads 477,919;
+raising the threshold past any chain reads 0 with every other counter equal,
+and the ratchet row "a long chain walked instead of searched" makes that
+mutation.
+
+CI's rows for the branch with the index in it, after main's constant storage
+merged in, against main: `work_runbench` 1,131,250,979 to 1,129,336,309,
+`codegen_instructions_release` 453,707,138 to 453,867,566,
+`codegen_instructions_dev` 118,896,762 to 118,918,413 and `emit_instructions`
+7,062,299 to 7,058,075. The browser compiles in 390,304,777 instructions, up
+2,122,974, and `browser_run_instructions` lands on 34,089,215, up 596,152. Every
+benchmark's machine code is about 7,900 bytes larger than main's, so `text`
+rises to 4,722,910 in all. Moving the index's two branches out of line saved
+960 of those bytes and was not kept, so most of the growth is somewhere other
+than the index; where has not been measured. The book's two counters samples
+gain the `chain_finds=0` line.
+
+Nine of the fourteen work rows rise, and `runbench`, `pendbench`, `widebench`,
+`deepbench` and `basket` fall. The rises are small: `work_oneshot` lands on
+13,207,117, up 30,630, `work_encodebench` on 2,383,882,573, `work_jsonbench` on
+860,558,623, `work_livebench` on 1,472,862,368, `work_digestbench` on
+5,561,968, `work_indexbench` on 2,458,407, `work_scanbench` on 269,663,
+`work_readbench` on 4,577,482 and `work_escapebench` on 39,045,847. None of
+those nine runs a loop the lap carry admits, and what moved them has not been
+isolated. `basket` falls by 1,969,638 to 30,405,476, and its survivor slots
+drop from 16,002 to 6 in the same change. Welfare rises to 90.26 and the floor is raised to hold it.
+
 ## 2026-10-10 — a directory called lib is an ordinary directory
 
 The beat analysis keeps an imported library's loops out of the carry tier,
@@ -24902,6 +25114,54 @@ which the `text` total and both codegen rows carry. CI's rows, old to new:
 Welfare fell by less than a hundredth, and the floor moves down with it under
 the rule for a change that makes the language do what it says: the program
 crashed.
+
+**Main's repair list, merged into the lap carry.** The two branches touch
+different parts of the carry, and the code merged without a conflict. One golden
+moved. `a_node_repaired_by_an_inner_pop_outlives_the_outer_stage.mem` was
+written before the lap carry, when every edge staged, and under the lap carry
+the same program stages less: `evac_allocs` 237 -> 121, `evac_bytes` 8,288 ->
+4,128, `survive_slots` 82 -> 40, `allocs` 302 -> 246, `alloc_bytes` 7,088,284
+-> 7,086,268, and the new `chain_finds` row reads 0. Its output is unchanged.
+The fixture still does its job on the merged tree: with
+`k_pend_keep_repaired` returning at once, the program segfaults. The goldens
+both branches moved were combined as the sum of the two deltas, and CI's rows
+for the merged head follow.
+
+CI's rows for the merged head. The projection from the two branches' deltas was
+close but not exact: each benchmark's text is 672 bytes larger than the sum, basket
+runs 129,985 instructions fewer, deepbench 104,915 more and runbench 14,885 more.
+Against main, every row that worsened, with the value it landed on:
+
+    run_ten_frees                                6 ->               1
+    run_ten_handups                              2 ->               1
+    compile_instructions                25,832,340 ->      25,858,191
+    entry_instructions                  85,435,525 ->      85,514,540
+    library_instructions                85,988,213 ->      86,067,450
+    codegen_instructions_dev           118,918,430 ->     118,945,861
+    codegen_instructions_release       453,994,118 ->     454,057,202
+    browser_compile_instructions       388,181,803 ->     390,304,777
+    browser_compile_peak_bytes             673,727 ->         675,725
+    browser_run_instructions            33,507,353 ->      34,098,461
+    work_digestbench                     5,561,143 ->       5,562,545
+    work_encodebench                 2,383,861,896 ->   2,383,883,896
+    work_escapebench                    39,045,300 ->      39,045,867
+    work_indexbench                      2,457,185 ->       2,459,004
+    work_jsonbench                     860,549,545 ->     860,559,280
+    work_livebench                   1,472,861,300 ->   1,472,863,852
+    work_oneshot                        13,176,528 ->      13,207,890
+    work_readbench                       4,577,104 ->       4,577,539
+    work_scanbench                         268,793 ->         270,025
+    text                                 4,643,166 ->       4,763,230
+
+The lap carry stages once per 256KB of drift where it staged at every edge, which
+is what the work rows above pay for; the runtime grows by the chain index and the
+lap bookkeeping, which is the text row. Against that, runbench falls to
+1,129,571,152, basket to 30,405,533 and deepbench to 366,705,890, the run
+program evacuates 6,441,632 bytes where it evacuated 9,789,344, and the browser
+run peaks at 1,179,648 bytes. `run_ten_frees` and `run_ten_handups` count work on
+tenured blocks, and they fall because the program now tenures one block where it
+tenured six. Welfare rises from 90.2505 to 90.2618, and the floor is raised to
+hold it.
 
 ## 2026-10-10 — a `tie` node holds its references in a list
 
@@ -25184,3 +25444,553 @@ run_arena_peak_bytes lands on 8,912,912 and run_held_peak_bytes on 3,222,256,
 and run_peak_bytes' baseline goes from 156,818,380 to 489,255,962. Both
 baselines are rounded up. The score is unchanged, and the four fixes now
 have something to score against.
+
+## 2026-10-10 — a pop after a skipped lap walks the whole result
+
+With the two carry faults of kanso#1834 fixed, the sat port still failed under
+the lap carry: `rand75_unsat` reported a satisfying assignment, and mal's
+self-hosted runs died with a segmentation fault. Both came back right with the
+pop's copy-out made deep, so the search went there.
+
+When a carrying loop returns, `k_beat_pop_slow` copies its result out of the
+loop's storage. That walk has no mark, so it counts every arena node as a
+survivor, and it stops at a node whose direct interior survives as well. Under
+the old rule every lap staged, so whatever the result held in the depth's carry
+pair sat under the pair's own nodes, and the walk reached and copied it. The
+lap carry lets laps go by without staging. Such a lap builds its new nodes in
+the arena, around values that are still in the pair. The pop's walk meets the
+fresh outer node first, finds its interior fresh too, and stops. The value in
+the pair is left where it was. The next loop entered at the same depth stages
+into the same pair and writes over it.
+
+`tests/golden/micro/a_pop_after_a_skipped_lap_keeps_what_the_lap_built.kso` is
+the shape in a dozen lines: a loop that wraps a box four times, of which only
+the first lap stages, followed by a loop at the same depth that builds twenty
+thousand elements a lap. The second loop's list replaced the first loop's
+innermost box, and the program printed `<<<record>>>` where the interpreter
+prints `<<<<[1 2 3]>>>>`.
+
+The carry now records when a lap skipped its stage, in the lap carry's drift
+test and in the chain's. A stage clears the record, and so does the push that
+opens a depth. A pop that finds it set walks the whole result, as it already
+did when a write had reached the carry. A pop after a loop whose last lap
+staged is unchanged.
+
+mal still crashed after that, in a map lookup reading a key whose length word
+held a pointer. A hardware watchpoint on the key showed it written twice by
+stage copies into a carry buffer and then overwritten by a later stage that
+reused the buffer. The deep walk at the pop had found a map whose header and
+pairs lay in the arena and whose keys lay in the pair. It copied the keys out
+and rewrote the pairs in place. The map's sorted view is a second, malloc'd
+copy of the pairs that the walk never reaches, so it went on naming the old
+keys, and the next lookup searched it. The walk now drops the view whenever
+it moves a key or a value in a map it repairs in place, and the next read
+sorts again.
+
+`tests/golden/micro/a_sorted_view_follows_the_keys_a_pop_moves.kso` builds
+the shape: a loop that adds a key a lap and reads the map back, staging every
+tenth lap, followed by a second run of the same loop with keys of the same
+length. Without the change the program dies with a segmentation fault; with
+it, it prints what the interpreter prints. Main does not reach this path,
+because its pops copy deep only after a write has reached the carry.
+
+The deep walk first cost memory where it should not have. It meets a string
+builder whose header survives and goes straight to the in-place repair, which
+asks only whether the builder's storage lies in the arena. A builder's storage
+is malloc'd, so that answer was no, and the repair copied it into the arena and
+dropped the builder's capacity, leaving a plain string the next append had to
+copy again. The survival test the shallow walk uses already passes a builder,
+and a malloc'd byte buffer, for this reason. The repair now passes them too.
+With that, `string_builder_shape`, `builder_counts_once` and
+`a_builder_handed_on_is_still_a_builder` are back to main's counts; with the
+repair copying, `string_builder_shape` had evacuated 4,096 bytes where it
+evacuates 80.
+
+Against main, the counters that see a pop fall or hold. basket allocates
+27,263 nodes, one fewer, and asks 4 survival questions where it asked 16,002;
+the run program's survive count falls from 105,679 slots to 4,854 and it
+evacuates 6,441,632 bytes where it evacuated 9,789,344. `record_reuse_shape`
+asks 8 survival questions where it asked 16,006, and `effect_push_shape` 10
+where it asked 15.
+
+The ports' long-running loops, measured by peak resident memory on this branch
+with main's fixes merged in, against main alone. mal's `(fib 25)` held 764 MB
+on main and holds 9 MB here, and a 40,000-step tail call that held 147 MB
+holds 9 MB; both print what they printed before. That closes mal's F8. lox's
+F18, a loop that builds a `Point` a pass, is not closed by this change alone:
+it holds 1,131 MB at 20,000 passes on both trees. With kanso#1824 added as
+well it holds 24 MB at 20,000 passes and 88 MB at 80,000, which is what the
+interpreter holds, 31 MB and 93 MB. The lox port keeps every object in a heap
+of cells that it never collects, so that growth is the program's own. What
+stays slow is time: each stage copies the whole live heap again, and 200,000
+passes still had not finished after 120 seconds.
+
+CI measured the rest against main, and most of it costs. Every benchmark's
+machine code grows by between 9,200 and 9,472 bytes, the runtime's share of
+the lap carry; runbench's is 611,769 bytes and the fourteen together 4,781,774.
+work_deepbench does the most extra work, landing on 393,576,371 against
+main's 367,269,411, 7.2% more. runbench, with the four phases kanso#1836 added, does 1,247,098,999 against main's 1,245,043,324, 0.17% more; encodebench
+2,398,358,806, 0.19% more; livebench 1,473,968,154; jsonbench 860,559,756;
+oneshot 13,210,643; work_widebench 28,175,109; digestbench 5,599,654; escapebench
+39,045,879; indexbench 2,459,068; scanbench 270,069; readbench 4,577,565.
+basket does less, 30,415,829 against 32,505,156, and so does pendbench,
+190,050,778 against 190,396,306. The deep walk at the pop and the record of a
+skipped lap are what this change adds to those paths, but no build has
+separated the two, so the delta arrived with the change and its split between
+them is open. On the compile side, release codegen counts 454,310,397, dev
+codegen 118,946,233, compile_instructions 25,858,385, entry_instructions
+85,515,649 and library_instructions 86,067,297, each a little higher, and
+emit_instructions falls to 7,058,267. In the browser, compiling the corpus
+takes 390,605,563 instructions with a peak of 675,725 bytes, and running it
+34,102,877.
+
+Together those cost the objective 0.0035: the meta reads 90.2465 against a
+floor of 90.2499. The change is a correctness fix, because a loop that holds
+764 MB to compute `(fib 25)` is a program that fails on a larger input, and
+the floor goes down by exactly that much under the rule for changes that make
+the language work as specified.
+
+## 2026-10-10 — a fold that joins onto its accumulator writes in place
+
+The mustache port renders a template by folding over its pieces, and its
+folder answers `"{acc}{piece}"`. Natively, every step copied the whole string
+built so far, so 20,000 pieces held 2.77 GB before the program finished. The
+interpreter was not affected.
+
+The string-builder analysis already wrote a join in place when the
+accumulator is carried by a recursive function. A lambda handed to a fold was
+never looked at, because `walk_for_builder` stops at every lambda. A fold's
+folder runs once per element on the accumulator the fold threads through, so
+when `fold_owns_accumulator` says the fold owns its seed, a join onto the
+folder's first parameter has the same shape as the recursive case. The walk
+now marks those joins: in the folder's body, in either arm of an `if`, and
+through the wrapper lambda that `body_is_folder` already accepts.
+
+A folder passed by name, as in `list/fold xs "" piece`, is handled the same
+way under three conditions. Every arm of `piece` must end in a join onto its
+first parameter. Every direct call of `piece` must hand that argument over.
+Every use of the name as a value must be the folder of a fold whose seed
+nothing else holds. A partial application of `piece` keeps what it was given,
+so it disqualifies the group.
+
+The runtime's in-place join stopped the program when its accumulator was not
+already a builder. A fold's seed is usually a literal, so `k_concat_arr_mut`
+now converts it on the first join, the way a builder parameter's caller does.
+
+`tests/golden/mem/a_fold_that_joins_onto_its_accumulator_grows_one_string`
+folds 2,000 pieces with a named folder and with a lambda. `alloc_bytes` falls
+from 21,839,568 to 1,221,150 and `arena_peak_bytes` from 22,020,096 to
+2,097,152. `tests/golden/micro/a_fold_joins_onto_its_own_accumulator` covers
+the ways the string can be shared: a seed bound to a name, one fold's result
+folded twice more, and a direct call of the named folder. Making
+`fold_owns_accumulator` answer yes unconditionally turns it red. The two folds
+over one lambda result then wrote into the same buffer, and both printed
+`[1][2][3]+5-6`.
+
+No benchmark folds a string, so every allocation counter agrees with main.
+The runtime's join grows 320 bytes of machine code, and CI's rows move with
+it:
+
+- `text` grows 320 bytes a binary, to 4,593,438 in all.
+- `work_basket` lands on 32,404,790, `work_runbench` on 1,129,589,259,
+  `work_livebench` on 1,473,486,345, `work_encodebench` on 2,384,338,137,
+  `work_oneshot` on 13,027,190, `work_digestbench` on 5,566,917 and
+  `work_scanbench` on 281,806, each within 22,030 instructions of main.
+- The analysis costs `compile_instructions` 25,857,543,
+  `entry_instructions` 85,513,471 and `library_instructions` 86,066,360.
+  `emit_instructions` falls to 7,058,306, `interp_instructions` to
+  488,868,354, and both codegen rows fall.
+- `browser_compile_instructions` rises from 388,182,464 to 391,515,764,
+  0.86%, and the browser run row falls 6, to 33,510,702. The rise does not
+  come from the new pass: with `named_folder_joins` switched off the row reads
+  392,251,588, higher still, so it follows the wasm binary's layout rather
+  than the work done.
+
+On main as it stood before kanso#1836, welfare fell from 90.25811251 to
+90.25519022 on those rows, because no benchmark folded a string.
+
+The floor question closed on the corpus-first gavel, and kanso#1836 put the
+shape into the run program as its `fold` phase: 800 pieces folded onto one
+string, measured on main before this fix at 858,398 instructions. With main
+merged in, runbench falls from 1,245,043,324 to 1,244,977,121, a projection
+from this container's 1,244,976,714 plus the 407 instructions by which CI read
+main above it; CI's row replaces it. The phase's memory is where the fix pays.
+run_arena_peak_bytes falls from 8,912,912 to 7,864,336, run_arena_blocks from
+8 to 7, run_alloc_bytes from 326,862,802 to 325,331,283, run_allocs from
+1,773,132 to 1,772,340 and run_sh_str from 10,188,896 to 8,648,960. Two run
+counters rise with the fix: run_str_scans goes from 229 to 1,021 while
+run_str_scan_bytes falls to 17,930,429, and run_bytes_malloc rises by 7 to
+9,127. Nothing here isolates which step of the in-place join each comes from.
+The rows the runtime's 320 bytes moved above
+carry onto main's values: `text` totals 4,656,446, work_basket lands on
+32,527,186, work_livebench on 1,472,861,727, work_encodebench on
+2,393,926,750, work_oneshot on 13,176,997, work_digestbench on 5,598,179 and
+work_scanbench on 268,886. The analysis's rows carry the same way:
+compile_instructions lands on 25,857,737, entry_instructions on 85,514,580,
+library_instructions on 86,066,207 and browser_compile_instructions on
+391,827,307. All of these are projected until CI reads them. Welfare rises from 90.2499
+to 90.3104 on those rows, and the rise is banked.
+
+CI's rows replace the projection. work_runbench lands on 1,244,977,121, as
+projected. The other rows CI corrects are small: `text` totals 4,656,478,
+work_encodebench lands on 2,393,926,869, work_livebench on 1,472,861,230 and
+browser_compile_instructions on 391,826,076. The run program's emitted code
+reads one call and two lines more than this container wrote, so
+emitted_other_calls lands on 17,394 and emitted_other_lines on 146,698.
+Welfare reads 90.3105 on CI's rows, and the rise is banked.
+
+## 2026-10-10 — a loop entered from a tail cycle gives its garbage back
+
+The lox and mal ports both ran their interpreters out of memory. A Lox `for`
+loop of fifty thousand passes that builds two small objects per pass held
+3.0 GB at its peak natively, and mal's tail-recursive `sum2` kept 3.7 KB per
+iteration until exit. The interpreter under `--interp` ran the same programs
+in about 11 MB.
+
+Each port's machine loop is a self-recursive function, the shape the beat
+analysis rewinds, and neither rewound. The lox loop, `spin`, failed two
+tests. The first was its entry. `exec` tail-calls `spin` from its while arm,
+and `exec` sits in a tail cycle of its own, since a block runs its first
+statement and tail-calls itself on the rest. The analysis demoted a tail
+entry to a plain call only when the caller was in no tail cycle at all, on
+the reasoning that a plain call inside a cycle grows the stack. That holds
+only when the cycle runs through the demoted edge, which happens when the
+loop can reach its caller back by tail calls. `spin` returns its state to
+`exec` and never tail-calls it, so the plain call holds one frame while the
+loop runs and the caller returns before its cycle goes round again. The
+condition now asks exactly that: the entry is demoted unless the loop
+tail-reaches the caller.
+
+The second was the loop's own arguments. `spin` hands its body and condition
+on unchanged, and both come out of a record field, which inference reads as
+any value at all. A slot of unknown type was never carried through a
+rewind, in case it hid a growing accumulator behind a helper call. A
+parameter every self-tail-call passes on as itself cannot grow: it arrived at
+entry, lives below the mark, and the evacuation shares it rather than copying
+it. Such a position is now carried whatever its type.
+
+With both changes the lox loop rewinds every pass. At fifty thousand passes
+the release binary peaks at 77 MB, down from 3.0 GB, and runs in 1.17 s
+against 3.01 s. What remains is the port's own heap of instance fields, which
+it never frees by design. The fixture
+`a_loop_entered_from_a_tail_cycle_gives_its_garbage_back` builds the same
+shape in thirty lines and pins `arena_peak_bytes` at 1,048,576 for twenty
+thousand passes; main holds 3,145,728 for it.
+
+mal's machine is not fixed by this. Its `ev` is one member of a tail cycle
+with `ret`, `throw` and `settle`, which makes it a cluster, and a cluster
+carries only scalars and threaded parameters through its rewind. Carrying a
+heap value round a cluster is the next piece of work.
+
+No benchmark's run changed: every runtime cost vein agrees with its golden.
+The analysis is dearer to run, on CI's rows after merging main:
+`compile_instructions` rises to 25,861,592, `entry_instructions` to
+85,526,009 and `library_instructions` to 86,078,947, while
+`emit_instructions` falls to 7,032,277 and `interp_instructions` to
+488,876,843. `browser_compile_instructions` rises from 388,182,464 to
+390,287,782 with this tree's rustc. On main as it stood before kanso#1836,
+welfare fell from 90.25811251 to 90.25621395, because no benchmark ran a loop
+entered from a cycle.
+
+The floor question closed on the corpus-first gavel, and kanso#1836 put the
+shape into the run program as its `machine` phase: 20,000 passes of a loop in
+a cycle, measured on main before this fix at 8,825,906 instructions. Rewinding
+the loop costs instructions and gives memory back. With main merged in,
+work_runbench rises from 1,245,043,324 to 1,263,682,936, a projection from
+this container's 1,263,682,529 plus the 407 instructions by which CI read main
+above it; CI's row replaces it. run_arena_peak_bytes falls from 8,912,912 to
+6,815,760 and run_arena_blocks from 8 to 6. The rewind's own work shows in the
+rows that rise: run_beat_iters lands on 47,564, run_evac_allocs on 128,717,
+run_evac_bytes on 11,709,440, run_alloc_bytes on 326,929,762, run_allocs on
+1,773,139, run_sh_buf on 119,108,240 and run_buf_reuse on 134. Carried onto
+main's rows, compile_instructions lands on 25,861,786, entry_instructions on
+85,527,118, library_instructions on 86,078,794 and
+browser_compile_instructions on 390,599,325, all projected until CI reads
+them. The objective weighs the peak above the instructions: welfare rises from
+90.2499 to 90.3087 on those rows, and the rise is banked. The fix's own
+fixture, `a_loop_entered_from_a_tail_cycle_gives_its_garbage_back`, reads
+four fewer evacuations on main's runtime: evac_allocs lands on 80,013 and
+evac_bytes on 1,920,368.
+
+CI's rows replace the projection. work_runbench lands on 1,263,682,936, as
+projected. The rewind's code in the run program's machine phase shows in its
+emitted counts: emitted_other_calls lands on 17,405, emitted_other_branches on
+16,399 and emitted_other_lines on 146,723. `text` totals 4,652,398 and
+browser_compile_instructions lands on 390,597,579. Welfare reads 90.3087 on
+CI's rows, the score already banked.
+
+## 2026-10-10 — a read named before the write keeps the write in place
+
+Three ports hit the same cliff. The sat solver, the toml parser and the lox
+interpreter each read a map entry into a name and then wrote the map:
+
+```
+v = m[i]
+bump (put m i (v + 1)) ...
+```
+
+Written inline as `put m i (m[i] + 1)`, the put happens in place. Written
+with the name, `linear.rs` counted `v = m[i]` as a second use of `m`, so `m`
+was not unique at the put and every put copied the map. The sat port's
+reduction, 20,000 steps over 100 keys, ran in 27.5 seconds natively with the
+name and 0.010 seconds without it.
+
+The two programs are the same as far as the map is concerned. The read
+answers an element, and `v` is used only as an operand of the put's own
+arguments, which are evaluated before the put writes. `effective_uses` now
+discounts a binding's mentions of the map when the bound name meets three
+conditions: neither the name nor the map is rebound in the block, the
+binding does not hold the map itself, and every later mention of the name is
+reached from the sibling arguments of a `put`, `push` or `append` on that
+map through arithmetic and comparison alone. A mention anywhere else (inside
+a lambda, a list, another call, or a second binding such as `w = v * 2`)
+could force the read after the write, and the binding still counts. A loop's
+bindings usually sit under its `return ... if` guard, so the search goes down
+through the guard's rest.
+
+`tests/golden/mem/a_read_named_before_the_write_stays_in_place.kso` is the
+sat reduction at 2,000 steps. Its golden pins 8 allocations; the compiler
+before this change made 6,013 on it.
+`tests/golden/micro/a_read_named_before_a_write_sees_the_old_value.kso`
+covers the other side: a name used after the write, a name stored in the
+list the put writes, and a name that feeds a second binding all keep the
+copy, and each line prints the old value beside the new on every engine.
+
+The analysis costs the front end a little on every route: compile_instructions
+lands on 25,857,737, entry_instructions on 85,514,349, library_instructions on
+86,065,981, emit_instructions on 7,065,059 and interp_instructions on
+489,220,284. browser_compile_instructions lands on 392,737,085. These are
+carried onto main's rows from this branch's own readings and are projected
+until CI reads them.
+
+The floor question closed on the corpus-first gavel, and kanso#1836 put the
+shape into the run program as its `bump` phase: 350 updates through a named
+read, measured on main before this fix at 53,247,360 instructions. With main
+merged in, runbench falls from 1,245,043,324 to 1,192,648,013, a projection
+from this container's 1,192,647,606 plus the 407 instructions by which CI read
+main above it; CI's row replaces it. run_held_peak_bytes falls from 3,222,256
+to 197,704 and run_arena_peak_bytes from 8,912,912 to 7,864,336, because the
+phase no longer keeps a copy of its map per update. run_alloc_bytes falls to
+322,971,202, run_allocs to 1,772,081 and run_sh_map to 0. run_buf_reuse falls
+by one to 136, and run_view_allocs and run_view_frees fall from 360 to 10 with
+the fix; nothing here isolates why the scatter phase's views moved.
+
+CI's rows replace the projection. work_runbench lands on 1,192,648,013, as
+projected. The front-end rows land on entry_instructions 85,514,580,
+library_instructions 86,066,207, interp_instructions 488,962,208 and
+emit_instructions 7,059,706, and browser_compile_instructions on 392,738,164.
+`text` totals 4,652,222. The run program's emitted code reads one line fewer,
+50,993. Welfare reads 90.6830 on CI's rows, and the rise is banked.
+
+## 2026-10-10 — a map's view takes keys out of order without moving itself
+
+Three ports found the same cliff from three directions. xsv's
+`stats --cardinality` spent 2.6 of its 2.7 seconds counting a column of
+distinct values, ugit's Myers diff on a 3,000-line file took 4.0 seconds
+against the interpreter's 0.4, and `list/tally` over 40,000 distinct
+strings took 4.95 seconds natively where the interpreter took 0.2. All of
+them read a map between puts. A read builds the map's sorted view, and
+from then on each put of a new key was inserted into the view in order,
+which for a key landing in the middle meant moving every pair after it
+one slot along. Callgrind on the ugit diff put 80% of the time there.
+
+A key that would land in the middle of a view of more than sixty-four
+pairs now goes to a second sorted run beside it, which the runtime calls
+the side. A key past the view's last still goes on its end, so a map
+filled in ascending order never starts one. Reads search the view and
+then the side, so a read between two puts merges nothing. When the side
+holds more keys than the square root of the view, the two are merged,
+from the back and into the view's own buffer when it has room. Anything
+that wants the whole order, such as printing, `entries` or equality,
+merges first.
+
+The side costs the map header nothing. A view's buffer is preceded by a
+header slot whose first word is its capacity, and the second word, which
+was unused, now points to the side. A mark on the map's view pointer
+says a side is waiting, so a read that finds the bit clear asks nothing
+more, and the emitted fast put, which only tests the pointer for null,
+still takes the call when a view exists. The side is kept, emptied, after
+a merge, so the next key out of order does not allocate.
+
+`list/tally` over 40,000 distinct strings went from 4.95 seconds to 0.21,
+and xsv's reproduction from 4.75 to 0.17. `tests/golden/mem/
+a_tally_of_scattered_keys_merges_its_view.kso` pins the shape: 4,000
+scrambled keys, each read before it is put, take 15 view allocations where
+main took 12, and hold 206,448 bytes at peak where main held 196,576.
+Two mem goldens move with it. `fused_tally` takes one more allocation (65
+to 66, alloc_bytes 41,536 to 42,064), and `growing_map` two more (1,613 to
+1,615), with held_peak_bytes 49,120 to 55,408 and alloc_bytes 181,952 to
+189,312.
+`tests/golden/micro/a_map_written_out_of_order_past_its_room.kso` puts 211
+keys in scrambled order with reads, a length, a missing key and a print in
+between, and one in-place loop visits every key twice, so its second visit
+reads and replaces keys that are still in the side. Every engine prints the
+same. Leaving the side out of the search turns it red: the loop reads a key
+it has already put as missing, puts it again, and prints 217 keys.
+
+The first version of that fixture could not fail. Its loop was also handed
+a map the play went on reading, so the linearity analysis gave none of its
+puts the in-place write, no view ever grew a side, and removing the side
+search changed nothing. A separate loop that only ever receives a fresh map
+is what made the side reachable.
+
+A put that replaces a key already in the map still walks the pairs log
+backwards to find its last write, so a tally whose keys repeat pays for
+the distance back to that key's last occurrence. That walk is untouched
+here.
+
+The first round of CI put welfare 0.0000 below its floor, and all of the
+fall was in the run program: runbench rose from 1,129,588,698 to
+1,130,533,679. Callgrind on both builds put the whole difference in one
+function, `k_b_columns`, which `keys` and `values` reach on every call, and
+its disassembly showed why. It asks `k_map_sorted` for the view, and the
+check before that call grew from one test (is there a view?) to two (is
+there a view, and does it have a side?), five instructions where main had
+two. The side mark was the pointer's low bit.
+
+The mark now sits in the pointer's top bit. A 64-bit address never sets it,
+so read as a signed number the view pointer is positive with no side, zero
+with no view and negative with a side, and one test against zero asks both
+questions. `k_b_columns` came back to main's instructions with one alignment
+nop added before its copy loop. Measured locally from one directory against
+a build of main's runtime, runbench is 207,423 instructions above main and
+livebench 903,510, down from 945,000 and 4,208,000. wasm32 keeps the low
+bit, because a 32-bit address can have its top bit set.
+
+CI's rows for this head with main's constant storage merged in, against
+main: work_runbench rises from 1,131,250,979 to 1,131,457,856 and
+work_livebench from 1,472,859,260 to 1,473,762,140, the remains of the check
+described above. work_basket rises from 32,375,114 to 32,926,353, 1.7%,
+work_encodebench to 2,383,871,632, work_oneshot to 13,189,990 and
+work_pendbench to 190,390,734. Every binary's text is about 4,800 bytes
+larger, which sums to text 4,612,254 to 4,679,230. browser_run_instructions
+goes from 33,493,063 to 33,502,036, codegen_instructions_dev from 118,896,762
+to 118,916,117 and codegen_instructions_release from 453,707,138 to
+454,001,319, all carrying the larger runtime. basket builds maps and reads
+them between puts, so it is the benchmark that meets the side; which of its
+maps grows one is not isolated here. The mem rows are the ones named above:
+fused_tally_allocs 65 to 66 and fused_tally_alloc_bytes 41,536 to 42,064;
+growing_map_allocs 1,613 to 1,615, growing_map_alloc_bytes 181,952 to 189,312
+and growing_map_held_peak_bytes 49,120 to 55,408. Welfare falls from
+90.25153 to 90.25054. The gate passes that, because it allows 0.001 for
+disagreement between hosts, but every term here is deterministic, so the fall
+is real. It raised the floor question for this fix and three other port
+fixes, and the paragraph below records how that question closed.
+
+The floor question closed on the corpus-first gavel, and kanso#1836 put the
+shape into the run program as its `scatter` phase: 2,340 keys counted in
+scrambled order, measured on main before this fix at 50,901,814 instructions.
+With main merged in, runbench falls from 1,245,043,324 to 1,201,828,599, a
+projection from this container's 1,201,828,192 plus the 407 instructions by
+which CI read main above it; CI's row replaces it. The run's held peak falls
+from 3,222,256 bytes to 3,166,752, run_alloc_bytes falls to 326,749,138 and
+run_allocs rises by two to 1,773,134. Welfare rises from 90.2499 to 90.4099 on
+those rows, and the rise is banked.
+
+CI's rows for the merged tree replace the projection and agree with it on the
+run program: work_runbench lands on 1,201,828,611. The merge had carried main's
+rows for the other benchmarks, and CI restores this fix's own cost on them.
+The view code adds 4,784 bytes to every binary, so `text` totals 4,718,942.
+work_basket lands on 33,056,395, work_livebench on 1,473,763,578,
+work_encodebench on 2,393,936,650, work_oneshot on 13,190,150 and
+work_pendbench on 190,396,604. codegen_instructions_dev lands on 118,940,067
+and browser_run_instructions on 33,517,389. Welfare reads 90.4099 on CI's rows,
+the score already banked.
+
+## 2026-10-10 — the five port fixes land together
+
+kanso#1820, kanso#1822, kanso#1824, kanso#1825 and kanso#1827 each merged main
+and scored against the run program on their own. Each also moves the runbench
+row and the floor, so landing them one at a time would cost a CI round per pull
+request. This branch merges all five onto main and is measured as one tree.
+
+The fixes do not add up. Measured separately against main, their runbench
+deltas sum to -74,980,545, which would put the row at 1,170,062,384. The
+combined tree reads 1,152,573,228 in this container, 17,489,149 lower, so it is
+projected at 1,152,573,635 until CI reads it. The loop rewind (kanso#1824) and
+the lap carry (kanso#1827) both change what a rewound loop keeps, and the loop
+fixture `a_loop_entered_from_a_tail_cycle_gives_its_garbage_back` shows the
+overlap most plainly: with both fixes evac_allocs falls from 80,013 to 49 and
+evac_bytes from 1,920,368 to 1,232. Which of the two fixes accounts for the
+runbench difference is not isolated here.
+
+The run program's counters land on the combined tree as run_beat_iters on 47,564, run_buf_reuse on 132, run_bytes_malloc on 9,127, run_sh_buf on 119,108,240, run_str_scans on 1,021, run_ten_frees on 1, run_ten_handups on 1, run_view_allocs on 12, run_view_frees on 12. The mem
+fixtures the map fix moved land as fused_tally_alloc_bytes on 42,064, fused_tally_allocs on 66, fused_tally_view_allocs on 16, growing_map_alloc_bytes on 189,312, growing_map_allocs on 1,615, growing_map_held_peak_bytes on 55,408, growing_map_view_allocs on 12, growing_map_view_frees on 10. The benchmarks' work rows carry
+each fix's own delta onto main's row until CI measures them together:
+work_deepbench on 393,576,370, work_digestbench on 5,599,739, work_encodebench on 2,398,369,413, work_escapebench on 39,045,874, work_indexbench on 2,459,056, work_jsonbench on 860,559,605, work_livebench on 1,474,870,880, work_oneshot on 13,223,306, work_readbench on 4,577,564, work_scanbench on 270,158, work_widebench on 28,175,107. So do the compile and browser rows: compile_instructions on 25,938,043, entry_instructions on 85,762,025, library_instructions on 86,314,325, codegen_instructions_dev on 118,966,405, codegen_instructions_release on 454,110,241, browser_compile_instructions on 400,285,361, browser_compile_peak_bytes on 675,725, browser_run_instructions on 34,111,788. `text` totals
+4,853,950. Every mem fixture that predates the lap carry gains its
+`chain_finds=0` line.
+
+Welfare reads 91.0246 on these rows against the five floors banked separately,
+the highest of which was 90.6830, and the rise is banked.
+
+## 2026-10-10 — a lap waits for twice what the last stage copied
+
+Testing the combined tree on the lox port's F18 loop found two things the five
+fixes did not do on their own. Peak memory fell as expected: at 40,000 passes
+the loop held 45 MB against main's 2,333 MB. But past about 135,000 passes the
+run slowed sharply, from 2.7 seconds at 130,000 to 99 seconds at 160,000. Stack
+samples put the time in `k_copy_size` and `k_deep_copy` under
+`k_beat_lap_carry`, and the counters showed evac_allocs jumping from 5.8
+million at 130,000 passes to 139 million at 140,000. Tenure stops at
+`K_TEN_CAP`, 64 MiB, and lox's heap map keeps every object it allocates, so
+from that point on every stage copied the whole live state, once per quarter
+megabyte of drift.
+
+A smaller program then showed a worse case. The loop of
+`a_loop_entered_from_a_tail_cycle_gives_its_garbage_back`, with a map in its
+state that keeps one entry a pass, ran 20,000 passes in 0.01 seconds on main
+and in 3.2 seconds with kanso#1824 alone, allocating 9.5 GB. kanso#1824 is what
+makes this loop rewind at all. Each stage copies the map out of the arena, the
+next put copies it back, and that copy is a quarter megabyte of drift on its
+own, so a stage followed almost every pass.
+
+`k_beat_lap_carry` now waits for twice what the last stage copied before it
+stages again, and never less than the quarter megabyte it waited before.
+Copying then stays proportional to the drift it answers, which is how a copying
+collector sizes its heap. When the arena has opened blocks since the last stage
+and the wait has grown past the quarter megabyte, the drift is measured across
+them: the rest of the old block, every block between, and what the newest
+holds. A loop whose stages copy little behaves as it did, including staging
+when the arena opens a block. The first version counted the newest block at
+its full size, and with a 2 MiB block that staged on most passes.
+
+`tests/golden/mem/a_growing_map_in_a_rewound_loop_waits_for_its_copy` is that
+small program at 20,000 passes. Its alloc_bytes is 44,612,576; without the wait
+it reads 9,165,495,888. No other mem fixture and no cost golden moves. On the
+lox loop, 160,000 passes now take 5.3 seconds and 320,000 take 33.
+
+Time still grows faster than the pass count, and the counters say where.
+Allocation is linear: alloc_bytes reads 2,457,232,021 at 40,000 passes,
+5,168,271,765 at 80,000 and 10,642,119,589 at 160,000, about 66 KB a pass.
+evac_bytes is not. It reads 63,965,040, 132,744,688 and then 1,296,200,208,
+ten times the step before, while ten_blocks only goes from 8 to 9. That is the
+pass count at which the port's heap outgrows tenure. Below it, tenure holds the
+heap and a stage copies only what the pass made. Above it, each stage copies the
+live heap, and the wait keeps that to half of the drift at most, so copying is
+bounded by allocation but no longer small next to it. The cost per byte copied
+also rises as the heap grows, because the copy keeps a pointer map for shared
+values and the map grows with the heap. Removing it would mean letting tenure
+grow past `K_TEN_CAP` for a loop whose survivors keep surviving. The cap exists
+so that no loop holds storage that only the pop frees, and changing it is a
+separate piece of work.
+runbench reads 180,786 instructions more for the wait's arithmetic and is
+projected at 1,152,754,421 until CI reads it. Welfare falls from 91.0246 to
+91.0239, which this fix pays to remove a regression the carried kanso#1824
+would otherwise ship.
+
+CI has now read the combined tree, lap wait included. runbench reads
+1,152,754,435, fourteen instructions over the projection, so the wait's
+180,786 holds. The rows the projections had carried land as follows.
+work_encodebench lands on 2,398,370,183, work_escapebench on 39,045,884,
+work_indexbench on 2,459,212, work_livebench on 1,474,870,796, work_oneshot on
+13,223,628 and work_scanbench on 270,249. work_basket falls to 30,812,505.
+compile_instructions lands on 25,832,558, entry_instructions on 85,436,280,
+library_instructions on 85,987,742, emit_instructions on 7,037,238 and
+interp_instructions on 489,012,183. codegen_instructions_dev lands on
+118,951,226 and codegen_instructions_release on 454,427,018.
+browser_compile_instructions lands on 391,401,241, browser_compile_peak_bytes
+on 675,725 and browser_run_instructions on 34,124,829. The run program's
+emitted code gains 29 lines, which moves emitted_other_branches to 16,399,
+emitted_other_calls to 17,406 and emitted_other_lines to 146,724, and `text`
+totals 4,833,086. Welfare reads 91.0317 on CI's rows, and the rise is banked.

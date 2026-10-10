@@ -1,0 +1,52 @@
+# A map read between its puts keeps a sorted view to look things up in. Past
+# sixty-four keys, a key that lands in the middle of the view goes to a
+# second sorted run beside it, and the two are merged once the run grows
+# past the square root of the view. These maps take 211 keys in a scrambled
+# order, each read before it is put. `lap` takes every key twice and is
+# handed only maps nothing else holds, so it writes in place and its second
+# visit reads and replaces a key wherever it sits by then, in the view or
+# still in the run; `scatter` is also handed a map the play still reads, so
+# its writes copy. A length, a read of a missing key and a print
+# come in between. Every engine prints the same.
+fn bump none
+  1
+
+fn bump n
+  n + 1
+
+fn scatter m 0
+  m
+
+fn scatter m n
+  k = n * 37 % 211
+  scatter (put m k (bump m[k])) (n - 1)
+
+fn lap m 0
+  m
+
+fn lap m n
+  k = n * 37 % 211
+  lap (put m k (bump m[k])) (n - 1)
+
+fn named m 0
+  m
+
+fn named m n
+  k = "k{n * 53 % 211}"
+  named (put m k (bump m[k])) (n - 1)
+
+pub play =
+  laps = lap {} 422
+  once = scatter {} 210
+  first = "once: {length once} {once[37]} {once[173]} {once[500]}"
+  twice = scatter once 210
+  words = named {} 210
+  some = "words: {length words} {words["k1"]} {words["k99"]}"
+  again = named words 105
+  print "laps: {length laps} {laps[37]} {laps[0]}"
+  print "{laps}"
+  print first
+  print "twice: {length twice} {twice[0]} {twice[74]}"
+  print "{twice}"
+  print some
+  print "{again}"
