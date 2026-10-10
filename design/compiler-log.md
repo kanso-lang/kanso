@@ -24499,17 +24499,42 @@ inside a non-tail recursion, peaks at 618,392 KB with 154,187 faults for the
 same reason. The claim also went into a Readwise summary and a reply to
 Clay; both are corrected.
 
-CI's rows for this branch. The emitted text shrinks by 1,760 bytes in every
-benchmark binary, 4,611,102 to 4,586,462 summed. The same 1,760 in every
-binary puts all of it in the runtime, and the bignum section is the part of
-the runtime this branch rewrote. Runtime work falls in basket (32,404,398 to 32,356,406),
-runbench (1,129,589,342 to 1,129,588,698), encodebench and oneshot. Two rows
-rise. work_livebench goes from 1,473,485,624 to 1,473,485,659, 35
-instructions, and none of its loops touches a bignum, so this is layout in a
-binary whose runtime moved under it. codegen_instructions_release goes from
-453,756,115 to 453,756,383, 268 instructions of clang and ld reading a
-runtime whose bignum section changed shape; the dev tier fell 566 over the
-same source.
+CI's first reading of the branch put the browser engine's compile at
+391,614,023 instructions against main's 389,803,790, a rise of 1,810,233
+(0.46%), and this host reads the same figure from the same rustc. The new
+analysis was not what cost it. With `widens` answering false before it read
+anything, so that every loop was judged exactly as on main, the row read
+391,491,971; with the new `Beats` field alone and main's `beat.rs` otherwise,
+it read 389,807,903; and moving the cheap test ahead of `crossing_positions`,
+or walking the program once instead of once per loop, each moved it by less
+than 200,000. Marking `group_param_set` and `tail_exprs` `#[inline]` put it at
+387,724,060, which is 2,079,730 (0.53%) under main. Both helpers gained a
+caller in this change, and `group_param_set` is called in
+`crossing_positions`'s loop over every parameter, so the likeliest reading is
+that the extra caller cost them their inlining there. That reading has not
+been isolated: the measurement shows the row moving with the attribute and
+nothing else.
+
+CI's rows for the tree as pushed: `compile_instructions` 25,855,719 to
+25,829,822, `entry_instructions` 85,257,442 to 85,178,721 and
+`library_instructions` 85,813,347 to 85,734,452, all lower; `emit_instructions`
+7,035,904 to 7,062,270, 26,366 or 0.37% higher, and `interp_instructions`
+488,869,908 to 488,913,120. The emit row is where the attribute shows on
+native: the codegen pass runs the helpers it inlined. The runtime rows are the
+projection exactly.
+
+The trend gate's names for what rose, each at the value it landed on:
+`basket_alloc_bytes` 7,522,273; `basket_allocs` 27,264; `basket_buf_reuse`
+119; `basket_sh_buf` 689,952; `branches` 53; `calls` 88; `lines` 1,589;
+`interp_instructions` 488,913,120; `emit_instructions` 7,062,270;
+`work_basket` 32,362,738; `emitted_other_branches` 16,032;
+`emitted_other_calls` 17,104; `emitted_other_lines` 144,174; `text`
+4,586,926; `a_map_whose_keys_arrived_in_order_is_its_own_view_beat_iters`
+1,000; `force_path_beat_iters` 2,000; `lazy_verdict_is_per_arm_beat_iters`
+2,000; `many_cells_beat_iters` 140; `returned_thunk_beat_iters` 2,000;
+`stream_fold_beat_iters` 10,000;
+`the_length_of_an_indexed_character_needs_no_scan_beat_iters` 4,021;
+`two_bound_columns_are_one_allocation_beat_iters` 3,000.
 
 Taken together the two sides net to a fall in welfare of 0.0000025, from
 90.25702372 to 90.25702120. The floor is lowered by that much. Clay asked
@@ -24567,23 +24592,23 @@ left alone until a program shows it matters.
 `runtime/a_name_bound_to_a_lazy_err_keeps_its_check.kso`; reverting the
 codegen line turns it red.
 
-CI's rows for this branch. The front end does a little less work on the
-library and a little more on everything that reads the larger regexp module:
-compile_instructions falls from 25,855,719 to 25,818,316, while
-entry_instructions rises from 85,257,442 to 85,384,090 and
-library_instructions from 85,813,347 to 85,937,682, both of which compile
+Rows for this branch against main as it stands after the bignum loop rewind,
+each the branch's CI change added to main's. The front end does a little less
+work on the library and a little more on everything that reads the larger
+regexp module: compile_instructions falls from 25,829,822 to 25,792,419, while
+entry_instructions rises from 85,178,721 to 85,305,369 and
+library_instructions from 85,734,452 to 85,858,787, both of which compile
 std/regexp. compile_allocs goes from 14,529 to 14,530. The interpreter's run
 asks the allocator twice more, interp_allocs 587,281 to 587,283, with its peak
 unchanged. The browser compiles the same library and its checker, and
-browser_compile_instructions rises from 389,803,790 to 390,263,432.
+browser_compile_instructions rises from 387,724,060 to 388,183,702.
 
 Four benchmark binaries changed. basket, scanbench and runbench grew and
 pendbench shrank by one call and three lines, which sums to
-emitted_other_branches 16,024 to 16,071, emitted_other_calls 17,094 to 17,118
-and emitted_other_lines 144,096 to 144,331. The text is 4,586,462 to 4,588,430
+emitted_other_branches 16,032 to 16,079, emitted_other_calls 17,104 to 17,128
+and emitted_other_lines 144,174 to 144,409. The text is 4,586,926 to 4,588,894
 summed, all of it in the three that grew. Runtime work rises in two of them:
-work_basket from 32,356,406 to 32,380,431 and work_runbench from 1,129,588,698
+work_basket from 32,362,738 to 32,386,763 and work_runbench from 1,129,588,698
 to 1,129,588,845, 147 instructions. Which of the four fixes moved which binary
-is not isolated here. Welfare falls 0.0000519, to
-90.25650199. These are fixes to the language as ruled, so the floor follows
-under the 2026-09-13 rule.
+is not isolated here. Welfare falls, and the floor follows under the
+2026-09-13 rule.

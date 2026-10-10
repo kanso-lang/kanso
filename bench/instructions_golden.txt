@@ -739,7 +739,7 @@
 jsonbench 860548155
 encodebench 2384337843
 oneshot 13027085
-basket 32380431
+basket 32386763
 widebench 28094257
 deepbench 370091233
 escapebench 39045031
