@@ -26178,6 +26178,13 @@ carrier alone, the release row falls by 120,818 and the dev row rises by
 3,943; every benchmark's runtime text grows 176 bytes, which is the spare
 list's accounting and its drop path.
 
+The carrier took main's retired `build` and CI's rows for it, and this branch
+took the carrier in a merge commit. Each conflicted row is projected as this
+fix's own CI delta laid on the carrier's CI row: codegen_instructions_dev lands
+on 118,958,562, work_encodebench on 2,398,370,022, work_livebench on
+1,474,871,748, work_oneshot on 13,224,265 and work_runbench on 1,152,754,602,
+and `text` totals 4,829,278. CI's reading replaces each of them.
+
 ## 2026-10-10 — a counting loop keeps every pass's key; copying keys out measured and declined
 
 A loop that counts into a map it was handed, under a key it interpolates each
