@@ -714,13 +714,22 @@ fn eligible_clusters(
         groups.iter().enumerate().map(|(i, (name, arity))| ((name.as_str(), *arity), i)).collect();
     // tail edges: (caller group, callee group, decl index, args)
     let mut edges: Vec<(usize, usize, usize, &Vec<Expr>)> = Vec::new();
+    // the edges among those that a piped lambda's body makes: see lambda_tails
+    let mut through_lambda: HashSet<(usize, usize)> = HashSet::default();
     for (di, decl) in program.fns.iter().enumerate() {
         let from = index[&(decl.name.as_str(), decl.params.len())];
-        for tail in tail_exprs(decl.body.last()) {
+        let mut tails = Vec::new();
+        if let Some(Stmt::Expr(e)) = decl.body.last() {
+            marked_tails(e, false, &mut tails);
+        }
+        for (tail, under) in tails {
             let Expr::App { head, args, piped: false, .. } = tail else { continue };
             let Expr::Ident(callee, _, _) = head.as_ref() else { continue };
             if let Some(&to) = index.get(&(callee.as_str(), args.len())) {
                 edges.push((from, to, di, args));
+                if under {
+                    through_lambda.insert((from, to));
+                }
             }
         }
     }
@@ -760,11 +769,23 @@ fn eligible_clusters(
         if let Some(carried) =
             cluster_edges_ok(program, inference, mut_sites, chains, &groups, &members, &edges)
         {
-            // A demoted entry buys a plain beat and nothing more. A carried
-            // slot is evacuated at every rewind, and a cluster reached only
-            // by a tail call is one whose cost nobody has measured — the
-            // json string scanner pays 8 GB of copies for the licence.
-            if !entries.is_empty() && !carried.is_empty() {
+            // A cluster reached by a tail call carries its slots like any
+            // other. They were refused until 2026-10-10 because a carried
+            // slot was evacuated at every rewind and the json string scanner
+            // paid 8 GB of copies for the licence; the rewind now waits until
+            // the lap has left a quarter megabyte behind (k_beat_lap_carry),
+            // and mal's evaluator, a cluster of about forty groups entered
+            // by a tail call, is the program that needed it.
+            //
+            // An edge inside the cluster that runs through a piped lambda
+            // still refuses a carrying cluster. golden_prose walks its
+            // directory tree through `os/is_dir here .> (d -> entered ...)`,
+            // the lambda runs from `k_exec` after `onward` has returned, and
+            // carrying across it freed a string the chain still held: the
+            // gate died in `k_concat_arr`.
+            if !carried.is_empty()
+                && through_lambda.iter().any(|(f, t)| members.contains(f) && members.contains(t))
+            {
                 continue;
             }
             out.push(Cluster {
@@ -887,6 +908,7 @@ fn cluster_edges_ok(
     let mut carried: HashMap<Group, Vec<usize>> = HashMap::default();
     for (_, to, di, args) in &inner {
         let decl = &program.fns[*di];
+        let locals = local_binds(decl);
         for (i, arg) in args.iter().enumerate() {
             let s = slot_set(*to, i);
             if (s != 0 && s & !FAIL & !CROSSES == 0)
@@ -897,10 +919,22 @@ fn cluster_edges_ok(
             }
             // a byte builder rebuilt each iteration would deep-copy its
             // whole buffer at every rewind: growth wearing a carry — and a
-            // slot inference can't type may hide the same shape
-            if s & BYTES != 0 || s == 0 {
+            // slot inference can't type may hide the same shape. A slot that
+            // may hold any value, bytes among the rest, is carried: an
+            // interpreter's value register is that slot, and refusing it
+            // kept mal's machine from rewinding at all
+            if (s & !FAIL) == BYTES || s == 0 {
                 return None;
             }
+            // read through a name the body bound: `grown = push acc x` handed
+            // on as `grown` grows the slot exactly as `push acc x` would.
+            // grammar_check's capture loop does that, and carrying it died
+            // in k_deep_copy once a carrying cluster could be entered by a
+            // tail call
+            let arg = match arg {
+                Expr::Ident(n, _, _) => locals.get(n.as_str()).copied().unwrap_or(arg),
+                _ => arg,
+            };
             if let Expr::App { head: ah, args: aargs, .. } = arg {
                 if let Expr::Ident(op, _, _) = ah.as_ref() {
                     let own = decl.params.get(i).and_then(|p| match p {
@@ -1779,6 +1813,38 @@ fn tail_exprs(last: Option<&Stmt>) -> Vec<&Expr> {
     let mut out = Vec::new();
     expand_tail(e, &mut out);
     out
+}
+
+/// `expand_tail`'s walk, each tail marked with whether a piped literal lambda
+/// led to it. Such a tail is the caller's own when the pipe inlines, and it is
+/// not when the piped value is an effect description: `k_exec` calls the
+/// lambda later, as a closure, after the caller has returned the description.
+/// A cluster that carries slots across such an edge rewinds under values the
+/// chain runner still holds.
+fn marked_tails<'a>(e: &'a Expr, under: bool, out: &mut Vec<(&'a Expr, bool)>) {
+    if let Expr::Guard { early, rest, .. } = e {
+        marked_tails(early, under, out);
+        if let Some(Stmt::Expr(last)) = rest.last() {
+            marked_tails(last, under, out);
+        }
+        return;
+    }
+    if let Expr::App { head, args, piped, .. } = e {
+        if !piped && matches!(head.as_ref(), Expr::Ident(n, _, _) if n == "if") && args.len() == 3 {
+            marked_tails(&args[1], under, out);
+            marked_tails(&args[2], under, out);
+            return;
+        }
+        if *piped && args.len() == 1 {
+            if let Expr::Lambda { params, body, .. } = head.as_ref() {
+                if params.len() == 1 {
+                    marked_tails(body, true, out);
+                    return;
+                }
+            }
+        }
+    }
+    out.push((e, under));
 }
 
 fn guard_stmt_expr(s: &Stmt) -> &Expr {
@@ -2686,6 +2752,22 @@ mod tests {
     }
 
     #[test]
+    fn a_cluster_growing_its_carried_list_through_a_name_stays_out() {
+        // grammar_check's capture loop: `grown = push acc x` handed on as
+        // `grown` grows the carried slot as `push acc x` would, and growth in
+        // a carried slot refuses the cluster. The name hid it until
+        // 2026-10-10, and once a carrying cluster could be entered by a tail
+        // call the gate died in k_deep_copy.
+        let src = "fn each acc at\n  stepping acc at (at > 3)\n\nfn stepping acc _ true\n  acc\n\nfn stepping acc at false\n  grown = push acc \"x{at}\"\n  each grown (at + 1)\n\nfn start acc\n  each acc 1\n\nmain = print \"{length (start [])}\"\n";
+        let (program, inference) = compiled(src);
+        let beats =
+            super::beat_loops(&program, &inference, &crate::linear::in_place_pushes(&program));
+
+        assert!(!beats.ids.contains_key(&("each".to_string(), 2)));
+        assert!(!beats.ids.contains_key(&("stepping".to_string(), 3)));
+    }
+
+    #[test]
     fn a_cluster_the_entering_caller_is_reached_from_stays_grow_only() {
         // counted enters the cycle by a tail call and the cycle reaches it
         // back, so the entry recurs: demoting it would retain a frame per
@@ -2865,9 +2947,7 @@ mod tests {
         // list accumulators — those stay out. The two encoders thread a byte
         // builder by pointer identity, which is exactly what the chain
         // license admits: raw bytes hold no pointers, so nothing in the
-        // accumulator can dangle across a rewind. The string scanners share
-        // the licence but not the entry: they are reached by a tail call,
-        // and a demoted entry buys a plain beat, never a carried one.
+        // accumulator can dangle across a rewind.
         //
         // Read through an import, which is how a program meets the library.
         // Until 2026-10-10 this compiled lib/json as a root and leaned on the
@@ -2893,12 +2973,30 @@ mod tests {
         // `keys` and `values` since 2026-09-27. That call is a region, which
         // reclaims them once per nested map, and the loops allocate nothing
         // else an iteration outlives.
+        //
+        // The string scanners joined on 2026-10-10, when a cluster entered by
+        // a tail call began to carry its slots. That is this library read on
+        // its own: a program that imports std/json emits no carried rewind
+        // in them, and decoding five 300,000-character strings with an
+        // escape every three characters read 78,278,587 instructions with
+        // the licence and without it.
+        let scanners: Vec<(String, usize)> = [
+            ("json/str_chars", 3),
+            ("json/str_low", 5),
+            ("json/str_pair", 4),
+            ("json/str_run", 4),
+            ("json/str_surrogate", 4),
+            ("json/str_unicode", 3),
+            ("json/string_scan", 3),
+        ]
+        .into_iter()
+        .map(|(n, a)| (n.to_string(), a))
+        .collect();
         assert_eq!(
-            licensed,
-            Vec::<(String, usize)>::new(),
-            "no loop in the library rewinds: the escaper and the encoders \
-             allocate nothing an iteration outlives, and scanners threading \
-             records or lists stay on the grow-only arena"
+            licensed, scanners,
+            "the string scanners are the library's only beats: the escaper \
+             and the encoders allocate nothing an iteration outlives, and \
+             scanners threading records or lists stay on the grow-only arena"
         );
         let regions: Vec<usize> = loops.regions.iter().map(|(_, line, _)| *line).collect();
         assert_eq!(

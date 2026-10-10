@@ -1137,18 +1137,19 @@ length_fold = row
   (breaking "a_length_twin_that_compares_three_times")
   benches
 
-# The run program's counters had no row until 2026-09-07, for the reason the
-# read_counters paragraph gives: runbench joined on 2026-09-06 and nothing
-# proved its gate could go red. This row is that proof, and its defect is the
-# tenure block sharing that took runbench's phase from forty-nine blocks to
-# one.
+# The tenure block sharing that took runbench's phase from forty-nine blocks to
+# one. This row gated on the run program's counters until the lap carry, which
+# stages runbench's inner loop so rarely that one block holds its tenure with
+# or without the sharing, and the mutation left that gate green. The mem
+# fixture an_inner_beat_opens_its_tenure_in_the_block_outside still opens a
+# block per inner beat without it, and goes red.
 ten_open = row
   "an inner beat that opens its own tenure block beside one with room"
   true
-  (gating "run_counters")
-  "cost goldens (deterministic ratchet, no clocks)"
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
   (breaking "a_child_beat_that_opens_its_own_tenure_block")
-  benchmarks
+  release
 
 # Where a tenure block dies. `ten_blocks` and `ten_frees` count the block being
 # claimed and given back and neither can say at which depth, so freeing a
@@ -1161,6 +1162,17 @@ ten_where = row
   "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
   "specs (unit, golden, differential)"
   (breaking "a_tenure_block_freed_where_it_was_handed_up")
+  release
+
+# Which block a pointer lies in. Past eight blocks the survival questions are
+# answered from an index sorted by address, and walking the chain instead gives
+# the same answers, so only `chain_finds` can tell the two apart.
+chain_index = row
+  "a long chain walked instead of searched"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_long_chain_walked_instead_of_searched")
   release
 
 # Where a rewind keeps its place in a string. The cursor is a position cache,
@@ -1826,7 +1838,7 @@ rows_b1e1 = text/concat rows_b1e0 [host_measures]
 
 rows_b1e2 = text/concat rows_b1e1 [inline_pin chart_replay objective_row]
 
-rows_b1e3 = text/concat rows_b1e2 [one_char_memo length_memo]
+rows_b1e3 = text/concat rows_b1e2 [one_char_memo length_memo chain_index]
 
 rows_b1e4 = text/concat rows_b1e3 [length_fold ten_open ten_where seek_kept]
 

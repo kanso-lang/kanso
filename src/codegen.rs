@@ -1377,7 +1377,7 @@ declare void @k_carry_reset()
 declare void @k_carry_stage(%KValue)
 declare void @k_carry_stage_kept(%KValue)
 declare %KValue @k_carry_take(i64)
-declare void @k_beat_iter_carry()
+declare void @k_beat_lap_carry()
 declare %KValue @k_beat_pop(%KValue)
 declare %KValue @k_cohort_pop(%KValue)
 declare %KValue @k_region_pop(%KValue)
@@ -9595,7 +9595,7 @@ impl<'a> Backend<'a> {
                                             emitted[j]
                                         ));
                                     }
-                                    f.line("call void @k_beat_iter_carry()");
+                                    f.line("call void @k_beat_lap_carry()");
                                     for (slot, &j) in positions.iter().enumerate() {
                                         let t = f.tmp();
                                         f.line_fmt(format_args!(
