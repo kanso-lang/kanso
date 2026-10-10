@@ -25177,9 +25177,8 @@ floor nothing, as the codegen rows were on 2026-10-07 when their gates began
 counting the clang the benchmarks use. `run_instructions` and `run_peak_bytes`
 keep their ratio to their baselines: each baseline is multiplied by the reading
 with the phases over the reading without them, both on main's compiler.
-work_runbench lands on 1,245,042,977, staged as CI stages it, against main's
-1,131,539,079, so run_instructions' baseline goes from 3,043,743,748 to
-3,349,059,567. The run peak, which the objective reads as the arena, held and
+work_runbench lands on 1,245,043,324 on CI, against main's 1,131,539,079,
+so run_instructions' baseline goes from 3,043,743,748 to 3,349,060,500. The run peak, which the objective reads as the arena, held and
 permanent peaks summed, goes from 3,899,936 bytes to 12,167,368:
 run_arena_peak_bytes lands on 8,912,912 and run_held_peak_bytes on 3,222,256,
 and run_peak_bytes' baseline goes from 156,818,380 to 489,255,962. Both
