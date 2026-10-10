@@ -1,0 +1,25 @@
+# A loop whose state record is rebuilt each pass by interpolating its one
+# string field, a megabyte long, into a new string a byte longer. Record reuse
+# writes each new state into the old record's storage, and the first record
+# was built before the loop, below its mark. A stage repaired that record by
+# copying its string under the mark and raising the mark over the copy; the
+# next pass replaced the string, and the copy stayed under the mark until the
+# loop ended. Until 2026-10-10 the arena's peak grew a megabyte a pass, 420 MB
+# at 400 passes. The peak below must not grow with the count.
+type state
+  count
+  body
+
+fn spin 0 st
+  st
+
+fn spin n st
+  spin (n - 1) (state (st.count + 1) "{st.body}{st.count % 10}")
+
+fn seed 0 acc
+  acc
+
+fn seed n acc
+  seed (n - 1) "{acc}{acc}"
+
+pub play = print "{length (spin 100 (state 0 (seed 20 "x"))).body}"

@@ -4315,12 +4315,28 @@ KValue k_pair_failure(KValue a, KValue b) {
     return k_merge_rest(2, args, k_not_failure(a) ? 1 : 0);
 }
 
+/* Inside a beat loop a record is reused only where the arena has put it since
+   the loop's mark. A record below the mark survives every rewind, so writing
+   a fresh field into it makes the next stage repair it: the field's storage
+   is copied under the mark and the mark is raised over it. The next pass
+   writes a newer field, and the copy is dead under the mark until the loop
+   ends -- a loop interpolating a 1 MiB string into its reused state held
+   420 MB at 400 passes. Outside the mark the record is built fresh, which is
+   one allocation a stage rather than a megabyte a pass. */
+static inline int k_reuse_above_mark(const KRec* r) {
+    if (k_beat_depth <= 0 || k_beat_depth > K_BEAT_MAX) return 1;
+    const KMark* m = &k_beat_stack[k_beat_depth - 1];
+    if (m->block != k_blocks) return 0;
+    const char* p = (const char*)r;
+    return p >= m->ptr && p < k_arena;
+}
+
 KValue k_rec_reuse(long long type_id, long long n, KValue* args, KValue victim) {
     for (long long i = 0; i < n; i++)
         if (__builtin_expect(!k_not_failure(args[i]), 0)) return k_merge_rest(n, args, i);
     if (n > 0 && victim.tag == K_REC) {
         KRec* r = k_as_rec(victim);
-        if (r->nfields == n) {
+        if (r->nfields == n && k_reuse_above_mark(r)) {
             for (long long i = 0; i < n; i++) r->fields[i] = args[i];
             r->type_id = type_id;
             return victim;
