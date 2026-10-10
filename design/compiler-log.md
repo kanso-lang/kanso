@@ -24836,7 +24836,8 @@ the old registration it frees none and holds 2,240,000 bytes of views.
 bytes in its carried rewinds; letting the view registry force a stage copies
 3,200,304.
 Merged with main's constant storage it copies 6,128, since the constants it
-names are no longer copied, and its one tenure block is gone.
+names are no longer copied, and its one tenure block is gone. The evaluator
+fixture's lap rule copies 3,360 where it copied 3,488, for the same reason.
 
 The native cost veins and the lazy tier do not move: no benchmark builds a
 view one beat below its map. The tab's run does. `bench/interp_corpus` builds
