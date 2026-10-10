@@ -835,7 +835,7 @@
 jsonbench text=318073
 encodebench text=332537
 oneshot text=333337
-basket text=298009
+basket text=298473
 widebench text=340761
 deepbench text=275337
 escapebench text=267241

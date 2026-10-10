@@ -9513,7 +9513,13 @@ impl<'a> Backend<'a> {
                                 // everything this iteration allocated is
                                 // dead; rewind to the entry mark
                                 let edge = ((f.group.clone(), f.arity), (name.to_string(), n));
-                                if self.beat.rewind.contains(&edge) {
+                                // a widening loop's word twin carries words
+                                // and nothing else, so it has nothing to hand
+                                // back; only the general body, which a bignum
+                                // reaches, rewinds
+                                let words_only = self.beat.widening.contains(&edge.0)
+                                    && self.emitting_twin(&f.group, f.arity);
+                                if self.beat.rewind.contains(&edge) && !words_only {
                                     let lifted: Vec<usize> = (0..emitted.len())
                                         .filter(|&j| {
                                             packed[j].is_none()
