@@ -24899,6 +24899,17 @@ raising the threshold past any chain reads 0 with every other counter equal,
 and the ratchet row "a long chain walked instead of searched" makes that
 mutation.
 
+CI's rows for the branch with the index in it, against main: `runbench`
+1,129,603,831 to 1,127,606,416, `codegen_instructions_release` 453,787,838 to
+453,817,435, `codegen_instructions_dev` 118,867,296 to 118,894,574 and
+`emit_instructions` 7,062,299 to 7,058,075. The browser compiles in 390,304,777
+instructions, up 2,122,974, and runs in 34,093,107, up 573,561, which is 54,971
+more than the branch read before the index. Every benchmark's machine code is
+8,112 bytes larger than main's. Moving the index's two branches out of line
+saved 960 of those bytes and was not kept, so most of the growth is somewhere
+other than the index; where has not been measured. The book's two counters
+samples gain the `chain_finds=0` line.
+
 ## 2026-10-10 — a directory called lib is an ordinary directory
 
 The beat analysis keeps an imported library's loops out of the carry tier,
