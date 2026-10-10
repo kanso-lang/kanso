@@ -994,7 +994,108 @@ fn effective_uses(var: &str, body: &[Stmt]) -> usize {
         };
         discounted += consumed_sibling_uses(var, e);
     }
-    total.saturating_sub(discounted)
+    // every caller asks only whether this is more than one, so the read
+    // discount, which walks every binding, is owed only when it could matter
+    let held = total.saturating_sub(discounted);
+    if held <= 1 {
+        return held;
+    }
+    held.saturating_sub(read_into_siblings(var, body))
+}
+
+/// Mentions of `var` in bindings that read it and hand the answer only to the
+/// call that consumes it: `v = m[i]` then `put m i (v + 1)`. The read answers
+/// the element and lets the map go, and every use of `v` is an operand the
+/// builtin forces before it writes, so the binding is finished with `m` before
+/// the write, exactly as `put m i (m[i] + 1)` is. A use of `v` anywhere else —
+/// after the write, inside a lambda or a list, passed to another call — could
+/// force the read once the map has changed under it, and the binding counts.
+fn read_into_siblings(var: &str, body: &[Stmt]) -> usize {
+    // `return m if done` puts everything below it in the guard's rest, so a
+    // loop's bindings usually sit one block down
+    let below: usize = match body.last() {
+        Some(Stmt::Expr(Expr::Guard { rest, .. })) => read_into_siblings(var, rest),
+        _ => 0,
+    };
+    below + read_in_block(var, body)
+}
+
+fn read_in_block(var: &str, body: &[Stmt]) -> usize {
+    let rebinds = |name: &str| {
+        body.iter()
+            .any(|s| matches!(s, Stmt::Bind { pattern: Pattern::Var(n, _), .. } if n == name))
+    };
+    if rebinds(var) {
+        return 0;
+    }
+    let mut discounted = 0;
+    for (i, stmt) in body.iter().enumerate() {
+        let Stmt::Bind { pattern: Pattern::Var(v, _), expr } = stmt else { continue };
+        let reads = mentions(var, expr);
+        if reads == 0 || holds(var, expr) {
+            continue;
+        }
+        let shadowed = body
+            .iter()
+            .filter(|s| matches!(s, Stmt::Bind { pattern: Pattern::Var(n, _), .. } if n == v))
+            .count()
+            > 1;
+        if shadowed || v == var {
+            continue;
+        }
+        let later = &body[i + 1..];
+        let total: usize = later.iter().map(|s| mentions(v, stmt_expr(s))).sum();
+        let fed =
+            later.iter().try_fold(0, |n, s| fed_to_consumer(var, v, stmt_expr(s)).map(|k| n + k));
+        if total > 0 && fed == Some(total) {
+            discounted += reads;
+        }
+    }
+    discounted
+}
+
+/// Every mention of `var` in `e`, on every path.
+fn mentions(var: &str, e: &Expr) -> usize {
+    let here = matches!(e, Expr::Ident(n, _, _) if n == var) as usize;
+    let mut n = here;
+    crate::for_each_child(e, |c| n += mentions(var, c));
+    n
+}
+
+/// Mentions of `v` that are operands forced by a call consuming `var` as its
+/// first argument, or None when some mention of `v` in a sibling of such a
+/// call is not one: inside a lambda, a list or another call, it may be forced
+/// after the write.
+fn fed_to_consumer(var: &str, v: &str, e: &Expr) -> Option<usize> {
+    let mut n = 0;
+    if let Expr::App { head, args, .. } = e {
+        let consuming = matches!(head.as_ref(), Expr::Ident(h, _, _)
+            if matches!(h.as_str(), "put" | "push" | "append" | "builtin_append"));
+        if consuming && matches!(args.first(), Some(Expr::Ident(first, _, _)) if first == var) {
+            for sibling in &args[1..] {
+                n += forced_operand(v, sibling)?;
+            }
+            return Some(n);
+        }
+    }
+    let mut ok = true;
+    crate::for_each_child(e, |c| match fed_to_consumer(var, v, c) {
+        Some(k) => n += k,
+        None => ok = false,
+    });
+    ok.then_some(n)
+}
+
+/// Mentions of `v` reached from `e` through arithmetic and comparison alone,
+/// which a builtin's argument evaluation forces; None for a mention anywhere
+/// deeper.
+fn forced_operand(v: &str, e: &Expr) -> Option<usize> {
+    match e {
+        Expr::Ident(n, _, _) if n == v => Some(1),
+        Expr::BinOp { lhs, rhs, .. } => Some(forced_operand(v, lhs)? + forced_operand(v, rhs)?),
+        _ if mentions(v, e) == 0 => Some(0),
+        _ => None,
+    }
 }
 
 /// Uses of `var` inside the sibling arguments of a call that consumes `var`
