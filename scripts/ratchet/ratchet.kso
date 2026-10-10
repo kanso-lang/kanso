@@ -1137,18 +1137,19 @@ length_fold = row
   (breaking "a_length_twin_that_compares_three_times")
   benches
 
-# The run program's counters had no row until 2026-09-07, for the reason the
-# read_counters paragraph gives: runbench joined on 2026-09-06 and nothing
-# proved its gate could go red. This row is that proof, and its defect is the
-# tenure block sharing that took runbench's phase from forty-nine blocks to
-# one.
+# The tenure block sharing that took runbench's phase from forty-nine blocks to
+# one. This row gated on the run program's counters until the lap carry, which
+# stages runbench's inner loop so rarely that one block holds its tenure with
+# or without the sharing, and the mutation left that gate green. The mem
+# fixture an_inner_beat_opens_its_tenure_in_the_block_outside still opens a
+# block per inner beat without it, and goes red.
 ten_open = row
   "an inner beat that opens its own tenure block beside one with room"
   true
-  (gating "run_counters")
-  "cost goldens (deterministic ratchet, no clocks)"
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
   (breaking "a_child_beat_that_opens_its_own_tenure_block")
-  benchmarks
+  release
 
 # Where a tenure block dies. `ten_blocks` and `ten_frees` count the block being
 # claimed and given back and neither can say at which depth, so freeing a

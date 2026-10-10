@@ -24795,6 +24795,11 @@ basket program's carried rewinds stage less often. Of the tab compiler's rise
 in `browser_compile_instructions`, 1,710,393 arrived with the lambda-edge
 refusal. The next entry prices the whole change on CI's rows.
 
+The ratchet's tenure-sharing row gated on the run program's counters, and with
+one tenure block there instead of six the mutation stopped moving them. It now
+gates on the mem corpus, where
+`an_inner_beat_opens_its_tenure_in_the_block_outside` goes red.
+
 ## 2026-10-10 — a map's view belongs to the beat that frees the map
 
 A map read by key, rendered, compared or measured gets a sorted view, and the
