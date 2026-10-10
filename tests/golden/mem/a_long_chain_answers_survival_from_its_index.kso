@@ -1,0 +1,28 @@
+# Fifteen arena blocks of live rows, and a loop that carries a record holding
+# them. Every stage asks whether each row survives the rewind, and the answer
+# is a question about which block a pointer lies in. That question walked the
+# chain of blocks, so its cost grew with the live data: the lox port, whose
+# heap only grows, spent 30.6 s on 40,000 passes. Past eight blocks it is
+# answered from an index sorted by address, and `chain_finds` counts those
+# answers. Taking the index away answers the same questions by walking, which
+# moves nothing but this counter.
+import "std/list"
+
+type state
+  rows
+  last
+
+fn row i
+  "row {i}, and enough text that a hundred thousand of them fill ten blocks"
+
+fn keep s n
+  state s.rows "step {n}"
+
+fn spin n s
+  return length s.rows if n == 0
+  spin (n - 1) (keep s n)
+
+fn start n
+  state (list/to_list (list/map (list/take list/naturals n) row)) "none"
+
+pub play = print "{spin 20000 (start 100000)}"

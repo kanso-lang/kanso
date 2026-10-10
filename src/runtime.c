@@ -164,6 +164,7 @@ static long long k_stat_ten_frees = 0;
    the fixture whose own comment said such a change would turn it red. Found
    on 2026-09-22 by making the change and running the vein. */
 static long long k_stat_ten_handups = 0;
+static long long k_stat_chain_finds = 0;
 static long long k_stat_utf8_zerocopy = 0;
 /* Characters counted by walking, which a string that can cache its count
    pays once and a builder pays on every read. Quadratic when a builder is
@@ -523,6 +524,57 @@ static KValue* k_map_sorted(KMap* m, long long* out_len);
 typedef struct KBlock { struct KBlock* next; size_t cap; struct KBlock* host; size_t pad; } KBlock;
 KBlock* k_blocks = NULL;
 static KBlock* k_spare = NULL;
+
+/* The live chain sorted by address, for the survival questions once the chain
+   is long. Each block's `pad` holds its position in the chain counted from the
+   oldest, so "is this block older than the mark's" is one compare. A program
+   whose arena only grows -- an interpreter that never frees its heap -- built
+   a chain of hundreds of blocks, and every survival check walked it: the lox
+   port's loop of 40,000 passes took 30.6 s with the lap carry and 1.9 s with
+   64 MiB blocks. Below K_BIDX_WALK blocks the walk is kept, because the hot
+   paths ask with a chain of one or two and a search would only cost them. */
+#define K_BIDX_WALK 8
+static KBlock** k_bidx = NULL;
+static long long k_bidx_n = 0, k_bidx_cap = 0;
+
+static void k_bidx_link(KBlock* b) {
+    b->pad = b->next ? b->next->pad + 1 : 0;
+    if (k_bidx_n == k_bidx_cap) {
+        k_bidx_cap = k_bidx_cap ? 2 * k_bidx_cap : 64;
+        k_bidx = realloc(k_bidx, sizeof(KBlock*) * (size_t)k_bidx_cap);
+        if (!k_bidx) { fputs("out of memory\n", stderr); exit(1); }
+    }
+    long long i = k_bidx_n;
+    while (i > 0 && k_bidx[i - 1] > b) { k_bidx[i] = k_bidx[i - 1]; i--; }
+    k_bidx[i] = b;
+    k_bidx_n++;
+}
+
+static void k_bidx_unlink(KBlock* b) {
+    long long i = 0;
+    while (i < k_bidx_n && k_bidx[i] != b) i++;
+    if (i == k_bidx_n) return;
+    for (; i + 1 < k_bidx_n; i++) k_bidx[i] = k_bidx[i + 1];
+    k_bidx_n--;
+}
+
+/* The live block holding q, or NULL. */
+static __attribute__((noinline)) KBlock* k_bidx_find(const char* q) {
+    if (K_COUNTING) k_stat_chain_finds++;
+    long long lo = 0, hi = k_bidx_n;
+    while (hi - lo > 1) {
+        long long mid = (lo + hi) / 2;
+        if ((const char*)k_bidx[mid] <= q) lo = mid; else hi = mid;
+    }
+    if (k_bidx_n == 0 || (const char*)k_bidx[lo] > q) return NULL;
+    KBlock* b = k_bidx[lo];
+    const char* start = (const char*)(b + 1);
+    return q >= start && q < start + b->cap ? b : NULL;
+}
+
+static inline int k_chain_long(void) {
+    return k_blocks && k_blocks->pad >= K_BIDX_WALK;
+}
 /* bytes held by the live chain, and the most it ever held: the process's
    deterministic peak, the number the one-shot welfare term watches */
 long long k_live_block_bytes = 0;
@@ -664,8 +716,8 @@ static void k_stats_dump(void) {
     fprintf(stderr, "buf_reuse=%lld\nheld_peak_bytes=%lld\n", k_stat_buf_reuse, k_stat_held_peak);
     fprintf(stderr, "view_allocs=%lld\nview_frees=%lld\n",
             k_stat_view_allocs, k_stat_view_frees);
-    fprintf(stderr, "ten_blocks=%lld\nten_frees=%lld\nten_handups=%lld\n",
-            k_stat_ten_blocks, k_stat_ten_frees, k_stat_ten_handups);
+    fprintf(stderr, "ten_blocks=%lld\nten_frees=%lld\nten_handups=%lld\nchain_finds=%lld\n",
+            k_stat_ten_blocks, k_stat_ten_frees, k_stat_ten_handups, k_stat_chain_finds);
     fprintf(stderr,
         "sh_str=%lld\nsh_rec=%lld\nsh_buf=%lld\nsh_map=%lld\nsh_bytes=%lld\n",
         k_stat_sh_str, k_stat_sh_rec, k_stat_sh_buf, k_stat_sh_map, k_stat_sh_bytes);
@@ -704,6 +756,7 @@ static void k_arena_push(size_t need) {
     }
     b->next = k_blocks;
     k_blocks = b;
+    k_bidx_link(b);
     k_live_block_bytes += (long long)b->cap;
     if (K_COUNTING && k_live_block_bytes > k_stat_peak_block_bytes) {
         k_stat_peak_block_bytes = k_live_block_bytes;
@@ -781,6 +834,7 @@ static __attribute__((noinline)) void* k_alloc_oversize(size_t n) {
     t->host = host;
     t->next = k_blocks;
     k_blocks = t;
+    k_bidx_link(t);
     k_arena = (char*)(t + 1);
     k_arena_left = t->cap;
     return p;
@@ -1131,6 +1185,7 @@ void k_beat_rewind_slow(KMark* m) {
     while (k_blocks != m->block) {
         KBlock* b = k_blocks;
         k_blocks = b->next;
+        k_bidx_unlink(b);
         if (b->host) {
             /* a tail goes back to the block it was cut from */
             b->host->cap += sizeof(KBlock) + b->cap;
@@ -1420,6 +1475,12 @@ static int k_survives(const void* p, KMark* m) {
     const char* q = (const char*)p;
     KBlock* b = m ? m->block : k_blocks;
     const char* frontier = m ? m->ptr : k_arena;
+    if (__builtin_expect(k_chain_long(), 0) && b) {
+        const char* start = (const char*)(b + 1);
+        if (q >= start && q < frontier) return 1;
+        KBlock* at = k_bidx_find(q);
+        return at && at != b && at->pad < b->pad;
+    }
     for (; b; b = b->next) {
         const char* start = (const char*)(b + 1);
         const char* end = (b == (m ? m->block : k_blocks)) ? frontier : start + b->cap;
@@ -1490,6 +1551,11 @@ static int k_where(const void* p, KMark* m) {
         const char* start = (const char*)(mb + 1);
         if (q >= start && q < start + mb->cap)
             return q < m->ptr ? K_WHERE_BELOW : K_WHERE_ABOVE;
+    }
+    if (__builtin_expect(k_chain_long(), 0)) {
+        KBlock* at = k_bidx_find(q);
+        if (!at) return K_WHERE_OUTSIDE;
+        return mb && at->pad < mb->pad ? K_WHERE_BELOW : K_WHERE_ABOVE;
     }
     for (KBlock* b = k_blocks; b != mb; b = b->next) {
         const char* start = (const char*)(b + 1);

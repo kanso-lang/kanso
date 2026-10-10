@@ -24866,3 +24866,35 @@ subdirectory, `import "./lib/fx"`, loses its cycle's rewind: the evaluator
 fixture above holds 4 MiB and never rewinds that way, and 1 MiB with 40,002
 rewinds imported as `./fx`. Self-loops are unaffected. main reproduces it.
 That is the next piece.
+
+## 2026-10-10 — a survival question about an old block asks an index
+
+The lap carry made the lox port's F18 loop quadratic. Its 40,000 passes took
+2.5 s on main and 30.6 s on this branch, and 80,000 took 152 s. Memory was the
+same on both, 2.3 GB at 40,000 passes, because lox's heap only grows; F18
+itself is still open.
+
+The time was in the survival checks. `k_survives` and `k_where` answer "does
+this pointer outlive the rewind" by finding the arena block that holds it, and
+they found it by walking the chain of blocks from the mark's block towards the
+oldest. Lox holds every object it ever made, so by pass 10,000 the chain was
+375 one-megabyte blocks long, and every check on an old object walked most of
+it. Main asked few of those questions in this program. The lap carry admits
+the clusters lox's evaluator runs in, so each stage and each carried pop asks
+one for every carried node, and the walk grew with the heap. Rebuilding with
+64 MiB blocks put the 40,000 passes at 1.9 s, which isolated the walk.
+
+The live chain is now also kept sorted by address, and each block's header
+records its position in the chain. Once the chain is longer than eight blocks
+the two questions binary-search the index and compare positions. Shorter
+chains keep the walk, so the programs in the benchmark corpus, none of which
+reach eight blocks, take the same path as before. Lox runs 10,000, 20,000 and
+40,000 passes in 0.47, 0.97 and 2.12 s, against main's 0.58, 1.26 and 2.48.
+mal's 200,000 iterations still run in 0.66 s at 9 MB.
+
+`chain_finds` counts the questions the index answered, and is zero on every
+benchmark. `tests/golden/mem/a_long_chain_answers_survival_from_its_index`
+keeps fifteen blocks of rows live under a carrying loop and reads 477,919;
+raising the threshold past any chain reads 0 with every other counter equal,
+and the ratchet row "a long chain walked instead of searched" makes that
+mutation.
