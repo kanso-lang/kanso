@@ -25223,7 +25223,8 @@ to 928 and sh_map from 0 to 192, which are the key list and the map `tie`
 answers; sh_str falls from 192 to 176.
 
 ch03 teaches `tie` in the section on records that point at each other, and
-appendix A replaces its `error[build]` section with `error[tie]`, the check
+shows a field holding a list of references, which the same day's gavel "a field
+may hold a list of `tie` references" owes the book. Appendix A replaces its `error[build]` section with `error[tie]`, the check
 that refuses a literal link to a key the list does not hold. The playground's
 two knot samples are rewritten with `tie`, and the compiler page's account of
 the memory model now describes a cycle as a tie's birth cohort.

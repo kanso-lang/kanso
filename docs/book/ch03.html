@@ -144,6 +144,8 @@ back where we started: ada</code></pre>
 
 <p>the maker is an ordinary overloaded function: <code>met</code> builds ada with a link to bob, and everyone else with a link to ada. <code>ref "bob"</code> stands for bob before bob has been made, and <code>tie</code> fills the link in once every call has returned, so no code ever sees a record with a field still to come. the type can say <code>partner:person</code> instead of some nullable stand-in.</p>
 
+<p>a field can hold several links at once. <code>town name [(ref "birch") (ref "cedar")]</code> stores two references in one list field, and a map literal of references works the same way. the maker may store such a list but not read it: indexing it, measuring it or passing it to another function while the nodes are being made is refused, because each of those would look through a reference that is not filled in yet.</p>
+
 <p>a link can name a key that is not in the list. when the keys and the links are literals, as they are here, the compiler sees the missing key and refuses the program with <code>error[tie]</code>. when the keys are computed, the answer is only known at run time, and <code>tie</code> answers a <code>list/broken_link</code> naming the key in place of the map; a program that builds its keys from data takes that apart with an overload on <code>b:list/broken_link</code> before it reads a node.</p>
 
 <p>what comes back is ordinary immutable data that happens to contain a cycle. you can walk the ring as far as you like—<code>ada.partner.partner</code> is ada again—and nothing in it can be assigned. ch10 returns to the memory side: everything one call to <code>tie</code> creates is born together and released together, so a cycle costs the runtime no more than a straight line.</p>
