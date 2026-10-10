@@ -25994,3 +25994,70 @@ on 675,725 and browser_run_instructions on 34,124,829. The run program's
 emitted code gains 29 lines, which moves emitted_other_branches to 16,399,
 emitted_other_calls to 17,406 and emitted_other_lines to 146,724, and `text`
 totals 4,833,086. Welfare reads 91.0317 on CI's rows, and the rise is banked.
+## 2026-10-10 — an oversize block that cannot be reused is freed when it misses
+
+A loop that appends a byte a pass to a one-megabyte string ran 6,000 passes
+with an arena peak of 3,157,760 bytes and a resident peak of 777 MB. The arena
+gives a value over a megabyte a block of exactly its size. When the loop
+rewinds, that block goes to the spare list, and the next pass asks for a block
+a few bytes larger, which no spare can serve. So every pass opened a new block,
+and the old ones stayed in the spare list until the loop ended. Valgrind
+counted 99 mallocs and 82 frees at 300 passes, nearly all of the frees at the
+loop's end. Main reaches 394 MB on the same program, and the five port fixes
+had roughly doubled it, because they rewind more often.
+
+`k_arena_push` now frees the oversize spares smaller than the request when an
+oversize request misses. The standard 1 MiB spares are kept, since they serve
+ordinary refills. The program's resident peak falls from 777 MB to 10 MB, and
+it runs in 0.96 seconds against 1.2.
+
+No counter could see this. `arena_peak_bytes` counts blocks in use and
+`arena_blocks` counts mallocs, and both read the same before and after: 752
+blocks and a peak of 3,157,760. A new counter, `spare_peak_bytes`, records the
+most the spare list held, and it is lower-is-better in the trend gate. It is
+counted only in counting builds, so no program pays for it. Every cost golden,
+every mem fixture and the two book samples that print counters gain the line
+and nothing else.
+
+`tests/golden/mem/a_string_that_grows_each_pass_reuses_its_block` is the
+reduction at 400 passes. Its spare_peak_bytes is 2,097,984; with the miss path
+left as it was, it reads 52,440,000. The run program's spare_peak_bytes is
+2,621,456. runbench reads 248 instructions more, measured in one worktree
+against the same tree without the fix, and is projected at 1,152,754,683.
+
+One reading from this container does not agree with CI. Measured in the
+carrier's own worktree, runbench read 1,152,573,288, below the lap wait's
+figure; CI reads the carrier at 1,152,754,435, which agrees with the wait's
+cost. That stray reading is not explained here, and the projection above is
+taken from CI's row plus the 248.
+
+A second shape retains far more and is not fixed here. When a loop builds the
+new string by interpolating the old one directly, as in `"{st.body}{x}"`, the
+arena peak grows a megabyte a pass on main (420,568,976 bytes at 400 passes)
+and half that on the carrier. Every version of the string stays in a block in
+use. Slicing the string first, as the fixture does, keeps the peak flat at
+3 MB.
+
+The mechanism is the repair. The interpolation lets the record-reuse analysis
+write each new state into the old record's storage, and that record was built
+before the loop, below its mark. At a stage the record survives but its new
+string does not, so the walk repairs it: `k_repaired_settle` copies the string
+into the arena and raises the mark over the copy, because a surviving node
+points at it. The next pass writes a newer string into the same record, and the
+settled copy is dead under the mark until the loop ends. A trace of the beat
+carry shows the mark's block moving 48 bytes up at each of the 200 stages of a
+400-pass run, with a megabyte more live beneath it each time. Raising the mark
+is right for a node repaired once. What it lacks is a way to take back a
+settled region when the same node is repaired again, and that is a separate
+change.
+
+CI's rows replace the projection. runbench reads 1,152,754,609, which is 174
+instructions above the carrier's row rather than the 248 measured here.
+Measured against main, the rows that end worse on this branch, the carrier's
+changes included, are codegen_instructions_dev at 118,955,169,
+codegen_instructions_release at 454,306,200, browser_run_instructions at
+34,124,990, work_encodebench at 2,398,370,414, work_livebench at
+1,474,871,090, work_oneshot at 13,224,195 and text at 4,835,550. Against the
+carrier alone, the release row falls by 120,818 and the dev row rises by
+3,943; every benchmark's runtime text grows 176 bytes, which is the spare
+list's accounting and its drop path.
