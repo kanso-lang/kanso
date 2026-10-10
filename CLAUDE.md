@@ -55,19 +55,17 @@ section is where its instructions will appear.
 
 Clay runs a compiler worker ("kanso cloud") and a design chat. The worker owns
 compiler work: measure, build, PR, merge. The chat owns the interaction
-machinery: gavels, the log, the ledger, and the rules in this file. A session
+machinery: gavels, the log, the issues that track decisions and rulings, and
+the rules in this file. A session
 should know which it is before it starts editing.
 
-The chat does not write code. Its pull requests touch design/pending-gavels.md,
-design/compiler-log.md, STATUS.md and this file. A change to the compiler, its
+The chat does not write code. Its pull requests touch design/compiler-log.md,
+this file and the prose of docs/compiler.html, and it files, labels and closes
+issues. STATUS.md and design/pending-gavels.md were its files too and retire
+under #1852. A change to the compiler, its
 goldens or its benchmarks is cloud's, however small it looks. Clay, 2026-09-08:
 "your PRs should only write to gavels and such, and cloud should do the coding
 work."
-
-STATUS.md joined that list on 2026-09-14, having been missing from it since the
-"Ruled, unbuilt" rule below was written on 2026-09-09 — and that rule makes
-keeping STATUS.md current the chat's job, in those words. A session reading the
-lane sentence strictly would have found its own assignment out of lane.
 
 docs/compiler.html joined it on 2026-09-17 for the same reason, having been
 missing the whole time. The `page_drift` gate fails a tree carrying more than
@@ -88,33 +86,42 @@ the other's work. The sweep in the merge rules below is unchanged and still
 covers every open PR in both repos, so one that ages is landed by whichever
 session reaches it first.
 
-The chat's job when a decision gets ruled: write the ruling into
-design/compiler-log.md, remove the entry from design/pending-gavels.md in the
-same commit, push, and merge it on green. Cite ledger entries by heading, never by a session task
-id, because task numbers resolve nowhere outside the session that made them. A
-question that has already been ruled is never re-asked. A performance question
-with no surface area is the implementer's and does not go to Clay at all.
+**GitHub issues are the tracker.** Ruled 2026-10-10, replacing STATUS.md's
+"Ruled, unbuilt" section and the design/pending-gavels.md ledger, both of which
+went stale whenever someone forgot a step. Each open item is an issue in
+kanso-lang/kanso with labels for what it is (`needs-clay`, `ruled`, `cleanup`,
+`perf`), whose it is (`lane:chat`, `lane:cloud`) and when (`p1`, `p2`, `p3`).
+A pull request that finishes one says `Fixes #N`, and the merge closes it. The
+log stays the permanent record of rulings and measurements; an issue says what
+is open, the log says what happened. Read the queue with
+`gh api 'repos/kanso-lang/kanso/issues?state=open&labels=<label>'`.
+
+**A decision for Clay is a `needs-clay` issue, and nowhere else.** It carries
+the search behind it (the log, the archive, the docs and the tests), the
+options, and a recommendation, so a sitting can be a yes or a no. A question
+left only in a pull request body or a log paragraph is a question nobody will
+see: on 2026-10-10 two floor questions sat in PR bodies for a day. A
+performance question with no surface area is the implementer's and does not go
+to Clay at all, and a question already ruled is never re-asked; cite the
+ruling and close the issue.
+
+**When Clay rules, the chat records it.** It writes the ruling into
+design/compiler-log.md as a `— gavel:` entry, and in the same change either
+closes the `needs-clay` issue (nothing to build) or relabels it `ruled` and
+`lane:cloud` with the owes as a checklist. Cite a ruling by its log heading or
+issue number, never by a session task id, which resolves nowhere outside the
+session that made it.
 
 **Every unbuilt ruling stays in view, and cloud chooses among them.** Cloud
 has discretion over the order it builds things in. What it may not do is take
 the next item off its own last pull request's open-items list without having
-read the whole list of rulings that stand unbuilt. That list is the "Ruled,
-unbuilt" section of STATUS.md, one heading per ruling with the date and the
-log entry that recorded it; the chat keeps it current, adds a row the day a
-ruling lands, and removes the row the day the build lands on main. Cloud reads
-the whole section at every check-in and before opening any pull request, and
-the body of a pull request on a self-generated lead says which rulings it
-weighed and why the lead came first. A row that has sat for a week gets a
-sentence in the log saying why. Learned on 2026-09-09: the 2026-08-29 sitting
-ruled the effect type, the err readers and the bind respelling, the 2026-08-26
-sitting minted `done`, and the 2026-08-15 sitting recorded per-call
-exhaustiveness; by 2026-09-09 none of the five was built, 296 pull requests
-had landed, and Clay was reading a chart that was wrong the whole time. His
-words: "it needs to have discretion over the order. but it just needs to be
-able to see and consider the entire list to do that, not just take the next
-thing." Nothing in the log schedules a ruling, and an OPEN entry is read when
-cloud next reads the log, which is why the list lives in STATUS.md and not in
-the log.
+read the whole list of open `ruled` issues. It reads that list at every
+check-in and before opening any pull request, and the body of a pull request
+on a self-generated lead says which rulings it weighed and why the lead came
+first. Learned on 2026-09-09, when five rulings had sat unbuilt across 296
+merged pull requests. Clay: "it needs to have discretion over the order. but it
+just needs to be able to see and consider the entire list to do that, not just
+take the next thing."
 
 **COUNTING THE RULINGS TAKES TWO GREPS, AND THE SECOND ONE IS THE ONE PEOPLE
 FORGET.** The log has written a ruling two ways. September and most of August
@@ -587,7 +594,7 @@ So, before an argument rests on a number:
   human word to leave draft or to land — not a request, not a heads-up, not a
   sentence in the reply pausing for one. The discipline below says how to
   merge well; none of it is a reason to wait for him. What goes to him is a
-  DECISION, in design/pending-gavels.md, never a merge. If a permission
+  DECISION, in a `needs-clay` issue, never a merge. If a permission
   prompt reaches him anyway that is the harness's auto-mode classifier rather
   than a question being asked, and the lever is the permission MODE: the
   allow list is not what gates it, because tools already listed there still
@@ -876,11 +883,45 @@ deliberately left the timings, with the reason in the commit.
   The log carries history. Seven plans described a system that already exists;
   they cost a reader time and told them nothing the code does not.
 
+### Hygiene is continuous
+
+Clay, 2026-10-10: "the instructions should explicitly maintain ongoing
+refactoring so that things stay hygienic over time and I don't have to
+explicitly remind you." Cruft here has one recurring shape: a fact written in
+two places and then corrected in only one.
+
+- **Leave each file you touch cleaner than you found it.** A pull request may
+  carry a small cleanup of the code or prose it already changes (a stale
+  comment, a duplicated helper, a rule stated twice) in its own commit, so the
+  change itself still reads clearly in the diff. Anything larger becomes a
+  `cleanup` issue.
+- **One fact, one home.** A number, a list or a rule lives in exactly one
+  place, and everything else points at it. Finding a second copy means deleting
+  it or turning it into a pointer in the same pull request. A test whose only
+  job is to keep two copies in agreement means one copy should not exist.
+- **The cleanup queue is worked as it is filled.** Cloud lands at least one
+  `cleanup` pull request for every five other pull requests it merges, taken
+  from the open `cleanup` issues in its lane by priority. The chat works its
+  own `lane:chat` cleanup issues whenever it has a pull request open anyway.
+- **Cloud sweeps the whole repository once a week** and files a `cleanup`
+  issue in the right lane for each finding, with the evidence and what done
+  looks like: a rule or fact stated twice; a count or list in prose that a
+  script could print; a design note whose work shipped; a source file past a
+  few thousand lines with seams in it; tracked files nothing reads; a test
+  whose only job is keeping two copies in step; docs describing something that
+  no longer exists. A finding in CLAUDE.md, the log or the docs is filed as
+  `lane:chat`.
+- **A refactor is a pure move.** No golden changes. A compile or machine-code
+  row that moves by layout is named as layout in the log, and welfare moves
+  are reported and banked like any other.
+- **Instructions are rules, not stories.** This file states each rule once,
+  with its reason in a sentence or two. How a rule was learned belongs in the
+  log, cited by entry heading.
+
 ### Design flow
 - Dialog before changes while Clay is designing. A decision that waits on
-  him lives in design/pending-gavels.md — the single ledger; STATUS.md
-  indexes it, sessions cite entries by heading, and no other file carries
-  pending-decision text. The ruling is recorded in the append-only log
-  and the entry leaves the ledger in the same commit; implementation
-  starts only after the gavel is recorded.
+  him is an open `needs-clay` issue, and no other place carries
+  pending-decision text, a pull request body included. The ruling is
+  recorded in the append-only log and the issue is relabelled or closed in
+  the same change; implementation starts only after the gavel is recorded.
 - Docs present the settled design; chronology lives only in the log.
