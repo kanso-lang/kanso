@@ -1,0 +1,6 @@
+tree/src/lib.rs:0
+tree/src/main.rs:1
+tree/src/secret.txt:1
+tree/src/util/strings.rs:0
+[stderr]
+[exit 0]

@@ -1,0 +1,12 @@
+tree/README.md:1
+tree/data/noeol.txt:1
+tree/docs/guide.md:1
+tree/docs/nested/old.tmp:1
+tree/docs/unicode.txt:1
+tree/keep.log:1
+tree/scripts/build.sh:1
+tree/scripts/run.log:1
+tree/src/main.rs:1
+tree/src/secret.txt:1
+[stderr]
+[exit 0]

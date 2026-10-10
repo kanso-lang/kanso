@@ -1,0 +1,17 @@
+test_normal_strips_dot_slash = normal "./tree/src/" == "tree/src"
+
+test_normal_of_dot = normal "." == ""
+
+test_normal_keeps_plain = normal "tree" == "tree"
+
+test_ancestors_nested = ancestors "tree/src/util" == ["" "tree" "tree/src"]
+
+test_ancestors_of_top_level = ancestors "tree" == [""]
+
+test_ancestors_of_absolute_path = ancestors "/etc/x" == []
+
+test_type_globs_for_rust = type_globs "rust" == ["*.rs"]
+
+test_shell_type_is_split_whole = length (type_globs "sh") == 34
+
+test_typed_matches_name_only = typed? ["*.md"] "tree/docs/guide.md"

@@ -1,0 +1,8 @@
+tree/README.md:[write] the install section
+tree/docs/guide.md:The widget reads one file. [document] flags.
+tree/scripts/build.sh:# [cache] the build
+tree/scripts/run.log:[a] log .gitignore hides and scripts/.ignore lets back in
+tree/src/main.rs:    // [support] more than one file
+tree/src/secret.txt:[this] secret.txt is not at the root
+[stderr]
+[exit 0]

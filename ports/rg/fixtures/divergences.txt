@@ -1,0 +1,7 @@
+# Cases where the port's output differs from ripgrep 14 on purpose or by
+# necessity. Name, a tab, and why.
+latin1	rg writes a line's bytes as they are; kanso's io/write takes a string, so invalid UTF-8 is shown as U+FFFD
+bad_regex	the regex parse error is std/regexp's one-line reason, not rg's multi-line report with a caret
+type_list	the port knows 17 file types, not rg's several hundred
+parent_ignore	rg 14 applies tree/.gitignore's `docs/*.tmp` to tree/docs/nested/old.tmp when the root is tree/docs, but not when it is tree; the port follows git and keeps the file both ways
+unicode_fold	rg folds case across Unicode; std/regexp folds ASCII letters only, so CAFÉ does not find café

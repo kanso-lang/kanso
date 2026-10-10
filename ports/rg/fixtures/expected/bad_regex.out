@@ -1,0 +1,3 @@
+[stderr]
+rg: regex parse error: the pattern ends inside a group, class, count or escape
+[exit 2]

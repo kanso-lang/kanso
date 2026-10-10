@@ -1,0 +1,90 @@
+import "std/text"
+
+sample = "one\ntwo\nmatch a\nthree\nfour\nmatch b\nfive\n"
+
+fn trial args body
+  c = parse args
+  searched c (target "f.txt" false) (decoded (text/bytes body)) true
+
+fn printed_by args body
+  (trial args body).out
+
+test_plain_lines = printed_by ["match"] sample == ["match a\n" "match b\n"]
+
+test_report_counts_matches = (trial ["match"] sample).matched == 2
+
+test_line_numbers =
+  got = printed_by ["-n" "match"] sample
+  got == ["3:match a\n" "6:match b\n"]
+
+test_after_context_then_gap =
+  got = printed_by ["-A" "1" "match"] sample
+  got == ["match a\n" "three\n" "--\n" "match b\n" "five\n"]
+
+test_gap_gets_separator =
+  got = printed_by ["-B" "1" "-n" "match"] sample
+  got == ["2-two\n" "3:match a\n" "--\n" "5-four\n" "6:match b\n"]
+
+test_adjacent_groups_merge =
+  got = printed_by ["-C" "2" "match"] sample
+  length got == 7
+
+test_invert = (trial ["-v" "match"] sample).matched == 5
+
+test_max_count_stops_matching =
+  got = printed_by ["-m" "1" "-A" "3" "-n" "match"] sample
+  got == ["3:match a\n" "4-three\n" "5-four\n" "6-match b\n"]
+
+test_count_mode = printed_by ["-c" "match"] sample == ["2\n"]
+
+test_count_zero_is_silent = printed_by ["-c" "zzz"] sample == []
+
+test_count_matches =
+  got = printed_by ["--count-matches" "o"] "foo\nbar\nboo\n"
+  got == ["4\n"]
+
+test_only_matching =
+  got = printed_by ["-o" "-n" "o+"] "foo\nbar\nboo zoo\n"
+  got == ["1:oo\n" "3:oo\n" "3:oo\n"]
+
+test_replace_groups =
+  got = printed_by ["-r" "<$1>" "m(\\w+)"] "map mop\n"
+  got == ["<ap> <op>\n"]
+
+test_replace_literal_dollar =
+  got = printed_by ["-r" "$$x" "a"] "cat\n"
+  got == ["c$xt\n"]
+
+test_column_counts_bytes =
+  got = printed_by ["--column" "b"] "éb\n"
+  got == ["1:3:éb\n"]
+
+test_binary_explicit_is_reported =
+  c = parse ["x"]
+  body = decoded (text/to_bytes [120 0 10])
+  got = searched c (target "b" true) body true
+  got.out == ["b: binary file matches (found \"\\0\" byte around offset 1)\n"]
+
+test_binary_found_by_walking_is_skipped =
+  c = parse ["x"]
+  body = decoded (text/to_bytes [120 0 10])
+  got = searched c (target "b" true) body false
+  got.matched == 0 and got.out == []
+
+test_text_flag_searches_binary =
+  c = parse ["-a" "x"]
+  body = decoded (text/to_bytes [120 0 10])
+  got = searched c (target "b" false) body false
+  got.matched == 1
+
+test_with_name_prefix =
+  c = parse ["-n" "two"]
+  got = searched c (target "f.txt" true) (decoded (text/bytes sample)) true
+  got.out == ["f.txt:2:two\n"]
+
+test_files_with_matches =
+  c = parse ["-l" "two"]
+  got = searched c (target "f.txt" false) (decoded (text/bytes sample)) true
+  got.out == ["f.txt\n"]
+
+test_empty_pattern_matches_all = printed_by ["-c" ""] sample == ["7\n"]

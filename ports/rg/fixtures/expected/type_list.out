@@ -1,0 +1,18 @@
+c: *.[chH], *.[chH].in, *.cats
+css: *.css, *.scss
+go: *.go
+html: *.ejs, *.htm, *.html
+js: *.cjs, *.js, *.jsx, *.mjs, *.vue
+json: *.json, *.sarif, composer.lock
+log: *.log
+markdown: *.markdown, *.md, *.mdown, *.mdwn, *.mdx, *.mkd, *.mkdn
+md: *.markdown, *.md, *.mdown, *.mdwn, *.mdx, *.mkd, *.mkdn
+py: *.py, *.pyi
+python: *.py, *.pyi
+rust: *.rs
+sh: *.bash, *.bashrc, *.csh, *.cshrc, *.ksh, *.kshrc, *.sh, *.tcsh, *.zsh, .bash_login, .bash_logout, .bash_profile, .bashrc, .cshrc, .kshrc, .login, .logout, .profile, .tcshrc, .zlogin, .zlogout, .zprofile, .zshenv, .zshrc, bash_login, bash_logout, bash_profile, bashrc, profile, zlogin, zlogout, zprofile, zshenv, zshrc
+toml: *.toml, Cargo.lock
+txt: *.txt
+yaml: *.yaml, *.yml
+[stderr]
+[exit 0]

@@ -1,0 +1,12 @@
+tree/README.md:5:TODO: write the install section
+tree/data/noeol.txt:2:last line without newline TODO
+tree/docs/guide.md:7:The widget reads one file. TODO: document flags.
+tree/docs/nested/old.tmp:1:TODO nested tmp is not hidden by docs/*.tmp
+tree/docs/unicode.txt:1:naïve café TODO
+tree/keep.log:1:TODO keep this log
+tree/scripts/build.sh:3:# TODO: cache the build
+tree/scripts/run.log:1:TODO: a log .gitignore hides and scripts/.ignore lets back in
+tree/src/main.rs:12:    // TODO: support more than one file
+tree/src/secret.txt:1:TODO: this secret.txt is not at the root
+[stderr]
+[exit 0]

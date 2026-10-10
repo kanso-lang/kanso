@@ -1,0 +1,97 @@
+import "std/text"
+
+# A file's bytes, read as text. `nul` is the offset of the first NUL byte,
+# counted from 0 the way ripgrep reports it, or none when there is none: a
+# NUL is how a file says it is binary.
+pub type contents
+  nul
+  text
+
+pub fn decoded bytes
+  at = text/find2 bytes 1 0 0
+  nul = if (at > length bytes) none (at - 1)
+  contents nul (as_text bytes)
+
+# Bytes that are not UTF-8 are not a reason to stop searching: each broken
+# sequence becomes U+FFFD and the rest of the file reads as it is.
+fn as_text bytes
+  lossy (text/utf8 bytes) bytes
+
+fn lossy (err _) bytes
+  text/utf8 (repaired bytes 1 [])
+
+fn lossy s _
+  s
+
+replacement = [239 191 189]
+
+fn repaired bs i acc
+  return acc if i > length bs
+  b = byte_at bs i
+  return repaired bs (i + 1) (push acc b) if b < 128
+  n = sequence_length b
+  return repaired bs (i + 1) (text/concat acc replacement) if n == 0
+  bad = first_bad bs i n
+  return copied bs i (i + n) acc if bad == 0
+  repaired bs bad (text/concat acc replacement)
+
+fn copied bs i stop acc
+  return repaired bs stop acc if i == stop
+  copied bs (i + 1) stop (push acc (byte_at bs i))
+
+fn byte_at bs i
+  if (i < 1 or i > length bs) (0 - 1) bs[i]
+
+# How many bytes a sequence starting with this lead byte holds, or 0 when no
+# sequence can start with it.
+fn sequence_length b
+  return 2 if b >= 194 and b <= 223
+  return 3 if b >= 224 and b <= 239
+  return 4 if b >= 240 and b <= 244
+  0
+
+# The position of the first byte that breaks the sequence starting at `i`,
+# or 0 when all `n` bytes belong together. The second byte has a narrower
+# range after some leads, which is what rules out overlong forms and
+# surrogates.
+fn first_bad bs i n
+  lead = byte_at bs i
+  second = byte_at bs (i + 1)
+  return i + 1 if not in_range? second (low_after lead) (high_after lead)
+  rest_bad bs (i + 2) (i + n)
+
+fn rest_bad bs j stop
+  return 0 if j == stop
+  return j if not in_range? (byte_at bs j) 128 191
+  rest_bad bs (j + 1) stop
+
+fn in_range? b lo hi
+  b >= lo and b <= hi
+
+fn low_after 224
+  160
+
+fn low_after 240
+  144
+
+fn low_after _
+  128
+
+fn high_after 237
+  159
+
+fn high_after 244
+  143
+
+fn high_after _
+  191
+
+# Lines as ripgrep counts them: a final newline ends the last line rather
+# than starting an empty one.
+pub fn lines_of ""
+  []
+
+pub fn lines_of text
+  parts = text/split text "\n"
+  ended = text/slice text (length text) (length text) == "\n"
+  if ended (text/slice parts 1 (length parts - 1)) parts

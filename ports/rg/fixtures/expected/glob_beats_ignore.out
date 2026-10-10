@@ -1,0 +1,5 @@
+tree/debug.log:TODO debug log line
+tree/keep.log:TODO keep this log
+tree/scripts/run.log:TODO: a log .gitignore hides and scripts/.ignore lets back in
+[stderr]
+[exit 0]

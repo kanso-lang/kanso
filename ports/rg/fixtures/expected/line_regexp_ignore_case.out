@@ -1,0 +1,3 @@
+match beta
+[stderr]
+[exit 0]

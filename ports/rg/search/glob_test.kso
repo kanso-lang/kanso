@@ -1,0 +1,25 @@
+test_glob_star_stays_in_component = not glob_match? "src/*.rs" "src/a/b.rs"
+
+test_glob_star_matches_name = glob_match? "src/*.rs" "src/main.rs"
+
+test_glob_double_star_any_depth = glob_match? "**/*.rs" "src/util/strings.rs"
+
+test_glob_double_star_zero_dirs = glob_match? "**/main.rs" "main.rs"
+
+test_glob_trailing_double_star = glob_match? "target/**" "target/a/b/c.txt"
+
+test_glob_question = glob_match? "a?c" "abc" and not glob_match? "a?c" "a/c"
+
+test_glob_class_range = glob_match? "file[0-9].txt" "file7.txt"
+
+test_glob_class_negated = not glob_match? "file[!0-9].txt" "file7.txt"
+
+test_glob_class_bracket_member = glob_match? "[]x]" "]"
+
+test_glob_unclosed_bracket_is_literal = glob_match? "a[b" "a[b"
+
+test_glob_escape =
+  literal = glob_match? "\\*.md" "*.md"
+  literal and not glob_match? "\\*.md" "x.md"
+
+test_glob_middle_double_star = glob_match? "a/**/z" "a/b/c/z"

@@ -1,0 +1,3 @@
+[stderr]
+rg: ripgrep requires at least one pattern to execute a search
+[exit 2]

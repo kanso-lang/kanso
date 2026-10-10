@@ -1,0 +1,319 @@
+import "std/list"
+import "std/regexp"
+import "std/text"
+
+# What searching one file came to: how many lines matched, and what to print
+# for it, each line already ended.
+pub type report
+  matched
+  out
+
+# One line chosen for printing: its number, and whether it is a match (`:`),
+# context around one (`-`), or the `--` that marks a gap between groups.
+type row
+  kind
+  number
+
+# The file had no NUL in it, or `-a` said to treat it as text anyway.
+type text_file
+
+# Where a file's lines are going: the path to print when one is wanted, and
+# whether this run puts the path in front of every line.
+pub type target
+  path
+  with_name
+
+# Search one file's contents and say what to print. A binary file found by
+# walking a directory is skipped without a word, the way ripgrep skips one;
+# a binary file named on the command line, or any binary file under
+# `--binary`, is searched, and a match is reported as one line rather than
+# as the bytes around it. `--text` searches it as if it were text.
+pub fn searched cfg dest (contents nul body) explicit
+  state = binary_state cfg.text nul
+  searchable = explicit or cfg.binary
+  return report 0 [] if state != text_file and not searchable
+  lines = lines_of body
+  flags = matched_flags cfg lines
+  hits = list/count flags (f -> f)
+  out = rendered cfg cfg.mode dest lines flags hits state
+  report hits out
+
+fn binary_state true _
+  text_file
+
+fn binary_state false nul
+  nul_state nul
+
+fn nul_state none
+  text_file
+
+fn nul_state at
+  at
+
+# Which lines count as matches, as a list of booleans. Once `-m` matches have
+# been found the rest are not asked, so they read as unmatched; that is also
+# what lets after-context run on past the last match.
+fn matched_flags cfg lines
+  flagging cfg lines 1 0 []
+
+fn flagging cfg lines i found acc
+  return acc if i > length lines
+  room = under_max? cfg.max_count found
+  hit = room and selected? cfg (string_at lines i)
+  next = if hit (found + 1) found
+  flagging cfg lines (i + 1) next (push acc hit)
+
+fn under_max? none _
+  true
+
+fn under_max? max found
+  found < max
+
+fn selected? cfg line
+  matching? cfg.regex line != cfg.invert
+
+fn rendered cfg count_lines dest _ _ hits _
+  counted cfg dest hits
+
+fn rendered cfg count_matches dest lines flags hits _
+  total = if cfg.invert hits (match_total cfg lines flags)
+  counted cfg dest total
+
+fn rendered cfg list_matching dest _ _ hits _
+  if (hits > 0) [(path_line cfg dest.path)] []
+
+fn rendered cfg list_unmatching dest _ _ hits _
+  if (hits == 0) [(path_line cfg dest.path)] []
+
+fn rendered _ quiet _ _ _ _ _
+  []
+
+fn rendered cfg _ dest lines flags hits nul
+  noticed cfg dest lines flags hits nul
+
+fn noticed cfg dest lines flags _ text_file
+  printed cfg dest lines flags
+
+fn noticed _ dest _ _ hits nul
+  return [] if hits == 0
+  why = "binary file matches (found \"\\0\" byte around offset {nul})"
+  line = if dest.with_name "{dest.path}: {why}" why
+  ["{line}\n"]
+
+# A path on a line of its own ends in a newline, or in a NUL under `-0` so
+# that another program can split the list without trusting the names.
+fn path_line cfg path
+  ending = if cfg.null nul_char "\n"
+  "{path}{ending}"
+
+nul_char = text/from_code 0
+
+# What goes in front of a line for its file: the path and the separator that
+# says whether the line matched, or nothing when paths are not shown. `-0`
+# puts a NUL after the path in place of the separator.
+fn path_part cfg dest kind
+  return "" if not dest.with_name
+  sep = if cfg.null nul_char kind
+  "{dest.path}{sep}"
+
+# `-c` prints a count for a file with matches, and for one without only when
+# `--include-zero` asks.
+fn counted cfg dest n
+  return [] if n == 0 and not cfg.include_zero
+  ["{path_part cfg dest ":"}{n}\n"]
+
+fn match_total cfg lines flags
+  each = list/map list/naturals (k -> matches_in cfg lines k (yes? flags[k]))
+  list/sum (list/take each (length lines))
+
+fn matches_in cfg lines k true
+  length (hits_in cfg.regex (string_at lines k))
+
+fn matches_in _ _ _ _
+  0
+
+# The regex was compiled once when the command line was read, and an err
+# there stopped the run, so these two never see one. std/regexp has no value
+# for a compiled pattern to carry that fact, so every call is asked again.
+fn matching? regex line
+  answered? (regexp/match? regex line)
+
+fn answered? (err _)
+  false
+
+fn answered? b
+  b
+
+# A pattern that can match nothing matches between every pair of characters,
+# and those empty matches are not reported or counted.
+fn hits_in regex line
+  nonempty (regexp/matches regex line)
+
+fn nonempty (err _)
+  []
+
+fn nonempty hits
+  list/to_list (list/select hits (h -> h.to > h.from))
+
+# The matching lines, with whatever context was asked for, in file order.
+# `-o` and `--vimgrep` print one line per match instead of one per line.
+fn printed cfg dest lines flags
+  return per_match cfg dest lines flags if cfg.only or cfg.vimgrep
+  chosen = rows flags cfg.before cfg.after
+  list/to_list (list/map chosen (r -> formatted cfg dest lines r))
+
+# One pass over the flags. `last` is the number of the last line printed and
+# `left` how many more after-context lines it is owed. A match first pulls in
+# the before-context it is owed, which never reaches back past `last`.
+fn rows flags before after
+  context = before > 0 or after > 0
+  rowing flags 1 0 0 [] before after context
+
+fn rowing flags i last left acc before after context
+  return acc if i > length flags
+  hit = yes? flags[i]
+  return matched_row flags i last acc before after context if hit
+  owed = left > 0 and i == last + 1
+  next = if owed (push acc (row "-" i)) acc
+  moved = if owed i last
+  rowing flags (i + 1) moved (left - 1) next before after context
+
+fn matched_row flags i last acc before after context
+  start = max_of (i - before) (last + 1)
+  gap = context and last > 0 and start > last + 1
+  marked = if gap (push acc (row "--" 0)) acc
+  lead = leading marked start i
+  rowing flags (i + 1) i after (push lead (row ":" i)) before after context
+
+fn leading acc k stop
+  return acc if k >= stop
+  leading (push acc (row "-" k)) (k + 1) stop
+
+fn max_of a b
+  if (a > b) a b
+
+fn formatted _ _ _ (row "--" _)
+  "--\n"
+
+fn formatted cfg dest lines (row kind k)
+  line = string_at lines k
+  shown = if (kind == ":") (replaced cfg line) line
+  col = column_of cfg kind line
+  numbered cfg dest kind (fields cfg.line_numbers k col) shown
+
+fn numbered cfg dest kind parts body
+  "{path_part cfg dest kind}{text/join (push parts body) kind}\n"
+
+# The line number and column in front of a line's text, each followed by
+# the separator that says whether the line matched.
+fn fields numbers k col
+  counted_line = if numbers ["{k}"] []
+  if (col == none) counted_line (push counted_line "{col}")
+
+fn column_of cfg ":" line
+  return none if not cfg.column
+  first = (hits_in cfg.regex line)[1]
+  start_of first line
+
+fn column_of _ _ _
+  none
+
+fn start_of none _
+  1
+
+fn start_of h line
+  byte_column line h.from
+
+# Columns count bytes from 1, as ripgrep's do, so a line with accented
+# letters before the match reports a larger column than its character count.
+fn byte_column line from
+  length (text/bytes (text/slice line 1 (from - 1))) + 1
+
+# `-o` prints each match on a line of its own, and `--vimgrep` prints the
+# whole line once for each match in it, with the column that tells an editor
+# where to jump.
+fn per_match cfg dest lines flags
+  numbers = list/take list/naturals (length lines)
+  list/fold numbers [] (acc k -> parts_of cfg dest acc lines k (yes? flags[k]))
+
+fn parts_of cfg dest acc lines k true
+  line = string_at lines k
+  hits = hits_in cfg.regex line
+  list/fold hits acc (out h -> push out (one_part cfg dest line k h))
+
+fn parts_of _ _ acc _ _ _
+  acc
+
+fn one_part cfg dest line k h
+  piece = text/slice line h.from (h.to - 1)
+  shown = if cfg.vimgrep line (expanded cfg.replace piece h.groups)
+  col = if cfg.column (byte_column line h.from) none
+  numbered cfg dest ":" (fields cfg.line_numbers k col) shown
+
+# `-r` rewrites each match in a printed line. Without it the line is shown
+# as it is.
+fn replaced cfg line
+  rewritten cfg.replace cfg.regex line
+
+fn rewritten none _ line
+  line
+
+fn rewritten repl regex line
+  hits = hits_in regex line
+  spliced line hits 1 1 "" repl
+
+fn spliced line hits i at acc repl
+  return "{acc}{text/slice line at (length line)}" if i > length hits
+  h = hits[i]
+  before = text/slice line at (h.from - 1)
+  whole = text/slice line h.from (h.to - 1)
+  piece = expanded repl whole h.groups
+  spliced line hits (i + 1) h.to "{acc}{before}{piece}" repl
+
+# A replacement names captures as `$1` or `${1}`, the whole match as `$0`,
+# and a literal dollar as `$$`.
+fn expanded none whole _
+  whole
+
+fn expanded repl whole groups
+  expanding (text/chars repl) 1 "" (text/concat [whole] groups)
+
+fn expanding cs i acc caps
+  return acc if i > length cs
+  c = string_at cs i
+  return dollar cs (i + 1) acc caps if c == "$"
+  expanding cs (i + 1) "{acc}{c}" caps
+
+fn dollar cs i acc caps
+  next = string_at cs i
+  return expanding cs (i + 1) "{acc}$" caps if next == "$"
+  return braced cs (i + 1) acc caps if next == "\{"
+  digits = digit_run cs i ""
+  return expanding cs i "{acc}$" caps if digits == ""
+  expanding cs (i + length digits) "{acc}{capture caps digits}" caps
+
+fn braced cs i acc caps
+  digits = digit_run cs i ""
+  closed = string_at cs (i + length digits) == "}"
+  return expanding cs (i - 1) "{acc}$" caps if digits == "" or not closed
+  expanding cs (i + length digits + 1) "{acc}{capture caps digits}" caps
+
+fn digit_run cs i acc
+  c = string_at cs i
+  return acc if c == "" or not is_digit? c
+  digit_run cs (i + 1) "{acc}{c}"
+
+fn is_digit? c
+  code = text/char_code c
+  code >= 48 and code <= 57
+
+# Group numbers count from 0, the whole match, and a group that does not
+# exist expands to nothing.
+fn capture caps digits
+  blank_if_none caps[digit_value (text/chars digits) + 1]
+
+fn blank_if_none none
+  ""
+
+fn blank_if_none s
+  s

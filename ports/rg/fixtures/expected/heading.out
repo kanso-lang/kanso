@@ -1,0 +1,16 @@
+tree/README.md
+5-TODO: write the install section
+6:FIXME: the example below is out of date
+7-
+
+tree/scripts/deploy.py
+3-def deploy(target):
+4:    # FIXME: no rollback yet
+5-    print("deploying to", target)
+
+tree/src/lib.rs
+13-
+14:    // FIXME: size should be validated
+15-    pub fn resize(&mut self, size: usize) {
+[stderr]
+[exit 0]

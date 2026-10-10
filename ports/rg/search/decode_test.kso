@@ -1,0 +1,29 @@
+import "std/text"
+
+test_lines_drop_final_newline = lines_of "a\nb\n" == ["a" "b"]
+
+test_lines_keep_unterminated_last = lines_of "a\nb" == ["a" "b"]
+
+test_lines_keep_blank_lines = lines_of "a\n\nb\n" == ["a" "" "b"]
+
+test_lines_of_empty = lines_of "" == []
+
+test_decoded_finds_nul =
+  c = decoded (text/to_bytes [104 105 0 33])
+  c.nul == 2 and c.text == text/utf8 [104 105 0 33]
+
+test_decoded_text_has_no_nul = (decoded (text/bytes "plain")).nul == none
+
+test_decoded_repairs_latin1 =
+  c = decoded (text/to_bytes [99 97 102 233 10])
+  c.text == "caf{fffd}\n"
+
+test_decoded_repairs_truncated_sequence =
+  c = decoded (text/to_bytes [226 130 65])
+  c.text == "{fffd}A"
+
+test_decoded_keeps_multibyte = (decoded (text/bytes "naïve")).text == "naïve"
+
+# kanso strings have no `\u` escape, so the replacement character is built
+# from its code point.
+fffd = text/from_code 65533

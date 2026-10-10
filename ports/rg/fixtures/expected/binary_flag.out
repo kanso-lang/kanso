@@ -1,0 +1,4 @@
+tree/data/blob.bin: binary file matches (found "\0" byte around offset 14)
+tree/data/noeol.txt:last line without newline TODO
+[stderr]
+[exit 0]

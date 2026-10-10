@@ -1,0 +1,4 @@
+tree/data/blob.bin: binary file matches (found "\0" byte around offset 14)
+tree/README.md:TODO: write the install section
+[stderr]
+[exit 0]

@@ -1,0 +1,3 @@
+[stderr]
+rg: unrecognized flag --frobnicate
+[exit 2]

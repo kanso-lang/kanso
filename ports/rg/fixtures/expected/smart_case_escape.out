@@ -1,0 +1,5 @@
+tree/src/main.rs:    // TODO: support more than one file
+tree/src/secret.txt:TODO: this secret.txt is not at the root
+tree/src/util/strings.rs:// todo: lower-case todo should only match with -i
+[stderr]
+[exit 0]

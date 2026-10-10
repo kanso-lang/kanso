@@ -1,0 +1,9 @@
+5-four
+6-five
+7:match beta
+8-six
+9:match gamma
+10-seven
+11-eight
+[stderr]
+[exit 0]

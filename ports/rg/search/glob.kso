@@ -1,0 +1,131 @@
+import "std/text"
+
+# One `[...]` class, read out of a glob: the character ranges it admits,
+# whether a leading `!` or `^` turned it inside out, and the position in the
+# pattern just past its closing bracket.
+type klass
+  after
+  negated
+  spans
+
+# An inclusive range of character codes. A single member is a span of one.
+type span
+  hi
+  lo
+
+# A glob in the dialect .gitignore and `-g` share, matched against a
+# slash-separated path. `*` and `?` stay inside one path component, `**`
+# crosses them, `[...]` is a class, and a backslash makes the next character
+# literal.
+pub fn glob_match? pattern path
+  matching? (text/chars pattern) 1 (text/chars path) 1
+
+fn matching? p i s j
+  return j > length s if i > length p
+  step? p i s j (string_at p i)
+
+# A position outside a list of strings reads as the empty string rather
+# than none, so a caller can compare it with `==` and never meet a none.
+pub fn string_at cs i
+  if (i < 1 or i > length cs) "" cs[i]
+
+fn step? p i s j "*"
+  starred? p i s j (string_at p (i + 1) == "*")
+
+fn step? p i s j "?"
+  c = string_at s j
+  c != "" and c != "/" and matching? p (i + 1) s (j + 1)
+
+fn step? p i s j "["
+  bracketed? p i s j (read_class p (i + 1))
+
+fn step? p i s j "\\"
+  literal? p (i + 2) s j (string_at p (i + 1))
+
+fn step? p i s j c
+  literal? p (i + 1) s j c
+
+fn literal? p next s j c
+  string_at s j == c and matching? p next s (j + 1)
+
+fn starred? p i s j true
+  double? p (i + 2) s j
+
+fn starred? p i s j false
+  single? p (i + 1) s j
+
+# One star: any run of characters short of a slash, shortest first.
+fn single? p i s j
+  return true if matching? p i s j
+  c = string_at s j
+  return false if c == "" or c == "/"
+  single? p i s (j + 1)
+
+# `**/` stands for zero or more whole directories. A `**` anywhere else
+# matches everything that follows, slashes included.
+fn double? p i s j
+  return dirs? p (i + 1) s j if string_at p i == "/"
+  anything? p i s j
+
+fn dirs? p i s j
+  return true if matching? p i s j
+  next = slash_from s j
+  return false if next > length s
+  dirs? p i s (next + 1)
+
+fn slash_from s j
+  return j if j > length s or s[j] == "/"
+  slash_from s (j + 1)
+
+fn anything? p i s j
+  return true if matching? p i s j
+  return false if j > length s
+  anything? p i s (j + 1)
+
+# A `[` with no closing bracket is an ordinary character, the way git reads
+# it, so the class reader answers none and the bracket is matched literally.
+fn bracketed? p i s j none
+  literal? p (i + 1) s j "["
+
+fn bracketed? p _ s j k
+  c = string_at s j
+  fits = c != "" and c != "/" and admits? k c
+  fits and matching? p k.after s (j + 1)
+
+fn admits? (klass _ negated spans) c
+  code = text/char_code c
+  inside = list_any? spans 1 code
+  inside != negated
+
+fn list_any? spans at code
+  return false if at > length spans
+  sp = spans[at]
+  return true if sp.lo <= code and code <= sp.hi
+  list_any? spans (at + 1) code
+
+fn read_class p i
+  negated = string_at p i == "!" or string_at p i == "^"
+  start = if negated (i + 1) i
+  members p start start negated []
+
+# A `]` in the first position is a member rather than the end, which is how
+# `[]a]` names a bracket.
+fn members p at start negated acc
+  c = string_at p at
+  return none if c == ""
+  return klass (at + 1) negated acc if c == "]" and at > start
+  ranged p at start negated acc (ranged? p at)
+
+fn ranged? p at
+  string_at p (at + 1) == "-" and string_at p (at + 2) != "]"
+
+fn ranged p at start negated acc true
+  last = string_at p (at + 2)
+  return none if last == ""
+  lo = text/char_code (string_at p at)
+  hi = text/char_code last
+  members p (at + 3) start negated (push acc (span hi lo))
+
+fn ranged p at start negated acc false
+  code = text/char_code (string_at p at)
+  members p (at + 1) start negated (push acc (span code code))

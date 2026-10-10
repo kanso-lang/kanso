@@ -1,0 +1,11 @@
+match alpha
+three
+--
+match beta
+six
+match gamma
+seven
+--
+match delta
+[stderr]
+[exit 0]

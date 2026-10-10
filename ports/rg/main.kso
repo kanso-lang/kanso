@@ -1,0 +1,4 @@
+import "./search"
+import "std/os"
+
+os/args .> search/main

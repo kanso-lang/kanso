@@ -1,0 +1,4 @@
+3:match alpha
+7:match beta
+[stderr]
+[exit 0]

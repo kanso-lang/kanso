@@ -1,0 +1,113 @@
+import "std/list"
+import "std/regexp"
+import "std/text"
+
+# The characters a regex reads as syntax. `-F` puts a backslash before each
+# one so the pattern means its own letters.
+specials = "\\.+*?()|[]\{}^$"
+
+# All the patterns as one regex: each in a group of its own, joined as
+# alternatives, then wrapped for `-w` or `-x`, with `(?i)` in front when the
+# case mode says letters should fold.
+pub fn regex_for patterns case fixed shape
+  literal = list/to_list (list/map patterns (p -> as_written p fixed))
+  grouped = list/to_list (list/map literal (p -> "(?:{p})"))
+  body = shaped (text/join grouped "|") shape
+  folded body (folds? case patterns)
+
+fn as_written p true
+  quoted p
+
+fn as_written p false
+  widened (text/chars p) 1 false ""
+
+# std/regexp knows `\w`, `\d` and `\s` but reads their capital forms as plain
+# letters (bugs/regexp_negated_escapes), so outside a class the three are
+# spelled out here as the negated classes they stand for. Inside a class
+# there is no spelling for "not a word character", so they are left alone.
+fn widened cs i in_class acc
+  return acc if i > length cs
+  c = string_at cs i
+  return escape_at cs i in_class acc if c == "\\"
+  opens = c == "[" and not in_class
+  closes = c == "]" and in_class
+  now = if opens true (if closes false in_class)
+  widened cs (i + 1) now "{acc}{c}"
+
+fn escape_at cs i in_class acc
+  next = string_at cs (i + 1)
+  spelled = if in_class "\\{next}" (negated_class next)
+  widened cs (i + 2) in_class "{acc}{spelled}"
+
+fn negated_class "W"
+  "[^a-zA-Z0-9_]"
+
+fn negated_class "D"
+  "[^0-9]"
+
+fn negated_class "S"
+  "[^ \\t\\n\\r]"
+
+fn negated_class c
+  "\\{c}"
+
+pub fn quoted p
+  cs = text/chars p
+  text/join (list/to_list (list/map cs (c -> guarded c))) ""
+
+fn guarded c
+  if (in_specials? c) "\\{c}" c
+
+fn in_specials? c
+  length (text/split specials c) > 1
+
+fn shaped body "line"
+  "^(?:{body})$"
+
+fn shaped body "word"
+  "\\b(?:{body})\\b"
+
+fn shaped body _
+  body
+
+fn folded body true
+  "(?i){body}"
+
+fn folded body false
+  body
+
+fn folds? "insensitive" _
+  true
+
+fn folds? "smart" patterns
+  not list/any? patterns (p -> has_upper? p)
+
+fn folds? _ _
+  false
+
+# Smart case looks at the letters a pattern spells, so the letter after a
+# backslash (`\W`, `\S`) does not count as an uppercase one.
+pub fn has_upper? p
+  upper_from? (text/chars p) 1
+
+fn upper_from? cs i
+  return false if i > length cs
+  c = string_at cs i
+  return upper_from? cs (i + 2) if c == "\\"
+  code = text/char_code c
+  code >= 65 and code <= 90 or upper_from? cs (i + 1)
+
+# A regex that does not compile, as the sentence to show the user, or none
+# when it compiles. Matching it against nothing is the cheapest way to ask
+# std/regexp to compile it.
+pub fn regex_trouble regex
+  trouble (regexp/find regex "")
+
+fn trouble none
+  none
+
+fn trouble (err why)
+  "regex parse error: {why}"
+
+fn trouble _
+  none

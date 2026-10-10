@@ -1,0 +1,4 @@
+./tree/scripts/build.sh:# TODO: cache the build
+./tree/scripts/run.log:TODO: a log .gitignore hides and scripts/.ignore lets back in
+[stderr]
+[exit 0]

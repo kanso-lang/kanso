@@ -1,0 +1,6 @@
+import "std/regexp"
+
+pub fn run _
+  a = regexp/find "o\\W" "todo: x"
+  b = regexp/find "o\\W" "toWn"
+  "{a} {b}"

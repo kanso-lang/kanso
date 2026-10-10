@@ -1,0 +1,10 @@
+tree/src/main.rs
+    // TODO: support more than one file
+
+tree/src/secret.txt
+TODO: this secret.txt is not at the root
+
+tree/README.md
+TODO: write the install section
+[stderr]
+[exit 0]

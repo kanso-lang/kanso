@@ -1,0 +1,5 @@
+tree/src/lib.rs:    pub fn new(name: &str) -> Widget {
+tree/src/lib.rs:    pub fn resize(&mut self, size: usize) {
+tree/src/main.rs:fn main() {
+[stderr]
+[exit 0]

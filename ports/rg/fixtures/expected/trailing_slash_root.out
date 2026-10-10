@@ -1,0 +1,3 @@
+tree/scripts/deploy.py:    # FIXME: no rollback yet
+[stderr]
+[exit 0]

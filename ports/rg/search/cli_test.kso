@@ -1,0 +1,73 @@
+test_first_positional_is_pattern =
+  c = parse ["foo" "a" "b"]
+  c.regex == "(?:foo)" and c.paths == ["a" "b"]
+
+test_e_makes_every_positional_a_path =
+  c = parse ["-e" "foo" "a"]
+  c.paths == ["a"]
+
+test_short_cluster_with_value =
+  c = parse ["-inC2" "x"]
+  c.before == 2 and c.after == 2 and c.line_numbers
+
+test_after_beats_context =
+  c = parse ["-A" "1" "-C" "3" "x"]
+  c.after == 1 and c.before == 3
+
+test_long_flag_with_equals =
+  c = parse ["--max-count=4" "x"]
+  c.max_count == 4
+
+test_last_mode_wins =
+  c = parse ["-c" "-l" "x"]
+  c.mode == list_matching
+
+test_unrestricted_levels =
+  c = parse ["-uuu" "x"]
+  c.hidden and not c.ignore and c.binary
+
+test_column_brings_line_numbers =
+  c = parse ["--column" "x"]
+  c.line_numbers
+
+test_no_line_number_wins_over_column =
+  c = parse ["--column" "-N" "x"]
+  not c.line_numbers
+
+test_double_dash_ends_flags =
+  c = parse ["--" "-v" "a"]
+  c.regex == "(?:-v)" and not c.invert
+
+test_unknown_flag = parse ["--nope" "x"] == bad_usage "unrecognized flag --nope"
+
+test_missing_value =
+  why = "missing value for flag -m: missing argument for option '-m'"
+  parse ["x" "-m"] == bad_usage why
+
+test_bad_number =
+  why = "value is not a valid number: invalid digit found in string"
+  parse ["-A" "two" "x"] == bad_usage "error parsing flag -A: {why}"
+
+test_no_pattern_is_refused =
+  why = "ripgrep requires at least one pattern to execute a search"
+  parse ["-n"] == bad_usage why
+
+test_files_needs_no_pattern =
+  c = parse ["--files" "dir"]
+  c.paths == ["dir"]
+
+test_bad_regex_is_refused = refused? (parse ["(x"])
+
+test_type_globs_collected =
+  c = parse ["-t" "md" "x"]
+  length c.types == 7
+
+test_unknown_type =
+  refusal = bad_usage "unrecognized file type: nope"
+  parse ["-t" "nope" "x"] == refusal
+
+fn refused? (bad_usage _)
+  true
+
+fn refused? _
+  false

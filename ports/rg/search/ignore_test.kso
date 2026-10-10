@@ -1,0 +1,51 @@
+import "std/text"
+
+gitignore = "# logs\ntarget/\n*.log\n!keep.log\n/secret.txt\ndocs/*.tmp\n"
+
+root_rules = ignore_rules "tree" gitignore
+
+test_ignore_skips_comments = length root_rules == 5
+
+test_ignore_name_at_any_depth = ignored? root_rules "tree/a/b/debug.log" false
+
+test_ignore_negation_readmits = not ignored? root_rules "tree/keep.log" false
+
+test_ignore_dir_only_skips_dir = ignored? root_rules "tree/target" true
+
+test_ignore_dir_only_spares_file = not ignored? root_rules "tree/target" false
+
+test_ignore_anchored_root_only =
+  top = ignored? root_rules "tree/secret.txt" false
+  top and not ignored? root_rules "tree/src/secret.txt" false
+
+test_ignore_middle_slash_anchors =
+  shallow = ignored? root_rules "tree/docs/draft.tmp" false
+  shallow and not ignored? root_rules "tree/docs/nested/old.tmp" false
+
+test_ignore_outside_base = not ignored? root_rules "other/debug.log" false
+
+test_ignore_deeper_file_overrides =
+  deeper = ignore_rules "tree/sub" "!debug.log\n"
+  rules = text/concat root_rules deeper
+  not ignored? rules "tree/sub/debug.log" false
+
+test_ignore_crlf_and_trailing_space =
+  rules = ignore_rules "" "notes.txt  \r\n"
+  ignored? rules "a/notes.txt" false
+
+test_ignore_escaped_hash =
+  rules = ignore_rules "" "\\#lit\n"
+  ignored? rules "#lit" false
+
+test_override_whitelist_requires_match =
+  globs = [(override_rule "*.rs")]
+  kept = not overridden? globs "src/main.rs" false
+  kept and overridden? globs "README.md" false
+
+test_override_whitelist_spares_dirs =
+  globs = [(override_rule "*.rs")]
+  not overridden? globs "src" true
+
+test_override_exclude =
+  globs = [(override_rule "*.rs") (override_rule "!lib.rs")]
+  overridden? globs "src/lib.rs" false

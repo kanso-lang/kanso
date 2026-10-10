@@ -1,0 +1,3 @@
+[stderr]
+rg: missing value for flag -A: missing argument for option '-A'
+[exit 2]

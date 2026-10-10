@@ -1,0 +1,6 @@
+4:12:pub struct Widget {
+9:6:impl Widget {
+10:31:    pub fn new(name: &str) -> Widget {
+11:9:        Widget { name: name.to_string(), size: 0 }
+[stderr]
+[exit 0]

@@ -1,0 +1,7 @@
+tree/src/lib.rs:    pub size: usize,
+tree/src/lib.rs:        Widget { name: name.to_string(), size: 0 }
+tree/src/lib.rs:    // FIXME: size should be validated
+tree/src/lib.rs:    pub fn resize(&mut self, size: usize) {
+tree/src/lib.rs:        self.size = size;
+[stderr]
+[exit 0]

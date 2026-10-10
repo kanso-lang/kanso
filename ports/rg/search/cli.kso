@@ -1,0 +1,681 @@
+import "std/list"
+import "std/text"
+
+# What the run is for. Printing matching lines is the default; each of the
+# others replaces it, and the last one named on the command line wins.
+pub type count_lines
+
+pub type count_matches
+
+pub type list_files
+
+pub type list_matching
+
+pub type list_types
+
+pub type list_unmatching
+
+pub type print_lines
+
+pub type quiet
+
+pub type show_help
+
+pub type show_version
+
+# A command line that cannot be run, with the sentence that says why.
+pub type bad_usage
+  why
+
+# Everything a search needs to know, settled once from the command line.
+# `regex` is the one pattern every line is tested against, built from all the
+# `-e` patterns and the flags that shape them. `filename` is true, false, or
+# none for "decide from the paths". `depth` is none when unlimited.
+pub type config
+  after
+  before
+  binary
+  column
+  depth
+  filename
+  globs
+  heading
+  hidden
+  ignore
+  include_zero
+  invert
+  line_numbers
+  max_count
+  mode
+  null
+  only
+  paths
+  pattern_files
+  regex
+  replace
+  spec
+  text
+  types
+  untypes
+  vimgrep
+
+# How the regex was put together, kept so that patterns read from a `-f`
+# file can join the ones from the command line and be built again.
+pub type spec
+  case
+  fixed
+  patterns
+  shape
+
+# Flags that take a value, by their long names. The value is the next
+# argument, or the rest of a short cluster (`-A2`), or what follows `=` in a
+# long flag (`--max-count=3`).
+# Every short flag is another spelling of a long one, and the rest of the
+# parser speaks only the long names. A name with no long form is its own.
+fn canonical "-."
+  "--hidden"
+
+fn canonical "-A"
+  "--after-context"
+
+fn canonical "-B"
+  "--before-context"
+
+fn canonical "-C"
+  "--context"
+
+fn canonical "-0"
+  "--null"
+
+fn canonical "-F"
+  "--fixed-strings"
+
+fn canonical "-H"
+  "--with-filename"
+
+fn canonical "-I"
+  "--no-filename"
+
+fn canonical "-N"
+  "--no-line-number"
+
+fn canonical "-S"
+  "--smart-case"
+
+fn canonical "-T"
+  "--type-not"
+
+fn canonical "-V"
+  "--version"
+
+fn canonical "-a"
+  "--text"
+
+fn canonical "-c"
+  "--count"
+
+fn canonical "-d"
+  "--max-depth"
+
+fn canonical "-e"
+  "--regexp"
+
+fn canonical "-f"
+  "--file"
+
+fn canonical "-g"
+  "--glob"
+
+fn canonical "-h"
+  "--help"
+
+fn canonical "-i"
+  "--ignore-case"
+
+fn canonical "-l"
+  "--files-with-matches"
+
+fn canonical "-m"
+  "--max-count"
+
+fn canonical "-n"
+  "--line-number"
+
+fn canonical "-o"
+  "--only-matching"
+
+fn canonical "-q"
+  "--quiet"
+
+fn canonical "-r"
+  "--replace"
+
+fn canonical "-s"
+  "--case-sensitive"
+
+fn canonical "-t"
+  "--type"
+
+fn canonical "-u"
+  "--unrestricted"
+
+fn canonical "-v"
+  "--invert-match"
+
+fn canonical "-w"
+  "--word-regexp"
+
+fn canonical "-x"
+  "--line-regexp"
+
+fn canonical name
+  name
+
+fn valued? "--after-context"
+  true
+
+fn valued? "--before-context"
+  true
+
+fn valued? "--context"
+  true
+
+fn valued? "--file"
+  true
+
+fn valued? "--glob"
+  true
+
+fn valued? "--max-count"
+  true
+
+fn valued? "--max-depth"
+  true
+
+fn valued? "--regexp"
+  true
+
+fn valued? "--replace"
+  true
+
+fn valued? "--sort"
+  true
+
+fn valued? "--type"
+  true
+
+fn valued? "--type-not"
+  true
+
+fn valued? _
+  false
+
+fresh = { "globs":[] "patterns":[] "positional":[] "types":[] "untypes":[] }
+  . put "unrestricted" 0
+
+# The arguments after the program name, read left to right into a map of
+# settings, and then into a config.
+pub fn parse argv
+  settled (reading argv 1 fresh)
+
+fn reading _ _ b@(bad_usage _)
+  b
+
+fn reading argv at m
+  return m if at > length argv
+  arg = string_at argv at
+  classified argv at m arg (kind_of arg)
+
+# Which of the four shapes an argument has. `--` ends the flags, a lone `-`
+# is the name of standard input and so a path, and anything else beginning
+# with a dash is a flag.
+fn kind_of "--"
+  "end"
+
+fn kind_of "-"
+  "positional"
+
+fn kind_of arg
+  return "long" if starts? arg "--"
+  return "short" if starts? arg "-"
+  "positional"
+
+fn starts? s prefix
+  text/slice s 1 (length prefix) == prefix
+
+fn classified argv at m _ "end"
+  rest = text/slice argv (at + 1) (length argv)
+  list/fold rest m (acc a -> positional acc a)
+
+fn classified argv at m arg "positional"
+  reading argv (at + 1) (positional m arg)
+
+fn classified argv at m arg "long"
+  long argv at m (text/split arg "=")
+
+fn classified argv at m arg "short"
+  cluster argv at m (text/chars arg) 2
+
+fn positional m arg
+  put m "positional" (push m["positional"] arg)
+
+fn set_flag m _ "--heading"
+  put m "heading" true
+
+fn set_flag m _ "--include-zero"
+  put m "include_zero" true
+
+fn set_flag m _ "--no-heading"
+  put m "heading" false
+
+fn set_flag m _ "--null"
+  put m "null" true
+
+fn set_flag m _ "--passthru"
+  put m "passthru" true
+
+fn set_flag m _ "--passthrough"
+  put m "passthru" true
+
+fn set_flag m _ "--vimgrep"
+  put m "vimgrep" true
+
+# `--name=value` carries its value; `--name value` takes the next argument.
+fn long argv at m parts
+  spelled = string_at parts 1
+  inline = length parts > 1
+  value = text/join (text/slice parts 2 (length parts)) "="
+  flag = canonical spelled
+  long_valued argv at m spelled flag value inline (valued? flag)
+
+fn long_valued argv at m spelled flag value true true
+  reading argv (at + 1) (set_value m spelled flag value)
+
+fn long_valued _ _ _ spelled _ _ true false
+  bad_usage "flag {spelled} does not take a value"
+
+fn long_valued argv at m spelled flag _ false true
+  following argv at m spelled flag
+
+fn long_valued argv at m spelled flag _ false false
+  reading argv (at + 1) (set_flag m spelled flag)
+
+fn following argv at m spelled flag
+  return missing spelled if at + 1 > length argv
+  value = string_at argv (at + 1)
+  reading argv (at + 2) (set_value m spelled flag value)
+
+fn missing spelled
+  why = "missing argument for option '{spelled}'"
+  bad_usage "missing value for flag {spelled}: {why}"
+
+# A short cluster like `-inC2` is several flags in one argument. A flag that
+# takes a value ends the cluster: the rest of it is the value, or the next
+# argument is when nothing is left.
+fn cluster _ _ b@(bad_usage _) _ _
+  b
+
+fn cluster argv at m cs i
+  return reading argv (at + 1) m if i < 1 or i > length cs
+  spelled = "-{cs[i]}"
+  flag = canonical spelled
+  in_cluster argv at m cs i spelled flag (valued? flag)
+
+fn in_cluster argv at m cs i spelled flag true
+  return following argv at m spelled flag if i == length cs
+  value = text/join (text/slice cs (i + 1) (length cs)) ""
+  reading argv (at + 1) (set_value m spelled flag value)
+
+fn in_cluster argv at m cs i spelled flag false
+  cluster argv at (set_flag m spelled flag) cs (i + 1)
+
+fn set_flag m _ "--binary"
+  put m "binary" true
+
+fn set_flag m _ "--case-sensitive"
+  put m "case" "sensitive"
+
+fn set_flag m _ "--column"
+  put m "column" true
+
+fn set_flag m _ "--count"
+  put m "mode" count_lines
+
+fn set_flag m _ "--count-matches"
+  put m "mode" count_matches
+
+fn set_flag m _ "--files"
+  put m "mode" list_files
+
+fn set_flag m _ "--files-with-matches"
+  put m "mode" list_matching
+
+fn set_flag m _ "--files-without-match"
+  put m "mode" list_unmatching
+
+fn set_flag m _ "--fixed-strings"
+  put m "fixed" true
+
+fn set_flag m _ "--help"
+  put m "mode" show_help
+
+fn set_flag m _ "--hidden"
+  put m "hidden" true
+
+fn set_flag m _ "--ignore-case"
+  put m "case" "insensitive"
+
+fn set_flag m _ "--invert-match"
+  put m "invert" true
+
+fn set_flag m _ "--line-number"
+  put m "line_numbers" true
+
+fn set_flag m _ "--line-regexp"
+  put m "line_regexp" true
+
+fn set_flag m _ "--no-filename"
+  put m "filename" false
+
+fn set_flag m _ "--no-ignore"
+  put m "no_ignore" true
+
+fn set_flag m _ "--no-ignore-global"
+  m
+
+fn set_flag m _ "--no-line-number"
+  put m "line_numbers" false
+
+fn set_flag m _ "--no-require-git"
+  m
+
+fn set_flag m _ "--only-matching"
+  put m "only" true
+
+fn set_flag m _ "--quiet"
+  put m "mode" quiet
+
+fn set_flag m _ "--smart-case"
+  put m "case" "smart"
+
+fn set_flag m _ "--text"
+  put m "text" true
+
+fn set_flag m _ "--type-list"
+  put m "mode" list_types
+
+fn set_flag m _ "--unrestricted"
+  put m "unrestricted" (m["unrestricted"] + 1)
+
+fn set_flag m _ "--version"
+  put m "mode" show_version
+
+fn set_flag m _ "--with-filename"
+  put m "filename" true
+
+fn set_flag m _ "--word-regexp"
+  put m "word" true
+
+fn set_flag _ spelled _
+  bad_usage "unrecognized flag {spelled}"
+
+fn set_value m spelled "--after-context" v
+  counted m "after" spelled v
+
+fn set_value m spelled "--before-context" v
+  counted m "before" spelled v
+
+fn set_value m spelled "--context" v
+  counted m "context" spelled v
+
+fn set_value m _ "--file" v
+  put m "pattern_files" (push (listed m "pattern_files") v)
+
+fn set_value m _ "--glob" v
+  put m "globs" (push m["globs"] v)
+
+fn set_value m spelled "--max-count" v
+  counted m "max_count" spelled v
+
+fn set_value m spelled "--max-depth" v
+  counted m "depth" spelled v
+
+fn set_value m _ "--regexp" v
+  put m "patterns" (push m["patterns"] v)
+
+fn set_value m _ "--replace" v
+  put m "replace" v
+
+fn set_value m _ "--sort" v
+  sorted_by m v
+
+fn set_value m _ "--type" v
+  with_type m "types" v
+
+fn set_value m _ "--type-not" v
+  with_type m "untypes" v
+
+fn set_value _ spelled _ _
+  bad_usage "unrecognized flag {spelled}"
+
+# A count must be a whole number that is not negative.
+fn counted m key flag v
+  number m key flag (whole_number v)
+
+fn number _ _ spelled none
+  why = "value is not a valid number: invalid digit found in string"
+  bad_usage "error parsing flag {spelled}: {why}"
+
+fn number m key _ n
+  put m key n
+
+fn whole_number v
+  digits = text/chars v
+  all_digits = length v > 0 and list/all? digits (c -> in_digits? c)
+  if all_digits (digit_value digits) none
+
+fn in_digits? c
+  code = text/char_code c
+  code >= 48 and code <= 57
+
+fn digit_value digits
+  list/fold digits 0 (acc c -> acc * 10 + text/char_code c - 48)
+
+# Output is always in path order, so `--sort path` asks for what happens
+# anyway and `--sort none` is allowed to get it too.
+fn sorted_by m "none"
+  m
+
+fn sorted_by m "path"
+  m
+
+fn sorted_by _ v
+  bad_usage "unsupported sort order {v}: this port always sorts by path"
+
+fn with_type m key name
+  known = type_globs name
+  return bad_usage "unrecognized file type: {name}" if length known == 0
+  put m key (push (listed m key) name)
+
+# The settings map, read into a config. The first positional argument is the
+# pattern unless `-e` named one; everything after it is a path.
+fn settled b@(bad_usage _)
+  b
+
+fn settled m
+  mode = or_else m["mode"] print_lines
+  patterned m mode (needs_pattern? mode)
+
+fn needs_pattern? list_files
+  false
+
+fn needs_pattern? list_types
+  false
+
+fn needs_pattern? show_help
+  false
+
+fn needs_pattern? show_version
+  false
+
+fn needs_pattern? _
+  true
+
+fn patterned m mode false
+  built m mode [] (listed m "positional")
+
+fn patterned m mode true
+  given = listed m "patterns"
+  pos = listed m "positional"
+  named = length given > 0 or length (listed m "pattern_files") > 0
+  return built m mode given pos if named
+  why = "ripgrep requires at least one pattern to execute a search"
+  return bad_usage why if length pos == 0
+  built m mode [pos[1]] (text/slice pos 2 (length pos))
+
+fn built m mode patterns paths
+  wanted = spec (case_mode m) (on? m "fixed") patterns (shape_of m)
+  regex = regex_of wanted
+  checked m mode regex wanted paths (regex_trouble regex)
+
+fn checked m mode regex wanted paths none
+  config_of m mode regex wanted paths
+
+fn checked _ _ _ _ _ why
+  bad_usage why
+
+# No pattern at all, which an empty `-f` file can leave, matches nothing,
+# and `(?!)` is the regex that never matches.
+pub fn regex_of (spec case fixed patterns shape)
+  return "(?!)" if length patterns == 0
+  regex_for patterns case fixed shape
+
+fn case_mode m
+  or_else m["case"] "sensitive"
+
+fn shape_of m
+  word = on? m "word"
+  line = on? m "line_regexp"
+  if line "line" (if word "word" "plain")
+
+fn on? m key
+  yes? m[key]
+
+fn yes? none
+  false
+
+fn yes? true
+  true
+
+fn yes? _
+  false
+
+# The list settings start out empty in `fresh`, but a map lookup can always
+# miss as far as the checker knows, so each read names what a miss means.
+fn listed m key
+  or_else m[key] []
+
+fn or_else none fallback
+  fallback
+
+fn or_else v _
+  v
+
+fn config_of m mode regex wanted paths
+  level = m["unrestricted"]
+  passthru = on? m "passthru"
+  context = if passthru everything (or_else m["context"] 0)
+  after = or_else m["after"] context
+  before = or_else m["before"] context
+  binary = on? m "binary" or level >= 3
+  vimgrep = on? m "vimgrep"
+  column = on? m "column" or vimgrep
+  depth = m["depth"]
+  filename = or_else m["filename"] (if vimgrep true none)
+  globs = list/to_list (list/map (listed m "globs") override_rule)
+  heading = on? m "heading"
+  hidden = on? m "hidden" or level >= 2
+  ignore = not (on? m "no_ignore" or level >= 1)
+  include_zero = on? m "include_zero"
+  invert = on? m "invert"
+  numbers = numbers_wanted m["line_numbers"] column
+  null = on? m "null"
+  files = listed m "pattern_files"
+  only = on? m "only"
+  replace = m["replace"]
+  text = on? m "text"
+  types = globs_of (listed m "types")
+  untypes = globs_of (listed m "untypes")
+  max = m["max_count"]
+  config
+    after
+    before
+    binary
+    column
+    depth
+    filename
+    globs
+    heading
+    hidden
+    ignore
+    include_zero
+    invert
+    numbers
+    max
+    mode
+    null
+    only
+    paths
+    files
+    regex
+    replace
+    wanted
+    text
+    types
+    untypes
+    vimgrep
+
+# `--passthru` is context wide enough to take in every line of any file.
+everything = 1000000000
+
+# The same config with another regex: what patterns read from a file make.
+# A record has no update syntax, so every field is named to change one.
+pub fn with_regex c regex
+  config
+    c.after
+    c.before
+    c.binary
+    c.column
+    c.depth
+    c.filename
+    c.globs
+    c.heading
+    c.hidden
+    c.ignore
+    c.include_zero
+    c.invert
+    c.line_numbers
+    c.max_count
+    c.mode
+    c.null
+    c.only
+    c.paths
+    c.pattern_files
+    regex
+    c.replace
+    c.spec
+    c.text
+    c.types
+    c.untypes
+    c.vimgrep
+
+# `--column` needs a line number to be read against, so it brings one along
+# unless `-N` said otherwise.
+fn numbers_wanted none column
+  column
+
+fn numbers_wanted said _
+  said
+
+fn globs_of names
+  list/fold names [] (acc name -> text/concat acc (type_globs name))

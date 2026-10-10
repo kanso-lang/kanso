@@ -1,0 +1,19 @@
+tree/README.md
+tree/context.txt
+tree/data/blob.bin
+tree/data/empty.txt
+tree/data/latin1.txt
+tree/data/noeol.txt
+tree/docs/guide.md
+tree/docs/nested/old.tmp
+tree/docs/unicode.txt
+tree/keep.log
+tree/scripts/build.sh
+tree/scripts/deploy.py
+tree/scripts/run.log
+tree/src/lib.rs
+tree/src/main.rs
+tree/src/secret.txt
+tree/src/util/strings.rs
+[stderr]
+[exit 0]

@@ -1,0 +1,15 @@
+1-one
+2-two
+3:match alpha
+--
+5-four
+6-five
+7:match beta
+8-six
+9:match gamma
+--
+13-ten
+14-eleven
+15:match delta
+[stderr]
+[exit 0]

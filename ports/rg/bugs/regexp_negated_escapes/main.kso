@@ -1,0 +1,15 @@
+# Bug: std/regexp reads `\W`, `\D` and `\S` as the letters W, D and S.
+#
+# `\w`, `\d` and `\s` are supported, and their capital forms are in every
+# regex dialect a programmer brings (Perl, PCRE, Go, Rust, JavaScript). An
+# escape the parser does not know falls through to "the letter itself", so
+# these three neither work nor fail:
+#
+#   expected:  o: <none>     (an o followed by a non-word character)
+#   actual:    <none> oW     (an o followed by a capital W)
+#
+# Expected either the negated classes or an err naming the escape. The
+# same fall-through makes `\q` match "q", which hides typos in patterns.
+import "./probe"
+
+print (probe/run 0)

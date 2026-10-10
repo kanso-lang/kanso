@@ -1,0 +1,6 @@
+tree/docs/guide.md:7:18:The widget reads one file. TODO: document flags.
+tree/docs/guide.md:7:35:The widget reads one file. TODO: document flags.
+tree/docs/guide.md:8:4:Errors go to standard error.
+tree/docs/guide.md:8:26:Errors go to standard error.
+[stderr]
+[exit 0]

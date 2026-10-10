@@ -1,0 +1,6 @@
+match alpha
+match beta
+match gamma
+match delta
+[stderr]
+[exit 0]

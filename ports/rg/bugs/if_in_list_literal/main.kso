@@ -1,0 +1,18 @@
+# Bug: `if` written as a list element is not one element, and nothing says so.
+#
+# A list element is one atom, and the checker enforces that for an ordinary
+# call: `[override_rule "*.rs"]` is refused with "a list element is one atom
+# -- write `(override_rule ...)`". The same shape with `if` is not refused:
+#
+#   kanso run if_in_list_literal --interp   prints  [<fn> true "x" "y"]
+#   kanso build if_in_list_literal          error: native backend: `if` as a
+#                                           bare value is not yet supported
+#
+# Expected: the checker refuses `[if b "x" "y"]` with the same "one atom"
+# diagnostic it gives a call, so both engines agree and the author is told
+# to write `[(if b "x" "y")]`. Instead the interpreter silently builds a
+# four-element list, and the native backend refuses the program with an
+# error that names no file and no line.
+import "./pick"
+
+print "{pick/one true}"

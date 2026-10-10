@@ -1,0 +1,5 @@
+match alpha
+three
+four
+[stderr]
+[exit 0]

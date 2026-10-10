@@ -1,0 +1,111 @@
+# One fixture per line: a name, a tab, and the arguments as a shell would
+# read them. Every case runs in a directory holding the tree that
+# make_tree.sh builds, under the name `tree`, unless the arguments begin
+# with `@dir`, which runs the case from inside that directory instead. The
+# expected output for case NAME is expected/NAME.out: stdout, then stderr,
+# then the exit status.
+basic	TODO tree
+line_numbers	-n TODO tree
+ignore_case	-i todo tree/src
+smart_case_lower	-S todo tree/src
+smart_case_upper	-S Todo tree
+smart_case_escape	-S 'todo\W' tree/src
+case_last_wins	-i -s todo tree/src
+word	-w size tree/src
+not_word	size tree/src
+line_regexp	-x 'match \w+' tree/context.txt
+invert	-v -n e tree/context.txt
+count	-c TODO tree
+count_single_file	-c match tree/context.txt
+count_invert	-c -v match tree/context.txt
+count_matches	--count-matches e tree/src
+files_with_matches	-l TODO tree
+files_without_match	--files-without-match TODO tree
+after_context	-A 1 match tree/context.txt
+before_context	-B 2 -n match tree/context.txt
+context	-C 1 -n match tree/context.txt
+context_across_files	-C1 FIXME tree
+context_overlap	-C 2 -n 'beta|gamma' tree/context.txt
+max_count	-m 2 -n match tree/context.txt
+max_count_context	-m1 -A2 match tree/context.txt
+multiple_patterns	-e TODO -e FIXME tree
+attached_values	-eFIXME --regexp=Contact -C0 tree/README.md
+fixed_strings	-F 'docs/*.tmp' tree
+fixed_line	-x -F 'match beta' tree/context.txt
+only_matching	-o -n '[A-Z]{4,5}:' tree/README.md
+only_matching_word	-o -w 'match \w+' tree/context.txt
+replace	-r '[$1]' 'TODO: (\w+)' tree
+replace_braced	-o -r '${1}!' 'match (\w+)' tree/context.txt
+column	--column -n Widget tree/src/lib.rs
+combined_flags	-inC1 todo tree/src/util
+glob_include	-g '*.rs' TODO tree
+glob_exclude	-g '!*.md' TODO tree
+glob_path	-g 'tree/src/*.rs' fn tree
+glob_exclude_dir	-g '!docs/' TODO tree
+type_rust	-t rust TODO tree
+type_not	-T rust -T md TODO tree
+type_list	--type-list
+type_unknown	-t klingon TODO tree
+hidden	--hidden TODO tree
+no_ignore	--no-ignore TODO tree
+unrestricted_text	-uuu TODO tree
+binary_explicit	TODO tree/data/blob.bin
+binary_explicit_many	TODO tree/data/blob.bin tree/README.md
+binary_count	-c TODO tree/data/blob.bin
+files	--files tree
+files_glob	--files -g '*.md' tree
+max_depth	--max-depth 1 TODO tree
+parent_ignore	TODO tree/docs
+nested_ignore	generated tree/src
+nested_ignore_off	--no-ignore generated tree/src
+explicit_ignored_file	TODO tree/debug.log
+missing_path	TODO nope tree/README.md
+no_match	zzzzz tree
+quiet	-q TODO tree
+quiet_no_match	-q zzzzz tree
+no_trailing_newline	-n TODO tree/data/noeol.txt
+empty_file	-c . tree/data/empty.txt
+with_filename	-H Contact tree/README.md
+no_filename	-I TODO tree/src
+dot_root	TODO ./tree/scripts
+trailing_slash_root	FIXME tree/scripts/
+unknown_flag	--frobnicate x tree
+missing_value	TODO tree -A
+bad_count	-m lots TODO tree
+latin1	latin tree/data/latin1.txt
+bad_regex	'(oops' tree
+no_pattern	
+binary_flag	--binary TODO tree/data
+text_flag	-a TODO tree/data
+deeper_negation	TODO tree/scripts
+glob_beats_ignore	-g '*.log' TODO tree
+glob_double_star	-g 'tree/**/util/*' -l . tree
+context_invert	-v -C1 -n 'match|e' tree/context.txt
+count_ignores_context	-c -A3 match tree/context.txt
+files_with_invert	-l -v TODO tree/src
+single_file_list	-l Contact tree/README.md
+many_roots	FIXME tree/README.md tree/scripts
+line_regexp_ignore_case	-x -i 'MATCH BETA' tree/context.txt
+max_count_zero	-m 0 match tree/context.txt
+replace_many	-r X o tree/docs/guide.md
+only_column	-o --column -n 'o\w' tree/docs/guide.md
+dash_pattern	-e --fast tree/README.md
+double_dash	-- --fast tree/README.md
+unicode_column	--column TODO tree/docs/unicode.txt
+unicode_fold	-i 'CAFÉ' tree/docs/unicode.txt
+depth_zero	--max-depth 0 TODO tree
+heading	--heading -n -C1 FIXME tree
+heading_many_roots	--heading TODO tree/src tree/README.md
+heading_single_file	--heading -n Contact tree/README.md
+vimgrep	--vimgrep 'o\w' tree/docs/guide.md
+passthru	--passthru -n beta tree/context.txt
+include_zero	-c --include-zero TODO tree/src
+null_list	-l -0 TODO tree/src
+null_lines	-0 -n FIXME tree/scripts
+pattern_file	-f tree/scripts/build.sh tree/scripts
+pattern_file_missing	-f nope TODO tree
+pattern_file_and_e	-f tree/docs/nested/old.tmp -e FIXME tree/scripts
+working_directory	@tree FIXME
+working_directory_dot	@tree -c TODO .
+nested_working_directory	@tree/src -n TODO
+working_directory_glob	@tree -g 'src/*.rs' TODO

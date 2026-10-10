@@ -1,0 +1,5 @@
+README.md:FIXME: the example below is out of date
+scripts/deploy.py:    # FIXME: no rollback yet
+src/lib.rs:    // FIXME: size should be validated
+[stderr]
+[exit 0]

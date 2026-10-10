@@ -1,0 +1,8 @@
+tree/context.txt
+tree/data/empty.txt
+tree/data/latin1.txt
+tree/scripts/deploy.py
+tree/src/lib.rs
+tree/src/util/strings.rs
+[stderr]
+[exit 0]

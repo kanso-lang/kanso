@@ -1,0 +1,6 @@
+tree/scripts/build.sh:#!/bin/sh
+tree/scripts/build.sh:set -e
+tree/scripts/build.sh:# TODO: cache the build
+tree/scripts/build.sh:cargo build --release
+[stderr]
+[exit 0]

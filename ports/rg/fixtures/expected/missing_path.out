@@ -1,0 +1,4 @@
+tree/README.md:TODO: write the install section
+[stderr]
+rg: nope: IO error for operation on nope: No such file or directory (os error 2)
+[exit 2]

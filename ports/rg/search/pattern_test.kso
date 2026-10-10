@@ -1,0 +1,37 @@
+test_fixed_quotes_metacharacters = quoted "a.b*(c)" == "a\\.b\\*\\(c\\)"
+
+test_alternatives_are_grouped =
+  got = regex_for ["ab" "cd"] "sensitive" false "plain"
+  got == "(?:ab)|(?:cd)"
+
+test_word_shape =
+  got = regex_for ["fn"] "sensitive" false "word"
+  got == "\\b(?:(?:fn))\\b"
+
+test_line_shape = regex_for ["x"] "sensitive" false "line" == "^(?:(?:x))$"
+
+test_insensitive_folds =
+  got = regex_for ["x"] "insensitive" false "plain"
+  got == "(?i)(?:x)"
+
+test_smart_case_lower_folds =
+  got = regex_for ["todo"] "smart" false "plain"
+  got == "(?i)(?:todo)"
+
+test_smart_case_upper_keeps_case =
+  got = regex_for ["Todo"] "smart" false "plain"
+  got == "(?:Todo)"
+
+test_smart_case_ignores_escapes = not has_upper? "a\\Wb\\S"
+
+test_negated_escapes_spelled_out =
+  got = regex_for ["a\\Wb"] "sensitive" false "plain"
+  got == "(?:a[^a-zA-Z0-9_]b)"
+
+test_negated_escape_in_class_kept =
+  got = regex_for ["[\\W]"] "sensitive" false "plain"
+  got == "(?:[\\W])"
+
+test_regex_trouble_reports = regex_trouble "(oops" != none
+
+test_regex_trouble_none_for_good = regex_trouble "a+b" == none

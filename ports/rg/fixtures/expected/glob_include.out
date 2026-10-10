@@ -1,0 +1,4 @@
+tree/src/main.rs:    // TODO: support more than one file
+tree/src/util/generated.rs:// TODO generated code, ignored by src/util/.gitignore
+[stderr]
+[exit 0]

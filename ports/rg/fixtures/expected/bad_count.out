@@ -1,0 +1,3 @@
+[stderr]
+rg: error parsing flag -m: value is not a valid number: invalid digit found in string
+[exit 2]

@@ -1,0 +1,141 @@
+import "std/list"
+import "std/text"
+
+# What the rules say about one path. A rule that matches nothing leaves the
+# path `unruled`, which is different from being let in: only a negated rule
+# lets a path back in after an earlier one shut it out.
+pub type admitted
+
+pub type excluded
+
+pub type unruled
+
+# One line of an ignore file, or one `-g` glob, ready to match. `base` is the
+# directory the rule was written in, relative to where the search runs, so a
+# rule in src/.gitignore says nothing about a path outside src. `glob` is
+# already rewritten so that a pattern with no slash in it matches at any
+# depth, and `negated` is true for a line that began with `!`.
+pub type rule
+  base
+  dir_only
+  glob
+  negated
+
+# A gitignore file's lines as rules. Comments and blank lines say nothing; a
+# leading backslash protects a `#` or `!` that is part of the name.
+pub fn ignore_rules base content
+  lines = text/split content "\n"
+  list/fold lines [] (acc line -> with_line acc base (unreturned line))
+
+fn with_line acc base line
+  return acc if line == "" or text/slice line 1 1 == "#"
+  push acc (rule_of base line)
+
+# A file written on Windows ends its lines with a carriage return, and git
+# does not count it as part of the pattern. Trailing spaces are dropped too.
+fn unreturned line
+  trailing_trimmed (text/chars line) (length line)
+
+fn trailing_trimmed cs n
+  return "" if n < 1
+  c = cs[n]
+  return trailing_trimmed cs (n - 1) if c == "\r" or c == " "
+  text/join (text/slice cs 1 n) ""
+
+pub fn rule_of base line
+  negated = text/slice line 1 1 == "!"
+  body = unescaped (if negated (text/slice line 2 (length line)) line)
+  dir_only = ends_with? body "/"
+  bare = if dir_only (text/slice body 1 (length body - 1)) body
+  rule base dir_only (anchored bare) negated
+
+fn unescaped body
+  first = text/slice body 1 2
+  escaped = first == "\\#" or first == "\\!"
+  if escaped (text/slice body 2 (length body)) body
+
+# A slash at the start or in the middle ties a pattern to the directory its
+# file sits in. Without one, the pattern names a file at any depth below it.
+fn anchored bare
+  return text/slice bare 2 (length bare) if text/slice bare 1 1 == "/"
+  if (contains? bare "/") bare "**/{bare}"
+
+fn contains? s needle
+  length (text/split s needle) > 1
+
+pub fn ends_with? s suffix
+  n = length s
+  m = length suffix
+  m <= n and text/slice s (n - m + 1) n == suffix
+
+# The path seen from the directory a rule was written in, or none when the
+# path lies outside it.
+pub fn relative_to "" path
+  path
+
+pub fn relative_to base path
+  prefix = "{base}/"
+  return none if not starts_with? path prefix
+  text/slice path (length prefix + 1) (length path)
+
+pub fn starts_with? s prefix
+  text/slice s 1 (length prefix) == prefix
+
+# Every rule is asked in order and the last one that matches decides, which is
+# how a deeper .gitignore or a later `!` line overrides what came before.
+pub fn verdict rules path dir?
+  list/fold rules unruled (now r -> heard now r path dir?)
+
+fn heard now r path dir?
+  return now if r.dir_only and not dir?
+  rel = relative_to r.base path
+  if (matches_rule? rel r) (outcome r.negated) now
+
+fn matches_rule? none _
+  false
+
+fn matches_rule? rel r
+  glob_match? r.glob rel
+
+fn outcome true
+  admitted
+
+fn outcome false
+  excluded
+
+# Ignore files exclude what they match and a `!` line lets a path back in.
+pub fn ignored? rules path dir?
+  shut? (verdict rules path dir?)
+
+fn shut? excluded
+  true
+
+fn shut? _
+  false
+
+# `-g` globs run the other way round: a plain glob is a whitelist and `!glob`
+# excludes. A directory is only ever excluded by them, never required to
+# match, or no file below it could be reached; a file must match some
+# whitelist glob whenever there is one.
+pub fn overridden? globs path dir?
+  said = verdict globs path dir?
+  refused? said (not dir? and any_whitelist? globs)
+
+fn refused? admitted _
+  false
+
+fn refused? excluded _
+  true
+
+fn refused? unruled must
+  must
+
+fn any_whitelist? globs
+  list/any? globs (g -> g.negated)
+
+# A `-g` glob is read the way an ignore line is, with the sense flipped: the
+# rule records `negated` for a glob WITHOUT a leading `!`, so the shared
+# verdict above answers `admitted` for a whitelisted path.
+pub fn override_rule glob
+  r = rule_of "" glob
+  rule r.base r.dir_only r.glob (not r.negated)

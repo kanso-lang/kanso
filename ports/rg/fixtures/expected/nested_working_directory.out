@@ -1,0 +1,4 @@
+main.rs:12:    // TODO: support more than one file
+secret.txt:1:TODO: this secret.txt is not at the root
+[stderr]
+[exit 0]

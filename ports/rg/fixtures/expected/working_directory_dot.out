@@ -1,0 +1,12 @@
+./README.md:1
+./data/noeol.txt:1
+./docs/guide.md:1
+./docs/nested/old.tmp:1
+./docs/unicode.txt:1
+./keep.log:1
+./scripts/build.sh:1
+./scripts/run.log:1
+./src/main.rs:1
+./src/secret.txt:1
+[stderr]
+[exit 0]

@@ -1,0 +1,362 @@
+import "std/io"
+import "std/list"
+import "std/os"
+import "std/path"
+import "std/text"
+
+# What the run has seen so far, threaded from one file to the next. `printed`
+# is whether any match has been written yet, which decides whether a context
+# group needs a `--` in front of it.
+pub type progress
+  errors
+  matched
+  printed
+
+# Where the walk stands in a directory: the path to show and open, the same
+# path in the form ignore rules are matched against, the rules gathered on the
+# way down, and how deep this directory sits below its root.
+type place
+  depth
+  norm
+  rules
+  shown
+
+version = "rg (kanso port) 0.1.0"
+
+pub fn main argv
+  run (parse argv)
+
+fn run (bad_usage why)
+  io/write_err "rg: {why}\n" .> (_ -> os/exit 2)
+
+fn run cfg
+  loaded cfg cfg.pattern_files .> (ready -> started ready)
+
+fn started (bad_usage why)
+  run (bad_usage why)
+
+fn started cfg
+  by_mode cfg cfg.mode
+
+# Patterns named with `-f` are read before anything else happens, one
+# pattern a line, and join those given on the command line. The regex is
+# built again from all of them and checked again.
+fn loaded cfg files
+  return effect cfg if length files == 0
+  in_turn files [] patterns_from .> (found -> rebuilt cfg found)
+
+# Once one file is missing the rest are not read: the refusal is carried on.
+fn patterns_from b@(bad_usage _) _
+  effect b
+
+fn patterns_from acc file
+  os/read_file file .> (got -> pattern_lines file acc got)
+
+fn pattern_lines file _ (file_not_found _)
+  bad_usage "{file}: No such file or directory (os error 2)"
+
+fn pattern_lines _ acc body
+  text/concat acc (lines_of body)
+
+fn rebuilt _ b@(bad_usage _)
+  b
+
+fn rebuilt cfg found
+  s = cfg.spec
+  all = text/concat s.patterns found
+  regex = regex_of (spec s.case s.fixed all s.shape)
+  vetted (with_regex cfg regex) (regex_trouble regex)
+
+fn vetted cfg none
+  cfg
+
+fn vetted _ why
+  bad_usage why
+
+fn by_mode _ show_help
+  print help_text
+
+fn by_mode _ show_version
+  print version
+
+fn by_mode _ list_types
+  io/write "{text/join type_lines "\n"}\n"
+
+fn by_mode cfg _
+  roots = if (length cfg.paths == 0) [""] cfg.paths
+  naming cfg roots .> (named -> all_roots cfg named roots)
+
+fn all_roots cfg named roots
+  start = progress false false false
+  in_turn roots start (t root -> one_root cfg named root t) .> finished
+
+# A path goes in front of every line unless the command line settled it, or
+# the search is one file named on its own.
+fn naming cfg roots
+  decided cfg.filename cfg roots
+
+fn decided true _ _
+  effect true
+
+fn decided false _ _
+  effect false
+
+fn decided _ _ roots
+  return effect true if length roots != 1
+  only = string_at roots 1
+  return effect true if only == ""
+  os/is_dir only
+
+fn finished (progress true _ _)
+  os/exit 2
+
+fn finished (progress false true _)
+  effect done
+
+fn finished _
+  os/exit 1
+
+# One effect for each element, in order, each handed what the one before it
+# yielded: a fold whose accumulator is the chain built so far.
+fn in_turn xs start step
+  list/fold xs (effect start) (chain x -> chain .> (acc -> step acc x))
+
+# The search root the user typed, or "" for the working directory, whose
+# entries print without a `./` in front.
+fn one_root cfg named "" t
+  start_dir cfg named "" t
+
+fn one_root cfg named root t
+  os/exists root .> (there -> existing cfg named root t there)
+
+fn existing _ _ root t false
+  failed root "No such file or directory (os error 2)" t
+
+fn existing cfg named root t true
+  os/is_dir root .> (dir -> rooted cfg named root t dir)
+
+fn rooted cfg named root t true
+  start_dir cfg named root t
+
+fn rooted cfg named root t false
+  one_file cfg named root true t
+
+fn failed what why t
+  message = "rg: {what}: IO error for operation on {what}: {why}\n"
+  io/write_err message .> (_ -> effect (progress true t.matched t.printed))
+
+# The ignore files of every directory above the root, up to the working
+# directory, apply below it too: `rg x src` still honours ./.gitignore.
+fn start_dir cfg named root t
+  norm = normal root
+  above = ancestors norm
+  begin = (rules -> into cfg named (place 0 norm rules root) t)
+  in_turn above [] (rules dir -> rules_in cfg dir rules) .> begin
+
+fn ancestors ""
+  []
+
+fn ancestors norm
+  return [] if text/slice norm 1 1 == "/"
+  parts = text/split norm "/"
+  rising parts 1 [""]
+
+fn rising parts i acc
+  return acc if i >= length parts
+  prefix = text/join (text/slice parts 1 i) "/"
+  rising parts (i + 1) (push acc prefix)
+
+# A path as rules see it: no `./` in front and no `/` behind, and the working
+# directory itself as "".
+pub fn normal "."
+  ""
+
+pub fn normal p
+  return normal (text/slice p 3 (length p)) if starts_with? p "./"
+  trimmed = length p > 1 and ends_with? p "/"
+  if trimmed (normal (text/slice p 1 (length p - 1))) p
+
+# Read the three ignore files a directory may hold, lowest precedence first,
+# so that a later rule wins over an earlier one the way a deeper file's do.
+fn rules_in cfg dir rules
+  return effect rules if not cfg.ignore
+  in_turn ignore_files rules (acc name -> rules_from dir acc name)
+
+ignore_files = [".gitignore" ".ignore" ".rgignore"]
+
+fn rules_from dir rules name
+  file = path/join (opened dir) name
+  os/read_file file .> (got -> with_rules dir rules got)
+
+fn with_rules _ rules (file_not_found _)
+  rules
+
+fn with_rules dir rules body
+  text/concat rules (ignore_rules dir body)
+
+fn opened ""
+  "."
+
+fn opened dir
+  dir
+
+fn into cfg named here t
+  on = (rules -> listed cfg named here rules t)
+  rules_in cfg here.norm here.rules .> on
+
+fn listed cfg named here rules t
+  more = place here.depth here.norm rules here.shown
+  os/list_dir (opened here.shown) .> (names -> visit cfg named more names t)
+
+fn visit cfg named here names t
+  in_turn names t (acc name -> entry cfg named here name acc)
+
+# Nothing below `--max-depth` is looked at.
+fn entry cfg named here name t
+  depth = here.depth + 1
+  return effect t if too_deep? cfg.depth depth
+  shown = path/join here.shown name
+  norm = path/join here.norm name
+  hidden = text/slice name 1 1 == "." and not cfg.hidden
+  seen = (dir -> by_kind cfg named here shown norm depth hidden t dir)
+  os/is_dir shown .> seen
+
+fn too_deep? none _
+  false
+
+fn too_deep? limit depth
+  depth > limit
+
+fn by_kind cfg named here shown norm depth hidden t true
+  return effect t if skipped? cfg here.rules norm true hidden
+  into cfg named (place depth norm here.rules shown) t
+
+fn by_kind cfg named here shown norm _ hidden t false
+  return effect t if skipped? cfg here.rules norm false hidden
+  one_file cfg named shown false t
+
+# A `-g` glob that names the path decides, either way, ahead of everything
+# else: a whitelisted path is searched even when it is hidden, ignored, or
+# of a type `-T` turned away. When no glob names it, a hidden name is
+# skipped, then the ignore files have their say, then the file types.
+fn skipped? cfg rules norm dir? hidden
+  said = verdict cfg.globs norm dir?
+  overruled? said cfg rules norm dir? hidden
+
+fn overruled? admitted _ _ _ _ _
+  false
+
+fn overruled? excluded _ _ _ _ _
+  true
+
+fn overruled? unruled cfg rules norm dir? hidden
+  must_match = not dir? and list/any? cfg.globs (g -> g.negated)
+  return true if must_match or hidden
+  return true if cfg.ignore and ignored? rules norm dir?
+  not dir? and not wanted_type? cfg norm
+
+fn wanted_type? cfg norm
+  shut_out = length cfg.untypes > 0 and typed? cfg.untypes norm
+  let_in = length cfg.types == 0 or typed? cfg.types norm
+  let_in and not shut_out
+
+fn one_file cfg named shown explicit t
+  listing cfg.mode cfg named shown explicit t
+
+fn listing list_files _ _ shown _ t
+  io/write "{shown}\n" .> (_ -> effect (progress t.errors true t.printed))
+
+fn listing _ cfg named shown explicit t
+  read = (got -> read_one cfg named shown explicit got t)
+  os/read_bytes shown .> read
+
+fn read_one _ _ shown _ (file_not_found _) t
+  failed shown "No such file or directory (os error 2)" t
+
+fn read_one cfg named shown explicit bytes t
+  headed = named and headed? cfg.mode cfg
+  dest = target shown (named and not headed)
+  r = searched cfg dest (decoded bytes) explicit
+  written cfg r shown headed t
+
+# Each file's lines go out as soon as they are known, in one write. With
+# context on, a `--` separates this file's first group from the last file's.
+# Under `--heading` the path stands on a line of its own above the file's
+# lines, and a blank line separates one file from the next.
+fn written cfg r shown headed t
+  matched = t.matched or r.matched > 0
+  return effect (progress t.errors matched t.printed) if length r.out == 0
+  gap = t.printed and grouped? cfg.mode cfg
+  lead = if headed (heading_lead t.printed shown) (if gap "--\n" "")
+  chunk = "{lead}{text/join r.out ""}"
+  io/write chunk .> (_ -> effect (progress t.errors matched true))
+
+fn heading_lead true shown
+  "\n{shown}\n"
+
+fn heading_lead false shown
+  "{shown}\n"
+
+fn headed? print_lines cfg
+  cfg.heading and not cfg.vimgrep
+
+fn headed? _ _
+  false
+
+fn grouped? print_lines cfg
+  context = cfg.before > 0 or cfg.after > 0
+  context and not cfg.only
+
+fn grouped? _ _
+  false
+
+help_text = text/join help_lines "\n"
+
+# A list literal must fit on one line, so the help is grown a line at a
+# time.
+help_lines = ["usage: rg [OPTIONS] PATTERN [PATH ...]"]
+  . push ""
+  . push "Search files below PATH (default: the working directory) for lines"
+  . push "matching PATTERN, honouring .gitignore, .ignore and .rgignore files."
+  . push ""
+  . push "  -e, --regexp PATTERN      a pattern to search for; may repeat"
+  . push "  -f, --file FILE           read patterns from FILE, one a line"
+  . push "  -F, --fixed-strings       treat every pattern as literal text"
+  . push "  -i, --ignore-case         fold case when matching"
+  . push "  -s, --case-sensitive      match case exactly (the default)"
+  . push "  -S, --smart-case          fold case unless a pattern has a capital"
+  . push "  -w, --word-regexp         match whole words only"
+  . push "  -x, --line-regexp         match whole lines only"
+  . push "  -v, --invert-match        select the lines that do not match"
+  . push "  -m, --max-count NUM       stop after NUM matching lines per file"
+  . push "  -A, -B, -C NUM            lines of context after, before, or both"
+  . push "  -n, --line-number         show line numbers"
+  . push "  -N, --no-line-number      hide line numbers"
+  . push "  -H, --with-filename       show the path on every line"
+  . push "  -I, --no-filename         never show the path"
+  . push "      --column              show the column of the first match"
+  . push "      --heading             print each path once, above its lines"
+  . push "      --vimgrep             one line per match: path:line:col:text"
+  . push "      --passthru            print every line, matching or not"
+  . push "  -0, --null                follow every path with a NUL byte"
+  . push "  -o, --only-matching       print each match on its own line"
+  . push "  -r, --replace TEXT        print matches rewritten; $1 names a group"
+  . push "  -c, --count               count matching lines per file"
+  . push "      --count-matches       count matches per file"
+  . push "      --include-zero        with -c, also list files with no match"
+  . push "  -l, --files-with-matches  print only the paths of matching files"
+  . push "      --files-without-match print only the paths of files with none"
+  . push "  -q, --quiet               print nothing; the exit status answers"
+  . push "      --files               print the files that would be searched"
+  . push "  -g, --glob GLOB           search files matching GLOB; !GLOB skips"
+  . push "  -t, --type TYPE           search only files of TYPE"
+  . push "  -T, --type-not TYPE       skip files of TYPE"
+  . push "      --type-list           show the known file types"
+  . push "  -., --hidden              search hidden files and directories"
+  . push "      --no-ignore           do not read ignore files"
+  . push "  -u, --unrestricted        -u no ignores, -uu +hidden, -uuu +binary"
+  . push "      --binary              search binary files, reporting a match"
+  . push "  -a, --text                search binary files as if they were text"
+  . push "  -d, --max-depth NUM       descend at most NUM directories"
+  . push "  -h, --help                show this help"
+  . push "  -V, --version             show the version"
