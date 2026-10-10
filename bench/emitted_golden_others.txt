@@ -236,7 +236,7 @@
 # livebench gains three calls and loses nine branches.
 encodebench defines=135 calls=1114 branches=1015 lines=10281
 oneshot defines=137 calls=1184 branches=1218 lines=11487
-basket defines=125 calls=1095 branches=1013 lines=8783
+basket defines=125 calls=1105 branches=1021 lines=8861
 widebench defines=151 calls=1269 branches=1137 lines=11364
 deepbench defines=52 calls=272 branches=277 lines=2573
 escapebench defines=20 calls=91 branches=93 lines=967
