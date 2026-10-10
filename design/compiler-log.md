@@ -25125,3 +25125,62 @@ rise with `--set`. The entry's option 1 also asked to widen the 2026-09-13
 exception to every change that lets native finish a program the interpreter
 finishes; under corpus-first such a change scores as a gain once the corpus
 holds its shape, so the widening is not needed, and it is not made here.
+
+## 2026-10-10 — four port shapes join the run program, measured before their fixes
+
+The corpus-first gavel, applied today to kanso#1820, kanso#1822, kanso#1824 and
+kanso#1825, says none of the four lowers the floor: the shape each fixes goes
+into the benchmark corpus first, measured on the compiler without the fix, and
+the fix then scores against it. This entry is the first half. The run program
+gains four phases, each the PR's own reduced fixture with its count lifted into
+a parameter, and nothing in the compiler changes. The columns are
+instructions on main with each phase built alone, less the empty program's
+6,662,610, and the shares are of the whole program's 1,245,042,917.
+
+    scatter  2,340 keys counted in scrambled order   50,901,814  4.09%
+    bump     350 updates through a named read        53,247,360  4.28%
+    machine  20,000 passes of a loop in a cycle       8,825,906  0.71%
+    fold     800 pieces folded onto one string          858,398  0.07%
+
+`scatter` counts keys that arrive out of order (kanso#1820), `bump` updates a
+map through a read named on the line before the write (kanso#1822), `machine`
+runs a loop entered from inside a tail cycle (kanso#1824), and `fold` folds
+pieces onto a string (kanso#1825). The counts follow the rule the header
+already states for the stress shapes: `scatter` and `bump` are quadratic on
+main, and each count lands its phase near five per cent of the program.
+`machine` and `fold` cost little in instructions and a great deal in memory,
+so their counts are sized to add about one decoded document to the peak.
+
+The header keeps its changeover table as it was. That table is the mix
+bench/runbench_phases.txt replays when history from before 2026-09-06 is
+reconstructed, and a phase with no counter in that history has no place in it.
+The four new phases have a table of their own below it, and
+`tests/the_phase_map_matches_the_run_programs_header.rs` now stops reading at
+the changeover table's total.
+
+Every row the run program carries moves, because it now does more work. In the
+run vein, run_allocs lands on 1,773,132, run_alloc_bytes on 326,862,802,
+run_arena_blocks on 8, run_perm_allocs on 97, run_beat_iters on 27,564,
+run_put_mut_grow on 15, run_str_scans on 229 and run_str_scan_bytes on
+17,932,036. The shape counters follow the new values the phases build:
+run_sh_str lands on 10,188,896, run_sh_rec on 1,500,528, run_sh_buf on
+119,041,376 and run_sh_map on 11,200. `scatter` reads its map between puts, so
+the run now builds and frees sorted views: run_view_allocs and run_view_frees
+are both 360. The run program's machine code grows to 602,217 bytes, which
+moves the text total to 4,651,966, and its emitted code to 684 defines, 6,519
+calls, 5,938 branches and 50,994 lines, which moves emitted_other_defines to
+2,002, emitted_other_calls to 17,393, emitted_other_branches to 16,393 and
+emitted_other_lines to 146,696.
+
+A counter that measures something new is re-based so that landing it costs the
+floor nothing, as the codegen rows were on 2026-10-07 when their gates began
+counting the clang the benchmarks use. `run_instructions` and `run_peak_bytes`
+keep their ratio to their baselines: each baseline is multiplied by the reading
+with the phases over the reading without them, both on main's compiler.
+work_runbench lands on 1,245,043,324 on CI, against main's 1,131,539,079,
+so run_instructions' baseline goes from 3,043,743,748 to 3,349,060,500. The run peak, which the objective reads as the arena, held and
+permanent peaks summed, goes from 3,899,936 bytes to 12,167,368:
+run_arena_peak_bytes lands on 8,912,912 and run_held_peak_bytes on 3,222,256,
+and run_peak_bytes' baseline goes from 156,818,380 to 489,255,962. Both
+baselines are rounded up. The score is unchanged, and the four fixes now
+have something to score against.
