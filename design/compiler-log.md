@@ -24940,3 +24940,14 @@ text. That question has gone to the ledger as "May a list built from data hold
 The book teaches cyclic structures with `build` and does not mention `tie`, so
 the place `tie` is taught is its own comment in `lib/list/list.kso`. That
 comment now names the list form and shows `node id [(ref "b") (ref "c")]`.
+
+CI's rows for this branch, with main's repair list merged in. The check walks
+two more expression kinds in a constructor's arguments, and `lib/list/list.kso`
+carries two more comment lines, which every compile of the library lexes:
+
+    compile_instructions             25,832,340 ->  25,832,534
+    entry_instructions               85,435,525 ->  85,436,634
+    library_instructions             85,988,213 ->  85,988,060
+    browser_compile_instructions    388,181,803 -> 388,192,201
+
+The ruling is a part of the language, so the floor follows whatever these cost.
