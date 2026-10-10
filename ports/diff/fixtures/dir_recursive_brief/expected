@@ -1,0 +1,10 @@
+$ diff -rq old new
+Files old/README and new/README differ
+Only in new: added.txt
+Files old/bin.dat and new/bin.dat differ
+Only in new: extra
+Only in old: gone.txt
+File old/mode is a directory while file new/mode is a regular file
+Files old/src/main.c and new/src/main.c differ
+--- stderr
+--- exit 1

@@ -1,0 +1,29 @@
+test_parse_counts_lines = count (parse "a\nb\n") == 2
+
+test_parse_empty_file_has_no_lines = count (parse "") == 0
+
+test_parse_sees_missing_newline =
+  d = parse "a\nb"
+  not d.eol and bare_end? d 2 and not bare_end? d 1
+
+test_render_round_trips = render (parse "a\n\nb") == "a\n\nb"
+
+test_keys_mark_the_bare_line =
+  n = number (parse "a\nb") (parse "a\nb\n") plain
+  n.left == ["a" "b\n"] and n.right == ["a" "b"]
+
+test_ignore_case =
+  n = number (parse "Hello\n") (parse "hello\n") (fold_with true space_exact)
+  n.left == n.right
+
+test_space_change_keeps_leading_space =
+  n = number (parse " a  b \n") (parse "a b\n") (fold_with false space_change)
+  n.left == [" a b"] and n.right == ["a b"]
+
+test_all_space_removes_every_blank =
+  n = number (parse "\ta b \n") (parse "ab\n") (fold_with false all_space)
+  n.left == n.right
+
+test_from_keys_restores_missing_newline = from_keys ["a" "b\n"] == "a\nb"
+
+test_from_keys_mid_file_mark_gets_newline = from_keys ["a\n" "b"] == "a\nb\n"

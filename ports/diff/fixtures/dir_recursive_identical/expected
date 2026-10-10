@@ -1,0 +1,4 @@
+$ diff -rs old/src copy
+Files old/src/a.txt and copy/a.txt are identical
+--- stderr
+--- exit 0

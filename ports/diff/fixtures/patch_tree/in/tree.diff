@@ -1,0 +1,56 @@
+diff -ruN old/README new/README
+--- old/README
++++ new/README
+@@ -1 +1,2 @@
+ A small project.
++Now with byte counts.
+diff -ruN old/added.txt new/added.txt
+--- old/added.txt	1970-01-01 00:00:00.000000000 +0000
++++ new/added.txt
+@@ -0,0 +1 @@
++this file is new
+Binary files old/bin.dat and new/bin.dat differ
+diff -ruN old/extra/deep.txt new/extra/deep.txt
+--- old/extra/deep.txt	1970-01-01 00:00:00.000000000 +0000
++++ new/extra/deep.txt
+@@ -0,0 +1 @@
++deep
+diff -ruN old/gone.txt new/gone.txt
+--- old/gone.txt
++++ new/gone.txt	1970-01-01 00:00:00.000000000 +0000
+@@ -1 +0,0 @@
+-this file is removed
+File old/mode is a directory while file new/mode is a regular file
+diff -ruN old/src/main.c new/src/main.c
+--- old/src/main.c
++++ new/src/main.c
+@@ -1,19 +1,24 @@
+ #include <stdio.h>
+ #include <stdlib.h>
++#include <string.h>
+ 
+-/* count the lines on standard input */
+-static int count_lines(FILE *in)
++/* count the lines and the bytes on standard input */
++static int count_lines(FILE *in, long *bytes)
+ {
+     int c, n = 0;
+-    while ((c = getc(in)) != EOF)
++    *bytes = 0;
++    while ((c = getc(in)) != EOF) {
++        (*bytes)++;
+         if (c == '\n')
+             n++;
++    }
+     return n;
+ }
+ 
+ int main(void)
+ {
+-    int n = count_lines(stdin);
+-    printf("%d\n", n);
++    long bytes;
++    int n = count_lines(stdin, &bytes);
++    printf("%d %ld\n", n, bytes);
+     return 0;
+ }

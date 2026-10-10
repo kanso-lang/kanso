@@ -1,0 +1,233 @@
+# diff itself: decide what the two operands are, read them, compare, print,
+# and answer the exit status GNU diff answers: 0 for no differences, 1 for
+# some, 2 for trouble.
+import "../lines"
+import "../myers"
+import "../report"
+import "std/io"
+import "std/list"
+import "std/os"
+import "std/path"
+import "std/text"
+
+# what a path turned out to hold once it was read
+type binary
+  bytes
+
+type missing
+  path
+
+pub fn run_diff argv
+  started (parse_diff argv)
+
+fn started (bad_usage reason)
+  trouble "diff: {reason}"
+
+fn started (parsed left opts right)
+  compare_paths opts left right
+
+fn trouble message
+  io/write_err "{message}\ndiff: Try 'diff --help' for more information.\n"
+    .> (_ -> effect 2)
+
+fn compare_paths opts pa pb
+  os/is_dir pa .> (da -> os/is_dir pb .> (db -> by_kind opts pa pb da db))
+
+fn by_kind opts pa pb true true
+  compare_dirs opts pa pb
+
+fn by_kind opts pa pb true false
+  compare_files opts (path/join pa (path/basename pb)) pb false
+
+fn by_kind opts pa pb false true
+  compare_files opts pa (path/join pb (path/basename pa)) false
+
+fn by_kind opts pa pb false false
+  compare_files opts pa pb false
+
+# "-" is standard input, as for GNU diff
+fn load "-"
+  io/stdin .> (content -> lines/parse content)
+
+fn load path
+  os/read_bytes path .> (r -> loaded path r)
+
+fn loaded _ (file_not_found p)
+  missing p
+
+fn loaded _ bytes
+  return binary bytes if list/any? bytes (b -> b == 0)
+  decoded bytes (text/utf8 bytes)
+
+fn decoded bytes (err _)
+  binary bytes
+
+fn decoded _ content
+  lines/parse content
+
+# nested says whether this pair was reached by walking directories, in which
+# case GNU diff announces the pair with the command line that would compare
+# it on its own
+fn compare_files opts pa pb nested
+  load pa .> (a -> load pb .> (b -> filled_pair opts pa pb nested a b))
+
+# A file that -N stands in for with an empty one gets the epoch as its
+# time in the header, as GNU diff prints it; that stamp is how patch knows
+# the file is to be created or deleted. Files that do exist get no time at
+# all, because std/os has no way to ask a file for its modification time.
+fn filled_pair opts pa pb nested a b
+  stamps = [(stamp opts a) (stamp opts b)]
+  judged opts pa pb nested (filled opts a) (filled opts b) stamps
+
+fn stamp opts (missing _)
+  if opts.new_file "\t1970-01-01 00:00:00.000000000 +0000" ""
+
+fn stamp _ _
+  ""
+
+fn judged opts pa pb nested a b stamps
+  return absent pa if gone? a
+  return absent pb if gone? b
+  return binaries opts pa pb (a == b) if raw? a or raw? b
+  ids = lines/number a b opts.folding
+  exact = lines/number a b lines/plain
+  horizon = opts.context
+  found = myers/changed_lines ids.left ids.right exact.left exact.right horizon
+  cs = changes found (lines/count a) (lines/count b)
+  return same opts pa pb if length cs == 0
+  return differ pa pb if opts.brief
+  text = "{announce opts pa pb nested}{shown opts pa pb a b cs stamps}"
+  io/write text .> (_ -> effect 1)
+
+fn absent p
+  io/write_err "diff: {p}: No such file or directory\n" .> (_ -> effect 2)
+
+fn binaries _ _ _ true
+  effect 0
+
+fn binaries opts pa pb false
+  return differ pa pb if opts.brief
+  print "Binary files {pa} and {pb} differ" .> (_ -> effect 1)
+
+fn same opts pa pb
+  return effect 0 if not opts.identical
+  print "Files {pa} and {pb} are identical" .> (_ -> effect 0)
+
+fn differ pa pb
+  print "Files {pa} and {pb} differ" .> (_ -> effect 1)
+
+# One string, written once: see bugs/native_crash_after_reads.kso for what
+# happened when the header was its own print in front of the write.
+fn announce opts pa pb true
+  words = text/concat (text/concat ["diff"] opts.switches) [pa pb]
+  "{text/join words " "}\n"
+
+fn announce _ _ _ false
+  ""
+
+fn shown opts pa pb a b cs stamps
+  label_a = "{given opts.labels[1] pa}{given stamps[1] ""}"
+  label_b = "{given opts.labels[2] pb}{given stamps[2] ""}"
+  out = formatted opts.format a b label_a label_b cs opts.context
+  "{text/join out "\n"}\n"
+
+fn formatted normal_format a b _ _ cs _
+  normal a b cs
+
+fn formatted unified_format a b la lb cs ctx
+  unified a b la lb cs ctx
+
+fn formatted context_format a b la lb cs ctx
+  context a b la lb cs ctx
+
+fn gone? (missing _)
+  true
+
+fn gone? _
+  false
+
+fn raw? (binary _)
+  true
+
+fn raw? _
+  false
+
+fn filled opts (missing p)
+  if opts.new_file (lines/parse "") (missing p)
+
+fn filled _ found
+  found
+
+# Two directories: every name either side holds, in sorted order. A name on
+# one side only is reported; a name on both is compared, descending into
+# subdirectories only under -r.
+fn compare_dirs opts pa pb
+  os/list_dir pa .> (na -> os/list_dir pb .> (nb -> walk opts pa pb na nb))
+
+fn walk opts pa pb na nb
+  names = list/fold (list/sort (text/concat na nb)) [] unique
+  each opts pa pb na nb names 1 0
+
+fn unique seen name
+  return seen if seen[length seen] == name
+  push seen name
+
+fn each opts pa pb na nb names i status
+  return effect status if i > length names
+  name = names[i]
+  here = list/any? na (m -> m == name)
+  there = list/any? nb (m -> m == name)
+  next = (s -> each opts pa pb na nb names (i + 1) (worse status s))
+  entry opts (path/join pa name) (path/join pb name) here there .> next
+
+fn worse x y
+  if (x > y) x y
+
+fn entry opts pa pb true false
+  only opts pa pb pa
+
+fn entry opts pa pb false true
+  only opts pa pb pb
+
+fn entry opts pa pb _ _
+  os/is_dir pa .> (da -> os/is_dir pb .> (db -> both opts pa pb da db))
+
+# With -N a name on one side only is compared with nothing: a file with an
+# empty file, a directory with an empty directory.
+fn only opts pa pb one
+  os/is_dir one .> (d -> lonely opts pa pb one opts.new_file d)
+
+fn lonely opts pa pb _ true false
+  compare_files opts pa pb true
+
+fn lonely opts pa pb one true true
+  os/list_dir one .> (names -> half_walk opts pa pb one names)
+
+fn lonely _ _ _ one false _
+  print "Only in {path/dirname one}: {path/basename one}" .> (_ -> effect 1)
+
+fn half_walk opts pa pb one names
+  return walk opts pa pb names [] if one == pa
+  walk opts pa pb [] names
+
+fn both opts pa pb true true
+  return compare_dirs opts pa pb if opts.recursive
+  print "Common subdirectories: {pa} and {pb}" .> (_ -> effect 0)
+
+fn both _ pa pb true false
+  os/read_bytes pb .> (bs -> mismatch pa "a directory" pb (kind_of bs))
+
+fn both _ pa pb false true
+  os/read_bytes pa .> (bs -> mismatch pa (kind_of bs) pb "a directory")
+
+fn both opts pa pb false false
+  compare_files opts pa pb true
+
+fn mismatch pa ka pb kb
+  print "File {pa} is {ka} while file {pb} is {kb}" .> (_ -> effect 1)
+
+fn kind_of (file_not_found _)
+  "a regular file"
+
+fn kind_of bs
+  if (length bs == 0) "a regular empty file" "a regular file"

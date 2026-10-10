@@ -1,0 +1,104 @@
+# GNU diff's shift_boundaries. A minimal edit script is rarely unique: an
+# inserted line that repeats its neighbour could be the first copy or the
+# second. This pass slides each run of changed lines as far down as equal
+# lines allow, merging it with the next run when they touch, and then back up
+# until it lines up with a change in the other file, so the output groups
+# changes the way a person would.
+#
+# The C walks two cursors over two flag arrays and rewrites one of them in
+# place. Here the flags are a map from 0-based line to true, the cursors and
+# the run boundaries travel in a record, and each `while` is a function.
+type walker
+  chg
+  corr
+  i
+  j
+  start
+
+type file_side
+  eq
+  n
+  other
+
+pub fn shift_boundaries ids_a ids_b m
+  left = shift_file (file_side ids_a (length ids_a) m.right) m.left
+  right = shift_file (file_side ids_b (length ids_b) left) m.right
+  marks left right
+
+fn shift_file f chg
+  next_run f (walker chg 0 0 0 0)
+
+fn on? m k
+  given m[k] false
+
+fn eq_at f k
+  f.eq[k + 1]
+
+# scan forward to the start of the next run of changes, keeping j at the
+# corresponding place in the other file
+fn next_run f w
+  return w.chg if w.i >= f.n
+  return found_run f w if on? w.chg w.i
+  j = past_other f w.j
+  next_run f (walker w.chg w.corr (w.i + 1) j w.start)
+
+# `while (other[j++]);` leaves j one past the first unchanged line
+fn past_other f j
+  if (on? f.other j) (past_other f (j + 1)) (j + 1)
+
+fn found_run f w
+  i = run_end w.chg (w.i + 1)
+  j = other_end f w.j
+  settle_run f (walker w.chg w.corr i j w.i)
+
+fn run_end chg i
+  if (on? chg i) (run_end chg (i + 1)) i
+
+fn other_end f j
+  if (on? f.other j) (other_end f (j + 1)) j
+
+fn settle_run f w
+  runlength = w.i - w.start
+  back = slide_back f w
+  corr = if (on? f.other (back.j - 1)) back.i f.n
+  ahead = slide_ahead f (walker back.chg corr back.i back.j back.start)
+  return settle_run f ahead if runlength != ahead.i - ahead.start
+  next_run f (to_corresponding f ahead)
+
+# move the run back while the line before it equals its last line
+fn slide_back f w
+  return w if w.start == 0
+  return w if eq_at f (w.start - 1) != eq_at f (w.i - 1)
+  start = w.start - 1
+  i = w.i - 1
+  chg = put (put w.chg start true) i false
+  j = other_back f (w.j - 1)
+  slide_back f (walker chg w.corr i j (merge_back chg start))
+
+fn merge_back chg start
+  if (on? chg (start - 1)) (merge_back chg (start - 1)) start
+
+# `while (other[--j]);`
+fn other_back f j
+  if (on? f.other j) (other_back f (j - 1)) j
+
+# move the run forward while its first line equals the line after it
+fn slide_ahead f w
+  return w if w.i == f.n
+  return w if eq_at f w.start != eq_at f w.i
+  chg = put (put w.chg w.start false) w.i true
+  i = run_end chg (w.i + 1)
+  forward_other f (walker chg w.corr i w.j (w.start + 1))
+
+# `while (other[++j]) corresponding = i;`
+fn forward_other f w
+  j = w.j + 1
+  return forward_other f (walker w.chg w.i w.i j w.start) if on? f.other j
+  slide_ahead f (walker w.chg w.corr w.i j w.start)
+
+fn to_corresponding f w
+  return w if w.corr >= w.i
+  start = w.start - 1
+  i = w.i - 1
+  chg = put (put w.chg start true) i false
+  to_corresponding f (walker chg w.corr i (other_back f (w.j - 1)) start)

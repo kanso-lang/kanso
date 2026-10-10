@@ -1,0 +1,8 @@
+$ patch -i nl.diff
+patching file f
+--- stderr
+--- exit 0
+== ./f
+a
+b
+c

@@ -1,0 +1,3 @@
+$ diff -w spaced tight
+--- stderr
+--- exit 0

@@ -1,0 +1,35 @@
+$ diff -r old new
+diff -r old/README new/README
+1a2
+> Now with byte counts.
+Only in new: added.txt
+Binary files old/bin.dat and new/bin.dat differ
+Only in new: extra
+Only in old: gone.txt
+File old/mode is a directory while file new/mode is a regular file
+diff -r old/src/main.c new/src/main.c
+2a3
+> #include <string.h>
+4,5c5,6
+< /* count the lines on standard input */
+< static int count_lines(FILE *in)
+---
+> /* count the lines and the bytes on standard input */
+> static int count_lines(FILE *in, long *bytes)
+8c9,11
+<     while ((c = getc(in)) != EOF)
+---
+>     *bytes = 0;
+>     while ((c = getc(in)) != EOF) {
+>         (*bytes)++;
+10a14
+>     }
+16,17c20,22
+<     int n = count_lines(stdin);
+<     printf("%d\n", n);
+---
+>     long bytes;
+>     int n = count_lines(stdin, &bytes);
+>     printf("%d %ld\n", n, bytes);
+--- stderr
+--- exit 1

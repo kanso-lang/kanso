@@ -1,0 +1,153 @@
+# Myers' O(ND) difference algorithm in its linear-space form, as GNU diff's
+# diffseq.h writes it: a forward and a backward search run toward each other
+# one edit at a time until they meet, the meeting point splits the problem in
+# two, and each half is solved the same way. Every line the search cannot
+# match is marked changed in a map from its real line index to true.
+#
+# Indices here are 0-based, as in the C, because every bound in the
+# algorithm is a half-open interval and 0-based arithmetic keeps them
+# readable. The sequences themselves are kanso lists, so element x is xv[x+1].
+#
+# the two sequences being compared, and where each element really lives in
+# its file once discarded lines are taken out
+type problem
+  xreal
+  xv
+  yreal
+  yv
+
+# the point where the two searches met
+type partition
+  xmid
+  ymid
+
+# One round of one search: the furthest x reached on each diagonal from hi
+# down to lo in steps of two, as GNU's loop visits them. A diagonal outside
+# the row reads as the search's sentinel.
+type row
+  hi
+  lo
+  vals
+
+pub type marks
+  left
+  right
+
+# larger than any line index, the C's LIN_MAX
+far = 1000000000000
+
+pub fn compare_lines xv xreal yv yreal m
+  p = problem xreal xv yreal yv
+  compareseq p m 0 (length xv) 0 (length yv)
+
+fn compareseq p m xoff xlim yoff ylim
+  lo = prefix_run p xoff xlim yoff ylim 0
+  hi = suffix_run p (xoff + lo) xlim (yoff + lo) ylim 0
+  inner p m (xoff + lo) (xlim - hi) (yoff + lo) (ylim - hi)
+
+fn inner p m xoff xlim yoff ylim
+  return inserted_run p m yoff ylim if xoff == xlim
+  return deleted_run p m xoff xlim if yoff == ylim
+  mid = diag p xoff xlim yoff ylim
+  left = compareseq p m xoff mid.xmid yoff mid.ymid
+  compareseq p left mid.xmid xlim mid.ymid ylim
+
+# the search collects changed lines as lists, in order; maps are made once at
+# the end, since growing a map that is also being read copies it each time
+fn inserted_run p (marks left right) y ylim
+  return marks left right if y >= ylim
+  inserted_run p (marks left (push right (real p.yreal y))) (y + 1) ylim
+
+fn deleted_run p (marks left right) x xlim
+  return marks left right if x >= xlim
+  deleted_run p (marks (push left (real p.xreal x)) right) (x + 1) xlim
+
+fn real indexes at
+  given indexes[at + 1] at
+
+fn prefix_run p xoff xlim yoff ylim k
+  return k if xoff + k >= xlim or yoff + k >= ylim
+  same = p.xv[xoff + k + 1] == p.yv[yoff + k + 1]
+  if same (prefix_run p xoff xlim yoff ylim (k + 1)) k
+
+fn suffix_run p xoff xlim yoff ylim k
+  return k if xlim - k <= xoff or ylim - k <= yoff
+  same = p.xv[xlim - k] == p.yv[ylim - k]
+  if same (suffix_run p xoff xlim yoff ylim (k + 1)) k
+
+# GNU keeps fd and bd as arrays it overwrites in place. A kanso map read and
+# then grown in the same function is copied on each put, which made a search
+# with a few hundred differences take minutes; so each round is a fresh row
+# built by push, reading only the round before it.
+fn diag p xoff xlim yoff ylim
+  fmid = xoff - yoff
+  bmid = xlim - ylim
+  odd = (fmid - bmid) % 2 != 0
+  f = row fmid fmid [xoff]
+  b = row bmid bmid [xlim]
+  rounds p xoff xlim yoff ylim odd f b
+
+fn rounds p xoff xlim yoff ylim odd f b
+  dmin = xoff - ylim
+  dmax = xlim - yoff
+  lo = if (f.lo > dmin) (f.lo - 1) (f.lo + 1)
+  hi = if (f.hi < dmax) (f.hi + 1) (f.hi - 1)
+  met = forward p xlim ylim odd f b lo hi hi []
+  after_forward p xoff xlim yoff ylim odd b met
+
+fn after_forward _ _ _ _ _ _ _ (partition x y)
+  partition x y
+
+fn after_forward p xoff xlim yoff ylim odd b f
+  dmin = xoff - ylim
+  dmax = xlim - yoff
+  lo = if (b.lo > dmin) (b.lo - 1) (b.lo + 1)
+  hi = if (b.hi < dmax) (b.hi + 1) (b.hi - 1)
+  met = backward p xoff yoff odd f b lo hi hi []
+  after_backward p xoff xlim yoff ylim odd f met
+
+fn after_backward _ _ _ _ _ _ _ (partition x y)
+  partition x y
+
+fn after_backward p xoff xlim yoff ylim odd f b
+  rounds p xoff xlim yoff ylim odd f b
+
+fn reach r d sentinel
+  return sentinel if d < r.lo or d > r.hi
+  given r.vals[(r.hi - d) / 2 + 1] sentinel
+
+fn forward p xlim ylim odd prev b lo hi d acc
+  return row hi lo acc if d < lo
+  tlo = reach prev (d - 1) (0 - 1)
+  thi = reach prev (d + 1) (0 - 1)
+  x0 = if (tlo < thi) thi (tlo + 1)
+  x = slide_down p xlim ylim x0 (x0 - d)
+  met = odd and b.lo <= d and d <= b.hi and reach b d far <= x
+  return partition x (x - d) if met
+  forward p xlim ylim odd prev b lo hi (d - 2) (push acc x)
+
+fn backward p xoff yoff odd f prev lo hi d acc
+  return row hi lo acc if d < lo
+  tlo = reach prev (d - 1) far
+  thi = reach prev (d + 1) far
+  x0 = if (tlo < thi) tlo (thi - 1)
+  x = slide_up p xoff yoff x0 (x0 - d)
+  met = not odd and f.lo <= d and d <= f.hi and x <= reach f d (0 - 1)
+  return partition x (x - d) if met
+  backward p xoff yoff odd f prev lo hi (d - 2) (push acc x)
+
+fn slide_down p xlim ylim x y
+  return x if x >= xlim or y >= ylim
+  same = p.xv[x + 1] == p.yv[y + 1]
+  if same (slide_down p xlim ylim (x + 1) (y + 1)) x
+
+fn slide_up p xoff yoff x y
+  return x if x <= xoff or y <= yoff
+  same = p.xv[x] == p.yv[y]
+  if same (slide_up p xoff yoff (x - 1) (y - 1)) x
+
+pub fn given none fallback
+  fallback
+
+pub fn given v _
+  v

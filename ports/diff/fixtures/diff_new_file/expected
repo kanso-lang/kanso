@@ -1,0 +1,20 @@
+$ diff -uN nosuch poem_a
+--- nosuch	1970-01-01 00:00:00.000000000 +0000
++++ poem_a
+@@ -0,0 +1,14 @@
++The quick brown fox
++jumps over
++the lazy dog.
++
++It was the best of times,
++it was the worst of times,
++it was the age of wisdom,
++it was the age of foolishness,
++it was the epoch of belief,
++it was the epoch of incredulity,
++it was the season of Light,
++it was the season of Darkness,
++it was the spring of hope,
++it was the winter of despair.
+--- stderr
+--- exit 1

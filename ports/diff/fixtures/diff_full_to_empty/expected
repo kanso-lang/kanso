@@ -1,0 +1,6 @@
+$ diff full empty
+1,2d0
+< one
+< two
+--- stderr
+--- exit 1

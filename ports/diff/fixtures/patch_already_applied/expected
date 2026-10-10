@@ -1,0 +1,27 @@
+$ patch poem fix.diff
+patching file poem
+Reversed (or previously applied) patch detected!  Assume -R? [n] 
+Apply anyway? [n] 
+Skipping patch.
+2 out of 2 hunks ignored -- saving rejects to file poem.rej
+--- stderr
+--- exit 1
+== ./poem.rej
+--- poem_a
++++ poem_b
+@@ -1,5 +1,5 @@
+ The quick brown fox
+-jumps over
++leaps over
+ the lazy dog.
+ 
+ It was the best of times,
+@@ -10,5 +10,6 @@
+ it was the epoch of incredulity,
+ it was the season of Light,
+ it was the season of Darkness,
+ it was the spring of hope,
+-it was the winter of despair.
++it was the winter of despair,
++we had everything before us.
+

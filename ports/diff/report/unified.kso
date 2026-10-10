@@ -1,0 +1,52 @@
+# Unified format: one header pair, then hunks of " ", "-" and "+" lines.
+import "../lines"
+import "std/list"
+
+type place
+  out
+  pos
+
+pub fn unified a b label_a label_b cs ctx
+  head = ["--- {label_a}" "+++ {label_b}"]
+  list/fold (hunks cs ctx) head (&unified_hunk a b ctx)
+
+fn unified_hunk a b ctx out group
+  first = group[1]
+  last = group[length group]
+  a_lo = larger 1 (first.a_at - ctx)
+  b_lo = first.b_at - (first.a_at - a_lo)
+  a_end = last.a_at + last.a_n
+  tail = smaller ctx (lines/count a - a_end + 1)
+  a_len = a_end + tail - a_lo
+  b_len = last.b_at + last.b_n + tail - b_lo
+  header = "@@ -{span a_lo a_len} +{span b_lo b_len} @@"
+  walked = list/fold group (place (push out header) a_lo) (&unified_change a b)
+  emit_range walked.out a walked.pos (walked.pos + tail - 1) " "
+
+fn unified_change a b (place out pos) c
+  before = emit_range out a pos (c.a_at - 1) " "
+  gone = emit_range before a c.a_at (c.a_at + c.a_n - 1) "-"
+  place (emit_range gone b c.b_at (c.b_at + c.b_n - 1) "+") (c.a_at + c.a_n)
+
+pub fn emit_range out d i stop mark
+  return out if i > stop
+  emit_range (emit out d mark i) d (i + 1) stop mark
+
+pub fn emit out d mark i
+  shown = push out "{mark}{d.lines[i]}"
+  if (lines/bare_end? d i) (push shown "\\ No newline at end of file") shown
+
+fn span s 0
+  "{s - 1},0"
+
+fn span s 1
+  "{s}"
+
+fn span s n
+  "{s},{n}"
+
+pub fn larger x y
+  if (x > y) x y
+
+pub fn smaller x y
+  if (x < y) x y

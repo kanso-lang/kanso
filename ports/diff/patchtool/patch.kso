@@ -1,0 +1,354 @@
+# patch: read a unified diff, and for each file it names, find the file, apply
+# the hunks without fuzz, and write the result. What it prints follows GNU
+# patch 2.7 run without a terminal, which answers each of its questions with
+# the default: so a reversed patch is reported and skipped, not reversed.
+import "../lines"
+import "../patch"
+import "std/io"
+import "std/list"
+import "std/os"
+import "std/path"
+import "std/text"
+
+# what applying one file's hunks came to
+type outcome
+  content
+  failed
+  hunks
+  mismatch
+  report
+
+# a hunk on its way to the reject file, moved by the hunks before it
+type rejected
+  hunk
+  out
+
+type account
+  failed
+  mismatch
+  said
+
+# everything one file's patch needs, so the steps below take one argument
+type job
+  births
+  born
+  deaths
+  dies
+  fp
+  hunks
+  opts
+
+pub fn run_patch argv
+  begun (parse_patch_args argv)
+
+fn begun (bad_usage reason)
+  hint = "patch: Try 'patch --help' for more information.\n"
+  io/write_err "patch: {reason}\n{hint}" .> (_ -> effect 2)
+
+fn begun opts
+  source opts.input .> (content -> read_in opts content)
+
+fn source none
+  io/stdin
+
+fn source file
+  os/read_file file
+
+fn read_in _ (file_not_found p)
+  why = "No such file or directory"
+  io/write_err "patch: **** Can't open patch file {p} : {why}\n"
+    .> (_ -> effect 2)
+
+fn read_in opts content
+  patches = patch/parse_patch content
+  return garbage if length patches == 0
+  each opts patches 1 0
+
+garbage = io/write_err "patch: **** Only garbage was found in the {source_}.\n"
+  .> (_ -> effect 2)
+
+source_ = "patch input"
+
+fn each opts patches i status
+  return effect status if i > length patches
+  next = (s -> each opts patches (i + 1) (if (s > status) s status))
+  one opts patches[i] .> next
+
+fn one _ none
+  effect 0
+
+fn one opts fp
+  turned = list/to_list (list/map fp.hunks patch/reversed)
+  hunks = if opts.reverse turned fp.hunks
+  old = strip_name fp.old_name opts.strip
+  new = strip_name fp.new_name opts.strip
+  creating = absent? fp.old_name fp.old_epoch
+  deleting = absent? fp.new_name fp.new_epoch
+  births = if opts.reverse deleting creating
+  deaths = if opts.reverse creating deleting
+  born = births or empty_side? hunks (h -> h.old_start + h.old_len)
+  dies = deaths or empty_side? hunks (h -> h.new_start + h.new_len)
+  task = job births born deaths dies fp hunks opts
+  olds = if (fp.old_name == "/dev/null") [] [old]
+  news = if (fp.new_name == "/dev/null") [] [new]
+  target_of opts.target (text/concat olds news) .> (name -> located task name)
+
+# A lone hunk whose range on one side is "0,0" says that side is empty,
+# which GNU patch reads as a weaker form of /dev/null.
+fn empty_side? hunks span
+  length hunks == 1 and list/all? hunks (h -> span h == 0)
+
+# The first named file that exists; if none does, the name GNU patch calls
+# best: fewest directories, then the shortest base name, then the shortest.
+fn target_of none names
+  existing names 1 names
+
+fn target_of target _
+  effect target
+
+fn existing names i all
+  return effect (best all) if i > length names
+  name = given names[i] ""
+  os/exists name .> (here -> if here (effect name) (existing names (i + 1) all))
+
+fn best names
+  list/fold names (given names[1] "") better
+
+fn better champ name
+  if (rank name < rank champ) name champ
+
+fn rank name
+  parts = length (text/split name "/")
+  parts * 1000000 + length (path/basename name) * 1000 + length name
+
+fn located task name
+  os/exists name .> (here -> decided task name here)
+
+fn decided task name false
+  return would task name "delete" "does not exist" if task.dies
+  return cant_find task if not task.born
+  effect "" .> (content -> patch_file task name false content)
+
+fn decided task name true
+  os/read_file name .> (content -> present task name (text_of content))
+
+fn present task name content
+  full = length content > 0
+  return would task name "create" "already exists" if task.births and full
+  empty = task.dies and not full
+  return would task name "empty out" "is already empty" if empty
+  patch_file task name true content
+
+fn text_of (file_not_found _)
+  ""
+
+fn text_of content
+  content
+
+fn absent? "/dev/null" _
+  true
+
+fn absent? _ epoch
+  epoch
+
+# -pN drops N leading directories; with no -p, patch keeps the base name
+fn strip_name name none
+  path/basename name
+
+fn strip_name name n
+  parts = text/split name "/"
+  text/join (text/slice parts (n + 1) (length parts)) "/"
+
+fn plural 1 word
+  "1 out of 1 {word}"
+
+fn plural n word
+  "{n} out of {n} {word}s"
+
+fn hunks_word total
+  if (total == 1) "hunk" "hunks"
+
+fn ignored task
+  n = length task.hunks
+  "{n} out of {n} {hunks_word n} ignored"
+
+# Without a terminal GNU patch takes the default answer to each question,
+# and with -N it does not ask.
+fn declined task
+  question = if task.opts.reverse "Ignore -R?" "Assume -R?"
+  asked = "{question} [n] \nApply anyway? [n] \n"
+  skip = if task.opts.quiet "" "Skipping patch.\n"
+  if task.opts.forward "Skipping patch.\n" "{asked}{skip}"
+
+fn cant_find task
+  at = first_at task.hunks[1]
+  quoted = list/to_list (list/map task.fp.intro (l -> "|{l}\n"))
+  rule = "--------------------------\n"
+  first = "can't find file to patch at input line {at}\n"
+  second = "Perhaps you used the wrong -p or --strip option?\n"
+  third = "The text leading up to this was:\n"
+  tail = "{rule}File to patch: \nSkip this patch? [y] \nSkipping patch.\n"
+  body = "{first}{second}{third}{rule}{text/join quoted ""}{tail}"
+  io/write "{body}{ignored task}\n" .> (_ -> effect 1)
+
+fn first_at none
+  0
+
+fn first_at h
+  h.at
+
+fn would task name verb why
+  turned = if task.opts.reverse ", when reversed," ""
+  said = "The next patch{turned} would {verb} the file {name},\nwhich {why}!  "
+  io/write "{said}{declined task}{ignored task}\n" .> (_ -> effect 1)
+
+# The file is read (or empty, for one being created). If the first hunk will
+# not go in forward but goes in backward, the patch has most likely been
+# applied already, and GNU patch says so instead of failing each hunk.
+fn patch_file task name existed content
+  rows = lines/exact_keys (lines/parse content)
+  return applied_already task name if backwards? task rows
+  result = patch/apply_hunks rows task.hunks
+  story = told task result.outcomes 1 [] []
+  verb = if task.opts.dry_run "checking" "patching"
+  quiet = task.opts.quiet
+  head = if quiet [] ["{verb} file {shown_name task name}"]
+  failed = length story.failed
+  total = length task.hunks
+  saving = "{failed} out of {total} {hunks_word total} FAILED"
+  saved = if task.opts.dry_run "" " -- saving rejects to file {name}.rej"
+  summary = if (failed > 0) ["{saving}{saved}"] []
+  said = text/concat (text/concat head (if quiet [] story.said)) summary
+  new = lines/from_keys result.rows
+  wrote = outcome new story.failed task.hunks story.mismatch said
+  written task name existed content wrote
+
+fn told task outcomes i failed said
+  off = length failed > 0 or mismatch? outcomes
+  return account failed off said if i > length outcomes
+  h = task.hunks[i]
+  o = outcomes[i]
+  told task outcomes (i + 1) (missed_hunk failed h o) (push_said said i h o)
+
+fn mismatch? outcomes
+  list/any? outcomes (o -> moved? o)
+
+fn moved? (found _ offset)
+  offset != 0
+
+fn moved? _
+  true
+
+fn missed_hunk failed h (missed _ out)
+  push failed (rejected h out)
+
+fn missed_hunk failed _ _
+  failed
+
+fn push_said said i _ (missed at _)
+  push said "Hunk #{i} FAILED at {at}."
+
+fn push_said said i _ (found at offset)
+  return said if offset == 0
+  by = "{offset} {line_word offset}"
+  push said "Hunk #{i} succeeded at {at} (offset {by})."
+
+fn line_word 1
+  "line"
+
+fn line_word _
+  "lines"
+
+fn backwards? task rows
+  goes_back? rows task.hunks[1]
+
+fn goes_back? _ none
+  false
+
+fn goes_back? rows h
+  ahead = patch/locate rows h (patch/first_line h) 0 0
+  back = patch/reversed h
+  ahead == 0 and patch/locate rows back (patch/first_line back) 0 0 != 0
+
+fn applied_already task name
+  verb = if task.opts.dry_run "checking" "patching"
+  said = "{flipped task}{declined task}"
+  saved = if task.opts.dry_run "" " -- saving rejects to file {name}.rej"
+  rej = "{ignored task}{saved}"
+  all = list/to_list (list/map task.hunks (h -> rejected h 0))
+  head = if task.opts.quiet "" "{verb} file {shown_name task name}\n"
+  io/write "{head}{said}{rej}\n"
+    .> (_ -> rejects task name all)
+    .> (_ -> effect 1)
+
+fn flipped task
+  return "Unreversed patch detected!  " if task.opts.reverse
+  "Reversed (or previously applied) patch detected!  "
+
+fn written task name existed old (outcome new failed _ mismatch said)
+  shown = if (length said == 0) "" "{text/join said "\n"}\n"
+  status = if (length failed > 0) 1 0
+  return io/write shown .> (_ -> effect status) if task.opts.dry_run
+  io/write shown
+    .> (_ -> backup name existed mismatch old)
+    .> (_ -> outcome_file task name new)
+    .> (_ -> rejects task name failed)
+    .> (_ -> effect status)
+
+# GNU patch keeps the original as NAME.orig whenever the patch did not
+# apply exactly, so a hunk found at an offset or a failed one can be checked
+fn backup name true true old
+  os/write_file "{name}.orig" old
+
+fn backup _ _ _ _
+  effect done
+
+fn outcome_file task name ""
+  return os/run "rm" ["-f" name] .> (_ -> effect done) if task.deaths
+  put_result task name ""
+
+fn outcome_file task name new
+  put_result task name new
+
+fn put_result task name new
+  target = given task.opts.output name
+  folder = path/dirname target
+  return os/write_file target new if folder == "." or not task.born
+  os/make_dir folder .> (_ -> os/write_file target new)
+
+# A reject file holds the failed hunks in the direction they were tried,
+# their line numbers moved by the hunks that did go in before them, so they
+# point at the right place in the file as it now is.
+fn rejects task name failed
+  return effect done if length failed == 0 or task.opts.dry_run
+  old = header_name task.fp.old_head task.fp.old_name task.opts.strip
+  new = header_name task.fp.new_head task.fp.new_name task.opts.strip
+  head = if task.opts.reverse "--- {new}\n+++ {old}\n" "--- {old}\n+++ {new}\n"
+  body = text/join (list/to_list (list/map failed hunk_text)) ""
+  os/write_file "{name}.rej" "{head}{body}"
+
+# a reject file's header names the files as patch understood them, after -p
+fn header_name head name strip
+  rest = text/slice head 5 (length head)
+  stamp = text/slice rest (length name + 1) (length rest)
+  "{strip_name name strip}{stamp}"
+
+fn hunk_text (rejected h out)
+  old = range (patch/first_line h + out) h.old_len
+  new = range (patch/new_first h + out) h.new_len
+  body = text/join (patch/canonical h.raw) "\n"
+  "@@ -{old} +{new} @@{patch/section h}\n{body}\n"
+
+fn range start 0
+  "{start - 1},0"
+
+fn range start 1
+  "{start}"
+
+fn range start n
+  "{start},{n}"
+
+# with -o the result goes elsewhere, and patch says where it read from
+fn shown_name task name
+  out = given task.opts.output name
+  if (out == name) name "{out} (read from {name})"

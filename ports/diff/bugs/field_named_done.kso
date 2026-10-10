@@ -1,0 +1,21 @@
+# A parameter pattern that binds a record field to the name `done` does not
+# bind it: `done` is the nullary yielded by a finished write, so the pattern
+# demands that the field BE `done`, and the arm silently stops matching.
+#
+# Run: kanso play bugs/field_named_done.kso
+#
+# Should print "3 items" (or refuse `done` as a binding name, the way a
+# binding that shadows a declaration is refused with error[name]).
+#
+# Does fail at run time on both engines with
+#   error[runtime]: no overload of `count` matches these arguments
+# and nothing at check time. The same spelling as a field NAME in the type
+# declaration (`type walk` / `done`) is accepted.
+type walk
+  done
+  n
+
+fn count (walk done n)
+  "{n} {done}"
+
+print (count (walk "items" 3))

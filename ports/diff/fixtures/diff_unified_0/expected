@@ -1,0 +1,12 @@
+$ diff --unified=0 nums nums2
+--- nums
++++ nums2
+@@ -7 +7 @@
+-7
++seven
+@@ -25,0 +26 @@
++25.5
+@@ -33 +33,0 @@
+-33
+--- stderr
+--- exit 1

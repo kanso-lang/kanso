@@ -1,0 +1,37 @@
+$ patch -R -p1 -i tree.diff
+patching file README
+patching file added.txt
+patching file extra/deep.txt
+patching file gone.txt
+patching file src/main.c
+--- stderr
+--- exit 0
+== ./README
+A small project.
+
+== ./gone.txt
+this file is removed
+
+== ./src/main.c
+#include <stdio.h>
+#include <stdlib.h>
+
+/* count the lines on standard input */
+static int count_lines(FILE *in)
+{
+    int c, n = 0;
+    while ((c = getc(in)) != EOF)
+        if (c == '\n')
+            n++;
+    return n;
+}
+
+int main(void)
+{
+    int n = count_lines(stdin);
+    printf("%d\n", n);
+    return 0;
+}
+
+== ./added.txt (removed)
+== ./extra/deep.txt (removed)

@@ -1,0 +1,50 @@
+import "../lines"
+import "../myers"
+import "std/text"
+
+fn blocks_of x y
+  a = lines/parse x
+  b = lines/parse y
+  n = lines/number a b lines/plain
+  found = myers/changed_lines n.left n.right n.left n.right 3
+  changes found (lines/count a) (lines/count b)
+
+fn normal_of x y
+  normal (lines/parse x) (lines/parse y) (blocks_of x y)
+
+fn unified_of x y ctx
+  unified (lines/parse x) (lines/parse y) "a" "b" (blocks_of x y) ctx
+
+fn context_of x y
+  context (lines/parse x) (lines/parse y) "a" "b" (blocks_of x y) 1
+
+test_normal_change =
+  out = normal_of "a\nb\nc\n" "a\nB\nc\n"
+  out == ["2c2" "< b" "---" "> B"]
+
+test_normal_add = normal_of "a\n" "a\nb\n" == ["1a2" "> b"]
+
+test_normal_delete = normal_of "a\nb\nc\n" "a\n" == ["2,3d1" "< b" "< c"]
+
+test_unified_hunk =
+  out = unified_of "1\n2\n3\n4\n5\n" "1\n2\nthree\n4\n5\n" 1
+  out == ["--- a" "+++ b" "@@ -2,3 +2,3 @@" " 2" "-3" "+three" " 4"]
+
+test_unified_into_empty_file =
+  out = unified_of "" "x\n" 3
+  out == ["--- a" "+++ b" "@@ -0,0 +1 @@" "+x"]
+
+test_unified_missing_newline =
+  out = unified_of "a\n" "a" 3
+  out[length out] == "\\ No newline at end of file"
+
+# far-apart changes get hunks of their own; near ones share
+test_hunks_split_by_gap =
+  cs = blocks_of "1\n2\n3\n4\n5\n6\n7\n8\n9\n" "x\n2\n3\n4\n5\n6\n7\n8\ny\n"
+  length (hunks cs 1) == 2 and length (hunks cs 4) == 1
+
+test_context_marks =
+  out = context_of "a\nb\nc\n" "a\nB\nc\nd\n"
+  old = ["*** a" "--- b" "***************" "*** 1,3 ****" "  a" "! b" "  c"]
+  new = ["--- 1,4 ----" "  a" "! B" "  c" "+ d"]
+  out == text/concat old new

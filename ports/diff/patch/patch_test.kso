@@ -1,0 +1,67 @@
+import "std/text"
+
+sample = text/join (text/concat head_lines body_lines) "\n"
+
+body_lines = ["@@ -1,3 +1,3 @@" " 1" "-2" "+two" " 3"]
+
+head_lines = ["diff -u a/f b/f" "--- a/f" "+++ b/f"]
+
+fn only_hunk content
+  fp = parse_patch content
+  first_hunk fp[1]
+
+fn first_hunk none
+  none
+
+fn first_hunk fp
+  fp.hunks[1]
+
+test_parse_names =
+  fps = parse_patch sample
+  length fps == 1 and fps[1].old_name == "a/f" and fps[1].new_name == "b/f"
+
+test_parse_keeps_leading_text =
+  fps = parse_patch sample
+  fps[1].intro == ["diff -u a/f b/f" "--- a/f" "+++ b/f"]
+
+test_parse_sides =
+  h = only_hunk sample
+  h.old == ["1" "2" "3"] and h.new == ["1" "two" "3"]
+
+test_parse_context_counts =
+  h = only_hunk sample
+  h.prefix == 1 and h.suffix == 1
+
+test_epoch_says_absent =
+  fps = parse_patch "--- a\t1970-01-01 00:00:00.000000000 +0000\n+++ b\n"
+  fps[1].old_epoch and not fps[1].new_epoch
+
+test_no_newline_marks_side =
+  marker = "\\ No newline at end of file"
+  h = only_hunk "--- f\n+++ f\n@@ -1 +1 @@\n-x\n{marker}\n+x\n"
+  h.old == ["x\n"] and h.new == ["x"]
+
+test_apply_in_place =
+  result = apply_hunks ["1" "2" "3"] [(only_hunk sample)]
+  result.rows == ["1" "two" "3"]
+
+test_apply_finds_offset =
+  result = apply_hunks ["0" "0" "1" "2" "3"] [(only_hunk sample)]
+  result.rows == ["0" "0" "1" "two" "3"] and result.outcomes == [(found 3 2)]
+
+test_apply_reports_miss =
+  result = apply_hunks ["1" "X" "3"] [(only_hunk sample)]
+  result.rows == ["1" "X" "3"] and result.outcomes == [(missed 1 0)]
+
+test_reversed_undoes =
+  back = reversed (only_hunk sample)
+  (apply_hunks ["1" "two" "3"] [back]).rows == ["1" "2" "3"]
+
+# one context line before and three after: the hunk can only start at line 1
+test_short_lead_anchors_to_top =
+  h = only_hunk "--- f\n+++ f\n@@ -1,4 +1,4 @@\n-a\n+A\n b\n c\n d\n"
+  locate ["z" "a" "b" "c" "d"] h 1 0 0 == 0
+
+test_canonical_puts_removals_first =
+  reordered = canonical [" a" "+b" "-c" " d"]
+  reordered == [" a" "-c" "+b" " d"]

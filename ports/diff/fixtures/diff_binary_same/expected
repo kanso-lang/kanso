@@ -1,0 +1,3 @@
+$ diff blob1 blob2
+--- stderr
+--- exit 0

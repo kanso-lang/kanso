@@ -1,0 +1,3 @@
+$ diff poem_a copy
+--- stderr
+--- exit 0

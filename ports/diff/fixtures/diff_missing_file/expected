@@ -1,0 +1,4 @@
+$ diff poem_a nosuch
+--- stderr
+diff: nosuch: No such file or directory
+--- exit 2

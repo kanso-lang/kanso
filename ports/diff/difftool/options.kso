@@ -1,0 +1,219 @@
+# Reading diff's command line. Flags are gathered into a map first, because a
+# record has no update syntax and a dozen flags arriving in any order would
+# otherwise mean rebuilding a nine-field record at every step.
+import "../lines"
+import "std/list"
+import "std/text"
+
+pub type options
+  brief
+  context
+  folding
+  format
+  identical
+  labels
+  new_file
+  recursive
+  switches
+
+pub type context_format
+
+pub type normal_format
+
+pub type unified_format
+
+pub type bad_usage
+  reason
+
+pub type parsed
+  left
+  options
+  right
+
+pub fn parse_diff argv
+  read_flags argv 1 { "files":[] "labels":[] "switches":[] }
+
+fn read_flags argv i acc
+  return finish acc if i > length argv
+  word = argv[i]
+  return operands argv (i + 1) acc if word == "--"
+  return flag argv i acc word if starts? word "-" and length word > 1
+  read_flags argv (i + 1) (put acc "files" (push acc["files"] word))
+
+fn operands argv i acc
+  rest = text/slice argv i (length argv)
+  finish (put acc "files" (text/concat (given acc["files"] []) rest))
+
+fn flag argv i acc word
+  noted = put acc "switches" (push acc["switches"] word)
+  return long argv i noted word if starts? word "--"
+  short argv i noted (text/slice word 2 (length word))
+
+fn long argv i acc "--brief"
+  read_flags argv (i + 1) (put acc "brief" true)
+
+fn long argv i acc "--context"
+  read_flags argv (i + 1) (formatted acc context_format 3)
+
+fn long argv i acc "--ignore-all-space"
+  read_flags argv (i + 1) (put acc "space" "all")
+
+fn long argv i acc "--ignore-case"
+  read_flags argv (i + 1) (put acc "case" true)
+
+fn long argv i acc "--ignore-space-change"
+  read_flags argv (i + 1) (put acc "space" "change")
+
+fn long argv i acc "--label"
+  label = argv[i + 1]
+  return bad_usage "option '--label' requires an argument" if label == none
+  read_flags argv (i + 2) (put acc "labels" (push acc["labels"] label))
+
+fn long argv i acc "--new-file"
+  read_flags argv (i + 1) (put acc "new_file" true)
+
+fn long argv i acc "--normal"
+  read_flags argv (i + 1) (formatted acc normal_format 0)
+
+fn long argv i acc "--recursive"
+  read_flags argv (i + 1) (put acc "recursive" true)
+
+fn long argv i acc "--report-identical-files"
+  read_flags argv (i + 1) (put acc "identical" true)
+
+fn long argv i acc "--unified"
+  read_flags argv (i + 1) (formatted acc unified_format 3)
+
+fn long argv i acc word
+  pieces = text/split word "="
+  value = text/join (text/slice pieces 2 (length pieces)) "="
+  long_valued argv i acc (given pieces[1] word) value
+
+fn long_valued argv i acc "--context" n
+  counted argv (i + 1) acc context_format n
+
+fn long_valued argv i acc "--label" l
+  read_flags argv (i + 1) (put acc "labels" (push acc["labels"] l))
+
+fn long_valued argv i acc "--unified" n
+  counted argv (i + 1) acc unified_format n
+
+fn long_valued _ _ _ name _
+  bad_usage "unrecognized option '{name}'"
+
+# a bundle of one-letter flags: -ruN is -r -u -N, and the letters that take a
+# number take the rest of the word or, failing that, the next word
+fn short argv i acc ""
+  read_flags argv (i + 1) acc
+
+fn short argv i acc letters
+  head = text/slice letters 1 1
+  rest = text/slice letters 2 (length letters)
+  letter argv i acc head rest
+
+fn letter argv i acc "C" ""
+  counted argv (i + 2) acc context_format argv[i + 1]
+
+fn letter argv i acc "U" ""
+  counted argv (i + 2) acc unified_format argv[i + 1]
+
+fn letter argv i acc "C" rest
+  counted argv (i + 1) acc context_format rest
+
+fn letter argv i acc "U" rest
+  counted argv (i + 1) acc unified_format rest
+
+fn letter argv i acc "N" rest
+  short argv i (put acc "new_file" true) rest
+
+fn letter argv i acc "b" rest
+  short argv i (put acc "space" "change") rest
+
+fn letter argv i acc "c" rest
+  short argv i (formatted acc context_format 3) rest
+
+fn letter argv i acc "i" rest
+  short argv i (put acc "case" true) rest
+
+fn letter argv i acc "q" rest
+  short argv i (put acc "brief" true) rest
+
+fn letter argv i acc "r" rest
+  short argv i (put acc "recursive" true) rest
+
+fn letter argv i acc "s" rest
+  short argv i (put acc "identical" true) rest
+
+fn letter argv i acc "u" rest
+  short argv i (formatted acc unified_format 3) rest
+
+fn letter argv i acc "w" rest
+  short argv i (put acc "space" "all") rest
+
+fn letter _ _ _ head _
+  bad_usage "invalid option -- '{head}'"
+
+fn counted _ _ _ _ none
+  bad_usage "option requires an argument"
+
+fn counted argv i acc format word
+  n = text/to_int word
+  number argv i acc format n word
+
+fn number _ _ _ _ (err _) word
+  bad_usage "invalid context length '{word}'"
+
+fn number argv i acc format n _
+  read_flags argv i (put (put acc "format" format) "context" n)
+
+fn formatted acc format n
+  put (put acc "format" format) "context" n
+
+fn finish acc
+  files = acc["files"]
+  return bad_usage "missing operand after 'diff'" if length files == 0
+  lone = given files[1] ""
+  return bad_usage "missing operand after '{lone}'" if length files < 2
+  return bad_usage "extra operand '{files[3]}'" if length files > 2
+  parsed (given files[1] "") (built acc) (given files[2] "")
+
+fn built acc
+  fold = lines/fold_with (given acc["case"] false) (spacing acc["space"])
+  ctx = given acc["context"] 0
+  format = given acc["format"] normal_format
+  identical = given acc["identical"] false
+  new_file = given acc["new_file"] false
+  recursive = given acc["recursive"] false
+  brief = given acc["brief"] false
+  switches = acc["switches"]
+  options
+    brief
+    ctx
+    fold
+    format
+    identical
+    acc["labels"]
+    new_file
+    recursive
+    switches
+
+fn given none fallback
+  fallback
+
+fn given v _
+  v
+
+fn spacing "all"
+  lines/all_space
+
+fn spacing "change"
+  lines/space_change
+
+fn spacing none
+  lines/space_exact
+
+fn spacing _
+  lines/space_exact
+
+fn starts? word prefix
+  text/slice word 1 (length prefix) == prefix

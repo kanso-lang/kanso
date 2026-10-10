@@ -1,0 +1,185 @@
+# Reading a unified diff. A patch is a run of file patches, each a "---" and
+# "+++" header pair followed by hunks; anything else between them (a "diff
+# -r" line, an "Only in" line, a mail header) is leading text that patch
+# skips but keeps, because it quotes it back when it cannot find a file.
+#
+# A hunk keeps three views of itself: the raw lines, so a reject file can
+# reproduce it exactly; the old and new sides as comparison keys, where a
+# line followed by "\ No newline at end of file" carries a trailing "\n" the
+# way lines/lines.kso marks a bare last line; and how many context lines lead
+# and trail it, which decides where it may match.
+import "std/list"
+import "std/text"
+
+pub type hunk
+  at
+  head
+  new
+  new_len
+  new_start
+  old
+  old_len
+  old_start
+  prefix
+  raw
+  suffix
+
+pub type file_patch
+  hunks
+  intro
+  new_epoch
+  new_head
+  new_name
+  old_epoch
+  old_head
+  old_name
+
+# a hunk being read: the sides so far, and the mark of the last line
+type body
+  last
+  new
+  old
+  raw
+
+type range
+  len
+  start
+
+type read_hunks
+  hunks
+  stop
+
+pub fn parse_patch content
+  lines = text/split content "\n"
+  scan lines 1 [] []
+
+# looking for the next "---" line followed by a "+++" line
+fn scan lines i intro acc
+  return acc if i > length lines
+  line = given lines[i] ""
+  next = given lines[i + 1] ""
+  header = starts? line "--- " and starts? next "+++ "
+  return file_at lines i intro acc if header
+  scan lines (i + 1) (push intro line) acc
+
+fn file_at lines i intro acc
+  old_head = given lines[i] ""
+  new_head = given lines[i + 1] ""
+  read = hunks_from lines (i + 2) []
+  patch_ = file_patch
+    read.hunks
+    (text/concat intro [old_head new_head])
+    (epoch? new_head)
+    new_head
+    (name_of new_head)
+    (epoch? old_head)
+    old_head
+    (name_of old_head)
+  scan lines read.stop [] (push acc patch_)
+
+fn hunks_from lines i acc
+  line = given lines[i] ""
+  return read_hunks acc i if not starts? line "@@ "
+  h = hunk_at lines i line
+  hunks_from lines (i + 1 + length h.raw) (push acc h)
+
+fn hunk_at lines i line
+  words = text/split line " "
+  old = range_of (given words[2] "-0")
+  new = range_of (given words[3] "+0")
+  b = body_from lines (i + 1) old.len new.len (body " " [] [] [])
+  prefix = lead_context b.raw 1 0
+  suffix = trail_context b.raw (length b.raw) 0
+  hunk
+    i
+    line
+    b.new
+    new.len
+    new.start
+    b.old
+    old.len
+    old.start
+    prefix
+    b.raw
+    suffix
+
+# "-12,3" or "+7": a start and a length, the length 1 when it is left out
+fn range_of word
+  parts = text/split (text/slice word 2 (length word)) ","
+  start = number_of (given parts[1] "0")
+  len = if (length parts > 1) (number_of (given parts[2] "1")) 1
+  range len start
+
+fn number_of word
+  as_number (text/to_int word)
+
+fn as_number (err _)
+  0
+
+fn as_number n
+  n
+
+# read lines until both sides have their counts, then take a trailing
+# "\ No newline" too
+fn body_from lines i olds news b
+  line = lines[i]
+  return b if line == none
+  return marked lines i olds news b if starts? line "\\"
+  return b if olds <= 0 and news <= 0
+  mark = if (line == "") " " (text/slice line 1 1)
+  text_ = text/slice line 2 (length line)
+  new = side mark "+" b.new text_
+  old = side mark "-" b.old text_
+  grown = body mark new old (push b.raw line)
+  left_old = if (mark == "+") olds (olds - 1)
+  left_new = if (mark == "-") news (news - 1)
+  body_from lines (i + 1) left_old left_new grown
+
+fn side " " _ xs t
+  push xs t
+
+fn side mark mine xs t
+  if (mark == mine) (push xs t) xs
+
+# the line before has no newline: mark it on the sides it belongs to
+fn marked lines i olds news b
+  new = if (b.last == "-") b.new (bare b.new)
+  old = if (b.last == "+") b.old (bare b.old)
+  raw = push b.raw (given lines[i] "")
+  body_from lines (i + 1) olds news (body b.last new old raw)
+
+fn bare xs
+  n = length xs
+  return xs if n == 0
+  push (text/slice xs 1 (n - 1)) "{given xs[n] ""}\n"
+
+fn lead_context raw i k
+  line = raw[i]
+  return k if line == none or starts? line "\\"
+  return k if not (starts? line " " or line == "")
+  lead_context raw (i + 1) (k + 1)
+
+fn trail_context raw i k
+  return k if i < 1
+  line = given raw[i] ""
+  return trail_context raw (i - 1) k if starts? line "\\"
+  return k if not (starts? line " " or line == "")
+  trail_context raw (i - 1) (k + 1)
+
+# "--- a/x\t2026-10-10 ..." names a/x; a header with no tab is all name
+fn name_of head
+  rest = text/slice head 5 (length head)
+  given (text/split rest "\t")[1] rest
+
+fn epoch? head
+  stamp = given (text/split head "\t")[2] ""
+  starts? stamp "1970-01-01 00:00:00"
+
+pub fn starts? s prefix
+  text/slice s 1 (length prefix) == prefix
+
+fn given none fallback
+  fallback
+
+fn given v _
+  v

@@ -1,0 +1,44 @@
+# From changed lines to change blocks: each block is a run of removed and
+# inserted lines with no kept line inside it. a_at is the first line of a it
+# covers; a pure insertion has a_n = 0 and a_at is the line it goes before.
+import "../myers"
+import "std/list"
+import "std/text"
+
+pub type change
+  a_at
+  a_n
+  b_at
+  b_n
+
+# GNU's build_script: walk both files together; wherever either side has a
+# changed line, the changed runs on both sides from there are one block.
+pub fn changes m na nb
+  blocks m na nb 0 0 []
+
+fn blocks m na nb i j acc
+  return acc if i >= na and j >= nb
+  here = myers/changed? m.left i or myers/changed? m.right j
+  return blocks m na nb (i + 1) (j + 1) acc if not here
+  i2 = run_end m.left i
+  j2 = run_end m.right j
+  found = change (i + 1) (i2 - i) (j + 1) (j2 - j)
+  blocks m na nb (i2 + 1) (j2 + 1) (push acc found)
+
+fn run_end flags i
+  if (myers/changed? flags i) (run_end flags (i + 1)) i
+
+# Changes whose gap is at most twice the context share a hunk, so their
+# context lines are printed once.
+pub fn hunks cs ctx
+  list/fold cs [] (&gather ctx)
+
+fn gather ctx groups c
+  return [[c]] if length groups == 0
+  last = groups[length groups]
+  prev = last[length last]
+  gap = c.a_at - (prev.a_at + prev.a_n)
+  if (gap <= 2 * ctx) (replace_last groups (push last c)) (push groups [c])
+
+fn replace_last groups g
+  push (text/slice groups 1 (length groups - 1)) g

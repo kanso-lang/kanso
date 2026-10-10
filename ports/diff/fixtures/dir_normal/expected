@@ -1,0 +1,13 @@
+$ diff old new
+diff old/README new/README
+1a2
+> Now with byte counts.
+Only in new: added.txt
+Binary files old/bin.dat and new/bin.dat differ
+Common subdirectories: old/docs and new/docs
+Only in new: extra
+Only in old: gone.txt
+File old/mode is a directory while file new/mode is a regular file
+Common subdirectories: old/src and new/src
+--- stderr
+--- exit 1

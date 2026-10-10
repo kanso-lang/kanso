@@ -1,0 +1,4 @@
+$ diff -q poem_a poem_b
+Files poem_a and poem_b differ
+--- stderr
+--- exit 1

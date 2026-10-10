@@ -1,0 +1,5 @@
+$ patch --frobnicate
+--- stderr
+patch: unrecognized option '--frobnicate'
+patch: Try 'patch --help' for more information.
+--- exit 2

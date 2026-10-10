@@ -1,0 +1,30 @@
+# One program, two tools, the way busybox does it: the first argument names
+# the tool and the rest are its arguments.
+import "../difftool"
+import "../patchtool"
+import "std/io"
+import "std/os"
+import "std/text"
+
+pub fn main argv
+  tool argv[1] (text/slice argv 2 (length argv))
+
+fn tool "diff" rest
+  run_diff rest .> exit_with
+
+fn tool "patch" rest
+  run_patch rest .> exit_with
+
+fn tool none _
+  tool "" []
+
+fn tool _ _
+  io/write_err "usage: main diff [OPTION]... FILE1 FILE2\n"
+    .> (_ -> io/write_err "       main patch [OPTION]... [ORIGFILE [PATCH]]\n")
+    .> (_ -> os/exit 2)
+
+fn exit_with 0
+  effect done
+
+fn exit_with status
+  os/exit status

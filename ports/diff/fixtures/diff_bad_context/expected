@@ -1,0 +1,5 @@
+$ diff -U lots a b
+--- stderr
+diff: invalid context length 'lots'
+diff: Try 'diff --help' for more information.
+--- exit 2

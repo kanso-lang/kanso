@@ -1,0 +1,4 @@
+$ diff blob1 blob2
+Binary files blob1 and blob2 differ
+--- stderr
+--- exit 1

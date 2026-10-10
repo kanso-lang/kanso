@@ -1,0 +1,45 @@
+$ patch -p1 -i tree.diff
+patching file README
+patching file added.txt
+patching file extra/deep.txt
+patching file gone.txt
+patching file src/main.c
+--- stderr
+--- exit 0
+== ./README
+A small project.
+Now with byte counts.
+
+== ./added.txt
+this file is new
+
+== ./extra/deep.txt
+deep
+
+== ./src/main.c
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+/* count the lines and the bytes on standard input */
+static int count_lines(FILE *in, long *bytes)
+{
+    int c, n = 0;
+    *bytes = 0;
+    while ((c = getc(in)) != EOF) {
+        (*bytes)++;
+        if (c == '\n')
+            n++;
+    }
+    return n;
+}
+
+int main(void)
+{
+    long bytes;
+    int n = count_lines(stdin, &bytes);
+    printf("%d %ld\n", n, bytes);
+    return 0;
+}
+
+== ./gone.txt (removed)

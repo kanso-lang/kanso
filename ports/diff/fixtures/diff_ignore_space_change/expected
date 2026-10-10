@@ -1,0 +1,7 @@
+$ diff -b spaced tight
+2c2
+<   indented
+---
+> indented
+--- stderr
+--- exit 1

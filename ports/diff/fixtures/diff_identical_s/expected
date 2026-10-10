@@ -1,0 +1,4 @@
+$ diff -s poem_a copy
+Files poem_a and copy are identical
+--- stderr
+--- exit 0

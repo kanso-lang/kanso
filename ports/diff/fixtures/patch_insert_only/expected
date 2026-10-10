@@ -1,0 +1,15 @@
+$ patch -i ins.diff
+patching file f
+--- stderr
+--- exit 0
+== ./f
+1
+2
+3
+three and a half
+4
+5
+6
+7
+10
+

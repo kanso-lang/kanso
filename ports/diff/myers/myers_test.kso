@@ -1,0 +1,50 @@
+# The comparison on small sequences, with the changed lines GNU diff 3.10
+# reports for the same inputs (0-based line numbers).
+fn changed_in m n
+  list_changed m 0 n []
+
+fn list_changed m i n acc
+  return acc if i >= n
+  more = if (changed? m i) (push acc i) acc
+  list_changed m (i + 1) n more
+
+fn compared a b
+  changed_lines a b a b 0
+
+test_identical_has_no_changes =
+  m = compared ["a" "b" "c"] ["a" "b" "c"]
+  changed_in m.left 3 == [] and changed_in m.right 3 == []
+
+test_one_line_changed =
+  m = compared ["a" "b" "c"] ["a" "x" "c"]
+  changed_in m.left 3 == [1] and changed_in m.right 3 == [1]
+
+test_insert_at_front =
+  m = compared ["b" "c"] ["a" "b" "c"]
+  changed_in m.left 2 == [] and changed_in m.right 3 == [0]
+
+test_everything_deleted =
+  m = compared ["a" "b"] []
+  changed_in m.left 2 == [0 1]
+
+# Myers' paper: ABCABBA against CBABAC differs by five edits
+test_paper_example =
+  m = compared ["a" "b" "c" "a" "b" "b" "a"] ["c" "b" "a" "b" "a" "c"]
+  length (changed_in m.left 7) + length (changed_in m.right 6) == 5
+
+# an inserted copy of a repeated line slides down to the last place it can
+# go, which is where GNU diff puts it
+test_duplicate_slides_down =
+  m = compared ["a" "b" "c"] ["a" "b" "b" "c"]
+  changed_in m.right 4 == [2]
+
+# a line that occurs nowhere in the other file is discarded before the
+# search and still reported as changed
+test_unmatched_line_discarded =
+  m = compared ["a" "q" "b"] ["a" "b"]
+  changed_in m.left 3 == [1]
+
+# the identical ends are trimmed before the search
+test_identical_ends_trimmed =
+  m = compared ["x" "x" "a" "x" "x"] ["x" "x" "b" "x" "x"]
+  changed_in m.left 5 == [2] and changed_in m.right 5 == [2]

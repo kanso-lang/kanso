@@ -1,0 +1,29 @@
+fn reason_of (bad_usage r)
+  r
+
+fn reason_of _
+  ""
+
+test_defaults =
+  o = parse_patch_args []
+  o.strip == none and o.input == none and not o.reverse and not o.dry_run
+
+test_strip_glued = (parse_patch_args ["-p1"]).strip == 1
+
+test_strip_apart = (parse_patch_args ["-p" "2"]).strip == 2
+
+test_strip_long = (parse_patch_args ["--strip=0"]).strip == 0
+
+test_input_flag = (parse_patch_args ["-i" "x.diff"]).input == "x.diff"
+
+test_positional_file_and_patch =
+  o = parse_patch_args ["orig.c" "fix.diff"]
+  o.target == "orig.c" and o.input == "fix.diff"
+
+test_flags =
+  o = parse_patch_args ["-R" "-N" "-s" "--dry-run"]
+  o.reverse and o.forward and o.quiet and o.dry_run
+
+test_unknown_long =
+  r = reason_of (parse_patch_args ["--fuzz=3"])
+  r == "unrecognized option '--fuzz'"

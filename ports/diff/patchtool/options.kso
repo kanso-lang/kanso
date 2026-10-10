@@ -1,0 +1,131 @@
+# patch's command line: patch [OPTION]... [ORIGFILE [PATCHFILE]]. As in diff,
+# flags are gathered into a map and turned into a record once at the end.
+import "std/text"
+
+pub type options
+  dry_run
+  forward
+  input
+  output
+  quiet
+  reverse
+  strip
+  target
+
+pub type bad_usage
+  reason
+
+pub fn parse_patch_args argv
+  read_flags argv 1 { "files":[] }
+
+fn read_flags argv i acc
+  return finish acc if i > length argv
+  word = given argv[i] ""
+  rest = text/slice argv (i + 1) (length argv)
+  return finish (more_files acc rest) if word == "--"
+  return flag argv i acc word if starts? word "-" and length word > 1
+  read_flags argv (i + 1) (more_files acc [word])
+
+fn more_files acc words
+  put acc "files" (text/concat (given acc["files"] []) words)
+
+fn flag argv i acc "--dry-run"
+  read_flags argv (i + 1) (put acc "dry_run" true)
+
+fn flag argv i acc "--forward"
+  read_flags argv (i + 1) (put acc "forward" true)
+
+fn flag argv i acc "--quiet"
+  read_flags argv (i + 1) (put acc "quiet" true)
+
+fn flag argv i acc "--reverse"
+  read_flags argv (i + 1) (put acc "reverse" true)
+
+fn flag argv i acc "--silent"
+  read_flags argv (i + 1) (put acc "quiet" true)
+
+fn flag argv i acc "-N"
+  read_flags argv (i + 1) (put acc "forward" true)
+
+fn flag argv i acc "-R"
+  read_flags argv (i + 1) (put acc "reverse" true)
+
+fn flag argv i acc "-i"
+  valued argv (i + 2) acc "input" argv[i + 1]
+
+fn flag argv i acc "-o"
+  valued argv (i + 2) acc "output" argv[i + 1]
+
+fn flag argv i acc "-p"
+  stripped argv (i + 2) acc argv[i + 1]
+
+fn flag argv i acc "-s"
+  read_flags argv (i + 1) (put acc "quiet" true)
+
+fn flag argv i acc word
+  return prefixed argv i acc (text/slice word 1 2) word if not starts? word "--"
+  named argv i acc (given (text/split word "=")[1] "") (after_eq word)
+
+# -p1: the number glued to the letter
+fn prefixed argv i acc "-p" word
+  stripped argv (i + 1) acc (text/slice word 3 (length word))
+
+fn prefixed _ _ _ _ word
+  bad_usage "invalid option -- '{text/slice word 2 2}'"
+
+fn named argv i acc "--input" value
+  valued argv (i + 1) acc "input" value
+
+fn named argv i acc "--output" value
+  valued argv (i + 1) acc "output" value
+
+fn named argv i acc "--strip" value
+  stripped argv (i + 1) acc value
+
+fn named _ _ _ name _
+  bad_usage "unrecognized option '{name}'"
+
+fn after_eq word
+  pieces = text/split word "="
+  text/join (text/slice pieces 2 (length pieces)) "="
+
+fn valued _ _ _ key none
+  bad_usage "option '{key}' requires an argument"
+
+fn valued argv i acc key word
+  read_flags argv i (put acc key word)
+
+fn stripped _ _ _ none
+  bad_usage "option requires an argument -- 'p'"
+
+fn stripped argv i acc word
+  depth argv i acc word (text/to_int word)
+
+fn depth _ _ _ word (err _)
+  bad_usage "strip count {word} is not a number"
+
+fn depth argv i acc _ n
+  read_flags argv i (put acc "strip" n)
+
+fn finish acc
+  files = given acc["files"] []
+  return bad_usage "extra operand '{given files[3] ""}'" if length files > 2
+  input = if (length files == 2) files[2] acc["input"]
+  options
+    (given acc["dry_run"] false)
+    (given acc["forward"] false)
+    input
+    acc["output"]
+    (given acc["quiet"] false)
+    (given acc["reverse"] false)
+    acc["strip"]
+    files[1]
+
+fn given none fallback
+  fallback
+
+fn given v _
+  v
+
+fn starts? word prefix
+  text/slice word 1 (length prefix) == prefix

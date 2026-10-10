@@ -1,0 +1,22 @@
+# Reading a map and then `put`ting into it copies (or re-sorts) the whole
+# map on every put, so a read-modify-write loop is quadratic.
+#
+# Run: time kanso play bugs/map_read_then_put_is_quadratic.kso
+#
+# Should take about as long as the same loop without the read: 20,000 puts
+# into a map are 12 ms natively when nothing reads the map in between.
+#
+# Does take 0.8 to 1.0 s natively for the loop below (20,000 keys), and the
+# time grows with the square of the count. Where the read sits does not matter:
+# a binding before the put, the put's own argument (`put m k (f m[k])`), or
+# a caller that reads and passes the value down all behave the same.
+# std/list's `tally` is written `put m x (bump m[x])`, so it has the same
+# cost: 0.7 s for 20,000 ints. callgrind put 92% of the diff port's time in
+# `k_map_sort_build` and libc `msort` before the port stopped reading maps it
+# was about to grow.
+fn filled m k n
+  return m if k > n
+  v = m[k - 1]
+  filled (put m k (if (v == none) 1 (v + 1))) (k + 1) n
+
+print "{length (filled {} 1 20000)}"

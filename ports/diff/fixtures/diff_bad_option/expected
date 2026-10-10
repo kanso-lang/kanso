@@ -1,0 +1,5 @@
+$ diff -Q a b
+--- stderr
+diff: invalid option -- 'Q'
+diff: Try 'diff --help' for more information.
+--- exit 2

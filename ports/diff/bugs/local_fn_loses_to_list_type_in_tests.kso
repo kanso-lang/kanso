@@ -1,0 +1,36 @@
+# A local function whose name is also a pub TYPE of std/list (`skipped`,
+# `step`, `cursor`, `capped`, ...) loses to that type's constructor on the
+# interpreter, and wins natively. The engines disagree.
+#
+# Run (from a directory holding only this file, since `kanso test` and
+# `kanso play` take the whole directory as the module):
+#   kanso test local_fn_loses_to_list_type_in_tests.kso
+#   kanso play p.kso / kanso play p.kso --interp   (p.kso = this file with the
+#   test replaced by  print "{(sum_all [1 2 3]).total}")
+#
+# Should: the test passes and both engines print 6. `skipped` is declared
+# right here, and a local declaration outranks an import (chapter 11).
+#
+# Does: the test FAILS with
+#   error[runtime]: `list/skipped` has no field `total`
+# because `skipped` built std/list's `skipped` record (fields `burn` and
+# `source`) instead of naming the function below. `kanso play p.kso` prints 6;
+# `kanso play p.kso --interp` fails with the same error. Nothing at check
+# time.
+#
+# In the diff port the call `skipped c (missed ...)` in patch/apply.kso failed
+# this way under `kanso test patch` while every run of the program, native
+# and interpreted, behaved, so the test was reporting the engine, not the
+# code under test. The function is now called `passed_over`.
+import "std/list"
+
+type tally_
+  total
+
+fn skipped acc n
+  tally_ (acc.total + n)
+
+fn sum_all xs
+  list/fold xs (tally_ 0) skipped
+
+test_local_function_wins = (sum_all [1 2 3]).total == 6

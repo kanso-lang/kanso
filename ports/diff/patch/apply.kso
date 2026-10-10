@@ -1,0 +1,166 @@
+# Applying hunks without fuzz. Each hunk's old side must match the file
+# exactly, line for line; patch looks first where the hunk says it belongs
+# (moved by however far the previous hunk was found from where it said),
+# then one line further down, one line further up, two down, and so on.
+# This follows locate_hunk in GNU patch with the fuzz factor fixed at 0,
+# including its rule that a hunk with less context on one side than the
+# other sits against that end of the file and may only match there.
+import "std/list"
+import "std/text"
+
+# a hunk that went in, at the line patch reports (its place in the output
+# so far) and how far from where it said it would be
+pub type found
+  at
+  offset
+
+# a hunk that did not; `out` is how far earlier hunks have moved the output,
+# which the report and the reject file both add to the hunk's own numbers
+pub type missed
+  at
+  out
+
+# the result of applying a list of hunks to a file's line rows
+pub type applied
+  rows
+  outcomes
+
+type ordering
+  minus
+  plus
+  settled
+
+type progress
+  grown
+  offset
+  out
+  outcomes
+  pos
+
+# where the hunk says its old side starts, as GNU's pch_first: a hunk with
+# no old lines names the line it goes after
+pub fn first_line h
+  if (h.old_len == 0) (h.old_start + 1) h.old_start
+
+pub fn new_first h
+  if (h.new_len == 0) (h.new_start + 1) h.new_start
+
+pub fn apply_hunks rows hunks
+  walked = list/fold hunks (progress 0 0 [] [] 0) (&apply_one rows)
+  rest = text/slice rows (walked.pos + 1) (length rows)
+  applied (text/concat walked.out rest) walked.outcomes
+
+fn apply_one rows c h
+  first = first_line h
+  where = locate rows h first c.offset c.pos
+  return passed_over c (missed (first + c.grown) c.grown) if where == 0
+  before = text/slice rows (c.pos + 1) (lesser (where - 1) (length rows))
+  out = text/concat (text/concat c.out before) h.new
+  offset = where - first
+  told = push c.outcomes (found (where + c.grown) offset)
+  grown = c.grown + h.new_len - h.old_len
+  progress grown offset out told (lesser (where - 1 + h.old_len) (length rows))
+
+# text/slice answers nothing at all for a range that runs past the end, so
+# a null-range hunk placed beyond the last line has to be clamped by hand
+fn lesser x y
+  if (x < y) x y
+
+fn passed_over c outcome
+  progress c.grown c.offset c.out (push c.outcomes outcome) c.pos
+
+# Is hunk h at line `where` of the file? GNU's patch_match with no fuzz.
+pub fn fits? rows h where
+  inside = where >= 1 and where - 1 + h.old_len <= length rows
+  inside and same_run? rows h.old where 1
+
+fn same_run? rows old where k
+  return true if k > length old
+  return false if rows[where + k - 1] != old[k]
+  same_run? rows old where (k + 1)
+
+# 1-based line where the hunk applies, or 0 when it applies nowhere
+pub fn locate rows h first offset pos
+  guess = first + offset
+  return guess if h.old_len == 0
+  context = if (h.prefix < h.suffix) h.suffix h.prefix
+  prefix_fuzz = h.prefix - context
+  suffix_fuzz = h.suffix - context
+  max_where = length rows - h.old_len + 1
+  min_where = pos + 1
+  max_pos = max_where - guess
+  max_neg = clamp_neg (guess - min_where) guess
+  return at_start rows h guess max_pos if prefix_fuzz < 0 and first <= 1
+  return at_end rows h guess max_neg if suffix_fuzz < 0
+  search rows h guess max_pos max_neg 0 (if (max_pos < max_neg) max_neg max_pos)
+
+# do not try lines before the first
+fn clamp_neg neg guess
+  if (guess <= neg) (guess - 1) neg
+
+# less leading context than trailing: the hunk is at the top of the file
+fn at_start rows h guess max_pos
+  offset = 1 - guess
+  if (offset <= max_pos and fits? rows h 1) 1 0
+
+# less trailing context than leading: the hunk is at the bottom
+fn at_end rows h guess max_neg
+  offset = guess - (length rows - h.old_len + 1)
+  where = guess - offset
+  if (offset <= max_neg and fits? rows h where) where 0
+
+fn search rows h guess max_pos max_neg offset max_offset
+  return 0 if offset > max_offset
+  return guess + offset if offset <= max_pos and fits? rows h (guess + offset)
+  below = guess - offset
+  return below if offset > 0 and offset <= max_neg and fits? rows h below
+  search rows h guess max_pos max_neg (offset + 1) max_offset
+
+# the hunk read backwards, for -R and for spotting a patch already applied
+pub fn reversed h
+  hunk
+    h.at
+    h.head
+    h.old
+    h.old_len
+    h.old_start
+    h.new
+    h.new_len
+    h.new_start
+    h.prefix
+    (list/to_list (list/map h.raw swap_mark))
+    h.suffix
+
+fn swap_mark line
+  head = text/slice line 1 1
+  rest = text/slice line 2 (length line)
+  return "+{rest}" if head == "-"
+  return "-{rest}" if head == "+"
+  line
+
+# whatever follows the second "@@" of the header: diff -p's function name
+pub fn section h
+  parts = text/split h.head "@@"
+  text/join (text/slice parts 3 (length parts)) "@@"
+
+# The body as GNU patch writes it back out: within each run of changed
+# lines, the removed ones first. A "\ No newline" line stays with its line.
+pub fn canonical raw
+  groups = list/fold raw [] gather_line
+  ordered = list/fold groups (ordering [] [] []) place_group
+  flat (text/concat (text/concat ordered.settled ordered.minus) ordered.plus)
+
+fn gather_line groups line
+  return push groups [line] if not starts? line "\\" or length groups == 0
+  n = length groups
+  push (text/slice groups 1 (n - 1)) (push (given groups[n] []) line)
+
+fn place_group o g
+  mark = text/slice (given g[1] " ") 1 1
+  return ordering (push o.minus g) o.plus o.settled if mark == "-"
+  return ordering o.minus (push o.plus g) o.settled if mark == "+"
+  settled = text/concat (text/concat o.settled o.minus) o.plus
+  ordering [] [] (push settled g)
+
+fn flat groups
+  list/fold groups [] (acc g -> text/concat acc g)

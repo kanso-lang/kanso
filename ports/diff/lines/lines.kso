@@ -1,0 +1,124 @@
+# A text file as diff sees it: a list of lines without their newlines, and
+# whether the last one had a newline at all. GNU diff and patch both care
+# about that last bit, because "\ No newline at end of file" is part of the
+# output and part of what patch has to reproduce.
+import "std/list"
+import "std/text"
+
+pub type doc
+  eol
+  lines
+
+# What two lines must share to count as the same line.
+pub type folding
+  case
+  space
+
+# Both files' lines as comparison keys.
+pub type numbered
+  left
+  right
+
+pub type all_space
+
+pub type space_change
+
+pub type space_exact
+
+pub plain = folding false space_exact
+
+pub fn fold_with case space
+  folding case space
+
+pub fn parse ""
+  doc true []
+
+pub fn parse content
+  pieces = text/split content "\n"
+  ends = pieces[length pieces] == ""
+  doc ends (if ends (text/slice pieces 1 (length pieces - 1)) pieces)
+
+pub fn render d
+  return "" if length d.lines == 0
+  body = text/join d.lines "\n"
+  if d.eol "{body}\n" body
+
+pub fn count d
+  length d.lines
+
+# Is line i the last line of a file that has no final newline?
+pub fn bare_end? d i
+  i == length d.lines and not d.eol
+
+# A line's key is the text the comparison sees, after -i, -b and -w have had
+# their say. The keys are compared directly; numbering them first through a
+# map cost more than it saved (see FRICTION.md, F8).
+pub fn number left right f
+  numbered (keys_of left f) (keys_of right f)
+
+# the keys patch matches against: the lines as they are
+pub fn exact_keys d
+  keys_of d plain
+
+# Keys back into file content. A key ending in the newline mark is a line
+# with no newline of its own, and the mark already is a newline, so every
+# key ends up as a line ending in one; only the very last line, if marked,
+# gives its newline back.
+pub fn from_keys rows
+  body = text/join (list/to_list (list/map rows with_newline)) ""
+  n = length body
+  if (bare_key? (given rows[length rows] "")) (text/slice body 1 (n - 1)) body
+
+fn with_newline k
+  if (bare_key? k) k "{k}\n"
+
+fn bare_key? k
+  n = length k
+  n > 0 and text/slice k n n == "\n"
+
+# the newline is never inside a line, so it marks the bare last one
+fn keys_of d f
+  shapes = list/to_list (list/map d.lines (&shape_of f))
+  n = length shapes
+  return shapes if d.eol or n == 0
+  push (text/slice shapes 1 (n - 1)) "{given shapes[n] ""}\n"
+
+fn shape_of f line
+  squeeze (lower line f.case) f.space
+
+fn lower s false
+  s
+
+fn lower s true
+  text/utf8 (list/to_list (list/map (text/bytes s) down))
+
+fn down b
+  if (b >= 65 and b <= 90) (b + 32) b
+
+fn squeeze s space_exact
+  s
+
+fn squeeze s all_space
+  text/utf8 (list/to_list (list/reject (text/bytes s) blank?))
+
+# -b: a run of white space counts as one space, and white space at the end of
+# the line does not count at all; leading white space still differs from none
+fn squeeze s space_change
+  text/utf8 (trailing (list/fold (text/bytes s) [] collapse))
+
+fn collapse acc b
+  return push acc b if not blank? b
+  if (given acc[length acc] 0 == 32) acc (push acc 32)
+
+fn trailing bs
+  n = length bs
+  if (n > 0 and given bs[n] 0 == 32) (text/slice bs 1 (n - 1)) bs
+
+fn blank? b
+  b == 32 or b == 9 or b == 13 or b == 11 or b == 12
+
+fn given none fallback
+  fallback
+
+fn given v _
+  v

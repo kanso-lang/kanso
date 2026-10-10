@@ -1,0 +1,5 @@
+$ frobnicate
+--- stderr
+usage: main diff [OPTION]... FILE1 FILE2
+       main patch [OPTION]... [ORIGFILE [PATCH]]
+--- exit 2

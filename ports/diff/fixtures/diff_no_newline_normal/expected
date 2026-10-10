@@ -1,0 +1,8 @@
+$ diff without with
+3c3
+< C
+\ No newline at end of file
+---
+> c
+--- stderr
+--- exit 1

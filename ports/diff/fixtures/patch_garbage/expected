@@ -1,0 +1,4 @@
+$ patch -i junk
+--- stderr
+patch: **** Only garbage was found in the patch input.
+--- exit 2

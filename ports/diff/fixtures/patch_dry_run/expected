@@ -1,0 +1,7 @@
+$ patch --dry-run poem fix.diff
+checking file poem
+Hunk #1 FAILED at 1.
+Hunk #2 succeeded at 11 (offset 1 line).
+1 out of 2 hunks FAILED
+--- stderr
+--- exit 1

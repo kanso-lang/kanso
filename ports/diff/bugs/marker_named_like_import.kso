@@ -1,0 +1,26 @@
+# A local marker type whose name is also a pub function of an imported
+# module loses to the import when mentioned as a value.
+#
+# Run: kanso play bugs/marker_named_like_import.kso
+#
+# Should print "dropped": `drop` is declared in this file as a marker type,
+# and chapter 11 says a local arm outranks an imported one on a tie. The
+# bare mention `drop` should be the marker's value.
+#
+# Does print "something else" on both engines: the argument `drop` evaluates
+# to std/list's `drop` function (it renders as <fn> when interpolated), so
+# the `letter drop` arm never matches. No diagnostic is given. In a module
+# directory, the import can sit in a different file (a `_test.kso` sibling)
+# and still change what `drop` means in this one, so adding a test file
+# changed the behaviour of the program under test.
+import "std/list"
+
+type drop
+
+fn letter drop
+  "dropped"
+
+fn letter _
+  "something else"
+
+print (letter drop)

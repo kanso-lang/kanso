@@ -1,0 +1,54 @@
+fn opts_of argv
+  options_in (parse_diff argv)
+
+fn options_in (parsed _ o _)
+  o
+
+fn options_in _
+  none
+
+fn reason_of (bad_usage r)
+  r
+
+fn reason_of _
+  ""
+
+test_defaults_to_normal_format =
+  o = opts_of ["a" "b"]
+  o.format == normal_format and o.context == 0 and not o.recursive
+
+test_unified_takes_three_lines = (opts_of ["-u" "a" "b"]).context == 3
+
+test_unified_count_glued = (opts_of ["-U5" "a" "b"]).context == 5
+
+test_unified_count_apart = (opts_of ["-U" "2" "a" "b"]).context == 2
+
+test_long_unified_count = (opts_of ["--unified=7" "a" "b"]).context == 7
+
+test_bundled_flags =
+  o = opts_of ["-ruN" "a" "b"]
+  o.recursive and o.new_file and o.format == unified_format
+
+test_switches_kept_in_order =
+  o = opts_of ["-r" "-u" "a" "b"]
+  o.switches == ["-r" "-u"]
+
+test_two_labels =
+  o = opts_of ["--label" "x" "--label=y" "a" "b"]
+  o.labels == ["x" "y"]
+
+test_operands_after_dashes =
+  p = parse_diff ["--" "-a" "-b"]
+  p.left == "-a" and p.right == "-b"
+
+test_unknown_letter =
+  r = reason_of (parse_diff ["-Z" "a" "b"])
+  r == "invalid option -- 'Z'"
+
+test_missing_operand =
+  r = reason_of (parse_diff ["a"])
+  r == "missing operand after 'a'"
+
+test_bad_count =
+  r = reason_of (parse_diff ["-U" "x" "a" "b"])
+  r == "invalid context length 'x'"

@@ -1,0 +1,1 @@
+diff -u --label old/poem --label new/poem poem_a poem_b
