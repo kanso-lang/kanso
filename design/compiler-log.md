@@ -25184,3 +25184,66 @@ run_arena_peak_bytes lands on 8,912,912 and run_held_peak_bytes on 3,222,256,
 and run_peak_bytes' baseline goes from 156,818,380 to 489,255,962. Both
 baselines are rounded up. The score is unchanged, and the four fixes now
 have something to score against.
+
+## 2026-10-10 — a read named before the write keeps the write in place
+
+Three ports hit the same cliff. The sat solver, the toml parser and the lox
+interpreter each read a map entry into a name and then wrote the map:
+
+```
+v = m[i]
+bump (put m i (v + 1)) ...
+```
+
+Written inline as `put m i (m[i] + 1)`, the put happens in place. Written
+with the name, `linear.rs` counted `v = m[i]` as a second use of `m`, so `m`
+was not unique at the put and every put copied the map. The sat port's
+reduction, 20,000 steps over 100 keys, ran in 27.5 seconds natively with the
+name and 0.010 seconds without it.
+
+The two programs are the same as far as the map is concerned. The read
+answers an element, and `v` is used only as an operand of the put's own
+arguments, which are evaluated before the put writes. `effective_uses` now
+discounts a binding's mentions of the map when the bound name meets three
+conditions: neither the name nor the map is rebound in the block, the
+binding does not hold the map itself, and every later mention of the name is
+reached from the sibling arguments of a `put`, `push` or `append` on that
+map through arithmetic and comparison alone. A mention anywhere else (inside
+a lambda, a list, another call, or a second binding such as `w = v * 2`)
+could force the read after the write, and the binding still counts. A loop's
+bindings usually sit under its `return ... if` guard, so the search goes down
+through the guard's rest.
+
+`tests/golden/mem/a_read_named_before_the_write_stays_in_place.kso` is the
+sat reduction at 2,000 steps. Its golden pins 8 allocations; the compiler
+before this change made 6,013 on it.
+`tests/golden/micro/a_read_named_before_a_write_sees_the_old_value.kso`
+covers the other side: a name used after the write, a name stored in the
+list the put writes, and a name that feeds a second binding all keep the
+copy, and each line prints the old value beside the new on every engine.
+
+The analysis costs the front end a little on every route: compile_instructions
+lands on 25,857,737, entry_instructions on 85,514,349, library_instructions on
+86,065,981, emit_instructions on 7,065,059 and interp_instructions on
+489,220,284. browser_compile_instructions lands on 392,737,085. These are
+carried onto main's rows from this branch's own readings and are projected
+until CI reads them.
+
+The floor question closed on the corpus-first gavel, and kanso#1836 put the
+shape into the run program as its `bump` phase: 350 updates through a named
+read, measured on main before this fix at 53,247,360 instructions. With main
+merged in, runbench falls from 1,245,043,324 to 1,192,648,013, a projection
+from this container's 1,192,647,606 plus the 407 instructions by which CI read
+main above it; CI's row replaces it. run_held_peak_bytes falls from 3,222,256
+to 197,704 and run_arena_peak_bytes from 8,912,912 to 7,864,336, because the
+phase no longer keeps a copy of its map per update. run_alloc_bytes falls to
+322,971,202, run_allocs to 1,772,081 and run_sh_map to 0. run_buf_reuse falls
+by one to 136, and run_view_allocs and run_view_frees fall from 360 to 10 with
+the fix; nothing here isolates why the scatter phase's views moved.
+
+CI's rows replace the projection. work_runbench lands on 1,192,648,013, as
+projected. The front-end rows land on entry_instructions 85,514,580,
+library_instructions 86,066,207, interp_instructions 488,962,208 and
+emit_instructions 7,059,706, and browser_compile_instructions on 392,738,164.
+`text` totals 4,652,222. The run program's emitted code reads one line fewer,
+50,993. Welfare reads 90.6830 on CI's rows, and the rise is banked.
