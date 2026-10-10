@@ -24952,6 +24952,43 @@ carries two more comment lines, which every compile of the library lexes:
 
 The ruling is a part of the language, so the floor follows whatever these cost.
 
+## 2026-10-10 — a constructor handed over as a function builds
+
+The lox port found that a record constructor passed where a function is wanted
+checks and runs on the interpreter and stops the native build with "`pair` as
+a bare value is not yet supported" (lox F20). The port wrapped each one in a
+lambda, `(l o r -> logical l o r)`, which is what native now does by itself.
+When codegen lowers a name that is not a function group, a builtin or one of
+the words with a value of its own, and the name is a record type with one to
+four fields, it lowers the lambda that calls the constructor. Four is the
+native lambda's limit, so a record of five or more fields handed over is still
+refused at build with the same message.
+
+`tests/golden/micro/a_constructor_handed_over_as_a_function` hands a
+one-field constructor to `list/map`, a two-field one to a function that calls
+it and a three-field one to another, and prints the same line on the
+interpreter, a dev build and a release build. The compiler on main refuses to
+build it. The ratchet row "a constructor refused as a value" puts the refusal
+back and the micro corpus goes red.
+
+`tests/a_type_name_as_a_bare_value.rs` had pinned the refusal for a
+two-field record printed bare. It now pins that both engines print `<fn>`.
+
+CI's rows for this branch, with main's repair list merged in. Two rows moved,
+both by the size of the new lowering in the emitter:
+
+    emit_instructions                7,062,299 ->   7,062,491
+    browser_compile_instructions   388,181,803 -> 388,266,184
+
+Welfare falls from 90.2505 to 90.2504, and the floor follows it down under the
+rule for a change that makes the language do what it says: a program that
+checks and runs on the interpreter now builds natively.
+
+The tie-list ruling landed first. Carried over it, the browser compile row
+lands at 388,276,582, the constructor's 84,381 on top of main's 388,192,201,
+and the floor at 90.25039901483147.
+
+
 ## 2026-10-10 — two values a carry handed back while they were still held
 
 The lap carry (kanso#1827) let the toml port parse a comment holding a
