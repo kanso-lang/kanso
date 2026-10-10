@@ -24,6 +24,17 @@ const CARRIED: &[(&str, &str)] = &[
     ("bench/runbench/runbench/split/scanbench.kso", "bench/scanbench/scanbench/scanbench.kso"),
 ];
 
+/// Phases that joined the run program on 2026-10-10 from a port's reduced
+/// fixture rather than from a benchmark, measured on main before the fix each
+/// one answers. No benchmark carries them, so there is no second copy to
+/// drift from; the mem fixture each fix adds says where a move came from.
+const BORN_HERE: &[&str] = &[
+    "bench/runbench/runbench/bump/bump.kso",
+    "bench/runbench/runbench/fold/fold.kso",
+    "bench/runbench/runbench/machine/machine.kso",
+    "bench/runbench/runbench/scatter/scatter.kso",
+];
+
 fn read(rel: &str) -> String {
     let path: PathBuf = manifest_dir().join(rel);
     std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{} reads: {e}", path.display()))
@@ -74,7 +85,9 @@ fn every_carried_module_is_listed() {
     }
     found.sort();
     let mut listed: Vec<String> = CARRIED.iter().map(|(copy, _)| copy.to_string()).collect();
+    listed.extend(BORN_HERE.iter().map(|copy| copy.to_string()));
     listed.sort();
+    assert_eq!(BORN_HERE.len(), 4, "a phase joined or left the run program without a line here");
     assert_eq!(found, listed, "a module under bench/runbench/runbench is not pinned above");
 }
 
