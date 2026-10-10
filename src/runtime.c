@@ -2919,6 +2919,38 @@ void k_beat_iter_carry(void) {
     k_from_window(0);
 }
 
+/* A compiled loop's carry, which waits until the lap has left something worth
+   reclaiming. `k_beat_iter_carry` sizes every carried slot, copies it into the
+   carry pair and rewinds, and a loop whose laps are small paid that on every
+   one: mal's evaluator crosses a carrying edge about fifty times for each call
+   it runs, and copying the machine state at each of them made the loop ten
+   times slower than letting the arena grow. Here the rewind waits until the
+   arena has drifted a quarter megabyte past where the last stage left it, in
+   the same block, with nothing registered at the depth. That is the bind
+   chain's drift test, used for the same reason. Skipping is always sound: the
+   carried values stay where they are, and the next stage copies whatever is
+   still reachable. What the test bounds is the garbage held in the meantime.
+
+   The registries are asked because their storage is malloc'd, so the block
+   test cannot see it grow; skipping past a registered buffer held 49 KB more
+   permanent storage at the run program's peak. A stale position left by an
+   earlier loop at the same depth only makes the first lap stage early, and the
+   cohort and the chain still call `k_beat_iter_carry` directly. */
+void k_beat_lap_carry(void) {
+    long long d = k_beat_depth - 1;
+    if (d < 0 || d >= K_BEAT_MAX) { k_beat_iter_carry(); return; }
+    KCarry* kc = &k_carries[d];
+    if (kc->at_blocks == (const void*)k_blocks && kc->at_arena
+        && (size_t)(k_arena - kc->at_arena) < (size_t)(1 << 18)
+        && !k_beat_stack[d].reg_any) {
+        if (K_COUNTING) k_stat_beat_iters++;
+        return;
+    }
+    k_beat_iter_carry();
+    kc->at_arena = k_arena;
+    kc->at_blocks = (const void*)k_blocks;
+}
+
 /* A permanent object: malloc'd, so it lives outside the beat arena and
    survives every rewind. Interned single-char strings and zero-field marker
    records are cached and reused across beats — an arena rewind moves the
