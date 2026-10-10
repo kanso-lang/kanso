@@ -26108,6 +26108,13 @@ fewer, encodebench 280 fewer and oneshot 644 fewer. They are projected into
 `bench/instructions_golden.txt` from that branch's figures, and CI's rows
 replace them.
 
+CI read every instruction row exactly as projected. Three rows end worse than
+main, the two branches below this one included: codegen_instructions_dev at
+118,957,002, codegen_instructions_release at 454,309,037 and text at 4,836,670.
+Against the spare fix alone the dev row rises 1,833 and the release row 2,837,
+and each benchmark's runtime text grows 80 bytes, which is the check before a
+reuse.
+
 By the trend gate's keys, the rows this change worsens land at basket_allocs
 27,265, basket_evac_allocs 5, basket_evac_bytes 256 and basket_sh_rec 130,176;
 record_reuse_shape_allocs 6, record_reuse_shape_alloc_bytes 304,
