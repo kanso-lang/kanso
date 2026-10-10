@@ -25381,3 +25381,15 @@ pops evacuate 4,208 bytes where they evacuated 192; the run program's survive
 count falls from 105,679 slots to 4,854, because a deep walk copies a node
 instead of asking whether it survives. Four mem fixtures evacuate between one
 and forty more nodes at their pops, and two more ask fewer survival questions.
+
+The ports' long-running loops, measured by peak resident memory on this branch
+with main's fixes merged in, against main alone. mal's `(fib 25)` held 764 MB
+on main and holds 9 MB here, and a 40,000-step tail call that held 147 MB
+holds 9 MB; both print what they printed before. That closes mal's F8. lox's
+F18, a loop that builds a `Point` a pass, is not closed by this change alone:
+it holds 1,131 MB at 20,000 passes on both trees. With kanso#1824 added as
+well it holds 24 MB at 20,000 passes and 88 MB at 80,000, which is what the
+interpreter holds, 31 MB and 93 MB. The lox port keeps every object in a heap
+of cells that it never collects, so that growth is the program's own. What
+stays slow is time: each stage copies the whole live heap again, and 200,000
+passes still had not finished after 120 seconds.
