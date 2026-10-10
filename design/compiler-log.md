@@ -26023,6 +26023,23 @@ work_deepbench on 393,576,370, work_digestbench on 5,599,739, work_encodebench o
 Welfare reads 91.0246 on these rows against the five floors banked separately,
 the highest of which was 90.6830, and the rise is banked.
 
+Main moved under the branch when kanso#1837 retired `build`, and the carrier
+took main in a merge commit. The compiler's front end lost the passes `build`
+needed, so the rows the carrier's analysis had raised land below where they
+stood before the merge and above main's: compile_instructions lands on
+25,715,103 against main's 25,712,749, entry_instructions on 85,044,877 against
+85,036,744, and library_instructions on 85,599,176 against 85,590,951.
+interp_instructions lands on 488,792,115 against 488,375,858. The two codegen
+tiers land on 118,954,619 for codegen_instructions_dev and 454,407,182 for
+codegen_instructions_release, against main's 118,906,508 and 453,887,359.
+browser_compile_instructions lands on 390,036,773 against 388,285,810. Each
+runtime binary sheds 448 bytes with `build` gone, and `text` totals 4,826,814
+against main's 4,645,694. The work rows CI read on the merged tree are
+work_encodebench on 2,398,369,791, work_livebench on 1,474,871,454 and
+work_oneshot on 13,223,698; work_runbench lands on 1,152,754,428, against
+main's 1,245,043,177. Welfare reads 91.0337 on CI's rows against the floor of
+91.0317, and the rise is banked.
+
 ## 2026-10-10 — a lap waits for twice what the last stage copied
 
 Testing the combined tree on the lox port's F18 loop found two things the five
@@ -26093,3 +26110,34 @@ on 675,725 and browser_run_instructions on 34,124,829. The run program's
 emitted code gains 29 lines, which moves emitted_other_branches to 16,399,
 emitted_other_calls to 17,406 and emitted_other_lines to 146,724, and `text`
 totals 4,833,086. Welfare reads 91.0317 on CI's rows, and the rise is banked.
+
+## 2026-10-10 — a counting loop keeps every pass's key; copying keys out measured and declined
+
+A loop that counts into a map it was handed, under a key it interpolates each
+pass, never rewinds. `put m k (m[k] + 1)` is an in-place put and replaces the
+count, so the key string is garbage once the put has found its slot. The beat
+licence refuses the loop anyway, because a key the put does store would be
+freed under the map by the next rewind. At 100,000 passes over ten keys the
+arena peak is 4,194,304 bytes, 32 bytes a pass. A loop that builds a new string
+value each pass into a map, `put m "body" "{m["body"]}{x}"`, keeps every
+version the same way: 105,913,696 bytes of arena at 100 passes of a one-megabyte
+string, 420,568,976 at 400, on main and on every branch in flight.
+
+The fix tried was to let the put copy a key it inserts out of the arena, and
+license the loop. The copy is registered with the map's pairs and freed when
+they are, so a function that builds a map of fresh keys in a loop does not leak
+across calls: peak RSS held at 10 MB from 2,000 to 200,000 calls. Inside a loop
+that rewinds, a put with a string key calls the runtime instead of the emitter's
+inline fast path, which would store the key uncopied. Routing every string-key
+put to the runtime whenever any beat was live cost jsonbench 16.6% and runbench
+8.2%; routing only the puts inside the newly licensed loop cost nothing
+measurable on the instruction rows. The counting loop's arena peak fell to
+1,048,576 bytes and stays there.
+
+It is declined on memory. Licensing the loop moves its map's pairs out of the
+arena into malloc'd storage, which the objective counts, and in the run program
+nothing came back from the arena to pay for it: run_peak_bytes rose from
+4,948,512 to 5,202,176, and welfare fell from 91.0318 to 91.0163. basket also
+read 901,269 more instructions. A version worth trying keeps the pairs in the arena and
+copies the key into the region below the loop's mark, which needs an allocation
+point the arena does not have.
