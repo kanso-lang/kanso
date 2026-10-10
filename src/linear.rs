@@ -994,7 +994,13 @@ fn effective_uses(var: &str, body: &[Stmt]) -> usize {
         };
         discounted += consumed_sibling_uses(var, e);
     }
-    total.saturating_sub(discounted + read_into_siblings(var, body))
+    // every caller asks only whether this is more than one, so the read
+    // discount, which walks every binding, is owed only when it could matter
+    let held = total.saturating_sub(discounted);
+    if held <= 1 {
+        return held;
+    }
+    held.saturating_sub(read_into_siblings(var, body))
 }
 
 /// Mentions of `var` in bindings that read it and hand the answer only to the
