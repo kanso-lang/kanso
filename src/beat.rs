@@ -400,9 +400,7 @@ fn demotable_entries(
         // edge itself, which is the loop tail-reaching its caller, would
         // stack a frame per lap.
         let reached = tail_reach(&next, &group);
-        if !callers.is_empty()
-            && callers.iter().all(|c| !reached.contains(c))
-        {
+        if !callers.is_empty() && callers.iter().all(|c| !reached.contains(c)) {
             let mut list: Vec<_> = callers.into_iter().collect();
             list.sort();
             out.push((group, list, crossing));
@@ -414,7 +412,10 @@ fn demotable_entries(
 
 /// Every group `from` reaches by tail calls alone, itself excluded unless a
 /// cycle returns to it.
-fn tail_reach<'a>(next: &HashMap<&'a Group, Vec<&'a Group>>, from: &'a Group) -> HashSet<&'a Group> {
+fn tail_reach<'a>(
+    next: &HashMap<&'a Group, Vec<&'a Group>>,
+    from: &'a Group,
+) -> HashSet<&'a Group> {
     let mut seen: HashSet<&Group> = HashSet::default();
     let mut stack = vec![from];
     while let Some(at) = stack.pop() {
