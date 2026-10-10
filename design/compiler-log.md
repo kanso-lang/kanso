@@ -24694,3 +24694,25 @@ the second registry pass a carried pop now makes. On CI's rows:
 
 Welfare falls from 90.25811251 to 90.25801113, and the floor follows under the
 2026-09-13 rule: two programs that crashed natively now run.
+
+## 2026-10-10 — gavel: a field may hold a list of `tie` references
+
+Clay, on whether a node built by `list/tie` may hold its links as a list: "of
+course field can be an array". The 2026-10-04 gavel "a data-sized cycle is tied
+with `list/tie`, and `list/tie!` insists" says a reference may be stored in a
+constructor's field and nothing else. The build read that strictly: a list
+literal is not a field, so `node id [(ref "b") (ref "c")]` was refused, and the
+graph fixture held each node's edges as a chain of one-reference records ending
+in a `no_road` marker.
+
+**The clarification.** A field may hold any value, and a list of references in
+a field is storage. The 2026-10-04 rule was about reading, and a list that
+holds references reads none of them. A list or map literal whose elements are
+references, written as a constructor's argument, is admitted. Everything the
+rule refused stays refused: during making, nothing may index, measure, walk or
+pass that list anywhere, because each of those reads through it.
+
+Owes: the check admits a collection literal of references as a field's value,
+with an error golden for a read of such a list in the maker; the graph fixture
+holds each node's neighbours as a list and drops the chain of records; ch03 or
+wherever `tie` is taught shows the list form.
