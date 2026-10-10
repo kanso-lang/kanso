@@ -25375,12 +25375,24 @@ length. Without the change the program dies with a segmentation fault; with
 it, it prints what the interpreter prints. Main does not reach this path,
 because its pops copy deep only after a write has reached the carry.
 
-The deep pop copies what the shallow one left in place, so the counters that
-see a pop move. basket allocates one more node and 3,872 more bytes, and its
-pops evacuate 4,208 bytes where they evacuated 192; the run program's survive
-count falls from 105,679 slots to 4,854, because a deep walk copies a node
-instead of asking whether it survives. Four mem fixtures evacuate between one
-and forty more nodes at their pops, and two more ask fewer survival questions.
+The deep walk first cost memory where it should not have. It meets a string
+builder whose header survives and goes straight to the in-place repair, which
+asks only whether the builder's storage lies in the arena. A builder's storage
+is malloc'd, so that answer was no, and the repair copied it into the arena and
+dropped the builder's capacity, leaving a plain string the next append had to
+copy again. The survival test the shallow walk uses already passes a builder,
+and a malloc'd byte buffer, for this reason. The repair now passes them too.
+With that, `string_builder_shape`, `builder_counts_once` and
+`a_builder_handed_on_is_still_a_builder` are back to main's counts; with the
+repair copying, `string_builder_shape` had evacuated 4,096 bytes where it
+evacuates 80.
+
+Against main, the counters that see a pop fall or hold. basket allocates
+27,263 nodes, one fewer, and asks 4 survival questions where it asked 16,002;
+the run program's survive count falls from 105,679 slots to 4,854 and it
+evacuates 6,441,632 bytes where it evacuated 9,789,344. `record_reuse_shape`
+asks 8 survival questions where it asked 16,006, and `effect_push_shape` 10
+where it asked 15.
 
 The ports' long-running loops, measured by peak resident memory on this branch
 with main's fixes merged in, against main alone. mal's `(fib 25)` held 764 MB

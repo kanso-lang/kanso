@@ -2645,9 +2645,14 @@ static KValue k_deep_copy(KValue v, KCopy* cp) {
    next carry instead of a malloc'd copy that has to be walked again. */
 static void k_repair_interior(KValue v, void* p, KCopy* cp) {
     switch (v.tag) {
+        /* A builder's storage and a malloc'd byte buffer are out of a
+           rewind's reach, which is why k_interior_survives passes them. A
+           deep walk comes here without asking it, and copying the storage
+           into the arena would turn a builder into a plain string that the
+           next append copies again. */
         case K_STR: {
             KStr* st = (KStr*)p;
-            if (k_survives_x(st->data, cp->mark)) break;
+            if (st->cap > 0 || k_survives_x(st->data, cp->mark)) break;
             char* d = k_copy_alloc(cp, (size_t)st->len + 1);
             memcpy(d, st->data, (size_t)st->len);
             d[st->len] = 0;
@@ -2658,7 +2663,7 @@ static void k_repair_interior(KValue v, void* p, KCopy* cp) {
         case K_BIG:
         case K_BYTES: {
             KBytes* b = (KBytes*)p;
-            if (k_survives_x(b->data, cp->mark)) break;
+            if (k_bytes_malloced(b) || k_survives_x(b->data, cp->mark)) break;
             unsigned char* d = k_copy_alloc(cp, (size_t)b->len);
             memcpy(d, b->data, (size_t)b->len);
             b->data = d;
