@@ -26022,3 +26022,16 @@ arena peak grows a megabyte a pass on main (420,568,976 bytes at 400 passes)
 and half that on the carrier. Every version of the string stays in a block in
 use. Slicing the string first, as the fixture does, keeps the peak flat at
 3 MB.
+
+The mechanism is the repair. The interpolation lets the record-reuse analysis
+write each new state into the old record's storage, and that record was built
+before the loop, below its mark. At a stage the record survives but its new
+string does not, so the walk repairs it: `k_repaired_settle` copies the string
+into the arena and raises the mark over the copy, because a surviving node
+points at it. The next pass writes a newer string into the same record, and the
+settled copy is dead under the mark until the loop ends. A trace of the beat
+carry shows the mark's block moving 48 bytes up at each of the 200 stages of a
+400-pass run, with a megabyte more live beneath it each time. Raising the mark
+is right for a node repaired once. What it lacks is a way to take back a
+settled region when the same node is repaired again, and that is a separate
+change.
