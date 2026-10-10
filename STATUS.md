@@ -7,7 +7,8 @@ is stale — say so.
 ## Waiting on Clay
 
 The decisions live in design/pending-gavels.md — the single ledger; this file
-only indexes it. **Blocking right now: zero.** The last blocking entry, whether
+only indexes it. **Blocking right now: one**, whether four port fixes may
+lower the welfare floor (filed 2026-10-10). The blocking entry before it, whether
 the wall's simultaneous-failure merge was meant to go, closed on 2026-09-27 on a
 citation: kanso#783 removed the merge on purpose on 2026-08-06, and the log
 entry "the wall's merge went on purpose, the day it was measured" carries the
@@ -48,8 +49,12 @@ kanso — sat here and was bounced on 2026-08-29: a performance question with no
 surface area is the implementer's, per the ledger's own charter, and the log
 carries the research mandate it left with.
 
-**One question is waiting** — zero blocking. It is whether `build` still earns
-its place beside `tie`, filed 2026-10-04 by the ruling that gave cyclic
+**Three questions are waiting** — one blocking. The blocking one, filed
+2026-10-10, is whether four port fixes may lower the welfare floor: kanso#1820,
+kanso#1822, kanso#1824 and kanso#1825 each build a fault the ports found, and
+each costs the meta a few thousandths. The second, filed the same day, is
+whether a list built from data may hold `tie` references. The third is whether
+`build` still earns its place beside `tie`, filed 2026-10-04 by the ruling that gave cyclic
 structures sized by data their spelling, `list/tie` and `list/tie!`. Clay
 ruled three and directed four on 2026-09-30 in one sitting, and each is in
 design/compiler-log.md under its entry's name. The last two blocking entries
@@ -89,7 +94,10 @@ entry cites the search behind it and proposes an answer, and a sitting can be a
 yes or a no rather than a fresh design conversation. On 2026-08-29 every
 remaining question was ruled in one pass.
 
-**The one open, not blocking** — whether `build` still earns its place beside
+**The two open, not blocking** — whether a list built from data may hold `tie`
+references, filed 2026-10-10 when the ruling that let a node hold its
+references in a list was built and stopped at lists written out in the
+constructor's field; and whether `build` still earns its place beside
 `tie`, filed 2026-10-04 with a recommendation to retire it once `tie` is built
 and its compile-time check on literal data is pinned. The entry it replaces,
 what spelling "cyclic structures sized by data" needs, was filed 2026-09-18 and
@@ -550,8 +558,10 @@ else. Chains that tested for `none` after an effect migrate.
     checked from here on two days and both refused by the tooling
   - whether an err gains readers a lambda callback can use
 
-**One question waits in `design/pending-gavels.md`** — zero blocking, one
-open — with a recommendation. Recounted on 2026-10-04: the spelling of cyclic
+**Three questions wait in `design/pending-gavels.md`** — one blocking, two
+open — each with a recommendation. Recounted on 2026-10-10: whether four port
+fixes may lower the welfare floor joined Blocking, and whether a list built
+from data may hold `tie` references joined Open. Recounted on 2026-10-04: the spelling of cyclic
 structures sized by data left Open ruled, `list/tie` and `list/tie!`, and
 whether `build` still earns its place beside `tie` joined it. Recounted on 2026-09-30:
 Clay ruled three entries and directed four in one sitting, and only the
