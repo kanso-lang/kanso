@@ -8963,9 +8963,48 @@ impl<'a> Backend<'a> {
                         f.record(&t, DESC);
                         Ok(t.to_string())
                     }
-                    _ => Err(format!(
-                        "native backend: `{name}` as a bare value is not yet supported"
-                    )),
+                    _ => {
+                        // A record constructor handed over as a function is
+                        // the lambda that calls it, which the interpreter
+                        // already treats it as (lox F20).
+                        let fields = self
+                            .program
+                            .types
+                            .iter()
+                            .find(|t| t.name == name.as_str() && t.members.is_empty())
+                            .map(|t| t.fields.len());
+                        match fields {
+                            Some(n @ 1..=4) => {
+                                let span = expr.span();
+                                let params: Vec<(String, Span)> =
+                                    (0..n).map(|i| (format!("__field{i}"), span)).collect();
+                                let args = params
+                                    .iter()
+                                    .map(|(p, _)| {
+                                        Expr::Ident(
+                                            Name::new(p),
+                                            span,
+                                            crate::ast::Resolution::default(),
+                                        )
+                                    })
+                                    .collect();
+                                let lambda = Expr::Lambda {
+                                    params,
+                                    body: Box::new(Expr::App {
+                                        head: Box::new(expr.clone()),
+                                        args,
+                                        span,
+                                        piped: false,
+                                    }),
+                                    span,
+                                };
+                                self.emit_expr(f, &lambda)
+                            }
+                            _ => Err(format!(
+                                "native backend: `{name}` as a bare value is not yet supported"
+                            )),
+                        }
+                    }
                 }
             }
             Expr::App { head, args, piped, span } => {

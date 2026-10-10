@@ -1,9 +1,10 @@
 //! A type's name standing alone, with no arguments after it.
 //!
 //! Three shapes reach this, and until now they got three different answers
-//! from the three engines. A record type with fields is refused by native as
-//! a limit of its own; a record type with NO fields is a value on every
-//! engine, because naming the one thing it describes builds it. A subtype and
+//! from the three engines. A record type with fields names its constructor,
+//! which every engine hands over as a function; a record type with NO fields
+//! is a value on every engine, because naming the one thing it describes
+//! builds it. A subtype and
 //! a typeset carry no fields either, and the emitter's test was `fields is
 //! empty`, so both were emitted as nullary records — `print "{age}"` for
 //! `type age int` printed `<mod>/age` where the oracle prints `<fn>` and the
@@ -67,15 +68,11 @@ fn a_record_type_with_no_fields_is_still_a_value_on_both_engines() {
     assert_eq!(stdout(&run("nullary_oracle", NULLARY, &["--interp"])), "nullary_oracle/unit");
 }
 
-/// The neighbour that was already right, and the sentence the subtype now
-/// borrows: a record type WITH fields has always been declined out loud.
+/// The neighbour that used to be declined: a record type WITH fields names
+/// its constructor, and native now hands it over as a function the way the
+/// oracle always did, so both engines print the same thing.
 #[test]
-fn native_already_declined_a_bare_record_name_the_same_way() {
-    let said = stderr(&run("record_native", RECORD, &[]));
-
-    assert!(
-        said.contains("`point` as a bare value is not yet supported"),
-        "the backend's older limit moved: {said}"
-    );
+fn a_bare_record_name_is_its_constructor_on_both_engines() {
+    assert_eq!(stdout(&run("record_native", RECORD, &[])), "<fn>");
     assert_eq!(stdout(&run("record_oracle", RECORD, &["--interp"])), "<fn>");
 }
