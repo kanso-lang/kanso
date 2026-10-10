@@ -25257,3 +25257,10 @@ them. The objective weighs the peak above the instructions: welfare rises from
 fixture, `a_loop_entered_from_a_tail_cycle_gives_its_garbage_back`, reads
 four fewer evacuations on main's runtime: evac_allocs lands on 80,013 and
 evac_bytes on 1,920,368.
+
+CI's rows replace the projection. work_runbench lands on 1,263,682,936, as
+projected. The rewind's code in the run program's machine phase shows in its
+emitted counts: emitted_other_calls lands on 17,405, emitted_other_branches on
+16,399 and emitted_other_lines on 146,723. `text` totals 4,652,398 and
+browser_compile_instructions lands on 390,597,579. Welfare reads 90.3087 on
+CI's rows, the score already banked.
