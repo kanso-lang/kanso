@@ -98,6 +98,36 @@ of the kind the differential law forbids. The other two turn runs of 27 s and
 
 ## Open, not blocking
 
+### May a list built from data hold `tie` references?
+
+**Cited:** the live log's "gavel: a field may hold a list of `tie` references"
+(2026-10-10), which admits a list or map literal and whose Owes asks the graph
+fixture to drop its chain of records; "a `tie` node holds its references in a
+list", which built it; `tests/golden/micro/a_graph_tied_from_a_map_of_edges`.
+Searched the log, the archive, the ledger and the tests for a ruling on a list
+of references a call builds: none.
+
+**The question.** The graph fixture reads each town's roads from a map, so the
+number of references a node holds is data. A literal cannot hold a number of
+elements decided at run time, so under the ruling's text the fixture still
+needs its chain of `road` records. The natural spelling is
+
+    town name (list/map (roads_of edges[name]) ref)
+
+which hands `ref` to `list/map`. The check refuses that today, because what a
+function from std does with `ref` is out of its sight. `list/map` stores each
+answer and reads none of them, so the same argument that admitted the literal
+would admit this call.
+
+1. **Admit `list/map xs ref`, and `list/map xs (k -> ref k)`, written as a
+   field.** The check names `list/map` as a function that stores what its
+   function answers, and the graph fixture drops its chain.
+2. **Leave it at literals.** A node whose links come from data keeps the chain.
+
+**Recommendation: 1.** A graph read from data is the case `tie` exists for,
+and `list/map` is the one call that builds such a list without reading what it
+holds.
+
 ### Does `build` still earn its place beside `tie`?
 
 **Cited:** the live log's "gavel: a data-sized cycle is tied with `list/tie`,
