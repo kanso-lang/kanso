@@ -24924,3 +24924,13 @@ back and the micro corpus goes red.
 
 `tests/a_type_name_as_a_bare_value.rs` had pinned the refusal for a
 two-field record printed bare. It now pins that both engines print `<fn>`.
+
+CI's rows for this branch, with main's repair list merged in. Two rows moved,
+both by the size of the new lowering in the emitter:
+
+    emit_instructions                7,062,299 ->   7,062,491
+    browser_compile_instructions   388,181,803 -> 388,266,184
+
+Welfare falls from 90.2505 to 90.2504, and the floor follows it down under the
+rule for a change that makes the language do what it says: a program that
+checks and runs on the interpreter now builds natively.
