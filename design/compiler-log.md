@@ -26051,6 +26051,17 @@ is right for a node repaired once. What it lacks is a way to take back a
 settled region when the same node is repaired again, and that is a separate
 change.
 
+CI's rows replace the projection. runbench reads 1,152,754,609, which is 174
+instructions above the carrier's row rather than the 248 measured here.
+Measured against main, the rows that end worse on this branch, the carrier's
+changes included, are codegen_instructions_dev at 118,955,169,
+codegen_instructions_release at 454,306,200, browser_run_instructions at
+34,124,990, work_encodebench at 2,398,370,414, work_livebench at
+1,474,871,090, work_oneshot at 13,224,195 and text at 4,835,550. Against the
+carrier alone, the release row falls by 120,818 and the dev row rises by
+3,943; every benchmark's runtime text grows 176 bytes, which is the spare
+list's accounting and its drop path.
+
 ## 2026-10-10 — a record is reused in place only above the loop's mark
 
 The retention at the end of the previous entry has a smaller fix than taking
@@ -26101,6 +26112,6 @@ By the trend gate's keys, the rows this change worsens land at basket_allocs
 27,265, basket_evac_allocs 5, basket_evac_bytes 256 and basket_sh_rec 130,176;
 record_reuse_shape_allocs 6, record_reuse_shape_alloc_bytes 304,
 record_reuse_shape_evac_allocs 5, record_reuse_shape_evac_bytes 144 and
-record_reuse_shape_sh_rec 192; and, projected, work_encodebench 2,398,369,903,
-work_livebench 1,474,871,398 and work_oneshot 13,222,984. Each record row is a
+record_reuse_shape_sh_rec 192; and, projected, work_encodebench 2,398,370,134,
+work_livebench 1,474,871,692 and work_oneshot 13,223,551. Each record row is a
 record built fresh above the mark where it used to be written below it.
