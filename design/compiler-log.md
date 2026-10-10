@@ -24767,7 +24767,7 @@ The cohort pop and the chain still call `k_beat_iter_carry` directly.
 mal at two hundred thousand iterations now runs in 0.68 s at 21 MB, against
 1.15 s and 729 MB. It still grows by about 80 bytes an iteration: 209,210 map
 views are built and 10,519 freed, because a view is registered for release only
-when its map was allocated in the current beat. That is the next piece.
+when its map was allocated in the current beat. The next entry fixes that.
 
 `tests/golden/mem/an_evaluator_carrying_any_value_round_its_cycle_rewinds`
 builds the shape in forty lines and pins `arena_peak_bytes` at 1,048,576 for
@@ -24782,3 +24782,55 @@ each binary for the new function, to 4,611,582 in all. The tab compiler reads
 `browser_compile_instructions` 390,296,998, up 2,114,534 on main; 1,710,393 of
 that arrived with the lambda-edge refusal. `browser_compile_peak_bytes` reads
 675,725 and `browser_run_instructions` 33,520,883.
+
+## 2026-10-10 — a map's view belongs to the beat that frees the map
+
+A map read by key, rendered, compared or measured gets a sorted view, and the
+view is malloc'd. It is released when the beat whose rewind reclaims the map's
+header rewinds. Until today the view was registered for release only when the
+map was born in the innermost beat. A map built in an outer loop and read
+inside an inner one was never registered, so its view was never freed. mal's
+evaluator builds its environments in its tail cycle and looks symbols up one
+region call further in, and at two hundred thousand iterations it built
+209,210 views and freed 10,519.
+
+`k_viewreg_own` now asks each depth from the innermost outward whether its
+rewind reclaims the header, and registers the view at the first that does. A
+header outside every arena block, in a carry buffer or a tenure block,
+registers at the innermost depth, which rewinds no later than that storage is
+released. A frozen constant keeps its view for the life of the program.
+
+That alone made mal fifteen times slower. The lap carry stages whenever a
+registry at its depth holds anything, and mal's views now registered at the
+cycle's own depth, so every edge staged again. The view registry no longer
+forces a stage. A view is never larger than its map, and the map is either
+garbage the drift test already counts or still live, so a skipped lap holds no
+more view memory than the test bounds.
+
+mal now holds 9 MB at two hundred thousand iterations and at four hundred
+thousand, where lap carry alone held 21 MB and 39 MB. It runs in 0.63 s and
+1.26 s, the same as lap carry alone.
+
+Two fixtures pin the two halves.
+`a_view_built_one_beat_down_is_freed_by_the_beat_that_built_its_map` builds
+twenty thousand views one beat below their maps and frees all of them; with
+the old registration it frees none and holds 2,240,000 bytes of views.
+`a_cycle_that_sorts_a_map_each_step_still_waits_for_its_lap` copies 6,224
+bytes in its carried rewinds; letting the view registry force a stage copies
+3,200,304.
+
+The native cost veins and the lazy tier do not move: no benchmark builds a
+view one beat below its map. The tab's run does. `bench/interp_corpus` builds
+1,320 views and now frees them all, so `browser_run_instructions` rises
+517,253 to 34,038,136 and `browser_run_peak_bytes` falls 131,072 to 1,179,648.
+Natively the same corpus costs 336,930 more instructions, about 240,000 of
+them in glibc's `free`. The browser side of welfare rises from 83.42 to 83.55.
+A fast path that registered a head-block header without the walk cost more on
+this corpus than it saved, because its maps sit below the innermost mark, and
+was dropped.
+
+While building the fixtures I found that a file imported from a
+subdirectory, `import "./lib/fx"`, loses its cycle's rewind: the evaluator
+fixture above holds 4 MiB and never rewinds that way, and 1 MiB with 40,002
+rewinds imported as `./fx`. Self-loops are unaffected. main reproduces it.
+That is the next piece.

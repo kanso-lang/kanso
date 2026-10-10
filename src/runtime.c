@@ -990,6 +990,30 @@ static void k_viewreg_add(KMap* m) {
     k_viewreg_push(d, m);
 }
 
+static int k_frozen_holds(const void* p);
+static int k_survives(const void* p, KMark* m);
+static int k_frozen_n;
+
+/* The view goes to the beat whose rewind reclaims its map's header, asked from
+   the innermost depth out. Asking only the innermost mark, as
+   `k_born_this_beat` does, missed a map read inside a region call one depth
+   below the loop that built it: the header lay under the region's mark, so
+   the view was never registered, and mal's evaluator built 209,210 views at
+   two hundred thousand iterations and freed 10,519. A header in no arena
+   block -- a carry buffer, a tenure block -- registers at the innermost depth,
+   which rewinds no later than its storage goes; a frozen constant keeps its
+   view for the life of the program, as before. */
+static __attribute__((noinline)) void k_viewreg_own(KMap* m) {
+    if (k_frozen_n && k_frozen_holds(m)) return;
+    for (int d = k_beat_depth - 1; d >= 0; d--) {
+        if (d >= K_BEAT_MAX) continue;
+        if (!k_survives(m, &k_beat_stack[d])) {
+            k_viewreg_push(d, m);
+            return;
+        }
+    }
+}
+
 /* An accumulator whose storage was pushed outside the arena had, until now,
    nobody to release it. The growth path frees each buffer it outgrows, so a
    single list costs nothing; what leaked was the LAST buffer of every escaped
@@ -2933,7 +2957,12 @@ void k_beat_iter_carry(void) {
 
    The registries are asked because their storage is malloc'd, so the block
    test cannot see it grow; skipping past a registered buffer held 49 KB more
-   permanent storage at the run program's peak. A stale position left by an
+   permanent storage at the run program's peak. The view registry is not
+   asked. A view is never larger than its map, and its map is either part of
+   the drift or still live, so the views a skipped lap holds are bounded by
+   what the test already bounds. Asking it made every edge of a cycle that
+   sorts a map stage at once: 3,200,304 bytes copied where the lap rule copies
+   6,224, and mal ran fifteen times slower. A stale position left by an
    earlier loop at the same depth only makes the first lap stage early, and the
    cohort and the chain still call `k_beat_iter_carry` directly. */
 void k_beat_lap_carry(void) {
@@ -2942,7 +2971,7 @@ void k_beat_lap_carry(void) {
     KCarry* kc = &k_carries[d];
     if (kc->at_blocks == (const void*)k_blocks && kc->at_arena
         && (size_t)(k_arena - kc->at_arena) < (size_t)(1 << 18)
-        && !k_beat_stack[d].reg_any) {
+        && !(k_beat_stack[d].reg_any & ~K_REG_VIEW)) {
         if (K_COUNTING) k_stat_beat_iters++;
         return;
     }
@@ -8174,7 +8203,7 @@ static __attribute__((noinline, preserve_most)) void k_map_sort_build(KMap* m) {
         m->sorted = out;
         /* Born this beat means the header dies at the rewind, which is the
            only moment anything knows this view has become garbage. */
-        if (k_born_this_beat(m)) k_viewreg_add(m);
+        k_viewreg_own(m);
     }
 }
 
@@ -8353,7 +8382,7 @@ static inline void k_map_view_insert(KMap* m, KValue key, KValue val) {
         KValue* own = k_view_alloc(room);
         memcpy(own, m->sorted, sizeof(KValue) * 2 * (size_t)m->sorted_len);
         m->sorted = own;
-        if (k_born_this_beat(m)) k_viewreg_add(m);
+        k_viewreg_own(m);
     }
     k_map_view_insert_built(m, key, val);
 }
