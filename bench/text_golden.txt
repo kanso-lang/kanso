@@ -832,17 +832,17 @@
 # 2026-10-07: the decoder hands an unescaped string over with built_text.
 # oneshot, livebench and runbench, the three that decode through std/json,
 # each fall 64 bytes.
-jsonbench text=326329
-encodebench text=340857
-oneshot text=341593
-basket text=306905
-widebench text=349017
-deepbench text=283609
-escapebench text=275433
-pendbench text=290521
-indexbench text=274073
-scanbench text=445353
-digestbench text=315609
-readbench text=274857
-livebench text=344393
-runbench text=604089
+jsonbench text=326441
+encodebench text=340969
+oneshot text=341705
+basket text=307017
+widebench text=349129
+deepbench text=283721
+escapebench text=275545
+pendbench text=290633
+indexbench text=274185
+scanbench text=445465
+digestbench text=315721
+readbench text=274969
+livebench text=344505
+runbench text=604201

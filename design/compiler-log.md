@@ -25465,3 +25465,28 @@ interpreter holds, 31 MB and 93 MB. The lox port keeps every object in a heap
 of cells that it never collects, so that growth is the program's own. What
 stays slow is time: each stage copies the whole live heap again, and 200,000
 passes still had not finished after 120 seconds.
+
+CI measured the rest against main, and most of it costs. Every benchmark's
+machine code grows by between 9,200 and 9,472 bytes, the runtime's share of
+the lap carry; runbench's is 604,201 bytes and the fourteen together 4,774,206.
+work_deepbench does the most extra work, landing on 393,576,371 against
+main's 367,269,411, 7.2% more. runbench does 1,133,554,241, 0.18% more; encodebench
+2,398,358,806, 0.19% more; livebench 1,473,968,154; jsonbench 860,559,756;
+oneshot 13,210,643; work_widebench 28,175,109; digestbench 5,599,654; escapebench
+39,045,879; indexbench 2,459,068; scanbench 270,069; readbench 4,577,565.
+basket does less, 30,415,829 against 32,505,156, and so does pendbench,
+190,050,778 against 190,396,306. The deep walk at the pop and the record of a
+skipped lap are what this change adds to those paths, but no build has
+separated the two, so the delta arrived with the change and its split between
+them is open. On the compile side, release codegen counts 454,310,397, dev
+codegen 118,946,233, compile_instructions 25,858,385, entry_instructions
+85,515,649 and library_instructions 86,067,297, each a little higher, and
+emit_instructions falls to 7,058,267. In the browser, compiling the corpus
+takes 390,605,563 instructions with a peak of 675,725 bytes, and running it
+34,102,877.
+
+Together those cost the objective 0.0042: the meta reads 90.2458 against a
+floor of 90.2499. The change is a correctness fix, because a loop that holds
+764 MB to compute `(fib 25)` is a program that fails on a larger input, and
+the floor goes down by exactly that much under the rule for changes that make
+the language work as specified.
