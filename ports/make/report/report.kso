@@ -1,0 +1,39 @@
+# make's own voice. Every message GNU make writes begins with the program's
+# name or with the file and line it is complaining about, and a fatal one
+# ends in "Stop." and exit status 2.
+import "std/io"
+import "std/os"
+
+# Where a line came from, for messages: "Makefile:12".
+pub type loc
+  file
+  line
+
+# The place of a message that has no line behind it, such as one about a
+# file named on the command line.
+pub type nowhere
+
+pub fn at file line
+  loc file line
+
+pub fn where (loc file line)
+  "{file}:{line}"
+
+pub fn fatal nowhere message
+  io/write_err "make: *** {message}.  Stop.\n" .> (_ -> os/exit 2)
+
+pub fn fatal place message
+  io/write_err "{where place}: *** {message}.  Stop.\n" .> (_ -> os/exit 2)
+
+pub fn warn nowhere message
+  io/write_err "make: {message}\n"
+
+pub fn warn place message
+  io/write_err "{where place}: {message}\n"
+
+# A line on stderr that is not a fatal error, after make's name.
+pub fn complain message
+  io/write_err "make: {message}\n"
+
+pub fn say message
+  io/write "make: {message}\n"

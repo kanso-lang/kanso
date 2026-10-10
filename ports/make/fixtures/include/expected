@@ -1,0 +1,4 @@
+$ make 
+rule from rules.mk
+--- stderr
+--- exit 0

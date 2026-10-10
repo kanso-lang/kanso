@@ -1,0 +1,5 @@
+$ make all x
+make: Nothing to be done for 'all'.
+make: 'x' is up to date.
+--- stderr
+--- exit 0

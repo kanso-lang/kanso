@@ -1,0 +1,32 @@
+# The scenes the book builds, chapter by chapter. Each takes the generator,
+# because the last one places its small spheres at random, and hands it back
+# for the render to continue from.
+import "../rng"
+import "../vec"
+
+type scene
+  view
+  world
+
+# Chapter 10: a diffuse sphere sitting on a diffuse ground.
+fn diffuse g
+  ground = sphere (vec/new 0.0 -100.5 -1.0) (lambertian grey) 100.0
+  ball = sphere (vec/new 0.0 0.0 -1.0) (lambertian grey) 0.5
+  rng/paired g (scene default_view (group [ground ball]))
+
+# Chapters 4 to 11 look down -z from the origin through a 90 degree lens.
+default_view = view
+  (16.0 / 9.0)              # aspect
+  0.0                       # defocus_angle
+  10.0                      # focus_dist
+  (vec/new 0.0 0.0 -1.0)    # lookat
+  vec/zero                  # lookfrom
+  90.0                      # vfov
+  up                        # vup
+
+pub fn scene_named "diffuse" g _
+  diffuse g
+
+grey = vec/new 0.5 0.5 0.5
+
+up = vec/new 0.0 1.0 0.0

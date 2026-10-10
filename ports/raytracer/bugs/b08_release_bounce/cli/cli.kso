@@ -1,0 +1,10 @@
+import "../tracer"
+
+pub fn main args
+  tracer/run "diffuse" 16 2 6 1 11 (pick "{args[1]}")
+
+fn pick "hemisphere"
+  tracer/shading_named "hemisphere"
+
+fn pick _
+  tracer/full_shading

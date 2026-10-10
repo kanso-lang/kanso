@@ -1,0 +1,258 @@
+# The command line: options, VAR=value assignments and goals, the search
+# for a makefile, reading it, remaking any include that was missing, and
+# then each goal in turn.
+import "../db"
+import "../reader"
+import "../report"
+import "../update"
+import "../words"
+import "std/io"
+import "std/list"
+import "std/os"
+import "std/text"
+
+# One line of the usage message.
+type help
+  about
+  flags
+
+type flags
+  always
+  bad
+  dry_run
+  files
+  goals
+  ignore
+  keep_going
+  silent
+  vars
+
+blank = flags false "" false [] [] false false false []
+
+fn with_always (flags _ bad dry files goals ignore keep silent vars) v
+  flags v bad dry files goals ignore keep silent vars
+
+fn with_bad (flags always _ dry files goals ignore keep silent vars) v
+  flags always v dry files goals ignore keep silent vars
+
+fn with_dry (flags always bad _ files goals ignore keep silent vars) v
+  flags always bad v files goals ignore keep silent vars
+
+fn with_files (flags always bad dry _ goals ignore keep silent vars) v
+  flags always bad dry v goals ignore keep silent vars
+
+fn with_goals (flags always bad dry files _ ignore keep silent vars) v
+  flags always bad dry files v ignore keep silent vars
+
+fn with_ignore (flags always bad dry files goals _ keep silent vars) v
+  flags always bad dry files goals v keep silent vars
+
+fn with_keep (flags always bad dry files goals ignore _ silent vars) v
+  flags always bad dry files goals ignore v silent vars
+
+fn with_silent (flags always bad dry files goals ignore keep _ vars) v
+  flags always bad dry files goals ignore keep v vars
+
+fn with_vars (flags always bad dry files goals ignore keep silent _) v
+  flags always bad dry files goals ignore keep silent v
+
+pub fn main argv
+  o = read_args argv 1 blank
+  return usage o.bad if o.bad != ""
+  makefiles o .> (files -> begin o files)
+
+# GNU make lists every option it has here; this lists the ones this port
+# has, in GNU make's layout: the flags indented two, the text at column 31,
+# and flags too wide for that on a line of their own.
+fn usage bad
+  report/complain bad
+    .> (_ -> io/write_err "Usage: make [options] [target] ...\nOptions:\n")
+    .> (_ -> io/write_err (text/join (list/to_list (list/map helps shown)) ""))
+    .> (_ -> os/exit 2)
+
+helps = list/map ["B" "f" "i" "k" "n" "s"] help_of
+
+fn help_of "B"
+  help "Unconditionally make all targets." "-B, --always-make"
+
+fn help_of "f"
+  help "Read FILE as a makefile." "-f FILE, --file=FILE, --makefile=FILE"
+
+fn help_of "i"
+  help "Ignore errors from recipes." "-i, --ignore-errors"
+
+fn help_of "k"
+  help "Keep going when some targets can't be made." "-k, --keep-going"
+
+fn help_of "n"
+  about = "Don't actually run any recipe; just print them."
+  help about "-n, --just-print, --dry-run, --recon"
+
+fn help_of _
+  help "Don't echo recipes." "-s, --silent, --quiet"
+
+fn shown (help about spelled)
+  gap = 28 - length spelled
+  return "  {spelled}\n{spaces 30}{about}\n" if gap < 2
+  "  {spelled}{spaces gap}{about}\n"
+
+fn spaces n
+  text/join (list/to_list (list/take (list/repeat " ") n)) ""
+
+fn read_args argv i o
+  return o if i < 1 or length argv < i
+  a = argv[i]
+  return file_option argv i o if a == "-f"
+  return read_args argv (i + 1) (long o a) if words/starts_with? a "--"
+  return read_args argv (i + 1) (short o a 2) if words/starts_with? a "-"
+  return read_args argv (i + 1) (cli_assignment o a) if words/contains? a "="
+  read_args argv (i + 1) (with_goals o (push o.goals a))
+
+fn file_option argv i o
+  named = argv[i + 1]
+  return with_bad o "option requires an argument -- 'f'" if named == none
+  read_args argv (i + 2) (with_files o (push o.files named))
+
+fn cli_assignment o a
+  eq = words/find a "=" 1
+  name = text/slice a 1 (eq - 1)
+  with_vars o (push o.vars [name (text/slice a (eq + 1) (length a))])
+
+fn long o "--dry-run"
+  with_dry o true
+
+fn long o "--just-print"
+  with_dry o true
+
+fn long o "--recon"
+  with_dry o true
+
+fn long o "--keep-going"
+  with_keep o true
+
+fn long o "--silent"
+  with_silent o true
+
+fn long o "--quiet"
+  with_silent o true
+
+fn long o "--ignore-errors"
+  with_ignore o true
+
+fn long o "--always-make"
+  with_always o true
+
+fn long o a
+  eq = words/find a "=" 1
+  key = if (eq == 0) a (text/slice a 1 (eq - 1))
+  value = text/slice a (eq + 1) (length a)
+  file = key == "--file" or key == "--makefile"
+  return with_files o (push o.files value) if file and eq > 0
+  with_bad o "unrecognized option '{a}'"
+
+# Single-letter flags may share one dash, as in -nk; -f may carry its file,
+# as in -fbuild.mk.
+fn short o a i
+  return o if i > length a
+  c = text/slice a i i
+  rest = text/slice a (i + 1) (length a)
+  return with_files o (push o.files rest) if c == "f" and rest != ""
+  short (flag o c) a (i + 1)
+
+fn flag o "n"
+  with_dry o true
+
+fn flag o "k"
+  with_keep o true
+
+fn flag o "s"
+  with_silent o true
+
+fn flag o "i"
+  with_ignore o true
+
+fn flag o "B"
+  with_always o true
+
+fn flag o c
+  with_bad o "invalid option -- '{c}'"
+
+fn makefiles o
+  return effect o.files if o.files != []
+  first_existing ["GNUmakefile" "makefile" "Makefile"] 1
+
+fn first_existing names i
+  return effect [] if i < 1 or length names < i
+  name = names[i]
+  later = first_existing names (i + 1)
+  os/exists name .> (here -> if here (effect [name]) later)
+
+fn opts_of o dry_run
+  update/options_from o.always dry_run o.ignore o.keep_going o.silent
+
+# Command-line variables come first and outrank the makefile's own.
+fn seeded o
+  named = db/define_default db/empty "MAKE" "make"
+  d = db/define_default named "SHELL" "/bin/sh"
+  list/fold o.vars d (acc kv -> command_var acc kv)
+
+fn command_var d kv
+  db/define_recursive d (given kv[1]) true (given kv[2]) report/nowhere
+
+fn given none
+  ""
+
+fn given s
+  s
+
+fn begin o files
+  lost = "No targets specified and no makefile found"
+  none_found = files == [] and o.goals == []
+  return report/fatal report/nowhere lost if none_found
+  return run_goals o (seeded o) if files == []
+  base = seeded o
+  reader/read_all base files .> (p -> owed o files base p)
+
+# An include that was not there may have a rule to make it. Make it, then
+# read every makefile again from the start, as GNU make restarts itself.
+fn owed o files base p
+  return run_goals o p.db if p.missing == []
+  rn = update/start p.db (opts_of o false)
+  remake rn p.missing 1 .> (_ -> reread o files base)
+
+fn reread o files base
+  reader/read_all base files .> (p -> again o p)
+
+fn again o p
+  return run_goals o p.db if p.missing == []
+  m = p.missing[1]
+  report/fatal m.at "{m.name}: No such file or directory"
+
+fn remake rn missing i
+  return effect rn if i < 1 or length missing < i
+  m = missing[i]
+  update/plan_of rn m.name .> (pl -> remake_one rn missing i m pl.found)
+
+fn remake_one rn missing i m true
+  update/make_target rn m.name "" .> (next -> remake next missing (i + 1))
+
+fn remake_one _ _ _ m false
+  report/warn m.at "{m.name}: No such file or directory"
+    .> (_ -> report/fatal report/nowhere "No rule to make target '{m.name}'")
+
+fn run_goals o d
+  wanted = if (o.goals == []) (default_goals d) o.goals
+  return report/fatal report/nowhere "No targets" if wanted == []
+  rn = update/start d (opts_of o o.dry_run)
+  each_goal rn wanted 1
+
+fn default_goals d
+  if (d.default_goal == none) [] [d.default_goal]
+
+fn each_goal rn gs i
+  return finish rn if i < 1 or length gs < i
+  update/update_goal rn gs[i] .> (next -> each_goal next gs (i + 1))
+
+fn finish rn
+  ended = if rn.failed (os/exit 2) (effect done)
+  update/remove_temporary rn .> (_ -> ended)

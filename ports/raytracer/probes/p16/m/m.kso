@@ -1,0 +1,5 @@
+fn never_called x
+  x + 1
+
+pub fn used x
+  x

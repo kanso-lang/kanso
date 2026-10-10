@@ -1,0 +1,5 @@
+$ make 
+--- stderr
+Makefile:1: careful 2
+Makefile:4: *** stop here.  Stop.
+--- exit 2

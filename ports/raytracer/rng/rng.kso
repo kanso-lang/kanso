@@ -1,0 +1,66 @@
+# A seeded generator. The original calls a global `random_double()`; a pure
+# program cannot hide state in a global, so every draw hands back the value
+# together with the generator to draw from next.
+#
+# The generator is Park and Miller's minimal standard: multiply by 48271
+# modulo the Mersenne prime 2^31 - 1. Every product fits in 64 bits, the
+# arithmetic is integer-exact on every engine, and the period is 2^31 - 2.
+import "../vec"
+import "std/math"
+
+pub type drawn
+  gen
+  value
+
+pub type gen
+  state
+
+modulus = 2147483647
+
+# A float in [0, 1).
+pub fn double (gen state)
+  after = state * 48271 % modulus
+  drawn (gen after) ((after - 1) / 2147483646.0)
+
+# A float in [lo, hi).
+pub fn between g lo hi
+  drawn next u = double g
+  drawn next (lo + (hi - lo) * u)
+
+# The constructor for importers, which cannot build a `drawn` themselves.
+pub fn paired g value
+  drawn g value
+
+# Any seed is accepted; zero and multiples of the modulus would stick at
+# zero, so the seed is folded into the generator's legal range first.
+pub fn seeded n
+  gen (n % (modulus - 1) + 1)
+
+# A vector whose components are each drawn from [lo, hi).
+pub fn vector g lo hi
+  drawn g1 x = between g lo hi
+  drawn g2 y = between g1 lo hi
+  drawn g3 z = between g2 lo hi
+  drawn g3 (vec/new x y z)
+
+# A point in the unit disk on the z = 0 plane, by rejection.
+pub fn in_unit_disk g
+  drawn g1 x = between g -1.0 1.0
+  drawn g2 y = between g1 -1.0 1.0
+  p = vec/new x y 0.0
+  if (vec/length_squared p < 1.0) (drawn g2 p) (in_unit_disk g2)
+
+# A uniformly distributed unit vector, by rejection from the cube. Points very
+# near the centre are rejected too, because normalising them would overflow.
+pub fn unit_vector g
+  drawn next p = vector g -1.0 1.0
+  lensq = vec/length_squared p
+  inside = 0.0000000001 < lensq and lensq <= 1.0
+  if inside (drawn next (p / math/sqrt lensq)) (unit_vector next)
+
+# A unit vector on the hemisphere around `normal`, uniformly: chapter 9's
+# first diffuse model, before Lambertian scattering replaces it.
+pub fn on_hemisphere g normal
+  d = unit_vector g
+  outward = 0.0 < vec/dot d.value normal
+  drawn d.gen (if outward d.value (vec/neg d.value))

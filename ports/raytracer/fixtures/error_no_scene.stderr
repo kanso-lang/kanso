@@ -1,0 +1,5 @@
+raytracer: name a scene
+usage: raytracer <scene | file.scene> [--width N] [--samples N] [--depth N] [--seed N] [--grid N] [--shade S]
+scenes: cover defocus diffuse glass metal sky wide
+shades: materials normals hemisphere
+exit 2

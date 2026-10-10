@@ -1,0 +1,6 @@
+pub type pair
+  left
+  right
+
+pub fn make a b
+  pair a b

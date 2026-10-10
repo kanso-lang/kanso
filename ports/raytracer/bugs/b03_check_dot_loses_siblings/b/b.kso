@@ -1,0 +1,14 @@
+# Bug: `kanso check .` run from inside this directory cannot resolve the
+# sibling import below, while `kanso check b` from the parent and
+# `kanso check $PWD` from here both say ok.
+#
+#   $ cd bugs/b03_check_dot_loses_siblings/b && kanso check .
+#   error: cannot resolve import "../a" — a dot-prefixed path names a module
+#   beside the importing one, and there is no such directory or `.kso` file
+#   there
+#
+# Expected: `.` names this directory, so "../a" is the sibling `a`.
+import "../a"
+
+pub fn two _
+  a/one 0 + 1

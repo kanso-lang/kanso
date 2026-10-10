@@ -1,0 +1,3 @@
+import "./rd"
+
+rd/run 0

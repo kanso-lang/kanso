@@ -1,0 +1,85 @@
+# The camera: where it stands, where it looks, and how it turns a pixel into
+# rays and rays into a colour.
+import "../fmath"
+import "../rng"
+import "../vec"
+
+# Everything `initialize()` derives in the original, computed once.
+type camera
+  center
+  defocus_angle
+  defocus_u
+  defocus_v
+  height
+  max_depth
+  mode
+  pixel00
+  pixel_du
+  pixel_dv
+  samples
+  width
+
+# How many pixels, how many samples per pixel, how many bounces, and which
+# of the book's shading models to use.
+type quality
+  max_depth
+  mode
+  samples
+  width
+
+# What a scene says about its camera.
+type view
+  aspect
+  defocus_angle
+  focus_dist
+  lookat
+  lookfrom
+  vfov
+  vup
+
+fn camera_for (view aspect angle focus lookat lookfrom vfov vup) q
+  tall = fmath/floor (q.width / aspect)
+  height = fmath/max_of 1 tall
+  half = fmath/tan (fmath/radians vfov / 2.0)
+  viewport_h = 2.0 * half * focus
+  viewport_w = viewport_h * q.width / height
+  w = vec/unit (lookfrom - lookat)
+  u = vec/unit (vec/cross vup w)
+  v = vec/cross w u
+  du = u * viewport_w / q.width
+  dv = vec/neg v * viewport_h / height
+  corner = lookfrom - w * focus - u * viewport_w / 2.0 + v * viewport_h / 2.0
+  pixel00 = corner + (du + dv) * 0.5
+  radius = focus * fmath/tan (fmath/radians (angle / 2.0))
+  camera
+    lookfrom
+    angle
+    (u * radius)
+    (v * radius)
+    height
+    q.max_depth
+    q.mode
+    pixel00
+    du
+    dv
+    q.samples
+    q.width
+
+# A ray from the lens towards a random point in the square around pixel
+# (i, j). With no defocus the lens is a pinhole and no disk point is drawn,
+# so the random stream matches the original's.
+fn get_ray cam i j g
+  dx = rng/between g -0.5 0.5
+  dy = rng/between dx.gen -0.5 0.5
+  across = cam.pixel_du * (i + dx.value)
+  down = cam.pixel_dv * (j + dy.value)
+  target = cam.pixel00 + across + down
+  lens = lens_point cam dy.gen
+  rng/paired lens.gen (ray (target - lens.value) lens.value)
+
+fn lens_point cam g
+  return rng/paired g cam.center if cam.defocus_angle <= 0.0
+  d = rng/in_unit_disk g
+  p = d.value
+  offset = cam.defocus_u * p.x + cam.defocus_v * p.y
+  rng/paired d.gen (cam.center + offset)

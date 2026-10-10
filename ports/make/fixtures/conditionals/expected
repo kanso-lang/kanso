@@ -1,0 +1,11 @@
+$ make 
+ifeq yes
+ifneq quoted yes
+blanks around the comma dropped
+ifdef yes
+empty counts as undefined
+nested else
+recipe line from a conditional
+after
+--- stderr
+--- exit 0

@@ -1,0 +1,7 @@
+$ make 
+x is 5
+a
+b
+$$ is a dollar
+--- stderr
+--- exit 0

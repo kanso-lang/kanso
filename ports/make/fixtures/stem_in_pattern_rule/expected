@@ -1,0 +1,4 @@
+$ make src/main.o
+stem=src/main from src/main.c to src/main.o
+--- stderr
+--- exit 0

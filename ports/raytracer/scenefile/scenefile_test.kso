@@ -1,0 +1,59 @@
+import "../tracer"
+import "../vec"
+
+one_sphere = "material m lambertian 0.5 0.5 0.5\nsphere 0 0 -1 0.5 m"
+
+test_blank_lines_and_comments_are_skipped =
+  source = "# a comment\n\n   \n{one_sphere}\n"
+  objects_in source == 1
+
+test_camera_settings_apply =
+  s = parse "camera vfov 20\ncamera lookfrom 1 2 3\ncamera aspect 4 2"
+  v = s.view
+  v.vfov == 20.0 and v.lookfrom == vec/new 1.0 2.0 3.0 and v.aspect == 2.0
+
+test_extra_numbers_are_refused =
+  source = "material m dielectric 1.5 2"
+  failure source == "line 1: unexpected 2"
+
+test_later_material_wins =
+  source = "material m dielectric 1.5\n{one_sphere}"
+  s = parse source
+  w = s.world
+  ball = w.objects[1]
+  ball.material == tracer/new_lambertian (vec/new 0.5 0.5 0.5)
+
+test_material_must_exist_first =
+  source = "sphere 0 0 0 1 m\nmaterial m dielectric 1.5"
+  failure source == "line 1: no material called m"
+
+test_not_a_number = failure "camera vfov wide" == "line 1: wide is not a number"
+
+test_spheres_are_read = objects_in "{one_sphere}\nsphere 1 0 -1 0.5 m" == 2
+
+test_unknown_camera_setting =
+  source = "camera zoom 3"
+  failure source == "line 1: unknown camera setting zoom"
+
+test_unknown_directive =
+  source = "\n\ncube 1 2 3"
+  failure source == "line 3: unknown directive cube"
+
+test_unknown_material_kind =
+  source = "material m velvet 1 1 1"
+  failure source == "line 1: unknown material kind velvet"
+
+# The reason a parse failed, or "parsed" when it did not.
+fn failure source
+  reason_of (parse source)
+
+fn objects_in source
+  s = parse source
+  w = s.world
+  length w.objects
+
+fn reason_of (err reason)
+  reason
+
+fn reason_of _
+  "parsed"

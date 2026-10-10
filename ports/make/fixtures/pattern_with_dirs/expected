@@ -1,0 +1,5 @@
+$ make 
+generic src/one.c to src/one.o stem src/one
+obj-rule lib/two.c to obj/two.o stem two
+--- stderr
+--- exit 0

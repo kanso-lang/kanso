@@ -1,0 +1,14 @@
+# Checker gap: a field read on a value that may be a fieldless marker is
+# accepted, and fails at run time.
+#
+# `probe/probe` answers `hit` or `miss`, and only `hit` has a field `t`.
+# `kanso check` says ok; running says
+#   error[runtime]: `miss` has no field `t`
+#
+# The checker refuses the equivalent read when the alternative is `none`
+# ("this can be a none and ... has no arm for it") and when it is an err;
+# a marker that stands in for none, which chapter 04 recommends, gets no
+# such check. Expected: a refusal at check time naming `miss`.
+import "./probe"
+
+print "{(probe/probe 0).t}"

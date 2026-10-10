@@ -1,0 +1,197 @@
+# Turning a makefile's physical lines into logical ones, and saying what kind
+# of line each is. Nothing here expands a variable or reads a file.
+import "../expand"
+import "../words"
+import "std/list"
+import "std/text"
+
+# A variable assignment, as written: the name still unexpanded, `op` one of
+# "=", ":=", "::=", "+=", "?=", "!=", and the value with its leading blanks
+# gone (its trailing ones stay, as in GNU make).
+pub type assignment
+  name
+  op
+  value
+
+# A logical line and the index of the physical line after it.
+pub type logical
+  next
+  text
+
+# A rule line: what comes before the `;`, and the recipe after it, if any.
+pub type rule_line
+  head
+  inline
+
+# A rule's head after expansion: targets before the first colon, the rest
+# after it. A second colon makes a static pattern rule, whose target pattern
+# is `static`; it is empty for every other rule.
+pub type rule_parts
+  order_only
+  prereqs
+  static
+  targets
+
+# What `assigned` answers for a line that is not an assignment.
+pub type unassigned
+
+# A line that is neither: make expands it, and it must come to nothing.
+pub type bare_line
+  text
+
+# A line ends in a continuation when it ends in an odd number of backslashes.
+pub fn continued? line
+  odd_run? line (length line) 0
+
+fn odd_run? line i n
+  return n % 2 == 1 if i < 1
+  if (text/slice line i i == "\\") (odd_run? line (i - 1) (n + 1)) (n % 2 == 1)
+
+fn chop line
+  text/slice line 1 (length line - 1)
+
+fn line_of lines i
+  given lines[i]
+
+fn given none
+  ""
+
+fn given s
+  s
+
+# Outside a recipe, a backslash-newline and the blanks around it become one
+# space.
+pub fn joined lines i
+  glue lines (i + 1) (line_of lines i)
+
+fn glue lines i acc
+  return logical i acc if not continued? acc or length lines < i
+  next = words/trim_left (line_of lines i)
+  glue lines (i + 1) "{words/trim_right (chop acc)} {next}"
+
+# Inside a recipe, the backslash-newline stays for the shell to read, and
+# only the tab that starts the next line goes.
+pub fn joined_recipe lines i
+  stitch lines (i + 1) (line_of lines i)
+
+fn stitch lines i acc
+  return logical i acc if not continued? acc or length lines < i
+  next = line_of lines i
+  tabbed = words/starts_with? next "\t"
+  body = if tabbed (text/slice next 2 (length next)) next
+  stitch lines (i + 1) "{acc}\n{body}"
+
+# The text before the first `#` that is not escaped, with `\#` made `#`.
+pub fn uncommented s
+  cut = hash_at s 1
+  kept = if (cut == 0) s (text/slice s 1 (cut - 1))
+  words/replace_all kept "\\#" "#"
+
+fn hash_at s from
+  at = words/find s "#" from
+  return 0 if at == 0
+  escaped = at > 1 and text/slice s (at - 1) (at - 1) == "\\"
+  if escaped (hash_at s (at + 1)) at
+
+pub fn blank_line? s
+  words/squeeze s == ""
+
+# What a logical line outside a recipe is. A `;` before any comment ends a
+# rule's prerequisites and starts its recipe; everything after it goes to
+# the shell as written, `#` and all.
+pub fn classify s
+  semi = expand/top_level s ";" 1 0
+  hash = hash_at s 1
+  inline = semi > 0 and (hash == 0 or semi < hash)
+  head = if inline (text/slice s 1 (semi - 1)) (uncommented s)
+  classified head (assigned head) inline (text/slice s (semi + 1) (length s)) s
+
+fn classified head unassigned true recipe _
+  rule_line head recipe
+
+fn classified head unassigned false _ _
+  colon = expand/top_level head ":" 1 0
+  if (colon == 0) (bare_line head) (rule_line head no_inline)
+
+fn classified _ found true _ whole
+  either (assigned (uncommented whole)) found
+
+fn classified _ found false _ _
+  found
+
+fn either unassigned fallback
+  fallback
+
+fn either found _
+  found
+
+# An assignment when the first `=` outside a reference comes before any
+# `:`, or right after the `:` or `::` that spells the operator.
+pub fn assigned s
+  eq = expand/top_level s "=" 1 0
+  colon = expand/top_level s ":" 1 0
+  return unassigned if eq == 0
+  in_rule = colon > 0 and colon < eq and not operator_colon? s colon eq
+  return unassigned if in_rule
+  op_start = operator_start s eq
+  name = words/squeeze (text/slice s 1 (op_start - 1))
+  value = words/trim_left (text/slice s (eq + 1) (length s))
+  assignment name (text/slice s op_start eq) value
+
+fn operator_colon? s colon eq
+  between = text/slice s colon (eq - 1)
+  between == ":" or between == "::"
+
+fn operator_start s eq
+  before = text/slice s (eq - 1) (eq - 1)
+  return eq if eq < 2
+  return colon_start s (eq - 1) if before == ":"
+  if (before == "+" or before == "?" or before == "!") (eq - 1) eq
+
+fn colon_start s at
+  if (at > 1 and text/slice s (at - 1) (at - 1) == ":") (at - 1) at
+
+pub fn split_rule expanded
+  colon = words/find expanded ":" 1
+  targets = words/split_words (text/slice expanded 1 (colon - 1))
+  after = text/slice expanded (colon + 1) (length expanded)
+  double = text/slice after 1 1 == ":"
+  rest = if double (text/slice after 2 (length after)) after
+  second = words/find rest ":" 1
+  return parted targets "" rest if second == 0
+  pattern = words/squeeze (text/slice rest 1 (second - 1))
+  parted targets pattern (text/slice rest (second + 1) (length rest))
+
+fn parted targets static rest
+  bar = words/find rest "|" 1
+  normal = if (bar == 0) rest (text/slice rest 1 (bar - 1))
+  ordered = if (bar == 0) "" (text/slice rest (bar + 1) (length rest))
+  prereqs = words/split_words normal
+  rule_parts (words/split_words ordered) prereqs static targets
+
+# The directive a line starts with, if it starts with one and is not
+# instead an assignment to a variable that happens to share the name.
+pub fn directive s
+  word = words/first_word s
+  return "" if not directive_word? word
+  rest = words/trim_left (text/slice s (length word + 1) (length s))
+  op = list/any? operators (o -> words/starts_with? rest o)
+  if op "" word
+
+fn directive_word? w
+  list/any? directives (d -> d == w)
+
+directives = text/concat conditionals (text/concat others refused)
+
+conditionals = ["else" "endif" "ifdef" "ifeq" "ifndef" "ifneq"]
+
+others = ["-include" "export" "include" "override" "sinclude" "unexport"]
+
+# Directives GNU make has and this port does not: reading one stops with a
+# message that says so, rather than a misleading "missing separator".
+refused = ["define" "endef" "vpath"]
+
+operators = ["=" ":=" "::=" "+=" "?=" "!="]
+
+pub fn after_word s word
+  words/trim_left (text/slice (words/trim_left s) (length word + 1) (length s))

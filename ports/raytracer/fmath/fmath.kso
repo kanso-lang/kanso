@@ -1,0 +1,57 @@
+# The pieces of <cmath> the ray tracer uses that std/math does not supply.
+# Everything here is built from + - * / and math/round, so it computes the
+# same bits on every engine.
+import "std/math"
+
+pub fn abs x
+  if (x < 0.0) (0.0 - x) x
+
+pub fn clamp x lo hi
+  max_of lo (min_of x hi)
+
+pub fn cos x
+  series_cos (x * x) 1.0 1.0 1
+
+# A NaN or an infinity has no floor; `math/round` answers none for those, and
+# that becomes a failure here.
+pub fn floor x
+  settle x (math/round x)
+
+# Stands in for +inf as an interval bound. Dividing by zero is a failure in
+# kanso rather than inf, so this is the largest bound the program needs:
+# every ray parameter is far smaller.
+pub infinity = 1000000000000000000000000000000.0
+
+pub fn max_of a b
+  if (a < b) b a
+
+pub fn min_of a b
+  if (b < a) b a
+
+pub pi = 3.141592653589793
+
+pub fn radians degrees
+  degrees * pi / 180.0
+
+pub fn sin x
+  series_sin (x * x) x x 1
+
+pub fn tan x
+  sin x / cos x
+
+# The two series sum their terms until a term stops changing the sum; the
+# camera only asks for angles up to a quarter turn, where twelve terms are
+# already past double precision.
+fn settle x none
+  err "floor takes a finite number, got {x}"
+
+fn settle x n
+  if (x < n) (n - 1) n
+
+fn series_cos xx term total k
+  next = 0.0 - term * xx / ((2.0 * k - 1.0) * 2.0 * k)
+  if (k < 12) (series_cos xx next (total + next) (k + 1)) total
+
+fn series_sin xx term total k
+  next = 0.0 - term * xx / (2.0 * k * (2.0 * k + 1.0))
+  if (k < 12) (series_sin xx next (total + next) (k + 1)) total

@@ -1,0 +1,7 @@
+$ make 
+a=[later] c=[late] x=[one two] s=[one later] q=[kept]
+t=[trailing   ]
+empty=[] undefined=[]
+nested=[later] braces=[one two] one-char=[one two]
+--- stderr
+--- exit 0

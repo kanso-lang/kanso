@@ -1,0 +1,4 @@
+$ make 
+cleaning
+--- stderr
+--- exit 0

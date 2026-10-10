@@ -1,0 +1,21 @@
+$ make 
+echo compile a.c to a.o
+compile a.c to a.o
+cat a.c > a.o
+echo compile b.c to b.o
+compile b.c to b.o
+cat b.c > b.o
+link prog from a.o b.o
+cat a.o b.o > prog
+--- stderr
+--- exit 0
+== ./a.o
+A
+
+== ./b.o
+B
+
+== ./prog
+A
+B
+

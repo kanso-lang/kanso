@@ -1,0 +1,4 @@
+$ make 
+--- stderr
+Makefile:3: *** missing separator.  Stop.
+--- exit 2

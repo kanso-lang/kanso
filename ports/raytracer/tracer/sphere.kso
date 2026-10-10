@@ -1,0 +1,63 @@
+# Spheres, collections of them, and the record a ray hit leaves behind.
+import "../vec"
+import "std/list"
+import "std/math"
+
+# A list of things a ray can hit. The original's `hittable_list`; a group may
+# hold spheres or other groups, and `hit` dispatches on which.
+type group
+  objects
+
+# Where a ray struck a surface. `front_face` says whether it struck from
+# outside; the normal always points against the ray.
+type hit_record
+  front_face
+  material
+  normal
+  p
+  t
+
+# What `hit` answers when the ray strikes nothing.
+type miss
+
+type sphere
+  center
+  material
+  radius
+
+# The nearest hit along `r` within `span`, or miss.
+fn hit (group objects) r span
+  list/fold objects miss (&closer r span)
+
+fn hit (sphere center mat radius) r span
+  oc = center - r.origin
+  a = vec/length_squared r.direction
+  h = vec/dot r.direction oc
+  c = vec/length_squared oc - radius * radius
+  discriminant = h * h - a * c
+  return miss if discriminant < 0.0
+  sqrtd = math/sqrt discriminant
+  near = (h - sqrtd) / a
+  root = if (surrounds? span near) near ((h + sqrtd) / a)
+  return miss if not surrounds? span root
+  p = at r root
+  outward = (p - center) / radius
+  front = vec/dot r.direction outward < 0.0
+  normal = if front outward (vec/neg outward)
+  hit_record front mat normal p root
+
+fn closer r span best obj
+  nearer (hit obj r (narrow span best)) best
+
+# Once something has been hit, only nearer things matter.
+fn narrow span miss
+  span
+
+fn narrow span found
+  bounds span.min found.t
+
+fn nearer miss best
+  best
+
+fn nearer found _
+  found

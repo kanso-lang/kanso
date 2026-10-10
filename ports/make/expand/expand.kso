@@ -1,0 +1,231 @@
+# Variable expansion: `$(name)`, `${name}`, `$x`, `$$`, substitution
+# references, automatic variables and make's functions.
+#
+# Expansion answers an effect rather than a string, because three of the
+# functions reach the world: $(shell) runs a process, $(wildcard) lists a
+# directory, and $(info), $(warning) and $(error) write. A text with no `$`
+# in it is answered at once.
+import "../db"
+import "../report"
+import "../words"
+import "std/os"
+import "std/text"
+
+# Everything an expansion can see. `at` is the line being read or run,
+# where $(warning) and $(error) point. `expanding` is where the expander's
+# own complaints point: the line that set the variable being expanded, as in
+# GNU make. `locals` holds automatic variables and the variables $(foreach)
+# and $(call) bind; `within` holds the recursive variables being expanded
+# right now, so a loop is caught instead of run.
+pub type scope
+  at
+  expanding
+  locals
+  vars
+  within
+
+pub fn scope_of d at
+  scope at at {} d.vars {}
+
+pub fn scope_at (scope _ _ locals vars within) at
+  scope at at locals vars within
+
+pub fn with_locals (scope at expanding _ vars within) locals
+  scope at expanding locals vars within
+
+pub fn bind_local (scope at expanding locals vars within) name value
+  scope at expanding (put locals name value) vars within
+
+fn entering (scope at expanding locals vars within) name place
+  inside = put within name true
+  scope at (if (place == report/nowhere) expanding place) locals vars inside
+
+pub fn expand sc s
+  return effect s if not words/contains? s "$"
+  scan sc s 1 []
+
+# Expand each text in turn, answering the list of results.
+pub fn expand_each sc texts
+  each sc texts 1 []
+
+# The effect before each step keeps the native engines from crashing on
+# the list this loop carries (bugs/native_crash_carrying_a_record).
+fn each sc texts i acc
+  effect done .> (_ -> each_at sc texts i acc)
+
+fn each_at sc texts i acc
+  return effect acc if i < 1 or length texts < i
+  expand sc texts[i] .> (v -> each sc texts (i + 1) (push acc v))
+
+fn scan sc s i acc
+  j = words/find s "$" i
+  rest = text/slice s i (length s)
+  return effect (text/join (push acc rest) "") if j == 0
+  lit = text/slice s i (j - 1)
+  dollar sc s j (push acc lit) (text/slice s (j + 1) (j + 1))
+
+# A lone `$` at the very end expands to nothing.
+fn dollar _ _ _ acc ""
+  effect (text/join acc "")
+
+fn dollar sc s j acc "$"
+  scan sc s (j + 2) (push acc "$")
+
+fn dollar sc s j acc "("
+  enclosed sc s j acc "(" ")"
+
+fn dollar sc s j acc "\{"
+  enclosed sc s j acc "\{" "}"
+
+fn dollar sc s j acc c
+  lookup sc c .> (v -> scan sc s (j + 2) (push acc v))
+
+fn enclosed sc s j acc open close
+  k = closing s (j + 2) open close 0
+  missing = "unterminated variable reference"
+  return report/fatal sc.expanding missing if k == 0
+  inner = text/slice s (j + 2) (k - 1)
+  reference sc inner .> (v -> scan sc s (k + 1) (push acc v))
+
+# The position of the `close` that ends a reference opened just before `i`.
+pub fn closing s i open close depth
+  return 0 if i > length s
+  c = text/slice s i i
+  return i if c == close and depth == 0
+  deeper = if (c == open) (depth + 1) (if (c == close) (depth - 1) depth)
+  closing s (i + 1) open close deeper
+
+# The first `c` in `s` at or after `i` that is not inside a reference, or 0.
+pub fn top_level s c i depth
+  return 0 if i > length s
+  here = text/slice s i i
+  return i if here == c and depth == 0
+  opens = here == "(" or here == "\{"
+  shuts = here == ")" or here == "}"
+  deeper = if opens (depth + 1) (if shuts (depth - 1) depth)
+  top_level s c (i + 1) deeper
+
+fn reference sc inner
+  name = function_name inner
+  routed sc inner name (arities name)
+
+fn routed sc inner _ none
+  variable_ref sc inner
+
+fn routed sc inner name (arity least most)
+  given = split_args (args_text inner name) most
+  return too_few sc name given if length given < least
+  function sc name given
+
+fn too_few sc name given
+  count = length given
+  message = "insufficient number of arguments ({count}) to function '{name}'"
+  report/fatal sc.expanding message
+
+# A function's name is the word before the first blank; $(info) with no
+# blank is a variable called "info".
+fn function_name inner
+  spaced = words/replace_all inner "\t" " "
+  at = words/find spaced " " 1
+  if (at == 0) "" (text/slice inner 1 (at - 1))
+
+fn args_text inner name
+  words/trim_left (text/slice inner (length name + 1) (length inner))
+
+# Split at commas outside references; the last argument keeps the rest, so
+# $(shell echo a,b) is one argument. A limit of 0 means no limit.
+pub fn split_args s most
+  cut s 1 [] most
+
+fn cut s from acc most
+  full = most > 0 and length acc + 1 == most
+  at = if full 0 (top_level s "," from 0)
+  part = text/slice s from (if (at == 0) (length s) (at - 1))
+  return push acc part if at == 0
+  cut s (at + 1) (push acc part) most
+
+fn variable_ref sc inner
+  colon = top_level inner ":" 1 0
+  eq = if (colon == 0) 0 (words/find inner "=" colon)
+  return substitution sc inner colon eq if eq > 0
+  expand sc inner .> (name -> lookup sc name)
+
+# $(var:from=to): without a `%`, `from` is a suffix of each word.
+fn substitution sc inner colon eq
+  name_text = text/slice inner 1 (colon - 1)
+  from_text = text/slice inner (colon + 1) (eq - 1)
+  to_text = text/slice inner (eq + 1) (length inner)
+  expand_each sc [name_text from_text to_text]
+    .> (parts -> lookup sc (arg parts 1) .> (v -> replaced v parts))
+
+fn replaced value parts
+  effect (substituted value (arg parts 2) (arg parts 3))
+
+fn substituted value from to
+  pat = if (words/pattern? from) from "%{from}"
+  rep = if (words/pattern? from) to "%{to}"
+  words/unwords (patsubst_all pat rep (words/split_words value))
+
+pub fn patsubst_all pat rep ws
+  answered = []
+  patsub_from pat rep ws 1 answered
+
+fn patsub_from pat rep ws i acc
+  return acc if i < 1 or length ws < i
+  next = push acc (words/patsubst_word pat rep ws[i])
+  patsub_from pat rep ws (i + 1) next
+
+pub fn lookup sc name
+  local sc name sc.locals[name]
+
+fn local sc name none
+  automatic_part sc name (text/slice name 1 1) (text/slice name 2 2)
+
+fn local _ _ value
+  effect value
+
+# $(@D) and $(@F): the directory and file parts of an automatic variable.
+fn automatic_part sc name first "D"
+  parted sc name sc.locals[first] true
+
+fn automatic_part sc name first "F"
+  parted sc name sc.locals[first] false
+
+fn automatic_part sc name _ _
+  global sc name sc.vars[name]
+
+fn parted sc name none _
+  global sc name sc.vars[name]
+
+fn parted _ _ value dir
+  ws = words/split_words value
+  effect (words/unwords (pieces ws dir 1 []))
+
+fn pieces ws dir i acc
+  return acc if i < 1 or length ws < i
+  pieces ws dir (i + 1) (push acc (piece ws[i] dir))
+
+fn piece w true
+  d = words/dir_part w
+  if (d == "./") "." (text/slice d 1 (length d - 1))
+
+fn piece w false
+  words/file_part w
+
+# A name make never heard of may still be in the environment, which make
+# reads as though each variable there were assigned recursively.
+fn global sc name none
+  os/env name .> (v -> from_env sc name v)
+
+fn global sc name found
+  return effect found.value if db/simple? found
+  loop = "Recursive variable '{name}' references itself (eventually)"
+  place = if (found.at == report/nowhere) sc.expanding found.at
+  return report/fatal place loop if sc.within[name] != none
+  expand (entering sc name found.at) found.value
+
+fn from_env _ _ none
+  effect ""
+
+fn from_env sc name value
+  expand (entering sc name report/nowhere) value

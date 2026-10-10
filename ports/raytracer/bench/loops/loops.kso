@@ -1,0 +1,29 @@
+import "../../vec"
+
+pub fn floats n
+  float_loop n 0.0 0.0 0.0
+
+fn float_loop 0 x y z
+  x + y + z
+
+fn float_loop n x y z
+  float_loop (n - 1) (x + 0.5) (y + 0.25) (z + 0.125)
+
+pub fn vecs n
+  v = vec_loop n vec/zero
+  v.x + v.y + v.z
+
+fn vec_loop 0 v
+  v
+
+fn vec_loop n v
+  vec_loop (n - 1) (v + vec/new 0.5 0.25 0.125)
+
+pub fn pick "floats"
+  "{floats 10000000}"
+
+pub fn pick none
+  "name floats or vecs"
+
+pub fn pick _
+  "{vecs 10000000}"

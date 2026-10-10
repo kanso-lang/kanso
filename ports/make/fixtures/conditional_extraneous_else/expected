@@ -1,0 +1,4 @@
+$ make 
+--- stderr
+Makefile:2: *** extraneous 'else'.  Stop.
+--- exit 2

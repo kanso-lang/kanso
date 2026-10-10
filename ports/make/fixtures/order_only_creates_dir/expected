@@ -1,0 +1,7 @@
+$ make 
+mkdir -p build
+compiling into build/x.o
+--- stderr
+--- exit 0
+== ./build/x.o
+

@@ -1,0 +1,20 @@
+import "std/math"
+
+type vec3
+  x
+  y
+  z
+
+fn * (vec3 x y z) s:float64
+  vec3 (x * s) (y * s) (z * s)
+
+fn + (vec3 ax ay az) (vec3 bx by bz)
+  vec3 (ax + bx) (ay + by) (az + bz)
+
+a = vec3 1.0 2.0 3.0
+b = a + a * 0.5
+r = math/round 2.7
+q = 7.5 / 2
+m = 17 % 5
+f = 0.1 + 0.2
+print "{b} {r} {q} {m} {f} {1.0 / 3.0} {255.999 * 0.5}"

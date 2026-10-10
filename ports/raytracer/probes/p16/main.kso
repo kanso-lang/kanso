@@ -1,0 +1,3 @@
+import "./m"
+
+print "{m/used 1}"

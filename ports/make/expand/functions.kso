@@ -1,0 +1,355 @@
+# make's functions. Most expand their arguments and compute a string; a few
+# expand lazily ($(foreach), $(if), $(or), $(and)) and a few reach the world
+# ($(shell), $(wildcard), $(info), $(warning), $(error)).
+import "../glob"
+import "../report"
+import "../words"
+import "std/io"
+import "std/list"
+import "std/os"
+import "std/text"
+
+# How many arguments a function takes; `most` of 0 means any number.
+type arity
+  least
+  most
+
+fn arities "addprefix"
+  arity 2 2
+
+fn arities "addsuffix"
+  arity 2 2
+
+fn arities "and"
+  arity 1 0
+
+fn arities "basename"
+  arity 0 1
+
+fn arities "call"
+  arity 1 0
+
+fn arities "dir"
+  arity 0 1
+
+fn arities "error"
+  arity 0 1
+
+fn arities "filter"
+  arity 2 2
+
+fn arities "filter-out"
+  arity 2 2
+
+fn arities "findstring"
+  arity 2 2
+
+fn arities "firstword"
+  arity 0 1
+
+fn arities "foreach"
+  arity 3 3
+
+fn arities "if"
+  arity 2 3
+
+fn arities "info"
+  arity 0 1
+
+fn arities "join"
+  arity 2 2
+
+fn arities "lastword"
+  arity 0 1
+
+fn arities "notdir"
+  arity 0 1
+
+fn arities "or"
+  arity 1 0
+
+fn arities "origin"
+  arity 0 1
+
+fn arities "patsubst"
+  arity 3 3
+
+fn arities "shell"
+  arity 0 1
+
+fn arities "sort"
+  arity 0 1
+
+fn arities "strip"
+  arity 0 1
+
+fn arities "subst"
+  arity 3 3
+
+fn arities "suffix"
+  arity 0 1
+
+fn arities "value"
+  arity 0 1
+
+fn arities "warning"
+  arity 0 1
+
+fn arities "wildcard"
+  arity 0 1
+
+fn arities "word"
+  arity 2 2
+
+fn arities "wordlist"
+  arity 3 3
+
+fn arities "words"
+  arity 0 1
+
+fn arities _
+  none
+
+fn arg args i
+  or_empty args[i]
+
+fn or_empty none
+  ""
+
+fn or_empty s
+  s
+
+fn function sc "and" args
+  all_of sc args 1 ""
+
+fn function sc "call" args
+  expand_each sc args .> (vals -> calling sc vals)
+
+fn function sc "error" args
+  expand sc (arg args 1) .> (m -> report/fatal sc.at m)
+
+fn function sc "foreach" args
+  body = arg args 3
+  expand sc (arg args 1)
+    .> (name -> expand sc (arg args 2) .> (list -> looped sc name list body))
+
+fn function sc "if" args
+  chosen = (c -> if (words/squeeze c == "") (arg args 3) (arg args 2))
+  expand sc (arg args 1) .> (c -> expand sc (chosen c))
+
+fn function sc "info" args
+  expand sc (arg args 1) .> (m -> io/write "{m}\n" .> (_ -> effect ""))
+
+fn function sc "or" args
+  any_of sc args 1
+
+fn function sc "origin" args
+  expand sc (arg args 1) .> (name -> origin sc name)
+
+fn function sc "shell" args
+  expand sc (arg args 1) .> run_shell
+
+fn function sc "value" args
+  expand sc (arg args 1) .> (name -> effect (raw sc.vars[name]))
+
+fn function sc "warning" args
+  expand sc (arg args 1) .> (m -> report/warn sc.at m .> (_ -> effect ""))
+
+fn function sc "wildcard" args
+  expand sc (arg args 1)
+    .> (pats -> glob/expand_all (words/split_words pats))
+    .> (found -> effect (words/unwords found))
+
+fn function sc "word" args
+  expand_each sc args .> (vals -> nth sc (arg vals 1) (arg vals 2))
+
+fn function sc "wordlist" args
+  expand_each sc args .> (vals -> ranged sc vals)
+
+fn function sc name args
+  expand_each sc args .> (vals -> effect (computed name vals))
+
+fn all_of sc args i last
+  return effect last if i < 1 or length args < i
+  stop = effect ""
+  next = (v -> if (words/squeeze v == "") stop (all_of sc args (i + 1) v))
+  expand sc args[i] .> next
+
+fn any_of sc args i
+  return effect "" if i < 1 or length args < i
+  next = (v -> if (words/squeeze v == "") (any_of sc args (i + 1)) (effect v))
+  expand sc args[i] .> next
+
+fn looped sc name list body
+  each_word sc (words/squeeze name) (words/split_words list) body 1 []
+
+fn each_word sc name ws body i acc
+  return effect (words/unwords acc) if i < 1 or length ws < i
+  inner = bind_local sc name ws[i]
+  next = (v -> each_word sc name ws body (i + 1) (push acc v))
+  expand inner body .> next
+
+# $(call var,a,b): $(0) is the name, $(1) and on the arguments, and the
+# variable's text is expanded with them in view. Numbered parameters the
+# caller did not pass are empty, so an outer call's do not show through.
+fn calling sc vals
+  name = arg vals 1
+  nine = list/take list/naturals 9
+  bound = list/fold nine sc (s n -> bind_local s "{n}" "")
+  params = numbered bound vals 2
+  expand (bind_local params "0" name) (raw sc.vars[name])
+
+fn numbered sc vals i
+  return sc if i < 2 or length vals < i
+  numbered (bind_local sc "{i - 1}" vals[i]) vals (i + 1)
+
+fn raw none
+  ""
+
+fn raw found
+  found.value
+
+fn origin sc name
+  return effect "automatic" if sc.locals[name] != none
+  declared sc.vars[name] name
+
+fn declared none name
+  os/env name .> (v -> effect (if (v == none) "undefined" "environment"))
+
+fn declared found _
+  effect (origin_word found.origin)
+
+fn origin_word from_command
+  "command line"
+
+fn origin_word from_default
+  "default"
+
+fn origin_word _
+  "file"
+
+# Run a command the way $(shell) and `!=` do: its stderr passes through,
+# and its stdout comes back as one line.
+pub fn run_shell cmd
+  os/run "/bin/sh" ["-c" cmd]
+    .> (p -> io/write_err p.stderr .> (_ -> effect (shell_text p.stdout)))
+
+# What $(shell) hands back: trailing newlines gone, the rest made spaces.
+fn shell_text out
+  words/replace_all (words/replace_all (chomp out) "\r\n" " ") "\n" " "
+
+fn chomp s
+  last = text/slice s (length s) (length s)
+  if (last == "\n") (chomp (text/slice s 1 (length s - 1))) s
+
+fn nth sc n text
+  number sc "word" n .> (i -> effect (or_empty (words/split_words text)[i]))
+
+fn ranged sc vals
+  from_text = arg vals 1
+  to_text = arg vals 2
+  ws = words/split_words (arg vals 3)
+  number sc "wordlist" from_text
+    .> (from -> number sc "wordlist" to_text .> (to -> slice_words ws from to))
+
+fn slice_words ws from to
+  effect (words/unwords (text/slice ws from to))
+
+# A function's numeric argument, which make refuses unless it is a whole
+# number above zero.
+fn number sc name n
+  counted sc name n (text/to_int (words/squeeze n))
+
+fn counted sc name n (err _)
+  report/fatal sc.at "non-numeric first argument to '{name}' function: '{n}'"
+
+fn counted sc name _ i
+  message = "first argument to '{name}' function must be greater than 0"
+  if (i < 1) (report/fatal sc.at message) (effect i)
+
+fn computed "addprefix" vals
+  every (arg vals 2) (w -> "{arg vals 1}{w}")
+
+fn computed "addsuffix" vals
+  every (arg vals 2) (w -> "{w}{arg vals 1}")
+
+fn computed "basename" vals
+  every (arg vals 1) without_suffix
+
+fn computed "dir" vals
+  every (arg vals 1) words/dir_part
+
+fn computed "filter" vals
+  kept (arg vals 1) (arg vals 2) true
+
+fn computed "filter-out" vals
+  kept (arg vals 1) (arg vals 2) false
+
+fn computed "findstring" vals
+  if (words/contains? (arg vals 2) (arg vals 1)) (arg vals 1) ""
+
+fn computed "firstword" vals
+  words/first_word (arg vals 1)
+
+fn computed "join" vals
+  joined (words/split_words (arg vals 1)) (words/split_words (arg vals 2))
+
+fn computed "lastword" vals
+  ws = words/split_words (arg vals 1)
+  or_empty ws[length ws]
+
+fn computed "notdir" vals
+  every (arg vals 1) words/file_part
+
+fn computed "patsubst" vals
+  pat = words/squeeze (arg vals 1)
+  rep = words/squeeze (arg vals 2)
+  words/unwords (patsubst_all pat rep (words/split_words (arg vals 3)))
+
+fn computed "sort" vals
+  words/unwords (words/uniq (list/sort (words/split_words (arg vals 1))))
+
+fn computed "strip" vals
+  words/squeeze (arg vals 1)
+
+fn computed "subst" vals
+  words/replace_all (arg vals 3) (arg vals 1) (arg vals 2)
+
+fn computed "suffix" vals
+  ws = list/map (words/split_words (arg vals 1)) suffix_of
+  words/unwords (list/to_list (list/reject ws (s -> s == "")))
+
+fn computed "words" vals
+  "{length (words/split_words (arg vals 1))}"
+
+fn computed _ _
+  ""
+
+fn every text f
+  words/unwords (list/to_list (list/map (words/split_words text) f))
+
+fn kept patterns text keep
+  pats = words/split_words patterns
+  hit = (w -> list/any? pats (p -> words/stem_of p w != none))
+  ws = list/select (words/split_words text) (w -> hit w == keep)
+  words/unwords (list/to_list ws)
+
+fn joined left right
+  n = if (length left < length right) (length right) (length left)
+  pairs = list/map (list/take list/naturals n) (i -> pair left right i)
+  words/unwords (list/to_list pairs)
+
+fn pair left right i
+  "{or_empty left[i]}{or_empty right[i]}"
+
+# A word's suffix is from its last `.` on, when that dot is in the file
+# part; a word with no such dot has none.
+fn suffix_of w
+  dot = words/find_last w "."
+  slash = words/find_last w "/"
+  if (dot > slash) (text/slice w dot (length w)) ""
+
+fn without_suffix w
+  dot = words/find_last w "."
+  slash = words/find_last w "/"
+  if (dot > slash) (text/slice w 1 (dot - 1)) w

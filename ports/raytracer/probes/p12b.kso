@@ -1,0 +1,12 @@
+type miss
+
+type hit
+  t
+
+fn probe 0
+  miss
+
+fn probe n
+  hit n
+
+print "{(probe 0).t}"

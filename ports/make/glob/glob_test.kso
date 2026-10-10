@@ -1,0 +1,19 @@
+test_star = matches? "*.c" "main.c"
+
+test_star_miss = not matches? "*.c" "main.h"
+
+test_star_empty = matches? "a*" "a"
+
+test_question = matches? "?.o" "x.o"
+
+test_class = matches? "[abc].c" "b.c"
+
+test_class_miss = not matches? "[abc].c" "d.c"
+
+test_range = matches? "[a-c]x" "bx"
+
+test_negated = matches? "[!a]x" "bx"
+
+test_two_stars = matches? "*_*.c" "a_b.c"
+
+test_wild = wild? "src/*.c" and not wild? "src/a.c"

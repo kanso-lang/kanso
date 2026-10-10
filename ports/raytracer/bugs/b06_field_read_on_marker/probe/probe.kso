@@ -1,0 +1,10 @@
+pub type hit
+  t
+
+pub type miss
+
+pub fn probe 0
+  miss
+
+pub fn probe n
+  hit n

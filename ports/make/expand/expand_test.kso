@@ -1,0 +1,31 @@
+test_closing = closing "$(a $(b))x" 3 "(" ")" 0 == 9
+
+test_closing_unterminated = closing "$(a" 3 "(" ")" 0 == 0
+
+test_top_level = top_level "$(x:a=b):c" ":" 1 0 == 9
+
+test_split_args = split_args "a,$(f x,y),c" 0 == ["a" "$(f x,y)" "c"]
+
+test_split_args_limit = split_args "echo a,b" 1 == ["echo a,b"]
+
+test_split_args_last_keeps = split_args "a,b,c,d" 3 == ["a" "b" "c,d"]
+
+test_function_name = function_name "patsubst %.c,%.o,x" == "patsubst"
+
+test_function_name_plain = function_name "srcs" == ""
+
+test_suffix_ref = substituted "a.c b.c" ".c" ".o" == "a.o b.o"
+
+test_pattern_ref = substituted "a.c b.h" "%.c" "obj/%.o" == "obj/a.o b.h"
+
+test_shell_text = shell_text "x\ny\n\n" == "x y"
+
+test_sort = computed "sort" ["b a c b"] == "a b c"
+
+test_filter = computed "filter" ["%.c" "a.c b.h c.c"] == "a.c c.c"
+
+test_join = computed "join" ["a b c" "1 2"] == "a1 b2 c"
+
+test_basename = computed "basename" ["src/a.c b.d/e"] == "src/a b.d/e"
+
+test_suffix = computed "suffix" ["a.c b"] == ".c"

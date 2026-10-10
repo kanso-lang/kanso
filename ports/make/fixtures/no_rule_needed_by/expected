@@ -1,0 +1,4 @@
+$ make 
+--- stderr
+make: *** No rule to make target 'missing', needed by 'all'.  Stop.
+--- exit 2

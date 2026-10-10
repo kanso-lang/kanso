@@ -1,0 +1,68 @@
+fn op_of (assignment _ op _)
+  op
+
+fn name_of (assignment name _ _)
+  name
+
+fn value_of (assignment _ _ value)
+  value
+
+fn head_of (rule_line head _)
+  head
+
+fn inline_of (rule_line _ inline)
+  inline
+
+test_continued = continued? "a \\"
+
+test_not_continued = not continued? "a \\\\"
+
+test_joined = (joined ["x = a \\" "   b \\" "" "y"] 1).text == "x = a b "
+
+test_joined_next = (joined ["x = a \\" "   b" "y"] 1).next == 3
+
+test_recipe_joined = recipe_text == "\techo a \\\n  b"
+
+recipe_text = (joined_recipe ["\techo a \\" "\t  b" "c"] 1).text
+
+test_uncommented = uncommented "x = a # c" == "x = a "
+
+test_escaped_hash = uncommented "x = a \\# b # c" == "x = a # b "
+
+test_simple = op_of (classify "x := 1") == ":="
+
+test_double_colon_simple = op_of (classify "x ::= 1") == "::="
+
+test_append = op_of (classify "CFLAGS += -O2") == "+="
+
+test_conditional = op_of (classify "x ?= 1") == "?="
+
+test_shell_assign = op_of (classify "x != echo") == "!="
+
+test_name = name_of (classify "  long name  = v") == "long name"
+
+test_value_keeps_trailing = value_of (classify "x =   a b   # c") == "a b   "
+
+test_rule = head_of (classify "all: a b # c") == "all: a b "
+
+test_rule_with_ref = head_of (classify "$(x:.c=.o): y") == "$(x:.c=.o): y"
+
+test_inline = inline_of (classify "all: ; echo a # b") == " echo a # b"
+
+test_rule_eq_in_prereq = head_of (classify "a: b=c") == "a: b=c"
+
+test_bare = classify "$(info hi)" == bare_line "$(info hi)"
+
+test_split_rule = split_rule "a b: c d | e" == split_expected
+
+split_expected = rule_parts ["e"] ["c" "d"] "" ["a" "b"]
+
+test_split_static = (split_rule "a.o b.o: %.o: %.c").static == "%.o"
+
+test_split_double = (split_rule "a:: b").prereqs == ["b"]
+
+test_directive = directive "include foo.mk" == "include"
+
+test_directive_as_name = directive "include = 3" == ""
+
+test_no_directive = directive "all: x" == ""

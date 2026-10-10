@@ -1,0 +1,8 @@
+pub type vec3
+  x
+
+pub fn - (vec3 a) (vec3 b)
+  vec3 (a - b)
+
+pub fn unit v
+  v

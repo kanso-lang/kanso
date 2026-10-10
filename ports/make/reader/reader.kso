@@ -1,0 +1,322 @@
+# Reading makefiles into the database, a line at a time. Reading is an
+# effect from top to bottom: assignments with `:=` expand at once, and an
+# expansion can run $(shell); `include` reads another file in the middle.
+import "../db"
+import "../expand"
+import "../glob"
+import "../report"
+import "../words"
+import "std/list"
+import "std/os"
+import "std/text"
+
+# A conditional being read: whether the lines in its current branch count,
+# whether any of its branches has counted yet, and whether the lines around
+# it count at all.
+type frame
+  live
+  outer
+  taken
+
+# An include file that was not there, remembered so make can try to build
+# it once everything is read.
+pub type missing_include
+  at
+  name
+
+# What reading leaves behind: the database, and the includes still owed.
+pub type parsed
+  db
+  missing
+
+# No rule line is waiting for recipe lines.
+type no_rule
+
+# A rule line with no `;` recipe of its own.
+type no_inline
+
+# A rule line whose recipe lines are still arriving.
+type open_rule
+  at
+  has_recipe
+  order_only
+  prereqs
+  recipe
+  static
+  targets
+
+# Everything reading one file carries from line to line.
+type reader
+  conds
+  db
+  file
+  lines
+  missing
+  pending
+
+fn with_conds (reader _ d file lines missing pending) conds
+  reader conds d file lines missing pending
+
+fn with_db (reader conds _ file lines missing pending) d
+  reader conds d file lines missing pending
+
+fn with_missing (reader conds d file lines _ pending) missing
+  reader conds d file lines missing pending
+
+fn with_pending (reader conds d file lines missing _) pending
+  reader conds d file lines missing pending
+
+# Read the named makefiles in order into `d`.
+pub fn read_all d files
+  read_files (parsed d []) files 1 report/nowhere
+
+fn read_files sofar files i at
+  return effect sofar if i < 1 or length files < i
+  next = (p -> read_files p files (i + 1) at)
+  read_one sofar files[i] at false .> next
+
+fn read_one sofar path at optional
+  os/read_file path .> (content -> opened sofar path at optional content)
+
+fn opened sofar path at optional _:os/file_not_found
+  return effect sofar if optional
+  owed = push sofar.missing (missing_include at path)
+  effect (parsed sofar.db owed)
+
+fn opened sofar path _ _ content
+  lines = words/split_on content "\n"
+  walk (reader [] sofar.db path lines sofar.missing no_rule) 1
+
+fn here r i
+  report/at r.file i
+
+fn live? r
+  r.conds == [] or (top r.conds).live
+
+fn top conds
+  conds[length conds]
+
+fn walk r i
+  return finished r if i < 1 or length r.lines < i
+  line = r.lines[i]
+  in_recipe = words/starts_with? line "\t" and r.pending != no_rule
+  return recipe_line r i if in_recipe
+  piece = lines_joined r.lines i
+  statement r i piece.next piece.text
+
+fn lines_joined lines i
+  joined lines i
+
+fn finished r
+  open = r.conds != []
+  eof = report/at r.file (length r.lines)
+  return report/fatal eof "missing 'endif'" if open
+  committed r .> (s -> effect (parsed s.db s.missing))
+
+# A recipe line goes to the pending rule as the shell will see it, minus
+# its tab; one in a branch that does not count is skipped.
+fn recipe_line r i
+  piece = joined_recipe r.lines i
+  body = text/slice piece.text 2 (length piece.text)
+  return walk r piece.next if not live? r
+  step = db/command_at (here r i) body
+  walk (with_pending r (with_step r.pending step)) piece.next
+
+fn with_step (open_rule at _ order_only prereqs recipe static targets) step
+  more = push recipe step
+  open_rule at true order_only prereqs more static targets
+
+fn statement r i next text
+  bare = uncommented text
+  word = directive bare
+  return walk r next if blank_line? bare
+  return conditional r i next word (after_word bare word) if conditional? word
+  return walk r next if not live? r
+  return tab_first r i if words/starts_with? text "\t"
+  return directed r i next word bare text if r.pending == no_rule
+  committed r .> (s -> directed s i next word bare text)
+
+fn conditional? word
+  testing? word or word == "else" or word == "endif"
+
+fn tab_first r i
+  report/fatal (here r i) "recipe commences before first target"
+
+fn directed r i next "include" bare _
+  including r i next (after_word bare "include") false
+
+fn directed r i next "-include" bare _
+  including r i next (after_word bare "-include") true
+
+fn directed r i next "sinclude" bare _
+  including r i next (after_word bare "sinclude") true
+
+fn directed r i next "override" _ text
+  overriding r i next (after_word text "override")
+
+fn directed r i next "export" bare text
+  exporting r i next (after_word bare "export") (after_word text "export")
+
+fn directed r _ next "unexport" _ _
+  walk r next
+
+fn directed r i _ "define" _ _
+  unsupported r i "'define'"
+
+fn directed r i _ "endef" _ _
+  unsupported r i "'endef'"
+
+fn directed r i _ "vpath" _ _
+  unsupported r i "'vpath'"
+
+fn directed r i next _ _ text
+  line_kind r i next (classify text)
+
+fn line_kind r i next (assignment name op value)
+  assign r i name op value false .> (d -> walk (with_db r d) next)
+
+fn line_kind r i next (rule_line head inline)
+  sc = expand/scope_of r.db (here r i)
+  expand/expand sc head .> (h -> ruled r i next h inline)
+
+fn line_kind r i next (bare_line text)
+  sc = expand/scope_of r.db (here r i)
+  expand/expand sc text .> (e -> must_vanish r i next e text)
+
+# A line that is neither assignment nor rule must expand to nothing, as a
+# line holding only $(info ...) does; one that expands to a rule is a rule.
+fn must_vanish r i next expanded text
+  return walk r next if blank_line? expanded
+  semi = words/find expanded ";" 1
+  head = if (semi == 0) expanded (text/slice expanded 1 (semi - 1))
+  inline = text/slice expanded (semi + 1) (length expanded)
+  return ruled r i next head inline if semi > 0 and words/contains? head ":"
+  return ruled r i next expanded no_inline if words/contains? expanded ":"
+  spaces = words/starts_with? text "        "
+  hint = " (did you mean TAB instead of 8 spaces?)"
+  report/fatal (here r i) "missing separator{if spaces hint ""}"
+
+fn unsupported r i what
+  report/fatal (here r i) "{what} is not supported by this port of make"
+
+fn ruled r i next expanded inline
+  ruleless = not words/contains? expanded ":"
+  return must_vanish r i next expanded expanded if ruleless
+  parts = split_rule expanded
+  scoped = words/contains? (words/unwords parts.prereqs) "="
+  return unsupported r i "a target-specific variable" if scoped
+  begin = (ts ps -> started r i next parts ts ps inline)
+  globbed parts.targets .> (ts -> globbed parts.prereqs .> (ps -> begin ts ps))
+
+fn started r i next parts targets prereqs inline
+  at = here r i
+  steps = inline_steps at inline
+  has = inline != no_inline
+  waiting = open_rule at has parts.order_only prereqs steps parts.static targets
+  walk (with_pending r waiting) next
+
+fn inline_steps _ no_inline
+  []
+
+fn inline_steps at text
+  [(db/command_at at (words/trim_left text))]
+
+# Wildcards in a rule's targets and prerequisites expand as in $(wildcard);
+# a pattern that matches nothing is kept as written.
+fn globbed ws
+  each_glob ws 1 []
+
+fn each_glob ws i acc
+  return effect acc if i < 1 or length ws < i
+  w = ws[i]
+  kept = (found -> if (found == []) [w] found)
+  more = (found -> each_glob ws (i + 1) (text/concat acc (kept found)))
+  if (glob/wild? w) (glob/expand_one w .> more) (more [w])
+
+# The pending rule goes into the database for each of its targets. The
+# caller in `statement` asks first whether anything is pending, though this
+# answers that case too: binding `effect r` there for every line crashed the
+# native engines (bugs/native_crash_carrying_a_record).
+fn committed r
+  return effect r if r.pending == no_rule
+  p = r.pending
+  each_target r.db p 1 .> (d -> effect (with_pending (with_db r d) no_rule))
+
+# The effect before each step keeps the native engines from crashing on
+# the database this loop carries (bugs/native_crash_carrying_a_record).
+fn each_target d p i
+  effect done .> (_ -> target_at d p i)
+
+fn target_at d p i
+  return effect d if i < 1 or length p.targets < i
+  t = p.targets[i]
+  target_rule (db/offer_goal d t) p t .> (next -> each_target next p (i + 1))
+
+fn target_rule d p ".PHONY"
+  effect (db/mark_phony d p.prereqs)
+
+fn target_rule d p t
+  return static_rule d p t if p.static != ""
+  return effect (patterned d p t) if words/pattern? t
+  db/add_rule d t p.at p.has_recipe p.prereqs p.order_only p.recipe ""
+
+fn patterned d p t
+  db/add_pattern d t p.at p.prereqs p.order_only p.recipe
+
+fn static_rule d p t
+  stem = words/stem_of p.static t
+  return unmatched d p t if stem == none
+  prereqs = filled p.prereqs stem
+  order_only = filled p.order_only stem
+  db/add_rule d t p.at p.has_recipe prereqs order_only p.recipe stem
+
+fn unmatched d p t
+  message = "target '{t}' doesn't match the target pattern"
+  report/warn p.at message
+    .> (_ -> db/add_rule d t p.at p.has_recipe [] [] p.recipe "")
+
+fn filled patterns stem
+  list/to_list (list/map patterns (pat -> words/fill pat stem))
+
+fn including r i next rest optional
+  sc = expand/scope_of r.db (here r i)
+  expand/expand sc rest
+    .> (names -> globbed (words/split_words names))
+    .> (files -> included r i next files 1 optional)
+
+fn included r i next files k optional
+  return walk r next if k < 1 or length files < k
+  sofar = parsed r.db r.missing
+  resumed = (p -> with_missing (with_db r p.db) p.missing)
+  back = (p -> included (resumed p) i next files (k + 1) optional)
+  read_one sofar files[k] (here r i) optional .> back
+
+fn overriding r i next text
+  over = (d -> walk (with_db r d) next)
+  overridden r i (classify text) .> over
+
+fn overridden r i (assignment name op value)
+  assign r i name op value true
+
+fn overridden r i _
+  report/fatal (here r i) "missing separator"
+
+# `export NAME = value` assigns and exports; `export NAME...` exports.
+fn exporting r i next bare text
+  shown = (d -> walk (with_db r d) next)
+  export_kind r i (classify text) bare .> shown
+
+# The name is marked first and assigned second: the assignment keeps the
+# mark. Assigning and then marking crashed the native engines whenever a rule
+# followed (bugs/native_crash_carrying_a_record).
+fn export_kind r i (assignment name op value) _
+  marked = with_db r (export_all r.db [name])
+  assign marked i name op value false
+
+fn export_kind r i _ bare
+  sc = expand/scope_of r.db (here r i)
+  listed = (names -> effect (export_all r.db (words/split_words names)))
+  expand/expand sc bare .> listed
+
+fn export_all d names
+  list/fold names d (acc n -> db/export acc (words/squeeze n))

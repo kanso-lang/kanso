@@ -1,0 +1,4 @@
+$ make prog
+newer: b c
+--- stderr
+--- exit 0

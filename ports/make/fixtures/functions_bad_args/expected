@@ -1,0 +1,4 @@
+$ make 
+--- stderr
+Makefile:1: *** insufficient number of arguments (2) to function 'subst'.  Stop.
+--- exit 2

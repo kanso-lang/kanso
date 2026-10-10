@@ -1,0 +1,4 @@
+$ make 
+make: Nothing to be done for 'all'.
+--- stderr
+--- exit 0

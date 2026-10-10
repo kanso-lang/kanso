@@ -1,0 +1,21 @@
+test_add = vec3 1.0 2.0 3.0 + vec3 4.0 5.0 6.0 == vec3 5.0 7.0 9.0
+
+test_cross = cross (vec3 1.0 0.0 0.0) (vec3 0.0 1.0 0.0) == vec3 0.0 0.0 1.0
+
+test_dot = dot (vec3 1.0 2.0 3.0) (vec3 4.0 5.0 6.0) == 32.0
+
+test_near_zero = near_zero? (vec3 0.000000001 0.0 0.0)
+
+test_not_near_zero = not near_zero? (vec3 0.001 0.0 0.0)
+
+test_reflect =
+  bounced = reflect (vec3 1.0 -1.0 0.0) (vec3 0.0 1.0 0.0)
+  bounced == vec3 1.0 1.0 0.0
+
+test_scale_both_sides = vec3 1.0 2.0 3.0 * 2.0 == 2.0 * vec3 1.0 2.0 3.0
+
+test_straight_through =
+  out = refract (vec3 0.0 -1.0 0.0) (vec3 0.0 1.0 0.0) 1.0
+  out == vec3 0.0 -1.0 0.0
+
+test_unit = unit (vec3 3.0 0.0 4.0) == vec3 0.6 0.0 0.8

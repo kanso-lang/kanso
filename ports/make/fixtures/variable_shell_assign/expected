@@ -1,0 +1,4 @@
+$ make 
+[hello world]
+--- stderr
+--- exit 0

@@ -1,0 +1,4 @@
+$ make 
+made by a rule from a variable
+--- stderr
+--- exit 0

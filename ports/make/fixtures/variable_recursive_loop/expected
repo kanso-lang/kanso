@@ -1,0 +1,4 @@
+$ make 
+--- stderr
+Makefile:1: *** Recursive variable 'a' references itself (eventually).  Stop.
+--- exit 2

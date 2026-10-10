@@ -1,0 +1,4 @@
+$ make 
+part-a part-b
+--- stderr
+--- exit 0

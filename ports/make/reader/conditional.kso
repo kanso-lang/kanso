@@ -1,0 +1,100 @@
+# ifeq, ifneq, ifdef, ifndef, else and endif. Each `if` pushes a frame and
+# `endif` pops it. A conditional inside a branch that does not count is not
+# evaluated at all, so a $(shell) in its test never runs.
+import "../expand"
+import "../report"
+import "../words"
+import "std/os"
+import "std/text"
+
+fn conditional r i next "endif" _
+  return report/fatal (here r i) "extraneous 'endif'" if r.conds == []
+  walk (with_conds r (popped r.conds)) next
+
+fn conditional r i next "else" rest
+  return report/fatal (here r i) "extraneous 'else'" if r.conds == []
+  f = top r.conds
+  word = words/first_word rest
+  return chained r i next f word (after_word rest word) if testing? word
+  live = f.outer and not f.taken
+  walk (with_conds r (push (popped r.conds) (frame live f.outer true))) next
+
+fn conditional r i next word rest
+  outer = live? r
+  dead = frame false false true
+  return walk (with_conds r (push r.conds dead)) next if not outer
+  enter = (ok -> walk (with_conds r (push r.conds (frame ok true ok))) next)
+  tested r i word rest .> enter
+
+fn testing? word
+  word == "ifeq" or word == "ifneq" or word == "ifdef" or word == "ifndef"
+
+# `else ifeq ...`: the new test is asked only if no branch has counted yet.
+fn chained r i next f word rest
+  rest_of = popped r.conds
+  skip = frame false f.outer true
+  return walk (with_conds r (push rest_of skip)) next if f.taken or not f.outer
+  enter = (ok -> walk (with_conds r (push rest_of (frame ok true ok))) next)
+  tested r i word rest .> enter
+
+fn popped conds
+  text/slice conds 1 (length conds - 1)
+
+fn tested r i "ifdef" rest
+  defined r i rest
+
+fn tested r i "ifndef" rest
+  defined r i rest .> (yes -> effect (not yes))
+
+fn tested r i "ifeq" rest
+  compared r i rest
+
+fn tested r i _ rest
+  compared r i rest .> (same -> effect (not same))
+
+# ifdef asks whether the variable has a value that is not empty, without
+# expanding it.
+fn defined r i rest
+  sc = expand/scope_of r.db (here r i)
+  asked = (name -> has_value r.db.vars[words/squeeze name] name)
+  expand/expand sc rest .> asked
+
+fn has_value none name
+  os/env name .> (v -> effect (v != none and v != ""))
+
+fn has_value v _
+  effect (v.value != "")
+
+# The two arguments of ifeq: `(a,b)`, or each quoted with " or '. In the
+# parenthesised form the blanks before the comma and after it are dropped,
+# and the others kept.
+fn compared r i rest
+  at = here r i
+  opener = text/slice rest 1 1
+  return parenthesised r at rest if opener == "("
+  return quoted r at rest opener if opener == "\"" or opener == "'"
+  report/fatal at "invalid syntax in conditional"
+
+fn parenthesised r at rest
+  close = expand/closing rest 2 "(" ")" 0
+  inner = text/slice rest 2 (close - 1)
+  comma = expand/top_level inner "," 1 0
+  bad = close == 0 or comma == 0
+  return report/fatal at "invalid syntax in conditional" if bad
+  left = words/trim_right (text/slice inner 1 (comma - 1))
+  right = words/trim_left (text/slice inner (comma + 1) (length inner))
+  equal r at left right
+
+fn quoted r at rest opener
+  shut = words/find rest opener 2
+  left = text/slice rest 2 (shut - 1)
+  after = words/trim_left (text/slice rest (shut + 1) (length rest))
+  second = text/slice after 1 1
+  ends = words/find after second 2
+  ok = shut > 0 and (second == "\"" or second == "'") and ends > 0
+  return report/fatal at "invalid syntax in conditional" if not ok
+  equal r at left (text/slice after 2 (ends - 1))
+
+fn equal r at left right
+  sc = expand/scope_of r.db at
+  expand/expand_each sc [left right] .> (vs -> effect (vs[1] == vs[2]))

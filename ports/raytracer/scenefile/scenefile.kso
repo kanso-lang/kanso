@@ -1,0 +1,161 @@
+# Scene files: a scene described in text, one directive per line, so a
+# render does not need a scene compiled into the program. The format is in
+# README.md. A line that cannot be read stops the parse with an err naming
+# the line.
+import "../tracer"
+import "../vec"
+import "std/list"
+import "std/text"
+
+# The camera settings a file may change, starting from the book's defaults.
+type camera_spec
+  aspect
+  defocus
+  focus
+  lookat
+  lookfrom
+  vfov
+  vup
+
+# What has been read so far, and the number of the line being read.
+type reading
+  camera
+  line
+  materials
+  objects
+
+fn camera_line (reading camera n materials objects) words
+  return fails n "camera needs a setting and its numbers" if length words < 3
+  rest = text/slice words 3 (length words)
+  updated = set_camera camera words[2] rest n
+  reading updated n materials objects
+
+fn comment? word
+  text/slice word 1 1 == "#"
+
+fn directive st "camera" words
+  camera_line st words
+
+fn directive st "material" words
+  material_line st words
+
+fn directive st "sphere" words
+  sphere_line st words
+
+fn directive st head _
+  fails st.line "unknown directive {head}"
+
+fn fails n reason
+  err "line {n}: {reason}"
+
+fn finish (reading camera _ _ objects)
+  camera_spec aspect defocus focus lookat lookfrom vfov vup = camera
+  v = tracer/new_view aspect defocus focus lookat lookfrom vfov vup
+  tracer/new_scene v objects
+
+fn material_line (reading camera n materials objects) words
+  return fails n "material needs a name and a kind" if length words < 3
+  rest = text/slice words 4 (length words)
+  made = material_of words[3] rest n
+  reading camera n (put materials words[2] made) objects
+
+fn material_of "dielectric" rest n
+  index = scalar rest n
+  tracer/new_dielectric index
+
+fn material_of "lambertian" rest n
+  albedo = triple rest n
+  tracer/new_lambertian albedo
+
+fn material_of "metal" rest n
+  return fails n "metal takes r g b and a fuzz" if length rest < 4
+  albedo = triple (text/slice rest 1 3) n
+  fuzz = scalar (text/slice rest 4 (length rest)) n
+  tracer/new_metal albedo fuzz
+
+fn material_of kind _ n
+  fails n "unknown material kind {kind}"
+
+fn next_line (reading camera n materials objects) source
+  words = list/to_list (list/reject (text/split source " ") (w -> w == ""))
+  read_line (reading camera (n + 1) materials objects) words
+
+fn number_of (err _) word n
+  fails n "{word} is not a number"
+
+fn number_of x _ _
+  x
+
+pub fn parse source
+  view = tracer/standard_view 0
+  start = camera_spec
+    view.aspect
+    view.defocus_angle
+    view.focus_dist
+    view.lookat
+    view.lookfrom
+    view.vfov
+    view.vup
+  read = list/fold (text/split source "\n") (reading start 0 {} []) next_line
+  finish read
+
+fn read_line st words
+  return st if length words < 1
+  return st if comment? words[1]
+  directive st words[1] words
+
+fn scalar rest n
+  return fails n "expected a number" if length rest < 1
+  return fails n "unexpected {rest[2]}" if 1 < length rest
+  number_of (text/to_float rest[1]) rest[1] n
+
+fn set_camera (camera_spec _ d f la lf vf vu) "aspect" rest n
+  return fails n "aspect takes a width and a height" if length rest < 2
+  wide = scalar (text/slice rest 1 1) n
+  high = scalar (text/slice rest 2 (length rest)) n
+  camera_spec (wide / high) d f la lf vf vu
+
+fn set_camera (camera_spec a _ f la lf vf vu) "defocus" rest n
+  angle = scalar rest n
+  camera_spec a angle f la lf vf vu
+
+fn set_camera (camera_spec a d _ la lf vf vu) "focus" rest n
+  distance = scalar rest n
+  camera_spec a d distance la lf vf vu
+
+fn set_camera (camera_spec a d f _ lf vf vu) "lookat" rest n
+  point = triple rest n
+  camera_spec a d f point lf vf vu
+
+fn set_camera (camera_spec a d f la _ vf vu) "lookfrom" rest n
+  point = triple rest n
+  camera_spec a d f la point vf vu
+
+fn set_camera (camera_spec a d f la lf _ vu) "vfov" rest n
+  degrees = scalar rest n
+  camera_spec a d f la lf degrees vu
+
+fn set_camera (camera_spec a d f la lf vf _) "vup" rest n
+  direction = triple rest n
+  camera_spec a d f la lf vf direction
+
+fn set_camera _ field _ n
+  fails n "unknown camera setting {field}"
+
+fn sphere_line (reading camera n materials objects) words
+  return fails n "sphere takes x y z, radius, material" if length words < 6
+  return fails n "unexpected {words[7]}" if 6 < length words
+  mat = materials[words[6]]
+  return fails n "no material called {words[6]}" if mat == none
+  center = triple (text/slice words 2 4) n
+  radius = scalar (text/slice words 5 5) n
+  made = tracer/new_sphere center mat radius
+  reading camera n materials (push objects made)
+
+fn triple rest n
+  return fails n "expected 3 numbers" if length rest < 3
+  return fails n "unexpected {rest[4]}" if 3 < length rest
+  x = number_of (text/to_float rest[1]) rest[1] n
+  y = number_of (text/to_float rest[2]) rest[2] n
+  z = number_of (text/to_float rest[3]) rest[3] n
+  vec/new x y z

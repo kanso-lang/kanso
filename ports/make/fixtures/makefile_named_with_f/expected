@@ -1,0 +1,4 @@
+$ make -f build.mk two
+two from build.mk
+--- stderr
+--- exit 0

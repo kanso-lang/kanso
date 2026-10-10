@@ -1,0 +1,15 @@
+$ make 
+subst=[src/a.o src/b.h c.o d]
+patsubst=[src/a.o src/b.h c.o d]
+strip=[a b]
+findstring=[b.h] []
+filter=[src/a.c src/b.h c.c] filter-out=[src/b.h d]
+sort=[a b c]
+word=[src/b.h] words=[4] wordlist=[src/b.h c.c]
+firstword=[src/a.c] lastword=[d]
+dir=[src/ src/ ./ ./] notdir=[a.c b.h c.c d]
+suffix=[.c .h .c] basename=[src/a src/b c d]
+addprefix=[lib/a lib/b] addsuffix=[a.x b.x]
+join=[a1 b2 c]
+--- stderr
+--- exit 0

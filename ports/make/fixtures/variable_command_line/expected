@@ -1,0 +1,4 @@
+$ make x=cmd y=cmd
+x=cmd y=forced z=cmd
+--- stderr
+--- exit 0

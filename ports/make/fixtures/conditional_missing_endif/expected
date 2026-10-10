@@ -1,0 +1,4 @@
+$ make 
+--- stderr
+Makefile:5: *** missing 'endif'.  Stop.
+--- exit 2

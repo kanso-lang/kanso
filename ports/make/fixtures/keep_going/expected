@@ -1,0 +1,10 @@
+$ make -k
+echo a; exit 3
+a
+echo c
+c
+--- stderr
+make: *** [Makefile:3: a] Error 3
+make: *** No rule to make target 'd', needed by 'b'.
+make: Target 'all' not remade because of errors.
+--- exit 2

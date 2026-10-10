@@ -1,0 +1,16 @@
+# Bug: a pub function is reported private when an imported module defines an
+# operator arm and a pub function of the same name.
+#
+# Module `vec` declares an operator arm (`-` on vec3) and `pub fn unit`.
+# Module `rng` imports `vec` and declares its own `pub fn unit`. Calling
+# `rng/unit` from here should print 42.
+#
+# What it does, on the interpreter and in `kanso check` alike:
+#   error[opacity]: `unit` is private to module `rng` — only pub names cross
+#   an import
+#
+# Rename vec's `-` arm to an ordinary function (say `twice`) and the program
+# prints 42, so the operator arm is what turns the lookup wrong.
+import "./rng"
+
+print "{rng/unit (rng/seeded 42)}"

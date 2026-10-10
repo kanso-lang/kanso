@@ -1,0 +1,114 @@
+# Running a target's recipe. GNU make expands every line of the recipe, with
+# the automatic variables in view, before it runs the first; then each line
+# goes to its own shell. A line's `@`, `-` and `+` prefixes say whether it is
+# echoed, whether its failure is ignored, and whether -n still runs it.
+import "../db"
+import "../expand"
+import "../report"
+import "../words"
+import "std/io"
+import "std/list"
+import "std/os"
+import "std/text"
+
+# One recipe line after expansion, its prefixes read off.
+type recipe_line
+  always
+  at
+  command
+  ignore
+  silent
+
+fn run_recipe rn t p stale
+  base = expand/scope_of rn.db report/nowhere
+  scope = expand/with_locals base (autos t p stale)
+  ats = list/to_list (list/map p.recipe (c -> c.at))
+  texts = list/to_list (list/map p.recipe (c -> c.text))
+  expanded_lines scope ats texts 1 []
+    .> (ls -> environment rn .> (env -> each_line rn t env ls 1))
+
+# Each line is expanded where it was written, so an error names its line.
+fn expanded_lines scope ats texts i acc
+  effect done .> (_ -> expanded_from scope ats texts i acc)
+
+fn expanded_from scope ats texts i acc
+  return effect acc if i < 1 or length texts < i
+  at = ats[i]
+  here = expand/scope_at scope at
+  grown = (s -> push acc (read_line at s))
+  more = (s -> expanded_lines scope ats texts (i + 1) (grown s))
+  expand/expand here texts[i] .> more
+
+fn autos t p stale
+  first = given p.prereqs[1]
+  m = put (put {} "@" t) "<" first
+  all = words/unwords (words/uniq p.prereqs)
+  m2 = put (put m "^" all) "+" (words/unwords p.prereqs)
+  m3 = put (put m2 "?" (words/unwords stale)) "*" p.stem
+  put m3 "|" (words/unwords (words/uniq p.order_only))
+
+fn given none
+  ""
+
+fn given s
+  s
+
+fn read_line at s
+  prefixed (words/trim_left s) at false false false
+
+fn prefixed s at silent ignore always
+  c = text/slice s 1 1
+  rest = words/trim_left (text/slice s 2 (length s))
+  return prefixed rest at true ignore always if c == "@"
+  return prefixed rest at silent true always if c == "-"
+  return prefixed rest at silent ignore true if c == "+"
+  recipe_line always at s ignore silent
+
+# The exported variables, expanded now, as NAME=value words for env(1):
+# std/os cannot give a child process an environment of its own.
+fn environment rn
+  names = db/exported_names rn.db
+  scope = expand/scope_of rn.db report/nowhere
+  refs = list/to_list (list/map names (n -> "{n}=$({n})"))
+  expand/expand_each scope refs
+
+fn each_line rn t env ls i
+  effect done .> (_ -> line_at rn t env ls i)
+
+fn line_at rn t env ls i
+  return effect rn if i < 1 or length ls < i
+  one_line rn t env ls[i] .> (next -> continue_lines next t env ls i)
+
+fn continue_lines rn t env ls i
+  return effect rn if rn.status[t] == broken
+  each_line rn t env ls (i + 1)
+
+fn one_line rn t env l
+  return effect rn if l.command == ""
+  shown = rn.opts.dry_run or not (l.silent or rn.opts.silent)
+  counted = with_commands rn (rn.commands + 1)
+  echo = if shown (io/write "{l.command}\n") (effect done)
+  return echo .> (_ -> effect counted) if rn.opts.dry_run and not l.always
+  echo .> (_ -> shell env l.command) .> (p -> finished counted t l p)
+
+fn shell env command
+  return os/run "/bin/sh" ["-c" command] if env == []
+  os/run "env" (text_concat env ["/bin/sh" "-c" command])
+
+# The child's output arrives whole when it exits: os/run captures both
+# streams rather than handing the child make's own.
+fn finished rn t l p
+  io/write p.stdout
+    .> (_ -> io/write_err p.stderr)
+    .> (_ -> exited rn t l p.status)
+
+fn exited rn _ _ 0
+  effect rn
+
+fn exited rn t l status
+  said = "[{report/where l.at}: {t}] Error {status}"
+  ignored = l.ignore or rn.opts.ignore
+  return report/complain "{said} (ignored)" .> (_ -> effect rn) if ignored
+  stop = report/complain "*** {said}" .> (_ -> os/exit 2)
+  return stop if not rn.opts.keep_going
+  report/complain "*** {said}" .> (_ -> effect (failing rn t))

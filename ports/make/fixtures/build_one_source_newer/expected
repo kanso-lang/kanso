@@ -1,0 +1,15 @@
+$ make 
+echo compile a.c to a.o
+compile a.c to a.o
+cat a.c > a.o
+link prog from a.o b.o
+cat a.o b.o > prog
+--- stderr
+--- exit 0
+== ./a.o
+A2
+
+== ./prog
+A2
+B
+

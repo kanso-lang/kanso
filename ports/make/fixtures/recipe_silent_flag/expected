@@ -1,0 +1,5 @@
+$ make -s
+x
+all
+--- stderr
+--- exit 0

@@ -1,0 +1,4 @@
+$ make here.txt
+make: Nothing to be done for 'here.txt'.
+--- stderr
+--- exit 0

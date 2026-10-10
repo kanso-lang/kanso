@@ -1,0 +1,12 @@
+# F6: vec3 is `pub type`, and still only module vec may build it or take it
+# apart positionally. `kanso check probes/f6_foreign_record` answers
+#   error[opacity]: `vec/vec3` is foreign — its structure does not cross ...
+# and with the destructuring line deleted,
+#   error[opacity]: `vec/vec3` is foreign — only `vec` builds a `vec3`; ...
+# Dot reads (`v.y`) and keyed reads (`{ x } = v`) are accepted.
+import "../../vec"
+
+v = vec/vec3 1.0 2.0 3.0
+vec/vec3 a b c = v
+{ x } = v
+print "{a} {b} {c} {x} {v.y}"

@@ -1,0 +1,6 @@
+$ make 
+[a.o b.o dir/c.o]
+[obj/a.o obj/b.o obj/dir/c.o]
+[a b dir/c]
+--- stderr
+--- exit 0

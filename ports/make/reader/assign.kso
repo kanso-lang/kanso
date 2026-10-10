@@ -1,0 +1,75 @@
+# Variable assignments, with GNU make's five operators. A variable set on the
+# command line stays as it was unless the makefile says `override`.
+import "../db"
+import "../expand"
+import "../words"
+import "std/os"
+
+fn assign r i name_text op value override
+  sc = expand/scope_of r.db (here r i)
+  named = (name -> assign_to r.db sc (words/squeeze name) op value override)
+  expand/expand sc name_text .> named
+
+fn assign_to d sc name op value override
+  existing = d.vars[name]
+  return effect d if commanded? existing and not override
+  set_by d sc name op value existing
+
+fn commanded? none
+  false
+
+fn commanded? v
+  db/from_command? v
+
+fn set_by d sc name "=" value _
+  effect (db/define_recursive d name false value sc.at)
+
+fn set_by d sc name ":=" value _
+  set = (v -> db/define_simple d name false v sc.at)
+  expand/expand sc value .> (v -> effect (set v))
+
+fn set_by d sc name "::=" value _
+  set = (v -> db/define_simple d name false v sc.at)
+  expand/expand sc value .> (v -> effect (set v))
+
+fn set_by d sc name "+=" value existing
+  appended d sc name value existing
+
+fn set_by d sc name "?=" value existing
+  defaulted d sc name value existing
+
+fn set_by d sc name "!=" value _
+  ran = (out -> effect (db/define_recursive d name false out sc.at))
+  expand/expand sc value .> expand/run_shell .> ran
+
+fn set_by d _ _ _ _ _
+  effect d
+
+# `+=` keeps the flavor it finds: a simple variable gets the expanded text,
+# a recursive one the text as written, and a new one is recursive.
+fn appended d sc name value none
+  effect (db/define_recursive d name false value sc.at)
+
+fn appended d sc name value old
+  more = (v -> spaced old.value v)
+  grown = (v -> effect (db/define_simple d name false (more v) sc.at))
+  return expand/expand sc value .> grown if db/simple? old
+  longer = spaced old.value value
+  effect (db/define_recursive d name false longer sc.at)
+
+fn spaced "" v
+  v
+
+fn spaced old v
+  "{old} {v}"
+
+# `?=` assigns only a variable that has no value anywhere, the environment
+# included.
+fn defaulted d sc name value none
+  os/env name .> (e -> effect (if (e == none) (fresh d sc name value) d))
+
+fn defaulted d _ _ _ _
+  effect d
+
+fn fresh d sc name value
+  db/define_recursive d name false value sc.at

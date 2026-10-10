@@ -1,0 +1,26 @@
+# Constructors for other modules. A record is built only by the module that
+# declares it, and a function may not share its type's name, so each type a
+# scene file can mention gets a `new_` function here.
+pub fn new_dielectric index
+  dielectric index
+
+pub fn new_lambertian albedo
+  lambertian albedo
+
+pub fn new_metal albedo fuzz
+  metal albedo fuzz
+
+pub fn new_scene v objects
+  scene v (group objects)
+
+pub fn new_sphere center mat radius
+  sphere center mat radius
+
+# Fields in the record's alphabetical order, as the record takes them.
+pub fn new_view aspect angle focus lookat lookfrom vfov vup
+  view aspect angle focus lookat lookfrom vfov vup
+
+# The camera chapters 4 to 11 use, for a scene file that sets nothing. A
+# function rather than a pub constant: see bugs/b07.
+pub fn standard_view _
+  default_view

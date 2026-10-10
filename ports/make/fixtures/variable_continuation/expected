@@ -1,0 +1,5 @@
+$ make 
+[a b c]
+one two
+--- stderr
+--- exit 0

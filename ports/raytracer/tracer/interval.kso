@@ -1,0 +1,19 @@
+# Parameter intervals along a ray: the original's `interval` class, reduced
+# to what book one uses.
+import "../fmath"
+
+# The fields are alphabetical, so `interval max min` takes the upper bound
+# first; `bounds lo hi` is the constructor the rest of the program reads.
+type interval
+  max
+  min
+
+fn bounds lo hi
+  interval hi lo
+
+# The interval a reflected or refracted ray is tested over. Starting just
+# above zero skips the surface the ray left from ("shadow acne").
+from_surface = bounds 0.001 fmath/infinity
+
+fn surrounds? (interval max min) x
+  min < x and x < max

@@ -1,0 +1,11 @@
+# Bug: a pattern naming a type that does not exist is accepted.
+#
+# `kanso check bugs/b04_undeclared_type_in_pattern/shapes` says ok, though
+# no type `circel` is declared anywhere (the intended name is `circle`). The
+# arm can never match. Expected: "no type is called `circel`", the message
+# the checker already gives for `s:circel`.
+pub type circle
+  r
+
+pub fn area (circel r)
+  r * r * 3

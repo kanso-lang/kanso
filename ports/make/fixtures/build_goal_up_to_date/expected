@@ -1,0 +1,4 @@
+$ make prog
+make: 'prog' is up to date.
+--- stderr
+--- exit 0

@@ -1,0 +1,195 @@
+# The database make builds while it reads: variables, explicit rules, pattern
+# rules, the phony set and the default goal. Only this module can build or
+# take apart its records, so every change another module wants to make is a
+# function here.
+import "../report"
+import "../words"
+import "std/list"
+
+# The two flavors of variable. A recursive one keeps its text and expands it
+# at every use; a simple one was expanded once, when it was assigned.
+pub type recursive
+
+pub type simple
+
+# Who set a variable. A command-line assignment outranks the makefile's
+# unless the makefile says `override`.
+pub type from_command
+
+# Set by make itself before it reads anything: MAKE and SHELL.
+pub type from_default
+
+pub type from_file
+
+# `at` is where the variable was last set, which is where make points when
+# expanding it goes wrong; a variable make or the command line set has none.
+pub type var
+  at
+  exported
+  flavor
+  origin
+  value
+
+# One line of a recipe and where it was written. (Not `step`: std/list
+# exports a `step`, and an import's type wins that name here.)
+pub type command
+  at
+  text
+
+# A target's explicit rule, gathered from every rule line that names it. A
+# static pattern rule leaves its stem here for $*.
+pub type rule
+  at
+  has_recipe
+  order_only
+  prereqs
+  recipe
+  stem
+
+pub type pattern_rule
+  at
+  order_only
+  prereqs
+  recipe
+  target
+
+pub type db
+  default_goal
+  patterns
+  phony
+  rules
+  vars
+
+pub empty = db none [] {} {} {}
+
+pub fn with_default (db _ patterns phony rules vars) goal
+  db goal patterns phony rules vars
+
+pub fn with_patterns (db goal _ phony rules vars) patterns
+  db goal patterns phony rules vars
+
+pub fn with_phony (db goal patterns _ rules vars) phony
+  db goal patterns phony rules vars
+
+pub fn with_rules (db goal patterns phony _ vars) rules
+  db goal patterns phony rules vars
+
+pub fn with_vars (db goal patterns phony rules _) vars
+  db goal patterns phony rules vars
+
+pub fn command_at at text
+  command at text
+
+pub fn simple? v
+  v.flavor == simple
+
+pub fn from_command? v
+  v.origin == from_command
+
+# Set a variable, keeping whether it was exported.
+pub fn define d name flavor on_line value at
+  origin = if on_line from_command from_file
+  exported = exported? d.vars[name]
+  with_vars d (put d.vars name (var at exported flavor origin value))
+
+pub fn define_default d name value
+  exported = exported? d.vars[name]
+  made = var report/nowhere exported simple from_default value
+  with_vars d (put d.vars name made)
+
+pub fn define_simple d name on_line value at
+  define d name simple on_line value at
+
+pub fn define_recursive d name on_line value at
+  define d name recursive on_line value at
+
+# `export NAME`: the variable goes into every recipe's environment. A name
+# with no value yet is exported empty, and keeps the mark when assigned.
+pub fn export d name
+  marked = exported_var d.vars[name]
+  with_vars d (put d.vars name marked)
+
+fn exported_var none
+  var report/nowhere true recursive from_file ""
+
+fn exported_var (var at _ flavor origin value)
+  var at true flavor origin value
+
+pub fn exported_names d
+  list/to_list (list/select (keys d.vars) (n -> exported? d.vars[n]))
+
+fn exported? none
+  false
+
+fn exported? v
+  v.exported
+
+pub fn phony? d target
+  d.phony[target] != none
+
+pub fn mark_phony d targets
+  with_phony d (list/fold targets d.phony (m t -> put m t true))
+
+# Make's default goal is the first target of the first rule that is neither
+# a pattern nor one of the dot-names, unless the dot-name holds a slash.
+pub fn offer_goal d target
+  return d if d.default_goal != none
+  dotted = words/starts_with? target "." and not words/contains? target "/"
+  if (dotted or words/pattern? target) d (with_default d target)
+
+# Whether any explicit rule names `t` as a prerequisite.
+pub fn mentioned? d t
+  rules = values d.rules
+  names = (r -> text_concat r.prereqs r.order_only)
+  list/any? rules (r -> list/any? (names r) (q -> q == t))
+
+pub fn rule_for d target
+  d.rules[target]
+
+pub fn add_pattern d target at prereqs order_only recipe
+  made = pattern_rule at order_only prereqs recipe target
+  with_patterns d (push d.patterns made)
+
+# Another rule line for a target that may already have rules. Prerequisites
+# gather; the rule with the recipe puts its own first, so its first is $<.
+# A second recipe replaces the first, with the two warnings GNU make gives.
+pub fn add_rule d target at has_recipe prereqs order_only recipe stem
+  fresh = rule at has_recipe order_only prereqs recipe stem
+  merged d target fresh d.rules[target]
+
+fn merged d target fresh none
+  effect (with_rules d (put d.rules target fresh))
+
+fn merged d target fresh old
+  both = old.has_recipe and fresh.has_recipe
+  joined = combined old fresh
+  noted = if both (overriding target old fresh) (effect done)
+  noted .> (_ -> effect (with_rules d (put d.rules target joined)))
+
+fn combined old fresh
+  order_only = text_concat old.order_only fresh.order_only
+  return later fresh old.prereqs order_only if fresh.has_recipe
+  stem = if (old.stem == "") fresh.stem old.stem
+  joined = text_concat old.prereqs fresh.prereqs
+  rule old.at old.has_recipe order_only joined old.recipe stem
+
+fn later fresh earlier order_only
+  prereqs = text_concat fresh.prereqs earlier
+  rule fresh.at true order_only prereqs fresh.recipe fresh.stem
+
+fn text_concat a b
+  list/fold b a (acc x -> push acc x)
+
+fn overriding target old fresh
+  named = "recipe for target '{target}'"
+  report/warn (recipe_at fresh) "warning: overriding {named}"
+    .> (_ -> report/warn (recipe_at old) "warning: ignoring old {named}")
+
+fn recipe_at r
+  first_step_at r.recipe[1] r.at
+
+fn first_step_at none at
+  at
+
+fn first_step_at s _
+  s.at

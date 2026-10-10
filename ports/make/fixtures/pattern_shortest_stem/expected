@@ -1,0 +1,5 @@
+$ make lib/x.o other.o
+specific for lib/x.o
+general for other.o
+--- stderr
+--- exit 0

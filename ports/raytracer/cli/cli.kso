@@ -1,0 +1,145 @@
+# The command line: a scene, named or read from a file, and optional flags.
+#
+#   raytracer <scene | file.scene> [--width N] [--samples N] [--depth N]
+#             [--seed N] [--grid N] [--shade materials|normals|hemisphere]
+import "../scenefile"
+import "../tracer"
+import "std/io"
+import "std/os"
+import "std/text"
+
+type bad_flag
+  text
+
+type options
+  depth
+  grid
+  samples
+  scene
+  seed
+  shade
+  width
+
+# A flag that needs a value and has none, or a value that is not a whole
+# number, ends the walk with a `bad_flag`.
+fn apply _ _ b:bad_flag
+  b
+
+fn apply opts flag n
+  set opts flag n
+
+fn continue b:bad_flag _ _
+  b
+
+fn continue opts args i
+  walk args i opts
+
+# The defaults are chapters 4 to 13's image: 400 wide, 100 samples, 50
+# bounces, the full material model. The cover's grid defaults to the
+# original's 11.
+fn defaults name
+  options 50 11 100 name 1 tracer/full_shading 400
+
+fn draw (err reason) path _
+  refuse "{path}: {reason}"
+
+fn draw built _ opts
+  { depth samples seed shade width } = opts
+  tracer/run_scene built width samples depth seed shade
+
+fn fail message
+  io/write_err "raytracer: {message}\n{usage}" .> (_ -> os/exit 2)
+
+# A scene argument ending in .scene is a file to read.
+fn file? name
+  n = length name
+  6 < n and text/slice name (n - 5) n == ".scene"
+
+fn from_file missing:os/file_not_found _
+  refuse "no file {missing.path}"
+
+fn from_file source opts
+  draw (scenefile/parse source) opts.scene opts
+
+fn launch b:bad_flag
+  fail b.text
+
+fn launch opts
+  return os/read_file opts.scene .> (s -> from_file s opts) if file? opts.scene
+  options depth grid samples scene seed shade width = opts
+  report (tracer/run scene width samples depth seed grid shade)
+
+pub fn main args
+  return fail "name a scene" if length args < 1
+  launch (walk args 2 (defaults args[1]))
+
+# A scene file that cannot be used: the command line itself was fine, so
+# there is no usage to repeat.
+fn refuse message
+  io/write_err "raytracer: {message}\n" .> (_ -> os/exit 2)
+
+fn read_count flag (err _)
+  bad_flag "{flag} takes a whole number"
+
+fn read_count flag n
+  return bad_flag "{flag} takes a number above zero" if n < 1
+  n
+
+fn report u:tracer/unknown_scene
+  fail "no scene called {u.name}"
+
+fn report plan
+  plan
+
+# Each flag rebuilds the whole record with one field changed.
+fn set (options _ gr sa sc se sh w) "--depth" n
+  options n gr sa sc se sh w
+
+fn set (options d _ sa sc se sh w) "--grid" n
+  options d n sa sc se sh w
+
+fn set (options d gr _ sc se sh w) "--samples" n
+  options d gr n sc se sh w
+
+fn set (options d gr sa sc _ sh w) "--seed" n
+  options d gr sa sc n sh w
+
+fn set (options d gr sa sc se _ w) "--shade" mode
+  options d gr sa sc se mode w
+
+fn set (options d gr sa sc se sh _) "--width" n
+  options d gr sa sc se sh n
+
+fn set _ flag _
+  bad_flag "unknown flag {flag}"
+
+fn shading _ raw none
+  bad_flag "no shading called {raw}"
+
+fn shading opts _ mode
+  set opts "--shade" mode
+
+fn step _ "--shade" none
+  bad_flag "--shade needs a value"
+
+fn step opts "--shade" raw
+  shading opts raw (tracer/shading_named raw)
+
+fn step _ flag none
+  bad_flag "{flag} needs a value"
+
+fn step opts flag raw
+  apply opts flag (read_count flag (text/to_int raw))
+
+usage =
+  flags = "[--width N] [--samples N] [--depth N] [--seed N] [--grid N]"
+  scenes = text/join tracer/scene_names " "
+  head = "usage: raytracer <scene | file.scene> {flags} [--shade S]"
+  shades = "materials normals hemisphere"
+  "{head}\nscenes: {scenes}\nshades: {shades}\n"
+
+fn walk args i opts
+  return opts if length args < i
+  flag = args[i]
+  value = args[i + 1]
+  continue (step opts flag value) args (i + 2)

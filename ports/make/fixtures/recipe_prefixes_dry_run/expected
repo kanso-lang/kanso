@@ -1,0 +1,10 @@
+$ make -n
+echo hi
+echo there
+false
+echo  plus
+plus
+echo "a \
+  b"
+--- stderr
+--- exit 0

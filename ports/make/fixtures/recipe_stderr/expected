@@ -1,0 +1,6 @@
+$ make 
+out
+second
+--- stderr
+err
+--- exit 0

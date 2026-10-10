@@ -1,0 +1,4 @@
+$ make nothing
+--- stderr
+make: *** No rule to make target 'nothing'.  Stop.
+--- exit 2

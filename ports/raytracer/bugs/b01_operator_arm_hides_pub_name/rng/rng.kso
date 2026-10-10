@@ -1,0 +1,13 @@
+import "../vec"
+
+pub type gen
+  state
+
+pub fn seeded n
+  gen n
+
+pub fn unit (gen state)
+  state
+
+pub fn use v
+  vec/unit v

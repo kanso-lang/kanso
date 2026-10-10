@@ -1,0 +1,5 @@
+$ make 
+--- stderr
+Makefile:1: nope.mk: No such file or directory
+make: *** No rule to make target 'nope.mk'.  Stop.
+--- exit 2

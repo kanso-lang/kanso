@@ -1,0 +1,218 @@
+# Bringing targets up to date: make's walk of the dependency graph. A target
+# is remade when it is phony, when it does not exist, or when one of its
+# normal prerequisites is newer; order-only prerequisites are made first but
+# never make it stale. Everything is done in order, one recipe line at a
+# time, the way GNU make runs without -j.
+import "../db"
+import "../report"
+import "../words"
+import "std/io"
+import "std/list"
+import "std/os"
+import "std/text"
+
+pub type options
+  always
+  dry_run
+  ignore
+  keep_going
+  silent
+
+# Where a target stands. `building` is the mark that catches a cycle.
+pub type broken
+
+pub type building
+
+pub type fresh
+
+pub type remade
+
+# Everything the walk carries: how many commands it has started (a goal that
+# started none gets a message), whether anything failed, and what each
+# target came to. It is not called `run`: a type of that name loses to
+# os/run, which std/os enrolls in this module.
+pub type progress
+  commands
+  db
+  failed
+  opts
+  recipes
+  status
+  temporary
+
+pub fn start d opts
+  progress 0 d false opts {} {} []
+
+fn with_commands (progress _ d failed opts recipes status temporary) n
+  progress n d failed opts recipes status temporary
+
+fn with_failed (progress commands d _ opts recipes status temporary) b
+  progress commands d b opts recipes status temporary
+
+fn with_recipes (progress commands d failed opts _ status temporary) m
+  progress commands d failed opts m status temporary
+
+fn with_status (progress commands d failed opts recipes _ temporary) m
+  progress commands d failed opts recipes m temporary
+
+fn with_temporary (progress commands d failed opts recipes status _) ts
+  progress commands d failed opts recipes status ts
+
+fn mark rn t state
+  with_status rn (put rn.status t state)
+
+fn failing rn t
+  with_failed (mark rn t broken) true
+
+pub fn outcome rn t
+  rn.status[t]
+
+# Bring one goal up to date and say so if nothing had to be done. Whether
+# the goal had a recipe was noted when it was planned; asking `plan_of`
+# again here, one bind later, crashed the native engines on a goal with no
+# makefile behind it.
+pub fn update_goal rn goal
+  before = rn.commands
+  make_target rn goal "" .> (after -> settled after goal before)
+
+fn settled rn goal before
+  goal_message rn goal before (had_recipe? rn.recipes[goal])
+
+fn had_recipe? none
+  false
+
+fn had_recipe? noted
+  noted
+
+fn goal_message rn goal before has_recipe
+  state = rn.status[goal]
+  return effect rn if state == none
+  return not_remade rn goal if state == broken
+  return effect rn if rn.commands != before
+  idle = "Nothing to be done for '{goal}'."
+  message = if has_recipe "'{goal}' is up to date." idle
+  report/say message .> (_ -> effect rn)
+
+fn not_remade rn goal
+  report/complain "Target '{goal}' not remade because of errors."
+    .> (_ -> effect rn)
+
+pub fn make_target rn t parent
+  visit rn t parent rn.status[t]
+
+fn visit rn t parent none
+  noted = (p -> with_recipes rn (put rn.recipes t p.has_recipe))
+  plan_of rn t .> (p -> planned (mark (noted p) t building) t parent p)
+
+fn visit rn t parent building
+  message = "Circular {parent} <- {t} dependency dropped."
+  report/complain message .> (_ -> effect rn)
+
+fn visit rn _ _ _
+  effect rn
+
+fn planned rn t parent p
+  return unruled rn t parent if not p.found
+  all = text_concat p.prereqs p.order_only
+  prereqs_of rn t all 1 .> (after -> decide after t parent p)
+
+fn unruled rn t parent
+  found = effect (mark rn t fresh)
+  os/exists t .> (here -> if here found (no_rule rn t parent))
+
+fn no_rule rn t parent
+  needed = if (parent == "") "" ", needed by '{parent}'"
+  message = "No rule to make target '{t}'{needed}"
+  return report/fatal report/nowhere message if not rn.opts.keep_going
+  report/complain "*** {message}." .> (_ -> effect (failing rn t))
+
+fn prereqs_of rn t ps i
+  return effect rn if i < 1 or length ps < i
+  make_target rn ps[i] t .> (after -> prereqs_of after t ps (i + 1))
+
+fn decide rn t parent p
+  all = text_concat p.prereqs p.order_only
+  bad = list/any? all (q -> rn.status[q] == broken)
+  return effect (failing rn t) if bad
+  stamps (push p.prereqs t) .> (times -> judged rn t parent p times)
+
+fn judged rn t parent p times
+  phony = db/phony? rn.db t
+  newest = list/select (words/uniq p.prereqs) (q -> newer? rn q t times)
+  stale = list/to_list newest
+  gone = times[t] == none
+  must = phony or gone or rn.opts.always or stale != []
+  return effect (mark rn t fresh) if not must
+  return effect (mark rn t remade) if not p.has_recipe
+  temporary = gone and intermediate? rn t parent
+  run_recipe rn t p stale .> (after -> settle after t temporary)
+
+fn settle rn t temporary
+  return effect rn if rn.status[t] == broken
+  made = mark rn t remade
+  kept = temporary and not rn.opts.dry_run
+  effect (if kept (with_temporary made (push made.temporary t)) made)
+
+# A file a chain of pattern rules made on the way to something else, and
+# that the makefile never names, is intermediate: make deletes it at the end.
+fn intermediate? rn t parent
+  named = rn.db.rules[t] != none or db/mentioned? rn.db t
+  parent != "" and not named
+
+# A prerequisite counts as newer when it is phony, when it is not there, when
+# it was remade in a dry run (which never touches it), or when its time is
+# later than the target's.
+fn newer? rn q t times
+  remade_dry = rn.opts.dry_run and rn.status[q] == remade
+  qt = times[q]
+  tt = times[t]
+  return true if db/phony? rn.db q or remade_dry or qt == none or tt == none
+  qt > tt
+
+fn text_concat a b
+  list/fold b a (acc x -> push acc x)
+
+# The modification times of the named files, in nanoseconds, keyed by name;
+# a file that is not there has no key. std/os cannot read a time, so this
+# asks stat(1), once for the whole list.
+pub fn stamps names
+  os/run "stat" (text_concat ["-c" "%.9Y %n" "--"] names)
+    .> (p -> effect (parsed_stamps (words/split_on p.stdout "\n")))
+
+fn parsed_stamps lines
+  list/fold lines {} stamp_line
+
+fn stamp_line acc line
+  space = words/find line " " 1
+  return acc if space == 0
+  digits = words/replace_all (text/slice line 1 (space - 1)) "." ""
+  name = text/slice line (space + 1) (length line)
+  stamped acc name (to_number digits)
+
+fn stamped acc _ none
+  acc
+
+fn stamped acc name n
+  put acc name n
+
+fn to_number s
+  number_or_none (text/to_int s)
+
+fn number_or_none (err _)
+  none
+
+fn number_or_none n
+  n
+
+pub fn options_from always dry_run ignore keep_going silent
+  options always dry_run ignore keep_going silent
+
+# GNU make's last act: delete the intermediate files it made, saying so.
+pub fn remove_temporary rn
+  files = rn.temporary
+  return effect done if files == []
+  line = io/write "rm {words/unwords files}\n"
+  said = if rn.opts.silent (effect done) line
+  said
+    .> (_ -> os/run "rm" (text_concat ["-f" "--"] files))
+    .> (_ -> effect done)

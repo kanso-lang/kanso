@@ -1,0 +1,43 @@
+test_find = find "a.b.c" "." 1 == 2
+
+test_find_from = find "a.b.c" "." 3 == 4
+
+test_find_missing = find "abc" "x" 1 == 0
+
+test_split_words = split_words "  a\tb \n c  " == ["a" "b" "c"]
+
+test_squeeze = squeeze "  a   b  " == "a b"
+
+test_replace_all = replace_all "a.c.c" ".c" ".o" == "a.o.o"
+
+test_stem = stem_of "%.c" "main.c" == "main"
+
+test_stem_prefix = stem_of "src/%.c" "src/x.c" == "x"
+
+test_stem_miss = stem_of "%.c" "main.h" == none
+
+test_stem_literal = stem_of "main.c" "main.c" == ""
+
+test_stem_too_short = stem_of "ab%ba" "aba" == none
+
+test_fill = fill "obj/%.o" "main" == "obj/main.o"
+
+test_patsubst = patsubst_word "%.c" "%.o" "x.c" == "x.o"
+
+test_patsubst_untouched = patsubst_word "%.c" "%.o" "x.h" == "x.h"
+
+test_dir_part = dir_part "src/a.c" == "src/"
+
+test_dir_part_none = dir_part "a.c" == "./"
+
+test_file_part = file_part "src/a.c" == "a.c"
+
+test_trim_left = trim_left " \t a b " == "a b "
+
+test_trim_right = trim_right " a b \t" == " a b"
+
+test_uniq = uniq ["a" "b" "a" "c" "b"] == ["a" "b" "c"]
+
+test_starts = starts_with? "include x" "include"
+
+test_ends = ends_with? "x.o" ".o"

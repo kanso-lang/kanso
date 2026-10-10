@@ -1,0 +1,32 @@
+# How each surface turns an incoming ray into an outgoing one. The original
+# has an abstract `material` class with a virtual `scatter`; here each
+# material is a record and `scatter` is one arm per record.
+import "../rng"
+import "../vec"
+
+# Clear glass, water, diamond: refracts where it can and reflects where it
+# must. The index is relative to the medium around it.
+type dielectric
+  refraction_index
+
+# A diffuse surface.
+type lambertian
+  albedo
+
+type scattered
+  attenuation
+  gen
+  ray
+
+fn scatter (dielectric _) r_in rec g
+  bounce rec g (vec/reflect r_in.direction rec.normal)
+
+fn scatter (lambertian albedo) _ rec g
+  d = rng/unit_vector g
+  aim = rec.normal + d.value
+  dir = if (vec/near_zero? aim) rec.normal aim
+  scattered albedo d.gen (ray dir rec.p)
+
+# Glass passes every colour through unchanged.
+fn bounce rec g dir
+  scattered (vec/new 1.0 1.0 1.0) g (ray dir rec.p)

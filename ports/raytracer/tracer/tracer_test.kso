@@ -1,0 +1,80 @@
+import "../rng"
+import "../vec"
+
+g0 = rng/seeded 1
+
+# A ray along -z from the origin and a unit sphere 3 units away.
+probe = ray (vec/new 0.0 0.0 -1.0) vec/zero
+
+unit_ball = sphere (vec/new 0.0 0.0 -3.0) (lambertian grey) 1.0
+
+# Gamma 2 takes 0.25 to 0.5, which is byte 128; anything at or past 1.0
+# clamps to 255 and anything at or below zero is 0.
+test_bytes_clamp_and_gamma =
+  line = pixel_line (vec/new 4.0 0.25 -1.0)
+  line == "255 128 0"
+
+test_camera_height_follows_aspect =
+  cam = camera_for default_view (quality 10 materials 1 64)
+  cam.height == 36
+
+# A pinhole camera's rays leave from the eye and reach the focus plane, 10
+# units down -z in the default view.
+test_pinhole_rays_reach_the_focus_plane =
+  cam = camera_for default_view (quality 10 materials 1 9)
+  d = get_ray cam 4 2 g0
+  r = d.value
+  r.origin == vec/zero and r.direction.z == -10.0
+
+# Leaving glass at a grazing angle cannot refract, so the ray reflects back
+# inside, and no random draw is spent deciding.
+test_glass_reflects_past_the_critical_angle =
+  down = vec/new 0.0 -1.0 0.0
+  inside = hit_record false (dielectric 1.5) down vec/zero 1.0
+  grazing = ray (vec/new 1.0 0.1 0.0) vec/zero
+  out = scatter (dielectric 1.5) grazing inside g0
+  out.ray.direction.y < 0.0 and out.gen == g0
+
+test_group_picks_the_nearest =
+  near = sphere (vec/new 0.0 0.0 -3.0) (lambertian grey) 1.0
+  far = sphere (vec/new 0.0 0.0 -10.0) (lambertian grey) 1.0
+  found = hit (group [far near]) probe from_surface
+  found.t == 2.0
+
+test_hit_from_outside_faces_front =
+  found = hit unit_ball probe from_surface
+  found.front_face and found.normal == vec/new 0.0 0.0 1.0
+
+test_hit_from_inside_faces_back =
+  inside = ray (vec/new 0.0 0.0 -1.0) (vec/new 0.0 0.0 -3.0)
+  found = hit unit_ball inside from_surface
+  not found.front_face and found.normal == vec/new 0.0 0.0 1.0
+
+test_hit_is_at_the_near_surface = (hit unit_ball probe from_surface).t == 2.0
+
+# A reflection that would leave below the surface is absorbed. Only a fuzzy
+# metal produces one from a real hit; a ray arriving from behind the normal
+# forces it here.
+test_metal_below_the_surface_absorbs =
+  rec = hit_record true (metal grey 0.0) (vec/new 0.0 1.0 0.0) vec/zero 1.0
+  skim = ray (vec/new 1.0 1.0 0.0) vec/zero
+  out = scatter (metal grey 0.0) skim rec g0
+  out == absorbed (rng/unit_vector g0).gen
+
+test_mirror_reflects_exactly =
+  rec = hit_record true (metal grey 0.0) (vec/new 0.0 1.0 0.0) vec/zero 1.0
+  down = ray (vec/new 1.0 -1.0 0.0) (vec/new -1.0 1.0 0.0)
+  out = scatter (metal grey 0.0) down rec g0
+  out.ray.direction == vec/unit (vec/new 1.0 1.0 0.0)
+
+test_miss_beside_the_sphere =
+  aside = ray (vec/new 0.0 0.0 -1.0) (vec/new 2.0 0.0 0.0)
+  hit unit_ball aside from_surface == miss
+
+test_same_seed_same_cover = cover g0 2 == cover g0 2
+
+test_sky_is_pale_at_the_horizon =
+  level = ray (vec/new 1.0 0.0 0.0) vec/zero
+  sky level == vec/new 0.75 0.85 1.0
+
+test_unknown_scene_is_named = scene_named "pot" g0 3 == unknown_scene "pot"

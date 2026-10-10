@@ -1,0 +1,7 @@
+$ make -k
+fine
+--- stderr
+make: *** No rule to make target 'gone', needed by 'all'.
+make: *** [Makefile:3: broken] Error 1
+make: Target 'all' not remade because of errors.
+--- exit 2

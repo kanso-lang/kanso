@@ -1,0 +1,12 @@
+$ make 
+echo hi
+hi
+there
+echo  plus
+plus
+echo "a \
+  b"
+a   b
+--- stderr
+make: [Makefile:4: all] Error 1 (ignored)
+--- exit 0

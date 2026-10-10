@@ -1,0 +1,7 @@
+$ make 
+echo one
+one
+two
+all
+--- stderr
+--- exit 0

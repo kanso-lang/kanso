@@ -1,0 +1,4 @@
+ifdef x
+
+all:
+	echo

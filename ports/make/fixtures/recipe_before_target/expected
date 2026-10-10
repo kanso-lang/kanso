@@ -1,0 +1,4 @@
+$ make 
+--- stderr
+Makefile:2: *** recipe commences before first target.  Stop.
+--- exit 2

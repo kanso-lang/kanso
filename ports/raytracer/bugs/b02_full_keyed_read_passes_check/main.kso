@@ -1,0 +1,21 @@
+# Bug: a keyed read that names every field of an imported record passes
+# `kanso check` and then fails when it runs.
+#
+# Outside the module that declares `pair`, the positional form
+# `pair/pair l r = p` is refused (error[opacity]: its structure does not
+# cross an import), so the keyed read is the only way left to take both
+# fields in one statement. `kanso check` says ok. Running it says:
+#   error[runtime]: a keyed read omits at least one field; reading every
+#   field is the positional form
+#
+# The same happens inside the declaring module, where `{ left right } = p`
+# also passes check and fails at run time. In cli/cli.kso a seven-field
+# keyed read of a local record instead produced "unknown name" errors for
+# every field it bound.
+#
+# Expected: either the read is allowed (it is the only one-statement read an
+# importer has) or `kanso check` refuses it with that message.
+import "./pair"
+
+{ left right } = pair/make 1 2
+print "{left} {right}"

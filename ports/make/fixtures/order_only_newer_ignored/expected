@@ -1,0 +1,4 @@
+$ make 
+make: 'build/x.o' is up to date.
+--- stderr
+--- exit 0

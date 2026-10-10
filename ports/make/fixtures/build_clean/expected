@@ -1,0 +1,6 @@
+$ make clean
+rm -f prog *.o
+--- stderr
+--- exit 0
+== ./a.o (removed)
+== ./prog (removed)

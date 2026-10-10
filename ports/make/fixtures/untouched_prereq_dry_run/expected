@@ -1,0 +1,5 @@
+$ make -n
+echo making b
+echo making a
+--- stderr
+--- exit 0

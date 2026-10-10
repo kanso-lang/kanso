@@ -1,0 +1,4 @@
+import "./loops"
+import "std/os"
+
+os/args .> (a -> print (loops/pick a[1]))

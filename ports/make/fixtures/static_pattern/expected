@@ -1,0 +1,7 @@
+$ make all foo.x
+a.o from a.c stem a
+b.o from b.c stem b
+foo.x has no prerequisites: []
+--- stderr
+Makefile:5: target 'foo.x' doesn't match the target pattern
+--- exit 0

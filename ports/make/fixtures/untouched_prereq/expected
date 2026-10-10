@@ -1,0 +1,4 @@
+$ make 
+making b
+--- stderr
+--- exit 0

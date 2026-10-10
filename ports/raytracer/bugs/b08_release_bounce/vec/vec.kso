@@ -1,0 +1,65 @@
+# Three-component vectors, used for points, directions and colours alike, as
+# the original does with its `point3` and `color` aliases.
+import "../fmath"
+import "std/math"
+
+pub type vec3
+  x
+  y
+  z
+
+pub fn * (vec3 ax ay az) (vec3 bx by bz)
+  vec3 (ax * bx) (ay * by) (az * bz)
+
+pub fn * (vec3 x y z) s
+  vec3 (x * s) (y * s) (z * s)
+
+pub fn + (vec3 ax ay az) (vec3 bx by bz)
+  vec3 (ax + bx) (ay + by) (az + bz)
+
+pub fn - (vec3 ax ay az) (vec3 bx by bz)
+  vec3 (ax - bx) (ay - by) (az - bz)
+
+pub fn / (vec3 x y z) s
+  vec3 (x / s) (y / s) (z / s)
+
+pub fn cross (vec3 ax ay az) (vec3 bx by bz)
+  vec3 (ay * bz - az * by) (az * bx - ax * bz) (ax * by - ay * bx)
+
+pub fn dot (vec3 ax ay az) (vec3 bx by bz)
+  ax * bx + ay * by + az * bz
+
+pub fn length_squared v
+  dot v v
+
+pub fn magnitude v
+  math/sqrt (length_squared v)
+
+# True when every component is within 1e-8 of zero; a scatter direction that
+# small would make a degenerate ray.
+pub fn near_zero? (vec3 x y z)
+  tiny = 0.00000001
+  fmath/abs x < tiny and fmath/abs y < tiny and fmath/abs z < tiny
+
+# The constructor other modules use: a record is built only by the module
+# that declares it, even when the type is pub.
+pub fn new x y z
+  vec3 x y z
+
+pub fn neg (vec3 x y z)
+  vec3 (0.0 - x) (0.0 - y) (0.0 - z)
+
+pub fn reflect v n
+  v - n * (2.0 * dot v n)
+
+# Snell's law, split into the parts perpendicular and parallel to the normal.
+pub fn refract uv n ratio
+  cos_theta = fmath/min_of (dot (neg uv) n) 1.0
+  perp = (uv + n * cos_theta) * ratio
+  parallel = n * (0.0 - math/sqrt (fmath/abs (1.0 - length_squared perp)))
+  perp + parallel
+
+pub fn unit v
+  v / magnitude v
+
+pub zero = vec3 0.0 0.0 0.0

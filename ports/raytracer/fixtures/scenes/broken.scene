@@ -1,0 +1,4 @@
+# The third directive has a word where its radius belongs.
+material m lambertian 0.5 0.5 0.5
+sphere 0 0 -1 0.5 m
+sphere 0 0 -2 big m

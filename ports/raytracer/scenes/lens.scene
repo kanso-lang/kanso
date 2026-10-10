@@ -1,0 +1,21 @@
+# Five spheres in a row receding from the camera, focused on the middle
+# one through a wide aperture, so the near and far ones blur.
+camera aspect 2 1
+camera lookfrom 3 1.5 4
+camera lookat 0 0.5 -2
+camera vfov 35
+camera defocus 4
+camera focus 5.9
+
+material floor lambertian 0.4 0.45 0.5
+material red   lambertian 0.7 0.15 0.1
+material clear dielectric 1.33
+material steel metal 0.75 0.75 0.8 0.05
+material brass metal 0.7 0.55 0.25 0.4
+
+sphere 0 -1000 0 1000 floor
+sphere 0 0.5  1.0 0.5 red
+sphere 0 0.5 -1.0 0.5 clear
+sphere 0 0.5 -3.0 0.5 steel
+sphere 0 0.5 -5.0 0.5 brass
+sphere 0 0.5 -7.0 0.5 red

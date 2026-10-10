@@ -1,0 +1,4 @@
+$ make 
+lowercase makefile wins
+--- stderr
+--- exit 0

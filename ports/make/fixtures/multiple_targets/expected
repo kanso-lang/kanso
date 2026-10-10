@@ -1,0 +1,9 @@
+$ make a b c
+x
+a
+b2
+c
+--- stderr
+Makefile:4: warning: overriding recipe for target 'b'
+Makefile:2: warning: ignoring old recipe for target 'b'
+--- exit 0

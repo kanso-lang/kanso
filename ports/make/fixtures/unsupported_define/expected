@@ -1,0 +1,4 @@
+$ make 
+--- stderr
+Makefile:1: *** 'define' is not supported by this port of make.  Stop.
+--- exit 2

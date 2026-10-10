@@ -1,0 +1,4 @@
+$ make 
+first
+--- stderr
+--- exit 0

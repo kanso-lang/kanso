@@ -1,0 +1,7 @@
+$ make -k all other
+lib
+other
+--- stderr
+make: *** [Makefile:3: lib] Error 1
+make: Target 'all' not remade because of errors.
+--- exit 2

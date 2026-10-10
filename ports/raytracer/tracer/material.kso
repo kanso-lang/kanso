@@ -1,0 +1,66 @@
+# How each surface turns an incoming ray into an outgoing one. The original
+# has an abstract `material` class with a virtual `scatter`; here each
+# material is a record and `scatter` is one arm per record.
+import "../fmath"
+import "../rng"
+import "../vec"
+import "std/math"
+
+# The ray was absorbed; only the generator moves on.
+type absorbed
+  gen
+
+# Clear glass, water, diamond: refracts where it can and reflects where it
+# must. The index is relative to the medium around it.
+type dielectric
+  refraction_index
+
+# A diffuse surface.
+type lambertian
+  albedo
+
+type metal
+  albedo
+  fuzz
+
+type scattered
+  attenuation
+  gen
+  ray
+
+type material dielectric lambertian metal
+
+fn scatter (dielectric index) r_in rec g
+  ri = if rec.front_face (1.0 / index) index
+  dir = vec/unit r_in.direction
+  cos_theta = fmath/min_of (vec/dot (vec/neg dir) rec.normal) 1.0
+  sin_theta = math/sqrt (1.0 - cos_theta * cos_theta)
+  return bounce rec g (vec/reflect dir rec.normal) if 1.0 < ri * sin_theta
+  d = rng/double g
+  mirror = d.value < reflectance cos_theta ri
+  out = if mirror (vec/reflect dir rec.normal) (vec/refract dir rec.normal ri)
+  bounce rec d.gen out
+
+fn scatter (lambertian albedo) _ rec g
+  d = rng/unit_vector g
+  aim = rec.normal + d.value
+  dir = if (vec/near_zero? aim) rec.normal aim
+  scattered albedo d.gen (ray dir rec.p)
+
+fn scatter (metal albedo fuzz) r_in rec g
+  d = rng/unit_vector g
+  reflected = vec/unit (vec/reflect r_in.direction rec.normal)
+  dir = reflected + d.value * fuzz
+  out = scattered albedo d.gen (ray dir rec.p)
+  if (0.0 < vec/dot dir rec.normal) out (absorbed d.gen)
+
+# Glass passes every colour through unchanged.
+fn bounce rec g dir
+  scattered (vec/new 1.0 1.0 1.0) g (ray dir rec.p)
+
+# Schlick's approximation of how much light glass reflects at an angle.
+fn reflectance cosine ri
+  r0 = (1.0 - ri) / (1.0 + ri)
+  r0sq = r0 * r0
+  k = 1.0 - cosine
+  r0sq + (1.0 - r0sq) * k * k * k * k * k

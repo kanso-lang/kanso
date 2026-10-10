@@ -1,0 +1,7 @@
+$ make 
+c
+b
+a
+--- stderr
+make: Circular c <- a dependency dropped.
+--- exit 0

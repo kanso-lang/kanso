@@ -1,0 +1,6 @@
+$ make 
+second p / p r s q
+--- stderr
+Makefile:5: warning: overriding recipe for target 'all'
+Makefile:3: warning: ignoring old recipe for target 'all'
+--- exit 0

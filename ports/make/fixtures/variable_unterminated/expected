@@ -1,0 +1,4 @@
+$ make 
+--- stderr
+Makefile:1: *** unterminated variable reference.  Stop.
+--- exit 2

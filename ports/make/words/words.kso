@@ -1,0 +1,147 @@
+# Text helpers make needs and std/text does not have: whitespace-separated
+# words, prefix and suffix tests, substring search and replacement, and the
+# `%` patterns that pattern rules, static pattern rules and $(patsubst) share.
+import "std/list"
+import "std/text"
+
+# What uniq has gathered: the words in order, and a mark for each.
+type seen
+  kept
+  marks
+
+# The first position of `sub` in `s` at or after `from`, or 0 when it does
+# not occur there. The split does the scanning.
+pub fn find s sub from
+  rest = text/slice s from (length s)
+  pieces = split_on rest sub
+  if (length pieces < 2) 0 (from + length pieces[1])
+
+pub fn contains? s sub
+  length (split_on s sub) > 1
+
+pub fn starts_with? s prefix
+  length prefix <= length s and text/slice s 1 (length prefix) == prefix
+
+pub fn ends_with? s suffix
+  n = length s
+  m = length suffix
+  m <= n and text/slice s (n - m + 1) n == suffix
+
+# text/split with an empty separator answers an err, so every call whose
+# separator is a name rather than a literal can be an err as far as the
+# checker knows, even past an arm that has already taken "". The callers here
+# never pass an empty separator; this is the one place that says so.
+pub fn split_on s sep
+  listed (text/split s sep)
+
+fn listed (err _)
+  []
+
+fn listed pieces
+  pieces
+
+# Every occurrence of `from` replaced by `to`. GNU make's $(subst) with an
+# empty search string appends the replacement once, at the end.
+pub fn replace_all s "" to
+  "{s}{to}"
+
+pub fn replace_all s from to
+  text/join (split_on s from) to
+
+# Tabs and newlines count as blanks wherever make splits a list of words.
+pub fn split_words s
+  flat = replace_all (replace_all s "\t" " ") "\n" " "
+  list/to_list (list/reject (split_on flat " ") (w -> w == ""))
+
+# A word list back to the text make would print for it.
+pub fn unwords ws
+  text/join ws " "
+
+# Strip leading and trailing blanks and collapse runs inside to one space.
+pub fn squeeze s
+  unwords (split_words s)
+
+pub fn trim_left s
+  from_left s 1
+
+fn from_left s at
+  return "" if at > length s
+  rest = text/slice s at (length s)
+  if (blank? (text/slice s at at)) (from_left s (at + 1)) rest
+
+pub fn trim_right s
+  from_right s (length s)
+
+fn from_right s at
+  return "" if at < 1
+  if (blank? (text/slice s at at)) (from_right s (at - 1)) (text/slice s 1 at)
+
+pub fn blank? c
+  c == " " or c == "\t"
+
+pub fn first_word s
+  first_of (split_words s)
+
+fn first_of ws
+  if (length ws == 0) "" ws[1]
+
+# A word list with each word kept once, at its first position; make keeps a
+# target's prerequisites this way for $^.
+pub fn uniq ws
+  (list/fold ws (seen [] {}) remember).kept
+
+fn remember (seen kept marks) w
+  return seen kept marks if marks[w] != none
+  seen (push kept w) (put marks w true)
+
+# What `%` matched when `word` fits `pattern`, or none. A pattern with no
+# `%` matches only itself, and its stem is empty.
+pub fn stem_of pattern word
+  at = find pattern "%" 1
+  return literal_stem pattern word if at == 0
+  prefix = text/slice pattern 1 (at - 1)
+  suffix = text/slice pattern (at + 1) (length pattern)
+  fits = length prefix + length suffix <= length word
+  ok = fits and starts_with? word prefix and ends_with? word suffix
+  if ok (text/slice word (length prefix + 1) (length word - length suffix)) none
+
+fn literal_stem pattern word
+  if (pattern == word) "" none
+
+# The first `%` of `pattern` replaced by `stem`.
+pub fn fill pattern stem
+  at = find pattern "%" 1
+  return pattern if at == 0
+  before = text/slice pattern 1 (at - 1)
+  "{before}{stem}{text/slice pattern (at + 1) (length pattern)}"
+
+pub fn pattern? s
+  contains? s "%"
+
+# $(patsubst pattern,replacement,word) for one word.
+pub fn patsubst_word pattern replacement word
+  answer (stem_of pattern word) replacement word
+
+fn answer none _ word
+  word
+
+fn answer stem replacement _
+  fill replacement stem
+
+# A file name's directory part, with its slash, the way $(dir) and $(@D)
+# need it; "./" when there is none.
+pub fn dir_part w
+  at = find_last w "/"
+  if (at == 0) "./" (text/slice w 1 at)
+
+pub fn file_part w
+  at = find_last w "/"
+  text/slice w (at + 1) (length w)
+
+# The last position of the one-character string `c` in `s`, or 0.
+pub fn find_last s c
+  back s c (length s)
+
+fn back s c i
+  return 0 if i < 1
+  if (text/slice s i i == c) i (back s c (i - 1))

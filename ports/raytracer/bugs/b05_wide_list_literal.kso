@@ -1,0 +1,16 @@
+# Bug: a list literal too wide for one line cannot be written at all.
+#
+# Written on one line, this list is 102 characters and the compiler refuses
+# it as wider than 80. Written one element per line, as below, `kanso play`
+# answers:
+#   error[syntax]: expected an expression
+#     --> b05_wide_list_literal.kso:14:22
+#
+# The same layout with a list that fits on one line is refused as "needless
+# continuation: this statement fits on one line", which says the layout is
+# the intended way to wrap a list. Expected: this file prints 2.
+xs = [
+  "the first sphere, at the origin, which is long enough to need wrapping"
+  "the second sphere"
+]
+print "{length xs}"

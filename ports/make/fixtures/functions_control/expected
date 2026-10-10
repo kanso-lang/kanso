@@ -1,0 +1,8 @@
+$ make 
+foreach=[a/x b/x c/x]
+call=[left-right] [only-]
+if=[yes] [no] []
+or=[second] and=[c] []
+value=[$(dirs)] origin=[file] [undefined] [default]
+--- stderr
+--- exit 0

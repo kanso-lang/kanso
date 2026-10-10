@@ -1,0 +1,14 @@
+$ make -z
+--- stderr
+make: invalid option -- 'z'
+Usage: make [options] [target] ...
+Options:
+  -B, --always-make           Unconditionally make all targets.
+  -f FILE, --file=FILE, --makefile=FILE
+                              Read FILE as a makefile.
+  -i, --ignore-errors         Ignore errors from recipes.
+  -k, --keep-going            Keep going when some targets can't be made.
+  -n, --just-print, --dry-run, --recon
+                              Don't actually run any recipe; just print them.
+  -s, --silent, --quiet       Don't echo recipes.
+--- exit 2

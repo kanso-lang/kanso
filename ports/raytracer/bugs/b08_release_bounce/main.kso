@@ -1,0 +1,24 @@
+# Bug: the release build fails where the interpreter and the dev build
+# succeed. This is the ray tracer cut down by deleting declarations while
+# the failure held; it would not reduce further by whole declarations, and
+# a 90-line model of the same shape did not fail.
+#
+#   kanso run main.kso --interp -- x        prints a 16x9 PPM, exit 0
+#   kanso build main.kso && ./main x        the same bytes, exit 0
+#   kanso build main.kso --release && ./main x
+#     prints a few rows, then
+#     error[runtime]: no overload of `-` matches these arguments
+#
+# What the failure needs, each found by removing it and watching the
+# release build start working:
+#   - `surface hemisphere` in tracer/render.kso, an arm that never runs for
+#     the argument "x", whose ray takes its direction straight from a
+#     generator record: `ray d.value rec.p`. Writing `d.value + vec/zero`
+#     there makes the release build correct; `d.value * 1.0` does not.
+#   - the mode reaching `tracer/run` through cli/cli.kso's `pick`, so that
+#     it can be either marker. Passing `tracer/full_shading` straight from
+#     here makes it correct.
+import "./cli"
+import "std/os"
+
+os/args .> cli/main

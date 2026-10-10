@@ -1,0 +1,8 @@
+$ make 
+echo G=generated > gen.mk
+all generated
+--- stderr
+--- exit 0
+== ./gen.mk
+G=generated
+

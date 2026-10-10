@@ -1,0 +1,10 @@
+$ make -i
+echo a; exit 3
+a
+echo after
+after
+echo b
+b
+--- stderr
+make: [Makefile:3: a] Error 3 (ignored)
+--- exit 0

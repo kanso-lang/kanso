@@ -1,0 +1,4 @@
+$ make clean
+make: 'clean' is up to date.
+--- stderr
+--- exit 0

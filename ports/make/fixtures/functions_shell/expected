@@ -1,0 +1,7 @@
+$ make 
+shell=[x y]
+[out]
+in a recipe
+--- stderr
+to-stderr
+--- exit 0

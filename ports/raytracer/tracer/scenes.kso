@@ -1,0 +1,155 @@
+# The scenes the book builds, chapter by chapter. Each takes the generator,
+# because the last one places its small spheres at random, and hands it back
+# for the render to continue from.
+import "../rng"
+import "../vec"
+
+type scene
+  view
+  world
+
+pub type unknown_scene
+  name
+
+# Chapter 14, the cover: a ground plane, three large spheres, and a grid of
+# small spheres with random materials. The original's grid runs from -11 to
+# 10 on each axis; `grid` sets that half-width, so a test image can carry a
+# few dozen spheres instead of nearly five hundred.
+fn cover g grid
+  floor_ball = sphere (vec/new 0.0 -1000.0 0.0) (lambertian grey) 1000.0
+  smalls = scatter_spheres (0 - grid) (0 - grid) grid [floor_ball] g
+  glass_ball = sphere (vec/new 0.0 1.0 0.0) (dielectric 1.5) 1.0
+  matte_ball = sphere (vec/new -4.0 1.0 0.0) (lambertian brown) 1.0
+  steel_ball = sphere (vec/new 4.0 1.0 0.0) (metal steel 0.0) 1.0
+  balls = smalls.value . push glass_ball . push matte_ball . push steel_ball
+  eye = vec/new 13.0 2.0 3.0
+  v = view (16.0 / 9.0) 0.6 10.0 vec/zero eye 20.0 up
+  rng/paired smalls.gen (scene v (group balls))
+
+# Chapter 13: the camera from chapter 12 with a lens of 10 degrees, focused
+# on the centre sphere 3.4 units away.
+fn defocus g
+  eye = vec/new -2.0 2.0 1.0
+  v = view (16.0 / 9.0) 10.0 3.4 (vec/new 0.0 0.0 -1.0) eye 20.0 up
+  rng/paired g (scene v (group three_materials))
+
+# Chapter 10: a diffuse sphere sitting on a diffuse ground.
+fn diffuse g
+  ground = sphere (vec/new 0.0 -100.5 -1.0) (lambertian grey) 100.0
+  ball = sphere (vec/new 0.0 0.0 -1.0) (lambertian grey) 0.5
+  rng/paired g (scene default_view (group [ground ball]))
+
+# Chapters 4 to 11 look down -z from the origin through a 90 degree lens.
+default_view = view
+  (16.0 / 9.0)              # aspect
+  0.0                       # defocus_angle
+  10.0                      # focus_dist
+  (vec/new 0.0 0.0 -1.0)    # lookat
+  vec/zero                  # lookfrom
+  90.0                      # vfov
+  up                        # vup
+
+fn glass g
+  rng/paired g (scene default_view (group three_materials))
+
+# Chapter 10: matte in the middle, fuzzy and sharp metal either side.
+fn metals g
+  ground = sphere (vec/new 0.0 -100.5 -1.0) (lambertian yellow) 100.0
+  center = sphere (vec/new 0.0 0.0 -1.2) (lambertian navy) 0.5
+  left = sphere (vec/new -1.0 0.0 -1.0) (metal silver 0.3) 0.5
+  right = sphere (vec/new 1.0 0.0 -1.0) (metal gold 1.0) 0.5
+  rng/paired g (scene default_view (group [ground center left right]))
+
+# The scene a name on the command line asks for, or `unknown_scene`.
+pub fn scene_named "cover" g grid
+  cover g grid
+
+pub fn scene_named "defocus" g _
+  defocus g
+
+pub fn scene_named "diffuse" g _
+  diffuse g
+
+pub fn scene_named "glass" g _
+  glass g
+
+pub fn scene_named "metal" g _
+  metals g
+
+pub fn scene_named "sky" g _
+  rng/paired g (scene default_view (group []))
+
+pub fn scene_named "wide" g _
+  wide g
+
+pub fn scene_named name _ _
+  unknown_scene name
+
+pub scene_names = ["cover" "defocus" "diffuse" "glass" "metal" "sky" "wide"]
+
+grey = vec/new 0.5 0.5 0.5
+
+# One small sphere of the cover's grid, its material chosen by `choose`:
+# 80% diffuse, 15% metal, 5% glass.
+fn small_sphere choose center g
+  return small_diffuse center g if choose < 0.8
+  return small_metal center g if choose < 0.95
+  rng/paired g (sphere center (dielectric 1.5) 0.2)
+
+fn small_diffuse center g
+  a = rng/vector g 0.0 1.0
+  b = rng/vector a.gen 0.0 1.0
+  rng/paired b.gen (sphere center (lambertian (a.value * b.value)) 0.2)
+
+fn small_metal center g
+  albedo = rng/vector g 0.5 1.0
+  fuzz = rng/between albedo.gen 0.0 0.5
+  shiny = metal albedo.value fuzz.value
+  rng/paired fuzz.gen (sphere center shiny 0.2)
+
+# Walks the grid a row at a time. A sphere too close to the large metal one
+# is skipped, but its three draws are still spent, as in the original.
+fn scatter_spheres a b grid placed g
+  return rng/paired g placed if a == grid
+  return scatter_spheres (a + 1) (0 - grid) grid placed g if b == grid
+  choose = rng/double g
+  dx = rng/double choose.gen
+  dz = rng/double dx.gen
+  center = vec/new (a + 0.9 * dx.value) 0.2 (b + 0.9 * dz.value)
+  clear = 0.9 < vec/magnitude (center - vec/new 4.0 0.2 0.0)
+  if clear
+    s = small_sphere choose.value center dz.gen
+    scatter_spheres a (b + 1) grid (push placed s.value) s.gen
+  else
+    scatter_spheres a (b + 1) grid placed dz.gen
+
+# Chapter 11: a matte sphere, a glass sphere with an air bubble inside it,
+# and a gold metal one.
+three_materials =
+  ground = sphere (vec/new 0.0 -100.5 -1.0) (lambertian yellow) 100.0
+  center = sphere (vec/new 0.0 0.0 -1.2) (lambertian navy) 0.5
+  left = sphere (vec/new -1.0 0.0 -1.0) (dielectric 1.5) 0.5
+  bubble = sphere (vec/new -1.0 0.0 -1.0) (dielectric (1.0 / 1.5)) 0.4
+  right = sphere (vec/new 1.0 0.0 -1.0) (metal gold 1.0) 0.5
+  [ground center left bubble right]
+
+silver = vec/new 0.8 0.8 0.8
+
+up = vec/new 0.0 1.0 0.0
+
+# Chapter 12: the chapter 11 spheres seen from up and to the left, through a
+# 20 degree lens.
+fn wide g
+  eye = vec/new -2.0 2.0 1.0
+  v = view (16.0 / 9.0) 0.0 3.4 (vec/new 0.0 0.0 -1.0) eye 20.0 up
+  rng/paired g (scene v (group three_materials))
+
+brown = vec/new 0.4 0.2 0.1
+
+gold = vec/new 0.8 0.6 0.2
+
+navy = vec/new 0.1 0.2 0.5
+
+steel = vec/new 0.7 0.6 0.5
+
+yellow = vec/new 0.8 0.8 0.0

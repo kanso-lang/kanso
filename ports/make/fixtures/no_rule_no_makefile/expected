@@ -1,0 +1,4 @@
+$ make 
+--- stderr
+make: *** No targets specified and no makefile found.  Stop.
+--- exit 2

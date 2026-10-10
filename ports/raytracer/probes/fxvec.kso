@@ -1,0 +1,21 @@
+import "std/math"
+
+type v3
+  x
+  y
+  z
+
+# A float in [-1, 1) from the effect generator, which only yields ints.
+fn coord _
+  math/random 2000000 .> (n -> effect (n / 1000000.0 - 1.0))
+
+fn on_sphere x y z
+  lensq = x * x + y * y + z * z
+  ok = 0.0000000001 < lensq and lensq <= 1.0
+  len = math/sqrt lensq
+  if ok (effect (v3 (x / len) (y / len) (z / len))) (unit_vector 0)
+
+fn unit_vector _
+  coord 0 .> (x -> coord 0 .> (y -> coord 0 .> (z -> on_sphere x y z)))
+
+unit_vector 0 .> (v -> print "{v}")

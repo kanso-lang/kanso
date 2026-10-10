@@ -1,0 +1,7 @@
+# A ray is an origin and a direction; `at` walks along it.
+type ray
+  direction
+  origin
+
+fn at (ray direction origin) t
+  origin + direction * t

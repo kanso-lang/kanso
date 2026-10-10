@@ -1,0 +1,16 @@
+# Bug: a pub constant cannot use the indented-argument form that a private
+# constant can.
+#
+# As written, `kanso check bugs/b07_pub_constant_indented_args` answers
+#   error[formatting]: an inline constant has no indented block
+#     --> .../m/m.kso:14:3
+# Delete `pub` (and reach the value through a pub function instead) and the
+# same lines are accepted; examples/indented_args.kso uses this form for a
+# private constant. Expected: `pub` changes visibility and nothing else.
+fn brochure name price blurb
+  "{name} — {price} yen. {blurb}"
+
+pub card = brochure
+  "the long-name matcha parfait of the west garden annex"
+  1200
+  "a dessert whose description would never have fit inline"

@@ -1,0 +1,7 @@
+$ make out/prog.x
+mkdir -p out
+@=out/prog.x <=b.in ^=b.in a.in +=b.in a.in b.in
+?=b.in a.in |=out *=
+D=out F=prog.x <D=. ^F=b.in a.in
+--- stderr
+--- exit 0

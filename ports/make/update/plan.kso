@@ -1,0 +1,114 @@
+# Which rule makes a target. An explicit rule with a recipe wins, and so
+# does any rule for a phony target; otherwise make looks for a pattern rule
+# whose prerequisites exist or can be made, preferring the shortest stem.
+# GNU make's built-in rules are not here: this make runs as `make -r`.
+import "../db"
+import "../words"
+import "std/list"
+import "std/os"
+
+pub type plan
+  found
+  has_recipe
+  order_only
+  prereqs
+  recipe
+  stem
+
+# A pattern rule fitted to one target.
+type candidate
+  order_only
+  prereqs
+  recipe
+  stem
+
+pub fn plan_of rn t
+  explicit_plan rn t rn.db.rules[t]
+
+fn explicit_plan rn t none
+  implicit rn t [] [] false
+
+fn explicit_plan rn t r
+  whole = plan true r.has_recipe r.order_only r.prereqs r.recipe r.stem
+  return effect whole if r.has_recipe or db/phony? rn.db t
+  implicit rn t r.prereqs r.order_only true
+
+fn implicit rn t prereqs order_only had_rule
+  choices = fitted rn.db t
+  bare = plan had_rule false order_only prereqs [] ""
+  pick = (c -> effect (chosen c prereqs order_only bare))
+  first_viable rn choices 1 .> pick
+
+fn chosen none _ _ bare
+  bare
+
+fn chosen c prereqs order_only _
+  joined = text_concat c.prereqs prereqs
+  ordered = text_concat c.order_only order_only
+  plan true true ordered joined c.recipe c.stem
+
+# Every pattern rule with a recipe whose target fits, shortest stem first,
+# and among equal stems the one defined first.
+fn fitted d t
+  rules = list/select d.patterns (p -> p.recipe != [])
+  fits = list/to_list (list/map rules (p -> fit p t))
+  found = list/to_list (list/select fits (c -> c != none))
+  by_stem found
+
+fn by_stem cs
+  lengths = list/sort (list/to_list (list/map cs (c -> length c.stem)))
+  ordered = words/uniq (list/to_list (list/map lengths (n -> "{n}")))
+  list/fold ordered [] (acc n -> text_concat acc (stem_sized cs n))
+
+fn stem_sized cs n
+  list/to_list (list/select cs (c -> "{length c.stem}" == n))
+
+# A target pattern without a slash is matched against the file part of the
+# target, and the directory goes back onto each prerequisite after.
+fn fit p t
+  slashed = words/contains? p.target "/"
+  dir = if slashed "" (directory_of t)
+  name = if slashed t (words/file_part t)
+  fitted_stem p dir (words/stem_of p.target name)
+
+fn fitted_stem _ _ none
+  none
+
+fn fitted_stem p dir stem
+  prereqs = list/to_list (list/map p.prereqs (q -> placed q dir stem))
+  ordered = list/to_list (list/map p.order_only (q -> placed q dir stem))
+  candidate ordered prereqs p.recipe "{dir}{stem}"
+
+fn placed q dir stem
+  if (words/pattern? q) "{dir}{words/fill q stem}" q
+
+fn directory_of t
+  d = words/dir_part t
+  if (d == "./") "" d
+
+fn first_viable rn cs i
+  return effect none if i < 1 or length cs < i
+  c = cs[i]
+  next = (ok -> if ok (effect c) (first_viable rn cs (i + 1)))
+  all_viable rn c.prereqs 1 0 .> next
+
+fn all_viable rn qs i depth
+  return effect true if i < 1 or length qs < i
+  next = (ok -> if ok (all_viable rn qs (i + 1) depth) (effect false))
+  viable rn qs[i] depth .> next
+
+# A prerequisite of a pattern rule must exist, be a target the makefile
+# mentions, or be makeable by another pattern rule, two links deep at most.
+fn viable rn q depth
+  return effect true if rn.db.rules[q] != none
+  os/exists q .> (here -> if here (effect true) (chained rn q depth))
+
+fn chained rn q depth
+  return effect false if depth >= 2
+  cs = fitted rn.db q
+  any_chain rn cs 1 (depth + 1)
+
+fn any_chain rn cs i depth
+  return effect false if i < 1 or length cs < i
+  next = (ok -> if ok (effect true) (any_chain rn cs (i + 1) depth))
+  all_viable rn cs[i].prereqs 1 depth .> next

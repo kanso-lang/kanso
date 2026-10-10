@@ -1,0 +1,6 @@
+$ make 
+echo a; exit 3
+a
+--- stderr
+make: *** [Makefile:3: a] Error 3
+--- exit 2

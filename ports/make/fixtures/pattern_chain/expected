@@ -1,0 +1,9 @@
+$ make x.o
+yacc x.y
+cc x.c
+rm x.c
+--- stderr
+--- exit 0
+== ./x.o
+grammar
+

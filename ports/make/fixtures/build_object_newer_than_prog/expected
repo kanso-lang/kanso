@@ -1,0 +1,5 @@
+$ make 
+link prog from a.o b.o
+cat a.o b.o > prog
+--- stderr
+--- exit 0

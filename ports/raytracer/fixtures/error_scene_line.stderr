@@ -1,0 +1,2 @@
+raytracer: fixtures/scenes/broken.scene: line 4: big is not a number
+exit 2

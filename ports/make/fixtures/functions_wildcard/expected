@@ -1,0 +1,6 @@
+$ make 
+[a.c b.c zz.c] [src/q.c src/p.h] [] [a.c]
+[a.c b.c] [a.c b.c]
+prereqs: a.c b.c zz.c objs: a.o b.o zz.o
+--- stderr
+--- exit 0

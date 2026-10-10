@@ -1,0 +1,132 @@
+# Tracing rays and writing the image. The random generator threads through
+# every pixel in scanline order, so one seed gives one image.
+import "../fmath"
+import "../rng"
+import "../vec"
+import "std/io"
+import "std/math"
+import "std/text"
+
+# The book's shading models, in the order it introduces them.
+type hemisphere
+
+type materials
+
+type normals
+
+type shading hemisphere materials normals
+
+black = vec/new 0.0 0.0 0.0
+
+# A colour component as a byte: gamma 2, then [0, 1) scaled to [0, 256).
+fn byte c
+  lin = if (0.0 < c) (math/sqrt c) 0.0
+  fmath/floor (256.0 * fmath/clamp lin 0.0 0.999)
+
+fn follow (absorbed g) _ _
+  rng/paired g black
+
+fn follow (scattered attenuation g out) depth world
+  c = ray_color materials out (depth - 1) world g
+  rng/paired c.gen (attenuation * c.value)
+
+fn pixel_line c
+  "{byte c.x} {byte c.y} {byte c.z}"
+
+fn ray_color _ _ 0 _ g
+  rng/paired g black
+
+fn ray_color mode r depth world g
+  shade (hit world r from_surface) mode r depth world g
+
+# The image as P3 text: a header, then one "r g b" line per pixel, top row
+# first. Progress goes to stderr, as the original's does.
+fn render (scene v world) q g
+  cam = camera_for v q
+  header = "P3\n{cam.width} {cam.height}\n255\n"
+  io/write header .> (_ -> rows cam world 0 g)
+
+fn row cam world j i lines g
+  return rng/paired g lines if i == cam.width
+  c = sample cam world i j cam.samples black g
+  line = pixel_line (c.value * (1.0 / cam.samples))
+  row cam world j (i + 1) (push lines line) c.gen
+
+fn rows cam world j g
+  return io/write_err "\rDone.                 \n" if j == cam.height
+  left = cam.height - j
+  r = row cam world j 0 [] g
+  io/write_err "\rScanlines remaining: {left} "
+    .> (_ -> io/write "{text/join r.value "\n"}\n")
+    .> (_ -> rows cam world (j + 1) r.gen)
+
+fn sample _ _ _ _ 0 total g
+  rng/paired g total
+
+fn sample cam world i j n total g
+  d = get_ray cam i j g
+  c = ray_color cam.mode d.value cam.max_depth world d.gen
+  sample cam world i j (n - 1) (total + c.value) c.gen
+
+fn shade miss _ r _ _ g
+  rng/paired g (sky r)
+
+fn shade rec mode r depth world g
+  surface mode rec r depth world g
+
+# Chapter 9's first diffuse model: bounce in a uniformly random direction
+# away from the surface and keep half the light, whatever the material.
+fn surface hemisphere rec _ depth world g
+  d = rng/on_hemisphere g rec.normal
+  # Adding zero leaves the direction as it was; without it the release build
+  # fails every scene with a bounce (bugs/b08).
+  outgoing = ray (d.value + vec/zero) rec.p
+  c = ray_color hemisphere outgoing (depth - 1) world d.gen
+  rng/paired c.gen (c.value * 0.5)
+
+fn surface materials rec r depth world g
+  follow (scatter rec.material r rec g) depth world
+
+# Chapter 6: colour a surface by its unit normal, each axis mapped from
+# [-1, 1] to [0, 1].
+fn surface normals rec _ _ _ g
+  rng/paired g ((rec.normal + vec/new 1.0 1.0 1.0) * 0.5)
+
+# The background: white at the horizon blending to sky blue overhead.
+fn sky r
+  dir = vec/unit r.direction
+  a = 0.5 * (dir.y + 1.0)
+  vec/new 1.0 1.0 1.0 * (1.0 - a) + vec/new 0.5 0.7 1.0 * a
+
+# Renders the named scene to stdout, or answers `unknown_scene` for a name
+# no scene has. The scene and the render draw from one generator, so the
+# seed fixes the cover's layout and its noise together.
+pub fn run name width samples depth seed grid mode
+  built = scene_named name (rng/seeded seed) grid
+  start built (quality depth mode samples width)
+
+# Renders a scene built elsewhere, from a file for instance.
+pub fn run_scene s width samples depth seed mode
+  render s (quality depth mode samples width) (rng/seeded seed)
+
+# The model the book ends on, and the default.
+pub full_shading = materials
+
+# The shading model a name on the command line asks for, or none.
+pub fn shading_named "hemisphere"
+  hemisphere
+
+pub fn shading_named "materials"
+  materials
+
+pub fn shading_named "normals"
+  normals
+
+pub fn shading_named _
+  none
+
+fn start u:unknown_scene _
+  u
+
+fn start built q
+  render built.value q built.gen

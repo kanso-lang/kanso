@@ -1,0 +1,5 @@
+$ make 
+x=[1 ] y=[a#b]
+still the recipe
+--- stderr
+--- exit 0

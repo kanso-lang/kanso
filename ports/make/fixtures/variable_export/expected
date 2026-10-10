@@ -1,0 +1,4 @@
+$ make 
+hello from make / set after / []
+--- stderr
+--- exit 0

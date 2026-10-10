@@ -1,0 +1,5 @@
+$ make x.o y.o
+from s: x.o
+from c: y.o
+--- stderr
+--- exit 0

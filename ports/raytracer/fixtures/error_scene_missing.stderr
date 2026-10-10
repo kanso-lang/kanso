@@ -1,0 +1,2 @@
+raytracer: no file fixtures/scenes/absent.scene
+exit 2
