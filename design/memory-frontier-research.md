@@ -19,10 +19,10 @@ this says only which of them are in the tree.
 | 3.5 | `--explain-copies` + AARA footprint ratchet | **half shipped** — the counter stack exists and is CI-gated; the diagnostic naming each copy's source site does not |
 | 3.6 | TRMC | **shipped** (#394, #395), and **widened** 2026-08-23 — the operand proof comes off the shape, so `n * fact (n - 1)` qualifies without Inference threaded from check |
 | 3.7 | cohort-counting soundness ratchet test | **shipped** |
-| 4.1 | static reuse-in-place inside the build-block | **declined**, measured |
+| 4.1 | static reuse-in-place inside the build-block | **declined**, measured; **moot** since `build` retired on 2026-10-10 (kanso#1837) |
 | 4.2 | tag-hoist under monomorphism speculation | **half harvested**, corrected 2026-09-02 — harvested for a value's tag in a numeric loop, and NOT for a callable's tag at a dispatch, which was worth 1.096% of oneshot and shipped in #1210 |
 | 4.3 | auto-SoA via whole-program field-touch | **declined** for want of a numeric workload |
-| 4.4 | build-blocks hosting in-place graph algorithms | **the rule is widened** (2026-09-09): born flows through aliases, `if`, indexes and fields; a node reached through a call is still not proved, so the traversal algorithms wait on that flow |
+| 4.4 | build-blocks hosting in-place graph algorithms | **moot** since `build` retired on 2026-10-10 (kanso#1837), and `list/tie` is the one way to write a cycle. Before that: **the rule is widened** (2026-09-09): born flows through aliases, `if`, indexes and fields; a node reached through a call is still not proved, so the traversal algorithms wait on that flow |
 | 4.5 | e-graph fusion over pure IR | **declined** for want of a customer |
 | 5.1 | copy-or-pin for survivors | **its premise is gone** (rechecked 2026-08-24) — one-shot's evacuation is 3 allocations, not 63,967; #868 deleted the copy-out this was going to delete. Reposed below against where evacuation actually lives now |
 | 5.2 | per-beat policy selection by survivor ratio | **new 2026-08-07**, not among the original sixteen |

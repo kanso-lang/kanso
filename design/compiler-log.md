@@ -19,43 +19,6 @@
 > The last forty entries. Everything older is in `log/compiler-log-archive.md`,
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
-## 2026-10-07 — the codegen rows count the clang the benchmarks use
-
-`codegen_instructions` and `emit_instructions` run `kanso build` under
-`env -i PATH=/usr/bin:/bin`, so that nothing in the job's environment reaches
-the count. That path finds `/usr/bin/clang`, which is clang 18 on CI's runner
-and in this container. The workflow installs clang 19 and links it at
-`/usr/local/bin/clang`, where every other build in the job finds it. So the
-release row counted a clang 18 link, and kanso uses its own LTO pipeline only
-under clang 19. The unswitch pass that took 0.422% off runbench left
-`codegen_instructions_release` at 496,432,472 on CI with the pass and without
-it, and its ld.lld read 294,982,591, the size of a clang 18 link here.
-
-The gates' fixed path is now `/usr/local/bin:/usr/bin:/bin`, the same in
-every run, and it finds clang 19. The codegen gate prints the clang the counted
-build runs and refuses to count when that is not the clang the job's own PATH
-finds. With the old path the refusal fires and names clang 18.
-
-On CI the rows move from their clang 18 readings to:
-
-    codegen_instructions_dev      126,448,042 -> 118,872,382
-    codegen_instructions_release  496,432,472 -> 449,424,792
-    emit_instructions              24,714,409 ->  24,923,517
-
-This container reads 118,871,022, 449,011,647 and 24,923,517.
-
-The emit row moves with the clang because kanso probes clang for
-`preserve_none` before it emits (`preserve_none_probe`). Clang 18 rejects a
-`preserve_nonecc` function and clang 19 compiles it, so under clang 18 the
-gate counted the emitter writing a convention the release build never uses.
-
-This re-bases three welfare terms. Each baseline is scaled by its row's new
-reading over its old one on CI and rounded up, as the address-blind preload's
-re-basings were: `codegen_instructions_dev` 596,161,187 -> 560,444,427,
-`codegen_instructions_release` 6,826,827,769 -> 6,180,388,720 and
-`emit_instructions` 379,919,026 -> 383,133,512. Every ratio holds, and the
-score reads 90.01 before and after.
-
 ## 2026-10-07 — the release link runs correlated propagation and early-cse
 
 After the unswitch pass was in, I tried the passes that LLVM's O3 function
@@ -2051,3 +2014,55 @@ both files since 2026-09-18, and
   today, and both times it had run to many times the limit. A spec that counts
   the live file's headings and fails above forty would hold it. That spec is
   `tests/`, so it is cloud's: #1854.
+
+## 2026-10-10 — three design notes retire, and a July ruling reaches the log
+
+This closes #1851. CLAUDE.md says a design note whose work has shipped is
+deleted, and that no file but the tracker carries pending-decision text. Five
+notes were read against the tree.
+
+**`design/enumerable.md` is deleted.** Its vocabulary is in `lib/list` and is
+taught in ch12 and appendix B, including the collision rule. The two rulings
+its status line called interim were ratified by Clay on 2026-08-14 (`range` is
+unbound and the statistic is `spread`; map builders are last-write-wins, like
+`put`), and §6 of the note already said so. Its one item marked open,
+`first coll n` beside `take n . to_list`, was settled by what shipped:
+`lib/list` has `first coll` alone, so `take` and `to_list` is the one way to
+take n. Its §7 described build blocks, which retired today.
+
+**`design/testing.md` is deleted.** The `testing` hako ships in `lib/testing`,
+`lib/json/json_test.kso` uses `when_failed`, and ch07 and ch08 teach it. The
+note's deferrals stay deferred and are recorded here so they keep a home: the
+2026-07-28 describe/context sketch is superseded until real suites show the
+need, with its two-deep limit still the right cage if they do; effectful tests
+are out of scope until io testing gets its own design against the boundary
+language; and two small observations were noted and not proposed, that a lambda
+cannot carry arms (so dispatching on a reason inside `when_failed` takes a named
+group) and that `when_failed` answering false on success folds "did not fail"
+into "failed the wrong way".
+
+**The work-ahead engine was ruled on 2026-07-22 and the ruling was never
+logged.** It lived only in `design/workahead-engine.md`. Recorded now: when a
+fiber parks on io, the scheduler runs proven-needed work in first-use order,
+then speculative work, keyed off logical scheduler state so the counters stay
+deterministic; v1 is proven work alone. The wall-credit substrate and the
+`bench/workahead/` rig shipped, and the engine did not. The note's
+implementation detail moves to #1856 (`ruled`, `lane:cloud`), and the note is
+deleted. docs/compiler.html's section remains the public description.
+
+**`design/hako.md` stays.** It is the only specification of `kanso install`,
+`list` and `update`, which ship, and `src/hako.rs` cites it. Its open-questions
+section pointed at the ledger, which is retiring under #1852; it now says the
+`std/` question was ruled on 2026-08-29 (std ships inside the binary) and keeps
+signing and monorepo hakos as parked.
+
+**`design/memory-frontier-research.md` stays.** Its table is the record of
+which memory ideas shipped, which were declined on measurement and which were
+refuted, and its refuted list is what stops an idea from being rebuilt. Rows
+4.1 and 4.4 concerned build blocks and are marked moot.
+
+The oldest live entry moves to the archive with this one, so the live file
+stays at forty.
+
+- **DONE** #1851.
+- **OPEN** #1856, the work-ahead engine, cloud's.
