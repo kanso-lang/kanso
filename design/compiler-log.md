@@ -24499,79 +24499,36 @@ inside a non-tail recursion, peaks at 618,392 KB with 154,187 faults for the
 same reason. The claim also went into a Readwise summary and a reply to
 Clay; both are corrected.
 
-CI's rows for this branch. The emitted text shrinks by 1,760 bytes in every
-benchmark binary, 4,611,102 to 4,586,462 summed. The same 1,760 in every
-binary puts all of it in the runtime, and the bignum section is the part of
-the runtime this branch rewrote. Runtime work falls in basket (32,404,398 to 32,356,406),
-runbench (1,129,589,342 to 1,129,588,698), encodebench and oneshot. Two rows
-rise. work_livebench goes from 1,473,485,624 to 1,473,485,659, 35
-instructions, and none of its loops touches a bignum, so this is layout in a
-binary whose runtime moved under it. codegen_instructions_release goes from
-453,756,115 to 453,756,383, 268 instructions of clang and ld reading a
-runtime whose bignum section changed shape; the dev tier fell 566 over the
-same source.
+CI's first reading of the branch put the browser engine's compile at
+391,614,023 instructions against main's 389,803,790, a rise of 1,810,233
+(0.46%), and this host reads the same figure from the same rustc. The new
+analysis was not what cost it. With `widens` answering false before it read
+anything, so that every loop was judged exactly as on main, the row read
+391,491,971; with the new `Beats` field alone and main's `beat.rs` otherwise,
+it read 389,807,903; and moving the cheap test ahead of `crossing_positions`,
+or walking the program once instead of once per loop, each moved it by less
+than 200,000. Marking `group_param_set` and `tail_exprs` `#[inline]` put it at
+387,724,060, which is 2,079,730 (0.53%) under main. Both helpers gained a
+caller in this change, and `group_param_set` is called in
+`crossing_positions`'s loop over every parameter, so the likeliest reading is
+that the extra caller cost them their inlining there. That reading has not
+been isolated: the measurement shows the row moving with the attribute and
+nothing else.
 
-Taken together the two sides net to a fall in welfare of 0.0000025, from
-90.25702372 to 90.25702120. The floor is lowered by that much. Clay asked
-why the two engines stored integers differently, and there was no reason;
-this branch is the answer to that question, so the floor follows it.
+The native compile rows in this entry's goldens are projections: CI's rows from
+the first push, carried onto main by the branch's own delta, from a build
+without the attribute. The next CI run measures the tree as it stands, and
+its rows replace them.
 
-## 2026-10-10 — a loop that grows a bignum rewinds its arena
-
-The entry before this one found that `pw (acc * 3) (n - 1)`, raising three
-to the 100,000th power and doing it three times, peaked at 1,949,852 KB
-natively against the interpreter's 10,044 KB. `beat.rs` gave a loop a
-rewind only when it allocated, and it counted arithmetic as free, because
-an int that fits in a word allocates nothing. Once `acc` passes 2^63 every
-iteration makes a new bignum in the arena, and with no rewind all 100,000
-of them stay there until the loop returns.
-
-Inference cannot help. `numeric_result` marks every `+`, `-` and `*`
-result as possibly big, so the set an int parameter carries says only that
-it might widen, which is true of nearly every counter. The new rule in
-`widens` reads the self tail call instead: a loop widens when it hands
-itself an argument built by `+`, `-` or `*` whose parameter can hold a
-bignum, unless the argument is a step by a literal, `n - 1` or `i + 1`. A
-step leaves the word only after 2^63 iterations, and without that exception
-every counting loop in the corpus would take a beat.
-
-A widening loop takes a beat only when no other argument crosses its
-rewind. The first version took one regardless, and `builder_counts_once`
-in the mem vein went from 11 allocations to 3,602 and from one thunk
-evaluation to 400: a carried builder was copied past the rewind on every
-iteration to reclaim a bignum that program never makes. Requiring
-`crossing_positions` to come back empty puts it back where it was.
-
-In a release build the loop's word twin runs until an argument overflows
-and then tail-calls the general body. The twin carries words and nothing
-else, so it skips the rewind; only the general body, which a bignum
-reaches, rewinds. A loop whose ints stay in a word pays nothing in release.
-The dev tier has no twin, and every loop the rule picks now marks and
-rewinds on each iteration there. Eight mem goldens record that as
-`beat_iters` rising from 0 to between 140 and 10,000 with every other
-counter unchanged, except `the_length_of_an_indexed_character`, whose
-`ten_frees` goes from 0 to 1.
-
-`tests/golden/mem/a_loop_of_bignum_products_holds_one_at_a_time.kso` runs
-the product loop for 20,000 iterations. On main its binary takes 39 arena
-blocks and peaks at 40,894,464 bytes; with this change it takes one block
-and peaks at 1,048,576. The three-times-3^100000 program now peaks at about
-10 MB and runs in 393 ms, against 1,316 ms before and the interpreter's
-440 ms.
-
-The rule covers tail loops only. s900624, which doubles an accumulator
-inside a recursion that is not a tail call, is not a loop to `beat.rs` and
-still peaks at 618,392 KB.
-
-The basket counters move with it: allocs 27,259 to 27,264, alloc_bytes
-7,499,921 to 7,522,273, sh_buf 667,600 to 689,952, and buf_reuse 124 to
-119. Five buffers the shelf used to hand back are now allocated fresh, at
-22,352 bytes between them. Two basket loops match the rule on reading,
-`list_sum` with `acc + xs[n]` and `arith` with `acc + n * 3 - n / 2`, and
-which of them moves the shelf has not been isolated.
-
-The compile golden's `recursion` sample is `count (n - 1) (acc + n)`, and
-`acc + n` is not a step by a literal, so the dev tier now marks and rewinds
-it: lines 362 to 406, calls 21 to 26, branches 16 to 18, with rounds and
-visits unchanged. Every accumulating loop over ints pays that on the dev
-tier, where there is no twin to skip it.
+The trend gate's names for what rose, each at the value it landed on:
+`basket_alloc_bytes` 7,522,273; `basket_allocs` 27,264; `basket_buf_reuse`
+119; `basket_sh_buf` 689,952; `branches` 53; `calls` 88; `lines` 1,589;
+`interp_instructions` 488,909,159; `emit_instructions` 7,040,683;
+`work_basket` 32,362,738; `emitted_other_branches` 16,032;
+`emitted_other_calls` 17,104; `emitted_other_lines` 144,174; `text`
+4,586,926; `a_map_whose_keys_arrived_in_order_is_its_own_view_beat_iters`
+1,000; `force_path_beat_iters` 2,000; `lazy_verdict_is_per_arm_beat_iters`
+2,000; `many_cells_beat_iters` 140; `returned_thunk_beat_iters` 2,000;
+`stream_fold_beat_iters` 10,000;
+`the_length_of_an_indexed_character_needs_no_scan_beat_iters` 4,021;
+`two_bound_columns_are_one_allocation_beat_iters` 3,000.

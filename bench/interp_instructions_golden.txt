@@ -678,5 +678,5 @@
 # where the base reads 491,415,834:
 # 491,415,834 -> 488,869,940, a FALL of 2,545,894 (-0.5181%).
 # CI's reading replaces it if it differs.
-interp_instructions=488869908
+interp_instructions=488909159
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

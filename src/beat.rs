@@ -260,12 +260,9 @@ pub fn beat_loops(program: &Program, inference: &infer::Inference, mut_sites: &M
     // a list that predates the mark grows outside the arena. An iteration of
     // such a loop allocates nothing there, and the test every iteration made
     // found the arena where the mark left it.
-    let widening: HashSet<Group> = ids
-        .keys()
-        .filter(|(name, arity)| {
-            !allocating.contains(name.as_str()) && widens(program, inference, name, *arity)
-        })
-        .cloned()
+    let widening: HashSet<Group> = widening_groups(program, inference)
+        .into_iter()
+        .filter(|g| ids.contains_key(g) && !allocating.contains(g.0.as_str()))
         .collect();
     rewind.retain(|(from, to)| {
         from != to
@@ -276,13 +273,15 @@ pub fn beat_loops(program: &Program, inference: &infer::Inference, mut_sites: &M
     Beats { ids, demoted, carried, rewind, regions, widening }
 }
 
-/// Whether a loop hands itself an int that can leave the word. Arithmetic
+/// The loops that hand themselves an int that can leave the word. Arithmetic
 /// allocates nothing while ints are words, so a loop like
 /// `pw (acc * 3) (n - 1)` reads as pure; once `acc` is a bignum every
 /// iteration makes a new one in the arena, and a loop without a rewind keeps
 /// all of them. A step by a literal, `n - 1` or `i + 1`, is left out: it
-/// leaves the word only after 2^63 iterations.
-fn widens(program: &Program, inference: &infer::Inference, name: &str, arity: usize) -> bool {
+/// leaves the word only after 2^63 iterations. One walk over the program
+/// answers for every group, since asking group by group scans every
+/// declaration once per loop.
+fn widening_groups(program: &Program, inference: &infer::Inference) -> HashSet<Group> {
     let step = |op: &str, lhs: &Expr, rhs: &Expr| {
         op != "*"
             && matches!(
@@ -294,8 +293,13 @@ fn widens(program: &Program, inference: &infer::Inference, name: &str, arity: us
         Expr::BinOp { op, lhs, rhs, .. } if matches!(*op, "+" | "-" | "*") => !step(op, lhs, rhs),
         _ => false,
     };
-    program.fns.iter().filter(|d| d.name == name && d.params.len() == arity).any(|d| {
-        tail_exprs(d.body.last()).into_iter().any(|t| {
+    let mut out: HashSet<Group> = HashSet::default();
+    for d in &program.fns {
+        let (name, arity) = (d.name.as_str(), d.params.len());
+        if out.contains(&(d.name.clone(), arity)) {
+            continue;
+        }
+        let widened = tail_exprs(d.body.last()).into_iter().any(|t| {
             let Expr::App { head, args, piped: false, .. } = t else { return false };
             matches!(head.as_ref(), Expr::Ident(n, _, _) if n == name)
                 && args.len() == arity
@@ -303,8 +307,12 @@ fn widens(program: &Program, inference: &infer::Inference, name: &str, arity: us
                     grows(a)
                         && group_param_set(program, inference, name, arity, p) & infer::BIG != 0
                 })
-        })
-    })
+        });
+        if widened {
+            out.insert((d.name.clone(), arity));
+        }
+    }
+    out
 }
 
 /// Whether a loop's arms allocate nothing but the growth of lists its
@@ -1133,6 +1141,7 @@ fn classify_all(
 ) -> Vec<(String, usize, Verdict)> {
     let tails = TailCalls::of(program);
     let value_uses = ValueUses::of(program);
+    let widening = widening_groups(program, inference);
     let mut groups: Vec<(String, usize)> = {
         let set: HashSet<(String, usize)> =
             program.fns.iter().map(|d| (d.name.clone(), d.params.len())).collect();
@@ -1142,8 +1151,14 @@ fn classify_all(
     groups
         .into_iter()
         .filter_map(|(name, arity)| {
-            let whole =
-                Whole { program, value_uses: &value_uses, inference, mut_sites, tails: &tails };
+            let whole = Whole {
+                program,
+                value_uses: &value_uses,
+                inference,
+                mut_sites,
+                tails: &tails,
+                widening: &widening,
+            };
             classify(&whole, chains, allocating, &name, arity).map(|v| (name, arity, v))
         })
         .collect()
@@ -1209,6 +1224,7 @@ struct Whole<'a> {
     inference: &'a infer::Inference,
     mut_sites: &'a MutSites,
     tails: &'a TailCalls<'a>,
+    widening: &'a HashSet<Group>,
 }
 
 fn classify(
@@ -1218,7 +1234,7 @@ fn classify(
     name: &str,
     arity: usize,
 ) -> Option<Verdict> {
-    let Whole { program, value_uses, inference, mut_sites, tails } = whole;
+    let Whole { program, value_uses, inference, mut_sites, tails, widening } = whole;
     if !tails.has_self_tail(name, arity) {
         return None;
     }
@@ -1228,13 +1244,14 @@ fn classify(
     if value_uses.has(name) {
         return Some(crate::beat::Verdict::UsedAsValue);
     }
+    if !allocating.contains(name) && !widening.iter().any(|(n, a)| n == name && *a == arity) {
+        return Some(crate::beat::Verdict::PureLoop);
+    }
     let crossing = crossing_positions(program, inference, mut_sites, chains, name, arity);
     // a loop that allocates nothing but a bignum takes a beat only when
     // nothing else would cross its rewind: a carried string or list would be
     // copied every iteration to reclaim a bignum most runs never make
-    if !allocating.contains(name)
-        && !(crossing.is_empty() && widens(program, inference, name, arity))
-    {
+    if !allocating.contains(name) && !crossing.is_empty() {
         return Some(crate::beat::Verdict::PureLoop);
     }
     if !crossing.is_empty() {
@@ -1712,6 +1729,7 @@ fn expr_allocates(
 /// The tail expressions of an arm body: the final statement's expression,
 /// with lazy `if` expanding into both branches — mirroring `emit_tail`, which
 /// emits `musttail` exactly there. Piped applications are not tail calls.
+#[inline]
 fn tail_exprs(last: Option<&Stmt>) -> Vec<&Expr> {
     let Some(Stmt::Expr(e)) = last else { return Vec::new() };
     let mut out = Vec::new();
@@ -2039,6 +2057,7 @@ fn arg_ok(
     callee_set != 0 && callee_set & !FAIL & !CROSSES == 0
 }
 
+#[inline]
 fn group_param_set(
     program: &Program,
     inference: &infer::Inference,
