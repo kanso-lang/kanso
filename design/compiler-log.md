@@ -26050,3 +26050,14 @@ carry shows the mark's block moving 48 bytes up at each of the 200 stages of a
 is right for a node repaired once. What it lacks is a way to take back a
 settled region when the same node is repaired again, and that is a separate
 change.
+
+CI's rows replace the projection. runbench reads 1,152,754,609, which is 174
+instructions above the carrier's row rather than the 248 measured here.
+Measured against main, the rows that end worse on this branch, the carrier's
+changes included, are codegen_instructions_dev at 118,955,169,
+codegen_instructions_release at 454,306,200, browser_run_instructions at
+34,124,990, work_encodebench at 2,398,370,414, work_livebench at
+1,474,871,090, work_oneshot at 13,224,195 and text at 4,835,550. Against the
+carrier alone, the release row falls by 120,818 and the dev row rises by
+3,943; every benchmark's runtime text grows 176 bytes, which is the spare
+list's accounting and its drop path.
