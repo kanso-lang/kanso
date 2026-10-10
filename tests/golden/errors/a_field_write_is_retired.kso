@@ -1,0 +1,11 @@
+# A field was written by assignment inside a `build` block. With the block
+# retired no value is written after it is made, and the diagnostic says where
+# the field's value goes instead.
+type node
+  id
+  peers
+
+pub play =
+  a = node 1 []
+  a.peers = []
+  print "{a}"

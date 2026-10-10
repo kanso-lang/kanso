@@ -4512,28 +4512,6 @@ KValue k_field_forced(KValue v, const char* name) {
     return k_b_field(k_force(v), name);
 }
 
-KValue k_set_field(KValue target, const char* name, KValue v) {
-    if (!k_not_failure(target)) return target;
-    if (!k_not_failure(v)) return v;
-    if (target.tag == K_SUB) target = k_sub_base(target);
-    if (target.tag != K_REC) k_die_value("`set` writes a record field", target);
-    KRec* r = k_as_rec(target);
-    for (long long i = 0; i < r->nfields; i++) {
-        if (!strcmp(k_type_field_name(r->type_id, i), name)) {
-            r->fields[i] = v;
-            k_note_if_carried(v);
-            KValue none; none.tag = K_NONE; none.payload = 0; return none;
-        }
-    }
-    /* The sentence the other two engines print, and the one `k_keyed_field`
-       and `k_no_field` above already print for a READ. This site said "no such
-       field" — naming neither the type nor the field, and diverging from the
-       oracle on a program a user can write. */
-    fprintf(stderr, "%serror[runtime]:%s `%s` has no field `%s`\n", k_c_err(), k_c_off(),
-            k_type_name(r->type_id), name);
-    exit(1);
-}
-
 KValue k_keyed_field(KValue v, const char* name) {
     KRec* r = k_as_rec(v);
     long long n = k_type_field_count(r->type_id);

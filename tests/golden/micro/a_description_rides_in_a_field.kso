@@ -1,6 +1,6 @@
-# The fourth and last of the per-element sites: a record field written inside
-# a build block. The block's names outlive it, so the field is read back after
-# the close and answered as `play`'s description, which the runner executes.
+# A description held in a record field and read back out is still a
+# description: the record is built with it, the field is read after, and the
+# read is answered as `play`'s description, which the runner executes.
 import "std/io"
 
 type cell
@@ -12,7 +12,5 @@ fn opaque v
 d = io/write "a\n" .> (_ -> io/write "b\n")
 
 pub play =
-  build
-    c = cell _
-    c.n = opaque d
+  c = cell (opaque d)
   c.n

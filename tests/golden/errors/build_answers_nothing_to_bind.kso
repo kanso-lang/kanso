@@ -1,4 +1,0 @@
-pub play =
-  b = build
-    x = 1
-  print "{b}"

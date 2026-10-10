@@ -679,7 +679,7 @@ fn wants_prelude(program: &ast::Program) -> bool {
             ast::Expr::Ident(name, _, _) | ast::Expr::Partial(name, _) => {
                 name == MATH_FAILURE || name == DIVIDE_BY_ZERO
             }
-            ast::Expr::Block(stmts, _) | ast::Expr::Build(stmts, _) => stmts.iter().any(in_stmt),
+            ast::Expr::Block(stmts, _) => stmts.iter().any(in_stmt),
             ast::Expr::Guard { cond, early, rest, .. } => {
                 in_expr(cond) || in_expr(early) || rest.iter().any(in_stmt)
             }
@@ -689,7 +689,6 @@ fn wants_prelude(program: &ast::Program) -> bool {
     fn in_stmt(s: &ast::Stmt) -> bool {
         match s {
             ast::Stmt::Bind { expr, .. } | ast::Stmt::Expr(expr) => in_expr(expr),
-            ast::Stmt::Set { value, .. } => in_expr(value),
         }
     }
     program.types.iter().any(|t| t.parent.as_deref() == Some(MATH_FAILURE))
@@ -973,7 +972,7 @@ fn bound_in_stmt<'a>(stmt: &'a ast::Stmt, out: &mut crate::hash::Set<&'a str>) {
             bound_in_pattern(pattern, out);
             bound_in_expr(expr, out);
         }
-        ast::Stmt::Expr(e) | ast::Stmt::Set { value: e, .. } => bound_in_expr(e, out),
+        ast::Stmt::Expr(e) => bound_in_expr(e, out),
     }
 }
 
@@ -985,7 +984,7 @@ fn bound_in_expr<'a>(e: &'a ast::Expr, out: &mut crate::hash::Set<&'a str>) {
             }
             bound_in_expr(body, out);
         }
-        ast::Expr::Block(stmts, _) | ast::Expr::Build(stmts, _) => {
+        ast::Expr::Block(stmts, _) => {
             for st in stmts {
                 bound_in_stmt(st, out);
             }
@@ -1037,7 +1036,6 @@ fn bound_in_expr<'a>(e: &'a ast::Expr, out: &mut crate::hash::Set<&'a str>) {
             bound_in_expr(rhs, out);
         }
         ast::Expr::Int(..)
-        | ast::Expr::Hole(..)
         | ast::Expr::Float(..)
         | ast::Expr::Ident(..)
         | ast::Expr::Partial(..) => {}
@@ -1210,9 +1208,7 @@ fn alias_stmt(
     wrote: &mut Rewrites,
 ) {
     match stmt {
-        ast::Stmt::Bind { expr, .. }
-        | ast::Stmt::Expr(expr)
-        | ast::Stmt::Set { value: expr, .. } => alias_expr(expr, aliases, wrote),
+        ast::Stmt::Bind { expr, .. } | ast::Stmt::Expr(expr) => alias_expr(expr, aliases, wrote),
     }
 }
 
@@ -1224,7 +1220,7 @@ fn alias_expr(e: &mut ast::Expr, aliases: &crate::hash::Map<String, String>, wro
                 *name = Name::new(q);
             }
         }
-        ast::Expr::Int(..) | ast::Expr::Float(..) | ast::Expr::Hole(..) => {}
+        ast::Expr::Int(..) | ast::Expr::Float(..) => {}
         ast::Expr::MapLit(pairs, _) => {
             for (k, v) in pairs {
                 alias_expr(k, aliases, wrote);
@@ -1265,7 +1261,7 @@ fn alias_expr(e: &mut ast::Expr, aliases: &crate::hash::Map<String, String>, wro
             alias_expr(lhs, aliases, wrote);
             alias_expr(rhs, aliases, wrote);
         }
-        ast::Expr::Block(stmts, _) | ast::Expr::Build(stmts, _) => {
+        ast::Expr::Block(stmts, _) => {
             for st in stmts {
                 alias_stmt(st, aliases, wrote);
             }
@@ -1393,7 +1389,7 @@ pub fn fuse_enumerable(program: &mut ast::Program) {
         inline_single_use_chains(&mut decl.body, &shorts);
         for stmt in &mut decl.body {
             match stmt {
-                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => {
                     fuse_expr(expr, &shorts, &fold_name, &helpers, &mut counter);
                 }
             }
@@ -1431,16 +1427,14 @@ fn inline_single_use_chains(body: &mut Vec<ast::Stmt>, shorts: &crate::hash::Map
         let mut uses = 0usize;
         for later in body.iter().skip(idx + 1) {
             match later {
-                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => {
                     count_ident_uses(expr, &name, &mut uses);
                 }
             }
         }
         let sole_coll_use = uses == 1
             && body.iter().skip(idx + 1).any(|later| match later {
-                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
-                    coll_arg_use(expr, &name, shorts)
-                }
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => coll_arg_use(expr, &name, shorts),
             });
         if !sole_coll_use {
             idx += 1;
@@ -1449,7 +1443,7 @@ fn inline_single_use_chains(body: &mut Vec<ast::Stmt>, shorts: &crate::hash::Map
         let Stmt::Bind { expr, .. } = body.remove(idx) else { unreachable!() };
         for later in body.iter_mut().skip(idx) {
             match later {
-                Stmt::Bind { expr: e, .. } | Stmt::Expr(e) | Stmt::Set { value: e, .. } => {
+                Stmt::Bind { expr: e, .. } | Stmt::Expr(e) => {
                     substitute_ident(e, &name, &expr);
                 }
             }
@@ -1515,12 +1509,10 @@ fn fuse_expr(
             }
         }
         Expr::Lambda { body, .. } => fuse_expr(body, shorts, fold_name, helpers, counter),
-        Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
+        Expr::Block(stmts, _) => {
             for stmt in stmts {
                 match stmt {
-                    ast::Stmt::Bind { expr, .. }
-                    | ast::Stmt::Expr(expr)
-                    | ast::Stmt::Set { value: expr, .. } => {
+                    ast::Stmt::Bind { expr, .. } | ast::Stmt::Expr(expr) => {
                         fuse_expr(expr, shorts, fold_name, helpers, counter)
                     }
                 }
@@ -2164,7 +2156,6 @@ fn synthesize_reader_groups(program: &mut ast::Program) {
 fn desugar_stmt(stmt: &mut ast::Stmt) {
     match stmt {
         ast::Stmt::Bind { expr, .. } | ast::Stmt::Expr(expr) => desugar_expr(expr),
-        ast::Stmt::Set { value, .. } => desugar_expr(value),
     }
 }
 
@@ -2187,7 +2178,6 @@ pub fn desugar_inequality(program: &mut ast::Program) {
 fn deny_stmt(stmt: &mut ast::Stmt) {
     match stmt {
         ast::Stmt::Bind { expr, .. } | ast::Stmt::Expr(expr) => deny_expr(expr),
-        ast::Stmt::Set { value, .. } => deny_expr(value),
     }
 }
 
@@ -2257,7 +2247,6 @@ pub fn prune_unused_getters(program: &mut ast::Program) {
 fn mentions_in_stmt<'a>(stmt: &'a ast::Stmt, out: &mut crate::hash::Set<&'a str>) {
     match stmt {
         ast::Stmt::Bind { expr, .. } | ast::Stmt::Expr(expr) => mentions_in_expr(expr, out),
-        ast::Stmt::Set { value, .. } => mentions_in_expr(value, out),
     }
 }
 
@@ -2281,7 +2270,7 @@ fn mentions_in_expr<'a>(e: &'a ast::Expr, out: &mut crate::hash::Set<&'a str>) {
                 out.insert(short);
             }
         }
-        ast::Expr::Block(stmts, _) | ast::Expr::Build(stmts, _) => {
+        ast::Expr::Block(stmts, _) => {
             for s in stmts {
                 mentions_in_stmt(s, out);
             }
@@ -2384,7 +2373,6 @@ fn rewrite_stmt(
             pattern_binds(pattern, bound);
         }
         ast::Stmt::Expr(e) => rewrite_expr(e, owned, bound),
-        ast::Stmt::Set { value, .. } => rewrite_expr(value, owned, bound),
     }
 }
 
@@ -2402,9 +2390,7 @@ fn rewrite_expr(e: &mut ast::Expr, owned: &crate::hash::Map<Name, Owned>, bound:
             rewrite_expr(early, owned, bound);
             rewrite_scope(rest, owned, bound);
         }
-        ast::Expr::Block(stmts, _) | ast::Expr::Build(stmts, _) => {
-            rewrite_scope(stmts, owned, bound)
-        }
+        ast::Expr::Block(stmts, _) => rewrite_scope(stmts, owned, bound),
         // `&f` names a function the way a mention does, so it moves with the
         // module the way a mention does. Left behind, the sigil holds a bare
         // name after every declaration has been qualified away from it.
@@ -2464,7 +2450,7 @@ fn rewrite_expr(e: &mut ast::Expr, owned: &crate::hash::Map<Name, Owned>, bound:
                 }
             }
         }
-        ast::Expr::Int(..) | ast::Expr::Float(..) | ast::Expr::Hole(..) => {}
+        ast::Expr::Int(..) | ast::Expr::Float(..) => {}
     }
 }
 
@@ -2928,9 +2914,7 @@ fn door_type(ty: &mut String, doors: &crate::hash::Map<String, String>) {
 /// `(v):ty` names a type where nothing else in an expression does.
 fn door_stmt(stmt: &mut ast::Stmt, doors: &crate::hash::Map<String, String>) {
     match stmt {
-        ast::Stmt::Bind { expr, .. }
-        | ast::Stmt::Expr(expr)
-        | ast::Stmt::Set { value: expr, .. } => door_expr(expr, doors),
+        ast::Stmt::Bind { expr, .. } | ast::Stmt::Expr(expr) => door_expr(expr, doors),
     }
 }
 
@@ -3016,9 +3000,9 @@ fn mark_bare_quals(
     for decl in &program.fns {
         for stmt in &decl.body {
             match stmt {
-                ast::Stmt::Bind { expr, .. }
-                | ast::Stmt::Expr(expr)
-                | ast::Stmt::Set { value: expr, .. } => collect(expr, &asked, &mut bare),
+                ast::Stmt::Bind { expr, .. } | ast::Stmt::Expr(expr) => {
+                    collect(expr, &asked, &mut bare)
+                }
             }
         }
     }
@@ -3106,7 +3090,6 @@ fn used_quals(program: &ast::Program, quals: &mut crate::hash::Set<String>) {
                     walk_expr(expr, quals);
                 }
                 ast::Stmt::Expr(e) => walk_expr(e, quals),
-                ast::Stmt::Set { value, .. } => walk_expr(value, quals),
             }
         }
     }
@@ -3175,11 +3158,9 @@ fn expr_span(e: &ast::Expr) -> &diag::Span {
         | ast::Expr::MapLit(_, s)
         | ast::Expr::Str(_, s)
         | ast::Expr::Int(_, s)
-        | ast::Expr::Hole(s)
         | ast::Expr::Float(_, s) => s,
         ast::Expr::Field { span: s, .. } => s,
         ast::Expr::Upcast { span: s, .. } => s,
-        ast::Expr::Build(_, s) => s,
     }
 }
 
@@ -3208,7 +3189,6 @@ fn private_uses(
     match stmt {
         ast::Stmt::Bind { expr, .. } => walk(expr, exports, diags),
         ast::Stmt::Expr(e) => walk(e, exports, diags),
-        ast::Stmt::Set { value, .. } => walk(value, exports, diags),
     }
 }
 
@@ -3250,14 +3230,11 @@ pub fn any_child<'a>(e: &'a ast::Expr, mut p: impl FnMut(&'a ast::Expr) -> bool)
 /// Every direct sub-expression, in source order, until `f` answers false.
 fn walk_children<'a, F: FnMut(&'a ast::Expr) -> bool>(e: &'a ast::Expr, f: &mut F) {
     let stmt_expr = |st: &'a ast::Stmt| match st {
-        ast::Stmt::Bind { expr, .. }
-        | ast::Stmt::Expr(expr)
-        | ast::Stmt::Set { value: expr, .. } => expr,
+        ast::Stmt::Bind { expr, .. } | ast::Stmt::Expr(expr) => expr,
     };
     match e {
         ast::Expr::Partial(..)
         | ast::Expr::Int(..)
-        | ast::Expr::Hole(..)
         | ast::Expr::Float(..)
         | ast::Expr::Ident(..) => {}
         ast::Expr::Upcast { expr, .. } => {
@@ -3273,7 +3250,7 @@ fn walk_children<'a, F: FnMut(&'a ast::Expr) -> bool>(e: &'a ast::Expr, f: &mut 
                 }
             }
         }
-        ast::Expr::Block(stmts, _) | ast::Expr::Build(stmts, _) => {
+        ast::Expr::Block(stmts, _) => {
             for st in stmts {
                 if !f(stmt_expr(st)) {
                     return;
@@ -4021,7 +3998,7 @@ pub fn hoist_repeated_strings(program: &mut ast::Program) {
 fn purely_computed(e: &ast::Expr) -> bool {
     use ast::Expr;
     match e {
-        Expr::Ident(..) | Expr::Int(..) | Expr::Float(..) | Expr::Hole(..) => true,
+        Expr::Ident(..) | Expr::Int(..) | Expr::Float(..) => true,
         Expr::BinOp { op, lhs, rhs, .. } => {
             matches!(*op, "+" | "-" | "*" | "/" | "%")
                 && purely_computed(lhs)
@@ -4129,7 +4106,7 @@ fn walk_children_mut(e: &mut ast::Expr, f: &mut dyn FnMut(&mut ast::Expr)) {
                 f(stmt_expr_mut(stmt));
             }
         }
-        Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
+        Expr::Block(stmts, _) => {
             for stmt in stmts {
                 f(stmt_expr_mut(stmt));
             }
@@ -4141,7 +4118,6 @@ fn walk_children_mut(e: &mut ast::Expr, f: &mut dyn FnMut(&mut ast::Expr)) {
 fn stmt_expr_mut(s: &mut ast::Stmt) -> &mut ast::Expr {
     match s {
         ast::Stmt::Bind { expr, .. } | ast::Stmt::Expr(expr) => expr,
-        ast::Stmt::Set { value, .. } => value,
     }
 }
 
@@ -4153,7 +4129,6 @@ fn hoist_in_body(body: &mut Vec<ast::Stmt>, counter: &mut usize) {
             ast::Stmt::Bind { expr, .. } | ast::Stmt::Expr(expr) => {
                 collect_hoistable(expr, &mut found)
             }
-            ast::Stmt::Set { value, .. } => collect_hoistable(value, &mut found),
         }
         let mut seen: crate::hash::Map<String, usize> = crate::hash::Map::default();
         for (shape, _) in &found {
@@ -4179,7 +4154,6 @@ fn hoist_in_body(body: &mut Vec<ast::Stmt>, counter: &mut usize) {
                 ast::Stmt::Bind { expr: e, .. } | ast::Stmt::Expr(e) => {
                     replace_shape(e, &shape, &name)
                 }
-                ast::Stmt::Set { value, .. } => replace_shape(value, &shape, &name),
             }
             body.insert(
                 i + inserted,

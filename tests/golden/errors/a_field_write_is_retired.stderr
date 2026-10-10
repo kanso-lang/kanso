@@ -1,0 +1,4 @@
+error[syntax]: `a.peers = ...` writes a field, and a value is never written after it is made: give the field its value where `a` is built, or make a cycle with `list/tie`
+  --> a_field_write_is_retired.kso:10:5
+  10 |   a.peers = []
+           ^

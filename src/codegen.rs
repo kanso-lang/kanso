@@ -1289,7 +1289,6 @@ declare void @k_no_field(%KValue, ptr)
 declare %KValue @k_field_forced(%KValue, ptr)
 declare %KValue @k_err_read(%KValue, ptr)
 declare i64 @k_is_err(%KValue)
-declare %KValue @k_set_field(%KValue, ptr, %KValue)
 declare i64 @k_check_some(%KValue)
 declare %KValue @k_err_inner(%KValue)
 declare i64 @k_check_rec(%KValue, i64, i64)
@@ -2096,9 +2095,7 @@ fn ties(program: &Program) -> bool {
         }
     }
     let stmt = |st: &Stmt| match st {
-        Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
-            mentions(expr)
-        }
+        Stmt::Bind { expr, .. } | Stmt::Expr(expr) => mentions(expr),
     };
     program.fns.iter().filter(|d| !d.name.starts_with("list/")).any(|d| d.body.iter().any(stmt))
 }
@@ -2349,7 +2346,6 @@ pub(crate) fn knotted_constants(program: &Program) -> crate::hash::Set<String> {
         for stmt in &decl.body {
             match stmt {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) => names(expr, found),
-                Stmt::Set { value, .. } => names(value, found),
             }
         }
     }
@@ -2489,14 +2485,12 @@ fn without_unbuilt_arms(program: &Program) -> Option<(Vec<bool>, UnreadPositions
     built.insert(0);
     fn names_in_stmt<'a>(s: &'a Stmt, out: &mut Vec<&'a str>) {
         match s {
-            Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
-                names_in(expr, out)
-            }
+            Stmt::Bind { expr, .. } | Stmt::Expr(expr) => names_in(expr, out),
         }
     }
     fn names_in<'a>(e: &'a Expr, out: &mut Vec<&'a str>) {
         match e {
-            Expr::Int(..) | Expr::Float(..) | Expr::Hole(_) => {}
+            Expr::Int(..) | Expr::Float(..) => {}
             Expr::Ident(n, _, _) | Expr::Partial(n, _) => out.push(n.as_str()),
             Expr::MapLit(pairs, _) => {
                 for (k, v) in pairs {
@@ -2526,9 +2520,7 @@ fn without_unbuilt_arms(program: &Program) -> Option<(Vec<bool>, UnreadPositions
                 names_in(b, out);
             }
             Expr::Lambda { body, .. } => names_in(body, out),
-            Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
-                stmts.iter().for_each(|s| names_in_stmt(s, out))
-            }
+            Expr::Block(stmts, _) => stmts.iter().for_each(|s| names_in_stmt(s, out)),
             Expr::Upcast { expr, ty, .. } => {
                 names_in(expr, out);
                 out.push(ty.as_str());
@@ -4015,7 +4007,6 @@ fn call_graph(program: &Program) -> (Vec<&str>, Vec<Vec<usize>>) {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) => {
                     mentions(expr, &index, &mut adj[from])
                 }
-                Stmt::Set { value, .. } => mentions(value, &index, &mut adj[from]),
             }
         }
     }
@@ -4047,7 +4038,6 @@ fn kept_out(program: &Program) -> crate::hash::Set<&str> {
         for stmt in &decl.body {
             match stmt {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) => mentions(expr, index, &mut out),
-                Stmt::Set { value, .. } => mentions(value, index, &mut out),
             }
         }
         out
@@ -4180,7 +4170,7 @@ fn framed_views(
     }
     fn stmt_expr(st: &Stmt) -> &Expr {
         match st {
-            Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expr,
+            Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
         }
     }
     fn locals_of<'a>(expr: &'a Expr, out: &mut crate::hash::Set<&'a str>) {
@@ -4190,7 +4180,7 @@ fn framed_views(
                     out.insert(n.as_str());
                 }
             }
-            Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
+            Expr::Block(stmts, _) => {
                 for st in stmts {
                     if let Stmt::Bind { pattern, .. } = st {
                         pattern_names(pattern, out);
@@ -4235,13 +4225,13 @@ fn framed_views(
     fn stmts_read_only(stmts: &[Stmt], x: &str, cx: &Cx) -> bool {
         stmts.iter().all(|st| match st {
             Stmt::Expr(e) => reads_only(e, x, cx),
-            Stmt::Bind { expr, .. } | Stmt::Set { value: expr, .. } => !mentions(expr, x),
+            Stmt::Bind { expr, .. } => !mentions(expr, x),
         })
     }
     fn reads_only(expr: &Expr, x: &str, cx: &Cx) -> bool {
         match expr {
             Expr::Ident(n, _, _) => n.as_str() != x,
-            Expr::Lambda { .. } | Expr::Build(..) => !mentions(expr, x),
+            Expr::Lambda { .. } => !mentions(expr, x),
             Expr::Index { base, index, .. } if is_x(base, x) => reads_only(index, x, cx),
             Expr::Block(stmts, _) => stmts_read_only(stmts, x, cx),
             Expr::Guard { cond, early, rest, .. } => {
@@ -8409,7 +8399,6 @@ impl<'a> Backend<'a> {
                 continue;
             }
             match stmt {
-                Stmt::Set { .. } => unreachable!("`set` parses only inside `build`"),
                 Stmt::Bind { pattern: Pattern::Var(name, _), expr }
                     if self.demand.is_lazy_bind(&f.group.clone(), f.arity, i)
                         && self.thunkable(f, expr) =>
@@ -8759,27 +8748,12 @@ impl<'a> Backend<'a> {
                 f.record(&t, crate::infer::TOP);
                 Ok(t.to_string())
             }
-            Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
+            Expr::Block(stmts, _) => {
                 let mut value = "{ i64 4, i64 0 }".to_string();
                 let last = stmts.len().saturating_sub(1);
                 for (i, stmt) in stmts.iter().enumerate() {
                     match stmt {
                         Stmt::Bind { pattern, expr } => self.emit_bind(f, pattern, expr)?,
-                        Stmt::Set { target, field, value, span } => {
-                            let new = self.emit_expr(f, value)?;
-                            let new = self.maybe_force(f, new);
-                            let ident = Expr::Ident(
-                                Name::new(&target.clone()),
-                                *span,
-                                crate::ast::Resolution::default(),
-                            );
-                            let tv = self.emit_expr(f, &ident)?;
-                            let tv = self.maybe_force(f, tv);
-                            let (label, _) = self.intern(&format!("{field}\0"));
-                            f.line_fmt(format_args!(
-                                "call %KValue @k_set_field(%KValue {tv}, ptr @{label}, %KValue {new})"
-                            ));
-                        }
                         Stmt::Expr(e) => {
                             let v = self.emit_expr(f, e)?;
                             if i == last {
@@ -8793,7 +8767,6 @@ impl<'a> Backend<'a> {
             Expr::Guard { .. } => {
                 Err("native backend: a return guard sits only in tail position".to_string())
             }
-            Expr::Hole(_) => Ok("{ i64 4, i64 0 }".to_string()),
             // A literal wider than a word is a bignum the runtime reads from
             // its digits, each time the literal is reached.
             Expr::Int(n, _) => match i64::try_from(n) {
@@ -11832,13 +11805,11 @@ impl<'a> Backend<'a> {
 
 fn collect_idents(expr: &Expr, out: &mut Vec<String>) {
     match expr {
-        Expr::Int(..) | Expr::Float(..) | Expr::Partial(..) | Expr::Hole(..) => {}
-        Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
+        Expr::Int(..) | Expr::Float(..) | Expr::Partial(..) => {}
+        Expr::Block(stmts, _) => {
             for stmt in stmts {
                 match stmt {
-                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
-                        collect_idents(expr, out)
-                    }
+                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) => collect_idents(expr, out),
                 }
             }
         }
@@ -11883,9 +11854,7 @@ fn collect_idents(expr: &Expr, out: &mut Vec<String>) {
             collect_idents(early, out);
             for stmt in rest.iter() {
                 match stmt {
-                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
-                        collect_idents(expr, out)
-                    }
+                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) => collect_idents(expr, out),
                 }
             }
         }

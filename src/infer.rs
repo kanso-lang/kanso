@@ -279,12 +279,11 @@ fn stmt_ctor_types(stmt: &Stmt, type_names: &HashMap<&str, usize>, out: &mut Vec
             expr_ctor_types(expr, type_names, out);
         }
         Stmt::Expr(expr) => expr_ctor_types(expr, type_names, out),
-        Stmt::Set { value, .. } => expr_ctor_types(value, type_names, out),
     }
 }
 
 fn expr_ctor_types(expr: &Expr, type_names: &HashMap<&str, usize>, out: &mut Vec<usize>) {
-    if let Expr::Block(stmts, _) | Expr::Build(stmts, _) = expr {
+    if let Expr::Block(stmts, _) = expr {
         for stmt in stmts {
             stmt_ctor_types(stmt, type_names, out);
         }
@@ -370,7 +369,6 @@ pub fn infer(program: &Program) -> Inference {
         d.params.is_empty()
             && d.body.iter().any(|stmt| match stmt {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) => mentions(expr, &d.name),
-                Stmt::Set { value, .. } => mentions(value, &d.name),
             })
     });
     // A row of bits per declaration, rounded up to whole words.
@@ -858,7 +856,6 @@ fn callee_first(program: &Program) -> Vec<usize> {
         for stmt in &decl.body {
             match stmt {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) => gather(expr, &mut names),
-                Stmt::Set { value, .. } => gather(value, &mut names),
             }
         }
         // A mention is deduplicated by the range it names, not by its own
@@ -1054,9 +1051,6 @@ fn eval_body<'a>(ctx: &mut Ctx<'a>, body: &'a [Stmt], env: &mut Env<'a>) -> Set 
                 }
             }
             Stmt::Expr(expr) => result = eval_expr(ctx, expr, env),
-            Stmt::Set { value, .. } => {
-                eval_expr(ctx, value, env);
-            }
         }
     }
     ctx.facts.truncate(mark);
@@ -1070,9 +1064,6 @@ fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut Env<'a>) -> Set {
             Ok(_) => INT,
             Err(_) => BIG,
         },
-        // A hole is filled with a real value before its block freezes, so what
-        // readers see is that value: anything but a failure, and not a none.
-        Expr::Hole(..) => TOP & !FAIL & !NONE,
         // A partial over a group hands the group out as a value, as a bare
         // mention does, and whatever it holds or is later handed reaches the
         // group's parameters where nothing here can see it. So the parameters
@@ -1092,7 +1083,7 @@ fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut Env<'a>) -> Set {
             TOP
         }
         Expr::Upcast { expr: inner, .. } => eval_expr(ctx, inner, env),
-        Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
+        Expr::Block(stmts, _) => {
             // a child scope: block binds stay local to the branch
             let mut env = env.child(stmts.len());
             let mut result = NONE;
@@ -1114,9 +1105,6 @@ fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut Env<'a>) -> Set {
                         }
                     }
                     Stmt::Expr(expr) => result = eval_expr(ctx, expr, &mut env),
-                    Stmt::Set { value, .. } => {
-                        eval_expr(ctx, value, &mut env);
-                    }
                 }
             }
             result
@@ -1558,9 +1546,7 @@ fn cell_params(
             }
             for stmt in &d.body {
                 match stmt {
-                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
-                        walk(expr, &holders, &mut w)
-                    }
+                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) => walk(expr, &holders, &mut w),
                 }
             }
         }

@@ -1,4 +1,0 @@
-error[build]: `n.peers = ...` writes only block-born values: `n` is not a construction made in this `build` block, so it stays immutable (module build_not_block_born)
-  --> build_not_block_born.kso:8:7
-   8 |     n.peers = [a]
-             ^
