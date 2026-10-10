@@ -1,0 +1,17 @@
+# curl as an independent client, so the server is checked against a
+# client this project did not write. Arguments are split on spaces, so
+# headers are written without one after the colon.
+curl -s -i -H Host:localhost {base}/todos
+curl -s -i -H Host:localhost -H Content-Type:application/json -d {"title":"from-curl"} {base}/todos
+note curl sends a chunked body when told to, and waits for 100 Continue when asked
+curl -s -H Host:localhost -H Content-Type:application/json -H Transfer-Encoding:chunked -d {"title":"chunked-by-curl","order":2} {base}/todos
+curl -s -H Host:localhost -H Content-Type:application/json -H Expect:100-continue -X PATCH -d {"completed":true} {base}/todos/1
+note two URLs on one command line share a connection: the second opens none
+curl -s -H Host:localhost -w [connections:%{num_connects}]\n {base}/todos/1 {base}/todos/2
+note HEAD, and a chunked download measured by curl
+curl -s -I -H Host:localhost {base}/todos/2
+curl -s -o /dev/null -w %{http_code}:%{size_download}:%{content_type} {base}/docs/big.txt
+curl -s --http1.0 -o /dev/null -w %{http_code}:%{size_download} {base}/docs/big.txt
+note a preflight, and a method the route does not take
+curl -s -i -X OPTIONS -H Host:localhost {base}/todos/1
+curl -s -i -X PUT -H Host:localhost {base}/todos/1

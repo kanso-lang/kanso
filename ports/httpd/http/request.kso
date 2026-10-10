@@ -1,0 +1,316 @@
+import "std/list"
+import "std/text"
+
+# One parsed request. `body` is the bytes the framing delivered, after any
+# chunked coding is taken off; `body_text` turns them into a string for the
+# handlers that want one. Header names are lowercased on the way in, and a
+# header sent twice is joined with ", ", which is what RFC 9110 says a
+# recipient may do for every field except set-cookie.
+pub type request
+  body
+  headers
+  method
+  path
+  query
+  target
+  version
+
+# What a parse of the buffer can answer. The connection loop reads more on
+# the first two, answers and hangs up on the third, and serves the fourth.
+pub type need_head
+
+# The head is in, the body is not. `expects` is true when the client sent
+# `Expect: 100-continue` and is waiting to be told to go on.
+pub type need_body
+  expects
+
+pub type rejected
+  reason
+  status
+
+pub type framed
+  request
+  rest
+
+# The limits a server enforces while it reads. A head longer than
+# `max_head` without its blank line is a 431; a body longer than
+# `max_body` is a 413, whether it was announced or chunked.
+pub type limits
+  max_body
+  max_head
+
+type head_end
+  at
+
+type framing_chunked
+
+type framing_length
+  n
+
+type framing_none
+
+type chunk_done
+  body
+  next
+
+pub default_limits = limits 1048576 8192
+
+# A request built by hand, for tests and for a client that wants to frame
+# one: the target is split and its query parsed the way the parser does it.
+pub fn make_request method target headers body
+  cut query path = split_target target
+  bs = text/bytes body
+  request bs headers method path (parse_query query) target "HTTP/1.1"
+
+pub fn body_text r
+  text/utf8 r.body
+
+pub fn header r name
+  r.headers[name]
+
+# Leading blank lines before a request line are skipped, as RFC 9112 asks
+# a server to do: some clients send a stray CR LF after a POST body.
+pub fn parse bs lim
+  start = past_blank_lines bs 1
+  at = blank_line_at bs start
+  head_found bs lim start at
+
+fn past_blank_lines bs i
+  return i if bs[i] != 13 or bs[i + 1] != 10
+  past_blank_lines bs (i + 2)
+
+fn head_found bs lim _ 0
+  { max_head } = lim
+  return rejected "the head is too large" 431 if length bs > max_head
+  need_head
+
+fn head_found bs lim start at
+  { max_head } = lim
+  return rejected "the head is too large" 431 if at - start > max_head
+  head_lines bs lim at (text_of bs start (at - 1))
+
+fn head_lines _ _ _ (err _)
+  rejected "the head is not utf-8" 400
+
+fn head_lines bs lim at head
+  lines = split_on head "\r\n"
+  request_line bs lim at lines (words lines[1])
+
+fn words none
+  []
+
+fn words line
+  split_on line " "
+
+fn request_line bs lim at lines parts
+  return rejected "a malformed request line" 400 if length parts != 3
+  version = parts[3]
+  return version_refused version if not version_known? version
+  method = parts[1]
+  return rejected "a malformed method" 400 if not token? method
+  target = parts[2]
+  return rejected "a malformed target" 400 if not starts_with? target "/"
+  fields = header_fields lines 2 {}
+  with_fields bs lim at method target version fields
+
+fn version_known? "HTTP/1.1"
+  true
+
+fn version_known? "HTTP/1.0"
+  true
+
+fn version_known? _
+  false
+
+fn version_refused v
+  shaped = starts_with? v "HTTP/" and length v == 8
+  if shaped (rejected "unsupported version" 505) (bad "a malformed version")
+
+fn bad reason
+  rejected reason 400
+
+# A method is a token: letters, and in practice upper case. Lower-case
+# methods are legal tokens but no client sends them, and refusing them
+# keeps `get` from quietly meaning something different from `GET`.
+fn token? s
+  cs = text/bytes s
+  length cs > 0 and list/all? cs (b -> b > 64 and b < 91)
+
+fn header_fields lines i acc
+  return acc if i < 1 or length lines < i
+  line = lines[i]
+  return rejected "obsolete line folding" 400 if folded? line
+  header_field lines i acc (split_once line ":")
+
+fn folded? line
+  first = text/slice line 1 1
+  first == " " or first == "\t"
+
+fn header_field _ _ _ none
+  rejected "a header line without a colon" 400
+
+fn header_field lines i acc (cut after name)
+  return rejected "a malformed header name" 400 if not field_name? name
+  key = lower name
+  header_fields lines (i + 1) (put acc key (joined acc[key] (text/trim after)))
+
+fn joined none value
+  value
+
+fn joined before value
+  "{before}, {value}"
+
+# No whitespace between the name and the colon: RFC 9112 says a server
+# must refuse that rather than guess which header was meant.
+fn field_name? s
+  cs = text/bytes s
+  length cs > 0 and list/all? cs (b -> b > 32 and b < 127)
+
+fn with_fields _ _ _ _ _ _ r:rejected
+  r
+
+fn with_fields bs lim at method target version fields
+  missing = host_missing? version fields
+  return bad "an HTTP/1.1 request without a host" if missing
+  framing = framing_of fields
+  blank = request [] fields method "" {} target version
+  framed_body bs lim at blank framing
+
+fn host_missing? "HTTP/1.1" fields
+  fields["host"] == none
+
+fn host_missing? _ _
+  false
+
+fn framing_of fields
+  te = fields["transfer-encoding"]
+  cl = fields["content-length"]
+  both = te != none and cl != none
+  return bad "both transfer-encoding and content-length" if both
+  return coding_of (lower te) if te != none
+  return length_of cl if cl != none
+  framing_none
+
+fn coding_of "chunked"
+  framing_chunked
+
+fn coding_of te
+  last = text/trim (list/last (split_on te ","))
+  refused = rejected "a coding before chunked" 501
+  if (last == "chunked") refused (bad "a body with no length")
+
+# A content-length sent twice arrives joined as "5, 5". Identical copies are
+# one length; different ones are a request that cannot be framed.
+fn length_of cl
+  copies = list/to_list (list/map (split_on cl ",") text/trim)
+  return bad "a malformed content-length" if length copies < 1
+  same = list/all? copies (v -> v == copies[1])
+  return bad "conflicting content-lengths" if not same
+  counted (parse_decimal copies[1])
+
+fn counted none
+  bad "a malformed content-length"
+
+fn counted n
+  framing_length n
+
+fn framed_body bs _ at req framing_none
+  finished req bs (at + 4) (text/bytes "")
+
+fn framed_body bs lim at req (framing_length n)
+  { max_body } = lim
+  return rejected "the body is too large" 413 if n > max_body
+  from = at + 4
+  return need_body (expects? req) if length bs - from + 1 < n
+  finished req bs (from + n) (text/slice bs from (from + n - 1))
+
+fn framed_body bs lim at req framing_chunked
+  { max_body } = lim
+  dechunked req bs (chunk_from bs (at + 4) (text/bytes "") max_body)
+
+fn framed_body _ _ _ _ r:rejected
+  r
+
+fn expects? req
+  e = req.headers["expect"]
+  e != none and lower e == "100-continue"
+
+fn dechunked req bs (chunk_done body next)
+  finished req bs next body
+
+fn dechunked req _ need_head
+  need_body (expects? req)
+
+fn dechunked _ _ r:rejected
+  r
+
+fn finished req bs next body
+  { headers method target version } = req
+  cut query path = split_target target
+  r = request body headers method path (parse_query query) target version
+  framed r (text/slice bs next (length bs))
+
+# One chunk at a time: a size line in hex, the data, a CR LF. A zero size
+# ends the body, and the trailer section after it is read and dropped.
+fn chunk_from bs at acc max
+  line_end = crlf_at bs at
+  return need_head if line_end == 0
+  size_line = text_of bs at (line_end - 1)
+  chunk_sized bs line_end acc max (chunk_size size_line)
+
+fn chunk_size (err _)
+  none
+
+fn chunk_size line
+  size = (split_on line ";")[1]
+  if (size == none) none (parse_hex (text/trim size))
+
+fn chunk_sized _ _ _ _ none
+  bad "a malformed chunk size"
+
+fn chunk_sized bs line_end acc _ 0
+  trailers bs (line_end + 2) acc
+
+fn chunk_sized bs line_end acc max size
+  return rejected "the body is too large" 413 if length acc + size > max
+  from = line_end + 2
+  past = from + size
+  return need_head if length bs < past + 1
+  return bad "a chunk without its CR LF" if bs[past] != 13 or bs[past + 1] != 10
+  data = text/slice bs from (past - 1)
+  chunk_from bs (past + 2) (text/append acc data) max
+
+fn trailers bs at acc
+  line_end = crlf_at bs at
+  return need_head if line_end == 0
+  return chunk_done acc (line_end + 2) if line_end == at
+  trailers bs (line_end + 2) acc
+
+# "/todos/3?x=1" is a path and a query. The path is percent-decoded segment
+# by segment later, by the router, because a decoded slash is not a slash.
+fn split_target target
+  target_parts target (split_once target "?")
+
+fn target_parts target none
+  cut "" target
+
+fn target_parts _ c
+  c
+
+pub fn parse_query ""
+  {}
+
+pub fn parse_query q
+  list/fold (split_on q "&") {} query_pair
+
+fn query_pair acc ""
+  acc
+
+fn query_pair acc item
+  query_put acc item (split_once item "=")
+
+fn query_put acc item none
+  put acc (unescape item) ""
+
+fn query_put acc _ (cut after before)
+  put acc (unescape before) (unescape after)

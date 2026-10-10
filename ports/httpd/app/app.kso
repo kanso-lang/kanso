@@ -1,0 +1,80 @@
+import "../http"
+import "../router"
+import "../static"
+import "../todo"
+import "std/text"
+
+# The whole application: the todo store, and the directory static files are
+# served from. It is the state the server carries from request to request.
+pub type app
+  root
+  todos
+
+pub fn start root
+  app root todo/empty_store
+
+# The route table. The todo-backend API lives at /todos; everything else a
+# GET can name is a file under the static root.
+routes = [preflight listing creating clearing showing editing deleting files]
+
+preflight = router/on "OPTIONS" "/*any" allow_cors
+
+listing = router/on "GET" "/todos" (on_todos todo/list_todos)
+
+creating = router/on "POST" "/todos" (on_todos todo/create_todo)
+
+clearing = router/on "DELETE" "/todos" (on_todos todo/clear_todos)
+
+showing = router/on "GET" "/todos/:id" (on_todos todo/show_todo)
+
+editing = router/on "PATCH" "/todos/:id" (on_todos todo/edit_todo)
+
+deleting = router/on "DELETE" "/todos/:id" (on_todos todo/delete_todo)
+
+files = router/on "GET" "/*file" serve_static
+
+# `request app -> <turn>effect`, the handler the server is given.
+pub fn handle req a
+  found = router/find routes req.method req.path
+  routed req a found .> (t -> with_cors t)
+
+fn routed req a m:router/matched
+  h = m.handler
+  h req m.params a
+
+fn routed _ a w:router/wrong_method
+  refused = http/failure 405 "method not allowed"
+  allow = text/join w.allowed ", "
+  effect (http/carry (http/with_header refused "allow" allow) a)
+
+fn routed _ a router/no_route
+  effect (http/carry (http/failure 404 "no such resource") a)
+
+# A todo handler is pure: it answers a response and a new store. Lifting it
+# into a route puts the store back into the app and the pair into an
+# effect, which is what every route answers.
+fn on_todos h
+  (req params a -> lifted a (h req params a.todos))
+
+fn lifted a o
+  { root } = a
+  effect (http/carry o.reply (app root o.store))
+
+fn serve_static req params a
+  { root } = a
+  wanted = params["file"]
+  rel = if (wanted == none) "" wanted
+  static/serve_file root rel req .> (r -> http/carry r a)
+
+fn allow_cors _ _ a
+  methods = http/field "access-control-allow-methods" "GET, POST, PATCH, DELETE"
+  headers = http/field "access-control-allow-headers" "content-type"
+  age = http/field "access-control-max-age" "86400"
+  answer = http/with_headers (http/empty 204) [methods headers age]
+  effect (http/carry answer a)
+
+# Every answer may be read by a page from another origin: the todo-backend
+# spec runs its test suite from its own site against the server under test.
+fn with_cors t
+  open = http/with_header t.response "access-control-allow-origin" "*"
+  http/carry open t.state

@@ -1,0 +1,39 @@
+# Persistent connections. HTTP/1.1 keeps a connection open unless a side
+# says close; HTTP/1.0 closes it unless the client asks for keep-alive.
+note three requests pipelined on one HTTP/1.1 connection
+conn
+send GET /todos HTTP/1.1
+send Host: localhost
+send
+send POST /todos HTTP/1.1
+send Host: localhost
+send Content-Type: application/json
+send Content-Length: 17
+send
+data {"title":"first"}
+send GET /todos/1 HTTP/1.1
+send Host: localhost
+send
+note Connection: close ends the connection after its response
+conn
+send GET /todos/1 HTTP/1.1
+send Host: localhost
+send Connection: close
+send
+note HTTP/1.0 closes after one response by default
+conn
+send GET /todos/1 HTTP/1.0
+send
+note HTTP/1.0 with keep-alive keeps the connection for a second request
+conn
+send GET /todos/1 HTTP/1.0
+send Connection: keep-alive
+send
+send HEAD /todos/1 HTTP/1.0
+send
+note connection tokens are a list, and case does not matter
+conn
+send GET /todos HTTP/1.1
+send Host: localhost
+send Connection: Upgrade, CLOSE
+send

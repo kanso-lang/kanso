@@ -1,0 +1,67 @@
+-- a head split in the middle of a header line
+== connection 1: 40 bytes in 5 pieces
+[server] GET /todos 200
+< HTTP/1.1 200 OK
+< content-type: application/json
+< access-control-allow-origin: *
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< content-length: 2
+<
+[]
+(the server closed the connection)
+-- a body that arrives after its head
+== connection 2: 117 bytes in 7 pieces
+[server] POST /todos 201
+< HTTP/1.1 201 Created
+< content-type: application/json
+< location: http://localhost/todos/1
+< access-control-allow-origin: *
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< content-length: 82
+<
+{"completed":false,"id":1,"title":"in two parts","url":"http://localhost/todos/1"}
+(the server closed the connection)
+-- a client that asks to be told to go on
+== connection 3: 132 bytes in 7 pieces
+[server] POST /todos 201
+< HTTP/1.1 100 Continue
+< HTTP/1.1 201 Created
+< content-type: application/json
+< location: http://localhost/todos/2
+< access-control-allow-origin: *
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< content-length: 75
+<
+{"completed":false,"id":2,"title":"later","url":"http://localhost/todos/2"}
+(the server closed the connection)
+-- blank lines before a request line are skipped
+== connection 4: 44 bytes in 3 pieces
+[server] GET /todos 200
+< HTTP/1.1 200 OK
+< content-type: application/json
+< access-control-allow-origin: *
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< content-length: 160
+<
+[{"completed":false,"id":1,"title":"in two parts","url":"http://localhost/todos/1"},{"completed":false,"id":2,"title":"later","url":"http://localhost/todos/2"}]
+(the server closed the connection)
+-- a second request split across a pause after a first one
+== connection 5: 84 bytes in 5 pieces
+[server] GET /todos/1 200
+[server] GET /todos/2 200
+< HTTP/1.1 200 OK
+< content-type: application/json
+< access-control-allow-origin: *
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< content-length: 82
+<
+{"completed":false,"id":1,"title":"in two parts","url":"http://localhost/todos/1"}
+< HTTP/1.1 200 OK
+< content-type: application/json
+< access-control-allow-origin: *
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< content-length: 75
+<
+{"completed":false,"id":2,"title":"later","url":"http://localhost/todos/2"}
+(the server closed the connection)
+== shutdown: the port no longer answers

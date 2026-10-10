@@ -1,0 +1,13 @@
+# text/concat on the value text/bytes answers.
+#
+# Should: print [1 97 98] on every engine. The book (appendix b) documents
+# text/bytes as answering int[] and text/concat as appending two lists.
+#
+# Does: the native engines print [1 97 98]; the interpreter stops with
+#   error[runtime]: concat takes two lists
+# because text/bytes answers a bytes value there, which prints like a list
+# and indexes like one but is not one to concat. A slice of it fails the
+# same way. Run with `kanso run concat_of_bytes.kso --interp` and without.
+import "std/text"
+
+print "{text/concat [1] (text/bytes "ab")}"

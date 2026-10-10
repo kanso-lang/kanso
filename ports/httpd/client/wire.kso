@@ -1,0 +1,48 @@
+import "../http"
+import "std/list"
+import "std/os"
+import "std/text"
+
+# kanso has no way to open a connection (FRICTION F16), so the bytes travel
+# through netcat. The script writes each piece in turn, sleeping where the
+# scenario paused, and `nc -N` half-closes the socket after the last one so
+# the server reads an end of stream once it has answered everything. What
+# comes back is hex, so a body that is not text survives the trip through a
+# string intact.
+script = "{writer} | timeout 10 nc -N 127.0.0.1 \"$port\" | od -An -v -tx1"
+
+# A string literal cannot be wrapped (FRICTION F12), so the script is built
+# from parts short enough to fit.
+writer = "port=$0; \{ for p in \"$@\"; do {one_piece}; done; }"
+
+one_piece = "if [ \"$p\" = '<pause>' ]; then sleep 0.3; else {printing}; fi"
+
+printing = "printf '%s' \"$p\""
+
+pub fn exchange port pieces
+  args = list/to_list (list/map pieces as_arg)
+  argv = text/concat ["-c" script "{port}"] args
+  os/run "bash" argv .> (p -> unhexed p.stdout)
+
+fn as_arg p:string
+  p
+
+fn as_arg _
+  "<pause>"
+
+# " 48 54 54 50\n 2f 31" is the bytes 0x48 0x54 0x54 0x50 0x2f 0x31.
+pub fn unhexed out
+  words = list/reject (http/split_on (flattened out) " ") (w -> w == "")
+  text/to_bytes (list/to_list (list/map words byte_of))
+
+fn flattened out
+  text/join (http/split_on out "\n") " "
+
+fn byte_of w
+  n = http/parse_hex w
+  if (n == none) 0 n
+
+# Whether anything still answers on the port: nc -z succeeds only when a
+# connection opens.
+pub fn listening? port
+  os/run "nc" ["-z" "127.0.0.1" "{port}"] .> (p -> p.status == 0)

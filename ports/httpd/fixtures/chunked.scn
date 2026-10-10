@@ -1,0 +1,51 @@
+# Chunked transfer coding, in both directions.
+note a body sent in three chunks becomes one todo
+conn
+chunked POST /todos {"title":|"sent in |pieces"}
+request GET /todos/1
+note chunk sizes are hex, extensions are ignored, trailers are read past
+conn
+send POST /todos HTTP/1.1
+send Host: localhost
+send Content-Type: application/json
+send Transfer-Encoding: chunked
+send
+send 14;name=value
+send {"title":"hex sizes,
+send 5
+send  ok"}
+send 0
+send X-Checksum: none
+send
+request GET /todos/2
+note a large file goes out chunked to an HTTP/1.1 client
+conn
+request GET /docs/big.txt
+note and with a content-length to an HTTP/1.0 client, which cannot read chunks
+conn
+send GET /docs/big.txt HTTP/1.0
+send
+note a malformed chunk size is a 400 and the connection closes
+conn
+send POST /todos HTTP/1.1
+send Host: localhost
+send Transfer-Encoding: chunked
+send
+send zz
+send nope
+note a chunk whose data runs past its size is a 400
+conn
+send POST /todos HTTP/1.1
+send Host: localhost
+send Transfer-Encoding: chunked
+send
+send 2
+send toolong
+send 0
+send
+note gzip under chunked is not supported
+conn
+send POST /todos HTTP/1.1
+send Host: localhost
+send Transfer-Encoding: gzip, chunked
+send

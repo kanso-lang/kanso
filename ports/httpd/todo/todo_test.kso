@@ -1,0 +1,131 @@
+import "../http"
+import "std/list"
+import "std/text"
+
+json_kind = { "content-type":"application/json" "host":"example.test" }
+
+fn sent method body
+  http/make_request method "/todos" json_kind body
+
+fn sent_as kind body
+  headers = { "content-type":kind "host":"example.test" }
+  http/make_request "POST" "/todos" headers body
+
+# A response summarised as its status and body, which is what the tests
+# compare; the body of these responses is always text.
+fn said (outcome reply _)
+  "{reply.status} {reply.body}"
+
+fn after (outcome _ st)
+  st
+
+fn create_in st body
+  after (create_todo (sent "POST" body) {} st)
+
+one = create_in empty_store "\{\"title\":\"walk the dog\"}"
+
+two = create_in one "\{\"title\":\"buy milk\",\"order\":5,\"completed\":true}"
+
+id_1 = { "id":"1" }
+
+id_2 = { "id":"2" }
+
+test_create_answers_201 =
+  got = said (create_todo (sent "POST" "\{\"title\":\"a\"}") {} empty_store)
+  want = "\{\"completed\":false,\"id\":1,\"title\":\"a\""
+  got == "201 {want},\"url\":\"http://example.test/todos/1\"}"
+
+test_create_sets_location =
+  { reply } = create_todo (sent "POST" "\{\"title\":\"a\"}") {} empty_store
+  located = list/find reply.headers (h -> h.name == "location")
+  located.value == "http://example.test/todos/1"
+
+test_ids_count_up = two.next_id == 3
+
+test_list_in_id_order =
+  got = said (list_todos (sent "GET" "") {} two)
+  first = "\{\"completed\":false,\"id\":1,\"title\":\"walk the dog\""
+  a = "{first},\"url\":\"http://example.test/todos/1\"}"
+  b = "\{\"completed\":true,\"id\":2,\"order\":5,\"title\":\"buy milk\""
+  got == "200 [{a},{b},\"url\":\"http://example.test/todos/2\"}]"
+
+test_show_one =
+  got = said (show_todo (sent "GET" "") id_2 two)
+  b = "\{\"completed\":true,\"id\":2,\"order\":5,\"title\":\"buy milk\""
+  got == "200 {b},\"url\":\"http://example.test/todos/2\"}"
+
+test_show_missing =
+  got = said (show_todo (sent "GET" "") { "id":"9" } two)
+  got == "404 \{\"error\":\"no such todo\",\"status\":404}"
+
+test_show_non_numeric =
+  got = said (show_todo (sent "GET" "") { "id":"abc" } two)
+  got == "404 \{\"error\":\"no such todo\",\"status\":404}"
+
+test_patch_keeps_unsent_fields =
+  got = said (edit_todo (sent "PATCH" "\{\"completed\":true}") id_1 two)
+  first = "\{\"completed\":true,\"id\":1,\"title\":\"walk the dog\""
+  got == "200 {first},\"url\":\"http://example.test/todos/1\"}"
+
+test_patch_clears_order =
+  got = said (edit_todo (sent "PATCH" "\{\"order\":null}") id_2 two)
+  b = "\{\"completed\":true,\"id\":2,\"title\":\"buy milk\""
+  got == "200 {b},\"url\":\"http://example.test/todos/2\"}"
+
+test_patch_missing =
+  got = said (edit_todo (sent "PATCH" "\{}") { "id":"7" } two)
+  got == "404 \{\"error\":\"no such todo\",\"status\":404}"
+
+test_delete_one =
+  left = after (delete_todo (sent "DELETE" "") id_1 two)
+  keys left.items == [2]
+
+test_delete_answers_204 =
+  got = said (delete_todo (sent "DELETE" "") id_1 two)
+  got == "204 "
+
+test_clear_keeps_counting =
+  cleared_store = after (clear_todos (sent "DELETE" "") {} two)
+  length cleared_store.items == 0 and cleared_store.next_id == 3
+
+test_not_json =
+  got = said (create_todo (sent "POST" "\{title") {} empty_store)
+  why = "the body is not JSON: expected a string key at byte 2"
+  got == "400 \{\"error\":\"{why}\",\"status\":400}"
+
+test_not_an_object =
+  got = said (create_todo (sent "POST" "[1]") {} empty_store)
+  got == "422 \{\"error\":\"a todo is a JSON object\",\"status\":422}"
+
+test_title_required =
+  got = said (create_todo (sent "POST" "\{\"order\":1}") {} empty_store)
+  got == "422 \{\"error\":\"a todo needs a title\",\"status\":422}"
+
+test_title_must_be_text =
+  got = said (create_todo (sent "POST" "\{\"title\":7}") {} empty_store)
+  got == "422 \{\"error\":\"title must be a string\",\"status\":422}"
+
+test_completed_must_be_bool =
+  body = "\{\"title\":\"a\",\"completed\":\"yes\"}"
+  got = said (create_todo (sent "POST" body) {} empty_store)
+  got == "422 \{\"error\":\"completed must be true or false\",\"status\":422}"
+
+test_order_must_be_whole =
+  body = "\{\"title\":\"a\",\"order\":1.5}"
+  got = said (create_todo (sent "POST" body) {} empty_store)
+  got == "422 \{\"error\":\"order must be a whole number\",\"status\":422}"
+
+test_wrong_media_type =
+  plain = sent_as "text/plain" "\{\"title\":\"a\"}"
+  got = said (create_todo plain {} empty_store)
+  why = "a todo is sent as application/json"
+  got == "415 \{\"error\":\"{why}\",\"status\":415}"
+
+test_json_with_charset_accepted =
+  kind = "application/json; charset=utf-8"
+  got = said (create_todo (sent_as kind "\{\"title\":\"a\"}") {} empty_store)
+  text/slice got 1 3 == "201"
+
+test_empty_body =
+  got = said (create_todo (sent "POST" "") {} empty_store)
+  got == "400 \{\"error\":\"a todo needs a body\",\"status\":400}"

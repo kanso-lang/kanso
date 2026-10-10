@@ -1,0 +1,129 @@
+import "../http"
+import "std/list"
+import "std/text"
+
+# A scenario is a text file of steps, one per line, that the end-to-end
+# driver plays against a running server. The steps:
+#
+#   # text              a comment, dropped
+#   note TEXT           print TEXT into the transcript
+#   conn                open a connection; what follows is sent on it
+#   send TEXT           send TEXT and a CR LF ("send" alone sends a CR LF)
+#   data TEXT           send TEXT with nothing after it
+#   pause               send what came before, wait, then go on
+#   request M T [BODY]  a whole request: Host, and a JSON body with its length
+#   chunked M T A|B|C   a whole request whose body goes out in chunks A, B, C
+#   curl ARGS...        run curl; {base} in ARGS is the server's address
+#
+# A connection ends at the next `conn`, `curl` or `note`, or at the end of
+# the file. The client half-closes it once everything is sent, and reads
+# until the server hangs up.
+pub type conn_step
+  pieces
+
+pub type curl_step
+  args
+
+pub type note_step
+  text
+
+type pause_mark
+
+type parse_state
+  open
+  steps
+
+pub pause = pause_mark
+
+pub fn parse_scenario source
+  lines = http/split_on source "\n"
+  start = parse_state none []
+  closed (list/fold lines start read_line)
+
+fn closed (parse_state none steps)
+  steps
+
+fn closed (parse_state pieces steps)
+  push steps (conn_step pieces)
+
+fn read_line st line
+  trimmed = text/trim line
+  return st if trimmed == "" or http/starts_with? trimmed "#"
+  word = first_word trimmed
+  rest = after_word trimmed
+  step_for st word rest
+
+fn first_word line
+  pair = http/split_once line " "
+  if (pair == none) line pair.before
+
+fn after_word line
+  pair = http/split_once line " "
+  if (pair == none) "" pair.after
+
+fn step_for st "conn" _
+  flushed = closed st
+  parse_state [] flushed
+
+fn step_for st "note" rest
+  parse_state none (push (closed st) (note_step rest))
+
+fn step_for st "curl" rest
+  args = list/to_list (list/reject (http/split_on rest " ") (a -> a == ""))
+  parse_state none (push (closed st) (curl_step args))
+
+fn step_for st "send" rest
+  adding st "{rest}\r\n"
+
+fn step_for st "data" rest
+  adding st rest
+
+fn step_for st "pause" _
+  adding st pause
+
+fn step_for st "request" rest
+  adding st (whole_request rest)
+
+fn step_for st "chunked" rest
+  adding st (chunked_request rest)
+
+fn step_for _ word _
+  err "unknown scenario step `{word}`"
+
+fn adding (parse_state none steps) piece
+  parse_state [piece] steps
+
+fn adding (parse_state pieces steps) piece
+  parse_state (push pieces piece) steps
+
+# "POST /todos {"title":"x"}" -- the method, the target, and the rest of the
+# line as a JSON body, framed with its length in bytes.
+fn whole_request rest
+  method = first_word rest
+  after = after_word rest
+  target = first_word after
+  body = after_word after
+  head = "{method} {target} HTTP/1.1\r\nHost: localhost\r\n"
+  framed_with head body
+
+fn framed_with head ""
+  "{head}\r\n"
+
+fn framed_with head body
+  n = length (text/bytes body)
+  kind = "Content-Type: application/json\r\n"
+  "{head}{kind}Content-Length: {n}\r\n\r\n{body}"
+
+fn chunked_request rest
+  method = first_word rest
+  after = after_word rest
+  target = first_word after
+  pieces = http/split_on (after_word after) "|"
+  head = "{method} {target} HTTP/1.1\r\nHost: localhost\r\n"
+  te = "Content-Type: application/json\r\nTransfer-Encoding: chunked\r\n"
+  coded = list/to_list (list/map pieces encode_chunk)
+  "{head}{te}\r\n{text/join coded ""}0\r\n\r\n"
+
+pub fn encode_chunk piece
+  n = length (text/bytes piece)
+  "{http/to_hex n}\r\n{piece}\r\n"

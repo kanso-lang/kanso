@@ -1,0 +1,90 @@
+import "../http"
+import "std/list"
+import "std/os"
+import "std/path"
+import "std/sha256"
+import "std/text"
+
+# Files under one directory, served by GET and HEAD. A path is refused, as
+# a 404 so nothing is revealed, when a segment would climb out of the root
+# or names a hidden file. A directory answers its index.html.
+#
+# A file larger than `chunk_size` goes out as chunks of that size, which a
+# client speaking HTTP/1.1 receives with chunked coding. The ETag is the
+# first sixteen hex digits of the content's SHA-256, and a matching
+# If-None-Match answers 304 with no body.
+chunk_size = 4096
+
+pub fn serve_file root rel req
+  segments = list/reject (http/split_on rel "/") (s -> s == "")
+  missing = http/failure 404 "no such file"
+  return effect missing if not list/all? segments safe?
+  full = path/join root rel
+  os/is_dir full .> (dir -> located full dir req)
+
+fn safe? s
+  not http/starts_with? s "."
+
+fn located full true req
+  read_and_answer (path/join full "index.html") req
+
+fn located full false req
+  read_and_answer full req
+
+fn read_and_answer full req
+  os/read_bytes full .> (found -> answered full req found)
+
+fn answered _ _ (file_not_found _)
+  http/failure 404 "no such file"
+
+fn answered full req content
+  tag = etag content
+  wanted = req.headers["if-none-match"]
+  if (wanted == tag) (not_modified tag) (whole_file full tag content)
+
+fn not_modified tag
+  http/respond 304 [(http/field "etag" tag)] ""
+
+fn whole_file full tag content
+  kind = http/field "content-type" (content_type (path/extension full))
+  headers = [kind (http/field "etag" tag)]
+  http/respond 200 headers (sized content)
+
+fn sized content
+  n = length content
+  if (n > chunk_size) (http/chunked (pieces content 1 n [])) content
+
+fn pieces content at n acc
+  return acc if at > n
+  last = if (at + chunk_size - 1 > n) n (at + chunk_size - 1)
+  pieces content (at + chunk_size) n (push acc (text/slice content at last))
+
+pub fn etag content
+  "\"{text/slice (sha256/hex content) 1 16}\""
+
+pub fn content_type "html"
+  "text/html; charset=utf-8"
+
+pub fn content_type "css"
+  "text/css; charset=utf-8"
+
+pub fn content_type "js"
+  "text/javascript; charset=utf-8"
+
+pub fn content_type "json"
+  "application/json"
+
+pub fn content_type "txt"
+  "text/plain; charset=utf-8"
+
+pub fn content_type "svg"
+  "image/svg+xml"
+
+pub fn content_type "png"
+  "image/png"
+
+pub fn content_type "ico"
+  "image/x-icon"
+
+pub fn content_type _
+  "application/octet-stream"

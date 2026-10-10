@@ -1,0 +1,162 @@
+import "std/list"
+import "std/net"
+import "std/text"
+import "std/time"
+
+# A handler answers an effect that yields a `turn`: the response, and the
+# state to carry to the next request. The state is whatever the application
+# keeps -- the todo store, here -- and the server never looks inside it.
+pub type turn
+  response
+  state
+
+# How a server behaves. `handler` is `request state -> <turn>effect`, `log`
+# is `string -> effect` and receives one line per answered request, and
+# `max_requests` caps how many requests one connection may carry before the
+# server asks the client to open another.
+pub type server
+  handler
+  limits
+  log
+  max_requests
+
+# Per connection: the bytes read but not yet parsed, whether a 100 Continue
+# has gone out for the request now arriving, and how many requests the
+# connection has carried.
+type session
+  buffer
+  continued
+  served
+
+type listener_closed
+
+type peer_gone
+
+# What a handler answers, built from outside the module (FRICTION F15).
+pub fn carry reply state
+  turn reply state
+
+pub fn server_with handler log
+  server handler default_limits log 100
+
+# Accept, converse, accept again, carrying the state from one connection to
+# the next. Connections are served one at a time: a read on a socket blocks
+# the whole program, so a second connection could not be read while the
+# first one waits anyway (FRICTION F19, F20). A closed listener ends the loop,
+# and the state it carried is what the loop answers.
+pub fn serve srv l state
+  net/accept l .? closed .> (c -> accepted srv l state c)
+
+# The accept has to run beside another statement: alone, both engines decide
+# that nothing could ever connect and fail at once (FRICTION F2).
+pub fn listening srv l state banner
+  { log } = srv
+  log banner
+  serve srv l state
+
+fn closed (err _)
+  listener_closed
+
+fn accepted _ _ state listener_closed
+  effect state
+
+fn accepted srv l state c
+  fresh = session (text/bytes "") false 0
+  converse srv c state fresh .> (s -> serve srv l s)
+
+fn converse srv c state ses
+  { limits:lim } = srv
+  on_parse srv c state ses (parse ses.buffer lim)
+
+fn on_parse srv c state (session buffer false served) (need_body true)
+  go_on = "HTTP/1.1 100 Continue\r\n\r\n"
+  next = session buffer true served
+  net/write c go_on .> (_ -> more srv c state next)
+
+fn on_parse srv c state ses need_head
+  more srv c state ses
+
+fn on_parse srv c state ses (need_body _)
+  more srv c state ses
+
+fn on_parse srv c state _ (rejected reason status)
+  { log } = srv
+  log "{status} {reason}"
+    .> (_ -> dated (failure status reason))
+    .> (r -> written c (render r "GET" "HTTP/1.1" true) 1)
+    .> (_ -> net/close_conn c)
+    .> (_ -> state)
+
+fn on_parse srv c state ses (framed req rest)
+  { handler } = srv
+  handler req state .> (t -> answer srv c ses req rest t)
+
+fn more srv c state ses
+  net/read c .? gone .> (chunk -> received srv c state ses chunk)
+
+fn gone (err _)
+  peer_gone
+
+fn received _ c state _ ""
+  net/close_conn c .> (_ -> state)
+
+fn received _ c state _ peer_gone
+  net/close_conn c .? gone .> (_ -> state)
+
+fn received srv c state ses chunk
+  session buffer continued served = ses
+  grown = session (text/append buffer chunk) continued served
+  converse srv c state grown
+
+fn answer srv c ses req rest (turn reply state)
+  { method target version } = req
+  served = ses.served + 1
+  keep = keep_alive? srv req reply served
+  { log } = srv
+  log "{method} {target} {reply.status}"
+    .> (_ -> dated reply)
+    .> (r -> written c (render r method version (not keep)) 1)
+    .> (_ -> onward srv c state rest served keep)
+
+# Every response says when it was sent. KANSO_NOW pins the clock, which is
+# how the transcripts in fixtures/ stay byte-identical from run to run.
+fn dated reply
+  time/now .> (ms -> with_header reply "date" (http_date ms))
+
+fn onward srv c state rest served true
+  converse srv c state (session rest false served)
+
+fn onward _ c state _ _ false
+  net/close_conn c .> (_ -> state)
+
+# HTTP/1.1 keeps a connection unless someone says close; HTTP/1.0 closes it
+# unless the client asked for keep-alive. A handler that sets
+# `connection: close` itself, and a connection that has carried
+# `max_requests`, close it too.
+fn keep_alive? srv req reply served
+  { max_requests } = srv
+  asked = req.headers["connection"]
+  wanted = persistent? req.version (tokens asked)
+  wanted and served < max_requests and not closes? reply.headers
+
+fn tokens none
+  []
+
+fn tokens value
+  split_on (lower value) ","
+
+fn persistent? "HTTP/1.1" ts
+  not has_token? ts "close"
+
+fn persistent? _ ts
+  has_token? ts "keep-alive"
+
+fn has_token? ts t
+  list/any? ts (x -> text/trim x == t)
+
+fn closes? headers
+  list/any? headers (h -> h.name == "connection" and h.value == "close")
+
+fn written c wire i
+  return effect done if i < 1 or length wire < i
+  net/write c wire[i] .> (_ -> written c wire (i + 1))

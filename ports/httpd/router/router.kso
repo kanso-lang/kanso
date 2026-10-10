@@ -1,0 +1,108 @@
+import "../http"
+import "std/list"
+import "std/text"
+
+# A route table is a list of routes, tried in order. A pattern is a path with
+# `:name` for one segment and `*name` for the rest of the path:
+# "/todos/:id" and "/static/*file".
+pub type route
+  handler
+  method
+  pattern
+
+pub type literal
+  text
+
+pub type param
+  name
+
+pub type splat
+  name
+
+# What a lookup answers. A path that some route knows under another method is
+# a 405 and not a 404, and the allowed methods are what the Allow header
+# lists.
+pub type matched
+  handler
+  params
+
+pub type wrong_method
+  allowed
+
+pub type no_route
+
+pub fn on method path handler
+  route handler method (compiled path)
+
+fn compiled path
+  list/to_list (list/map (segments_of path) piece)
+
+fn piece s
+  return param (text/slice s 2 (length s)) if http/starts_with? s ":"
+  return splat (text/slice s 2 (length s)) if http/starts_with? s "*"
+  literal s
+
+# "/todos/3/" is ["todos" "3"]: empty segments carry nothing a route could
+# name, so a trailing slash and a doubled one are the same path. Each
+# segment is decoded after the split, so an escaped slash stays inside its
+# segment.
+pub fn segments_of path
+  pieces = http/split_on path "/"
+  kept = list/to_list (list/reject pieces (s -> s == ""))
+  list/to_list (list/map kept http/unescape)
+
+# HEAD is GET without the body, so a HEAD request that no route names is
+# looked up as a GET and the server leaves the body off.
+pub fn find routes method path
+  segs = segments_of path
+  found = first_match routes method segs 1
+  if (method == "HEAD") (head_or_get routes segs found) found
+
+fn head_or_get _ _ m:matched
+  m
+
+fn head_or_get routes segs _
+  first_match routes "GET" segs 1
+
+fn first_match routes method segs i
+  return refused routes segs if i < 1 or length routes < i
+  r = routes[i]
+  bound = bind_all r.pattern segs 1 {}
+  hit = bound != none and r.method == method
+  if hit (matched r.handler bound) (first_match routes method segs (i + 1))
+
+fn refused routes segs
+  fits = list/select routes (r -> bind_all r.pattern segs 1 {} != none)
+  allowed = list/fold (list/map fits _.method) [] once
+  if (length allowed == 0) no_route (wrong_method (with_head allowed))
+
+fn once acc m
+  if (list/any? acc (x -> x == m)) acc (push acc m)
+
+fn with_head allowed
+  has_get = list/any? allowed (m -> m == "GET")
+  if has_get (once allowed "HEAD") allowed
+
+# The params a pattern binds against a path, or none when it does not fit.
+fn bind_all pattern segs i params
+  p = pattern[i]
+  s = segs[i]
+  return params if p == none and s == none
+  bind_one pattern segs i params p s
+
+fn bind_one _ _ _ _ none _
+  none
+
+fn bind_one _ segs i params (splat name) _
+  rest = text/join (text/slice segs i (length segs)) "/"
+  put params name rest
+
+fn bind_one pattern segs i params p s
+  return none if s == none
+  bind_segment pattern segs i params p s
+
+fn bind_segment pattern segs i params (param name) s
+  bind_all pattern segs (i + 1) (put params name s)
+
+fn bind_segment pattern segs i params (literal t) s
+  if (t == s) (bind_all pattern segs (i + 1) params) none

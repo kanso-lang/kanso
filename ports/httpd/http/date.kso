@@ -1,0 +1,41 @@
+import "std/text"
+
+# The Date header's format, IMF-fixdate from RFC 9110:
+# "Sun, 06 Nov 1994 08:49:37 GMT". The calendar arithmetic is Howard
+# Hinnant's civil_from_days, restricted to dates after 1970, which is all a
+# clock can hand a server.
+type civil
+  day
+  month
+  year
+
+day_names = "ThuFriSatSunMonTueWed"
+
+month_names = "JanFebMarAprMayJunJulAugSepOctNovDec"
+
+pub fn http_date ms
+  secs = ms / 1000
+  days = secs / 86400
+  of_day = secs % 86400
+  civil day month year = civil_of days
+  weekday = three day_names (days % 7 + 1)
+  clock = "{two (of_day / 3600)}:{two (of_day % 3600 / 60)}:{two (of_day % 60)}"
+  "{weekday}, {two day} {three month_names month} {year} {clock} GMT"
+
+fn civil_of days
+  z = days + 719468
+  era = z / 146097
+  doe = z - era * 146097
+  yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365
+  doy = doe - (365 * yoe + yoe / 4 - yoe / 100)
+  mp = (5 * doy + 2) / 153
+  day = doy - (153 * mp + 2) / 5 + 1
+  month = if (mp < 10) (mp + 3) (mp - 9)
+  year = yoe + era * 400 + if (month <= 2) 1 0
+  civil day month year
+
+fn three names n
+  text/slice names (n * 3 - 2) (n * 3)
+
+fn two n
+  if (n < 10) "0{n}" "{n}"

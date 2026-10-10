@@ -1,0 +1,191 @@
+import "../http"
+import "std/list"
+import "std/sha256"
+import "std/text"
+
+# The client's reading of a response stream. It is written apart from the
+# server's parser on purpose: a client that shared the server's framing code
+# would agree with the server's mistakes.
+pub type reply
+  body
+  chunk_count
+  fields
+  status
+  status_line
+
+# What the stream held after the last whole response: nothing, or bytes
+# that did not make one.
+pub type leftover
+  count
+
+type reading
+  at
+  body
+  count
+
+type cut_short
+
+type no_body
+
+type by_length
+  n
+
+type by_chunks
+
+type to_end
+
+# The methods are those of the requests sent, in order, so a HEAD response
+# is read without a body. A 1xx response is interim and answers no request.
+pub fn read_replies bs methods
+  replies_from bs 1 methods []
+
+fn replies_from bs at methods acc
+  return push acc (leftover 0) if at > length bs
+  end = http/blank_line_at bs at
+  return push acc (leftover (length bs - at + 1)) if end == 0
+  head = http/text_of bs at (end - 1)
+  with_head bs (end + 4) methods acc head
+
+fn with_head bs _ _ acc (err _)
+  push acc (leftover (length bs))
+
+fn with_head bs from methods acc head
+  lines = http/split_on head "\r\n"
+  status = status_of lines[1]
+  fields = list/to_list (list/drop lines 1)
+  interim = status < 200
+  method = if interim "" (first_method methods)
+  framing = how_framed status method (field_map fields)
+  got = read_body bs from framing
+  continued bs methods acc (status_line_of lines) status fields interim got
+
+fn continued bs methods acc line status fields interim (reading at body count)
+  r = reply body count fields status line
+  later = if interim methods (list/to_list (list/drop methods 1))
+  replies_from bs at later (push acc r)
+
+fn continued bs _ acc _ _ _ _ cut_short
+  push acc (leftover (length bs))
+
+fn status_line_of lines
+  first = lines[1]
+  if (first == none) "" first
+
+fn first_method methods
+  m = methods[1]
+  if (m == none) "GET" m
+
+fn status_of none
+  0
+
+fn status_of line
+  words = http/split_on line " "
+  n = if (length words < 2) none (http/parse_decimal words[2])
+  if (n == none) 0 n
+
+fn field_map fields
+  list/fold fields {} field_into
+
+fn field_into acc line
+  added acc (http/split_once line ":")
+
+fn added acc none
+  acc
+
+fn added acc pair
+  put acc (http/lower pair.before) (text/trim pair.after)
+
+fn how_framed status method fields
+  return no_body if status < 200 or status == 204 or status == 304
+  return no_body if method == "HEAD"
+  te = fields["transfer-encoding"]
+  return by_chunks if te != none and http/lower te == "chunked"
+  cl = fields["content-length"]
+  n = if (cl == none) none (http/parse_decimal cl)
+  if (n == none) to_end (by_length n)
+
+fn read_body _ from no_body
+  reading from (text/bytes "") 0
+
+fn read_body bs from (by_length n)
+  return cut_short if length bs - from + 1 < n
+  reading (from + n) (text/slice bs from (from + n - 1)) 0
+
+fn read_body bs from to_end
+  reading (length bs + 1) (text/slice bs from (length bs)) 0
+
+fn read_body bs from by_chunks
+  chunk_loop bs from (text/bytes "") 0
+
+fn chunk_loop bs at acc count
+  line_end = http/crlf_at bs at
+  return cut_short if line_end == 0
+  size = size_of (http/text_of bs at (line_end - 1))
+  next_chunk bs line_end acc count size
+
+fn size_of (err _)
+  none
+
+fn size_of line
+  digits = (http/split_on line ";")[1]
+  if (digits == none) none (http/parse_hex (text/trim digits))
+
+fn next_chunk _ _ _ _ none
+  cut_short
+
+fn next_chunk bs line_end acc count 0
+  past_trailers bs (line_end + 2) acc count
+
+fn next_chunk bs line_end acc count size
+  from = line_end + 2
+  past = from + size
+  return cut_short if length bs < past + 1
+  data = text/slice bs from (past - 1)
+  chunk_loop bs (past + 2) (text/append acc data) (count + 1)
+
+fn past_trailers bs at acc count
+  line_end = http/crlf_at bs at
+  return cut_short if line_end == 0
+  return reading (line_end + 2) acc count if line_end == at
+  past_trailers bs (line_end + 2) acc count
+
+# How a reply looks in a transcript: its status line and headers each
+# behind "< ", then the body. Text bodies are shown as they are; anything
+# else is shown by its length and digest, which is what a test can compare.
+pub fn shown_lines r:reply
+  { body chunk_count fields status_line } = r
+  heads = list/to_list (list/map fields (f -> "< {f}"))
+  framing = if (chunk_count > 0) ["({chunk_count} chunks)"] []
+  lines = text/concat (text/concat ["< {status_line}"] heads) framing
+  readable = textual? (field_map fields)["content-type"]
+  text/concat lines (body_lines body readable)
+
+pub fn shown_lines (leftover 0)
+  ["(the server closed the connection)"]
+
+pub fn shown_lines (leftover n)
+  ["(the server closed the connection; {n} bytes did not make a response)"]
+
+# Past two kilobytes even a text body is shown by its digest, so a
+# transcript stays readable and still pins every byte.
+fn body_lines body readable
+  return [] if length body == 0
+  return ["<" (digest body)] if not readable or length body > 2048
+  as_text body (text/utf8 body)
+
+fn as_text body (err _)
+  ["<" (digest body)]
+
+fn as_text _ t
+  ["<" t]
+
+fn digest body
+  "({length body} bytes, sha256 {text/slice (sha256/hex body) 1 16})"
+
+fn textual? none
+  false
+
+fn textual? kind
+  k = http/lower kind
+  types = ["text/" "application/json" "application/javascript"]
+  list/any? types (t -> http/starts_with? k t)

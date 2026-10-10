@@ -1,0 +1,15 @@
+# A server that accepts outside a parallel group.
+#
+# Should: wait for a connection, then answer it. Start it, then run
+#   curl -s localhost:48219/
+# from another shell and see "hi".
+#
+# Does: exits at once on every engine with
+#   error[endpoint]: unhandled err reached the executor: "nothing connected"
+# The executor's accept assumes that only another fiber of the same program
+# could ever connect, so with no group around it there is nothing to wait
+# for. Putting `serve l` in a group with any other statement makes it work.
+import "./solo"
+import "std/net"
+
+net/listen 48219 .> solo/serve

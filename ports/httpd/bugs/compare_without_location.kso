@@ -1,0 +1,21 @@
+# A comparison between a list and an int, reached through a pipe that put
+# the arguments in a different order from the one the function declares.
+#
+# Should: be refused before it runs, since `i < 1` needs a number and the
+# pipe hands `walk` a list in that position; failing that, the run-time
+# error should name the file and line of the `<`.
+#
+# Does: `kanso play compare_without_location.kso` (with or without
+# --interp) stops with
+#   error[runtime]: comparison requires two values of one comparable type
+# and no file, line, birthplace or trace. In the port the same mistake,
+# `options ... . read_options args (i + 1)` in cli/cli.kso, passed
+# `kanso check main.kso` and was found by bisecting the program by hand.
+fn walk args i acc
+  return acc if i < 1 or length args < i
+  walk args (i + 1) (acc + 1)
+
+fn start args
+  0 . walk args 1
+
+print "{start ["a" "b"]}"

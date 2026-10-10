@@ -1,0 +1,166 @@
+import "std/list"
+import "std/text"
+
+pub type cut
+  after
+  before
+
+hexits = "0123456789abcdef"
+
+# The position of the next CR LF at or after `from`, or 0 when the buffer
+# holds none yet. find2 is asked for the same byte twice because there is
+# only one byte to look for; the LF is checked where the CR was found.
+pub fn crlf_at bs from
+  i = text/find2 bs from 13 13
+  return 0 if i > length bs
+  return i if bs[i + 1] == 10
+  crlf_at bs (i + 1)
+
+# Where the blank line that ends a head begins: the first CR LF CR LF.
+pub fn blank_line_at bs from
+  i = crlf_at bs from
+  return 0 if i == 0
+  return i if bs[i + 2] == 13 and bs[i + 3] == 10
+  blank_line_at bs (i + 2)
+
+# The bytes from `from` to `to`, inclusive, as text. A head is ascii by the
+# grammar, and a body that is not utf-8 is refused by whoever asked for text.
+pub fn text_of bs from to
+  text/utf8 (text/slice bs from to)
+
+# Case changes on ascii letters only. Mapping bytes cannot break utf-8 that
+# was whole, but text/utf8 answers an err in its type, so `or_original`
+# says what happens in the case that cannot arise.
+pub fn lower s
+  or_original s (text/utf8 (list/to_list (list/map (text/bytes s) lower_byte)))
+
+fn or_original s (err _)
+  s
+
+fn or_original _ t
+  t
+
+fn lower_byte b
+  if (b > 64 and b < 91) (b + 32) b
+
+pub fn upper s
+  or_original s (text/utf8 (list/to_list (list/map (text/bytes s) upper_byte)))
+
+fn upper_byte b
+  if (b > 96 and b < 123) (b - 32) b
+
+# A chunk size or a percent escape. None for anything that is not hex, and
+# for a number too long to be a size anyone means.
+pub fn parse_hex s
+  ds = text/bytes s
+  return none if length ds == 0 or length ds > 12
+  hex_from ds 1 0
+
+fn hex_from ds i acc
+  return acc if i < 1 or length ds < i
+  hex_step ds i acc (hex_digit ds[i])
+
+fn hex_step _ _ _ none
+  none
+
+fn hex_step ds i acc d
+  hex_from ds (i + 1) (acc * 16 + d)
+
+pub fn hex_digit none
+  none
+
+pub fn hex_digit b
+  return b - 48 if b > 47 and b < 58
+  return b - 87 if b > 96 and b < 103
+  return b - 55 if b > 64 and b < 71
+  none
+
+pub fn to_hex 0
+  "0"
+
+pub fn to_hex n
+  hex_digits n ""
+
+fn hex_digits 0 acc
+  acc
+
+fn hex_digits n acc
+  digit = n % 16 + 1
+  hex_digits (n / 16) "{text/slice hexits digit digit}{acc}"
+
+# Decimal digits only: no sign, no spaces, no plus. A content-length is a
+# count of bytes, and anything looser is how request smuggling starts.
+pub fn parse_decimal s
+  ds = text/bytes s
+  return none if length ds == 0 or length ds > 15
+  decimal_from ds 1 0
+
+fn decimal_from ds i acc
+  return acc if i < 1 or length ds < i
+  d = ds[i]
+  return none if d < 48 or d > 57
+  decimal_from ds (i + 1) (acc * 10 + d - 48)
+
+pub fn starts_with? s prefix
+  n = length prefix
+  length s >= n and text/slice s 1 n == prefix
+
+pub fn ends_with? s suffix
+  n = length s
+  m = length suffix
+  n >= m and text/slice s (n - m + 1) n == suffix
+
+# `text/split` answers an err for an empty separator, so the checker reads
+# every split whose separator is a variable as fallible. Every separator
+# here is a literal at the call site; this is where the err is put down.
+pub fn split_on s sep
+  listed (text/split s sep)
+
+fn listed (err _)
+  []
+
+fn listed parts
+  parts
+
+# Everything before the first `sep`, and everything after it. None when
+# there is no `sep`; a split on every occurrence would cut a header value
+# that itself holds the separator.
+pub fn split_once s sep
+  parts = split_on s sep
+  return none if length parts < 2
+  rest = text/join (text/slice parts 2 (length parts)) sep
+  cut rest parts[1]
+
+pub fn byte_length s:string
+  length (text/bytes s)
+
+pub fn byte_length b
+  length b
+
+# Percent-decoding. A `%` that is not followed by two hex digits is kept as
+# it was, which is what browsers do with a stray percent sign; `+` is a space
+# only in a query, and this decoder serves the query, so it decodes it.
+# Escapes that decode to bytes which are not utf-8 leave the text as it
+# was sent, rather than failing the whole request over one query value.
+pub fn unescape s
+  decoded = unescape_from (text/bytes s) 1 []
+  or_original s (text/utf8 decoded)
+
+fn unescape_from bs i acc
+  return acc if i < 1 or length bs < i
+  b = bs[i]
+  return unescape_from bs (i + 1) (push acc 32) if b == 43
+  return unescape_from bs (i + 1) (push acc b) if b != 37
+  escaped bs i acc (hex_digit bs[i + 1]) (hex_digit bs[i + 2])
+
+fn escaped bs i acc none none
+  unescape_from bs (i + 1) (push acc 37)
+
+fn escaped bs i acc none _
+  unescape_from bs (i + 1) (push acc 37)
+
+fn escaped bs i acc _ none
+  unescape_from bs (i + 1) (push acc 37)
+
+fn escaped bs i acc hi lo
+  unescape_from bs (i + 3) (push acc (hi * 16 + lo))

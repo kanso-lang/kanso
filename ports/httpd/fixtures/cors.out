@@ -1,0 +1,18 @@
+== connection 1: 205 bytes in 7 pieces
+[server] OPTIONS /todos 204
+[server] GET /todos 200
+< HTTP/1.1 204 No Content
+< access-control-allow-methods: GET, POST, PATCH, DELETE
+< access-control-allow-headers: content-type
+< access-control-max-age: 86400
+< access-control-allow-origin: *
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< HTTP/1.1 200 OK
+< content-type: application/json
+< access-control-allow-origin: *
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< content-length: 2
+<
+[]
+(the server closed the connection)
+== shutdown: the port no longer answers

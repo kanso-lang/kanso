@@ -1,0 +1,140 @@
+import "../app"
+import "../client"
+import "../http"
+import "std/io"
+import "std/net"
+import "std/os"
+
+# The command line:
+#
+#   httpd serve [--port N] [--root DIR] [--quiet]
+#   httpd e2e SCENARIO [--port N] [--root DIR]
+#
+# `serve` runs the todo-backend until it is killed. `e2e` starts the same
+# server inside this process, plays a scenario file against it over real
+# sockets, prints the transcript, and shuts the server down.
+type options
+  port
+  quiet
+  root
+  words
+
+type busy
+
+default_port = 48213
+
+usage = "usage: {serve_usage}\n       {e2e_usage}\n"
+
+serve_usage = "httpd serve [--port N] [--root DIR] [--quiet]"
+
+e2e_usage = "httpd e2e SCENARIO [--port N] [--root DIR]"
+
+pub fn run args
+  opts = read_options args 1 (options none false "public" [])
+  dispatched opts.words opts
+
+fn read_options args i opts
+  return opts if i < 1 or length args < i
+  flag = args[i]
+  value = args[i + 1]
+  option_step args i opts flag value
+
+fn option_step args i opts "--port" v:string
+  port = http/parse_decimal v
+  return complaint "--port takes a number" if port == none
+  read_options args (i + 2) (options port opts.quiet opts.root opts.words)
+
+fn option_step args i opts "--root" v:string
+  read_options args (i + 2) (options opts.port opts.quiet v opts.words)
+
+fn option_step args i opts "--quiet" _
+  read_options args (i + 1) (options opts.port true opts.root opts.words)
+
+fn option_step args i opts word _
+  words = push opts.words word
+  read_options args (i + 1) (options opts.port opts.quiet opts.root words)
+
+fn complaint text
+  err text
+
+fn dispatched words opts
+  command words[1] words opts
+
+fn command none _ _
+  wrong_usage
+
+fn command "serve" words opts
+  return wrong_usage if length words != 1
+  serving opts
+
+fn command "e2e" words opts
+  return wrong_usage if length words != 2
+  scenario words[2] opts
+
+fn command _ _ _
+  wrong_usage
+
+wrong_usage = io/write_err usage .> (_ -> os/exit 2)
+
+fn port_or port none
+  port
+
+fn port_or _ chosen
+  chosen
+
+fn serving opts
+  port = port_or default_port opts.port
+  net/listen port .? refused .> (l -> started l port opts)
+
+fn refused (err _)
+  busy
+
+fn started _ port _ busy
+  io/write_err "httpd: cannot listen on port {port}\n" .> (_ -> os/exit 1)
+
+fn started l _ opts
+  srv = http/server_with app/handle (logger opts.quiet)
+  banner = "httpd: serving {opts.root} on http://127.0.0.1:"
+  net/port l .> (p -> http/listening srv l (app/start opts.root) "{banner}{p}")
+
+# The access log goes to stderr. A native binary block-buffers stdout when
+# it is not a terminal and has no way to flush it, so a server that is
+# killed loses the lines it printed (FRICTION F21); stderr is unbuffered.
+fn logger true
+  (_ -> effect done)
+
+fn logger false
+  (line -> io/write_err "{line}\n")
+
+fn scenario file opts
+  os/read_file file .> (src -> loaded file src opts)
+
+fn loaded file (file_not_found _) _
+  io/write_err "httpd: no such scenario: {file}\n" .> (_ -> os/exit 1)
+
+fn loaded _ src opts
+  steps = client/parse_scenario src
+  port = port_or 0 opts.port
+  net/listen port
+    .? refused
+    .> (l -> fallback l opts)
+    .> (l -> session l steps opts)
+
+# A port somebody else holds is not a reason to fail a test run: the
+# operating system is asked for any free one instead.
+fn fallback busy _
+  net/listen 0
+
+fn fallback l _
+  effect l
+
+fn session l steps opts
+  net/port l .> (p -> both l p steps opts)
+
+# The two halves run side by side as a group: the server accepting, and the
+# client connecting. The client closes the listener when it is done, which
+# ends the server's loop.
+fn both l p steps opts
+  srv = http/server_with app/handle (line -> print "[server] {line}")
+  http/serve srv l (app/start opts.root)
+  client/drive l p steps

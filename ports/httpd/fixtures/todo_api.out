@@ -1,0 +1,180 @@
+-- create two todos and list them
+== connection 1: 280 bytes in 3 pieces
+[server] POST /todos 201
+[server] POST /todos 201
+[server] GET /todos 200
+< HTTP/1.1 201 Created
+< content-type: application/json
+< location: http://localhost/todos/1
+< access-control-allow-origin: *
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< content-length: 82
+<
+{"completed":false,"id":1,"title":"walk the dog","url":"http://localhost/todos/1"}
+< HTTP/1.1 201 Created
+< content-type: application/json
+< location: http://localhost/todos/2
+< access-control-allow-origin: *
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< content-length: 88
+<
+{"completed":false,"id":2,"order":2,"title":"buy milk","url":"http://localhost/todos/2"}
+< HTTP/1.1 200 OK
+< content-type: application/json
+< access-control-allow-origin: *
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< content-length: 173
+<
+[{"completed":false,"id":1,"title":"walk the dog","url":"http://localhost/todos/1"},{"completed":false,"id":2,"order":2,"title":"buy milk","url":"http://localhost/todos/2"}]
+(the server closed the connection)
+-- read one, change it, read the collection again
+== connection 2: 335 bytes in 4 pieces
+[server] GET /todos/2 200
+[server] PATCH /todos/1 200
+[server] PATCH /todos/2 200
+[server] GET /todos 200
+< HTTP/1.1 200 OK
+< content-type: application/json
+< access-control-allow-origin: *
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< content-length: 88
+<
+{"completed":false,"id":2,"order":2,"title":"buy milk","url":"http://localhost/todos/2"}
+< HTTP/1.1 200 OK
+< content-type: application/json
+< access-control-allow-origin: *
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< content-length: 87
+<
+{"completed":true,"id":1,"title":"walk the dog twice","url":"http://localhost/todos/1"}
+< HTTP/1.1 200 OK
+< content-type: application/json
+< access-control-allow-origin: *
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< content-length: 78
+<
+{"completed":false,"id":2,"title":"buy milk","url":"http://localhost/todos/2"}
+< HTTP/1.1 200 OK
+< content-type: application/json
+< access-control-allow-origin: *
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< content-length: 168
+<
+[{"completed":true,"id":1,"title":"walk the dog twice","url":"http://localhost/todos/1"},{"completed":false,"id":2,"title":"buy milk","url":"http://localhost/todos/2"}]
+(the server closed the connection)
+-- delete one; the other is still there and ids keep counting
+== connection 3: 264 bytes in 4 pieces
+[server] DELETE /todos/1 204
+[server] GET /todos/1 404
+[server] POST /todos 201
+[server] GET /todos 200
+< HTTP/1.1 204 No Content
+< access-control-allow-origin: *
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< HTTP/1.1 404 Not Found
+< content-type: application/json
+< access-control-allow-origin: *
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< content-length: 37
+<
+{"error":"no such todo","status":404}
+< HTTP/1.1 201 Created
+< content-type: application/json
+< location: http://localhost/todos/3
+< access-control-allow-origin: *
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< content-length: 84
+<
+{"completed":true,"id":3,"order":3,"title":"third","url":"http://localhost/todos/3"}
+< HTTP/1.1 200 OK
+< content-type: application/json
+< access-control-allow-origin: *
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< content-length: 165
+<
+[{"completed":false,"id":2,"title":"buy milk","url":"http://localhost/todos/2"},{"completed":true,"id":3,"order":3,"title":"third","url":"http://localhost/todos/3"}]
+(the server closed the connection)
+-- clear everything
+== connection 4: 83 bytes in 2 pieces
+[server] DELETE /todos 204
+[server] GET /todos 200
+< HTTP/1.1 204 No Content
+< access-control-allow-origin: *
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< HTTP/1.1 200 OK
+< content-type: application/json
+< access-control-allow-origin: *
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< content-length: 2
+<
+[]
+(the server closed the connection)
+-- bad input is refused with a reason
+== connection 5: 796 bytes in 8 pieces
+[server] POST /todos 422
+[server] POST /todos 422
+[server] POST /todos 422
+[server] POST /todos 422
+[server] POST /todos 400
+[server] PATCH /todos/99 404
+[server] PUT /todos/1 405
+[server] GET /todos/abc 404
+< HTTP/1.1 422 Unprocessable Content
+< content-type: application/json
+< access-control-allow-origin: *
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< content-length: 45
+<
+{"error":"a todo needs a title","status":422}
+< HTTP/1.1 422 Unprocessable Content
+< content-type: application/json
+< access-control-allow-origin: *
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< content-length: 47
+<
+{"error":"title must be a string","status":422}
+< HTTP/1.1 422 Unprocessable Content
+< content-type: application/json
+< access-control-allow-origin: *
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< content-length: 56
+<
+{"error":"completed must be true or false","status":422}
+< HTTP/1.1 422 Unprocessable Content
+< content-type: application/json
+< access-control-allow-origin: *
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< content-length: 48
+<
+{"error":"a todo is a JSON object","status":422}
+< HTTP/1.1 400 Bad Request
+< content-type: application/json
+< access-control-allow-origin: *
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< content-length: 81
+<
+{"error":"the body is not JSON: unexpected end of input at byte 10","status":400}
+< HTTP/1.1 404 Not Found
+< content-type: application/json
+< access-control-allow-origin: *
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< content-length: 37
+<
+{"error":"no such todo","status":404}
+< HTTP/1.1 405 Method Not Allowed
+< content-type: application/json
+< allow: OPTIONS, GET, PATCH, DELETE, HEAD
+< access-control-allow-origin: *
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< content-length: 43
+<
+{"error":"method not allowed","status":405}
+< HTTP/1.1 404 Not Found
+< content-type: application/json
+< access-control-allow-origin: *
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< content-length: 37
+<
+{"error":"no such todo","status":404}
+(the server closed the connection)
+== shutdown: the port no longer answers

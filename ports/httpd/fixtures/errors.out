@@ -1,0 +1,179 @@
+-- a request line with four words
+== connection 1: 41 bytes in 3 pieces
+[server] 400 a malformed request line
+< HTTP/1.1 400 Bad Request
+< content-type: application/json
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< connection: close
+< content-length: 49
+<
+{"error":"a malformed request line","status":400}
+(the server closed the connection)
+-- a version this server does not speak
+== connection 2: 35 bytes in 3 pieces
+[server] 505 unsupported version
+< HTTP/1.1 505 HTTP Version Not Supported
+< content-type: application/json
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< connection: close
+< content-length: 44
+<
+{"error":"unsupported version","status":505}
+(the server closed the connection)
+-- something that is not HTTP at all
+== connection 3: 15 bytes in 2 pieces
+[server] 400 a malformed request line
+< HTTP/1.1 400 Bad Request
+< content-type: application/json
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< connection: close
+< content-length: 49
+<
+{"error":"a malformed request line","status":400}
+(the server closed the connection)
+-- an HTTP/1.1 request with no Host
+== connection 4: 23 bytes in 2 pieces
+[server] 400 an HTTP/1.1 request without a host
+< HTTP/1.1 400 Bad Request
+< content-type: application/json
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< connection: close
+< content-length: 59
+<
+{"error":"an HTTP/1.1 request without a host","status":400}
+(the server closed the connection)
+-- a lower-case method
+== connection 5: 40 bytes in 3 pieces
+[server] 400 a malformed method
+< HTTP/1.1 400 Bad Request
+< content-type: application/json
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< connection: close
+< content-length: 43
+<
+{"error":"a malformed method","status":400}
+(the server closed the connection)
+-- an absolute-form target
+== connection 6: 56 bytes in 3 pieces
+[server] 400 a malformed target
+< HTTP/1.1 400 Bad Request
+< content-type: application/json
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< connection: close
+< content-length: 43
+<
+{"error":"a malformed target","status":400}
+(the server closed the connection)
+-- whitespace between a header name and its colon
+== connection 7: 41 bytes in 3 pieces
+[server] 400 a malformed header name
+< HTTP/1.1 400 Bad Request
+< content-type: application/json
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< connection: close
+< content-length: 48
+<
+{"error":"a malformed header name","status":400}
+(the server closed the connection)
+-- an obsolete folded header
+== connection 8: 60 bytes in 5 pieces
+[server] 400 obsolete line folding
+< HTTP/1.1 400 Bad Request
+< content-type: application/json
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< connection: close
+< content-length: 46
+<
+{"error":"obsolete line folding","status":400}
+(the server closed the connection)
+-- both content-length and transfer-encoding
+== connection 9: 93 bytes in 7 pieces
+[server] 400 both transfer-encoding and content-length
+< HTTP/1.1 400 Bad Request
+< content-type: application/json
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< connection: close
+< content-length: 66
+<
+{"error":"both transfer-encoding and content-length","status":400}
+(the server closed the connection)
+-- two content-lengths that disagree
+== connection 10: 82 bytes in 6 pieces
+[server] 400 conflicting content-lengths
+< HTTP/1.1 400 Bad Request
+< content-type: application/json
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< connection: close
+< content-length: 52
+<
+{"error":"conflicting content-lengths","status":400}
+(the server closed the connection)
+-- a content-length that is not a number
+== connection 11: 61 bytes in 4 pieces
+[server] 400 a malformed content-length
+< HTTP/1.1 400 Bad Request
+< content-type: application/json
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< connection: close
+< content-length: 51
+<
+{"error":"a malformed content-length","status":400}
+(the server closed the connection)
+-- a body larger than the server accepts
+== connection 12: 67 bytes in 4 pieces
+[server] 413 the body is too large
+< HTTP/1.1 413 Content Too Large
+< content-type: application/json
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< connection: close
+< content-length: 46
+<
+{"error":"the body is too large","status":413}
+(the server closed the connection)
+-- a head larger than the server reads
+== connection 13: 9053 bytes in 4 pieces
+[server] 431 the head is too large
+< HTTP/1.1 431 Request Header Fields Too Large
+< content-type: application/json
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< connection: close
+< content-length: 46
+<
+{"error":"the head is too large","status":431}
+(the server closed the connection)
+-- a body that is not JSON's media type
+== connection 14: 101 bytes in 6 pieces
+[server] POST /todos 415
+< HTTP/1.1 415 Unsupported Media Type
+< content-type: application/json
+< access-control-allow-origin: *
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< content-length: 59
+<
+{"error":"a todo is sent as application/json","status":415}
+(the server closed the connection)
+-- a client that hangs up halfway through a body gets no answer
+== connection 15: 70 bytes in 5 pieces
+(the server closed the connection)
+-- unknown paths and methods
+== connection 16: 159 bytes in 2 pieces
+[server] POST /nowhere 405
+[server] DELETE /todos/1/extra 405
+< HTTP/1.1 405 Method Not Allowed
+< content-type: application/json
+< allow: OPTIONS, GET, HEAD
+< access-control-allow-origin: *
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< content-length: 43
+<
+{"error":"method not allowed","status":405}
+< HTTP/1.1 405 Method Not Allowed
+< content-type: application/json
+< allow: OPTIONS, GET, HEAD
+< access-control-allow-origin: *
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< content-length: 43
+<
+{"error":"method not allowed","status":405}
+(the server closed the connection)
+== shutdown: the port no longer answers

@@ -1,0 +1,68 @@
+== curl -s -i -H Host:localhost {base}/todos
+[server] GET /todos 200
+HTTP/1.1 200 OK
+content-type: application/json
+access-control-allow-origin: *
+date: Fri, 10 Oct 2025 01:20:00 GMT
+content-length: 2
+
+[]
+== curl -s -i -H Host:localhost -H Content-Type:application/json -d {"title":"from-curl"} {base}/todos
+[server] POST /todos 201
+HTTP/1.1 201 Created
+content-type: application/json
+location: http://localhost/todos/1
+access-control-allow-origin: *
+date: Fri, 10 Oct 2025 01:20:00 GMT
+content-length: 79
+
+{"completed":false,"id":1,"title":"from-curl","url":"http://localhost/todos/1"}
+-- curl sends a chunked body when told to, and waits for 100 Continue when asked
+== curl -s -H Host:localhost -H Content-Type:application/json -H Transfer-Encoding:chunked -d {"title":"chunked-by-curl","order":2} {base}/todos
+[server] POST /todos 201
+{"completed":false,"id":2,"order":2,"title":"chunked-by-curl","url":"http://localhost/todos/2"}
+== curl -s -H Host:localhost -H Content-Type:application/json -H Expect:100-continue -X PATCH -d {"completed":true} {base}/todos/1
+[server] PATCH /todos/1 200
+{"completed":true,"id":1,"title":"from-curl","url":"http://localhost/todos/1"}
+-- two URLs on one command line share a connection: the second opens none
+== curl -s -H Host:localhost -w [connections:%{num_connects}]\n {base}/todos/1 {base}/todos/2
+[server] GET /todos/1 200
+[server] GET /todos/2 200
+{"completed":true,"id":1,"title":"from-curl","url":"http://localhost/todos/1"}[connections:1]
+{"completed":false,"id":2,"order":2,"title":"chunked-by-curl","url":"http://localhost/todos/2"}[connections:0]
+-- HEAD, and a chunked download measured by curl
+== curl -s -I -H Host:localhost {base}/todos/2
+[server] HEAD /todos/2 200
+HTTP/1.1 200 OK
+content-type: application/json
+access-control-allow-origin: *
+date: Fri, 10 Oct 2025 01:20:00 GMT
+content-length: 95
+
+== curl -s -o /dev/null -w %{http_code}:%{size_download}:%{content_type} {base}/docs/big.txt
+[server] GET /docs/big.txt 200
+200:10600:text/plain; charset=utf-8
+== curl -s --http1.0 -o /dev/null -w %{http_code}:%{size_download} {base}/docs/big.txt
+[server] GET /docs/big.txt 200
+200:10600
+-- a preflight, and a method the route does not take
+== curl -s -i -X OPTIONS -H Host:localhost {base}/todos/1
+[server] OPTIONS /todos/1 204
+HTTP/1.1 204 No Content
+access-control-allow-methods: GET, POST, PATCH, DELETE
+access-control-allow-headers: content-type
+access-control-max-age: 86400
+access-control-allow-origin: *
+date: Fri, 10 Oct 2025 01:20:00 GMT
+
+== curl -s -i -X PUT -H Host:localhost {base}/todos/1
+[server] PUT /todos/1 405
+HTTP/1.1 405 Method Not Allowed
+content-type: application/json
+allow: OPTIONS, GET, PATCH, DELETE, HEAD
+access-control-allow-origin: *
+date: Fri, 10 Oct 2025 01:20:00 GMT
+content-length: 43
+
+{"error":"method not allowed","status":405}
+== shutdown: the port no longer answers

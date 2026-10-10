@@ -1,0 +1,10 @@
+# Cross-origin access, which the todo-backend spec's browser test suite
+# needs: every response allows any origin, and a preflight is answered.
+conn
+send OPTIONS /todos HTTP/1.1
+send Host: localhost
+send Origin: https://www.todobackend.com
+send Access-Control-Request-Method: PATCH
+send Access-Control-Request-Headers: content-type
+send
+request GET /todos

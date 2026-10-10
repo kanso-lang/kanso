@@ -1,0 +1,33 @@
+# The todo-backend API, as the todobackend.com spec exercises it. Each
+# connection carries several requests, so this also runs keep-alive.
+note create two todos and list them
+conn
+request POST /todos {"title":"walk the dog"}
+request POST /todos {"title":"buy milk","order":2}
+request GET /todos
+note read one, change it, read the collection again
+conn
+request GET /todos/2
+request PATCH /todos/1 {"completed":true,"title":"walk the dog twice"}
+request PATCH /todos/2 {"order":null}
+request GET /todos
+note delete one; the other is still there and ids keep counting
+conn
+request DELETE /todos/1
+request GET /todos/1
+request POST /todos {"title":"third","completed":true,"order":3}
+request GET /todos
+note clear everything
+conn
+request DELETE /todos
+request GET /todos
+note bad input is refused with a reason
+conn
+request POST /todos {"order":1}
+request POST /todos {"title":7}
+request POST /todos {"title":"x","completed":"yes"}
+request POST /todos [1,2]
+request POST /todos {"title":
+request PATCH /todos/99 {"title":"nobody"}
+request PUT /todos/1 {"title":"x"}
+request GET /todos/abc

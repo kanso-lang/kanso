@@ -1,0 +1,7 @@
+httpd: serving public on http://127.0.0.1:PORT
+GET /todos 200
+POST /todos 201
+GET / 200
+[]
+{"completed":false,"id":1,"title":"from the shell","url":"http://localhost/todos/1"}
+200 307

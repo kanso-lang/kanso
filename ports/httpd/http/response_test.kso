@@ -1,0 +1,100 @@
+import "std/list"
+import "std/text"
+
+# Rendering is tested on the wire it produces: the pieces joined into the
+# exact text a client would read.
+fn on_wire r method version closing
+  pieces = render r method version closing
+  text/join (as_texts pieces) ""
+
+fn as_texts pieces
+  list/to_list (list/map pieces piece_text)
+
+fn piece_text p:string
+  p
+
+fn piece_text p
+  text/utf8 p
+
+ok_text = text_page 200 "hi"
+
+test_plain_response =
+  got = on_wire ok_text "GET" "HTTP/1.1" false
+  head = "HTTP/1.1 200 OK\r\ncontent-type: text/plain; charset=utf-8\r\n"
+  got == "{head}content-length: 2\r\n\r\nhi"
+
+test_closing_says_so =
+  got = on_wire (empty 404) "GET" "HTTP/1.1" true
+  head = "HTTP/1.1 404 Not Found\r\nconnection: close\r\n"
+  got == "{head}content-length: 0\r\n\r\n"
+
+test_http10_keep_alive_says_so =
+  got = on_wire (empty 200) "GET" "HTTP/1.0" false
+  head = "HTTP/1.1 200 OK\r\nconnection: keep-alive\r\n"
+  got == "{head}content-length: 0\r\n\r\n"
+
+test_head_keeps_length_drops_body =
+  got = on_wire ok_text "HEAD" "HTTP/1.1" false
+  head = "HTTP/1.1 200 OK\r\ncontent-type: text/plain; charset=utf-8\r\n"
+  got == "{head}content-length: 2\r\n\r\n"
+
+test_no_content_has_no_length =
+  got = on_wire (empty 204) "DELETE" "HTTP/1.1" false
+  got == "HTTP/1.1 204 No Content\r\n\r\n"
+
+test_length_counts_bytes =
+  got = on_wire (respond 200 [] "650 円") "GET" "HTTP/1.1" false
+  got == "HTTP/1.1 200 OK\r\ncontent-length: 7\r\n\r\n650 円"
+
+three_chunks = chunked ["hello" "" ", world"]
+
+test_chunked_for_http11 =
+  got = on_wire (respond 200 [] three_chunks) "GET" "HTTP/1.1" false
+  head = "HTTP/1.1 200 OK\r\ntransfer-encoding: chunked\r\n\r\n"
+  got == "{head}5\r\nhello\r\n7\r\n, world\r\n0\r\n\r\n"
+
+test_chunks_joined_for_http10 =
+  got = on_wire (respond 200 [] three_chunks) "GET" "HTTP/1.0" true
+  head = "HTTP/1.1 200 OK\r\nconnection: close\r\n"
+  got == "{head}content-length: 12\r\n\r\nhello, world"
+
+test_head_of_chunked_is_sized =
+  got = on_wire (respond 200 [] three_chunks) "HEAD" "HTTP/1.1" false
+  got == "HTTP/1.1 200 OK\r\ncontent-length: 12\r\n\r\n"
+
+test_bytes_body_sent_as_is =
+  raw = text/bytes "ab"
+  pieces_out = render (respond 200 [] raw) "GET" "HTTP/1.1" false
+  length pieces_out == 2 and pieces_out[2] == raw
+
+test_failure_is_json =
+  got = failure 404 "gone" . _.body
+  got == "\{\"error\":\"gone\",\"status\":404}"
+
+test_with_header_appends =
+  r = with_header (empty 200) "x-a" "1" . with_header "x-b" "2"
+  list/to_list (list/map r.headers _.name) == ["x-a" "x-b"]
+
+test_reason_known = reason_phrase 413 == "Content Too Large"
+
+test_reason_unknown = reason_phrase 299 == "Unknown"
+
+test_hex = to_hex 255 == "ff" and to_hex 0 == "0" and to_hex 4096 == "1000"
+
+test_parse_hex = parse_hex "1A" == 26 and parse_hex "x" == none
+
+test_parse_decimal_strict =
+  signed = parse_decimal "+1"
+  signed == none and parse_decimal "042" == 42
+
+test_lower_upper =
+  low = lower "Content-TYPE"
+  low == "content-type" and upper "get" == "GET"
+
+test_split_once =
+  c = split_once "a=b=c" "="
+  c.before == "a" and c.after == "b=c"
+
+test_split_once_missing = split_once "abc" "=" == none
+
+test_unescape = unescape "a%20b+c%2F%zz" == "a b c/%zz"

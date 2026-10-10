@@ -1,0 +1,29 @@
+# Files under the static root.
+note the index, a stylesheet and a script, with their media types
+conn
+request GET /
+request GET /style.css
+request HEAD /app.js
+note a binary file is sent as it is, so its digest matches the file's
+conn
+request GET /dot.png
+note a directory answers its index.html
+conn
+request GET /docs
+request GET /docs/
+note a matching If-None-Match is a 304 with no body
+conn
+send GET /style.css HTTP/1.1
+send Host: localhost
+send If-None-Match: "fb26a694e2b85431"
+send
+send GET /style.css HTTP/1.1
+send Host: localhost
+send If-None-Match: "0000000000000000"
+send
+note hidden files and paths that climb out of the root are not found
+conn
+request GET /.private/secret.txt
+request GET /docs/../.private/secret.txt
+request GET /%2e%2e/check.sh
+request GET /missing.html

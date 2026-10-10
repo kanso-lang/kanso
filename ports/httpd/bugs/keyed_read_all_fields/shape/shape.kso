@@ -1,0 +1,10 @@
+pub type pair
+  left
+  right
+
+pub fn make a b
+  pair a b
+
+pub fn swapped p
+  { left right } = p
+  pair right left

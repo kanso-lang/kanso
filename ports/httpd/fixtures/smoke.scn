@@ -1,0 +1,4 @@
+# The smallest round trip: one request on one connection.
+note an empty collection
+conn
+request GET /todos

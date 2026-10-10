@@ -1,0 +1,38 @@
+import "../http"
+import "std/list"
+import "std/text"
+
+test_html_type = content_type "html" == "text/html; charset=utf-8"
+
+test_unknown_type = content_type "bin" == "application/octet-stream"
+
+test_etag_is_quoted_digest = etag (text/bytes "hi") == "\"8f434346648f6b96\""
+
+test_small_file_is_one_body =
+  content = text/bytes "small"
+  sized content == content
+
+test_large_file_is_chunked =
+  xs = list/to_list (list/take (list/repeat "x") 9000)
+  content = text/bytes (text/join xs "")
+  pieces_of (sized content) == [4096 4096 808]
+
+fn pieces_of c:http/chunks
+  sizes c.pieces
+
+# A build reads this file with the whole program's types, where a field of
+# a foreign record may be none; `kanso test static` does not (FRICTION F14).
+fn sizes none
+  []
+
+fn sizes ps
+  list/to_list (list/map ps length)
+
+fn pieces_of _
+  []
+
+test_hidden_segment_unsafe = not safe? ".git"
+
+test_dotdot_unsafe = not safe? ".."
+
+test_plain_segment_safe = safe? "style.css"

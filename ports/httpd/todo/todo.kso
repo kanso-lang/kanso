@@ -1,0 +1,263 @@
+import "../http"
+import "std/json"
+import "std/list"
+
+# The todo-backend API (todobackend.com): a collection of todos at /todos,
+# each with a title, a completed flag, an optional order and a url that
+# names it. The store is a value; every handler answers a new one beside
+# its response, and the server carries it to the next request.
+pub type todo
+  completed
+  id
+  order
+  title
+
+pub type store
+  items
+  next_id
+
+# What a handler answers: the response, and the store after the request.
+pub type outcome
+  reply
+  store
+
+# A request body that cannot become a todo, with the status that says why.
+pub type invalid
+  reason
+  status
+
+# The fields a body sets. `unset` is a field the body did not mention, which
+# a PATCH leaves alone and a POST fills with its default; `cleared` is an
+# order sent as null.
+type edits
+  completed
+  order
+  title
+
+type unset
+
+type cleared
+
+# A todo nobody has given an order. None would do as a value, but a none
+# handed to a function needs a none arm wherever it lands (FRICTION F14).
+type unordered
+
+pub empty_store = store {} 1
+
+# --- the collection ---
+pub fn list_todos req _ st
+  { items } = st
+  base = base_url req
+  every = list/to_list (list/map (values items) (t -> as_json t base))
+  outcome (http/json_page 200 every) st
+
+pub fn clear_todos _ _ st
+  { next_id } = st
+  outcome (http/empty 204) (store {} next_id)
+
+pub fn create_todo req _ st
+  created req st (body_edits req)
+
+fn created _ st (invalid reason status)
+  outcome (http/failure status reason) st
+
+fn created req st (edits completed order title)
+  return refuse 422 "a todo needs a title" st if title == unset
+  store items next_id = st
+  t = todo (default completed false) next_id (fresh_order order) title
+  base = base_url req
+  page = http/json_page 201 (as_json t base)
+  located = http/with_header page "location" "{base}/todos/{next_id}"
+  outcome located (store (put items next_id t) (next_id + 1))
+
+# --- one todo ---
+pub fn show_todo req params st
+  found = lookup st params["id"]
+  shown req st found
+
+fn shown _ st none
+  missing st
+
+fn shown req st t
+  outcome (http/json_page 200 (as_json t (base_url req))) st
+
+pub fn edit_todo req params st
+  found = lookup st params["id"]
+  edited req st found (body_edits req)
+
+fn edited _ st none (invalid _ _)
+  missing st
+
+fn edited _ st none _
+  missing st
+
+fn edited _ st _ (invalid reason status)
+  outcome (http/failure status reason) st
+
+fn edited req st t (edits completed order title)
+  { id } = t
+  done_now = keep completed t.completed
+  ordered = kept_order order t.order
+  changed = todo done_now id ordered (keep title t.title)
+  store items next_id = st
+  shown req (store (put items id changed) next_id) changed
+
+pub fn delete_todo _ params st
+  found = lookup st params["id"]
+  deleted st found
+
+fn deleted st none
+  missing st
+
+fn deleted st t
+  store items next_id = st
+  remaining = list/fold (entries items) {} (acc e -> dropping acc e t.id)
+  outcome (http/empty 204) (store remaining next_id)
+
+fn dropping acc (entry k v) id
+  if (k == id) acc (put acc k v)
+
+fn missing st
+  outcome (http/failure 404 "no such todo") st
+
+fn refuse status reason st
+  outcome (http/failure status reason) st
+
+# An id in a path is text; the store keys by number. A segment that is not a
+# number names no todo, which is a 404 like any other id nobody holds.
+fn lookup _ none
+  none
+
+fn lookup st id_text
+  n = http/parse_decimal id_text
+  if (n == none) none st.items[n]
+
+# --- the JSON a client sees ---
+# `url` is absolute, built from the Host the client used, because the
+# todo-backend clients follow it as they find it.
+pub fn as_json t base
+  todo completed id order title = t
+  url = "{base}/todos/{id}"
+  fields = { "completed":completed "id":id "title":title "url":url }
+  with_order fields order
+
+fn with_order m unordered
+  m
+
+fn with_order m n
+  put m "order" n
+
+fn base_url req
+  host = req.headers["host"]
+  "http://{if (host == none) "localhost" host}"
+
+# --- reading a body ---
+fn body_edits req
+  kind = req.headers["content-type"]
+  return invalid "a todo is sent as application/json" 415 if not json_kind? kind
+  from_text (http/body_text req)
+
+fn json_kind? none
+  true
+
+fn json_kind? kind
+  http/starts_with? (http/lower kind) "application/json"
+
+fn from_text ""
+  invalid "a todo needs a body" 400
+
+fn from_text (err _)
+  invalid "the body is not utf-8" 400
+
+fn from_text body
+  from_json (json/decode body)
+
+fn from_json (err r)
+  invalid "the body is not JSON: {r.reason} at byte {r.position}" 400
+
+fn from_json m:map[string some]
+  c = check_completed m["completed"]
+  o = check_order m["order"]
+  t = check_title m["title"]
+  first_invalid [c o t] (edits c o t)
+
+fn from_json _
+  invalid "a todo is a JSON object" 422
+
+fn check_completed none
+  unset
+
+fn check_completed true
+  true
+
+fn check_completed false
+  false
+
+fn check_completed _
+  invalid "completed must be true or false" 422
+
+fn check_order none
+  unset
+
+fn check_order json/json_null
+  cleared
+
+fn check_order n:int
+  n
+
+fn check_order _
+  invalid "order must be a whole number" 422
+
+fn check_title none
+  unset
+
+fn check_title s:string
+  s
+
+fn check_title _
+  invalid "title must be a string" 422
+
+fn first_invalid checks fallback
+  chosen (list/find checks invalid?) fallback
+
+fn chosen none fallback
+  fallback
+
+fn chosen bad _
+  bad
+
+fn invalid? (invalid _ _)
+  true
+
+fn invalid? _
+  false
+
+fn default unset d
+  d
+
+fn default v _
+  v
+
+fn keep unset before
+  before
+
+fn keep v _
+  v
+
+fn fresh_order unset
+  unordered
+
+fn fresh_order cleared
+  unordered
+
+fn fresh_order n
+  n
+
+fn kept_order unset before
+  before
+
+fn kept_order cleared _
+  unordered
+
+fn kept_order n _
+  n

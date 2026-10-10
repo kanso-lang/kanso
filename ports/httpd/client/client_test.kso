@@ -1,0 +1,94 @@
+import "std/list"
+import "std/text"
+
+# The client's own pieces, tested without a server: scenario parsing, the
+# chunk encoder, the hex transport's decoding, and the response reader.
+test_encode_chunk = encode_chunk "hello" == "5\r\nhello\r\n"
+
+test_encode_chunk_counts_bytes = encode_chunk "円" == "3\r\n円\r\n"
+
+test_unhexed = unhexed " 48 54\n 0d 0a\n" == text/bytes "HT\r\n"
+
+test_scenario_steps =
+  steps = parse_scenario "# c\nnote hi\nconn\nsend A\ndata B\npause\nconn\n"
+  length steps == 3
+
+test_scenario_pieces =
+  steps = parse_scenario "conn\nsend A\ndata B\npause\nsend\n"
+  first = steps[1]
+  first.pieces == ["A\r\n" "B" pause "\r\n"]
+
+test_scenario_request =
+  steps = parse_scenario "conn\nrequest POST /t \{\"a\":1}\n"
+  first = steps[1]
+  head = "POST /t HTTP/1.1\r\nHost: localhost\r\n"
+  kind = "Content-Type: application/json\r\n"
+  first.pieces == ["{head}{kind}Content-Length: 7\r\n\r\n\{\"a\":1}"]
+
+test_scenario_chunked =
+  steps = parse_scenario "conn\nchunked POST /t ab|c\n"
+  first = steps[1]
+  body = "2\r\nab\r\n1\r\nc\r\n0\r\n\r\n"
+  whole = first.pieces[1]
+  text/slice whole 98 (length whole) == body
+
+test_scenario_curl =
+  steps = parse_scenario "curl -s  \{base}/x\n"
+  first = steps[1]
+  first.args == ["-s" "\{base}/x"]
+
+fn replies_of raw methods
+  read_replies (text/bytes raw) methods
+
+fn statuses replies
+  list/to_list (list/map replies status_or_rest)
+
+fn status_or_rest r:reply
+  r.status
+
+fn status_or_rest l
+  "left {l.count}"
+
+ok_two = "HTTP/1.1 200 OK\r\ncontent-length: 2\r\n\r\nhi"
+
+test_two_replies =
+  got = replies_of "{ok_two}{ok_two}" ["GET" "GET"]
+  statuses got == [200 200 "left 0"]
+
+test_head_reply_has_no_body =
+  head_only = "HTTP/1.1 200 OK\r\ncontent-length: 2\r\n\r\n"
+  got = replies_of "{head_only}{ok_two}" ["HEAD" "GET"]
+  statuses got == [200 200 "left 0"]
+
+test_interim_reply_answers_nothing =
+  go_on = "HTTP/1.1 100 Continue\r\n\r\n"
+  got = replies_of "{go_on}{ok_two}" ["POST"]
+  statuses got == [100 200 "left 0"]
+
+test_chunked_reply =
+  head = "HTTP/1.1 200 OK\r\ntransfer-encoding: chunked\r\n\r\n"
+  got = replies_of "{head}2\r\nhi\r\n3\r\nyou\r\n0\r\n\r\n" ["GET"]
+  r = got[1]
+  r.body == text/bytes "hiyou" and r.chunk_count == 2
+
+test_reply_to_end_of_stream =
+  got = replies_of "HTTP/1.0 200 OK\r\n\r\nall of it" ["GET"]
+  r = got[1]
+  r.body == text/bytes "all of it"
+
+test_truncated_reply =
+  got = replies_of "HTTP/1.1 200 OK\r\ncontent-length: 9\r\n\r\nhi" ["GET"]
+  statuses got == ["left 40"]
+
+test_shown_lines =
+  typed = "HTTP/1.1 200 OK\r\ncontent-type: text/plain\r\n"
+  got = replies_of "{typed}content-length: 2\r\n\r\nhi" ["GET"]
+  r = got[1]
+  heads = ["< HTTP/1.1 200 OK" "< content-type: text/plain"]
+  shown_lines r == text/concat heads ["< content-length: 2" "<" "hi"]
+
+test_binary_shown_by_digest =
+  got = replies_of ok_two ["GET"]
+  r = got[1]
+  lines = shown_lines r
+  lines[4] == "(2 bytes, sha256 8f434346648f6b96)"

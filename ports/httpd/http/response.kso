@@ -1,0 +1,179 @@
+import "std/json"
+import "std/list"
+import "std/text"
+
+# A response as a handler builds it. `body` is a string, the bytes
+# os/read_bytes answered, or `chunks` -- pieces the server sends with
+# chunked transfer coding when the client speaks HTTP/1.1. Headers are a
+# list rather than a map because their order is what goes on the wire, and
+# a handler that sets the same one twice means both.
+pub type response
+  body
+  headers
+  status
+
+pub type header
+  name
+  value
+
+pub type chunks
+  pieces
+
+pub fn respond status headers body
+  response body headers status
+
+# Another module cannot build an `http/header` or an `http/chunks` itself,
+# so these are the doors (FRICTION F15).
+pub fn field name value
+  header name value
+
+pub fn chunked pieces
+  chunks pieces
+
+pub fn with_header r name value
+  response body headers status = r
+  response body (push headers (header name value)) status
+
+pub fn with_headers r extra
+  response body headers status = r
+  response body (text/concat headers extra) status
+
+pub fn text_page status body
+  response body [(header "content-type" "text/plain; charset=utf-8")] status
+
+pub fn json_page status value
+  kind = header "content-type" "application/json"
+  response (json/encode value) [kind] status
+
+pub fn empty status
+  response "" [] status
+
+# What a client is told when its request could not be served. The reason is
+# the parser's or the handler's own sentence, sent as JSON so that a client
+# of the todo API reads every failure the same way.
+pub fn failure status reason
+  json_page status { "error":reason "status":status }
+
+pub fn reason_phrase 100
+  "Continue"
+
+pub fn reason_phrase 200
+  "OK"
+
+pub fn reason_phrase 201
+  "Created"
+
+pub fn reason_phrase 204
+  "No Content"
+
+pub fn reason_phrase 304
+  "Not Modified"
+
+pub fn reason_phrase 400
+  "Bad Request"
+
+pub fn reason_phrase 403
+  "Forbidden"
+
+pub fn reason_phrase 404
+  "Not Found"
+
+pub fn reason_phrase 405
+  "Method Not Allowed"
+
+pub fn reason_phrase 411
+  "Length Required"
+
+pub fn reason_phrase 413
+  "Content Too Large"
+
+pub fn reason_phrase 415
+  "Unsupported Media Type"
+
+pub fn reason_phrase 422
+  "Unprocessable Content"
+
+pub fn reason_phrase 431
+  "Request Header Fields Too Large"
+
+pub fn reason_phrase 500
+  "Internal Server Error"
+
+pub fn reason_phrase 501
+  "Not Implemented"
+
+pub fn reason_phrase 505
+  "HTTP Version Not Supported"
+
+pub fn reason_phrase _
+  "Unknown"
+
+# 1xx, 204 and 304 never carry a body, and say nothing about its length.
+fn bodiless? s
+  s < 200 or s == 204 or s == 304
+
+pub fn body_length b:string
+  length (text/bytes b)
+
+pub fn body_length (chunks pieces)
+  list/sum (list/to_list (list/map pieces piece_length))
+
+pub fn body_length b
+  length b
+
+fn piece_length p:string
+  length (text/bytes p)
+
+fn piece_length p
+  length p
+
+# What goes on the wire, in order: a list of strings and byte values that
+# the connection writes one after another. `closing` is the server's
+# decision about the connection, made before the response is rendered so
+# the header can say it.
+pub fn render r method version closing
+  { headers status } = r
+  line = "HTTP/1.1 {status} {reason_phrase status}\r\n"
+  connection = connection_header version closing
+  fields = text/concat headers connection
+  wire_for r method version fields line
+
+fn connection_header "HTTP/1.0" false
+  [(header "connection" "keep-alive")]
+
+fn connection_header _ true
+  [(header "connection" "close")]
+
+fn connection_header _ false
+  []
+
+fn wire_for r method version fields line
+  { body status } = r
+  return [(head_text line fields)] if bodiless? status
+  sized = push fields (header "content-length" "{body_length body}")
+  return [(head_text line sized)] if method == "HEAD"
+  framed_wire line fields sized body version
+
+fn framed_wire line fields _ (chunks pieces) "HTTP/1.1"
+  coded = push fields (header "transfer-encoding" "chunked")
+  opened = [(head_text line coded)]
+  text/concat (list/fold pieces opened chunk_onto) ["0\r\n\r\n"]
+
+fn framed_wire line _ sized (chunks pieces) _
+  text/concat [(head_text line sized)] pieces
+
+fn framed_wire line _ sized body _
+  [(head_text line sized) body]
+
+# An empty piece would read as the last chunk, so it is skipped.
+fn chunk_onto acc p
+  n = piece_length p
+  return acc if n == 0
+  text/concat acc ["{to_hex n}\r\n" p "\r\n"]
+
+fn head_text line fields
+  lines = list/to_list (list/map fields header_line)
+  "{line}{text/join lines ""}\r\n"
+
+fn header_line (header name value)
+  "{name}: {value}\r\n"

@@ -1,0 +1,63 @@
+# Handlers are plain values to the router, so a test table can name them
+# with strings and read back which one a lookup chose. A list literal cannot
+# be wrapped (FRICTION F12), so each route gets a name and the table lists
+# the names.
+table = [listing creating showing editing files root]
+
+listing = on "GET" "/todos" "list"
+
+creating = on "POST" "/todos" "create"
+
+showing = on "GET" "/todos/:id" "show"
+
+editing = on "PATCH" "/todos/:id" "edit"
+
+files = on "GET" "/files/*rest" "files"
+
+root = on "GET" "/" "root"
+
+fn chosen method path
+  shown (find table method path)
+
+fn shown (matched handler params)
+  "{handler} {length params} {params}"
+
+fn shown (wrong_method allowed)
+  "405 {allowed}"
+
+fn shown no_route
+  "404"
+
+none_bound = "list 0 \{}"
+
+test_literal_route = chosen "GET" "/todos" == none_bound
+
+test_method_picks_route = chosen "POST" "/todos" == "create 0 \{}"
+
+test_param_bound = chosen "GET" "/todos/42" == "show 1 \{ \"id\":\"42\" }"
+
+test_trailing_slash = chosen "GET" "/todos/" == none_bound
+
+test_doubled_slash = chosen "GET" "//todos" == none_bound
+
+test_param_decoded = chosen "GET" "/todos/a%2Fb" == "show 1 \{ \"id\":\"a/b\" }"
+
+test_splat =
+  got = chosen "GET" "/files/css/site.css"
+  got == "files 1 \{ \"rest\":\"css/site.css\" }"
+
+test_root = chosen "GET" "/" == "root 0 \{}"
+
+test_head_falls_back_to_get =
+  got = chosen "HEAD" "/todos/1"
+  got == "show 1 \{ \"id\":\"1\" }"
+
+test_wrong_method =
+  got = chosen "DELETE" "/todos/1"
+  got == "405 [\"GET\" \"PATCH\" \"HEAD\"]"
+
+test_unknown_path = chosen "GET" "/nope" == "404"
+
+test_too_deep = chosen "GET" "/todos/1/2" == "404"
+
+test_segments = segments_of "//a/b%20c//" == ["a" "b c"]

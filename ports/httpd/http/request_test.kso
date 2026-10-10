@@ -1,0 +1,203 @@
+import "std/text"
+
+# Each parse is summarised as one line, so a test states the whole outcome
+# and a failing one prints what it got when run through `outcome` by hand.
+fn outcome s
+  summary (parse (text/bytes s) default_limits)
+
+fn small s
+  summary (parse (text/bytes s) (limits 10 50))
+
+fn summary (framed r rest)
+  { body method path target version } = r
+  shown = text/utf8 body
+  "{method} {path} {version} target={target} body={shown} rest={length rest}"
+
+fn summary (need_body expects)
+  "need_body expects={expects}"
+
+fn summary need_head
+  "need_head"
+
+fn summary (rejected reason status)
+  "{status} {reason}"
+
+fn headers_of s
+  headers_from (parse (text/bytes s) default_limits)
+
+fn headers_from (framed r _)
+  r.headers
+
+fn headers_from _
+  {}
+
+fn query_of s
+  query_from (parse (text/bytes s) default_limits)
+
+fn query_from (framed r _)
+  r.query
+
+fn query_from _
+  {}
+
+get_line = "GET /todos HTTP/1.1\r\nHost: x\r\n\r\n"
+
+test_simple_get =
+  want = "GET /todos HTTP/1.1 target=/todos body= rest=0"
+  outcome get_line == want
+
+test_head_incomplete = outcome "GET /todos HTTP/1.1\r\nHost: x\r\n" == need
+
+test_empty_buffer = outcome "" == "need_head"
+
+test_leading_crlf_skipped =
+  got = outcome "\r\n\r\n{get_line}"
+  got == "GET /todos HTTP/1.1 target=/todos body= rest=0"
+
+test_pipelined_rest =
+  got = outcome "{get_line}{get_line}"
+  got == "GET /todos HTTP/1.1 target=/todos body= rest=32"
+
+test_query_decoded =
+  got = query_of "GET /a?x=1&q=a%20b+c&flag HTTP/1.1\r\nHost: x\r\n\r\n"
+  got == { "flag":"" "q":"a b c" "x":"1" }
+
+test_bad_percent_kept =
+  got = query_of "GET /a?q=100%&r=%zz HTTP/1.1\r\nHost: x\r\n\r\n"
+  got == { "q":"100%" "r":"%zz" }
+
+test_headers_lowercased =
+  got = headers_of "GET / HTTP/1.1\r\nHOST: x\r\nX-Thing:  a b  \r\n\r\n"
+  got == { "host":"x" "x-thing":"a b" }
+
+test_repeated_header_joined =
+  got = headers_of "GET / HTTP/1.1\r\nHost: x\r\nA: 1\r\na: 2\r\n\r\n"
+  got == { "a":"1, 2" "host":"x" }
+
+test_content_length_body =
+  sent = "POST /t HTTP/1.1\r\nHost: x\r\nContent-Length: 5\r\n\r\nhello"
+  outcome sent == "POST /t HTTP/1.1 target=/t body=hello rest=0"
+
+test_content_length_short =
+  sent = "POST /t HTTP/1.1\r\nHost: x\r\nContent-Length: 9\r\n\r\nhello"
+  outcome sent == "need_body expects=false"
+
+test_expect_continue =
+  e = "Expect: 100-continue\r\n"
+  sent = "POST /t HTTP/1.1\r\nHost: x\r\n{e}Content-Length: 9\r\n\r\n"
+  outcome sent == "need_body expects=true"
+
+test_body_counts_bytes =
+  sent = "POST /t HTTP/1.1\r\nHost: x\r\nContent-Length: 7\r\n\r\n650 円"
+  outcome sent == "POST /t HTTP/1.1 target=/t body=650 円 rest=0"
+
+test_duplicate_equal_lengths =
+  cl = "Content-Length: 2\r\nContent-Length: 2\r\n"
+  sent = "POST /t HTTP/1.1\r\nHost: x\r\n{cl}\r\nhi"
+  outcome sent == "POST /t HTTP/1.1 target=/t body=hi rest=0"
+
+test_conflicting_lengths =
+  cl = "Content-Length: 2\r\nContent-Length: 3\r\n"
+  sent = "POST /t HTTP/1.1\r\nHost: x\r\n{cl}\r\nhi"
+  outcome sent == "400 conflicting content-lengths"
+
+test_signed_length_refused =
+  sent = "POST /t HTTP/1.1\r\nHost: x\r\nContent-Length: +2\r\n\r\nhi"
+  outcome sent == "400 a malformed content-length"
+
+chunked_head = "POST /t HTTP/1.1\r\nHost: x\r\n{te_chunked}\r\n"
+
+te_chunked = "Transfer-Encoding: chunked\r\n"
+
+need = "need_head"
+
+test_chunked_body =
+  sent = "{chunked_head}5\r\nhello\r\n7;ext=1\r\n, world\r\n0\r\n\r\n"
+  outcome sent == "POST /t HTTP/1.1 target=/t body=hello, world rest=0"
+
+test_chunked_hex_size =
+  sixteen = "abcdefghijklmnop"
+  sent = "{chunked_head}A\r\n0123456789\r\n10\r\n{sixteen}\r\n0\r\n\r\n"
+  outcome sent == "POST /t HTTP/1.1 target=/t body=0123456789{sixteen} rest=0"
+
+test_chunked_trailers =
+  sent = "{chunked_head}2\r\nhi\r\n0\r\nX-Sum: 1\r\n\r\nGET"
+  outcome sent == "POST /t HTTP/1.1 target=/t body=hi rest=3"
+
+test_chunked_incomplete =
+  sent = "{chunked_head}5\r\nhel"
+  outcome sent == "need_body expects=false"
+
+test_chunked_missing_terminator =
+  sent = "{chunked_head}2\r\nhi"
+  outcome sent == "need_body expects=false"
+
+test_chunked_bad_size =
+  got = outcome "{chunked_head}zz\r\nhi\r\n"
+  got == "400 a malformed chunk size"
+
+test_chunked_bad_crlf =
+  sent = "{chunked_head}2\r\nhiXX0\r\n\r\n"
+  outcome sent == "400 a chunk without its CR LF"
+
+test_both_framings_refused =
+  both = "Transfer-Encoding: chunked\r\nContent-Length: 3\r\n"
+  sent = "POST /t HTTP/1.1\r\nHost: x\r\n{both}\r\n"
+  outcome sent == "400 both transfer-encoding and content-length"
+
+test_unknown_coding =
+  sent = "POST /t HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: gzip\r\n\r\n"
+  outcome sent == "400 a body with no length"
+
+test_gzip_then_chunked =
+  te = "Transfer-Encoding: gzip, chunked\r\n"
+  sent = "POST /t HTTP/1.1\r\nHost: x\r\n{te}\r\n"
+  outcome sent == "501 a coding before chunked"
+
+test_missing_host =
+  got = outcome "GET / HTTP/1.1\r\n\r\n"
+  got == "400 an HTTP/1.1 request without a host"
+
+test_http10_needs_no_host =
+  got = outcome "GET / HTTP/1.0\r\n\r\n"
+  got == "GET / HTTP/1.0 target=/ body= rest=0"
+
+test_unsupported_version =
+  got = outcome "GET / HTTP/2.0\r\n\r\n"
+  got == "505 unsupported version"
+
+test_garbage_version =
+  got = outcome "GET / HTCPCP/1.0\r\n\r\n"
+  got == "400 a malformed version"
+
+test_lowercase_method =
+  got = outcome "get / HTTP/1.1\r\nHost: x\r\n\r\n"
+  got == "400 a malformed method"
+
+test_absolute_target_refused =
+  sent = "GET http://x/ HTTP/1.1\r\nHost: x\r\n\r\n"
+  outcome sent == "400 a malformed target"
+
+test_extra_words_refused =
+  got = outcome "GET / x HTTP/1.1\r\nHost: x\r\n\r\n"
+  got == "400 a malformed request line"
+
+test_space_before_colon =
+  got = outcome "GET / HTTP/1.1\r\nHost : x\r\n\r\n"
+  got == "400 a malformed header name"
+
+test_folded_header =
+  sent = "GET / HTTP/1.1\r\nHost: x\r\nA: 1\r\n  2\r\n\r\n"
+  outcome sent == "400 obsolete line folding"
+
+test_colonless_header =
+  got = outcome "GET / HTTP/1.1\r\nHost: x\r\nnonsense\r\n\r\n"
+  got == "400 a header line without a colon"
+
+test_head_too_large =
+  got = small "GET /aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  got == "431 the head is too large"
+
+test_body_too_large =
+  sent = "POST / HTTP/1.1\r\nHost: x\r\nContent-Length: 11\r\n\r\n"
+  small sent == "413 the body is too large"

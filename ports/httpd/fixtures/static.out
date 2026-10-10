@@ -1,0 +1,136 @@
+-- the index, a stylesheet and a script, with their media types
+== connection 1: 121 bytes in 3 pieces
+[server] GET / 200
+[server] GET /style.css 200
+[server] HEAD /app.js 200
+< HTTP/1.1 200 OK
+< content-type: text/html; charset=utf-8
+< etag: "b718a707346ddcaa"
+< access-control-allow-origin: *
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< content-length: 307
+<
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>todos</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<h1>todos</h1>
+<form id="add"><input id="title" placeholder="what needs doing?" autofocus></form>
+<ul id="list"></ul>
+<script src="/app.js"></script>
+</body>
+</html>
+
+< HTTP/1.1 200 OK
+< content-type: text/css; charset=utf-8
+< etag: "fb26a694e2b85431"
+< access-control-allow-origin: *
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< content-length: 178
+<
+body { font: 16px/1.5 system-ui, sans-serif; margin: 2rem auto; max-width: 32rem; }
+li.done { color: #888; text-decoration: line-through; }
+input { font: inherit; width: 100%; }
+
+< HTTP/1.1 200 OK
+< content-type: text/javascript; charset=utf-8
+< etag: "5099992def57a510"
+< access-control-allow-origin: *
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< content-length: 964
+(the server closed the connection)
+-- a binary file is sent as it is, so its digest matches the file's
+== connection 2: 42 bytes in 1 pieces
+[server] GET /dot.png 200
+< HTTP/1.1 200 OK
+< content-type: image/png
+< etag: "d0afbaf740ad2d35"
+< access-control-allow-origin: *
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< content-length: 67
+<
+(67 bytes, sha256 d0afbaf740ad2d35)
+(the server closed the connection)
+-- a directory answers its index.html
+== connection 3: 79 bytes in 2 pieces
+[server] GET /docs 200
+[server] GET /docs/ 200
+< HTTP/1.1 200 OK
+< content-type: text/html; charset=utf-8
+< etag: "124fdba1b9192ae0"
+< access-control-allow-origin: *
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< content-length: 30
+<
+hello from the docs directory
+
+< HTTP/1.1 200 OK
+< content-type: text/html; charset=utf-8
+< etag: "124fdba1b9192ae0"
+< access-control-allow-origin: *
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< content-length: 30
+<
+hello from the docs directory
+
+(the server closed the connection)
+-- a matching If-None-Match is a 304 with no body
+== connection 4: 158 bytes in 8 pieces
+[server] GET /style.css 304
+[server] GET /style.css 200
+< HTTP/1.1 304 Not Modified
+< etag: "fb26a694e2b85431"
+< access-control-allow-origin: *
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< HTTP/1.1 200 OK
+< content-type: text/css; charset=utf-8
+< etag: "fb26a694e2b85431"
+< access-control-allow-origin: *
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< content-length: 178
+<
+body { font: 16px/1.5 system-ui, sans-serif; margin: 2rem auto; max-width: 32rem; }
+li.done { color: #888; text-decoration: line-through; }
+input { font: inherit; width: 100%; }
+
+(the server closed the connection)
+-- hidden files and paths that climb out of the root are not found
+== connection 5: 213 bytes in 4 pieces
+[server] GET /.private/secret.txt 404
+[server] GET /docs/../.private/secret.txt 404
+[server] GET /%2e%2e/check.sh 404
+[server] GET /missing.html 404
+< HTTP/1.1 404 Not Found
+< content-type: application/json
+< access-control-allow-origin: *
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< content-length: 37
+<
+{"error":"no such file","status":404}
+< HTTP/1.1 404 Not Found
+< content-type: application/json
+< access-control-allow-origin: *
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< content-length: 37
+<
+{"error":"no such file","status":404}
+< HTTP/1.1 404 Not Found
+< content-type: application/json
+< access-control-allow-origin: *
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< content-length: 37
+<
+{"error":"no such file","status":404}
+< HTTP/1.1 404 Not Found
+< content-type: application/json
+< access-control-allow-origin: *
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< content-length: 37
+<
+{"error":"no such file","status":404}
+(the server closed the connection)
+== shutdown: the port no longer answers

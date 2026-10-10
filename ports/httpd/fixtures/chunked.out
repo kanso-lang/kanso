@@ -1,0 +1,100 @@
+-- a body sent in three chunks becomes one todo
+== connection 1: 189 bytes in 2 pieces
+[server] POST /todos 201
+[server] GET /todos/1 200
+< HTTP/1.1 201 Created
+< content-type: application/json
+< location: http://localhost/todos/1
+< access-control-allow-origin: *
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< content-length: 84
+<
+{"completed":false,"id":1,"title":"sent in pieces","url":"http://localhost/todos/1"}
+< HTTP/1.1 200 OK
+< content-type: application/json
+< access-control-allow-origin: *
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< content-length: 84
+<
+{"completed":false,"id":1,"title":"sent in pieces","url":"http://localhost/todos/1"}
+(the server closed the connection)
+-- chunk sizes are hex, extensions are ignored, trailers are read past
+== connection 2: 213 bytes in 13 pieces
+[server] POST /todos 201
+[server] GET /todos/2 200
+< HTTP/1.1 201 Created
+< content-type: application/json
+< location: http://localhost/todos/2
+< access-control-allow-origin: *
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< content-length: 83
+<
+{"completed":false,"id":2,"title":"hex sizes, ok","url":"http://localhost/todos/2"}
+< HTTP/1.1 200 OK
+< content-type: application/json
+< access-control-allow-origin: *
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< content-length: 83
+<
+{"completed":false,"id":2,"title":"hex sizes, ok","url":"http://localhost/todos/2"}
+(the server closed the connection)
+-- a large file goes out chunked to an HTTP/1.1 client
+== connection 3: 47 bytes in 1 pieces
+[server] GET /docs/big.txt 200
+< HTTP/1.1 200 OK
+< content-type: text/plain; charset=utf-8
+< etag: "310e342b82df7189"
+< access-control-allow-origin: *
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< transfer-encoding: chunked
+(3 chunks)
+<
+(10600 bytes, sha256 310e342b82df7189)
+(the server closed the connection)
+-- and with a content-length to an HTTP/1.0 client, which cannot read chunks
+== connection 4: 30 bytes in 2 pieces
+[server] GET /docs/big.txt 200
+< HTTP/1.1 200 OK
+< content-type: text/plain; charset=utf-8
+< etag: "310e342b82df7189"
+< access-control-allow-origin: *
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< connection: close
+< content-length: 10600
+<
+(10600 bytes, sha256 310e342b82df7189)
+(the server closed the connection)
+-- a malformed chunk size is a 400 and the connection closes
+== connection 5: 79 bytes in 6 pieces
+[server] 400 a malformed chunk size
+< HTTP/1.1 400 Bad Request
+< content-type: application/json
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< connection: close
+< content-length: 47
+<
+{"error":"a malformed chunk size","status":400}
+(the server closed the connection)
+-- a chunk whose data runs past its size is a 400
+== connection 6: 86 bytes in 8 pieces
+[server] 400 a chunk without its CR LF
+< HTTP/1.1 400 Bad Request
+< content-type: application/json
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< connection: close
+< content-length: 50
+<
+{"error":"a chunk without its CR LF","status":400}
+(the server closed the connection)
+-- gzip under chunked is not supported
+== connection 7: 75 bytes in 4 pieces
+[server] 501 a coding before chunked
+< HTTP/1.1 501 Not Implemented
+< content-type: application/json
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< connection: close
+< content-length: 48
+<
+{"error":"a coding before chunked","status":501}
+(the server closed the connection)
+== shutdown: the port no longer answers

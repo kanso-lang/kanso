@@ -1,0 +1,3 @@
+body { font: 16px/1.5 system-ui, sans-serif; margin: 2rem auto; max-width: 32rem; }
+li.done { color: #888; text-decoration: line-through; }
+input { font: inherit; width: 100%; }

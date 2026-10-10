@@ -1,0 +1,74 @@
+import "../http"
+import "std/list"
+import "std/net"
+import "std/os"
+import "std/text"
+
+# Plays a scenario against the server listening on `port`, printing a
+# transcript, then closes the listener and checks that nothing answers on
+# the port any more. The listener is the server's, handed over so the
+# client can end the server's accept loop: there is no other way for one
+# fiber to tell another to stop (FRICTION F20).
+pub fn drive l port steps
+  played port steps 1 1
+    .> (_ -> net/close_listener l)
+    .> (_ -> listening? port)
+    .> (open -> print (shutdown_line open))
+
+fn shutdown_line true
+  "!! the port still answers after shutdown"
+
+fn shutdown_line false
+  "== shutdown: the port no longer answers"
+
+fn played port steps i n
+  return effect done if i < 1 or length steps < i
+  next = played_one port steps[i] n
+  next .> (m -> played port steps (i + 1) m)
+
+fn played_one port (conn_step pieces) n
+  sent = text/join (list/to_list (list/reject pieces (p -> p == pause))) ""
+  methods = methods_of (text/bytes sent) []
+  count = length (list/to_list (list/reject pieces (p -> p == pause)))
+  print "== connection {n}: {length (text/bytes sent)} bytes in {count} pieces"
+    .> (_ -> exchange port pieces)
+    .> (bs -> print (transcript bs methods))
+    .> (_ -> n + 1)
+
+fn played_one port (curl_step args) n
+  base = "http://127.0.0.1:{port}"
+  filled = list/to_list (list/map args (a -> with_base a base))
+  print "== curl {text/join args " "}"
+    .> (_ -> os/run "curl" filled)
+    .> (p -> print (without_cr p.stdout))
+    .> (_ -> n)
+
+fn played_one _ (note_step words) n
+  print "-- {words}" .> (_ -> n)
+
+fn with_base arg base
+  text/join (http/split_on arg "\{base}") base
+
+fn without_cr s
+  trimmed = text/join (http/split_on s "\r") ""
+  n = length trimmed
+  if (http/ends_with? trimmed "\n") (text/slice trimmed 1 (n - 1)) trimmed
+
+fn transcript bs methods
+  replies = read_replies bs methods
+  lines = list/fold replies [] (acc r -> text/concat acc (shown_lines r))
+  text/join lines "\n"
+
+# The methods of the requests a connection carried, read with the server's
+# own parser so a HEAD is known to have no body in its response. A request
+# the parser refuses ends the list; its response, and any after it, are
+# read as answers to a GET.
+fn methods_of bs acc
+  return acc if length bs == 0
+  next_method bs acc (http/parse bs http/default_limits)
+
+fn next_method _ acc f:http/framed
+  methods_of f.rest (push acc f.request.method)
+
+fn next_method _ acc _
+  acc

@@ -1,0 +1,18 @@
+# A keyed read that names every field.
+#
+# Should: be refused by `kanso check`, pointing at shape/shape.kso:9. The
+# rule is a compile-time rule elsewhere: in the todo port,
+# `{ items next_id } = st` was refused when checked, though with the
+# message "unknown name `next_id`".
+#
+# Does: `kanso check main.kso` says ok. Running it, on both engines, stops
+# with
+#   error[runtime]: a keyed read omits at least one field; reading every
+#   field is the positional form
+# and no location at all. In the port the same error carried a location
+# naming the calling module and no file (`--> todo:26:29` for a read at
+# http/response.kso:26).
+import "./shape"
+
+p = shape/make 1 2
+print "{shape/swapped p}"

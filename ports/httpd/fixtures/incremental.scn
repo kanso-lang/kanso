@@ -1,0 +1,44 @@
+# Requests that arrive in pieces. A read is a segment of the stream, not a
+# request, so the server parses what it has and reads again.
+note a head split in the middle of a header line
+conn
+data GET /todos HTTP/1.1
+send
+data Ho
+pause
+send st: localhost
+send
+note a body that arrives after its head
+conn
+send POST /todos HTTP/1.1
+send Host: localhost
+send Content-Type: application/json
+send Content-Length: 24
+send
+pause
+data {"title":"in two
+pause
+data  parts"}
+note a client that asks to be told to go on
+conn
+send POST /todos HTTP/1.1
+send Host: localhost
+send Content-Type: application/json
+send Expect: 100-continue
+send Content-Length: 17
+send
+pause
+data {"title":"later"}
+note blank lines before a request line are skipped
+conn
+send
+send
+request GET /todos
+note a second request split across a pause after a first one
+conn
+request GET /todos/1
+data GET /todos/2 HT
+pause
+send TP/1.1
+send Host: localhost
+send

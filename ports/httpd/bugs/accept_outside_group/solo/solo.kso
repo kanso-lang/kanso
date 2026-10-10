@@ -1,0 +1,8 @@
+import "std/net"
+
+pub fn serve l
+  net/accept l .> (c -> net/read c .> (raw -> answer c raw))
+
+fn answer c _
+  net/write c "HTTP/1.1 200 OK\r\ncontent-length: 2\r\n\r\nhi"
+    .> (_ -> net/close_conn c)

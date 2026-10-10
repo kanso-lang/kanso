@@ -1,0 +1,31 @@
+# Whether a connection stays open after a response, decided from the
+# request's version and Connection header, the response's own headers, and
+# how many requests the connection has carried.
+fn keeps? version connection reply served
+  quiet = server_with (_ s -> effect (carry (empty 200) s)) (_ -> effect done)
+  keep_alive? quiet (request_with version connection) reply served
+
+fn request_with version ""
+  request [] { "host":"x" } "GET" "/" {} "/" version
+
+fn request_with version connection
+  headers = { "connection":connection "host":"x" }
+  request [] headers "GET" "/" {} "/" version
+
+plain = empty 200
+
+says_close = with_header (empty 200) "connection" "close"
+
+test_http11_keeps = keeps? "HTTP/1.1" "" plain 1
+
+test_http11_close_closes = not keeps? "HTTP/1.1" "close" plain 1
+
+test_tokens_are_a_list = not keeps? "HTTP/1.1" "Upgrade, Close" plain 1
+
+test_http10_closes = not keeps? "HTTP/1.0" "" plain 1
+
+test_http10_keep_alive = keeps? "HTTP/1.0" "keep-alive" plain 1
+
+test_handler_can_close = not keeps? "HTTP/1.1" "" says_close 1
+
+test_request_cap = not keeps? "HTTP/1.1" "" plain 100

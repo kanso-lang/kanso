@@ -1,0 +1,12 @@
+-- an empty collection
+== connection 1: 40 bytes in 1 pieces
+[server] GET /todos 200
+< HTTP/1.1 200 OK
+< content-type: application/json
+< access-control-allow-origin: *
+< date: Fri, 10 Oct 2025 01:20:00 GMT
+< content-length: 2
+<
+[]
+(the server closed the connection)
+== shutdown: the port no longer answers

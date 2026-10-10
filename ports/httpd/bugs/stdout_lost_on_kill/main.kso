@@ -1,0 +1,14 @@
+# Output printed by a long-running native program is lost when it is killed.
+#
+# Should: `started` reaches the file before the process is killed, on
+# every engine, the way it does on the interpreter:
+#   kanso build main.kso && (./main > out.txt & sleep 1; kill $!); cat out.txt
+#
+# Does: the interpreter writes `started` at once. A native binary writes
+# stdout through a block buffer when stdout is not a terminal, and nothing
+# in kanso flushes it, so out.txt is empty after the kill. A server's
+# access log printed with `print` is lost this way. io/write_err is not
+# buffered and survives.
+import "std/time"
+
+print "started" .> (_ -> time/sleep 60000)

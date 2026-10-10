@@ -1,0 +1,10 @@
+# Reference values from Python's email.utils.formatdate(usegmt=True).
+test_epoch = http_date 0 == "Thu, 01 Jan 1970 00:00:00 GMT"
+
+test_recent = http_date 1760059200000 == "Fri, 10 Oct 2025 01:20:00 GMT"
+
+test_leap_day = http_date 951782400000 == "Tue, 29 Feb 2000 00:00:00 GMT"
+
+test_end_of_day = http_date 4107542399000 == "Sun, 28 Feb 2100 23:59:59 GMT"
+
+test_leap_2024 = http_date 1709164800000 == "Thu, 29 Feb 2024 00:00:00 GMT"
