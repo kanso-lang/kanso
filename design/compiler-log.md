@@ -25184,3 +25184,118 @@ run_arena_peak_bytes lands on 8,912,912 and run_held_peak_bytes on 3,222,256,
 and run_peak_bytes' baseline goes from 156,818,380 to 489,255,962. Both
 baselines are rounded up. The score is unchanged, and the four fixes now
 have something to score against.
+
+## 2026-10-10 — a map's view takes keys out of order without moving itself
+
+Three ports found the same cliff from three directions. xsv's
+`stats --cardinality` spent 2.6 of its 2.7 seconds counting a column of
+distinct values, ugit's Myers diff on a 3,000-line file took 4.0 seconds
+against the interpreter's 0.4, and `list/tally` over 40,000 distinct
+strings took 4.95 seconds natively where the interpreter took 0.2. All of
+them read a map between puts. A read builds the map's sorted view, and
+from then on each put of a new key was inserted into the view in order,
+which for a key landing in the middle meant moving every pair after it
+one slot along. Callgrind on the ugit diff put 80% of the time there.
+
+A key that would land in the middle of a view of more than sixty-four
+pairs now goes to a second sorted run beside it, which the runtime calls
+the side. A key past the view's last still goes on its end, so a map
+filled in ascending order never starts one. Reads search the view and
+then the side, so a read between two puts merges nothing. When the side
+holds more keys than the square root of the view, the two are merged,
+from the back and into the view's own buffer when it has room. Anything
+that wants the whole order, such as printing, `entries` or equality,
+merges first.
+
+The side costs the map header nothing. A view's buffer is preceded by a
+header slot whose first word is its capacity, and the second word, which
+was unused, now points to the side. A mark on the map's view pointer
+says a side is waiting, so a read that finds the bit clear asks nothing
+more, and the emitted fast put, which only tests the pointer for null,
+still takes the call when a view exists. The side is kept, emptied, after
+a merge, so the next key out of order does not allocate.
+
+`list/tally` over 40,000 distinct strings went from 4.95 seconds to 0.21,
+and xsv's reproduction from 4.75 to 0.17. `tests/golden/mem/
+a_tally_of_scattered_keys_merges_its_view.kso` pins the shape: 4,000
+scrambled keys, each read before it is put, take 15 view allocations where
+main took 12, and hold 206,448 bytes at peak where main held 196,576.
+Two mem goldens move with it. `fused_tally` takes one more allocation (65
+to 66, alloc_bytes 41,536 to 42,064), and `growing_map` two more (1,613 to
+1,615), with held_peak_bytes 49,120 to 55,408 and alloc_bytes 181,952 to
+189,312.
+`tests/golden/micro/a_map_written_out_of_order_past_its_room.kso` puts 211
+keys in scrambled order with reads, a length, a missing key and a print in
+between, and one in-place loop visits every key twice, so its second visit
+reads and replaces keys that are still in the side. Every engine prints the
+same. Leaving the side out of the search turns it red: the loop reads a key
+it has already put as missing, puts it again, and prints 217 keys.
+
+The first version of that fixture could not fail. Its loop was also handed
+a map the play went on reading, so the linearity analysis gave none of its
+puts the in-place write, no view ever grew a side, and removing the side
+search changed nothing. A separate loop that only ever receives a fresh map
+is what made the side reachable.
+
+A put that replaces a key already in the map still walks the pairs log
+backwards to find its last write, so a tally whose keys repeat pays for
+the distance back to that key's last occurrence. That walk is untouched
+here.
+
+The first round of CI put welfare 0.0000 below its floor, and all of the
+fall was in the run program: runbench rose from 1,129,588,698 to
+1,130,533,679. Callgrind on both builds put the whole difference in one
+function, `k_b_columns`, which `keys` and `values` reach on every call, and
+its disassembly showed why. It asks `k_map_sorted` for the view, and the
+check before that call grew from one test (is there a view?) to two (is
+there a view, and does it have a side?), five instructions where main had
+two. The side mark was the pointer's low bit.
+
+The mark now sits in the pointer's top bit. A 64-bit address never sets it,
+so read as a signed number the view pointer is positive with no side, zero
+with no view and negative with a side, and one test against zero asks both
+questions. `k_b_columns` came back to main's instructions with one alignment
+nop added before its copy loop. Measured locally from one directory against
+a build of main's runtime, runbench is 207,423 instructions above main and
+livebench 903,510, down from 945,000 and 4,208,000. wasm32 keeps the low
+bit, because a 32-bit address can have its top bit set.
+
+CI's rows for this head with main's constant storage merged in, against
+main: work_runbench rises from 1,131,250,979 to 1,131,457,856 and
+work_livebench from 1,472,859,260 to 1,473,762,140, the remains of the check
+described above. work_basket rises from 32,375,114 to 32,926,353, 1.7%,
+work_encodebench to 2,383,871,632, work_oneshot to 13,189,990 and
+work_pendbench to 190,390,734. Every binary's text is about 4,800 bytes
+larger, which sums to text 4,612,254 to 4,679,230. browser_run_instructions
+goes from 33,493,063 to 33,502,036, codegen_instructions_dev from 118,896,762
+to 118,916,117 and codegen_instructions_release from 453,707,138 to
+454,001,319, all carrying the larger runtime. basket builds maps and reads
+them between puts, so it is the benchmark that meets the side; which of its
+maps grows one is not isolated here. The mem rows are the ones named above:
+fused_tally_allocs 65 to 66 and fused_tally_alloc_bytes 41,536 to 42,064;
+growing_map_allocs 1,613 to 1,615, growing_map_alloc_bytes 181,952 to 189,312
+and growing_map_held_peak_bytes 49,120 to 55,408. Welfare falls from
+90.25153 to 90.25054. The gate passes that, because it allows 0.001 for
+disagreement between hosts, but every term here is deterministic, so the fall
+is real. It raised the floor question for this fix and three other port
+fixes, and the paragraph below records how that question closed.
+
+The floor question closed on the corpus-first gavel, and kanso#1836 put the
+shape into the run program as its `scatter` phase: 2,340 keys counted in
+scrambled order, measured on main before this fix at 50,901,814 instructions.
+With main merged in, runbench falls from 1,245,043,324 to 1,201,828,599, a
+projection from this container's 1,201,828,192 plus the 407 instructions by
+which CI read main above it; CI's row replaces it. The run's held peak falls
+from 3,222,256 bytes to 3,166,752, run_alloc_bytes falls to 326,749,138 and
+run_allocs rises by two to 1,773,134. Welfare rises from 90.2499 to 90.4099 on
+those rows, and the rise is banked.
+
+CI's rows for the merged tree replace the projection and agree with it on the
+run program: work_runbench lands on 1,201,828,611. The merge had carried main's
+rows for the other benchmarks, and CI restores this fix's own cost on them.
+The view code adds 4,784 bytes to every binary, so `text` totals 4,718,942.
+work_basket lands on 33,056,395, work_livebench on 1,473,763,578,
+work_encodebench on 2,393,936,650, work_oneshot on 13,190,150 and
+work_pendbench on 190,396,604. codegen_instructions_dev lands on 118,940,067
+and browser_run_instructions on 33,517,389. Welfare reads 90.4099 on CI's rows,
+the score already banked.

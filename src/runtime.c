@@ -938,6 +938,7 @@ static KMap** k_viewreg[K_BEAT_MAX];
 static long long k_viewreg_n[K_BEAT_MAX];
 static long long k_viewreg_cap[K_BEAT_MAX];
 static void k_view_free(KValue* view);
+static void k_map_view_free(KValue* view);
 
 static void k_viewreg_push(int d, KMap* m) {
     if (k_viewreg_n[d] == k_viewreg_cap[d]) {
@@ -955,7 +956,7 @@ static void k_viewreg_flush(int d) {
     for (long long i = 0; i < k_viewreg_n[d]; i++) {
         KMap* m = k_viewreg[d][i];
         if (m->sorted) {
-            if (m->sorted != m->pairs) k_view_free(m->sorted);
+            if (m->sorted != m->pairs) k_map_view_free(m->sorted);
             m->sorted = NULL;
             m->sorted_len = 0;
         }
@@ -2594,7 +2595,7 @@ static void k_repair_interior(KValue v, void* p, KCopy* cp) {
                 memcpy(nb + 1, mp->pairs, sizeof(KValue) * (size_t)(2 * mp->len));
                 int aliased = mp->sorted == mp->pairs;
                 mp->pairs = (KValue*)(nb + 1);
-                if (mp->sorted && !aliased) k_view_free(mp->sorted);
+                if (mp->sorted && !aliased) k_map_view_free(mp->sorted);
                 mp->sorted = NULL;
                 mp->sorted_len = 0;
             }
@@ -8238,6 +8239,7 @@ static KValue* k_view_alloc(long long cap) {
         k_stat_alloc_bytes += (long long)(sizeof(KValue) + sizeof(KValue) * 2 * (size_t)cap);
     }
     *(long long*)raw = cap;
+    ((long long*)raw)[1] = 0;
     if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) {
         k_stat_held_live += (long long)(sizeof(KValue) + sizeof(KValue) * 2 * (size_t)cap);
         if (k_stat_held_live > k_stat_held_peak) k_stat_held_peak = k_stat_held_live;
@@ -8249,6 +8251,37 @@ static long long k_view_cap(KValue* view) {
     return *(long long*)((char*)view - sizeof(KValue));
 }
 
+/* A view can carry a SIDE: keys put since the view was built, held sorted
+   in a buffer of their own, so that a key landing in the middle of a large
+   view costs a move within the side rather than within the view. Counting
+   40,000 distinct keys spent 4.9 seconds moving the view one slot to the
+   right at a time, where the interpreter took 0.2.
+
+   The side lives in the second word of the view's header slot, which the
+   capacity leaves unused, and the map says it has one by setting the top bit
+   of its view pointer. So a header pays nothing for it, and read as a signed
+   number the pointer answers both of a reader's questions at once: positive
+   is a view with no side, zero is no view, negative is a view with a side.
+   `keys` and `values` ask on every call, and the low bit cost them two
+   instructions a call, 706,000 on the run program. A 64-bit address has its
+   top bit clear, which the mark needs. A 32-bit one may not, so wasm32 marks
+   the low bit and asks the two questions separately. In a side buffer the
+   same word holds the side's length. */
+#if UINTPTR_MAX > 0xffffffffu
+#define K_VIEW_SIDE ((uintptr_t)1 << 63)
+#else
+#define K_VIEW_SIDE ((uintptr_t)1)
+#endif
+static inline long long* k_view_word(KValue* view) {
+    return (long long*)((char*)view - sizeof(KValue)) + 1;
+}
+static inline KValue* k_view_untagged(KValue* view) {
+    return (KValue*)((uintptr_t)view & ~K_VIEW_SIDE);
+}
+static inline KValue* k_view_side(KValue* main) {
+    return (KValue*)(intptr_t)*k_view_word(main);
+}
+
 static void k_view_free(KValue* view) {
     if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) {
         if (K_COUNTING) k_stat_view_frees++;
@@ -8258,10 +8291,62 @@ static void k_view_free(KValue* view) {
     free((char*)view - sizeof(KValue));
 }
 
+/* A map's own view, with the side it keeps, empty or not. Never the pairs:
+   a view that is the pairs has no header of its own to keep a side in, and
+   every caller asks first. */
+static void k_map_view_free(KValue* view) {
+    KValue* main = k_view_untagged(view);
+    KValue* side = k_view_side(main);
+    if (side) k_view_free(side);
+    k_view_free(main);
+}
+
 /* The build runs once per map and `entries` asks 248,490 times a run on the
    run program, so the build saves what it touches and the ask keeps no
    frame; k_map_sorted then inlines into its callers. */
+/* Fold the side into the view: two sorted runs with no key in common, since
+   a key goes to the side only when neither holds it. The merge runs from the
+   back, so a view with room for both takes it where it stands; one without
+   grows to twice what it will hold, as the end-append below does, and a map
+   taking keys in no order allocates a view about as often as one taking
+   them in order. */
+static void k_map_view_merge(KMap* m) {
+    KValue* main = k_view_untagged(m->sorted);
+    KValue* side = k_view_side(main);
+    long long n = m->sorted_len, sl = *k_view_word(side);
+    KValue* out = main;
+    if (n + sl > k_view_cap(main)) {
+        out = k_view_alloc((n + sl) * 2);
+        memcpy(out, main, sizeof(KValue) * 2 * (size_t)n);
+    }
+    long long i = n - 1, j = sl - 1, w = n + sl - 1;
+    while (j >= 0) {
+        if (i >= 0 && k_key_cmp(out[i * 2], side[j * 2]) > 0) {
+            out[w * 2] = out[i * 2];
+            out[w * 2 + 1] = out[i * 2 + 1];
+            i--;
+        } else {
+            out[w * 2] = side[j * 2];
+            out[w * 2 + 1] = side[j * 2 + 1];
+            j--;
+        }
+        w--;
+    }
+    /* the side stays, emptied, for the next key out of order */
+    *k_view_word(side) = 0;
+    if (out != main) {
+        k_view_free(main);
+        *k_view_word(out) = (long long)(intptr_t)side;
+    }
+    m->sorted = out;
+    m->sorted_len = n + sl;
+}
+
 static __attribute__((noinline, preserve_most)) void k_map_sort_build(KMap* m) {
+    if ((uintptr_t)m->sorted & K_VIEW_SIDE) {
+        k_map_view_merge(m);
+        return;
+    }
     {
         long long n = m->len;
         /* PAIRS ALREADY IN ORDER ARE THEIR OWN VIEW. A decoded object whose
@@ -8318,8 +8403,18 @@ static __attribute__((noinline, preserve_most)) void k_map_sort_build(KMap* m) {
     }
 }
 
+/* No view yet, or one with a side to fold in: either way the build runs. */
+static inline int k_view_stale(KValue* view) {
+    uintptr_t p = (uintptr_t)view;
+#if UINTPTR_MAX > 0xffffffffu
+    return (intptr_t)p <= 0;
+#else
+    return !p || (p & K_VIEW_SIDE);
+#endif
+}
+
 static inline KValue* k_map_sorted(KMap* m, long long* out_len) {
-    if (!m->sorted) k_map_sort_build(m);
+    if (__builtin_expect(k_view_stale(m->sorted), 0)) k_map_sort_build(m);
     if (out_len) *out_len = m->sorted_len;
     return m->sorted;
 }
@@ -8403,6 +8498,33 @@ KValue k_b_put(KValue mv, KValue key, KValue val);
 /// is unbounded growth for a bounded key set. Replacing in place also keeps
 /// the sorted view alive — its value slot is patched too, so the read that
 /// follows does not rebuild it.
+/* The value slot for `key` in a sorted run of n pairs, or NULL. */
+static KValue* k_view_search(KValue* run, long long n, KValue key) {
+    long long lo = 0, hi = n - 1;
+    while (lo <= hi) {
+        long long mid = lo + (hi - lo) / 2;
+        int c = k_key_cmp(run[mid * 2], key);
+        if (c == 0) return &run[mid * 2 + 1];
+        if (c < 0) {
+            lo = mid + 1;
+        } else {
+            hi = mid - 1;
+        }
+    }
+    return NULL;
+}
+
+/* The value slot for `key` in a map whose view is built, searching the view
+   and then its side, so a read between two puts merges nothing. */
+static KValue* k_map_find(KMap* m, KValue key) {
+    if (!((uintptr_t)m->sorted & K_VIEW_SIDE)) return k_view_search(m->sorted, m->sorted_len, key);
+    KValue* main = k_view_untagged(m->sorted);
+    KValue* hit = k_view_search(main, m->sorted_len, key);
+    if (hit) return hit;
+    KValue* side = k_view_side(main);
+    return k_view_search(side, *k_view_word(side), key);
+}
+
 static int k_map_replace(KMap* m, KValue key, KValue val) {
     /* Only when a view is already built. Without one there is no cheap way
        to know whether the key is present, and appending is correct anyway
@@ -8413,24 +8535,11 @@ static int k_map_replace(KMap* m, KValue key, KValue val) {
     }
     /* the view is sorted, so absence costs a binary search rather than a
        walk: a loop writing keys it has never written pays nothing here */
-    long long lo = 0, hi = m->sorted_len - 1, at = -1;
-    while (lo <= hi) {
-        long long mid = lo + (hi - lo) / 2;
-        int c = k_key_cmp(m->sorted[mid * 2], key);
-        if (c == 0) {
-            at = mid;
-            break;
-        }
-        if (c < 0) {
-            lo = mid + 1;
-        } else {
-            hi = mid - 1;
-        }
-    }
-    if (at < 0) {
+    KValue* slot = k_map_find(m, key);
+    if (!slot) {
         return 0;
     }
-    m->sorted[at * 2 + 1] = val;
+    *slot = val;
     /* the pairs log holds the same key, last write winning, so the newest
        occurrence is the one a rebuild would keep */
     for (long long i = m->len - 1; i >= 0; i--) {
@@ -8450,22 +8559,77 @@ static int k_map_replace(KMap* m, KValue key, KValue val) {
 /// each, which is where its time and its peak both went. Insertion keeps the
 /// order the view already has, so the sort never runs again and the buffer is
 /// grown by doubling instead of reallocated per read.
+/* Where `key` goes in a sorted run of n pairs: the first slot whose key is
+   greater. */
+static long long k_view_place(KValue* run, long long n, KValue key) {
+    long long lo = 0, hi = n;
+    while (lo < hi) {
+        long long mid = lo + (hi - lo) / 2;
+        if (k_key_cmp(run[mid * 2], key) < 0) {
+            lo = mid + 1;
+        } else {
+            hi = mid;
+        }
+    }
+    return lo;
+}
+
+/* A view this small takes the key in place: moving at most 64 pairs costs
+   less than keeping a second run to search. */
+#define K_VIEW_DIRECT 64
+
 static void k_map_view_insert_built(KMap* m, KValue key, KValue val) {
-    if (m->sorted_len + 1 > k_view_cap(m->sorted)) {
-        KValue* grown = k_view_alloc(m->sorted_len * 2 + 1);
-        memcpy(grown, m->sorted, sizeof(KValue) * 2 * (size_t)m->sorted_len);
-        k_view_free(m->sorted);
-        m->sorted = grown;
+    KValue* main = k_view_untagged(m->sorted);
+    long long n = m->sorted_len;
+    int sided = ((uintptr_t)m->sorted & K_VIEW_SIDE) != 0;
+    /* a key past the view's last goes on its end, whatever its size, so a
+       map filled in ascending order never starts a side */
+    int last = n == 0 || k_key_cmp(main[(n - 1) * 2], key) < 0;
+    if (!sided && (last || n < K_VIEW_DIRECT)) {
+        if (n + 1 > k_view_cap(main)) {
+            KValue* grown = k_view_alloc(n * 2 + 1);
+            memcpy(grown, main, sizeof(KValue) * 2 * (size_t)n);
+            *k_view_word(grown) = *k_view_word(main);
+            k_view_free(main);
+            main = grown;
+            m->sorted = grown;
+        }
+        long long at = last ? n : k_view_place(main, n, key);
+        memmove(&main[(at + 1) * 2], &main[at * 2], sizeof(KValue) * 2 * (size_t)(n - at));
+        main[at * 2] = key;
+        main[at * 2 + 1] = val;
+        m->sorted_len++;
+        return;
     }
-    long long at = 0;
-    while (at < m->sorted_len && k_key_cmp(m->sorted[at * 2], key) < 0) {
-        at++;
+    KValue* side;
+    long long sl;
+    side = k_view_side(main);
+    if (sided) {
+        sl = *k_view_word(side);
+    } else {
+        if (!side) {
+            side = k_view_alloc(16);
+            *k_view_word(main) = (long long)(intptr_t)side;
+        }
+        sl = 0;
+        m->sorted = (KValue*)((uintptr_t)main | K_VIEW_SIDE);
     }
-    memmove(&m->sorted[(at + 1) * 2], &m->sorted[at * 2],
-            sizeof(KValue) * 2 * (size_t)(m->sorted_len - at));
-    m->sorted[at * 2] = key;
-    m->sorted[at * 2 + 1] = val;
-    m->sorted_len++;
+    if (sl + 1 > k_view_cap(side)) {
+        KValue* grown = k_view_alloc(sl * 2);
+        memcpy(grown, side, sizeof(KValue) * 2 * (size_t)sl);
+        k_view_free(side);
+        side = grown;
+        *k_view_word(main) = (long long)(intptr_t)side;
+    }
+    long long at = k_view_place(side, sl, key);
+    memmove(&side[(at + 1) * 2], &side[at * 2], sizeof(KValue) * 2 * (size_t)(sl - at));
+    side[at * 2] = key;
+    side[at * 2 + 1] = val;
+    sl++;
+    *k_view_word(side) = sl;
+    /* past the square root of the view, a side costs more to insert into
+       and to search than one merge of the two costs spread over its keys */
+    if (sl * sl > n) k_map_view_merge(m);
 }
 
 /* A map with no view has nothing to insert into, and that is every map a
@@ -9619,16 +9783,9 @@ static __attribute__((noinline, cold, preserve_most)) KValue k_b_at_rest(KValue 
             return k_none();
         }
         KMap* m = k_as_map(container);
-        long long n;
-        KValue* s = k_map_sorted(m, &n);
-        long long lo = 0, hi = n - 1;
-        while (lo <= hi) {
-            long long mid = (lo + hi) / 2;
-            int c = k_key_cmp(index, s[mid * 2]);
-            if (c == 0) return s[mid * 2 + 1];
-            if (c < 0) hi = mid - 1; else lo = mid + 1;
-        }
-        return k_none();
+        if (!m->sorted) k_map_sort_build(m);
+        KValue* hit = k_map_find(m, index);
+        return hit ? *hit : k_none();
     }
     k_die_index(container);
     return k_none();
@@ -10114,8 +10271,12 @@ KValue k_b_length(KValue v) {
     if (v.tag == K_LIST) return k_int(k_as_list(v)->len);
     if (v.tag == K_BYTES) return k_int(k_as_bytes(v)->len);
     if (v.tag == K_MAP) {
+        /* the view's count and its side's, without merging the two */
+        KMap* m = k_as_map(v);
+        if ((uintptr_t)m->sorted & K_VIEW_SIDE)
+            return k_int(m->sorted_len + *k_view_word(k_view_side(k_view_untagged(m->sorted))));
         long long n;
-        k_map_sorted(k_as_map(v), &n);
+        k_map_sorted(m, &n);
         return k_int(n);
     }
     if (v.tag == K_STR) return k_int(k_str_chars(k_as_str(v)));
@@ -11399,7 +11560,11 @@ static __attribute__((cold, optnone, noinline)) void k_tie_resolve(KValue v) {
     } else if (v.tag == K_MAP) {
         KMap* m = (KMap*)p;
         k_tie_resolve_slots(m->pairs, 2 * m->len, 1, 2);
-        if (m->sorted) k_tie_resolve_slots(m->sorted, 2 * m->sorted_len, 1, 2);
+        if (m->sorted) {
+            long long n;
+            KValue* s = k_map_sorted(m, &n);
+            k_tie_resolve_slots(s, 2 * n, 1, 2);
+        }
     } else {
         KSub* sub = (KSub*)p;
         k_tie_resolve_slots(&sub->inner, 1, 0, 1);
