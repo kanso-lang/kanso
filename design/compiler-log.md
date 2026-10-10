@@ -24498,3 +24498,20 @@ the loop ends. s900624 from the entry before, which doubles an accumulator
 inside a non-tail recursion, peaks at 618,392 KB with 154,187 faults for the
 same reason. The claim also went into a Readwise summary and a reply to
 Clay; both are corrected.
+
+CI's rows for this branch. The emitted text shrinks by 1,760 bytes in every
+benchmark binary, 4,611,102 to 4,586,462 summed. The same 1,760 in every
+binary puts all of it in the runtime, and the bignum section is the part of
+the runtime this branch rewrote. Runtime work falls in basket (32,404,398 to 32,356,406),
+runbench (1,129,589,342 to 1,129,588,698), encodebench and oneshot. Two rows
+rise. work_livebench goes from 1,473,485,624 to 1,473,485,659, 35
+instructions, and none of its loops touches a bignum, so this is layout in a
+binary whose runtime moved under it. codegen_instructions_release goes from
+453,756,115 to 453,756,383, 268 instructions of clang and ld reading a
+runtime whose bignum section changed shape; the dev tier fell 566 over the
+same source.
+
+Taken together the two sides net to a fall in welfare of 0.0000025, from
+90.25702372 to 90.25702120. The floor is lowered by that much. Clay asked
+why the two engines stored integers differently, and there was no reason;
+this branch is the answer to that question, so the floor follows it.
