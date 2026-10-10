@@ -25050,12 +25050,18 @@ err, which the emitted code shows: runbench gains 22 branches and 125 lines,
 the decoder 4 branches and 15 lines, and seven other benchmarks between 2 and
 13 branches.
 
-CI's rows, measured with main's constructor change merged in: the browser
-compile row rises 217,425 instructions to 388,494,007 and the browser run row
-1,119 to 33,508,472, dev codegen rises 139 to 118,918,569, and release codegen
-falls 8 to 453,994,110. Machine code grows on every benchmark, by 16 bytes on
-scanbench and 368 on runbench. The work rows move with the change, and which
-branch costs what has not been isolated: encodebench grows by 10,064,560
-instructions, 0.42%, runbench by 68,142 and digestbench by 36,820, and
-livebench falls 259. Both changes are fixes to what programs print, so the
-floor follows them, from 90.25040 to 90.24995.
+CI's rows, measured with main's constructor change merged in. The code the
+compiler writes grows with the new tests: emitted_branches lands on 1,105 and
+emitted_lines on 10,070 for the decoder, emitted_other_branches on 16,143 and
+emitted_other_lines on 144,731 across the other benchmarks, and the machine
+code total, text, on 4,644,478 bytes, from 16 bytes more on scanbench to 368
+on runbench. The work rows move with the change, and which branch costs what
+has not been isolated: work_encodebench lands on 2,393,926,456, up 10,064,560
+or 0.42%; work_runbench on 1,131,539,079, up 68,142; work_digestbench on
+5,597,963, up 36,820; work_jsonbench on 860,549,995 and work_oneshot on
+13,176,892, up 450 and 364; and livebench falls 259. Building costs a little
+more: codegen_instructions_dev lands on 118,918,569, up 139, and release
+codegen falls 8 to 453,994,110. In the browser, browser_compile_instructions
+lands on 388,494,007, up 217,425, and browser_run_instructions on 33,508,472,
+up 1,119. Both changes fix what programs print, so the floor follows them,
+from 90.25040 to 90.24995.
