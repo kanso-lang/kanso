@@ -1,0 +1,11 @@
+# `_` once stood for a field a `build` block filled later. The block retired
+# on 2026-10-10 and the hole with it, so a construction gives every field its
+# value where it stands, and a program that still writes a hole is told how a
+# cycle is made now. The wildcard pattern keeps its `_`.
+type person
+  name
+  partner
+
+ada = person "ada" _
+
+pub play = print "{ada.name}"

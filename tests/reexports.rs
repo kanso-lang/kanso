@@ -121,19 +121,20 @@ fn a_module_that_only_re_exports_is_a_module() {
 /// the owner's canonical name wherever a program can write it. Until this
 /// fixture "wherever" was every statement of a function body and nothing
 /// nested inside one: `door_expr` recursed through `lib::walk_children_mut`,
-/// which has no arm for a lambda, a block, a build or a guard. An upcast
-/// written in any of the four kept the door spelling, `kanso check` passed it,
-/// and the widening failed at run time against a name no declaration answers.
+/// which had no arm for a lambda, a block, a `build` or a guard. An upcast
+/// written in any of them kept the door spelling, `kanso check` passed it, and
+/// the widening failed at run time against a name no declaration answers.
 ///
-/// The five positions are one program on purpose. Four of them were red and
-/// the statement-level one was green, which is the shape that named the cause.
+/// The positions are one program on purpose. The nested ones were red and the
+/// statement-level one was green, which is the shape that named the cause.
+/// `build` retired on 2026-10-10 and its position went with it.
 #[test]
 fn a_door_spelling_is_rewritten_inside_a_nested_body() {
     let output = run("upcast/app");
 
     assert_eq!(
         String::from_utf8_lossy(&output.stdout),
-        "top 1\nlambda [\"2\"]\nblock 3\nbuild 4\nguard 5\n"
+        "top 1\nlambda [\"2\"]\nblock 3\nguard 5\n"
     );
     assert!(output.status.success());
 }

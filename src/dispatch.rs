@@ -105,7 +105,6 @@ fn all_calls_feed_at(program: &Program, name: &str, arity: usize, disc: usize) -
             match stmt {
                 Stmt::Bind { expr, .. } => walk(expr, name, arity, disc, &mut ok),
                 Stmt::Expr(e) => walk(e, name, arity, disc, &mut ok),
-                Stmt::Set { value, .. } => walk(value, name, arity, disc, &mut ok),
             }
         }
     }

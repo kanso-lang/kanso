@@ -1,0 +1,25 @@
+import "std/list"
+
+type node
+  id
+  peer
+
+fn ring_of first second
+  linked = (id ref -> node id (ref (if (id == first) second first)))
+  around (list/tie [first second] linked) first
+
+fn around b:list/broken_link _
+  b
+
+fn around nodes key
+  nodes[key]
+
+ring1 = ring_of 1 2
+
+twin = ring_of 1 2
+
+other = ring_of 1 99
+
+print "{ring1 == twin}"
+  .> (_ -> print "{ring1 == other}")
+  .> (_ -> print "{ring1 == ring1}")

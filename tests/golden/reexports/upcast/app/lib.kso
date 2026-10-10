@@ -3,7 +3,7 @@
 # to the owner's canonical one everywhere a program can write it — and until
 # this fixture, "everywhere" meant every statement of a function body and
 # nothing nested inside one. The walk it recursed through had no arm for a
-# lambda, a block, a build or a guard, so an upcast written in any of those
+# lambda, a block or a guard, so an upcast written in any of those
 # kept the door spelling, and the widening then failed at run time against a
 # type name no declaration answered.
 #
@@ -29,11 +29,6 @@ pub fn in_block c
     "{w}"
   else
     "no"
-
-pub fn in_build c
-  build
-    w = (c):mid/shape
-  "{w}"
 
 pub fn below_guard c
   return "neg" if false

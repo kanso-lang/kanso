@@ -52,13 +52,9 @@ fn param_stays_local(body: &[Stmt], name: &str) -> bool {
     }
     fn expr_safe(e: &Expr, name: &str, is_result: bool) -> bool {
         match e {
-            Expr::Build(..) | Expr::Guard { .. } => false,
+            Expr::Guard { .. } => false,
             Expr::Ident(id, _, _) if id == name => is_result,
-            Expr::Int(..)
-            | Expr::Float(..)
-            | Expr::Ident(..)
-            | Expr::Partial(..)
-            | Expr::Hole(..) => true,
+            Expr::Int(..) | Expr::Float(..) | Expr::Ident(..) | Expr::Partial(..) => true,
             Expr::BinOp { lhs, rhs, .. } => {
                 (operand_is(lhs, name) || expr_safe(lhs, name, false))
                     && (operand_is(rhs, name) || expr_safe(rhs, name, false))
@@ -94,7 +90,6 @@ fn param_stays_local(body: &[Stmt], name: &str) -> bool {
         body.iter().enumerate().all(|(i, stmt)| match stmt {
             Stmt::Bind { expr, .. } => expr_safe(expr, name, false),
             Stmt::Expr(expr) => expr_safe(expr, name, result_ok && i == last),
-            Stmt::Set { value, .. } => expr_safe(value, name, false),
         })
     }
     param_stays_local_at(body, name, true)
@@ -139,9 +134,7 @@ fn use_targets(expr: &Expr, name: &str, out: &mut Vec<(String, usize, usize)>) {
             use_targets(early, name, out);
             for st in rest.iter() {
                 match st {
-                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
-                        use_targets(expr, name, out)
-                    }
+                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) => use_targets(expr, name, out),
                 }
             }
         }
@@ -160,12 +153,10 @@ fn use_targets(expr: &Expr, name: &str, out: &mut Vec<(String, usize, usize)>) {
                 }
             }
         }
-        Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
+        Expr::Block(stmts, _) => {
             for stmt in stmts {
                 match stmt {
-                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
-                        use_targets(expr, name, out)
-                    }
+                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) => use_targets(expr, name, out),
                 }
             }
         }
@@ -202,7 +193,7 @@ fn use_targets(expr: &Expr, name: &str, out: &mut Vec<(String, usize, usize)>) {
             use_targets(lhs, name, out);
             use_targets(rhs, name, out);
         }
-        Expr::Int(..) | Expr::Float(..) | Expr::Ident(..) | Expr::Hole(..) => {}
+        Expr::Int(..) | Expr::Float(..) | Expr::Ident(..) => {}
     }
 }
 
@@ -242,22 +233,22 @@ fn collect_uses(
 ) {
     match expr {
         Expr::Ident(id, _, _) | Expr::Partial(id, _) if id == name => uses.demanding += 1,
-        Expr::Int(..) | Expr::Float(..) | Expr::Ident(..) | Expr::Partial(..) | Expr::Hole(..) => {}
+        Expr::Int(..) | Expr::Float(..) | Expr::Ident(..) | Expr::Partial(..) => {}
         Expr::Guard { cond, early, rest, .. } => {
             collect_uses(cond, name, discard, uses);
             collect_uses(early, name, discard, uses);
             for st in rest.iter() {
                 match st {
-                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
+                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) => {
                         collect_uses(expr, name, discard, uses)
                     }
                 }
             }
         }
-        Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
+        Expr::Block(stmts, _) => {
             for stmt in stmts {
                 match stmt {
-                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
+                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) => {
                         collect_uses(expr, name, discard, uses)
                     }
                 }
@@ -332,15 +323,11 @@ fn expensive(expr: &Expr, fns: &HashSet<&str>) -> bool {
             expensive(cond, fns)
                 || expensive(early, fns)
                 || rest.iter().any(|st| match st {
-                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
-                        expensive(expr, fns)
-                    }
+                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expensive(expr, fns),
                 })
         }
-        Expr::Block(stmts, _) | Expr::Build(stmts, _) => stmts.iter().any(|st| match st {
-            Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
-                expensive(expr, fns)
-            }
+        Expr::Block(stmts, _) => stmts.iter().any(|st| match st {
+            Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expensive(expr, fns),
         }),
         Expr::App { head, args, .. } => {
             if let Expr::Ident(callee, _, _) = head.as_ref() {
@@ -369,11 +356,7 @@ fn expensive(expr: &Expr, fns: &HashSet<&str>) -> bool {
         Expr::Field { base, .. } => expensive(base, fns),
         Expr::Upcast { expr, .. } => expensive(expr, fns),
         Expr::Index { base, index, .. } => expensive(base, fns) || expensive(index, fns),
-        Expr::Lambda { .. }
-        | Expr::Ident(..)
-        | Expr::Int(..)
-        | Expr::Float(..)
-        | Expr::Hole(..) => false,
+        Expr::Lambda { .. } | Expr::Ident(..) | Expr::Int(..) | Expr::Float(..) => false,
     }
 }
 
@@ -407,9 +390,7 @@ pub fn analyze<'a>(program: &'a Program) -> DemandInfo<'a> {
             let mut uses = Uses::default();
             for later in &f.body[i + 1..] {
                 let e = match later {
-                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
-                        expr
-                    }
+                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
                 };
                 collect_uses(e, name, &discard, &mut uses);
             }
@@ -442,9 +423,7 @@ pub fn analyze<'a>(program: &'a Program) -> DemandInfo<'a> {
             let mut targets = Vec::new();
             for later in &decl.body[i + 1..] {
                 let e = match later {
-                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
-                        expr
-                    }
+                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
                 };
                 use_targets(e, name, &mut targets);
             }

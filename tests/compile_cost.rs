@@ -136,21 +136,6 @@ fn shift (point x y)
   point (x + 1) (y + 1)
 ",
     ),
-    (
-        "build_block",
-        "type node
-  id
-  peer
-
-main =
-  build
-    a = node 1 0
-    b = node 2 0
-    a.peer = b
-    b.peer = a
-  print \"{a}\"
-",
-    ),
 ];
 
 /// A watched number, not a line in the sand. Compilation and runtime trade

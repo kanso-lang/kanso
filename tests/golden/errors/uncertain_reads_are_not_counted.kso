@@ -45,21 +45,10 @@ fn rebound one two
   v = two
   a + v.wanted
 
-# A build block runs its statements, so a binding inside one ends a run there
-# for the same reason.
-fn inside_a_build one two
-  build
-    v = one
-    a = v.to
-    v = two
-    b = v.wanted
-  a + b
-
 pub play =
   print "{behind_a_lambda (span 1 5)}"
   print "{behind_a_branch (span 1 5)}"
   print "{behind_a_guard (span 1 5)}"
   print "{right_of_and? (span 1 5)}"
   print "{rebound (span 1 5) (node 2 3)}"
-  print "{inside_a_build (span 1 5) (node 2 3)}"
   print "{both_certain (span 1 5)}"

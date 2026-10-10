@@ -1,0 +1,30 @@
+import "std/list"
+
+type node
+  id
+  peers
+
+fn pair_of first second
+  linked = (id ref -> node id [(ref (if (id == first) second first))])
+  both (list/tie [first second] linked) first second
+
+fn both b:list/broken_link _ _
+  b
+
+fn both nodes first second
+  [nodes[first] nodes[second]]
+
+fn ring_of name
+  one (list/tie [name] (id ref -> node id [(ref id)])) name
+
+fn one b:list/broken_link _
+  b
+
+fn one nodes name
+  nodes[name]
+
+graph = pair_of "a" "b"
+
+ring = ring_of "seed"
+
+print "{graph}" .> (_ -> print "{ring}")

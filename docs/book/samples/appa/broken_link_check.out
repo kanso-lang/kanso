@@ -1,0 +1,4 @@
+error[tie]: `ref` links to `cy`, and no id in the list is `cy`, so this tie can only break
+  --> broken_link_check.kso:8:61
+   8 |   people = list/tie ["ada" "bob"] (name ref -> person name (ref "cy"))
+                                                                   ^

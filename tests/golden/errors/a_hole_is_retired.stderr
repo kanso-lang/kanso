@@ -1,0 +1,4 @@
+error[syntax]: `_` stands for a value nothing gives: every field is given its value where the record is built, and a cycle is made with `list/tie`
+  --> a_hole_is_retired.kso:9:20
+   9 | ada = person "ada" _
+                          ^

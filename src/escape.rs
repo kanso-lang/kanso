@@ -254,9 +254,7 @@ fn value_names(program: &Program) -> HashSet<String> {
     for f in &program.fns {
         for st in &f.body {
             match st {
-                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
-                    walk(expr, &mut out)
-                }
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => walk(expr, &mut out),
             }
         }
     }
@@ -390,15 +388,10 @@ impl<'a> Analysis<'a> {
                         return false;
                     }
                 }
-                Stmt::Set { value, .. } => {
-                    if self.expr_mentions_ty(ty, value) {
-                        return false;
-                    }
-                }
             }
         }
         match last {
-            Stmt::Bind { .. } | Stmt::Set { .. } => false,
+            Stmt::Bind { .. } => false,
             Stmt::Expr(e) => self.tail_position_safe(ty, e),
         }
     }
@@ -438,16 +431,10 @@ impl<'a> Analysis<'a> {
     /// appears in a container, index, binop, lambda, or template.
     fn expr_safe_calls(&self, ty: &str, e: &Expr) -> bool {
         match e {
-            Expr::Int(..)
-            | Expr::Float(..)
-            | Expr::Ident(..)
-            | Expr::Partial(..)
-            | Expr::Hole(..) => true,
+            Expr::Int(..) | Expr::Float(..) | Expr::Ident(..) | Expr::Partial(..) => true,
             Expr::Upcast { expr, .. } => self.expr_safe_calls(ty, expr),
-            Expr::Block(stmts, _) | Expr::Build(stmts, _) => stmts.iter().all(|st| match st {
-                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
-                    self.expr_safe_calls(ty, expr)
-                }
+            Expr::Block(stmts, _) => stmts.iter().all(|st| match st {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => self.expr_safe_calls(ty, expr),
             }),
             Expr::Field { base, .. } => {
                 !self.produces_ty(ty, base) && self.expr_safe_calls(ty, base)
@@ -480,9 +467,7 @@ impl<'a> Analysis<'a> {
                     && self.expr_safe_calls(ty, early)
                     && rest.iter().all(|s| {
                         let e = match s {
-                            Stmt::Bind { expr, .. }
-                            | Stmt::Expr(expr)
-                            | Stmt::Set { value: expr, .. } => expr,
+                            Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
                         };
                         !self.produces_ty(ty, e) && self.expr_safe_calls(ty, e)
                     })
@@ -611,10 +596,8 @@ impl<'a> Analysis<'a> {
         // Conservative: ty appears anywhere in this (non-tail) expression.
         match e {
             Expr::Ident(name, _, _) | Expr::Partial(name, _) => name == ty,
-            Expr::Block(stmts, _) | Expr::Build(stmts, _) => stmts.iter().any(|st| match st {
-                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
-                    self.expr_mentions_ty(ty, expr)
-                }
+            Expr::Block(stmts, _) => stmts.iter().any(|st| match st {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => self.expr_mentions_ty(ty, expr),
             }),
             Expr::Field { base, .. } => self.expr_mentions_ty(ty, base),
             Expr::Upcast { expr, .. } => self.expr_mentions_ty(ty, expr),
@@ -632,9 +615,7 @@ impl<'a> Analysis<'a> {
                     || self.expr_mentions_ty(ty, early)
                     || rest.iter().any(|s| {
                         let e = match s {
-                            Stmt::Bind { expr, .. }
-                            | Stmt::Expr(expr)
-                            | Stmt::Set { value: expr, .. } => expr,
+                            Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
                         };
                         self.expr_mentions_ty(ty, e)
                     })
@@ -648,7 +629,7 @@ impl<'a> Analysis<'a> {
                 crate::ast::TemplatePart::Interp(x) => self.expr_mentions_ty(ty, x),
                 crate::ast::TemplatePart::Lit(_) => false,
             }),
-            Expr::Int(..) | Expr::Float(..) | Expr::Hole(..) => false,
+            Expr::Int(..) | Expr::Float(..) => false,
         }
     }
 }
