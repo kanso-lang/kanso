@@ -1280,7 +1280,6 @@ declare %KValue @k_parsed_wide_first(i64) cold
 declare %KValue @k_parsed_wide_value(i64) cold
 declare %KValue @k_concat_arr_mut(i64, ptr)
 declare %KValue @k_b_str_builder(%KValue)
-declare %KValue @k_b_adopt(%KValue, %KValue)
 declare %KValue @k_field(%KValue, i64)
 declare %KValue @k_keyed_check(%KValue, i64)
 declare %KValue @k_keyed_field(%KValue, ptr)
@@ -8797,30 +8796,18 @@ impl<'a> Backend<'a> {
                 ));
                 let mut acc: Option<Vec<String>> = None;
                 let mut fails: Set = 0;
-                for (i, part) in parts.iter().enumerate() {
+                for part in parts {
                     let piece = match part {
                         TemplatePart::Lit(s) => self.str_const(f, s),
                         TemplatePart::Interp(inner) => {
                             let raw = self.emit_expr(f, inner)?;
-                            let value = self.maybe_force(f, raw.clone());
+                            let value = self.maybe_force(f, raw);
+                            // A seed that was not a string, or arrived lazily,
+                            // renders to a finished string; the in-place join
+                            // makes it the builder when it finds no room.
                             let (t, failed) = self.render_interp(f, &value);
                             fails |= failed;
-                            // the builder, which a seed that was not a string
-                            // becomes only here, rendered; a value the sets
-                            // prove is a string is the builder already. A seed
-                            // that arrived lazily is asked about as it arrived:
-                            // the entry left the thunk unconverted, so what it
-                            // forces to is a finished string and not a builder.
-                            match joins_builder && i == 0 && f.set_of(&raw) & !STR != 0 {
-                                true => {
-                                    let adopted = f.tmp();
-                                    f.line_fmt(format_args!(
-                                        "{adopted} = call %KValue @k_b_adopt(%KValue {raw}, %KValue {t})"
-                                    ));
-                                    adopted.to_string()
-                                }
-                                false => t,
-                            }
+                            t
                         }
                     };
                     match acc {
