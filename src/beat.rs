@@ -132,6 +132,10 @@ pub struct Beats {
     pub rewind: HashSet<(Group, Group)>,
     /// The calls that take a mark of their own: see `region_sites`.
     pub regions: RegionSites,
+    /// Loops that allocate nothing but the bignum an int argument can become:
+    /// see `widens`. Their word twin, which carries words only, skips the
+    /// rewind; the general body, which a bignum reaches, rewinds.
+    pub widening: HashSet<Group>,
 }
 
 impl Beats {
@@ -256,12 +260,51 @@ pub fn beat_loops(program: &Program, inference: &infer::Inference, mut_sites: &M
     // a list that predates the mark grows outside the arena. An iteration of
     // such a loop allocates nothing there, and the test every iteration made
     // found the arena where the mark left it.
+    let widening: HashSet<Group> = ids
+        .keys()
+        .filter(|(name, arity)| {
+            !allocating.contains(name.as_str()) && widens(program, inference, name, *arity)
+        })
+        .cloned()
+        .collect();
     rewind.retain(|(from, to)| {
         from != to
             || carried.contains_key(from)
+            || widening.contains(from)
             || !grows_only_itself(program, mut_sites, &regions, &allocating, from)
     });
-    Beats { ids, demoted, carried, rewind, regions }
+    Beats { ids, demoted, carried, rewind, regions, widening }
+}
+
+/// Whether a loop hands itself an int that can leave the word. Arithmetic
+/// allocates nothing while ints are words, so a loop like
+/// `pw (acc * 3) (n - 1)` reads as pure; once `acc` is a bignum every
+/// iteration makes a new one in the arena, and a loop without a rewind keeps
+/// all of them. A step by a literal, `n - 1` or `i + 1`, is left out: it
+/// leaves the word only after 2^63 iterations.
+fn widens(program: &Program, inference: &infer::Inference, name: &str, arity: usize) -> bool {
+    let step = |op: &str, lhs: &Expr, rhs: &Expr| {
+        op != "*"
+            && matches!(
+                (lhs, rhs),
+                (Expr::Ident(..), Expr::Int(..)) | (Expr::Int(..), Expr::Ident(..))
+            )
+    };
+    let grows = |e: &Expr| match e {
+        Expr::BinOp { op, lhs, rhs, .. } if matches!(*op, "+" | "-" | "*") => !step(op, lhs, rhs),
+        _ => false,
+    };
+    program.fns.iter().filter(|d| d.name == name && d.params.len() == arity).any(|d| {
+        tail_exprs(d.body.last()).into_iter().any(|t| {
+            let Expr::App { head, args, piped: false, .. } = t else { return false };
+            matches!(head.as_ref(), Expr::Ident(n, _, _) if n == name)
+                && args.len() == arity
+                && args.iter().enumerate().any(|(p, a)| {
+                    grows(a)
+                        && group_param_set(program, inference, name, arity, p) & infer::BIG != 0
+                })
+        })
+    })
 }
 
 /// Whether a loop's arms allocate nothing but the growth of lists its
@@ -1185,10 +1228,15 @@ fn classify(
     if value_uses.has(name) {
         return Some(crate::beat::Verdict::UsedAsValue);
     }
-    if !allocating.contains(name) {
+    let crossing = crossing_positions(program, inference, mut_sites, chains, name, arity);
+    // a loop that allocates nothing but a bignum takes a beat only when
+    // nothing else would cross its rewind: a carried string or list would be
+    // copied every iteration to reclaim a bignum most runs never make
+    if !allocating.contains(name)
+        && !(crossing.is_empty() && widens(program, inference, name, arity))
+    {
         return Some(crate::beat::Verdict::PureLoop);
     }
-    let crossing = crossing_positions(program, inference, mut_sites, chains, name, arity);
     if !crossing.is_empty() {
         // a slot inference can't type may hide a growing accumulator
         // behind a helper call, and a byte builder rebuilt each iteration
