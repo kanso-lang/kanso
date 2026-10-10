@@ -24744,6 +24744,20 @@ running out of stack, which is what it printed. A carrying cluster with an edge
 through a piped lambda is now refused, and golden_prose goes red without that
 refusal.
 
+Lifting the entry refusal admitted a second. grammar_check's capture loop is a
+three-member cluster entered by a tail call, and it grows its carried list with
+`grown = push acc x` and hands on `grown`. Growth in a carried slot refuses a
+cluster, but the check read only the argument itself, so `push acc x` written in
+place was refused and the same push behind a name was carried. The gate died in
+`k_deep_copy` under `k_repair_interior`, reading a heap pointer of 6, with the
+lap rule and with a stage at every edge alike. The check now reads through a
+name the body bound. grammar_check runs again, and
+`a_cluster_growing_its_carried_list_through_a_name_stays_out` fails without the
+lookthrough. I could not reduce the crash itself: a thirty-line copy of the
+loop, with nested capture maps and sliced group text, carries and rewinds
+cleanly. Why carrying that list corrupts a node is still open. The lookthrough
+costs the tab compiler 8,440 instructions, to 390,305,438.
+
 Lifting the refusals alone made mal ten times slower. A cluster rewinds at
 every edge between its members, and mal crosses about fifty edges for each
 call it evaluates. Each rewind sized the carried slots, copied them into the

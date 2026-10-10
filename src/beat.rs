@@ -864,6 +864,7 @@ fn cluster_edges_ok(
     let mut carried: HashMap<Group, Vec<usize>> = HashMap::default();
     for (_, to, di, args) in &inner {
         let decl = &program.fns[*di];
+        let locals = local_binds(decl);
         for (i, arg) in args.iter().enumerate() {
             let s = slot_set(*to, i);
             if (s != 0 && s & !FAIL & !CROSSES == 0)
@@ -881,6 +882,15 @@ fn cluster_edges_ok(
             if (s & !FAIL) == BYTES || s == 0 {
                 return None;
             }
+            // read through a name the body bound: `grown = push acc x` handed
+            // on as `grown` grows the slot exactly as `push acc x` would.
+            // grammar_check's capture loop does that, and carrying it died
+            // in k_deep_copy once a carrying cluster could be entered by a
+            // tail call
+            let arg = match arg {
+                Expr::Ident(n, _, _) => locals.get(n.as_str()).copied().unwrap_or(arg),
+                _ => arg,
+            };
             if let Expr::App { head: ah, args: aargs, .. } = arg {
                 if let Expr::Ident(op, _, _) = ah.as_ref() {
                     let own = decl.params.get(i).and_then(|p| match p {
@@ -2695,6 +2705,22 @@ mod tests {
             super::beat_loops(&program, &inference, &crate::linear::in_place_pushes(&program));
 
         assert!(beats.ids.contains_key(&("stepping".to_string(), 2)));
+    }
+
+    #[test]
+    fn a_cluster_growing_its_carried_list_through_a_name_stays_out() {
+        // grammar_check's capture loop: `grown = push acc x` handed on as
+        // `grown` grows the carried slot as `push acc x` would, and growth in
+        // a carried slot refuses the cluster. The name hid it until
+        // 2026-10-10, and once a carrying cluster could be entered by a tail
+        // call the gate died in k_deep_copy.
+        let src = "fn each acc at\n  stepping acc at (at > 3)\n\nfn stepping acc _ true\n  acc\n\nfn stepping acc at false\n  grown = push acc \"x{at}\"\n  each grown (at + 1)\n\nfn start acc\n  each acc 1\n\nmain = print \"{length (start [])}\"\n";
+        let (program, inference) = compiled(src);
+        let beats =
+            super::beat_loops(&program, &inference, &crate::linear::in_place_pushes(&program));
+
+        assert!(!beats.ids.contains_key(&("each".to_string(), 2)));
+        assert!(!beats.ids.contains_key(&("stepping".to_string(), 3)));
     }
 
     #[test]
