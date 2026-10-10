@@ -25211,3 +25211,10 @@ tenth lap, followed by a second run of the same loop with keys of the same
 length. Without the change the program dies with a segmentation fault; with
 it, it prints what the interpreter prints. Main does not reach this path,
 because its pops copy deep only after a write has reached the carry.
+
+The deep pop copies what the shallow one left in place, so the counters that
+see a pop move. basket allocates one more node and 3,872 more bytes, and its
+pops evacuate 4,208 bytes where they evacuated 192; the run program's survive
+count falls from 105,679 slots to 4,854, because a deep walk copies a node
+instead of asking whether it survives. Four mem fixtures evacuate between one
+and forty more nodes at their pops, and two more ask fewer survival questions.
