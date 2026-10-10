@@ -1,0 +1,12 @@
+print "output before the error is kept";
+var total = 0;
+for (var i = 1; i <= 3; i = i + 1) {
+  total = total + i;
+  print total;
+}
+fun broken(x) {
+  return x -
+    "a string";
+}
+print broken(1);
+print "never printed";

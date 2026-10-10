@@ -1,0 +1,127 @@
+0200            ; A one-player paddle game. Keys 4 and 6 move the paddle along the bottom
+0200            ; row; the ball bounces off the walls and the top, and the score in the
+0200            ; corner goes up each time the paddle returns it. A ball that gets past
+0200            ; the paddle is counted in VB and served again from the top.
+0200            ;
+0200            ; The paddle hit is found the CHIP-8 way: the ball is drawn, and if the draw
+0200            ; turned a pixel off, VF says it landed on the paddle.
+0200            LEFT:     EQU 4
+0200            RIGHT:    EQU 6
+0200            FLOOR:    EQU 31
+0200            CEILING:  EQU 7
+0200            PADDLE_Y: EQU 30
+0200            
+0200  00E0              CLS
+0202  6A1C              LD   VA, 28             ; paddle x
+0204  A2BE              LD   I, paddle
+0206  651E              LD   V5, PADDLE_Y
+0208  DA51              DRW  VA, V5, 1
+020A  6800              LD   V8, 0              ; score
+020C  22A0              CALL score
+020E  224E              CALL serve
+0210  6501      frame:  LD   V5, 1
+0212  F515              LD   DT, V5
+0214  F507      tick:   LD   V5, DT
+0216  3500              SE   V5, 0
+0218  1214              JP   tick
+021A  A2BF              LD   I, ball
+021C  D011              DRW  V0, V1, 1          ; erase the ball
+021E  6504              LD   V5, LEFT
+0220  E5A1              SKNP V5
+0222  227E              CALL go_left
+0224  6506              LD   V5, RIGHT
+0226  E5A1              SKNP V5
+0228  2290              CALL go_right
+022A  8024              ADD  V0, V2
+022C  8134              ADD  V1, V3
+022E  4000              SNE  V0, 0
+0230  226E              CALL flip_x
+0232  403F              SNE  V0, 63
+0234  226E              CALL flip_x
+0236  4107              SNE  V1, CEILING
+0238  2276              CALL flip_y
+023A  411F              SNE  V1, FLOOR
+023C  1248              JP   missed
+023E  A2BF              LD   I, ball
+0240  D011              DRW  V0, V1, 1
+0242  3F00              SE   VF, 0
+0244  225C              CALL hit
+0246  1210              JP   frame
+0248            
+0248  7B01      missed: ADD  VB, 1
+024A  224E              CALL serve
+024C  1210              JP   frame
+024E            
+024E            ; Put the ball back at the top, heading down and right.
+024E  6014      serve:  LD   V0, 20
+0250  6108              LD   V1, CEILING+1
+0252  6201              LD   V2, 1
+0254  6301              LD   V3, 1
+0256  A2BF              LD   I, ball
+0258  D011              DRW  V0, V1, 1
+025A  00EE              RET
+025C            
+025C            ; The ball landed on the paddle: take it back off, send it up, score.
+025C  D011      hit:    DRW  V0, V1, 1
+025E  63FF              LD   V3, 255
+0260  8134              ADD  V1, V3
+0262  8134              ADD  V1, V3
+0264  D011              DRW  V0, V1, 1
+0266  22A0              CALL score              ; erase the old score
+0268  7801              ADD  V8, 1
+026A  22A0              CALL score              ; draw the new one
+026C  00EE              RET
+026E            
+026E  6600      flip_x: LD   V6, 0
+0270  8625              SUB  V6, V2
+0272  8260              LD   V2, V6
+0274  00EE              RET
+0276            
+0276  6600      flip_y: LD   V6, 0
+0278  8635              SUB  V6, V3
+027A  8360              LD   V3, V6
+027C  00EE              RET
+027E            
+027E  4A00      go_left: SNE VA, 0
+0280  00EE              RET
+0282  A2BE              LD   I, paddle
+0284  651E              LD   V5, PADDLE_Y
+0286  DA51              DRW  VA, V5, 1
+0288  6602              LD   V6, 2
+028A  8A65              SUB  VA, V6
+028C  DA51              DRW  VA, V5, 1
+028E  00EE              RET
+0290            
+0290  4A38      go_right: SNE VA, 56
+0292  00EE              RET
+0294  A2BE              LD   I, paddle
+0296  651E              LD   V5, PADDLE_Y
+0298  DA51              DRW  VA, V5, 1
+029A  7A02              ADD  VA, 2
+029C  DA51              DRW  VA, V5, 1
+029E  00EE              RET
+02A0            
+02A0            ; Draw V8 as two decimal digits at the top left. Drawing the same digits
+02A0            ; twice erases them, so `score` both shows and clears.
+02A0  A2C3      score:  LD   I, saved
+02A2  F355              LD   [I], V3            ; keep the ball's V0..V3
+02A4  A2C0              LD   I, digits
+02A6  F833              LD   B, V8
+02A8  F265              LD   V2, [I]            ; V0..V2 = hundreds, tens, ones
+02AA  6601              LD   V6, 1
+02AC  6701              LD   V7, 1
+02AE  F129              LD   F, V1
+02B0  D675              DRW  V6, V7, 5
+02B2  6606              LD   V6, 6
+02B4  F229              LD   F, V2
+02B6  D675              DRW  V6, V7, 5
+02B8  A2C3              LD   I, saved
+02BA  F365              LD   V3, [I]
+02BC  00EE              RET
+02BE            
+02BE  FF        paddle: DB   #FF
+02BF  80        ball:   DB   %10000000
+02C0  000000    digits: DS   3
+02C3  00000000  saved:  DS   4
+02C7            
+[exit 0]

@@ -1,0 +1,41 @@
+import "std/text"
+
+# Runs a program without touching the world: the output a test sees is the
+# machine's pending lines, and a runtime error is reported in jlox's words.
+fn run_lox source
+  stmts = (resolve_program (parse (scan source).tokens).statements).statements
+  finished_run (run_list stmts (fresh_machine 0.0))
+
+fn finished_run (normal m)
+  text/join (chain_list m.out) "|"
+
+fn finished_run (err f)
+  shown = text/join (chain_list f.machine.out) "|"
+  "{shown}|{f.message} [line {f.line}]"
+
+test_run_arithmetic = run_lox "print 1 + 2 * 3; print 10 / 4;" == "7|2.5"
+
+test_run_closure_counter =
+  source = "fun c() \{ var n = 0; fun i() \{ n = n + 1; return n; } return i; }"
+  run_lox "{source} var f = c(); f(); print f();" == "2"
+
+test_run_class_init =
+  source = "class P \{ init(x) \{ this.x = x; } } print P(3).x; print P;"
+  run_lox source == "3|P"
+
+test_run_super =
+  base = "class A \{ m() \{ return \"A\"; } }"
+  derived = "class B < A \{ m() \{ return super.m() + \"B\"; } }"
+  run_lox "{base} {derived} print B().m();" == "AB"
+
+test_run_runtime_error =
+  got_error = run_lox "print \"ok\";\nprint -\"x\";"
+  got_error == "ok|Operand must be a number. [line 2]"
+
+test_run_while_return =
+  body = "while (true) \{ i = i + 1; if (i == 5) return i; }"
+  run_lox "fun f() \{ var i = 0; {body} } print f();" == "5"
+
+test_run_recursion =
+  source = "fun f(n) \{ if (n == 0) return 0; return f(n - 1) + 1; }"
+  run_lox "{source} print f(300);" == "300"

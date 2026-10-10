@@ -1,0 +1,28 @@
+# Two arms that tie -- each is more specific in some position -- are refused
+# with error[dispatch] when they are the only two arms. Add one arm that is
+# most specific everywhere and one catch-all, and the tie is no longer
+# reported; worse, the engines then pick different arms.
+#
+# Should: error[dispatch] "these `pick` arms tie" for arms 2 and 3, as it does
+# when arms 1 and 4 are deleted.
+#
+# Does:
+#   kanso play --interp   literal arm: false
+#   kanso play            typed arm for eq: 3.0
+#
+# In the Lox port this made `1 == 2` evaluate as `1 <= 2`: the `"=="` arm of
+# `binary_on` lost to the arithmetic arm typed `left:float64 right:float64`,
+# on both engines there, silently.
+fn pick "+" a:float64 b:float64
+  "plus {a + b}"
+
+fn pick "eq" a b
+  "literal arm: {a == b}"
+
+fn pick op a:float64 b:float64
+  "typed arm for {op}: {a + b}"
+
+fn pick op a b
+  "fallback {op} {a} {b}"
+
+print (pick "eq" 1.0 2.0)

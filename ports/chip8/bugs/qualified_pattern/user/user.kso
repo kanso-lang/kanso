@@ -1,0 +1,17 @@
+import "../shapes"
+
+# The same arm, spelled the way chapter 07 says it prefers ("the qualified
+# spelling is the one this book prefers, because it reads as documentation").
+#
+# Expected: both spellings mean the same pattern; `main` prints "jump 7".
+# Actual: `kanso check .` refuses the qualified one with
+#   error[opacity]: `shapes/jump` is foreign — its structure does not cross
+#   an import; use its module's pub operations
+# while the bare spelling `fn target (jump addr)` is accepted and destructures
+# the same foreign record. The message says the structure cannot cross the
+# import at all, which the bare arm shows is not so.
+pub fn shown op
+  target (shapes/decode op)
+
+fn target (shapes/jump addr)
+  "jump {addr}"

@@ -1,0 +1,7 @@
+# frame  action  key
+5        tap     A
+12       down    3
+20       up      3
+30       tap     0
+40       down    5
+50       up      5

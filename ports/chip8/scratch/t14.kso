@@ -1,0 +1,3 @@
+xs = [5]
+x = xs[2]
+print "{x != none} {x == none}"

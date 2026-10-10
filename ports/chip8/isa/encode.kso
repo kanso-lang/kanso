@@ -1,0 +1,121 @@
+import "std/bits"
+
+# The inverse of decode: an instruction value back to its 16-bit opcode.
+# `decode (encode i) == i` for every instruction, and the tests hold it to
+# that for all 35.
+pub fn encode (add_byte byte x)
+  xkk 7 x byte
+
+pub fn encode (add_i x)
+  xkk 15 x 30
+
+pub fn encode (add_reg x y)
+  xyn 8 x y 4
+
+pub fn encode (and_reg x y)
+  xyn 8 x y 2
+
+pub fn encode (bad op)
+  op
+
+pub fn encode (bcd x)
+  xkk 15 x 51
+
+pub fn encode (call addr)
+  nnn 2 addr
+
+pub fn encode cls
+  224
+
+pub fn encode (draw n x y)
+  xyn 13 x y n
+
+pub fn encode (font x)
+  xkk 15 x 41
+
+pub fn encode (get_delay x)
+  xkk 15 x 7
+
+pub fn encode (jump addr)
+  nnn 1 addr
+
+pub fn encode (jump_v0 addr)
+  nnn 11 addr
+
+pub fn encode (load x)
+  xkk 15 x 101
+
+pub fn encode (or_reg x y)
+  xyn 8 x y 1
+
+pub fn encode ret
+  238
+
+pub fn encode (rnd byte x)
+  xkk 12 x byte
+
+pub fn encode (set_byte byte x)
+  xkk 6 x byte
+
+pub fn encode (set_delay x)
+  xkk 15 x 21
+
+pub fn encode (set_i addr)
+  nnn 10 addr
+
+pub fn encode (set_reg x y)
+  xyn 8 x y 0
+
+pub fn encode (set_sound x)
+  xkk 15 x 24
+
+pub fn encode (shl_reg x y)
+  xyn 8 x y 14
+
+pub fn encode (shr_reg x y)
+  xyn 8 x y 6
+
+pub fn encode (skip_eq_byte byte x)
+  xkk 3 x byte
+
+pub fn encode (skip_eq_reg x y)
+  xyn 5 x y 0
+
+pub fn encode (skip_key x)
+  xkk 14 x 158
+
+pub fn encode (skip_ne_byte byte x)
+  xkk 4 x byte
+
+pub fn encode (skip_ne_reg x y)
+  xyn 9 x y 0
+
+pub fn encode (skip_no_key x)
+  xkk 14 x 161
+
+pub fn encode (store x)
+  xkk 15 x 85
+
+pub fn encode (sub_reg x y)
+  xyn 8 x y 5
+
+pub fn encode (subn_reg x y)
+  xyn 8 x y 7
+
+pub fn encode (sys addr)
+  nnn 0 addr
+
+pub fn encode (wait_key x)
+  xkk 15 x 10
+
+pub fn encode (xor_reg x y)
+  xyn 8 x y 3
+
+fn nnn f addr
+  bits/shl f 12 | addr
+
+fn xkk f x kk
+  bits/shl f 12 | bits/shl x 8 | kk
+
+fn xyn f x y n
+  bits/shl f 12 | bits/shl x 8 | bits/shl y 4 | n

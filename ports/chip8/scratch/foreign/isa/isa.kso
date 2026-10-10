@@ -1,0 +1,10 @@
+pub type cls
+
+pub type jp
+  addr
+
+pub fn decode 224
+  cls
+
+pub fn decode op
+  jp op

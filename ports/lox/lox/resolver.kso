@@ -1,0 +1,491 @@
+import "std/list"
+
+# Chapter 11's resolver, as a rewrite: it walks the parsed tree and answers a
+# new one in which every variable says where it lives. jlox records each
+# Expr object's depth in a side table keyed by object identity; kanso values
+# have no identity (two `a` nodes are equal if they read alike), so the
+# answer has to be written into the tree itself.
+#
+# A local is addressed by depth (scopes to walk out) and slot (its position
+# among its scope's declarations, from 1). The resolver also notes which
+# locals an inner function reads: those are "captured", and the interpreter
+# keeps them where a closure can still reach them after the scope ends.
+type local_get
+  depth
+  name
+  slot
+
+type global_get
+  name
+
+type local_set
+  depth
+  name
+  slot
+  value
+
+type global_set
+  name
+  value
+
+type this_ref
+  depth
+  keyword
+
+type super_ref
+  depth
+  keyword
+  method
+
+# Where a declaration puts its name.
+type local
+
+type global
+
+type define
+  initializer
+  name
+  place
+
+type define_fn
+  name
+  place
+  routine
+
+type define_class
+  methods
+  name
+  place
+  superclass
+
+# A block with the set of its slots that inner functions capture.
+type scoped
+  captured
+  statements
+
+# A function body, resolved. Its parameters are slots 1 to arity of its own
+# scope, and `captured` covers parameters and body locals alike.
+type routine
+  body
+  captured
+  initializer
+  name
+  params
+
+# A class whose methods are being resolved. `enclosing` is the class kind to
+# restore afterwards; `superclass` is resolved once the class has one.
+type class_work
+  enclosing
+  methods
+  name
+  place
+  superclass
+
+type resolver
+  class_kind
+  errors
+  fn_kind
+  level
+  scopes
+
+type scope
+  captured
+  count
+  level
+  names
+  ready
+
+type link
+  here
+  rest
+
+type no_scopes
+
+type resolved
+  node
+  state
+
+type found
+  depth
+  slot
+
+type not_found
+
+type resolution
+  errors
+  statements
+
+pub fn resolve_program stmts
+  rs = resolver "none" [] "none" 0 no_scopes
+  finished (resolve_list stmts rs)
+
+fn finished (resolved stmts rs)
+  resolution rs.errors stmts
+
+fn resolve_list stmts rs
+  as_list (list/fold stmts (resolved chain_start rs) resolve_step)
+
+fn resolve_step (resolved acc rs) stmt
+  appended acc (resolve_stmt stmt rs)
+
+fn appended acc (resolved node rs)
+  resolved (chain acc node) rs
+
+fn as_list (resolved acc rs)
+  resolved (chain_list acc) rs
+
+# --- scopes -----------------------------------------------------------------
+fn begin_scope rs
+  opened = scope {} 0 rs.level {} {}
+  resolver rs.class_kind rs.errors rs.fn_kind rs.level (link opened rs.scopes)
+
+fn end_scope rs
+  resolver rs.class_kind rs.errors rs.fn_kind rs.level rs.scopes.rest
+
+fn complain rs tok message
+  noted = push rs.errors (located tok message)
+  resolver rs.class_kind noted rs.fn_kind rs.level rs.scopes
+
+fn with_scopes rs scopes
+  resolver rs.class_kind rs.errors rs.fn_kind rs.level scopes
+
+fn place_of rs
+  scope_place rs.scopes
+
+fn scope_place no_scopes
+  global
+
+fn scope_place _
+  local
+
+fn declare rs name
+  in_scope_declare rs rs.scopes name
+
+fn in_scope_declare rs no_scopes _
+  rs
+
+fn in_scope_declare rs (link here rest) name
+  slot = here.count + 1
+  names = put here.names name.lexeme slot
+  grown_scope = scope here.captured slot here.level names here.ready
+  checked = duplicate_check rs here name
+  with_scopes checked (link grown_scope rest)
+
+fn duplicate_check rs here name
+  message = "Already a variable with this name in this scope."
+  if (here.names[name.lexeme] == none) rs (complain rs name message)
+
+fn define_name rs name
+  in_scope_define rs rs.scopes name.lexeme
+
+fn in_scope_define rs no_scopes _
+  rs
+
+fn in_scope_define rs (link here rest) word
+  ready = put here.ready word true
+  readied = scope here.captured here.count here.level here.names ready
+  with_scopes rs (link readied rest)
+
+# Declares and defines a name the resolver introduces itself ("this",
+# "super"), which has no token.
+fn implicit rs word
+  opened = begin_scope rs
+  here = opened.scopes.here
+  named = scope here.captured 1 here.level (put {} word 1) (put {} word true)
+  with_scopes opened (link named opened.scopes.rest)
+
+# Finds the innermost scope that declares `word`, and marks the slot captured
+# if a function boundary lies between here and there.
+fn lookup rs word
+  find_in rs.scopes word 0
+
+fn find_in no_scopes _ _
+  not_found
+
+fn find_in (link here rest) word depth
+  slot = here.names[word]
+  if (slot == none) (find_in rest word (depth + 1)) (found depth slot)
+
+fn mark_captured rs (found depth slot)
+  with_scopes rs (marked rs.scopes depth slot rs.level)
+
+fn mark_captured rs not_found
+  rs
+
+fn marked (link here rest) 0 slot level
+  return link here rest if level <= here.level
+  caught = put here.captured slot true
+  link (scope caught here.count here.level here.names here.ready) rest
+
+fn marked (link here rest) depth slot level
+  link here (marked rest (depth - 1) slot level)
+
+# --- statements -------------------------------------------------------------
+fn resolve_stmt (block stmts) rs
+  block_done (resolve_list stmts (begin_scope rs))
+
+fn resolve_stmt (var_stmt initializer name) rs
+  declared = declare rs name
+  var_done name (place_of rs) (resolve_expr initializer declared)
+
+fn resolve_stmt (function_decl body name params) rs
+  declared = define_name (declare rs name) name
+  shaped = resolve_function body name params "function" declared
+  fn_done name (place_of rs) shaped
+
+fn resolve_stmt (class_decl methods name superclass) rs
+  declared = define_name (declare rs name) name
+  checked = self_inherit declared name superclass
+  work = class_work rs.class_kind methods name (place_of rs) superclass
+  class_header work superclass checked
+
+fn resolve_stmt (expression_stmt e) rs
+  wrap_expression (resolve_expr e rs)
+
+fn resolve_stmt (print_stmt e) rs
+  wrap_print (resolve_expr e rs)
+
+fn resolve_stmt (if_stmt condition else_branch then_branch) rs
+  if_cond else_branch then_branch (resolve_expr condition rs)
+
+fn resolve_stmt (while_stmt body condition) rs
+  while_cond body (resolve_expr condition rs)
+
+fn resolve_stmt (return_stmt keyword value) rs
+  return_checked keyword value (return_check rs keyword value)
+
+fn resolve_stmt nothing rs
+  resolved nothing rs
+
+fn block_done (resolved stmts rs)
+  resolved (scoped rs.scopes.here.captured stmts) (end_scope rs)
+
+fn var_done name place (resolved initializer rs)
+  resolved (define initializer name place) (define_name rs name)
+
+fn fn_done name place (resolved shaped rs)
+  resolved (define_fn name place shaped) rs
+
+fn wrap_expression (resolved e rs)
+  resolved (expression_stmt e) rs
+
+fn wrap_print (resolved e rs)
+  resolved (print_stmt e) rs
+
+fn if_cond else_branch then_branch (resolved condition rs)
+  if_then_resolved condition else_branch (resolve_stmt then_branch rs)
+
+fn if_then_resolved condition else_branch (resolved then_branch rs)
+  if_resolved condition then_branch (resolve_stmt else_branch rs)
+
+fn if_resolved condition then_branch (resolved else_branch rs)
+  resolved (if_stmt condition else_branch then_branch) rs
+
+fn while_cond body (resolved condition rs)
+  while_resolved condition (resolve_stmt body rs)
+
+fn while_resolved condition (resolved body rs)
+  resolved (while_stmt body condition) rs
+
+fn return_check rs keyword value
+  top_level = "Can't return from top-level code."
+  return complain rs keyword top_level if rs.fn_kind == "none"
+  initializing = rs.fn_kind == "initializer" and value != nothing
+  message = "Can't return a value from an initializer."
+  if initializing (complain rs keyword message) rs
+
+fn return_checked keyword nothing rs
+  resolved (return_stmt keyword nothing) rs
+
+fn return_checked keyword value rs
+  return_done keyword (resolve_expr value rs)
+
+fn return_done keyword (resolved value rs)
+  resolved (return_stmt keyword value) rs
+
+# --- functions --------------------------------------------------------------
+fn resolve_function body name params kind rs
+  deeper = resolver rs.class_kind rs.errors kind (rs.level + 1) rs.scopes
+  entered = begin_scope deeper
+  with_params = list/fold params entered declare_param
+  function_done name params kind rs (resolve_list body with_params)
+
+fn declare_param rs param
+  define_name (declare rs param) param
+
+fn function_done name params kind outer (resolved body rs)
+  captured = rs.scopes.here.captured
+  shaped = routine body captured (kind == "initializer") name params
+  left = end_scope rs
+  kind = outer.fn_kind
+  back = resolver left.class_kind left.errors kind outer.level left.scopes
+  resolved shaped back
+
+# --- classes ----------------------------------------------------------------
+fn self_inherit rs name (variable parent)
+  same = parent.lexeme == name.lexeme
+  if same (complain rs parent "A class can't inherit from itself.") rs
+
+fn self_inherit rs _ nothing
+  rs
+
+fn class_header work nothing rs
+  class_body work (implicit (with_class rs "class") "this")
+
+fn class_header work superclass rs
+  class_parent work (resolve_expr superclass (with_class rs "subclass"))
+
+fn class_parent work (resolved superclass rs)
+  inside = implicit (implicit rs "super") "this"
+  w = work
+  parented = class_work w.enclosing w.methods w.name w.place superclass
+  class_body parented inside
+
+fn class_body work rs
+  class_done work (list/fold work.methods (resolved {} rs) method_step)
+
+fn method_step (resolved table rs) method
+  kind = if (method.name.lexeme == "init") "initializer" "method"
+  shaped = resolve_function method.body method.name method.params kind rs
+  method_resolved table shaped
+
+fn method_resolved table (resolved shaped rs)
+  resolved (put table shaped.name.lexeme shaped) rs
+
+fn class_done work (resolved table rs)
+  without_this = end_scope rs
+  parentless = work.superclass == nothing
+  outside = if parentless without_this (end_scope without_this)
+  node = define_class table work.name work.place work.superclass
+  resolved node (with_class outside work.enclosing)
+
+fn with_class rs kind
+  resolver kind rs.errors rs.fn_kind rs.level rs.scopes
+
+# --- expressions ------------------------------------------------------------
+fn resolve_expr (literal value) rs
+  resolved (literal value) rs
+
+fn resolve_expr (grouping inner) rs
+  resolve_expr inner rs
+
+fn resolve_expr (unary op right) rs
+  unary_done op (resolve_expr right rs)
+
+fn resolve_expr (binary left op right) rs
+  binary_left op right (resolve_expr left rs)
+
+fn resolve_expr (logical left op right) rs
+  logical_left op right (resolve_expr left rs)
+
+fn resolve_expr (variable name) rs
+  checked = initializer_check rs name
+  noted = mark_captured checked (lookup checked name.lexeme)
+  resolved (address checked name) noted
+
+fn resolve_expr (assign name value) rs
+  assign_done name (resolve_expr value rs)
+
+fn resolve_expr (call_expr args callee paren) rs
+  call_callee args paren (resolve_expr callee rs)
+
+fn resolve_expr (get_expr name object) rs
+  get_done name (resolve_expr object rs)
+
+fn resolve_expr (set_expr name object value) rs
+  set_value name object (resolve_expr value rs)
+
+fn resolve_expr (this_expr keyword) rs
+  return complain_this rs keyword if rs.class_kind == "none"
+  found_this keyword (lookup rs "this") (mark_captured rs (lookup rs "this"))
+
+fn resolve_expr (super_expr keyword method) rs
+  checked = super_check rs keyword
+  where = lookup checked "super"
+  found_super keyword method where (mark_captured checked where)
+
+fn complain_this rs keyword
+  failed = complain rs keyword "Can't use 'this' outside of a class."
+  resolved (global_get keyword) failed
+
+fn found_this keyword (found depth _) rs
+  resolved (this_ref depth keyword) rs
+
+fn found_this keyword not_found rs
+  resolved (global_get keyword) rs
+
+fn super_check rs keyword
+  outside = "Can't use 'super' outside of a class."
+  return complain rs keyword outside if rs.class_kind == "none"
+  no_parent = "Can't use 'super' in a class with no superclass."
+  if (rs.class_kind == "class") (complain rs keyword no_parent) rs
+
+fn found_super keyword method (found depth _) rs
+  resolved (super_ref depth keyword method) rs
+
+fn found_super keyword _ not_found rs
+  resolved (global_get keyword) rs
+
+fn initializer_check rs name
+  message = "Can't read local variable in its own initializer."
+  if (declared_unready? rs.scopes name.lexeme) (complain rs name message) rs
+
+fn declared_unready? no_scopes _
+  false
+
+fn declared_unready? (link here _) word
+  here.names[word] != none and here.ready[word] == none
+
+# Where a variable reference lives, before its capture is noted.
+fn address rs name
+  located_at name (lookup rs name.lexeme)
+
+fn located_at name (found depth slot)
+  local_get depth name slot
+
+fn located_at name not_found
+  global_get name
+
+fn unary_done op (resolved right rs)
+  resolved (unary op right) rs
+
+fn binary_left op right (resolved left rs)
+  binary_done left op (resolve_expr right rs)
+
+fn binary_done left op (resolved right rs)
+  resolved (binary left op right) rs
+
+fn logical_left op right (resolved left rs)
+  logical_done left op (resolve_expr right rs)
+
+fn logical_done left op (resolved right rs)
+  resolved (logical left op right) rs
+
+fn assign_done name (resolved value rs)
+  where = lookup rs name.lexeme
+  resolved (assignment_of where name value) (mark_captured rs where)
+
+fn assignment_of (found depth slot) name value
+  local_set depth name slot value
+
+fn assignment_of not_found name value
+  global_set name value
+
+fn call_callee args paren (resolved callee rs)
+  args = list/fold args (resolved chain_start rs) arg_step
+  args_done callee paren (as_list args)
+
+fn arg_step (resolved acc rs) arg
+  appended acc (resolve_expr arg rs)
+
+fn args_done callee paren (resolved args rs)
+  resolved (call_expr args callee paren) rs
+
+fn get_done name (resolved object rs)
+  resolved (get_expr name object) rs
+
+fn set_value name object (resolved value rs)
+  set_object name value (resolve_expr object rs)
+
+fn set_object name value (resolved object rs)
+  resolved (set_expr name object value) rs

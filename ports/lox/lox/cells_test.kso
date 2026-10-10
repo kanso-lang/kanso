@@ -1,0 +1,15 @@
+fn filled cs 0
+  cs
+
+fn filled cs n
+  filled (with_cell cs n (n * 10)) (n - 1)
+
+test_cells_grow =
+  cs = filled empty_cells 300
+  cell_at cs 1 == 10 and cell_at cs 64 == 640 and cell_at cs 300 == 3000
+
+test_cells_overwrite =
+  cs = with_cell (with_cell empty_cells 5 "a") 5 "b"
+  cell_at cs 5 == "b"
+
+test_cells_vacant = cell_at (filled empty_cells 10) 99 == vacant

@@ -1,0 +1,3 @@
+var s = "text";
+print "setting a field on a string";
+s.length = 4;

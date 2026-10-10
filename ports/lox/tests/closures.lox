@@ -1,0 +1,79 @@
+fun makeCounter() {
+  var count = 0;
+  fun increment() {
+    count = count + 1;
+    return count;
+  }
+  return increment;
+}
+var c1 = makeCounter();
+var c2 = makeCounter();
+print c1();
+print c1();
+print c2();
+print c1();
+// Two closures that share one variable.
+var getter;
+var setter;
+fun makePair() {
+  var value = "initial";
+  fun get() { return value; }
+  fun set(v) { value = v; }
+  getter = get;
+  setter = set;
+}
+makePair();
+print getter();
+setter("changed");
+print getter();
+// The resolver binds a name to the declaration in scope where the closure
+// is written, not to one declared later.
+var a = "global";
+{
+  fun showA() { print a; }
+  showA();
+  var a = "block";
+  showA();
+  print a;
+}
+// Closures over parameters and over three levels of nesting.
+fun adder(n) {
+  return fun_wrapper(n);
+}
+fun fun_wrapper(n) {
+  fun add(m) { return n + m; }
+  return add;
+}
+var add5 = adder(5);
+print add5(10);
+fun level1() {
+  var x = "one";
+  fun level2() {
+    var y = "two";
+    fun level3() {
+      return x + " " + y + " three";
+    }
+    return level3;
+  }
+  return level2();
+}
+print level1()();
+// Each loop pass makes a new block scope, so each closure keeps its own copy
+// of a variable declared inside the body.
+var saved1;
+var saved2;
+for (var i = 1; i <= 2; i = i + 1) {
+  var captured = i * 100;
+  fun show() { return captured; }
+  if (i == 1) saved1 = show; else saved2 = show;
+}
+print saved1();
+print saved2();
+// A closure outlives the block that made it.
+var later;
+{
+  var message = "still here";
+  fun remember() { return message; }
+  later = remember;
+}
+print later();

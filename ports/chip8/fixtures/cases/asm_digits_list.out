@@ -1,0 +1,19 @@
+0200            ; Draws the sixteen built-in hex digits in two rows of eight.
+0200  00E0              CLS
+0202  6000              LD   V0, 0          ; digit
+0204  6102              LD   V1, 2          ; x
+0206  6204              LD   V2, 4          ; y
+0208  F029      next:   LD   F, V0
+020A  D125              DRW  V1, V2, 5
+020C  7001              ADD  V0, 1
+020E  7108              ADD  V1, 8
+0210  3008              SE   V0, 8
+0212  1218              JP   same_row
+0214  6102              LD   V1, 2
+0216  620E              LD   V2, 14
+0218            same_row:
+0218  3010              SE   V0, 16
+021A  1208              JP   next
+021C  121C      done:   JP   done
+021E            
+[exit 0]

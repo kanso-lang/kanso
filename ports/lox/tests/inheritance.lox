@@ -1,0 +1,50 @@
+class Animal {
+  init(name) { this.name = name; }
+  speak() { return this.name + " makes a sound"; }
+  describe() { return "I am " + this.name + ". " + this.speak(); }
+}
+class Dog < Animal {
+  speak() { return this.name + " barks"; }
+}
+class Puppy < Dog {
+  init(name) {
+    super.init(name + " junior");
+  }
+  speak() { return super.speak() + " softly"; }
+}
+var a = Animal("generic");
+var d = Dog("rex");
+var p = Puppy("rex");
+print a.speak();
+print d.speak();
+print p.speak();
+print d.describe();
+print p.describe();
+print Puppy;
+print p;
+// A superclass method reached through a closure keeps its `super`.
+class Base {
+  greet() { return "base"; }
+}
+class Derived < Base {
+  greet() { return "derived"; }
+  viaClosure() {
+    fun call() { return super.greet(); }
+    return call;
+  }
+}
+print Derived().viaClosure()();
+print Derived().greet();
+// Inherited methods are found through several levels.
+class A { method() { return "A.method"; } }
+class B < A {}
+class C < B {}
+print C().method();
+// super binds to the class where the method is written, not to `this`.
+class First { name() { return "First"; } test() { return this.name(); } }
+class Second < First {
+  name() { return "Second"; }
+  test() { return super.test() + " via " + super.name(); }
+}
+class Third < Second { name() { return "Third"; } }
+print Third().test();

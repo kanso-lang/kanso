@@ -1,0 +1,617 @@
+import "std/list"
+
+# Recursive descent over the token list, one function per grammar rule, as in
+# chapter 6 and 8 of Crafting Interpreters. Every rule answers `parsed node
+# state` or an err holding a `parse_fault`. jlox throws a ParseError and
+# catches it in `declaration`; here the err rides back up the return path to
+# `next_declaration`, which records it and synchronizes.
+#
+# Some errors do not stop the parse ("Invalid assignment target.", the
+# 255-argument limit). Those are written into the state's error list and the
+# rule carries on, which is why every rule threads the state.
+type parser
+  errors
+  p
+  toks
+
+type parsed
+  node
+  state
+
+type parse_fault
+  message
+  state
+  token
+
+# What the whole parse produced.
+type parse_result
+  errors
+  statements
+
+pub fn parse toks
+  declarations (parser [] 1 toks) chain_start
+
+# --- the token cursor -------------------------------------------------------
+fn advance ps
+  if (at_end? ps) ps (parser ps.errors (ps.p + 1) ps.toks)
+
+fn at_end? ps
+  (peek ps).kind == "eof"
+
+fn check? ps kind
+  (peek ps).kind == kind
+
+fn consume ps kind message
+  return parsed (peek ps) (advance ps) if check? ps kind
+  fault ps message
+
+fn fault ps message
+  err (parse_fault message ps (peek ps))
+
+pub fn located tok message
+  where = if (tok.kind == "eof") "end" "'{tok.lexeme}'"
+  "[line {tok.line}] Error at {where}: {message}"
+
+# jlox reports the 256th argument or parameter and keeps parsing.
+fn limited ps items what
+  return ps if length items < 255
+  note ps (peek ps) "Can't have more than 255 {what}."
+
+fn note ps tok message
+  parser (push ps.errors (located tok message)) ps.p ps.toks
+
+fn peek ps
+  ps.toks[ps.p]
+
+fn previous ps
+  ps.toks[ps.p - 1]
+
+# Wraps a node once the token that ends it has been consumed.
+fn then_node (parsed _ ps) node
+  parsed node ps
+
+fn then_node e@(err _) _
+  e
+
+# --- declarations -----------------------------------------------------------
+fn declarations ps stmts
+  return parse_result ps.errors (chain_list stmts) if at_end? ps
+  next_declaration (declaration ps) stmts
+
+fn next_declaration (parsed node ps) stmts
+  declarations ps (chain stmts node)
+
+fn next_declaration (err f) stmts
+  noted = note f.state f.token f.message
+  declarations (synchronize (advance noted)) stmts
+
+# After an error, skip to what is probably the start of the next statement.
+fn synchronize ps
+  return ps if at_end? ps or (previous ps).kind == ";"
+  if (starts_statement? (peek ps).kind) ps (synchronize (advance ps))
+
+fn starts_statement? "class"
+  true
+
+fn starts_statement? "fun"
+  true
+
+fn starts_statement? "for"
+  true
+
+fn starts_statement? "if"
+  true
+
+fn starts_statement? "print"
+  true
+
+fn starts_statement? "return"
+  true
+
+fn starts_statement? "var"
+  true
+
+fn starts_statement? "while"
+  true
+
+fn starts_statement? _
+  false
+
+fn declaration ps
+  declaration_at ps (peek ps).kind
+
+fn declaration_at ps "class"
+  class_named (consume (advance ps) "identifier" "Expect class name.")
+
+fn declaration_at ps "fun"
+  function (advance ps) "function"
+
+fn declaration_at ps "var"
+  var_named (consume (advance ps) "identifier" "Expect variable name.")
+
+fn declaration_at ps _
+  statement ps
+
+fn class_named (parsed name ps)
+  return class_super name (advance ps) if check? ps "<"
+  class_body name nothing ps
+
+fn class_named e@(err _)
+  e
+
+fn class_super name ps
+  class_super_named name (consume ps "identifier" "Expect superclass name.")
+
+fn class_super_named name (parsed tok ps)
+  class_body name (variable tok) ps
+
+fn class_super_named _ e@(err _)
+  e
+
+fn class_body name superclass ps
+  opened = consume ps "\{" "Expect '\{' before class body."
+  class_methods name superclass opened []
+
+fn class_methods name superclass (parsed _ ps) methods
+  return class_close name superclass ps methods if check? ps "}" or at_end? ps
+  class_method name superclass (function ps "method") methods
+
+fn class_methods _ _ e@(err _) _
+  e
+
+fn class_method name superclass (parsed method ps) methods
+  class_methods name superclass (parsed method ps) (push methods method)
+
+fn class_method _ _ e@(err _) _
+  e
+
+fn class_close name superclass ps methods
+  closed = consume ps "}" "Expect '}' after class body."
+  then_node closed (class_decl methods name superclass)
+
+# `kind` is "function" or "method"; it only changes the messages.
+fn function ps kind
+  named = consume ps "identifier" "Expect {kind} name."
+  function_named kind named
+
+fn function_named kind (parsed name ps)
+  opened = consume ps "(" "Expect '(' after {kind} name."
+  function_params kind name opened
+
+fn function_named _ e@(err _)
+  e
+
+fn function_params kind name (parsed _ ps)
+  return function_body kind name [] (advance ps) if check? ps ")"
+  param_list kind name [] ps
+
+fn function_params _ _ e@(err _)
+  e
+
+fn param_list kind name params ps
+  counted = limited ps params "parameters"
+  named = consume counted "identifier" "Expect parameter name."
+  param_next kind name params named
+
+fn param_next kind name params (parsed param ps)
+  more = push params param
+  return param_list kind name more (advance ps) if check? ps ","
+  closed = consume ps ")" "Expect ')' after parameters."
+  function_closed kind name more closed
+
+fn param_next _ _ _ e@(err _)
+  e
+
+fn function_closed kind name params (parsed _ ps)
+  function_body kind name params ps
+
+fn function_closed _ _ _ e@(err _)
+  e
+
+fn function_body kind name params ps
+  opened = consume ps "\{" "Expect '\{' before {kind} body."
+  function_block name params (block_from opened)
+
+fn function_block name params (parsed (block stmts) ps)
+  parsed (function_decl stmts name params) ps
+
+fn function_block _ _ e@(err _)
+  e
+
+fn var_named (parsed name ps)
+  return var_init name (expression (advance ps)) if check? ps "="
+  var_end name (literal nil) ps
+
+fn var_named e@(err _)
+  e
+
+fn var_init name (parsed init ps)
+  var_end name init ps
+
+fn var_init _ e@(err _)
+  e
+
+fn var_end name init ps
+  ended = consume ps ";" "Expect ';' after variable declaration."
+  then_node ended (var_stmt init name)
+
+# --- statements -------------------------------------------------------------
+fn statement ps
+  statement_at ps (peek ps).kind
+
+fn statement_at ps "for"
+  for_open (consume (advance ps) "(" "Expect '(' after 'for'.")
+
+fn statement_at ps "if"
+  if_open (consume (advance ps) "(" "Expect '(' after 'if'.")
+
+fn statement_at ps "print"
+  print_value (expression (advance ps))
+
+fn statement_at ps "return"
+  return_value (peek ps) (advance ps)
+
+fn statement_at ps "while"
+  while_open (consume (advance ps) "(" "Expect '(' after 'while'.")
+
+fn statement_at ps "\{"
+  block_from (parsed nothing (advance ps))
+
+fn statement_at ps _
+  expression_value (expression ps)
+
+fn block_from (parsed _ ps)
+  block_items ps chain_start
+
+fn block_from e@(err _)
+  e
+
+fn block_items ps stmts
+  return block_close ps stmts if check? ps "}" or at_end? ps
+  block_item (declaration ps) stmts
+
+fn block_item (parsed stmt ps) stmts
+  block_items ps (chain stmts stmt)
+
+# jlox catches a parse error in every `declaration`, so an error inside a
+# block is recovered inside the block.
+fn block_item (err f) stmts
+  noted = note f.state f.token f.message
+  block_items (synchronize (advance noted)) stmts
+
+fn block_close ps stmts
+  closed = consume ps "}" "Expect '}' after block."
+  then_node closed (block (chain_list stmts))
+
+fn expression_value (parsed value ps)
+  ended = consume ps ";" "Expect ';' after expression."
+  then_node ended (expression_stmt value)
+
+fn expression_value e@(err _)
+  e
+
+fn print_value (parsed value ps)
+  then_node (consume ps ";" "Expect ';' after value.") (print_stmt value)
+
+fn print_value e@(err _)
+  e
+
+fn return_value keyword ps
+  return return_end keyword nothing ps if check? ps ";"
+  return_expr keyword (expression ps)
+
+fn return_expr keyword (parsed value ps)
+  return_end keyword value ps
+
+fn return_expr _ e@(err _)
+  e
+
+fn return_end keyword value ps
+  ended = consume ps ";" "Expect ';' after return value."
+  then_node ended (return_stmt keyword value)
+
+fn if_open (parsed _ ps)
+  if_condition (expression ps)
+
+fn if_open e@(err _)
+  e
+
+fn if_condition (parsed cond ps)
+  closed = consume ps ")" "Expect ')' after if condition."
+  if_then cond (then_statement closed)
+
+fn if_condition e@(err _)
+  e
+
+fn then_statement (parsed _ ps)
+  statement ps
+
+fn then_statement e@(err _)
+  e
+
+fn if_then cond (parsed branch ps)
+  return if_else cond branch (statement (advance ps)) if check? ps "else"
+  parsed (if_stmt cond nothing branch) ps
+
+fn if_then _ e@(err _)
+  e
+
+fn if_else cond branch (parsed otherwise ps)
+  parsed (if_stmt cond otherwise branch) ps
+
+fn if_else _ _ e@(err _)
+  e
+
+fn while_open (parsed _ ps)
+  while_condition (expression ps)
+
+fn while_open e@(err _)
+  e
+
+fn while_condition (parsed cond ps)
+  closed = consume ps ")" "Expect ')' after condition."
+  while_body cond (then_statement closed)
+
+fn while_condition e@(err _)
+  e
+
+fn while_body cond (parsed body ps)
+  parsed (while_stmt body cond) ps
+
+fn while_body _ e@(err _)
+  e
+
+# `for` has no node of its own: it is taken apart into a block, a `var`, a
+# `while` and the increment, as jlox does.
+fn for_open (parsed _ ps)
+  for_initializer ps (peek ps).kind
+
+fn for_open e@(err _)
+  e
+
+fn for_initializer ps ";"
+  for_condition nothing (advance ps)
+
+fn for_initializer ps "var"
+  start = var_named (consume (advance ps) "identifier" "Expect variable name.")
+  for_init_done start
+
+fn for_initializer ps _
+  for_init_done (expression_value (expression ps))
+
+fn for_init_done (parsed init ps)
+  for_condition init ps
+
+fn for_init_done e@(err _)
+  e
+
+fn for_condition init ps
+  return for_cond_end init (literal true) ps if check? ps ";"
+  for_cond_value init (expression ps)
+
+fn for_cond_value init (parsed cond ps)
+  for_cond_end init cond ps
+
+fn for_cond_value _ e@(err _)
+  e
+
+fn for_cond_end init cond ps
+  ended = consume ps ";" "Expect ';' after loop condition."
+  for_increment init cond ended
+
+fn for_increment init cond (parsed _ ps)
+  return for_inc_end init cond nothing ps if check? ps ")"
+  for_inc_value init cond (expression ps)
+
+fn for_increment _ _ e@(err _)
+  e
+
+fn for_inc_value init cond (parsed inc ps)
+  for_inc_end init cond inc ps
+
+fn for_inc_value _ _ e@(err _)
+  e
+
+fn for_inc_end init cond inc ps
+  closed = consume ps ")" "Expect ')' after for clauses."
+  for_body init cond inc (then_statement closed)
+
+fn for_body init cond inc (parsed body ps)
+  parsed (desugar_for init cond inc body) ps
+
+fn for_body _ _ _ e@(err _)
+  e
+
+fn desugar_for init cond inc body
+  looped = while_stmt (with_increment body inc) cond
+  with_initializer init looped
+
+fn with_increment body nothing
+  body
+
+fn with_increment body inc
+  block [body (expression_stmt inc)]
+
+fn with_initializer nothing looped
+  looped
+
+fn with_initializer init looped
+  block [init looped]
+
+# --- expressions ------------------------------------------------------------
+fn expression ps
+  assignment ps
+
+fn assignment ps
+  assign_after (logic_or ps)
+
+fn assign_after (parsed target ps)
+  return parsed target ps if not check? ps "="
+  assign_to target (peek ps) (assignment (advance ps))
+
+fn assign_after e@(err _)
+  e
+
+fn assign_to (variable name) _ (parsed value ps)
+  parsed (assign name value) ps
+
+fn assign_to (get_expr name object) _ (parsed value ps)
+  parsed (set_expr name object value) ps
+
+fn assign_to target equals (parsed _ ps)
+  parsed target (note ps equals "Invalid assignment target.")
+
+fn assign_to _ _ e@(err _)
+  e
+
+fn logic_or ps
+  left_assoc ps logic_and ["or"] (l o r -> logical l o r)
+
+fn logic_and ps
+  left_assoc ps equality ["and"] (l o r -> logical l o r)
+
+fn equality ps
+  left_assoc ps comparison ["!=" "=="] (l o r -> binary l o r)
+
+fn comparison ps
+  left_assoc ps term [">" ">=" "<" "<="] (l o r -> binary l o r)
+
+fn term ps
+  left_assoc ps factor ["-" "+"] (l o r -> binary l o r)
+
+fn factor ps
+  left_assoc ps unary_rule ["/" "*"] (l o r -> binary l o r)
+
+# One loop for every left-associative binary level: parse an operand with
+# `operand`, then fold `op operand` pairs while the next token is in `ops`.
+fn left_assoc ps operand ops make
+  assoc_loop (operand ps) operand ops make
+
+fn assoc_loop (parsed left ps) operand ops make
+  op = peek ps
+  return parsed left ps if not list/any? ops (k -> k == op.kind)
+  assoc_right left op (operand (advance ps)) operand ops make
+
+fn assoc_loop e@(err _) _ _ _
+  e
+
+fn assoc_right left op (parsed right ps) operand ops make
+  assoc_loop (parsed (make left op right) ps) operand ops make
+
+fn assoc_right _ _ e@(err _) _ _ _
+  e
+
+fn unary_rule ps
+  op = peek ps
+  negated = op.kind == "!" or op.kind == "-"
+  return unary_of op (unary_rule (advance ps)) if negated
+  call_rule ps
+
+fn unary_of op (parsed right ps)
+  parsed (unary op right) ps
+
+fn unary_of _ e@(err _)
+  e
+
+fn call_rule ps
+  call_suffix (primary ps)
+
+fn call_suffix (parsed callee ps)
+  return call_args callee (advance ps) [] if check? ps "("
+  return call_property callee (advance ps) if check? ps "."
+  parsed callee ps
+
+fn call_suffix e@(err _)
+  e
+
+fn call_property object ps
+  message = "Expect property name after '.'."
+  call_property_named object (consume ps "identifier" message)
+
+fn call_property_named object (parsed name ps)
+  call_suffix (parsed (get_expr name object) ps)
+
+fn call_property_named _ e@(err _)
+  e
+
+fn call_args callee ps args
+  return call_close callee args ps if check? ps ")"
+  counted = limited ps args "arguments"
+  call_arg callee (expression counted) args
+
+fn call_arg callee (parsed arg ps) args
+  more = push args arg
+  return call_args_more callee (advance ps) more if check? ps ","
+  call_close callee more ps
+
+fn call_arg _ e@(err _) _
+  e
+
+fn call_args_more callee ps args
+  counted = limited ps args "arguments"
+  call_arg callee (expression counted) args
+
+fn call_close callee args ps
+  closed = consume ps ")" "Expect ')' after arguments."
+  call_closed callee args closed
+
+fn call_closed callee args (parsed paren ps)
+  call_suffix (parsed (call_expr args callee paren) ps)
+
+fn call_closed _ _ e@(err _)
+  e
+
+fn primary ps
+  tok = peek ps
+  primary_at ps tok tok.kind
+
+fn primary_at ps _ "false"
+  parsed (literal false) (advance ps)
+
+fn primary_at ps _ "true"
+  parsed (literal true) (advance ps)
+
+fn primary_at ps _ "nil"
+  parsed (literal nil) (advance ps)
+
+fn primary_at ps tok "number"
+  parsed (literal tok.literal) (advance ps)
+
+fn primary_at ps tok "string"
+  parsed (literal tok.literal) (advance ps)
+
+fn primary_at ps tok "this"
+  parsed (this_expr tok) (advance ps)
+
+fn primary_at ps tok "identifier"
+  parsed (variable tok) (advance ps)
+
+fn primary_at ps tok "super"
+  dotted = consume (advance ps) "." "Expect '.' after 'super'."
+  super_dotted tok dotted
+
+fn primary_at ps _ "("
+  grouped (expression (advance ps))
+
+fn primary_at ps _ _
+  fault ps "Expect expression."
+
+fn super_dotted keyword (parsed _ ps)
+  named = consume ps "identifier" "Expect superclass method name."
+  super_named keyword named
+
+fn super_dotted _ e@(err _)
+  e
+
+fn super_named keyword (parsed method ps)
+  parsed (super_expr keyword method) ps
+
+fn super_named _ e@(err _)
+  e
+
+fn grouped (parsed inner ps)
+  closed = consume ps ")" "Expect ')' after expression."
+  then_node closed (grouping inner)
+
+fn grouped e@(err _)
+  e

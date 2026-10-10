@@ -1,0 +1,5 @@
+setting a field on a string
+--- stderr
+Only instances have fields.
+[line 3]
+--- exit 70

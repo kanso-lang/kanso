@@ -1,0 +1,3 @@
+print "a" + "b";
+print 1 + 2;
+print "total: " + 3;

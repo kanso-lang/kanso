@@ -1,0 +1,29 @@
+var x = 3;
+if (x > 2) print "big"; else print "small";
+if (x > 5) print "huge";
+if (x < 0) print "negative"; else if (x == 0) print "zero"; else print "positive";
+// A dangling else belongs to the nearest if.
+if (true) if (false) print "inner then"; else print "inner else";
+var i = 0;
+while (i < 3) {
+  print i;
+  i = i + 1;
+}
+for (var j = 0; j < 3; j = j + 1) print j * 10;
+var k = 0;
+for (; k < 2;) {
+  print "k " + "loop";
+  k = k + 1;
+}
+for (var row = 1; row <= 3; row = row + 1) {
+  var line = "";
+  for (var col = 1; col <= row; col = col + 1) {
+    line = line + "*";
+  }
+  print line;
+}
+var count = 0;
+while (count < 1000) count = count + 1;
+print count;
+for (var n = 10; n > 0; n = n - 3) {}
+print "done";

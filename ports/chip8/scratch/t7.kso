@@ -1,0 +1,7 @@
+fn zeta n
+  n + 1
+
+fn alpha n
+  zeta n
+
+print "{alpha 3} {not true} {7 % 3} {0 - 7 % 3}"

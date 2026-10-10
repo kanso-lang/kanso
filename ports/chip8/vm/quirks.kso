@@ -1,0 +1,22 @@
+# Where interpreters disagree. The COSMAC VIP interpreter of 1977 defines
+# CHIP-8; the HP-48 SUPER-CHIP of 1991 changed four behaviours that most
+# later programs came to rely on. `vip` is the default.
+#
+#   jump_vx   BNNN jumps to NNN plus VX, X the top nibble of NNN, not V0
+#   keep_i    FX55 and FX65 leave I alone rather than advancing it
+#   shift_vx  8XY6 and 8XYE shift VX in place rather than VY into VX
+#   vf_reset  8XY1, 8XY2 and 8XY3 clear VF
+pub type quirks
+  jump_vx
+  keep_i
+  shift_vx
+  vf_reset
+
+pub fn profile "modern"
+  quirks true true true false
+
+pub fn profile "vip"
+  quirks false false false true
+
+pub fn profile _
+  none

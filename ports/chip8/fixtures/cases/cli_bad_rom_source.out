@@ -1,0 +1,11 @@
+chip8: roms/errors/mistakes.asm: line 4: unknown instruction `MOV`
+chip8: roms/errors/mistakes.asm: line 5: byte 300 does not fit in 0..255
+chip8: roms/errors/mistakes.asm: line 6: unknown label `nowhere`
+chip8: roms/errors/mistakes.asm: line 7: `VG` is not a register
+chip8: roms/errors/mistakes.asm: line 8: `DRW` does not take these 2 operand(s)
+chip8: roms/errors/mistakes.asm: line 9: label `start` is defined twice
+chip8: roms/errors/mistakes.asm: line 10: 256 does not fit in 0..255
+chip8: roms/errors/mistakes.asm: line 11: `9lives` is not a label name
+chip8: roms/errors/mistakes.asm: line 12: `LD` does not take these 2 operand(s)
+chip8: roms/errors/mistakes.asm: line 13: `#1G` is not a number
+[exit 1]

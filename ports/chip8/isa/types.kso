@@ -1,0 +1,134 @@
+# The CHIP-8 instruction set as values: one type per instruction, so that
+# decoding answers a value the rest of the program dispatches on, and the
+# emulator, the assembler and the disassembler all speak the same 35 words.
+#
+# Field names are what the reference manuals call the operand fields: `x` and
+# `y` name registers, `byte` is an 8-bit immediate, `addr` a 12-bit address
+# and `n` a 4-bit count. Construction is positional in alphabetical order, so
+# `set_byte byte x` builds what the manuals write as `LD Vx, byte`.
+pub type add_byte
+  byte
+  x
+
+pub type add_i
+  x
+
+pub type add_reg
+  x
+  y
+
+pub type and_reg
+  x
+  y
+
+pub type bad
+  op
+
+pub type bcd
+  x
+
+pub type call
+  addr
+
+pub type cls
+
+pub type draw
+  n
+  x
+  y
+
+pub type font
+  x
+
+pub type get_delay
+  x
+
+pub type jump
+  addr
+
+pub type jump_v0
+  addr
+
+pub type load
+  x
+
+pub type or_reg
+  x
+  y
+
+pub type problem
+  reason
+
+pub type rnd
+  byte
+  x
+
+pub type ret
+
+pub type set_byte
+  byte
+  x
+
+pub type set_delay
+  x
+
+pub type set_i
+  addr
+
+pub type set_reg
+  x
+  y
+
+pub type set_sound
+  x
+
+pub type shl_reg
+  x
+  y
+
+pub type shr_reg
+  x
+  y
+
+pub type skip_eq_byte
+  byte
+  x
+
+pub type skip_eq_reg
+  x
+  y
+
+pub type skip_key
+  x
+
+pub type skip_ne_byte
+  byte
+  x
+
+pub type skip_ne_reg
+  x
+  y
+
+pub type skip_no_key
+  x
+
+pub type store
+  x
+
+pub type sub_reg
+  x
+  y
+
+pub type subn_reg
+  x
+  y
+
+pub type sys
+  addr
+
+pub type wait_key
+  x
+
+pub type xor_reg
+  x
+  y

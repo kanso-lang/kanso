@@ -1,0 +1,5 @@
+import "std/bits"
+
+op = 4660
+x = (bits/shr op 8) & 15
+print "{x}"

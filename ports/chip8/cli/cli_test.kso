@@ -1,0 +1,35 @@
+import "../vm"
+
+plain = parsed ["rom.ch8"]
+
+test_defaults = plain == options 1000 ["rom.ch8"] false 10 "vip" "" 1 false
+
+flagged = parsed ["--cycles" "#100" "a.asm" "--trace" "--seed" "9"]
+
+test_flags = flagged == options 256 ["a.asm"] false 10 "vip" "" 9 true
+
+test_unknown_flag = parsed ["--fast"] == usage_error "unknown flag `--fast`"
+
+no_number = usage_error "--cycles wants a number"
+
+test_flag_wants_number = parsed ["--cycles"] == no_number
+
+test_per_frame_positive = parsed ["--per-frame" "0"] == per_frame_error
+
+per_frame_error = usage_error "--per-frame wants a number above 0"
+
+test_extension = extension "roms/a.b.asm" == "asm"
+
+test_no_extension = extension "rom" == "rom"
+
+test_hex_lines = hex_lines [0 224 18 0] == ["00 E0 12 00"]
+
+test_hex_lines_wrap = length (hex_lines (vm/upto vm/blank_display 17)) == 2
+
+test_dis_lines = dis_lines [0 224 7] 0 == [cls_line odd_line]
+
+cls_line = "    CLS                 ; 200  00E0"
+
+odd_line = "    DB #07              ; 202  07"
+
+test_padded = padded "ab" 4 == "ab  "

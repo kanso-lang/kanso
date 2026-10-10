@@ -1,0 +1,118 @@
+import "std/list"
+import "std/text"
+
+# Everything the CHIP-8 program can see. `display` is 32 rows, each a 64-bit
+# int whose top bit is the leftmost pixel; `held` is a 16-bit mask of the
+# held held down; `memory` is 4096 bytes and `v` the sixteen registers.
+# `pending` is none, or the key FX0A saw pressed and is waiting to see
+# released. `rng` is the state of the generator behind CXNN.
+pub type machine
+  delay
+  display
+  i
+  held
+  memory
+  pc
+  pending
+  rng
+  sound
+  stack
+  v
+
+pub program_start = 512
+
+pub font_start = 80
+
+# A fresh machine with the font at 0x050 and `rom` at 0x200.
+pub fn boot rom seed
+  low = text/concat (filled font_start) font
+  gap = filled (program_start - length low)
+  image = text/concat (text/concat low gap) rom
+  memory = text/concat image (filled (4096 - length image))
+  machine 0 blank_display 0 0 memory program_start none seed 0 [] (filled 16)
+
+pub blank_display = filled 32
+
+fn filled n
+  list/to_list (list/take (list/repeat 0) n)
+
+# A list position is 1-based and an address is 0-based. Every read of memory
+# or a register goes through one of these, so the `+ 1` is written twice
+# rather than at forty call sites. A read past the end answers 0, the way
+# open bus reads on most interpreters do.
+pub fn peek memory a
+  or_zero memory[a + 1]
+
+pub fn reg v x
+  or_zero v[x + 1]
+
+fn or_zero none
+  0
+
+fn or_zero n
+  n
+
+# Lists cannot be written at an index, so a write is two slices and a
+# concatenation: the whole list is copied for every write.
+pub fn put_at xs at value
+  write_block xs at [value]
+
+#
+# text/slice answers an empty list when the end is past the last element,
+# rather than stopping at the last element, so every slice whose end might
+# overrun goes through `upto`.
+pub fn write_block xs at block
+  return xs if length xs <= at
+  stop = at + length block
+  head = text/slice xs 1 at
+  tail = text/slice xs (stop + 1) (length xs)
+  kept = upto block (length xs - at)
+  text/concat (text/concat head kept) tail
+
+# The first n elements, or all of them when there are fewer.
+pub fn upto xs n
+  text/slice xs 1 (if (n < length xs) n (length xs))
+
+# Elements from..to, 1-based and inclusive, cut short at the end of the list.
+pub fn span xs from to
+  text/slice xs from (if (to < length xs) to (length xs))
+
+# The setters. There is no record update, so each one takes the machine
+# apart and builds it again with one field changed.
+fn advanced (machine delay display i held memory pc pending rng sound stack v)
+  machine delay display i held memory (pc + 2) pending rng sound stack v
+
+fn with_display (machine delay _ i held memory pc pending rng sound stack v) d
+  machine delay d i held memory pc pending rng sound stack v
+
+fn with_i (machine delay display _ held memory pc pending rng sound stack v) i
+  machine delay display i held memory pc pending rng sound stack v
+
+fn with_keys (machine delay display i _ memory pc pending rng sound stack v) k
+  machine delay display i k memory pc pending rng sound stack v
+
+fn with_memory (machine delay display i held _ pc pending rng sound stack v) m
+  machine delay display i held m pc pending rng sound stack v
+
+fn with_pc (machine delay display i held memory _ pending rng sound stack v) pc
+  machine delay display i held memory pc pending rng sound stack v
+
+# A record field may hold none, but a none passed to a function needs an arm
+# that names it, so clearing the latch is a setter of its own.
+fn released (machine delay display i held memory pc _ rng sound stack v)
+  machine delay display i held memory pc none rng sound stack v
+
+fn with_pending (machine delay display i held memory pc _ rng sound stack v) p
+  machine delay display i held memory pc p rng sound stack v
+
+fn with_rng (machine delay display i held memory pc pending _ sound stack v) r
+  machine delay display i held memory pc pending r sound stack v
+
+fn with_stack (machine delay display i held memory pc pending rng sound _ v) s
+  machine delay display i held memory pc pending rng sound s v
+
+fn with_timers (machine _ display i held memory pc pending rng _ stack v) d s
+  machine d display i held memory pc pending rng s stack v
+
+fn with_v (machine delay display i held memory pc pending rng sound stack _) v
+  machine delay display i held memory pc pending rng sound stack v

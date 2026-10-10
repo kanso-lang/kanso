@@ -1,0 +1,24 @@
+# Native engines only. Appending to a list inside a helper function, called
+# once per iteration of a tail-recursive loop, copies the whole list on every
+# call, so n pushes cost O(n^2) time.
+#
+# Should: run in a few milliseconds, as it does on the interpreter and as the
+# same loop does when `push` is written inline in `fill` instead of in `bump`.
+#
+# Does (kanso play, or kanso build at either tier):
+#   n = 10000   ~2 s       KANSO_COUNTERS=1 at n = 3000 shows
+#   n = 40000   > 20 s     evac_bytes=144143632 push_mut_slow=3000
+# --interp: 0.01 s at n = 40000.
+#
+# The counters say each call to `bump` is a beat whose result is evacuated,
+# and the evacuated result is the whole list.
+fn bump xs i
+  push xs i
+
+fn fill xs 0
+  xs
+
+fn fill xs n
+  fill (bump xs n) (n - 1)
+
+print "{length (fill [] 10000)}"

@@ -1,0 +1,18 @@
+# A module declares its own type `random` and builds one. The name `random`
+# is not otherwise visible here: a bare `random 3` in an entry file is
+# "unknown name `random`". So the module's own type should be the only
+# meaning, and `make 7` should answer `random 7 1`.
+#
+# What happens: `kanso check` refuses the construction with
+#   error[arity]: `random` takes 1 argument(s), got 2 (module ...)
+# so some hidden one-argument `random` (math/random, which this module does
+# not import) wins over the type the module declared, and the declaration
+# itself draws no complaint.
+#
+# Run: kanso check bugs/type_named_random
+pub type random
+  byte
+  x
+
+pub fn make a
+  random a 1

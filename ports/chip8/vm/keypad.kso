@@ -1,0 +1,100 @@
+import "../isa"
+import "std/list"
+import "std/text"
+
+# A scripted keypad. A script is text, one event per line:
+#
+#   # frame  action  key
+#   30       down    5
+#   45       up      5
+#   60       tap     A      (down at 60, up two frames later)
+#
+# Frames are counted at 60 Hz from the start of the run, and an event takes
+# effect at the start of its frame. Keys are the hex digits 0-F.
+pub type bad_script
+  reason
+
+pub type key_event
+  down
+  frame
+  key
+
+pub fn script_events text
+  lines = text/split text "\n"
+  numbered = list/to_list (list/zip list/naturals lines)
+  parsed = list/fold numbered [] script_line
+  ordered parsed
+
+# A stable sort by frame: list/sort orders whole values, and two events in
+# one frame must keep the order the script wrote them in.
+fn ordered (bad_script reason)
+  bad_script reason
+
+fn ordered events
+  frames = list/sort (unique_frames events)
+  list/fold frames [] (acc f -> in_frame acc events f)
+
+fn unique_frames events
+  keys (list/index_by events (e -> e.frame))
+
+fn in_frame acc events f
+  text/concat acc (list/to_list (list/select events (e -> e.frame == f)))
+
+fn script_line (bad_script reason) _
+  bad_script reason
+
+fn script_line acc pair
+  n = pair[1]
+  line = pair[2]
+  words = list/to_list (list/reject (text/split (stripped line) " ") blank?)
+  added acc n (event_words words (length words))
+
+fn added _ n (bad_script reason)
+  bad_script "line {n}: {reason}"
+
+fn added acc _ events
+  text/concat acc events
+
+fn blank? w
+  w == ""
+
+fn event_words _ 0
+  []
+
+fn event_words words 3
+  frame = isa/literal (nth words 1)
+  key = key_of (nth words 3)
+  return bad_script "a frame is a number" if frame == none
+  return bad_script "a key is one hex digit, 0 to F" if key == none
+  keyed frame (nth words 2) key
+
+fn event_words _ _
+  bad_script "expected `<frame> down|up|tap <key>`"
+
+fn keyed frame "down" key
+  [(key_event true frame key)]
+
+fn keyed frame "tap" key
+  [(key_event true frame key) (key_event false (frame + 2) key)]
+
+fn keyed frame "up" key
+  [(key_event false frame key)]
+
+fn keyed _ action _
+  bad_script "unknown action `{action}`"
+
+fn key_of w
+  return none if length w != 1
+  isa/hex_digit w
+
+fn nth words i
+  or_blank words[i]
+
+fn or_blank none
+  ""
+
+fn or_blank w
+  w
+
+fn stripped line
+  nth (text/split line "#") 1

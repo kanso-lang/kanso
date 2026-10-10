@@ -1,0 +1,4 @@
+--- stderr
+Only instances have properties.
+[line 2]
+--- exit 70

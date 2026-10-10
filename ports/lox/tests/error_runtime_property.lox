@@ -1,0 +1,5 @@
+class Empty {}
+var e = Empty();
+e.present = "here";
+print e.present;
+print e.absent;

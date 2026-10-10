@@ -1,0 +1,5 @@
+calling it
+--- stderr
+Can only call functions and classes.
+[line 3]
+--- exit 70

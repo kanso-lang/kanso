@@ -1,0 +1,5 @@
+yes
+--- stderr
+Undefined variable 'notDefined'.
+[line 4]
+--- exit 70

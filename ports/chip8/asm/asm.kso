@@ -1,0 +1,258 @@
+import "../isa"
+import "std/list"
+import "std/text"
+
+# What assembling answers: the program's bytes and a listing, or every
+# error found, each prefixed with its line number.
+pub type assembled
+  bytes
+  listing
+
+pub type rejected
+  errors
+
+# Pass two's accumulator: the next address, the bytes so far, the listing
+# so far and the errors so far.
+type emitting
+  addr
+  bytes
+  errors
+  listing
+
+# One error, at one line.
+type asm_error
+  line
+  reason
+
+# Why one statement did not assemble. The instruction parser's `problem`
+# belongs to isa, and only isa may build one, so the assembler keeps its own.
+type trouble
+  reason
+
+# Pass one's accumulator: the next address, the labels seen, and errors.
+type labelling
+  addr
+  errors
+  labels
+
+# Programs load at 0x200, so the first byte assembled has that address.
+pub fn assemble source
+  lines = source_lines source
+  first = list/fold lines (labelling isa_start [] {}) labelled_line
+  start = emitting isa_start [] first.errors []
+  second = list/fold lines start (&emitted first.labels)
+  finished second
+
+isa_start = 512
+
+fn finished (emitting _ bytes errors listing)
+  return rejected (in_line_order errors) if 0 < length errors
+  assembled bytes listing
+
+# Pass one finds some errors and pass two the rest; the report lists them by
+# line. group_by keys the map by line number, and a map's values come back
+# in key order.
+fn in_line_order errors
+  by_line = list/group_by errors (e -> e.line)
+  told = list/map (list/fold (values by_line) [] text/concat) said
+  list/to_list told
+
+fn said (asm_error line reason)
+  "line {line}: {reason}"
+
+# Pass one: give every label the address of the line it stands on, or, on
+# an EQU line, the value of its operand. An EQU may use only the labels
+# defined above it.
+fn labelled_line (labelling addr errors labels) line
+  size = size_of line.mnemonic line.operands
+  marked = labelling (addr + size) errors labels
+  lone = asm_error line.n "EQU needs a label"
+  return labelling addr (push errors lone) labels if lone_equ? line
+  value = label_value line.mnemonic line.operands addr labels
+  named marked line.label value line.n
+
+fn lone_equ? line
+  line.mnemonic == "EQU" and line.label == ""
+
+fn label_value "EQU" operands _ labels
+  return none if length operands != 1
+  resolved labels operands[1]
+
+fn label_value _ _ addr _
+  addr
+
+# An unlabelled line has nothing to name. The first arm repeats the second
+# for the case where the value is also none, which the checker otherwise
+# calls a tie with the arm below them.
+fn named acc "" none _
+  acc
+
+fn named acc "" _ _
+  acc
+
+fn named acc label none n
+  labelling next errors labels = acc
+  unknown = asm_error n "`{label}` EQU wants one number or known label"
+  labelling next (push errors unknown) labels
+
+fn named acc label addr n
+  labelling next errors labels = acc
+  twice = asm_error n "label `{label}` is defined twice"
+  return labelling next (push errors twice) labels if labels[label] != none
+  taken = asm_error n "`{label}` is an operand name and cannot be a label"
+  return labelling next (push errors taken) labels if isa/reserved? label
+  misnamed = asm_error n "`{label}` is not a label name"
+  return labelling next (push errors misnamed) labels if not label_name? label
+  labelling next errors (put labels label addr)
+
+fn label_name? label
+  first = text/char_code (text/slice label 1 1)
+  65 <= first and first <= 90 or 97 <= first and first <= 122 or first == 95
+
+# How many bytes a statement assembles to. The sizes do not depend on any
+# label, so pass one can count them before the labels are known.
+fn size_of "" _
+  0
+
+fn size_of "DB" operands
+  length operands
+
+fn size_of "DS" operands
+  reserved operands
+
+fn size_of "EQU" _
+  0
+
+fn size_of "DW" operands
+  2 * length operands
+
+fn size_of _ _
+  2
+
+fn reserved operands
+  return 0 if length operands != 1
+  count = isa/literal operands[1]
+  if (count == none) 0 count
+
+# Pass two: assemble each statement with every label known.
+fn emitted labels acc line
+  resolve = &resolved labels
+  output = statement_bytes line.mnemonic line.operands resolve
+  recorded acc line output
+
+fn statement_bytes "" _ _
+  []
+
+fn statement_bytes "DB" operands resolve
+  checked_all (list/map operands (o -> sized (resolve o) 255 o)) 1
+
+fn statement_bytes "EQU" _ _
+  []
+
+fn statement_bytes "DS" operands _
+  count = reserved operands
+  return trouble "DS takes one number" if count == 0 and length operands != 1
+  list/to_list (list/take (list/repeat 0) count)
+
+fn statement_bytes "DW" operands resolve
+  checked_all (list/map operands (o -> sized (resolve o) 65535 o)) 2
+
+fn statement_bytes mnemonic operands resolve
+  opcode (isa/parse mnemonic operands resolve)
+
+fn opcode (problem reason)
+  trouble reason
+
+fn opcode instr
+  word_bytes (isa/encode instr)
+
+fn word_bytes w
+  [(w / 256) (w % 256)]
+
+fn sized none _ o
+  trouble "unknown label `{o}`"
+
+fn sized n limit _
+  return n if 0 <= n and n <= limit
+  trouble "{n} does not fit in 0..{limit}"
+
+# A DB or DW line: every operand checked, then the bytes, or the first
+# problem among them.
+fn checked_all items width
+  bad = list/find items trouble?
+  return bad if bad != none
+  list/fold items [] (acc v -> text/concat acc (as_bytes v width))
+
+fn as_bytes v 1
+  [v]
+
+fn as_bytes v _
+  word_bytes v
+
+fn trouble? (trouble _)
+  true
+
+fn trouble? _
+  false
+
+fn recorded (emitting addr bytes errors listing) line (trouble reason)
+  emitting addr bytes (push errors (asm_error line.n reason)) listing
+
+fn recorded (emitting addr bytes errors listing) line output
+  row = listing_line addr output line.text
+  next = addr + length output
+  emitting next (text/concat bytes output) errors (push listing row)
+
+fn listing_line addr output text
+  shown = text/join (list/to_list (list/map output (b -> isa/hex b 2))) ""
+  "{isa/hex addr 4}  {padded shown 8}  {text}"
+
+fn padded s width
+  return s if width <= length s
+  padded "{s} " width
+
+# An operand's value: a number, a label, or a sum and difference of them
+# (`sprite+5`, `end-start`), or none when some term is neither.
+fn resolved labels t
+  terms = list/map (text/split t "+") (part -> difference labels part)
+  list/fold terms 0 added
+
+# Either side may be none, so a third arm settles the case where both are.
+fn added none none
+  none
+
+fn added none _
+  none
+
+fn added _ none
+  none
+
+fn added total n
+  total + n
+
+fn difference labels part
+  pieces = list/map (text/split part "-") (p -> term labels (text/trim p))
+  first = pieces . list/first
+  rest = list/drop pieces 1
+  list/fold rest first subtracted
+
+fn subtracted none none
+  none
+
+fn subtracted none _
+  none
+
+fn subtracted _ none
+  none
+
+fn subtracted total n
+  total - n
+
+# A leading `-` leaves an empty first term, which counts as 0.
+fn term _ ""
+  0
+
+fn term labels t
+  number = isa/literal t
+  return number if number != none
+  labels[t]

@@ -1,0 +1,16 @@
+print "this never runs";
+return "from top level";
+{
+  var a = "first";
+  var a = "second";
+}
+{
+  var b = b;
+}
+print this;
+fun notMethod() { return super.thing; }
+class Plain {
+  method() { return super.method(); }
+  init() { return "value"; }
+}
+class Ouroboros < Ouroboros {}

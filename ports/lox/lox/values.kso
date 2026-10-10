@@ -1,0 +1,171 @@
+import "std/list"
+import "std/text"
+
+# Lox's runtime values that kanso has no word for. nil, booleans, numbers
+# (always floats) and strings are kanso's own values.
+#
+# A function value: the routine and the frame it closed over. A bound method
+# is a closure whose frame holds `this`. Lox compares functions by identity,
+# and kanso values have none, so every closure is numbered when it is made.
+type closure
+  frame
+  id
+  routine
+
+type lox_class
+  frame
+  id
+  methods
+  name
+  superclass
+
+# An instance's fields live in heap cell `id`, as a map from field name to the
+# heap cell that holds the field's value.
+type instance
+  id
+  klass
+
+type native_clock
+
+# kanso's float division answers an err for a zero divisor; Lox, on the JVM,
+# answers an infinity or NaN.
+infinity = text/to_float "inf"
+
+pub fn divide a b
+  return a / b if b != 0.0
+  return infinity - infinity if a == 0.0 or nan? a
+  negative = (a < 0.0) != negative_zero? b
+  if negative (0.0 - infinity) infinity
+
+# kanso orders every NaN above infinity.
+fn nan? x
+  infinity < x
+
+fn negative_zero? b
+  "{b}" == "-0.0"
+
+pub fn truthy? false
+  false
+
+pub fn truthy? nil
+  false
+
+pub fn truthy? _
+  true
+
+# jlox compares with Object.equals: nil only equals nil, and instances and
+# classes are equal only to themselves.
+pub fn equal? (instance a _) (instance b _)
+  a == b
+
+pub fn equal? (lox_class _ a _ _ _) (lox_class _ b _ _ _)
+  a == b
+
+pub fn equal? (closure _ a _) (closure _ b _)
+  a == b
+
+# Java's Double.equals compares bits: NaN equals NaN (as it does in kanso),
+# and 0.0 does not equal -0.0 (where kanso says it does).
+pub fn equal? a:float64 b:float64
+  a == b and negative_zero? a == negative_zero? b
+
+pub fn equal? a b
+  a == b
+
+pub fn stringify true
+  "true"
+
+pub fn stringify false
+  "false"
+
+pub fn stringify nil
+  "nil"
+
+pub fn stringify x:float64
+  number_text x
+
+pub fn stringify s:string
+  s
+
+pub fn stringify (closure _ _ code)
+  "<fn {code.name.lexeme}>"
+
+pub fn stringify native_clock
+  "<native fn>"
+
+pub fn stringify (lox_class _ _ _ name _)
+  name.lexeme
+
+pub fn stringify (instance _ klass)
+  "{klass.name.lexeme} instance"
+
+# --- numbers ----------------------------------------------------------------
+# jlox prints a double with Java's Double.toString and then drops a trailing
+# ".0". Java writes plain decimals from 10^-3 up to 10^7 and computerized
+# scientific notation ("1.5E-5", "1.0E21") outside that range. kanso renders
+# the same shortest digits in its own notation ("1.5e-05", "1.0e+21"), so the
+# digits are read back out of kanso's text and laid out again.
+pub fn number_text x
+  java_text "{x}"
+
+fn java_text "inf"
+  "Infinity"
+
+fn java_text "-inf"
+  "-Infinity"
+
+fn java_text "nan"
+  "NaN"
+
+fn java_text rendered
+  negative = text/slice rendered 1 1 == "-"
+  sign = if negative "-" ""
+  body = if negative (text/slice rendered 2 (length rendered)) rendered
+  halves = text/split body "e"
+  power = exponent_of halves[2]
+  mantissa = halves[1]
+  parts = text/split mantissa "."
+  digits = "{parts[1]}{parts[2]}"
+  lead = first_nonzero (text/chars digits) 1
+  "{sign}{laid_out digits lead (length parts[1] - lead + power)}"
+
+fn exponent_of none
+  0
+
+fn exponent_of written
+  whole (text/to_int (text/join (text/split written "+") ""))
+
+fn whole (err _)
+  0
+
+fn whole n
+  n
+
+fn first_nonzero cs i
+  return i if length cs < i or cs[i] != "0"
+  first_nonzero cs (i + 1)
+
+fn laid_out digits lead power
+  return "0" if length digits < lead
+  significant = trim_zeros (text/slice digits lead (length digits))
+  return scientific significant power if power < 0 - 3 or 6 < power
+  decimal significant power
+
+fn trim_zeros s
+  return s if length s == 1 or text/slice s (length s) (length s) != "0"
+  trim_zeros (text/slice s 1 (length s - 1))
+
+fn decimal significant power
+  return "0.{zeros (0 - power - 1)}{significant}" if power < 0
+  padded = "{significant}{zeros (power + 1 - length significant)}"
+  whole_part = text/slice padded 1 (power + 1)
+  after = text/slice padded (power + 2) (length padded)
+  if (after == "") whole_part "{whole_part}.{after}"
+
+fn scientific significant power
+  rest = text/slice significant 2 (length significant)
+  after = if (rest == "") "0" rest
+  "{text/slice significant 1 1}.{after}E{power}"
+
+fn zeros n
+  text/join (list/to_list (list/take (list/repeat "0") n)) ""

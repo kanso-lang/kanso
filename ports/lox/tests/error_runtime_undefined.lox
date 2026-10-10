@@ -1,0 +1,5 @@
+var defined = "yes";
+print defined;
+{
+  print notDefined;
+}

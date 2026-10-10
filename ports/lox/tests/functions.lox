@@ -1,0 +1,47 @@
+fun greet(name) {
+  print "hello, " + name;
+}
+greet("lox");
+print greet;
+print clock;
+fun nothing() {}
+print nothing();
+fun fib(n) {
+  if (n < 2) return n;
+  return fib(n - 1) + fib(n - 2);
+}
+print fib(20);
+fun sum(a, b, c) { return a + b + c; }
+print sum(1, 2, 3);
+fun firstOver(limit) {
+  for (var i = 0; i < 100; i = i + 1) {
+    while (true) {
+      if (i * i > limit) return i;
+      break_out = true;
+      return -1;
+    }
+  }
+}
+var break_out = false;
+print firstOver(-1);
+print break_out;
+fun early(flag) {
+  if (flag) return "early";
+  print "late path";
+  return;
+}
+print early(true);
+print early(false);
+fun outer() {
+  fun inner(x) { return x * 2; }
+  return inner(21);
+}
+print outer();
+fun apply(f, x) { return f(x); }
+fun square(n) { return n * n; }
+print apply(square, 9);
+fun isEven(n) { if (n == 0) return true; return isOdd(n - 1); }
+fun isOdd(n) { if (n == 0) return false; return isEven(n - 1); }
+print isEven(10);
+print isOdd(7);
+print clock() > 0;

@@ -1,0 +1,18 @@
+# A record constructor passed as a function value. `kanso check` accepts it
+# and the interpreter runs it; the native backend refuses to build it.
+#
+# Should: print the same pair on every engine (or be refused by check).
+#
+# Does:
+#   kanso play --interp   constructor_as_value_native/pair 1 2
+#   kanso play / build    error: native backend: `pair` as a bare
+#                         value is not yet supported
+# Workaround: wrap it, `(a b -> pair a b)`.
+type pair
+  left
+  right
+
+fn combine make a b
+  make a b
+
+print "{combine pair 1 2}"

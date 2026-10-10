@@ -1,0 +1,7 @@
+# Chase the ball: right, then left, then right again.
+10   down  6
+40   up    6
+60   down  4
+75   up    4
+120  down  6
+150  up    6

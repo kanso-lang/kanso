@@ -1,0 +1,3 @@
+import "std/os"
+
+os/write_file "out.bin" [0 18 255 200] .> (_ -> print "wrote")

@@ -1,0 +1,30 @@
+# Pushing onto a list that lives in a record field, one element per
+# iteration, rebuilding the record each time: the most ordinary accumulator
+# there is. It is quadratic on every engine, and on the native engines it
+# also runs out of memory.
+#
+# Should: take milliseconds for n = 10000.
+#
+# Does (wall clock, loaded 4-core machine):
+#   n        --interp     kanso play (native)
+#   10,000   1.2 s        3.3 s
+#   20,000   4.0 s        33 s
+#   40,000   12.8 s       killed by signal 9 after 98 s
+#
+# The interpreter copies the list because the old record still holds it; the
+# native engine evacuates it on every return (see push_in_helper_is_quadratic).
+type bag
+  count
+  items
+
+fn add b i
+  bag (b.count + 1) (push b.items i)
+
+fn fill b 0
+  b
+
+fn fill b n
+  fill (add b n) (n - 1)
+
+full = fill (bag 0 []) 10000
+print "{full.count} {length full.items}"

@@ -1,0 +1,64 @@
+class Bagel {}
+print Bagel;
+var bagel = Bagel();
+print bagel;
+bagel.topping = "sesame";
+print bagel.topping;
+class Counter {
+  init(start) {
+    this.count = start;
+  }
+  increment() {
+    this.count = this.count + 1;
+    return this;
+  }
+  show() { print "count is " + this.label(); }
+  label() {
+    if (this.count < 10) return "small";
+    return "large";
+  }
+}
+var counter = Counter(8);
+counter.increment().increment();
+print counter.count;
+counter.show();
+// A bound method remembers its object.
+var inc = counter.increment;
+inc();
+print counter.count;
+// init always answers the instance, even when called again by hand.
+var again = counter.init(1);
+print again == counter;
+print counter.count;
+class Early {
+  init(flag) {
+    this.value = "set";
+    if (flag) return;
+    this.value = "overwritten";
+  }
+}
+print Early(true).value;
+print Early(false).value;
+// A field can hold a function, and shadows a method of the same name.
+class Box {
+  method() { return "method"; }
+}
+var box = Box();
+fun replacement() { return "field"; }
+print box.method();
+box.method = replacement;
+print box.method();
+// Methods see `this` from inside nested closures.
+class Greeter {
+  init(name) { this.name = name; }
+  delayed() {
+    fun later() { return "hi " + this.name; }
+    return later;
+  }
+}
+var greeting = Greeter("ada").delayed();
+print greeting();
+print Greeter("bob") == Greeter("bob");
+var same = Greeter("cy");
+print same == same;
+print box.method == box.method;

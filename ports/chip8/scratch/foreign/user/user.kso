@@ -1,0 +1,11 @@
+import "../isa"
+
+fn show cls
+  "clear"
+
+fn show (jp addr)
+  "jump {addr}"
+
+pub fn demo _
+  made = isa/decode 12
+  "{show (isa/decode 224)} {show made} {show (isa/decode 7)}"

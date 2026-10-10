@@ -1,0 +1,4 @@
+print "before";
+var x = 1 @ 2;
+print # "and";
+print "unterminated;

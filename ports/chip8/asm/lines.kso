@@ -1,0 +1,64 @@
+import "../isa"
+import "std/list"
+import "std/text"
+
+# One source line taken apart: an optional label, a mnemonic or directive
+# (upper-cased, "" on a line with none) and its operand texts. `label` is ""
+# when the line has none.
+pub type source_line
+  label
+  mnemonic
+  n
+  operands
+  text
+
+# Assembly syntax, one statement per line:
+#
+#   loop:  ADD V1, 1      ; comment
+#          DB  %11110000, #90
+#
+# A label ends with `:` and may stand alone on its line.
+pub fn source_lines source
+  numbered = list/zip list/naturals (text/split source "\n")
+  list/to_list (list/map numbered split_line)
+
+fn split_line pair
+  n = pair[1]
+  original = pair[2]
+  code = text/trim (before original ";")
+  colon = position_of code ":"
+  labelled (labelled? code colon) code colon n original
+
+fn labelled true code colon n original
+  name = text/trim (text/slice code 1 (colon - 1))
+  rest = text/trim (text/slice code (colon + 1) (length code))
+  statement name rest n original
+
+fn labelled false code _ n original
+  statement "" code n original
+
+# A colon counts as a label's only before the first space, so `DB ":"` style
+# operands cannot be mistaken for one.
+fn labelled? code colon
+  colon <= length code and colon < position_of code " "
+
+fn statement label code n original
+  space = position_of code " "
+  mnemonic = isa/upper (text/slice code 1 (space - 1))
+  rest = text/slice code (space + 1) (length code)
+  source_line label mnemonic n (operand_texts rest) original
+
+fn operand_texts rest
+  parts = list/map (text/split rest ",") text/trim
+  list/to_list (list/reject parts (p -> p == ""))
+
+fn before s mark
+  text/slice s 1 (position_of s mark - 1)
+
+# The 1-based position of the first `mark` in `s`, or one past the end when
+# there is none. std/text has no search over strings; `find2` searches a byte
+# list for either of two bytes, so the mark is passed twice. Assembly source
+# is ASCII here, so a byte position is a character position.
+fn position_of s mark
+  c = text/char_code mark
+  text/find2 (text/bytes s) 1 c c

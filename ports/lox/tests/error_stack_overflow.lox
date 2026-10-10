@@ -1,0 +1,7 @@
+// jlox dies with a Java StackOverflowError here; this port stops every
+// engine at the same depth with clox's message instead.
+fun down(n) {
+  return down(n + 1);
+}
+print "going down";
+down(0);

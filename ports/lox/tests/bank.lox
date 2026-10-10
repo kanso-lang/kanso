@@ -1,0 +1,56 @@
+// Accounts, a ledger kept in closures, and an overdraft that becomes a
+// runtime error at the end.
+class Account {
+  init(owner, balance) {
+    this.owner = owner;
+    this.balance = balance;
+    this.history = nil;
+  }
+  record(kind, amount) {
+    var previous = this.history;
+    fun replay() {
+      if (previous != nil) previous();
+      print "  " + kind;
+      print amount;
+    }
+    this.history = replay;
+  }
+  deposit(amount) {
+    this.balance = this.balance + amount;
+    this.record("deposit", amount);
+  }
+  withdraw(amount) {
+    if (amount > this.balance) {
+      this.record("refused", amount);
+      return false;
+    }
+    this.balance = this.balance - amount;
+    this.record("withdraw", amount);
+    return true;
+  }
+  statement() {
+    print this.owner + " has";
+    print this.balance;
+    if (this.history != nil) this.history();
+  }
+}
+class Savings < Account {
+  init(owner, balance, rate) {
+    super.init(owner, balance);
+    this.rate = rate;
+  }
+  addInterest() {
+    var interest = this.balance * this.rate;
+    this.deposit(interest);
+  }
+}
+var checking = Account("ada", 100);
+checking.deposit(50);
+print checking.withdraw(500);
+print checking.withdraw(30);
+checking.statement();
+var savings = Savings("bob", 1000, 0.05);
+savings.addInterest();
+savings.addInterest();
+savings.statement();
+print savings.withdraw("everything");

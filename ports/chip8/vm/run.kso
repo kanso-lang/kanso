@@ -1,0 +1,132 @@
+import "../isa"
+import "std/bits"
+import "std/list"
+import "std/text"
+
+# How a run is set up. `cycles` is how many instructions to execute at most,
+# `per_frame` how many make one 60 Hz frame (the timers tick and scripted
+# keys take effect between frames), and `trace` whether to log every
+# instruction.
+pub type config
+  cycles
+  per_frame
+  quirks
+  trace
+
+# Where a run stopped, and why.
+pub type finished
+  session
+  status
+
+# The running state around the machine: how far the run has got, the key
+# events still to come, how many frames the sound timer held the tone on,
+# and the trace so far.
+type session
+  cycles
+  events
+  frames
+  machine
+  tone
+  trace
+
+# Only vm may build a config, so other modules ask for one here.
+pub fn configured cycles per_frame q trace
+  config cycles per_frame q trace
+
+pub fn run m cfg events
+  start = session 0 events 0 (pressed m events 0) 0 []
+  looped start cfg
+
+fn looped s cfg
+  return finished s "ran {s.cycles} cycles" if s.cycles == cfg.cycles
+  m = s.machine
+  op = bits/shl (peek m.memory m.pc) 8 | peek m.memory (m.pc + 1)
+  instr = isa/decode op
+  return finished s "idle at #{isa/hex m.pc 3}" if idle? instr m s.events
+  traced = logged s cfg.trace op instr
+  stepped (execute instr (advanced m) cfg.quirks) traced cfg
+
+fn stepped (fault reason) s _
+  pc = isa/hex s.machine.pc 3
+  finished s "fault at #{pc} after {s.cycles} cycles: {reason}"
+
+fn stepped m s cfg
+  count = s.cycles + 1
+  return looped (with_machine s m count) cfg if count % cfg.per_frame != 0
+  looped (framed s m count) cfg
+
+# A jump to itself, with no timer running and no key still to come, can only
+# go on jumping to itself, so the run stops there rather than spin.
+fn idle? (jump addr) m events
+  addr == m.pc and m.delay == 0 and m.sound == 0 and length events == 0
+
+fn idle? _ _ _
+  false
+
+# Between frames the timers count down, the tone is logged, and the keys the
+# script presses or releases in the new frame take effect.
+fn framed (session _ events frames _ tone trace) m count
+  frame = frames + 1
+  timed = with_timers m (down_to_zero m.delay) (down_to_zero m.sound)
+  ringing = if (0 < m.sound) (tone + 1) tone
+  later = list/to_list (list/select events (e -> frame < e.frame))
+  session count later frame (pressed timed events frame) ringing trace
+
+fn down_to_zero 0
+  0
+
+fn down_to_zero t
+  t - 1
+
+fn pressed m events frame
+  now = list/select events (e -> e.frame == frame)
+  with_keys m (list/fold now m.held toggled)
+
+fn toggled mask (key_event true _ key)
+  mask | bits/shl 1 key
+
+fn toggled mask (key_event false _ key)
+  mask & bits/complement (bits/shl 1 key)
+
+fn with_machine (session _ events frames _ tone trace) m count
+  session count events frames m tone trace
+
+fn logged (session cycles events frames m tone trace) true op instr
+  line = "{cycles} #{isa/hex m.pc 3} {isa/hex op 4}  {isa/spell instr}"
+  session cycles events frames m tone (push trace line)
+
+fn logged s false _ _
+  s
+
+# The report: the status line, the counters, the registers, the held keys,
+# and the screen in a frame of `+`, `-` and `|`.
+pub fn report (finished s status)
+  m = s.machine
+  said = "status: {status}"
+  counts = "cycles {s.cycles}  frames {s.frames}  tone {s.tone}"
+  regs = "v  {hex_bytes m.v}"
+  stack = "stack {stack_text m.stack}"
+  held = "keys {key_text m.held}"
+  head = [said counts (registers m) regs stack held]
+  rows = list/to_list (list/map (rendered m.display) (r -> "|{r}|"))
+  framed_screen = push (text/concat [border] rows) border
+  text/concat (text/concat s.trace head) framed_screen
+
+border = "+{text/join (list/to_list (list/take (list/repeat "-") 64)) ""}+"
+
+fn registers m
+  "pc #{isa/hex m.pc 3}  i #{isa/hex m.i 3}  dt {m.delay}  st {m.sound}"
+
+fn hex_bytes bytes
+  text/join (list/to_list (list/map bytes (b -> isa/hex b 2))) " "
+
+fn stack_text stack
+  return "-" if length stack == 0
+  text/join (list/to_list (list/map stack (a -> "#{isa/hex a 3}"))) " "
+
+fn key_text 0
+  "-"
+
+fn key_text mask
+  held = list/select (list/take list/naturals 16) (k -> held? mask (k - 1))
+  text/join (list/to_list (list/map held (k -> isa/hex (k - 1) 1))) " "

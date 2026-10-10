@@ -1,0 +1,18 @@
+if (nil) print "nil is truthy"; else print "nil is falsey";
+if (false) print "false is truthy"; else print "false is falsey";
+if (0) print "0 is truthy"; else print "0 is falsey";
+if ("") print "empty string is truthy"; else print "empty string is falsey";
+print nil or "default";
+print "first" or "second";
+print nil and "never";
+print 1 and 2;
+print false or nil;
+// The right operand is not evaluated when the left decides.
+var side = "untouched";
+fun touch() { side = "touched"; return true; }
+print false and touch();
+print side;
+print true or touch();
+print side;
+print nil or touch();
+print side;

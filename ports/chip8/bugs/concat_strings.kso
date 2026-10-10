@@ -1,0 +1,11 @@
+# appendix b says text/concat "appends two lists—or two strings", and the
+# signature it prints is (list | string) (list | string). Expected: "abcd cd".
+# Actual, on the interpreter and natively: error[runtime]: concat takes two
+# lists. Interpolation ("{a}{b}") is the working spelling.
+#
+# Run: kanso play bugs/concat_strings.kso
+import "std/text"
+
+a = text/concat "ab" "cd"
+b = text/concat "" "cd"
+print "{a} {b}"

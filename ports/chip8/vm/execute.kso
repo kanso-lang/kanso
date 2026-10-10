@@ -1,0 +1,187 @@
+import "../isa"
+import "std/bits"
+import "std/text"
+
+# A run stops at a fault: an opcode that means nothing, or a stack that
+# overflows or runs dry. The fault is the program's problem, not the
+# emulator's, so it is a value the run loop reports rather than an err.
+pub type fault
+  reason
+
+# One instruction. `m` has already had its pc advanced past the opcode, as
+# the VIP's fetch did, so only jumps and skips touch pc here. `q` is the
+# quirks profile.
+pub fn execute (add_byte byte x) m _
+  set m x (reg m.v x + byte & 255)
+
+pub fn execute (add_i x) m _
+  with_i m (m.i + reg m.v x & 65535)
+
+pub fn execute (add_reg x y) m _
+  sum = reg m.v x + reg m.v y
+  flagged m x (sum & 255) (if (255 < sum) 1 0)
+
+pub fn execute (and_reg x y) m q
+  logic m x (reg m.v x & reg m.v y) q
+
+pub fn execute (bad op) _ _
+  fault "unknown opcode #{isa/hex op 4}"
+
+pub fn execute (bcd x) m _
+  n = reg m.v x
+  digits = [(n / 100) (n / 10 % 10) (n % 10)]
+  with_memory m (write_block m.memory m.i digits)
+
+pub fn execute (call addr) m _
+  return fault "stack overflow: CALL #{isa/hex addr 3}" if 16 <= length m.stack
+  with_pc (with_stack m (push m.stack m.pc)) addr
+
+pub fn execute cls m _
+  with_display m blank_display
+
+pub fn execute (draw n x y) m _
+  sprite = drawn m.display m.memory m.i (reg m.v x) (reg m.v y) n
+  with_v (with_display m sprite.display) (put_at m.v 15 (bit sprite.collided))
+
+pub fn execute (font x) m _
+  with_i m (font_start + (reg m.v x & 15) * 5)
+
+pub fn execute (get_delay x) m _
+  set m x m.delay
+
+pub fn execute (jump addr) m _
+  with_pc m addr
+
+pub fn execute (jump_v0 addr) m q
+  offset = reg m.v (if q.jump_vx (bits/shr addr 8) 0)
+  with_pc m (addr + offset & 4095)
+
+pub fn execute (load x) m q
+  block = span m.memory (m.i + 1) (m.i + x + 1)
+  with_i (with_v m (write_block m.v 0 block)) (index_after m.i x q)
+
+pub fn execute (or_reg x y) m q
+  logic m x (reg m.v x | reg m.v y) q
+
+pub fn execute ret m _
+  depth = length m.stack
+  return fault "stack underflow: RET with nothing to return to" if depth == 0
+  with_pc (with_stack m (text/slice m.stack 1 (depth - 1))) (top m.stack)
+
+pub fn execute (rnd byte x) m _
+  state = next_state m.rng
+  set (with_rng m state) x (byte_from state & byte)
+
+pub fn execute (set_byte byte x) m _
+  set m x byte
+
+pub fn execute (set_delay x) m _
+  with_timers m (reg m.v x) m.sound
+
+pub fn execute (set_i addr) m _
+  with_i m addr
+
+pub fn execute (set_reg x y) m _
+  set m x (reg m.v y)
+
+pub fn execute (set_sound x) m _
+  with_timers m m.delay (reg m.v x)
+
+pub fn execute (shl_reg x y) m q
+  source = reg m.v (if q.shift_vx x y)
+  flagged m x (bits/shl source 1 & 255) (bits/shr source 7 & 1)
+
+pub fn execute (shr_reg x y) m q
+  source = reg m.v (if q.shift_vx x y)
+  flagged m x (bits/shr source 1) (source & 1)
+
+pub fn execute (skip_eq_byte byte x) m _
+  skip_when m (reg m.v x == byte)
+
+pub fn execute (skip_eq_reg x y) m _
+  skip_when m (reg m.v x == reg m.v y)
+
+pub fn execute (skip_key x) m _
+  skip_when m (held? m.held (reg m.v x))
+
+pub fn execute (skip_ne_byte byte x) m _
+  skip_when m (reg m.v x != byte)
+
+pub fn execute (skip_ne_reg x y) m _
+  skip_when m (reg m.v x != reg m.v y)
+
+pub fn execute (skip_no_key x) m _
+  skip_when m (not held? m.held (reg m.v x))
+
+pub fn execute (store x) m q
+  block = text/slice m.v 1 (x + 1)
+  with_i (with_memory m (write_block m.memory m.i block)) (index_after m.i x q)
+
+pub fn execute (sub_reg x y) m _
+  a = reg m.v x
+  b = reg m.v y
+  flagged m x (a - b & 255) (bit (b <= a))
+
+pub fn execute (subn_reg x y) m _
+  a = reg m.v x
+  b = reg m.v y
+  flagged m x (b - a & 255) (bit (a <= b))
+
+pub fn execute (sys _) m _
+  m
+
+# FX0A waits for a key to go down and come back up, as the VIP did. While
+# waiting, pc is put back on the FX0A so it runs again next cycle; `pending`
+# remembers the key once it has gone down.
+pub fn execute (wait_key x) m _
+  waited (with_pc m (m.pc - 2)) x m.pending (lowest_key m.held 0)
+
+pub fn execute (xor_reg x y) m q
+  logic m x (bits/xor (reg m.v x) (reg m.v y)) q
+
+fn bit true
+  1
+
+fn bit false
+  0
+
+fn flagged m x value flag
+  with_v m (put_at (put_at m.v x value) 15 flag)
+
+pub fn held? mask key
+  bits/shr mask (key & 15) & 1 == 1
+
+fn index_after i x q
+  if q.keep_i i (i + x + 1)
+
+fn logic m x value q
+  return set m x value if not q.vf_reset
+  flagged m x value 0
+
+fn lowest_key 0 _
+  none
+
+fn lowest_key mask k
+  if (mask & 1 == 1) k (lowest_key (bits/shr mask 1) (k + 1))
+
+fn set m x value
+  with_v m (put_at m.v x value)
+
+fn skip_when m true
+  advanced m
+
+fn skip_when m false
+  m
+
+fn top stack
+  or_zero stack[length stack]
+
+fn waited m _ none none
+  m
+
+fn waited m _ none k
+  with_pending m k
+
+fn waited m x k _
+  return m if held? m.held k
+  set (released (advanced m)) x k

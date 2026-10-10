@@ -1,0 +1,42 @@
+import "../isa"
+
+# The sixteen hex-digit sprites, five rows each, as the COSMAC VIP's ROM
+# held them. They are written as hex pairs in strings because kanso has
+# neither hex literals nor a list literal that may span lines.
+pub font = isa/hex_table "{digits_0_7} {digits_8_f}"
+
+digits_0_7 = "{d0} {d1} {d2} {d3} {d4} {d5} {d6} {d7}"
+
+digits_8_f = "{d8} {d9} {da} {db} {dc} {dd} {de} {df}"
+
+d0 = "F0 90 90 90 F0"
+
+d1 = "20 60 20 20 70"
+
+d2 = "F0 10 F0 80 F0"
+
+d3 = "F0 10 F0 10 F0"
+
+d4 = "90 90 F0 10 10"
+
+d5 = "F0 80 F0 10 F0"
+
+d6 = "F0 80 F0 90 F0"
+
+d7 = "F0 10 20 40 40"
+
+d8 = "F0 90 F0 90 F0"
+
+d9 = "F0 90 F0 10 F0"
+
+da = "F0 90 F0 90 90"
+
+db = "E0 90 E0 90 E0"
+
+dc = "F0 80 80 80 F0"
+
+dd = "E0 90 90 90 E0"
+
+de = "F0 80 F0 80 F0"
+
+df = "F0 80 F0 80 80"

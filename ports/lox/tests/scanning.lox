@@ -1,0 +1,17 @@
+// Comments run to the end of the line, and whitespace of every kind is skipped.
+print 123;	print 1.5;   print 0.25;
+print "a string";
+print "a string
+that spans
+three lines";
+print "";
+var _under_score = "identifiers may use underscores";
+print _under_score;
+var classy = "a keyword prefix is still an identifier";
+print classy;
+var orchid = "so is one that starts with 'or'";
+print orchid;
+print 1+2*3-4/2;  // no spaces needed between tokens
+print!true;
+print 3.14159;
+print 007;

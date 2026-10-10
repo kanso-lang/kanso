@@ -1,0 +1,20 @@
+false
+true
+ada has
+120
+  deposit
+50
+  refused
+500
+  withdraw
+30
+bob has
+1102.5
+  deposit
+50
+  deposit
+52.5
+--- stderr
+Operands must be numbers.
+[line 23]
+--- exit 70

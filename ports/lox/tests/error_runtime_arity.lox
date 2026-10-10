@@ -1,0 +1,5 @@
+fun pair(a, b) { return a + b; }
+print pair(1, 2);
+class Point { init(x, y) { this.x = x; this.y = y; } }
+print Point(1, 2).x;
+print Point(1);

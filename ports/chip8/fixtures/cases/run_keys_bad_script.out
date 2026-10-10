@@ -1,0 +1,2 @@
+chip8: roms/errors/badkeys.txt: line 3: unknown action `press`
+[exit 1]

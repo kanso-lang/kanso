@@ -1,0 +1,205 @@
+import "../asm"
+import "../isa"
+import "../vm"
+import "std/io"
+import "std/list"
+import "std/os"
+import "std/text"
+
+# A ROM that could not be loaded, and why, in words for the person who
+# named it.
+type load_failed
+  reason
+
+# A string cannot span lines, so the usage text is a list of them.
+usage = text/join [usage_run usage_flags usage_asm usage_dis usage_rom] "\n"
+
+usage_asm = "       chip8 asm SOURCE [--list]"
+
+usage_dis = "       chip8 dis ROM"
+
+usage_flags = "       [--seed N] [--quirks vip|modern] [--trace]"
+
+usage_rom = "ROM is a .ch8 binary, a .hex text file, or a .asm source."
+
+usage_run = "usage: chip8 run ROM [--cycles N] [--per-frame N] [--keys FILE]"
+
+pub fn main argv
+  chosen (or_blank argv[1]) (parsed (text/slice argv 2 (length argv)))
+
+fn chosen _ (usage_error reason)
+  failed 2 reason
+
+fn chosen word opts
+  command word opts
+
+fn command "asm" opts
+  return failed 2 "asm wants one source file" if length opts.files != 1
+  path = only opts.files
+  os/read_file path .> (t -> assembly t path opts.list)
+
+fn command "dis" opts
+  return failed 2 "dis wants one ROM" if length opts.files != 1
+  loaded (only opts.files) .> disassembly
+
+fn command "help" _
+  print usage
+
+fn command "run" opts
+  return failed 2 "run wants one ROM" if length opts.files != 1
+  q = vm/profile opts.quirks
+  return failed 2 "unknown quirks profile `{opts.quirks}`" if q == none
+  cfg = vm/configured opts.cycles opts.per_frame q opts.trace
+  loaded (only opts.files) .> (rom -> with_keys rom opts cfg)
+
+fn command "" _
+  io/write_err "{usage}\n" .> (_ -> os/exit 2)
+
+fn command word _
+  failed 2 "unknown command `{word}`\n{usage}"
+
+fn failed code reason
+  io/write_err "chip8: {reason}\n" .> (_ -> os/exit code)
+
+fn only files
+  or_blank files[1]
+
+fn or_blank none
+  ""
+
+fn or_blank w
+  w
+
+# asm: the bytes as hex, sixteen to a line, or with --list a listing that
+# puts each address and its bytes beside the source line.
+fn assembly (file_not_found path) _ _
+  failed 1 "no such file: {path}"
+
+fn assembly source path list
+  shown (asm/assemble source) path list
+
+fn shown (assembled bytes _) _ false
+  print (text/join (hex_lines bytes) "\n")
+
+fn shown (assembled _ listing) _ true
+  print (text/join listing "\n")
+
+fn shown (rejected errors) path _
+  failed 1 (located errors path)
+
+# list/map answers a lazy sequence, and text/join wants a list, so a join
+# over a map needs list/to_list between them or it fails at run time.
+fn located errors path
+  text/join (list/to_list (list/map errors (e -> "{path}: {e}"))) "\nchip8: "
+
+fn hex_lines bytes
+  return [] if length bytes == 0
+  line = vm/upto bytes 16
+  rest = text/slice bytes 17 (length bytes)
+  first = text/join (list/to_list (list/map line (b -> isa/hex b 2))) " "
+  text/concat [first] (hex_lines rest)
+
+# dis: one instruction per two bytes, in syntax the assembler reads back,
+# with the address and opcode in a comment.
+fn disassembly (load_failed reason)
+  failed 1 reason
+
+fn disassembly rom
+  print (text/join (dis_lines rom 0) "\n")
+
+fn dis_lines rom at
+  return [] if length rom <= at
+  return [(odd_byte rom at)] if length rom == at + 1
+  hi = or_zero rom[at + 1]
+  op = hi * 256 + or_zero rom[at + 2]
+  addr = isa/hex (512 + at) 3
+  code = padded (isa/spell (isa/decode op)) 20
+  spelled = "    {code}; {addr}  {isa/hex op 4}"
+  text/concat [spelled] (dis_lines rom (at + 2))
+
+fn odd_byte rom at
+  b = or_zero rom[at + 1]
+  "    {padded "DB #{isa/hex b 2}" 20}; {isa/hex (512 + at) 3}  {isa/hex b 2}"
+
+fn or_zero none
+  0
+
+fn or_zero n
+  n
+
+fn padded s width
+  return s if width <= length s
+  padded "{s} " width
+
+# Loading: a .asm source is assembled, a .hex file is read as hex pairs, and
+# anything else is read as the raw bytes of a .ch8 ROM.
+fn loaded path
+  loaded_as (extension path) path
+
+fn loaded_as "asm" path
+  os/read_file path .> (t -> from_source t path)
+
+fn loaded_as "hex" path
+  os/read_file path .> from_hex
+
+fn loaded_as _ path
+  os/read_bytes path .> from_binary
+
+fn extension path
+  parts = text/split path "."
+  or_blank parts[length parts]
+
+fn from_source (file_not_found path) _
+  load_failed "no such file: {path}"
+
+fn from_source source path
+  from_assembly (asm/assemble source) path
+
+fn from_assembly (rejected errors) path
+  load_failed (located errors path)
+
+fn from_assembly (assembled bytes _) _
+  fits bytes
+
+fn from_binary (file_not_found path)
+  load_failed "no such file: {path}"
+
+# The interpreter's read_bytes answers a byte string that text/concat
+# refuses (native code accepts it), so the bytes are copied into a plain list
+# before they meet the machine's memory. See bugs/read_bytes_concat.kso.
+fn from_binary bytes
+  fits (list/to_list (list/map bytes (b -> b)))
+
+fn from_hex (file_not_found path)
+  load_failed "no such file: {path}"
+
+fn from_hex t
+  fits (isa/hex_table t)
+
+fn fits (file_not_found path)
+  load_failed "no such file: {path}"
+
+fn fits bytes
+  size = length bytes
+  return load_failed "ROM is {size} bytes; 3584 fit" if 3584 < size
+  bytes
+
+fn with_keys (load_failed reason) _ _
+  failed 1 reason
+
+fn with_keys rom opts cfg
+  return emulated rom [] opts cfg if opts.script == ""
+  os/read_file opts.script .> (t -> scripted t rom opts cfg)
+
+fn scripted (file_not_found path) _ _ _
+  failed 1 "no such key script: {path}"
+
+fn scripted t rom opts cfg
+  emulated rom (vm/script_events t) opts cfg
+
+fn emulated _ (bad_script reason) opts _
+  failed 1 "{opts.script}: {reason}"
+
+fn emulated rom events opts cfg
+  machine = vm/boot rom opts.seed
+  print (text/join (vm/report (vm/run machine cfg events)) "\n")

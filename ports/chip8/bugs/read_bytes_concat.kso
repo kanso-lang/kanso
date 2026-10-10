@@ -1,0 +1,16 @@
+# os/read_bytes answers the file's bytes, and text/concat appends two lists.
+# Expected on every engine: "[1 2 3 0 224]" when the file holds 00 E0.
+# Natively that is what prints. On the interpreter (`--interp`):
+#   error[runtime]: concat takes two lists
+# with no location, so the bytes are some other kind of value there. The
+# emulator copies the ROM into memory with text/concat and met this on its
+# first binary ROM. `list/to_list (list/map rom (b -> b))` works around it.
+#
+# Run from bugs/: kanso play read_bytes_concat.kso --interp
+import "std/os"
+import "std/text"
+
+fn joined rom
+  text/concat [1 2 3] (text/slice rom 1 2)
+
+os/read_bytes! "../roms/digits.ch8" .> (rom -> print "{joined rom}")

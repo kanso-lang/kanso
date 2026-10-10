@@ -1,0 +1,16 @@
+nil is falsey
+false is falsey
+0 is truthy
+empty string is truthy
+default
+first
+nil
+2
+nil
+false
+untouched
+true
+untouched
+true
+touched
+--- exit 0

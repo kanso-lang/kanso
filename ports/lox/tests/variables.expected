@@ -1,0 +1,12 @@
+global a
+nil
+redeclared at top level
+inner block
+outer block
+redeclared at top level
+2
+10
+10
+reassigned local
+fg
+--- exit 0

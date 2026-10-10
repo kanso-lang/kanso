@@ -1,0 +1,179 @@
+import "std/bits"
+
+# kanso has no hex literals, so the opcode tables below are written in
+# decimal with the hex spelling beside each arm. The nibble that picks a
+# family is the top four bits; within a family the low byte or the low
+# nibble picks the instruction.
+pub fn decode op
+  family (bits/shr op 12) op
+
+fn addr_of op
+  op & 4095
+
+fn byte_of op
+  op & 255
+
+fn family 0 op
+  system (addr_of op) op
+
+fn family 1 op
+  jump (addr_of op)
+
+fn family 2 op
+  call (addr_of op)
+
+fn family 3 op
+  skip_eq_byte (byte_of op) (x_of op)
+
+fn family 4 op
+  skip_ne_byte (byte_of op) (x_of op)
+
+# 5xy0 and 9xy0 compare registers; any other low nibble is not an opcode
+fn family 5 op
+  pair 5 (op & 15) op
+
+fn family 6 op
+  set_byte (byte_of op) (x_of op)
+
+fn family 7 op
+  add_byte (byte_of op) (x_of op)
+
+fn family 8 op
+  arithmetic (op & 15) (x_of op) (y_of op) op
+
+fn family 9 op
+  pair 9 (op & 15) op
+
+# Annn
+fn family 10 op
+  set_i (addr_of op)
+
+# Bnnn
+fn family 11 op
+  jump_v0 (addr_of op)
+
+# Cxkk
+fn family 12 op
+  rnd (byte_of op) (x_of op)
+
+# Dxyn
+fn family 13 op
+  draw (op & 15) (x_of op) (y_of op)
+
+# Ex9E and ExA1
+fn family 14 op
+  keyed (byte_of op) (x_of op) op
+
+# Fx..
+fn family 15 op
+  misc (byte_of op) (x_of op) op
+
+fn family _ op
+  bad op
+
+fn arithmetic 0 x y _
+  set_reg x y
+
+fn arithmetic 1 x y _
+  or_reg x y
+
+fn arithmetic 2 x y _
+  and_reg x y
+
+fn arithmetic 3 x y _
+  xor_reg x y
+
+fn arithmetic 4 x y _
+  add_reg x y
+
+fn arithmetic 5 x y _
+  sub_reg x y
+
+fn arithmetic 6 x y _
+  shr_reg x y
+
+fn arithmetic 7 x y _
+  subn_reg x y
+
+# 8xyE
+fn arithmetic 14 x y _
+  shl_reg x y
+
+fn arithmetic _ _ _ op
+  bad op
+
+# Ex9E
+fn keyed 158 x _
+  skip_key x
+
+# ExA1
+fn keyed 161 x _
+  skip_no_key x
+
+fn keyed _ _ op
+  bad op
+
+# Fx07
+fn misc 7 x _
+  get_delay x
+
+# Fx0A
+fn misc 10 x _
+  wait_key x
+
+# Fx15
+fn misc 21 x _
+  set_delay x
+
+# Fx18
+fn misc 24 x _
+  set_sound x
+
+# Fx1E
+fn misc 30 x _
+  add_i x
+
+# Fx29
+fn misc 41 x _
+  font x
+
+# Fx33
+fn misc 51 x _
+  bcd x
+
+# Fx55
+fn misc 85 x _
+  store x
+
+# Fx65
+fn misc 101 x _
+  load x
+
+fn misc _ _ op
+  bad op
+
+fn pair 5 0 op
+  skip_eq_reg (x_of op) (y_of op)
+
+fn pair 9 0 op
+  skip_ne_reg (x_of op) (y_of op)
+
+fn pair _ _ op
+  bad op
+
+# 00E0 and 00EE are the two system calls a program can make; every other
+# 0nnn called machine code on the COSMAC VIP, which no emulator runs.
+fn system 224 _
+  cls
+
+fn system 238 _
+  ret
+
+fn system addr _
+  sys addr
+
+fn x_of op
+  bits/shr op 8 & 15
+
+fn y_of op
+  bits/shr op 4 & 15

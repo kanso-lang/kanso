@@ -1,0 +1,1 @@
+chip8 asm roms/alu.asm | tr -d " \n" > $OUT/asm.txt; od -An -tx1 roms/alu.ch8 | tr -d " \n" | tr a-f A-F > $OUT/ch8.txt; cmp $OUT/asm.txt $OUT/ch8.txt && echo "alu.asm assembles to the bytes of alu.ch8"

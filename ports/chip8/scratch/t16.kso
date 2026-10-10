@@ -1,0 +1,13 @@
+type usage_error
+  reason
+
+fn command "asm" opts
+  "asm {opts}"
+
+fn command _ (usage_error reason)
+  "usage: {reason}"
+
+fn command word _
+  "unknown {word}"
+
+print (command "asm" 1) .> (_ -> print (command "x" (usage_error "bad")))

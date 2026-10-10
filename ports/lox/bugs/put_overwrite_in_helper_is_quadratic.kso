@@ -1,0 +1,23 @@
+# Native engines only. Overwriting the SAME key of a one-entry map, from a
+# helper called once per loop iteration, grows time and memory without bound.
+# A native map is an append-only log of pairs ("any duplicate to be resolved
+# on read", runtime.c k_b_put), so every overwrite adds a pair, and the
+# helper's evacuation copies the whole log each call.
+#
+# Should: finish instantly with a map of one entry, as --interp does.
+#
+# Does (kanso play / kanso build):
+#   n = 4000    ~0.5 s
+#   n = 8000    ~3 s
+#   n = 12000   4.4 GB resident (VmHWM), then finishes
+# With a string key instead of 7, n = 4000 takes 41 s.
+fn bump m i
+  put m 7 i
+
+fn loop m 0
+  m
+
+fn loop m n
+  loop (bump m n) (n - 1)
+
+print "{(loop {} 8000)[7]}"

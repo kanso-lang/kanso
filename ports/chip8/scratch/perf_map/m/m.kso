@@ -1,0 +1,46 @@
+import "std/bits"
+import "std/list"
+import "std/text"
+
+type machine
+  cycles
+  i
+  memory
+  pc
+  v
+
+pub fn boot _
+  pairs = list/map (list/take list/naturals 4096) (n -> [(n - 1) (n & 255)])
+  mem = list/to_h (list/to_list pairs)
+  machine 0 0 mem 512 (list/to_list (list/take (list/repeat 0) 16))
+
+fn byte none
+  0
+
+fn byte n
+  n
+
+fn poke mem a value
+  put mem a value
+
+fn set_reg v x value
+  text/concat (text/slice v 1 x) (text/concat [value] (text/slice v (x + 2) 16))
+
+pub fn report (machine cycles i memory pc v)
+  "cycles {cycles} i {i} pc {pc} v {v} {list/sum (values memory)}"
+
+pub fn run m n
+  return m if n == 0
+  run (execute m) (n - 1)
+
+fn execute (machine cycles i memory pc v)
+  op = bits/shl (byte memory[pc]) 8 | byte memory[pc + 1]
+  x = bits/shr op 8 & 15
+  value = byte v[x + 1] + op & 255
+  mem = poke memory (i + 1024) (value & 255)
+  machine
+    cycles + 1
+    i + 1 & 1023
+    mem
+    pc + 2 & 4095
+    set_reg v x (value & 255)

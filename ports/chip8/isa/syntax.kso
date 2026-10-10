@@ -1,0 +1,117 @@
+# The assembly spelling of each instruction, in the syntax of Cowgod's
+# CHIP-8 technical reference: mnemonics upper case, registers `V0`..`VF`,
+# hex immediates written `#2A`. The assembler reads exactly what this
+# writes, so a disassembly assembles back to the same bytes.
+pub fn spell (add_byte byte x)
+  "ADD {reg x}, {imm byte}"
+
+pub fn spell (add_i x)
+  "ADD I, {reg x}"
+
+pub fn spell (add_reg x y)
+  "ADD {reg x}, {reg y}"
+
+pub fn spell (and_reg x y)
+  "AND {reg x}, {reg y}"
+
+pub fn spell (bad op)
+  "DW #{hex op 4}"
+
+pub fn spell (bcd x)
+  "LD B, {reg x}"
+
+pub fn spell (call addr)
+  "CALL #{hex addr 3}"
+
+pub fn spell cls
+  "CLS"
+
+pub fn spell (draw n x y)
+  "DRW {reg x}, {reg y}, {n}"
+
+pub fn spell (font x)
+  "LD F, {reg x}"
+
+pub fn spell (get_delay x)
+  "LD {reg x}, DT"
+
+pub fn spell (jump addr)
+  "JP #{hex addr 3}"
+
+pub fn spell (jump_v0 addr)
+  "JP V0, #{hex addr 3}"
+
+pub fn spell (load x)
+  "LD {reg x}, [I]"
+
+pub fn spell (or_reg x y)
+  "OR {reg x}, {reg y}"
+
+pub fn spell ret
+  "RET"
+
+pub fn spell (rnd byte x)
+  "RND {reg x}, {imm byte}"
+
+pub fn spell (set_byte byte x)
+  "LD {reg x}, {imm byte}"
+
+pub fn spell (set_delay x)
+  "LD DT, {reg x}"
+
+pub fn spell (set_i addr)
+  "LD I, #{hex addr 3}"
+
+pub fn spell (set_reg x y)
+  "LD {reg x}, {reg y}"
+
+pub fn spell (set_sound x)
+  "LD ST, {reg x}"
+
+pub fn spell (shl_reg x y)
+  "SHL {reg x}, {reg y}"
+
+pub fn spell (shr_reg x y)
+  "SHR {reg x}, {reg y}"
+
+pub fn spell (skip_eq_byte byte x)
+  "SE {reg x}, {imm byte}"
+
+pub fn spell (skip_eq_reg x y)
+  "SE {reg x}, {reg y}"
+
+pub fn spell (skip_key x)
+  "SKP {reg x}"
+
+pub fn spell (skip_ne_byte byte x)
+  "SNE {reg x}, {imm byte}"
+
+pub fn spell (skip_ne_reg x y)
+  "SNE {reg x}, {reg y}"
+
+pub fn spell (skip_no_key x)
+  "SKNP {reg x}"
+
+pub fn spell (store x)
+  "LD [I], {reg x}"
+
+pub fn spell (sub_reg x y)
+  "SUB {reg x}, {reg y}"
+
+pub fn spell (subn_reg x y)
+  "SUBN {reg x}, {reg y}"
+
+pub fn spell (sys addr)
+  "SYS #{hex addr 3}"
+
+pub fn spell (wait_key x)
+  "LD {reg x}, K"
+
+pub fn spell (xor_reg x y)
+  "XOR {reg x}, {reg y}"
+
+fn imm n
+  "#{hex n 2}"
+
+fn reg x
+  "V{hex x 1}"

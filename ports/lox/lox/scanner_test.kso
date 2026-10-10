@@ -1,0 +1,29 @@
+import "std/list"
+import "std/text"
+
+fn kinds source
+  text/join (list/to_list (list/map (scan source).tokens (t -> t.kind))) " "
+
+fn lines source
+  text/join (list/to_list (list/map (scan source).tokens (t -> "{t.line}"))) " "
+
+test_scan_errors =
+  errors = (scan "a @ \"open").errors
+  bad = "[line 1] Error: Unexpected character."
+  errors == [bad "[line 1] Error: Unterminated string."]
+
+test_scan_keywords =
+  got = kinds "var x = nil; class orchid"
+  got == "var identifier = nil ; class identifier eof"
+
+test_scan_lines = lines "a\n\"b\nc\" // note\nd" == "1 3 4 4"
+
+test_scan_literals = (scan "12.5 \"hi\" 7.").tokens[2].literal == "hi"
+
+test_scan_numbers = kinds "12.5 7. .5" == "number number . . number eof"
+
+test_scan_punctuation = kinds "()\{},.-+;*" == "( ) \{ } , . - + ; * eof"
+
+test_scan_two_char =
+  got = kinds "!= == <= >= < > / ! ="
+  got == "!= == <= >= < > / ! = eof"

@@ -1,0 +1,95 @@
+# The syntax tree the parser builds. Field order is alphabetical, as kanso
+# requires, so the constructors read in that order: `binary left op right`,
+# `if_stmt condition else_branch then_branch`. Every node that can fail at run
+# time keeps the token it came from, for the line number.
+type assign
+  name
+  value
+
+type binary
+  left
+  op
+  right
+
+type block
+  statements
+
+type call_expr
+  args
+  callee
+  paren
+
+type class_decl
+  methods
+  name
+  superclass
+
+type expression_stmt
+  expression
+
+type function_decl
+  body
+  name
+  params
+
+type get_expr
+  name
+  object
+
+type grouping
+  inner
+
+type if_stmt
+  condition
+  else_branch
+  then_branch
+
+type literal
+  value
+
+type logical
+  left
+  op
+  right
+
+# Lox's nil. Kanso's own none is an answer to a question ("was it there?"),
+# and a value that rides through every Lox variable cannot be one.
+type nil
+
+# An optional part of a node that is not there: an `if` with no `else`, a
+# `return;`, a class with no superclass.
+type nothing
+
+type print_stmt
+  expression
+
+type return_stmt
+  keyword
+  value
+
+type set_expr
+  name
+  object
+  value
+
+type super_expr
+  keyword
+  method
+
+type this_expr
+  keyword
+
+type unary
+  op
+  right
+
+type var_stmt
+  initializer
+  name
+
+type variable
+  name
+
+type while_stmt
+  body
+  condition

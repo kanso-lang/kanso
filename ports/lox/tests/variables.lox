@@ -1,0 +1,31 @@
+var a = "global a";
+var b;
+print a;
+print b;
+var a = "redeclared at top level";
+print a;
+{
+  var a = "outer block";
+  {
+    var a = "inner block";
+    print a;
+  }
+  print a;
+}
+print a;
+var c = 1;
+c = c + 1;
+print c;
+var d = c = 10;
+print c;
+print d;
+{
+  var e = "local";
+  e = "reassigned local";
+  print e;
+}
+var f = "f";
+{
+  var g = f + "g";
+  print g;
+}

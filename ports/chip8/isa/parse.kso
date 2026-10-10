@@ -1,0 +1,290 @@
+import "std/list"
+import "std/text"
+
+# Operand shapes. An operand is a register, a number, or one of the special
+# names the LD and ADD forms use.
+type bcd_op
+
+type delay_reg
+
+type font_op
+
+type index_mem
+
+type index_reg
+
+type key_op
+
+type sound_reg
+
+type unresolved
+  text
+
+type value
+  n
+
+type vreg
+  x
+
+# From a mnemonic and its operand texts to an instruction, or to a problem
+# saying why not. `resolve` turns any operand that is not a register or a
+# special name into a number, or none when it cannot: the assembler passes
+# one that knows labels.
+pub fn parse mnemonic texts resolve
+  shapes = list/to_list (list/map texts (t -> operand t resolve))
+  sorted_out (list/find shapes problem?) mnemonic shapes
+
+fn sorted_out none mnemonic shapes
+  by_count (length shapes) mnemonic shapes
+
+fn sorted_out found _ _
+  found
+
+fn by_count 0 m _
+  form0 m
+
+fn by_count 1 m shapes
+  return problem "{m} wants an operand" if length shapes < 1
+  form1 m shapes[1]
+
+fn by_count 2 m shapes
+  return problem "{m} wants two operands" if length shapes < 2
+  form2 m shapes[1] shapes[2]
+
+fn by_count 3 m shapes
+  return problem "{m} wants three operands" if length shapes < 3
+  form3 m shapes[1] shapes[2] shapes[3]
+
+fn by_count n m _
+  problem "{m} does not take {n} operands"
+
+fn form0 "CLS"
+  cls
+
+fn form0 "RET"
+  ret
+
+fn form0 m
+  unknown_form m 0
+
+fn form1 "CALL" (value a)
+  within 4095 "address" a (call a)
+
+fn form1 "JP" (value a)
+  within 4095 "address" a (jump a)
+
+fn form1 "SHL" (vreg x)
+  shl_reg x x
+
+fn form1 "SHR" (vreg x)
+  shr_reg x x
+
+fn form1 "SKNP" (vreg x)
+  skip_no_key x
+
+fn form1 "SKP" (vreg x)
+  skip_key x
+
+fn form1 "SYS" (value a)
+  within 4095 "address" a (sys a)
+
+fn form1 m _
+  unknown_form m 1
+
+fn form2 "ADD" (vreg x) (value b)
+  within 255 "byte" b (add_byte b x)
+
+fn form2 "ADD" (vreg x) (vreg y)
+  add_reg x y
+
+fn form2 "ADD" index_reg (vreg x)
+  add_i x
+
+fn form2 "AND" (vreg x) (vreg y)
+  and_reg x y
+
+fn form2 "JP" (vreg 0) (value a)
+  within 4095 "address" a (jump_v0 a)
+
+fn form2 "LD" (vreg x) (value b)
+  within 255 "byte" b (set_byte b x)
+
+fn form2 "LD" (vreg x) (vreg y)
+  set_reg x y
+
+fn form2 "LD" (vreg x) delay_reg
+  get_delay x
+
+fn form2 "LD" (vreg x) key_op
+  wait_key x
+
+fn form2 "LD" (vreg x) index_mem
+  load x
+
+fn form2 "LD" index_reg (value a)
+  within 4095 "address" a (set_i a)
+
+fn form2 "LD" delay_reg (vreg x)
+  set_delay x
+
+fn form2 "LD" sound_reg (vreg x)
+  set_sound x
+
+fn form2 "LD" font_op (vreg x)
+  font x
+
+fn form2 "LD" bcd_op (vreg x)
+  bcd x
+
+fn form2 "LD" index_mem (vreg x)
+  store x
+
+fn form2 "OR" (vreg x) (vreg y)
+  or_reg x y
+
+fn form2 "RND" (vreg x) (value b)
+  within 255 "byte" b (rnd b x)
+
+fn form2 "SE" (vreg x) (value b)
+  within 255 "byte" b (skip_eq_byte b x)
+
+fn form2 "SE" (vreg x) (vreg y)
+  skip_eq_reg x y
+
+fn form2 "SHL" (vreg x) (vreg y)
+  shl_reg x y
+
+fn form2 "SHR" (vreg x) (vreg y)
+  shr_reg x y
+
+fn form2 "SNE" (vreg x) (value b)
+  within 255 "byte" b (skip_ne_byte b x)
+
+fn form2 "SNE" (vreg x) (vreg y)
+  skip_ne_reg x y
+
+fn form2 "SUB" (vreg x) (vreg y)
+  sub_reg x y
+
+fn form2 "SUBN" (vreg x) (vreg y)
+  subn_reg x y
+
+fn form2 "XOR" (vreg x) (vreg y)
+  xor_reg x y
+
+fn form2 m _ _
+  unknown_form m 2
+
+fn form3 "DRW" (vreg x) (vreg y) (value n)
+  within 15 "sprite height" n (draw n x y)
+
+fn form3 m _ _ _
+  unknown_form m 3
+
+# The special operand names, matched after upper-casing.
+fn named "B" _
+  bcd_op
+
+fn named "DT" _
+  delay_reg
+
+fn named "F" _
+  font_op
+
+fn named "I" _
+  index_reg
+
+fn named "K" _
+  key_op
+
+fn named "ST" _
+  sound_reg
+
+fn named "[I]" _
+  index_mem
+
+fn named up original
+  register up original (register_number up)
+
+# A label may not be spelled like a register or a special operand name, or
+# `JP b` would be read as the B of `LD B, V1`.
+pub fn reserved? name
+  up = upper name
+  return true if register_number up != none
+  special? (named up name)
+
+fn special? (unresolved _)
+  false
+
+fn special? _
+  true
+
+fn operand t resolve
+  shaped (named (upper t) t) resolve
+
+# What a number may start with, so that a bad one is not called a label.
+fn numeric? c
+  return true if c == "#" or c == "$" or c == "%"
+  code = text/char_code c
+  48 <= code and code <= 57
+
+fn problem? (problem _)
+  true
+
+fn problem? _
+  false
+
+fn v_shaped? up
+  length up == 2 and text/slice up 1 1 == "V"
+
+# `V0`..`VF`, either case; anything else is left for `resolve`.
+fn register_number up
+  return none if length up != 2 or text/slice up 1 1 != "V"
+  hex_digit (text/slice up 2 2)
+
+fn register up original none
+  return problem "`{original}` is not a register" if v_shaped? up
+  unresolved original
+
+fn register _ _ x
+  vreg x
+
+fn shaped (unresolved t) resolve
+  numbered (resolve t) t
+
+fn shaped shape _
+  shape
+
+fn numbered none t
+  return problem "`{t}` is not a number" if numeric? (text/slice t 1 1)
+  problem "unknown label `{t}`"
+
+fn numbered n _
+  value n
+
+fn unknown_form m count
+  return problem "unknown instruction `{m}`" if not known? m
+  problem "`{m}` does not take these {count} operand(s)"
+
+fn known? m
+  list/any? mnemonics (k -> k == m)
+
+# A list literal may not span lines, so the long list is a split string.
+pub mnemonics = text/split "{first_half}{second_half}" " "
+
+first_half = "ADD AND CALL CLS DRW JP LD OR RET RND "
+
+second_half = "SE SHL SHR SKNP SKP SNE SUB SUBN SYS XOR"
+
+# ASCII upper case; the assembler's mnemonics and register names are
+# case-insensitive and std/text has no case mapping.
+pub fn upper s
+  text/join (list/to_list (list/map (text/chars s) upper_char)) ""
+
+fn upper_char c
+  at = text/char_code c - 96
+  if (1 <= at and at <= 26) (text/slice "ABCDEFGHIJKLMNOPQRSTUVWXYZ" at at) c
+
+fn within limit what n instr
+  return instr if 0 <= n and n <= limit
+  problem "{what} {n} does not fit in 0..{limit}"

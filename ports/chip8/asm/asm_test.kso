@@ -1,0 +1,73 @@
+fn bytes_of source
+  (assemble source).bytes
+
+fn errors_of source
+  (assemble source).errors
+
+test_one_instruction = bytes_of "CLS" == [0 224]
+
+test_lower_case = bytes_of "ld v1, #2a" == [97 42]
+
+test_comment_and_blank = bytes_of "; nothing\n\n  RET ; back" == [0 238]
+
+test_forward_label = bytes_of "JP end\nCLS\nend: RET" == [18 4 0 224 0 238]
+
+test_label_alone = bytes_of "top:\n  JP top" == [18 0]
+
+test_db = bytes_of "DB 1, #FF, %10000001" == [1 255 129]
+
+test_dw = bytes_of "DW #1234, 5" == [18 52 0 5]
+
+test_ds = bytes_of "DS 3\nCLS" == [0 0 0 0 224]
+
+too_wide = "line 1: 512 does not fit in 0..255"
+
+test_label_in_db = errors_of "here: DB here" == [too_wide]
+
+test_label_after_data = bytes_of "LD I, data\ndata: DB 7" == [162 2 7]
+
+test_unknown_label = errors_of "JP away" == ["line 1: unknown label `away`"]
+
+test_errors_in_line_order = errors_of "x: CLS\nFOO\nx: RET" == two_errors
+
+two_errors = ["line 2: unknown instruction `FOO`" defined_twice]
+
+defined_twice = "line 3: label `x` is defined twice"
+
+test_db_range = errors_of "DB 256" == ["line 1: 256 does not fit in 0..255"]
+
+listed = (assemble "start: LD V0, 1\n  JP start").listing
+
+test_listing = listed == [first_listed "0202  1200        JP start"]
+
+first_listed = "0200  6001      start: LD V0, 1"
+
+test_colon_in_comment = bytes_of "CLS ; note: not a label" == [0 224]
+
+test_split_line = source_lines "a: LD V1, 2 ; c" == [lined]
+
+lined = source_line "a" "LD" 1 ["V1" "2"] "a: LD V1, 2 ; c"
+
+test_position_of = position_of "ab;c" ";" == 3
+
+test_position_missing = position_of "abc" ";" == 4
+
+test_size_of_ds = size_of "DS" ["#10"] == 16
+
+test_equ = bytes_of "speed: EQU 3\nLD V0, speed" == [96 3]
+
+test_equ_from_label = bytes_of "a: CLS\nat: EQU a+4\nJP at" == [0 224 18 4]
+
+reserved_error = "line 1: `dt` is an operand name and cannot be a label"
+
+test_reserved_label = errors_of "dt: CLS" == [reserved_error]
+
+test_sum = bytes_of "LD I, data+2\ndata: DB 1" == [162 4 1]
+
+test_difference = bytes_of "LD V1, end-start\nstart: CLS\nend:" == [97 2 0 224]
+
+test_equ_needs_label = errors_of "EQU 3" == ["line 1: EQU needs a label"]
+
+bad_equ = "line 1: `x` EQU wants one number or known label"
+
+test_equ_forward_refused = errors_of "x: EQU later\nlater: CLS" == [bad_equ]

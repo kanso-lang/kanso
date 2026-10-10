@@ -1,0 +1,62 @@
+import "std/io"
+import "std/os"
+import "std/text"
+import "std/time"
+
+# jlox's Lox.java: read the script, scan, parse, resolve, interpret. A scan,
+# parse or resolve error stops before anything runs (exit 65); a runtime
+# error stops the program where it happened (exit 70).
+pub fn start argv
+  time/now .> (ms -> launch argv (ms / 1000.0))
+
+fn launch argv started
+  return usage if 1 < length argv
+  return io/stdin .> (source -> run_source source started) if length argv == 0
+  path = argv[1]
+  os/read_file path .> (source -> run_file path source started)
+
+usage = print "Usage: jlox [script]" .> (_ -> os/exit 64)
+
+fn run_file path (file_not_found _) _
+  io/write_err "Could not read file '{path}'.\n" .> (_ -> os/exit 66)
+
+fn run_file _ source started
+  run_source source started
+
+pub fn run_source source started
+  lexed = scan source
+  syntax = parse lexed.tokens
+  early = text/concat lexed.errors syntax.errors
+  return static_failure early if 0 < length early
+  bound = resolve_program syntax.statements
+  return static_failure bound.errors if 0 < length bound.errors
+  run_top bound.statements 1 (fresh_machine started)
+
+fn static_failure errors
+  io/write_err "{text/join errors "\n"}\n" .> (_ -> os/exit 65)
+
+# Output is written after each top-level statement, so a long program
+# streams; inside one statement it waits in the machine.
+fn run_top stmts i m
+  return flush m if length stmts < i
+  stmt = stmts[i]
+  top_next stmts i (exec stmt m)
+
+fn top_next stmts i (normal m)
+  flush m .> (_ -> run_top stmts (i + 1) (cleared m))
+
+fn top_next stmts i (returning m _)
+  flush m .> (_ -> run_top stmts (i + 1) (cleared m))
+
+fn top_next _ _ (err f)
+  report = "{f.message}\n[line {f.line}]\n"
+  flush f.machine .> (_ -> io/write_err report) .> (_ -> os/exit 70)
+
+fn flush m
+  io/write (output_text m.out)
+
+fn output_text chain_start
+  ""
+
+fn output_text out
+  "{text/join (chain_list out) "\n"}\n"

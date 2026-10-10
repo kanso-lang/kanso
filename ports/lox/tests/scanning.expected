@@ -1,0 +1,16 @@
+123
+1.5
+0.25
+a string
+a string
+that spans
+three lines
+
+identifiers may use underscores
+a keyword prefix is still an identifier
+so is one that starts with 'or'
+5
+false
+3.14159
+7
+--- exit 0

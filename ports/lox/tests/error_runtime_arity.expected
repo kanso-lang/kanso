@@ -1,0 +1,6 @@
+3
+1
+--- stderr
+Expected 2 arguments but got 1.
+[line 5]
+--- exit 70

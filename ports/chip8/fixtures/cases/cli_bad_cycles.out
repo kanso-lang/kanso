@@ -1,0 +1,2 @@
+chip8: --cycles wants a number
+[exit 2]

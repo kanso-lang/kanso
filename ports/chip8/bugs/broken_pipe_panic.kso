@@ -1,0 +1,15 @@
+# Printing more lines than the reader wants. A built binary stops quietly
+# when stdout closes; `kanso play` without --interp reports
+#   error[runtime]: the program was ended by signal 13
+# and the interpreter prints
+#   thread '<unnamed>' panicked at ... failed printing to stdout: Broken pipe
+# followed by two Rust stack backtraces on stderr. Expected: a quiet stop on
+# every engine, as `head` users are used to.
+#
+# Run: kanso play bugs/broken_pipe_panic.kso --interp | head -1
+import "std/list"
+import "std/text"
+
+lines = list/to_list (list/map (list/take list/naturals 50000) (n -> "{n}"))
+
+print (text/join lines "\n")

@@ -1,0 +1,1 @@
+for r in alu bcd bounce keys maze paddle quirks; do chip8 asm roms/$r.asm > $OUT/$r.want; chip8 asm roms/$r.asm > $OUT/$r.hex; chip8 dis $OUT/$r.hex > $OUT/$r.dis.asm; chip8 asm $OUT/$r.dis.asm > $OUT/$r.got; cmp -s $OUT/$r.want $OUT/$r.got && echo "$r: same bytes"; done

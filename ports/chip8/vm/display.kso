@@ -1,0 +1,46 @@
+import "std/bits"
+import "std/list"
+import "std/text"
+
+pub type drawing
+  collided
+  display
+
+# DXYN: XOR an N-row sprite from memory at I onto the screen at (X, Y). The
+# start position wraps; the sprite itself is clipped at the right and the
+# bottom edges, as on the COSMAC VIP. VF reports whether any lit pixel was
+# turned off.
+pub fn drawn display memory i x y n
+  draw_rows display memory i (x & 63) (y & 31) n 0 false
+
+fn draw_rows display memory i x y n r collided
+  return drawing collided display if r == n or 31 < y + r
+  row = reg display (y + r)
+  sprite = placed (peek memory (i + r)) x
+  hit = row & sprite != 0
+  next = put_at display (y + r) (bits/xor row sprite)
+  draw_rows next memory i x y n (r + 1) (collided or hit)
+
+# The leftmost pixel is bit 63, so a sprite byte, whose top bit is its own
+# leftmost pixel, lands at bits 63-x down to 56-x. Past column 56 the low
+# bits fall off the right edge.
+fn placed b x
+  return bits/shl b (56 - x) if x <= 56
+  bits/shr b (x - 56)
+
+# One text line per row, `#` for a lit pixel.
+pub fn rendered display
+  list/to_list (list/map display row_text)
+
+fn row_text row
+  pixels = list/map columns (c -> pixel (bits/shr row (64 - c) & 1))
+  text/join (list/to_list pixels) ""
+
+# naturals count from 1, so column c is bit 64 - c
+columns = list/to_list (list/take list/naturals 64)
+
+fn pixel 1
+  "#"
+
+fn pixel _
+  "."

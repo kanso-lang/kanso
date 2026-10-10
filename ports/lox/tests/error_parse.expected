@@ -1,0 +1,9 @@
+--- stderr
+[line 2] Error at '=': Expect variable name.
+[line 3] Error at ';': Expect ')' after expression.
+[line 4] Error at '{': Expect ')' after parameters.
+[line 4] Error at '}': Expect expression.
+[line 5] Error at '{': Expect class name.
+[line 7] Error at 'print': Expect ';' after value.
+[line 9] Error at 'print': Expect ')' after if condition.
+--- exit 65

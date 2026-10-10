@@ -1,0 +1,42 @@
+no_superclass = "Can't use 'super' in a class with no superclass."
+
+fn resolve_errors source
+  (resolve_program (parse (scan source).tokens).statements).errors
+
+fn resolved_first source
+  (resolve_program (parse (scan source).tokens).statements).statements[1]
+
+test_resolve_captured =
+  first = resolved_first "\{ var a = 1; var b = 2; fun f() \{ return b; } }"
+  first.captured == { 2:true }
+
+test_resolve_depths =
+  first = resolved_first "\{ var a = 1; \{ print a; } }"
+  inner = first.statements[2].statements[1]
+  inner.expression == local_get 1 (scan "a").tokens[1] 1
+
+test_resolve_duplicate =
+  errors = resolve_errors "\{ var a; var a; }"
+  message = "Already a variable with this name in this scope."
+  errors == ["[line 1] Error at 'a': {message}"]
+
+test_resolve_own_initializer =
+  errors = resolve_errors "\{ var a = a; }"
+  message = "Can't read local variable in its own initializer."
+  errors == ["[line 1] Error at 'a': {message}"]
+
+test_resolve_return_top =
+  errors = resolve_errors "return 1;"
+  errors == ["[line 1] Error at 'return': Can't return from top-level code."]
+
+test_resolve_this_super =
+  errors = resolve_errors "print this; class A \{ m() \{ super.m(); } }"
+  e1 = "[line 1] Error at 'this': Can't use 'this' outside of a class."
+  e2 = "[line 1] Error at 'super': {no_superclass}"
+  errors == [e1 e2]
+
+test_resolve_init_return =
+  errors = resolve_errors "class A < A \{ init() \{ return 1; } }"
+  e1 = "[line 1] Error at 'A': A class can't inherit from itself."
+  e2 = "[line 1] Error at 'return': Can't return a value from an initializer."
+  errors == [e1 e2]

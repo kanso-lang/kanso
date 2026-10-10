@@ -1,0 +1,3 @@
+var NotAClass = "nope";
+print "declaring";
+class Sub < NotAClass {}

@@ -1,0 +1,5 @@
+declaring
+--- stderr
+Superclass must be a class.
+[line 3]
+--- exit 70

@@ -1,0 +1,104 @@
+# Native engines only. A persistent 4-ary trie of 65,536 leaves, updated
+# once per iteration of a tail-recursive loop, runs in linear time until the
+# loop has rewritten roughly every leaf, then falls off a cliff: evacuation
+# starts copying (apparently) the whole live tree on every beat.
+#
+# Should: cost the same per iteration at n = 80000 as at n = 60000; each
+# update allocates eight quads and a store, whatever n is.
+#
+# Does (KANSO_COUNTERS=1 kanso run, module form; kanso play is the same):
+#   n = 60000   0.9 s    evac_bytes=182672528
+#   n = 70000   1.0 s    evac_bytes=212769360
+#   n = 80000   20  s    evac_bytes=7692094960
+#   n = 160000  > 60 s
+# With 4,096 or 16,384 leaves there is no cliff at any n tried, so the
+# trigger seems to be the size of the live structure, not the loop count.
+# --interp: 2.8 s at n = 40000, linear.
+type quad
+  a
+  b
+  c
+  d
+
+type store
+  count
+  root
+
+fn empty 0
+  0
+
+fn empty depth
+  sub = empty (depth - 1)
+  quad sub sub sub sub
+
+fn get (quad a b c d) depth idx
+  pick (quad a b c d) (depth - 1) idx (idx / pow4 (depth - 1) % 4)
+
+fn get node _ _
+  node
+
+fn pick (quad a _ _ _) depth idx 0
+  get a depth idx
+
+fn pick (quad _ b _ _) depth idx 1
+  get b depth idx
+
+fn pick (quad _ _ c _) depth idx 2
+  get c depth idx
+
+fn pick (quad _ _ _ d) depth idx _
+  get d depth idx
+
+fn pow4 0
+  1
+
+fn pow4 n
+  4 * pow4 (n - 1)
+
+fn set (quad a b c d) depth idx v
+  slot = idx / pow4 (depth - 1) % 4
+  replace (quad a b c d) slot (set_in (quad a b c d) slot (depth - 1) idx v)
+
+fn set _ _ _ v
+  v
+
+fn set_in (quad a b c d) slot depth idx v
+  set (child (quad a b c d) slot) depth idx v
+
+fn child (quad a _ _ _) 0
+  a
+
+fn child (quad _ b _ _) 1
+  b
+
+fn child (quad _ _ c _) 2
+  c
+
+fn child (quad _ _ _ d) _
+  d
+
+fn replace (quad _ b c d) 0 x
+  quad x b c d
+
+fn replace (quad a _ c d) 1 x
+  quad a x c d
+
+fn replace (quad a b _ d) 2 x
+  quad a b x d
+
+fn replace (quad a b c _) _ x
+  quad a b c x
+
+fn bump (store count root) i
+  idx = i * 7919 % 65536
+  old = get root 8 idx
+  store (count + 1) (set root 8 idx (old + 1))
+
+fn loop st 0
+  st
+
+fn loop st n
+  loop (bump st n) (n - 1)
+
+fin = loop (store 0 (empty 8)) 80000
+print "{fin.count} {get fin.root 8 (7 * 7919 % 65536)}"

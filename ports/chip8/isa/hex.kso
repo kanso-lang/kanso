@@ -1,0 +1,89 @@
+import "std/bits"
+import "std/list"
+import "std/text"
+
+# Number formatting. kanso interpolates an int in decimal and has no format
+# verbs, so hex is built a digit at a time.
+fn digit n
+  text/slice "0123456789ABCDEF" (n + 1) (n + 1)
+
+# `hex 512 3` is "200": n in base 16, zero-padded to at least `width` digits.
+pub fn hex n width
+  hex_into n width ""
+
+fn hex_into n width acc
+  return acc if n == 0 and width < 1
+  hex_into (bits/shr n 4) (width - 1) "{digit (n & 15)}{acc}"
+
+# The value of one hex digit, either case, or none for anything else.
+pub fn hex_digit c
+  hex_value (text/char_code c)
+
+# "F0 90 9" style tables: whitespace-separated pairs, each a byte.
+pub fn hex_table s
+  flat = text/join (text/split s "\n") " "
+  words = list/reject (text/split flat " ") empty?
+  list/to_list (list/map words word_value)
+
+fn empty? w
+  w == ""
+
+fn hex_value c
+  return c - 48 if 48 <= c and c <= 57
+  return c - 55 if 65 <= c and c <= 70
+  return c - 87 if 97 <= c and c <= 102
+  none
+
+fn word_value w
+  list/fold (text/chars w) 0 (acc c -> acc * 16 + hex_digit c)
+
+# A number as the assembler writes one: decimal `42`, hex `#2A`, `$2A` or
+# `0x2A`, binary `%101010` or `0b101010`. Anything else answers none.
+pub fn literal t
+  return none if t == ""
+  prefixed (text/slice t 1 1) t
+
+# `#` and `0x` cannot both start one string, but dispatching on the first
+# character and the first two in one arm group makes the checker call those
+# arms a tie, so the `0` prefixes get a second step of their own.
+fn prefixed "#" t
+  digits_in (text/slice t 2 (length t)) 16
+
+fn prefixed "$" t
+  digits_in (text/slice t 2 (length t)) 16
+
+fn prefixed "%" t
+  digits_in (text/slice t 2 (length t)) 2
+
+fn prefixed "0" t
+  after_zero (text/slice t 2 2) t
+
+fn prefixed _ t
+  digits_in t 10
+
+fn after_zero "b" t
+  digits_in (text/slice t 3 (length t)) 2
+
+fn after_zero "x" t
+  digits_in (text/slice t 3 (length t)) 16
+
+fn after_zero _ t
+  digits_in t 10
+
+fn digits_in "" _
+  none
+
+fn digits_in ds base
+  list/fold (text/chars ds) 0 (acc c -> accumulate acc (hex_digit c) base)
+
+fn accumulate none none _
+  none
+
+fn accumulate none _ _
+  none
+
+fn accumulate _ none _
+  none
+
+fn accumulate acc d base
+  if (d < base) (acc * base + d) none

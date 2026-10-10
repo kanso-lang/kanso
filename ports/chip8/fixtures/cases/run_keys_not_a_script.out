@@ -1,0 +1,2 @@
+chip8: roms/errors/blank.txt: line 1: expected `<frame> down|up|tap <key>`
+[exit 1]

@@ -1,0 +1,5 @@
+going down
+--- stderr
+Stack overflow.
+[line 4]
+--- exit 70

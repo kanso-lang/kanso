@@ -1,0 +1,6 @@
+usage: chip8 run ROM [--cycles N] [--per-frame N] [--keys FILE]
+       [--seed N] [--quirks vip|modern] [--trace]
+       chip8 asm SOURCE [--list]
+       chip8 dis ROM
+ROM is a .ch8 binary, a .hex text file, or a .asm source.
+[exit 0]

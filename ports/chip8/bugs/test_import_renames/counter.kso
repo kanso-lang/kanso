@@ -1,0 +1,27 @@
+# This file never imports std/list. It defines a function `skipped`. The
+# test file beside it imports std/list, which exports a type named
+# `skipped`. Imports are per file ("a module's files share their
+# declarations, not their imports"), so the call below should reach this
+# file's function, and `kanso test` should pass.
+#
+# Actual: `kanso check .` says ok, and `kanso test .` fails at run time:
+#   error[runtime]: `list/skipped` has no field `n`
+# so the test file's import replaced this file's function with the std
+# type's constructor. Found in the emulator, where `fn skipped m true`
+# (skip the next instruction) turned into `list/skipped` under test only.
+#
+# Run: kanso test bugs/test_import_renames
+type counter
+  n
+
+pub fn start _
+  counter 0
+
+pub fn step_over c
+  skipped c true
+
+fn skipped (counter n) true
+  counter (n + 2)
+
+fn skipped c false
+  c

@@ -1,0 +1,6 @@
+import "std/bits"
+a = bits/shl 1 63
+b = bits/shl 255 60
+c = bits/xor a 1
+d = bits/shr a 63
+print "{a} {b} {c} {d} {0 - 1 & 255} {bits/complement 0}"

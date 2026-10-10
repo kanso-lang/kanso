@@ -1,0 +1,98 @@
+import "std/list"
+import "std/text"
+
+# One opcode for each of the 35 instructions, in Cowgod's order.
+all_opcodes = hex_table opcode_table
+
+fn number t
+  literal t
+
+fn round_trips? op
+  encode (decode op) == op
+
+fn spelled op
+  spell (decode op)
+
+fn parsed m texts
+  parse m texts number
+
+# A string literal cannot span lines either, so the table is three strings.
+opcode_table = text/join [row_a row_b row_c] " "
+
+row_a = "0123 00E0 00EE 1ABC 2345 3A12 4B34 5CD0 6E56 7F78 8120 8231"
+
+row_b = "8342 8453 8564 8675 8786 8897 89AE 9AB0 A123 B456 CB78 DCD5"
+
+row_c = "EC9E EDA1 F107 F20A F315 F418 F51E F629 F733 F855 F965"
+
+distinct = keys (list/index_by all_opcodes (op -> spell (decode op)))
+
+test_all_35_decode_to_distinct_instructions = length distinct == 35
+
+test_bad_opcodes_decode_as_bad = decode 20481 == bad 20481
+
+test_decode_draw = decode 56533 == draw 5 12 13
+
+test_decode_skip_key = decode 60574 == skip_key 12
+
+test_every_opcode_round_trips = list/all? all_opcodes round_trips?
+
+test_hex_pads = hex 10 3 == "00A"
+
+test_hex_widens = hex 65535 2 == "FFFF"
+
+test_hex_zero = hex 0 1 == "0"
+
+test_parse_drw = parsed "DRW" ["V1" "v2" "15"] == draw 15 1 2
+
+test_parse_jp_v0 = parsed "JP" ["V0" "#300"] == jump_v0 768
+
+jp_v1 = parsed "JP" ["V1" "#300"]
+
+refused = problem "`JP` does not take these 2 operand(s)"
+
+test_parse_jp_v1_is_refused = jp_v1 == refused
+
+test_parse_ld_store = parsed "LD" ["[i]" "VA"] == store 10
+
+too_big = parsed "LD" ["V1" "300"]
+
+test_parse_out_of_range = too_big == problem "byte 300 does not fit in 0..255"
+
+mov = parsed "MOV" ["V1" "V2"]
+
+test_parse_unknown = mov == problem "unknown instruction `MOV`"
+
+unresolved_jump = parsed "JP" ["nowhere"]
+
+test_parse_unresolved = unresolved_jump == problem "unknown label `nowhere`"
+
+test_spell_add_i = spelled 62750 == "ADD I, V5"
+
+test_spell_drw = spelled 56533 == "DRW VC, VD, 5"
+
+test_spell_set_byte = spelled 25174 == "LD V2, #56"
+
+test_spellings_parse_back = list/all? all_opcodes spells_back?
+
+fn spells_back? op
+  instr = decode op
+  s = spell instr
+  m = text/split s " "
+  return false if length m < 1
+  rest = text/slice s (length m[1] + 2) (length s)
+  instr == parsed m[1] (operand_texts rest)
+
+fn operand_texts ""
+  []
+
+fn operand_texts rest
+  text/split rest ", "
+
+spellings = ["42" "#2A" "$2a" "0x2A" "%101010" "0b101010"]
+
+test_literal_forms = list/all? (list/map spellings literal) (n -> n == 42)
+
+test_literal_garbage = literal "4G" == none
+
+test_upper = upper "ld v1, [i]" == "LD V1, [I]"

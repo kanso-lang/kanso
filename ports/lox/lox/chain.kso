@@ -1,0 +1,27 @@
+# A list grown one element at a time, kept newest first as a chain of
+# records and turned into a list once, when it is complete. Pushing onto a
+# list carried in a record, or from inside a helper function, copies the list
+# on every step on one engine or another (FRICTION F3, F30), so tokens,
+# statements and printed lines all collect this way instead.
+type chain
+  earlier
+  item
+
+type chain_start
+
+pub fn chain_list c
+  newest = newest_first c []
+  oldest_first newest (length newest) []
+
+fn newest_first chain_start acc
+  acc
+
+fn newest_first (chain earlier item) acc
+  newest_first earlier (push acc item)
+
+fn oldest_first _ 0 acc
+  acc
+
+fn oldest_first newest i acc
+  item = newest[i]
+  oldest_first newest (i - 1) (push acc item)

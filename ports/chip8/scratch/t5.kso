@@ -1,0 +1,4 @@
+import "std/os"
+import "std/text"
+
+os/write_file "out.bin" (text/utf8 [0 18 255 200]) .> (_ -> print "wrote")

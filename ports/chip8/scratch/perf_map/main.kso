@@ -1,0 +1,3 @@
+import "./m"
+
+print (m/report (m/run (m/boot 0) 4000))

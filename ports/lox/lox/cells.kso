@@ -1,0 +1,78 @@
+# A growable array of mutable cells, as a persistent 4-ary trie. Lox needs
+# memory it can overwrite: a variable a closure captured, an instance's
+# fields. Kanso values never change, and its maps are logs that every
+# overwrite lengthens (FRICTION F4), so the interpreter keeps its store here.
+# Reads and writes cost one step per level, and a write copies only the path
+# to its leaf.
+#
+# `span` is how many ids each child of the root covers; the root covers four
+# times that. Ids start at 0.
+type cells
+  root
+  span
+
+type quad
+  a
+  b
+  c
+  d
+
+# A subtree nothing has been written to yet.
+type vacant
+
+pub empty_cells = cells (quad vacant vacant vacant vacant) 1
+
+pub fn cell_at (cells root span) id
+  return vacant if span * 4 <= id
+  fetch root span id
+
+pub fn with_cell (cells root span) id value
+  return widened (cells root span) id value if span * 4 <= id
+  cells (store root span id value) span
+
+fn widened (cells root span) id value
+  with_cell (cells (quad root vacant vacant vacant) (span * 4)) id value
+
+fn child (quad a _ _ _) 0
+  a
+
+fn child (quad _ b _ _) 1
+  b
+
+fn child (quad _ _ c _) 2
+  c
+
+fn child (quad _ _ _ d) _
+  d
+
+fn fetch (quad a b c d) 1 id
+  child (quad a b c d) (id % 4)
+
+fn fetch (quad a b c d) span id
+  fetch (child (quad a b c d) (id / span % 4)) (span / 4) id
+
+fn fetch vacant _ _
+  vacant
+
+fn replace (quad _ b c d) 0 x
+  quad x b c d
+
+fn replace (quad a _ c d) 1 x
+  quad a x c d
+
+fn replace (quad a b _ d) 2 x
+  quad a b x d
+
+fn replace (quad a b c _) _ x
+  quad a b c x
+
+fn store (quad a b c d) 1 id value
+  replace (quad a b c d) (id % 4) value
+
+fn store (quad a b c d) span id value
+  slot = id / span % 4
+  below = store (child (quad a b c d) slot) (span / 4) id value
+  replace (quad a b c d) slot below
+
+fn store vacant span id value
+  store (quad vacant vacant vacant vacant) span id value

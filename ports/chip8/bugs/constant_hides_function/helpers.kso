@@ -1,0 +1,22 @@
+# One module, two files. This file defines a function `added`; the test file
+# beside it defines a constant `added`. Two top-level declarations with one
+# name in one module should be refused at compile time, the way a parameter
+# or a local that reuses a top-level name is ("`q` is already a declaration;
+# rename the binding").
+#
+# Actual: `kanso check` and `kanso test` accept the module, and the test
+# fails at run time with
+#   error[runtime]: `5` is not callable
+#     --> .:22:3
+# The call `added acc 1` below reached the test file's constant instead of
+# this function, and the location names the module, not this file.
+#
+# Run: kanso test bugs/constant_hides_function
+pub fn total xs
+  bump 0 xs
+
+fn added acc n
+  acc + n
+
+fn bump acc xs
+  added acc (length xs)

@@ -1,0 +1,31 @@
+Native stack overflow is a segfault inside the Lox port, but not in any
+reduction I could write.
+
+Reproduce (from the port's directory):
+
+  sed -i 's/max_calls = 1000$/max_calls = 100000/' lox/interpreter.kso
+  kanso build main.kso
+  echo 'fun f(n) { if (n == 0) return 0; return f(n - 1) + 1; } print f(20000);' > deep.lox
+  ./main deep.lox        # Segmentation fault, exit 139, no message
+  sed -i 's/max_calls = 100000$/max_calls = 1000/' lox/interpreter.kso
+
+Should: stop with "error[runtime]: the program ran out of stack", as the
+interpreter does for the same program, and as the native build does for
+every pure-kanso deep recursion I tried (plain non-tail recursion, recursion
+through a second function, through a list/fold callback, through a record
+returned from each level, and through a 4-ary trie write at each level, the
+last being the port's own shape).
+
+gdb puts the fault in the trie write, several levels below the frame that
+ran out:
+
+  #0  d_lox/store_4 ()
+  #1  d_lox/store_4 ()
+  ...
+  #5  d_lox/with_cell_3 ()
+  #6  d_lox/declare_local_2 ()
+  #7  w_lox/declare_local_2 ()
+
+The depth at which it happens differs by tier: the dev build survives 3,000
+Lox calls and dies by 4,000; the release build survives 4,000 and dies by
+6,000. The port caps Lox recursion at 1,000 calls so that all engines agree.

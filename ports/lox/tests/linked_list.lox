@@ -1,0 +1,79 @@
+// A singly linked list built from classes, with higher-order helpers.
+class Node {
+  init(value, next) {
+    this.value = value;
+    this.next = next;
+  }
+}
+class List {
+  init() {
+    this.head = nil;
+    this.size = 0;
+  }
+  push(value) {
+    this.head = Node(value, this.head);
+    this.size = this.size + 1;
+    return this;
+  }
+  each(f) {
+    var node = this.head;
+    while (node != nil) {
+      f(node.value);
+      node = node.next;
+    }
+  }
+  map(f) {
+    var out = List();
+    var reversed = List();
+    this.each(fun_push(reversed));
+    reversed.each(mapper(out, f));
+    return out;
+  }
+  fold(acc, f) {
+    var node = this.head;
+    while (node != nil) {
+      acc = f(acc, node.value);
+      node = node.next;
+    }
+    return acc;
+  }
+  join(sep) {
+    var text = "";
+    var first = true;
+    fun add(value) {
+      if (first) {
+        first = false;
+        text = value;
+      } else {
+        text = text + sep + value;
+      }
+    }
+    this.each(add);
+    return text;
+  }
+}
+fun fun_push(list) {
+  fun push(value) { list.push(value); }
+  return push;
+}
+fun mapper(out, f) {
+  fun each(value) { out.push(f(value)); }
+  return each;
+}
+fun describe(n) {
+  if (n < 10) return "small";
+  return "large";
+}
+fun plus(a, b) { return a + b; }
+var numbers = List();
+for (var i = 1; i <= 12; i = i + 3) numbers.push(i);
+print numbers.size;
+print numbers.map(describe).join(", ");
+print numbers.fold(0, plus);
+fun stringify(n) {
+  if (n == 1) return "one";
+  if (n == 4) return "four";
+  if (n == 7) return "seven";
+  return "ten";
+}
+print numbers.map(stringify).join(" <- ");

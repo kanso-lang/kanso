@@ -1,0 +1,2 @@
+alu.asm assembles to the bytes of alu.ch8
+[exit 0]

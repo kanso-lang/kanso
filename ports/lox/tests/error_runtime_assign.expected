@@ -1,0 +1,5 @@
+2
+--- stderr
+Undefined variable 'y'.
+[line 4]
+--- exit 70

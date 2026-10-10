@@ -1,0 +1,5 @@
+import "std/text"
+
+a = text/concat "ab" "cd"
+b = text/concat "" "cd"
+print "{a} {b}"

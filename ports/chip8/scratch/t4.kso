@@ -1,0 +1,7 @@
+import "std/bits"
+
+fn fetch mem pc
+  bits/shl mem[pc + 1] 8 | mem[pc + 2]
+
+mem = [0 18 52 86]
+print "{fetch mem 1}"

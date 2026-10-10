@@ -1,0 +1,177 @@
+import "../isa"
+import "std/list"
+import "std/text"
+
+# Each test boots a few instructions, written as hex byte pairs, runs them
+# and reads the machine afterwards. kanso has no hex literals, so the
+# programs are strings: "60 05" is LD V0, #05.
+fn ran program cycles q
+  cfg = config cycles 10 q false
+  (run (boot (isa/hex_table program) 1) cfg []).session.machine
+
+fn vip_run program cycles
+  ran program cycles vip
+
+fn modern_run program cycles
+  ran program cycles modern
+
+fn status_of program cycles
+  (run (boot (isa/hex_table program) 1) (vip_cfg cycles) []).status
+
+fn vip_cfg cycles
+  config cycles 10 vip false
+
+# profile answers none for an unknown name, and a call that can answer none
+# may not be passed straight to `ran`; a name bound to it may.
+vip = profile "vip"
+
+modern = profile "modern"
+
+fn reg_after program cycles x
+  reg (vip_run program cycles).v x
+
+# 60F0 6120 8014: F0 + 20 = 10, carry
+summed = vip_run "60 F0 61 20 80 14" 3
+
+test_add_carries = reg summed.v 0 == 16 and reg summed.v 15 == 1
+
+# 6030 6150 8015: 30 - 50 borrows, so VF is 0
+test_sub_borrows = reg_after "60 30 61 50 80 15" 3 15 == 0
+
+# 6050 6130 8015: 50 - 30 does not
+test_sub_no_borrow = reg_after "60 50 61 30 80 15" 3 15 == 1
+
+# 6185 8016: VIP shifts VY into VX
+shifted = vip_run "61 85 80 16" 2
+
+test_shr_takes_vy = reg shifted.v 0 == 66 and reg shifted.v 15 == 1
+
+modern_shift = modern_run "60 04 61 85 80 16" 3
+
+test_shr_modern_shifts_vx = reg modern_shift.v 0 == 2
+
+# 6F77 8011: OR clears VF on the VIP and leaves it under SUPER-CHIP
+test_or_resets_vf = reg_after "6F 77 80 11" 2 15 == 0
+
+test_or_keeps_vf_modern = reg (modern_run "6F 77 80 11" 2).v 15 == 119
+
+# 7XNN carries nowhere: FF + 2 = 01 and VF stays 77
+bumped = vip_run "6F 77 60 FF 70 02" 3
+
+test_add_byte_wraps = reg bumped.v 0 == 1 and reg bumped.v 15 == 119
+
+# 6089 A300 F033: BCD of 137 at #300
+bcd_done = vip_run "60 89 A3 00 F0 33" 3
+
+test_bcd_digits = memory_at bcd_done 768 3 == [1 3 7]
+
+fn memory_at m from n
+  offsets = list/take list/naturals n
+  list/to_list (list/map offsets (k -> peek m.memory (from + k - 1)))
+
+# store V0..V2 at #300; the VIP leaves I at #303, SUPER-CHIP at #300
+store_program = "60 0A 61 0B 62 0C A3 00 F2 55"
+
+stored = vip_run store_program 5
+
+test_store_writes = memory_at stored 768 3 == [10 11 12]
+
+test_store_moves_i = stored.i == 771
+
+test_store_keeps_i_modern = (modern_run store_program 5).i == 768
+
+# 2206 calls #206; 00EE there returns to #202
+called = vip_run "22 06 00 00 00 00 00 EE" 1
+
+test_call_pushes = called.stack == [514] and called.pc == 518
+
+returned = vip_run "22 06 12 04 00 00 00 EE" 2
+
+test_ret_pops = length returned.stack == 0 and returned.pc == 514
+
+# draw the font's 0 twice: the second draw erases it and sets VF
+drawn_once = vip_run "60 00 F0 29 D0 05" 3
+
+# F0 in the top byte of a 64-bit row is F0 shifted left 56 places, which is
+# negative in a signed 64-bit int
+bits_of_f0 = 0 - 1152921504606846976
+
+test_draw_lights = reg drawn_once.display 0 == bits_of_f0
+
+test_draw_no_collision = reg drawn_once.v 15 == 0
+
+drawn_twice = vip_run "60 00 F0 29 D0 05 D0 05" 4
+
+test_draw_twice_erases = drawn_twice.display == blank_display
+
+test_draw_twice_collides = reg drawn_twice.v 15 == 1
+
+top_row = (rendered drawn_once.display)[1]
+
+test_rendered_row = top_row == "####{dots 60}"
+
+fn dots n
+  text/join (list/to_list (list/take (list/repeat ".") n)) ""
+
+# timers count down once per ten instructions
+ticking = vip_run "60 05 F0 15 F0 18 12 06" 22
+
+test_timers_tick = ticking.delay == 3 and ticking.sound == 3
+
+# C0FF: the same seed draws the same byte
+test_random_repeats = reg_after "C0 FF" 1 0 == reg_after "C0 FF" 1 0
+
+test_random_masks = reg_after "C0 0F" 1 0 < 16
+
+# B300 jumps to #300 + V0
+test_jump_v0 = (vip_run "60 04 B3 00" 2).pc == 772
+
+bad_status = "fault at #200 after 0 cycles: unknown opcode #5121"
+
+test_bad_opcode_faults = status_of "51 21" 5 == bad_status
+
+test_idle_stops = status_of "12 00" 50 == "idle at #200"
+
+test_limit_stops = status_of "70 01 12 00" 7 == "ran 7 cycles"
+
+# FX0A with nothing pressed waits in place
+test_wait_key_waits = (vip_run "F3 0A" 5).pc == 512
+
+fn keyed_run program cycles script
+  cfg = config cycles 10 vip false
+  start = boot (isa/hex_table program) 1
+  (run start cfg (script_events script)).session.machine
+
+# key 7 down in frame 1 and up in frame 3; F30A finishes once it is up
+got_key = keyed_run "F3 0A 12 02" 40 "1 down 7\n3 up 7"
+
+test_wait_key_reads_release = reg got_key.v 3 == 7 and got_key.pc == 514
+
+# E19E skips the LD V2 when key V1 is held
+skip_program = "61 04 E1 9E 62 01 12 06"
+
+test_skip_key_held = reg (keyed_run skip_program 4 "0 down 4").v 2 == 0
+
+test_skip_key_not_held = reg (keyed_run skip_program 4 "").v 2 == 1
+
+sorted_script = script_events "5 down 1\n2 tap 3"
+
+tap_down = key_event true 2 3
+
+tap_up = key_event false 4 3
+
+test_script_sorted = sorted_script == [tap_down tap_up (key_event true 5 1)]
+
+bad_action = bad_script "line 1: unknown action `press`"
+
+test_script_bad_action = script_events "1 press 3" == bad_action
+
+bad_key = bad_script "line 2: a key is one hex digit, 0 to F"
+
+test_script_bad_key = script_events "# keys\n1 down 10" == bad_key
+
+test_put_at = put_at [1 2 3] 1 9 == [1 9 3]
+
+test_write_block_clips = write_block [1 2 3] 2 [7 8 9] == [1 2 7]
+
+test_upto_short = upto [1 2] 5 == [1 2]

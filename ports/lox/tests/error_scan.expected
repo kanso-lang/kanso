@@ -1,0 +1,7 @@
+--- stderr
+[line 2] Error: Unexpected character.
+[line 3] Error: Unexpected character.
+[line 5] Error: Unterminated string.
+[line 2] Error at '2': Expect ';' after variable declaration.
+[line 5] Error at end: Expect expression.
+--- exit 65

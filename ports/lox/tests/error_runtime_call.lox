@@ -1,0 +1,3 @@
+var notAFunction = "just a string";
+print "calling it";
+notAFunction();

@@ -1,0 +1,10 @@
+--- stderr
+[line 2] Error at 'return': Can't return from top-level code.
+[line 5] Error at 'a': Already a variable with this name in this scope.
+[line 8] Error at 'b': Can't read local variable in its own initializer.
+[line 10] Error at 'this': Can't use 'this' outside of a class.
+[line 11] Error at 'super': Can't use 'super' outside of a class.
+[line 13] Error at 'super': Can't use 'super' in a class with no superclass.
+[line 14] Error at 'return': Can't return a value from an initializer.
+[line 16] Error at 'Ouroboros': A class can't inherit from itself.
+--- exit 65

@@ -1,0 +1,675 @@
+import "std/list"
+
+# Chapters 7 to 13: the tree-walking evaluator. Evaluation is pure, so all of
+# jlox's mutable state travels in one `machine` value that every step takes
+# and gives back:
+#
+#   frame    the current scope chain (jlox's `environment`)
+#   globals  global name -> heap cell
+#   heap     cells that outlive a call: captured locals, instance fields
+#   next     the next free heap cell
+#   out      printed lines not yet written, as a `chain`
+#   sp       the next free stack cell
+#   stack    cells for locals no closure captures; reused once their scope ends
+#   started  what clock() answers, read once before the program starts
+type machine
+  frame
+  globals
+  heap
+  next
+  out
+  sp
+  stack
+  started
+
+# One scope at run time. `slots` holds one reference per local declared so
+# far, in declaration order; the resolver's slot numbers index it. `depth`
+# counts the Lox calls active when the frame was made.
+type frame
+  captured
+  depth
+  parent
+  slots
+
+# The global scope, at the end of every frame chain.
+type top
+
+# Where a local lives.
+type on_stack
+  id
+
+type on_heap
+  id
+
+# `this` and `super` never change, so their frames hold them directly.
+type fixed
+  value
+
+# What an expression answers.
+type evaluated
+  machine
+  value
+
+# What a statement answers: carry on, or unwind to the call with a value.
+type normal
+  machine
+
+type returning
+  machine
+  value
+
+type runtime_fault
+  line
+  machine
+  message
+
+type no_method
+
+# A while loop whose condition came out false.
+type loop_exit
+  machine
+
+minus_one = 0.0 - 1.0
+
+# Lox calls may nest this deep. jlox overflows the JVM's stack and dies with
+# a Java stack trace; the kanso engines overflow at different depths (about
+# 2,000 calls on the interpreter, 4,000 to 6,000 natively, with a segfault),
+# so the port stops every engine at the same place with clox's message.
+max_calls = 1000
+
+pub fn fresh_machine started
+  globals = { "clock":0 }
+  heap = with_cell empty_cells 0 native_clock
+  machine top globals heap 1 chain_start 0 empty_cells started
+
+fn runtime_error tok message m
+  err (runtime_fault tok.line m message)
+
+# --- the machine ------------------------------------------------------------
+fn at_frame m f
+  machine f m.globals m.heap m.next m.out m.sp m.stack m.started
+
+fn restored m f sp
+  machine f m.globals m.heap m.next m.out sp m.stack m.started
+
+fn heap_write m id value
+  heap = with_cell m.heap id value
+  machine m.frame m.globals heap m.next m.out m.sp m.stack m.started
+
+# Writes a new heap cell; the caller reads its id from `m.next` first.
+fn heap_alloc m value
+  heap = with_cell m.heap m.next value
+  machine m.frame m.globals heap (m.next + 1) m.out m.sp m.stack m.started
+
+# Uses up an id without writing a cell, for a value that only needs a
+# number of its own.
+fn numbered m
+  machine m.frame m.globals m.heap (m.next + 1) m.out m.sp m.stack m.started
+
+fn stack_write m id value
+  stack = with_cell m.stack id value
+  machine m.frame m.globals m.heap m.next m.out m.sp stack m.started
+
+pub fn print_line m text
+  pending = chain m.out text
+  machine m.frame m.globals m.heap m.next pending m.sp m.stack m.started
+
+pub fn cleared m
+  machine m.frame m.globals m.heap m.next chain_start m.sp m.stack m.started
+
+fn define_global m word value
+  define_global_at m word value m.globals[word]
+
+fn define_global_at m word value none
+  defined = heap_alloc m value
+  globals = put m.globals word m.next
+  machine m.frame globals defined.heap defined.next m.out m.sp m.stack m.started
+
+fn define_global_at m _ value id
+  heap_write m id value
+
+# Adds a local to the current frame: on the heap if a closure captures its
+# slot, on the stack otherwise.
+fn declare_local m value
+  f = m.frame
+  slot = length f.slots + 1
+  return declare_heap m f value if f.captured[slot] != none
+  stack = with_cell m.stack m.sp value
+  slots = push f.slots (on_stack m.sp)
+  grown_frame = frame f.captured f.depth f.parent slots
+  machine grown_frame m.globals m.heap m.next m.out (m.sp + 1) stack m.started
+
+fn declare_heap m f value
+  allocated = heap_alloc m value
+  slots = push f.slots (on_heap m.next)
+  grown_frame = frame f.captured f.depth f.parent slots
+  at_frame allocated grown_frame
+
+fn depth_of top
+  0
+
+fn depth_of f
+  f.depth
+
+fn ancestor f 0
+  f
+
+fn ancestor f depth
+  ancestor f.parent (depth - 1)
+
+fn read_slot m depth slot
+  ref = (ancestor m.frame depth).slots[slot]
+  deref m ref
+
+fn deref m (on_stack id)
+  cell_at m.stack id
+
+fn deref m (on_heap id)
+  cell_at m.heap id
+
+fn deref _ (fixed value)
+  value
+
+fn write_slot m depth slot value
+  ref = (ancestor m.frame depth).slots[slot]
+  write_ref m ref value
+
+fn write_ref m (on_stack id) value
+  stack_write m id value
+
+fn write_ref m (on_heap id) value
+  heap_write m id value
+
+# --- statements -------------------------------------------------------------
+pub fn run_list stmts m
+  run_from stmts 1 m
+
+fn run_from stmts i m
+  return normal m if length stmts < i
+  stmt = stmts[i]
+  run_next stmts i (exec stmt m)
+
+fn run_next stmts i (normal m)
+  run_from stmts (i + 1) m
+
+fn run_next _ _ (returning m value)
+  returning m value
+
+fn run_next _ _ e@(err _)
+  e
+
+pub fn exec (expression_stmt e) m
+  discarded (eval e m)
+
+pub fn exec (print_stmt e) m
+  printed_value (eval e m)
+
+pub fn exec (define initializer name place) m
+  defined_at name place (eval initializer m)
+
+pub fn exec (define_fn _ local code) m
+  declared = declare_local m nil
+  made = closure declared.frame declared.next code
+  slot = length declared.frame.slots
+  normal (write_slot (numbered declared) 0 slot made)
+
+pub fn exec (define_fn name global code) m
+  made = closure m.frame m.next code
+  normal (define_global (numbered m) name.lexeme made)
+
+pub fn exec (define_class methods name place superclass) m
+  parent_checked methods name place superclass (parent_of superclass m)
+
+pub fn exec (scoped captured stmts) m
+  entered = at_frame m (frame captured (depth_of m.frame) m.frame [])
+  block_left m.frame m.sp (run_list stmts entered)
+
+pub fn exec (if_stmt condition else_branch then_branch) m
+  chosen else_branch then_branch (eval condition m)
+
+pub fn exec (while_stmt body condition) m
+  spin body condition (normal m)
+
+pub fn exec (return_stmt _ nothing) m
+  returning m nil
+
+pub fn exec (return_stmt _ value) m
+  returned (eval value m)
+
+pub fn exec nothing m
+  normal m
+
+fn discarded (evaluated m _)
+  normal m
+
+fn discarded e@(err _)
+  e
+
+fn printed_value (evaluated m value)
+  normal (print_line m (stringify value))
+
+fn printed_value e@(err _)
+  e
+
+fn defined_at _ local (evaluated m value)
+  normal (declare_local m value)
+
+fn defined_at name global (evaluated m value)
+  normal (define_global m name.lexeme value)
+
+fn defined_at _ _ e@(err _)
+  e
+
+fn block_left f sp (normal m)
+  normal (restored m f sp)
+
+fn block_left f sp (returning m value)
+  returning (restored m f sp) value
+
+fn block_left _ _ e@(err _)
+  e
+
+fn chosen else_branch then_branch (evaluated m value)
+  if (truthy? value) (exec then_branch m) (exec else_branch m)
+
+fn chosen _ _ e@(err _)
+  e
+
+# A while loop is one self-recursive function, so that each pass is a call
+# the native engines can reclaim memory after. Written as two functions that
+# call each other, the loop kept every pass's garbage until the top-level
+# statement ended (FRICTION F18).
+fn spin body condition (normal m)
+  spin body condition (iteration body condition m)
+
+fn spin _ _ (loop_exit m)
+  normal m
+
+fn spin _ _ (returning m value)
+  returning m value
+
+fn spin _ _ e@(err _)
+  e
+
+fn iteration body condition m
+  tested body (eval condition m)
+
+fn tested body (evaluated m value)
+  if (truthy? value) (exec body m) (loop_exit m)
+
+fn tested _ e@(err _)
+  e
+
+fn returned (evaluated m value)
+  returning m value
+
+fn returned e@(err _)
+  e
+
+# --- classes ----------------------------------------------------------------
+fn parent_of nothing m
+  evaluated m nothing
+
+fn parent_of superclass m
+  eval superclass m
+
+fn parent_checked methods name place _ (evaluated m nothing)
+  class_built methods name place nothing m
+
+fn parent_checked methods name place _ (evaluated m (lox_class f i ms n s))
+  class_built methods name place (lox_class f i ms n s) m
+
+fn parent_checked _ _ _ superclass (evaluated m _)
+  runtime_error superclass.name "Superclass must be a class." m
+
+fn parent_checked _ _ _ _ e@(err _)
+  e
+
+# The name is declared before the class exists, so methods can refer to it,
+# and assigned once the class is built.
+fn class_built methods name place parent m
+  declared = declare_name m name place
+  inner = method_frame declared.frame parent
+  klass = lox_class inner declared.next methods name parent
+  normal (assign_name (numbered declared) name place klass)
+
+fn declare_name m _ local
+  declare_local m nil
+
+fn declare_name m name global
+  define_global m name.lexeme nil
+
+fn assign_name m _ local value
+  write_slot m 0 (length m.frame.slots) value
+
+fn assign_name m name global value
+  define_global m name.lexeme value
+
+fn method_frame f nothing
+  f
+
+fn method_frame f parent
+  frame {} 0 f [(fixed parent)]
+
+fn find_method nothing _
+  no_method
+
+fn find_method (lox_class f i methods n superclass) word
+  code = methods[word]
+  method_or_super (lox_class f i methods n superclass) word code
+
+fn method_or_super klass word none
+  find_method klass.superclass word
+
+fn method_or_super klass _ code
+  closure klass.frame 0 code
+
+fn bound_to (closure f _ code) object id
+  closure (frame {} 0 f [(fixed object)]) id code
+
+# A bound method the program can see, and so compare: it gets a number.
+fn bind_method method object m
+  evaluated (numbered m) (bound_to method object m.next)
+
+# --- expressions ------------------------------------------------------------
+pub fn eval (literal value) m
+  evaluated m value
+
+pub fn eval (local_get depth _ slot) m
+  evaluated m (read_slot m depth slot)
+
+pub fn eval (global_get name) m
+  global_value m name m.globals[name.lexeme]
+
+pub fn eval (local_set depth _ slot value) m
+  local_assigned depth slot (eval value m)
+
+pub fn eval (global_set name value) m
+  global_assigned name (eval value m)
+
+pub fn eval (unary op right) m
+  eval_unary op (eval right m)
+
+pub fn eval (binary left op right) m
+  eval_binary op right (eval left m)
+
+pub fn eval (logical left op right) m
+  eval_logical op right (eval left m)
+
+pub fn eval (call_expr args callee paren) m
+  eval_callee args paren (eval callee m)
+
+pub fn eval (get_expr name object) m
+  property_of name (eval object m)
+
+pub fn eval (set_expr name object value) m
+  set_target name value (eval object m)
+
+pub fn eval (this_ref depth _) m
+  evaluated m (read_slot m depth 1)
+
+pub fn eval (super_ref depth _ method) m
+  parent = read_slot m depth 1
+  object = read_slot m (depth - 1) 1
+  super_bound method object (find_method parent method.lexeme) m
+
+fn global_value m name none
+  runtime_error name "Undefined variable '{name.lexeme}'." m
+
+fn global_value m _ id
+  evaluated m (cell_at m.heap id)
+
+fn local_assigned depth slot (evaluated m value)
+  evaluated (write_slot m depth slot value) value
+
+fn local_assigned _ _ e@(err _)
+  e
+
+fn global_assigned name (evaluated m value)
+  global_store name value m m.globals[name.lexeme]
+
+fn global_assigned _ e@(err _)
+  e
+
+fn global_store name _ m none
+  runtime_error name "Undefined variable '{name.lexeme}'." m
+
+fn global_store _ value m id
+  evaluated (heap_write m id value) value
+
+fn eval_unary op (evaluated m value)
+  unary_on op.kind op value m
+
+fn eval_unary _ e@(err _)
+  e
+
+fn unary_on "-" _ value:float64 m
+  evaluated m (value * minus_one)
+
+fn unary_on "-" op _ m
+  runtime_error op "Operand must be a number." m
+
+fn unary_on _ _ value m
+  evaluated m (not truthy? value)
+
+fn eval_binary op right (evaluated m left)
+  binary_right left op (eval right m)
+
+fn eval_binary _ _ e@(err _)
+  e
+
+fn binary_right left op (evaluated m right)
+  binary_on op.kind op left right m
+
+fn binary_right _ _ e@(err _)
+  e
+
+# Dispatch on the operator first and on the operands second. One group
+# mixing literal operators with typed operands tied without a word from the
+# checker, and the typed arm won (bugs/dispatch_tie_unreported...).
+fn binary_on "==" _ left right m
+  evaluated m (equal? left right)
+
+fn binary_on "!=" _ left right m
+  evaluated m (not equal? left right)
+
+fn binary_on "+" op left right m
+  plus op left right m
+
+fn binary_on kind op left right m
+  numeric kind op left right m
+
+fn plus _ left:float64 right:float64 m
+  evaluated m (left + right)
+
+fn plus _ left:string right:string m
+  evaluated m "{left}{right}"
+
+fn plus op _ _ m
+  runtime_error op "Operands must be two numbers or two strings." m
+
+fn numeric kind _ left:float64 right:float64 m
+  evaluated m (arithmetic kind left right)
+
+fn numeric _ op _ _ m
+  runtime_error op "Operands must be numbers." m
+
+fn arithmetic "-" left right
+  left - right
+
+fn arithmetic "*" left right
+  left * right
+
+fn arithmetic "/" left right
+  divide left right
+
+fn arithmetic ">" left right
+  left > right
+
+fn arithmetic ">=" left right
+  left >= right
+
+fn arithmetic "<" left right
+  left < right
+
+fn arithmetic _ left right
+  left <= right
+
+fn eval_logical op right (evaluated m left)
+  short_circuit op.kind left right m
+
+fn eval_logical _ _ e@(err _)
+  e
+
+fn short_circuit "or" left right m
+  if (truthy? left) (evaluated m left) (eval right m)
+
+fn short_circuit _ left right m
+  if (truthy? left) (eval right m) (evaluated m left)
+
+# --- calls ------------------------------------------------------------------
+fn eval_callee args paren (evaluated m callee)
+  call_with callee paren (list/fold args (evaluated m []) eval_arg)
+
+fn eval_callee _ _ e@(err _)
+  e
+
+fn eval_arg (evaluated m collected) arg
+  arg_pushed collected (eval arg m)
+
+fn arg_pushed collected (evaluated m value)
+  evaluated m (push collected value)
+
+fn arg_pushed _ e@(err _)
+  e
+
+fn call_with callee paren (evaluated m args)
+  apply callee args paren m
+
+fn call_with _ _ e@(err _)
+  e
+
+fn apply (closure f i code) args paren m
+  arity = length code.params
+  return arity_fault paren arity args m if arity != length args
+  invoke (closure f i code) args paren m
+
+fn apply (lox_class f i methods n s) args paren m
+  klass = lox_class f i methods n s
+  init = find_method klass "init"
+  expected = arity_of init
+  return arity_fault paren expected args m if expected != length args
+  object = instance m.next klass
+  made = heap_alloc m {}
+  constructed object (initialize init object args paren made)
+
+fn apply native_clock args paren m
+  return arity_fault paren 0 args m if length args != 0
+  evaluated m m.started
+
+fn apply _ _ paren m
+  runtime_error paren "Can only call functions and classes." m
+
+fn arity_fault paren expected args m
+  runtime_error paren "Expected {expected} arguments but got {length args}." m
+
+fn arity_of no_method
+  0
+
+fn arity_of (closure _ _ code)
+  length code.params
+
+fn initialize no_method _ _ _ m
+  evaluated m nil
+
+fn initialize init object args paren m
+  invoke (bound_to init object 0) args paren m
+
+fn constructed object (evaluated m _)
+  evaluated m object
+
+fn constructed _ e@(err _)
+  e
+
+fn invoke (closure f _ code) args paren m
+  calls = depth_of m.frame + 1
+  return runtime_error paren "Stack overflow." m if max_calls < calls
+  entered = at_frame m (frame code.captured calls f [])
+  bound = list/fold args entered declare_local
+  call_done f code m.frame m.sp (run_list code.body bound)
+
+fn call_done f code caller sp (normal m)
+  result = if code.initializer (this_of f) nil
+  evaluated (restored m caller sp) result
+
+fn call_done f code caller sp (returning m value)
+  result = if code.initializer (this_of f) value
+  evaluated (restored m caller sp) result
+
+fn call_done _ _ _ _ e@(err _)
+  e
+
+fn this_of f
+  held = f.slots[1]
+  fixed_value held
+
+fn fixed_value (fixed value)
+  value
+
+# --- properties -------------------------------------------------------------
+fn property_of name (evaluated m (instance id klass))
+  fields = cell_at m.heap id
+  cell = fields[name.lexeme]
+  property name (instance id klass) cell m
+
+fn property_of name (evaluated m _)
+  runtime_error name "Only instances have properties." m
+
+fn property_of _ e@(err _)
+  e
+
+fn property name object none m
+  method_property name object (find_method object.klass name.lexeme) m
+
+fn property _ _ cell m
+  evaluated m (cell_at m.heap cell)
+
+fn method_property name _ no_method m
+  runtime_error name "Undefined property '{name.lexeme}'." m
+
+fn method_property _ object method m
+  bind_method method object m
+
+fn set_target name value (evaluated m (instance id klass))
+  set_done name (instance id klass) (eval value m)
+
+fn set_target name _ (evaluated m _)
+  runtime_error name "Only instances have fields." m
+
+fn set_target _ _ e@(err _)
+  e
+
+fn set_done name object (evaluated m value)
+  evaluated (field_write m object name.lexeme value) value
+
+fn set_done _ _ e@(err _)
+  e
+
+fn field_write m object word value
+  fields = cell_at m.heap object.id
+  existing = fields[word]
+  field_store m object word value existing
+
+fn field_store m object word value none
+  fields = cell_at m.heap object.id
+  added = heap_alloc m value
+  heap_write added object.id (put fields word m.next)
+
+fn field_store m _ _ value cell
+  heap_write m cell value
+
+fn super_bound method _ no_method m
+  runtime_error method "Undefined property '{method.lexeme}'." m
+
+fn super_bound _ object method m
+  bind_method method object m

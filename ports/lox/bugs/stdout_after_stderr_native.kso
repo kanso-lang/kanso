@@ -1,0 +1,18 @@
+# The bind orders the two writes, but on the native engines stdout reaches a
+# shared pipe after stderr, because stdout is still buffered when the program
+# exits.
+#
+# Run: kanso play stdout_after_stderr_native.kso 2>&1 | cat
+#
+# Should (and does on --interp):
+#   first, on stdout
+#   second, on stderr
+# Does (kanso play, kanso build, kanso build --release):
+#   second, on stderr
+#   first, on stdout
+import "std/io"
+import "std/os"
+
+io/write "first, on stdout\n"
+  .> (_ -> io/write_err "second, on stderr\n")
+  .> (_ -> os/exit 1)

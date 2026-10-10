@@ -1,0 +1,261 @@
+import "std/text"
+
+# A token's kind is its spelling for punctuation and keywords ("(", "!=",
+# "class"), and one of "identifier", "number", "string" or "eof" otherwise.
+# The literal is the parsed value for numbers and strings and the lexeme for
+# everything else.
+type token
+  kind
+  lexeme
+  line
+  literal
+
+# What scanning produced: every token through "eof", and the scan errors in
+# the order they were found. jlox reports a bad character and keeps going, so
+# a scan never stops early.
+type scanned
+  errors
+  tokens
+
+# The scanner's position. `cs` holds the source one character per element, so
+# a read past the end answers none and the dispatch below treats it as the end
+# of input. Tokens collect in a `chain` (chain.kso).
+type lexer
+  cs
+  errors
+  line
+  p
+  source
+  tokens
+
+pub fn scan source
+  cs = text/chars source
+  lex (lexer cs [] 1 1 source chain_start)
+
+fn lex c
+  lex_at c c.cs[c.p]
+
+fn lex_at c none
+  eof = token "eof" "" c.line "eof"
+  scanned c.errors (chain_list (chain c.tokens eof))
+
+fn lex_at c "("
+  single c "("
+
+fn lex_at c ")"
+  single c ")"
+
+fn lex_at c "\{"
+  single c "\{"
+
+fn lex_at c "}"
+  single c "}"
+
+fn lex_at c ","
+  single c ","
+
+fn lex_at c "."
+  single c "."
+
+fn lex_at c "-"
+  single c "-"
+
+fn lex_at c "+"
+  single c "+"
+
+fn lex_at c ";"
+  single c ";"
+
+fn lex_at c "*"
+  single c "*"
+
+fn lex_at c "!"
+  maybe_equal c "!"
+
+fn lex_at c "="
+  maybe_equal c "="
+
+fn lex_at c "<"
+  maybe_equal c "<"
+
+fn lex_at c ">"
+  maybe_equal c ">"
+
+fn lex_at c "/"
+  slash c c.cs[c.p + 1]
+
+fn lex_at c " "
+  lex (advance c 1)
+
+fn lex_at c "\r"
+  lex (advance c 1)
+
+fn lex_at c "\t"
+  lex (advance c 1)
+
+fn lex_at c "\n"
+  lex (next_line c (c.p + 1))
+
+fn lex_at c "\""
+  string_from c (c.p + 1)
+
+fn lex_at c ch
+  return number_from c (c.p + 1) if digit? ch
+  return word_from c (c.p + 1) if alpha? ch
+  lex (advance (fail c c.line "Unexpected character.") 1)
+
+fn advance c n
+  lexer c.cs c.errors c.line (c.p + n) c.source c.tokens
+
+fn alpha? ch
+  "a" <= ch and ch <= "z" or "A" <= ch and ch <= "Z" or ch == "_"
+
+fn alnum? none
+  false
+
+fn alnum? ch
+  alpha? ch or digit? ch
+
+fn comment c none
+  lex c
+
+fn comment c "\n"
+  lex c
+
+fn comment c _
+  skipped = advance c 1
+  comment skipped skipped.cs[skipped.p]
+
+fn digit? none
+  false
+
+fn digit? ch
+  "0" <= ch and ch <= "9"
+
+fn emit c kind lexeme value width
+  tok = token kind lexeme c.line value
+  more = chain c.tokens tok
+  lexer c.cs c.errors c.line (c.p + width) c.source more
+
+fn fail c line message
+  report = "[line {line}] Error: {message}"
+  lexer c.cs (push c.errors report) c.line c.p c.source c.tokens
+
+fn fraction c q
+  return q if c.cs[q] != "." or not digit? c.cs[q + 1]
+  integer_end c (q + 1)
+
+fn integer_end c q
+  if (digit? c.cs[q]) (integer_end c (q + 1)) q
+
+fn maybe_equal c ch
+  if (c.cs[c.p + 1] == "=") (two c "{ch}=") (single c ch)
+
+fn next_line c p
+  lexer c.cs c.errors (c.line + 1) p c.source c.tokens
+
+fn number_from c q
+  stop = fraction c (integer_end c q)
+  lexeme = source_text c c.p (stop - 1)
+  lex (emit c "number" lexeme (text/to_float lexeme) (stop - c.p))
+
+fn single c ch
+  lex (emit c ch ch ch 1)
+
+fn slash c "/"
+  comment c "/"
+
+fn slash c none
+  single c "/"
+
+fn slash c _
+  single c "/"
+
+# Strings may span lines; the token carries the line it ends on, as jlox's
+# does, because the line counter has moved by the time the token is added.
+fn string_at c q none
+  stopped = lexer c.cs c.errors c.line q c.source c.tokens
+  lex (fail stopped c.line "Unterminated string.")
+
+fn string_at c q "\""
+  body = source_text c (c.p + 1) (q - 1)
+  lexeme = source_text c c.p q
+  lex (emit c "string" lexeme body (q + 1 - c.p))
+
+fn string_at c q "\n"
+  moved = lexer c.cs c.errors (c.line + 1) c.p c.source c.tokens
+  string_from moved (q + 1)
+
+fn string_at c q _
+  string_from c (q + 1)
+
+fn string_from c q
+  string_at c q c.cs[q]
+
+# Characters `from` to `to` of the source. Slicing the string itself costs
+# time in proportion to the whole source on the interpreter, which made the
+# scanner quadratic there (FRICTION F31); slicing the character list does not.
+fn source_text c from to
+  text/join (text/slice c.cs from to) ""
+
+fn two c op
+  lex (emit c op op op 2)
+
+fn word_end c q
+  if (alnum? c.cs[q]) (word_end c (q + 1)) q
+
+fn word_from c q
+  stop = word_end c q
+  lexeme = source_text c c.p (stop - 1)
+  lex (emit c (word_kind lexeme) lexeme lexeme (stop - c.p))
+
+fn word_kind "and"
+  "and"
+
+fn word_kind "class"
+  "class"
+
+fn word_kind "else"
+  "else"
+
+fn word_kind "false"
+  "false"
+
+fn word_kind "for"
+  "for"
+
+fn word_kind "fun"
+  "fun"
+
+fn word_kind "if"
+  "if"
+
+fn word_kind "nil"
+  "nil"
+
+fn word_kind "or"
+  "or"
+
+fn word_kind "print"
+  "print"
+
+fn word_kind "return"
+  "return"
+
+fn word_kind "super"
+  "super"
+
+fn word_kind "this"
+  "this"
+
+fn word_kind "true"
+  "true"
+
+fn word_kind "var"
+  "var"
+
+fn word_kind "while"
+  "while"
+
+fn word_kind _
+  "identifier"

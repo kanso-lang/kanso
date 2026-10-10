@@ -1,0 +1,5 @@
+import "std/list"
+
+test_skips_two = (step_over (start 0)).n == 2
+
+test_list_still_works = list/sum [1 2] == 3

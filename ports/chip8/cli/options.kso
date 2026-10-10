@@ -1,0 +1,79 @@
+import "../isa"
+import "std/text"
+
+# The command line, parsed. `files` holds the arguments that are not flags,
+# in order; the rest are the flags' values with their defaults.
+pub type options
+  cycles
+  files
+  list
+  per_frame
+  quirks
+  script
+  seed
+  trace
+
+pub type usage_error
+  reason
+
+defaults = options 1000 [] false 10 "vip" "" 1 false
+
+pub fn parsed argv
+  flags argv 1 defaults
+
+fn flags argv at opts
+  return opts if length argv < at
+  word = or_blank argv[at]
+  value = or_blank argv[at + 1]
+  flag word value argv at opts
+
+# Every flag rebuilds the whole record, because kanso has no record update:
+# changing one field means naming all eight.
+fn flag "--cycles" value argv at opts
+  { files list per_frame quirks script seed trace } = opts
+  n = isa/literal value
+  return usage_error "--cycles wants a number" if n == none
+  updated = options n files list per_frame quirks script seed trace
+  flags argv (at + 2) updated
+
+fn flag "--keys" value argv at opts
+  { cycles files list per_frame quirks seed trace } = opts
+  return usage_error "--keys wants a script file" if value == ""
+  updated = options cycles files list per_frame quirks value seed trace
+  flags argv (at + 2) updated
+
+fn flag "--list" _ argv at opts
+  { cycles files per_frame quirks script seed trace } = opts
+  updated = options cycles files true per_frame quirks script seed trace
+  flags argv (at + 1) updated
+
+fn flag "--per-frame" value argv at opts
+  { cycles files list quirks script seed trace } = opts
+  n = isa/literal value
+  return usage_error "--per-frame wants a number above 0" if n == none or n < 1
+  updated = options cycles files list n quirks script seed trace
+  flags argv (at + 2) updated
+
+fn flag "--quirks" value argv at opts
+  { cycles files list per_frame script seed trace } = opts
+  updated = options cycles files list per_frame value script seed trace
+  flags argv (at + 2) updated
+
+fn flag "--seed" value argv at opts
+  { cycles files list per_frame quirks script trace } = opts
+  n = isa/literal value
+  return usage_error "--seed wants a number" if n == none
+  updated = options cycles files list per_frame quirks script n trace
+  flags argv (at + 2) updated
+
+fn flag "--trace" _ argv at opts
+  { cycles files list per_frame quirks script seed } = opts
+  updated = options cycles files list per_frame quirks script seed true
+  flags argv (at + 1) updated
+
+fn flag word _ argv at opts
+  return usage_error "unknown flag `{word}`" if text/slice word 1 2 == "--"
+  options cycles files list per_frame quirks script seed trace = opts
+  more = push files word
+  updated = options cycles more list per_frame quirks script seed trace
+  flags argv (at + 1) updated

@@ -1,0 +1,15 @@
+# list/map answers a lazy sequence and text/join wants a list. `kanso check`
+# accepts this file, and the run fails with
+#   error[runtime]: join takes a list of strings and a separator
+# and no file, line or column, on the interpreter and natively. Expected:
+# either the check refuses the call with a location, or join accepts the
+# sequence and prints "a!-b!".
+#
+# Run: kanso play bugs/join_lazy_no_location.kso
+import "std/list"
+import "std/text"
+
+fn loud words
+  text/join (list/map words (w -> "{w}!")) "-"
+
+print (loud ["a" "b"])

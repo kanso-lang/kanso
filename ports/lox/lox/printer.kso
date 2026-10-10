@@ -1,0 +1,95 @@
+import "std/list"
+import "std/text"
+
+# Chapter 5's AstPrinter: a syntax tree as a parenthesized prefix string. The
+# tests use it to say what the parser built.
+pub fn show (assign name value)
+  "(= {name.lexeme} {show value})"
+
+pub fn show (binary left op right)
+  "({op.lexeme} {show left} {show right})"
+
+pub fn show (call_expr args callee _)
+  "(call {show callee}{spaced args})"
+
+pub fn show (get_expr name object)
+  "(. {show object} {name.lexeme})"
+
+pub fn show (grouping inner)
+  "(group {show inner})"
+
+pub fn show (literal value)
+  show_literal value
+
+pub fn show (logical left op right)
+  "({op.lexeme} {show left} {show right})"
+
+pub fn show (set_expr name object value)
+  "(= (. {show object} {name.lexeme}) {show value})"
+
+pub fn show (super_expr _ method)
+  "(super {method.lexeme})"
+
+pub fn show (this_expr _)
+  "this"
+
+pub fn show (unary op right)
+  "({op.lexeme} {show right})"
+
+pub fn show (variable name)
+  name.lexeme
+
+pub fn show (block statements)
+  "(block{spaced statements})"
+
+pub fn show (class_decl methods name superclass)
+  "(class {name.lexeme}{show_super superclass}{spaced methods})"
+
+pub fn show (expression_stmt inner)
+  "(; {show inner})"
+
+pub fn show (function_decl body name params)
+  names = list/to_list (list/map params (p -> p.lexeme))
+  "(fun {name.lexeme} ({text/join names " "}){spaced body})"
+
+pub fn show (if_stmt condition else_branch then_branch)
+  "(if {show condition} {show then_branch}{show_else else_branch})"
+
+pub fn show (print_stmt inner)
+  "(print {show inner})"
+
+pub fn show (return_stmt _ nothing)
+  "(return)"
+
+pub fn show (return_stmt _ value)
+  "(return {show value})"
+
+pub fn show (var_stmt initializer name)
+  "(var {name.lexeme} {show initializer})"
+
+pub fn show (while_stmt body condition)
+  "(while {show condition} {show body})"
+
+fn show_else nothing
+  ""
+
+fn show_else branch
+  " {show branch}"
+
+fn show_literal nil
+  "nil"
+
+fn show_literal value:string
+  "\"{value}\""
+
+fn show_literal value
+  "{value}"
+
+fn show_super nothing
+  ""
+
+fn show_super (variable name)
+  " < {name.lexeme}"
+
+fn spaced nodes
+  text/join (list/to_list (list/map nodes (n -> " {show n}"))) ""
