@@ -24829,6 +24829,80 @@ wherever it counted: `run_carry_dedup` from 71, `encode_carry_dedup`,
 copy the walk found it had already made; constants are no longer copied, so
 there is nothing to find twice.
 
+## 2026-10-10 — a node an inner pop repairs stays on the outer loop's list
+
+The lox port's `tests/functions.lox` crashed natively once kanso#1824 let its
+evaluator loops carry. The cause is older than that branch. A record built
+before the evaluator's loop held a string in the outer loop's tenure block.
+An inner loop returned a value that reached the record, and its pop copied
+the result out of its carry pair. The pop's walk counts nothing outside the
+arena as a survivor, so it copied the string to the arena's frontier and
+repaired the record in place to point at the copy. The frontier was in the
+evaluator's lap. At the evaluator's next stage the walk reached the record
+through an older node whose own fields all survived, stopped there, and
+rewound the lap with the copy in it. The record then pointed at freed memory.
+
+Main's compiler crashes on the reduction too, so the bug did not need
+kanso#1824. `tests/golden/mem/a_node_repaired_by_an_inner_pop_outlives_the_outer_stage`
+is three nested loops and a box built before the middle one. Built against
+main's runtime it segfaults, and its stdout golden fails.
+
+The pop now keeps the nodes it repaired that lie below the enclosing mark, on
+a list beside `k_repaired`. Each stage walks the entries below its own mark as
+extra roots before it rewinds, sized with the carried slots, so a node that
+points above the mark is repaired into the carry and settled back under the
+raised mark like any other. That makes the node safe for the depth that
+staged and not for the one outside it, so an entry below the outer mark stays
+on the list, and so does a node the stage itself repaired below the outer
+mark. A rewind frees what lies above its mark, and the list must not keep an
+address that has been handed out again. While the list holds anything, a bit
+in `k_buf_dirty` sends every rewind to the slow path, and the slow path drops
+the entries above its mark, and a rewind to the outermost mark clears the list,
+since no stage outside it will revisit anything. The fast path reads nothing
+new.
+
+I first tried narrowing the pop's walk instead: an enclosing depth's tenure
+outlives the pop, so the pop could leave a pointer into it alone. That fixed
+`functions.lox` and broke `binary_trees.lox`. The lox interpreter writes into
+tenured environment maps in place, so an enclosing tenure node can hold a
+pointer into the inner carry pair, and the copy-out has to see it.
+
+With the fix, main's compiler passes all 28 lox fixtures on the interpreter,
+a dev build and a release build. On a tree carrying kanso#1827 and kanso#1824
+as well, the same 28 pass under the lap rule and with every edge staging. The
+twelve cost veins and the mem tier are unchanged apart from the new fixture's
+own file: no program in the corpus repairs a node below an enclosing mark.
+
+The list costs something when it is empty. `k_beat_iter_carry` now asks its
+depth for an outer mark and walks the nodes it repaired against it, and the
+pop does the same, at about fourteen instructions a call whether anything is
+pushed or not. deepbench stages 52,310 times and pops 52,003 times, so it pays
+the most, 0.40%. The runtime's text is 2,208 bytes larger in every binary,
+which the `text` total and both codegen rows carry. CI's rows, old to new:
+
+    work_deepbench               365,792,692 -> 367,269,411
+    work_basket                   32,375,114 ->  32,505,156
+    work_runbench              1,131,250,979 -> 1,131,470,937
+    work_pendbench               190,390,436 -> 190,396,306
+    work_livebench             1,472,859,260 -> 1,472,861,300
+    work_jsonbench               860,548,891 -> 860,549,545
+    work_encodebench           2,383,861,305 -> 2,383,861,896
+    work_digestbench               5,560,569 ->   5,561,143
+    work_indexbench                2,456,650 ->   2,457,185
+    work_scanbench                   268,468 ->     268,793
+    work_widebench                28,094,541 ->  28,094,810
+    work_readbench                 4,577,050 ->   4,577,104
+    work_oneshot                  13,176,487 ->  13,176,528
+    work_escapebench              39,045,280 ->  39,045,300
+    text                           4,612,254 ->   4,643,166
+    codegen_instructions_dev     118,896,762 -> 118,918,430
+    codegen_instructions_release 453,707,138 -> 453,994,118
+    browser_run_instructions      33,493,063 ->  33,507,353
+
+Welfare fell by less than a hundredth, and the floor moves down with it under
+the rule for a change that makes the language do what it says: the program
+crashed.
+
 ## 2026-10-10 — a `tie` node holds its references in a list
 
 Built the gavel "a field may hold a list of `tie` references". The maker check
