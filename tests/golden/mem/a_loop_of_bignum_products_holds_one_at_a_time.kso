@@ -1,0 +1,12 @@
+# A loop whose only allocation is the bignum its accumulator becomes. It does
+# no other allocation, so for a while it took no beat, and every power of
+# three it made stayed in the arena until the loop returned: twenty thousand
+# of them, about forty megabytes, where one at a time is enough. The arena's
+# peak below is the point of this fixture; it must not grow with the count.
+fn pw acc 0
+  acc
+
+fn pw acc n
+  pw (acc * 3) (n - 1)
+
+pub play = print "{pw 1 20000 % 1000000007}"
