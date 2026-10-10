@@ -50,7 +50,7 @@ went to the log rather than here.
 
 ## Blocking — a fixture, gate, or merge is waiting
 
-### May three port fixes lower the welfare floor?
+### May four port fixes lower the welfare floor?
 
 **Cited:** CLAUDE.md's "The welfare number only goes up", whose 2026-09-13
 exception lets a change that builds a ruled part of the language lower the
@@ -60,7 +60,7 @@ engines finish programs the interpreter already finishes: none. The nearest
 case is kanso#1830, which lowered the floor under the exception because the
 program crashed.
 
-**The question.** Three pull requests fix native-only failures that port
+**The question.** Four pull requests fix native-only failures that port
 journals reported. Each is green apart from the floor, and each costs welfare
 through compile rows, not through any runtime vein.
 
@@ -71,24 +71,30 @@ through compile rows, not through any runtime vein.
 - **kanso#1824, a loop entered from a tail cycle gives its garbage back.** The
   lox port's 50,000-pass loop peaked at 3.0 GB natively and now peaks at
   77 MB (lox F18). Welfare 90.25811 to 90.25621, down 0.00190.
+- **kanso#1820, a map's view takes keys out of order without moving itself.**
+  `list/tally` over 40,000 distinct strings falls from 4.95 s to 0.21 s, and
+  xsv's cardinality count and ugit's diff hit the same cliff. With main merged
+  in, welfare 90.25153 to 90.25054, down 0.00099. That is inside the 0.001
+  band the gate allows for disagreement between hosts, so CI passes it, but
+  every term here is deterministic and the fall is real.
 - **kanso#1825, a fold that joins onto its accumulator writes in place.**
   The mustache port held 2.77 GB rendering 20,000 pieces (mustache F14).
   Welfare 90.25811 to 90.25519, down 0.00292.
 
-None of the three changes what a program prints. The figures are each
-branch's own score against its own floor, and the three falls add to just
-under a hundredth of a point.
+None of the four changes what a program prints. The figures are each
+branch's own score against its own floor, and the four falls add to about a
+hundredth of a point.
 
-1. **Lower the floor for all three**, and widen the exception to cover any
+1. **Lower the floor for all four**, and widen the exception to cover any
    change that lets a native engine finish a program the interpreter
    finishes, so the next one does not wait.
-2. **Lower it for these three only.**
+2. **Lower it for these four only.**
 3. **Hold them** until each pays for its compile cost elsewhere.
 
-**Recommendation: 1.** Two of the three are programs that run out of memory
+**Recommendation: 1.** Two of the four are programs that run out of memory
 natively and finish on the interpreter, which is a divergence between engines
-of the kind the differential law forbids. The third turns a 27-second run into
-a 10-millisecond one. Each fall is a few thousandths of a point.
+of the kind the differential law forbids. The other two turn runs of 27 s and
+5 s into 10 ms and 0.2 s. Each fall is a few thousandths of a point.
 
 ## Open, not blocking
 
