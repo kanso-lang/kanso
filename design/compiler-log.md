@@ -25527,9 +25527,9 @@ passes still had not finished after 120 seconds.
 
 CI measured the rest against main, and most of it costs. Every benchmark's
 machine code grows by between 9,200 and 9,472 bytes, the runtime's share of
-the lap carry; runbench's is 611,689 bytes and the fourteen together 4,781,694.
+the lap carry; runbench's is 611,769 bytes and the fourteen together 4,781,774.
 work_deepbench does the most extra work, landing on 393,576,371 against
-main's 367,269,411, 7.2% more. runbench, with the four phases kanso#1836 added, does 1,247,058,486 against main's 1,245,043,324, 0.16% more; encodebench
+main's 367,269,411, 7.2% more. runbench, with the four phases kanso#1836 added, does 1,247,098,999 against main's 1,245,043,324, 0.17% more; encodebench
 2,398,358,806, 0.19% more; livebench 1,473,968,154; jsonbench 860,559,756;
 oneshot 13,210,643; work_widebench 28,175,109; digestbench 5,599,654; escapebench
 39,045,879; indexbench 2,459,068; scanbench 270,069; readbench 4,577,565.
