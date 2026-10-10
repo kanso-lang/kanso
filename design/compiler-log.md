@@ -24904,20 +24904,22 @@ a build of main's runtime, runbench is 207,423 instructions above main and
 livebench 903,510, down from 945,000 and 4,208,000. wasm32 keeps the low
 bit, because a 32-bit address can have its top bit set.
 
-CI's rows for this head, against main after the bignum loop rewind: work_runbench
-rises from 1,129,588,698 to 1,129,796,121 and work_livebench from 1,473,485,659
-to 1,474,389,169, the remains of the check described above. work_basket rises
-from 32,362,738 to 32,913,977, 1.7%, work_encodebench from 2,384,337,843 to
-2,384,348,674, work_oneshot from 13,027,085 to 13,041,113 and work_pendbench
-from 190,397,733 to 190,398,031. Every binary's text is 4,800 bytes larger,
-which sums to text 4,586,926 to 4,654,126. browser_run_instructions goes from
-33,510,708 to 33,519,681 and codegen_instructions_dev from 118,855,381 to
-118,877,223, both carrying the larger runtime. basket builds maps and reads
+CI's rows for this head with main's constant storage merged in, against
+main: work_runbench rises from 1,131,250,979 to 1,131,457,856 and
+work_livebench from 1,472,859,260 to 1,473,762,140, the remains of the check
+described above. work_basket rises from 32,375,114 to 32,926,353, 1.7%,
+work_encodebench to 2,383,871,632, work_oneshot to 13,189,990 and
+work_pendbench to 190,390,734. Every binary's text is about 4,800 bytes
+larger, which sums to text 4,612,254 to 4,679,230. browser_run_instructions
+goes from 33,493,063 to 33,502,036, codegen_instructions_dev from 118,896,762
+to 118,916,117 and codegen_instructions_release from 453,707,138 to
+454,001,319, all carrying the larger runtime. basket builds maps and reads
 them between puts, so it is the benchmark that meets the side; which of its
 maps grows one is not isolated here. The mem rows are the ones named above:
 fused_tally_allocs 65 to 66 and fused_tally_alloc_bytes 41,536 to 42,064;
 growing_map_allocs 1,613 to 1,615, growing_map_alloc_bytes 181,952 to 189,312
 and growing_map_held_peak_bytes 49,120 to 55,408. Welfare falls from
-90.25887870 to 90.25804143, and the trade, a benchmark corpus that never meets
-a mid-map key against ports that spend 95% of their time on one, has gone to
-Clay.
+90.25153 to 90.25054. The gate passes that, because it allows 0.001 for
+disagreement between hosts, but every term here is deterministic, so the fall
+is real, and it has gone to Clay with three other port fixes under "May four
+port fixes lower the welfare floor?".
