@@ -158,7 +158,11 @@ minted a day later does not satisfy.
 all but one entry. All six came off the same day: the float order, the
 one-engine fixture kind, the box through a parameter and escapebench's size,
 built, and the escape scan and the fixed heap start, each measured and declined.
-Three rows stand as of 2026-10-06. Each standing one has its own heading
+Two rows stand as of 2026-10-10. The `tie` row and the browser row came
+off that day, both built: `list/tie` on every engine with its ten-thousand-ring
+memory fixture (log, 2026-10-05), and the browser as a third side of the
+objective (log, 2026-10-06). The 2026-10-07 integer ruling was built the day it
+was recorded and never had a row. Each standing one has its own heading
 below, dated 2026-09-30, and a log entry of the same name. The seventh ruling
 of that sitting, the box constructor's spelling, has no row because `effect`
 was already built and pinned.
@@ -237,37 +241,14 @@ name the two welfares at all. This paragraph is the first thing cloud reads
 before choosing work, so a row miscounted here is a row chosen or skipped
 wrongly.
 
-### Data-sized cycles are tied with `list/tie` (2026-10-04)
+### A `tie` node may hold its references in a list (2026-10-10)
 
-The live log's "gavel: a data-sized cycle is tied with `list/tie`, and
-`list/tie!` insists". It replaces the row for the 2026-08-29 cohort gavel's
-data-sized cycle, which stood here from 2026-09-18 waiting on Clay's answer to
-the spelling and is answered by this ruling; the alias and the field of a born
-node that the cohort gavel also named stay built, as that row said.
-
-    nodes = list/tie! (keys links) (id ref -> node id (ref links[id]))
-
-The maker gets a key and `ref`, answers a complete node, and may store a
-reference only in a constructor's field; a read through one is a compile
-error. `tie` resolves the references when every key is made. A broken link is
-a marker record from `tie` and a failure inside the box from `tie!`, and with
-literal data it is refused at check. One call's nodes are one birth cohort.
-
-Owes, from the ruling: both forms on every engine with goldens for a ring, a
-graph from a map of edges, each form's broken-link answer and the compile-time
-refusal; error goldens for a read through a reference in the maker and in a
-helper it calls; and a fixture that ties and drops ten thousand graphs with a
-flat arena peak.
-
-### Every environment is weighed, and the browser is missing (2026-10-06)
-
-The live log's "gavel: welfare weighs every environment kanso runs in, and none
-at zero". Nothing in the objective measures the browser engine: neither
-compiling in the playground tab nor running the module it makes. Owes: browser
-terms for CPU and memory, counted deterministically, in `scripts/welfare` and
-`bench/objective_sources.txt`, with goldens and a CI gate; weights and their
-placement proposed by the implementer and recorded with reasons; the floor
-re-ratcheted in the same change.
+The live log's "gavel: a field may hold a list of `tie` references". A list or
+map literal of references written as a constructor's argument is storage and is
+admitted; indexing, measuring, walking or passing that list during making is
+still refused. Owes: the check widened, an error golden for a read of such a
+list in the maker, the graph fixture holding each node's neighbours as a list,
+and the teaching example moved to the list form.
 
 ### A welfare counter reads three parts per billion (2026-09-15)
 
