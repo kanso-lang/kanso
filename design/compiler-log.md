@@ -25193,3 +25193,21 @@ test and in the chain's. A stage clears the record, and so does the push that
 opens a depth. A pop that finds it set walks the whole result, as it already
 did when a write had reached the carry. A pop after a loop whose last lap
 staged is unchanged.
+
+mal still crashed after that, in a map lookup reading a key whose length word
+held a pointer. A hardware watchpoint on the key showed it written twice by
+stage copies into a carry buffer and then overwritten by a later stage that
+reused the buffer. The deep walk at the pop had found a map whose header and
+pairs lay in the arena and whose keys lay in the pair. It copied the keys out
+and rewrote the pairs in place. The map's sorted view is a second, malloc'd
+copy of the pairs that the walk never reaches, so it went on naming the old
+keys, and the next lookup searched it. The walk now drops the view whenever
+it moves a key or a value in a map it repairs in place, and the next read
+sorts again.
+
+`tests/golden/micro/a_sorted_view_follows_the_keys_a_pop_moves.kso` builds
+the shape: a loop that adds a key a lap and reads the map back, staging every
+tenth lap, followed by a second run of the same loop with keys of the same
+length. Without the change the program dies with a segmentation fault; with
+it, it prints what the interpreter prints. Main does not reach this path,
+because its pops copy deep only after a write has reached the carry.

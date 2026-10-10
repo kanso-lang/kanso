@@ -2684,7 +2684,21 @@ static void k_repair_interior(KValue v, void* p, KCopy* cp) {
                 mp->sorted = NULL;
                 mp->sorted_len = 0;
             }
-            for (long long i = 0; i < 2 * mp->len; i++) mp->pairs[i] = k_deep_copy(mp->pairs[i], cp);
+            /* A sorted view is a second copy of the pairs, held outside the
+               walk's reach. When the walk moves a key or a value, the view
+               still names the old one, and a lookup that searches the view
+               reads storage the next stage at this depth writes over. */
+            int moved = 0;
+            for (long long i = 0; i < 2 * mp->len; i++) {
+                KValue nv = k_deep_copy(mp->pairs[i], cp);
+                moved |= nv.payload != mp->pairs[i].payload;
+                mp->pairs[i] = nv;
+            }
+            if (moved && mp->sorted && mp->sorted != mp->pairs) {
+                k_view_free(mp->sorted);
+                mp->sorted = NULL;
+                mp->sorted_len = 0;
+            }
             break;
         }
         case K_REC: {
