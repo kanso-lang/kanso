@@ -24538,7 +24538,11 @@ shape and passed `kanso check` on main;
 `micro/arms_that_never_meet_are_not_a_tie.kso` is the other direction, two
 arms main called tied that no call can reach together. The bc port's
 `option` group has a real tie the old rule hid, `"--quiet" opts` beside
-`arg (options ...)`, and the stricter check now reports it.
+`arg (options ...)`, and the stricter check now reports it. So does this
+repository's own `scripts/golden_prose`: `writing_back false _ _ _` and
+`writing_back _ false _ _` both take `false false`, settled on paper by the
+`true true` arm. Both answer 0, so the program never misbehaved; the third arm
+is now `true false`.
 
 **`[if b "x" "y"]`.** The checker refuses a named function written bare in a
 list literal, since a list element is one atom, but it read `if`'s count from
