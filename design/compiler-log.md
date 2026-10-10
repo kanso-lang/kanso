@@ -25277,8 +25277,8 @@ growing_map_allocs 1,613 to 1,615, growing_map_alloc_bytes 181,952 to 189,312
 and growing_map_held_peak_bytes 49,120 to 55,408. Welfare falls from
 90.25153 to 90.25054. The gate passes that, because it allows 0.001 for
 disagreement between hosts, but every term here is deterministic, so the fall
-is real, and it has gone to Clay with three other port fixes under "May four
-port fixes lower the welfare floor?".
+is real. It raised the floor question for this fix and three other port
+fixes, and the paragraph below records how that question closed.
 
 The floor question closed on the corpus-first gavel, and kanso#1836 put the
 shape into the run program as its `scatter` phase: 2,340 keys counted in
@@ -25289,3 +25289,13 @@ which CI read main above it; CI's row replaces it. The run's held peak falls
 from 3,222,256 bytes to 3,166,752, run_alloc_bytes falls to 326,749,138 and
 run_allocs rises by two to 1,773,134. Welfare rises from 90.2499 to 90.4099 on
 those rows, and the rise is banked.
+
+CI's rows for the merged tree replace the projection and agree with it on the
+run program: work_runbench lands on 1,201,828,611. The merge had carried main's
+rows for the other benchmarks, and CI restores this fix's own cost on them.
+The view code adds 4,784 bytes to every binary, so `text` totals 4,718,942.
+work_basket lands on 33,056,395, work_livebench on 1,473,763,578,
+work_encodebench on 2,393,936,650, work_oneshot on 13,190,150 and
+work_pendbench on 190,396,604. codegen_instructions_dev lands on 118,940,067
+and browser_run_instructions on 33,517,389. Welfare reads 90.4099 on CI's rows,
+the score already banked.
