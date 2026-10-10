@@ -25958,8 +25958,22 @@ its full size, and with a 2 MiB block that staged on most passes.
 `tests/golden/mem/a_growing_map_in_a_rewound_loop_waits_for_its_copy` is that
 small program at 20,000 passes. Its alloc_bytes is 44,612,576; without the wait
 it reads 9,165,495,888. No other mem fixture and no cost golden moves. On the
-lox loop, 160,000 passes now take 5.3 seconds and 320,000 take 34. Time still
-grows faster than the pass count past 160,000, and that is not explained here.
+lox loop, 160,000 passes now take 5.3 seconds and 320,000 take 33.
+
+Time still grows faster than the pass count, and the counters say where.
+Allocation is linear: alloc_bytes reads 2,457,232,021 at 40,000 passes,
+5,168,271,765 at 80,000 and 10,642,119,589 at 160,000, about 66 KB a pass.
+evac_bytes is not. It reads 63,965,040, 132,744,688 and then 1,296,200,208,
+ten times the step before, while ten_blocks only goes from 8 to 9. That is the
+pass count at which the port's heap outgrows tenure. Below it, tenure holds the
+heap and a stage copies only what the pass made. Above it, each stage copies the
+live heap, and the wait keeps that to half of the drift at most, so copying is
+bounded by allocation but no longer small next to it. The cost per byte copied
+also rises as the heap grows, because the copy keeps a pointer map for shared
+values and the map grows with the heap. Removing it would mean letting tenure
+grow past `K_TEN_CAP` for a loop whose survivors keep surviving. The cap exists
+so that no loop holds storage that only the pop frees, and changing it is a
+separate piece of work.
 runbench reads 180,786 instructions more for the wait's arithmetic and is
 projected at 1,152,754,421 until CI reads it. Welfare falls from 91.0246 to
 91.0239, which this fix pays to remove a regression the carried kanso#1824
