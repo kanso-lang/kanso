@@ -24566,3 +24566,24 @@ on a name whose value is a thunk. Inference makes the same assumption in
 left alone until a program shows it matters.
 `runtime/a_name_bound_to_a_lazy_err_keeps_its_check.kso`; reverting the
 codegen line turns it red.
+
+CI's rows for this branch. The front end does a little less work on the
+library and a little more on everything that reads the larger regexp module:
+compile_instructions falls from 25,855,719 to 25,818,316, while
+entry_instructions rises from 85,257,442 to 85,384,090 and
+library_instructions from 85,813,347 to 85,937,682, both of which compile
+std/regexp. compile_allocs goes from 14,529 to 14,530. The interpreter's run
+asks the allocator twice more, interp_allocs 587,281 to 587,283, with its peak
+unchanged. The browser compiles the same library and its checker, and
+browser_compile_instructions rises from 389,803,790 to 390,263,432.
+
+Four benchmark binaries changed. basket, scanbench and runbench grew and
+pendbench shrank by one call and three lines, which sums to
+emitted_other_branches 16,024 to 16,071, emitted_other_calls 17,094 to 17,118
+and emitted_other_lines 144,096 to 144,331. The text is 4,586,462 to 4,588,430
+summed, all of it in the three that grew. Runtime work rises in two of them:
+work_basket from 32,356,406 to 32,380,431 and work_runbench from 1,129,588,698
+to 1,129,588,845, 147 instructions. Which of the four fixes moved which binary
+is not isolated here. Welfare falls 0.0000519, to
+90.25650199. These are fixes to the language as ruled, so the floor follows
+under the 2026-09-13 rule.
