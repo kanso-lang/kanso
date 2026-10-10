@@ -25184,3 +25184,69 @@ run_arena_peak_bytes lands on 8,912,912 and run_held_peak_bytes on 3,222,256,
 and run_peak_bytes' baseline goes from 156,818,380 to 489,255,962. Both
 baselines are rounded up. The score is unchanged, and the four fixes now
 have something to score against.
+
+## 2026-10-10 — `build` retires, and `tie` is the one way to write a cycle
+
+The gavel of the same day retired the `build` block and everything that existed
+to serve it: the hole `_` in a construction's argument, the field write
+`a.f = v`, and the checker's proof that a write reaches only a record born in
+the block. This entry is the build.
+
+The parser no longer produces `Expr::Build`, `Expr::Hole` or `Stmt::Set`, and
+the three variants are gone from the AST, so every pass that matched them lost
+an arm. The checker loses the block-born walk and its cohort table. The
+interpreter loses its field write and the native backend loses the
+`k_set_field` call it emitted for one, along with the runtime function behind
+it. A program written for the old form meets one syntax diagnostic for each
+spelling, and each one names `list/tie`: a `build` header, a bare `_` where a
+value goes, and `a.f = v`. The wildcard pattern and a lambda's `_` parameter
+are read before the expression parser is asked, so they keep their meaning.
+
+The error corpus loses the twenty-six fixtures that pinned the block's own
+refusals and gains three for the retired spellings,
+`a_build_block_is_retired`, `a_hole_is_retired` and
+`a_field_write_is_retired`. Each was seen red with the diagnostic's wording
+changed. `uncertain_reads_are_not_counted` loses its block-bound case and
+keeps its other six. The micro corpus loses four fixtures that existed only for
+the block. `a_description_rides_in_a_field` now builds its record with the
+description in place, and the re-export spec for a door spelling loses its
+`build` position and keeps the other four. The ratchet loses the seven rows
+that disarmed a hole refusal, with their mutation scripts, and the construct
+census in `tests/golden/shapes.txt` loses `Build`, `Hole` and `s:Set`.
+
+The examples, the ch03 sample and the knot-equality golden were rewritten with
+`tie` earlier on this branch. The mem fixture that pinned a cycle's cost moves
+from `build_cycle` to `tie_cycle`, and `tie` costs more than the block did for
+the same two cycles: 38 allocations against 18, 2,096 bytes against 784,
+evac_allocs 15 against 13 and evac_bytes 560 against 496. sh_buf goes from 144
+to 928 and sh_map from 0 to 192, which are the key list and the map `tie`
+answers; sh_str falls from 192 to 176.
+
+ch03 teaches `tie` in the section on records that point at each other, and
+appendix A replaces its `error[build]` section with `error[tie]`, the check
+that refuses a literal link to a key the list does not hold. The playground's
+two knot samples are rewritten with `tie`, and the compiler page's account of
+the memory model now describes a cycle as a tie's birth cohort.
+design/build-blocks.md is deleted; the log keeps its history.
+
+Moving the cycle fixture onto `tie` found a disagreement between engines.
+The interpreter builds a tie's nodes with thunk cells and settles each record's
+fields once the knot is closed, but `resolve_tied` settled only a field that
+was itself a cell. A cell inside a list or a map held by a field stayed a cell,
+and every later read forced it again: `tie_cycle` counted 5 `thunk_forces` on
+the interpreter and 0 natively. `settled_link` now replaces a forced cell
+inside a list or map field with the node it holds, and the two engines agree on
+the fixture. The spec is `mem_corpus_interp_matches_the_semantic_counters` in
+`tests/oracle.rs`, which runs every mem fixture on the interpreter and compares
+its semantic counters with the golden's. With the list and map arms of
+`settled_link` removed it goes red on `tie_cycle`, reading 5 forces against 0.
+The mem golden alone stays green, because it is read off the native binary.
+
+`tests/compile_cost.rs` timed a `build_block` sample, which no longer parses,
+so the sample and its row in `bench/compile_golden.txt` are gone. A `tie`
+sample cannot take its place there, because the harness compiles a file with no
+imports and `tie` lives in `list`. Removing the passes that served the block
+moves the compile, entry, library, emit and interpreter rows and the size of
+every binary. Those are CI's to measure, and the values they land on are
+recorded when its rows arrive. runbench reads 147 instructions fewer in this
+container, so it is projected at 1,245,043,177 until then.
