@@ -24742,4 +24742,6 @@ I found it while building the fixtures for the lap carry. The evaluator
 fixture, imported as `./lib/fx`, held 4 MiB and never rewound.
 
 The tab compiler reads 661 fewer instructions, `browser_compile_instructions`
-388,181,803. CI's rows for codegen and emit follow.
+388,181,803. CI moved one other row: `emit_instructions` falls 37, to
+7,062,299. Both codegen tiers held. The ratchet's mutation for this filter
+patched the old two-arm line, so it now patches the one-arm line.
