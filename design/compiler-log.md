@@ -24535,3 +24535,50 @@ The trend gate's names for what rose, each at the value it landed on:
 `stream_fold_beat_iters` 10,000;
 `the_length_of_an_indexed_character_needs_no_scan_beat_iters` 4,021;
 `two_bound_columns_are_one_allocation_beat_iters` 3,000.
+
+## 2026-10-10 — a loop entered from a tail cycle gives its garbage back
+
+The lox and mal ports both ran their interpreters out of memory. A Lox `for`
+loop of fifty thousand passes that builds two small objects per pass held
+3.0 GB at its peak natively, and mal's tail-recursive `sum2` kept 3.7 KB per
+iteration until exit. The interpreter under `--interp` ran the same programs
+in about 11 MB.
+
+Each port's machine loop is a self-recursive function, the shape the beat
+analysis rewinds, and neither rewound. The lox loop, `spin`, failed two
+tests. The first was its entry. `exec` tail-calls `spin` from its while arm,
+and `exec` sits in a tail cycle of its own, since a block runs its first
+statement and tail-calls itself on the rest. The analysis demoted a tail
+entry to a plain call only when the caller was in no tail cycle at all, on
+the reasoning that a plain call inside a cycle grows the stack. That holds
+only when the cycle runs through the demoted edge, which happens when the
+loop can reach its caller back by tail calls. `spin` returns its state to
+`exec` and never tail-calls it, so the plain call holds one frame while the
+loop runs and the caller returns before its cycle goes round again. The
+condition now asks exactly that: the entry is demoted unless the loop
+tail-reaches the caller.
+
+The second was the loop's own arguments. `spin` hands its body and condition
+on unchanged, and both come out of a record field, which inference reads as
+any value at all. A slot of unknown type was never carried through a
+rewind, in case it hid a growing accumulator behind a helper call. A
+parameter every self-tail-call passes on as itself cannot grow: it arrived at
+entry, lives below the mark, and the evacuation shares it rather than copying
+it. Such a position is now carried whatever its type.
+
+With both changes the lox loop rewinds every pass. At fifty thousand passes
+the release binary peaks at 77 MB, down from 3.0 GB, and runs in 1.17 s
+against 3.01 s. What remains is the port's own heap of instance fields, which
+it never frees by design. The fixture
+`a_loop_entered_from_a_tail_cycle_gives_its_garbage_back` builds the same
+shape in thirty lines and pins `arena_peak_bytes` at 1,048,576 for twenty
+thousand passes; main holds 3,145,728 for it.
+
+mal's machine is not fixed by this. Its `ev` is one member of a tail cycle
+with `ret`, `throw` and `settle`, which makes it a cluster, and a cluster
+carries only scalars and threaded parameters through its rewind. Carrying a
+heap value round a cluster is the next piece of work.
+
+No benchmark's run changed: every runtime cost vein agrees with its golden.
+The analysis is dearer to run. browser_compile_instructions rises from
+387,724,060 to 389,828,140 with this tree's rustc.
