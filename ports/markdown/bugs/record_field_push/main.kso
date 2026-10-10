@@ -1,0 +1,27 @@
+# BUG (performance): pushing onto a list held in a record copies the list
+# every time, and natively the copies are never freed.
+#
+# `loop` threads a record whose `events` field grows by one per step. A bare
+# list threaded the same way (`loop (push xs i) (i + 1) n`) is extended in
+# place: a million pushes take 0.03s natively. Through the record field:
+#
+#   n       native --release          interpreter
+#   2000    0.08s,  32 MB peak
+#   4000    0.53s, 124 MB
+#   8000    3.08s, 492 MB
+#   16000   16.8s                     2.4s
+#   64000   killed (out of memory)    41s
+#
+# Expected: the record dies when the next one is built, so the list inside it
+# is uniquely owned and `push` can extend it in place, as it does for a bare
+# list (std/list's `push` doc: "the runtime reuses the buffer in place when
+# the list is uniquely owned"). At least the copies should be freed.
+#
+# Destructuring the record in the parameter pattern,
+# `fn loop (state events line) i n`, stops the memory growth (9 MB at 64000)
+# but the time stays quadratic (30s at 64000).
+import "./acc"
+import "std/io"
+import "std/text"
+
+io/stdin .> (s -> print (acc/run (text/to_int (text/trim s))))

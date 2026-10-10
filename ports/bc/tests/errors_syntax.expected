@@ -1,0 +1,35 @@
+3
+5
+3
+6
+7
+8
+9
+1
+10
+11
+12
+v
+13
+14
+16
+--- stderr
+tests/errors_syntax.bc 5: syntax error
+tests/errors_syntax.bc 6: syntax error
+tests/errors_syntax.bc 9: syntax error
+tests/errors_syntax.bc 10: syntax error
+tests/errors_syntax.bc 12: syntax error
+tests/errors_syntax.bc 14: Break outside a for/while
+tests/errors_syntax.bc 15: Continue outside a for
+tests/errors_syntax.bc 17: Return outside of a function.
+tests/errors_syntax.bc 20: duplicate parameter names
+Runtime error (func=(main), adr=0): Function bad not defined.
+tests/errors_syntax.bc 22: variable in both parameter and auto lists
+Runtime error (func=(main), adr=0): Function worse not defined.
+tests/errors_syntax.bc 25: syntax error
+tests/errors_syntax.bc 27: syntax error
+tests/errors_syntax.bc 28: syntax error
+tests/errors_syntax.bc 33: void expression with +
+tests/errors_syntax.bc 34: Assignment of a void expression
+tests/errors_syntax.bc 36: syntax error
+--- exit 0

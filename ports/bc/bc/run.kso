@@ -1,0 +1,153 @@
+import "std/io"
+import "std/list"
+import "std/os"
+import "std/text"
+
+# The command line: `bc [-lqsw] [file ...]`. The library (with -l), then
+# each file, then standard input are read in turn, one unit at a time --
+# a line, or a whole define -- and each unit runs and has its output
+# written before the next is parsed, as GNU bc does: a syntax error late in
+# a file does not stop the lines before it, and output streams.
+type loaded
+  content
+  path
+
+type reading
+  label
+  notes
+
+type options
+  files
+  mathlib
+
+pub fn start argv
+  os/env "BC_LINE_LENGTH" .> (w -> begin argv (line_length w))
+
+fn line_length none
+  70
+
+fn line_length spelled
+  wanted = text/to_int spelled
+  usable_length wanted
+
+fn usable_length 0
+  0
+
+fn usable_length (err _)
+  70
+
+fn usable_length n
+  if (n < 3) 70 n
+
+fn begin argv width
+  opts = read_options argv 1 (options [] false)
+  load_files opts.files 1 [] (found -> run_session found opts.mathlib width)
+
+fn read_options argv i opts
+  arg = argv[i]
+  return opts if arg == none
+  read_options argv (i + 1) (option arg opts)
+
+fn option "--mathlib" (options files _)
+  options files true
+
+fn option "--quiet" opts
+  opts
+
+fn option arg (options files mathlib)
+  return options (push files arg) mathlib if not flag? arg
+  options files (mathlib or has_l? arg)
+
+fn flag? arg
+  length arg > 1 and text/slice arg 1 1 == "-"
+
+fn has_l? arg
+  list/any? (text/chars arg) (c -> c == "l")
+
+fn load_files files i acc k
+  path = files[i]
+  return k acc if path == none
+  os/read_file path .> (c -> load_next files i (push acc (loaded c path)) k)
+
+fn load_next files i acc k
+  load_files files (i + 1) acc k
+
+fn run_session found mathlib width
+  m = fresh_machine width
+  tables = fresh_tables 0
+  return run_loaded found 1 tables m if not mathlib
+  run_text "(library)" library_source tables m (t lm -> run_loaded found 1 t lm)
+
+fn run_loaded found i tables m
+  next = found[i]
+  return run_stdin tables m if next == none
+  run_file next tables m (t fm -> run_loaded found (i + 1) t fm)
+
+fn run_file (loaded (file_not_found _) path) _ m _
+  d = drain m
+  write d
+    .> (_ -> io/write_err "File {path} is unavailable.\n")
+    .> (_ -> os/exit 1)
+
+fn run_file (loaded content path) tables m k
+  run_text path content tables m k
+
+fn run_stdin tables m
+  io/stdin .> (c -> run_text "(standard_in)" c tables m finish)
+
+fn finish _ m
+  write (drain m)
+
+fn write d
+  return io/write d.output if d.errors == ""
+  io/write d.output .> (_ -> io/write_err d.errors)
+
+fn run_text label content tables m k
+  toks = tokenize content
+  lexed = lexical_notes toks
+  clean = clean_tokens toks
+  run_units (start_source tables clean) (reading label lexed) m k
+
+# What run_units needs to know about the text it is reading: its name for
+# diagnostics, and the lexer's diagnostics not yet reported.
+fn run_units s src m k
+  u = parse_unit s
+  upto = reached u
+  reading label notes = src
+  told = list/fold notes m (acc n -> tell_lexical n upto label acc)
+  later = list/to_list (list/reject notes (n -> n.at < upto))
+  take_unit u (reading label later) told k
+
+fn tell_lexical (lexical at line true words) upto label m
+  if (at < upto) (note m "{label} {line}: {words}\n") m
+
+fn tell_lexical (lexical at _ _ words) upto _ m
+  if (at < upto) (note m "{words}\n") m
+
+fn take_unit (finished s) _ m k
+  k s m
+
+fn take_unit quitting _ m _
+  write (drain m)
+
+fn take_unit (bad_unit line message s) src m k
+  noted = note m "{src.label} {line}: {message}\n"
+  flush_then noted s src k
+
+fn take_unit (unit body s) src m k
+  r = run_list body 1 m
+  after_unit r s src k
+
+fn after_unit (err (fault fm message)) s src k
+  noted = note (set_fname fm "(main)") "{message}\n"
+  flush_then noted s src k
+
+fn after_unit (err (halting hm)) _ _ _
+  write (drain hm)
+
+fn after_unit other s src k
+  flush_then other.machine s src k
+
+fn flush_then m s src k
+  d = drain m
+  write d .> (_ -> run_units s src d.machine k)

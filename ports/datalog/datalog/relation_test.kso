@@ -1,0 +1,28 @@
+import "std/list"
+
+test_codes_round_trip = decode 10 3 (encode 10 [4 0 7]) == [4 0 7]
+
+test_digits_read_columns = digit 10 407 100 == 4 and digit 10 407 1 == 7
+
+test_mask_places_pick_columns = mask_places 10 3 5 == [100 1]
+
+test_keys_read_the_masked_columns = key_of 10 [100 1] 457 == 47
+
+test_insert_all_fills_the_index =
+  rel = insert_all 10 (empty_relation 10 2 [1]) [12 13 21]
+  buckets_of (index_on rel 1) == { 1:[12 13] 2:[21] }
+
+test_insert_all_merges_with_old_buckets =
+  first = insert_all 10 (empty_relation 10 2 [2]) [11 32]
+  second = insert_all 10 first [21 22]
+  buckets_of (index_on second 2) == { 1:[11 21] 2:[32 22] }
+
+test_insert_all_keeps_the_set =
+  rel = insert_all 10 (insert_all 10 (empty_relation 10 2 []) [11 31]) [21]
+  has? rel 21 and has? rel 31 and not has? rel 12 and size_of rel == 3
+
+fn buckets_of none
+  {}
+
+fn buckets_of (index buckets _)
+  buckets

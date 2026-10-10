@@ -1,0 +1,31 @@
+?- even(X).
+  X = 0
+  X = 2
+  X = 4
+  X = 6
+  (4 answers)
+?- odd(X).
+  X = 1
+  X = 3
+  X = 5
+  (3 answers)
+?- path(1, X).
+  X = 2
+  X = 3
+  X = 4
+  X = 5
+  X = 6
+  X = 7
+  X = 8
+  X = 9
+  (8 answers)
+?- linked(X, 1).
+  X = 2
+  (1 answer)
+-- evaluation
+stratum 1: even, odd: 8 rounds, 7 new
+stratum 2: linked: 3 rounds, 16 new
+stratum 3: path: 5 rounds, 36 new
+relations: edge 8, even 4, linked 16, odd 3, path 36, succ 6, zero 1
+total: 74 tuples after 16 rounds
+--- exit 0

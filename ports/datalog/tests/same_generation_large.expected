@@ -1,0 +1,19 @@
+?- sg(400, 399).
+  yes
+?- sg(400, 1).
+  no
+?- sg(2, Y).
+  Y = 2
+  Y = 3
+  Y = 4
+  Y = 69
+  Y = 77
+  Y = 108
+  Y = 223
+  (7 answers)
+-- evaluation
+stratum 1: person: 1 round, 400 new
+stratum 2: sg: 12 rounds, 18014 new
+relations: parent 399, person 400, sg 18014
+total: 18813 tuples after 13 rounds
+--- exit 0

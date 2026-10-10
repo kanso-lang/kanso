@@ -1,0 +1,8 @@
+% The classic win-move game: a position is won if some move leads to a lost
+% position. `win` depends on its own negation through `move`, so the program
+% has no stratification.
+move(a, b).
+move(b, c).
+move(c, a).
+win(X) :- move(X, Y), !win(Y).
+?- win(X).

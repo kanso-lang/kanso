@@ -1,0 +1,81 @@
+import "std/text"
+
+type doc
+
+type item
+  mark
+
+type listing
+  mark
+  tight
+
+type para
+
+type mark
+  bullet
+  delim
+  offset
+  ordered
+  padding
+  start
+
+type frame
+  children
+  end
+  kind
+  lines
+  start
+
+type state
+  line
+  refs
+  stack
+
+fn accepts_lines? _
+  false
+
+fn add_child st kind
+  return add_child (close_top st (st.line - 1)) kind if not fits? (top st) kind
+  state st.line st.refs (push st.stack (frame [] st.line kind [] st.line))
+
+fn add_line st c
+  f = top st
+  replace_top st (with_lines f (push f.lines (rest c)))
+
+fn attach st child
+  p = top st
+  kids = push p.children child
+  replace_top st (frame kids p.end p.kind p.lines p.start)
+
+fn can_contain? (listing _ _) (item _)
+  true
+
+fn can_contain? doc _
+  true
+
+fn can_contain? (item _) _
+  true
+
+fn can_contain? _ _
+  false
+
+fn fits? f kind
+  can_contain? f.kind kind
+
+fn leaf? _
+  false
+
+fn para? _
+  false
+
+fn pop xs
+  text/slice xs 1 (length xs - 1)
+
+fn replace_top st f
+  state st.line st.refs (push (pop st.stack) f)
+
+fn top st
+  st.stack[length st.stack]
+
+fn with_lines f lines
+  frame f.children f.end f.kind lines f.start

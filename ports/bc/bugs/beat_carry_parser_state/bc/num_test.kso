@@ -1,0 +1,29 @@
+test_add_keeps_the_larger_scale = add (dec 1 15) (dec 2 225) == dec 2 375
+
+test_compare_ignores_trailing_zeros = compare (dec 2 150) (dec 1 15) == 0
+
+test_compare_orders_negatives = compare (from_int -2) (dec 1 -15) == -1
+
+test_divide_keeps_scale = divide (from_int 1) (from_int 3) 5 == dec 5 33333
+
+test_divide_truncates_toward_zero = divide (dec 0 -7) (dec 0 2) 0 == dec 0 -3
+
+test_length_counts_significant_digits = length_of (dec 2 12345) == 5
+
+test_length_of_a_fraction_is_its_scale = length_of (dec 3 1) == 3
+
+test_length_of_zero_is_one = length_of zero == 1
+
+test_modulo_uses_the_scaled_quotient = modulo (dec 0 7) (dec 0 3) 5 == dec 5 1
+
+test_multiply_truncates = multiply (dec 3 3123) (dec 1 21) 0 == dec 3 6558
+
+test_power_truncates_to_the_rule = power (dec 3 1234) 2 0 == dec 3 1522
+
+test_integer_power_is_exact = power (dec 0 2) 100 0 == dec 0 (raise 2 100)
+
+test_rescale_pads = rescale (dec 1 15) 3 == dec 3 1500
+
+test_rescale_truncates = rescale (dec 3 1999) 1 == dec 1 19
+
+test_square_root_floors = square_root (from_int 2) 10 == dec 10 14142135623

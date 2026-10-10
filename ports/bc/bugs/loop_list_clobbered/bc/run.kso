@@ -1,0 +1,163 @@
+import "std/io"
+import "std/list"
+import "std/os"
+import "std/text"
+
+# The command line: `bc [-lqsw] [file ...]`. The library (with -l), then
+# each file, then standard input are read in turn, one unit at a time, and
+# each unit runs before the next is parsed, so a syntax error late in a
+# file does not stop the lines before it.
+#
+# All of that is pure: the files are read first, the program runs, and the
+# output is written once at the end, then standard input gets the same
+# treatment. Writing after every unit is what GNU bc does, and what this
+# port did until a native crash in the effect executor (FRICTION F16).
+type loaded
+  content
+  path
+
+type options
+  files
+  mathlib
+
+# How running one source ended: on to the next, stopped by quit or halt, or
+# stopped at a file that could not be read.
+type carry_on
+  machine
+  tables
+
+type missing
+  machine
+  path
+
+type stopped
+  machine
+
+pub fn start argv
+  os/env "BC_LINE_LENGTH" .> (w -> begin argv (line_length w))
+
+fn line_length none
+  70
+
+fn line_length spelled
+  wanted = text/to_int spelled
+  usable_length wanted
+
+fn usable_length 0
+  0
+
+fn usable_length (err _)
+  70
+
+fn usable_length n
+  if (n < 3) 70 n
+
+fn begin argv width
+  opts = read_options argv 1 (options [] false)
+  load_files opts.files 1 [] (found -> run_session found opts.mathlib width)
+
+fn read_options argv i opts
+  arg = argv[i]
+  return opts if arg == none
+  read_options argv (i + 1) (option arg opts)
+
+fn option "--mathlib" (options files _)
+  options files true
+
+fn option "--quiet" opts
+  opts
+
+fn option arg (options files mathlib)
+  return options (push files arg) mathlib if not flag? arg
+  options files (mathlib or has_l? arg)
+
+fn flag? arg
+  length arg > 1 and text/slice arg 1 1 == "-"
+
+fn has_l? arg
+  list/any? (text/chars arg) (c -> c == "l")
+
+fn load_files files i acc k
+  path = files[i]
+  return k acc if path == none
+  os/read_file path .> (c -> load_next files i (push acc (loaded c path)) k)
+
+fn load_next files i acc k
+  load_files files (i + 1) acc k
+
+fn run_session found mathlib width
+  m = fresh_machine width
+  tables = fresh_tables 0
+  begun = if mathlib (with_library tables m) (carry_on m tables)
+  after_files (run_loaded found 1 begun)
+
+fn with_library tables m
+  run_text "(library)" library_source tables m
+
+fn run_loaded found i (carry_on m tables)
+  next = found[i]
+  return carry_on m tables if next == none
+  ran_file = run_file next tables m
+  run_loaded found (i + 1) ran_file
+
+fn run_loaded _ _ other
+  other
+
+fn run_file (loaded (file_not_found _) path) _ m
+  missing m path
+
+fn run_file (loaded content path) tables m
+  run_text path content tables m
+
+fn after_files (carry_on m tables)
+  d = drain m
+  rest = d.machine
+  write d .> (_ -> io/stdin) .> (c -> finish (run_stdin c tables rest))
+
+fn after_files (missing m path)
+  d = drain m
+  write d
+    .> (_ -> io/write_err "File {path} is unavailable.\n")
+    .> (_ -> os/exit 1)
+
+fn after_files (stopped m)
+  write (drain m)
+
+fn run_stdin content tables m
+  run_text "(standard_in)" content tables m
+
+fn finish r
+  write (drain r.machine)
+
+fn write d
+  io/write d.output .> (_ -> io/write_err d.errors)
+
+fn run_text label content tables m
+  toks = tokenize content
+  run_units (start_source tables toks) label m
+
+fn run_units s label m
+  u = parse_unit s
+  take_unit u label m
+
+fn take_unit (finished s) _ m
+  carry_on m s
+
+fn take_unit quitting _ m
+  stopped m
+
+fn take_unit (bad_unit line message s) label m
+  run_units s label (note m "{label} {line}: {message}\n")
+
+fn take_unit (unit body s) label m
+  r = run_list body 1 m
+  after_unit r s label
+
+fn after_unit (err (fault fm message)) s label
+  run_units s label (note (set_fname fm "(main)") "{message}\n")
+
+fn after_unit (err (halting hm)) _ _
+  stopped hm
+
+fn after_unit other s label
+  run_units s label other.machine

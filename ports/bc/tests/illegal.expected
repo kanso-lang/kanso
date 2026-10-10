@@ -1,0 +1,8 @@
+3
+5
+--- stderr
+tests/illegal.bc 1: illegal character: @
+tests/illegal.bc 1: syntax error
+tests/illegal.bc 3: illegal character: $
+tests/illegal.bc 5: illegal character: "
+--- exit 0

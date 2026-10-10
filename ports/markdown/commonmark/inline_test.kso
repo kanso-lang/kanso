@@ -1,0 +1,60 @@
+fn html_of s
+  inlines_html (parse_inlines s {})
+
+fn with_ref s
+  refs = put {} "foo" (ref_def "/url" "title")
+  inlines_html (parse_inlines s refs)
+
+test_autolink_email =
+  out = html_of "<a@b.co>"
+  out == "<a href=\"mailto:a@b.co\">a@b.co</a>"
+
+test_autolink_uri =
+  out = html_of "<http://x.y>"
+  out == "<a href=\"http://x.y\">http://x.y</a>"
+
+test_backslash_escape = html_of "\\*not\\*" == "*not*"
+
+test_code_span_strips_one_space = html_of "`` `a` ``" == "<code>`a`</code>"
+
+test_collapsed_reference =
+  out = with_ref "[Foo][]"
+  out == "<a href=\"/url\" title=\"title\">Foo</a>"
+
+test_emphasis_rule_of_three = html_of "*foo**bar*" == "<em>foo**bar</em>"
+
+test_entity_named = html_of "&copy; &#35; &#x22;" == "© # &quot;"
+
+test_entity_unknown_stays = html_of "&nosuch;" == "&amp;nosuch;"
+
+test_hard_break_spaces = html_of "a  \nb" == "a<br />\nb"
+
+test_image_alt_is_plain =
+  out = html_of "![*a*](/i.png)"
+  out == "<img src=\"/i.png\" alt=\"a\" />"
+
+test_inline_link_title =
+  out = html_of "[a](/u \"t\")"
+  out == "<a href=\"/u\" title=\"t\">a</a>"
+
+test_label_case_folds = normalize_label "[ẞ  Foo]" == "ss foo"
+
+test_no_links_in_links =
+  out = html_of "[a [b](/c)](/d)"
+  out == "[a <a href=\"/c\">b</a>](/d)"
+
+test_raw_html_passes =
+  out = html_of "a <b class=\"x\">b</b>"
+  out == "a <b class=\"x\">b</b>"
+
+test_shortcut_reference =
+  out = with_ref "[foo]"
+  out == "<a href=\"/url\" title=\"title\">foo</a>"
+
+test_soft_break = html_of "a\nb" == "a\nb"
+
+test_strong_inside_em = html_of "***a***" == "<em><strong>a</strong></em>"
+
+test_underscore_intraword = html_of "snake_case_name" == "snake_case_name"
+
+test_url_percent_encoding = normalize_url "a b/ä%41" == "a%20b/%C3%A4%41"

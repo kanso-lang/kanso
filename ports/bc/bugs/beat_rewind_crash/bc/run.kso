@@ -1,0 +1,124 @@
+import "std/io"
+import "std/list"
+import "std/os"
+import "std/text"
+
+# The command line: `bc [-lqsw] [file ...]`. The library (with -l), then
+# each file, then standard input are read in turn, one unit at a time, and
+# each unit runs before the next is read -- so output streams, and a
+# syntax error late in a file does not stop the lines before it.
+type options
+  files
+  mathlib
+
+pub fn start argv
+  os/env "BC_LINE_LENGTH" .> (w -> begin argv (line_length w))
+
+fn line_length none
+  70
+
+fn line_length spelled
+  wanted = text/to_int spelled
+  usable_length wanted
+
+fn usable_length 0
+  0
+
+fn usable_length (err _)
+  70
+
+fn usable_length n
+  if (n < 3) 70 n
+
+fn begin argv width
+  opts = read_options argv 1 (options [] false)
+  m = fresh_machine width
+  tables = fresh_tables 0
+  files = opts.files
+  return run_files files 1 tables m if not opts.mathlib
+  run_text "(library)" library_source tables m (t lm -> run_files files 1 t lm)
+
+fn read_options argv i opts
+  arg = argv[i]
+  return opts if arg == none
+  read_options argv (i + 1) (option arg opts)
+
+fn option "--mathlib" (options files _)
+  options files true
+
+fn option "--quiet" opts
+  opts
+
+fn option arg (options files mathlib)
+  return options (push files arg) mathlib if not flag? arg
+  options files (mathlib or has_l? arg)
+
+fn flag? arg
+  length arg > 1 and text/slice arg 1 1 == "-"
+
+fn has_l? arg
+  list/any? (text/chars arg) (c -> c == "l")
+
+fn run_files files i tables m
+  path = files[i]
+  return run_stdin tables m if path == none
+  os/read_file path .> (content -> file_read content path files i tables m)
+
+fn file_read (file_not_found _) path _ _ _ m
+  d = drain m
+  io/write d.output
+    .> (_ -> io/write_err "{d.errors}File {path} is unavailable.\n")
+    .> (_ -> os/exit 1)
+
+fn file_read content path files i tables m
+  run_text path content tables m (t fm -> run_files files (i + 1) t fm)
+
+fn run_stdin tables m
+  io/stdin .> (content -> run_text "(standard_in)" content tables m finish)
+
+fn finish _ m
+  flush m
+
+fn flush m
+  d = drain m
+  io/write d.output .> (_ -> io/write_err d.errors)
+
+fn run_text label content tables m k
+  toks = tokenize content
+  run_units (start_source tables toks) label m k
+
+fn run_units s label m k
+  u = parse_unit s
+  take_unit u label m k
+
+fn take_unit (finished s) _ m k
+  k s m
+
+fn take_unit quitting _ m _
+  flush m
+
+fn take_unit (bad_unit line message s) label m k
+  d = drain m
+  io/write d.output
+    .> (_ -> io/write_err "{d.errors}{label} {line}: {message}\n")
+    .> (_ -> run_units s label d.machine k)
+
+fn take_unit (unit body s) label m k
+  r = run_list body 1 m
+  after_unit r s label k
+
+fn after_unit (err (fault fm message)) s label k
+  d = drain (set_fname fm "(main)")
+  io/write d.output
+    .> (_ -> io/write_err "{d.errors}{message}\n")
+    .> (_ -> run_units s label d.machine k)
+
+fn after_unit (err (halting hm)) _ _ _
+  flush hm
+
+fn after_unit other s label k
+  m = other.machine
+  d = drain m
+  io/write d.output
+    .> (_ -> io/write_err d.errors)
+    .> (_ -> run_units s label d.machine k)

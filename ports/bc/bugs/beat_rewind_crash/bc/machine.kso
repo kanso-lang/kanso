@@ -1,0 +1,163 @@
+import "std/text"
+
+# Everything a running bc program can change, threaded through every step:
+#
+#   arrays  slot -> the array's elements, index 0 at position 1
+#   col     the output column, for line wrapping
+#   fname   the function running, for error messages; "(main)" at the top
+#   funcs   slot -> definition, or none until the define runs
+#   ibase obase scale last   bc's four registers
+#   notes   warnings for standard error, newest first
+#   out     text written, newest first
+#   vars    slot -> scalar value
+#   width   BC_LINE_LENGTH: a line holds width - 2 characters and a
+#           backslash; zero turns wrapping off
+pub type machine
+  arrays
+  col
+  fname
+  funcs
+  ibase
+  last
+  notes
+  obase
+  out
+  scale
+  vars
+  width
+
+# A runtime error, raised as an err and caught at the top of the unit. It
+# carries the machine as it stood when the error happened, because what a
+# unit did before failing stays done.
+type laid_out
+  col
+  out
+
+# Hands back the text written since the last flush, oldest first, and the
+# machine with its buffers empty.
+pub type drained
+  errors
+  machine
+  output
+
+pub type fault
+  machine
+  message
+
+pub type written
+  older
+  text
+
+pub type nothing_written
+
+# A function slot whose define has not run yet.
+pub type undefined
+
+pub fn fresh_machine width
+  machine [] 0 "(main)" [] 10 zero nothing_written 10 nothing_written 0 [] width
+
+pub fn fail_with m message
+  err (fault m "Runtime error (func={m.fname}, adr=0): {message}")
+
+pub fn warn (machine ar col fnm fs ib ls ns ob out sc vs wd) message
+  line = "Runtime warning (func={fnm}, adr=0): {message}\n"
+  noted = written ns line
+  machine ar col fnm fs ib ls noted ob out sc vs wd
+
+# Slot lists grow on demand; a slot never written reads as `blank`.
+pub fn slot_get xs i blank
+  found = xs[i]
+  if (found == none) blank found
+
+pub fn slot_set xs i v blank
+  return push (pad_to xs (i - 1) blank) v if length xs < i
+  before = text/slice xs 1 (i - 1)
+  after = text/slice xs (i + 1) (length xs)
+  text/concat (push before v) after
+
+fn pad_to xs n blank
+  return xs if n <= length xs
+  pad_to (push xs blank) n blank
+
+pub fn get_var m slot
+  slot_get m.vars slot zero
+
+pub fn set_var (machine ar col fnm fs ib ls ns ob out sc vs wd) slot v
+  grown = slot_set vs slot v zero
+  machine ar col fnm fs ib ls ns ob out sc grown wd
+
+pub fn get_array m slot
+  slot_get m.arrays slot []
+
+pub fn set_array (machine ar col fnm fs ib ls ns ob out sc vs wd) slot elements
+  grown = slot_set ar slot elements []
+  machine grown col fnm fs ib ls ns ob out sc vs wd
+
+pub fn get_func m slot
+  slot_get m.funcs slot undefined
+
+pub fn set_func (machine ar col fnm fs ib ls ns ob out sc vs wd) slot def
+  grown = slot_set fs slot def undefined
+  machine ar col fnm grown ib ls ns ob out sc vs wd
+
+pub fn set_fname (machine ar col _ fs ib ls ns ob out sc vs wd) name
+  machine ar col name fs ib ls ns ob out sc vs wd
+
+pub fn set_last (machine ar col fnm fs ib _ ns ob out sc vs wd) v
+  machine ar col fnm fs ib v ns ob out sc vs wd
+
+pub fn set_ibase (machine ar col fnm fs _ ls ns ob out sc vs wd) b
+  machine ar col fnm fs b ls ns ob out sc vs wd
+
+pub fn set_obase (machine ar col fnm fs ib ls ns _ out sc vs wd) b
+  machine ar col fnm fs ib ls ns b out sc vs wd
+
+pub fn set_scale (machine ar col fnm fs ib ls ns ob out _ vs wd) sc
+  machine ar col fnm fs ib ls ns ob out sc vs wd
+
+# Output. Text goes through the column counter so that a long line breaks
+# with a backslash where GNU bc breaks it; a newline resets the column.
+pub fn emit (machine ar col fnm fs ib ls ns ob out sc vs wd) words
+  pieces = text/split words "\n"
+  laid = lay_pieces pieces 1 col wd out
+  machine ar laid.col fnm fs ib ls ns ob laid.out sc vs wd
+
+fn lay_pieces pieces i col width out
+  piece = pieces[i]
+  return laid_out col out if piece == none
+  placed = lay piece col width out
+  return placed if i == length pieces
+  lay_pieces pieces (i + 1) 0 width (written placed.out "\n")
+
+fn lay piece col width out
+  room = width - 2 - col
+  size = length piece
+  return laid_out col out if size == 0
+  return laid_out (col + size) (written out piece) if width == 0 or size <= room
+  head = text/slice piece 1 room
+  rest = text/slice piece (room + 1) size
+  lay rest 0 width (written out "{head}\\\n")
+
+pub fn drain (machine ar col fnm fs ib ls ns ob out sc vs wd)
+  blank = nothing_written
+  emptied = machine ar col fnm fs ib ls blank ob blank sc vs wd
+  drained (chain_text ns) emptied (chain_text out)
+
+fn chain_text nothing_written
+  ""
+
+fn chain_text chain
+  newest = newest_first chain []
+  text/join (oldest_first newest (length newest) []) ""
+
+fn newest_first nothing_written acc
+  acc
+
+fn newest_first (written older words) acc
+  newest_first older (push acc words)
+
+fn oldest_first _ 0 acc
+  acc
+
+fn oldest_first newest i acc
+  oldest_first newest (i - 1) (push acc newest[i])

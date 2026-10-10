@@ -1,0 +1,30 @@
+# BUG (performance): a list grown through a function call is copied on
+# every step natively, and the copies are not freed.
+#
+# Three loops build a list of n strings. `direct` pushes in the tail call's
+# argument; `helper` calls `add out x`, whose whole body is `push out x`;
+# `nested` pushes onto the result of a push. Measured with
+# `kanso build --release`, `echo <n> | ./<which>` (one entry file per loop):
+#
+#   which    n = 4000           n = 8000
+#   direct   0.00s,    9 MB     0.00s,     9 MB
+#   helper   12.8s,  312 MB     368s,  1,056 MB
+#   nested   64.7s,  529 MB     (not run)
+#
+# (Measured on a shared four-core box under load, so the times are loose;
+# the memory figures are not.)
+#
+# The interpreter runs all three in linear time.
+#
+# Expected: `out` is held by nothing but the loop, so `push` can extend it in
+# place however many calls it passes through.
+#
+# In the port, writing a 4,000-line code block took 250 seconds and 529 MB
+# (nested), and rebuilding the tree of a 4,000-paragraph document took 48
+# seconds and 314 MB (helper, while reversing a list of children). Both loops
+# now push in their own tail calls, and the same documents take 0.03 seconds.
+import "./np"
+import "std/io"
+import "std/text"
+
+io/stdin .> (s -> print (np/helper (text/to_int (text/trim s))))

@@ -1,0 +1,2 @@
+.input edge
+?- edge(X, Y).

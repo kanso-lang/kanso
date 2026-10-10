@@ -1,0 +1,19 @@
+/* string statements print as written; print understands escapes */
+"plain string with \n no escapes"
+"
+"
+print "tab\there\n"
+print "back\\slash \q quoted \q\n"
+print "unknown \z escape\n"
+print 1, 2, 3, "\n"
+print "x = ", 1/4, "\n"
+scale = 3
+print "x = ", 1/4, "\n"
+print "a", "b"; print "c\n"
+"multi
+line
+string
+"
+print 7
+print "\n"
+last

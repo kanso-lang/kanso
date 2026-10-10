@@ -1,0 +1,22 @@
+% Integers, negative integers, bare words and quoted strings. Integers sort
+% before strings, integers by value and strings by their bytes, and a quoted
+% string that spells a bare word is the same constant as the word.
+item(3, "three").
+item(-2, "minus two").
+item(10, ten).
+item(1, "one").
+item(10, "ten").
+item(0, "Zero").
+item(2, "line\nbreak").
+item(7, "say \"hi\"").
+
+big(N, W) :- item(N, W), N > 2.
+small(N) :- item(N, _), N <= 1.
+named(W) :- item(_, W).
+same_word(N) :- item(N, ten).
+
+.output item
+?- big(N, W).
+?- small(N).
+?- named(W).
+?- same_word(N).

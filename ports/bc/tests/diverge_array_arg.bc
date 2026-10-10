@@ -1,0 +1,10 @@
+/* Parameter type mismatches. GNU bc 1.07 prints a second message after the
+   first for each of these calls, names the wrong parameter for the second
+   and third, and crashes on the third; the port prints one message per call
+   naming the parameter that is wrong. */
+define f(a, b) { return (a + b) }
+define g(a[]) { return (a[0]) }
+h[0] = 4
+g(1)
+f(h[], 1)
+f(1, h[])

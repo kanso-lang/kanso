@@ -1,0 +1,3 @@
+print "one\n"
+print "two\n"; quit
+print "never\n"

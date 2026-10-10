@@ -1,0 +1,89 @@
+import "std/list"
+import "std/text"
+
+# Generators for the large fixtures. Each writes a Datalog program to
+# standard output from a seed, with a linear congruential generator, so the
+# same arguments always write the same file.
+#
+# A generator's state: the next random number and the lines written so far.
+type drawn
+  lines
+  seed
+
+pub fn main argv
+  pick argv[1] (size_of argv[2])
+
+fn draw (drawn lines seed)
+  drawn lines ((seed * 1103515245 + 12345) % 2147483648)
+
+# A number in [lo, hi] from the current seed.
+fn between seed lo hi
+  lo + seed / 65536 % (hi - lo + 1)
+
+fn emit (drawn lines seed) line
+  drawn (push lines line) seed
+
+fn finish lines
+  print (text/join lines "\n")
+
+# `tree N`: a random recursive tree on nodes 1..N, in which every node's
+# parent is any node before it, plus N/5 extra edges that always point
+# forward. The graph is acyclic, its depth grows with log N, and its closure
+# stays within a small multiple of N log N.
+fn tree_edges n
+  start = drawn [] 20261010
+  parents = list/fold (upto (n - 1)) start parent_edge
+  extra = list/fold (upto (n / 5)) parents (acc _ -> forward_edge acc n)
+  extra.lines
+
+fn parent_fact acc i
+  child = i + 1
+  next = draw acc
+  emit next "parent({child}, {between next.seed 1 (child - 1)})."
+
+fn parent_edge acc i
+  child = i + 1
+  next = draw acc
+  emit next "edge({between next.seed 1 (child - 1)}, {child})."
+
+fn forward_edge acc n
+  first = draw acc
+  second = draw first
+  a = between first.seed 1 (n - 1)
+  b = between second.seed (a + 1) n
+  emit second "edge({a}, {b})."
+
+fn pick "tree" n
+  rules = ["path(X, Y) :- edge(X, Y)." "path(X, Z) :- path(X, Y), edge(Y, Z)."]
+  queries = ["?- path(1, {n})." "?- path({n}, 1)." "?- path(X, 2)."]
+  header = ["% transitive closure over a generated tree of {n} nodes"]
+  body = text/concat header (tree_edges n)
+  finish (text/concat body (text/concat rules queries))
+
+# `family N`: people 1..N in a random recursive tree, each person's parent
+# any person before them, and the same-generation program over it.
+fn pick "family" n
+  start = drawn [] 19840812
+  parents = list/fold (upto (n - 1)) start parent_fact
+  rules = ["person(X) :- parent(X, _)." "person(X) :- parent(_, X)."]
+    . push "sg(X, X) :- person(X)."
+    . push "sg(X, Y) :- parent(X, XP), sg(XP, YP), parent(Y, YP)."
+  queries = ["?- sg({n}, {n - 1})." "?- sg({n}, 1)." "?- sg(2, Y)."]
+  header = ["% same generation over a generated family of {n} people"]
+  body = text/concat header parents.lines
+  finish (text/concat body (text/concat rules queries))
+
+fn pick none _
+  print "usage: gen <kind> <size>; try `tree 2500`"
+
+fn pick kind _
+  print "unknown generator `{kind}`; try `tree 2500`"
+
+fn upto n
+  list/to_list (list/take list/naturals n)
+
+fn size_of none
+  100
+
+fn size_of digits
+  text/to_int digits

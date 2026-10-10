@@ -1,0 +1,7 @@
+/* halt stops the program when it runs */
+print "before\n"
+for (i = 0; i < 10; i++) {
+  if (i == 3) halt
+  print i, "\n"
+}
+print "never\n"

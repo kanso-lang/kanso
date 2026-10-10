@@ -1,0 +1,180 @@
+import "std/list"
+import "std/text"
+
+# A rendered block. Every block but a paragraph in a tight list starts on
+# a fresh line and ends one; `breaks` says which kind this is.
+type rendered
+  body
+  breaks
+
+fn alt_text (code_span v)
+  escape_html v
+
+fn alt_text (emph kids)
+  alt_texts kids
+
+fn alt_text hardbreak
+  "\n"
+
+fn alt_text (image _ kids _)
+  alt_texts kids
+
+fn alt_text (link _ kids _)
+  alt_texts kids
+
+fn alt_text (plain v)
+  escape_html v
+
+fn alt_text (raw_html v)
+  v
+
+fn alt_text softbreak
+  "\n"
+
+fn alt_text (strong kids)
+  alt_texts kids
+
+fn alt_text _
+  ""
+
+fn alt_texts kids
+  text/join (list/to_list (list/map kids alt_text)) ""
+
+fn attr_title ""
+  ""
+
+fn attr_title title
+  " title=\"{escape_html title}\""
+
+fn code_class ""
+  ""
+
+fn code_class info
+  word = first_word info
+  return "" if word == ""
+  " class=\"language-{escape_html word}\""
+
+# Each line of code ends in a newline, the last one included.
+fn code_text lines
+  if (length lines == 0) "" "{text/join lines "\n"}\n"
+
+fn first_word info
+  spaced = swap (swap info "\t" " ") "\n" " "
+  words = text/split spaced " "
+  if (several_words? words) words[1] spaced
+
+fn several_words? (err _)
+  false
+
+fn several_words? _
+  true
+
+fn html_literal lines
+  text/join (trim_blank_tail lines) "\n"
+
+fn inline_html (code_span v)
+  "<code>{escape_html v}</code>"
+
+fn inline_html (emph kids)
+  "<em>{inlines_html kids}</em>"
+
+fn inline_html hardbreak
+  "<br />\n"
+
+fn inline_html (image dest kids title)
+  src = escape_html dest
+  "<img src=\"{src}\" alt=\"{alt_texts kids}\"{attr_title title} />"
+
+fn inline_html (link dest kids title)
+  "<a href=\"{escape_html dest}\"{attr_title title}>{inlines_html kids}</a>"
+
+fn inline_html (plain v)
+  escape_html v
+
+fn inline_html (raw_html v)
+  v
+
+fn inline_html softbreak
+  "\n"
+
+fn inline_html (strong kids)
+  "<strong>{inlines_html kids}</strong>"
+
+fn inline_html _
+  ""
+
+fn inlines_html kids
+  text/join (list/to_list (list/map kids inline_html)) ""
+
+fn block_html f tight refs
+  kind_html f f.kind tight refs
+
+fn inlines_of f refs
+  inlines_html (parse_inlines (text/join f.lines "\n") refs)
+
+# Join a container's children. The parts are pushed by this loop and by
+# nothing else, which keeps the list growing in place; pushing through a
+# helper copies it (bugs/push_through_call).
+fn join_kids kids tight refs i parts fresh
+  return text/join parts "" if i > length kids
+  kid_joined kids tight refs i parts fresh (block_of kids[i] tight refs)
+
+fn block_of none _ _
+  rendered "" false
+
+fn block_of f tight refs
+  block_html f tight refs
+
+fn kid_joined kids tight refs i parts fresh (rendered body true)
+  next = if fresh body "\n{body}"
+  join_kids kids tight refs (i + 1) (push parts next) true
+
+fn kid_joined kids tight refs i parts fresh (rendered body false)
+  join_kids kids tight refs (i + 1) (push parts body) (fresh and body == "")
+
+fn kind_html f para true refs
+  rendered (inlines_of f refs) false
+
+fn kind_html f doc _ refs
+  rendered (join_kids f.kids false refs 1 [] true) true
+
+fn kind_html f (fenced _ info _ _) _ _
+  code = escape_html (code_text f.lines)
+  rendered "<pre><code{code_class info}>{code}</code></pre>\n" true
+
+fn kind_html f (heading level) _ refs
+  rendered "<h{level}>{inlines_of f refs}</h{level}>\n" true
+
+fn kind_html _ hr _ _
+  rendered "<hr />\n" true
+
+fn kind_html f (html_block _) _ _
+  rendered "{html_literal f.lines}\n" true
+
+fn kind_html f indented _ _
+  rendered "<pre><code>{escape_html (code_text f.lines)}</code></pre>\n" true
+
+fn kind_html f (item _) tight refs
+  inner = join_kids f.kids tight refs 1 ["<li>"] false
+  rendered "{inner}</li>\n" true
+
+fn kind_html f (listing m tight) _ refs
+  tag = if m.ordered "ol" "ul"
+  start = if (m.ordered and m.start != 1) " start=\"{m.start}\"" ""
+  items = join_kids f.kids tight refs 1 [] true
+  rendered "<{tag}{start}>\n{items}</{tag}>\n" true
+
+fn kind_html f para _ refs
+  rendered "<p>{inlines_of f refs}</p>\n" true
+
+fn kind_html f quote _ refs
+  inner = join_kids f.kids false refs 1 [] true
+  rendered "<blockquote>\n{inner}</blockquote>\n" true
+
+fn kind_html _ _ _ _
+  rendered "" false
+
+# Render a document to HTML, the way cmark's HTML writer lays it out.
+pub fn to_html source
+  doc_tree = parse_document source
+  (block_html doc_tree.root false doc_tree.refs).body

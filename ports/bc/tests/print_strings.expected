@@ -1,0 +1,14 @@
+plain string with \n no escapes
+tab	here
+back\slash " quoted "
+unknown  escape
+123
+x = 0
+x = .250
+abc
+multi
+line
+string
+7
+7
+--- exit 0

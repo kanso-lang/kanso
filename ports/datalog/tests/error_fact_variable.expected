@@ -1,0 +1,3 @@
+--- stderr
+datalog: tests/error_fact_variable.dl:1: a fact may not hold the variable `X`
+--- exit 1

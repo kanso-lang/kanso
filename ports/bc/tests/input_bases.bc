@@ -1,0 +1,40 @@
+/* ibase: numbers are read in it when the statement runs, a lone digit
+   keeps its value, and a digit too big for the base counts as base - 1 */
+ibase = 16
+FF
+A
+1A
+.8
+1.8
+.01
+.FF
+ibase = A
+ibase = 2
+1010
+12
+2
+.1
+.111
+ibase = 1010
+ibase = 8
+777
+ibase = 10
+Z
+ZZ
+define f() { return 10; }
+ibase = 16
+f()
+ibase = A
+f()
+ibase = 4
+04
+004
+40
+0.4
+4.0
+.4
+ibase = A
+ibase = 16
+0G
+G.G
+ibase = A

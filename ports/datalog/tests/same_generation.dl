@@ -1,0 +1,34 @@
+% Same generation: two people are of the same generation when they are the
+% same person, or when their parents are of the same generation.
+% parent(Child, Parent).
+
+parent(bea, ada).
+parent(cal, ada).
+parent(dee, bea).
+parent(eli, bea).
+parent(fay, cal).
+parent(gus, cal).
+parent(hal, dee).
+parent(ivy, eli).
+parent(jon, fay).
+parent(kit, gus).
+parent(lou, gus).
+parent(max, kit).
+parent(ned, zed).
+parent(ora, ned).
+
+person(X) :- parent(X, _).
+person(X) :- parent(_, X).
+
+sg(X, X) :- person(X).
+sg(X, Y) :- parent(X, XP), sg(XP, YP), parent(Y, YP).
+
+cousin(X, Y) :- sg(X, Y), X != Y, !sibling(X, Y).
+sibling(X, Y) :- parent(X, P), parent(Y, P), X != Y.
+
+?- sg(hal, Y).
+?- cousin(hal, Y).
+?- cousin(max, Y).
+?- sg(ora, max).
+?- sibling(bea, Y).
+.output cousin

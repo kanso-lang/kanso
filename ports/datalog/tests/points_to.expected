@@ -1,0 +1,37 @@
+?- pt(d, O).
+  O = o2
+  O = o3
+  (2 answers)
+?- pt(g, O).
+  O = o2
+  O = o3
+  (2 answers)
+?- pt(cur, O).
+  O = n1
+  O = n2_site
+  O = n3_site
+  (3 answers)
+?- pt(w, O).
+  O = o4
+  O = o5
+  (2 answers)
+?- alias(a, Y).
+  Y = c
+  (1 answer)
+?- alias(d, g).
+  yes
+.output hpt (8 tuples)
+  hpt(n1, next, n2_site).
+  hpt(n1, val, o4).
+  hpt(n2_site, next, n3_site).
+  hpt(n2_site, val, o4).
+  hpt(n3_site, next, n1).
+  hpt(n3_site, val, o4).
+  hpt(o1, f, o2).
+  hpt(o1, f, o3).
+-- evaluation
+stratum 1: hpt, pt: 6 rounds, 27 new
+stratum 2: alias: 1 round, 13 new
+relations: alias 13, assign 5, hpt 8, load 3, new 8, pt 19, store 6
+total: 62 tuples after 7 rounds
+--- exit 0

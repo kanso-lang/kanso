@@ -1,0 +1,23 @@
+fn add out x
+  push out x
+
+pub fn direct n
+  "{length (direct_loop n 1 [])}"
+
+fn direct_loop n i out
+  return out if i > n
+  direct_loop n (i + 1) (push out "x")
+
+pub fn helper n
+  "{length (helper_loop n 1 [])}"
+
+fn helper_loop n i out
+  return out if i > n
+  helper_loop n (i + 1) (add out "x")
+
+pub fn nested n
+  "{length (nested_loop n 1 [])}"
+
+fn nested_loop n i out
+  return out if i > n
+  nested_loop n (i + 1) (push (push out "x") "y")

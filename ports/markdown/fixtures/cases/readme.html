@@ -1,0 +1,78 @@
+<h1>markdown: a CommonMark renderer in kanso</h1>
+<p>This is a port of <a href="https://github.com/commonmark/cmark">cmark</a>, the reference
+C implementation of <a href="https://commonmark.org">CommonMark</a>, to kanso. It reads
+Markdown and writes the HTML that cmark writes for it. The parsing strategy
+follows the one described in the CommonMark spec's appendix and used by cmark
+and <a href="https://github.com/commonmark/commonmark.js">commonmark.js</a>: a pass over
+lines that maintains a stack of open blocks, then a pass over each paragraph
+and heading for inline structure. The code was written from that description
+and from the spec; no source was copied from either implementation.</p>
+<p>Credit for the design belongs to John MacFarlane and the CommonMark
+contributors. The spec examples under <code>fixtures/spec/</code> are taken from the
+CommonMark spec, version 0.31.2, which is licensed CC-BY-SA 4.0.</p>
+<h2>What it covers</h2>
+<p>All 652 examples in the CommonMark 0.31.2 spec pass, byte for byte, on the
+interpreter, the dev build and the release build.</p>
+<p>Blocks: ATX and setext headings, paragraphs, thematic breaks, block quotes,
+bullet and ordered lists (tight and loose, nested, with lazy continuation
+lines), indented and fenced code blocks with info strings, all seven kinds of
+HTML block, and link reference definitions. Tabs are expanded to four-column
+stops where they count as indentation, as the spec requires.</p>
+<p>Inlines: emphasis and strong emphasis by the delimiter-run algorithm,
+including the rule of three; code spans; inline links and images, and full,
+collapsed and shortcut reference links; URI and email autolinks; raw HTML;
+backslash escapes; named, decimal and hexadecimal character references, with
+the full HTML5 entity table; hard and soft line breaks.</p>
+<h2>What it leaves out</h2>
+<ul>
+<li>cmark's other output formats (XML, LaTeX, man, CommonMark) and its
+source-position option. Only HTML is written.</li>
+<li>Extensions such as GitHub's tables, strikethrough and task lists.</li>
+<li>cmark's &quot;safe&quot; mode, which drops raw HTML and dangerous URLs. HTML is passed
+through, as <code>cmark --unsafe</code> does.</li>
+<li>Two places where the spec defers to Unicode tables use approximations,
+because the standard library has no Unicode character data:
+<ul>
+<li>link labels are case-folded for ASCII, Latin-1, Greek and Cyrillic and
+for <code>ß</code>, which covers the spec's examples but not all of Unicode;</li>
+<li>&quot;Unicode punctuation&quot; for emphasis flanking is a list of code-point
+blocks rather than the P and S categories.</li>
+</ul>
+</li>
+<li>Performance on large documents is worse than linear in places; see
+FRICTION.md. A typical README renders in a few milliseconds.</li>
+</ul>
+<h2>Running it</h2>
+<p>The toolchain is <code>/tmp/claude-0/kanso-main/kanso</code> in this environment.</p>
+<pre><code>kanso run main.kso &lt; input.md              # native, dev build
+kanso run main.kso --interp &lt; input.md     # the interpreter
+kanso build main.kso --release             # ./main, optimised
+kanso test commonmark                      # unit tests
+</code></pre>
+<p>The program reads Markdown on standard input and writes HTML to standard
+output.</p>
+<p><code>sh check.sh</code> runs the unit tests and then every fixture on all three engines,
+comparing each output to the expected HTML. <code>fixtures/spec/</code> holds the spec
+examples (one <code>.md</code> and one <code>.html</code> per example, with the spec's <code>→</code> turned
+back into tabs). <code>fixtures/cases/</code> holds longer documents whose expected HTML
+was produced by commonmark.js 0.31.2.</p>
+<h2>Layout</h2>
+<pre><code>main.kso                 the entry point: stdin to stdout
+commonmark/
+  caret.kso              a cursor on one line, with tab-stop columns
+  chars.kso              character classes and case folding
+  tree.kso               block kinds, frames and parser state
+  blocks.kso             the line-by-line block parser
+  build.kso              putting the block tree together afterwards
+  refs.kso               link reference definitions and label matching
+  links.kso              destinations, titles and labels
+  html.kso               the HTML tag grammar, for blocks and inlines
+  inline.kso             the inline scanner, brackets and emphasis
+  escape.kso             entities, backslash escapes, URL encoding
+  entities.kso           the HTML5 entity table (generated)
+  render.kso             the HTML writer
+  *_test.kso             unit tests
+tools/                   fixture and table generators, a spec report
+bugs/                    reproductions of compiler and runtime bugs
+FRICTION.md              the journal of what got in the way
+</code></pre>

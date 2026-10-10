@@ -1,0 +1,22 @@
+7
+0
+1
+2
+7
+0
+81
+285
+99
+0
+0
+42
+1
+6
+0
+3
+3
+4
+--- stderr
+Runtime error (func=(main), adr=0): Array a subscript out of bounds.
+Runtime error (func=(main), adr=0): Array a subscript out of bounds.
+--- exit 0

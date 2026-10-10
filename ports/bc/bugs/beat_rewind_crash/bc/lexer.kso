@@ -1,0 +1,211 @@
+import "std/list"
+import "std/text"
+
+# One token. `kind` is the token's spelling for operators and keywords, and
+# "name", "number", "string", "newline", "eof" or "bad" otherwise. `line` is
+# the line a syntax error found at this token is reported against: for a
+# newline that is the line after it, which is where GNU bc reports an error
+# whose offending token is the end of a line.
+pub type tok
+  kind
+  line
+  text
+
+pub fn tokenize source
+  bs = text/bytes source
+  lex bs 1 1 []
+
+fn lex bs i line acc
+  lex_at bs[i] bs i line acc
+
+fn lex_at none _ _ line acc
+  push acc (tok "eof" line "")
+
+# newline
+fn lex_at 10 bs i line acc
+  lex bs (i + 1) (line + 1) (push acc (tok "newline" (line + 1) "\n"))
+
+# tab, carriage return and space separate tokens and mean nothing else
+fn lex_at 9 bs i line acc
+  lex bs (i + 1) line acc
+
+fn lex_at 13 bs i line acc
+  lex bs (i + 1) line acc
+
+fn lex_at 32 bs i line acc
+  lex bs (i + 1) line acc
+
+# a string runs to the next double quote, newlines and all
+fn lex_at 34 bs i line acc
+  close = text/find2 bs (i + 1) 34 34
+  body = text/utf8 (text/slice bs (i + 1) (close - 1))
+  lines = line + newlines_in bs (i + 1) (close - 1) 0
+  return push acc (tok "bad" line "\"") if length bs < close
+  lex bs (close + 1) lines (push acc (tok "string" lines body))
+
+# a comment runs to the end of the line, which it leaves for the parser
+fn lex_at 35 bs i line acc
+  lex bs (text/find2 bs i 10 10) line acc
+
+fn lex_at 47 bs i line acc
+  return block_comment bs (i + 2) line acc if bs[i + 1] == 42
+  operator bs i line acc
+
+# a backslash joins two lines into one
+fn lex_at 92 bs i line acc
+  return lex bs (i + 2) (line + 1) acc if bs[i + 1] == 10
+  push acc (tok "bad" line "\\")
+
+fn lex_at c bs i line acc
+  return number bs i line acc if digit? c or c == 46 and digit_after? bs i
+  return word bs i line acc if 97 <= c and c <= 122
+  operator bs i line acc
+
+fn block_comment bs i line acc
+  close = comment_end bs i
+  lines = line + newlines_in bs i close 0
+  return push acc (tok "comment" lines "") if length bs < close
+  lex bs (close + 2) lines acc
+
+fn comment_end bs i
+  star = text/find2 bs i 42 42
+  return star if length bs <= star
+  if (bs[star + 1] == 47) star (comment_end bs (star + 1))
+
+fn newlines_in bs i last count
+  return count if last < i
+  next = text/find2 bs i 10 10
+  return count if last < next
+  newlines_in bs (next + 1) last (count + 1)
+
+# Digits are 0-9 and the capitals A-Z, so that any ibase up to 36 can be
+# written; a backslash-newline inside a number is skipped, which is what
+# lets bc read back its own wrapped output.
+pub fn digit? c
+  48 <= c and c <= 57 or 65 <= c and c <= 90
+
+fn digit_after? bs i
+  next = bs[i + 1]
+  return false if next == none
+  digit? next
+
+fn number bs i line acc
+  end = number_end bs i false
+  raw = text/slice bs i (end - 1)
+  digits = text/utf8 (list/to_list (list/reject raw (b -> b == 92 or b == 10)))
+  lines = line + newlines_in bs i (end - 1) 0
+  lex bs end lines (push acc (tok "number" lines digits))
+
+fn number_end bs i dotted
+  c = bs[i]
+  return number_end bs (i + 1) dotted if digit_char? c
+  return number_end bs (i + 1) true if c == 46 and not dotted
+  return number_end bs (i + 2) dotted if c == 92 and bs[i + 1] == 10
+  i
+
+fn digit_char? none
+  false
+
+fn digit_char? c
+  digit? c
+
+fn word bs i line acc
+  end = word_end bs i
+  spelled = text/utf8 (text/slice bs i (end - 1))
+  lex bs end line (push acc (tok (keyword spelled) line spelled))
+
+fn word_end bs i
+  c = bs[i]
+  return i if c == none
+  return word_end bs (i + 1) if 97 <= c and c <= 122 or digit_or_bar? c
+  i
+
+fn digit_or_bar? c
+  48 <= c and c <= 57 or c == 95
+
+fn keyword "auto"
+  "auto"
+
+fn keyword "break"
+  "break"
+
+fn keyword "continue"
+  "continue"
+
+fn keyword "define"
+  "define"
+
+fn keyword "else"
+  "else"
+
+fn keyword "for"
+  "for"
+
+fn keyword "halt"
+  "halt"
+
+fn keyword "ibase"
+  "ibase"
+
+fn keyword "if"
+  "if"
+
+fn keyword "last"
+  "last"
+
+fn keyword "length"
+  "length"
+
+fn keyword "limits"
+  "limits"
+
+fn keyword "obase"
+  "obase"
+
+fn keyword "print"
+  "print"
+
+fn keyword "quit"
+  "quit"
+
+fn keyword "read"
+  "read"
+
+fn keyword "return"
+  "return"
+
+fn keyword "scale"
+  "scale"
+
+fn keyword "sqrt"
+  "sqrt"
+
+fn keyword "void"
+  "void"
+
+fn keyword "warranty"
+  "warranty"
+
+fn keyword "while"
+  "while"
+
+fn keyword _
+  "name"
+
+# Operators: the two-character spellings first, then one character.
+fn operator bs i line acc
+  pair = text/utf8 (text/slice bs i (i + 1))
+  return lex bs (i + 2) line (push acc (tok pair line pair)) if double? pair
+  single = text/utf8 (text/slice bs i i)
+  return lex bs (i + 1) line (push acc (tok single line single)) if lone? single
+  push acc (tok "bad" line single)
+
+fn double? s
+  list/any? doubles (d -> d == s)
+
+doubles = text/split "!= %= && *= ++ += -- -= /= <= == >= ^= ||" " "
+
+fn lone? s
+  list/any? lones (d -> d == s)
+
+lones = text/split "! % ( ) * + , - . / ; < = > [ ] ^ \{ }" " "

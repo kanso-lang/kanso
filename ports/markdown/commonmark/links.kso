@@ -1,0 +1,145 @@
+import "std/text"
+
+# A link destination or title found at some position: the raw text, still
+# carrying its backslash escapes and entities, and where scanning stopped.
+type found
+  next
+  value
+
+fn angle_dest cs start p
+  angle_step cs start p cs[p]
+
+fn angle_step _ _ _ "\n"
+  none
+
+fn angle_step _ _ _ "<"
+  none
+
+fn angle_step cs start p ">"
+  found (p + 1) (span cs start (p - 1))
+
+fn angle_step cs start p "\\"
+  if (cs[p + 1] == "\n") none (angle_dest cs start (p + 2))
+
+fn angle_step _ _ _ none
+  none
+
+fn angle_step cs start p _
+  angle_dest cs start (p + 1)
+
+# A bare destination runs to whitespace, and its parentheses must balance.
+fn bare_dest cs start p depth
+  bare_step cs start p depth cs[p]
+
+fn bare_end cs start p depth paren
+  return none if p == start and not paren
+  return none if depth != 0
+  found p (span cs start (p - 1))
+
+fn bare_step cs start p 0 ")"
+  bare_end cs start p 0 true
+
+fn bare_step cs start p depth "\\"
+  skip = if (ascii_punct? cs[p + 1]) 2 1
+  bare_dest cs start (p + skip) depth
+
+fn bare_step cs start p depth "("
+  bare_dest cs start (p + 1) (depth + 1)
+
+fn bare_step cs start p depth ")"
+  bare_dest cs start (p + 1) (depth - 1)
+
+fn bare_step cs start p depth none
+  bare_end cs start p depth false
+
+fn bare_step cs start p depth c
+  return bare_end cs start p depth false if link_space? c
+  bare_dest cs start (p + 1) depth
+
+# Where a link label starting at p ends: the position after its `]`, or none
+# when the brackets do not close, nest, or hold more than 999 characters.
+fn label_end cs p
+  return none if cs[p] != "["
+  label_step cs p (p + 1) cs[p + 1]
+
+fn label_step _ _ _ "["
+  none
+
+fn label_step cs open p "\\"
+  label_step cs open (p + 2) cs[p + 2]
+
+fn label_step _ open p "]"
+  if (p - open > 1000) none (p + 1)
+
+fn label_step _ _ _ none
+  none
+
+fn label_step cs open p _
+  label_step cs open (p + 1) cs[p + 1]
+
+fn link_dest cs p
+  return angle_dest cs (p + 1) (p + 1) if cs[p] == "<"
+  bare_dest cs p p 0
+
+fn link_space? " "
+  true
+
+fn link_space? "\t"
+  true
+
+fn link_space? "\n"
+  true
+
+fn link_space? "\r"
+  true
+
+fn link_space? none
+  false
+
+fn link_space? c
+  c == text/from_code 11 or c == text/from_code 12
+
+# A title in double quotes, single quotes or parentheses, with escapes.
+fn link_title cs p
+  title_open cs p cs[p]
+
+fn title_open cs p "\""
+  title_scan cs (p + 1) (p + 1) "\""
+
+fn title_open cs p "'"
+  title_scan cs (p + 1) (p + 1) "'"
+
+fn title_open cs p "("
+  title_scan cs (p + 1) (p + 1) ")"
+
+fn title_open _ _ none
+  none
+
+fn title_open _ _ _
+  none
+
+fn title_scan cs start p close
+  title_step cs start p close cs[p]
+
+fn title_step cs start p close "\\"
+  title_scan cs start (p + 2) close
+
+fn title_step _ _ _ _ none
+  none
+
+fn title_step cs start p close c
+  return found (p + 1) (span cs start (p - 1)) if c == close
+  return none if close == ")" and c == "("
+  title_scan cs start (p + 1) close
+
+# The characters from one position to another, as a string.
+fn span cs from to
+  text/join (text/slice cs from to) ""
+
+# Spaces, at most one newline, and spaces again.
+fn skip_spnl cs p
+  after = skip_spaces_only cs p
+  if (cs[after] == "\n") (skip_spaces_only cs (after + 1)) after
+
+fn skip_spaces_only cs p
+  if (cs[p] == " ") (skip_spaces_only cs (p + 1)) p

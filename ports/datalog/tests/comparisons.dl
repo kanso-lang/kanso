@@ -1,0 +1,26 @@
+% The six comparisons, `=` as a test and as a binding, and comparisons
+% between strings, which order by their bytes.
+n(1). n(2). n(3). n(4).
+word(apple). word(banana). word(cherry).
+
+lt(X, Y) :- n(X), n(Y), X < Y.
+le(X, Y) :- n(X), n(Y), X <= Y, Y <= 2.
+gt(X) :- n(X), X > 3.
+ge(X) :- n(X), X >= 3.
+ne(X) :- n(X), X != 2.
+eq(X) :- n(X), X = 3.
+twin(X, Y) :- n(X), Y = X.
+chain(X, Z) :- n(X), Y = X, Z = Y, Z != 1.
+first_words(W) :- word(W), W < cherry.
+mixed(X) :- n(X), X < apple.
+
+?- lt(X, Y).
+?- le(X, Y).
+?- gt(X).
+?- ge(X).
+?- ne(X).
+?- eq(X).
+?- twin(X, Y).
+?- chain(X, Z).
+?- first_words(W).
+?- mixed(X).

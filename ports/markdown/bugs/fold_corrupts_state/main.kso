@@ -1,0 +1,27 @@
+# BUG: list/fold hands a corrupted accumulator back in native code.
+#
+# This is the CommonMark port's block parser, cut down automatically to the
+# declarations needed to show the fault (353 lines in cm/). It folds the
+# input's lines through `parse_line` with `list/fold`, threading a parser
+# state record that holds a list of frame records, then prints each open
+# frame's `start` field.
+#
+#   kanso run bugs/fold_corrupts_state/main.kso --interp < input.md
+#     1 1 5 6 7 7                       (correct)
+#   kanso run bugs/fold_corrupts_state/main.kso < input.md
+#     1 1 [list/broken_link []] 6 7 7   (wrong: an int field now holds a
+#                                        std/list internal value)
+#
+# `kanso build --release` gives the same wrong answer. In the full port the
+# same fault showed up as a segfault, as "`list/broken_link` has no field
+# `kind`", as "`-` is not defined for these values" and as "no overload of
+# `continues` matches these arguments", depending on the input.
+#
+# Replacing `list/fold lines start parse_line` in cm/blocks.kso with a
+# hand-written recursion over the line index makes native agree with the
+# interpreter, so the port does that. The same fault appeared with list/fold
+# and a closure in the HTML renderer, worked around the same way.
+import "./cm"
+import "std/io"
+
+io/stdin .> (s -> print (cm/starts s))

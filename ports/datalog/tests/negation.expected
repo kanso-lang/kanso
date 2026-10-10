@@ -1,0 +1,36 @@
+?- unreachable(X).
+  X = f
+  X = g
+  X = h
+  (3 answers)
+?- on_cycle(X).
+  X = b
+  X = c
+  (2 answers)
+?- dead_end(X).
+  X = e
+  (1 answer)
+?- acyclic_reach(X).
+  X = a
+  X = d
+  X = e
+  (3 answers)
+?- only_forward(X, Y).
+  X = a, Y = b
+  X = b, Y = d
+  X = d, Y = e
+  X = f, Y = g
+  X = g, Y = h
+  (5 answers)
+-- evaluation
+stratum 1: has_out: 1 round, 6 new
+stratum 2: path: 4 rounds, 16 new
+stratum 3: reach: 5 rounds, 5 new
+stratum 4: dead_end: 1 round, 1 new
+stratum 5: on_cycle: 1 round, 2 new
+stratum 6: only_forward: 1 round, 5 new
+stratum 7: unreachable: 1 round, 3 new
+stratum 8: acyclic_reach: 1 round, 3 new
+relations: acyclic_reach 3, dead_end 1, edge 7, has_out 6, node 8, on_cycle 2, only_forward 5, path 16, reach 5, start 1, unreachable 3
+total: 57 tuples after 15 rounds
+--- exit 0

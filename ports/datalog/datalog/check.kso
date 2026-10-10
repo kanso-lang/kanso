@@ -1,0 +1,266 @@
+import "std/list"
+import "std/text"
+
+# The checks a program must pass before it is evaluated: every relation is
+# used at one arity, every relation that is read is defined somewhere, facts
+# are ground, and every rule is range-restricted.
+#
+# What survives is a `schema`: for each relation name, its arity and the line
+# that first fixed it, and whether anything defines it.
+pub type schema
+  arities
+  defined
+
+# A relation's arity and the line where it was first used.
+pub type shape_at
+  arity
+  line
+
+# What a search for an undefined read answers when it finds none.
+type no_gap
+
+pub type semantic_error
+  line
+  reason
+
+pub fn check_program (program cs)
+  shape = list/fold cs (schema {} {}) note_clause
+  defined_reads cs shape
+
+# Each variable a positive atom binds is bound for the whole rule. An `=`
+# whose one side is bound binds the other, and that can chain, so this runs to
+# a fixpoint.
+pub fn bound_variables body
+  firm = list/fold body {} bind_positive
+  close_equalities body firm
+
+fn arity_clash name line (shape_at was first) now
+  reason = "`{name}` has {now} argument(s) here but {was} at line {first}"
+  err (semantic_error line reason)
+
+fn bind_positive acc (holds a)
+  list/fold a.terms acc bind_term
+
+fn bind_positive acc _
+  acc
+
+fn bind_term acc (variable v)
+  put acc v true
+
+fn bind_term acc _
+  acc
+
+fn bound_term? _ (constant _)
+  true
+
+fn bound_term? firm (variable v)
+  present? firm[v]
+
+fn bound_term? _ wildcard
+  false
+
+fn by_equality acc (comparison left _ "=" right)
+  return bind_term acc right if bound_term? acc left
+  return bind_term acc left if bound_term? acc right
+  acc
+
+fn by_equality acc _
+  acc
+
+fn close_equalities body firm
+  wider = list/fold body firm by_equality
+  if (length wider == length firm) firm (close_equalities body wider)
+
+fn define (schema arities defined) name
+  schema arities (put defined name true)
+
+fn defined_read shape (holds a)
+  undefined_read shape a
+
+fn defined_read shape (lacks a)
+  undefined_read shape a
+
+fn defined_read _ _
+  no_gap
+
+# The first read of an undefined relation, in source order, or no_gap.
+fn defined_reads cs shape
+  missing = list/fold cs no_gap (gap c -> first_gap gap (read_gap shape c))
+  report_gap missing shape
+
+fn first_gap no_gap later
+  later
+
+fn first_gap gap _
+  gap
+
+fn ground_fact head shape
+  stray = list/find head.terms (t -> not constant? t)
+  ground_or_not stray head shape
+
+fn ground_or_not none _ shape
+  shape
+
+fn ground_or_not (variable v) head _
+  err (semantic_error head.line "a fact may not hold the variable `{v}`")
+
+fn ground_or_not _ head _
+  err (semantic_error head.line "a fact may not hold `_`")
+
+fn constant? (constant _)
+  true
+
+fn constant? _
+  false
+
+fn note_atom (schema arities defined) a
+  was = arities[a.name]
+  note_arity (schema arities defined) a was
+
+fn note_arity (schema arities defined) a none
+  first = shape_at (length a.terms) a.line
+  schema (put arities a.name first) defined
+
+fn note_arity shape a was
+  now = length a.terms
+  return shape if now == was.arity
+  arity_clash a.name a.line was now
+
+fn note_clause shape (declaration n line name)
+  columns = list/to_list (list/take (list/repeat wildcard) n)
+  noted = note_atom shape (atom line name columns)
+  define noted name
+
+fn note_clause shape (input _ _ name)
+  define shape name
+
+fn note_clause shape (output _ _)
+  shape
+
+fn note_clause shape (printsize _ _)
+  shape
+
+fn note_clause shape (query a)
+  note_atom shape a
+
+fn note_clause shape (rule body head)
+  checked = rule_checked body head shape
+  start = note_atom checked head
+  noted = list/fold body start note_literal
+  define noted head.name
+
+fn note_literal shape (comparison _ _ _ _)
+  shape
+
+fn note_literal shape (holds a)
+  note_atom shape a
+
+fn note_literal shape (lacks a)
+  note_atom shape a
+
+fn read_gap shape (output line name)
+  undefined_read shape (atom line name [])
+
+fn read_gap shape (printsize line name)
+  undefined_read shape (atom line name [])
+
+fn read_gap shape (query a)
+  undefined_read shape a
+
+fn read_gap shape (rule body _)
+  list/fold body no_gap (gap l -> first_gap gap (defined_read shape l))
+
+fn read_gap _ _
+  no_gap
+
+fn report_gap no_gap shape
+  shape
+
+fn report_gap found _
+  err found
+
+fn present? none
+  false
+
+fn present? _
+  true
+
+fn rule_checked body head shape
+  return ground_fact head shape if length body == 0
+  return wild_head head if list/any? head.terms wildcard?
+  return wild_comparison head if list/any? body wild_comparison?
+  firm = bound_variables body
+  unsafe = list/find (variables_needing body head) (v -> not present? firm[v])
+  safe_or_not unsafe body head shape
+
+fn safe_or_not none _ _ shape
+  shape
+
+fn safe_or_not v body head _
+  reason = unsafe_reason body head v
+  err (semantic_error head.line reason)
+
+# Range restriction, with a hint for the common case: a variable that occurs
+# once, under negation, where `_` was meant.
+fn unsafe_reason body head v
+  plain = "`{v}` is not range-restricted: no positive atom binds it"
+  others = text/concat (variables_in head.terms) (all_of body variables_of)
+  under_not = all_of body negated_variables
+  count = length (list/to_list (list/select others (w -> w == v)))
+  once = count == 1 and list/any? under_not (w -> w == v)
+  hint = "write `_` for a column that may hold anything"
+  if once "{plain}; {hint}" plain
+
+fn undefined_read shape a
+  return no_gap if present? shape.defined[a.name]
+  reason = "`{a.name}` is read but no fact, rule or .decl defines it"
+  semantic_error a.line reason
+
+fn variables_in terms
+  list/to_list (list/map (list/select terms variable?) (t -> t.name))
+
+fn variables_needing body head
+  text/concat (variables_in head.terms) (all_of body variables_of)
+
+# Every variable a literal's `pick` names, across a whole body.
+fn all_of body pick
+  list/fold body [] (acc l -> text/concat acc (pick l))
+
+fn negated_variables (lacks a)
+  variables_in a.terms
+
+fn negated_variables _
+  []
+
+fn variables_of (comparison left _ _ right)
+  variables_in [left right]
+
+fn variables_of (holds _)
+  []
+
+fn variables_of (lacks a)
+  variables_in a.terms
+
+fn variable? (variable _)
+  true
+
+fn variable? _
+  false
+
+fn wild_comparison head
+  err (semantic_error head.line "a comparison may not hold `_`")
+
+fn wild_comparison? (comparison left _ _ right)
+  wildcard? left or wildcard? right
+
+fn wild_comparison? _
+  false
+
+fn wild_head head
+  err (semantic_error head.line "the head of a rule may not hold `_`")
+
+fn wildcard? wildcard
+  true
+
+fn wildcard? _
+  false

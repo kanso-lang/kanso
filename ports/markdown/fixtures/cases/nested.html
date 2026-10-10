@@ -1,0 +1,54 @@
+<h1>Release notes</h1>
+<ol>
+<li>
+<p>Parser</p>
+<ul>
+<li>
+<p>block quotes now nest:</p>
+<blockquote>
+<p>outer</p>
+<blockquote>
+<p>inner, with a list:</p>
+<ul>
+<li>one</li>
+<li>two</li>
+</ul>
+</blockquote>
+</blockquote>
+</li>
+<li>
+<p>fenced code inside items keeps its indent:</p>
+<pre><code class="language-kanso">fn main
+  print &quot;hi&quot;
+</code></pre>
+</li>
+</ul>
+</li>
+<li>
+<p>Renderer</p>
+<ul>
+<li>
+<p>tight lists stay tight</p>
+</li>
+<li>
+<p>loose ones get paragraphs</p>
+<p>even with a second paragraph</p>
+</li>
+</ul>
+</li>
+</ol>
+<ol start="10">
+<li>a list that starts at ten</li>
+<li>and keeps counting</li>
+</ol>
+<ul>
+<li>[ ] not a task list, just brackets</li>
+<li>empty first line, content below</li>
+</ul>
+<blockquote>
+<p>lazy continuation
+of a quote paragraph</p>
+</blockquote>
+<ul>
+<li>and a list that interrupts it</li>
+</ul>

@@ -1,0 +1,3 @@
+/* BC_LINE_LENGTH=30 (line_length.env) */
+2 ^ 200
+"a string longer than thirty characters, which wraps too"

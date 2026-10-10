@@ -1,0 +1,101 @@
+import "std/list"
+import "std/text"
+
+# A link reference definition parsed out of a paragraph's opening lines.
+type definition
+  dest
+  key
+  next
+  title
+
+# What a reference definition says a label points at.
+type ref_def
+  dest
+  title
+
+# The definitions table after reading a paragraph, and what was left of it.
+type taken
+  refs
+  rest
+
+fn at_line_end? cs p
+  q = skip_spaces_only cs p
+  cs[q] == "\n" or cs[q] == none
+
+fn defined refs key dest title
+  return refs if refs[key] != none
+  put refs key (ref_def dest title)
+
+fn dest_part _ _ none
+  none
+
+fn dest_part cs key (found next raw)
+  dest = normalize_url (unescape raw)
+  t = skip_spnl cs next
+  title = if (t == next) none (link_title cs t)
+  titled cs key dest next title
+
+fn label_space? " "
+  true
+
+fn label_space? "\t"
+  true
+
+fn label_space? "\n"
+  true
+
+fn label_space? "\r"
+  true
+
+fn label_space? _
+  false
+
+fn line_end_next cs p
+  q = skip_spaces_only cs p
+  if (cs[q] == "\n") (q + 1) q
+
+# Labels match case-insensitively, with runs of whitespace treated as one
+# space and the ends trimmed.
+fn normalize_label raw
+  cs = text/chars raw
+  inner = text/slice cs 2 (length cs - 1)
+  spaced = list/to_list (list/map inner (c -> if (label_space? c) " " c))
+  words = text/split (text/join spaced "") " "
+  kept = list/to_list (list/reject words (w -> w == ""))
+  fold_case (text/join kept " ")
+
+fn ref_at cs p
+  ref_label cs p (label_end cs p)
+
+fn ref_label _ _ none
+  none
+
+fn ref_label cs p e
+  return none if cs[e] != ":"
+  key = normalize_label (span cs p (e - 1))
+  return none if key == ""
+  dest_part cs key (link_dest cs (skip_spnl cs (e + 1)))
+
+fn ref_result refs cs p none
+  taken refs (span cs p (length cs))
+
+fn ref_result refs cs _ (definition dest key next title)
+  take_from (defined refs key dest title) cs next
+
+fn take_from refs cs p
+  return taken refs (span cs p (length cs)) if cs[p] != "["
+  ref_result refs cs p (ref_at cs p)
+
+# Read link reference definitions off the front of a paragraph's text.
+fn take_refs refs content
+  take_from refs (text/chars content) 1
+
+fn titled cs key dest next none
+  return none if not at_line_end? cs next
+  definition dest key (line_end_next cs next) ""
+
+# A title that runs past the end of its line is dropped, and the definition
+# stands without it if the destination ended its own line.
+fn titled cs key dest next (found after raw)
+  return titled cs key dest next none if not at_line_end? cs after
+  definition dest key (line_end_next cs after) (unescape raw)

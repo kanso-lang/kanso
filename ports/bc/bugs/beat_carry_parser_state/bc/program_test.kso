@@ -1,0 +1,79 @@
+# Whole programs, run in pure code with no I/O: what they print, and what
+# they say on standard error.
+type session
+  errors
+  output
+
+fn run_program program
+  toks = clean_tokens (tokenize program)
+  m = pure_units (start_source (fresh_tables 0) toks) (fresh_machine 70)
+  d = drain m
+  session d.errors d.output
+
+fn pure_units s m
+  u = parse_unit s
+  pure_unit u m
+
+fn pure_unit (unit body s) m
+  r = run_list body 1 m
+  pure_after r s
+
+fn pure_unit (bad_unit line message s) m
+  pure_units s (note m "{line}: {message}\n")
+
+fn pure_unit _ m
+  m
+
+fn pure_after (err (fault fm message)) s
+  pure_units s (note fm "{message}\n")
+
+fn pure_after (err (halting hm)) _
+  hm
+
+fn pure_after other s
+  pure_units s other.machine
+
+fn prints program
+  r = run_program program
+  r.output
+
+fn complains program
+  r = run_program program
+  r.errors
+
+test_a_bare_assignment_prints_nothing = prints "x = 5\nx\n" == "5\n"
+
+test_a_grouped_assignment_prints = prints "(x = 5)\n" == "5\n"
+
+test_assignment_binds_before_comparison = prints "a = 3 < 5\na\n" == "1\n3\n"
+
+test_autos_are_restored = prints restores == "0\n7\n"
+
+test_dynamic_scope = prints scoped == "4\n"
+
+test_error_leaves_earlier_work_done = prints "x = 1; 1 / 0; x = 2\nx\n" == "1\n"
+
+test_error_message = complains "1 / 0\n" == "{runtime_error} Divide by zero\n"
+
+test_halt_stops = prints "1\nhalt\n2\n" == "1\n"
+
+test_long_numbers_wrap = prints "10 ^ 70\n" == "1{zeros 67}\\\n000\n"
+
+test_quit_is_read_not_run = prints "1\nif (0) quit\n2\n" == "1\n"
+
+test_short_circuit = prints "x = 1\n0 && (x = 2)\nx\n" == "0\n1\n"
+
+test_syntax_error_skips_its_line = prints "1 +\n2\n" == "2\n"
+
+test_unary_minus_binds_tighter_than_power = prints "-2 ^ 2\n" == "4\n"
+
+restores = "define f() \{ auto x; x = 2 }\nx = 7\nf()\nx\n"
+
+scoped = "define g() \{ return (y) }\n{scoped_f}f(4)\n"
+
+scoped_f = "define f(y) \{ return (g()) }\n"
+
+runtime_error = "Runtime error (func=(main), adr=0):"
+
+fn zeros n
+  if (n == 0) "" "0{zeros (n - 1)}"

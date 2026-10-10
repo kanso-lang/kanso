@@ -1,0 +1,37 @@
+/* a syntax error abandons the rest of its line; parsing picks up on the
+   next one */
+1 + 2
+1 +
+5
+2 2
+3
+x = (4
+6
+)
+7
+if 1 2
+8
+break
+continue
+return 5
+9
+define f() { return 1 }
+f()
+define bad(a, a) { return 1 }
+bad(1, 2)
+define worse(x) { auto x; return x }
+worse(1)
+print "ok", 
+10
+for (i = 0; i < 3; i++
+11
+x = 3 +* 4
+12
+define void v() { print "v\n" }
+v()
+1 + v()
+y = v()
+13
+if (1) 14
+else 15
+16

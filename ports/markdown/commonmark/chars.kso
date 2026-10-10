@@ -1,0 +1,105 @@
+import "std/list"
+import "std/text"
+
+# The characters a backslash may escape: ASCII punctuation, by code range.
+fn ascii_punct? none
+  false
+
+fn ascii_punct? c
+  n = text/char_code c
+  between? n 33 47 or between? n 58 64 or punct_tail? n
+
+fn between? n lo hi
+  lo <= n and n <= hi
+
+fn digit_run cs p n
+  if (digit? cs[p]) (digit_run cs (p + 1) (n + 1)) n
+
+# ASCII letters fold by adding 32; the folds past ASCII cover Latin-1,
+# Greek and Cyrillic capitals, which is what labels in the wild use.
+fn fold_char "ß"
+  "ss"
+
+fn fold_char "ẞ"
+  "ss"
+
+fn fold_char c
+  n = text/char_code c
+  return text/from_code (n + 32) if folds_by_32? n
+  return text/from_code (n + 80) if between? n 1024 1039
+  c
+
+# Case-fold a label for matching: the spec asks for Unicode case folding,
+# and nothing in std/text lowers a string, so this covers the common blocks.
+pub fn fold_case s
+  text/join (list/to_list (list/map (text/chars s) fold_char)) ""
+
+fn folds_by_32? n
+  return true if between? n 65 90
+  return n != 215 if between? n 192 222
+  return n != 930 if between? n 913 937
+  between? n 1040 1071
+
+# ASCII-only lowering, for HTML tag names and URL schemes.
+pub fn lower_ascii s
+  text/join (list/to_list (list/map (text/chars s) lower_char)) ""
+
+fn lower_char c
+  n = text/char_code c
+  if (between? n 65 90) (text/from_code (n + 32)) c
+
+fn punct_tail? n
+  between? n 91 96 or between? n 123 126
+
+# Unicode punctuation and symbols (categories P and S) by block. There is no
+# category table in the standard library, so this lists the blocks whole and
+# carves out the letters and digits that live inside them.
+fn punct? none
+  false
+
+fn punct? c
+  n = text/char_code c
+  return ascii_punct? c if n < 128
+  return latin_punct? n if n < 256
+  wide_punct? n
+
+fn latin_punct? n
+  return false if n == 170 or n == 178 or n == 179 or n == 181
+  return false if n == 185 or n == 186 or between? n 188 190
+  between? n 161 191 or n == 215 or n == 247
+
+fn wide_punct? n
+  return true if between? n 8208 8231 or between? n 8240 8286
+  return true if between? n 8352 8399 or between? n 8448 8527
+  return true if between? n 8592 9215 or between? n 9472 10239
+  return true if between? n 10496 11263 or between? n 12289 12291
+  return true if between? n 12296 12305 or between? n 65281 65295
+  return true if between? n 65306 65312 or between? n 65339 65344
+  between? n 65371 65381
+
+# How many times `c` repeats from p.
+fn run_length cs p c
+  if (cs[p] == c) (1 + run_length cs (p + 1) c) 0
+
+pub fn space_or_tab? " "
+  true
+
+pub fn space_or_tab? "\t"
+  true
+
+pub fn space_or_tab? none
+  false
+
+pub fn space_or_tab? _
+  false
+
+# Unicode whitespace for flanking: category Zs plus tab, newline, form feed
+# and carriage return. The edges of the text count as whitespace.
+fn white? none
+  true
+
+fn white? c
+  n = text/char_code c
+  return true if n == 9 or n == 10 or n == 12 or n == 13 or n == 32
+  return true if n == 160 or n == 5760 or between? n 8192 8202
+  n == 8239 or n == 8287 or n == 12288

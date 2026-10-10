@@ -1,0 +1,97 @@
+import "std/text"
+
+# Where the block parser stands on a line. `col` counts columns with tabs
+# expanded to stops of four, `off` indexes `chars` from 1, and `tab` says the
+# character at `off` is a tab already partly spent as indentation.
+type caret
+  chars
+  col
+  off
+  tab
+
+# The first character at or after the caret that is not a space or tab.
+type gap
+  at
+  col
+
+# Advance by `count` columns, spending a tab partway when it is wider
+# than what is left to take.
+fn advance_cols c 0
+  c
+
+fn advance_cols c count
+  advance_col c count c.chars[c.off]
+
+fn advance_col c _ none
+  c
+
+fn advance_col c count "\t"
+  width = 4 - c.col % 4
+  spent = caret c.chars (c.col + width) (c.off + 1) false
+  return advance_cols spent (count - width) if width <= count
+  caret c.chars (c.col + count) c.off true
+
+fn advance_col c count _
+  advance_cols (caret c.chars (c.col + 1) (c.off + 1) false) (count - 1)
+
+# Advance by `count` characters; a tab takes its whole width.
+fn advance_chars c 0
+  c
+
+fn advance_chars c count
+  step = if (c.chars[c.off] == "\t") (4 - c.col % 4) 1
+  next = caret c.chars (c.col + step) (c.off + 1) false
+  if (c.off > length c.chars) c (advance_chars next (count - 1))
+
+fn advance_to c at
+  advance_chars c (at - c.off)
+
+fn blank? c
+  (nonspace c).at > length c.chars
+
+fn caret_of chars
+  caret chars 0 1 false
+
+fn char_at c at
+  c.chars[at]
+
+fn indent c
+  (nonspace c).col - c.col
+
+fn nonspace c
+  skip_spaces c.chars c.off c.col
+
+fn peek c
+  c.chars[c.off]
+
+# What is left of the line, for a block that keeps lines. A tab spent
+# partway leaves its remaining columns behind as spaces.
+fn rest c
+  tail = text/join (text/slice c.chars c.off (length c.chars)) ""
+  return tail if not c.tab
+  pad = text/join (spaces (4 - c.col % 4)) ""
+  "{pad}{text/join (text/slice c.chars (c.off + 1) (length c.chars)) ""}"
+
+fn rest_from c at
+  text/join (text/slice c.chars at (length c.chars)) ""
+
+fn skip_spaces chars at col
+  skip_one chars at col chars[at]
+
+fn skip_one chars at col " "
+  skip_spaces chars (at + 1) (col + 1)
+
+fn skip_one chars at col "\t"
+  skip_spaces chars (at + 1) (col + 4 - col % 4)
+
+fn skip_one _ at col none
+  gap at col
+
+fn skip_one _ at col _
+  gap at col
+
+fn spaces 0
+  []
+
+fn spaces n
+  push (spaces (n - 1)) " "

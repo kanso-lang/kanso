@@ -1,0 +1,25 @@
+import "std/list"
+import "std/text"
+
+fn read_facts contents
+  shown_facts (facts_from (input "f.facts" 3 "f") contents)
+
+fn shown_facts (err e)
+  "{e.line}: {e.reason}"
+
+fn shown_facts facts
+  text/join (list/to_list (list/map facts show_clause)) " "
+
+test_reads_columns =
+  shown = read_facts "a\t1\nb c\t-2\n"
+  agrees shown "f(a, 1). f(\"b c\", -2)."
+
+test_skips_blank_lines = agrees (read_facts "\nx\n\ny") "f(x). f(y)."
+
+test_a_lone_minus_is_text =
+  shown = read_facts "-\n-5\n5-"
+  agrees shown "f(\"-\"). f(-5). f(\"5-\")."
+
+test_refuses_ragged_rows =
+  shown = read_facts "a\tb\nc"
+  agrees shown "3: f.facts:2: expected 2 columns, found 1"

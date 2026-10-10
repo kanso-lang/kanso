@@ -1,0 +1,25 @@
+test_a_lone_digit_keeps_its_value = in_base "A" 2 == from_int 10
+
+test_digits_too_big_for_the_base_clamp = in_base "12" 2 == from_int 3
+
+test_hex_reads = in_base "FF" 16 == from_int 255
+
+test_hex_fraction_keeps_its_digit_count = in_base ".8" 16 == dec 1 5
+
+test_render_binary_fraction = render (dec 2 525) 2 == "101.0100000"
+
+test_render_drops_a_leading_zero = render (dec 1 5) 10 == ".5"
+
+test_render_hex = render (from_int -255) 16 == "-FF"
+
+test_render_keeps_trailing_zeros = render (dec 2 150) 10 == "1.50"
+
+test_render_large_base_groups = render (from_int 300) 17 == " 01 00 11"
+
+test_render_large_base_fraction = render (dec 1 5) 20 == ".10"
+
+test_render_zero_is_always_zero = render (dec 3 0) 10 == "0"
+
+test_a_zero_padded_digit_keeps_its_value = in_base "04" 4 == from_int 4
+
+test_fraction_digits_always_clamp = in_base ".4" 4 == dec 1 7

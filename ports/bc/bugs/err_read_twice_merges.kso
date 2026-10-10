@@ -1,0 +1,42 @@
+# One err, read through two fields of the same name and handed to a record
+# constructor, arrives as a list of two copies of itself. Handed to an
+# ordinary function instead, it arrives once.
+#
+# Expected, by the book's rule that a call keeps the first failure:
+#   caught: boom
+#   caught: boom
+# Actual, on --interp and native alike:
+#   caught: ["boom" "boom"]
+#   caught: boom
+#
+# Each constructor level doubles the list, so an err that crosses n of them
+# arrives as 2^n copies, and an arm written for one err no longer matches.
+type pair
+  a
+  b
+
+print (report (through_constructor 0))
+  .> (_ -> print (report (through_function 0)))
+
+fn make 0
+  err "boom"
+
+fn make n
+  pair n (n + 1)
+
+fn through_constructor n
+  r = make n
+  pair r.a r.b
+
+fn through_function n
+  r = make n
+  join r.a r.b
+
+fn join a b
+  a + b
+
+fn report (err reason)
+  "caught: {reason}"
+
+fn report p
+  "fine: {p}"

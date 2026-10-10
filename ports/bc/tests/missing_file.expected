@@ -1,0 +1,4 @@
+first
+--- stderr
+File tests/no_such_file.bc is unavailable.
+--- exit 1

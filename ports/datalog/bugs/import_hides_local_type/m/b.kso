@@ -1,0 +1,4 @@
+import "std/list"
+
+pub fn total xs
+  list/sum xs

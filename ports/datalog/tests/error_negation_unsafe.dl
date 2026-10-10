@@ -1,0 +1,4 @@
+% A variable that only appears under negation is not range-restricted.
+node(a).
+lonely(X) :- node(X), !edge(X, Y).
+edge(a, a).

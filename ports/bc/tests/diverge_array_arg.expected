@@ -1,0 +1,5 @@
+--- stderr
+Runtime error (func=(main), adr=0): Parameter type mismatch parameter a.
+Runtime error (func=(main), adr=0): Parameter type mismatch parameter a.
+Runtime error (func=(main), adr=0): Parameter type mismatch parameter b.
+--- exit 0

@@ -1,0 +1,3 @@
+--- stderr
+datalog: tests/error_directive.dl:2:1: unknown directive `.load`
+--- exit 1

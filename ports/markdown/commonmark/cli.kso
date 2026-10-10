@@ -1,0 +1,32 @@
+import "std/io"
+import "std/os"
+
+# The command line, as cmark takes it: Markdown files named as arguments
+# are read and rendered in turn as one document, and with no arguments
+# standard input is read instead.
+pub fn main argv
+  return io/stdin .> write_html if length argv == 0
+  return usage if argv[1] == "-h" or argv[1] == "--help"
+  read_all argv 1 ""
+
+fn read_all argv i text
+  read_one argv i text argv[i]
+
+fn read_one _ _ text none
+  write_html text
+
+fn read_one argv i text path
+  os/read_file path .> (got -> appended argv i text got)
+
+# A file the user named may not exist, and that is an answer rather than a
+# failure: say so on stderr and exit 1, as cmark does.
+fn appended _ _ _ (file_not_found path)
+  io/write_err "markdown: cannot open {path}\n" .> (_ -> os/exit 1)
+
+fn appended argv i text more
+  read_all argv (i + 1) "{text}{more}"
+
+usage = print "usage: markdown [file ...]   (reads stdin when no file is given)"
+
+fn write_html text
+  io/write (to_html text)

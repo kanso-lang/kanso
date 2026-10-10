@@ -1,0 +1,283 @@
+import "std/text"
+
+# A recursive-descent parser over the token list. Every step answers a
+# `parsed` (the position after what it read, and the value) or an err holding
+# a syntax_error that points at the offending token.
+type parsed
+  p
+  value
+
+pub fn parse source
+  tokens = lex source
+  clauses tokens 1 []
+
+fn after_body ts (parsed p body) head
+  end_of_rule p body head (tok ts p)
+
+fn after_head ts (parsed p head)
+  after_head_mark ts p head (tok ts p)
+
+fn after_head_mark _ p head (token _ mark_tok _ ".")
+  parsed (p + 1) (rule [] head)
+
+fn after_head_mark ts p head (token _ mark_tok _ ":-")
+  body = literals ts (p + 1) []
+  after_body ts body head
+
+fn after_head_mark _ _ _ t
+  unexpected t "expected `.` or `:-` after the head of a clause"
+
+fn arguments ts p acc
+  arg = term_at ts p (tok ts p)
+  more_arguments ts arg acc
+
+fn atom_at ts p (token _ lower_tok line name)
+  atom_args ts (p + 1) line name (tok ts (p + 1))
+
+fn atom_at _ _ t
+  unexpected t "expected a predicate name"
+
+fn atom_args ts p line name (token _ mark_tok _ "(")
+  args = arguments ts (p + 1) []
+  closed_atom args line name
+
+fn atom_args _ p line name _
+  parsed p (atom line name [])
+
+fn clause_at ts p (token _ directive_tok _ "decl")
+  declared ts (p + 1) (tok ts (p + 1))
+
+fn clause_at ts p (token _ directive_tok _ "input")
+  input_at ts (p + 1) (tok ts (p + 1))
+
+fn clause_at ts p (token _ directive_tok _ "output")
+  output_at ts (p + 1) (tok ts (p + 1))
+
+fn clause_at ts p (token _ directive_tok _ "printsize")
+  printsize_at ts (p + 1) (tok ts (p + 1))
+
+fn clause_at _ _ (token col directive_tok line other)
+  err (syntax_error col line "unknown directive `.{other}`")
+
+fn clause_at ts p (token _ mark_tok _ "?-")
+  asked = atom_at ts (p + 1) (tok ts (p + 1))
+  finish_query ts asked
+
+fn clause_at ts p _
+  head = atom_at ts p (tok ts p)
+  after_head ts head
+
+fn clauses ts p acc
+  next_clause ts p acc (tok ts p)
+
+fn closed_atom (parsed p args) line name
+  parsed p (atom line name args)
+
+fn comparison_at ts p left line (token _ mark_tok _ op)
+  right = term_at ts (p + 1) (tok ts (p + 1))
+  compared right left line op
+
+fn compared (parsed p right) left line op
+  parsed p (comparison left line op right)
+
+fn decl_params _ p n (token _ mark_tok _ ")")
+  parsed (p + 1) n
+
+fn decl_params ts p n (token _ mark_tok _ ",")
+  decl_param ts (p + 1) n (tok ts (p + 1))
+
+fn decl_params _ _ _ t
+  unexpected t "expected `,` or `)` in a declaration"
+
+fn decl_param ts p n (token _ lower_tok _ _)
+  decl_typed ts (p + 1) n (tok ts (p + 1))
+
+fn decl_param ts p n (token _ upper_tok _ _)
+  decl_typed ts (p + 1) n (tok ts (p + 1))
+
+fn decl_param _ _ _ t
+  unexpected t "expected a column name in a declaration"
+
+# `.decl edge(x: number, y: symbol)`: the column types are accepted and
+# ignored, since every column here holds any constant.
+fn decl_typed ts p n (token _ mark_tok _ ":")
+  decl_type ts (p + 1) n (tok ts (p + 1))
+
+fn decl_typed ts p n t
+  decl_params ts p (n + 1) t
+
+fn decl_type ts p n (token _ lower_tok _ _)
+  decl_params ts (p + 1) (n + 1) (tok ts (p + 1))
+
+fn decl_type _ _ _ t
+  unexpected t "expected a type name after `:`"
+
+fn declared ts p (token _ lower_tok line name)
+  declared_open ts (p + 1) line name (tok ts (p + 1))
+
+fn declared _ _ t
+  unexpected t "expected a relation name after `.decl`"
+
+fn declared_open ts p line name (token _ mark_tok _ "(")
+  params = decl_first ts (p + 1) (tok ts (p + 1))
+  declared_done params line name
+
+fn declared_open _ p line name _
+  parsed p (declaration 0 line name)
+
+fn decl_first _ p (token _ mark_tok _ ")")
+  parsed (p + 1) 0
+
+fn decl_first ts p t
+  decl_param ts p 0 t
+
+fn declared_done (parsed p arity) line name
+  parsed p (declaration arity line name)
+
+fn end_of_rule p body head (token _ mark_tok _ ".")
+  parsed (p + 1) (rule body head)
+
+fn end_of_rule _ _ _ t
+  unexpected t "expected `,` or `.` after the body"
+
+fn expect ts p text
+  expect_mark p text (tok ts p)
+
+fn expect_mark p text (token _ mark_tok _ seen)
+  if (seen == text) (p + 1) (expected_mark text (token 0 mark_tok 0 seen))
+
+fn expect_mark _ text t
+  expected_mark text t
+
+fn expected_mark text t
+  unexpected t "expected `{text}`"
+
+fn finish_query ts (parsed p asked)
+  parsed (expect ts p ".") (query asked)
+
+fn literal_at ts p (token _ mark_tok _ "!")
+  negated ts (p + 1)
+
+fn literal_at ts p (token _ lower_tok _ "not")
+  negated ts (p + 1)
+
+fn literal_at ts p (token _ lower_tok line w)
+  next = tok ts (p + 1)
+  return comparison_at ts (p + 1) (constant w) line next if operator? next
+  a = atom_at ts p (token 0 lower_tok line w)
+  positive a
+
+fn literal_at ts p t
+  left = term_at ts p t
+  operand left ts t.line
+
+fn literals ts p acc
+  lit = literal_at ts p (tok ts p)
+  more_literals ts lit acc
+
+fn more_arguments ts (parsed p arg) acc
+  more_arguments_at ts p (push acc arg) (tok ts p)
+
+fn more_arguments_at ts p acc (token _ mark_tok _ ",")
+  arguments ts (p + 1) acc
+
+fn more_arguments_at _ p acc (token _ mark_tok _ ")")
+  parsed (p + 1) acc
+
+fn more_arguments_at _ _ _ t
+  unexpected t "expected `,` or `)` between arguments"
+
+fn more_literals ts (parsed p lit) acc
+  more_literals_at ts p (push acc lit) (tok ts p)
+
+fn more_literals_at ts p acc (token _ mark_tok _ ",")
+  literals ts (p + 1) acc
+
+fn more_literals_at _ p acc _
+  parsed p acc
+
+fn negated ts p
+  inner = atom_at ts p (tok ts p)
+  negated_done inner
+
+fn negated_done (parsed p inner)
+  parsed p (lacks inner)
+
+fn next_clause _ _ acc (token _ end_tok _ _)
+  program acc
+
+fn next_clause ts p acc _
+  one = clause_at ts p (tok ts p)
+  stored ts one acc
+
+fn operand (parsed p left) ts line
+  comparison_at ts p left line (tok ts p)
+
+fn operator? (token _ mark_tok _ op)
+  op == "=" or op == "!=" or op == "<" or op == "<=" or op == ">" or op == ">="
+
+fn operator? _
+  false
+
+fn input_at ts p (token _ lower_tok line name)
+  input_file p line name (tok ts (p + 1))
+
+fn input_at _ _ t
+  unexpected t "expected a relation name after `.input`"
+
+fn input_file p line name (token _ string_tok _ file)
+  parsed (p + 2) (input file line name)
+
+fn input_file p line name _
+  parsed (p + 1) (input "{name}.facts" line name)
+
+fn output_at _ p (token _ lower_tok line name)
+  parsed (p + 1) (output line name)
+
+fn output_at _ _ t
+  unexpected t "expected a relation name after `.output`"
+
+fn printsize_at _ p (token _ lower_tok line name)
+  parsed (p + 1) (printsize line name)
+
+fn printsize_at _ _ t
+  unexpected t "expected a relation name after `.printsize`"
+
+fn positive (parsed p a)
+  parsed p (holds a)
+
+fn stored ts (parsed p one) acc
+  clauses ts p (push acc one)
+
+fn term_at _ p (token _ upper_tok _ v)
+  parsed (p + 1) (variable v)
+
+fn term_at _ p (token _ blank_tok _ _)
+  parsed (p + 1) wildcard
+
+fn term_at _ p (token _ lower_tok _ w)
+  parsed (p + 1) (constant w)
+
+fn term_at _ p (token _ string_tok _ s)
+  parsed (p + 1) (constant s)
+
+fn term_at _ p (token _ number_tok _ digits)
+  parsed (p + 1) (constant (text/to_int digits))
+
+fn term_at _ _ t
+  unexpected t "expected a variable, `_` or a constant"
+
+fn tok ts p
+  token_or_end ts ts[p]
+
+fn token_or_end ts none
+  ts[length ts]
+
+fn token_or_end _ t
+  t
+
+fn unexpected (token col end_tok line _) reason
+  err (syntax_error col line "{reason}, found end of input")
+
+fn unexpected (token col _ line seen) reason
+  err (syntax_error col line "{reason}, found `{seen}`")

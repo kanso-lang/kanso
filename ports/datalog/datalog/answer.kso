@@ -1,0 +1,104 @@
+import "std/list"
+import "std/text"
+
+# Turning an evaluated database into text: answers to `?-` queries and dumps
+# for `.output`, in source order, then what evaluation did. Rows are sorted by
+# their constants, and constants sort in id order, so sorting the codes of the
+# rows sorts the rows, and every engine prints the same bytes.
+pub fn answer_all tree table ev
+  base = base_of table
+  shown = list/fold tree.clauses [] (acc c -> answered base table ev acc c)
+  text/concat shown (summary ev)
+
+fn answered base table ev acc c
+  text/concat acc (answer_clause base table ev c)
+
+# A query runs as the body of a rule whose head lists its variables, through
+# the same planner and evaluator as every other rule.
+fn answer_clause base table ev (query a)
+  vars = distinct_variables a.terms
+  r = rule [(holds a)] (atom a.line "?" (list/to_list (list/map vars variable)))
+  ctx = context base ev.db {} {}
+  found = run_from ctx (plan_rule table r 0) 1 [] []
+  rows = decoded base (length vars) (distinct found)
+  text/concat ["?- {show_atom a}."] (answer_lines table vars rows)
+
+fn answer_clause base table ev (output _ name)
+  rel = ev.db[name]
+  rows = decoded base (arity_or_zero rel) (list/sort (rows_of rel))
+  head = ".output {name} ({counted (length rows) "tuple"})"
+  lines = list/to_list (list/map rows (t -> fact_line table name t))
+  text/concat [head] lines
+
+fn answer_clause _ _ ev (printsize _ name)
+  [".printsize {name}: {counted (size_or_zero ev.db[name]) "tuple"}"]
+
+fn answer_clause _ _ _ _
+  []
+
+fn answer_lines table vars rows
+  return [(if (length rows > 0) "  yes" "  no")] if length vars == 0
+  lines = list/to_list (list/map rows (r -> "  {bindings_text table vars r}"))
+  push lines "  ({counted (length rows) "answer"})"
+
+fn bindings_text table vars ids
+  pairs = list/fold ids [] (acc id -> push acc (binding table vars acc id))
+  text/join pairs ", "
+
+fn binding table vars acc id
+  "{vars[length acc + 1]} = {constant_text table id}"
+
+fn constant_text table id
+  show_term (constant (value_of table id))
+
+fn counted 1 noun
+  "1 {noun}"
+
+fn counted n noun
+  "{n} {noun}s"
+
+fn distinct_variables terms
+  named = list/to_list (list/map (list/select terms variable?) (t -> t.name))
+  list/fold named [] add_once
+
+fn add_once acc v
+  if (list/any? acc (w -> w == v)) acc (push acc v)
+
+fn fact_line table name t
+  return "  {name}." if length t == 0
+  shown = list/to_list (list/map t (id -> constant_text table id))
+  "  {name}({text/join shown ", "})."
+
+fn size_or_zero none
+  0
+
+fn size_or_zero rel
+  size_of rel
+
+fn arity_or_zero none
+  0
+
+fn arity_or_zero rel
+  rel.arity
+
+# Sorted codes, as the id lists they stand for.
+fn decoded base arity codes
+  list/to_list (list/map codes (c -> decode base arity c))
+
+fn stratum_line acc r
+  rounds = counted r.rounds "round"
+  names = text/join r.names ", "
+  "stratum {length acc + 1}: {names}: {rounds}, {r.derived} new"
+
+fn summary ev
+  layers = list/fold ev.reports [] (acc r -> push acc (stratum_line acc r))
+  sizes = list/to_list (list/map (entries ev.db) size_text)
+  total = list/fold (values ev.db) 0 (acc r -> acc + size_of r)
+  rounds = list/fold ev.reports 0 (acc r -> acc + r.rounds)
+  all = "total: {counted total "tuple"} after {counted rounds "round"}"
+  listed = if (length sizes == 0) "none" (text/join sizes ", ")
+  tail = ["relations: {listed}" all]
+  text/concat (text/concat ["-- evaluation"] layers) tail
+
+fn size_text (entry name rel)
+  "{name} {size_of rel}"

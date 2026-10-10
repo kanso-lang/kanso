@@ -1,0 +1,322 @@
+import "std/list"
+import "std/text"
+
+# Compiling a rule into a join plan. A plan is a list of steps run left to
+# right over an environment: a list of constant ids, one per variable, in the
+# order the variables were bound. Positive atoms are scanned in the order they
+# are written, except that the atom reading the delta goes first. Every
+# comparison and negation runs as soon as its variables are bound.
+#
+# A term in a plan is a constant id or a slot in the environment.
+pub type fixed
+  id
+
+pub type slot
+  index
+
+# What a scan does with one column of a tuple, found at `place` in its code:
+# bind it to the next slot, or check it against a term. A column a scan
+# ignores gets no operation.
+pub type bind_col
+  place
+
+pub type check_col
+  place
+  term
+
+# Scan a relation. `key_terms` are the terms for the columns in `mask` (bit j-1
+# for column j), which an index can match at once; `keyed_ops` are the column
+# operations left once it has, and `ops` are all of them, for a scan that
+# reads every tuple. With `delta`, read the tuples new in the last round.
+# `whole` says every column is a key.
+pub type scan_step
+  delta
+  key_terms
+  keyed_ops
+  mask
+  name
+  ops
+  whole
+
+# Continue only if no tuple of `name` matches the key. `whole` says every
+# column is a key, so the probe is a membership test.
+pub type absent_step
+  key_terms
+  mask
+  name
+  whole
+
+# Continue only if the comparison holds.
+pub type compare_step
+  left
+  op
+  right
+
+# Bind the next slot to a term's value: `Y = X` with `X` bound.
+pub type assign_step
+  term
+
+pub type plan
+  head
+  name
+  steps
+
+# The planner's state: each bound variable's slot, the literals still
+# waiting for their variables, and the steps so far.
+type planning
+  bound
+  pending
+  steps
+
+# How one column of a scanned atom is matched: against a term known before
+# the scan (`by_key`), by binding a variable first seen here (`by_bind`),
+# against a variable bound earlier in the same atom (`by_repeat`), or not at
+# all (`by_skip`). The names are prefixed so that no pattern variable can be
+# mistaken for one of them (see FRICTION F7).
+type by_key
+  term
+
+type by_bind
+
+type by_repeat
+  term
+
+type by_skip
+
+# The columns planned so far, and the variables bound once they match.
+type laying
+  bound
+  kinds
+
+# A positive atom in join order, and whether it reads the delta.
+type to_scan
+  atom
+  delta
+
+# `delta_at` is 0 for a plan that reads only full relations, or the position
+# among the rule's positive atoms of the one atom that reads the delta.
+pub fn plan_rule table (rule body head) delta_at
+  positives = list/to_list (list/map (list/select body holds?) (l -> l.atom))
+  others = list/to_list (list/reject body holds?)
+  start = settle table (planning {} others [])
+  order = ordered positives delta_at
+  js = list/fold order start (p a -> scanned table p a)
+  heads = list/to_list (list/map head.terms (t -> compiled table js.bound t))
+  plan heads head.name js.steps
+
+# The positions, counting from 1, of the positive atoms that read one of
+# `names`.
+pub fn recursive_positions (rule body _) names
+  positives = list/to_list (list/select body holds?)
+  places = upto (length positives)
+  list/to_list (list/select places (i -> in_stratum? positives[i] names))
+
+fn add_step (planning bound pending steps) step
+  planning bound pending (push steps step)
+
+fn all_keys? kinds
+  list/all? kinds key?
+
+fn bind_step (planning bound pending steps) name step
+  planning (put bound name (length bound + 1)) pending (push steps step)
+
+fn compiled table _ (constant c)
+  fixed (known_id table (constant c))
+
+fn compiled _ bound (variable v)
+  slot_of bound v
+
+fn compiled _ _ wildcard
+  fixed 0
+
+fn firm? _ (constant _)
+  true
+
+fn firm? bound (variable v)
+  present? bound[v]
+
+fn firm? _ wildcard
+  false
+
+fn holds? (holds _)
+  true
+
+fn holds? _
+  false
+
+fn in_stratum? none _
+  false
+
+fn in_stratum? (holds a) names
+  list/any? names (n -> n == a.name)
+
+fn in_stratum? _ _
+  false
+
+fn keep (planning bound pending steps) l
+  planning bound (push pending l) steps
+
+fn keys_of kinds
+  list/to_list (list/map (list/select kinds key?) (k -> k.term))
+
+fn key? (by_key _)
+  true
+
+fn key? _
+  false
+
+fn known_id table c
+  or_zero (id_of table c)
+
+fn lay table _ (laying bound kinds) (constant c)
+  laying bound (push kinds (by_key (compiled table bound (constant c))))
+
+fn lay _ before (laying bound kinds) (variable v)
+  kind = variable_kind before bound v
+  wider = if (fresh? kind) (put bound v (length bound + 1)) bound
+  laying wider (push kinds kind)
+
+fn lay _ _ (laying bound kinds) wildcard
+  laying bound (push kinds by_skip)
+
+fn mask_bit (by_key _) i
+  power 2 (i - 1)
+
+fn fresh? by_bind
+  true
+
+fn fresh? _
+  false
+
+fn mask_bit none _
+  0
+
+fn mask_bit _ _
+  0
+
+fn mask_of kinds
+  places = upto (length kinds)
+  list/fold places 0 (acc i -> acc + mask_bit kinds[i] i)
+
+# The operations for a scan's columns, in column order. A keyed scan has
+# already matched its key columns through the index and skips them.
+fn column_ops base kinds keyed?
+  n = length kinds
+  list/fold (upto n) [] (os j -> column_op os base kinds j keyed?)
+
+fn column_op acc base kinds j keyed?
+  add_op acc (place_of base (length kinds) j) (kind_at kinds j) keyed?
+
+# The kind of column j, which is always in range.
+fn kind_at kinds j
+  return by_skip if j < 1 or length kinds < j
+  kinds[j]
+
+fn add_op acc place kind true
+  keyed_op acc place kind
+
+fn add_op acc place kind false
+  full_op acc place kind
+
+# An operation for every column but the ignored ones.
+fn full_op acc place (by_key t)
+  push acc (check_col place t)
+
+fn full_op acc place by_bind
+  push acc (bind_col place)
+
+fn full_op acc place (by_repeat t)
+  push acc (check_col place t)
+
+fn full_op acc _ by_skip
+  acc
+
+# The same, leaving out the columns an index matched.
+fn keyed_op acc _ (by_key _)
+  acc
+
+fn keyed_op acc place kind
+  full_op acc place kind
+
+fn or_zero none
+  0
+
+fn or_zero n
+  n
+
+fn ordered positives 0
+  list/to_list (list/map positives (a -> to_scan a false))
+
+fn ordered positives delta_at
+  places = upto (length positives)
+  rest = list/to_list (list/select places (i -> i != delta_at))
+  others = list/to_list (list/map rest (i -> to_scan positives[i] false))
+  text/concat [(to_scan positives[delta_at] true)] others
+
+# `=` binds a variable when the other side is known, and tests when both are.
+fn equality table st (comparison left _ _ right) true true
+  add_step st (tested table st.bound left "=" right)
+
+fn equality table st (comparison left _ _ (variable v)) true false
+  bind_step st v (assign_step (compiled table st.bound left))
+
+fn equality table st (comparison (variable v) _ _ right) false true
+  bind_step st v (assign_step (compiled table st.bound right))
+
+fn equality _ st l _ _
+  keep st l
+
+fn ordering table st (comparison left _ op right) true
+  add_step st (tested table st.bound left op right)
+
+fn ordering _ st l false
+  keep st l
+
+fn place_literal table st (comparison left line "=" right)
+  l = comparison left line "=" right
+  equality table st l (firm? st.bound left) (firm? st.bound right)
+
+fn place_literal table st (comparison left line op right)
+  both = firm? st.bound left and firm? st.bound right
+  ordering table st (comparison left line op right) both
+
+fn place_literal table st (lacks a)
+  ready = list/all? a.terms (t -> not variable? t or firm? st.bound t)
+  if ready (add_step st (probe table st.bound a)) (keep st (lacks a))
+
+fn probe table bound a
+  kinds = list/to_list (list/map a.terms (t -> probe_kind table bound t))
+  absent_step (keys_of kinds) (mask_of kinds) a.name (all_keys? kinds)
+
+fn probe_kind _ _ wildcard
+  by_skip
+
+fn probe_kind table bound t
+  by_key (compiled table bound t)
+
+fn scanned table st (to_scan a delta)
+  start = laying st.bound []
+  laid = list/fold a.terms start (acc t -> lay table st.bound acc t)
+  kinds = laid.kinds
+  base = base_of table
+  ops = column_ops base kinds false
+  keyed = column_ops base kinds true
+  mask = mask_of kinds
+  step = scan_step delta (keys_of kinds) keyed mask a.name ops (all_keys? kinds)
+  settle table (planning laid.bound st.pending (push st.steps step))
+
+fn slot_of bound v
+  slot (or_zero bound[v])
+
+fn settle table (planning bound pending steps)
+  start = planning bound [] steps
+  after = list/fold pending start (st l -> place_literal table st l)
+  if (length after.pending == length pending) after (settle table after)
+
+fn variable_kind before bound v
+  return by_key (slot_of before v) if present? before[v]
+  return by_repeat (slot_of bound v) if present? bound[v]
+  by_bind
+
+fn tested table bound left op right
+  compare_step (compiled table bound left) op (compiled table bound right)

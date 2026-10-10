@@ -1,0 +1,253 @@
+import "std/text"
+
+# What the lexer produces: each token knows its kind, its text and where it
+# started, so the parser can point at it.
+pub type token
+  col
+  kind
+  line
+  text
+
+# Token kinds. `lower_tok` is a lowercase identifier (a constant or a
+# predicate name), `upper_tok` a variable, `blank_tok` the wildcard `_`,
+# `directive_tok` a word after a dot such as `.decl`, and `mark_tok` any
+# punctuation, whose text says which.
+pub type blank_tok
+
+pub type directive_tok
+
+pub type end_tok
+
+pub type mark_tok
+
+pub type upper_tok
+
+pub type number_tok
+
+pub type string_tok
+
+pub type lower_tok
+
+pub type syntax_error
+  col
+  line
+  reason
+
+# The lexer's scanner. `start` is the index at which the current line began,
+# so a column is a subtraction.
+type scanner
+  cs
+  line
+  p
+  start
+
+pub fn lex source
+  scan (scanner (text/chars source) 1 1 1) []
+
+fn at (scanner cs _ p _) k
+  cs[p + k]
+
+fn advance (scanner cs line p start) n
+  scanner cs line (p + n) start
+
+fn column (scanner _ _ p start)
+  p - start + 1
+
+# The text from `from` to `to` characters past the scanner, inclusive.
+fn cut c from to
+  text/join (text/slice c.cs (c.p + from) (c.p + to)) ""
+
+fn digit? none
+  false
+
+fn digit? c
+  "0" <= c and c <= "9"
+
+# A dot opens a directive such as `.decl` only where a clause could begin:
+# after whitespace or at the start of the file, and before a lowercase letter.
+# So `edge(a, b).edge(b, c).` is two facts rather than a fact and a
+# directive.
+fn directive_start? c
+  lower? (at c 1) and space? (at c (0 - 1))
+
+fn emit c kind text width acc
+  made = token (column c) kind c.line text
+  scan (advance c width) (push acc made)
+
+fn fail_at c reason
+  err (syntax_error (column c) c.line reason)
+
+fn lower? none
+  false
+
+fn lower? c
+  "a" <= c and c <= "z"
+
+fn newline c
+  scanner c.cs (c.line + 1) (c.p + 1) (c.p + 1)
+
+fn scan c acc
+  scan_char c (at c 0) acc
+
+fn skip_block c none _
+  fail_at c "a block comment is never closed"
+
+fn skip_block c "\n" acc
+  skip_block (newline c) (at (newline c) 0) acc
+
+fn skip_block c "*" acc
+  if (at c 1 == "/")
+    scan (advance c 2) acc
+  else
+    next = advance c 1
+    skip_block next (at next 0) acc
+
+fn skip_block c _ acc
+  next = advance c 1
+  skip_block next (at next 0) acc
+
+fn skip_line c none acc
+  scan c acc
+
+fn skip_line c "\n" acc
+  scan c acc
+
+fn skip_line c _ acc
+  next = advance c 1
+  skip_line next (at next 0) acc
+
+fn space? none
+  true
+
+fn space? c
+  c == " " or c == "\n" or c == "\t" or c == "\r"
+
+fn span_while c k keep?
+  if (keep? (at c k)) (span_while c (k + 1) keep?) k
+
+fn scan_char c none acc
+  push acc (token (column c) end_tok c.line "")
+
+fn scan_char c "\n" acc
+  scan (newline c) acc
+
+fn scan_char c " " acc
+  scan (advance c 1) acc
+
+fn scan_char c "\t" acc
+  scan (advance c 1) acc
+
+fn scan_char c "\r" acc
+  scan (advance c 1) acc
+
+fn scan_char c "%" acc
+  skip_line c "%" acc
+
+fn scan_char c "\"" acc
+  string_body (advance c 1) c "" acc
+
+fn scan_char c "(" acc
+  emit c mark_tok "(" 1 acc
+
+fn scan_char c ")" acc
+  emit c mark_tok ")" 1 acc
+
+fn scan_char c "," acc
+  emit c mark_tok "," 1 acc
+
+fn scan_char c "=" acc
+  emit c mark_tok "=" 1 acc
+
+fn scan_char c "!" acc
+  if (at c 1 == "=") (emit c mark_tok "!=" 2 acc) (emit c mark_tok "!" 1 acc)
+
+fn scan_char c "<" acc
+  if (at c 1 == "=") (emit c mark_tok "<=" 2 acc) (emit c mark_tok "<" 1 acc)
+
+fn scan_char c ">" acc
+  if (at c 1 == "=") (emit c mark_tok ">=" 2 acc) (emit c mark_tok ">" 1 acc)
+
+fn scan_char c ":" acc
+  if (at c 1 == "-") (emit c mark_tok ":-" 2 acc) (emit c mark_tok ":" 1 acc)
+
+fn scan_char c "?" acc
+  return emit c mark_tok "?-" 2 acc if at c 1 == "-"
+  fail_at c "expected `?-` after `?`"
+
+fn scan_char c "/" acc
+  return skip_line c "/" acc if at c 1 == "/"
+  return skip_block (advance c 2) (at c 2) acc if at c 1 == "*"
+  fail_at c "unexpected character `/`"
+
+fn scan_char c "." acc
+  return emit c mark_tok "." 1 acc if not directive_start? c
+  width = span_while c 1 word_char?
+  emit c directive_tok (cut c 1 (width - 1)) width acc
+
+fn scan_char c "-" acc
+  return fail_at c "a `-` must start a negative number" if not digit? (at c 1)
+  width = span_while c 1 digit?
+  emit c number_tok (cut c 0 (width - 1)) width acc
+
+fn scan_char c "_" acc
+  width = span_while c 1 word_char?
+  return emit c blank_tok "_" 1 acc if width == 1
+  word_token c upper_tok width acc
+
+fn scan_char c ch acc
+  return word_token c lower_tok (span_while c 1 word_char?) acc if lower? ch
+  return word_token c upper_tok (span_while c 1 word_char?) acc if upper? ch
+  return word_token c number_tok (span_while c 1 digit?) acc if digit? ch
+  fail_at c "unexpected character `{ch}`"
+
+fn string_body c open text acc
+  string_char c open text (at c 0) acc
+
+fn string_char _ open _ none _
+  fail_at open "a string is never closed"
+
+fn string_char _ open _ "\n" _
+  fail_at open "a string may not span lines"
+
+fn string_char c open text "\"" acc
+  made = token (column open) string_tok open.line text
+  scan (advance c 1) (push acc made)
+
+fn string_char c open text "\\" acc
+  escaped c open text (at c 1) acc
+
+fn string_char c open text ch acc
+  string_body (advance c 1) open "{text}{ch}" acc
+
+fn escaped c open text "n" acc
+  string_body (advance c 2) open "{text}\n" acc
+
+fn escaped c open text "t" acc
+  string_body (advance c 2) open "{text}\t" acc
+
+fn escaped c open text "\"" acc
+  string_body (advance c 2) open "{text}\"" acc
+
+fn escaped c open text "\\" acc
+  string_body (advance c 2) open "{text}\\" acc
+
+fn escaped _ open _ none _
+  fail_at open "a string is never closed"
+
+fn escaped c _ _ _ _
+  fail_at c "unknown escape in a string"
+
+fn upper? none
+  false
+
+fn upper? c
+  "A" <= c and c <= "Z"
+
+fn word_char? none
+  false
+
+fn word_char? c
+  lower? c or upper? c or digit? c or c == "_"
+
+fn word_token c kind width acc
+  emit c kind (cut c 0 (width - 1)) width acc

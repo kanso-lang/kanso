@@ -1,0 +1,6 @@
+% A negative edge inside a longer cycle: p reads !q, q reads r, r reads p.
+base(1).
+base(2).
+p(X) :- base(X), !q(X).
+q(X) :- base(X), r(X).
+r(X) :- p(X), X > 1.

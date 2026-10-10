@@ -1,0 +1,161 @@
+import "std/text"
+
+# The kinds of block. A frame carries one of these, and every rule that
+# differs by kind is an overload group dispatching on it.
+type doc
+
+type fenced
+  char
+  info
+  len
+  offset
+
+type heading
+  level
+
+type hr
+
+type html_block
+  variant
+
+type indented
+
+type item
+  mark
+
+type listing
+  mark
+  tight
+
+type para
+
+type quote
+
+# What a list marker said: the bullet character or the ordered delimiter,
+# the column it sat at, and how far its content is indented past that.
+type mark
+  bullet
+  delim
+  offset
+  ordered
+  padding
+  start
+
+# A block in the finished tree: its kind, its lines, its children, and the
+# lines it spans, which decide whether a list is tight.
+type block
+  end
+  kids
+  kind
+  lines
+  start
+
+# A block while the parser holds it, and after it closes. A frame does not
+# hold its children: they are written out as they close, ahead of it, and
+# `size` counts the frame and everything written under it, so the tree can
+# be put back together once the input is read.
+type frame
+  end
+  kind
+  lines
+  size
+  start
+
+# The parser between lines: the frames closed on this line, the line being
+# read, the link reference definitions found so far, and the open blocks
+# from the document down.
+type state
+  closed
+  line
+  refs
+  stack
+
+fn accepts_lines? (fenced _ _ _ _)
+  true
+
+fn accepts_lines? (html_block _)
+  true
+
+fn accepts_lines? indented
+  true
+
+fn accepts_lines? para
+  true
+
+fn accepts_lines? _
+  false
+
+fn add_child st kind
+  return add_child (close_top st (st.line - 1)) kind if not fits? (top st) kind
+  fresh = frame st.line kind [] 1 st.line
+  state st.closed st.line st.refs (push st.stack fresh)
+
+fn add_line st c
+  f = top st
+  replace_top st (with_lines f (push f.lines (rest c)))
+
+# A closed block is written out, and its parent grows by its size.
+fn attach st child
+  p = top st
+  grown = frame p.end p.kind p.lines (p.size + child.size) p.start
+  state (push st.closed child) st.line st.refs (push (pop st.stack) grown)
+
+fn can_contain? (listing _ _) (item _)
+  true
+
+fn can_contain? doc (item _)
+  false
+
+fn can_contain? quote (item _)
+  false
+
+fn can_contain? (item _) (item _)
+  false
+
+fn can_contain? (listing _ _) _
+  false
+
+fn can_contain? doc _
+  true
+
+fn can_contain? quote _
+  true
+
+fn can_contain? (item _) _
+  true
+
+fn can_contain? _ _
+  false
+
+fn fits? f kind
+  can_contain? f.kind kind
+
+fn leaf? (fenced _ _ _ _)
+  true
+
+fn leaf? (html_block _)
+  true
+
+fn leaf? indented
+  true
+
+fn leaf? _
+  false
+
+fn para? para
+  true
+
+fn para? _
+  false
+
+fn pop xs
+  text/slice xs 1 (length xs - 1)
+
+fn replace_top st f
+  state st.closed st.line st.refs (push (pop st.stack) f)
+
+fn top st
+  st.stack[length st.stack]
+
+fn with_lines f lines
+  frame f.end f.kind lines f.size f.start

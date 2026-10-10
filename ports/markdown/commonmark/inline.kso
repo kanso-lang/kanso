@@ -1,0 +1,439 @@
+import "std/list"
+import "std/text"
+
+# An opening `[` or `![` waiting for its `]`. `pos` is where the link text
+# starts, just past the bracket.
+type bracket
+  active
+  image
+  pos
+
+type code_span
+  value
+
+# A run of `*` or `_` that may open or close emphasis. `orig` is the run's
+# length as written, which the rule of three reads after `count` shrinks.
+type delim
+  can_close
+  can_open
+  char
+  count
+  orig
+
+type emph
+  kids
+
+type hardbreak
+
+type image
+  dest
+  kids
+  title
+
+type link
+  dest
+  kids
+  title
+
+type plain
+  value
+
+type raw_html
+  value
+
+type softbreak
+
+type strong
+  kids
+
+# Where a link's `]` led: its destination, title and the position after it.
+type target
+  dest
+  next
+  title
+
+fn backslash cs p out refs
+  n = cs[p + 1]
+  return after_break cs (p + 2) (push out hardbreak) refs if n == "\n"
+  return scan cs (p + 2) (push out (plain n)) refs if ascii_punct? n
+  scan cs (p + 1) (push out (plain "\\")) refs
+
+fn after_break cs p out refs
+  scan cs (skip_spaces_only cs p) out refs
+
+fn bracket? none
+  false
+
+fn bracket? (bracket _ _ _)
+  true
+
+fn bracket? _
+  false
+
+# Delimiters between an opener and its closer are not emphasis any more.
+fn flatten nodes
+  list/to_list (list/map nodes flat)
+
+# A run is left-flanking when it is not followed by whitespace, and either
+# not followed by punctuation or preceded by whitespace or punctuation.
+# Swapping the two sides gives right-flanking.
+fn flanking? before after
+  not white? after and (not punct? after or white? before or punct? before)
+
+fn flat (bracket _ pic _)
+  plain (if pic "![" "[")
+
+fn flat (delim _ _ ch count _)
+  plain (repeat_text ch count)
+
+fn flat node
+  node
+
+fn code_at cs p out refs
+  k = run_length cs p "`"
+  code_close cs p out refs k (closing_ticks cs (p + k) k)
+
+fn code_close cs p out refs k none
+  scan cs (p + k) (push out (plain (repeat_text "`" k))) refs
+
+fn code_close cs p out refs k close
+  body = swap (span cs (p + k) (close - 1)) "\n" " "
+  scan cs (close + k) (push out (code_span (strip_code body))) refs
+
+fn close_bracket cs p out refs _ none
+  scan cs (p + 1) (push out (plain "]")) refs
+
+# A `]` with an opener: if a destination or a defined label follows, the
+# nodes since the opener become the link's text. Otherwise the opener was
+# only a bracket.
+fn close_bracket cs p out refs b (bracket true pic pos)
+  linked cs p out refs b pic (link_target cs (p + 1) refs pos p)
+
+fn close_bracket cs p out refs b (bracket false pic _)
+  not_a_link cs p out refs b pic
+
+fn close_bracket cs p out refs _ _
+  scan cs (p + 1) (push out (plain "]")) refs
+
+fn closing_ticks cs p k
+  return none if cs[p] == none
+  r = run_length cs p "`"
+  return p if r == k
+  closing_ticks cs (p + if (r == 0) 1 r) k
+
+fn deactivate (bracket _ false pos)
+  bracket false false pos
+
+fn deactivate node
+  node
+
+fn delims cs p out refs c
+  k = run_length cs p c
+  before = cs[p - 1]
+  after = cs[p + k]
+  left = flanking? before after
+  right = flanking? after before
+  opens = if (c == "*") left (left and (not right or punct? before))
+  closes = if (c == "*") right (right and (not left or punct? after))
+  scan cs (p + k) (push out (delim closes opens c k k)) refs
+
+# The emphasis pass, run over a finished list of nodes: each closer looks
+# back for the nearest opener it can pair with.
+fn emphasize xs i
+  return xs if i > length xs
+  emph_at xs i xs[i]
+
+fn emph_at xs i none
+  emphasize xs (i + 1)
+
+fn emph_at xs i (delim true opens ch count orig)
+  j = opener_for xs (i - 1) ch opens orig
+  return emphasize xs (i + 1) if j == 0
+  pair_up xs j i xs[j] (delim true opens ch count orig)
+
+fn emph_at xs i _
+  emphasize xs (i + 1)
+
+fn email_end cs p
+  local = email_local cs p
+  return none if local == p or cs[local] != "@"
+  domain_end cs (local + 1)
+
+fn email_local cs p
+  c = cs[p]
+  return p if c == none
+  ok = alnum? c or has? ".!#$%&'*+/=?^_`\{|}~-" c
+  if ok (email_local cs (p + 1)) p
+
+fn domain_end cs p
+  e = domain_label cs p p
+  return none if e == p or e - p > 63 or cs[e - 1] == "-"
+  return e + 1 if cs[e] == ">"
+  if (cs[e] == ".") (domain_end cs (e + 1)) none
+
+fn domain_label cs start p
+  c = cs[p]
+  ok = alnum? c or c == "-" and p > start
+  if ok (domain_label cs start (p + 1)) p
+
+fn entity_here cs p out refs
+  entity_found cs p out refs (entity_at cs p)
+
+fn entity_found cs p out refs none
+  scan cs (p + 1) (push out (plain "&")) refs
+
+fn entity_found cs _ out refs (entity next value)
+  scan cs next (push out (plain value)) refs
+
+fn image_or_link true dest kids title
+  image dest kids title
+
+fn image_or_link false dest kids title
+  link dest kids title
+
+# An inline link: `(`, a destination, an optional title after whitespace,
+# and `)`, with spaces and up to one line ending between them.
+fn inline_target cs q
+  dest_then cs (link_dest cs (skip_spnl cs (q + 1)))
+
+fn dest_then _ none
+  none
+
+fn dest_then cs (found next raw)
+  b = skip_spnl cs next
+  t = if (b > next) (link_title cs b) none
+  title_then cs b (normalize_url (unescape raw)) t
+
+fn title_then cs b dest none
+  close_paren cs b dest ""
+
+fn title_then cs _ dest (found next raw)
+  close_paren cs (skip_spnl cs next) dest (unescape raw)
+
+fn close_paren cs e dest title
+  if (cs[e] == ")") (target dest (e + 1) title) none
+
+fn last_bracket out i
+  return 0 if i == 0
+  if (bracket? out[i]) i (last_bracket out (i - 1))
+
+# After `<`: a URI autolink, an email autolink, raw HTML, or just a `<`.
+fn left_angle cs p out refs
+  angle_uri cs p out refs (uri_end cs (p + 1))
+
+fn angle_uri cs p out refs none
+  angle_mail cs p out refs (email_end cs (p + 1))
+
+fn angle_uri cs p out refs e
+  autolink cs p out refs e ""
+
+fn angle_mail cs p out refs none
+  angle_tag cs p out refs (inline_html_end cs p)
+
+fn angle_mail cs p out refs e
+  autolink cs p out refs e "mailto:"
+
+fn angle_tag cs p out refs none
+  scan cs (p + 1) (push out (plain "<")) refs
+
+fn angle_tag cs p out refs e
+  scan cs e (push out (raw_html (span cs p (e - 1)))) refs
+
+fn autolink cs p out refs e scheme
+  addr = span cs (p + 1) (e - 2)
+  node = link (normalize_url "{scheme}{addr}") [(plain addr)] ""
+  scan cs e (push out node) refs
+
+# A line ending is hard when two or more spaces come before it, and the
+# spaces are dropped either way.
+fn line_break cs p out refs
+  last = out[length out]
+  trail = trailing_spaces last
+  kept = if (trail == 0) out (push (pop out) (plain (drop_spaces last)))
+  brk = if (trail >= 2) hardbreak softbreak
+  after_break cs (p + 1) (push kept brk) refs
+
+# A URI autolink: a scheme of 2 to 32 characters, a colon, and no spaces,
+# controls or angle brackets before the closing `>`.
+fn uri_end cs p
+  s = scheme_end cs p p
+  return none if s - p < 2 or s - p > 32 or cs[s] != ":"
+  uri_body cs (s + 1)
+
+fn uri_body cs p
+  c = cs[p]
+  return p + 1 if c == ">"
+  return none if c == none or c == "<" or text/char_code c <= 32
+  uri_body cs (p + 1)
+
+fn scheme_end cs start p
+  c = cs[p]
+  ok = letter? c or p > start and (alnum? c or has? "+.-" c)
+  if ok (scheme_end cs start (p + 1)) p
+
+fn trailing_spaces (plain v)
+  cs = text/chars v
+  length cs - last_solid cs (length cs)
+
+fn trailing_spaces _
+  0
+
+fn drop_spaces (plain v)
+  cs = text/chars v
+  span cs 1 (last_solid cs (length cs))
+
+fn drop_spaces node
+  node
+
+# What follows a `]`: an inline destination, a full reference `[label]`,
+# or the link text itself used as the label (`[]` or nothing at all).
+fn link_target cs q refs pos close
+  inline = if (cs[q] == "(") (inline_target cs q) none
+  via_inline cs q refs pos close inline
+
+fn via_inline cs q refs pos close none
+  via_label cs q refs pos close (label_end cs q)
+
+fn via_inline _ _ _ _ _ t
+  t
+
+fn via_label cs q refs pos close none
+  own_label cs refs pos close q
+
+fn via_label cs q refs pos close e
+  return own_label cs refs pos close e if e <= q + 2
+  ref_target refs (span cs q (e - 1)) e
+
+fn own_label cs refs pos close next
+  whole = label_end cs (pos - 1) == close + 1
+  if whole (ref_target refs (span cs (pos - 1) close) next) none
+
+fn linked cs p out refs b pic none
+  not_a_link cs p out refs b pic
+
+fn linked cs _ out refs b pic (target dest next title)
+  kids = flatten (emphasize (text/slice out (b + 1) (length out)) 1)
+  node = image_or_link pic dest kids title
+  before = text/slice out 1 (b - 1)
+  kept = if pic before (list/to_list (list/map before deactivate))
+  scan cs next (push kept node) refs
+
+fn not_a_link cs p out refs b pic
+  opener = plain (if pic "![" "[")
+  fixed = text/concat (push (text/slice out 1 (b - 1)) opener) (after_b out b)
+  scan cs (p + 1) (push fixed (plain "]")) refs
+
+fn after_b out b
+  text/slice out (b + 1) (length out)
+
+fn opener_for xs j ch opens orig
+  return 0 if j == 0
+  if (opener? xs[j] ch opens orig) j (opener_for xs (j - 1) ch opens orig)
+
+fn opener? none _ _ _
+  false
+
+fn opener? (delim closes true c _ o) ch opens orig
+  odd = (opens or closes) and orig % 3 != 0 and (o + orig) % 3 == 0
+  c == ch and not odd
+
+fn opener? _ _ _ _
+  false
+
+fn pair_up xs _ i none _
+  emphasize xs (i + 1)
+
+fn pair_up xs j i (delim oc oo ch on oorig) closer
+  { can_close:cc can_open:co count:cn orig:corig } = closer
+  use = if (on >= 2 and cn >= 2) 2 1
+  inner = flatten (text/slice xs (j + 1) (i - 1))
+  wrapped = if (use == 2) (strong inner) (emph inner)
+  left = shrink (text/slice xs 1 (j - 1)) (delim oc oo ch (on - use) oorig)
+  right = shrink [] (delim cc co ch (cn - use) corig)
+  after = text/slice xs (i + 1) (length xs)
+  joined = text/concat (push left wrapped) (text/concat right after)
+  emphasize joined (length left + 2)
+
+fn pair_up xs _ i _ _
+  emphasize xs (i + 1)
+
+# Parse a paragraph's or heading's text into inline nodes.
+pub fn parse_inlines s refs
+  cs = text/chars (text/trim s)
+  scan cs 1 [] refs
+
+fn ref_target refs label next
+  ref_found next refs[normalize_label label]
+
+fn ref_found _ none
+  none
+
+fn ref_found next (ref_def dest title)
+  target dest next title
+
+fn repeat_text s n
+  text/join (list/to_list (list/take (list/repeat s) n)) ""
+
+fn scan cs p out refs
+  scan_at cs p out refs cs[p]
+
+fn scan_at _ _ out _ none
+  flatten (emphasize out 1)
+
+fn scan_at cs p out refs "\n"
+  line_break cs p out refs
+
+fn scan_at cs p out refs "\\"
+  backslash cs p out refs
+
+fn scan_at cs p out refs "`"
+  code_at cs p out refs
+
+fn scan_at cs p out refs "*"
+  delims cs p out refs "*"
+
+fn scan_at cs p out refs "_"
+  delims cs p out refs "_"
+
+fn scan_at cs p out refs "["
+  scan cs (p + 1) (push out (bracket true false (p + 1))) refs
+
+fn scan_at cs p out refs "!"
+  return scan cs (p + 1) (push out (plain "!")) refs if cs[p + 1] != "["
+  scan cs (p + 2) (push out (bracket true true (p + 2))) refs
+
+fn scan_at cs p out refs "]"
+  b = last_bracket out (length out)
+  return scan cs (p + 1) (push out (plain "]")) refs if b == 0
+  close_bracket cs p out refs b out[b]
+
+fn scan_at cs p out refs "<"
+  left_angle cs p out refs
+
+fn scan_at cs p out refs "&"
+  entity_here cs p out refs
+
+fn scan_at cs p out refs _
+  q = text_end cs (p + 1)
+  scan cs q (push out (plain (span cs p (q - 1)))) refs
+
+fn shrink xs (delim _ _ _ 0 _)
+  xs
+
+fn shrink xs d
+  push xs d
+
+fn special_inline? c
+  has? "\n\\`*_[]!<&" c
+
+fn strip_code body
+  cs = text/chars body
+  n = length cs
+  edged = n > 2 and cs[1] == " " and cs[n] == " "
+  return body if not edged or text/trim body == ""
+  span cs 2 (n - 1)
+
+fn text_end cs p
+  c = cs[p]
+  return p if c == none or special_inline? c
+  text_end cs (p + 1)

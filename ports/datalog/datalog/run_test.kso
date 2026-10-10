@@ -1,0 +1,44 @@
+import "std/text"
+
+# Whole programs, source to output, through the same pipeline as the command
+# line (less `.input`, which needs the file system).
+fn ran source
+  shown_run (run_source source)
+
+fn shown_run (err e)
+  "error: {e.reason}"
+
+fn shown_run lines
+  text/join lines "\n"
+
+# The first `n` lines of a program's output, which leaves out the evaluation
+# report.
+fn first_lines n source
+  lines = text/split (ran source) "\n"
+  text/join (text/slice lines 1 n) "\n"
+
+test_answers_a_query =
+  source = "e(1, 2).\ne(2, 3).\np(X, Y) :- e(X, Y)."
+    . with_line "p(X, Z) :- p(X, Y), e(Y, Z).\n?- p(1, X)."
+  wanted = "?- p(1, X).\n  X = 2\n  X = 3\n  (2 answers)\n-- evaluation"
+    . with_line "stratum 1: p: 3 rounds, 3 new\nrelations: e 2, p 3"
+    . with_line "total: 5 tuples after 3 rounds"
+  agrees (ran source) wanted
+
+test_negation_reads_a_finished_stratum =
+  source = "n(1). n(2). n(3). e(1, 2).\nr(X) :- e(1, X)."
+    . with_line "r(Y) :- r(X), e(X, Y).\nu(X) :- n(X), !r(X).\n?- u(X)."
+  shown = first_lines 4 source
+  agrees shown "?- u(X).\n  X = 1\n  X = 3\n  (2 answers)"
+
+test_ground_queries_answer_yes_or_no =
+  source = "e(a).\n?- e(a).\n?- e(b)."
+  agrees (first_lines 4 source) "?- e(a).\n  yes\n?- e(b).\n  no"
+
+test_repeated_variables_filter =
+  shown = first_lines 3 "e(1, 1). e(1, 2).\n?- e(X, X)."
+  agrees shown "?- e(X, X).\n  X = 1\n  (1 answer)"
+
+test_refusals_surface =
+  shown = ran "p(X) :- q(X).\nq(1).\nq(X) :- !p(X)."
+  agrees shown "error: `X` is not range-restricted: no positive atom binds it"

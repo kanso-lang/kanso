@@ -1,0 +1,154 @@
+import "std/list"
+import "std/text"
+
+# A character reference decoded at some position, and where it ended.
+type entity
+  next
+  value
+
+fn alnum? none
+  false
+
+fn alnum? c
+  n = text/char_code c
+  between? n 48 57 or between? n 65 90 or between? n 97 122
+
+fn code_char n
+  return text/from_code 65533 if n == 0 or n > 1114111
+  return text/from_code 65533 if between? n 55296 57343
+  text/from_code n
+
+fn decimal_entity cs start p
+  return entity_close cs start p (digits_value cs start p 10) if cs[p] == ";"
+  return none if not digit? cs[p] or p - start >= 7
+  decimal_entity cs start (p + 1)
+
+fn digit? none
+  false
+
+fn digit? c
+  between? (text/char_code c) 48 57
+
+fn digits_value cs start stop base
+  digits = text/slice cs start (stop - 1)
+  list/fold digits 0 (n c -> n * base + hex_value c)
+
+fn entity_at cs p
+  return numeric_entity cs (p + 2) if cs[p + 1] == "#"
+  named_entity cs (p + 1) (p + 1)
+
+fn entity_close _ start p n
+  return none if p == start
+  entity (p + 1) (code_char n)
+
+fn escape_html s
+  s . swap "&" "&amp;" . swap "<" "&lt;" . swap ">" "&gt;" . swap "\"" "&quot;"
+
+# std/text's split answers an err for an empty separator, and the checker
+# carries that err into every caller whose separator is not a literal, so
+# the two uses here settle it on the spot. No caller passes "".
+fn has? _ none
+  false
+
+fn has? s piece
+  several? (text/split s piece)
+
+fn hex? none
+  false
+
+fn hex? c
+  n = text/char_code c
+  between? n 48 57 or between? n 65 70 or between? n 97 102
+
+fn hex_entity cs start p
+  return entity_close cs start p (digits_value cs start p 16) if cs[p] == ";"
+  return none if not hex? cs[p] or p - start >= 6
+  hex_entity cs start (p + 1)
+
+hex_upper = text/chars "0123456789ABCDEF"
+
+fn hex_value c
+  n = text/char_code c
+  return n - 48 if n < 58
+  return n - 55 if n < 71
+  n - 87
+
+fn named_entity cs start p
+  return named_close cs start p if cs[p] == ";"
+  return none if not alnum? cs[p] or p - start >= 32
+  named_entity cs start (p + 1)
+
+fn named_close cs start p
+  named_value p entity_table[text/join (text/slice cs start (p - 1)) ""]
+
+fn named_value _ none
+  none
+
+fn named_value p value
+  entity (p + 1) value
+
+# Percent-encode what a URL may not carry bare, keeping escapes already made.
+fn normalize_url s
+  cs = text/chars s
+  parts = list/map (list/naturals . list/take (length cs)) (p -> url_char cs p)
+  text/join (list/to_list parts) ""
+
+fn numeric_entity cs p
+  x = cs[p] == "x" or cs[p] == "X"
+  if x (hex_entity cs (p + 1) (p + 1)) (decimal_entity cs p p)
+
+fn percent b
+  "%{hex_upper[b / 16 + 1]}{hex_upper[b % 16 + 1]}"
+
+fn several? (err _)
+  false
+
+fn several? parts
+  length parts > 1
+
+fn swap s from to
+  swapped s (text/split s from) to
+
+fn swapped s (err _) _
+  s
+
+fn swapped _ parts to
+  text/join parts to
+
+# Backslash escapes and character references, resolved to the characters
+# they stand for. Used on destinations, titles and info strings.
+fn unescape s
+  return s if not has? s "\\" and not has? s "&"
+  cs = text/chars s
+  text/join (unescape_from cs 1 []) ""
+
+fn unescape_at cs p out "\\"
+  return unescape_from cs (p + 2) (push out cs[p + 1]) if ascii_punct? cs[p + 1]
+  unescape_from cs (p + 1) (push out "\\")
+
+fn unescape_at cs p out "&"
+  unescaped_entity cs p out (entity_at cs p)
+
+fn unescape_at _ _ out none
+  out
+
+fn unescape_at cs p out c
+  unescape_from cs (p + 1) (push out c)
+
+fn unescape_from cs p out
+  unescape_at cs p out cs[p]
+
+fn unescaped_entity cs p out none
+  unescape_from cs (p + 1) (push out "&")
+
+fn unescaped_entity cs _ out (entity next value)
+  unescape_from cs next (push out value)
+
+fn url_char cs p
+  c = cs[p]
+  return c if url_safe? c
+  return c if c == "%" and hex? cs[p + 1] and hex? cs[p + 2]
+  text/join (list/to_list (list/map (text/bytes c) percent)) ""
+
+fn url_safe? c
+  alnum? c or has? ";/?:@&=+$,-_.!~*'()#" c

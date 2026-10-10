@@ -1,0 +1,4 @@
+import "./graphs"
+import "std/os"
+
+os/args .> graphs/main

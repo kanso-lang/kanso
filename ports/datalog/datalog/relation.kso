@@ -1,0 +1,167 @@
+import "std/list"
+import "std/text"
+
+# A relation's tuples, each stored as one integer: its code. A tuple is a
+# list of constant ids, and its code writes those ids as the digits of a
+# number in base `base`, most significant first, so codes are valid map keys,
+# two tuples of one arity are equal exactly when their codes are, and sorting
+# codes sorts tuples. Column j of an arity-n tuple is the digit at place
+# base^(n-j).
+#
+# The tuples are held three ways: as a list in the order they arrived, as a
+# set for membership, and in one hash index per column mask the plans probe.
+#
+# A relation grows a round at a time, never a tuple at a time. A map or list
+# held in a record is shared with the record, so growing it in place is
+# impossible and every `put` copies it; growing each structure by a fold,
+# where the accumulator is the only reference after the first step, copies it
+# once per round instead of once per tuple.
+pub type relation
+  arity
+  indexes
+  seen
+  tuples
+
+# One index: the places of the columns it keys on, most significant first,
+# and for each key code the codes of the tuples that carry it.
+pub type index
+  buckets
+  places
+
+# The codes of one round that share a key, ascending.
+type group
+  key
+  members
+
+pub fn empty_relation base arity masks
+  indexes = list/fold masks {} (acc m -> add_index acc base arity m)
+  relation arity indexes {} []
+
+pub fn encode base ids
+  list/fold ids 0 (acc v -> acc * base + v)
+
+pub fn decode base arity code
+  places = list/to_list (list/map (upto arity) (j -> place_of base arity j))
+  list/to_list (list/map places (p -> digit base code p))
+
+pub fn digit base code place
+  code / place % base
+
+pub fn has? rel code
+  present? rel.seen[code]
+
+# The index on `mask`, or none when no plan asked for one.
+pub fn index_on rel mask
+  rel.indexes[mask]
+
+# Adds codes the relation does not hold yet, all at once. The codes arrive
+# sorted, and the set is rebuilt by merging them with the old set's sorted
+# keys, so its keys go in ascending and the map never sorts them.
+pub fn insert_all base (relation arity indexes seen tuples) codes
+  seen_now = merged_set (keys seen) codes 1 1 {}
+  span = power base arity
+  masks = keys indexes
+  indexed = list/fold masks indexes (acc m -> grow_index base span acc m codes)
+  relation arity indexed seen_now (text/concat tuples codes)
+
+# The key of a tuple under an index: the digits at `places`, as one number.
+pub fn key_of base places code
+  list/fold places 0 (acc p -> acc * base + digit base code p)
+
+# The places, most significant first, of the columns whose bits are set in
+# `mask` (bit j-1 for column j).
+pub fn mask_places base arity mask
+  columns = list/select (upto arity) (j -> bit_set? mask j)
+  list/to_list (list/map columns (j -> place_of base arity j))
+
+pub fn place_of base arity j
+  power base (arity - j)
+
+pub fn size_of rel
+  length rel.tuples
+
+pub fn upto n
+  list/to_list (list/take list/naturals n)
+
+fn add_index acc base arity mask
+  put acc mask (index {} (mask_places base arity mask))
+
+fn bit_set? mask j
+  step = power 2 (j - 1)
+  mask / step % 2 == 1
+
+# Growing an index never reads the bucket map it is writing. A map keeps its
+# pairs in arrival order and sorts them when it is first read after a write,
+# so the obvious loop, read a bucket and put it back longer, sorts the whole
+# map once per tuple (FRICTION F18). Instead the round's codes are sorted by
+# key and grouped, and the groups are merged with the old buckets, read once
+# through `entries`, into a fresh map whose keys arrive in ascending order.
+fn grow_index base span indexes mask codes
+  grown = grown_index base span indexes[mask] codes
+  put indexes mask grown
+
+fn grown_index _ _ none _
+  index {} []
+
+fn grown_index base span (index buckets places) codes
+  groups = grouped base span places codes
+  index (merged (entries buckets) groups 1 1 {}) places
+
+# Codes grouped by key, keys ascending. Each code is tagged with its key as
+# the high digits of one integer, so sorting integers sorts by key.
+fn grouped base span places codes
+  tagged = list/map codes (c -> key_of base places c * span + c)
+  sweep span (list/sort tagged) 1 0 [] []
+
+fn sweep span vs i key members groups
+  return closed key members groups if i < 1 or length vs < i
+  v = vs[i]
+  k = v / span
+  c = v % span
+  return sweep span vs (i + 1) key (push members c) groups if k == key
+  sweep span vs (i + 1) k [c] (closed key members groups)
+
+fn closed key members groups
+  if (length members == 0) groups (push groups (group key members))
+
+fn merged olds news i j acc
+  return rest_of_news news j acc if i < 1 or length olds < i
+  return rest_of_olds olds i acc if j < 1 or length news < j
+  merge_pair olds news i j acc olds[i] news[j]
+
+fn merge_pair olds news i j acc (entry k old) (group g members)
+  return merged olds news (i + 1) j (put acc k old) if k < g
+  return merged olds news i (j + 1) (put acc g members) if g < k
+  merged olds news (i + 1) (j + 1) (put acc k (text/concat old members))
+
+fn rest_of_news news j acc
+  return acc if j < 1 or length news < j
+  rest_of_news news (j + 1) (put_group acc news[j])
+
+fn rest_of_olds olds i acc
+  return acc if i < 1 or length olds < i
+  rest_of_olds olds (i + 1) (put_entry acc olds[i])
+
+fn merged_set olds news i j acc
+  return rest_of_set news j acc if i < 1 or length olds < i
+  return rest_of_set olds i acc if j < 1 or length news < j
+  o = olds[i]
+  n = news[j]
+  return merged_set olds news (i + 1) j (put acc o true) if o < n
+  merged_set olds news i (j + 1) (put acc n true)
+
+fn rest_of_set codes i acc
+  return acc if i < 1 or length codes < i
+  rest_of_set codes (i + 1) (put acc codes[i] true)
+
+fn put_entry acc (entry k v)
+  put acc k v
+
+fn put_group acc (group k members)
+  put acc k members
+
+fn power _ 0
+  1
+
+fn power b n
+  b * power b (n - 1)

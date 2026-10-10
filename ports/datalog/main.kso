@@ -1,0 +1,4 @@
+import "./datalog"
+import "std/os"
+
+os/args .> datalog/main

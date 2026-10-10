@@ -1,0 +1,78 @@
+import "std/list"
+import "std/text"
+
+# Renders syntax back into Datalog source. A string constant prints bare when
+# it would lex back as the same word, and quoted otherwise.
+pub fn show_atom (atom _ name terms)
+  return name if length terms == 0
+  "{name}({text/join (list/to_list (list/map terms show_term)) ", "})"
+
+pub fn show_clause (declaration arity _ name)
+  ".decl {name}/{arity}"
+
+pub fn show_clause (input file _ name)
+  ".input {name} {quote file}"
+
+pub fn show_clause (output _ name)
+  ".output {name}"
+
+pub fn show_clause (printsize _ name)
+  ".printsize {name}"
+
+pub fn show_clause (query a)
+  "?- {show_atom a}."
+
+pub fn show_clause (rule body head)
+  return "{show_atom head}." if length body == 0
+  shown = text/join (list/to_list (list/map body show_literal)) ", "
+  "{show_atom head} :- {shown}."
+
+pub fn show_literal (comparison left _ op right)
+  "{show_term left} {op} {show_term right}"
+
+pub fn show_literal (holds a)
+  show_atom a
+
+pub fn show_literal (lacks a)
+  "!{show_atom a}"
+
+pub fn show_term (constant n:int)
+  "{n}"
+
+pub fn show_term (constant s)
+  if (bare_word? s) s (quote s)
+
+pub fn show_term (variable v)
+  v
+
+pub fn show_term wildcard
+  "_"
+
+fn bare_word? s
+  cs = text/chars s
+  length cs > 0 and lower_start? cs[1] and list/all? cs word_char?
+
+fn escape "\""
+  "\\\""
+
+fn escape "\\"
+  "\\\\"
+
+fn escape "\n"
+  "\\n"
+
+fn escape "\t"
+  "\\t"
+
+fn escape c
+  c
+
+fn lower_start? none
+  false
+
+fn lower_start? c
+  lower? c
+
+fn quote s
+  inner = text/join (list/to_list (list/map (text/chars s) escape)) ""
+  "\"{inner}\""

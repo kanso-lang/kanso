@@ -1,0 +1,19 @@
+import "std/list"
+
+fn kinds source
+  list/to_list (list/map (clean_tokens (tokenize source)) (t -> t.kind))
+
+test_a_backslash_newline_joins_a_number = texts "12\\\n34" == ["1234" ""]
+
+test_comments_vanish = kinds "1 /* a\nb */ # c\n" == ["number" "newline" "eof"]
+
+test_illegal_characters_are_notes = length (lexical_notes (tokenize "1@")) == 1
+
+test_keywords_and_names = kinds "while x" == ["while" "name" "eof"]
+
+test_two_character_operators = kinds "x+=--y" == ["name" "+=" "--" "name" "eof"]
+
+test_uppercase_letters_are_digits = texts "FF.8" == ["FF.8" ""]
+
+fn texts source
+  list/to_list (list/map (clean_tokens (tokenize source)) (t -> t.text))

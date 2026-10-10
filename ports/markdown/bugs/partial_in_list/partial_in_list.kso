@@ -1,0 +1,29 @@
+# BUG: a list of held functions cannot be written in a module file.
+#
+# Expected: `kanso check bugs/partial_in_list` reports ok. `&a` holds `a`
+# (the book, ch05: "& supplies what you have and waits for the rest"), and a
+# list of held functions is a list of values.
+#
+# Actual: `[&a &b]` and `. push &a` both fail with
+#   error[formatting]: canonical form requires exactly one space here
+# pointing at the `&` of the second element, and the parenthesised spelling
+# `[(&a) (&b)]` fails with "these parentheses group nothing". No spelling of
+# the list passes check, so the only way through is `[(x -> a x) (x -> b x)]`.
+#
+# The same `fs = [&a &b]` passes in a file run with `kanso play`, so the
+# two paths disagree about the formatting rule. Each error is also printed
+# twice.
+fn a n
+  n + 1
+
+fn b n
+  n * 2
+
+pub fn run n
+  fs[1] n + gs[1] n
+
+fs = [&a &b]
+
+gs = []
+  . push &a
+  . push &b

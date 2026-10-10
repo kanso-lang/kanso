@@ -1,0 +1,51 @@
+/* user functions: recursion, autos, dynamic scope, return forms, void */
+define fact(n) {
+  if (n <= 1) return (1)
+  return (n * fact(n - 1))
+}
+fact(30)
+define fib(n) {
+  auto a, b, t, i
+  a = 0
+  b = 1
+  for (i = 0; i < n; i++) { t = a + b; a = b; b = t }
+  return (a)
+}
+fib(100)
+define noreturn(x) { x = x + 1 }
+noreturn(5)
+define bare() { return; }
+bare()
+define plain(x) { return x * 2 }
+plain(21)
+x = 7
+define peek() { return (x) }
+define shadow(x) { return (peek()) }
+shadow(100)
+x
+define counter() { auto k; k = k + 1; return (k) }
+counter(); counter()
+define void hello(name) { print "hello, ", name, "\n" }
+hello(42)
+define twoargs(a, b) { return (a - b) }
+twoargs(10, 3)
+define gcd(a, b) {
+  auto t
+  while (b != 0) { t = b; b = a % b; a = t }
+  return (a)
+}
+gcd(1071, 462)
+gcd(2^64, 6^20)
+define f(x) {
+  return (g(x) + 1)
+}
+define g(x) { return (x * 10) }
+f(4)
+define g(x) { return (x * 100) }
+f(4)
+define ack(m, n) {
+  if (m == 0) return (n + 1)
+  if (n == 0) return (ack(m - 1, 1))
+  return (ack(m - 1, ack(m, n - 1)))
+}
+ack(2, 3)

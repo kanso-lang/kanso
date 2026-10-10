@@ -1,0 +1,65 @@
+import "std/text"
+
+type caret
+  chars
+  col
+  off
+  tab
+
+type gap
+  at
+  col
+
+fn advance_cols c 0
+  c
+
+fn advance_cols c count
+  advance_col c count c.chars[c.off]
+
+fn advance_col c _ none
+  c
+
+fn advance_col c count _
+  advance_cols (caret c.chars (c.col + 1) (c.off + 1) false) (count - 1)
+
+fn advance_chars c 0
+  c
+
+fn advance_to c at
+  advance_chars c (at - c.off)
+
+fn blank? c
+  (nonspace c).at > length c.chars
+
+fn caret_of chars
+  caret chars 0 1 false
+
+fn indent c
+  (nonspace c).col - c.col
+
+fn nonspace c
+  skip_spaces c.chars c.off c.col
+
+fn peek c
+  c.chars[c.off]
+
+fn rest c
+  tail = text/join (text/slice c.chars c.off (length c.chars)) ""
+  return tail if not c.tab
+  pad = text/join (spaces (4 - c.col % 4)) ""
+  "{pad}{text/join (text/slice c.chars (c.off + 1) (length c.chars)) ""}"
+
+fn skip_spaces chars at col
+  skip_one chars at col chars[at]
+
+fn skip_one chars at col " "
+  skip_spaces chars (at + 1) (col + 1)
+
+fn skip_one _ at col none
+  gap at col
+
+fn skip_one _ at col _
+  gap at col
+
+fn spaces n
+  push (spaces (n - 1)) " "

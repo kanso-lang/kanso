@@ -1,0 +1,31 @@
+% Stratified negation across four strata: reachability, then what is not
+% reachable, then cycles, then the reachable nodes that are dead ends.
+
+node(a). node(b). node(c). node(d). node(e). node(f). node(g). node(h).
+edge(a, b).
+edge(b, c).
+edge(c, b).
+edge(b, d).
+edge(d, e).
+edge(f, g).
+edge(g, h).
+start(a).
+
+reach(X) :- start(X).
+reach(Y) :- reach(X), edge(X, Y).
+unreachable(X) :- node(X), !reach(X).
+
+path(X, Y) :- edge(X, Y).
+path(X, Z) :- path(X, Y), edge(Y, Z).
+on_cycle(X) :- path(X, X).
+
+has_out(X) :- edge(X, _).
+dead_end(X) :- reach(X), !has_out(X).
+acyclic_reach(X) :- reach(X), !on_cycle(X).
+only_forward(X, Y) :- edge(X, Y), !path(Y, X).
+
+?- unreachable(X).
+?- on_cycle(X).
+?- dead_end(X).
+?- acyclic_reach(X).
+?- only_forward(X, Y).

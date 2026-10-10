@@ -1,0 +1,17 @@
+/* the library truncates to whatever scale is in force when it is called */
+scale = 50
+4 * a(1)
+e(1)
+l(10)
+s(3.14159)
+sqrt(2)
+scale = 5
+e(-1)
+l(-1)
+s(1)
+scale = 0
+e(2)
+a(1)
+c(0)
+scale = 100
+4 * a(1)

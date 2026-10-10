@@ -1,0 +1,41 @@
+# A keyed read of a value that turns out to be an err. A dot read of the same
+# value passes the err along, as the railway says it should.
+#
+# Expected: both lines report the err the same way, e.g.
+#   dot read: caught boom
+#   keyed read: caught boom
+# Actual, interpreter:
+#   dot read: caught boom
+#   error[runtime]: cannot read fields of err "boom"; keyed reads take a record
+# Actual, native (kanso play): nothing on stdout, and
+#   error[runtime]: the program ran out of stack: recursion went deeper than
+#   the stack holds
+# There is no recursion here. In the bc port the same read, reached through
+# `scale(1/0)`, was a segmentation fault (exit 139) in a native build.
+type pair
+  a
+  b
+
+print "dot read: {report (by_dot 0)}"
+  .> (_ -> print "keyed read: {report (by_key 0)}")
+
+fn make 0
+  err "boom"
+
+fn make n
+  pair n n
+
+fn by_dot n
+  r = make n
+  r.a + 1
+
+fn by_key n
+  r = make n
+  { a } = r
+  a + 1
+
+fn report (err reason)
+  "caught {reason}"
+
+fn report v
+  "{v}"

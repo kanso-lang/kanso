@@ -1,0 +1,142 @@
+# The tree the parser builds and the interpreter walks. Variables, arrays and
+# functions are resolved to slot numbers while parsing, so the machine keeps
+# them in lists rather than maps (FRICTION F5).
+#
+# `op` is the operator's spelling: + - * / % ^
+pub type arith
+  left
+  op
+  right
+
+# `op` is = or one of the compound spellings += -= *= /= %= ^=
+pub type assignment
+  op
+  target
+  value
+
+pub type both
+  left
+  right
+
+pub type call
+  args
+  name
+  slot
+
+# A number as written. bc converts it with the ibase in force when it runs,
+# so the digits are kept; `decimal` is the value under ibase 10, which is
+# what nearly every program uses.
+pub type constant
+  decimal
+  digits
+
+pub type either
+  left
+  right
+
+pub type element
+  index
+  name
+  slot
+
+pub type inverse
+  operand
+
+# length(e), scale(e) and sqrt(e)
+pub type measure
+  operand
+  what
+
+pub type negation
+  operand
+
+pub type post_step
+  delta
+  target
+
+pub type pre_step
+  delta
+  target
+
+pub type read_call
+
+# scale, ibase, obase and last, read or assigned as variables
+pub type register
+  what
+
+pub type relation
+  left
+  op
+  right
+
+pub type scalar
+  name
+  slot
+
+# `name[]` passed whole to a function
+pub type whole_array
+  name
+  slot
+
+# What stands where a statement or a for loop's part was left out.
+pub type absent
+
+pub type block
+  body
+
+# `line` is where a misplaced one is reported.
+pub type break_stmt
+  line
+
+pub type continue_stmt
+  line
+
+# `params` and `autos` are lists of formal; `void` says the function prints
+# nothing when called as a statement.
+pub type definition
+  autos
+  body
+  name
+  params
+  slot
+  void
+
+pub type expression_stmt
+  value
+
+pub type for_stmt
+  body
+  check
+  first
+  step
+
+pub type formal
+  array
+  name
+  reference
+  slot
+
+pub type halt_stmt
+
+pub type if_stmt
+  check
+  no
+  yes
+
+pub type limits_stmt
+
+pub type print_stmt
+  items
+
+pub type return_stmt
+  line
+  value
+
+pub type string_stmt
+  text
+
+pub type warranty_stmt
+
+pub type while_stmt
+  body
+  check

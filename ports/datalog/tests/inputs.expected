@@ -1,0 +1,16 @@
+?- path(a, X).
+  X = b
+  X = c
+  X = d
+  (3 answers)
+?- score(X, Y).
+  X = 1, Y = -2
+  X = "x y", Y = 3
+  (2 answers)
+.printsize path: 6 tuples
+.printsize edge: 3 tuples
+-- evaluation
+stratum 1: path: 4 rounds, 6 new
+relations: edge 3, path 6, score 2
+total: 11 tuples after 4 rounds
+--- exit 0

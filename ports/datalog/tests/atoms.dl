@@ -1,0 +1,35 @@
+% Zero-arity relations, repeated variables inside one atom, wildcards in the
+% body and under negation, duplicate facts, and a declared relation with no
+% tuples.
+.decl blocked(from: symbol, to: symbol)
+.decl nothing()
+
+ready.
+raining.
+go :- ready, !raining.
+stay :- ready, raining.
+walk :- go.
+
+edge(a, a). edge(a, b). edge(b, b). edge(b, c). edge(c, a).
+edge(a, b). edge(a, b).
+
+loop(X) :- edge(X, X).
+has_in(Y) :- edge(_, Y).
+open(X, Y) :- edge(X, Y), !blocked(X, Y), !blocked(Y, _).
+sink(X) :- has_in(X), !edge(X, _).
+anything :- edge(_, _).
+empty_read(X) :- blocked(X, _).
+
+?- go.
+?- stay.
+?- walk.
+?- loop(X).
+?- open(X, Y).
+?- sink(X).
+?- anything.
+?- empty_read(X).
+?- edge(a, _).
+?- edge(X, X).
+.output edge
+.output nothing
+.output stay

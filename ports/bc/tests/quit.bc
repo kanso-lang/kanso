@@ -1,0 +1,4 @@
+/* quit stops bc as soon as it is read, even where it would never run */
+print "one\n"
+if (0) { quit }
+print "never\n"

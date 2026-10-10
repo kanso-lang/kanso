@@ -1,0 +1,73 @@
+/* small programs of the kind bc is used for */
+define collatz(n) {
+  auto steps
+  while (n != 1) {
+    if (n % 2 == 0) n = n / 2 else n = 3 * n + 1
+    steps = steps + 1
+  }
+  return (steps)
+}
+collatz(27)
+define isprime(n) {
+  auto d
+  if (n < 2) return (0)
+  for (d = 2; d * d <= n; d++) if (n % d == 0) return (0)
+  return (1)
+}
+for (i = 1; i <= 50; i++) if (isprime(i)) print i, " "
+print "\n"
+define sieve(n) {
+  auto i, j, c, f[]
+  for (i = 2; i <= n; i++) {
+    if (f[i] == 0) {
+      c = c + 1
+      for (j = i * i; j <= n; j += i) f[j] = 1
+    }
+  }
+  return (c)
+}
+sieve(500)
+define newton(x) {
+  auto g, h
+  g = x
+  while (1) {
+    h = (g + x / g) / 2
+    if (h == g) break
+    g = h
+  }
+  return (g)
+}
+scale = 30
+newton(2)
+sqrt(2)
+scale = 0
+define power_mod(b, e, m) {
+  auto r
+  r = 1
+  b = b % m
+  while (e > 0) {
+    if (e % 2 == 1) r = (r * b) % m
+    e = e / 2
+    b = (b * b) % m
+  }
+  return (r)
+}
+power_mod(2, 1000, 1000007)
+define binom(n, k) {
+  auto i, r
+  r = 1
+  for (i = 1; i <= k; i++) r = r * (n - k + i) / i
+  return (r)
+}
+binom(100, 50)
+scale = 20
+define harmonic(n) {
+  auto i, s
+  for (i = 1; i <= n; i++) s = s + 1 / i
+  return (s)
+}
+harmonic(100)
+scale = 60
+1 / 7
+obase = 2
+2 ^ 100 - 1

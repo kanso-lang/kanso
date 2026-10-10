@@ -1,0 +1,3 @@
+--- stderr
+datalog: tests/error_undefined.dl:2: `blocked` is read but no fact, rule or .decl defines it
+--- exit 1

@@ -1,0 +1,85 @@
+# The syntax tree a parsed program becomes. Every node that can be named in a
+# diagnostic carries the line it started on.
+#
+# A predicate applied to terms: `edge(X, 3)`.
+pub type atom
+  line
+  name
+  terms
+
+# A comparison in a rule body: `X != Y`, `N < 10`. `op` is its spelling.
+pub type comparison
+  left
+  line
+  op
+  right
+
+# A constant term. `value` is an int or a string, and a bare lowercase word
+# such as `alice` is the same constant as the string "alice".
+pub type constant
+  value
+
+# `.decl name(a, b)`: declares a relation and its arity without giving it any
+# tuples, so a program may mention a relation that ends up empty.
+pub type declaration
+  arity
+  line
+  name
+
+# One body literal that must hold: `edge(X, Y)`.
+pub type holds
+  atom
+
+# One body literal that must not hold: `!edge(X, Y)` or `not edge(X, Y)`.
+pub type lacks
+  atom
+
+# `.input name` or `.input name "file"`: read a relation's tuples from a file
+# of tab-separated columns, `name.facts` beside the program by default.
+pub type input
+  file
+  line
+  name
+
+# `.output name`: print every tuple of a relation after evaluation.
+pub type output
+  line
+  name
+
+# `.printsize name`: print how many tuples a relation holds.
+pub type printsize
+  line
+  name
+
+# A whole program, its clauses in source order.
+pub type program
+  clauses
+
+# `?- path(a, X).`
+pub type query
+  atom
+
+# `head :- body.` A fact is a rule with an empty body.
+pub type rule
+  body
+  head
+
+# A named variable. Names that start with an underscore are variables too,
+# just ones the author promises to use once.
+pub type variable
+  name
+
+# `_`: matches anything and binds nothing.
+pub type wildcard
+
+pub type clause declaration input output printsize query rule
+
+pub type literal comparison holds lacks
+
+pub type term constant variable wildcard
+
+pub fn fact? (rule body _)
+  length body == 0
+
+pub fn fact? _
+  false

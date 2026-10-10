@@ -1,0 +1,64 @@
+fn vetted source
+  verdict (parse source)
+
+fn verdict (err e)
+  "syntax: {e.reason}"
+
+fn verdict tree
+  judged (check_program tree)
+
+fn judged (err e)
+  "{e.line}: {e.reason}"
+
+fn judged _
+  "ok"
+
+test_accepts_a_program =
+  shown = vetted "e(1, 2).\np(X, Y) :- e(X, Y), !e(Y, X), X != Y."
+  agrees shown "ok"
+
+test_refuses_an_arity_clash =
+  shown = vetted "e(1, 2).\np(X) :- e(X)."
+  agrees shown "2: `e` has 1 argument(s) here but 2 at line 1"
+
+test_refuses_an_unbound_head_variable =
+  shown = vetted "e(1).\np(X, Y) :- e(X)."
+  agrees shown "2: `Y` is not range-restricted: no positive atom binds it"
+
+test_refuses_a_variable_only_under_negation =
+  shown = vetted "e(1).\np(X) :- e(X), !e(Y)."
+  wanted = "2: `Y` is not range-restricted: no positive atom binds it;"
+    . then " write `_` for a column that may hold anything"
+  agrees shown wanted
+
+test_refuses_an_unbound_comparison =
+  shown = vetted "e(1).\np(X) :- e(X), Y < X."
+  agrees shown "2: `Y` is not range-restricted: no positive atom binds it"
+
+test_equality_binds =
+  shown = vetted "e(1).\np(X, Y) :- e(X), Y = X, Z = Y, Z != 2."
+  agrees shown "ok"
+
+test_refuses_a_fact_with_variables =
+  shown = vetted "e(X, 1)."
+  agrees shown "1: a fact may not hold the variable `X`"
+
+test_refuses_a_wildcard_head =
+  shown = vetted "e(1).\np(_) :- e(_)."
+  agrees shown "2: the head of a rule may not hold `_`"
+
+test_refuses_an_undefined_relation =
+  shown = vetted "e(1).\np(X) :- e(X), !q(X)."
+  agrees shown "2: `q` is read but no fact, rule or .decl defines it"
+
+test_declarations_define =
+  shown = vetted ".decl q(x)\ne(1).\np(X) :- e(X), !q(X)."
+  agrees shown "ok"
+
+test_refuses_an_undefined_query =
+  shown = vetted "e(1).\n?- f(X)."
+  agrees shown "2: `f` is read but no fact, rule or .decl defines it"
+
+test_refuses_a_wildcard_comparison =
+  shown = vetted "e(1).\np(X) :- e(X), X < _."
+  agrees shown "2: a comparison may not hold `_`"

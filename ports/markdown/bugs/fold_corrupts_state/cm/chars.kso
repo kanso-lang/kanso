@@ -1,0 +1,27 @@
+import "std/list"
+import "std/text"
+
+fn between? n lo hi
+  lo <= n and n <= hi
+
+fn digit_run cs p n
+  if (digit? cs[p]) (digit_run cs (p + 1) (n + 1)) n
+
+pub fn lower_ascii s
+  text/join (list/to_list (list/map (text/chars s) lower_char)) ""
+
+fn lower_char c
+  n = text/char_code c
+  if (between? n 65 90) (text/from_code (n + 32)) c
+
+pub fn space_or_tab? none
+  false
+
+pub fn space_or_tab? _
+  false
+
+fn rest_blank? cs p
+  if (space_or_tab? cs[p]) (rest_blank? cs (p + 1)) false
+
+fn digit? none
+  false

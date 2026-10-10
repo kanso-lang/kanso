@@ -1,0 +1,15 @@
+% Transitive closure over a small graph with a cycle.
+edge(a, b).
+edge(b, c).
+edge(c, d).
+edge(d, b).
+edge(e, f).
+
+path(X, Y) :- edge(X, Y).
+path(X, Z) :- path(X, Y), edge(Y, Z).
+
+?- path(a, X).
+?- path(X, X).
+?- path(e, f).
+?- path(f, e).
+.output path

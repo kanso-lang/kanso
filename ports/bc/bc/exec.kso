@@ -1,0 +1,230 @@
+import "std/text"
+
+# Running statements. A statement answers how control leaves it: ran on to
+# the next statement, broke or continued out of a loop, or returned from a
+# function. halt and runtime errors are raised as errs instead, because they
+# leave every enclosing statement at once.
+pub type broke
+  machine
+
+pub type continued
+  machine
+
+pub type ran
+  machine
+
+pub type returned
+  machine
+  value
+
+fn give_back m v
+  returned m v
+
+pub fn run_list body i m
+  next = body[i]
+  return ran m if i > length body
+  r = exec next m
+  after_statement r body i
+
+fn after_statement (ran m) body i
+  run_list body (i + 1) m
+
+fn after_statement other _ _
+  other
+
+fn exec absent m
+  ran m
+
+fn exec (expression_stmt value) m
+  r = eval value m
+  return ran r.machine if quiet? value r.machine
+  shown = emit r.machine "{render r.value r.machine.obase}\n"
+  ran (set_last shown r.value)
+
+fn exec (string_stmt words) m
+  ran (emit m words)
+
+fn exec (print_stmt items) m
+  ran (print_items items 1 m)
+
+fn exec (if_stmt check no yes) m
+  c = eval check m
+  return exec yes c.machine if not zero? c.value
+  exec no c.machine
+
+fn exec (while_stmt body check) m
+  loop_while body check m
+
+fn exec (for_stmt body check first step) m
+  begun = discard first m
+  loop_for body check step begun
+
+fn exec (block body) m
+  run_list body 1 m
+
+fn exec (break_stmt _) m
+  broke m
+
+fn exec (continue_stmt _) m
+  continued m
+
+fn exec (return_stmt _ absent) m
+  returned m zero
+
+fn exec (return_stmt _ value) m
+  r = eval value m
+  give_back r.machine r.value
+
+fn exec halt_stmt m
+  err (halting m)
+
+fn exec limits_stmt m
+  ran (emit m limits_text)
+
+fn exec warranty_stmt m
+  ran (emit m warranty_text)
+
+fn exec (definition autos body name params slot void) m
+  ran (set_func m slot (definition autos body name params slot void))
+
+# A bare assignment prints nothing, and neither does a call to a void
+# function; every other expression statement prints its value.
+fn quiet? (assignment _ _ _) _
+  true
+
+fn quiet? (call _ _ slot) m
+  def = get_func m slot
+  void_function? def
+
+fn quiet? _ _
+  false
+
+fn void_function? (definition _ _ _ _ _ void)
+  void
+
+fn void_function? _
+  false
+
+fn loop_while body check m
+  c = eval check m
+  return ran c.machine if zero? c.value
+  r = exec body c.machine
+  while_next r body check
+
+fn while_next (ran m) body check
+  loop_while body check m
+
+fn while_next (continued m) body check
+  loop_while body check m
+
+fn while_next (broke m) _ _
+  ran m
+
+fn while_next other _ _
+  other
+
+fn loop_for body check step m
+  c = test check m
+  return ran c.machine if zero? c.value
+  r = exec body c.machine
+  for_next r body check step
+
+fn for_next (ran m) body check step
+  stepped = discard step m
+  loop_for body check step stepped
+
+fn for_next (continued m) body check step
+  stepped = discard step m
+  loop_for body check step stepped
+
+fn for_next (broke m) _ _ _
+  ran m
+
+fn for_next other _ _ _
+  other
+
+# A for loop's three parts may each be left out; a missing test is true.
+fn test absent m
+  ev m one
+
+fn test check m
+  eval check m
+
+fn discard absent m
+  m
+
+fn discard e m
+  r = eval e m
+  r.machine
+
+fn print_items items i m
+  item = items[i]
+  return m if item == none
+  printed = print_one item m
+  print_items items (i + 1) printed
+
+fn print_one (string_stmt words) m
+  emit m (unescape words)
+
+fn print_one e m
+  r = eval e m
+  set_last (emit r.machine (render r.value r.machine.obase)) r.value
+
+# The escapes print understands. A backslash before any other character
+# drops both, as GNU bc does.
+fn unescape words
+  parts = text/split words "\\"
+  first = parts[1]
+  rest = text/slice parts 2 (length parts)
+  "{first}{text/join (escape_parts rest 1 []) ""}"
+
+fn escape_parts parts i acc
+  part = parts[i]
+  return acc if part == none
+  return escape_parts parts (i + 2) (push acc "\\{parts[i + 1]}") if part == ""
+  lead = text/slice part 1 1
+  tail = text/slice part 2 (length part)
+  escape_parts parts (i + 1) (push acc "{escaped lead}{tail}")
+
+fn escaped "a"
+  text/from_code 7
+
+fn escaped "b"
+  text/from_code 8
+
+fn escaped "f"
+  text/from_code 12
+
+fn escaped "n"
+  "\n"
+
+fn escaped "q"
+  "\""
+
+fn escaped "r"
+  text/from_code 13
+
+fn escaped "t"
+  "\t"
+
+fn escaped _
+  ""
+
+limits_text = text/join limit_lines "\n"
+
+limit_lines = []
+  . push "BC_BASE_MAX     = 2147483647"
+  . push "BC_DIM_MAX      = 16777215"
+  . push "BC_SCALE_MAX    = 2147483647"
+  . push "BC_STRING_MAX   = 2147483647"
+  . push "MAX Exponent    = 9223372036854775807"
+  . push "Number of vars  = 32767"
+  . push ""
+
+warranty_text = text/join warranty_lines "\n"
+
+warranty_lines = []
+  . push "This is a port of GNU bc to the kanso language. It comes with"
+  . push "ABSOLUTELY NO WARRANTY; GNU bc itself is distributed under the GNU"
+  . push "General Public License, version 3 or later."
+  . push ""

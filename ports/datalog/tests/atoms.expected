@@ -1,0 +1,51 @@
+?- go.
+  no
+?- stay.
+  yes
+?- walk.
+  no
+?- loop(X).
+  X = a
+  X = b
+  (2 answers)
+?- open(X, Y).
+  X = a, Y = a
+  X = a, Y = b
+  X = b, Y = b
+  X = b, Y = c
+  X = c, Y = a
+  (5 answers)
+?- sink(X).
+  (0 answers)
+?- anything.
+  yes
+?- empty_read(X).
+  (0 answers)
+?- edge(a, _).
+  yes
+?- edge(X, X).
+  X = a
+  X = b
+  (2 answers)
+.output edge (5 tuples)
+  edge(a, a).
+  edge(a, b).
+  edge(b, b).
+  edge(b, c).
+  edge(c, a).
+.output nothing (0 tuples)
+.output stay (1 tuple)
+  stay.
+-- evaluation
+stratum 1: anything: 1 round, 1 new
+stratum 2: empty_read: 1 round, 0 new
+stratum 3: go: 1 round, 0 new
+stratum 4: has_in: 1 round, 3 new
+stratum 5: loop: 1 round, 2 new
+stratum 6: open: 1 round, 5 new
+stratum 7: stay: 1 round, 1 new
+stratum 8: sink: 1 round, 0 new
+stratum 9: walk: 1 round, 0 new
+relations: anything 1, blocked 0, edge 5, empty_read 0, go 0, has_in 3, loop 2, nothing 0, open 5, raining 1, ready 1, sink 0, stay 1, walk 0
+total: 19 tuples after 9 rounds
+--- exit 0

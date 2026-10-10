@@ -1,0 +1,55 @@
+?- sg(hal, Y).
+  Y = hal
+  Y = ivy
+  Y = jon
+  Y = kit
+  Y = lou
+  (5 answers)
+?- cousin(hal, Y).
+  Y = ivy
+  Y = jon
+  Y = kit
+  Y = lou
+  (4 answers)
+?- cousin(max, Y).
+  (0 answers)
+?- sg(ora, max).
+  no
+?- sibling(bea, Y).
+  Y = cal
+  (1 answer)
+.output cousin (26 tuples)
+  cousin(dee, fay).
+  cousin(dee, gus).
+  cousin(eli, fay).
+  cousin(eli, gus).
+  cousin(fay, dee).
+  cousin(fay, eli).
+  cousin(gus, dee).
+  cousin(gus, eli).
+  cousin(hal, ivy).
+  cousin(hal, jon).
+  cousin(hal, kit).
+  cousin(hal, lou).
+  cousin(ivy, hal).
+  cousin(ivy, jon).
+  cousin(ivy, kit).
+  cousin(ivy, lou).
+  cousin(jon, hal).
+  cousin(jon, ivy).
+  cousin(jon, kit).
+  cousin(jon, lou).
+  cousin(kit, hal).
+  cousin(kit, ivy).
+  cousin(kit, jon).
+  cousin(lou, hal).
+  cousin(lou, ivy).
+  cousin(lou, jon).
+-- evaluation
+stratum 1: person: 1 round, 16 new
+stratum 2: sibling: 1 round, 8 new
+stratum 3: sg: 5 rounds, 50 new
+stratum 4: cousin: 1 round, 26 new
+relations: cousin 26, parent 14, person 16, sg 50, sibling 8
+total: 114 tuples after 8 rounds
+--- exit 0

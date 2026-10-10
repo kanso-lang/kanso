@@ -1,0 +1,181 @@
+import "std/list"
+import "std/text"
+
+# Splitting a checked program into strata. Each stratum is one strongly
+# connected component of the dependency graph between relations: a rule
+# `p :- q, !r.` makes `p` depend on `q` and, negatively, on `r`. Components
+# are evaluated in dependency order, so by the time a rule reads `!r` every
+# tuple of `r` is known. A negative edge inside one component would make that
+# impossible, and the program is refused.
+#
+# One edge of the dependency graph: `head` depends on `body`, through a
+# negated literal when `negative` is true, in the rule on `line`.
+type edge
+  body
+  head
+  line
+  negative
+
+# A component to evaluate: its relation names in order, and the rules whose
+# heads it defines, in source order.
+# A breadth-first search in progress: the nodes to expand next, and the parent
+# each visited node was reached from.
+type frontier_step
+  frontier
+  parents
+
+pub type stratum
+  names
+  rules
+
+pub fn stratify (program cs) shape
+  rules = list/to_list (list/select cs rule?)
+  graph = list/fold rules {} add_edges
+  reach = closure graph (keys shape.arities)
+  bad = list/find (all_edges graph) (e -> negative_cycle? reach e)
+  ordered_or_not bad graph reach rules
+
+fn add_edge graph e
+  put graph e.head (push (edges_of graph e.head) e)
+
+fn add_edges graph (rule body head)
+  list/fold body graph (g l -> edge_of g head.name l)
+
+fn all_edges graph
+  list/fold (values graph) [] text/concat
+
+fn closure graph names
+  first = list/fold names {} (acc n -> put acc n (direct graph n))
+  widen graph names first
+
+# Every relation in the same component as `name`, sorted.
+fn component reach name
+  ahead = keys reach[name]
+  back = list/select ahead (q -> q != name and reaches? reach q name)
+  list/sort (push (list/to_list back) name)
+
+fn cycle_reason graph (edge body head line _)
+  return "`{head}` depends on its own negation at line {line}" if body == head
+  path = text/join (path_between graph body head) " -> "
+  cycle = "`{body}` depends on `{head}` ({path})"
+  "`{head}` depends on the negation of `{body}` at line {line}, and {cycle}"
+
+fn deeper levels graph reach name
+  deps = edges_of graph name
+  inner = component reach name
+  outside = list/select deps (e -> not list/any? inner (q -> q == e.body))
+  list/fold outside 0 (acc e -> max_of acc (level_of levels e.body + 1))
+
+fn direct graph name
+  list/fold (edges_of graph name) {} (acc e -> put acc e.body true)
+
+fn edge_of g head (holds a)
+  add_edge g (edge a.name head a.line false)
+
+fn edge_of g head (lacks a)
+  add_edge g (edge a.name head a.line true)
+
+fn edge_of g _ _
+  g
+
+fn edges_of graph name
+  or_empty graph[name]
+
+fn level_of levels name
+  zero_if_none levels[name]
+
+fn levelled graph reach names levels
+  next = list/fold names levels (acc n -> put acc n (deeper acc graph reach n))
+  return levels if next == levels
+  levelled graph reach names next
+
+fn max_of a b
+  if (a < b) b a
+
+fn negative_cycle? reach (edge body head _ negative)
+  negative and (body == head or reaches? reach body head)
+
+fn or_blank none
+  {}
+
+fn or_blank m
+  m
+
+fn or_empty none
+  []
+
+fn or_empty es
+  es
+
+fn ordered_or_not none graph reach rules
+  heads = keys graph
+  levels = levelled graph reach heads {}
+  leaders = list/select heads (n -> (component reach n)[1] == n)
+  by_level = list/group_by leaders (n -> level_of levels n)
+  sequence = list/fold (values by_level) [] (acc g -> sorted_onto acc g)
+  list/to_list (list/map sequence (n -> stratum_for reach rules n))
+
+fn ordered_or_not bad graph _ _
+  reason = "the program cannot be stratified: {cycle_reason graph bad}"
+  err (semantic_error bad.line reason)
+
+fn path_between graph from to
+  parents = search graph to [from] (put {} from from)
+  list/fold (walk_back parents from to []) [] (acc n -> text/concat [n] acc)
+
+fn reaches? reach from to
+  present? reach[from][to]
+
+fn rule? (rule _ _)
+  true
+
+fn rule? _
+  false
+
+fn search graph to frontier parents
+  return parents if present? parents[to]
+  start = frontier_step [] parents
+  step = list/fold frontier start (acc n -> visit graph acc n)
+  search graph to step.frontier step.parents
+
+fn sorted_onto acc names
+  text/concat acc (list/sort names)
+
+fn stratum_for reach rules leader
+  names = component reach leader
+  own = list/select rules (r -> list/any? names (n -> n == r.head.name))
+  stratum names (list/to_list own)
+
+fn visit graph acc n
+  novel = list/select (edges_of graph n) (e -> not present? acc.parents[e.body])
+  list/fold novel acc (a e -> visited a e.body n)
+
+fn visited (frontier_step frontier parents) body n
+  frontier_step (push frontier body) (put parents body n)
+
+fn walk_back _ _ none acc
+  acc
+
+fn walk_back parents from node acc
+  return push acc node if node == from
+  walk_back parents from parents[node] (push acc node)
+
+fn widen graph names reach
+  next = list/fold names reach (acc n -> put acc n (reach_from acc n))
+  if (next == reach) reach (widen graph names next)
+
+fn reach_from reach n
+  mine = or_blank reach[n]
+  list/fold (keys mine) mine (acc q -> merge acc reach[q])
+
+fn merge a none
+  a
+
+fn merge a b
+  list/fold (keys b) a (acc k -> put acc k true)
+
+fn zero_if_none none
+  0
+
+fn zero_if_none n
+  n

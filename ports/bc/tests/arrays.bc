@@ -1,0 +1,36 @@
+/* arrays: unset elements are zero, arrays pass by value, *a[] by reference */
+a[0] = 1
+a[5] = 6
+a[0] + a[5] + a[3]
+a[2]++
+a[2]
+++a[2]
+b[1000] = 7
+b[1000]
+b[999]
+for (i = 0; i < 10; i++) sq[i] = i * i
+sq[9]
+define sum(x[], n) {
+  auto i, s
+  for (i = 0; i < n; i++) s += x[i]
+  return (s)
+}
+sum(sq[], 10)
+define zap(x[]) { x[0] = 99; return (x[0]) }
+zap(sq[])
+sq[0]
+define grab(*x[]) { x[0] = 42; x[20] = 1 }
+grab(sq[])
+sq[0]
+sq[20]
+define local() { auto t[]; t[0] = 5; return (t[0] + sq[1]) }
+local()
+t[0]
+c[1.9] = 3
+c[1]
+n = 3
+d[n * 2] = n
+d[6]
+a[-1] = 2
+a[16777216]
+4

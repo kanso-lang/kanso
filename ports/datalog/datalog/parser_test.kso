@@ -1,0 +1,59 @@
+import "std/list"
+import "std/text"
+
+# Parses a program and renders it back, one clause per line, or renders the
+# syntax error.
+fn round_trip source
+  reshown (parse source)
+
+fn reshown (err e)
+  "{e.line}:{e.col}: {e.reason}"
+
+fn reshown (program cs)
+  text/join (list/to_list (list/map cs show_clause)) "\n"
+
+test_parses_a_fact =
+  shown = round_trip "edge(1, 2)."
+  agrees shown "edge(1, 2)."
+
+test_parses_a_rule =
+  shown = round_trip "path(X,Z) :- edge(X,Y), path(Y,Z)."
+  agrees shown "path(X, Z) :- edge(X, Y), path(Y, Z)."
+
+test_parses_negation_both_ways =
+  shown = round_trip "p(X) :- q(X), !r(X), not s(X, _)."
+  agrees shown "p(X) :- q(X), !r(X), !s(X, _)."
+
+test_parses_comparisons =
+  shown = round_trip "p(X) :- q(X, Y), X != Y, Y < 3, a = X."
+  agrees shown "p(X) :- q(X, Y), X != Y, Y < 3, a = X."
+
+test_quotes_strings_that_are_not_words =
+  shown = round_trip "name(\"Ann Lee\", bob, \"carl\")."
+  agrees shown "name(\"Ann Lee\", bob, carl)."
+
+test_parses_zero_arity_atoms =
+  shown = round_trip "go :- ready."
+  agrees shown "go :- ready."
+
+test_parses_queries =
+  shown = round_trip "?- path(a, X)."
+  agrees shown "?- path(a, X)."
+
+test_parses_directives =
+  shown = round_trip ".decl e(x: number, y: symbol)\n.output e"
+  agrees shown ".decl e/2\n.output e"
+
+test_reports_a_missing_dot =
+  shown = round_trip "p(X) :- q(X)\nr(a)."
+  agrees shown "2:1: expected `,` or `.` after the body, found `r`"
+
+test_reports_a_bad_argument =
+  shown = round_trip "p(X, :-)."
+  wanted = "1:6: expected a variable, `_` or a constant, found `:-`"
+  agrees shown wanted
+
+test_reports_the_end_of_input =
+  shown = round_trip "p(X"
+  wanted = "1:4: expected `,` or `)` between arguments, found end of input"
+  agrees shown wanted

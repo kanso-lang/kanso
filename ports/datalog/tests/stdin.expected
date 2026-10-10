@@ -1,0 +1,33 @@
+?- path(a, X).
+  X = b
+  X = c
+  X = d
+  (3 answers)
+?- path(X, X).
+  X = b
+  X = c
+  X = d
+  (3 answers)
+?- path(e, f).
+  yes
+?- path(f, e).
+  no
+.output path (13 tuples)
+  path(a, b).
+  path(a, c).
+  path(a, d).
+  path(b, b).
+  path(b, c).
+  path(b, d).
+  path(c, b).
+  path(c, c).
+  path(c, d).
+  path(d, b).
+  path(d, c).
+  path(d, d).
+  path(e, f).
+-- evaluation
+stratum 1: path: 4 rounds, 13 new
+relations: edge 5, path 13
+total: 18 tuples after 4 rounds
+--- exit 0

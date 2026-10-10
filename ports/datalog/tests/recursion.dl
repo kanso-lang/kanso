@@ -1,0 +1,21 @@
+% Mutual recursion inside one stratum, a rule that reads its own relation
+% twice, and a non-linear transitive closure (path joined with path).
+succ(0, 1). succ(1, 2). succ(2, 3). succ(3, 4). succ(4, 5). succ(5, 6).
+zero(0).
+
+even(X) :- zero(X).
+odd(Y) :- even(X), succ(X, Y).
+even(Y) :- odd(X), succ(X, Y).
+
+edge(1, 2). edge(2, 3). edge(3, 4). edge(4, 5). edge(5, 6). edge(6, 7).
+edge(7, 8). edge(8, 9).
+path(X, Y) :- edge(X, Y).
+path(X, Z) :- path(X, Y), path(Y, Z).
+
+linked(X, Y) :- edge(X, Y).
+linked(X, Y) :- linked(Y, X).
+
+?- even(X).
+?- odd(X).
+?- path(1, X).
+?- linked(X, 1).

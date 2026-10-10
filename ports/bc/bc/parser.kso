@@ -1,0 +1,773 @@
+import "std/list"
+import "std/text"
+
+# A recursive-descent parser for bc, with precedence climbing for
+# expressions. It reads one top-level unit at a time -- a line of statements
+# or one function definition -- because bc runs each unit before it reads
+# the next. A syntax error is raised as an err carrying a syntax_fault and is
+# caught where the unit started (FRICTION F7).
+#
+pub type bad_unit
+  line
+  message
+  ps
+
+pub type finished
+  ps
+
+# Wraps an assignment written in parentheses, which prints when it is a
+# statement on its own where a bare assignment does not.
+pub type grouped
+  inner
+
+# A break, continue or return found where it cannot run.
+type misplaced
+  line
+  message
+
+pub type parsed
+  node
+  ps
+
+# The parser's whole state: the tokens, where it is, and the three name
+# tables that give each variable, array and function its slot. The tables
+# outlive one source, so the library's functions are visible to the program.
+pub type ps
+  arrays
+  funcs
+  pos
+  scalars
+  toks
+  voids
+
+pub type quitting
+
+type quit_seen
+
+pub type syntax_fault
+  line
+  message
+  pos
+
+pub type unit
+  body
+  ps
+
+pub fn fresh_tables _
+  ps {} {} 1 {} [] {}
+
+pub fn start_source tables toks
+  { arrays funcs scalars voids } = tables
+  ps arrays funcs 1 scalars toks voids
+
+# Built by a call rather than the constructor, so that a syntax error
+# arriving in both arguments stays one error (FRICTION F7).
+fn got node s
+  parsed node s
+
+fn peek (ps _ _ pos _ toks _)
+  toks[pos]
+
+fn kind_at s
+  t = peek s
+  t.kind
+
+fn advance (ps arrays funcs pos scalars toks voids)
+  ps arrays funcs (pos + 1) scalars toks voids
+
+fn moved_to (ps arrays funcs _ scalars toks voids) pos
+  ps arrays funcs pos scalars toks voids
+
+fn fail s message
+  t = peek s
+  err (syntax_fault t.line message s.pos)
+
+fn expect s kind
+  k = kind_at s
+  if (k == kind) (advance s) (fail s "syntax error")
+
+# These three scan the token list by position and move the cursor once at
+# the end. Written as loops over the parser state itself, they became beat
+# loops carrying a record that holds maps across the arena rewind, and the
+# native build later read corrupted values (FRICTION F15).
+fn skip_newlines s
+  moved_to s (past_kinds s.toks s.pos "newline" "newline")
+
+fn skip_separators s
+  moved_to s (past_kinds s.toks s.pos "newline" ";")
+
+fn past_kinds toks pos a b
+  t = toks[pos]
+  return pos if t == none
+  k = t.kind
+  return past_kinds toks (pos + 1) a b if k == a or k == b
+  pos
+
+# A name gets the next free slot the first time it is seen. The table is
+# only written then: a native map keeps every write, so writing a name on
+# each sight made parsing quadratic (FRICTION F5).
+fn with_scalar (ps arrays funcs pos scalars toks voids) name
+  found = scalars[name]
+  return got found (ps arrays funcs pos scalars toks voids) if found != none
+  slot = length scalars + 1
+  got slot (ps arrays funcs pos (put scalars name slot) toks voids)
+
+fn with_array (ps arrays funcs pos scalars toks voids) name
+  found = arrays[name]
+  return got found (ps arrays funcs pos scalars toks voids) if found != none
+  slot = length arrays + 1
+  got slot (ps (put arrays name slot) funcs pos scalars toks voids)
+
+fn with_func (ps arrays funcs pos scalars toks voids) name
+  found = funcs[name]
+  return got found (ps arrays funcs pos scalars toks voids) if found != none
+  slot = length funcs + 1
+  got slot (ps arrays (put funcs name slot) pos scalars toks voids)
+
+pub fn parse_unit s
+  begun = skip_separators s
+  k = kind_at begun
+  return finished begun if k == "eof"
+  settle (unit_of begun k) begun
+
+fn unit_of s "define"
+  d = definition_of (advance s)
+  after = optional_semicolon d.ps
+  ended = end_of_unit after
+  placed = check_placement [d.node] ended
+  make_unit [d.node] placed
+
+fn unit_of s _
+  first = statement s
+  more = statement_list first.ps
+  body = text/concat [first.node] more.node
+  ended = end_of_unit more.ps
+  placed = check_placement body ended
+  make_unit body placed
+
+fn optional_semicolon s
+  k = kind_at s
+  if (k == ";") (advance s) s
+
+fn end_of_unit s
+  k = kind_at s
+  return advance s if k == "newline"
+  return s if k == "eof"
+  fail s "syntax error"
+
+# Statements separated by semicolons, up to the end of the line.
+#
+# This and the other list-building parsers below recurse and build their
+# lists on the way back out, rather than looping and pushing into an
+# accumulator: native builds corrupted lists built the second way (FRICTION
+# F15, bugs/loop_list_clobbered).
+fn statement_list s
+  k = kind_at s
+  return got [] s if k != ";"
+  after = advance s
+  k2 = kind_at after
+  return got [] after if k2 == "newline" or k2 == "eof" or k2 == ";"
+  next = statement after
+  rest = statement_list next.ps
+  got (text/concat [next.node] rest.node) rest.ps
+
+fn settle (err (syntax_fault line message pos)) s
+  bad_unit line message (recover (moved_to s pos))
+
+fn settle (err quit_seen) _
+  quitting
+
+fn settle result _
+  result
+
+# GNU bc discards the rest of the line an error was found on.
+fn recover s
+  moved_to s (line_end s.toks s.pos)
+
+fn line_end toks pos
+  t = toks[pos]
+  return pos if t == none
+  k = t.kind
+  return pos if k == "eof"
+  return pos + 1 if k == "newline"
+  line_end toks (pos + 1)
+
+fn statement s
+  k = kind_at s
+  statement_by k s
+
+fn statement_by "\{" s
+  inner = block_body (skip_separators (advance s))
+  got (block inner.node) inner.ps
+
+fn statement_by "break" s
+  t = peek s
+  got (break_stmt t.line) (advance s)
+
+fn statement_by "continue" s
+  t = peek s
+  got (continue_stmt t.line) (advance s)
+
+fn statement_by "for" s
+  opened = expect (advance s) "("
+  first = optional_expr opened ";"
+  after_first = expect first.ps ";"
+  check = optional_expr after_first ";"
+  after_check = expect check.ps ";"
+  step = optional_expr after_check ")"
+  closed = expect step.ps ")"
+  body = statement (skip_newlines closed)
+  got (make_for body.node check.node first.node step.node) body.ps
+
+fn statement_by "halt" s
+  got halt_stmt (advance s)
+
+fn statement_by "if" s
+  check = condition (advance s)
+  yes = statement (skip_newlines check.ps)
+  k = kind_at yes.ps
+  return got (make_if check.node absent yes.node) yes.ps if k != "else"
+  no = statement (skip_newlines (advance yes.ps))
+  got (make_if check.node no.node yes.node) no.ps
+
+fn statement_by "limits" s
+  got limits_stmt (advance s)
+
+fn statement_by "print" s
+  items = print_items (advance s)
+  got (print_stmt items.node) items.ps
+
+fn statement_by "quit" _
+  err quit_seen
+
+fn statement_by "return" s
+  after = advance s
+  k = kind_at after
+  t = peek after
+  return got (return_stmt t.line absent) after if ends_statement? k
+  value = expression after 1
+  ended = value.ps
+  te = peek ended
+  got (return_stmt te.line value.node) ended
+
+fn statement_by "string" s
+  t = peek s
+  got (string_stmt t.text) (advance s)
+
+fn statement_by "warranty" s
+  got warranty_stmt (advance s)
+
+fn statement_by "while" s
+  check = condition (advance s)
+  body = statement (skip_newlines check.ps)
+  got (make_while body.node check.node) body.ps
+
+fn statement_by k s
+  return got absent s if ends_statement? k
+  value = expression s 1
+  got (expression_stmt value.node) value.ps
+
+fn ends_statement? k
+  k == ";" or k == "newline" or k == "}" or k == "eof" or k == "else"
+
+fn condition s
+  opened = expect s "("
+  check = expression opened 1
+  closed = expect check.ps ")"
+  got check.node closed
+
+fn optional_expr s closer
+  k = kind_at s
+  return got absent s if k == closer
+  expression s 1
+
+fn block_body s
+  k = kind_at s
+  return got [] (advance s) if k == "}"
+  return fail s "syntax error" if k == "eof"
+  next = statement s
+  rest = block_after next.ps
+  got (text/concat [next.node] rest.node) rest.ps
+
+fn block_after s
+  k = kind_at s
+  return got [] (advance s) if k == "}"
+  return block_body (skip_separators s) if k == ";" or k == "newline"
+  fail s "syntax error"
+
+fn print_items s
+  item = print_item s
+  k = kind_at item.ps
+  return got [item.node] item.ps if k != ","
+  rest = print_items (advance item.ps)
+  got (text/concat [item.node] rest.node) rest.ps
+
+fn print_item s
+  k = kind_at s
+  return expression s 1 if k != "string"
+  t = peek s
+  got (string_stmt t.text) (advance s)
+
+fn definition_of s
+  k = kind_at s
+  void = k == "void"
+  named = if void (advance s) s
+  t = peek named
+  define_named t void named
+
+fn define_named t void s
+  return fail s "syntax error" if t.kind != "name"
+  slot = with_func (advance s) t.text
+  opened = expect slot.ps "("
+  params = formals opened ")"
+  braced = skip_newlines_then_brace params.ps
+  autos = auto_list braced
+  checked = check_formals params.node autos.node autos.ps
+  body = block_body checked
+  made = make_definition autos.node body.node t.text params.node slot.node void
+  marked = if void (with_void body.ps t.text) body.ps
+  got made marked
+
+fn skip_newlines_then_brace s
+  k = kind_at s
+  return fail s "syntax error" if k != "\{"
+  skip_separators (advance s)
+
+fn auto_list s
+  k = kind_at s
+  return got [] s if k != "auto"
+  names = formals (advance s) ";"
+  got names.node (skip_separators names.ps)
+
+# A parameter or auto list. `closer` is ) for parameters; an auto list ends
+# at a semicolon or a newline. The list may be empty, but not after a comma.
+fn formals s closer
+  k = kind_at s
+  return got [] (advance s) if k == closer
+  return got [] s if closer == ";" and k == "newline"
+  formal_list s closer
+
+fn formal_list s closer
+  item = formal_of s
+  k = kind_at item.ps
+  return more_formals item closer if k == ","
+  return got [item.node] (advance item.ps) if k == closer
+  return got [item.node] item.ps if closer == ";" and k == "newline"
+  fail item.ps "syntax error"
+
+# Not a loop: the list is built on the way back out. Built by pushing in a
+# tail-recursive loop, it came back corrupted from native builds (FRICTION
+# F15, bugs/loop_list_clobbered).
+fn more_formals item closer
+  rest = formal_list (advance item.ps) closer
+  got (text/concat [item.node] rest.node) rest.ps
+
+fn formal_of s
+  k = kind_at s
+  return formal_named true (advance s) if k == "*"
+  formal_named false s
+
+fn formal_named reference s
+  t = peek s
+  formal_after t reference s
+
+fn formal_after t reference s
+  return fail s "syntax error" if t.kind != "name"
+  after = advance s
+  k = kind_at after
+  return scalar_formal t.text reference after if k != "["
+  closed = expect (advance after) "]"
+  slot = with_array closed t.text
+  got (formal true t.text reference slot.node) slot.ps
+
+fn scalar_formal name reference s
+  return fail s "syntax error" if reference
+  slot = with_scalar s name
+  got (formal false name false slot.node) slot.ps
+
+fn check_formals params autos s
+  all = text_names (text/concat params autos)
+  return fail s "duplicate parameter names" if repeats? (text_names params)
+  return fail s "variable in both parameter and auto lists" if repeats? all
+  s
+
+fn text_names fs
+  list/to_list (list/map fs (f -> if f.array "{f.name}[]" f.name))
+
+fn repeats? names
+  length (list/tally names) < length names
+
+# Binding power of each infix operator; zero for anything else. Assignment
+# binds tighter than comparison in bc, so `a = 3 < 5` compares the
+# assignment's value with 5.
+fn power_of "||"
+  1
+
+fn power_of "&&"
+  2
+
+fn power_of "<"
+  4
+
+fn power_of "<="
+  4
+
+fn power_of ">"
+  4
+
+fn power_of ">="
+  4
+
+fn power_of "=="
+  4
+
+fn power_of "!="
+  4
+
+fn power_of "="
+  5
+
+fn power_of "+="
+  5
+
+fn power_of "-="
+  5
+
+fn power_of "*="
+  5
+
+fn power_of "/="
+  5
+
+fn power_of "%="
+  5
+
+fn power_of "^="
+  5
+
+fn power_of "+"
+  6
+
+fn power_of "-"
+  6
+
+fn power_of "*"
+  7
+
+fn power_of "/"
+  7
+
+fn power_of "%"
+  7
+
+fn power_of "^"
+  8
+
+fn power_of _
+  0
+
+pub fn expression s floor
+  left = prefix s
+  infix left.node left.ps floor
+
+fn infix left s floor
+  k = kind_at s
+  strength = power_of k
+  return got left s if strength < floor or strength == 0
+  combined = combine k left (advance s)
+  infix combined.node combined.ps floor
+
+fn combine k left s
+  strength = power_of k
+  return assign_to k left s if strength == 5
+  right = expression s (right_floor k strength)
+  joined = join_operands k left right.node
+  checked = refuse_void k left right.node right.ps
+  got joined checked
+
+# ^ and assignment group to the right; everything else to the left.
+fn right_floor "^" strength
+  strength
+
+fn right_floor _ strength
+  strength + 1
+
+fn join_operands "||" left right
+  either left right
+
+fn join_operands "&&" left right
+  both left right
+
+fn join_operands k left right
+  return relation left k right if power_of k == 4
+  arith left k right
+
+fn refuse_void k left right s
+  return fail s "void expression with {k}" if void_call? left s
+  return fail s "void expression with {k}" if void_call? right s
+  s
+
+fn assign_to k left s
+  return fail s "syntax error" if not lvalue? left
+  value = expression s 5
+  checked = refuse_void_assignment value.node value.ps
+  got (assignment k left value.node) checked
+
+fn refuse_void_assignment value s
+  return fail s "Assignment of a void expression" if void_call? value s
+  s
+
+fn void_call? (call _ name _) s
+  s.voids[name] != none
+
+fn void_call? _ _
+  false
+
+fn with_void (ps arrays funcs pos scalars toks voids) name
+  ps arrays funcs pos scalars toks (put voids name true)
+
+fn lvalue? (scalar _ _)
+  true
+
+fn lvalue? (element _ _ _)
+  true
+
+fn lvalue? (register _)
+  true
+
+fn lvalue? _
+  false
+
+fn prefix s
+  t = peek s
+  prefix_of t.kind t s
+
+fn prefix_of "number" t s
+  got (constant (decimal_value t.text) t.text) (advance s)
+
+fn prefix_of "(" _ s
+  inner = expression (advance s) 1
+  closed = expect inner.ps ")"
+  got (grouping inner.node) closed
+
+fn prefix_of "-" _ s
+  operand = expression (advance s) 9
+  got (negation operand.node) operand.ps
+
+fn prefix_of "!" _ s
+  operand = expression (advance s) 3
+  got (inverse operand.node) operand.ps
+
+fn prefix_of "++" _ s
+  target = lvalue_at (advance s)
+  got (pre_step 1 target.node) target.ps
+
+fn prefix_of "--" _ s
+  target = lvalue_at (advance s)
+  got (pre_step (0 - 1) target.node) target.ps
+
+fn prefix_of "length" _ s
+  measured "length" (advance s)
+
+fn prefix_of "sqrt" _ s
+  measured "sqrt" (advance s)
+
+fn prefix_of "scale" _ s
+  k = kind_at (advance s)
+  return measured "scale" (advance s) if k == "("
+  postfix (register "scale") (advance s)
+
+fn prefix_of "read" _ s
+  opened = expect (advance s) "("
+  closed = expect opened ")"
+  got read_call closed
+
+fn prefix_of "name" _ s
+  primary_name s
+
+fn prefix_of "ibase" _ s
+  postfix (register "ibase") (advance s)
+
+fn prefix_of "obase" _ s
+  postfix (register "obase") (advance s)
+
+fn prefix_of "last" _ s
+  postfix (register "last") (advance s)
+
+fn prefix_of "." _ s
+  postfix (register "last") (advance s)
+
+fn prefix_of _ _ s
+  fail s "syntax error"
+
+fn grouping (assignment op target value)
+  grouped (assignment op target value)
+
+fn grouping inner
+  inner
+
+fn measured what s
+  opened = expect s "("
+  operand = expression opened 1
+  closed = expect operand.ps ")"
+  got (measure operand.node what) closed
+
+fn postfix node s
+  k = kind_at s
+  return got (post_step 1 node) (advance s) if k == "++"
+  return got (post_step (0 - 1) node) (advance s) if k == "--"
+  got node s
+
+fn lvalue_at s
+  k = kind_at s
+  return got (register k) (advance s) if register_name? k
+  return fail s "syntax error" if k != "name"
+  t = peek s
+  lvalue_named t.text (advance s)
+
+fn register_name? k
+  k == "scale" or k == "ibase" or k == "obase" or k == "last"
+
+fn lvalue_named name s
+  k = kind_at s
+  return element_of name (advance s) if k == "["
+  slot = with_scalar s name
+  got (scalar name slot.node) slot.ps
+
+fn element_of name s
+  index = expression s 1
+  closed = expect index.ps "]"
+  slot = with_array closed name
+  got (make_element index.node name slot.node) slot.ps
+
+fn primary_name s
+  t = peek s
+  primary_after t.text (advance s)
+
+fn primary_after name s
+  k = kind_at s
+  return call_of name (advance s) if k == "("
+  return element_postfix name s if k == "["
+  slot = with_scalar s name
+  postfix (scalar name slot.node) slot.ps
+
+fn element_postfix name s
+  indexed = element_of name (advance s)
+  postfix indexed.node indexed.ps
+
+fn call_of name s
+  args = arguments s
+  slot = with_func args.ps name
+  got (make_call args.node name slot.node) slot.ps
+
+fn arguments s
+  k = kind_at s
+  return got [] (advance s) if k == ")"
+  argument_list s
+
+fn argument_list s
+  item = argument s
+  k = kind_at item.ps
+  return more_arguments item if k == ","
+  closed = expect item.ps ")"
+  got [item.node] closed
+
+fn more_arguments item
+  rest = argument_list (advance item.ps)
+  got (text/concat [item.node] rest.node) rest.ps
+
+# `name[]` passes a whole array; anything else is an expression.
+fn argument s
+  k = kind_at s
+  return expression s 1 if k != "name"
+  t = peek s
+  argument_named t.text s
+
+fn argument_named name s
+  after = advance s
+  open = kind_at after
+  close = kind_at (advance after)
+  return expression s 1 if open != "[" or close != "]"
+  slot = with_array (advance (advance after)) name
+  got (whole_array name slot.node) slot.ps
+
+fn make_unit body s
+  unit body s
+
+fn make_for body check first step
+  for_stmt body check first step
+
+fn make_if check no yes
+  if_stmt check no yes
+
+fn make_while body check
+  while_stmt body check
+
+fn make_definition autos body name params slot void
+  definition autos body name params slot void
+
+fn make_call args name slot
+  call args name slot
+
+fn make_element index name slot
+  element index name slot
+
+# break and continue belong in a loop and return in a function; GNU bc
+# refuses the unit when one is elsewhere. `s` is handed back when all is
+# well.
+fn check_placement body s
+  found = list/fold body absent (acc x -> first_misplaced acc x false false)
+  refuse_misplaced found s
+
+fn refuse_misplaced absent s
+  s
+
+fn refuse_misplaced (misplaced line message) s
+  err (syntax_fault line message (s.pos - 1))
+
+fn first_misplaced absent x loop func
+  misplaced_in x loop func
+
+fn first_misplaced found _ _ _
+  found
+
+fn misplaced_in (break_stmt line) loop _
+  if loop absent (misplaced line "Break outside a for/while")
+
+fn misplaced_in (continue_stmt line) loop _
+  if loop absent (misplaced line "Continue outside a for")
+
+fn misplaced_in (return_stmt line _) _ func
+  if func absent (misplaced line "Return outside of a function.")
+
+fn misplaced_in (block body) loop func
+  list/fold body absent (acc x -> first_misplaced acc x loop func)
+
+fn misplaced_in (if_stmt _ no yes) loop func
+  first_misplaced (misplaced_in yes loop func) no loop func
+
+fn misplaced_in (while_stmt body _) _ func
+  misplaced_in body true func
+
+fn misplaced_in (for_stmt body _ _ _) _ func
+  misplaced_in body true func
+
+fn misplaced_in (definition _ body _ _ _ _) _ _
+  list/fold body absent (acc x -> first_misplaced acc x false true)
+
+fn misplaced_in _ _ _
+  absent
+
+# How far a unit's parse reached in the token list, so that the lexer's
+# diagnostics up to there can be reported first.
+pub fn reached (finished s)
+  s.pos + 1
+
+pub fn reached (bad_unit _ _ s)
+  s.pos
+
+pub fn reached (unit _ s)
+  s.pos
+
+pub fn reached _
+  0

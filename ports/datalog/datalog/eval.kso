@@ -1,0 +1,301 @@
+import "std/list"
+import "std/text"
+
+# Bottom-up, semi-naive evaluation, one stratum at a time.
+#
+# The first round of a stratum runs every rule over the full relations. Each
+# later round runs only the delta plans: for a rule whose body reads the
+# stratum's own relations at positions i, j, ..., one pl per position, with
+# that atom reading the tuples new in the previous round. A tuple is new when
+# no relation already holds it, and a stratum is done when a round derives
+# nothing new.
+#
+# What one stratum's evaluation did.
+pub type stratum_report
+  derived
+  names
+  rounds
+
+# The database after evaluation, and a report per stratum.
+pub type evaluation
+  db
+  reports
+
+# A stratum compiled: its relation names, the pl per rule for the first
+# round, and the delta plans for every later round.
+type compiled_stratum
+  delta_plans
+  names
+  naive_plans
+
+# What every pl reads while it runs: the base of the tuple codes, the
+# relations, the last round's new tuples by relation, and the set of codes
+# the head relation already holds.
+type context
+  base
+  db
+  delta
+  seen
+
+# A scan's column operations met a tuple they do not match.
+type no_match
+
+pub fn evaluate table shape strata facts
+  plans = list/to_list (list/map strata (s -> compile_stratum table s))
+  masks = list/fold plans {} masks_of_stratum
+  base = base_of table
+  names = keys shape.arities
+  start = list/fold names {} (db n -> put db n (blank base shape masks n))
+  loaded = load_facts base table start facts
+  list/fold plans (evaluation loaded []) (ev p -> run_stratum base ev p)
+
+fn absorb base db (entry name rows)
+  rel = db[name]
+  put db name (insert_all base rel rows)
+
+fn another_round (stratum_report derived names rounds) more
+  stratum_report (derived + more) names (rounds + 1)
+
+fn apply_round base db found
+  list/fold (entries found) db (acc e -> absorb base acc e)
+
+fn blank base shape masks name
+  arity = arity_of shape.arities[name]
+  empty_relation base arity (keys (or_blank masks[name]))
+
+fn arity_of none
+  0
+
+fn arity_of (shape_at arity _)
+  arity
+
+fn compile_stratum table s
+  naive = list/to_list (list/map s.rules (r -> plan_rule table r 0))
+  each = list/map s.rules (r -> delta_plans table r s.names)
+  deltas = list/fold each [] text/concat
+  compiled_stratum deltas s.names naive
+
+fn compare? "=" a b
+  a == b
+
+fn compare? "!=" a b
+  a != b
+
+fn compare? "<" a b
+  a < b
+
+fn compare? "<=" a b
+  a <= b
+
+fn compare? ">" a b
+  a > b
+
+fn compare? ">=" a b
+  a >= b
+
+fn compare? _ _ _
+  false
+
+fn count_new found
+  list/fold (values found) 0 (acc rows -> acc + length rows)
+
+# A round's rows for one relation, without duplicates, in code order.
+fn distinct rows
+  keys (list/fold rows {} (acc c -> put acc c true))
+
+fn delta_plans table r names
+  places = recursive_positions r names
+  list/to_list (list/map places (i -> plan_rule table r i))
+
+# A derived tuple joins the round's rows unless the relation already holds
+# it. Duplicates within the round are removed when the round ends.
+fn emit ctx pl env acc
+  base = ctx.base
+  code = list/fold pl.head 0 (c tm -> c * base + term_value env tm)
+  if (present? ctx.seen[code]) acc (push acc code)
+
+fn exec ctx pl i env acc (scan_step true _ _ _ name ops _)
+  rows = or_empty ctx.delta[name]
+  base = ctx.base
+  list/fold rows acc (a c -> matched ctx pl i (match_ops base ops c env 1) a)
+
+fn exec ctx pl i env acc (scan_step false _ _ 0 name ops _)
+  rows = rows_of ctx.db[name]
+  base = ctx.base
+  list/fold rows acc (a c -> matched ctx pl i (match_ops base ops c env 1) a)
+
+fn exec ctx pl i env acc (scan_step false key_terms _ _ name _ true)
+  code = key_code ctx.base key_terms env
+  if (holds_code? ctx.db[name] code) (run_from ctx pl (i + 1) env acc) acc
+
+fn exec ctx pl i env acc (scan_step false key_terms keyed mask name ops false)
+  rel = ctx.db[name]
+  code = key_code ctx.base key_terms env
+  found = index_on_rel rel mask
+  probed ctx pl i env acc found code keyed (rows_of rel) ops
+
+fn exec ctx pl i env acc (absent_step key_terms mask name whole)
+  code = key_code ctx.base key_terms env
+  found = probe_found? ctx.base ctx.db[name] mask code whole
+  if found acc (run_from ctx pl (i + 1) env acc)
+
+fn exec ctx pl i env acc (compare_step left op right)
+  ok = compare? op (term_value env left) (term_value env right)
+  if ok (run_from ctx pl (i + 1) env acc) acc
+
+fn exec ctx pl i env acc (assign_step tm)
+  run_from ctx pl (i + 1) (push env (term_value env tm)) acc
+
+fn key_code base key_terms env
+  list/fold key_terms 0 (c k -> c * base + term_value env k)
+
+fn fact_code base table (rule _ head)
+  ids = list/to_list (list/map head.terms (c -> or_zero (id_of table c)))
+  encode base ids
+
+# Facts are grouped by relation with one pass per relation rather than by
+# reading and rewriting a map entry per fact, which sorts the map each time
+# (FRICTION F18).
+fn fact_rows base table facts acc name
+  mine = list/select facts (f -> f.head.name == name)
+  put acc name (list/to_list (list/map mine (f -> fact_code base table f)))
+
+fn load_facts base table db facts
+  names = keys db
+  rows = list/fold names {} (acc n -> fact_rows base table facts acc n)
+  apply_round base db (deduped rows)
+
+fn deduped found
+  list/fold (entries found) {} put_distinct
+
+fn put_distinct acc (entry name rows)
+  put acc name (distinct rows)
+
+fn masks_of_plan acc p
+  list/fold p.steps acc note_mask
+
+fn masks_of_stratum acc cs
+  all = text/concat cs.naive_plans cs.delta_plans
+  list/fold all acc masks_of_plan
+
+fn matched _ _ _ no_match acc
+  acc
+
+fn matched ctx pl i env acc
+  run_from ctx pl (i + 1) env acc
+
+# Runs a scan's column operations on one tuple's code, answering the
+# environment with the new bindings, or no_match.
+fn match_ops base ops code env j
+  return env if j < 1 or length ops < j
+  match_op base ops code env j ops[j]
+
+fn match_op base ops code env j (bind_col place)
+  match_ops base ops code (push env (digit base code place)) (j + 1)
+
+fn match_op base ops code env j (check_col place tm)
+  same = digit base code place == term_value env tm
+  if same (match_ops base ops code env (j + 1)) no_match
+
+fn note_index acc name mask
+  put acc name (put (or_blank acc[name]) mask true)
+
+fn note_mask acc (scan_step false _ _ mask name _ false)
+  if (mask == 0) acc (note_index acc name mask)
+
+fn note_mask acc (absent_step _ mask name false)
+  if (mask == 0) acc (note_index acc name mask)
+
+fn note_mask acc _
+  acc
+
+fn probe_found? _ none _ _ _
+  false
+
+fn probe_found? base rel mask code whole
+  if whole (has? rel code) (partly_found? base rel mask code)
+
+fn partly_found? _ rel 0 _
+  size_of rel > 0
+
+fn partly_found? base rel mask code
+  found = index_on rel mask
+  bucket_found? base rel mask code found
+
+fn bucket_found? base rel mask code none
+  places = mask_places base rel.arity mask
+  list/any? rel.tuples (c -> key_of base places c == code)
+
+fn bucket_found? _ _ _ code (index buckets _)
+  present? buckets[code]
+
+fn holds_code? none _
+  false
+
+fn holds_code? rel code
+  has? rel code
+
+fn index_on_rel none _
+  none
+
+fn index_on_rel rel mask
+  index_on rel mask
+
+# An indexed scan reads one bucket. A scan whose index nobody asked for, as a
+# query's can be, reads every row and checks every column instead.
+fn probed ctx pl i env acc none _ _ rows ops
+  base = ctx.base
+  list/fold rows acc (a c -> matched ctx pl i (match_ops base ops c env 1) a)
+
+fn probed ctx pl i env acc (index buckets _) code keyed _ _
+  rows = or_empty buckets[code]
+  base = ctx.base
+  list/fold rows acc (a c -> matched ctx pl i (match_ops base keyed c env 1) a)
+
+fn rows_of none
+  []
+
+fn rows_of rel
+  rel.tuples
+
+fn rounds_from base db delta cs report
+  return finished db report if count_new delta == 0
+  found = deduped (run_plans base db delta cs.delta_plans)
+  grown = apply_round base db found
+  rounds_from base grown found cs (another_round report (count_new found))
+
+fn finished db report
+  evaluation db [report]
+
+fn run_from ctx pl i env acc
+  steps = pl.steps
+  return emit ctx pl env acc if i < 1 or length steps < i
+  exec ctx pl i env acc steps[i]
+
+fn run_plan base db delta found p
+  ctx = context base db delta (seen_of db[p.name])
+  put found p.name (run_from ctx p 1 [] (or_empty found[p.name]))
+
+fn run_plans base db delta plans
+  list/fold plans {} (hs p -> run_plan base db delta hs p)
+
+fn run_stratum base (evaluation db reports) cs
+  first = deduped (run_plans base db {} cs.naive_plans)
+  grown = apply_round base db first
+  report = stratum_report (count_new first) cs.names 1
+  return evaluation grown (push reports report) if length cs.delta_plans == 0
+  done_with = rounds_from base grown first cs report
+  evaluation done_with.db (text/concat reports done_with.reports)
+
+fn seen_of none
+  {}
+
+fn seen_of rel
+  rel.seen
+
+fn term_value _ (fixed id)
+  id
+
+fn term_value env (slot k)
+  return 0 if k < 1 or length env < k
+  env[k]

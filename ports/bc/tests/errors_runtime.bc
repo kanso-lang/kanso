@@ -1,0 +1,32 @@
+/* a runtime error abandons the rest of its line and carries on with the
+   next; what the line did before the error stays done */
+1; 1/0; 2
+3
+x = 5; y = x % 0; x = 6
+x
+y
+sqrt(-1)
+0 ^ -1
+nofunc(3)
+define f(a, b) { return (a + b) }
+f(1)
+f(1, 2, 3)
+define g(a[]) { return (a[0]) }
+h[0] = 4
+g(h[])
+a[-1] = 2
+a[16777216]
+define deep(n) {
+  auto k
+  k = n
+  if (n == 0) return (1 / n)
+  return (deep(n - 1))
+}
+k = 42
+deep(5)
+k
+define p() { print "partial "; return (1 / 0) }
+p(); print "never\n"
+print "after\n"
+z = 7; print "z is ", z, "\n"; z / 0; print "not here\n"
+z

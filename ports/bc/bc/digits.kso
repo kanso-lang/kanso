@@ -1,0 +1,113 @@
+import "std/list"
+import "std/text"
+
+# Reading numbers in ibase and writing them in obase.
+#
+pub fn decimal_value digits
+  in_base digits 10
+
+# A number as written, read in `base`. An integer part that is one digit
+# once its leading zeros are gone keeps that digit's value whatever the base
+# (so A is ten even under ibase=2, and so are 0A and A.1); in a longer
+# integer part, and always in the fraction, a digit too big for the base
+# counts as base - 1. That is what GNU bc does. The fraction keeps as many
+# decimal places as it had digits.
+pub fn in_base digits base
+  bs = text/bytes digits
+  point = text/find2 bs 1 46 46
+  whole = without_leading_zeros (text/slice bs 1 (point - 1)) 1
+  part = text/slice bs (point + 1) (length bs)
+  top = base - 1
+  integer = whole_value whole base top
+  return dec 0 integer if length part == 0
+  places = length part
+  numer = list/fold part 0 (acc b -> acc * base + clamp (digit_value b) top)
+  denom = raise base places
+  dec places (integer * ten_to places + numer * ten_to places / denom)
+
+fn without_leading_zeros bs i
+  b = bs[i]
+  return without_leading_zeros bs (i + 1) if b == 48
+  text/slice bs i (length bs)
+
+fn whole_value whole base top
+  return digit_value whole[1] if length whole == 1
+  list/fold whole 0 (acc b -> acc * base + clamp (digit_value b) top)
+
+fn clamp d top
+  if (top < d) top d
+
+fn digit_value b
+  if (b <= 57) (b - 48) (b - 55)
+
+# The digits of a number in `base`, with no line wrapping; the output layer
+# wraps. Zero is always "0", whatever its scale.
+pub fn render n base
+  return "0" if zero? n
+  sign = if (negative? n) "-" ""
+  dec places units = n
+  size = magnitude units
+  whole = size / ten_to places
+  part = size - whole * ten_to places
+  front = whole_digits whole base
+  back = fraction_digits part places base
+  "{sign}{front}{back}"
+
+fn whole_digits n base
+  return "" if n == 0
+  return "{n}" if base == 10
+  ds = backwards (base_digits n base [])
+  text/join (list/to_list (list/map ds (d -> spell d base))) ""
+
+# Least significant first; whole_digits reads them backwards.
+fn base_digits 0 _ acc
+  acc
+
+fn base_digits n base acc
+  base_digits (n / base) base (push acc (n % base))
+
+fn backwards xs
+  n = length xs
+  list/to_list (list/map (list/take list/naturals n) (i -> xs[n + 1 - i]))
+
+# Each step multiplies the fraction by the base and takes the integer part
+# as the next digit, and the steps stop once base^k needs more than
+# `places` decimal digits -- enough digits to show the precision the number
+# had, and the count GNU bc prints.
+fn fraction_digits part places base
+  return "" if places == 0
+  return decimal_fraction part places if base == 10
+  scaled = ten_to places
+  ds = fraction_steps part scaled base 1 places []
+  first = spell_first ds[1] base
+  rest = text/slice ds 2 (length ds)
+  tail = text/join (list/to_list (list/map rest (d -> spell d base))) ""
+  ".{first}{tail}"
+
+fn decimal_fraction part places
+  padded = "{ten_to places + part}"
+  ".{text/slice padded 2 (length padded)}"
+
+fn fraction_steps part scaled base place places acc
+  return acc if places < digit_count place
+  grown = part * base
+  digit = grown / scaled
+  next = grown - digit * scaled
+  fraction_steps next scaled base (place * base) places (push acc digit)
+
+# A digit in bases up to 16 is one character; above that it is a group of
+# decimal digits, as wide as base - 1 needs, with a space before it.
+fn spell d base
+  return text/slice hex (d + 1) (d + 1) if base <= 16
+  " {spell_first d base}"
+
+fn spell_first none _
+  ""
+
+fn spell_first d base
+  return text/slice hex (d + 1) (d + 1) if base <= 16
+  wide = digit_count (base - 1)
+  padded = "{ten_to wide + d}"
+  text/slice padded 2 (length padded)
+
+hex = "0123456789ABCDEF"

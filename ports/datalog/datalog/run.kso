@@ -1,0 +1,121 @@
+import "std/io"
+import "std/list"
+import "std/os"
+import "std/text"
+import "std/time"
+
+# A refusal on its way through the effects, carried as data: an err in a box
+# would skip every step after it, including the one that reports it.
+type refused
+  problem
+
+# The pipeline from a parsed program to output lines. Each stage can refuse
+# the program; a refusal is an err that rides past every later stage.
+pub fn run_tree tree
+  shape = check_program tree
+  strata = stratify tree shape
+  table = intern_program tree
+  facts = list/to_list (list/select tree.clauses fact?)
+  ev = evaluate table shape strata facts
+  answer_all tree table ev
+
+# Source text to output lines, for a program with no `.input`.
+pub fn run_source source
+  tree = parse source
+  run_tree tree
+
+# `datalog [--time] [file]`: runs a program from a file, or from standard
+# input when no file is named. `--time` reports the time taken on standard
+# error, where it cannot disturb a comparison of the output.
+pub fn main argv
+  timed = list/any? argv (a -> a == "--time")
+  paths = list/to_list (list/reject argv (a -> a == "--time"))
+  start_with timed paths[1]
+
+fn conclude _ label _ (refused e)
+  report_problem label e
+
+fn conclude timed? label start tree
+  lines = run_tree tree
+  printed label lines
+    .> (_ -> time/now)
+    .> (finish -> report_time timed? start finish)
+
+fn directory_of "<stdin>"
+  ""
+
+fn directory_of path
+  parts = text/split path "/"
+  return "" if length parts < 2
+  kept = list/to_list (list/take parts (length parts - 1))
+  "{text/join kept "/"}/"
+
+fn input? (input _ _ _)
+  true
+
+fn input? _
+  false
+
+# Reads every `.input` file in order and adds its tuples to the program.
+fn load_inputs _ (err e)
+  effect (refused e)
+
+fn load_inputs dir (program cs)
+  wanted = list/to_list (list/select cs input?)
+  read_inputs dir wanted 1 cs
+
+fn printed label (err e)
+  report_problem label e
+
+fn printed _ lines
+  print (text/join lines "\n")
+
+fn read_input dir wanted i cs (input file line name)
+  path = "{dir}{file}"
+  os/read_file path .> (got -> took dir wanted i cs (input file line name) got)
+
+fn read_inputs dir wanted i cs
+  return effect (program cs) if i < 1 or length wanted < i
+  read_input dir wanted i cs wanted[i]
+
+fn report_problem label e
+  io/write_err "datalog: {label}:{where e}: {e.reason}\n" .> (_ -> os/exit 1)
+
+fn report_time timed? start finish
+  if timed? (io/write_err "time: {finish - start} ms\n") (effect done)
+
+fn run_input _ label (file_not_found _)
+  io/write_err "datalog: no such file: {label}\n" .> (_ -> os/exit 1)
+
+fn run_input timed? label source
+  time/now .> (start -> timed_run timed? label source start)
+
+fn start_with timed? none
+  io/stdin .> (source -> run_input timed? "<stdin>" source)
+
+fn start_with timed? path
+  os/read_file path .> (source -> run_input timed? path source)
+
+fn timed_run timed? label source start
+  tree = parse source
+  load_inputs (directory_of label) tree
+    .> (outcome -> conclude timed? label start outcome)
+
+fn took _ _ _ _ (input file line _) (file_not_found _)
+  effect (refused (semantic_error line "cannot read `{file}`"))
+
+fn took dir wanted i cs given contents
+  facts = facts_from given contents
+  with_facts dir wanted i cs facts
+
+fn where (syntax_error col line _)
+  "{line}:{col}"
+
+fn where (semantic_error line _)
+  "{line}"
+
+fn with_facts _ _ _ _ (err e)
+  effect (refused e)
+
+fn with_facts dir wanted i cs facts
+  read_inputs dir wanted (i + 1) (text/concat cs facts)

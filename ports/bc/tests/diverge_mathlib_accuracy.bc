@@ -1,0 +1,17 @@
+/* At low scales GNU's library can be wrong in the last digit printed: true
+   cos(32.69) is .29238785..., which truncates to .2923, and GNU prints
+   .2925. The port's library works further past the scale and prints the
+   truncated true value in each of these. */
+scale = 1
+c(47.3)
+c(6.9)
+c(-42.5)
+j(1, -8.6)
+scale = 4
+c(32.69)
+c(-33.52)
+scale = 31
+s(-43.654)
+scale = 40
+c(32.69)
+c(-42.5)

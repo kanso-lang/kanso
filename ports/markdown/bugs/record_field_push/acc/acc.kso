@@ -1,0 +1,11 @@
+type state
+  events
+  line
+
+fn loop st i n
+  return st if i > n
+  loop (state (push st.events i) i) (i + 1) n
+
+pub fn run n
+  st = loop (state [] 0) 1 n
+  "{length st.events}"

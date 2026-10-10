@@ -1,0 +1,38 @@
+import "std/list"
+import "std/text"
+
+fn layered source
+  tree = parse source
+  shape = check_program tree
+  laid_out (stratify tree shape)
+
+fn laid_out (err e)
+  "{e.line}: {e.reason}"
+
+fn laid_out strata
+  text/join (list/to_list (list/map strata layer)) "; "
+
+fn layer s
+  "{text/join s.names " "} ({length s.rules})"
+
+test_orders_by_dependency =
+  source = "e(1, 2).\nt(X, Y) :- e(X, Y)."
+    . with_line "t(X, Z) :- t(X, Y), e(Y, Z).\nn(X) :- e(X, _), !t(X, X)."
+  agrees (layered source) "t (2); n (1)"
+
+test_groups_mutual_recursion =
+  source = "e(1).\nodd(X) :- e(X).\neven(X) :- odd(X)."
+    . with_line "odd(X) :- even(X)."
+  agrees (layered source) "even odd (3)"
+
+test_refuses_negation_through_recursion =
+  source = "e(1).\np(X) :- e(X), !q(X).\nq(X) :- e(X), r(X)."
+    . with_line "r(X) :- p(X)."
+  wanted = "2: the program cannot be stratified: `p` depends on the negation"
+    . then " of `q` at line 2, and `q` depends on `p` (q -> r -> p)"
+  agrees (layered source) wanted
+
+test_refuses_self_negation =
+  wanted = "2: the program cannot be stratified: `p` depends on its own"
+    . then " negation at line 2"
+  agrees (layered "e(1).\np(X) :- e(X), !p(X).") wanted

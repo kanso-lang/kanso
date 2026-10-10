@@ -1,0 +1,23 @@
+test_code_block_class =
+  out = to_html "```kanso extra\nx < y\n```\n"
+  out == "<pre><code class=\"language-kanso\">x &lt; y\n</code></pre>\n"
+
+test_empty_document = to_html "" == ""
+
+test_html_block_passes_through = to_html "<hr class=x>\n" == "<hr class=x>\n"
+
+test_loose_item_gets_paragraphs =
+  out = to_html "- a\n\n  b\n"
+  out == "<ul>\n<li>\n<p>a</p>\n<p>b</p>\n</li>\n</ul>\n"
+
+test_ordered_start =
+  out = to_html "3. c\n4. d\n"
+  out == "<ol start=\"3\">\n<li>c</li>\n<li>d</li>\n</ol>\n"
+
+test_quote_in_tight_item =
+  out = to_html "- a\n  > b\n"
+  out == "<ul>\n<li>a\n<blockquote>\n<p>b</p>\n</blockquote>\n</li>\n</ul>\n"
+
+test_tight_item_has_no_paragraph =
+  out = to_html "- a\n- b\n"
+  out == "<ul>\n<li>a</li>\n<li>b</li>\n</ul>\n"

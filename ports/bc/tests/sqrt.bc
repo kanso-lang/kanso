@@ -1,0 +1,17 @@
+/* sqrt keeps max(scale, scale(x)) digits, truncated */
+sqrt(2)
+sqrt(16)
+sqrt(15)
+sqrt(0)
+sqrt(0.0004)
+scale = 10
+sqrt(2)
+sqrt(1000000)
+sqrt(0.5)
+sqrt(2.00000000000000000000)
+scale = 50
+sqrt(2)
+sqrt(10^40)
+sqrt(12345678901234567890)
+scale = 0
+sqrt(10^60 + 1)

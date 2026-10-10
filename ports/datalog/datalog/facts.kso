@@ -1,0 +1,58 @@
+import "std/list"
+import "std/text"
+
+# Reading `.input` files: one tuple per line, columns separated by tabs, the
+# format Soufflé reads. A column of digits, with an optional leading minus,
+# is an integer; anything else is a string. Every line must have the same
+# number of columns, and blank lines are skipped.
+#
+# The tuples become facts, clauses like any written in the program, stamped
+# with the line of the `.input` that read them.
+#
+# One line of a facts file: its number, for messages, and its columns.
+type row
+  cells
+  number
+
+pub fn facts_from (input file line name) contents
+  lines = text/split contents "\n"
+  rows = list/fold (upto (length lines)) [] (acc i -> add_row acc i lines[i])
+  width = first_width rows
+  bad = list/find rows (r -> length r.cells != width)
+  facts_or_not bad file line name rows width
+
+fn add_row acc _ none
+  acc
+
+fn add_row acc i line
+  return acc if line == ""
+  push acc (row (text/split line "\t") i)
+
+fn cell_constant cell
+  if (integer? cell) (constant (text/to_int cell)) (constant cell)
+
+fn facts_or_not none _ line name rows _
+  list/to_list (list/map rows (r -> fact_of line name r))
+
+fn facts_or_not (row cells number) file line _ _ width
+  reason = "{file}:{number}: expected {width} columns, found {length cells}"
+  err (semantic_error line reason)
+
+fn fact_of line name (row cells _)
+  terms = list/to_list (list/map cells cell_constant)
+  rule [] (atom line name terms)
+
+fn first_width rows
+  return 0 if length rows == 0
+  width_of rows[1]
+
+fn integer? cell
+  cs = text/chars cell
+  digits = if (cs[1] == "-") (text/slice cs 2 (length cs)) cs
+  length digits > 0 and list/all? digits digit?
+
+fn width_of none
+  0
+
+fn width_of (row cells _)
+  length cells

@@ -1,0 +1,3 @@
+--- stderr
+datalog: tests/error_unstratifiable_cycle.dl:4: the program cannot be stratified: `p` depends on the negation of `q` at line 4, and `q` depends on `p` (q -> r -> p)
+--- exit 1

@@ -1,0 +1,3 @@
+--- stderr
+datalog: tests/error_arity.dl:2: `edge` has 3 argument(s) here but 2 at line 1
+--- exit 1

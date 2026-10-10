@@ -1,0 +1,50 @@
+// Andersen-style, flow-insensitive points-to analysis of a small program.
+// Each variable is a symbol, each allocation site an `o_` constant.
+//
+//   a = new O1;  b = new O2;  c = a;     a.f = b;
+//   d = c.f;     e = new O3;  c.f = e;   g = d;
+//   head = new N1;  n2 = new N2;  n3 = new N3;
+//   head.next = n2;  n2.next = n3;  n3.next = head;
+//   cur = head;  cur = cur.next;  item = new O4;  cur.val = item;
+//   v = head.val;  w = v;  x = new O5;  w = x;
+
+new(a, o1).
+new(b, o2).
+new(e, o3).
+new(head, n1).
+new(n2, n2_site).
+new(n3, n3_site).
+new(item, o4).
+new(x, o5).
+
+assign(c, a).
+assign(g, d).
+assign(cur, head).
+assign(w, v).
+assign(w, x).
+
+store(a, f, b).
+store(c, f, e).
+store(head, next, n2).
+store(n2, next, n3).
+store(n3, next, head).
+store(cur, val, item).
+
+load(d, c, f).
+load(cur, cur, next).
+load(v, head, val).
+
+pt(V, O) :- new(V, O).
+pt(V, O) :- assign(V, W), pt(W, O).
+pt(V, O2) :- load(V, B, F), pt(B, O1), hpt(O1, F, O2).
+hpt(O1, F, O2) :- store(B, F, W), pt(B, O1), pt(W, O2).
+
+alias(X, Y) :- pt(X, O), pt(Y, O), X < Y.
+
+?- pt(d, O).
+?- pt(g, O).
+?- pt(cur, O).
+?- pt(w, O).
+?- alias(a, Y).
+?- alias(d, g).
+.output hpt

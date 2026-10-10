@@ -1,0 +1,12 @@
+?- path(1, 2500).
+  yes
+?- path(2500, 1).
+  no
+?- path(X, 2).
+  X = 1
+  (1 answer)
+-- evaluation
+stratum 1: path: 15 rounds, 24331 new
+relations: edge 2998, path 24331
+total: 27329 tuples after 15 rounds
+--- exit 0

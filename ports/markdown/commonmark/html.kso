@@ -1,0 +1,245 @@
+import "std/list"
+import "std/text"
+
+# The tag names that open an HTML block of the sixth kind. A string of
+# them would pass eighty columns, so the set is a chain of puts.
+block_tags = {}
+  . put "address" true
+  . put "article" true
+  . put "aside" true
+  . put "base" true
+  . put "basefont" true
+  . put "blockquote" true
+  . put "body" true
+  . put "caption" true
+  . put "center" true
+  . put "col" true
+  . put "colgroup" true
+  . put "dd" true
+  . put "details" true
+  . put "dialog" true
+  . put "dir" true
+  . put "div" true
+  . put "dl" true
+  . put "dt" true
+  . put "fieldset" true
+  . put "figcaption" true
+  . put "figure" true
+  . put "footer" true
+  . put "form" true
+  . put "frame" true
+  . put "frameset" true
+  . put "h1" true
+  . put "h2" true
+  . put "h3" true
+  . put "h4" true
+  . put "h5" true
+  . put "h6" true
+  . put "head" true
+  . put "header" true
+  . put "hr" true
+  . put "html" true
+  . put "iframe" true
+  . put "legend" true
+  . put "li" true
+  . put "link" true
+  . put "main" true
+  . put "menu" true
+  . put "menuitem" true
+  . put "nav" true
+  . put "noframes" true
+  . put "ol" true
+  . put "optgroup" true
+  . put "option" true
+  . put "p" true
+  . put "param" true
+  . put "search" true
+  . put "section" true
+  . put "summary" true
+  . put "table" true
+  . put "tbody" true
+  . put "td" true
+  . put "tfoot" true
+  . put "th" true
+  . put "thead" true
+  . put "title" true
+  . put "tr" true
+  . put "track" true
+  . put "ul" true
+
+fn after_name cs p
+  if (alnum? cs[p] or cs[p] == "-") (after_name cs (p + 1)) p
+
+fn attr_end cs q
+  attr_value_end cs (attr_name_end cs q)
+
+fn attr_name_end cs p
+  return attr_name_end cs (p + 1) if alnum? cs[p] or has? "_:.-" cs[p]
+  p
+
+fn attr_start? none
+  false
+
+fn attr_start? c
+  letter? c or c == "_" or c == ":"
+
+fn attr_value_end cs r
+  q = skip_html_space cs r
+  return r if cs[q] != "="
+  v = skip_html_space cs (q + 1)
+  value_end cs v cs[v]
+
+fn attrs_end _ none
+  none
+
+fn attrs_end cs p
+  q = skip_html_space cs p
+  more = q > p and attr_start? cs[q]
+  if more (attrs_end cs (attr_end cs q)) (tag_close cs q cs[q])
+
+fn block_tag? cs q
+  p = if (cs[q] == "/") (q + 1) q
+  e = after_name cs p
+  name = lower_ascii (span cs p (e - 1))
+  return false if block_tags[name] == none
+  ends_tag_name? cs e
+
+fn close_tag_end cs p
+  return none if not letter? cs[p]
+  q = skip_html_space cs (after_name cs p)
+  if (cs[q] == ">") (q + 1) none
+
+fn comment_end cs q
+  return q + 1 if cs[q] == ">"
+  return q + 2 if cs[q] == "-" and cs[q + 1] == ">"
+  seq_end cs q "-->"
+
+# A whole open or closing tag, and nothing after it but spaces and tabs.
+fn complete_tag? cs p
+  e = if (cs[p + 1] == "/") (close_tag_end cs (p + 2)) (open_tag_end cs (p + 1))
+  blank_after_tag? cs e
+
+fn blank_after_tag? _ none
+  false
+
+fn blank_after_tag? cs e
+  rest_blank? cs e
+
+fn ends_tag_name? cs e
+  c = cs[e]
+  c == none or c == ">" or link_space? c or c == "/" and cs[e + 1] == ">"
+
+# Each kind of HTML block names the line that ends it; kinds 6 and 7 end
+# at a blank line instead, which the block parser sees for itself.
+fn html_ends? 1 s
+  l = lower_ascii s
+  list/any? ["</script>" "</pre>" "</textarea>" "</style>"] (t -> has? l t)
+
+fn html_ends? 2 s
+  has? s "-->"
+
+fn html_ends? 3 s
+  has? s "?>"
+
+fn html_ends? 4 s
+  has? s ">"
+
+fn html_ends? 5 s
+  has? s "]]>"
+
+fn html_ends? _ _
+  false
+
+# Which of the seven kinds of HTML block a line opens at p, or 0.
+fn html_start cs p
+  return 0 if cs[p] != "<"
+  c = cs[p + 1]
+  return 1 if raw_tag? cs (p + 1)
+  return 2 if starts_at? cs (p + 1) "!--"
+  return 3 if c == "?"
+  return 4 if c == "!" and letter? cs[p + 2]
+  return 5 if starts_at? cs (p + 1) "![CDATA["
+  return 6 if block_tag? cs (p + 1)
+  if (complete_tag? cs p) 7 0
+
+# Inline raw HTML at p: where it ends, or none when the text is not a tag,
+# comment, processing instruction, declaration or CDATA section.
+fn inline_html_end cs p
+  c = cs[p + 1]
+  return open_tag_end cs (p + 1) if letter? c
+  return close_tag_end cs (p + 2) if c == "/"
+  return seq_end cs (p + 2) "?>" if c == "?"
+  return comment_end cs (p + 4) if starts_at? cs (p + 1) "!--"
+  return seq_end cs (p + 9) "]]>" if starts_at? cs (p + 1) "![CDATA["
+  return seq_end cs (p + 2) ">" if c == "!" and letter? cs[p + 2]
+  none
+
+fn letter? none
+  false
+
+fn letter? c
+  n = text/char_code c
+  between? n 65 90 or between? n 97 122
+
+fn open_tag_end cs p
+  return none if not letter? cs[p]
+  attrs_end cs (after_name cs p)
+
+fn raw_tag? cs q
+  e = after_name cs q
+  name = lower_ascii (span cs q (e - 1))
+  raw = name == "script" or name == "pre" or name == "textarea"
+  return false if not raw and name != "style"
+  c = cs[e]
+  c == none or c == ">" or link_space? c
+
+fn rest_blank? cs p
+  return true if cs[p] == none
+  if (space_or_tab? cs[p]) (rest_blank? cs (p + 1)) false
+
+# The position after the first occurrence of `seq` at or after p.
+fn seq_end cs p seq
+  return none if cs[p] == none
+  return p + length seq if starts_at? cs p seq
+  seq_end cs (p + 1) seq
+
+fn skip_html_space cs p
+  if (link_space? cs[p]) (skip_html_space cs (p + 1)) p
+
+fn starts_at? cs p seq
+  starts_from? cs p (text/chars seq) 1
+
+fn starts_from? cs p want i
+  return true if i > length want
+  return false if cs[p] != want[i]
+  starts_from? cs (p + 1) want (i + 1)
+
+fn tag_close cs q "/"
+  if (cs[q + 1] == ">") (q + 2) none
+
+fn tag_close _ q ">"
+  q + 1
+
+fn tag_close _ _ none
+  none
+
+fn tag_close _ _ _
+  none
+
+fn unquoted_end cs p
+  c = cs[p]
+  return p if c == none or has? "\"'=<>`" c
+  if (text/char_code c <= 32) p (unquoted_end cs (p + 1))
+
+fn value_end cs v "'"
+  seq_end cs (v + 1) "'"
+
+fn value_end cs v "\""
+  seq_end cs (v + 1) "\""
+
+fn value_end _ _ none
+  none
+
+fn value_end cs v _
+  e = unquoted_end cs v
+  if (e == v) none e

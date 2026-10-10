@@ -1,0 +1,3 @@
+% `Z` appears in the head but no positive atom binds it.
+edge(a, b).
+path(X, Z) :- edge(X, Y).

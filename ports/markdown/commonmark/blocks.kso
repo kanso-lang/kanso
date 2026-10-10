@@ -1,0 +1,444 @@
+import "std/list"
+import "std/text"
+
+# A closing code fence ended its block, and with it the line.
+type fence_closed
+  c
+
+# A list marker read, and the caret after it.
+type marked
+  c
+  m
+
+# A block start left the line open for further starts.
+type opened
+  line
+
+# A block start opened a block that keeps the rest of the line.
+type leaf_opened
+  line
+
+# A block start used the whole line.
+type line_done
+  st
+
+# A line in progress once the open blocks have been matched: whether the
+# unmatched ones are closed yet, the caret, the deepest block matched and
+# the parser state.
+type line_ctx
+  closed
+  cur
+  depth
+  st
+
+# A block start did not apply; the line carries on to the next one.
+type passed_over
+  line
+
+# A block that does not continue onto this line.
+type unmatched
+
+# How far a line got through the open blocks.
+type walked
+  c
+  depth
+  done
+  st
+
+fn add_text st f c
+  return text_into st f c if accepts_lines? f.kind
+  return st if blank? c
+  add_line (add_child st para) (advance_to c (nonspace c).at)
+
+fn add_text_line st s
+  f = top st
+  replace_top st (with_lines f (push f.lines s))
+
+fn after_marker c
+  if (space_or_tab? (peek c)) (advance_cols c 1) c
+
+# An ATX heading's text: the closing run of `#` goes when a space or the
+# start of the line comes before it.
+fn atx_content cs
+  e = last_solid cs (length cs)
+  h = before_hashes cs e
+  return "" if h == 0
+  if (space_or_tab? cs[h]) (span cs 1 h) (span cs 1 e)
+
+fn atx_start x
+  g = nonspace x.cur
+  cs = x.cur.chars
+  k = run_length cs g.at "#"
+  ok = not indented? x g and 1 <= k and k <= 6 and space_end? cs[g.at + k]
+  return passed_over x if not ok
+  body = atx_content (text/slice cs (g.at + k) (length cs))
+  line_done (add_text_line (add_child (close_unmatched x) (heading k)) body)
+
+fn before_hashes cs p
+  if (p > 0 and cs[p] == "#") (before_hashes cs (p - 1)) p
+
+fn blank_text? none
+  true
+
+fn blank_text? s
+  text/trim s == ""
+
+# The block starts, tried in this order at each position on a line.
+block_starts = []
+  . push (x -> quote_start x)
+  . push (x -> atx_start x)
+  . push (x -> fence_start x)
+  . push (x -> html_block_start x)
+  . push (x -> setext_start x)
+  . push (x -> hr_start x)
+  . push (x -> item_start x)
+  . push (x -> code_start x)
+
+fn close_all st n
+  if (length st.stack > 1) (close_all (close_top st n) n) st
+
+fn close_down st depth end
+  if (length st.stack > depth) (close_down (close_top st end) depth end) st
+
+# Close the innermost open block and hand it, finished, to its parent.
+fn close_top st end
+  f = top st
+  finish (state st.closed st.line st.refs (pop st.stack)) f end f.kind
+
+fn close_unmatched x
+  if x.closed x.st (close_down x.st x.depth (x.st.line - 1))
+
+fn closing_fence? cs at ch len
+  k = run_length cs at ch
+  k >= len and rest_blank? cs (at + k)
+
+fn code_start x
+  g = nonspace x.cur
+  ok = indented? x g and not para? (top x.st).kind and not blank? x.cur
+  return passed_over x if not ok
+  c = advance_cols x.cur 4
+  leaf_opened (line_ctx true c 0 (add_child (close_unmatched x) indented))
+
+fn container x
+  if x.closed (top x.st) x.st.stack[x.depth]
+
+fn continues doc _ c _
+  c
+
+fn continues (fenced ch _ len offset) _ c _
+  g = nonspace c
+  closing = g.col - c.col <= 3 and closing_fence? c.chars g.at ch len
+  return fence_closed (advance_to c (length c.chars + 1)) if closing
+  skip_fence_indent c offset
+
+fn continues (heading _) _ _ _
+  unmatched
+
+fn continues hr _ _ _
+  unmatched
+
+fn continues (html_block v) _ c _
+  if (v >= 6 and blank? c) unmatched c
+
+fn continues indented _ c _
+  return advance_cols c 4 if indent c >= 4
+  return advance_to c (nonspace c).at if blank? c
+  unmatched
+
+fn continues (item m) f c has_child
+  return item_blank f c has_child if blank? c
+  need = m.offset + m.padding
+  if (indent c >= need) (advance_cols c need) unmatched
+
+fn continues (listing _ _) _ c _
+  c
+
+fn continues para _ c _
+  if (blank? c) unmatched c
+
+fn continues quote _ c _
+  g = nonspace c
+  return unmatched if g.col - c.col > 3 or c.chars[g.at] != ">"
+  after_marker (advance_to c (g.at + 1))
+
+fn fence_start x
+  g = nonspace x.cur
+  cs = x.cur.chars
+  ch = cs[g.at]
+  return passed_over x if indented? x g or ch != "`" and ch != "~"
+  k = run_length cs g.at ch
+  info = span cs (g.at + k) (length cs)
+  return passed_over x if k < 3 or ch == "`" and has? info "`"
+  kind = fenced ch (unescape (text/trim info)) k (g.col - x.cur.col)
+  line_done (add_child (close_unmatched x) kind)
+
+# Finishing a block is where the kinds differ: a paragraph gives up its
+# reference definitions, an indented code block its trailing blank lines,
+# and a list learns whether it is tight.
+fn finish st f end para
+  finish_para st f end (take_refs st.refs (text/join f.lines "\n"))
+
+fn finish st f _ indented
+  kept = trim_blank_tail f.lines
+  ends = f.start + length kept - 1
+  attach st (frame ends indented kept f.size f.start)
+
+fn finish st f end kind
+  attach st (frame end kind f.lines f.size f.start)
+
+fn finish_para st f end (taken refs left)
+  next = state st.closed st.line refs st.stack
+  return next if blank_text? left
+  attach next (frame end para [left] f.size f.start)
+
+fn finish_line x
+  return add_line x.st x.cur if lazy? x
+  st = close_unmatched x
+  add_text st (top st) x.cur
+
+fn hr_start x
+  g = nonspace x.cur
+  return passed_over x if indented? x g or not thematic? x.cur.chars g.at
+  line_done (add_child (close_unmatched x) hr)
+
+fn html_block_start x
+  g = nonspace x.cur
+  v = html_start x.cur.chars g.at
+  return passed_over x if indented? x g or v == 0
+  return passed_over x if v == 7 and (para? (container x).kind or lazy? x)
+  st = add_child (close_unmatched x) (html_block v)
+  leaf_opened (line_ctx true x.cur 0 st)
+
+fn html_ended? (html_block v) s
+  html_ends? v s
+
+fn html_ended? _ _
+  false
+
+fn indented? x g
+  g.col - x.cur.col >= 4
+
+fn item_blank f c has_child
+  empty = f.size == 1 and not has_child
+  if empty unmatched (advance_to c (nonspace c).at)
+
+fn item_opened x _ none
+  passed_over x
+
+fn item_opened x _ (marked m c)
+  st = close_unmatched x
+  wrapped = if (same_list? (top st).kind m) st (add_child st (listing m true))
+  opened (line_ctx true c 0 (add_child wrapped (item m)))
+
+fn item_start x
+  g = nonspace x.cur
+  cf = container x
+  item_opened x cf (list_marker x g (para? cf.kind))
+
+fn last_solid cs p
+  if (p > 0 and space_or_tab? cs[p]) (last_solid cs (p - 1)) p
+
+fn lazy? x
+  not x.closed and not blank? x.cur and para? (top x.st).kind
+
+fn list_marker x g in_para
+  return none if indented? x g
+  c = x.cur.chars[g.at]
+  bullet = c == "*" or c == "+" or c == "-"
+  return ordered_marker x g in_para if not bullet
+  marker_tail x g in_para 1 c "" false 0
+
+# A marker that fits leaves a caret past it and the spaces that follow:
+# one to four spaces set the content's indent, and five or more mean the
+# content is indented code, so only the first counts.
+fn marker_tail x g in_para len bullet ender ordered start
+  cs = x.cur.chars
+  return none if not space_end? cs[g.at + len]
+  return none if in_para and rest_blank? cs (g.at + len)
+  c1 = advance_cols (advance_to x.cur g.at) len
+  c2 = spaces_after c1 (advance_cols c1 1)
+  n = c2.col - c1.col
+  narrow = n >= 5 or n < 1 or peek c2 == none
+  padding = if narrow (len + 1) (len + n)
+  c = if narrow (after_marker c1) c2
+  marked (mark bullet ender (g.col - x.cur.col) ordered padding start) c
+
+fn open_starts x
+  cf = container x
+  return finish_line x if leaf? cf.kind
+  g = nonspace x.cur
+  ordinary = not indented? x g and not special? x.cur.chars[g.at]
+  return finish_line (to_nonspace x) if ordinary
+  try_starts x 1
+
+fn ordered_marker x g in_para
+  cs = x.cur.chars
+  d = digit_run cs g.at 0
+  ender = cs[g.at + d]
+  ok = 1 <= d and d <= 9 and (ender == "." or ender == ")")
+  return none if not ok
+  n = digits_value cs g.at (g.at + d) 10
+  return none if in_para and n != 1
+  marker_tail x g in_para (d + 1) "" ender true n
+
+# Read the input into blocks: the document frame, holding every block, and
+# the link reference definitions found along the way.
+pub fn parse_document text
+  lines = split_lines text
+  start = state [] 0 {} [(frame 0 doc [] 1 1)]
+  each_line start [] lines 1
+
+# The natural spelling is `list/fold lines start parse_line`, and natively
+# that fold corrupts the state it threads (bugs/fold_corrupts_state), so the
+# loop is written out by hand. The closed blocks travel beside the state
+# rather than inside it, and are pushed by the loop itself: a list held in a
+# record, or grown through a helper function, is copied on every push
+# (bugs/record_field_push, bugs/push_through_call).
+fn each_line st out lines i
+  n = length lines
+  return seal (close_all (state [] st.line st.refs st.stack) n) out n 1 if i > n
+  drain (parse_line st lines[i]) out lines (i + 1) 1
+
+fn drain st out lines i j
+  return each_line st out lines i if j > length st.closed
+  drain st (push out st.closed[j]) lines i (j + 1)
+
+# The document closes last, after everything inside it.
+fn seal st out n j
+  return sealed st.refs out n (top st) if j > length st.closed
+  seal st (push out st.closed[j]) n (j + 1)
+
+fn sealed refs _ _ none
+  parsed refs (block 0 [] doc [] 0)
+
+fn sealed refs written n f
+  all = push written (frame n f.kind f.lines f.size f.start)
+  parsed refs (build all (length all))
+
+fn parse_line st none
+  st
+
+fn parse_line st line
+  process_line (state [] (st.line + 1) st.refs st.stack) (text/chars line)
+
+fn process_line st chars
+  w = walk_open st (caret_of chars) 2
+  return close_top w.st w.st.line if w.done
+  open_starts (line_ctx (w.depth == length w.st.stack) w.c w.depth w.st)
+
+fn quote_start x
+  g = nonspace x.cur
+  return passed_over x if indented? x g or x.cur.chars[g.at] != ">"
+  c = after_marker (advance_to x.cur (g.at + 1))
+  opened (line_ctx true c 0 (add_child (close_unmatched x) quote))
+
+fn same_list? (listing lm _) m
+  lm.bullet == m.bullet and lm.delim == m.delim and lm.ordered == m.ordered
+
+fn same_list? _ _
+  false
+
+fn setext_level cs p
+  c = cs[p]
+  level = if (c == "=") 1 (if (c == "-") 2 0)
+  return 0 if level == 0
+  if (rest_blank? cs (p + run_length cs p c)) level 0
+
+# An underline turns the paragraph above it into a heading, unless its
+# reference definitions were all it held.
+fn setext_start x
+  g = nonspace x.cur
+  cf = container x
+  level = setext_level x.cur.chars g.at
+  return passed_over x if indented? x g or not para? cf.kind or level == 0
+  t = take_refs x.st.refs (text/join cf.lines "\n")
+  kept = if (blank_text? t.rest) [] [t.rest]
+  next = state x.st.closed x.st.line t.refs x.st.stack
+  st = replace_top next (with_lines cf kept)
+  return passed_over (line_ctx x.closed x.cur x.depth st) if blank_text? t.rest
+  line_done (replace_top st (frame 0 (heading level) kept cf.size cf.start))
+
+fn skip_fence_indent c 0
+  c
+
+fn skip_fence_indent c n
+  more = space_or_tab? (peek c)
+  if more (skip_fence_indent (advance_cols c 1) (n - 1)) c
+
+fn space_end? none
+  true
+
+fn space_end? c
+  space_or_tab? c
+
+fn spaces_after start c
+  more = c.col - start.col < 5 and space_or_tab? (peek c)
+  if more (spaces_after start (advance_cols c 1)) c
+
+fn special? none
+  false
+
+fn special? c
+  has? "#`~*+_=<>-0123456789" c
+
+fn split_lines text
+  t = text . swap "\r\n" "\n" . swap "\r" "\n"
+  clean = swap t (text/from_code 0) (text/from_code 65533)
+  ls = text/split clean "\n"
+  if (ls[length ls] == "") (pop ls) ls
+
+fn started _ _ (leaf_opened x)
+  finish_line x
+
+fn started _ _ (line_done st)
+  st
+
+fn started _ _ (opened x)
+  open_starts x
+
+fn started _ i (passed_over x)
+  try_starts x (i + 1)
+
+fn text_into st f c
+  next = add_line st c
+  if (html_ended? f.kind (rest c)) (close_top next st.line) next
+
+fn thematic? cs p
+  c = cs[p]
+  return false if c != "*" and c != "-" and c != "_"
+  thematic_count cs p c 0 >= 3
+
+fn thematic_count cs p c n
+  d = cs[p]
+  return n if d == none
+  return thematic_count cs (p + 1) c (n + 1) if d == c
+  if (space_or_tab? d) (thematic_count cs (p + 1) c n) 0
+
+fn to_nonspace x
+  with_cur x (advance_to x.cur (nonspace x.cur).at)
+
+fn trim_blank_tail lines
+  n = length lines
+  return lines if n == 0 or not blank_text? lines[n]
+  trim_blank_tail (pop lines)
+
+fn try_starts x i
+  return finish_line (to_nonspace x) if i > length block_starts
+  started x i (block_starts[i] x)
+
+fn walk_open st c d
+  return walked c (d - 1) false st if d > length st.stack
+  f = st.stack[d]
+  walk_result st c d (continues f.kind f c (d < length st.stack))
+
+fn walk_result st c d unmatched
+  walked c (d - 1) false st
+
+fn walk_result st _ _ (fence_closed c)
+  walked c 0 true st
+
+fn walk_result st _ d next
+  walk_open st next (d + 1)
+
+fn with_cur x c
+  line_ctx x.closed c x.depth x.st

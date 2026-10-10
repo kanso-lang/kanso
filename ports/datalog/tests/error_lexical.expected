@@ -1,0 +1,3 @@
+--- stderr
+datalog: tests/error_lexical.dl:2:9: a string may not span lines
+--- exit 1

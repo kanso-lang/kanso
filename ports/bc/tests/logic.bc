@@ -1,0 +1,29 @@
+/* comparisons answer 1 or 0; && and || short-circuit; assignment binds
+   tighter than comparison */
+1 == 1
+1 != 1
+2 < 3
+3 <= 2
+4 > 1
+4 >= 4
+1.0 == 1
+-0 == 0
+!0
+!5
+!!7
+2 && 0
+2 || 0
+0 || 0
+x = 1
+0 && (x = 5)
+x
+1 || (x = 6)
+x
+a = 3 < 5
+a
+(b = 3) < 5
+b
+c = 2 + 3 == 5
+c
+!1 + 1
+-1 < 0 && 2 > 1

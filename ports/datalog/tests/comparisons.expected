@@ -1,0 +1,63 @@
+?- lt(X, Y).
+  X = 1, Y = 2
+  X = 1, Y = 3
+  X = 1, Y = 4
+  X = 2, Y = 3
+  X = 2, Y = 4
+  X = 3, Y = 4
+  (6 answers)
+?- le(X, Y).
+  X = 1, Y = 1
+  X = 1, Y = 2
+  X = 2, Y = 2
+  (3 answers)
+?- gt(X).
+  X = 4
+  (1 answer)
+?- ge(X).
+  X = 3
+  X = 4
+  (2 answers)
+?- ne(X).
+  X = 1
+  X = 3
+  X = 4
+  (3 answers)
+?- eq(X).
+  X = 3
+  (1 answer)
+?- twin(X, Y).
+  X = 1, Y = 1
+  X = 2, Y = 2
+  X = 3, Y = 3
+  X = 4, Y = 4
+  (4 answers)
+?- chain(X, Z).
+  X = 2, Z = 2
+  X = 3, Z = 3
+  X = 4, Z = 4
+  (3 answers)
+?- first_words(W).
+  W = apple
+  W = banana
+  (2 answers)
+?- mixed(X).
+  X = 1
+  X = 2
+  X = 3
+  X = 4
+  (4 answers)
+-- evaluation
+stratum 1: chain: 1 round, 3 new
+stratum 2: eq: 1 round, 1 new
+stratum 3: first_words: 1 round, 2 new
+stratum 4: ge: 1 round, 2 new
+stratum 5: gt: 1 round, 1 new
+stratum 6: le: 1 round, 3 new
+stratum 7: lt: 1 round, 6 new
+stratum 8: mixed: 1 round, 4 new
+stratum 9: ne: 1 round, 3 new
+stratum 10: twin: 1 round, 4 new
+relations: chain 3, eq 1, first_words 2, ge 2, gt 1, le 3, lt 6, mixed 4, n 4, ne 3, twin 4, word 3
+total: 36 tuples after 10 rounds
+--- exit 0

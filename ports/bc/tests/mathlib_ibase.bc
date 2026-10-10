@@ -1,0 +1,7 @@
+/* the library reads its constants in base ten whatever ibase is */
+ibase = 16
+e(1)
+s(1)
+ibase = A
+obase = 16
+e(1)

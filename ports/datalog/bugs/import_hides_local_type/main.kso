@@ -1,0 +1,3 @@
+import "./m"
+
+print "{m/start 1} {m/total [1 2]}"

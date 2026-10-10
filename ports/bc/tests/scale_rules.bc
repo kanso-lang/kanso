@@ -1,0 +1,28 @@
+/* result scales: add and subtract keep the larger, multiply keeps
+   min(a+b, max(scale, a, b)), divide keeps scale */
+scale = 0
+3.123 * 2.1
+1 / 3
+scale = 5
+1 / 3
+2 / 3
+3.123 * 2.1
+0.3333333333 * 3
+1.234 ^ 2
+1.234 ^ 3
+2 ^ -3
+(0.5) ^ -2
+3.3 ^ -3
+7 % 3
+7.5 % 2
+-7.25 % 2
+scale = 2
+7.5 % 2
+1.000 + 1
+1 - 1.0
+22 / 7
+scale = 20
+22 / 7
+1 / 98
+scale = 50
+1 / 7

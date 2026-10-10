@@ -1,0 +1,7 @@
+1 + 1
+define sq(x) { return (x * x) }
+sq(12)
+x = 1 +
+4
+"done
+"

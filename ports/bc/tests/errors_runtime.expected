@@ -1,0 +1,23 @@
+1
+3
+5
+0
+4
+42
+partial after
+z is 7
+7
+--- stderr
+Runtime error (func=(main), adr=0): Divide by zero
+Runtime error (func=(main), adr=0): Modulo by zero
+Runtime error (func=(main), adr=0): Square root of a negative number
+Runtime error (func=(main), adr=0): divide by zero
+Runtime error (func=(main), adr=0): Function nofunc not defined.
+Runtime error (func=(main), adr=0): Parameter number mismatch
+Runtime error (func=(main), adr=0): Parameter number mismatch
+Runtime error (func=(main), adr=0): Array a subscript out of bounds.
+Runtime error (func=(main), adr=0): Array a subscript out of bounds.
+Runtime error (func=deep, adr=0): Divide by zero
+Runtime error (func=p, adr=0): Divide by zero
+Runtime error (func=(main), adr=0): Divide by zero
+--- exit 0

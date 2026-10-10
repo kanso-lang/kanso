@@ -1,0 +1,132 @@
+import "std/list"
+import "std/text"
+
+# Calling a bc function. bc scopes dynamically: a parameter or an auto
+# hides the global of the same name for the length of the call, and for
+# every function the call calls in turn. So a call saves the slots its
+# parameters and autos use, binds them, runs the body, and puts the saved
+# values back -- on the way out of an error too, as GNU bc does.
+type gathered
+  machine
+  values
+
+type saved
+  formal
+  value
+
+# A *name[] parameter: the array the caller passed is written back.
+type write_back
+  from
+  into
+
+fn invoke undefined _ name m
+  fail_with m "Function {name} not defined."
+
+fn invoke (definition autos body fname params _ _) args _ m
+  return fail_with m "Parameter number mismatch" if length args != length params
+  given = gather params args 1 m
+  enter given params args autos body fname
+
+# Arguments are evaluated left to right, each in the machine the last one
+# left. The list is built on the way back out (FRICTION F15).
+fn gather params args i m
+  p = params[i]
+  return gathered m [] if p == none
+  a = args[i]
+  r = argument_value p a m
+  gather_rest params args i r
+
+fn gather_rest params args i (evaluated m v)
+  rest = gather params args (i + 1) m
+  in_front v rest
+
+fn in_front v (gathered m vs)
+  gathered m (text/concat [v] vs)
+
+fn argument_value (formal true _ _ _) (whole_array _ slot) m
+  ev m (get_array m slot)
+
+fn argument_value (formal false pname _ _) (whole_array _ _) m
+  fail_with m "Parameter type mismatch parameter {pname}."
+
+fn argument_value (formal true pname _ _) _ m
+  fail_with m "Parameter type mismatch parameter {pname}."
+
+fn argument_value _ a m
+  eval a m
+
+fn enter given params args autos body fname
+  m = given.machine
+  every = text/concat params autos
+  saves = save_all every 1 m []
+  bound = bind_params params given.values 1 m
+  cleared = list/fold autos bound (acc f -> clear f acc)
+  caller = m.fname
+  result = run_list body 1 (set_fname cleared fname)
+  backs = write_backs params args
+  leave result saves backs caller
+
+fn current_of (formal true _ _ slot) m
+  get_array m slot
+
+fn current_of (formal _ _ _ slot) m
+  get_var m slot
+
+fn save_all fs i m acc
+  f = fs[i]
+  return acc if f == none
+  save_all fs (i + 1) m (push acc (saved f (current_of f m)))
+
+fn bind_params params given i m
+  p = params[i]
+  return m if p == none
+  v = given[i]
+  bind_params params given (i + 1) (put_formal p v m)
+
+fn put_formal (formal true _ _ slot) v m
+  set_array m slot v
+
+fn put_formal (formal _ _ _ slot) v m
+  set_var m slot v
+
+fn clear (formal true _ _ slot) m
+  set_array m slot []
+
+fn clear (formal _ _ _ slot) m
+  set_var m slot zero
+
+fn write_backs params args
+  indices = list/to_list (list/take list/naturals (length params))
+  refs = list/to_list (list/select indices (i -> reference_at? params i))
+  list/to_list (list/map refs (i -> back_of params args i))
+
+fn reference_at? params i
+  p = params[i]
+  p.reference
+
+fn back_of params args i
+  p = params[i]
+  a = args[i]
+  write_back p.slot a.slot
+
+fn leave (returned m v) saves backs caller
+  ev (unwind m saves backs caller) v
+
+fn leave (err (fault fm message)) saves backs caller
+  err (fault (unwind fm saves backs caller) message)
+
+fn leave other saves backs caller
+  m = other.machine
+  ev (unwind m saves backs caller) zero
+
+fn unwind m saves backs caller
+  finals = list/to_list (list/map backs (b -> get_array m b.from))
+  restored = list/fold saves m (acc s -> put_formal s.formal s.value acc)
+  backed = write_finals backs finals 1 restored
+  set_fname backed caller
+
+fn write_finals backs finals i m
+  b = backs[i]
+  return m if b == none
+  final = finals[i]
+  write_finals backs finals (i + 1) (set_array m b.into final)

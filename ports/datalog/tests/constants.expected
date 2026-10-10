@@ -1,0 +1,38 @@
+.output item (7 tuples)
+  item(-2, "minus two").
+  item(0, "Zero").
+  item(1, one).
+  item(2, "line\nbreak").
+  item(3, three).
+  item(7, "say \"hi\"").
+  item(10, ten).
+?- big(N, W).
+  N = 3, W = three
+  N = 7, W = "say \"hi\""
+  N = 10, W = ten
+  (3 answers)
+?- small(N).
+  N = -2
+  N = 0
+  N = 1
+  (3 answers)
+?- named(W).
+  W = "Zero"
+  W = "line\nbreak"
+  W = "minus two"
+  W = one
+  W = "say \"hi\""
+  W = ten
+  W = three
+  (7 answers)
+?- same_word(N).
+  N = 10
+  (1 answer)
+-- evaluation
+stratum 1: big: 1 round, 3 new
+stratum 2: named: 1 round, 7 new
+stratum 3: same_word: 1 round, 1 new
+stratum 4: small: 1 round, 3 new
+relations: big 3, item 7, named 7, same_word 1, small 3
+total: 21 tuples after 4 rounds
+--- exit 0

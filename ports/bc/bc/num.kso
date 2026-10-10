@@ -1,0 +1,137 @@
+# bc's numbers. A dec is the exact rational units / 10^scale; units carries
+# the sign, and scale is the count of digits after the point, which bc keeps
+# even when they are zeros (1.50 prints as 1.50). Every operator below picks
+# its result scale by bc's rules and truncates toward zero, as bc does.
+pub type dec
+  scale
+  units
+
+pub one = dec 0 1
+
+pub zero = dec 0 0
+
+pub fn add (dec sa ua) (dec sb ub)
+  keep = larger sa sb
+  dec keep (ua * ten_to (keep - sa) + ub * ten_to (keep - sb))
+
+# The comparison bc's relational operators and every loop test reduce to:
+# -1, 0 or 1.
+pub fn compare (dec sa ua) (dec sb ub)
+  keep = larger sa sb
+  left = ua * ten_to (keep - sa)
+  right = ub * ten_to (keep - sb)
+  return 0 - 1 if left < right
+  if (right < left) 1 0
+
+# Division keeps the scale bc's `scale` names, whatever the operands carry.
+# The caller has already refused a zero divisor.
+pub fn divide (dec sa ua) (dec sb ub) keep
+  dec keep (ua * ten_to (keep + sb) / (ub * ten_to sa))
+
+pub fn from_int n
+  dec 0 n
+
+# The integer part, truncated toward zero, for the places bc wants a
+# machine number: an exponent, an array index, a base.
+pub fn int_part (dec sa ua)
+  ua / ten_to sa
+
+pub fn integral? (dec sa ua)
+  ua % ten_to sa == 0
+
+fn larger a b
+  if (a < b) b a
+
+# bc's length(): significant digits. A number below one counts its scale,
+# and zero with no scale still has one digit.
+pub fn length_of (dec 0 ua)
+  digit_count (magnitude ua)
+
+pub fn length_of (dec sa ua)
+  size = magnitude ua
+  if (size < ten_to sa) sa (digit_count size)
+
+pub fn digit_count n
+  if (n < 10) 1 (1 + digit_count (n / 10))
+
+pub fn magnitude n
+  if (n < 0) (0 - n) n
+
+# a % b: the quotient is taken at `scale`, and the remainder keeps
+# max(scale + scale(b), scale(a)) digits.
+pub fn modulo a b keep
+  q = divide a b keep
+  wide = larger (keep + scale_of b) (scale_of a)
+  rescale (subtract a (multiply_exact q b)) wide
+
+pub fn multiply (dec sa ua) (dec sb ub) keep
+  full = sa + sb
+  rescale (dec full (ua * ub)) (smaller full (larger keep (larger sa sb)))
+
+fn multiply_exact (dec sa ua) (dec sb ub)
+  dec (sa + sb) (ua * ub)
+
+pub fn negate (dec sa ua)
+  dec sa (0 - ua)
+
+pub fn negative? (dec _ ua)
+  ua < 0
+
+# a ^ n for a whole n >= 0. The exact power is truncated to
+# min(scale(a) * n, max(scale, scale(a))).
+pub fn power (dec sa ua) n keep
+  full = sa * n
+  exact = dec full (raise ua n)
+  rescale exact (smaller full (larger keep sa))
+
+pub fn raise _ 0
+  1
+
+pub fn raise b e
+  half = raise (b * b) (e / 2)
+  if (e % 2 == 0) half (half * b)
+
+pub fn rescale (dec sa ua) wanted
+  return dec wanted (ua * ten_to (wanted - sa)) if sa <= wanted
+  dec wanted (ua / ten_to (sa - wanted))
+
+fn smaller a b
+  if (a < b) a b
+
+# A keyed read of an err stops the program where a function's pattern lets
+# it pass, so the scale is read through one (FRICTION F16).
+pub fn scale_of (dec places _)
+  places
+
+# sqrt keeps max(scale, scale(a)) digits; the root is the exact floor. The
+# roots of zero and one are plain 0 and 1, with no scale, as in GNU bc.
+pub fn square_root (dec sa ua) keep
+  return zero if ua == 0
+  return one if ua == ten_to sa
+  wanted = larger keep sa
+  dec wanted (whole_root (ua * ten_to (2 * wanted - sa)))
+
+pub fn subtract a b
+  add a (negate b)
+
+pub fn ten_to k
+  raise 10 k
+
+fn whole_root 0
+  0
+
+fn whole_root n
+  newton n (ten_to (digit_count n / 2 + 1))
+
+fn newton n x
+  y = (x + n / x) / 2
+  return x if x <= y
+  newton n y
+
+pub fn zero? (dec _ ua)
+  ua == 0
+
+# a ^ n with every digit kept, for the negative exponents, which divide one
+# by it at `scale`.
+pub fn exact_power (dec sa ua) n
+  dec (sa * n) (raise ua n)

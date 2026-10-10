@@ -1,0 +1,3 @@
+--- stderr
+datalog: no such file: tests/does_not_exist.dl
+--- exit 1

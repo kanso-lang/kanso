@@ -1,0 +1,16 @@
+/* pi to 200 places by Machin's formula, written out without -l */
+define arctan_inv(x) {
+  auto s, t, n, x2, k
+  s = 1 / x
+  t = s
+  x2 = x * x
+  for (k = 3; t != 0; k = k + 2) {
+    t = -t / x2
+    s = s + t / k
+  }
+  return (s)
+}
+scale = 210
+p = 16 * arctan_inv(5) - 4 * arctan_inv(239)
+scale = 200
+p / 1

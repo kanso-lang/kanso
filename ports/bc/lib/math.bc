@@ -1,0 +1,182 @@
+/* The -l math library, written for this port. Each function works some
+   digits past the caller's scale and truncates to that scale on the way
+   out, and sets ibase to ten while it runs so its constants mean what
+   they say. */
+scale = 20
+
+/* e(x): halve x until it is at most one half, sum the Taylor series, and
+   square the result back up once per halving. A negative x is 1/e(-x). */
+define e(x) {
+  auto b, s, k, n, t, r, g
+  b = ibase
+  ibase = A
+  s = scale
+  if (x < 0) {
+    scale = s + 6
+    r = 1 / e(-x)
+    scale = s
+    ibase = b
+    return (r / 1)
+  }
+  scale = 0
+  g = x * 45 / 100
+  scale = s + g + length(x / 1) + 10
+  k = 0
+  while (x > 0.5) {
+    x = x / 2
+    k = k + 1
+  }
+  r = 1
+  t = 1
+  for (n = 1; t != 0; n++) {
+    t = t * x / n
+    r = r + t
+  }
+  while (k > 0) {
+    r = r * r
+    k = k - 1
+  }
+  scale = s
+  ibase = b
+  return (r / 1)
+}
+
+/* l(x): take square roots until x lies between one half and two, then sum
+   2 * atanh((x - 1) / (x + 1)) and double once per root taken. */
+define l(x) {
+  auto b, s, k, u, v, t, r, n
+  b = ibase
+  ibase = A
+  s = scale
+  if (x <= 0) {
+    ibase = b
+    return ((1 - 10 ^ s) / 1)
+  }
+  scale = s + length(x / 1) + 12
+  k = 0
+  while (x >= 2) {
+    x = sqrt(x)
+    k = k + 1
+  }
+  while (x <= 0.5) {
+    x = sqrt(x)
+    k = k + 1
+  }
+  u = (x - 1) / (x + 1)
+  v = u * u
+  r = u
+  t = u
+  for (n = 3; t != 0; n = n + 2) {
+    t = t * v
+    r = r + t / n
+  }
+  r = r * 2 ^ (k + 1)
+  scale = s
+  ibase = b
+  return (r / 1)
+}
+
+/* s(x): bring x within one turn of zero, then sum the Taylor series. */
+define s(x) {
+  auto b, s, p, q, n, t, r, v
+  b = ibase
+  ibase = A
+  s = scale
+  scale = s + length(x / 1) + 12
+  p = 8 * a(1)
+  q = x / p
+  scale = 0
+  q = q / 1
+  scale = s + length(x / 1) + 12
+  x = x - q * p
+  v = x * x
+  r = x
+  t = x
+  for (n = 2; t != 0; n = n + 2) {
+    t = -t * v / (n * (n + 1))
+    r = r + t
+  }
+  scale = s
+  ibase = b
+  return (r / 1)
+}
+
+/* c(x) is the sine a quarter turn on. */
+define c(x) {
+  auto b, s, r
+  b = ibase
+  ibase = A
+  s = scale
+  scale = s + 12
+  r = s(x + 2 * a(1))
+  scale = s
+  ibase = b
+  return (r / 1)
+}
+
+/* a(x): arctangent. Above one, use pi/2 - a(1/x); then halve the angle
+   until x is small and sum the series. */
+define a(x) {
+  auto b, s, m, k, n, t, r, v
+  b = ibase
+  ibase = A
+  s = scale
+  scale = s + 12
+  m = 1
+  if (x < 0) {
+    m = -1
+    x = -x
+  }
+  if (x > 1) {
+    r = 2 * a(1) - a(1 / x)
+    scale = s
+    ibase = b
+    return (m * r / 1)
+  }
+  k = 0
+  while (x > 0.2) {
+    x = x / (1 + sqrt(1 + x * x))
+    k = k + 1
+  }
+  v = x * x
+  r = x
+  t = x
+  for (n = 3; t != 0; n = n + 2) {
+    t = -t * v
+    r = r + t / n
+  }
+  r = r * 2 ^ k
+  scale = s
+  ibase = b
+  return (m * r / 1)
+}
+
+/* j(n,x): the Bessel function of the first kind, by its power series. n
+   is truncated to an integer, and J(-n) is (-1)^n J(n). */
+define j(n, x) {
+  auto b, s, m, g, k, t, r, v
+  b = ibase
+  ibase = A
+  s = scale
+  scale = 0
+  n = n / 1
+  m = 1
+  if (n < 0) {
+    n = -n
+    if (n % 2 == 1) m = -1
+  }
+  g = x * 44 / 100
+  if (g < 0) g = -g
+  scale = s + g + 12
+  t = 1
+  for (k = 1; k <= n; k++) t = t * x / (2 * k)
+  v = -x * x / 4
+  r = t
+  for (k = 1; t != 0; k++) {
+    t = t * v / (k * (n + k))
+    r = r + t
+  }
+  scale = s
+  ibase = b
+  return (m * r / 1)
+}

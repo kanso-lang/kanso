@@ -1,0 +1,4 @@
+gcd(2^64, 6^20)
+define g(x) { return (x * 100) }
+define ack(m, n) {
+ack(2, 3)

@@ -1,0 +1,3 @@
+% The second line of the file has three columns.
+.input pair "inputs/ragged.facts"
+?- pair(X, Y).

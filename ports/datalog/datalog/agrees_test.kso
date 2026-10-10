@@ -1,0 +1,17 @@
+# What a failing test shows. A test passes on `true`, and the runner prints
+# any other value it returns, so answering a record on a mismatch puts both
+# sides in the report. (std/expect does this, but is not shipped.)
+type mismatch
+  got
+  wanted
+
+fn agrees got wanted
+  if (got == wanted) true (mismatch got wanted)
+
+# Building long strings in tests, where a literal may not run past eighty
+# columns and may not span lines: `with_line` adds a line, `then` adds text.
+fn with_line acc next
+  "{acc}\n{next}"
+
+fn then acc next
+  "{acc}{next}"
