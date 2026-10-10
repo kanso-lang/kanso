@@ -1979,7 +1979,12 @@ static int k_interior_survives(KValue v, const void* p, KMark* m) {
             if (!k_survives_x(l->items, m)) return 0;
             if (k_beat_depth > 0 && l->len >= K_ISV_MIN) {
                 KMark* outer = &k_beat_stack[0];
-                if (k_isv_base != outer->ptr) {
+                /* The table starts empty and so does `k_isv_base`, and an
+                   outermost mark taken before the arena held anything has a
+                   NULL position too. Comparing the two alone left the table
+                   unopened, and its first lookup grew zero slots to zero and
+                   probed with a mask of all ones. */
+                if (!k_isv_list.slots || k_isv_base != outer->ptr) {
                     k_ptrmap_begin(&k_isv_list);
                     k_isv_live = 0;
                     k_isv_base = outer->ptr;
@@ -2591,6 +2596,59 @@ static int k_memo_outlives(KValue result) {
    tenure block at its depth, which is 507,678 of runbench's 507,685 -- pays
    its four tests and returns without the six callee-saved pushes the copy
    and the migrates below need. The same split the rewind made. */
+static KBuf* k_buf_of(KValue* items);
+
+/* Whether `p` lies in depth d's carry pair. */
+static int k_carry_at_holds(long long d, const void* p) {
+    const char* q = (const char*)p;
+    KCarryBuf* f = &k_carries[d].from;
+    KCarryBuf* t = &k_carries[d].to;
+    return (f->data && q >= f->data && q < f->data + f->cap)
+        || (t->data && q >= t->data && q < t->data + t->cap);
+}
+
+/* A map or list header in a carry buffer is born this beat by the arena's
+   reckoning, since the buffer is not arena, so its view or its permanent
+   storage registers at this depth. A pop that copies its result out of the
+   carry pair leaves every such header dead: the pair is overwritten by the
+   next loop at this depth or freed with it. Handing those entries up, as a
+   kept region's are, left the parent flushing headers that no longer held
+   anything, and the diff port died freeing a pointer into the middle of an
+   arena block. They are released here instead, while the headers are still
+   intact. */
+static void k_registries_drop_carried(long long d) {
+    long long kept = 0;
+    for (long long i = 0; i < k_viewreg_n[d]; i++) {
+        KMap* m = k_viewreg[d][i];
+        if (!k_carry_at_holds(d, m)) {
+            k_viewreg[d][kept++] = m;
+            continue;
+        }
+        if (m->sorted) {
+            if (m->sorted != m->pairs) k_view_free(m->sorted);
+            m->sorted = NULL;
+            m->sorted_len = 0;
+        }
+    }
+    k_viewreg_n[d] = kept;
+    kept = 0;
+    for (long long i = 0; i < k_permreg_n[d]; i++) {
+        KValue** slot = k_permreg[d][i];
+        if (!k_carry_at_holds(d, slot)) {
+            k_permreg[d][kept++] = slot;
+            continue;
+        }
+        if (!*slot) continue;
+        KBuf* b = k_buf_of(*slot);
+        if (!k_buf_malloced(b)) continue;
+        if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) k_stat_bytes_freed++;
+        k_perm_live -= (long long)(sizeof(KBuf) + sizeof(KValue) * (size_t)k_buf_cap(b));
+        free(b);
+        *slot = NULL;
+    }
+    k_permreg_n[d] = kept;
+}
+
 static __attribute__((noinline)) KValue k_beat_pop_slow(KValue r, long long d,
                                                         int rewound) {
     KCarry* c = &k_carries[d];
@@ -2602,6 +2660,7 @@ static __attribute__((noinline)) KValue k_beat_pop_slow(KValue r, long long d,
             k_ptrmap_begin(&k_copy_map);
             k_copy_map_live = 0;
             r = k_deep_copy(r, &cp);
+            k_registries_drop_carried(d);
         }
         k_chunkreg_migrate((int)d);
         k_viewreg_migrate((int)d);

@@ -24515,3 +24515,70 @@ Taken together the two sides net to a fall in welfare of 0.0000025, from
 90.25702372 to 90.25702120. The floor is lowered by that much. Clay asked
 why the two engines stored integers differently, and there was no reason;
 this branch is the answer to that question, so the floor follows it.
+
+## 2026-10-10 — two native crashes the ports found in the arena
+
+The toml port grew a list by calling a helper that pushed onto it, and the
+native binary died at sixty-four elements, dev and release alike. Sixty-three
+worked on every engine, and so did pushing directly in the tail call.
+
+The pop that hands a loop's result back to its caller asks whether the
+result's interior survives the rewind. For a list of `K_ISV_MIN` (64) or more
+elements it asks a memo table, `k_isv_list`, keyed against the outermost
+beat's mark, and the table is opened when that mark's position differs from
+the one it last saw. Both start as NULL. A program whose outermost beat began
+before the arena held anything compares NULL with NULL, never opens the
+table, and the first lookup grows zero slots to zero and probes with a mask
+of all ones. gdb put the fault on that probe. A list grown through a helper
+reaches the branch because the carry repairs the list's interior every
+iteration rather than copying it, so the list header is old and the pop asks
+the memo about it. The table now opens on its first use as well as on a new
+mark.
+
+The fault needs an entry file, because an entry's statements are what leave
+the arena empty when the first beat begins; the same functions run from a
+`play` did not crash. `tests/golden/entryfile/a_list_pushed_through_a_helper_past_sixty_four`
+builds a 64-element list first and a 1,000-element one after it, and
+`tests/entry_file.rs` checks native against the interpreter. Removing the
+new condition turns the spec red on the crash itself.
+
+The first suspect was the arena's free shelf. The carry's copy of a list has
+room for exactly its length, so every push after a carry grows the list, and
+the outgrown storage is donated to the shelf when its capacity is a power of
+two. Tracing every grow showed that storage was ordinary arena memory, and at
+64 elements the last grow is from a capacity of 63, which the shelf does not
+keep. That change was reverted.
+
+The port's other native report, an arm that ran with an err when its sibling
+had `_` in the same position, is the lazy-err check from the entry before
+this one: `grown` is a thunk that forces to the err, and with that change the
+binary stops at `refused 5` as the interpreter does.
+
+The diff port's native binary died on a three-step effect chain after two
+file reads, sometimes as "ran out of stack" and sometimes as `free(): invalid
+pointer`. valgrind put the bad free in `k_beat_rewind_slow`, on an address
+13,328 bytes inside an arena block, and a trace of the view registry showed
+the path. Myers' search carries its two frontier maps through a loop and
+reads them, which builds each map a sorted view. The headers live in the
+loop's carry buffer, which is outside the arena, so `k_born_this_beat` calls
+them new and the views register at the loop's depth. When the loop's beat
+popped it copied its result out of the carry buffer and then migrated every
+registration to the enclosing depth, the same as it would for a region it
+keeps. A later loop at the same depth overwrote the carry buffer, and when
+the enclosing depth finally rewound it flushed a header that held other
+data. A map at the same address was registered again at the loop's depth
+before the end, which is what the trace caught.
+
+On a pop that copies out of the carry pair, entries whose header lies in
+that depth's carry buffers are now released then and there, while the
+headers are still intact, and the rest migrate as before. The permanent-
+storage registry has the same shape, since it registers a field inside a
+header, and gets the same treatment. The port's own reduction, a 217-line
+module and an eight-line entry, is the fixture:
+`tests/golden/entryfile/a_view_left_in_a_carry_buffer`, run from a scratch
+directory because it writes two files. Removing the release turns the spec
+red on the crash. The diff port's `check.sh` passes all 54 fixtures on the
+three engines with this compiler. Three smaller programs that carry and read
+maps did not reproduce the crash, because their puts happened in place and
+left the maps in the arena.
+
