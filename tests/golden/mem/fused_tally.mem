@@ -1,5 +1,5 @@
-allocs=65
-alloc_bytes=41536
+allocs=66
+alloc_bytes=42064
 arena_blocks=1
 arena_peak_bytes=1048576
 cohort_frees=0
@@ -40,7 +40,7 @@ seek_resumes=0
 seek_steps=0
 buf_reuse=0
 held_peak_bytes=7648
-view_allocs=15
+view_allocs=16
 view_frees=5
 ten_blocks=0
 ten_frees=0

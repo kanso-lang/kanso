@@ -1,0 +1,24 @@
+# A map read between its puts keeps a sorted view, and a key that lands in
+# the middle of a large view used to be inserted by moving every key after
+# it one slot along. Counting 40,000 distinct keys that way took 4.9 seconds
+# natively against the interpreter's 0.2. Such a key now goes to a sorted
+# run beside the view, and the run is merged in once it outgrows the square
+# root of the view: view_allocs counts those merges and the runs they empty,
+# where the old insert allocated only when the view doubled. The keys here
+# arrive scrambled, 4,000 of them, each read before it is put.
+fn bump none
+  1
+
+fn bump n
+  n + 1
+
+fn scatter m 0
+  m
+
+fn scatter m n
+  k = n * 1999 % 4001
+  scatter (put m k (bump m[k])) (n - 1)
+
+pub play =
+  counts = scatter {} 4000
+  print "{length counts} {counts[1999]} {counts[4000]}"

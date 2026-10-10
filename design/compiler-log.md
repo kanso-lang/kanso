@@ -24425,3 +24425,59 @@ and `work_runbench` -14 to 1,129,589,342, read by CI, with where the larger
 runtime's code landed. This
 container's counter sweep had read them unmoved. The allocation counters,
 the lazy tier and the compile rows did not move.
+
+## 2026-10-10 — a map's view takes keys out of order without moving itself
+
+Three ports found the same cliff from three directions. xsv's
+`stats --cardinality` spent 2.6 of its 2.7 seconds counting a column of
+distinct values, ugit's Myers diff on a 3,000-line file took 4.0 seconds
+against the interpreter's 0.4, and `list/tally` over 40,000 distinct
+strings took 4.95 seconds natively where the interpreter took 0.2. All of
+them read a map between puts. A read builds the map's sorted view, and
+from then on each put of a new key was inserted into the view in order,
+which for a key landing in the middle meant moving every pair after it
+one slot along. Callgrind on the ugit diff put 80% of the time there.
+
+A key that would land in the middle of a view of more than sixty-four
+pairs now goes to a second sorted run beside it, which the runtime calls
+the side. A key past the view's last still goes on its end, so a map
+filled in ascending order never starts one. Reads search the view and
+then the side, so a read between two puts merges nothing. When the side
+holds more keys than the square root of the view, the two are merged,
+from the back and into the view's own buffer when it has room. Anything
+that wants the whole order, such as printing, `entries` or equality,
+merges first.
+
+The side costs the map header nothing. A view's buffer is preceded by a
+header slot whose first word is its capacity, and the second word, which
+was unused, now points to the side. The low bit of the map's view pointer
+says a side is waiting, so a read that finds the bit clear asks nothing
+more, and the emitted fast put, which only tests the pointer for null,
+still takes the call when a view exists. The side is kept, emptied, after
+a merge, so the next key out of order does not allocate.
+
+`list/tally` over 40,000 distinct strings went from 4.95 seconds to 0.21,
+and xsv's reproduction from 4.75 to 0.17. `tests/golden/mem/
+a_tally_of_scattered_keys_merges_its_view.kso` pins the shape: 4,000
+scrambled keys, each read before it is put, take 15 view allocations where
+main took 12, and hold 206,448 bytes at peak where main held 196,576.
+Two mem goldens move with it. `growing_map` takes one more view (15 to 16,
+alloc_bytes 41,536 to 42,064), and `fused_tally` two more (10 to 12),
+with held_peak_bytes 49,120 to 55,408 and alloc_bytes 181,952 to 189,312.
+`tests/golden/micro/a_map_written_out_of_order_past_its_room.kso` puts 211
+keys in scrambled order with reads, a length, a missing key and a print in
+between, and one in-place loop visits every key twice, so its second visit
+reads and replaces keys that are still in the side. Every engine prints the
+same. Leaving the side out of the search turns it red: the loop reads a key
+it has already put as missing, puts it again, and prints 217 keys.
+
+The first version of that fixture could not fail. Its loop was also handed
+a map the play went on reading, so the linearity analysis gave none of its
+puts the in-place write, no view ever grew a side, and removing the side
+search changed nothing. A separate loop that only ever receives a fresh map
+is what made the side reachable.
+
+A put that replaces a key already in the map still walks the pairs log
+backwards to find its last write, so a tally whose keys repeat pays for
+the distance back to that key's last occurrence. That walk is untouched
+here.
