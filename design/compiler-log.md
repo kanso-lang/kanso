@@ -25265,3 +25265,11 @@ compile_instructions lands on 25,857,737, entry_instructions on 85,514,580,
 library_instructions on 86,066,207 and browser_compile_instructions on
 391,827,307. All of these are projected until CI reads them. Welfare rises from 90.2499
 to 90.3104 on those rows, and the rise is banked.
+
+CI's rows replace the projection. work_runbench lands on 1,244,977,121, as
+projected. The other rows CI corrects are small: `text` totals 4,656,478,
+work_encodebench lands on 2,393,926,869, work_livebench on 1,472,861,230 and
+browser_compile_instructions on 391,826,076. The run program's emitted code
+reads one call and two lines more than this container wrote, so
+emitted_other_calls lands on 17,394 and emitted_other_lines on 146,698.
+Welfare reads 90.3105 on CI's rows, and the rise is banked.
