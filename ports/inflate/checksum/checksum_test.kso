@@ -1,0 +1,17 @@
+import "std/text"
+
+test_crc32_check_value = crc32 (text/bytes "123456789") == 3421780262
+
+test_crc32_empty = crc32 (text/bytes "") == 0
+
+test_crc32_in_pieces =
+  whole = crc32 (text/bytes "hello, world")
+  whole == crc32_more (crc32 (text/bytes "hello, ")) (text/bytes "world")
+
+test_adler32_wikipedia = adler32 (text/bytes "Wikipedia") == 300286872
+
+test_adler32_empty = adler32 (text/bytes "") == 1
+
+test_adler32_in_pieces =
+  whole = adler32 (text/bytes "hello, world")
+  whole == adler32_more (adler32 (text/bytes "hello, ")) (text/bytes "world")

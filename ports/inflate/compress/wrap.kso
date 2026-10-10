@@ -1,0 +1,53 @@
+# The three containers a compressed stream goes out in, and the choice
+# between a fixed-code block and stored blocks.
+import "../checksum"
+import "std/bits"
+import "std/text"
+
+# Fixed codes, unless they would come out bigger than storing the input as
+# it is, which is what happens to data that is already compressed.
+pub fn deflate_bytes src
+  coded = lz77_fixed src
+  if (length coded <= stored_size src) coded (stored src)
+
+# Stored blocks hold at most 65535 bytes, and each costs five bytes of header.
+fn stored_size src
+  length src + 5 * (length src / 65535 + 1)
+
+fn stored src
+  stored_from src 1 (text/bytes "")
+
+fn stored_from src i acc
+  n = length src
+  last = if (i + 65534 < n) (i + 65534) n
+  final = if (last == n) 1 0
+  len = last - i + 1
+  head = text/append acc (text/to_bytes [final])
+  sized = text/append (text/append head (le16 len)) (le16 (bits/xor len 65535))
+  out = text/append sized (text/slice src i last)
+  return out if final == 1
+  stored_from src (last + 1) out
+
+# gzip: the ten-byte header with no optional fields, no time stamp and an
+# unknown operating system, then the CRC-32 and the length.
+pub fn gzip_bytes src
+  head = text/to_bytes [31 139 8 0 0 0 0 0 0 255]
+  body = text/append head (deflate_bytes src)
+  sized = text/append body (le32 (checksum/crc32 src))
+  text/append sized (le32 (length src % 4294967296))
+
+# zlib: 0x78 0x01, a 32 KiB window and the "fastest" level hint, which is a
+# fair description of a greedy matcher; then the Adler-32, high byte first.
+pub fn zlib_bytes src
+  body = text/append (text/to_bytes [120 1]) (deflate_bytes src)
+  text/append body (be32 (checksum/adler32 src))
+
+fn le16 n
+  text/to_bytes [(n & 255) (bits/shr n 8)]
+
+fn le32 n
+  text/append (le16 (n & 65535)) (le16 (bits/shr n 16))
+
+fn be32 n
+  hi = [(bits/shr n 24) (bits/shr n 16 & 255) (bits/shr n 8 & 255) (n & 255)]
+  text/to_bytes hi

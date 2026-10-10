@@ -1,0 +1,11 @@
+format:       gzip
+members:      1
+mtime:        0
+os:           unknown
+compressed:   2733 bytes
+uncompressed: 5994 bytes
+ratio:        45.5%
+crc32:        deb5804a
+adler32:      0eb84ad1
+blocks:       1 (0 stored, 1 fixed, 0 dynamic)
+[exit 0]

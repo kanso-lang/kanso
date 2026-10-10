@@ -1,0 +1,38 @@
+import "std/testing"
+import "std/text"
+
+# zlib.compress(b"hi\n", 9) from Python.
+hi_zlib = text/to_bytes [120 218 203 200 228 2 0 2 23 0 220]
+
+test_hex8 = hex8 3421780262 == "cbf43926" and hex8 0 == "00000000"
+
+test_detects_zlib = zlib? hi_zlib and not gzip? hi_zlib
+
+test_unzlib = text/utf8 (unzlib hi_zlib).data == "hi\n"
+
+test_unzlib_fields =
+  fields = (unzlib hi_zlib).fields
+  fields[1].value == "15 bits" and fields[2].value == "maximum"
+
+test_zlib_bad_check =
+  src = text/to_bytes [120 219 203 200 228 2 0 2 23 0 220]
+  testing/when_failed (unzlib src) (e -> e.reason == "header check failed")
+
+test_zlib_bad_adler =
+  src = text/to_bytes [120 218 203 200 228 2 0 2 23 0 221]
+  testing/when_failed (unzlib src) (e -> e.at == 7)
+
+test_gunzip_empty_member =
+  head = [31 139 8 0 0 0 0 0 0 3]
+  src = text/to_bytes (text/concat head [3 0 0 0 0 0 0 0 0 0])
+  u = gunzip src
+  length u.data == 0 and u.members == 1
+
+test_not_gzip =
+  src = text/to_bytes [31 140 8 0]
+  testing/when_failed (gunzip src) (e -> e.reason == "not a gzip file")
+
+test_raw_trailing_bytes =
+  src = text/to_bytes [3 0 9 9]
+  why = "2 unexpected bytes after the stream"
+  testing/when_failed (unraw src) (e -> e.reason == why)

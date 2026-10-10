@@ -1,0 +1,10 @@
+block 1: dynamic hlit=266 hdist=20 hclen=14, header at byte 0 bit 0, 986 bytes out
+block 2: stored, header at byte 455 bit 2, 0 bytes out
+block 3: stored, header at byte 460 bit 0, 300 bytes out
+block 4: stored, header at byte 765 bit 0, 0 bytes out
+block 5: fixed, header at byte 770 bit 0, 5 bytes out
+block 6: stored, header at byte 776 bit 2, 0 bytes out
+block 7: dynamic hlit=264 hdist=15 hclen=16, header at byte 781 bit 0, 238 bytes out
+block 8: stored, header at byte 926 bit 5, 0 bytes out
+block 9: fixed, header at byte 931 bit 0, 0 bytes out
+[exit 0]

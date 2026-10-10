@@ -1,0 +1,23 @@
+# Writing symbols in the fixed code: a literal is its code; a match is a
+# length symbol, the length's extra bits, a distance code (five bits in the
+# fixed code) and the distance's extra bits.
+import "../deflate"
+
+fn literal out sym
+  c = deflate/nth lit_codes (sym + 1)
+  emit out c.bits c.width
+
+fn match_codes out len distance
+  slot = deflate/nth length_slot len
+  with_length = literal out (256 + slot)
+  extra = deflate/nth deflate/length_extra slot
+  base = deflate/nth deflate/length_base slot
+  with_extra = emit with_length (len - base) extra
+  d = dist_slot distance 30
+  with_dist = emit with_extra (reversed (d - 1) 5) 5
+  dbase = deflate/nth deflate/dist_base d
+  emit with_dist (distance - dbase) (deflate/nth deflate/dist_extra d)
+
+fn dist_slot distance d
+  return d if deflate/nth deflate/dist_base d <= distance
+  dist_slot distance (d - 1)

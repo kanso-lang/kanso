@@ -1,0 +1,19 @@
+# Writing bytes that are not text.
+#
+#   kanso play write_takes_bytes_only_sometimes.kso [--interp]
+#
+# os/write_file accepts a bytes value and writes it as is (out.bin holds
+# 1f 8b ff), on every engine, though appendix B gives it the signature
+# `string string -> io`. io/write refuses the same value on every engine,
+# at run time, with no location:
+#   error[runtime]: write takes a string
+# and kanso check passes the program.
+#
+# Expected: the two writers agree, and stdout can carry bytes (a
+# decompressor's natural output), or check refuses io/write of bytes.
+import "std/io"
+import "std/os"
+import "std/text"
+
+os/write_file "out.bin" (text/to_bytes [31 139 255])
+  .> (_ -> io/write (text/to_bytes [31 139 255]))

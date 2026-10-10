@@ -1,0 +1,2 @@
+inflate: fixtures/data/bad_size.gz: length mismatch: trailer says 78, data is 77 bytes (byte 86)
+[exit 1]

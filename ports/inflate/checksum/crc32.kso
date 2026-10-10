@@ -1,0 +1,50 @@
+# CRC-32 as gzip and PNG use it: the reflected polynomial 0xEDB88320, a
+# register that starts at all ones and is inverted on the way out.
+#
+# The table is the usual 256 entries, one per value of the low byte, built
+# once from the polynomial rather than pasted in.
+import "std/bits"
+import "std/list"
+
+# 0xEDB88320, the polynomial with its bits reversed.
+poly = 3988292384
+
+# 0xFFFFFFFF
+ones = 4294967295
+
+pub fn crc32 data
+  crc32_more 0 data
+
+# Continue a running CRC over more bytes, the way zlib's crc32(crc, buf, len)
+# does, so a stream can be checked in pieces.
+pub fn crc32_more crc data
+  inner = list/fold data (bits/xor crc ones) (c b -> crc_step c b)
+  bits/xor inner ones
+
+fn crc_step c b
+  slot = bits/xor c b & 255
+  bits/xor (table_at slot) (bits/shr c 8)
+
+fn entry_for n
+  shift_eight n 8
+
+fn shift_eight c 0
+  c
+
+fn shift_eight c k
+  odd = c & 1
+  next = if (odd == 1) (bits/xor poly (bits/shr c 1)) (bits/shr c 1)
+  shift_eight next (k - 1)
+
+fn table_at slot
+  entry_or_zero crc_table[slot + 1]
+
+fn entry_or_zero none
+  0
+
+fn entry_or_zero v
+  v
+
+crc_table = list/take list/naturals 256
+  . list/map (n -> entry_for (n - 1))
+  . list/to_list

@@ -1,0 +1,62 @@
+# The fixed tables of RFC 1951, section 3.2.5 and 3.2.6.
+#
+# Each length symbol from 257 to 284 stands for a run of lengths: a base, and
+# a count of extra bits read after the symbol that are added to it. The
+# number of extra bits climbs by one every four symbols, and every base is the
+# previous base plus the span the previous symbol covered, so both tables
+# follow from the extra-bit pattern. Symbol 285 breaks the pattern and means
+# exactly 258. Distances work the same way, two symbols per extra bit.
+import "std/bits"
+import "std/list"
+import "std/text"
+
+pub dist_base = bases_from 1 dist_extra
+
+pub dist_extra = list/to_list (list/map (upto 30) dist_extra_of)
+
+pub fixed_dist = code_of (list/map (upto 30) (_ -> 5))
+
+pub fixed_lit = code_of (list/map (upto 288) fixed_length)
+
+pub length_base = push (bases_from 3 (text/slice length_extra 1 28)) 258
+
+pub length_extra = push (list/to_list (list/map (upto 28) length_extra_of)) 0
+
+# The order the code-length code's own lengths are sent in: the ones most
+# likely to be used first, so a header can stop early and leave the rest 0.
+pub order = [16 17 18 0 8 7 9 6 10 5 11 4 12 3 13 2 14 1 15]
+
+# Each base is the previous base plus 2 to the previous symbol's extra bits.
+fn bases_from start extras
+  steps = list/fold extras [start] (acc e -> push acc (last_of acc + span e))
+  list/to_list (list/take steps (length extras))
+
+fn code_of lengths
+  (construct (list/to_list lengths)).code
+
+# Literal/length code lengths in the fixed code: 0-143 take 8 bits, 144-255
+# take 9, 256-279 take 7 and 280-287 take 8.
+fn dist_extra_of i
+  floor_zero ((i - 1) / 2 - 1)
+
+fn fixed_length i
+  sym = i - 1
+  return 8 if sym < 144
+  return 9 if sym < 256
+  return 7 if sym < 280
+  8
+
+fn floor_zero n
+  if (n < 0) 0 n
+
+fn last_of xs
+  nth xs (length xs)
+
+fn length_extra_of i
+  floor_zero ((i - 1) / 4 - 1)
+
+fn span e
+  bits/shl 1 e
+
+fn upto n
+  list/take list/naturals n

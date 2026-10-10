@@ -1,0 +1,2 @@
+inflate: fixtures/data/truncated.gz: corrupt DEFLATE data at byte 40: ran out of input
+[exit 1]

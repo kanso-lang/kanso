@@ -1,0 +1,2 @@
+inflate: fixtures/data/bad_zlib_method.zlib: corrupt DEFLATE data at byte 0: invalid block type 3
+[exit 1]

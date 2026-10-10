@@ -1,0 +1,41 @@
+# Reading the compressed stream a few bits at a time.
+#
+# DEFLATE packs its fields least significant bit first, so the reader keeps a
+# single number: the offset, in bits, of the next unread bit from the start of
+# the input. Every reader takes that offset and answers a value; the caller
+# adds the width it asked for. There is no bit buffer to carry between calls,
+# because the bytes are all in memory and any bit can be found again.
+import "std/bits"
+
+# Up to 17 bits from bit offset `bp`, low bit first: three bytes always
+# cover them, whatever the offset within the first. Past the end of the input
+# the stream reads as zeros; the loops that consume it check `exhausted?`.
+pub fn peek src bp n
+  k = bits/shr bp 3 + 1
+  lo = byte_at src k | bits/shl (byte_at src (k + 1)) 8
+  word = lo | bits/shl (byte_at src (k + 2)) 16
+  bits/shr word (bp & 7) & mask n
+
+pub fn mask n
+  bits/shl 1 n - 1
+
+pub fn byte_at src k
+  zero_past_end src[k]
+
+pub fn exhausted? src bp
+  bp > length src * 8
+
+# Where the next whole byte starts, as a 1-based index into the input.
+pub fn next_byte bp
+  bits/shr (bp + 7) 3 + 1
+
+fn zero_past_end none
+  0
+
+fn zero_past_end v
+  v
+
+# A list read at a position the caller has already bounded. A miss reads as
+# zero, which every table here treats as "no such entry".
+pub fn nth xs i
+  zero_past_end xs[i]

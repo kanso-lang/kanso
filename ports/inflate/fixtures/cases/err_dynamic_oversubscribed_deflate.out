@@ -1,0 +1,2 @@
+inflate: fixtures/data/dynamic_oversubscribed.deflate: corrupt DEFLATE data at byte 0: over-subscribed code-length code
+[exit 1]

@@ -1,0 +1,22 @@
+# Adler-32, the zlib trailer: two running sums modulo 65521, the largest prime
+# below 2^16, packed high and low into one 32-bit word.
+import "std/bits"
+import "std/list"
+
+type adler
+  a
+  b
+
+pub fn adler32 data
+  adler32_more 1 data
+
+pub fn adler32_more start data
+  lo = start & 65535
+  hi = bits/shr start 16
+  sums = list/fold data (adler lo hi) (s b -> adler_step s b)
+  adler a b = sums
+  bits/shl b 16 | a
+
+fn adler_step (adler a b) byte
+  a2 = (a + byte) % 65521
+  adler a2 ((b + a2) % 65521)

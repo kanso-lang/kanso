@@ -1,0 +1,3 @@
+block 1: dynamic hlit=271 hdist=30 hclen=19, header at byte 10 bit 0, 243751 bytes out
+block 2: dynamic hlit=271 hdist=30 hclen=15, header at byte 67074 bit 3, 106677 bytes out
+[exit 0]

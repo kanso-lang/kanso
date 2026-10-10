@@ -1,0 +1,25 @@
+# Compress a file three ways, decompress each with the decoder, and say
+# whether the bytes came back.
+import "../compress"
+import "../container"
+import "std/io"
+
+fn roundtrip r src
+  gz = compress/gzip_bytes src
+  z = compress/zlib_bytes src
+  raw = compress/deflate_bytes src
+  back_gz = container/unpack_as "gzip" gz
+  back_z = container/unpack_as "zlib" z
+  back_raw = container/unpack_as "raw" raw
+  unpacked_or_fail r back_gz (u -> trip src "gzip" gz u)
+    .> (_ -> unpacked_or_fail r back_z (u -> trip src "zlib" z u))
+    .> (_ -> unpacked_or_fail r back_raw (u -> trip src "raw" raw u))
+
+# A failure must not reach `trip`: a function with no arm for an err never
+# runs when handed one, so the decode goes to `unpacked_or_fail` first.
+fn trip src label packed u
+  io/write (verdict label src packed u.data)
+
+fn verdict label src packed data
+  same = if (data == src) "ok" "MISMATCH"
+  "{label}: {length src} -> {length packed} bytes, round trip {same}\n"

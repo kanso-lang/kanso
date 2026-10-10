@@ -1,0 +1,22 @@
+# A keyed read that follows a `return ... if` line binds nothing.
+#
+# Expected: prints "1 2". `{ after data:lens } = r` should bind `after` and
+# `lens`, as it does when the `return` line is deleted.
+# Actual (kanso check, play, every engine):
+#   error[name]: unknown name `after`
+#   error[name]: unknown name `lens`
+# A positional read (`trio after lens note = r`) in the same place works, so
+# the workaround is to name every field, or to read `r.after` with a dot.
+#
+# Run: kanso play keyed_read_after_return.kso
+type trio
+  after
+  data
+  note
+
+fn show r
+  return "neg" if r.after < 0
+  { after data:lens } = r
+  "{after} {lens}"
+
+print (show (trio 1 2 3))

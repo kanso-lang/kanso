@@ -1,0 +1,2 @@
+inflate: fixtures/data/missing.gz: no such file
+[exit 1]

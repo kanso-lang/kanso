@@ -1,0 +1,214 @@
+# The block loop: RFC 1951 section 3.2.3, puff.c's `puff` and `codes`.
+#
+# A DEFLATE stream is a run of blocks. Each starts with a bit saying whether
+# it is the last, and two bits giving its kind: stored (0), compressed with
+# the fixed code (1), or compressed with a code sent in the block (2). The
+# output is one growing byte string, and a match copies from its own tail.
+import "std/bits"
+import "std/list"
+import "std/text"
+
+# A failure in the compressed data: the byte offset in the input where the
+# decoder gave up, and why.
+pub type corrupt
+  at
+  reason
+
+# What the decoder made of one block, for `blocks` and `info`.
+pub type block_info
+  at
+  kind
+  note
+  size
+
+# What one block hands back to the loop: where the next block starts, the
+# output so far, and a note for the block report.
+pub type block_end
+  after
+  data
+  note
+
+pub type inflated
+  blocks
+  data
+  stop
+
+# Inflate the raw DEFLATE stream that starts at the 0-based byte offset
+# `start` of `src`. The answer says where the stream ended, so a wrapper can
+# read its trailer from there.
+pub fn inflate src start
+  each_block src (start * 8) (text/bytes "") []
+
+fn each_block src bp out log
+  return broken bp "ran out of input" if exhausted? src (bp + 3)
+  final = peek src bp 1
+  kind = peek src (bp + 1) 2
+  before = length out
+  e = block src (bp + 3) out kind
+  next_block src bp final kind before log e
+
+# Every answer that can be a failure is handed to a function before anything
+# reads it: a call passes a failure through untouched, where a binding pattern
+# or a field read would stop the program.
+fn next_block src bp final kind before log (block_end after data note)
+  logged = push log (block_info bp kind note (length data - before))
+  return inflated logged data after if final == 1
+  each_block src after data logged
+
+fn block src bp out 0
+  stored src bp out
+
+fn block src bp out 1
+  e = codes src bp out fixed_lit fixed_dist
+  noted e "fixed"
+
+fn block src bp out 2
+  dynamic src bp out
+
+fn block _ bp _ _
+  broken bp "invalid block type 3"
+
+fn noted (block_end after data _) note
+  block_end after data note
+
+fn broken bp reason
+  err (corrupt (bits/shr bp 3) reason)
+
+# A stored block skips to the next byte boundary, then gives a length and its
+# one's complement, then that many bytes copied straight through.
+fn stored src bp out
+  at = next_byte bp
+  return broken bp "ran out of input" if at + 3 > length src
+  len = byte_at src at | bits/shl (byte_at src (at + 1)) 8
+  nlen = byte_at src (at + 2) | bits/shl (byte_at src (at + 3)) 8
+  why = "stored length does not match its complement"
+  return broken bp why if nlen != bits/xor len 65535
+  last = at + 3 + len
+  return broken bp "ran out of input" if last > length src
+  block_end (last * 8) (text/append out (text/slice src (at + 4) last)) "stored"
+
+# A dynamic block sends its two codes as lists of code lengths, and sends
+# those lists compressed with a third, smaller code whose own lengths come
+# first, three bits each.
+fn dynamic src bp out
+  nlen = peek src bp 5 + 257
+  ndist = peek src (bp + 5) 5 + 1
+  ncode = peek src (bp + 10) 4 + 4
+  too_many = nlen > 286 or ndist > 30
+  return broken bp "too many length or distance codes" if too_many
+  start = bp + 14
+  clens = list/map order_index (s -> sent_length src start ncode s)
+  cb = construct (list/to_list clens)
+  return broken bp (code_length_fault cb.left) if cb.left != 0
+  r = read_lengths src (start + 3 * ncode) cb.code (nlen + ndist) []
+  dynamic_codes src out r nlen ndist ncode
+
+fn dynamic_codes src out (block_end after lens _) nlen ndist ncode
+  lit = text/slice lens 1 nlen
+  dist = text/slice lens (nlen + 1) (nlen + ndist)
+  return broken after "no end-of-block code" if nth lit 257 == 0
+  lb = construct lit
+  return broken after "invalid literal/length code lengths" if bad_code? lb nlen
+  db = construct dist
+  return broken after "invalid distance code lengths" if bad_code? db ndist
+  e = codes src after out lb.code db.code
+  noted e "dynamic hlit={nlen} hdist={ndist} hclen={ncode}"
+
+# The code-length code has to use every bit pattern exactly once.
+fn code_length_fault left
+  if (left < 0) "over-subscribed code-length code" "incomplete code-length code"
+
+# An incomplete code is allowed in one case only: a single code of one bit,
+# which is how a compressor sends a block that uses just one distance.
+fn bad_code? b n
+  built code left zeros = b
+  left != 0 and (left < 0 or n != zeros + nth code.counts 1)
+
+# Where code-length symbol `s` sits in the order the header sends them, or
+# zero when the header stopped before reaching it.
+fn sent_length src start ncode s
+  pos = nth order_position (s + 1)
+  if (pos > ncode) 0 (peek src (start + 3 * (pos - 1)) 3)
+
+order_index = list/to_list (list/map (list/take list/naturals 19) (i -> i - 1))
+
+order_position = list/map order_index (s -> position_of order s 1)
+  . list/to_list
+
+fn position_of xs v i
+  return i if nth xs i == v
+  position_of xs v (i + 1)
+
+fn read_lengths src bp ch want lens
+  return block_end bp lens "" if length lens >= want
+  return broken bp "ran out of input" if exhausted? src bp
+  g = decode src bp ch
+  length_step src g ch want lens
+
+# 16 repeats the previous length 3 to 6 times, 17 sends 3 to 10 zeros, 18
+# sends 11 to 138 zeros, and anything else is a length.
+fn length_step src (got bp 16) ch want lens
+  return broken bp "a repeat with no length before it" if length lens == 0
+  more = 3 + peek src bp 2
+  repeat_length src (bp + 2) ch want lens (nth lens (length lens)) more
+
+fn length_step src (got bp 17) ch want lens
+  repeat_length src (bp + 3) ch want lens 0 (3 + peek src bp 3)
+
+fn length_step src (got bp 18) ch want lens
+  repeat_length src (bp + 7) ch want lens 0 (11 + peek src bp 7)
+
+fn length_step src (got bp sym) ch want lens
+  read_lengths src bp ch want (push lens sym)
+
+fn repeat_length src bp ch want lens value n
+  return broken bp "too many code lengths" if length lens + n > want
+  read_lengths src bp ch want (pushed lens value n)
+
+fn pushed lens _ 0
+  lens
+
+fn pushed lens value n
+  pushed (push lens value) value (n - 1)
+
+# The heart of it: literals are appended, 256 ends the block, and 257 to 285
+# start a match, a length and a distance back into what is already written.
+fn codes src bp out lens dists
+  return broken bp "ran out of input" if exhausted? src bp
+  g = decode src bp lens
+  literal_or_match src g out lens dists
+
+fn literal_or_match _ (got bp 256) out _ _
+  block_end bp out ""
+
+fn literal_or_match src (got bp sym) out lens dists
+  return codes src bp (text/append out sym) lens dists if sym < 256
+  matched src bp out lens dists (sym - 256)
+
+fn matched src bp out lens dists i
+  return broken bp "invalid length symbol {i + 256}" if i > 29
+  extra = nth length_extra i
+  len = nth length_base i + peek src bp extra
+  g = decode src (bp + extra) dists
+  distance src g out lens dists len
+
+fn distance src (got after dsym) out lens dists len
+  return broken after "invalid distance symbol {dsym}" if dsym > 29
+  dextra = nth dist_extra (dsym + 1)
+  dist = nth dist_base (dsym + 1) + peek src after dextra
+  return broken after "distance {dist} is too far back" if dist > length out
+  codes src (after + dextra) (copy out dist len) lens dists
+
+# A match may overlap the bytes it is producing: distance 1, length 10 is ten
+# copies of the last byte. The bytes being copied repeat with a period of the
+# distance, so the copy is whole slices of that period.
+fn copy out dist len
+  start = length out - dist + 1
+  return text/append out (text/slice out start (start + len - 1)) if len <= dist
+  repeat_copy out start dist len
+
+fn repeat_copy out start dist left
+  return out if left <= 0
+  piece = if (left < dist) left dist
+  grown = text/append out (text/slice out start (start + piece - 1))
+  repeat_copy grown start dist (left - piece)

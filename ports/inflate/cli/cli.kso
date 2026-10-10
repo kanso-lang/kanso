@@ -1,0 +1,178 @@
+# The command line: which verb, which file, and what to do when the input
+# turns out to be corrupt.
+import "../checksum"
+import "../compress"
+import "../container"
+import "../deflate"
+import "std/io"
+import "std/os"
+import "std/text"
+
+# What the command line asked for. `format` is "auto" unless a flag named
+# one; `count` is the repeat count `bench` takes, 1 when it is not given;
+# `output` is the file named by `-o`, or none for standard output.
+type request
+  command
+  count
+  format
+  output
+  path
+
+pub fn main argv
+  flag = format_flag argv[2]
+  shift = if (flag == "auto") 0 1
+  path = argv[2 + shift]
+  after = argv[3 + shift]
+  output = output_of after argv[4 + shift]
+  count = count_of after
+  command argv[1] (request argv[1] count flag output path)
+
+fn output_of "-o" none
+  none
+
+fn output_of "-o" name
+  name
+
+fn output_of _ none
+  none
+
+fn output_of _ _
+  none
+
+fn format_flag "--gzip"
+  "gzip"
+
+fn format_flag "--raw"
+  "raw"
+
+fn format_flag "--zlib"
+  "zlib"
+
+fn format_flag none
+  "auto"
+
+fn format_flag _
+  "auto"
+
+fn count_of none
+  1
+
+fn count_of s
+  whole (text/to_int s)
+
+fn whole (err _)
+  0
+
+fn whole n
+  n
+
+fn command "adler32" r
+  with_file r (src -> say (container/hex8 (checksum/adler32 src)))
+
+fn command "bench" r
+  return usage if r.count < 1
+  with_file r (src -> decoded r src (u -> bench src r.format r.count u))
+
+fn command "blocks" r
+  with_file r (src -> decoded r src blocks)
+
+fn command "cat" r
+  with_file r (src -> decoded r src (u -> cat r u))
+
+fn command "crc32" r
+  with_file r (src -> say (container/hex8 (checksum/crc32 src)))
+
+fn command "deflate" r
+  with_file r (src -> deliver r (compress/deflate_bytes src))
+
+fn command "gzip" r
+  with_file r (src -> deliver r (compress/gzip_bytes src))
+
+fn command "hex" r
+  with_file r (src -> decoded r src hex)
+
+fn command "info" r
+  with_file r (src -> decoded r src (u -> info src u))
+
+fn command "roundtrip" r
+  with_file r (src -> roundtrip r src)
+
+fn command "zlib" r
+  with_file r (src -> deliver r (compress/zlib_bytes src))
+
+fn command none _
+  usage
+
+fn command _ _
+  usage
+
+# No string may span lines, so the help is one write per line.
+usage = io/write_err "usage: inflate <command> <file>\n\n"
+  .> (_ -> io/write_err "decompress gzip, zlib or raw DEFLATE (detected, or\n")
+  .> (_ -> io/write_err "named by --gzip, --zlib or --raw after the verb):\n")
+  .> (_ -> io/write_err "  cat FILE        the data, if it is text\n")
+  .> (_ -> io/write_err "  cat FILE -o OUT write the data to OUT\n")
+  .> (_ -> io/write_err "  hex FILE        the data as hex, 32 bytes a line\n")
+  .> (_ -> io/write_err "  info FILE       header fields, sizes, checksums\n")
+  .> (_ -> io/write_err "  blocks FILE     one line per DEFLATE block\n")
+  .> (_ -> io/write_err "  bench FILE N    decompress N times, print a size\n")
+  .> (_ -> io/write_err "compress (fixed codes, LZ77), as hex or to OUT:\n")
+  .> (_ -> io/write_err "  gzip FILE [-o OUT] | zlib ... | deflate ...\n")
+  .> (_ -> io/write_err "  roundtrip FILE  compress three ways, decompress\n")
+  .> (_ -> io/write_err "checksums of the file as it is:\n")
+  .> (_ -> io/write_err "  crc32 FILE | adler32 FILE\n")
+  .> (_ -> os/exit 2)
+
+fn say line
+  io/write "{line}\n"
+
+fn fail r reason
+  io/write_err "inflate: {r.path}: {reason}\n" .> (_ -> os/exit 1)
+
+fn with_file (request _ _ _ _ none) _
+  usage
+
+fn with_file r k
+  os/read_bytes r.path .> (found -> read_or_fail r found k)
+
+fn read_or_fail r (file_not_found _) _
+  fail r "no such file"
+
+fn read_or_fail _ src k
+  k src
+
+fn decoded r src k
+  u = container/unpack_as r.format src
+  unpacked_or_fail r u k
+
+# A decoder failure is reported with the byte where it was found. Both kinds
+# are failures the decoder raised, so they are named here, outside it.
+fn unpacked_or_fail r (err e:deflate/corrupt) _
+  fail r "corrupt DEFLATE data at byte {e.at}: {e.reason}"
+
+fn unpacked_or_fail r (err e:container/malformed) _
+  fail r "{e.reason} (byte {e.at})"
+
+fn unpacked_or_fail _ u k
+  k u
+
+# Standard output takes only text, so bytes go to a file named with `-o`, or
+# out as hex.
+fn deliver (request _ _ _ none _) data
+  write_hex data
+
+fn deliver r data
+  os/write_file r.output data
+
+fn cat (request _ _ _ none _) u
+  text_or_hint (text/utf8 u.data)
+
+fn cat r u
+  os/write_file r.output u.data
+
+fn text_or_hint (err _)
+  io/write_err "inflate: the data is not UTF-8 text; `inflate hex` shows it\n"
+    .> (_ -> os/exit 1)
+
+fn text_or_hint s
+  io/write s

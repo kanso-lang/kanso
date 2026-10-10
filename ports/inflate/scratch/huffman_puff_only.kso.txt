@@ -1,0 +1,81 @@
+# Canonical Huffman codes, the way puff.c builds and reads them.
+#
+# A DEFLATE code is sent as one number per symbol: the length of its code in
+# bits, zero for a symbol that does not occur. From the lengths alone both
+# ends can rebuild the same code, because the codes of one length are
+# consecutive integers handed out in symbol order, and each length starts
+# where the previous one left off, shifted left by a bit.
+#
+# So two lists are enough to decode. `counts` holds, for each length from 1
+# to 15, how many codes have that length. `symbols` holds the symbols in code
+# order: every length-1 symbol, then every length-2 symbol, and so on, each
+# group in symbol order.
+import "std/bits"
+import "std/list"
+
+# The decoder's answer: the bit offset after the code, and the symbol.
+pub type got
+  after
+  symbol
+
+pub type huffman
+  counts
+  symbols
+
+# What `construct` makes of a list of lengths. `left` is puff's verdict on the
+# code: 0 when every bit pattern is used, positive when some are left over
+# (an incomplete code), negative when more codes were asked for than the
+# lengths allow (over-subscribed).
+pub type built
+  code
+  left
+  zeros
+
+maxbits = 15
+
+pub fn construct lengths
+  counts = list/take list/naturals maxbits
+    . list/map (len -> list/count lengths (l -> l == len))
+    . list/to_list
+  zeros = list/count lengths (l -> l == 0)
+  built (huffman counts (in_code_order lengths)) (spare counts 1 1) zeros
+
+# Symbols sorted by (length, symbol), leaving out the unused ones. A key that
+# puts the length above the symbol sorts both at once.
+fn in_code_order lengths
+  n = length lengths
+  keyed = list/zip lengths (list/take list/naturals n)
+    . list/select (p -> p[1] > 0)
+    . list/map (p -> sort_key p)
+    . list/to_list
+  list/to_list (list/map (list/sort keyed) (k -> k % 1024))
+
+fn sort_key pair
+  len = nth pair 1
+  sym = nth pair 2
+  len * 1024 + sym - 1
+
+# How many bit patterns are left unused after every length has taken its
+# share: double what was left at the previous length, then subtract the codes
+# of this one. Below zero is an over-subscribed set, and puff stops there.
+fn spare counts len left
+  return left if left < 0 or len > maxbits
+  spare counts (len + 1) (left * 2 - nth counts len)
+
+# One symbol, read a bit at a time, puff's `decode`. `code` is the bits read so
+# far, `first` the first code of the current length and `index` where that
+# length's symbols start in `symbols`. A code shorter than the current length
+# would already have been returned, so if `code` falls below `first + count`
+# it belongs to this length.
+pub fn decode src bp h
+  walk src bp h 1 0 0 0
+
+fn walk src bp h len code first index
+  return broken bp "no such Huffman code" if len > maxbits
+  huffman counts symbols = h
+  here = code | peek src bp 1
+  count = nth counts len
+  slot = index + here - first + 1
+  return got (bp + 1) (nth symbols slot) if here - count < first
+  next_first = bits/shl (first + count) 1
+  walk src (bp + 1) h (len + 1) (bits/shl here 1) next_first (index + count)

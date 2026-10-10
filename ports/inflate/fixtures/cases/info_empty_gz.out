@@ -1,0 +1,11 @@
+format:       gzip
+members:      1
+mtime:        0
+os:           Unix
+compressed:   20 bytes
+uncompressed: 0 bytes
+ratio:        n/a
+crc32:        00000000
+adler32:      00000001
+blocks:       1 (0 stored, 1 fixed, 0 dynamic)
+[exit 0]

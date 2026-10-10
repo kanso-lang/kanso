@@ -1,0 +1,2 @@
+inflate: fixtures/data/dynamic_no_end.deflate: corrupt DEFLATE data at byte 11: no end-of-block code
+[exit 1]

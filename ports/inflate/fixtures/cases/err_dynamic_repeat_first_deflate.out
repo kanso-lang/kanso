@@ -1,0 +1,2 @@
+inflate: fixtures/data/dynamic_repeat_first.deflate: corrupt DEFLATE data at byte 9: a repeat with no length before it
+[exit 1]

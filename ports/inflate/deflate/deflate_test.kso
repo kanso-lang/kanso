@@ -1,0 +1,67 @@
+import "std/testing"
+import "std/text"
+
+test_peek_low_bits_first = peek (text/to_bytes [5 1]) 0 3 == 5
+
+test_peek_across_bytes = peek (text/to_bytes [128 1]) 7 2 == 3
+
+test_peek_past_end_is_zero = peek (text/to_bytes [255]) 8 8 == 0
+
+test_construct_counts =
+  b = construct [2 1 3 3]
+  { code left } = b
+  { counts symbols } = code
+  left == 0 and symbols == [1 0 2 3] and counts[1] == 1 and counts[3] == 2
+
+test_construct_incomplete = (construct [1 0 0]).left > 0
+
+test_construct_oversubscribed = (construct [1 1 1]).left < 0
+
+test_length_base_ends = length_base[1] == 3 and length_base[29] == 258
+
+test_length_extra_tops_out = length_extra[28] == 5 and length_extra[29] == 0
+
+test_dist_base_last = dist_base[30] == 24577 and dist_extra[30] == 13
+
+test_fixed_code_shape =
+  counts = fixed_lit.counts
+  counts[7] == 24 and counts[8] == 152 and counts[9] == 112
+
+test_inflate_fixed =
+  src = text/to_bytes [203 72 205 201 201 215 81 200 64 162 20 1]
+  text/utf8 (inflate src 0).data == "hello, hello, hello!"
+
+# Distance 2 and length 258, so the copy overlaps itself.
+test_inflate_overlapping_copy =
+  src = text/to_bytes [75 76 74 28 133 131 8 2 0]
+  out = (inflate src 0).data
+  length out == 400 and text/utf8 (text/slice out 395 400) == "ababab"
+
+test_inflate_stored =
+  src = text/to_bytes [1 3 0 252 255 107 115 111]
+  text/utf8 (inflate src 0).data == "kso"
+
+test_inflate_reports_the_end =
+  src = text/to_bytes [1 3 0 252 255 107 115 111 99]
+  (inflate src 0).stop == 64
+
+test_block_type_3 =
+  src = text/to_bytes [7]
+  testing/when_failed (inflate src 0) (e -> e.reason == "invalid block type 3")
+
+test_stored_complement =
+  src = text/to_bytes [1 3 0 252 254 107 115 111]
+  why = "stored length does not match its complement"
+  testing/when_failed (inflate src 0) (e -> e.reason == why)
+
+test_ran_out =
+  src = text/to_bytes [203 72 205 201]
+  testing/when_failed (inflate src 0) (e -> e.reason == "ran out of input")
+
+# puff's one exception: a code with a single one-bit length is incomplete but
+# allowed, which is how an encoder sends a block that uses one distance.
+test_one_code_is_allowed = not bad_code? (construct [0 0 1 0]) 4
+
+test_two_short_codes_are_not = bad_code? (construct [0 2 0 2]) 4
+
+test_oversubscribed_is_not = bad_code? (construct [1 1 1 0]) 4

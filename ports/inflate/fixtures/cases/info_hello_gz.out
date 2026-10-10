@@ -1,0 +1,12 @@
+format:       gzip
+members:      1
+mtime:        0
+os:           Unix
+name:         hello.txt
+compressed:   90 bytes
+uncompressed: 77 bytes
+ratio:        116.8%
+crc32:        d91b27a2
+adler32:      141e1a75
+blocks:       1 (0 stored, 1 fixed, 0 dynamic)
+[exit 0]

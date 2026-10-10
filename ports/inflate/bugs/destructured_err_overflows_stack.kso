@@ -1,0 +1,36 @@
+# Destructuring a value that turns out to be an err.
+#
+# `halves 0` answers an err, and `pair a b = p` takes it apart. kanso check
+# accepts the program (it reads calls, and `p` is a name). At run time:
+#
+#   interpreter:  error[runtime]: cannot destructure err "nothing to halve"
+#                 as `pair`; bindings are irrefutable, so handle other types
+#                 by dispatch first
+#   native (kanso play, build, build --release):
+#                 error[runtime]: the program ran out of stack: recursion
+#                 went deeper than the stack holds
+#
+# Expected: the same diagnostic on every engine, and the interpreter's is the
+# right one; there is no recursion here at all. (Better still, the err could
+# ride the railway past the binding the way it rides past a call, or the
+# checker could say that a binding pattern cannot take an err.) The decoder
+# hit this on every corrupt input before its pattern reads moved into
+# function heads.
+#
+# Run: kanso play destructured_err_overflows_stack.kso [--interp]
+type pair
+  left
+  right
+
+fn halves 0
+  err "nothing to halve"
+
+fn halves n
+  pair (n / 2) (n - n / 2)
+
+fn total n
+  p = halves n
+  pair a b = p
+  a + b
+
+print "{total 7}" .> (_ -> print "{total 0}")

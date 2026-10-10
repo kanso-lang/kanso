@@ -1,0 +1,17 @@
+import "std/text"
+
+test_format_flags = format_flag "--raw" == "raw" and format_flag "x" == "auto"
+
+test_output_needs_a_name = output_of "-o" "out.gz" == "out.gz"
+
+test_count_defaults_to_one = count_of none == 1 and count_of "12" == 12
+
+test_bad_count_is_zero = count_of "twelve" == 0
+
+test_ratio_in_tenths = ratio (text/bytes "abc") 8 == "37.5%"
+
+test_hex_lines =
+  data = text/bytes "kanso"
+  text/utf8 (hex_from data 1 (text/bytes "")) == "6b616e736f\n"
+
+test_padded = padded "crc32:" 8 == "crc32:  "

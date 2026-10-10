@@ -1,0 +1,2 @@
+inflate: fixtures/data/bad_flags.gz: reserved flag bits are set (byte 3)
+[exit 1]

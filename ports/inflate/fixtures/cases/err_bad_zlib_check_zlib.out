@@ -1,0 +1,2 @@
+inflate: fixtures/data/bad_zlib_check.zlib: corrupt DEFLATE data at byte 0: stored length does not match its complement
+[exit 1]

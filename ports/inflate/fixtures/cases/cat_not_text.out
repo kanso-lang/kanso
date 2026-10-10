@@ -1,0 +1,2 @@
+inflate: the data is not UTF-8 text; `inflate hex` shows it
+[exit 1]

@@ -1,0 +1,135 @@
+# The gzip wrapper, RFC 1952. A file is one or more members, each a header,
+# a DEFLATE stream and an eight-byte trailer: the CRC-32 of the member's
+# data and its length modulo 2^32, both least significant byte first.
+#
+#   ID1 ID2   31 139
+#   CM        8, DEFLATE
+#   FLG       bit 0 FTEXT, 1 FHCRC, 2 FEXTRA, 3 FNAME, 4 FCOMMENT, 5-7 zero
+#   MTIME     four bytes, seconds since 1970
+#   XFL OS    extra flags and the operating system that wrote it
+# and then, if their flags are set: the extra field (a two-byte length and
+# that many bytes), the file name and the comment (each ending in a zero
+# byte), and a CRC-16 of the header so far (the low half of its CRC-32).
+import "../checksum"
+import "../deflate"
+import "std/list"
+import "std/text"
+
+# A member's decoded data and where the next one would start.
+type gz_member
+  blocks
+  data
+  fields
+  next
+
+pub fn gzip? src
+  byte_at src 1 == 31 and byte_at src 2 == 139
+
+pub fn gunzip src
+  each_member src 1 (text/bytes "") [] [] 0
+
+# `p` is the 1-based index where the next member starts.
+fn each_member src p out blocks fields count
+  m = member src p
+  more_members src out blocks fields count m
+
+fn more_members src out blocks fields count (gz_member more data own next)
+  joined = text/append out data
+  all_blocks = text/concat blocks more
+  all_fields = text/concat fields own
+  finished = unpacked all_blocks joined all_fields "gzip" (count + 1)
+  return finished if next > length src
+  junk = not gzip? (text/slice src next (next + 1))
+  return bad (next - 1) "unexpected bytes after the last member" if junk
+  each_member src next joined all_blocks all_fields (count + 1)
+
+fn member src p
+  return bad (p - 1) "not a gzip file" if not gzip? (text/slice src p (p + 1))
+  return bad (p - 1) "truncated gzip header" if p + 9 > length src
+  method = byte_at src (p + 2)
+  return bad (p + 1) "unknown compression method {method}" if method != 8
+  flg = byte_at src (p + 3)
+  return bad (p + 2) "reserved flag bits are set" if flg & 224 != 0
+  q1 = skip_extra src (p + 10) (flg & 4)
+  q2 = skip_string src q1 (flg & 8)
+  q3 = skip_string src q2 (flg & 16)
+  start = q3 + if (flg & 2 == 0) 0 2
+  return bad (p - 1) "truncated gzip header" if start - 1 > length src
+  return bad q3 "header CRC mismatch" if header_crc_bad? src p q3 (flg & 2)
+  head = header_fields src p q1 q2 q3 flg
+  r = deflate/inflate src (start - 1)
+  gz_trailer src r head
+
+fn skip_extra _ q 0
+  q
+
+fn skip_extra src q _
+  q + 2 + le16 src q
+
+# Past the zero byte that ends a name or comment. With no zero byte the
+# answer lands past the end, and the caller reports a truncated header.
+fn skip_string _ q 0
+  q
+
+fn skip_string src q _
+  text/find2 src q 0 0 + 1
+
+fn header_crc_bad? _ _ _ 0
+  false
+
+fn header_crc_bad? src p q _
+  sum = checksum/crc32 (text/slice src p (q - 1)) & 65535
+  sum != le16 src q
+
+fn header_fields src p q1 q2 q3 flg
+  os = field "os" (os_name (byte_at src (p + 9)))
+  base = [(field "mtime" "{le32 src (p + 4)}") os]
+  named = with_string base "name" src q1 q2
+  commented = with_string named "comment" src q2 q3
+  extra = with_extra commented (p + 10) q1
+  flagged = if (flg & 1 == 0) extra (push extra (field "text" "yes"))
+  if (flg & 2 == 0) flagged (push flagged (field "header crc" "ok"))
+
+fn with_string fields label src from to
+  return fields if from == to
+  push fields (field label (latin1 (text/slice src from (to - 2))))
+
+fn with_extra fields from to
+  return fields if from == to
+  push fields (field "extra" "{to - from - 2} bytes")
+
+# Names and comments are ISO 8859-1, one character per byte.
+fn latin1 bs
+  text/join (list/to_list (list/map bs (b -> text/from_code b))) ""
+
+fn gz_trailer src r fields
+  data = r.data
+  t = deflate/next_byte r.stop
+  return bad (t - 1) "the gzip trailer is missing" if t + 7 > length src
+  sent = le32 src t
+  sum = checksum/crc32 data
+  why = "CRC-32 mismatch: trailer says {hex8 sent}, data gives {hex8 sum}"
+  return bad (t - 1) why if sent != sum
+  size = le32 src (t + 4)
+  actual = length data % 4294967296
+  why_size = "length mismatch: trailer says {size}, data is {actual} bytes"
+  return bad (t + 3) why_size if size != actual
+  gz_member r.blocks data fields (t + 8)
+
+fn os_name 0
+  "FAT"
+
+fn os_name 3
+  "Unix"
+
+fn os_name 7
+  "Macintosh"
+
+fn os_name 11
+  "NTFS"
+
+fn os_name 255
+  "unknown"
+
+fn os_name n
+  "{n}"

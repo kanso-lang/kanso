@@ -1,0 +1,31 @@
+# The fixed code of RFC 1951 section 3.2.6, ready to write: for each symbol,
+# its code already reversed into the order bits leave in, and its length.
+import "../deflate"
+import "std/list"
+
+type huff
+  bits
+  width
+
+lit_codes = list/to_list (list/map (list/take list/naturals 288) lit_code)
+
+fn lit_code i
+  sym = i - 1
+  return fixed_code (48 + sym) 8 if sym < 144
+  return fixed_code (400 + sym - 144) 9 if sym < 256
+  return fixed_code (sym - 256) 7 if sym < 280
+  fixed_code (192 + sym - 280) 8
+
+fn fixed_code value width
+  huff (reversed value width) width
+
+# Every match length from 3 to 258 mapped to its symbol's place in the
+# decoder's tables, so the encoder never searches them per match.
+length_slot = list/to_list (list/map (list/take list/naturals 258) slot_of)
+
+fn slot_of len
+  slot_from len 1
+
+fn slot_from len i
+  return i if i == 29 or len < deflate/nth deflate/length_base (i + 1)
+  slot_from len (i + 1)

@@ -1,0 +1,2 @@
+inflate: fixtures/data/too_far.deflate: corrupt DEFLATE data at byte 2: distance 2 is too far back
+[exit 1]

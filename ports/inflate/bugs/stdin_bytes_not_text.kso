@@ -1,0 +1,19 @@
+# Standard input that is not UTF-8.
+#
+#   printf '\x1f\x8b\xff' | kanso play stdin_bytes_not_text.kso
+#
+# Native (play, build, build --release) prints "[31 139 255]": io/stdin
+# yields a string holding bytes that are not text, and text/bytes hands them
+# back. The interpreter refuses the same input:
+#   error[endpoint]: unhandled err reached the executor: "stream did not
+#   contain valid UTF-8"
+#
+# Expected: one answer on every engine. os/read_file draws the same line
+# (refusing non-text with "the bytes are not text") and os/read_bytes is its
+# byte-level twin; stdin has no twin, so a decompressor cannot read a .gz
+# piped to it on the interpreter, and can on native only because of this
+# disagreement.
+import "std/io"
+import "std/text"
+
+io/stdin .> (s -> print "{text/bytes s}")

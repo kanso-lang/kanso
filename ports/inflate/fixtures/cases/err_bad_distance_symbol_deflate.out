@@ -1,0 +1,2 @@
+inflate: fixtures/data/bad_distance_symbol.deflate: corrupt DEFLATE data at byte 5: no such Huffman code
+[exit 1]

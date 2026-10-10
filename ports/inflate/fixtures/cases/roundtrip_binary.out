@@ -1,0 +1,7 @@
+gzip: 62 -> 85 bytes, round trip ok
+zlib: 62 -> 73 bytes, round trip ok
+raw: 62 -> 67 bytes, round trip ok
+gzip: 20 -> 31 bytes, round trip ok
+zlib: 20 -> 19 bytes, round trip ok
+raw: 20 -> 13 bytes, round trip ok
+[exit 0]

@@ -1,0 +1,2 @@
+inflate: fixtures/data/zlib_dict.zlib: needs preset dictionary 1 (byte 1)
+[exit 1]

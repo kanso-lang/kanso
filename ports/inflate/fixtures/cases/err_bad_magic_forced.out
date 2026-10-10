@@ -1,0 +1,2 @@
+inflate: fixtures/data/bad_magic.gz: not a gzip file (byte 0)
+[exit 1]

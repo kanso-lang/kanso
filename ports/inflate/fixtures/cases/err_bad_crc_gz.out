@@ -1,0 +1,2 @@
+inflate: fixtures/data/bad_crc.gz: CRC-32 mismatch: trailer says d91b27a3, data gives d91b27a2 (byte 82)
+[exit 1]

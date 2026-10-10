@@ -1,0 +1,2 @@
+inflate: fixtures/data/bad_zlib_check.zlib: header check failed (byte 1)
+[exit 1]

@@ -1,0 +1,60 @@
+# What a decompressed file looks like from outside, whatever wrapped it.
+import "../deflate"
+import "std/bits"
+import "std/text"
+
+# A fault in a wrapper rather than in the compressed data: the byte offset
+# where it was found, and why.
+pub type malformed
+  at
+  reason
+
+# One header field for the report, such as the file name a gzip member
+# carries.
+pub type field
+  label
+  value
+
+# The answer for any of the three formats. `fields` is a list of `field`s,
+# in the order the header holds them.
+pub type unpacked
+  blocks
+  data
+  fields
+  format
+  members
+
+fn bad at reason
+  err (malformed at reason)
+
+# Little- and big-endian words, by 1-based byte index.
+fn le16 src k
+  byte_at src k | bits/shl (byte_at src (k + 1)) 8
+
+fn le32 src k
+  le16 src k | bits/shl (le16 src (k + 2)) 16
+
+fn be32 src k
+  hi = bits/shl (byte_at src k) 24 | bits/shl (byte_at src (k + 1)) 16
+  hi | bits/shl (byte_at src (k + 2)) 8 | byte_at src (k + 3)
+
+fn byte_at src k
+  zero_past_end src[k]
+
+fn zero_past_end none
+  0
+
+fn zero_past_end v
+  v
+
+# A 32-bit value as eight hex digits, the way gzip -l and zlib's tools print
+# checksums.
+pub fn hex8 n
+  hex_digits n 8 ""
+
+fn hex_digits _ 0 acc
+  acc
+
+fn hex_digits n k acc
+  digit = text/slice "0123456789abcdef" (n % 16 + 1) (n % 16 + 1)
+  hex_digits (n / 16) (k - 1) "{digit}{acc}"

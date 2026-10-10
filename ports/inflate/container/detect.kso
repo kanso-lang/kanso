@@ -1,0 +1,32 @@
+# Which wrapper a file wears, read from its first bytes: gzip's magic number,
+# else a zlib header that passes its check, else raw DEFLATE.
+import "../deflate"
+
+pub fn unpack src
+  return gunzip src if gzip? src
+  return unzlib src if zlib? src
+  unraw src
+
+# A caller who knows the format says so, and a file that is not that format
+# is then reported as such rather than tried as the next one.
+pub fn unpack_as "gzip" src
+  gunzip src
+
+pub fn unpack_as "raw" src
+  unraw src
+
+pub fn unpack_as "zlib" src
+  unzlib src
+
+pub fn unpack_as _ src
+  unpack src
+
+pub fn unraw src
+  r = deflate/inflate src 0
+  raw_end src r
+
+fn raw_end src r
+  at = deflate/next_byte r.stop
+  extra = length src - at + 1
+  return bad (at - 1) "{extra} unexpected bytes after the stream" if extra > 0
+  unpacked r.blocks r.data [] "raw" 1

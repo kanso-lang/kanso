@@ -1,0 +1,2 @@
+inflate: fixtures/data/dynamic_too_many.deflate: corrupt DEFLATE data at byte 11: too many code lengths
+[exit 1]

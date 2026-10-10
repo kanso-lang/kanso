@@ -1,0 +1,2 @@
+inflate: fixtures/data/bad_adler.zlib: Adler-32 mismatch: trailer says 141e1a65, data gives 141e1a75 (byte 64)
+[exit 1]

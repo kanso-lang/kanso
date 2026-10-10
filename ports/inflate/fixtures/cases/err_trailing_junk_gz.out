@@ -1,0 +1,2 @@
+inflate: fixtures/data/trailing_junk.gz: unexpected bytes after the last member (byte 90)
+[exit 1]

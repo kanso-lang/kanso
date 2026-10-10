@@ -1,0 +1,11 @@
+format:       zlib
+members:      1
+window:       15 bits
+level:        fastest
+compressed:   70016 bytes
+uncompressed: 70000 bytes
+ratio:        100.0%
+crc32:        b44f179d
+adler32:      2dc6030d
+blocks:       2 (2 stored, 0 fixed, 0 dynamic)
+[exit 0]

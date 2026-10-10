@@ -1,0 +1,89 @@
+# Finding repeats: greedy LZ77 over a 32 KiB window, with hash chains.
+#
+# zlib keeps two arrays: `head`, the latest position seen for each run of
+# three bytes, and `prev`, for each position, the one before it with the same
+# three bytes. It updates both in place as the window slides. kanso has no
+# array that can be written at an index, and a map that is read and then
+# written is copied whole on every write (see FRICTION.md), so this builds
+# `prev` up front instead, by sorting.
+#
+# Every position is given a key: its three bytes, then its own position.
+# Sorted, positions with the same three bytes sit together in order, so each
+# one's predecessor in the sorted list is its link. A second sort, by
+# position, puts the links back in position order, where `links[i]` is the
+# nearest earlier position starting with the same three bytes, or 0.
+import "../deflate"
+import "std/bits"
+import "std/list"
+
+type found
+  distance
+  length
+
+# How many earlier occurrences to try before settling. zlib's default level
+# tries 128 with lazy matching; this greedy finder stops sooner.
+chain_limit = 32
+
+window = 32768
+
+# 2^32: positions sit below it in a key, three bytes above it.
+shift = 4294967296
+
+# One fixed-code block holding the whole input.
+pub fn lz77_fixed src
+  header = emit (emit empty_sink 1 1) 1 2
+  body = scan src 1 (length src) header (links_of src)
+  finish (literal body 256)
+
+pub fn links_of src
+  n = length src - 2
+  keyed = list/sort (list/map (list/take list/naturals n) (i -> key_of src i))
+  paired = list/map (list/take list/naturals n) (i -> link_at keyed i)
+  by_position = list/sort (list/to_list paired)
+  list/to_list (list/map by_position (v -> v % shift))
+
+fn key_of src i
+  trigram src i * shift + i
+
+# A key links to the one before it in sorted order when their three bytes
+# match. The answer is keyed by position, ready for the second sort.
+fn link_at keyed i
+  key = deflate/nth keyed i
+  last = deflate/nth keyed (i - 1)
+  prior = if (i > 1 and key / shift == last / shift) (last % shift) 0
+  key % shift * shift + prior
+
+fn scan src i n out links
+  return out if i > n
+  return literal_run src i n out if i + 2 > n
+  limit = if (n - i + 1 < 258) (n - i + 1) 258
+  best = longest src i limit links (deflate/nth links i) (found 0 0) chain_limit
+  take src i n out links best
+
+fn take src i n out links (found distance len)
+  return scan src (i + 1) n (literal out (byte src i)) links if len < 3
+  scan src (i + len) n (match_codes out len distance) links
+
+# The last one or two bytes cannot start a match.
+fn literal_run src i n out
+  return out if i > n
+  literal_run src (i + 1) n (literal out (byte src i))
+
+fn trigram src i
+  bits/shl (byte src i) 16 | bits/shl (byte src (i + 1)) 8 | byte src (i + 2)
+
+fn byte src i
+  deflate/byte_at src i
+
+# Walk the chain from `p`, keeping the longest match, until it runs out, leaves
+# the window, or `tries` reaches zero.
+fn longest src i limit links p best tries
+  return best if tries == 0 or p == 0 or i - p > window
+  len = match_length src p i 0 limit
+  better = if (len > best.length) (found (i - p) len) best
+  return better if len == limit
+  longest src i limit links (deflate/nth links p) better (tries - 1)
+
+fn match_length src a b k limit
+  return k if k == limit or src[a + k] != src[b + k]
+  match_length src a b (k + 1) limit

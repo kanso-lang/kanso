@@ -1,0 +1,34 @@
+# Writing bits, the reverse of deflate/input.kso. Bits go out least
+# significant first, and whole bytes are moved into `acc` as soon as eight are
+# waiting, so `bits` never holds more than a few dozen.
+import "std/bits"
+import "std/text"
+
+pub type sink
+  acc
+  bits
+  count
+
+pub empty_sink = sink (text/bytes "") 0 0
+
+pub fn emit (sink acc bits count) value n
+  drain acc (bits | bits/shl value count) (count + n)
+
+fn drain acc bits count
+  return sink acc bits count if count < 8
+  drain (text/append acc (bits & 255)) (bits/shr bits 8) (count - 8)
+
+# Pad to a byte boundary with zero bits and hand back the bytes.
+pub fn finish (sink acc bits count)
+  if (count == 0) acc (text/append acc (bits & 255))
+
+# Huffman codes are defined most significant bit first, the opposite of every
+# other field, so a code is reversed before it is written.
+pub fn reversed code n
+  flip code n 0
+
+fn flip _ 0 acc
+  acc
+
+fn flip code n acc
+  flip (bits/shr code 1) (n - 1) (bits/shl acc 1 | (code & 1))

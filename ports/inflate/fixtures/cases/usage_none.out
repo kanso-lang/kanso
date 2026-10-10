@@ -1,0 +1,16 @@
+usage: inflate <command> <file>
+
+decompress gzip, zlib or raw DEFLATE (detected, or
+named by --gzip, --zlib or --raw after the verb):
+  cat FILE        the data, if it is text
+  cat FILE -o OUT write the data to OUT
+  hex FILE        the data as hex, 32 bytes a line
+  info FILE       header fields, sizes, checksums
+  blocks FILE     one line per DEFLATE block
+  bench FILE N    decompress N times, print a size
+compress (fixed codes, LZ77), as hex or to OUT:
+  gzip FILE [-o OUT] | zlib ... | deflate ...
+  roundtrip FILE  compress three ways, decompress
+checksums of the file as it is:
+  crc32 FILE | adler32 FILE
+[exit 2]

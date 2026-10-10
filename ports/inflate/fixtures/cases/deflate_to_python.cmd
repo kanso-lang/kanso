@@ -1,0 +1,1 @@
+inflate deflate fixtures/data/prose.txt -o $OUT/p.raw && python3 -c 'import sys,zlib; sys.stdout.buffer.write(zlib.decompress(open(sys.argv[1],"rb").read(), -15))' $OUT/p.raw | cmp - fixtures/data/prose.txt && echo identical

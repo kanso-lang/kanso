@@ -1,0 +1,2 @@
+inflate: fixtures/data/stored_complement.deflate: corrupt DEFLATE data at byte 0: stored length does not match its complement
+[exit 1]

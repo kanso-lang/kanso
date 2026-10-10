@@ -1,0 +1,2 @@
+inflate: fixtures/data/no_trailer.gz: the gzip trailer is missing (byte 82)
+[exit 1]

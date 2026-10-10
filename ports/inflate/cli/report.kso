@@ -1,0 +1,99 @@
+# The reports: hex, info, blocks and bench.
+import "../checksum"
+import "../container"
+import "std/io"
+import "std/list"
+import "std/text"
+
+type row
+  label
+  value
+
+hex_digit_bytes = text/bytes "0123456789abcdef"
+
+# Hex, 32 bytes a line, built as bytes and turned into text once at the end.
+fn hex u
+  write_hex u.data
+
+fn write_hex data
+  io/write (text/utf8 (hex_from data 1 (text/bytes "")))
+
+fn hex_from data i acc
+  return finish_line acc (i - 1) if i > length data
+  b = byte_of data[i]
+  hi = text/append acc (digit_byte (b / 16))
+  pair = text/append hi (digit_byte (b % 16))
+  hex_from data (i + 1) (if (i % 32 == 0) (text/append pair 10) pair)
+
+# The last line ends with a newline too, unless it was already full.
+fn finish_line acc n
+  if (n % 32 == 0) acc (text/append acc 10)
+
+fn digit_byte d
+  byte_of hex_digit_bytes[d + 1]
+
+fn byte_of none
+  0
+
+fn byte_of b
+  b
+
+fn blocks u
+  numbered = list/zip u.blocks list/naturals
+  io/write (text/join (list/to_list (list/map numbered block_line)) "")
+
+fn block_line pair
+  b = pair[1]
+  n = pair[2]
+  where = "byte {b.at / 8} bit {b.at % 8}"
+  "block {n}: {b.note}, header at {where}, {b.size} bytes out\n"
+
+fn info src u
+  data = u.data
+  size = length data
+  kinds = list/map u.blocks (b -> b.kind)
+  stored = list/count kinds (k -> k == 0)
+  fixed = list/count kinds (k -> k == 1)
+  dynamic = list/count kinds (k -> k == 2)
+  kinds_text = "{stored} stored, {fixed} fixed, {dynamic} dynamic"
+  count = "{length u.blocks} ({kinds_text})"
+  r = ratio src size
+  block_row = row "blocks" count
+  crc = container/hex8 (checksum/crc32 data)
+  adler = container/hex8 (checksum/adler32 data)
+  fields = list/to_list (list/map u.fields (f -> row f.label f.value))
+  head = [(row "format" u.format) (row "members" "{u.members}")]
+  r1 = push (text/concat head fields) (row "compressed" "{length src} bytes")
+  r2 = push (push r1 (row "uncompressed" "{size} bytes")) (row "ratio" r)
+  r3 = push (push (push r2 (row "crc32" crc)) (row "adler32" adler)) block_row
+  io/write (text/join (list/to_list (list/map r3 shown)) "")
+
+# Compressed size over uncompressed, to a tenth of a percent, in integers so
+# every engine prints the same digits.
+fn ratio _ 0
+  "n/a"
+
+fn ratio src size
+  per_mille = length src * 1000 / size
+  "{per_mille / 10}.{per_mille % 10}%"
+
+fn shown (row label value)
+  "{padded "{label}:" 14}{value}\n"
+
+fn padded s n
+  return s if length s >= n
+  padded "{s} " n
+
+# Decompress the same input `n` times, for timing from outside. The first
+# run has been checked for failure already; the rest add up their sizes, so
+# no run can be dropped as unused.
+fn bench src format n u
+  total = again src format (n - 1) (length u.data)
+  say "{total} bytes in {n} runs"
+
+fn again _ _ 0 total
+  total
+
+fn again src format n total
+  u = container/unpack_as format src
+  again src format (n - 1) (total + length u.data)

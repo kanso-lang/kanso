@@ -1,0 +1,2 @@
+inflate: fixtures/data/bad_zlib_method.zlib: unknown compression method 7 (byte 0)
+[exit 1]

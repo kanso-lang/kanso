@@ -1,0 +1,2 @@
+inflate: fixtures/data/bad_length_symbol.deflate: corrupt DEFLATE data at byte 2: invalid length symbol 286
+[exit 1]

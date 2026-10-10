@@ -1,0 +1,9 @@
+format:       raw
+members:      1
+compressed:   8 bytes
+uncompressed: 72 bytes
+ratio:        11.1%
+crc32:        b4b8b9b5
+adler32:      ee4d1b91
+blocks:       1 (0 stored, 1 fixed, 0 dynamic)
+[exit 0]

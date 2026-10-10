@@ -1,0 +1,2 @@
+inflate: fixtures/data/bad_method.gz: unknown compression method 7 (byte 2)
+[exit 1]

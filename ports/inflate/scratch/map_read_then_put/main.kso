@@ -1,0 +1,13 @@
+# Growth costs, for FRICTION.md F7 and F21. Build with
+#   kanso build scratch/map_read_then_put --release
+# and run `./map_read_then_put KIND N` with KIND one of:
+#   map       N puts into a map                         linear
+#   readput   read key i-1, then put key i, N times     quadratic
+#   push      N pushes onto a list                      linear
+#   bytes     N one-byte appends                        linear
+#   recpush   N pushes onto a list held in a record     quadratic on --interp
+#   foldpush  N pushes in a list/fold                   linear
+import "./mb"
+import "std/os"
+
+os/args .> mb/run

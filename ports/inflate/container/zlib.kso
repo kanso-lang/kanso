@@ -1,0 +1,55 @@
+# The zlib wrapper, RFC 1950: two header bytes, the DEFLATE stream, and the
+# Adler-32 of the uncompressed data, most significant byte first.
+#
+#   CMF  low four bits the method (8), high four the window size less 8
+#   FLG  bit 5 asks for a preset dictionary; the two bytes read as a
+#        big-endian number must be a multiple of 31
+import "../checksum"
+import "../deflate"
+import "std/bits"
+
+pub fn unzlib src
+  return bad 0 "too short for a zlib header" if length src < 2
+  cmf = byte_at src 1
+  flg = byte_at src 2
+  method = cmf & 15
+  return bad 0 "unknown compression method {method}" if method != 8
+  window = bits/shr cmf 4
+  too_wide = "window size {window + 8} bits is over the limit of 15"
+  return bad 0 too_wide if window > 7
+  return bad 1 "header check failed" if (cmf * 256 + flg) % 31 != 0
+  dict = be32 src 3
+  return bad 1 "needs preset dictionary {dict}" if flg & 32 != 0
+  r = deflate/inflate src 2
+  zlib_trailer src r (window + 8) (bits/shr flg 6)
+
+fn zlib_trailer src r window level
+  data = r.data
+  at = deflate/next_byte r.stop
+  return bad (at - 1) "the Adler-32 trailer is missing" if at + 3 > length src
+  sent = be32 src at
+  sum = checksum/adler32 data
+  why = "Adler-32 mismatch: trailer says {hex8 sent}, data gives {hex8 sum}"
+  return bad (at - 1) why if sent != sum
+  extra = length src - (at + 3)
+  return bad (at + 3) "{extra} unexpected bytes after the stream" if extra > 0
+  fields = [(field "window" "{window} bits") (field "level" (level_name level))]
+  unpacked r.blocks data fields "zlib" 1
+
+fn level_name 0
+  "fastest"
+
+fn level_name 1
+  "fast"
+
+fn level_name 2
+  "default"
+
+fn level_name _
+  "maximum"
+
+# A zlib header is two bytes that pass its own check, which raw DEFLATE data
+# rarely does by accident.
+pub fn zlib? src
+  cmf = byte_at src 1
+  cmf & 15 == 8 and bits/shr cmf 4 < 8 and (cmf * 256 + byte_at src 2) % 31 == 0

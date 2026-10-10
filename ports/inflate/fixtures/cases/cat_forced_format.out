@@ -1,0 +1,2 @@
+inflate: fixtures/data/hello.gz: corrupt DEFLATE data at byte 0: invalid block type 3
+[exit 1]

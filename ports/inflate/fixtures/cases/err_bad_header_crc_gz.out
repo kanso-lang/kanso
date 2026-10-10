@@ -1,0 +1,2 @@
+inflate: fixtures/data/bad_header_crc.gz: header CRC mismatch (byte 11)
+[exit 1]

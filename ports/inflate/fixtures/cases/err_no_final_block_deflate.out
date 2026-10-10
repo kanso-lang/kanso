@@ -1,0 +1,2 @@
+inflate: fixtures/data/no_final_block.deflate: corrupt DEFLATE data at byte 5: ran out of input
+[exit 1]
