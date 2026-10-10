@@ -1,0 +1,1 @@
+xsv table people.csv

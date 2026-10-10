@@ -1,0 +1,231 @@
+import "../csv"
+import "std/io"
+import "std/list"
+import "std/os"
+import "std/text"
+
+# An input as it came back from the read: where it came from and what it
+# held, or `file_not_found`.
+type fetched
+  path
+  text
+
+# A file whose bytes are not UTF-8. A verdict rather than an err, because an
+# err handed to `fetched` would fail the whole read at the executor.
+type not_text
+
+# A parsed input. `named` is false under --no-headers, and then `head` is
+# empty and every record is data.
+type sheet
+  body
+  head
+  named
+
+# The whole program: from the arguments to one description of what to write.
+pub fn run argv
+  return failure general_usage if length argv == 0
+  launch argv[1] (text/slice argv 2 (length argv))
+
+fn launch none _
+  failure general_usage
+
+fn launch "-h" _
+  io/write general_usage
+
+fn launch "--help" _
+  io/write general_usage
+
+fn launch "help" _
+  io/write general_usage
+
+fn launch "--list" _
+  io/write general_usage
+
+fn launch "--version" _
+  io/write "0.13.0\n"
+
+fn launch name args
+  started name (flags_of name) args
+
+fn started name none _
+  failure "xsv: unknown command '{name}'. Run 'xsv --help' for a list.\n"
+
+fn started name specs args
+  configured name (parse_args specs args)
+
+fn configured name (err r)
+  misused name r
+
+fn configured name o
+  return io/write (usage_of name) if on? o "--help"
+  wanted name o (paths_of name o)
+
+fn wanted name _ (err r)
+  misused name r
+
+fn wanted name o paths
+  read_all paths .> (gs -> finish o (computed name o gs))
+
+# A command line the command cannot accept: say why, then how to call it.
+fn misused name why
+  failure "Invalid arguments: {why}\n\n{usage_of name}"
+
+fn failure message
+  io/write_err message .> (_ -> os/exit 1)
+
+# Every input, read in order. "-" is standard input.
+fn read_all paths
+  list/fold paths (effect []) (acc p -> acc .> (gs -> read_one p gs))
+
+fn read_one "-" gs
+  io/stdin .> (t -> push gs (fetched "-" t))
+
+# Files are read as bytes and decoded here, so that a file that is not
+# UTF-8 is an error message rather than a failure at the executor.
+fn read_one path gs
+  os/read_bytes path .> (bs -> push gs (fetched path (decoded_text bs)))
+
+fn decoded_text f@(file_not_found _)
+  f
+
+fn decoded_text bs
+  text_or_verdict (text/utf8 bs)
+
+fn text_or_verdict (err _)
+  not_text
+
+fn text_or_verdict t
+  t
+
+fn computed name o gs
+  sheets = list/fold gs [] (acc g -> gathered acc (loaded o g))
+  computed_from name o sheets
+
+# The fold above can answer a failure; a command only ever sees sheets.
+fn computed_from _ _ e@(err _)
+  e
+
+fn computed_from name o sheets
+  compute name o sheets
+
+fn gathered e@(err _) (err _)
+  e
+
+fn gathered e@(err _) _
+  e
+
+fn gathered _ e@(err _)
+  e
+
+fn gathered acc s
+  push acc s
+
+fn loaded _ (fetched path (file_not_found _))
+  err "{path}: No such file or directory"
+
+fn loaded _ (fetched path not_text)
+  err "{path}: invalid UTF-8"
+
+fn loaded o (fetched path text)
+  d = delimiter o path
+  sheet_of (decode text d) (on? o "--no-headers")
+
+fn decode _ e@(err _)
+  e
+
+fn decode text d
+  csv/parse text d
+
+fn sheet_of e@(err _) _
+  e
+
+fn sheet_of rows headless
+  laid_out rows headless
+
+fn laid_out rows true
+  sheet rows [] false
+
+fn laid_out rows false
+  headed (list/first rows) (text/slice rows 2 (length rows))
+
+fn headed none _
+  sheet [] [] true
+
+fn headed head body
+  sheet body head true
+
+# The field delimiter: -d when given, a tab for .tsv and .tab files, and a
+# comma otherwise.
+fn delimiter o path
+  given = value_or o "--delimiter" ""
+  return byte_of given if given != ""
+  tabbed = text/slice path (length path - 3) (length path)
+  if (tabbed == ".tsv" or tabbed == ".tab") 9 44
+
+fn byte_of "\\t"
+  9
+
+fn byte_of s
+  bs = text/bytes s
+  return bs[1] if length bs == 1
+  err "Could not convert '{s}' to a single ASCII character."
+
+# How many columns a sheet has: its header's width, or its first record's.
+fn width_of (sheet _ head true)
+  length head
+
+fn width_of (sheet body _ false)
+  first_width (list/first body)
+
+fn first_width none
+  0
+
+fn first_width record
+  length record
+
+# A command's records with the header in front, when there is one. An empty
+# input has no header even when headers are expected.
+fn with_head (sheet _ _ false) _ rows
+  rows
+
+fn with_head _ head rows
+  if (head == []) rows (text/concat [head] rows)
+
+fn finish _ (err r)
+  failure "{r}\n"
+
+fn finish o out
+  emitted (value_or o "--output" "") out
+
+fn emitted "" out
+  io/write out
+
+fn emitted path out
+  os/write_file path out
+
+# The input paths a command reads, from its positional arguments. A missing
+# input is standard input.
+fn paths_of "join" o
+  return err "join takes four arguments" if length o.rest != 4
+  [o.rest[2] o.rest[4]]
+
+fn paths_of "headers" o
+  if (o.rest == []) ["-"] o.rest
+
+fn paths_of "select" o
+  after_first o.rest
+
+fn paths_of "search" o
+  after_first o.rest
+
+fn paths_of _ o
+  one_input o.rest
+
+fn after_first rest
+  return err "missing argument" if rest == []
+  one_input (text/slice rest 2 (length rest))
+
+fn one_input rest
+  return ["-"] if rest == []
+  return rest if length rest == 1
+  err "too many arguments"

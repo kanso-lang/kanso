@@ -1,0 +1,2 @@
+CSV error: record 2 (line: 3, byte: 12): found record with 2 fields, but the previous record has 3 fields
+[exit 1]

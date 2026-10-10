@@ -1,0 +1,212 @@
+import "../csv"
+import "std/list"
+import "std/text"
+
+# A record's join key and its position in its input.
+type keyed_at
+  key
+  spot
+
+# One side of a join: its sheet and the columns its key is made of.
+type side
+  picked
+  sh
+
+fn flags_of "join"
+  own = [(flag "--cross" "" false) (flag "--full" "" false)]
+  more = [(flag "--left" "" false) (flag "--no-case" "" false)]
+  last = [(flag "--nulls" "" false) (flag "--right" "" false)]
+  flags_with (text/concat (text/concat own more) last)
+
+fn usage_of "join"
+  ["Joins two sets of CSV data on the specified columns."]
+    . push ""
+    . push "The default join operation is an 'inner' join. This corresponds"
+    . push "to the intersection of rows on the keys specified."
+    . push ""
+    . push "Joins are always done by ignoring leading and trailing whitespace."
+    . push "By default, joins are done case sensitively, but this can be"
+    . push "disabled with the --no-case flag."
+    . push ""
+    . push "The columns arguments specify the columns to join for each input."
+    . push "Columns can be referenced by name or index, starting at 1."
+    . push "Specify multiple columns by separating them with a comma."
+    . push "Specify a range of columns with `-`. Both columns1 and columns2"
+    . push "must specify exactly the same number of columns."
+    . push "(See 'xsv select --help' for the full syntax.)"
+    . push ""
+    . push "Usage:"
+    . push "    xsv join [options] <columns1> <input1> <columns2> <input2>"
+    . push ""
+    . push "join options:"
+    . push "    --no-case              When set, joins are done case"
+    . push "                           insensitively."
+    . push "    --left                 Do a 'left outer' join. This returns all"
+    . push "                           rows in first CSV data set, including"
+    . push "                           rows with no corresponding row in the"
+    . push "                           second data set. When no corresponding"
+    . push "                           row exists, it is padded out with empty"
+    . push "                           fields."
+    . push "    --right                Do a 'right outer' join. This returns"
+    . push "                           all rows in second CSV data set,"
+    . push "                           including rows with no corresponding"
+    . push "                           row in the first data set. When no"
+    . push "                           corresponding row exists, it is padded"
+    . push "                           out with empty fields. (This is the"
+    . push "                           reverse of 'outer-left'.)"
+    . push "    --full                 Do a 'full outer' join. This returns all"
+    . push "                           rows in both data sets with matching"
+    . push "                           records joined. If there is no match,"
+    . push "                           the missing side will be padded out"
+    . push "                           with empty fields."
+    . push "    --cross                This returns the cartesian product of"
+    . push "                           the CSV data sets given. The number of"
+    . push "                           rows return is equal to N * M, where N"
+    . push "                           and M correspond to the number of rows"
+    . push "                           in the given data sets, respectively."
+    . push "    --nulls                When set, joins will work on empty"
+    . push "                           fields. Otherwise, empty fields are"
+    . push "                           completely ignored. (In fact, any row"
+    . push "                           that has an empty field in the key"
+    . push "                           specified is ignored.)"
+    . usage_text
+
+fn compute "join" o sheets
+  first = sheets[1]
+  second = sheets[2]
+  one = side_of (or_empty o.rest[1]) first
+  two = side_of (or_empty o.rest[3]) second
+  joined o one two
+
+fn side_of sel sh
+  sided (selected sel sh) sh
+
+fn sided e@(err _) _
+  e
+
+fn sided picked sh
+  side picked sh
+
+fn joined _ e@(err _) (err _)
+  e
+
+fn joined _ e@(err _) _
+  e
+
+fn joined _ _ e@(err _)
+  e
+
+fn joined o one two
+  n1 = length one.picked
+  n2 = length two.picked
+  return mismatched n1 n2 if n1 != n2
+  head = text/concat one.sh.head two.sh.head
+  rows = join_rows (join_kind o) o one two
+  csv/render (with_head one.sh head rows) 44
+
+fn mismatched n1 n2
+  what = "Column selections must have the same number of columns"
+  err "{what}, but found column selections with {n1} and {n2} columns."
+
+# Which join the flags ask for; the first named in this order wins.
+fn join_kind o
+  kinds = ["--cross" "--full" "--left" "--right"]
+  or_empty (list/find kinds (k -> on? o k))
+
+fn join_rows "--cross" _ one two
+  per = list/map one.sh.body (r -> paired r two.sh.body)
+  flat per
+
+fn join_rows "--right" o one two
+  index = key_index o one
+  pad = blanks (width_of one.sh)
+  flat (list/map two.sh.body (r -> right_rows o one two index pad r))
+
+fn join_rows kind o one two
+  index = key_index o two
+  pad = blanks (width_of two.sh)
+  per = list/map one.sh.body (r -> left_rows kind o one two index pad r)
+  lefts = flat per
+  return lefts if kind != "--full"
+  text/concat lefts (unmatched o one two)
+
+# One list of every row. Pushing reuses the buffer; concatenating onto the
+# accumulator copied it for every record, quadratically.
+fn flat lists
+  list/fold lists [] (acc xs -> list/fold xs acc (a x -> push a x))
+
+fn paired r others
+  list/to_list (list/map others (q -> text/concat r q))
+
+fn blanks n
+  list/to_list (list/take (list/repeat "") n)
+
+# The rows of the first input matching one record of the second. Under
+# --right a record with no match is kept beside empty fields.
+fn right_rows o one two index pad r
+  hits = hits_for index (key_of o r two.picked)
+  return [(text/concat pad r)] if hits == []
+  list/to_list (list/map hits (i -> text/concat (row_at one.sh.body i) r))
+
+# The rows of the second input matching one record of the first. An inner
+# join drops a record with no match; the outer joins keep it, padded.
+fn left_rows kind o one two index pad r
+  hits = hits_for index (key_of o r one.picked)
+  return kept_alone kind r pad if hits == []
+  list/to_list (list/map hits (i -> text/concat r (row_at two.sh.body i)))
+
+fn kept_alone "" _ _
+  []
+
+fn kept_alone _ r pad
+  [(text/concat r pad)]
+
+# Under --full, the records of the second input that no record of the first
+# matched, after every left row, in their input order.
+fn unmatched o one two
+  index = key_index o one
+  pad = blanks (width_of one.sh)
+  matched? = (r -> hits_for index (key_of o r two.picked) != [])
+  lonely = list/reject two.sh.body matched?
+  list/to_list (list/map lonely (r -> text/concat pad r))
+
+# Every key of one side, with the positions of the records that carry it,
+# in input order. Built by sorting rather than by growing a map one record
+# at a time, which is quadratic (bugs/map_read_then_put_quadratic.kso).
+fn key_index o sd
+  spots = list/take list/naturals (length sd.sh.body)
+  tag = (i -> keyed_at (key_of o (row_at sd.sh.body i) sd.picked) i)
+  present = list/reject (list/map spots tag) (t -> t.key == none)
+  ordered = sorted_by (list/to_list present) (a b -> compare_text a.key b.key)
+  groups = runs ordered (a b -> a.key == b.key)
+  list/fold groups {} (m r -> put m ordered[r.first].key (spots_in ordered r))
+
+fn spots_in ordered r
+  list/to_list (list/map (text/slice ordered r.first r.last) (t -> t.spot))
+
+fn hits_for _ none
+  []
+
+fn hits_for index k
+  or_list index[k]
+
+fn or_list none
+  []
+
+fn or_list xs
+  xs
+
+fn row_at body i
+  or_list body[i]
+
+# A record's join key: its selected fields, trimmed, and folded to lower
+# case under --no-case, each written after its length so that no two
+# different field lists share a key. Without --nulls a key with an empty
+# field is no key at all.
+fn key_of o record picked
+  trimmed = list/map (fields_at record picked) text/trim
+  folded = if (on? o "--no-case") (list/map trimmed lower) trimmed
+  fields = list/to_list folded
+  empty = list/any? fields (f -> f == "")
+  return none if empty and not on? o "--nulls"
+  text/join (list/to_list (list/map fields (f -> "{length f}:{f}"))) ""

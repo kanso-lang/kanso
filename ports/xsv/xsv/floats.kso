@@ -1,0 +1,55 @@
+import "std/list"
+import "std/text"
+
+# A float written the way Rust's `{}` writes an f64, which is what xsv
+# prints: the shortest digits that read back exactly, never an exponent, and
+# no `.0` on a whole number. kanso writes `6.0` and `1.0e-07`; Rust writes
+# `6` and `0.0000001`.
+fn rust_float x
+  rendered "{x}"
+
+fn rendered "nan"
+  "NaN"
+
+fn rendered "inf"
+  "inf"
+
+fn rendered "-inf"
+  "-inf"
+
+fn rendered s
+  parts = text/split s "e"
+  return whole_dropped s if length parts == 1
+  expanded (or_empty parts[1]) (text/to_int (or_empty parts[2]))
+
+fn whole_dropped s
+  n = length s
+  if (text/slice s (n - 1) n == ".0") (text/slice s 1 (n - 2)) s
+
+fn expanded _ (err _)
+  "NaN"
+
+fn expanded mantissa exponent
+  negative = prefix? mantissa "-"
+  unsigned = if negative (text/slice mantissa 2 (length mantissa)) mantissa
+  halves = text/split unsigned "."
+  fraction = trailing_zeros_dropped (or_empty halves[2])
+  digits = "{or_empty halves[1]}{fraction}"
+  sign = if negative "-" ""
+  "{sign}{placed digits (exponent + 1)}"
+
+fn trailing_zeros_dropped s
+  return s if s == ""
+  n = length s
+  return s if text/slice s n n != "0"
+  trailing_zeros_dropped (text/slice s 1 (n - 1))
+
+# `digits` with the decimal point after the first `point` of them.
+fn placed digits point
+  n = length digits
+  return "{digits}{zeros (point - n)}" if point >= n
+  return "0.{zeros (0 - point)}{digits}" if point <= 0
+  "{text/slice digits 1 point}.{text/slice digits (point + 1) n}"
+
+fn zeros n
+  text/join (list/to_list (list/take (list/repeat "0") n)) ""

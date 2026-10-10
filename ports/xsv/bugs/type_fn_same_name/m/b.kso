@@ -1,0 +1,19 @@
+# kanso check bugs/type_fn_same_name
+#
+# SHOULD: refuse the module with the error the same two declarations get
+# when they share one file:
+#   error[name]: the name `run` is already taken
+#
+# DOES: across two files of one module the type is silently shadowed by
+# the function in a.kso, and the only error is
+#   error[arity]: no 2-argument arm of `run` (arms take 1)
+# pointing at the construction below. In xsv the function was `run argv`
+# in cli.kso and the type was a run of equal neighbours in order.kso; the
+# message there was "this can be a none and `run` has no arm for it",
+# which says nothing about a type.
+type run
+  first
+  last
+
+fn spans xs
+  run xs[1] xs[2]

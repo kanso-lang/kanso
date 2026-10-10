@@ -1,0 +1,12 @@
+name,age,city,email,score,city,country,population
+Ann Lee,34,Oslo,ann@example.com,88.5,Oslo,Norway,709037
+bob,27,Rome,bob@example.org,92,Rome,Italy,2761632
+Cyd Park,,Lima,cyd@example.com,71.25,Lima,Peru,10092000
+"Diaz, Eva",45,Oslo,eva@example.net,,Oslo,Norway,709037
+eli,27,Kyiv,,66,,,
+Fay,61,Rome,fay@example.com,92,Rome,Italy,2761632
+gus,19,,gus@example.org,58.75,,,
+,,,,,Paris,France,2102650
+,,,,,oslo,Norway (lower),1
+,,,,,,Nowhere,0
+[exit 0]

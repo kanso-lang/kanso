@@ -1,0 +1,2 @@
+badutf8.csv: invalid UTF-8
+[exit 1]

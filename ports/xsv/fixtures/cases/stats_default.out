@@ -1,0 +1,7 @@
+field,type,sum,min,max,min_length,max_length,mean,stddev
+name,Unicode,,Ann Lee,gus,3,9,,
+age,Integer,213,19,61,0,2,35.5,13.901438774457844
+city,Unicode,,Kyiv,Rome,0,4,,
+email,Unicode,,ann@example.com,gus@example.org,0,15,,
+score,Float,468.5,58.75,92,0,5,78.08333333333333,13.306222437474716
+[exit 0]

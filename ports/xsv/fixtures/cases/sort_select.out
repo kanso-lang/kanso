@@ -1,0 +1,9 @@
+name,age,city,email,score
+gus,19,,gus@example.org,58.75
+eli,27,Kyiv,,66
+Cyd Park,,Lima,cyd@example.com,71.25
+Ann Lee,34,Oslo,ann@example.com,88.5
+"Diaz, Eva",45,Oslo,eva@example.net,
+bob,27,Rome,bob@example.org,92
+Fay,61,Rome,fay@example.com,92
+[exit 0]

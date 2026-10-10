@@ -1,0 +1,4 @@
+field,type,sum,min,max,min_length,max_length,mean,stddev
+h1,NULL,,,,,,,
+h2,NULL,,,,,,,
+[exit 0]

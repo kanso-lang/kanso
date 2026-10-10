@@ -1,0 +1,8 @@
+field,value,count
+age,27,2
+age,(NULL),1
+age,19,1
+age,34,1
+age,45,1
+age,61,1
+[exit 0]

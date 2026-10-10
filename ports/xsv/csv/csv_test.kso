@@ -1,0 +1,72 @@
+import "std/testing"
+
+fn reads? s want
+  same? (parse s 44) want
+
+fn same? (err _) _
+  false
+
+fn same? got want
+  got == want
+
+test_simple = reads? "a,b\n1,2\n" [["a" "b"] ["1" "2"]]
+
+test_no_final_newline = reads? "a,b\n1,2" [["a" "b"] ["1" "2"]]
+
+test_crlf = reads? "a,b\r\n1,2\r\n" [["a" "b"] ["1" "2"]]
+
+test_lone_cr = reads? "a,b\r1,2" [["a" "b"] ["1" "2"]]
+
+test_blank_lines_skipped = reads? "\n\na\n\r\n\nb\n" [["a"] ["b"]]
+
+test_empty_fields = reads? ",,\na,," [["" "" ""] ["a" "" ""]]
+
+test_trailing_delimiter = reads? "a," [["a" ""]]
+
+test_quoted = reads? "\"a,b\",c" [["a,b" "c"]]
+
+test_doubled_quote = reads? "\"say \"\"hi\"\"\"" [["say \"hi\""]]
+
+test_quoted_newline = reads? "\"one\ntwo\",x\ny,z" [["one\ntwo" "x"] ["y" "z"]]
+
+test_quoted_crlf = reads? "\"a\",\"b\"\r\n\"c\",\"d\"" [["a" "b"] ["c" "d"]]
+
+test_quote_inside_bare = reads? "a\"b,c" [["a\"b" "c"]]
+
+test_text_after_quote = reads? "\"a\"b,c" [["ab" "c"]]
+
+test_unclosed_quote = reads? "\"abc\ndef" [["abc\ndef"]]
+
+test_empty_quoted = reads? "\"\",x" [["" "x"]]
+
+test_tab_delimited = same? (parse "a\tb\n1\t2" 9) [["a" "b"] ["1" "2"]]
+
+test_unicode = reads? "café,日本\n" [["café" "日本"]]
+
+test_empty_input = reads? "" []
+
+test_ragged =
+  got = parse "a,b\n1,2\n3\n" 44
+  at = "record 2 (line: 3, byte: 8)"
+  why = "found record with 1 fields, but the previous record has 2 fields"
+  testing/when_failed got (r -> r == "CSV error: {at}: {why}")
+
+test_render_plain = render [["a" "b"] ["1" "2"]] 44 == "a,b\n1,2\n"
+
+test_render_quotes =
+  got = render [["a,b" "say \"hi\"" "x\ny"]] 44
+  got == "\"a,b\",\"say \"\"hi\"\"\",\"x\ny\"\n"
+
+test_render_lone_empty = render [[""] ["a"]] 44 == "\"\"\na\n"
+
+test_render_empty_first = render [["" "x"]] 44 == ",x\n"
+
+test_round_trip =
+  doc = "h1,h2\n\"a,1\",\"b\"\"2\"\n,\n"
+  reads? (render [["h1" "h2"] ["a,1" "b\"2"] ["" ""]] 44) (must (parse doc 44))
+
+fn must (err _)
+  []
+
+fn must v
+  v

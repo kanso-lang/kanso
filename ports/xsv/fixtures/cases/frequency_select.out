@@ -1,0 +1,7 @@
+field,value,count
+city,Oslo,2
+city,Rome,2
+city,(NULL),1
+city,Kyiv,1
+city,Lima,1
+[exit 0]

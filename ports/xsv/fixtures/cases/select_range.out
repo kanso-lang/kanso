@@ -1,0 +1,9 @@
+age,city,email
+34,Oslo,ann@example.com
+27,Rome,bob@example.org
+,Lima,cyd@example.com
+45,Oslo,eva@example.net
+27,Kyiv,
+61,Rome,fay@example.com
+19,,gus@example.org
+[exit 0]

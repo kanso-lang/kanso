@@ -1,0 +1,9 @@
+email,name
+ann@example.com,Ann Lee
+bob@example.org,bob
+cyd@example.com,Cyd Park
+eva@example.net,"Diaz, Eva"
+,eli
+fay@example.com,Fay
+gus@example.org,gus
+[exit 0]

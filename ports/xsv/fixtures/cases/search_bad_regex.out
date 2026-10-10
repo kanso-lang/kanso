@@ -1,0 +1,2 @@
+Invalid regex 'a(b': the pattern ends inside a group, class, count or escape
+[exit 1]

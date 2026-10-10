@@ -1,0 +1,4 @@
+name,age,city,email,score
+Ann Lee,34,Oslo,ann@example.com,88.5
+bob,27,Rome,bob@example.org,92
+[exit 0]

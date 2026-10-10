@@ -1,0 +1,20 @@
+# kanso play bugs/param_named_done.kso
+#
+# SHOULD: print "abc", or be refused at compile time for naming a parameter
+# after the `done` marker, the way a local binding named after a declared
+# type is refused ("`x` is already a declaration; rename the binding").
+#
+# DOES: checks clean, then fails at run time on the interpreter with
+#   error[runtime]: no overload of `sel` matches these arguments
+# because the parameter `done` is read as the marker pattern `done` (the
+# value a finished write yields), not as a name. `sel` has exactly one
+# arm, and nothing in the message points at the parameter. Rename the
+# parameter to `finish` and it prints "abc". `done` is the natural name for
+# a continuation, which is how xsv/selection.kso met it.
+fn go s
+  sel s (xs -> "{xs}")
+
+fn sel s done
+  done s
+
+print (go "abc")

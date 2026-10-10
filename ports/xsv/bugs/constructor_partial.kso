@@ -1,0 +1,23 @@
+# kanso play bugs/constructor_partial.kso
+#
+# SHOULD: print "true [1 2]". Chapter 05 says `&` supplies arguments to any
+# function and waits for the rest, and a record type's name is its
+# constructor, so `&pick true` should be a value still waiting for `items`.
+#
+# DOES: `kanso check` passes. Then:
+#   --interp:  error[runtime]: no overload of `finish` matches these arguments
+#              (the message blames `finish`, which has one generic arm)
+#   native:    error: native backend: `pick` as a bare value is not yet
+#              supported
+# so the engines disagree, and neither says that `&pick` is the problem.
+type pick
+  inverted
+  items
+
+fn finish done xs
+  done xs
+
+fn show (pick inverted items)
+  "{inverted} {items}"
+
+print (show (finish (&pick true) [1 2]))

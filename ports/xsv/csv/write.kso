@@ -1,0 +1,31 @@
+import "std/list"
+import "std/text"
+
+# RFC 4180 writing. A field is quoted only when it has to be: when it holds
+# the delimiter, a quote, a CR or an LF. A record of one empty field is quoted
+# too, or it would read back as a blank line, which a reader skips.
+pub fn render rows delim
+  text/utf8 (list/fold rows (text/bytes "") (acc r -> record_onto acc r delim))
+
+pub fn record_onto acc fields delim
+  return text/append acc "\"\"\n" if fields == [""]
+  encoded = list/to_list (list/map fields (f -> field f delim))
+  text/append (text/append acc (text/join encoded (text/utf8 [delim]))) 10
+
+pub fn field f delim
+  bs = text/bytes f
+  if (needs_quotes? bs delim) (text/utf8 (quoted bs)) f
+
+fn needs_quotes? bs delim
+  n = length bs
+  text/find2 bs 1 delim 34 <= n or text/find2 bs 1 10 13 <= n
+
+fn quoted bs
+  inner = list/fold bs (text/append (text/bytes "") 34) (a b -> doubled a b)
+  text/append inner 34
+
+fn doubled a 34
+  text/append (text/append a 34) 34
+
+fn doubled a b
+  text/append a b

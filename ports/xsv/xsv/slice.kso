@@ -1,0 +1,75 @@
+import "../csv"
+import "std/text"
+
+# A half-open range [start, end) of 0-based record positions.
+type range
+  end
+  start
+
+fn flags_of "slice"
+  own = [(flag "--end" "-e" true) (flag "--index" "-i" true)]
+  more = [(flag "--len" "-l" true) (flag "--start" "-s" true)]
+  flags_with (text/concat own more)
+
+fn usage_of "slice"
+  ["Returns the rows in the range specified (starting at 0, half-open"]
+    . push "interval). The range does not include headers."
+    . push ""
+    . push "If the start of the range isn't specified, then the slice starts"
+    . push "from the first record in the CSV data."
+    . push ""
+    . push "If the end of the range isn't specified, then the slice continues"
+    . push "to the last record in the CSV data."
+    . push ""
+    . push "Usage:"
+    . push "    xsv slice [options] [<input>]"
+    . push ""
+    . push "slice options:"
+    . push "    -s, --start <arg>      The index of the record to slice from."
+    . push "    -e, --end <arg>        The index of the record to slice to."
+    . push "    -l, --len <arg>        The length of the slice (can be used"
+    . push "                           instead of --end)."
+    . push "    -i, --index <arg>      Slice a single record (shortcut for"
+    . push "                           -s N -l 1)."
+    . usage_text
+
+fn compute "slice" o sheets
+  sh = sheets[1]
+  total = length sh.body
+  bounds = slice_bounds o total
+  sliced sh bounds
+
+fn slice_bounds o total
+  return single (number_or o "--index" 0) if on? o "--index"
+  start = number_or o "--start" 0
+  limited o start total
+
+fn single e@(err _)
+  e
+
+fn single i
+  range (i + 1) i
+
+fn limited _ e@(err _) _
+  e
+
+fn limited o start total
+  return lengthwise start (number_or o "--len" 0) if on? o "--len"
+  return range (number_or o "--end" 0) start if on? o "--end"
+  range total start
+
+fn lengthwise _ e@(err _)
+  e
+
+fn lengthwise start n
+  range (start + n) start
+
+fn sliced _ e@(err _)
+  e
+
+fn sliced _ (range (err e) _)
+  err e
+
+fn sliced sh (range end start)
+  kept = clamped sh.body (start + 1) end
+  csv/render (with_head sh sh.head kept) 44

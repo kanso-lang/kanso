@@ -1,0 +1,9 @@
+name,city,score
+Ann Lee,Oslo,88.5
+bob,Rome,92
+Cyd Park,Lima,71.25
+"Diaz, Eva",Oslo,
+eli,Kyiv,66
+Fay,Rome,92
+gus,,58.75
+[exit 0]

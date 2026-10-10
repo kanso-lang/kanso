@@ -1,0 +1,4 @@
+field,type,sum,min,max,min_length,max_length,mean,stddev
+country,Unicode,,France,Peru,0,6,,
+population,Integer,3673976369,709037,10092000,0,8,3764320.0502049183,3563215.6562082525
+[exit 0]

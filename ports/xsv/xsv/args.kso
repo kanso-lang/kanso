@@ -1,0 +1,112 @@
+import "std/list"
+import "std/text"
+
+# One flag a command accepts: its long spelling, its short one ("" when it
+# has none), and whether it reads a value.
+type flag
+  long
+  short
+  takes
+
+# What the command line said: the flags by long name, with "" standing for a
+# switch that is on, and the positional arguments in order.
+type opts
+  given
+  rest
+
+fn parse_args specs argv
+  walk specs argv 1 {} []
+
+fn walk specs argv i given rest
+  return opts given rest if i > length argv
+  arg_at specs argv i given rest argv[i]
+
+fn arg_at _ _ _ given rest none
+  opts given rest
+
+fn arg_at _ argv i given rest "--"
+  opts given (text/concat rest (text/slice argv (i + 1) (length argv)))
+
+fn arg_at specs argv i given rest "-"
+  walk specs argv (i + 1) given (push rest "-")
+
+fn arg_at specs argv i given rest a
+  return long_flag specs argv i given rest a if prefix? a "--"
+  return shorts specs argv i given rest (text/chars a) 2 if prefix? a "-"
+  walk specs argv (i + 1) given (push rest a)
+
+# `--name value` or `--name=value`.
+fn long_flag specs argv i given rest a
+  parts = text/split a "="
+  name = parts[1]
+  spec = list/find specs (f -> f.long == name)
+  attached = text/join (text/slice parts 2 (length parts)) "="
+  known specs argv i given rest spec attached (length parts > 1) name
+
+fn known _ _ _ _ _ none _ _ name
+  err "unknown flag {name}"
+
+fn known specs argv i given rest spec v attached _
+  long_value specs argv i given rest spec v attached
+
+fn long_value specs argv i given rest (flag long _ true) v true
+  walk specs argv (i + 1) (put given long v) rest
+
+fn long_value specs argv i given rest (flag long _ true) _ false
+  valued specs argv i given rest long argv[i + 1]
+
+fn long_value _ _ _ _ _ (flag long _ false) _ true
+  err "flag {long} takes no value"
+
+fn long_value specs argv i given rest (flag long _ false) _ false
+  walk specs argv (i + 1) (put given long "") rest
+
+fn valued _ _ _ _ _ long none
+  err "flag {long} needs a value"
+
+fn valued specs argv i given rest long v
+  walk specs argv (i + 2) (put given long v) rest
+
+# A cluster of short flags, `-nR`. A flag that reads a value takes the rest of
+# the cluster, `-s1,2`, or else the next argument.
+fn shorts specs argv i given rest cs j
+  return walk specs argv (i + 1) given rest if j > length cs
+  spec = list/find specs (f -> f.short == "-{cs[j]}")
+  short_flag specs argv i given rest cs j spec
+
+fn short_flag _ _ _ _ _ cs j none
+  err "unknown flag -{cs[j]}"
+
+fn short_flag specs argv i given rest cs j (flag long _ false)
+  shorts specs argv i (put given long "") rest cs (j + 1)
+
+fn short_flag specs argv i given rest cs j (flag long _ true)
+  return valued specs argv i given rest long argv[i + 1] if j == length cs
+  tail = text/join (text/slice cs (j + 1) (length cs)) ""
+  walk specs argv (i + 1) (put given long tail) rest
+
+fn on? o long
+  o.given[long] != none
+
+# A flag's value, or the default when the flag is absent.
+fn value_or o long default
+  chosen o.given[long] default
+
+fn chosen none default
+  default
+
+fn chosen v _
+  v
+
+# A flag whose value must be a whole number.
+fn number_or o long default
+  whole_flag long (value_or o long "{default}")
+
+fn whole_flag long v
+  whole long v (text/to_int v)
+
+fn whole long v (err _)
+  err "flag {long} wants a whole number, got '{v}'"
+
+fn whole _ _ n
+  n

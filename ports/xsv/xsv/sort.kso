@@ -1,0 +1,99 @@
+import "../csv"
+import "std/list"
+import "std/text"
+
+fn flags_of "sort"
+  own = [(flag "--numeric" "-N" false) (flag "--reverse" "-R" false)]
+  flags_with (push own (flag "--select" "-s" true))
+
+fn usage_of "sort"
+  ["Sorts CSV data lexicographically."]
+    . push ""
+    . push "Note that this requires reading all of the CSV data into memory."
+    . push ""
+    . push "Usage:"
+    . push "    xsv sort [options] [<input>]"
+    . push ""
+    . push "sort options:"
+    . push "    -s, --select <arg>     Select a subset of columns to sort."
+    . push "                           See 'xsv select --help' for the format"
+    . push "                           details."
+    . push "    -N, --numeric          Compare according to string numerical"
+    . push "                           value"
+    . push "    -R, --reverse          Reverse order"
+    . usage_text
+
+fn compute "sort" o sheets
+  sh = sheets[1]
+  picked = chosen_columns o sh
+  sorted_sheet o sh picked
+
+fn sorted_sheet _ _ e@(err _)
+  e
+
+fn sorted_sheet o sh picked
+  cmp = key_order (on? o "--numeric") (on? o "--reverse") picked
+  csv/render (with_head sh sh.head (sorted_by sh.body cmp)) 44
+
+# How two records compare: by the selected fields, as text or as numbers,
+# forwards or backwards. Reversing swaps the comparison rather than the
+# output, so records that tie keep their input order either way.
+fn key_order false false picked
+  (a b -> compare_fields (fields_at a picked) (fields_at b picked))
+
+fn key_order false true picked
+  (a b -> compare_fields (fields_at b picked) (fields_at a picked))
+
+fn key_order true false picked
+  (a b -> compare_numeric (numbers_at a picked) (numbers_at b picked))
+
+fn key_order true true picked
+  (a b -> compare_numeric (numbers_at b picked) (numbers_at a picked))
+
+fn numbers_at record picked
+  list/to_list (list/map (fields_at record picked) number_value)
+
+# A field read as a number, the way xsv reads one: an integer if it is one,
+# else a float, else nothing.
+fn number_value s
+  as_int s (text/to_int s)
+
+fn as_int s (err _)
+  as_float (text/to_float s)
+
+fn as_int _ n
+  n
+
+fn as_float (err _)
+  none
+
+fn as_float f
+  f
+
+# xsv's numeric order. The first field that is not a number ends the
+# comparison: two such fields tie, and a missing number sorts before a
+# present one.
+fn compare_numeric a b
+  numeric_from a b 1
+
+fn numeric_from a b i
+  return 0 if i > length a and i > length b
+  numeric_step a b i a[i] b[i]
+
+fn numeric_step _ _ _ none none
+  0
+
+fn numeric_step _ _ _ none _
+  0 - 1
+
+fn numeric_step _ _ _ _ none
+  1
+
+fn numeric_step a b i x y
+  next_or (compare_numbers x y) a b i
+
+fn next_or 0 a b i
+  numeric_from a b (i + 1)
+
+fn next_or c _ _ _
+  c

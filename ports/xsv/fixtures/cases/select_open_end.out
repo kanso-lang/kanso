@@ -1,0 +1,9 @@
+email,score
+ann@example.com,88.5
+bob@example.org,92
+cyd@example.com,71.25
+eva@example.net,
+,66
+fay@example.com,92
+gus@example.org,58.75
+[exit 0]

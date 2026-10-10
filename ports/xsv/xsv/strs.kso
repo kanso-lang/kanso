@@ -1,0 +1,67 @@
+import "std/list"
+import "std/text"
+
+# Small string helpers std/text does not carry.
+fn prefix? s p
+  text/slice s 1 (length p) == p
+
+# ASCII only. Folding through bytes and text/utf8 would read cleaner, but
+# utf8 can answer an err, and then so could every key built from this.
+fn lower s
+  text/join (list/to_list (list/map (text/chars s) lowered)) ""
+
+fn lowered c
+  unchanged_or lower_table[c] c
+
+fn unchanged_or none c
+  c
+
+fn unchanged_or l _
+  l
+
+lower_table = list/to_h (list/zip (text/chars uppers) (text/chars lowers))
+
+uppers = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+lowers = "abcdefghijklmnopqrstuvwxyz"
+
+fn spaces n
+  text/join (list/to_list (list/take (list/repeat " ") n)) ""
+
+fn padded_to s none
+  s
+
+fn padded_to s width
+  "{s}{spaces (width - length s)}"
+
+fn digits? s
+  s != "" and list/all? (text/bytes s) (b -> 47 < b and b < 58)
+
+fn failed? (err _)
+  true
+
+fn failed? _
+  false
+
+# The failure, when there is one; otherwise what `then` makes. An arm for an
+# err beside literal arms in other positions ties, so code that wants both
+# checks for the failure first, here.
+fn unless_failed e@(err _) _
+  e
+
+fn unless_failed _ then
+  then none
+
+fn or_empty none
+  ""
+
+fn or_empty s
+  s
+
+# text/slice answers an empty result when either bound falls outside the
+# list, so a slice that asks for "up to the tenth" of three items gets none
+# of them. This one clamps the bounds first, the way Python and Rust do.
+fn clamped xs from to
+  lo = if (from < 1) 1 from
+  hi = if (to > length xs) (length xs) to
+  text/slice xs lo hi

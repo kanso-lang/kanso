@@ -1,0 +1,76 @@
+import "../csv"
+import "std/list"
+
+fn flags_of "select"
+  flags_with []
+
+fn usage_of "select"
+  ["Select columns from CSV data efficiently."]
+    . push ""
+    . push "This command lets you manipulate the columns in CSV data. You can"
+    . push "re-order them, duplicate them or drop them. Columns can be"
+    . push "referenced by index or by name if there is a header row (duplicate"
+    . push "column names can be disambiguated with more indexing). Finally,"
+    . push "column ranges can be specified."
+    . push ""
+    . push "  Select the first and fourth columns:"
+    . push "  $ xsv select 1,4"
+    . push ""
+    . push "  Select the first 4 columns (by index and by name):"
+    . push "  $ xsv select 1-4"
+    . push "  $ xsv select Header1-Header4"
+    . push ""
+    . push "  Ignore the first 2 columns (by range and by omission):"
+    . push "  $ xsv select 3-"
+    . push "  $ xsv select '!1-2'"
+    . push ""
+    . push "  Select the third column named 'Foo':"
+    . push "  $ xsv select 'Foo[2]'"
+    . push ""
+    . push "  Re-order and duplicate columns arbitrarily:"
+    . push "  $ xsv select 3-1,Header3-Header1,Header1,Foo[2],Header1"
+    . push ""
+    . push "  Quote column names that conflict with selector syntax:"
+    . push "  $ xsv select '\"Date - Opening\",\"Date - Actual Closing\"'"
+    . push ""
+    . push "Usage:"
+    . push "    xsv select [options] [--] <selection> [<input>]"
+    . usage_text
+
+fn compute "select" o sheets
+  sh = sheets[1]
+  picked = selected o.rest[1] sh
+  projected sh picked
+
+fn projected _ e@(err _)
+  e
+
+fn projected sh picked
+  head = fields_at sh.head picked
+  body = list/to_list (list/map sh.body (r -> fields_at r picked))
+  csv/render (with_head sh head body) 44
+
+# The columns a selection names, resolved against one sheet.
+fn selected none _
+  err "missing selection"
+
+fn selected e@(err _) _
+  e
+
+fn selected sel sh
+  resolve (parse_selection sel) (columns sh.named sh.head (width_of sh))
+
+# The columns --select names, or every column when it is absent.
+fn chosen_columns o sh
+  return selected (value_or o "--select" "") sh if on? o "--select"
+  list/to_list (list/take list/naturals (width_of sh))
+
+# The fields of a record at the given columns, in that order.
+fn fields_at record picked
+  list/to_list (list/map picked (i -> field_or_empty record[i]))
+
+fn field_or_empty none
+  ""
+
+fn field_or_empty f
+  f

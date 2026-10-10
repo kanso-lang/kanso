@@ -1,0 +1,33 @@
+field,value,count
+name,Ann Lee,1
+name,Cyd Park,1
+name,"Diaz, Eva",1
+name,Fay,1
+name,bob,1
+name,eli,1
+name,gus,1
+age,27,2
+age,(NULL),1
+age,19,1
+age,34,1
+age,45,1
+age,61,1
+city,Oslo,2
+city,Rome,2
+city,(NULL),1
+city,Kyiv,1
+city,Lima,1
+email,(NULL),1
+email,ann@example.com,1
+email,bob@example.org,1
+email,cyd@example.com,1
+email,eva@example.net,1
+email,fay@example.com,1
+email,gus@example.org,1
+score,92,2
+score,(NULL),1
+score,58.75,1
+score,66,1
+score,71.25,1
+score,88.5,1
+[exit 0]

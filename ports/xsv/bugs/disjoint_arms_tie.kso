@@ -1,0 +1,32 @@
+# kanso play bugs/disjoint_arms_tie.kso
+#
+# SHOULD: print "x valued". The `none` arm and the four `flag` arms can
+# never match the same call -- a value is either none or a flag -- so no
+# call is ambiguous.
+#
+# DOES: `kanso check` rejects all four flag arms with
+#   error[dispatch]: these `show` arms tie: each is the more specific one
+#   somewhere, and a call could match both
+# Delete the `none` arm and it compiles and prints "x valued". The same
+# shape with a bare `_` in the second position of the none arm is what
+# xsv/args.kso wanted for `long_value`.
+type flag
+  long
+  takes
+
+fn show none _
+  "none"
+
+fn show (flag long true) true
+  "{long} valued attached"
+
+fn show (flag long true) false
+  "{long} valued"
+
+fn show (flag long false) true
+  "{long} switch attached"
+
+fn show (flag long false) false
+  "{long} switch"
+
+print (show (flag "x" true) false)

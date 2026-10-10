@@ -1,0 +1,1 @@
+xsv stats people.csv

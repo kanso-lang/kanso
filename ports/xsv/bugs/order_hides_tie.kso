@@ -1,0 +1,25 @@
+# kanso play bugs/order_hides_tie.kso
+#
+# SHOULD: report the real problem, that `laid e@(err _) _` and `laid rows 0`
+# both match a call `laid (err ...) 0`, whatever order the arms are in.
+#
+# DOES: in this order it says
+#   error[formatting]: overloads of `laid` appear most-specific first:
+#   literal, then concrete type, then generic
+# Swap the first two arms and it says instead
+#   error[dispatch]: these `laid` arms tie
+# No order satisfies the formatting rule, so following its advice sends
+# the reader in a circle. With four parameters (xsv/table.kso, first draft)
+# BOTH orders reported the formatting error and neither mentioned the tie.
+import "std/text"
+
+fn laid rows 0
+  "plain {rows}"
+
+fn laid e@(err _) _
+  e
+
+fn laid rows limit
+  "{rows} cut at {limit}"
+
+print (laid (text/to_int "3") 0)

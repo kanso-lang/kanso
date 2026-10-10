@@ -1,0 +1,19 @@
+# kanso play bugs/err_in_list_literal.kso
+#
+# SHOULD: reach the endpoint with "too big", the way the same err does when
+# it is interpolated, passed to a function or handed to an operator. Chapter
+# 04: "an err flows through functions, not into them".
+#
+# DOES: prints `1 [err "too big"]` on both engines. A list literal holds the
+# err as an element, `length` counts it, and the program exits 0. In
+# xsv/selection.kso a selector that failed to resolve came back as a
+# one-element list holding the failure, and the selection "succeeded".
+fn checked n
+  return err "too big" if n > 5
+  n
+
+fn boxed n
+  one = checked n
+  [one]
+
+print "{length (boxed 9)} {boxed 9}"

@@ -1,0 +1,3 @@
+import "./m"
+
+print (m/run ["a"])

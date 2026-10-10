@@ -1,0 +1,4 @@
+import "./xsv"
+import "std/os"
+
+os/args .> xsv/run

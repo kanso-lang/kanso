@@ -1,0 +1,84 @@
+import "../csv"
+import "std/list"
+import "std/text"
+
+fn flags_of "frequency"
+  own = [(flag "--asc" "-a" false) (flag "--limit" "-l" true)]
+  more = [(flag "--no-nulls" "" false) (flag "--select" "-s" true)]
+  flags_with (text/concat own more)
+
+fn usage_of "frequency"
+  ["Compute a frequency table on CSV data."]
+    . push ""
+    . push "The frequency table is formatted as CSV data:"
+    . push ""
+    . push "    field,value,count"
+    . push ""
+    . push "By default, there is a row for the N most frequent values for each"
+    . push "field in the data. The order and number of values can be tweaked"
+    . push "with --asc and --limit, respectively."
+    . push ""
+    . push "Usage:"
+    . push "    xsv frequency [options] [<input>]"
+    . push ""
+    . push "frequency options:"
+    . push "    -s, --select <arg>     Select a subset of columns to compute"
+    . push "                           frequencies for. See 'xsv select --help'"
+    . push "                           for the format details."
+    . push "    -l, --limit <arg>      Limit the frequency table to the N most"
+    . push "                           common items. Set to '0' to disable a"
+    . push "                           limit. [default: 10]"
+    . push "    -a, --asc              Sort the frequency tables in ascending"
+    . push "                           order by count. The default is"
+    . push "                           descending order."
+    . push "    --no-nulls             Don't include NULLs in the frequency"
+    . push "                           table."
+    . usage_text
+
+fn compute "frequency" o sheets
+  sh = sheets[1]
+  picked = chosen_columns o sh
+  limit = number_or o "--limit" 10
+  bad = list/find [picked limit] failed?
+  unless_failed bad (_ -> frequencies o sh picked limit)
+
+fn frequencies o sh picked limit
+  tables = list/map picked (c -> column_table o sh c limit)
+  rows = flat tables
+  csv/render (push [] ["field" "value" "count"] . text/concat rows) 44
+
+# The table for one column: values counted, most frequent first (or least,
+# under --asc), ties broken by the value so the output never depends on
+# hash order, and cut to the limit.
+fn column_table o sh c limit
+  seen = list/map sh.body (r -> field_or_empty r[c])
+  dropped = on? o "--no-nulls"
+  kept_values = list/to_list (list/reject seen (v -> v == "" and dropped))
+  counted = counted_values kept_values
+  rows = list/map counted (t -> tally_row t.count (shown t.value))
+  ranked = sorted_by (list/to_list rows) (rank_order (on? o "--asc"))
+  kept = if (limit > 0) (clamped ranked 1 limit) ranked
+  name = column_name sh c
+  list/to_list (list/map kept (t -> [name t.value "{t.count}"]))
+
+fn shown ""
+  "(NULL)"
+
+fn shown v
+  v
+
+fn rank_order false
+  (a b -> tie_break (compare_numbers b.count a.count) a b)
+
+fn rank_order true
+  (a b -> tie_break (compare_numbers a.count b.count) a b)
+
+fn tie_break 0 a b
+  compare_text a.value b.value
+
+fn tie_break c _ _
+  c
+
+# A column's name, or its number under --no-headers.
+fn column_name sh c
+  if sh.named (or_empty sh.head[c]) "{c}"

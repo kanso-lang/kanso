@@ -1,0 +1,16 @@
+# kanso play bugs/first_none_unchecked.kso
+#
+# SHOULD: be refused by `kanso check` the way `length xs[1]` is refused:
+#   error[exhaustive]: this can be a none and `length` has no arm for it
+# list/first answers none for an empty list (appendix b says so), exactly
+# like a plain subscript.
+#
+# DOES: checks clean, then fails at run time on every engine with
+#   error[runtime]: length takes a list, string, or map, not <none>
+# and the runtime error carries no source position at all.
+import "std/list"
+
+fn width rows
+  length (list/first rows)
+
+print "width: {width []}"

@@ -1,0 +1,96 @@
+import "std/list"
+import "std/text"
+
+# A run of equal neighbours in a sorted list, by first and last position.
+type stretch
+  first
+  last
+
+# A value and how often it appeared.
+type tally_row
+  count
+  value
+
+# A stable merge sort by a three-way comparison: `cmp a b` answers a
+# negative number when a comes first, zero when they tie, and a positive one
+# when b does. Ties keep their input order.
+fn sorted_by xs cmp
+  n = length xs
+  return xs if n < 2
+  half = n / 2
+  left = sorted_by (text/slice xs 1 half) cmp
+  right = sorted_by (text/slice xs (half + 1) n) cmp
+  merged left right 1 1 [] cmp
+
+fn merged left right i j out cmp
+  return text/concat out (text/slice right j (length right)) if i > length left
+  return text/concat out (text/slice left i (length left)) if j > length right
+  merge_step left right i j out cmp (cmp right[j] left[i] < 0)
+
+fn merge_step left right i j out cmp true
+  merged left right i (j + 1) (push out right[j]) cmp
+
+fn merge_step left right i j out cmp false
+  merged left right (i + 1) j (push out left[i]) cmp
+
+# Three-way comparison of two strings, byte by byte. The guards in
+# `fields_from` keep `none` from arriving; the arms say what it would mean.
+fn compare_text none none
+  0
+
+fn compare_text none _
+  0 - 1
+
+fn compare_text _ none
+  1
+
+fn compare_text a b
+  return 0 - 1 if a < b
+  if (b < a) 1 0
+
+fn compare_numbers a b
+  return 0 - 1 if a < b
+  if (b < a) 1 0
+
+# Two lists of strings compared field by field; a list that runs out first
+# comes first.
+fn compare_fields a b
+  fields_from a b 1
+
+fn fields_from a b i
+  return 0 if i > length a and i > length b
+  return 0 - 1 if i > length a
+  return 1 if i > length b
+  settled (compare_text a[i] b[i]) a b i
+
+fn settled 0 a b i
+  fields_from a b (i + 1)
+
+fn settled c _ _ _
+  c
+
+# The runs of equal neighbours in a list, in order.
+fn runs xs same?
+  n = length xs
+  all = list/take list/naturals n
+  fresh? = (i -> i == 1 or not same? xs[i - 1] xs[i])
+  starts = list/to_list (list/select all fresh?)
+  each = list/take list/naturals (length starts)
+  spanned = (k -> stretch starts[k] (run_end starts[k + 1] n))
+  list/to_list (list/map each spanned)
+
+fn run_end none n
+  n
+
+fn run_end next _
+  next - 1
+
+# Each distinct string and how many times it occurs, in byte order. This is
+# list/tally done by sorting: a fold that reads a map and then puts into it
+# is quadratic in native code (bugs/map_read_then_put_quadratic.kso), and
+# this is the part of xsv that counts things.
+fn counted_values xs
+  ordered = sorted_by xs compare_text
+  found = runs ordered (a b -> a == b)
+  sized = (r -> tally_row (r.last - r.first + 1) ordered[r.first])
+  list/to_list (list/map found sized)

@@ -1,0 +1,60 @@
+import "std/testing"
+
+header = columns true ["a" "b" "c" "b" "e-f"] 5
+
+fn picks? sel want
+  same_pick? (pick_from sel header) want
+
+fn pick_from sel cols
+  resolve (parse_selection sel) cols
+
+fn same_pick? (err _) _
+  false
+
+fn same_pick? got want
+  got == want
+
+fn refused? sel why
+  testing/when_failed (pick_from sel header) (r -> r == why)
+
+test_select_indexes = picks? "1,3" [1 3]
+
+test_select_names = picks? "c,a" [3 1]
+
+test_select_range = picks? "2-4" [2 3 4]
+
+test_select_backwards = picks? "3-1" [3 2 1]
+
+test_select_open_end = picks? "4-" [4 5]
+
+test_select_open_start = picks? "-2" [1 2]
+
+test_select_name_range = picks? "a-c" [1 2 3]
+
+test_select_duplicate_name = picks? "b[1]" [4]
+
+test_select_first_duplicate = picks? "b" [2]
+
+test_select_quoted = picks? "\"e-f\",a" [5 1]
+
+test_select_negated = picks? "!2-3" [1 4 5]
+
+test_select_repeats = picks? "1,1,a" [1 1 1]
+
+test_select_missing_name =
+  why = "does not exist as a named header in the given CSV data."
+  refused? "zz" "Selector name 'zz' {why}"
+
+fn bounds_message n
+  "Selector index {n} is out of bounds. Index must be >= 1 and <= 5."
+
+test_select_out_of_bounds = refused? "9" (bounds_message 9)
+
+test_select_zero = refused? "0" (bounds_message 0)
+
+test_select_names_without_headers =
+  got = pick_from "a" (columns false [] 3)
+  why = "Cannot use names ('a') in selection with --no-headers set."
+  testing/when_failed got (r -> r == why)
+
+test_select_empty = testing/failed? (parse_selection "")

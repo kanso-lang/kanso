@@ -1,0 +1,6 @@
+field,type,sum,min,max,min_length,max_length,mean,stddev,median,mode,cardinality
+id,Integer,1125750,1,1500,1,4,750.5,433.01260566716377,750.5,1,1500
+city,Unicode,,Kyiv,Rome,0,5,,,,,6
+amount,Float,703362.9600000018,-49.39,999.34,3,6,468.90864000000124,304.6269625388027,452.77,115.15,1490
+flag,Unicode,,n,y,0,1,,,,n,3
+[exit 0]

@@ -1,0 +1,18 @@
+Invalid arguments: unknown flag --bogus
+
+Prints a count of the number of records in the CSV data.
+
+Note that the count will not include the header row (unless
+--no-headers is given).
+
+Usage:
+    xsv count [options] [<input>]
+
+Common options:
+    -h, --help             Display this message
+    -o, --output <file>    Write output to <file> instead of stdout.
+    -n, --no-headers       When set, the first row will not be
+                           interpreted as headers.
+    -d, --delimiter <arg>  The field delimiter for reading CSV data.
+                           Must be a single character. [default: ,]
+[exit 1]

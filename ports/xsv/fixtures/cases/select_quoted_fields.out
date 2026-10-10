@@ -1,0 +1,6 @@
+quote,id
+"He said ""hi""",1
+"a, b",2
+,3
+"trailing ""quote""",4
+[exit 0]

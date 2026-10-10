@@ -1,0 +1,27 @@
+# kanso play bugs/map_read_then_put_quadratic.kso
+# kanso play bugs/map_read_then_put_quadratic.kso --interp
+#
+# SHOULD: take time linear in the number of keys, as it does on the
+# interpreter (about 0.2 s at n = 40000 here, including start-up).
+#
+# DOES: native code is quadratic when the fold reads the map before it puts
+# into it. Measured with `kanso play` (native) on 2026-10-10:
+#   n = 10000   0.59 s
+#   n = 20000   1.21 s
+#   n = 40000   4.36 s
+# Without the read (`put acc x true`) the same fold takes 0.12 s at 40000.
+# This is the shape of list/tally itself, so `xsv stats --cardinality` on a
+# 20000-row column of distinct values spent 2.6 s of its 2.7 s here. My
+# guess is that the read leaves the map shared, so the put copies it; the
+# interpreter does not pay that.
+import "std/list"
+
+fn bumped none
+  1
+
+fn bumped n
+  n + 1
+
+xs = list/to_list (list/map (list/take list/naturals 40000) (i -> "k{i}"))
+m = list/fold xs {} (acc x -> put acc x (bumped acc[x]))
+print "{length m}"

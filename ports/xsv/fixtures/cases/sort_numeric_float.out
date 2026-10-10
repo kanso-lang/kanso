@@ -1,0 +1,9 @@
+label,n,f
+x,abc,
+nine,9,-2
+neg,-5,0.125
+ten,10,1.5
+dup,9,2.5
+big,1000000,7
+two,2,1e3
+[exit 0]

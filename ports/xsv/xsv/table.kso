@@ -1,0 +1,54 @@
+import "std/list"
+import "std/text"
+
+fn flags_of "table"
+  own = [(flag "--condense" "-c" true) (flag "--pad" "-p" true)]
+  flags_with (push own (flag "--width" "-w" true))
+
+fn usage_of "table"
+  ["Outputs CSV data as a table with columns in alignment."]
+    . push ""
+    . push "This will not work well if the CSV data contains large fields."
+    . push ""
+    . push "Note that formatting a table requires buffering all CSV data into"
+    . push "memory."
+    . push ""
+    . push "Usage:"
+    . push "    xsv table [options] [<input>]"
+    . push ""
+    . push "table options:"
+    . push "    -w, --width <arg>      The minimum width of each column."
+    . push "                           [default: 2]"
+    . push "    -p, --pad <arg>        The minimum number of spaces between"
+    . push "                           each column. [default: 2]"
+    . push "    -c, --condense <arg>   Limits the length of each field to the"
+    . push "                           value specified. If the field is UTF-8"
+    . push "                           encoded, then <arg> refers to the number"
+    . push "                           of code points. Otherwise, it refers to"
+    . push "                           the number of bytes."
+    . usage_text
+
+fn compute "table" o sheets
+  sh = sheets[1]
+  rows = with_head sh sh.head sh.body
+  least = number_or o "--width" 2
+  gap = number_or o "--pad" 2
+  limit = number_or o "--condense" 0
+  bad = list/find [least gap limit] failed?
+  unless_failed bad (_ -> laid rows least gap limit)
+
+fn laid rows least gap 0
+  aligned rows least gap
+
+fn laid rows least gap limit
+  short = list/map rows (r -> condensed_row r limit)
+  aligned (list/to_list short) least gap
+
+fn condensed_row r limit
+  list/to_list (list/map r (f -> condensed f limit))
+
+# A field longer than the limit keeps its first `limit` characters and ends
+# in an ellipsis.
+fn condensed f limit
+  return f if length f <= limit
+  "{text/slice f 1 limit}..."

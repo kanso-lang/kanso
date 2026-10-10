@@ -1,0 +1,5 @@
+field,type,sum,min,max,min_length,max_length,mean,stddev,median,mode,cardinality
+label,Unicode,,big,x,1,4,,,,big,7
+n,Unicode,,-5,abc,1,7,,,,9,6
+f,Float,1009.125,-2,1000,0,5,168.1875,372.00790867209173,2,,7
+[exit 0]

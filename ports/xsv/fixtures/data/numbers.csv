@@ -1,0 +1,8 @@
+label,n,f
+ten,10,1.5
+nine,9,-2
+two,2,1e3
+x,abc,
+neg,-5,0.125
+big,1000000,7
+dup,9,2.5

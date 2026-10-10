@@ -1,0 +1,6 @@
+id,quote,note
+1,"He said ""hi""","line one
+line two"
+2,"a, b",plain
+3,"",""
+4,"trailing ""quote""",x

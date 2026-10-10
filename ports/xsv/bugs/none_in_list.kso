@@ -1,0 +1,24 @@
+# kanso play bugs/none_in_list.kso
+#
+# SHOULD: agree with itself. Writing `[1 none 3]` is refused with
+#   error[none]: a list cannot hold a none: a lookup answers "not found"
+#   with one, so an element would be indistinguishable
+# so either a list really cannot hold a none, and map/push should refuse
+# or drop one, or it can, and the literal should be allowed.
+#
+# DOES: prints `[1 <none> 3] 3 <none> [1 <none>] 2` on both engines. The
+# lists hold nones, length counts them, and xs[2] answers a none that is
+# indistinguishable from a miss -- exactly what the error says cannot
+# happen. xsv/sort.kso relies on this: `numbers_at` maps fields to numbers
+# or none, and the numeric comparison dispatches on the nones.
+import "std/list"
+
+fn maybe 2
+  none
+
+fn maybe n
+  n
+
+xs = list/to_list (list/map [1 2 3] maybe)
+ys = push [1] none
+print "{xs} {length xs} {xs[2]} {ys} {length ys}"

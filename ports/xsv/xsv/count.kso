@@ -1,0 +1,15 @@
+fn flags_of "count"
+  flags_with []
+
+fn usage_of "count"
+  ["Prints a count of the number of records in the CSV data."]
+    . push ""
+    . push "Note that the count will not include the header row (unless"
+    . push "--no-headers is given)."
+    . push ""
+    . push "Usage:"
+    . push "    xsv count [options] [<input>]"
+    . usage_text
+
+fn compute "count" _ sheets
+  "{length sheets[1].body}\n"

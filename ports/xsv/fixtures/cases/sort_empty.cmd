@@ -1,0 +1,1 @@
+xsv sort empty.csv

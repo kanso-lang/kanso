@@ -1,0 +1,242 @@
+import "std/list"
+import "std/text"
+
+# What a column selector can name.
+type at_index
+  n
+
+type at_name
+  name
+  nth
+
+# The empty side of a range: `3-` runs to the last column, `-3` from the first.
+type open_end
+
+type span
+  hi
+  lo
+
+# A parsed selection: whether it was negated with `!`, and its selectors.
+type pick
+  inverted
+  items
+
+# A selector and the position after it.
+type read
+  item
+  next
+
+# What a selection is resolved against.
+type columns
+  named
+  names
+  width
+
+# The grammar xsv documents: comma-separated selectors, each an index, a
+# name, `name[n]` for the nth (from 0) column of that name, or a range of
+# any two of those joined by `-`. A name may be quoted when it holds a comma
+# or a dash. A leading `!` selects every column the rest does not.
+fn parse_selection s
+  return err "empty selection" if s == ""
+  cs = text/chars s
+  inverted = cs[1] == "!"
+  start = if inverted 2 1
+  selectors cs start [] (xs -> pick inverted xs)
+
+fn selectors cs p items built
+  r = selector cs p
+  after_selector cs r items built cs[r.next]
+
+fn after_selector _ (read it _) items built none
+  built (push items it)
+
+fn after_selector cs (read it next) items built ","
+  selectors cs (next + 1) (push items it) built
+
+fn after_selector cs (read _ next) _ _ c
+  err "unexpected '{c}' at position {next} of selection '{text/join cs ""}'"
+
+# One selector: an item, or two items joined by `-`.
+fn selector cs p
+  first = item cs p
+  ranged cs first cs[first.next]
+
+fn ranged cs (read lo next) "-"
+  second = item cs (next + 1)
+  read (span second.item lo) second.next
+
+fn ranged _ r none
+  r
+
+fn ranged _ r _
+  r
+
+fn item cs p
+  item_at cs p cs[p]
+
+fn item_at _ p none
+  read open_end p
+
+fn item_at _ p ","
+  read open_end p
+
+fn item_at _ p "-"
+  read open_end p
+
+fn item_at cs p "\""
+  close = quote_end cs (p + 1)
+  name = text/join (text/slice cs (p + 1) (close - 1)) ""
+  nth_of cs name (close + 1) cs[close + 1]
+
+fn item_at cs p _
+  stop = bare_end cs p
+  word = text/join (text/slice cs p (stop - 1)) ""
+  return read (at_index (number_of word)) stop if digits? word
+  nth_of cs word stop cs[stop]
+
+fn number_of word
+  whole_index (text/to_int word)
+
+fn whole_index (err _)
+  0
+
+fn whole_index n
+  n
+
+# The first position from p whose character the test accepts. Every test
+# accepts the end, so the walk stops.
+fn scan cs p stop?
+  if (stop? cs[p]) p (scan cs (p + 1) stop?)
+
+fn quote_end cs p
+  scan cs p quote_or_end?
+
+fn quote_or_end? none
+  true
+
+fn quote_or_end? "\""
+  true
+
+fn quote_or_end? _
+  false
+
+fn bare_end cs p
+  scan cs p bare_stop?
+
+fn bare_stop? none
+  true
+
+fn bare_stop? ","
+  true
+
+fn bare_stop? "-"
+  true
+
+fn bare_stop? "["
+  true
+
+fn bare_stop? _
+  false
+
+# `name[2]` picks the third column called `name`.
+fn nth_of cs name p "["
+  close = scan cs p bracket_or_end?
+  inner = text/join (text/slice cs (p + 1) (close - 1)) ""
+  nth_index cs name inner (close + 1) (digits? inner)
+
+fn nth_of _ name p none
+  read (at_name name 0) p
+
+fn nth_of _ name p _
+  read (at_name name 0) p
+
+fn bracket_or_end? none
+  true
+
+fn bracket_or_end? "]"
+  true
+
+fn bracket_or_end? _
+  false
+
+fn nth_index _ name inner next true
+  read (at_name name (number_of inner)) next
+
+fn nth_index _ _ inner _ false
+  err "bad column index '{inner}' in selection"
+
+# The 1-based column positions a selection names, in the order it names them.
+fn resolve e@(err _) _
+  e
+
+fn resolve (pick inverted items) cols
+  picked = list/fold items [] (acc it -> grow acc (positions it cols))
+  invert picked cols inverted
+
+# A selector that does not resolve fails the whole selection.
+fn grow e@(err _) (err _)
+  e
+
+fn grow e@(err _) _
+  e
+
+fn grow _ e@(err _)
+  e
+
+fn grow acc more
+  text/concat acc more
+
+fn invert picked _ false
+  picked
+
+fn invert picked cols true
+  all = list/to_list (list/take list/naturals cols.width)
+  list/to_list (list/reject all (i -> list/any? picked (c -> c == i)))
+
+fn positions (span hi lo) cols
+  from = endpoint lo cols 1
+  to = endpoint hi cols cols.width
+  stepped from to
+
+fn positions it cols
+  alone (endpoint it cols 0)
+
+# A list literal would hold an err as an element rather than pass it on.
+fn alone e@(err _)
+  e
+
+fn alone i
+  [i]
+
+# A range may run backwards: `3-1` is 3, 2, 1.
+fn stepped from to
+  count = if (from <= to) (to - from + 1) (from - to + 1)
+  step = if (from <= to) 1 (0 - 1)
+  ks = list/take list/naturals count
+  list/to_list (list/map ks (k -> from + (k - 1) * step))
+
+fn endpoint (at_name name _) (columns false _ _) _
+  err "Cannot use names ('{name}') in selection with --no-headers set."
+
+fn endpoint open_end _ default
+  return err "a selector cannot be empty" if default == 0
+  default
+
+fn endpoint (at_index n) cols _
+  in_bounds n cols.width
+
+fn endpoint (at_name name nth) cols _
+  all = list/take list/naturals cols.width
+  found = list/to_list (list/select all (i -> cols.names[i] == name))
+  named_at name found[nth + 1]
+
+fn named_at name none
+  why = "does not exist as a named header in the given CSV data."
+  err "Selector name '{name}' {why}"
+
+fn named_at _ i
+  i
+
+fn in_bounds n width
+  return n if 1 <= n and n <= width
+  err "Selector index {n} is out of bounds. Index must be >= 1 and <= {width}."

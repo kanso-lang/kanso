@@ -1,0 +1,1 @@
+xsv count sales.csv

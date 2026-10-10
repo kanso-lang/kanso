@@ -1,0 +1,4 @@
+name,age,city,email,score
+bob,27,Rome,bob@example.org,92
+eli,27,Kyiv,,66
+[exit 0]

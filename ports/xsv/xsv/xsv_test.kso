@@ -1,0 +1,129 @@
+import "std/list"
+import "std/testing"
+
+sample_specs = [(flag "--select" "-s" true)]
+  . push (flag "--reverse" "-R" false)
+  . flags_with
+
+fn parsed_with argv
+  parse_args sample_specs argv
+
+test_args_positional =
+  o = parsed_with ["a.csv"]
+  o.rest == ["a.csv"]
+
+test_args_long_value =
+  o = parsed_with ["--select" "1,2" "x.csv"]
+  value_or o "--select" "" == "1,2" and o.rest == ["x.csv"]
+
+test_args_long_equals =
+  o = parsed_with ["--select=a=b"]
+  value_or o "--select" "" == "a=b"
+
+test_args_short_cluster =
+  o = parsed_with ["-nRs" "3"]
+  on? o "--no-headers" and on? o "--reverse" and value_or o "--select" "" == "3"
+
+test_args_short_attached =
+  o = parsed_with ["-s1-2"]
+  value_or o "--select" "" == "1-2"
+
+test_args_double_dash =
+  o = parsed_with ["--" "-n" "--x"]
+  o.rest == ["-n" "--x"] and not on? o "--no-headers"
+
+test_args_stdin_dash =
+  o = parsed_with ["-"]
+  o.rest == ["-"]
+
+fn refused_with? argv why
+  testing/when_failed (parsed_with argv) (r -> r == why)
+
+test_args_unknown_long = refused_with? ["--bogus"] "unknown flag --bogus"
+
+test_args_unknown_short = refused_with? ["-z"] "unknown flag -z"
+
+test_args_missing_value = refused_with? ["-s"] "flag --select needs a value"
+
+test_args_switch_with_value =
+  why = "flag --reverse takes no value"
+  refused_with? ["--reverse=yes"] why
+
+fn number_is? (err _) _
+  false
+
+fn number_is? n want
+  n == want
+
+test_number_flag =
+  o = parsed_with ["--select" "12"]
+  number_is? (number_or o "--select" 0) 12
+
+test_number_flag_default =
+  o = parsed_with []
+  number_is? (number_or o "--select" 7) 7
+
+test_number_flag_bad =
+  o = parsed_with ["--select" "x"]
+  why = "flag --select wants a whole number, got 'x'"
+  testing/when_failed (number_or o "--select" 0) (r -> r == why)
+
+test_float_whole = rust_float 6.0 == "6"
+
+test_float_fraction = rust_float 2.0625 == "2.0625"
+
+test_float_small = rust_float 0.0000001 == "0.0000001"
+
+test_float_negative_small = rust_float (0.0 - 0.00000000025) == "-0.00000000025"
+
+test_float_large =
+  big = 1500000000000000000000.0
+  rust_float big == "1500000000000000000000"
+
+test_float_e15 = rust_float 1000000000000000.0 == "1000000000000000"
+
+test_float_long_mantissa =
+  big = 123456789012345680000000.0
+  rust_float big == "123456789012345690000000"
+
+test_lower = lower "MiXeD Case 9É" == "mixed case 9É"
+
+test_prefix = prefix? "--select" "--" and not prefix? "-s" "--"
+
+test_clamped = clamped [1 2 3] 2 10 == [2 3]
+
+test_aligned =
+  table = aligned [["a" "bb" "c"] ["ddd" "e" "f"]] 2 2
+  table == "a    bb  c\nddd  e   f\n"
+
+test_aligned_min_width = aligned [["a" "b"]] 6 1 == "a     b\n"
+
+test_sort_stable =
+  rows = [["b" "1"] ["a" "2"] ["b" "3"] ["a" "4"]]
+  sorted = sorted_by rows (x y -> compare_text x[1] y[1])
+  sorted == [["a" "2"] ["a" "4"] ["b" "1"] ["b" "3"]]
+
+test_compare_fields_prefix = compare_fields ["a"] ["a" "b"] < 0
+
+test_compare_numeric_missing =
+  word = numbers_at ["x" "1"] [1 2]
+  three = numbers_at ["3"] [1]
+  other = numbers_at ["y" "2"] [1 2]
+  compare_numeric word three < 0 and compare_numeric word other == 0
+
+test_counted_values =
+  counted = counted_values ["x" "y" "x" "" "x"]
+  list_map_counts counted == ["1:" "3:x" "1:y"]
+
+test_sample_kinds =
+  kinds = list/map ["" "12" "1.5" "x"] sample_kind
+  list/to_list kinds == [0 1 2 3]
+
+test_huge_integer_is_float = sample_kind "99999999999999999999" == 2
+
+test_median_even = median_of [1 2 3 4] == "2.5"
+
+test_median_odd = median_of [1 5 9] == "5"
+
+fn list_map_counts rows
+  list/to_list (list/map rows (t -> "{t.count}:{t.value}"))

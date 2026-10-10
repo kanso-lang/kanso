@@ -1,0 +1,57 @@
+import "../csv"
+import "std/list"
+import "std/regexp"
+
+fn flags_of "search"
+  own = [(flag "--ignore-case" "-i" false) (flag "--invert-match" "-v" false)]
+  flags_with (push own (flag "--select" "-s" true))
+
+fn usage_of "search"
+  ["Filters CSV data by whether the given regex matches a row."]
+    . push ""
+    . push "The regex is applied to each field in each row, and if any field"
+    . push "matches, then the row is written to the output. The columns to"
+    . push "search can be limited with the '--select' flag (but the full row"
+    . push "is still written to the output if there is a match)."
+    . push ""
+    . push "Usage:"
+    . push "    xsv search [options] <regex> [<input>]"
+    . push ""
+    . push "search options:"
+    . push "    -i, --ignore-case      Case insensitive search. This is"
+    . push "                           equivalent to prefixing the regex with"
+    . push "                           '(?i)'."
+    . push "    -s, --select <arg>     Select the columns to search. See 'xsv"
+    . push "                           select -h' for the full syntax."
+    . push "    -v, --invert-match     Select only rows that did not match"
+    . usage_text
+
+fn compute "search" o sheets
+  sh = sheets[1]
+  pattern = case_folded (or_empty o.rest[1]) (on? o "--ignore-case")
+  picked = chosen_columns o sh
+  valid = compiles pattern (regexp/match? pattern "")
+  bad = list/find [valid picked] failed?
+  unless_failed bad (_ -> searched o sh pattern picked)
+
+fn case_folded pattern true
+  "(?i){pattern}"
+
+fn case_folded pattern false
+  pattern
+
+# Matching the empty string is only there to learn whether the pattern
+# compiles.
+fn compiles pattern (err why)
+  err "Invalid regex '{pattern}': {why}"
+
+fn compiles _ _
+  true
+
+fn searched o sh pattern picked
+  keep = (r -> hit? pattern (fields_at r picked) != on? o "--invert-match")
+  kept = list/to_list (list/select sh.body keep)
+  csv/render (with_head sh sh.head kept) 44
+
+fn hit? pattern fields
+  list/any? fields (f -> regexp/match? pattern f)

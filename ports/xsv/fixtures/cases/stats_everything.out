@@ -1,0 +1,7 @@
+field,type,sum,min,max,min_length,max_length,mean,stddev,median,mode,cardinality
+name,Unicode,,Ann Lee,gus,3,9,,,,Ann Lee,7
+age,Integer,213,19,61,0,2,35.5,13.901438774457844,30.5,27,6
+city,Unicode,,Kyiv,Rome,0,4,,,,Oslo,5
+email,Unicode,,ann@example.com,gus@example.org,0,15,,,,,7
+score,Float,468.5,58.75,92,0,5,78.08333333333333,13.306222437474716,79.875,92,6
+[exit 0]

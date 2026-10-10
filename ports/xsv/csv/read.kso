@@ -1,0 +1,148 @@
+import "std/list"
+import "std/text"
+
+# A record and the byte where the one after it begins.
+type cut
+  fields
+  next
+
+# The records come back with the byte each one started at, so that a ragged
+# record can be reported by line.
+type gathered
+  rows
+  starts
+
+# The bytes of a document and the delimiter between its fields.
+type source
+  bytes
+  delim
+
+# RFC 4180 reading. A field is bare or quoted; a quoted field may hold the
+# delimiter, a doubled quote and line breaks. Records end at LF, CRLF or a
+# lone CR. Blank lines are skipped, the way the Rust csv crate skips them.
+# Every record must be as wide as the first, or the read fails.
+pub fn parse s delim
+  src = source (text/bytes s) delim
+  even src (records src 1 [] [])
+
+fn records src p rows starts
+  return gathered rows starts if p > length src.bytes
+  blank_or_record src p rows starts src.bytes[p]
+
+fn blank_or_record src p rows starts 10
+  records src (p + 1) rows starts
+
+fn blank_or_record src p rows starts 13
+  records src (p + 1) rows starts
+
+fn blank_or_record src p rows starts none
+  records src (p + 1) rows starts
+
+fn blank_or_record src p rows starts _
+  c = field src p []
+  records src c.next (push rows c.fields) (push starts p)
+
+# At the first byte of a field.
+fn field src p fields
+  opened src p fields src.bytes[p]
+
+fn opened src p fields 34
+  quoted src (p + 1) (text/bytes "") fields
+
+# A delimiter as the last byte leaves one empty field after it.
+fn opened _ p fields none
+  cut (push fields "") p
+
+fn opened src p fields _
+  bare src p p fields
+
+# A bare field runs to the next delimiter or line break. Any other control
+# byte, and any quote, is part of it.
+fn bare src start p fields
+  q = text/find2_below src.bytes p src.delim 10 14
+  bare_stop src start q fields src.bytes[q]
+
+fn bare_stop src start q fields none
+  ended src q (push fields (piece src.bytes start q))
+
+fn bare_stop src start q fields c
+  fields = push fields (piece src.bytes start q)
+  return field src (q + 1) fields if c == src.delim
+  line_end src q fields c
+
+fn line_end _ q fields 10
+  cut fields (q + 1)
+
+fn line_end src q fields 13
+  cut fields (past_cr src.bytes q)
+
+# A record that ends at a CR swallows the LF after it.
+fn past_cr bs q
+  if (bs[q + 1] == 10) (q + 2) (q + 1)
+
+fn ended _ q fields
+  cut fields q
+
+# Inside quotes only a quote matters. Two in a row stand for one; a single
+# one closes the field.
+fn quoted src p acc fields
+  q = text/find2 src.bytes p 34 34
+  closing src p q acc fields src.bytes[q + 1]
+
+fn closing src p q acc fields 34
+  quoted src (q + 2) (text/append acc (text/slice src.bytes p q)) fields
+
+fn closing src p q acc fields none
+  close src p q acc fields
+
+fn closing src p q acc fields _
+  close src p q acc fields
+
+fn close src p q acc fields
+  return unclosed src p acc fields if q > length src.bytes
+  inside = text/slice src.bytes p (q - 1)
+  after_quote src (q + 1) (text/append acc inside) fields
+
+# The input ended inside quotes. The csv crate keeps what it read, and so does
+# this reader.
+fn unclosed src p acc fields
+  whole = text/append acc (text/slice src.bytes p (length src.bytes))
+  cut (push fields (text/utf8 whole)) (length src.bytes + 1)
+
+# After a closing quote comes a delimiter, a line break or the end. Anything
+# else is kept as part of the field, as the csv crate keeps it.
+fn after_quote src p acc fields
+  stop_after src p acc fields src.bytes[p]
+
+fn stop_after _ p acc fields none
+  cut (push fields (text/utf8 acc)) p
+
+fn stop_after _ p acc fields 10
+  cut (push fields (text/utf8 acc)) (p + 1)
+
+fn stop_after src p acc fields 13
+  cut (push fields (text/utf8 acc)) (past_cr src.bytes p)
+
+fn stop_after src p acc fields c
+  return field src (p + 1) (push fields (text/utf8 acc)) if c == src.delim
+  after_quote src (p + 1) (text/append acc c) fields
+
+fn piece bs from upto
+  text/utf8 (text/slice bs from (upto - 1))
+
+# Every record is as wide as the first one.
+fn even src (gathered rows starts)
+  return [] if rows == []
+  width = length (list/first rows)
+  positions = list/naturals . list/take (length rows)
+  ragged = list/find positions (i -> length rows[i] != width)
+  verdict src rows starts width ragged
+
+fn verdict _ rows _ _ none
+  rows
+
+fn verdict src rows starts width i
+  line = 1 + list/count (text/slice src.bytes 1 (starts[i] - 1)) (b -> b == 10)
+  at = "record {i - 1} (line: {line}, byte: {starts[i] - 1})"
+  found = "found record with {length rows[i]} fields"
+  err "CSV error: {at}: {found}, but the previous record has {width} fields"

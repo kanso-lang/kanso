@@ -1,0 +1,36 @@
+import "std/list"
+import "std/text"
+
+# Elastic tabstops, as the Rust tabwriter crate lays them out: every column
+# but the last is padded to its widest cell plus `pad`, and never narrower
+# than `least`. The last cell of a line is written as it is.
+fn aligned rows least pad
+  widths = column_widths rows least pad
+  lines = list/map rows (r -> aligned_line r widths)
+  text/join (list/to_list lines) ""
+
+fn column_widths rows least pad
+  n = list/fold rows 0 (acc r -> if (length r > acc) (length r) acc)
+  cols = list/take list/naturals n
+  list/to_list (list/map cols (c -> widest rows c least pad))
+
+fn widest rows c least pad
+  w = list/fold rows 0 (acc r -> wider acc r[c])
+  if (w + pad < least) least (w + pad)
+
+fn wider acc none
+  acc
+
+fn wider acc cell
+  if (length cell > acc) (length cell) acc
+
+fn aligned_line r widths
+  last = length r
+  cells = list/zip (list/take list/naturals last) r
+  padded = list/map cells (p -> cell_text p widths last)
+  "{text/join (list/to_list padded) ""}\n"
+
+fn cell_text pair widths last
+  i = pair[1]
+  return "{pair[2]}" if i == last
+  padded_to "{pair[2]}" widths[i]

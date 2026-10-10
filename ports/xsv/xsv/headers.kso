@@ -1,0 +1,60 @@
+import "std/list"
+import "std/text"
+
+fn flags_of "headers"
+  own = [(flag "--intersect" "" false) (flag "--just-names" "-j" false)]
+  flags_with own
+
+fn usage_of "headers"
+  ["Prints the fields of the first row in the CSV data."]
+    . push ""
+    . push "These names can be used in commands like 'select' to refer to"
+    . push "columns in the CSV data."
+    . push ""
+    . push "Note that multiple CSV files may be given to this command. This"
+    . push "is useful with the --intersect flag."
+    . push ""
+    . push "Usage:"
+    . push "    xsv headers [options] [<input>...]"
+    . push ""
+    . push "headers options:"
+    . push "    -j, --just-names       Only show the header names (hide column"
+    . push "                           index)."
+    . push "    --intersect            Shows the intersection of all headers in"
+    . push "                           all of the inputs given."
+    . usage_text
+
+fn compute "headers" o sheets
+  names = header_names sheets (on? o "--intersect")
+  listed names (on? o "--just-names")
+
+# Under --no-headers a sheet's columns have no names, so they are numbered.
+fn names_of none
+  []
+
+fn names_of sh
+  return sh.head if sh.named
+  list/to_list (list/map (list/take list/naturals (width_of sh)) (i -> "{i}"))
+
+fn header_names sheets false
+  list/fold sheets [] (acc sh -> text/concat acc (names_of sh))
+
+# The names of the first input that every other input also has, once each.
+fn header_names sheets true
+  firsts = names_of sheets[1]
+  others = list/to_list (list/drop sheets 1)
+  shared = list/select firsts (n -> list/all? others (sh -> has? sh n))
+  list/fold shared [] (acc n -> once acc n)
+
+fn once acc n
+  if (list/any? acc (m -> m == n)) acc (push acc n)
+
+fn has? sh n
+  list/any? (names_of sh) (m -> m == n)
+
+fn listed names true
+  text/join (list/to_list (list/map names (n -> "{n}\n"))) ""
+
+fn listed names false
+  counts = list/map list/naturals (i -> "{i}")
+  aligned (list/to_list (list/zip counts names)) 2 2

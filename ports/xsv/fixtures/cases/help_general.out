@@ -1,0 +1,21 @@
+Usage:
+    xsv <command> [<args>...]
+    xsv [options]
+
+Options:
+    --list        List all commands available.
+    -h, --help    Display this message
+    --version     Print version info and exit
+
+Commands:
+    count       Count records
+    frequency   Show frequency tables
+    headers     Show header names
+    join        Join CSV files
+    search      Search CSV data with regexes
+    select      Select columns from CSV
+    slice       Slice records from CSV
+    sort        Sort CSV data
+    stats       Compute basic statistics
+    table       Align CSV data into columns
+[exit 0]

@@ -1,0 +1,190 @@
+import "../csv"
+import "std/list"
+import "std/math"
+import "std/text"
+
+# What one column holds, summarised for the stats table.
+type summary
+  kind
+  lengths
+  numbers
+  texts
+  values
+
+fn flags_of "stats"
+  own = [(flag "--cardinality" "" false) (flag "--everything" "" false)]
+  more = [(flag "--median" "" false) (flag "--mode" "" false)]
+  last = [(flag "--nulls" "" false) (flag "--select" "-s" true)]
+  flags_with (text/concat (text/concat own more) last)
+
+fn usage_of "stats"
+  ["Computes basic statistics on CSV data."]
+    . push ""
+    . push "Basic statistics includes mean, median, mode, standard deviation,"
+    . push "sum, max, min, min/max length and cardinality. Note that some"
+    . push "statistics are expensive to compute, so they must be enabled"
+    . push "explicitly."
+    . push ""
+    . push "Computing statistics on a large file can be made much faster if"
+    . push "you create an index for it first with 'xsv index'. (The index is"
+    . push "not supported by this port.)"
+    . push ""
+    . push "Usage:"
+    . push "    xsv stats [options] [<input>]"
+    . push ""
+    . push "stats options:"
+    . push "    -s, --select <arg>     Select a subset of columns to compute"
+    . push "                           stats for. See 'xsv select --help' for"
+    . push "                           the format details."
+    . push "    --everything           Show all statistics available."
+    . push "    --mode                 Show the mode. This requires storing all"
+    . push "                           CSV data in memory."
+    . push "    --cardinality          Show the cardinality. This requires"
+    . push "                           storing all CSV data in memory."
+    . push "    --median               Show the median. This requires storing"
+    . push "                           all CSV data in memory."
+    . push "    --nulls                Include NULLs in the population size for"
+    . push "                           computing mean and standard deviation."
+    . usage_text
+
+fn compute "stats" o sheets
+  sh = sheets[1]
+  picked = chosen_columns o sh
+  stats_table o sh picked
+
+fn stats_table _ _ e@(err _)
+  e
+
+fn stats_table o sh picked
+  head = text/concat base_columns (extra_columns o)
+  rows = list/map picked (c -> stats_row o (column_name sh c) (column_of sh c))
+  csv/render (push [] head . text/concat (list/to_list rows)) 44
+
+base_columns = ["field" "type" "sum" "min" "max" "min_length" "max_length"]
+  . text/concat ["mean" "stddev"]
+
+# The optional columns, in xsv's order, each on when asked for by name or by
+# --everything.
+fn extra_columns o
+  all = on? o "--everything"
+  names = ["median" "mode" "cardinality"]
+  list/to_list (list/select names (n -> all or on? o "--{n}"))
+
+fn column_of sh c
+  list/to_list (list/map sh.body (r -> field_or_empty r[c]))
+
+fn stats_row o name seen
+  s = summarised seen
+  row = [name (kind_name s.kind) (sum_of s)]
+    . text/concat (extremes s)
+    . text/concat (length_range s)
+    . text/concat (moments o s)
+  text/concat row (list/to_list (list/map (extra_columns o) (n -> extra n s)))
+
+fn summarised seen
+  filled = list/to_list (list/reject seen (v -> v == ""))
+  kind = list/fold seen 0 (k v -> merged_kind k (sample_kind v))
+  lengths = list/to_list (list/map seen (v -> length (text/bytes v)))
+  numbers = list/to_list (list/map filled number_value)
+  summary kind lengths numbers filled seen
+
+# Sample kinds are ranked so that merging two is taking the larger: an empty
+# field says nothing, an integer and a float make a float, and anything that
+# is not a number makes the whole column text.
+fn sample_kind ""
+  0
+
+fn sample_kind v
+  kind_of_number (number_value v)
+
+fn kind_of_number none
+  3
+
+fn kind_of_number n:int
+  if (fits_i64? n) 1 2
+
+fn kind_of_number _
+  2
+
+# xsv reads integers as 64-bit; a wider one parses only as a float.
+fn fits_i64? n
+  limit = 9223372036854775807
+  0 - limit - 1 <= n and n <= limit
+
+fn merged_kind a b
+  if (a < b) b a
+
+fn kind_name 0
+  "NULL"
+
+fn kind_name 1
+  "Integer"
+
+fn kind_name 2
+  "Float"
+
+fn kind_name _
+  "Unicode"
+
+fn numeric? s
+  s.kind == 1 or s.kind == 2
+
+fn sum_of s
+  return "" if not numeric? s
+  total = list/sum s.numbers
+  shown_number s.kind total
+
+fn extremes s
+  return ["" ""] if s.kind == 0
+  return [(list/min s.texts) (list/max s.texts)] if s.kind == 3
+  lo = shown_number s.kind (list/min s.numbers)
+  hi = shown_number s.kind (list/max s.numbers)
+  [lo hi]
+
+fn length_range s
+  return ["" ""] if s.lengths == []
+  ["{list/min s.lengths}" "{list/max s.lengths}"]
+
+# Mean and population standard deviation. Under --nulls an empty field
+# counts as a zero in the population.
+fn moments o s
+  return ["" ""] if not numeric? s or s.numbers == []
+  nulls = if (on? o "--nulls") (length s.values - length s.numbers) 0
+  floats = list/to_list (list/map s.numbers (x -> x * 1.0))
+  xs = text/concat floats (blank_zeros nulls)
+  mean = list/sum xs / length xs
+  spread = list/sum (list/map xs (x -> (x - mean) * (x - mean))) / length xs
+  [(rust_float mean) (rust_float (math/sqrt spread))]
+
+fn blank_zeros n
+  list/to_list (list/take (list/repeat 0.0) n)
+
+fn extra "median" s
+  return "" if not numeric? s or s.numbers == []
+  median_of (sorted_by s.numbers compare_numbers)
+
+fn extra "mode" s
+  mode_of (counted_values s.values)
+
+fn extra "cardinality" s
+  "{length (counted_values s.values)}"
+
+fn extra _ _
+  ""
+
+fn median_of xs
+  n = length xs
+  mid = (n + 1) / 2
+  return rust_float (xs[mid] * 1.0) if n % 2 == 1
+  rust_float ((xs[mid] + xs[mid + 1]) / 2.0)
+
+# The most common value; among equally common values, the smallest.
+fn mode_of counted
+  most = list/max (list/map counted (t -> t.count))
+  or_empty (list/find counted (t -> t.count == most) . (t -> t.value))
+
+fn shown_number 1 n
+  "{n}"
+
+fn shown_number _ n
+  rust_float (n * 1.0)

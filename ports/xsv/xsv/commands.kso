@@ -1,0 +1,50 @@
+import "std/text"
+
+# The usage text every command ends with.
+common_help = ["Common options:"]
+  . push "    -h, --help             Display this message"
+  . push "    -o, --output <file>    Write output to <file> instead of stdout."
+  . push "    -n, --no-headers       When set, the first row will not be"
+  . push "                           interpreted as headers."
+  . push "    -d, --delimiter <arg>  The field delimiter for reading CSV data."
+  . push "                           Must be a single character. [default: ,]"
+  . text/join "\n"
+
+general_usage = ["Usage:"]
+  . push "    xsv <command> [<args>...]"
+  . push "    xsv [options]"
+  . push ""
+  . push "Options:"
+  . push "    --list        List all commands available."
+  . push "    -h, --help    Display this message"
+  . push "    --version     Print version info and exit"
+  . push ""
+  . push "Commands:"
+  . push "    count       Count records"
+  . push "    frequency   Show frequency tables"
+  . push "    headers     Show header names"
+  . push "    join        Join CSV files"
+  . push "    search      Search CSV data with regexes"
+  . push "    select      Select columns from CSV"
+  . push "    slice       Slice records from CSV"
+  . push "    sort        Sort CSV data"
+  . push "    stats       Compute basic statistics"
+  . push "    table       Align CSV data into columns"
+  . push ""
+  . text/join "\n"
+
+# What every command accepts, before the flags of its own.
+fn flags_with own
+  shared = [(flag "--delimiter" "-d" true) (flag "--help" "-h" false)]
+  more = [(flag "--no-headers" "-n" false) (flag "--output" "-o" true)]
+  text/concat (text/concat shared more) own
+
+# The text --help prints: the command's own part, then the common options.
+fn usage_text own
+  "{text/join own "\n"}\n\n{common_help}\n"
+
+fn flags_of _
+  none
+
+fn usage_of _
+  general_usage

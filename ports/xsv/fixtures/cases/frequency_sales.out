@@ -1,0 +1,11 @@
+field,value,count
+city,(NULL),264
+city,Kyiv,260
+city,Oslo,253
+city,Paris,252
+city,Rome,244
+city,Lima,227
+flag,n,517
+flag,y,499
+flag,(NULL),484
+[exit 0]

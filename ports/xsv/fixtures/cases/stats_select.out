@@ -1,0 +1,4 @@
+field,type,sum,min,max,min_length,max_length,mean,stddev,median
+n,Unicode,,-5,abc,1,7,,,
+f,Float,1009.125,-2,1000,0,5,168.1875,372.00790867209173,2
+[exit 0]
