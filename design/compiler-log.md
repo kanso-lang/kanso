@@ -25248,6 +25248,25 @@ so the sample and its row in `bench/compile_golden.txt` are gone. A `tie`
 sample cannot take its place there, because the harness compiles a file with no
 imports and `tie` lives in `list`. Removing the passes that served the block
 moves the compile, entry, library, emit and interpreter rows and the size of
-every binary. Those are CI's to measure, and the values they land on are
-recorded when its rows arrive. runbench reads 147 instructions fewer in this
-container, so it is projected at 1,245,043,177 until then.
+every binary. On CI every one of them falls. compile_instructions lands on
+25,712,749, entry_instructions on 85,036,744, library_instructions on
+85,590,951, emit_instructions on 7,038,004 and interp_instructions on
+488,375,858. codegen_instructions_dev lands on 118,906,508 and
+codegen_instructions_release on 453,887,359. browser_compile_instructions
+lands on 388,285,810. Every binary is 448 bytes smaller, and the text total
+lands on 4,645,694. work_runbench lands on 1,245,043,177, as projected, with
+work_encodebench on 2,393,925,910, work_livebench on 1,472,860,747 and
+work_oneshot on 13,176,864. No row rises, so the floor does not have to move to
+admit the retirement, and the score rises from 90.24995 to 90.2512, which is
+banked.
+
+Three diagnostics lost their golden with the block. The unused-expression rule
+lives in two walks, the function body's and the block's, and
+a_build_body_line_goes_nowhere was the only program that reached either: in a
+body, consecutive expression lines fold into one effect group, and a binding
+after an expression line is refused first by "bindings precede the effects in a
+body". The indented-block rule never had a reachable program. It was counted as
+pinned by tests/golden/play/decls_after_statements.stderr, a file no test reads
+and whose fixture now runs and prints `first`. Dropping `build` from the
+message's wording took the stale copy out of agreement. All three are listed in
+tests/golden/unpinned_diagnostics.txt with the programs that were tried.
