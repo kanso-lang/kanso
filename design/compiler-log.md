@@ -25184,3 +25184,92 @@ run_arena_peak_bytes lands on 8,912,912 and run_held_peak_bytes on 3,222,256,
 and run_peak_bytes' baseline goes from 156,818,380 to 489,255,962. Both
 baselines are rounded up. The score is unchanged, and the four fixes now
 have something to score against.
+
+## 2026-10-10 — a fold that joins onto its accumulator writes in place
+
+The mustache port renders a template by folding over its pieces, and its
+folder answers `"{acc}{piece}"`. Natively, every step copied the whole string
+built so far, so 20,000 pieces held 2.77 GB before the program finished. The
+interpreter was not affected.
+
+The string-builder analysis already wrote a join in place when the
+accumulator is carried by a recursive function. A lambda handed to a fold was
+never looked at, because `walk_for_builder` stops at every lambda. A fold's
+folder runs once per element on the accumulator the fold threads through, so
+when `fold_owns_accumulator` says the fold owns its seed, a join onto the
+folder's first parameter has the same shape as the recursive case. The walk
+now marks those joins: in the folder's body, in either arm of an `if`, and
+through the wrapper lambda that `body_is_folder` already accepts.
+
+A folder passed by name, as in `list/fold xs "" piece`, is handled the same
+way under three conditions. Every arm of `piece` must end in a join onto its
+first parameter. Every direct call of `piece` must hand that argument over.
+Every use of the name as a value must be the folder of a fold whose seed
+nothing else holds. A partial application of `piece` keeps what it was given,
+so it disqualifies the group.
+
+The runtime's in-place join stopped the program when its accumulator was not
+already a builder. A fold's seed is usually a literal, so `k_concat_arr_mut`
+now converts it on the first join, the way a builder parameter's caller does.
+
+`tests/golden/mem/a_fold_that_joins_onto_its_accumulator_grows_one_string`
+folds 2,000 pieces with a named folder and with a lambda. `alloc_bytes` falls
+from 21,839,568 to 1,221,150 and `arena_peak_bytes` from 22,020,096 to
+2,097,152. `tests/golden/micro/a_fold_joins_onto_its_own_accumulator` covers
+the ways the string can be shared: a seed bound to a name, one fold's result
+folded twice more, and a direct call of the named folder. Making
+`fold_owns_accumulator` answer yes unconditionally turns it red. The two folds
+over one lambda result then wrote into the same buffer, and both printed
+`[1][2][3]+5-6`.
+
+No benchmark folds a string, so every allocation counter agrees with main.
+The runtime's join grows 320 bytes of machine code, and CI's rows move with
+it:
+
+- `text` grows 320 bytes a binary, to 4,593,438 in all.
+- `work_basket` lands on 32,404,790, `work_runbench` on 1,129,589,259,
+  `work_livebench` on 1,473,486,345, `work_encodebench` on 2,384,338,137,
+  `work_oneshot` on 13,027,190, `work_digestbench` on 5,566,917 and
+  `work_scanbench` on 281,806, each within 22,030 instructions of main.
+- The analysis costs `compile_instructions` 25,857,543,
+  `entry_instructions` 85,513,471 and `library_instructions` 86,066,360.
+  `emit_instructions` falls to 7,058,306, `interp_instructions` to
+  488,868,354, and both codegen rows fall.
+- `browser_compile_instructions` rises from 388,182,464 to 391,515,764,
+  0.86%, and the browser run row falls 6, to 33,510,702. The rise does not
+  come from the new pass: with `named_folder_joins` switched off the row reads
+  392,251,588, higher still, so it follows the wasm binary's layout rather
+  than the work done.
+
+On main as it stood before kanso#1836, welfare fell from 90.25811251 to
+90.25519022 on those rows, because no benchmark folded a string.
+
+The floor question closed on the corpus-first gavel, and kanso#1836 put the
+shape into the run program as its `fold` phase: 800 pieces folded onto one
+string, measured on main before this fix at 858,398 instructions. With main
+merged in, runbench falls from 1,245,043,324 to 1,244,977,121, a projection
+from this container's 1,244,976,714 plus the 407 instructions by which CI read
+main above it; CI's row replaces it. The phase's memory is where the fix pays.
+run_arena_peak_bytes falls from 8,912,912 to 7,864,336, run_arena_blocks from
+8 to 7, run_alloc_bytes from 326,862,802 to 325,331,283, run_allocs from
+1,773,132 to 1,772,340 and run_sh_str from 10,188,896 to 8,648,960. Two run
+counters rise with the fix: run_str_scans goes from 229 to 1,021 while
+run_str_scan_bytes falls to 17,930,429, and run_bytes_malloc rises by 7 to
+9,127. Nothing here isolates which step of the in-place join each comes from.
+The rows the runtime's 320 bytes moved above
+carry onto main's values: `text` totals 4,656,446, work_basket lands on
+32,527,186, work_livebench on 1,472,861,727, work_encodebench on
+2,393,926,750, work_oneshot on 13,176,997, work_digestbench on 5,598,179 and
+work_scanbench on 268,886. The analysis's rows carry the same way:
+compile_instructions lands on 25,857,737, entry_instructions on 85,514,580,
+library_instructions on 86,066,207 and browser_compile_instructions on
+391,827,307. All of these are projected until CI reads them. Welfare rises from 90.2499
+to 90.3104 on those rows, and the rise is banked.
+
+CI's rows replace the projection. work_runbench lands on 1,244,977,121, as
+projected. The other rows CI corrects are small: `text` totals 4,656,478,
+work_encodebench lands on 2,393,926,869, work_livebench on 1,472,861,230 and
+browser_compile_instructions on 391,826,076. The run program's emitted code
+reads one call and two lines more than this container wrote, so
+emitted_other_calls lands on 17,394 and emitted_other_lines on 146,698.
+Welfare reads 90.3105 on CI's rows, and the rise is banked.
