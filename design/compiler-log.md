@@ -25240,3 +25240,10 @@ phase no longer keeps a copy of its map per update. run_alloc_bytes falls to
 322,971,202, run_allocs to 1,772,081 and run_sh_map to 0. run_buf_reuse falls
 by one to 136, and run_view_allocs and run_view_frees fall from 360 to 10 with
 the fix; nothing here isolates why the scatter phase's views moved.
+
+CI's rows replace the projection. work_runbench lands on 1,192,648,013, as
+projected. The front-end rows land on entry_instructions 85,514,580,
+library_instructions 86,066,207, interp_instructions 488,962,208 and
+emit_instructions 7,059,706, and browser_compile_instructions on 392,738,164.
+`text` totals 4,652,222. The run program's emitted code reads one line fewer,
+50,993. Welfare reads 90.6830 on CI's rows, and the rise is banked.
