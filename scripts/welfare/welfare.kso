@@ -1108,12 +1108,13 @@ fn dimension_of name
   found = list/select terms (d -> list/any? d.counters (c -> c == name))
   list/first (list/to_list found)
 
-# the band covers only what two hosts disagree about — compile peak bytes
-# wobbles 56 bytes between linux and macos, worth under a ten-thousandth of a
-# point. every other term is deterministic, so a three-thousandths fall is a
-# real regression and fails
+# The score is compared with the floor exactly. Every term is read from a
+# committed golden and combined with + - * and /, which give the same double
+# on every IEEE host, so linux and macos score one tree to the same bits and
+# there is no disagreement left for a margin to absorb. The margin this
+# replaced was 0.001 wide and let real falls of up to that size through.
 fn verdict value floor
-  ruling value floor (value < floor - 0.001) (value > floor + 0.001)
+  ruling value floor (value < floor) (value > floor)
 
 fn ruling value floor true true
   fell (floor - value) .> (_ -> os/exit 1)

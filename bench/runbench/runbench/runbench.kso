@@ -80,6 +80,20 @@
 # They are not in bench/runbench_phases.txt. That file links each phase to a
 # per-benchmark counter from before 2026-09-06 so history can be rebuilt, and
 # nothing in that history ever measured these shapes.
+#
+# A fifth joined on 2026-10-11, after its fix had already merged, so its column
+# is the compiler from just before that fix (main at kanso#1839) rather than
+# main. Built alone the same way, less that compiler's empty program of
+# 6,760,257, and shared of the whole program on it, 1,166,079,984.
+#
+#   restate  128 passes rebuilding a record's string   13,151,636  1.13%
+#
+# `restate` (kanso#1840) rebuilds a two-field record each pass with its string
+# field interpolated from the last one. Before the fix, the record was
+# rewritten in place below the loop's mark, where no rewind reaches what it
+# points to, so every pass's string stayed. 128 passes over a 64 KiB string add
+# 2 MiB to the peak, about one decoded document, like `machine` and `fold`.
+# With the fix the peak does not move at all.
 import "./bump"
 import "./deep"
 import "./escape"
@@ -87,6 +101,7 @@ import "./fold"
 import "./index"
 import "./machine"
 import "./pend"
+import "./restate"
 import "./scatter"
 import "./split"
 import "std/io"
@@ -118,6 +133,8 @@ machine_passes = 20000
 
 fold_pieces = 800
 
+restate_passes = 128
+
 fn decoded _ 0 sofar
   sofar
 
@@ -147,7 +164,8 @@ fn tally raw doc a b
   scanned = split/total split_chars
   ported = scatter/total scatter_keys + bump/total bump_steps
   ported2 = machine/total machine_passes + fold/total fold_pieces
-  bulk + shapes + scanned + ported + ported2 + digested raw digest_bytes
+  ported3 = ported2 + restate/total restate_passes
+  bulk + shapes + scanned + ported + ported3 + digested raw digest_bytes
 
 fn shaped raw doc a
   pend/total pend_cards .> (b -> io/write "runbench {tally raw doc a b}\n")

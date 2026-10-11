@@ -114,10 +114,8 @@ fn plain_run_with_floor(floor: f64) -> std::process::Output {
 
 /// The hole the 41-visit regression slipped through: a deterministic fall
 /// smaller than the verdict's dead band read as holding the floor, and CI
-/// stayed green while the score sat below it. The band exists only for the
-/// host wobble in compile peak bytes — 56 bytes across linux and macos,
-/// worth well under a thousandth of a point — so a three-thousandths fall
-/// must fail.
+/// stayed green while the score sat below it. A five-thousandths fall must
+/// fail.
 #[test]
 fn a_small_fall_still_fails() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -134,4 +132,40 @@ fn a_small_fall_still_fails() {
         "a five-thousandths fall exited clean: {}",
         String::from_utf8_lossy(&output.stdout)
     );
+}
+
+/// The band went on 2026-10-11, after kanso#1820 fell 0.00099 inside it and
+/// passed. The score is read from committed goldens with nothing but
+/// arithmetic, so two hosts score one tree to the same bits, and the verdict
+/// compares exactly. A fall of a billionth of a point is a fall.
+#[test]
+fn a_fall_of_a_billionth_still_fails() {
+    let output = plain_run_with_floor(recorded_floor() + 1e-9);
+    assert!(
+        !output.status.success(),
+        "a fall of a billionth exited clean: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+}
+
+/// The other side of the same comparison: a rise nobody banked fails too, so
+/// the next change cannot spend it.
+#[test]
+fn a_rise_of_a_billionth_must_be_banked() {
+    let output = plain_run_with_floor(recorded_floor() - 1e-9);
+    assert!(
+        !output.status.success(),
+        "a rise of a billionth exited clean without --set: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+}
+
+fn recorded_floor() -> f64 {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let text =
+        std::fs::read_to_string(root.join("bench/welfare_floor.json")).expect("the floor reads");
+    let at = text.find("\"floor\":").expect("the floor is recorded");
+    let value = at + "\"floor\":".len();
+    let end = value + text[value..].find(',').expect("a field ends somewhere");
+    text[value..end].parse().expect("the floor is a number")
 }

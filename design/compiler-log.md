@@ -3143,3 +3143,73 @@ carrier's floor and 0.0000349 below the 91.0338442 banked from the projection.
 The floor now records CI's figure. Banking the projection before CI had read
 it was the error; a projected floor can only be wrong in a direction nobody
 has checked.
+
+## 2026-10-11 — the welfare verdict compares exactly, and kanso#1840's shape joins the run program
+
+The welfare verdict passed any score within 0.001 of the floor, on either side.
+Its comment said the margin was for compile peak bytes, which read 56 bytes
+apart on linux and macos. That stopped applying when welfare began scoring the
+committed goldens: both hosts read the same file. The script combines its terms
+with `+`, `-`, `*` and `/` alone, and IEEE 754 rounds each of those exactly, so
+two hosts score one tree to the same double. `math/round` appears only in the
+history note `--set` writes. kanso#1820 fell 0.00099 and passed inside the
+margin, which is what kanso#1845 reported.
+
+The verdict now compares exactly. A score below the floor fails as a fall, and
+a score above it fails as a rise nobody banked. `--set` writes the score through
+`json/encode`, and a plain run reads it back to the same bits: a floor banked
+on this branch held against its own tree with nothing to spare. Two specs in
+`tests/a_welfare_fall_is_bought.rs` stage the floor a billionth of a point above
+and below the recorded one. With the margin restored, both runs exited clean
+and both specs went red.
+
+`--set` still banks a fall smaller than 0.01. That path writes the new floor
+and its reason into `bench/welfare_floor.json`, where a reviewer reads both,
+and this change leaves it alone.
+
+Main sat 0.0000081 below its floor when this was written, inside the margin.
+kanso#1840 cost that much on the rows the objective reads, and what it bought
+was in a shape the run program never ran. The corpus-first gavel of 2026-09-05
+puts the shape into the corpus, measured on the compiler without the fix, and
+the fix then scores against it. kanso#1840 had already merged, so the compiler
+without it is main at kanso#1839, 30ffadf4, the tree kanso#1840 was cut from.
+
+The new phase, `restate`, is the mem fixture
+`an_interpolated_state_string_is_not_kept_under_the_mark` with its pass count
+lifted into a parameter and its seed string cut from a megabyte to 64 KiB. At
+128 passes, on kanso#1839's compiler, it raises the arena peak from 4,718,608
+to 6,815,760, which is two more one-megabyte blocks and about one decoded
+document, sized the way `machine` and `fold` were. It raises the program's
+instructions from 1,152,728,396 to 1,166,079,984. Built alone, less the empty
+program's 6,760,257, it costs 13,151,636, which is 1.13% of the program. The
+header's table of port phases gains that row.
+
+On main the arena peak stays at 4,718,608, and the program reads 1,170,030,652.
+That is 3,950,668 more than kanso#1839's compiler spends on the same program,
+so the fix costs instructions on this shape as well as saving memory. The
+mechanism was not isolated.
+
+Welfare's two run baselines are re-based the way the four port phases were, so
+that adding the phase costs kanso#1839's compiler nothing. Each is multiplied
+by the reading with the phase over the reading without it, both on kanso#1839's
+compiler. run_instructions goes from 3,349,060,500 to 3,387,851,317, by
+1,166,079,984 over 1,152,728,396. The run peak, which the objective reads as
+the arena, held and permanent peaks summed, goes from 4,948,512 to 7,045,664
+with the phase, so run_peak_bytes' baseline goes from 489,255,962 to
+696,599,932. Both baselines are rounded up. The instruction pair was read in
+this container. Both readings come from one compiler on one host, so the ratio
+carries no difference between hosts that matters. The peak pair is counted and
+is the same on every host.
+
+The run vein moves by the phase's own work. run_alloc_bytes lands on
+330,057,404, run_allocs on 1,771,562, run_beat_iters on 47,708,
+run_bytes_malloc on 9,134, run_evac_allocs on 49,183, run_evac_bytes on
+14,916,544, run_perm_allocs on 98, run_sh_rec on 1,508,784, run_sh_str on
+17,048,976, run_str_scans on 1,023 and run_str_scan_bytes on 17,996,094. The
+evacuated bytes are the string copied at each stage, which the mem fixture's
+entry already names as the price of carrying it.
+
+work_runbench is projected at 1,170,030,652 from this container. The run
+program's machine code, emitted code and codegen rows move with its source and
+are left for CI to read. On the projection welfare reads 91.11 against a floor
+of 91.03, and the floor is banked from CI's rows.
