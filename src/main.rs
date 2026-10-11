@@ -905,8 +905,6 @@ fn build(program: ast::Program, file: &str, release: bool, built_as: Option<Stri
 
 include!("main/tail_calls.rs");
 
-/// Release: whole-program LTO across the program and a freshly compiled
-/// runtime — the slowest build and the fastest binary.
 /// Whether this host's clang can take `preserve_none` on a closure body.
 ///
 /// PROBED WITH THE .ll FORM, and deliberately not with the C attribute: the
@@ -1371,6 +1369,8 @@ fn preserve_none_probe() -> bool {
     ok
 }
 
+/// Release: whole-program LTO across the program and a freshly compiled
+/// runtime — the slowest build and the fastest binary.
 fn release_clang(stem: &str, ll_path: &str) -> std::io::Result<std::process::ExitStatus> {
     // THE RUNTIME IS LINKED AS MACHINE CODE, NOT AS BITCODE. It was `-O3
     // -flto`, which put the whole runtime through the LTO link beside the
