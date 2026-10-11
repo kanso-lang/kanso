@@ -3008,3 +3008,11 @@ by 64,944 and `emit_instructions` by 479, and each runtime binary sheds 352
 bytes of text. encodebench reads 98 more, livebench 70 more and oneshot 7
 more, with no change to what they call. The front-end rows and every
 allocation counter agree with the carrier. CI's rows replace these.
+
+This change rides kanso#1839, the oversize-spare fix, rather than a pull
+request of its own. On CI's rows the spare fix alone scores 91.0337007,
+below the carrier's floor of 91.0337226, most of the gap in
+`codegen_instructions_release`, which lands 109,925 above the carrier at
+454,517,107. The adoption's retirement is projected onto those rows from the
+deltas above, and the two together score 91.0338379, which is the floor this
+pull request banks. CI's rows for the pair replace the projection.
