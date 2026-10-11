@@ -483,30 +483,44 @@ fn shorter s _ false
 fn shorter s n true
   text/slice s 1 n
 
-fn over_sources names found
-  onward_src names found (length names == 0)
+# The walk descends, the way corpus_of does below. It once read src/ alone, and
+# when a seam moved a function into src/eval/ or src/check/ its refusals left
+# the scan with nothing going red: the gate counts the sites it can see.
+fn sources_of dir found
+  os/list_dir dir .> (names -> over_sources dir (list/to_list names) found)
 
-fn onward_src _ found true
-  gathered found
+fn over_sources dir names found
+  onward_src dir names found (length names == 0)
 
-fn onward_src names found false
+fn onward_src _ _ found true
+  found
+
+fn onward_src dir names found false
   rest = list/to_list (list/drop names 1)
-  name = names[1]
-  read_src name (source? name) rest found
+  here = "{dir}/{names[1]}"
+  os/is_dir here .> (d -> src_descend here d dir rest found)
 
-fn read_src _ false rest found
-  over_sources rest found
+fn src_descend here true dir rest found
+  sources_of here found .> (grown -> over_sources dir rest grown)
 
-fn read_src name true rest found
-  os/read_file! "src/{name}" .> (src -> more_sources rest found src)
+fn src_descend here false dir rest found
+  read_src here (source? here) dir rest found
 
-fn more_sources rest found src
+fn read_src _ false dir rest found
+  over_sources dir rest found
+
+fn read_src here true dir rest found
+  os/read_file! here .> (src -> read_more dir rest found src)
+
+fn read_more dir rest found src
+  over_sources dir rest (text/concat found (sites_in src))
+
+fn sites_in src
   plain = text/concat (driver_in src) (kinded_in src)
   spoken = text/concat (native_in src) plain
   oracle = text/concat (oracle_in src) (oracle_format_in src)
   heard = text/concat oracle spoken
-  both = text/concat (raised_in src) heard
-  over_sources rest (text/concat found both)
+  text/concat (raised_in src) heard
 
 fn gathered found
   every = deduped (list/to_list (list/sort found))
@@ -751,4 +765,4 @@ fn settled 0
 fn settled _
   os/exit 1
 
-pub play = os/list_dir "src" .> (names -> over_sources (list/to_list names) [])
+pub play = sources_of "src" [] .> (found -> gathered found)
