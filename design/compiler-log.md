@@ -3220,3 +3220,48 @@ banks that.
 `tests/the_run_program_carries_the_shapes_unchanged.rs` lists `restate` with
 the four port phases that, like it, came from a fixture rather than from a
 benchmark.
+
+## 2026-10-11 — the interpreter row reads the same on every runner
+
+kanso#1843 asked for `interp_instructions` to read one number on every CI host,
+after two jobs at one source read 2,178,502,266 and 2,178,502,272 on
+2026-09-15. Every cost-goldens job prints an `interp_sample` notice carrying
+its CPU, the binary's hash and the row, so the question can be answered from
+the annotations rather than by a new measurement.
+
+The annotations of 144 jobs survive, from 2026-10-08 to this morning. They
+hold 20 distinct rows, one for each interpreter source those jobs built. 19 of
+the 20 were read on more than one CPU model, and none of them was read as two
+numbers. The six models are AMD family 0x19 models 0x1 and 0x11, family 0x1a
+model 0x2, and Intel family 0x6 models 0x6a, 0xad and 0xcf. 488,913,120 alone
+was read by 45 jobs on all six.
+
+Two pairs of rows sit close together, 488,869,908 against 488,869,940 and
+568,708,684 against 568,709,639. Each value in both pairs was read on two or
+more CPU models, and each step from one value to the next is a commit that
+moved the golden: 4119f057 for the first pair and 3b981430 for the second. The
+older jobs' annotations had expired, so the record starts eight days after the
+2026-09-30 change that took the heap's address out of the interpreter's cache
+keys.
+
+So the row reads identically across runner hosts, which is what kanso#1843
+asked for, and nothing needs excluding from the golden's header.
+
+## 2026-10-11 — where the restate phase's extra instructions go
+
+Main's compiler spends 3,950,668 more instructions on the run program with
+`restate` than kanso#1839's compiler does. A per-function callgrind diff of the
+two builds puts 3,870,494 of them in glibc's `memmove`, and every other
+function moves by under 17,000. That is the stage evacuation copying each
+pass's 64 KiB string below the loop's mark, which the 2026-10-10 entry on
+record reuse names as the price of carrying it: run_evac_bytes reads
+14,916,544 on main against 6,442,592 without the phase. Built alone, the phase
+costs fewer instructions on main than on kanso#1839's compiler: the run program
+with every other count set to zero reads 17,451,186 against 19,911,907. Why the
+phase costs more in the full program and less alone was not looked into.
+
+Handing the string's block down instead of copying it is not available: an
+allocation gets a block of its own only above 1 MiB, so a 64 KiB string shares
+a block with whatever else the stage allocated. Keeping survivors where they
+were built would need a different region discipline, and nothing here builds
+one.
