@@ -3,7 +3,8 @@
 // built. codegen.rs reads this file with include!, so these items stay in
 // the codegen module and the compiler builds to the same binary it did
 // when they sat in codegen.rs (kanso#1848). cargo fmt does not reach an
-// included file, so CI's format job checks this one by name.
+// included file, so CI's format job checks the files under src/'s
+// subdirectories itself.
 
 const DECLARES: &str = r#"%KValue = type { i64, i64 }
 %parsed = type { i64, i64 }
