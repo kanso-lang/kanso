@@ -19,44 +19,6 @@
 > The last forty entries. Everything older is in `log/compiler-log-archive.md`,
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
-## 2026-10-09 — the run peak's second block belongs to the index phase
-
-The entry above put a value on the run program's arena peak dropping a
-block: about 0.17 welfare, reached by sizing the decoded document's
-containers exactly. Two variants of runbench, built with `--counters` on
-`daa60f90`, show that exact sizing alone would not reach it.
-
-    variant                               arena_peak_bytes
-    main                                         3,670,032
-    index_chars = 1                              3,145,728
-    doc = json/decode "[1]"                      2,621,456
-
-Without the index phase's long string, the peak moves to the decode phase:
-the kept document's two blocks and a third for a decode round. Without the
-kept document, the peak is one block and the 1,572,880-byte string. The
-index phase builds that string with `text/join [s s] ""`, and while the
-join copies, its 786,448-byte input is still live and needs contiguous room
-in a block. On main that room is the slack in the document's second block.
-
-So a smaller document lowers the peak only if the document and that input
-fit in one block together, which means a document under about 262,000
-bytes. By arithmetic, not measurement: the kept document is about 1.35 MB,
-and sizing its 799,728 bytes of container buffers to the counts the
-document actually holds would leave it near 0.95 MB. The input would still
-take a second block, and the peak would stay at 3,670,032. A block lower
-needs both exact sizing and a join that does not hold its input beside its
-result, and the second is not available while the input may have another
-holder.
-
-The same afternoon, the random-program differential ran against `daa60f90`,
-the first main with kanso#1814's walk and its arm check. 1,300 generated
-programs ran on the interpreter and both native tiers: 1,068 agreed, three of
-them by stopping on the same runtime error, 223 were refused by the checker
-the same way on every engine, 9 were rejected as malformed, and none
-diverged. 250 more went through the browser engine, which
-compiles in `docs/kanso.wasm` and runs on wasmi, against the native engine.
-All 250 agreed.
-
 ## 2026-10-09 — the tab's translation reads the module more cheaply
 
 The playground compiles a program to native IR text and then translates that
@@ -2423,3 +2385,23 @@ failure message names the script and the first entry it will move.
 The first run moved 18 entries. The two files together hold the same lines
 before and after, compared as sorted multisets, and the line counts sum to the
 same 102,212.
+
+## 2026-10-11 — the carry-repair spec had stopped reaching the repair
+
+`tests/carry_repair.rs` was the regression test for kanso#823: a repair raised
+a mark's pointer over the bytes it copied and left the mark's room behind. Its
+program gathered four files of the repository's prose in a loop. With
+`m->left = k_arena_left;` deleted from `k_repaired_settle`, the spec passed on
+main, with those files and with fixed-size copies of them. A probe in
+`k_repaired_settle` printed nothing: the program no longer reaches the repair.
+Its check also lived in the rewind until kanso#1259 moved it to the push on
+2026-09-05, where it reads the mark it has just written and cannot see a stale
+one.
+
+Three mem fixtures do reach the repair:
+a_carried_value_written_into_an_older_node ten times,
+a_repaired_node_below_the_mark_holds_tenure eight times and
+a_node_repaired_by_an_inner_pop_outlives_the_outer_stage once. With the line
+deleted, the last of them exits 1 and its stdout and counters change, so the
+mem vein was already the real guard. The ratchet row `repaired_mark` now
+deletes the line and expects that red, and the spec is gone.

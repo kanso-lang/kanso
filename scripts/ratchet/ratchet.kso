@@ -303,6 +303,17 @@ carry_failure = row
   (breaking "a_failure_read_as_a_record_at_a_carry_take")
   release
 
+# A repair raises the mark over what it copied below it, and the mark's room
+# has to move with its pointer. The mutation leaves the room behind, and
+# a_node_repaired_by_an_inner_pop_outlives_the_outer_stage exits non-zero.
+repaired_mark = row
+  "a repaired mark raised without its room"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_repaired_mark_left_without_its_room")
+  release
+
 # An `e@(err _)` arm at a carried slot needs no record, and the mutation makes
 # it ask for one: the fixture an_err_as_pattern_keeps_a_carried_slot_unboxed
 # reads sh_rec=64000 against its 0.
@@ -2918,7 +2929,9 @@ rows_c1m0 = text/concat rows_c1k [beat_cursor rescue_licence raised_err]
 
 rows_c1m = text/concat rows_c1m0 [clay_send_filed]
 
-rows_c1n = text/concat rows_c1m [carry_failure err_as_pattern force_chain]
+rows_c1m2 = text/concat rows_c1m [carry_failure repaired_mark]
+
+rows_c1n = text/concat rows_c1m2 [err_as_pattern force_chain]
 
 rows_c1o = text/concat rows_c1n [hand_box callback_err]
 

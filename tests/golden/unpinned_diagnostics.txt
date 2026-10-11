@@ -381,7 +381,8 @@ field `{}` of `{}` takes {}
 #                       a_field_write_names_a_field_the_type_lacks.
 #   not an err          the words "not an error." in make_dir.rs's module
 #                       comment, which is about `mkdir -p`
-#   a beat mark ...     carry_repair.rs:37 QUOTES it as what used to happen
+#   a beat mark ...     carry_repair.rs:37 QUOTED it as what used to happen,
+#                       until the file was deleted on 2026-10-11
 #   too many processes  many_handles.rs:52 does the same
 #
 # The last two are the sharpest thing in this file. Each is a regression test
@@ -390,12 +391,13 @@ field `{}` of `{}` takes {}
 # read by the scan as a pin of the message. All four could have been reworded
 # in the runtime with nothing going red.
 
-# AN ARENA INVARIANT, which is not a program's error at all. The beat rewind
-# compares the mark's pointer and remaining count against the end of its block,
-# one comparison per rewind, and a disagreement means the compiler or the
-# runtime handed out memory past a block end. A program cannot ask for it; what
-# it reports is a defect in the code below the program. tests/carry_repair.rs
-# is the regression test, and it asserts the message never appears.
+# AN ARENA INVARIANT, which is not a program's error at all. The beat push
+# compares the mark it has just taken against the end of its block, and a
+# disagreement means the compiler or the runtime handed out memory past a block
+# end. A program cannot ask for it; what it reports is a defect in the code
+# below the program. The ratchet row `repaired_mark` takes the room out of a
+# repaired mark, and the mem fixture
+# a_node_repaired_by_an_inner_pop_outlives_the_outer_stage fails.
 a beat mark and the arena disagree about the room that is left
 
 # A FOURTH RESOURCE CAP, joining the three above it for the same reason: it is

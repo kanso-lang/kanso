@@ -577,7 +577,8 @@ fn kept_source rest parts t
 #                                  "the three ways a read can fail"
 #   not an err                     the words "not an error." in make_dir.rs's
 #                                  module comment, about mkdir -p
-#   a beat mark and the arena ...  carry_repair.rs:37 quotes it as history
+#   a beat mark and the arena ...  carry_repair.rs:37 quoted it as history
+#                                  (the file was deleted on 2026-10-11)
 #   too many processes at once     many_handles.rs:52 quotes it as history
 #
 # The last two are the sharpest. Each is a regression test that names the bug
