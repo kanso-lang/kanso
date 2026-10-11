@@ -3015,4 +3015,8 @@ below the carrier's floor of 91.0337226, most of the gap in
 `codegen_instructions_release`, which lands 109,925 above the carrier at
 454,517,107. The adoption's retirement is projected onto those rows from the
 deltas above, and the two together score 91.0338379, which is the floor this
-pull request banks. CI's rows for the pair replace the projection.
+pull request banks. Against the carrier, three rows still read worse:
+codegen_instructions_release on 454,452,163, work_livebench on 1,474,871,601
+and work_oneshot on 13,223,705, the release row from the spare fix's layout
+and the two run rows 147 and 7 above the carrier. CI's rows
+for the pair replace the projection.
