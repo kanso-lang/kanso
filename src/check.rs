@@ -1889,14 +1889,6 @@ fn demand_conflicts(
     }
 }
 
-/// The engines carry `none` as a tag rather than a declared type, so nothing
-/// can derive from it yet. Rejecting here keeps all three engines identical
-/// instead of one erroring and another silently dropping the subtype.
-///
-/// A typeset is refused as a parent for the same reason. It only annotates, so
-/// nothing is ever built as one, and the engines disagreed about what wrapping
-/// it means: the interpreter took any member, and the native backend looked
-/// for the typeset in the value's own chain and refused a member at run time.
 /// Ruled 2026-10-04: a reference `list/tie` hands its maker is stored in a
 /// constructor's field and nowhere else, because the node it names may not be
 /// made yet. So every call of the maker's `ref` is an argument of a
@@ -2120,6 +2112,14 @@ impl<'a> TieCheck<'a> {
     }
 }
 
+/// The engines carry `none` as a tag rather than a declared type, so nothing
+/// can derive from it yet. Rejecting here keeps all three engines identical
+/// instead of one erroring and another silently dropping the subtype.
+///
+/// A typeset is refused as a parent for the same reason. It only annotates, so
+/// nothing is ever built as one, and the engines disagreed about what wrapping
+/// it means: the interpreter took any member, and the native backend looked
+/// for the typeset in the value's own chain and refused a member at run time.
 fn check_sub_parents(program: &Program, diags: &mut Vec<Diagnostic>) {
     let typeset =
         |name: &str| program.types.iter().any(|t| t.name == name && !t.members.is_empty());
