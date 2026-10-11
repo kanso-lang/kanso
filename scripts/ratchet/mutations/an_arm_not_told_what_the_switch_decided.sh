@@ -9,7 +9,7 @@
 # and no counter moves on its own, so the work vein is the witness.
 set -e
 target='            let narrowed = self.arm_tags_set(&decl.params[disc], by_tag);'
-n=$(grep -cF "$target" src/codegen.rs)
+n=$(grep -cF "$target" src/codegen/dispatchers.rs)
 [ "$n" -eq 1 ] || { echo "the arm narrowing changed shape ($n); rewrite this" >&2; exit 1; }
-sed -i 's|^            let narrowed = self.arm_tags_set(&decl.params\[disc\], by_tag);$|            let narrowed = self.arm_tags_set(\&decl.params[disc], by_tag).filter(\|_\| false);|' src/codegen.rs
-grep -qF 'let narrowed = self.arm_tags_set(&decl.params[disc], by_tag).filter(|_| false);' src/codegen.rs
+sed -i 's|^            let narrowed = self.arm_tags_set(&decl.params\[disc\], by_tag);$|            let narrowed = self.arm_tags_set(\&decl.params[disc], by_tag).filter(\|_\| false);|' src/codegen/dispatchers.rs
+grep -qF 'let narrowed = self.arm_tags_set(&decl.params[disc], by_tag).filter(|_| false);' src/codegen/dispatchers.rs

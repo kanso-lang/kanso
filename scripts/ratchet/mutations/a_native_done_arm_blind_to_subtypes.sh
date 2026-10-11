@@ -5,7 +5,7 @@
 # interpreter prints `fin`.
 set -e
 old='            "done" if subs => format!("call i64 @k_check_sub_tag(%KValue {value}, i64 {K_DONE})"),'
-[ "$(grep -cxF "$old" src/codegen.rs)" -eq 1 ]
-sed -i.bak '/^            "done" if subs => format!("call i64 @k_check_sub_tag(%KValue {value}, i64 {K_DONE})"),$/d' src/codegen.rs
-rm -f src/codegen.rs.bak
-! grep -qxF "$old" src/codegen.rs
+[ "$(grep -cxF "$old" src/codegen/dispatchers.rs)" -eq 1 ]
+sed -i.bak '/^            "done" if subs => format!("call i64 @k_check_sub_tag(%KValue {value}, i64 {K_DONE})"),$/d' src/codegen/dispatchers.rs
+rm -f src/codegen/dispatchers.rs.bak
+! grep -qxF "$old" src/codegen/dispatchers.rs
