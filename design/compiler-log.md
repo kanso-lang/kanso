@@ -3144,6 +3144,25 @@ The floor now records CI's figure. Banking the projection before CI had read
 it was the error; a projected floor can only be wrong in a direction nobody
 has checked.
 
+## 2026-10-11 — the two sweeps print their own lists
+
+Two specs checked CLAUDE.md's wording. `every_counter_gate_is_in_the_sweep`
+read the word before "cost goldens," and `the_compile_sweep_names_every_compile_gate`
+read one bullet for every compile gate's name. Each kept a fact in two places
+and used a test to make them agree, which ties the instructions' prose to the
+tree and blocks rewriting it (kanso#1846).
+
+Both sweeps now take `--list`. `all_counters.sh --list` prints each vein and
+its golden, and `all_compile.sh --list` prints each gate, both before building
+anything. The two specs that read CLAUDE.md are replaced by
+`the_sweep_lists_every_cost_golden` and `the_sweep_lists_every_compile_gate`,
+which run the script with `--list` and compare its output with the files on
+disk in both directions. Each went red with one entry dropped from the list it
+reads, naming the golden or gate it had lost.
+
+So the scripts are the single source for which veins and gates exist, and
+CLAUDE.md no longer has to carry either list or a count.
+
 ## 2026-10-11 — the welfare verdict compares exactly, and kanso#1840's shape joins the run program
 
 The welfare verdict passed any score within 0.001 of the floor, on either side.
