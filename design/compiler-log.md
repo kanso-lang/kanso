@@ -2988,3 +2988,23 @@ nothing came back from the arena to pay for it: run_peak_bytes rose from
 read 901,269 more instructions. A version worth trying keeps the pairs in the arena and
 copies the key into the region below the loop's mark, which needs an allocation
 point the arena does not have.
+
+## 2026-10-11 — the first join makes its own builder, and `k_b_adopt` goes
+
+A builder seed that is not a string reached its first join through
+`k_b_adopt`, which rendered it and made the rendering the builder. The fold
+join (kanso#1825) taught `k_concat_arr_mut` to do the same for any seed that
+arrives with no room, and from then on the adoption had nothing left to
+convert. The ratchet showed it: both rows that mutated the adoption stayed
+green on the carrier, and were replaced by one row that restores the old
+refusal in `k_concat_arr_mut`. This change removes the call, its declaration
+and the runtime function.
+
+Measured in this container against the carrier, runbench reads 26,076
+instructions fewer, because the run program's builder loops no longer call
+the adoption on their first join; its emitted code loses one call and two
+lines. `codegen_instructions_dev` falls by 5,811, `codegen_instructions_release`
+by 64,944 and `emit_instructions` by 479, and each runtime binary sheds 352
+bytes of text. encodebench reads 98 more, livebench 70 more and oneshot 7
+more, with no change to what they call. The front-end rows and every
+allocation counter agree with the carrier. CI's rows replace these.
