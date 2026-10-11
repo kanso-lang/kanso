@@ -19,6 +19,8 @@ docs/book/samples/ch05/order.txt
 HN_DRAFT.md
 /lazybench
 /imports
+/index_missing
+/main
 bench/naive_json/Cargo.lock
 
 # The chart's rows live on the perf-history branch and are fetched, not kept.
