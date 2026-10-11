@@ -3137,7 +3137,8 @@ on 118,937,518 and codegen_instructions_release on 454,509,840, the release row
 work_livebench on 1,474,871,202, work_oneshot on 13,223,901 and work_runbench
 on 1,152,728,743. runbench's text falls 32 bytes to 615,417, so `text` totals
 4,824,318, and its emitted code is one call and two lines shorter than
-projected. Welfare on these rows is 91.0338093, which is 0.0000867 above the
+projected; emitted_other_lines lands on 146,722, two below the carrier. Welfare
+on these rows is 91.0338093, which is 0.0000867 above the
 carrier's floor and 0.0000349 below the 91.0338442 banked from the projection.
 The floor now records CI's figure. Banking the projection before CI had read
 it was the error; a projected floor can only be wrong in a direction nobody
