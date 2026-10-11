@@ -6,7 +6,7 @@
 # interpreted and the even one natively, and the micro fixture
 # a_float_halfway_between_two_shortest_takes_the_even_digit disagrees.
 set -e
-grep -q '^    if last.is_multiple_of(2) {$' src/eval.rs
-sed -i.bak 's/^    if last.is_multiple_of(2) {$/    if last.is_multiple_of(1) {/' src/eval.rs
-rm -f src/eval.rs.bak
-grep -q '^    if last.is_multiple_of(1) {$' src/eval.rs
+grep -q '^    if last.is_multiple_of(2) {$' src/eval/values.rs
+sed -i.bak 's/^    if last.is_multiple_of(2) {$/    if last.is_multiple_of(1) {/' src/eval/values.rs
+rm -f src/eval/values.rs.bak
+grep -q '^    if last.is_multiple_of(1) {$' src/eval/values.rs
