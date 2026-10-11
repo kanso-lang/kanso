@@ -19,39 +19,6 @@
 > The last forty entries. Everything older is in `log/compiler-log-archive.md`,
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
-## 2026-10-09 — the tab's translation reads the module more cheaply
-
-The playground compiles a program to native IR text and then translates that
-text to wasm (`src/ir_wasm.rs`). The translation tokenizes every line of the
-module and parses the tokens into instructions. On `bench/interp_corpus`,
-the program `browser_compile_instructions` compiles, that is 6,370 lines.
-Three costs in it were per byte or per token rather than per line:
-
-- `name_char` tested each byte of every name with `is_ascii_alphanumeric`
-  and a four-way match. It is now a 256-entry table.
-- `Locals::number` read a name like `t17` or `L4` with two `strip_prefix`
-  calls, two filters and `str::parse`, and asked both prefixes every time.
-  It is now one pass over the bytes that returns the prefix and the number,
-  with the same rule: nine digits at most and no leading zero except `0`.
-- `P::next` cloned each token out of the line, which copied every owned name
-  and byte string. The parser reads each token once and only forward, so the
-  token is now moved out with `mem::replace`.
-
-    browser_compile_instructions   396,716,054 -> 389,803,790   (-1.74%)
-    browser_run_instructions        33,510,708 ->  33,510,708
-
-The run rows are byte-identical, so the module the tab builds did not change.
-Natively, the same compile, emit and translation of the corpus read
-129,985,288 instructions before and 126,938,798 after, a fall of 2.3%.
-`browser_compile_instructions` is the one term in the objective still below
-its baseline (343,917,485), and this narrows the gap by about an eighth.
-
-The compile sweep moved one row on this host: `entry_instructions`
-85,257,437 -> 85,257,442, five instructions, from the compiler's own layout,
-since the native entry path does not run the translation. The two codegen
-rows read what this container read for main in the entry above, so they
-stay at CI's values.
-
 ## 2026-10-09 — a bignum multiplies with its shorter operand outside
 
 A differential run through the playground's own compile path found this. The
@@ -2408,3 +2375,23 @@ to a subdirectory to keep autotests, and other files name 29 of them by path,
 including source comments, golden headers, two pages and four workflows. The
 spec binaries already link with rust-lld, so the linker offers nothing either.
 Neither fold is built, and the issue is closed as not planned.
+
+## 2026-10-11 — the carry-repair spec had stopped reaching the repair
+
+`tests/carry_repair.rs` was the regression test for kanso#823: a repair raised
+a mark's pointer over the bytes it copied and left the mark's room behind. Its
+program gathered four files of the repository's prose in a loop. With
+`m->left = k_arena_left;` deleted from `k_repaired_settle`, the spec passed on
+main, with those files and with fixed-size copies of them. A probe in
+`k_repaired_settle` printed nothing: the program no longer reaches the repair.
+Its check also lived in the rewind until kanso#1259 moved it to the push on
+2026-09-05, where it reads the mark it has just written and cannot see a stale
+one.
+
+Three mem fixtures do reach the repair:
+a_carried_value_written_into_an_older_node ten times,
+a_repaired_node_below_the_mark_holds_tenure eight times and
+a_node_repaired_by_an_inner_pop_outlives_the_outer_stage once. With the line
+deleted, the last of them exits 1 and its stdout and counters change, so the
+mem vein was already the real guard. The ratchet row `repaired_mark` now
+deletes the line and expects that red, and the spec is gone.
