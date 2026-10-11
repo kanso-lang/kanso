@@ -8,13 +8,12 @@
 //! Hand-writing the list gets it wrong. `src`, `Cargo.toml` and `Cargo.lock`
 //! are obvious and `lib` is remembered, but the compiler also reads `hako`,
 //! and a list written from memory omitted it. So the list is pinned to a
-//! property of the tree instead: every `include_str!("../X/...")` under src/
-//! names a root X that cargo will rebuild for, and every such X must be in the
-//! hook. A new embedded tree turns this red on the commit that adds it.
+//! property of the tree instead: every `include_str!` under src/ reads from a
+//! root X that cargo will rebuild for, and every such X must be in the hook. A new embedded tree turns this red on the commit that adds it.
 
 use std::collections::BTreeSet;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -46,7 +45,9 @@ fn rust_sources(dir: &Path, found: &mut Vec<PathBuf>) {
     }
 }
 
-/// Every X in an `include_str!("../X/...")` under src/.
+/// The crate-root directory every `include_str!` under src/ reads from. The
+/// path resolves from the file that names it, so `../hako/...` in src/lib.rs
+/// and `../../hako/...` in src/lib/modules.rs both answer `hako`.
 fn embedded_roots() -> BTreeSet<String> {
     let mut sources = Vec::new();
     rust_sources(&root().join("src"), &mut sources);
@@ -54,16 +55,27 @@ fn embedded_roots() -> BTreeSet<String> {
     let mut roots = BTreeSet::new();
     for path in sources {
         let text = fs::read_to_string(&path).expect("a source file reads");
-        for (_, rest) in
-            text.match_indices("include_str!(\"../").map(|(i, m)| (i, &text[i + m.len()..]))
-        {
-            let Some((arg, _)) = rest.split_once('"') else {
+        let dir = path.parent().expect("a source file has a directory");
+        for (i, m) in text.match_indices("include_str!(\"") {
+            let Some((arg, _)) = text[i + m.len()..].split_once('"') else {
                 continue;
             };
-            let Some((first, _)) = arg.split_once('/') else {
+            let mut at = dir.to_path_buf();
+            for part in Path::new(arg).components() {
+                match part {
+                    Component::ParentDir => {
+                        at.pop();
+                    }
+                    Component::Normal(name) => at.push(name),
+                    _ => {}
+                }
+            }
+            let Ok(inside) = at.strip_prefix(root()) else {
                 continue;
             };
-            roots.insert(first.to_string());
+            if let Some(Component::Normal(first)) = inside.components().next() {
+                roots.insert(first.to_string_lossy().into_owned());
+            }
         }
     }
     roots
