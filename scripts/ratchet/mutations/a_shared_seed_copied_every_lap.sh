@@ -5,6 +5,6 @@
 # every lap in the interpreter, and the allocations grow with the square of
 # the laps.
 set -e
-sed -i.bak 's/|| (alone \&\& self.moved_here(span, frame))/|| (alone \&\& false \&\& self.moved_here(span, frame))/' src/eval.rs
-rm -f src/eval.rs.bak
-test "$(grep -c '(alone && false && self.moved_here(span, frame))' src/eval.rs)" = 3
+sed -i.bak 's/|| (alone \&\& self.moved_here(span, frame))/|| (alone \&\& false \&\& self.moved_here(span, frame))/' src/eval/builtins.rs
+rm -f src/eval/builtins.rs.bak
+test "$(grep -c '(alone && false && self.moved_here(span, frame))' src/eval/builtins.rs)" = 3

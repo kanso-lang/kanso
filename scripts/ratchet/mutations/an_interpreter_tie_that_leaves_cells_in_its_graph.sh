@@ -6,7 +6,7 @@
 # the micro corpus goes red.
 set -e
 old='                    resolve_tied(node, &mut seen);'
-[ "$(grep -cxF "$old" src/eval.rs)" -eq 1 ]
-sed -i.bak 's#^                    resolve_tied(node, &mut seen);$#                    let _ = (node, \&mut seen);#' src/eval.rs
-rm -f src/eval.rs.bak
-! grep -qxF "$old" src/eval.rs
+[ "$(grep -cxF "$old" src/eval/builtins.rs)" -eq 1 ]
+sed -i.bak 's#^                    resolve_tied(node, &mut seen);$#                    let _ = (node, \&mut seen);#' src/eval/builtins.rs
+rm -f src/eval/builtins.rs.bak
+! grep -qxF "$old" src/eval/builtins.rs
