@@ -7,6 +7,6 @@
 # an_err_reaches_a_group_with_no_arm_for_it answer no diagnostic where their
 # goldens hold one.
 set -e
-grep -qF 'raised_err_at(cur, &raisers, &consts, &err_arms, &decl.file, none_diags);' src/check.rs
-sed -i '/raised_err_at(cur, &raisers, &consts, &err_arms, &decl.file, none_diags);/d' src/check.rs
-! grep -qF 'raised_err_at(cur, &raisers' src/check.rs
+grep -qF 'raised_err_at(cur, &raisers, &consts, &err_arms, &decl.file, none_diags);' src/check/after_infer.rs
+sed -i '/raised_err_at(cur, &raisers, &consts, &err_arms, &decl.file, none_diags);/d' src/check/after_infer.rs
+! grep -qF 'raised_err_at(cur, &raisers' src/check/after_infer.rs

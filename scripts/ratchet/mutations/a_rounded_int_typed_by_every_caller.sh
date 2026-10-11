@@ -5,7 +5,7 @@
 # goes red.
 set -e
 old='                Expr::Ident(_, span, _) if tables.none_free.contains(span) => false,'
-[ "$(grep -cxF "$old" src/check.rs)" -eq 1 ]
-sed -i.bak 's#^                Expr::Ident(_, span, _) if tables.none_free.contains(span) => false,$#                Expr::Ident(_, span, _) if false \&\& tables.none_free.contains(span) => false,#' src/check.rs
-rm -f src/check.rs.bak
-! grep -qxF "$old" src/check.rs
+[ "$(grep -cxF "$old" src/check/after_infer.rs)" -eq 1 ]
+sed -i.bak 's#^                Expr::Ident(_, span, _) if tables.none_free.contains(span) => false,$#                Expr::Ident(_, span, _) if false \&\& tables.none_free.contains(span) => false,#' src/check/after_infer.rs
+rm -f src/check/after_infer.rs.bak
+! grep -qxF "$old" src/check/after_infer.rs

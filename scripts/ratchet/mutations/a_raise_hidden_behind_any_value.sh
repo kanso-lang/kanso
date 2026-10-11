@@ -5,7 +5,7 @@
 # with no arm for it without a word.
 set -e
 t='        let boxed = r & crate::infer::DESC != 0 && r & any != any;'
-n=$(grep -cF "$t" src/check.rs)
+n=$(grep -cF "$t" src/check/after_infer.rs)
 [ "$n" -eq 1 ] || { echo "the box test changed shape ($n); rewrite this" >&2; exit 1; }
-sed -i 's/^        let boxed = r & crate::infer::DESC != 0 \&\& r & any != any;/        let boxed = r \& crate::infer::DESC != 0 || any == 0;/' src/check.rs
-grep -qF '        let boxed = r & crate::infer::DESC != 0 || any == 0;' src/check.rs
+sed -i 's/^        let boxed = r & crate::infer::DESC != 0 \&\& r & any != any;/        let boxed = r \& crate::infer::DESC != 0 || any == 0;/' src/check/after_infer.rs
+grep -qF '        let boxed = r & crate::infer::DESC != 0 || any == 0;' src/check/after_infer.rs
