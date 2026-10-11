@@ -18,6 +18,7 @@
 #
 #   sh scripts/gates/all_counters.sh           read-only, one summary
 #   sh scripts/gates/all_counters.sh --write   regenerate each golden that moved
+#   sh scripts/gates/all_counters.sh --list    print each vein and its golden
 #
 # --write preserves each golden's comment header. Two of them have one --
 # cost_golden_wide.txt and cost_golden_pend.txt -- and a plain `cp` of the
@@ -27,7 +28,6 @@ set -e
 write=0
 [ "$1" = "--write" ] && write=1
 
-sh scripts/gates/build_benchmarks.sh >/dev/null
 
 # vein:program:golden
 #
@@ -50,6 +50,18 @@ read:readbench-counters:bench/cost_golden_read.txt
 scan:scanbench-counters:bench/cost_golden_scan.txt
 live:livebench-counters:bench/cost_golden_live.txt
 run:runbench-counters:bench/cost_golden_run.txt"
+
+# The table is the one list of what this sweep covers. `--list` prints it
+# without building anything, and the spec beside it compares that output with
+# the cost goldens on disk.
+if [ "$1" = "--list" ]; then
+  for row in $veins; do
+    echo "${row%%:*} ${row##*:}"
+  done
+  exit 0
+fi
+
+sh scripts/gates/build_benchmarks.sh >/dev/null
 
 moved=""
 for row in $veins; do

@@ -136,30 +136,34 @@ fn every_named_gate_is_a_script_on_disk() {
     }
 }
 
-/// And CLAUDE.md's own list of them, which is the one a session actually reads
-/// before touching lib/. It named five when there were six, in the same
-/// paragraph that warns a count in prose goes stale — so it is pinned to the
-/// tree rather than trusted, exactly as the cost-golden count is in
-/// `every_counter_gate_is_in_the_sweep.rs`.
-///
-/// Scoped to the bullet, not the file: a name that happens to appear in some
-/// distant sentence is not the instruction telling a session to run it.
+/// What the sweep prints with `--list` is the set derived from the gates on
+/// disk. This used to check that a CLAUDE.md bullet named every gate, which
+/// kept one list in two places. The script is now the only list, and
+/// `--list` is how a session reads it (kanso#1846).
 #[test]
-fn the_instructions_name_every_compile_gate() {
-    let guidance =
-        std::fs::read_to_string(root().join("CLAUDE.md")).expect("the instructions read");
-    let bullet = guidance
-        .split("\n- ")
-        .find(|b| b.contains("are separate gates"))
-        .expect("the instructions name the compile gates somewhere");
-    let missing: Vec<_> = compile_gates_on_disk()
-        .into_iter()
-        .filter(|g| !bullet.contains(&format!("`{g}`")))
+fn the_sweep_lists_every_compile_gate() {
+    let out = std::process::Command::new("sh")
+        .arg("scripts/gates/all_compile.sh")
+        .arg("--list")
+        .current_dir(root())
+        .output()
+        .expect("the sweep runs");
+    assert!(out.status.success(), "all_compile.sh --list failed: {out:?}");
+    let listed: BTreeSet<String> = String::from_utf8(out.stdout)
+        .expect("the list is text")
+        .lines()
+        .map(str::to_string)
         .collect();
+    let on_disk = compile_gates_on_disk();
+    let missing: Vec<_> = on_disk.difference(&listed).collect();
     assert!(
         missing.is_empty(),
-        "CLAUDE.md tells a session which compile gates to run and does not name \
-         {missing:?} — that list was short for as long as it was written down"
+        "all_compile.sh --list does not name {missing:?}, which reads a compile golden"
+    );
+    let extra: Vec<_> = listed.difference(&on_disk).collect();
+    assert!(
+        extra.is_empty(),
+        "all_compile.sh --list names {extra:?}, which reads no compile golden"
     );
 }
 

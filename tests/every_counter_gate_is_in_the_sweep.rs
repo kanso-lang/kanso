@@ -126,55 +126,44 @@ fn every_row_names_a_golden_and_a_program_the_build_can_produce() {
     }
 }
 
-/// CLAUDE.md tells a session which veins to regenerate, and its count of the
-/// cost goldens was WRONG: it said four when there were ten, and had said so
-/// long enough that nobody re-counted. A branch that followed it regenerated
-/// the .mem vein and the code goldens and missed nine cost goldens, which CI
-/// found a round late.
+/// Every cost golden on disk is one the sweep says it covers, and every golden
+/// it says it covers is on disk.
 ///
-/// A number in prose is not a pin, so this pins it. The instruction may say
-/// the count in words or digits; either way it has to match the files.
+/// This used to read a count word out of CLAUDE.md, because the instructions
+/// had said four cost goldens when there were ten and a branch that believed
+/// them regenerated one of ten. The count is now nowhere but the script's own
+/// table, so the check runs the script the way a session would, with
+/// `--list`, and compares what it prints with the directory (kanso#1846).
 #[test]
-fn the_instructions_count_the_cost_goldens_correctly() {
-    let on_disk = std::fs::read_dir(root().join("bench"))
-        .expect("the bench directory reads")
-        .filter(|e| {
-            e.as_ref().is_ok_and(|e| {
-                e.file_name()
-                    .to_str()
-                    .is_some_and(|n| n.starts_with("cost_golden") && n.ends_with(".txt"))
-            })
-        })
-        .count();
-    let guidance =
-        std::fs::read_to_string(root().join("CLAUDE.md")).expect("the instructions read");
-    let claim = guidance
+fn the_sweep_lists_every_cost_golden() {
+    let out = std::process::Command::new("sh")
+        .arg("scripts/gates/all_counters.sh")
+        .arg("--list")
+        .current_dir(root())
+        .output()
+        .expect("the sweep runs");
+    assert!(out.status.success(), "all_counters.sh --list failed: {out:?}");
+    let listed: BTreeSet<String> = String::from_utf8(out.stdout)
+        .expect("the list is text")
         .lines()
-        .find(|l| l.contains("cost goldens,"))
-        .expect("the instructions name the cost goldens");
-    // The WORD immediately before "cost goldens", not a substring of the
-    // line. The first draft asked whether the line contained "10" and passed
-    // with "four" still written, because the same line names the ch10 sample.
-    // Watched red only after this.
-    let counted = claim
-        .split_once("cost goldens")
-        .expect("the line names the cost goldens")
-        .0
-        .split_whitespace()
-        .next_back()
-        .expect("a word stands before them")
-        .to_ascii_lowercase();
-    let spelled = [
-        "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
-        "eleven", "twelve",
-    ];
-    let want = spelled.get(on_disk).copied().unwrap_or("");
+        .map(|l| {
+            let (_, golden) = l.split_once(' ').expect("a line is `vein golden`");
+            golden.trim_start_matches("bench/").to_string()
+        })
+        .collect();
+    let on_disk: BTreeSet<String> = std::fs::read_dir(root().join("bench"))
+        .expect("the bench directory reads")
+        .filter_map(|e| e.ok()?.file_name().into_string().ok())
+        .filter(|n| n.starts_with("cost_golden") && n.ends_with(".txt"))
+        .collect();
+    assert!(!on_disk.is_empty(), "there is at least one cost golden");
+    let missing: Vec<_> = on_disk.difference(&listed).collect();
     assert!(
-        counted == want || counted == on_disk.to_string(),
-        "there are {on_disk} cost goldens and CLAUDE.md counts them {counted:?} — the \
-         count in that sentence was wrong for as long as it was written down, so it \
-         is pinned rather than trusted"
+        missing.is_empty(),
+        "all_counters.sh --list does not name {missing:?}, so the sweep never reads them"
     );
+    let extra: Vec<_> = listed.difference(&on_disk).collect();
+    assert!(extra.is_empty(), "all_counters.sh --list names {extra:?}, which is not on disk");
 }
 
 /// The sweep runs something that reads the lazy tier.
