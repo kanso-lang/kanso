@@ -1,9 +1,10 @@
 #!/bin/sh
-# A measured decision sent to Clay must have an entry in
-# design/pending-gavels.md to go to; twice in two days one did not, and
-# tests/a_question_sent_to_clay_has_a_ledger_entry.rs is what now reads the
-# log for them. A send is satisfied when its own paragraph names the ledger
-# file, when a later paragraph names it and quotes one of the send's
+# A measured decision sent to Clay must name where it went: the ledger,
+# design/pending-gavels.md, for a send written before 2026-10-10, and a
+# `needs-clay` issue since. Twice in two days one named neither, and
+# tests/a_question_sent_to_clay_has_somewhere_to_go.rs is what now reads the
+# log for them. A send is satisfied when its own paragraph names a channel,
+# when a later paragraph names one and quotes one of the send's
 # measurements, or when a later paragraph records the send as bounced and
 # quotes one of its measurements. This mutation takes the ledger's name out of
 # the paragraph that files the `.rodata` page pin, so that send has nowhere to
