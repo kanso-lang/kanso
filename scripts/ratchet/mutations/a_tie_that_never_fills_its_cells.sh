@@ -6,8 +6,8 @@
 # made. Without the fill a reference stays a blackhole, and the first walk
 # through one stops with "a lazy binding demands its own value".
 set -e
-grep -qF '*cell.borrow_mut() = ThunkState::Forced(node.clone());' src/eval.rs
-f=src/eval.rs
+grep -qF '*cell.borrow_mut() = ThunkState::Forced(node.clone());' src/eval/builtins.rs
+f=src/eval/builtins.rs
 line='                    *cell.borrow_mut() = ThunkState::Forced(node.clone());'
 [ "$(grep -cxF "$line" "$f")" -eq 1 ] || {
   echo "the tie's fill moved; this mutation needs rewriting" >&2

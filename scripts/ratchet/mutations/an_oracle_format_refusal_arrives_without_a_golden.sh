@@ -8,10 +8,10 @@
 # `builtin_nope 1` in user code is refused by name, and reaching this arm means
 # a stdlib module naming a builtin that does not exist.
 set -e
-grep -qF 'message: format!("unknown builtin `{name}`")' src/eval.rs || {
+grep -qF 'message: format!("unknown builtin `{name}`")' src/eval/builtins.rs || {
   echo "the unknown-builtin refusal moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i.bak 's|message: format!("unknown builtin `{name}`")|message: format!("this oracle refusal has no golden at all `{name}`")|' src/eval.rs
-rm -f src/eval.rs.bak
-grep -qF 'this oracle refusal has no golden at all' src/eval.rs
+sed -i.bak 's|message: format!("unknown builtin `{name}`")|message: format!("this oracle refusal has no golden at all `{name}`")|' src/eval/builtins.rs
+rm -f src/eval/builtins.rs.bak
+grep -qF 'this oracle refusal has no golden at all' src/eval/builtins.rs

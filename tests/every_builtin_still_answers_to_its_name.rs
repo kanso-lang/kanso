@@ -33,11 +33,11 @@
 //!
 //! So the question is asked where it can be answered: two files that must
 //! agree. `lib/*.kso` names its builtins through the `builtin_` door and
-//! `src/eval.rs` dispatches them, and neither can move without the other.
+//! `src/eval/builtins.rs` dispatches them, and neither can move without the other.
 
 use std::path::Path;
 
-const EVAL: &str = include_str!("../src/eval.rs");
+const EVAL: &str = include_str!("../src/eval/builtins.rs");
 
 /// The byte-string patterns of `call_builtin`'s own match, read off the file.
 ///
