@@ -59,7 +59,7 @@ lower_a = ["allocs" "alloc_bytes" "arena_blocks" "perm_allocs" "beat_iters"]
 # and until 2026-09-01 no counter, no golden and no spec here could see one.
 lower_b = ["bytes_malloc" "thunk_allocs" "thunk_escaped" "ten_blocks"]
 
-lower_bb = ["thunk_live_exit"]
+lower_bb = ["thunk_live_exit" "spare_peak_bytes"]
 
 lower_c = ["arena_peak_bytes" "held_peak_bytes" "sh_str" "sh_rec" "sh_buf"]
 
