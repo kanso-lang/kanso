@@ -5,9 +5,9 @@
 # output is the same; the work vein is what sees it.
 set -e
 old='let kept = name == "main" || name.starts_with("k_") || externs.contains(&name);'
-[ "$(grep -cF "$old" src/main.rs)" -eq 1 ] || {
+[ "$(grep -cF "$old" src/main/tail_calls.rs)" -eq 1 ] || {
   echo "the plain-call rewrite's test moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i 's/let kept = name == "main" || name.starts_with("k_") || externs.contains(&name);/let kept = true || externs.contains(\&name);/' src/main.rs
-grep -qF 'let kept = true || externs.contains(&name);' src/main.rs
+sed -i 's/let kept = name == "main" || name.starts_with("k_") || externs.contains(&name);/let kept = true || externs.contains(\&name);/' src/main/tail_calls.rs
+grep -qF 'let kept = true || externs.contains(&name);' src/main/tail_calls.rs
