@@ -98924,3 +98924,884 @@ The ratchet rows `link_correlated` and `link_early_cse` each take one pass back
 out. Without early-cse, runbench reads 1,407,664 higher; correlated
 propagation, measured before early-cse joined, was worth 6,541,266. The work
 vein sees either.
+
+## 2026-10-07 — the program's inline threshold stays at 2000
+
+The comment above `-inline-threshold=2000` in src/main.rs declined 4000 on
+2026-09-19 for a 3.64% rise in `codegen_instructions_release`. That rise was
+measured while the gate found clang 18, which kanso#1795 corrected, so I
+measured 4000 again under clang 19 on the tree after kanso#1796.
+
+The run gains hold. Against 2000, in this container:
+
+    runbench    1,129,589,618 -> 1,122,248,562   -7,341,056  (-0.650%)
+    encodebench 2,384,337,036 -> 2,367,226,282  -17,110,754  (-0.718%)
+    livebench   1,473,485,636 -> 1,460,513,428  -12,972,208  (-0.880%)
+    jsonbench     860,548,095 ->   854,565,945   -5,982,150  (-0.695%)
+    digestbench     5,566,368 ->     5,510,253      -56,115  (-1.008%)
+
+oneshot falls 73,560, and the other rows move by fewer than 2,000 or not at
+all. Summed `.text` grows 187,376 bytes, 4.1%, of which runbench accounts for
+89,296.
+
+On the codegen corpus, `clang -cc1` and ld.lld read byte-identical at the two
+thresholds, 206,785,011 and 250,049,700. Scored on those rows, welfare would
+read 90.07 against a floor of 90.04.
+
+Building runbench gives the other side. Traced the same way, with clang 19, a
+release build of bench/runbench at 4000 costs `clang -cc1` 11,766,666,246
+instructions against 8,481,293,726 (+38.7%) and ld.lld 27,062,341,881 against
+20,412,779,482 (+32.6%). The corpus is 62 lines of kanso and has no function
+whose inlining cost falls between 2000 and 4000, so the threshold can move
+without the corpus seeing it. Runbench has many such functions.
+
+So 4000 stays declined. Taking it would have banked a run gain whose build cost
+the objective has no row for.
+
+I ran the same check on correlated propagation and early-cse, which kanso#1796
+priced on the corpus. Building runbench, ld.lld reads 19,947,820,412 before
+them and 20,412,779,482 after, +2.33%, where the corpus read +3.37%, and
+`clang -cc1` moves 0.13%. For those passes the corpus priced the change in
+proportion.
+
+Open: the release codegen row reads one small program. A change whose build
+cost grows with function size, such as an inline threshold or an unroll count,
+can move it by nothing. Counting runbench's own build beside it would close
+that, at about fifty-five times the corpus build's instruction count under
+callgrind.
+
+## 2026-10-07 — the interpreter reads a local where it last found it
+
+A name the interpreter evaluates is resolved through `lookup`, which walks the
+environment from the innermost frame outward and compares the name against
+every binding it passes. On the interpreted corpus that walk ran 654,409 times
+for 45,066,454 instructions of its own, 69 a call, and was the third-largest
+function in the profile after the dispatch loop and `eval`.
+
+Each name node already keeps a `Resolution`: 0 until it first runs, 1 for a
+local, and a stamp for a global. The stamp is sound because the frames a node
+sees are fixed by where the node sits in the text. That property also fixes
+where the binding sits, so the node now keeps that too. A local found at frame
+`d` above the innermost, in slot `s` of that frame, keeps `3 + 256d + s`,
+which lies between plain local and the global stamps. A later run follows `d`
+parent pointers, compares the one name in slot `s`, and takes the value. A
+miss walks the frames the old way and keeps the new place. A frame deeper than
+127 or a slot past 255 keeps plain local and always walks. Debug builds check
+every kept place against a full walk, so the specs check the property on
+every program they carry.
+
+`interp_instructions` reads 585,141,444 -> 573,873,591 in this container, a fall
+of 11,267,853 (-1.93%), where main reads 585,141,444 on the row. The kept
+place still costs about 45 instructions a reference, most of it the clone of
+the value it returns. `interp_peak_bytes` and `interp_allocs` do not move,
+since the place lives in a word the node already had.
+
+The ratchet row `local_place` keeps plain local for every reference, and the
+interpreted row is its witness. Under that mutation the row reads 613,859,041,
+above main as well, since every reference then takes the out-of-line walk.
+
+## 2026-10-07 — a local's scalar copied inline costs more than the clone
+
+After the interpreter learned to read a local at the place it last found it,
+`lookup_at` still spent about 45 instructions a reference, most of them in the
+derived `Value::clone`, which is a call for every variant. A small int, a float
+and the four unit values hold no count to raise, so `lookup_at` was given a
+match that writes those six out directly and sends everything else through
+`clone`. `interp_instructions` rose 573,873,591 -> 586,635,237 (+12,761,646,
++2.22%) in this container. The output was unchanged. The match was not
+isolated from what inlining it did to the surrounding code, and it was taken
+back out.
+
+`docs/compiler.html` §198 and §199 cover this entry and the two before it.
+
+## 2026-10-08 — two more ideas measured and declined
+
+The interpreter's tail calls each allocate an argument vector, and the
+dispatcher frees it once the arguments are bound, so a chain of tail calls
+allocated and freed one vector a hop. Keeping the emptied vector in a `Cell` on
+the interpreter for the next tail call to fill raised `interp_instructions`
+573,873,591 -> 576,314,674 (+2,441,083, +0.43%). Many of the vectors `eval_tail`
+fills end in an ordinary call rather than a hop, so the spare was often empty,
+and the take and the set cost more than the allocations they saved.
+
+The release link's loop unroll threshold was raised through
+`-Wl,-mllvm,-unroll-threshold`. At 600 runbench read 176 instructions higher
+and `.text` grew 512 bytes; at 4000 runbench fell 2,445 and `.text` grew
+19,264. The loops runbench spends its time in are not held back by the
+threshold.
+
+## 2026-10-08 — the gates name the allocator's host settings
+
+The standing row "A welfare counter reads three parts per billion" ends on a
+pointer: the frames that moved between its corpus arms were the allocator
+committing pages, `_mi_os_commit_ex`, `mi_bitmap_setN` and `_mi_prim_commit`.
+What decides that path is in mimalloc's start-up. It opens
+`/proc/sys/vm/overcommit_memory` and, when the setting is 0 or 1, maps with
+`MAP_NORESERVE` and lets arenas commit on demand; it reads
+`/sys/kernel/mm/transparent_hugepage/enabled` to decide whether huge pages
+are on offer. Both are the runner's settings, both reach the interpreted and
+compile rows through the allocator those rows run on, and neither appears in
+any job log. This container reads `overcommit=0 thp=madvise`.
+
+mimalloc reads them with raw `syscall(SYS_open)` and `syscall(SYS_read)`, so
+the gate's `LD_PRELOAD` cannot hand them a fixed value, and this container
+cannot test the hypothesis by changing them. `scripts/gates/dispatch.sh name`,
+which every instruction gate already calls to print its cpu, now prints an
+`allocator:` line with both settings before the `silicon:` line. When two
+runners of one commit next read a row apart, the two job logs say whether
+these settings differed. `the_silicon_a_row_was_counted_on` requires the line
+with a loader and without one.
+
+## 2026-10-08 — two ways to shrink a decoded document, and neither moves the run peak
+
+`run_peak_bytes` reads 3,899,936: the arena's 3,670,032, the held pool's
+197,704 and the permanent pool's 32,200. The arena is counted in 1 MiB blocks
+plus the index shape's 524,304-byte oversize block, so a change that saves
+memory moves this row only when it frees a whole block. The 2026-09-24 entry
+found that the top-level `doc` keeps two of the three blocks for the whole run.
+
+One decode of bench/large.json allocates 1,355,840 bytes in 9,288 allocations.
+Counting them by size names three shapes. The 2,761 objects take 208 bytes
+each, 574,288 in all, because `{}` opens with room for five pairs and the
+document's objects hold one to five keys. The 2,752 arrays take 128 bytes
+each, 352,256 in all, for one to six elements. The 1,773 strings that contain
+an escape take 112 bytes each from `string_scan`, 198,576 in all, for text that
+is mostly under 32 bytes, plus a 16-byte header from `str_run`.
+
+Two changes were measured against that.
+
+- Smaller seeds, three pairs for a map and four slots for a list where they were
+  five and six. The arena peak held at 3,670,032 and runbench rose 4.18%
+  (1,129,589,604 -> 1,176,795,989), because the commonest sizes now grow once.
+- A string that takes its builder's buffer in place gives the unused room back
+  when that buffer ends at the arena's frontier. It fires on the decoder's
+  escaped strings and returns 32 bytes for each, about 57 KB a decode. The run
+  program's counters came back byte-identical, and the only vein that moved was
+  widebench's beat iterations, 18 -> 15. No objective term moved, and it adds a
+  test to every built string, so it was taken back out.
+
+Objects and arrays cannot get the same treatment at the point they close. Each
+is allocated when it opens and its children are allocated after it, so a
+container is at the frontier when it closes only if nothing inside it reached
+the heap.
+
+## 2026-10-08 — the tab's compiler keeps small blocks for itself
+
+The browser side's compile row was the one welfare term worse than its
+baseline: `browser_compile_instructions` read 514,922,959 against 343,917,485.
+A native profile of the same work, `bench/interp_corpus` compiled and lowered
+to wasm, put about 13% of its instructions in malloc and free, from 76,354
+allocations. Native kanso runs on mimalloc, which keeps freed blocks on a list
+for each size. `docs/kanso.wasm` runs on `std::alloc::System`, which on wasm32
+is dlmalloc, and dlmalloc has no such lists.
+
+The allocator under the compiler's tally now keeps them on wasm32. A request of
+512 bytes or fewer is rounded up to a multiple of eight. A freed block goes on
+the list for its size, and the next request of that size takes it before
+dlmalloc is asked. `realloc` was the trait's default before, an allocation, a
+copy and a free. It now keeps a small block in place when the new size falls
+in the same class, and hands two large blocks to dlmalloc's own `realloc`,
+which can grow one where it stands.
+
+`browser_compile_instructions` reads 514,922,959 -> 453,713,751, a fall of
+61,209,208 (-11.89%). The `realloc` change alone accounts for 1,614,339 of it.
+A ceiling of 256 bytes cost 0.8% more than 512, and one of 1024 saved 0.3%
+more while keeping twice as much on the lists. The other three browser rows do
+not move. `browser_compile_peak_bytes` holds at 829,597 because the tally
+counts requested bytes before any of this, and a `realloc` is counted as the
+allocation, copy and free it replaced. The browser rows belong to the rustc
+that built the artifact, which is 1.98.1 here as on CI.
+
+Native kanso is untouched. Taking `realloc` through `mi_realloc` there was
+measured first and made the compile rows worse: `compile_instructions` +45,622,
+`entry_instructions` +156,320, `emit_instructions` +166,452. So the override
+exists only on wasm32, and `compile_instructions` and `emit_instructions` read
+their goldens with it in place.
+
+The ratchet row `small_blocks` sets the ceiling to nothing, so every block goes
+to dlmalloc. The browser compile row reads 513,308,620 under it.
+
+## 2026-10-08 — the emitter writes its lines without the formatter
+
+`FnEmit::write` appended each line of a function body with
+`writeln!(self.out, "  {text}")`. The line is already a string, so the only
+work is two spaces, the text and a newline, and the formatter spent about 540
+instructions a line getting there. On the browser corpus that was 8,571 lines
+for 4,657,137 instructions. The line, the block label `start_block` writes and
+the stack slots `body` hoists into the entry block now go onto the buffer with
+`push_str`.
+
+The module text is the same; `machine_code` and `emitted_code` agree.
+`emit_instructions` reads 24,923,517 -> 23,997,530 in this container, a fall of
+925,987 (-3.72%), and CI's reading replaces it if it differs.
+`browser_compile_instructions` reads 453,713,751 -> 450,123,996 (-0.79%) over
+the tab's small-block free list, which belongs to the rustc that built the
+artifact, 1.98.1 here as on CI. On main before that list it read
+514,922,959 -> 511,333,204, so the saving is the same 3.6 million either way. The
+`kanso check` rows do not move, since they stop before codegen.
+
+The ratchet row `emitted_lines` sends the body line through `writeln!` again,
+and the emit row reads 24,766,221 under it.
+
+## 2026-10-08 — a dispatch stops dropping values that own nothing
+
+When the interpreter dispatches a call, `bind_moved` takes each argument a
+plain parameter binds and leaves `NoneV` in its place. The argument vector was
+then cleared with `args.clear()`, which hands every element to `Value`'s drop.
+`Value` has nineteen variants and its drop is an out-of-line function, so
+each placeholder cost a call that only found out there was nothing to free. On
+the interpreted corpus `dispatch_loop` made 1,384,579 of those calls, about 17
+instructions each.
+
+The vector is now emptied through `release`, which matches the variants that
+own nothing (a small int, a float, the booleans, `none`, `done` and a table
+slot) and forgets them, and drops the rest as before. `interp_instructions`
+reads 573,873,591 -> 568,708,684 in this container, a fall of 5,164,907
+(-0.90%), and CI's reading replaces it if it differs. Forgetting only `NoneV`
+read 570,633,594, so the other trivial variants account for a further 1.9
+million.
+
+Two neighbours were measured and are not built. Releasing the pooled
+frame's old bindings the same way, in place of `binds.clear()`, read
+578,197,383 with the argument change beside it: the pop loop over pairs cost
+more in `dispatch_loop` than the calls it saved. And in the browser's
+translator, adding up integer literals of eighteen digits or fewer in an
+`i64` without checks, ahead of the checked `i128` path, moved
+`browser_compile_instructions` from 450,123,996 to 452,683,338. The `i128`
+loop was not the cost.
+
+The ratchet row `arguments_released` puts `drop(arg)` back in the loop, and
+the interpreted row reads 576,822,655 under it.
+
+## 2026-10-08 — the tab compiles only what its entry reaches
+
+The emitter wrote a dispatcher for every group in the program, and on a
+program with an entry `Written::finish` then pruned whatever nothing reached
+from it. On `bench/interp_corpus` the prune dropped 132 definitions and 127,415
+bytes of the 369,868 the tab had written, almost all of them std/list
+functions the corpus never calls. The text was held beside the program until
+the end of emission, which is the most the tab's compile holds. Every analysis
+before the emitter also read those functions: inference, linearity, the beat
+loops, escape and demand each walked the whole of std/list.
+
+The tab now walks the names each body mentions, from the entry, and takes
+every group the walk does not reach out of the program before any analysis
+runs. The walk is `call_graph`, which the cohort brackets already use. Some
+groups are reached without a body naming them. An interpolated value
+dispatches to `render`, a value-wrapped `print` renders through
+`render/to_string`, an operator finds a user's arm by asking whether the
+program declares one, and fused map columns stand in for `keys` and `values`
+only when the program declares neither. Those names are seeded.
+
+The first version of this skipped unreached groups in the emitter and kept
+them in the program, and it caught a miss by looking for a skipped group's
+symbols in the module. That check cannot work once the group is gone, because
+the emitter stops writing a call to something that is not there. The decisive
+case is an operator. With a user's `+` arm left out, the emitter asks whether
+`+` is declared, hears no, and sends two records down the numeric path. The
+module names nothing of `+` either way. So every question the emitter asks
+about a group by name now goes through one index, `group_named`, and a
+question about a left-out group sets a flag. A flagged module, a module naming
+a left-out group's symbols, and an emit that fails are all sent back with the
+program whole, so a miss costs a second emit and cannot change what the tab
+runs. A unit spec reads the emitter's source and fails if it scans its groups
+by name anywhere else. Across the 98 entry programs in the tree that compile
+alone, none needed the second emit.
+
+Native builds are unchanged and keep emitting every group. Turning the walk
+on for them as well moved `emit_instructions` from 23,994,397 to 15,189,091 on
+`pkg/codegen_corpus`, and the meta by about 0.01, because the emitting term
+is already near the top of its curve. That gain does not pay for renumbering
+every native module and re-reading the machine-code goldens, so it waits. The
+tab's module differs from the dev tier's in the numbering of lambdas, constant
+cells and strings, and in what inference concludes once the unreached callers
+are gone. The browser differential agrees on all 575 programs it compares,
+with the same six known gaps.
+
+`browser_compile_instructions` reads 450,123,996 -> 395,882,998 (-12.1%) and
+`browser_compile_peak_bytes` 829,597 -> 673,727 (-18.8%), on rustc 1.98.1 here
+as on CI. Skipping in the emitter alone had reached 433,427,683 and 698,157, so
+taking the groups out before the analyses is two thirds of the instruction
+saving. `browser_run_instructions` moves by 61, 33,510,647 -> 33,510,708. The
+ratchet row `reached_groups` turns the walk off and the browser rows go back
+up, and `left_out_asked` stops noting the question, which the `+` spec catches.
+
+The index helps native builds as well. Every lookup of a group by name used
+to scan the whole declaration list, and now it reads the index the emitter
+already kept: `emit_instructions` falls 23,997,530 -> 23,393,086 (-2.52%) on
+CI. Three front-end rows rise on CI: `compile_instructions` 26,182,238 ->
+26,200,562, `entry_instructions` 86,381,596 -> 86,445,364 and
+`library_instructions` 86,927,430 -> 86,991,343. Those rows run `kanso check`,
+which never reaches the emitter. Between main and this tree in one container
+the move sits inside the lexer, whose source did not change, so it is inlining
+redrawn around a changed codegen.rs.
+
+## 2026-10-08 — a dispatch ranks its candidates on the stack
+
+Arm selection ranks every candidate that matches into a score, one byte a
+parameter, and keeps the best. The score was a `Vec<u8>`. Every entry to
+`dispatch_loop` allocated one and freed it on the way out, and when the first
+candidate won, `std::mem::take` moved its buffer into `best` and left the next
+candidate to grow a new one from nothing. On `bench/interp_corpus` that growth
+was 44,905 calls to `RawVec<u8>::grow_one`.
+
+`Score` now holds twelve ranks inline and spills the rest into a vector that
+stays empty for any group of twelve parameters or fewer. A dispatch compares
+two scores of the same length, one rank per argument, so comparing the inline
+part and then the spill orders them as the vector did. A unit spec generates
+pairs of scores that differ in one position, inline or spilled, at every length
+from one to sixteen, and checks `beats` against the vector's comparison. With
+the spill left out of the comparison it fails on a thirteen-rank pair.
+
+`interp_instructions` reads 568,709,639 -> 559,187,740 in this container
+(-1.67%), with the corpus printing the same 874 lines, and CI read the same
+number. `interp_allocs` falls 873,371 -> 752,938, 120,433 fewer calls to the
+allocator, and the peak does not move.
+The ratchet row `scores_inline` gives the score a heap buffer at the start of
+every dispatch again, which puts back about 4.5 million of the 9.5.
+
+The bindings vector takes the same move when the first candidate wins, and its
+growth is the other half of what `dispatch_loop` grows. It is not changed here:
+the winner's bindings become the environment frame, so a second buffer has to
+exist whenever a later candidate is tried.
+
+## 2026-10-08 — a dispatch hands its second bindings buffer back
+
+The entry before this one left the bindings vector alone because the winner's
+bindings become the environment frame. When the first candidate matches,
+`std::mem::take` moves its buffer into `best`, and any later candidate the
+dispatch tries matches into a new vector. That vector was allocated for the
+dispatch and freed at its end, whether the later candidate won or not.
+
+The interpreter now keeps a short list of those buffers, at most 64. A
+candidate that finds `binds` empty pops one from the list before it matches,
+and at the end of the dispatch whatever buffer is left in `binds` is cleared
+and pushed back. The winner's buffer still leaves with the frame, so the list
+only ever holds buffers no frame kept.
+
+Measured in this container on `bench/interp_corpus`, printing the same 874
+lines: `interp_instructions` 559,187,740 -> 553,555,448 (-1.01%), and
+`interp_allocs` 752,938 -> 714,647, 38,291 fewer calls to the allocator. The
+peak does not move. CI's readings replace these if they differ.
+
+Taking a buffer from the list at the start of every dispatch, in place of the
+`Vec::new()` that `binds.reserve` then grows, read 556,139,823. Most dispatches
+never try a second candidate, and each of those paid for a pop and a push back.
+
+The ratchet row `spare_binds` turns the hand-back off, so each buffer goes to
+the allocator as before, and the row reads 558,551,917.
+
+## 2026-10-08 — a short string is held inside the value
+
+Reading a variable in the interpreter clones its value, and `Value::Str` held a
+`String`, so every read of a string allocated a copy. On `bench/interp_corpus`
+that was 83,612 calls to `String::clone`, 7.9 million instructions inside the
+clone before the allocator and the matching free are counted. An entry on
+2026-09-18 found the strings this corpus copies average four bytes. An
+`Rc<str>` was measured afterwards and declined at 2.84 million instructions
+worse, because building one copies the bytes a second time.
+
+`Value::Str` now holds a `Text`. A string of up to fifteen bytes is kept in
+place, with its length, and copies as plain bytes; a longer one is a `String`
+as before. Every string this corpus clones fits. `Text` dereferences to `str`
+and compares, orders and hashes as its `str` does, so the rest of the
+interpreter reads it the way it read the `String`.
+
+A map key holds a `Text` as well. With the value changed and the key left a
+`String`, putting a string key into a map converted one to the other, and an
+inline key allocated where the old code had moved its `String` across.
+`tests/a_shared_seed_is_copied_once.rs` caught it: 300 more laps of its
+builders cost 3,947 allocations against the 3,647 it pins, one more a lap.
+With both sides `Text` it reads 3,647 again.
+
+The width is fifteen because that is what fits beside a `String` without
+making `Text` bigger. The first version held 22 bytes. That cost `Text` the
+niche in `String`'s capacity field, `Text` grew to 32 bytes and `Value` to 40,
+and every move and drop of every value paid for it: the corpus ran 566,595,621
+instructions, 13 million more than before, with the allocations gone. At
+fifteen, `Value` is 32 bytes again.
+
+Wrapping the two forms in a private enum inside a `pub struct Text`, so that no
+code outside it can build an inline string from bytes that are not UTF-8, read
+547,075,871: the derived `Clone` on the wrapper added 5.7 million instructions
+inside `Value::clone`. A `Clone` written by hand, matching the two forms and
+copying the inline one directly, reads the same as the bare enum did.
+
+Measured in this container, printing the same 874 lines, with values and map
+keys both changed: `interp_instructions` 553,555,448 -> 540,215,448 (-2.41%),
+and `interp_allocs` 714,647 -> 626,209, 88,438 fewer calls to the allocator.
+Values alone had read 542,300,428 and 636,769. The peak does not move. CI's
+readings replace these if they differ.
+
+Two unit specs pin the shape. One asserts that `Text` is the size of a `String`
+and `Value` is 32 bytes; it fails at an inline width of 22. The other reads
+strings back at every length from zero to nineteen bytes, in one-byte and
+two-byte characters, and checks that any two compare and order as their `str`s
+do; it fails when the inline read drops a byte. The ratchet row
+`short_strings` sets the inline width to zero, so every string but the empty
+one goes to the heap again, and the row reads 550,877,389.
+
+The browser engine links the interpreter, so its binary changed too.
+`browser_compile_instructions` moved 395,882,998 -> 396,604,174, a rise of
+721,176 (+0.18%), read on rustc 1.98.1 as CI builds it. With the value change
+alone it had moved 1,238, so most of the rise arrived with the map keys. What
+in the tab's compile reads them is not isolated here.
+
+## 2026-10-08 — a kept local is answered before eval builds its frame
+
+`Interp::eval` held every expression form in one function, so its stack frame
+was sized for the largest of them. Every call pushed six callee-saved
+registers, reserved 760 bytes, and undid both on the way out. The line holding
+the function's signature carried 15.2 million instructions on
+`bench/interp_corpus` and its closing brace 11.1 million, about twenty
+instructions a call.
+
+Most calls did not need that frame. The commonest expression is a local name
+whose place the interpreter has already kept, 653,358 of them on the corpus,
+and reading one walks a frame or two and clones the value. `eval` is now a
+small function that answers exactly that case and hands everything else to
+`eval_node`, which is the old body unchanged. A global, or a local whose kept
+place no longer holds it, falls through and is resolved as before.
+
+The gain depends on the compiler inlining the small function where it is
+called, so that a local read there makes no call. Forced out of line with
+`#[inline(never)]` the corpus read 542,946,770, worse than with no door at
+all. `#[inline(always)]` read 512,496,800, which is what the compiler chose
+without being told, so the attribute is left off.
+
+Measured in this container on the same 874 lines of output, outside the gate:
+539,217,785 -> 512,403,757 (-26,814,028, -4.97%). CI's gate reading is
+`interp_instructions` 540,215,448 -> 513,401,792, a fall of 26,813,656
+(-4.96%). Nothing allocates differently, so the allocation counters are where
+they were.
+
+The ratchet row `front_door`, mutation `a_name_read_through_the_whole_node`,
+makes the range test refuse every name, so each one goes through `eval_node`
+again. With it applied the corpus reads 538,764,987.
+
+Adding integer literals to the door, which `eval_node` answers with one
+clone, read 543,053,630: 30.6 million worse than the door with names alone,
+and worse than no door at all. Where it went is not isolated; the out-of-line
+copy of the door has the same prologue in both builds, five registers and 32
+bytes.
+Sending every other name to an out-of-line identifier path instead of
+`eval_node` read 515,440,309, three million worse than the door as built.
+
+Two neighbours of this were measured the same day and declined. Both
+recycled argument vectors instead of allocating them. A pool fed by `eval` and
+`eval_tail` and refilled by the dispatcher read between 537,922,216 and
+540,566,075 depending on how it fell back when empty, and a version that also
+took the vector back from every builtin's `arity` read 539,054,147 and
+543,162,566 for its two ways of emptying it. mimalloc's fast path costs about
+63 instructions for an allocation and its free, and the pool cost about 45 to
+take a vector and 40 to give it back, so the spread across variants is layout
+and none of it is a gain.
+
+## 2026-10-08 — globals and integer literals answered at the door
+
+With the front door built, 730,565 nodes still reached `eval_node` on
+`bench/interp_corpus`. Counted by form, the largest group was global names:
+299,294 of them, ahead of applications at 137,928 and integer literals at
+122,017. Most globals the corpus reads name a function, and the value such a
+name reads as never changes: a `FnRef` holding the name.
+
+Each global slot now has a neighbour in a second table, `fixed`, holding that
+value when it is fixed: a function reference, `true`, `false`, `none` or
+`done`. A constant gets nothing there, because the first read of a constant
+runs its body. `eval` asks a small out-of-line function, `fixed_global`, for
+any name that is not a kept local, and only a miss goes on to `eval_node`.
+Counted over the first 300,000 such reads, 298,949 were answered from the
+table. The 1,051 misses were names read before their slot had been stamped,
+which is the read that stamps it.
+
+Measured in this container on the same 874 lines of output, outside the gate:
+512,403,757 -> 500,796,787 (-11,606,970, -2.27%) with the table alone, and
+498,287,606 with integer literals as well, below. CI's gate reading for the
+whole change is 513,401,792 -> 499,300,948 (-14,100,844, -2.75%), and four
+compile rows moved with the binary's layout by between 1,090 and 68,472.
+The table costs memory: `interp_peak_bytes` 739,436 -> 742,431 (+2,995,
++0.41%) and `interp_allocs` 626,209 -> 626,217, read by the gate on a host whose glibc and
+rustc are the golden's. The objective weighs that against the instructions
+and comes out ahead.
+
+The ratchet row `fixed_globals`, mutation
+`a_fixed_global_read_through_the_whole_node`, keeps function references out of
+the table, so every one of them is asked for and missed. With it applied to the
+build that also carries the literal arm, the corpus reads 524,244,086, worse
+than before the table existed, because each global then pays for the miss as
+well as for `eval_node`.
+
+Integer literals were the next group, 122,017 of them. Sent from the door to a
+one-line out-of-line helper that builds the value, they first read
+533,252,591, thirty-two million worse than the table alone. The profile says
+why: in that build `eval` ran as a function of its own, 48,560,872
+instructions of it, where in the builds that gained it ran almost entirely
+inlined into its callers. The extra arm had taken the door past what the
+compiler would inline unasked. With `#[inline(always)]` on the door the same
+arm reads 498,287,606, 2.5 million better than the table alone, and the
+attribute now states what the door depends on.
+
+Applications were the group after that, 137,928 nodes. Moving their arm out of
+`eval_node` into its own function and sending them there from the door read
+503,651,651, 5.4 million worse, and it is not built.
+
+## 2026-10-08 — the front end's peak, lowered at the two places it was set
+
+`compile_peak_bytes` and `interp_peak_bytes` are both set by the front end:
+the interpreter's run never holds more than its check did. Printing live and
+peak bytes around each front-end phase on `bench/compile_corpus` put the peak
+inside `canonicalize_bare_aliases`, the pass that rewrites a bare alias to the
+qualified name it stands for. At its top-level call it held two maps sized for
+every declaration in the program: 415 of them, of which 94 were synthetic
+aliases. Only those 94 are ever asked about. A name nothing synthetic carries
+cannot be an alias, and a site no synthetic declaration stands at is never
+looked up.
+
+The pass now counts the synthetic declarations first and returns at once when
+there are none, which is most of its calls. Otherwise it keys the site index
+by the synthetic sites alone and fills in the qualified declarations that
+stand there, and it keeps a name in the second map only when a synthetic
+declaration carries it; a qualified declaration of the same name only marks
+it as not an alias. The site index is dropped as soon as the names are
+resolved, and the set of locally bound names as soon as the aliases are
+chosen. On every target tried, the 56 of them that include each bench corpus,
+lib/json, kq and vse, `KANSO_ALIAS_REPORT` prints the same aliases before and
+after: 76 on the interpreter corpus.
+
+That alone moved the peak by 291 bytes, because the peak was set in two
+places. The second was the lexer. Each line's tokens were gathered in a vector
+that started at eight and doubled, and that vector was kept for the whole
+parse with up to half of it unused. A line's tokens are now gathered in a
+buffer kept between lines and moved out into a vector of exactly their length.
+The buffer is as long as the file's longest line and is released when the file
+is lexed; kept until the end, it held 3,072 bytes under the peak.
+
+Lowering the lexer's share by itself raised the peak by 3,076, to 732,705,
+because the alias pass then set it alone. Together, in this container:
+
+    compile_peak_bytes   729,629 -> 706,828   (-22,801, -3.13%)
+    compile_allocs        14,742 ->  14,515   (-227, -1.54%)
+    interp_peak_bytes    739,444 -> 726,051   (-13,393, -1.81%)
+    interp_allocs        626,209 -> 625,986   (-223)
+
+CI's rows replace these before the floor moves.
+
+The move out of the buffer is a `Vec::append` into a vector reserved at the
+line's length, which copies the line in one block. A first version used
+`drain(..).collect()`, which reached the same counters natively and moved
+each token separately: in the browser engine it read
+`browser_compile_instructions` 396,604,174 -> 397,453,894, and the lexer
+half alone 397,627,379. With `append` the browser row reads 396,335,868
+(-268,306), the lexer half alone 396,509,353, and its peak, which is set
+after the front end, does not move.
+
+`shrink_to_fit` on each line's vector was tried before either. It reached
+the same peak, 706,828, and cost 723 more allocations, because each shrink
+is a reallocation.
+
+Two ratchet rows hold this. `line_exact`, mutation
+`a_line_of_tokens_grown_by_doubling`, hands the buffer itself to the parse, so
+every line grows from empty again: `compile_allocs` reads 15,196. `alias_sites`,
+mutation `every_declaration_indexed_for_its_alias`, indexes every declaration
+by site again, which changes no alias. Before the change below it read
+`compile_peak_bytes` 712,674. After it, the peak is set at a point where the
+index is no longer alive, and under the mutation the peak reads 674,684, the
+same as without it. The ratchet's shard on CI found that the row had gone
+blind. It now watches `compile_allocs`, which reads 14,534 under the mutation
+against 14,529, and `compile_instructions` reads 25,933,852 against
+25,842,553. On the finished change, then, the alias pass saves five
+allocations and 91,299 instructions and no longer lowers the peak.
+
+With the peak no longer set by a pass, it is set by what the program is: the
+syntax tree, which is live from the parse to the end of the compile. `Expr`
+was 56 bytes on a 64-bit target and `Stmt`, which holds one, 120. The size of
+an enum is the size of its largest variant, and the largest was `Guard`, the
+only variant holding a vector inline; every other one fits 48. The statements
+below a guard now sit behind a box, `Rest`, which makes every expression 48
+bytes and every statement 112:
+
+    compile_peak_bytes   706,828 -> 674,716   (-32,112, -4.54%)
+    interp_peak_bytes    726,051 -> 693,467   (-32,584, -4.49%)
+
+The first build of that was slower everywhere. Checking the entry corpus went
+from 87,188,776 instructions to 89,458,310, spread across every walk over the
+tree at about 100,000 each. At 48 bytes the compiler no longer gave `Expr` a
+tag byte of its own: it hid the tag in a spare range of one of the fields, and
+every `match` over an expression decoded it. `#[repr(u8)]` puts the tag back
+in a byte of its own, and `App` lists `piped` first so that byte's neighbour
+holds it and the variant still fits 48 bytes. The entry corpus then reads
+86,720,594, below the 56-byte tree.
+
+Neither change helps on wasm32, where a pointer is four bytes and `Guard` was
+never the largest variant. The box alone took `browser_compile_instructions`
+to 397,184,456 and the box with the explicit tag to 398,423,756, against
+396,335,868 without either. Both are applied on 64-bit targets only, and the
+browser row reads 396,233,999, with the `App` reordering kept everywhere.
+
+Two more ratchet rows hold these. `guard_rest`, mutation
+`a_guards_statements_held_in_every_expression`, holds the statements inline
+again: `compile_peak_bytes` reads 706,832. `expr_tag`, mutation
+`an_expressions_tag_hidden_in_its_fields`, removes the explicit tag: the
+entry corpus reads 89,458,575.
+
+The interpreted run's peak is set after the front end, while the program
+runs. Probing the heap around the interpreter put 32,768 bytes of it in two
+direct-mapped tables `Interp::new` allocates and keeps for the whole run: 1,024
+callee slots and 512 frame slots. They were sized for speed when the peak was
+not counted. At 256 slots each the run holds 22,528 bytes less, and the
+corpus misses often enough to cost about 720,000 more instructions, 0.13%,
+by the count in the table's last column:
+
+    RECENT_CALLEES / RECENT_FRAMES   interp_peak_bytes   instructions here
+    1,024 / 512                      709,850             536,115,019
+    512 / 512                        697,562             536,348,115
+    512 / 256                        693,466             536,843,473
+    256 / 256                        687,322             536,835,497
+
+The objective weighs the peak above the instructions: development welfare
+reads 91.33 against 91.30 with the projected rows. The ratchet row
+`callee_slots`, mutation `the_callee_cache_sized_for_speed`, gives the callees
+1,024 slots again and the run peaks at 705,757.
+
+CI's instruction rows for the change, which this host's gates reproduce:
+`compile_instructions` 26,181,647 -> 25,842,553, `entry_instructions`
+86,376,944 -> 85,213,654 and `library_instructions` 86,922,871 -> 85,769,613.
+`emit_instructions` rose, 23,391,657 -> 23,409,658, 18,001 instructions. The
+rise arrived with the change, and what in it moved the emitter is not
+isolated.
+
+The gate's own interpreter row for the whole change, which CI read on a
+runner of family 0x6 model 0x6a and this container read the same:
+`interp_instructions` 499,300,948 -> 500,281,043, a rise of 980,095
+(+0.1963%). Main reads 499,300,948 here, so the rise belongs to the change
+and not to the silicon. `startup_instructions` did not move.
+
+## 2026-10-09 — a lone arm of bare names is bound without a contest
+
+The interpreter's dispatcher spent 136 million of the corpus's 537 million
+instructions in `dispatch_loop` itself, about 850 a dispatch over 159,352
+dispatches. Two parts of that did no work for the answer.
+
+A group with one arm whose parameters are all bare names has nothing to
+choose between. A name refuses a failure and takes anything else, so the arm
+wins exactly when no argument is a failure, and with no rival its score is
+never read. Such a group now skips the candidate loop: the dispatcher checks
+the arguments for a failure, pushes the names, and binds as before. A group
+whose one arm holds a pattern, an annotation or a literal still goes through
+the loop, and so does a call that hands a bare-name arm a failure, which
+reaches the error path the same way it did.
+
+The second part was the bookkeeping for the leader. The best candidate so far
+was an `Option<(Score, &FnDecl, Bindings)>`, 80 bytes, and every candidate
+that took the lead moved its score and bindings into it and the old leader's
+buffers back out. The `Option` was dropped once a dispatch. The dispatcher
+now keeps two score buffers and two binding buffers in fixed slots: the next
+candidate matches into slot 0, slot 1 holds the leader, and a new leader
+swaps them.
+
+The first version named the leader's slot with an index that flipped, which
+avoided the swap. It was slower than the swap by 3,766,635 instructions,
+because every access through a computed slot paid for its address and its
+bounds check, and there are more accesses than swaps.
+
+In this container, where main reads its golden exactly:
+
+    interp_instructions   500,281,043
+    lone arm alone        496,212,125   (-4,068,918)
+    with a flipping index 495,182,469   (-1,029,656)
+    with fixed slots      491,415,834   (-3,766,635)
+
+-8,865,209 together, -1.77%. `interp_peak_bytes` and `interp_allocs` read
+their goldens. The browser rows do not move: neither the tab's compile nor
+the program it emits runs the interpreter's dispatcher. CI's reading
+replaces these if it differs.
+
+Two ratchet rows hold this, both on the interpreter's instruction gate.
+`lone_arm`, mutation `a_lone_arm_scored_like_its_rivals`, sends the lone arm
+through the loop again and reads 496,945,703. `leader_slots`, mutation
+`a_leaders_slot_chosen_at_run_time`, hands the score's swap a slot chosen at
+run time, which is the cost the index had, and reads 492,342,137.
+
+What led here. Priced against the objective as it stands, by lowering one
+golden row 1% at a time on a scratch tree, runbench is worth 0.045 points a
+percent, browser compilation 0.0033, the interpreted run 0.0025 and the
+compile row 0.0004. Runbench came first and its profile offered nothing new
+past what the log already declines: the decoder's key loop is 81 instructions
+a key, most of them spills around an inlined map append; the number writer
+already takes `ryu_short`, warm-started from the last float's place count;
+and `s[i]` over multibyte text is 58 instructions a call, all of them from one
+phase written to keep indexing linear. The interpreted run was next in line.
+
+## 2026-10-09 — an in-place write keeps its container's allocation
+
+Where `linear::in_place_pushes` or `linear::moved_writes` proves that the only
+other holder of a list, map or byte buffer is a binding nobody reads again,
+the interpreter used to take the contents out of the shared `Rc` and box them
+in a new one: one allocation and one move for every push, put and append the
+analysis cleared. It now writes through the pointer, as the compiled engine
+has since kanso#1359, and hands back the `Rc` it was given. The dead binding
+sees the grown container where it used to see an empty one, and it never
+looks. An append of a byte buffer onto itself still takes the contents,
+because writing through the pointer would read the buffer it is extending.
+
+In this container, where the base reads its golden exactly:
+
+    interp_instructions   491,415,834 -> 488,869,940   (-2,545,894, -0.52%)
+    interp_allocs             626,007 ->     587,281   (-38,726, -6.19%)
+    interp_peak_bytes         687,319 ->     687,159   (-160)
+
+`tests/a_shared_seed_is_copied_once.rs` pins the allocations of 300 extra laps
+of three builders, and the number fell from 3,647 to 2,747: one box a lap for
+each builder. A ratchet row, `kept_box`, holds it. Its mutation
+`a_write_in_place_boxes_afresh` boxes the pushed list again, and the spec
+reads 3,047.
+
+Literal constants folded at their use, measured and declined. A zero-arity
+function whose whole body is one integer literal, such as runbench's
+`span = 400`, compiles to a lazily built cell that every use checks. Emitting
+the literal at each use removed the cell and its check, and the IR changed in
+just those lines. digestbench fell 25.3% and deepbench 0.17%, but runbench,
+the weighted row, rose 536,678 (+0.048%). Two things paid for it, and the fold
+controls neither. In the escape phase, once the loop's first bound was a
+constant, LLVM rewrote `n * 7` as a running offset beside a second
+down-counter, one more instruction per push: escapebench rose 1,249,393. In
+the rest of the run `_int_malloc`, `memcpy` and `free` rose by 3.4 million
+together with every allocation counter unchanged, which is the heap laid out
+differently once the cell's own allocation was gone.
+
+## 2026-10-09 — a native build emits only what its entry reaches
+
+Since 2026-10-08 the playground tab has dropped every function its entry
+cannot reach before inference, linearity and the emitter read the program.
+Native builds now do the same. Before this, a native build analysed and
+emitted every function the program imported, and the prune in
+`Written::finish` deleted the unreached ones from the module afterwards.
+The walk is the tab's: it follows the names each body mentions from the
+entry, and if the emitter asks for a function the walk left out, the
+function goes back in its place and the program is emitted again. The
+`only_reached` switch that kept native builds out of the walk is gone, since
+every caller now passes the same answer.
+
+Measured against goldens that read their own rows exactly, with the two
+codegen rows taken from CI, whose clang and linker are the ones they count:
+
+    emit_instructions              23,409,658 ->   7,035,904   (-69.9%)
+    codegen_instructions_release  457,532,287 -> 453,747,433   (-0.83%)
+    codegen_instructions_dev      118,872,382 -> 118,854,794   (-17,588)
+    runbench                    1,129,588,781 -> 1,129,589,356   (+575)
+    compile_instructions           25,842,553 ->  25,855,719   (+13,166)
+
+Both tiers handed clang the pruned module before this change, so neither
+codegen fall comes from less text to parse, and nothing here isolates where
+they came from. The benchmark rows are pinned to one AMD part, and this
+container is Intel, so each was read here on main and on the branch and the
+difference added to main's golden. runbench rises 575, pendbench 700 and
+encodebench 117; jsonbench falls 301 and oneshot 480; the other nine move by
+two or less. An earlier draft of this entry compared this container's
+reading with the golden directly and reported eleven rows falling about 347
+each and deepbench rising 11,049. Those were the two machines differing, and
+main reads the same offsets here.
+The compile, entry and library rows rise by 13,166, 43,783 and 43,734: the
+check described next, run once per record type.
+
+The first push of this change was wrong, and the diagnostics differential
+said so: `list/to_list (list/take (list/repeat 5) 3)` failed natively with
+"no overload of `list/next` matches these arguments" and printed `[5 5 5]`
+in the interpreter. A fuzz batch of 300 programs found six more. Two faults,
+one cause. A record whose first field is an int may go back to its caller
+in two words instead of a pointer, and `escape` granted that to a group when
+any arm produced the record. The other arms were assumed to answer
+failures, which cross the two words intact. `list/next` answers `done`
+beside its `step`, and `list/iter` answers a `cursor` from one arm and a
+`capped` from another; both came back read as the record. Neither could
+happen while every program carried all of std/list, because functions
+nobody called kept `step` and `capped` boxed. The tab has walked since
+2026-10-08 and could have met the same thing.
+
+`escape` now asks each arm of a group that answers the record. Every branch
+of its tail must build the record, call a group that answers it, or end in
+`err` or a call to a group whose arms answer only failures, such as json's
+`fail`; an arm whose inference says it answers only failures passes as it
+stands. The inference cannot do this alone, because it has one bit for
+every record. Runbench keeps exactly the thirty-three two-word functions it
+had, and all six fuzz programs agree with the interpreter. Two micro
+fixtures hold the two faults, each red on the compiler before the check and
+green after it.
+
+While chasing the first fault I built a cache that boxed a two-word value
+once per block instead of once per use, which took skip_shape from 41
+allocations to 39. With the check in place `list/drop` no longer returns two
+words, skip_shape reads its old 35, and no golden sees the cache, so it is
+not in this change.
+
+Two ratchet rows hold the rest. `native_reached`, mutation
+`a_native_build_emits_every_group`, empties the walk's answer, and the emit
+row reads 23,606,376 against 7,035,904. `parsed_arms`, mutation
+`a_group_answering_other_values_goes_by_value`, skips the check, and both
+fixtures go red.
+
+Two older rows had to move. `reached_groups`, the tab's walk, patched a line
+this change folded into the one both builds now share, so its mutation edits
+that line and the browser row reads 446,869,426 under it. `thunk_box` went
+blind: its fixture, a_lazy_record_call_nobody_reads_still_builds, reached a
+lazy cell's site through a function nobody calls, and native builds no longer
+emit such a function. a_lazy_record_call_somebody_makes_still_builds reaches
+the same site from `play`, through a record type of its own, and clang
+refuses it under the mutation with the error the first fixture was written
+for.
+
+`dead_cycle` went blind the same way. Its spec's summing program used to
+emit std/list's merge cycle and rely on the prune to strike it; the walk now
+leaves the merge out before anything is emitted. The prune still strikes a
+group that a body names and the module never calls, and the shortest one is a
+fused call: `text/to_float (text/slice ...)` is emitted as
+`k_b_to_float_slice`, so std/text's `to_float` survives the walk and nothing
+calls it. A third test builds that program; with every definition marked live
+the module defines `d_text/to_float_1` and the test goes red.
+
+Compiling the browser corpus in the tab rose 482,055 instructions with this
+change, from 396,233,999 to 396,716,054 (+0.12%), and the interpreted run fell
+32, to 488,869,908. The arm check is not the source of the first: a build with
+the check skipped reads 396,716,403, 349 more. The tab already used the walk,
+so its emitted modules are the same; what moved is the compiler's own code,
+and nothing here isolates where. Welfare rises from 90.2314 to 90.2512.
+
+The rows that rose, each by name and with the value it now reads:
+`browser_compile_instructions` 396,716,054; `entry_instructions` 85,257,437 and
+`library_instructions` 85,813,347, the arm check run once per record type;
+`module_calls` 130 and `module_lines` 1,284 in the modules vein, and
+`emitted_calls` 1,007 and `emitted_other_calls` 17,094 in the emitted veins,
+where the line counts fell to 10,055 and 144,096 because the walk drops what
+nothing calls. Of the benchmark rows, `work_runbench` reads 1,129,589,356,
+`work_pendbench` 190,397,733, `work_encodebench` 2,384,337,486 and `work_basket`
+32,404,398, all projected onto the recorded silicon as described above.
+
+Three interpreter and runtime ideas, measured and declined:
+
+Argument vectors pooled. The interpreter allocates a vector for every call's
+arguments, and mimalloc spends about 63 instructions to allocate and free one.
+A pool held in a `RefCell` cost about 45 instructions to take a vector and 40
+to give it back, which leaves little to win. Five variants on
+`bench/interp_corpus`, from a base of 539,217,785, read between 537,922,216
+and 543,162,566. That spread is the layout band this row has shown before, so
+none of the five is evidence of a gain. Releasing bound names one at a time
+instead of clearing the vector read 494,036,859 against 491,415,834.
+
+A two-way table of recent callees. After kanso#1813, `callee_missed` rose
+from 826,313 to 2,380,466 with the cache unchanged, because the cache keys a
+name by its address inside the source slice, and that address moves when the
+run allocates in a different order. Checking a second slot on a miss raised
+the row by 1,060,893 and the misses to 3,549,075. The misses are not pairs of
+names fighting over one slot, so a second way does not catch them.
+
+The run program's arena peak, one block lower. The peak is 3,670,032 bytes:
+two full 1 MiB blocks and the index phase's 1,572,880-byte string, which needs
+contiguous room. The data the run keeps is about 1.35 MB, of which 799,728
+bytes are list and map buffers sized for six items and ten pairs while the
+document's lists hold 3.5 and its maps 3. Smaller seeds moved nothing: the
+outgrown buffers came back from the byte-buffer classes at the same total.
+Sizing each container exactly would bring the kept data under one block on
+paper, but a trim at close copies into fresh space and leaves the old buffer
+behind, and the top-level decode never rewinds it. Exact sizing needs the
+size when the container is allocated, which means a two-pass decode or a
+scratch stack. Not built; a block lower would be worth about 0.17 welfare.
