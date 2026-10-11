@@ -9,9 +9,9 @@
 # vein is the witness: runbench 2,602,519,000 -> 2,487,359,798 on the
 # container when every constant froze, and 2,615,934,276 with this applied.
 set -e
-grep -q '^    fn is_constant_body(&self, _decl: &FnDecl) -> bool {$' src/codegen.rs || {
+grep -q '^    fn is_constant_body(&self, _decl: &FnDecl) -> bool {$' src/codegen/dispatchers.rs || {
   echo "is_constant_body changed shape; rewrite this" >&2
   exit 1
 }
-sed -i '/fn is_constant_body(&self, _decl: &FnDecl) -> bool {/,/^    }$/ s/^        true$/        self.knotted.contains(\&_decl.name)/' src/codegen.rs
-grep -q '^        self.knotted.contains(&_decl.name)$' src/codegen.rs
+sed -i '/fn is_constant_body(&self, _decl: &FnDecl) -> bool {/,/^    }$/ s/^        true$/        self.knotted.contains(\&_decl.name)/' src/codegen/dispatchers.rs
+grep -q '^        self.knotted.contains(&_decl.name)$' src/codegen/dispatchers.rs

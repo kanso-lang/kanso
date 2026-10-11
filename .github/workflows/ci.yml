@@ -53,6 +53,9 @@ jobs:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
           components: rustfmt
       - run: cargo fmt --check
+      # cargo fmt walks `mod` declarations only. The files under src/'s
+      # subdirectories are read with include!, so they are checked here.
+      - run: find src -mindepth 2 -name '*.rs' -exec rustfmt --edition 2021 --check {} +
 
   python-free:
     name: python-free (the harnesses stay kanso)
@@ -92,7 +95,7 @@ jobs:
       # THE SUITE BUILDS WITH THE CLANG THE MEASURED BINARIES ARE BUILT WITH.
       # The cost-goldens job selects clang 19, which takes preserve_nonecc,
       # and on that clang a release build on x86-64 rewrites its tail cycles
-      # (`preserve_none_tails` in src/main.rs) and the closures change
+      # (`preserve_none_tails` in src/main/tail_calls.rs) and the closures change
       # convention. This job ran the image's clang 18, where neither happens,
       # so no spec here had ever run a binary the objective counts. llvm-19
       # is for `opt-19`: tests/ir_verifier.rs reads the IR with the verifier

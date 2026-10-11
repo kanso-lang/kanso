@@ -5,10 +5,10 @@
 # refusal belongs.
 set -e
 old='            f.line_fmt(format_args!("{failing} = icmp eq i64 {disc_fail}, 5"));'
-[ "$(grep -cxF "$old" src/codegen.rs)" -eq 1 ]
+[ "$(grep -cxF "$old" src/codegen/dispatchers.rs)" -eq 1 ]
 sed -i.bak 's#^            f.line_fmt(format_args!("{failing} = icmp eq i64 {disc_fail}, 5"));$#            f.line_fmt(format_args!("{failing}.e = icmp eq i64 {disc_fail}, 5"));\
             f.line_fmt(format_args!("{failing}.n = icmp eq i64 {disc_fail}, 4"));\
-            f.line_fmt(format_args!("{failing} = or i1 {failing}.e, {failing}.n"));#' src/codegen.rs
-rm -f src/codegen.rs.bak
-! grep -qxF "$old" src/codegen.rs
-grep -qF '{failing} = or i1 {failing}.e, {failing}.n' src/codegen.rs
+            f.line_fmt(format_args!("{failing} = or i1 {failing}.e, {failing}.n"));#' src/codegen/dispatchers.rs
+rm -f src/codegen/dispatchers.rs.bak
+! grep -qxF "$old" src/codegen/dispatchers.rs
+grep -qF '{failing} = or i1 {failing}.e, {failing}.n' src/codegen/dispatchers.rs

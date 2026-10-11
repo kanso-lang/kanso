@@ -4,8 +4,8 @@
 # Split, the frontier test and the capacity test are two compares and two
 # branches. Joined again, LLVM computes both as flags and ors them.
 set -e
-f=src/codegen.rs
-grep -q 'define internal %KValue @k_b_push_mut_fast' src/codegen.rs
+f=src/codegen/declares.rs
+grep -q 'define internal %KValue @k_b_push_mut_fast' src/codegen/declares.rs
 line='  br i1 %lfront, label %lroom, label %lslow'
 [ "$(grep -cxF "$line" "$f")" -eq 1 ] || {
   echo "the push's room test moved; this mutation needs rewriting" >&2

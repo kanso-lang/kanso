@@ -20,7 +20,8 @@ use std::path::Path;
 #[test]
 fn an_empty_run_returns_the_accumulator_between_its_bounds() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let codegen = std::fs::read_to_string(root.join("src/codegen.rs")).expect("codegen reads");
+    let codegen =
+        std::fs::read_to_string(root.join("src/codegen/declares.rs")).expect("codegen reads");
     let lines: Vec<&str> = codegen.lines().collect();
     let at = |line: &str| {
         let found: Vec<usize> =

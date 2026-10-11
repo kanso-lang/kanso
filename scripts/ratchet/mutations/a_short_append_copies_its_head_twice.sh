@@ -9,10 +9,10 @@
 # is why it needs the corpus rather than a length check: an object key of that
 # size is ordinary, and the shorter appends the same site handles would hide it.
 set -e
-grep -qF 'store i64 %sw8b, ptr %sw8dp, align 1' src/codegen.rs || {
+grep -qF 'store i64 %sw8b, ptr %sw8dp, align 1' src/codegen/declares.rs || {
   echo "the overlapping-load append moved; this mutation needs rewriting" >&2
   exit 1
 }
 sed -i 's|store i64 %sw8b, ptr %sw8dp, align 1|store i64 %sw8a, ptr %sw8dp, align 1|' \
-  src/codegen.rs
-grep -qF 'store i64 %sw8a, ptr %sw8dp, align 1' src/codegen.rs
+  src/codegen/declares.rs
+grep -qF 'store i64 %sw8a, ptr %sw8dp, align 1' src/codegen/declares.rs
