@@ -3209,7 +3209,14 @@ run_bytes_malloc on 9,134, run_evac_allocs on 49,183, run_evac_bytes on
 evacuated bytes are the string copied at each stage, which the mem fixture's
 entry already names as the price of carrying it.
 
-work_runbench is projected at 1,170,030,652 from this container. The run
-program's machine code, emitted code and codegen rows move with its source and
-are left for CI to read. On the projection welfare reads 91.11 against a floor
-of 91.03, and the floor is banked from CI's rows.
+CI read the rest. work_runbench lands on 1,170,030,999, 347 above this
+container's 1,170,030,652. The phase adds eight functions to the run program,
+so its machine code grows to 618,633 bytes, which moves text to 4,828,574, and
+its emitted code moves emitted_other_defines to 2,010, emitted_other_calls to
+17,507, emitted_other_branches to 16,468 and emitted_other_lines to 147,279.
+Welfare on CI's rows is 91.1114 against main's floor of 91.0338, and the floor
+banks that.
+
+`tests/the_run_program_carries_the_shapes_unchanged.rs` lists `restate` with
+the four port phases that, like it, came from a fixture rather than from a
+benchmark.
