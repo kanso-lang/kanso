@@ -966,31 +966,6 @@ fn foreign_call(handle: u32, args: Vec<Value>, span: Span, decided: bool) -> Eva
 
 include!("eval/executor.rs");
 
-/// What a name that is not a local stands for. `eval_ident` used to answer
-/// this by walking a ladder -- `fns`, the three descriptor names, `types`,
-/// then `fns` and `types` a second time and a sixty-name array -- and a
-/// program asks it about the same name on every evaluation, once per loop
-/// iteration on the same node. The answer depends on the program alone, so it
-/// is remembered the first time it is worked out.
-///
-/// A constant is `Constant` rather than its value: `knotted` evaluates, and
-/// what it returns is a value rather than a resolution. A field-less record is
-/// `EmptyRecord` for the same reason -- its fields are a fresh `RefCell` on
-/// every mention.
-/// Every arm is a name or a pointer, and the three descriptors and four
-/// literals are arms of their own rather than a `Desc` or a `Value`: this
-/// lives in a table with one row per name the run mentions, and inlining
-/// either enum would size every row by its largest variant.
-/// What a CALL on a name does. `call_named` asked `err`, then the types map,
-/// then the function map, on every call; `group_of` inside `eval_tail` probed
-/// the same two maps to decide one bit. Neither map changes during a run, so
-/// the answer is remembered the first time it is worked out -- the same
-/// bargain `Named` makes for what a name is WORTH, at the sites that ask what
-/// it DOES.
-///
-/// Two memories rather than one because the rows would not fit in one: a value
-/// needs the name as an `Rc<str>` and a call needs the group, and an arm
-/// carrying both would size every row of both tables by the pair.
 /// The slot a key takes in the recent tables: the top bits of the key times
 /// the golden ratio, which spreads keys that differ only in their low bits.
 ///
@@ -1047,6 +1022,16 @@ const RECENT_CALLEES: usize = 256;
 /// Slots in `Interp::recent_frames`, sized with the callees above.
 const RECENT_FRAMES: usize = 256;
 
+/// What a CALL on a name does. `call_named` asked `err`, then the types map,
+/// then the function map, on every call; `group_of` inside `eval_tail` probed
+/// the same two maps to decide one bit. Neither map changes during a run, so
+/// the answer is remembered the first time it is worked out -- the same
+/// bargain `Named` makes for what a name is WORTH, at the sites that ask what
+/// it DOES.
+///
+/// Two memories rather than one because the rows would not fit in one: a value
+/// needs the name as an `Rc<str>` and a call needs the group, and an arm
+/// carrying both would size every row of both tables by the pair.
 #[derive(Clone)]
 enum Callee<'a> {
     Err,
@@ -1059,6 +1044,22 @@ enum Callee<'a> {
     Builtin,
 }
 
+/// What a name that is not a local stands for. `eval_ident` used to answer
+/// this by walking a ladder -- `fns`, the three descriptor names, `types`,
+/// then `fns` and `types` a second time and a sixty-name array -- and a
+/// program asks it about the same name on every evaluation, once per loop
+/// iteration on the same node. The answer depends on the program alone, so it
+/// is remembered the first time it is worked out.
+///
+/// A constant is `Constant` rather than its value: `knotted` evaluates, and
+/// what it returns is a value rather than a resolution. A field-less record is
+/// `EmptyRecord` for the same reason -- its fields are a fresh `RefCell` on
+/// every mention.
+///
+/// Every arm is a name or a pointer, and the three descriptors and four
+/// literals are arms of their own rather than a `Desc` or a `Value`: this
+/// lives in a table with one row per name the run mentions, and inlining
+/// either enum would size every row by its largest variant.
 #[derive(Clone)]
 enum Named<'a> {
     Constant(&'a FnDecl),
