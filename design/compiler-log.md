@@ -3078,9 +3078,10 @@ codegen_instructions_dev 118,935,145, codegen_instructions_release
 454,454,756, work_basket 30,873,237, work_encodebench 2,398,370,771,
 work_livebench 1,474,870,922, work_oneshot 13,224,076 and work_runbench
 1,152,728,036. Against the spare fix the dev row rises 1,901, the release row 2,593, basket
-60,732, encodebench 1,120 and oneshot 371, and livebench falls 679. Welfare
-scores 91.0338345, 0.0000034 below the floor the spare fix banked and inside
-the gate's 0.001 allowance, so the floor stays where the spare fix left it.
+60,732, encodebench 1,120 and oneshot 371, and livebench falls 679. With the
+browser row the spare fix carries, welfare scores 91.0338407, 0.0000035 below
+the floor the spare fix banked and inside the gate's 0.001 allowance, so the
+floor stays where the spare fix left it.
 `text` totals 4,825,470, 80 bytes a binary above the spare fix for the mark
 check.
 
