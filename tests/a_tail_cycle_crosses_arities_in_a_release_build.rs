@@ -3,7 +3,7 @@
 //! interpreter prints.
 //!
 //! On x86-64 with a clang that takes `preserve_nonecc`, `preserve_none_tails`
-//! in src/main.rs rewrites such a cycle: every arm gets one signature of i64
+//! in src/main/tail_calls.rs rewrites such a cycle: every arm gets one signature of i64
 //! words, padded to the widest, and every call flattens its arguments into
 //! them. `ping` below is five words and `pong` six, and the words carry an
 //! int, a float64 and a string, so a word dropped, swapped or left unpadded
