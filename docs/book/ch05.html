@@ -479,7 +479,7 @@ yield == none is false</code></pre>
 <p>so who actually performs? at the very edge of the toolchain sits the executor—the one component allowed to touch the world. in the interpreter it is a rust trait with one method per effect, and the shape of that trait is the shape of everything kanso can do to your machine:</p>
 
 <div class="code-panel">
-  <div class="code-panel-title">src/eval.rs</div>
+  <div class="code-panel-title">src/eval/executor.rs</div>
   <pre><code><span class="k">pub trait</span> <span class="t">Executor</span> {
     <span class="k">fn</span> <span class="f">print</span>(&amp;<span class="k">mut</span> self, text: &amp;<span class="t">str</span>);
     <span class="k">fn</span> <span class="f">args</span>(&amp;<span class="k">mut</span> self) -&gt; <span class="t">Vec</span>&lt;<span class="t">String</span>&gt;;
@@ -532,7 +532,7 @@ test_empty_text_has_no_lines ... ok
 <p>the second floor is the effects themselves. a test evaluates <code>main</code>—pure, fast, no side effects—and gets the program's <em>entire intent</em> as a value. the interpreter makes this concrete: <code>Executor</code> is a trait, so alongside the real executor there is a scripted one that performs nothing and appends each effect to a transcript, feeding the program canned args, canned stdin, and an in-memory map of files:</p>
 
 <div class="code-panel">
-  <div class="code-panel-title">src/eval.rs</div>
+  <div class="code-panel-title">src/eval/executor.rs</div>
   <pre><code><span class="k">pub struct</span> <span class="t">ScriptedExecutor</span> {
     <span class="k">pub</span> transcript: <span class="t">Vec</span>&lt;<span class="t">String</span>&gt;,
     <span class="k">pub</span> script_args: <span class="t">Vec</span>&lt;<span class="t">String</span>&gt;,

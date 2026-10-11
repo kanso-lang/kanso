@@ -142,19 +142,14 @@ says what happened. Read the queue with
   silently drops a kernel must turn CI red; one once deleted Eisel-Lemire from
   main and nothing noticed.
 - **Counters changed means regenerate every vein in the same PR**: the .mem
-  files, all TWELVE cost goldens, `bench/emitted_golden.txt`, the ch10 sample,
-  the book panels, and the siblings' own veins. Do not count the goldens from
-  memory; `sh scripts/gates/all_counters.sh` reads every one and names each that
-  moved, and `--write` regenerates them with headers intact. (The count word in
-  this bullet is pinned by `tests/every_counter_gate_is_in_the_sweep.rs`, which
-  is why it is the one count left in this file; #1846.)
+  files, every cost golden, `bench/emitted_golden.txt`, the ch10 sample, the
+  book panels, and the siblings' own veins. `sh scripts/gates/all_counters.sh
+  --list` prints the cost goldens; the sweep without a flag reads every one and
+  names each that moved, and `--write` regenerates them with headers intact.
 - **The runtime sweep does not read the compile veins, and a library change
   moves them**, because `lib/*.kso` is `include_str!`'d into the compiler.
-  `machine_code`, `emitted_code`, `compile_memory`, `compile_allocs`,
-  `compile_instructions`, `entry_instructions`, `library_instructions`,
-  `compile_libraries`, `codegen_instructions` and `emit_instructions`
-  are separate gates, and `sh scripts/gates/all_compile.sh` runs them all. Facts a
-  reader needs about them:
+  `sh scripts/gates/all_compile.sh` runs the compile gates, and `--list` prints
+  their names. Facts a reader needs about them:
   - `kanso check` routes by content: a directory is a module, a file with bare
     statements is an entry, a file of definitions alone is a library. The
     three routes are three compiles, with a row each.
@@ -169,8 +164,6 @@ says what happened. Read the queue with
   - Which gates refuse to compare depends on the host, because each checks its
     golden's measured-on line. A refusal exits non-zero like a regression, so
     read the sweep's `not compared here` line rather than counting failures.
-  - `tests/the_compile_sweep_names_every_compile_gate.rs` fails if a gate on
-    disk is missing from this bullet, so the list above can be trusted.
 - **Two compile veins are read by a cargo test rather than a gate**:
   `bench/compile_golden.txt` and `bench/compile_golden_modules.txt`, read by
   `tests/compile_cost.rs`. `all_compile.sh` runs that test by name. Regenerate

@@ -75,7 +75,7 @@ three</code></pre>
 <p>the payoff lands in testing. in most languages, testing effectful code means mocks: intercept the i/o call, record what would have happened, hope the interception is faithful. in kanso there is nothing to intercept, because evaluation never does i/o. the interpreter's runtime is a trait with two implementations—a real executor that prints, and a scripted one that appends each effect to a transcript:</p>
 
 <div class="code-panel">
-  <div class="code-panel-title">src/eval.rs</div>
+  <div class="code-panel-title">src/eval/executor.rs</div>
   <pre><code><span class="k">pub struct</span> <span class="t">ScriptedExecutor</span> {
     <span class="k">pub</span> transcript: <span class="t">Vec</span>&lt;<span class="t">String</span>&gt;,
 }</code></pre>

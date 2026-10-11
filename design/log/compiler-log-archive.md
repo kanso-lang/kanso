@@ -99876,3 +99876,354 @@ The compile sweep moved one row on this host: `entry_instructions`
 since the native entry path does not run the translation. The two codegen
 rows read what this container read for main in the entry above, so they
 stay at CI's values.
+
+## 2026-10-09 — a bignum multiplies with its shorter operand outside
+
+A differential run through the playground's own compile path found this. The
+harness hands a generated program to `docs/kanso.wasm` the way the tab does,
+compiles it with `kanso_compile_native`, runs the module against the wasm32
+runtime under wasmi, and compares stdout, stderr and the exit code with the
+interpreter's. It is a scratch test rather than a spec, because the
+generator lives outside the tree. Over 1,177 programs that touch no files,
+stdout and the exit code agreed on every one. stderr differed only in the
+path a trace names, `defs.kso` against `defs/defs.kso`, because the harness
+hands the module's one file under a shorter name than the interpreter reads
+it from. Three programs ran out of wasmi's two billion units of fuel. Five
+more generators, the box, first-order, nesting, NaN and minus ones,
+added 2,240 programs, and every one agreed on the same terms.
+
+All three run in about a tenth of a second interpreted and over a second
+native. Each holds a group like this one, which doubles an accumulator a
+hundred thousand times and never reads it:
+
+    fn acc46 n acc
+      5 + acc46 (n - 1) (acc * 2)
+
+The accumulator grows past 3,000 limbs, so each step multiplies a long
+number by a one-limb `2`. `k_int_mul` ran its schoolbook rows over the first
+operand and its columns over the second, which put the long number outside.
+Every limb then paid for a whole row, its setup and its carry, to multiply
+by a row one limb long: about 25 instructions a limb. It also cleared the
+result before the first row. num-bigint, under the interpreter, takes about
+three.
+
+`k_int_mul` now puts the shorter operand outside. The first row writes its
+products, where the later rows add to theirs, so the result is not cleared
+first. The two views are swapped by pointer, because a small int's limbs
+are stored inside its own view, and a swap by value leaves the short one
+pointing at the other view's storage. The algorithm and the count of limb
+products are unchanged.
+
+That alone took s900624 from 4,586,777,277 instructions to 1,084,873,711,
+with the multiply itself at 1,028,787,419, about 6.6 instructions a limb.
+The row then went two limbs at a time as one little-endian 64-bit word, with
+a 128-bit product, on x86-64 and arm64. A row that writes costs 4.0
+instructions a limb that way against 6.5, and one that adds 4.8 against 9.0.
+wasm32 has no 64 x 64 -> 128 multiply and keeps the limb loop. The first
+attempt at the wider row put the write and the add in one loop behind a test
+on the row number and read 1,498,505,558, slower than the narrow loop. As one
+inlined row called with the choice fixed at each site, it reads:
+
+    program    before          after
+    s900233    4,601,351,409   710,285,391
+    s900624    4,586,777,277   695,632,879
+    s901212    4,551,721,733   660,655,483
+
+The multiply falls from 3,919,227,713 to 639,546,587 on s900624. Each
+program prints the same bytes as before and as the interpreter, and through
+the tab all three now finish inside the fuel budget. A program that builds
+3^100000 three times, by repeated `acc * 3`, falls from 5,069,017,487 to
+3,214,914,845; it still costs more natively than interpreted, since
+num-bigint keeps 64-bit limbs where the runtime stores 32-bit ones.
+
+`tests/golden/micro/a_bignum_product_reads_the_same_from_either_side.kso`
+asks for seven products both ways round: long by one limb, by two limbs and
+by long, with every pairing of signs. Swapping the views by value turns
+all fourteen lines red, and dropping the row's own word from the wide add
+turns twelve of them red.
+
+The runtime is compiled into every binary, so three veins moved. Each
+benchmark's machine code grew by 1,136 bytes, and the text vein's total
+went from 4,595,198 to 4,611,102. `codegen_instructions_release`
+rose from 453,747,433 to 453,756,115 (+8,682) and `codegen_instructions_dev`
+from 118,854,794 to 118,855,947 (+1,153). Those are CI's readings. This
+container read the narrow version 488,366 below CI on the release row and
+14,082 above it on the dev row, where on kanso#1816 the two had agreed, so
+neither codegen row was taken from here. The objective moves by less than
+the gate's 0.001 either way and the floor stays. The work vein, which counts
+each benchmark's instructions, moved on four rows although none of them
+multiplies a bignum: `work_encodebench` +497 to 2,384,337,983,
+`work_oneshot` +308 to 13,027,092, `work_livebench` -371 to 1,473,485,624
+and `work_runbench` -14 to 1,129,589,342, read by CI, with where the larger
+runtime's code landed. This
+container's counter sweep had read them unmoved. The allocation counters,
+the lazy tier and the compile rows did not move.
+
+## 2026-10-10 — native bignums store 64-bit limbs
+
+Clay asked why the runtime's bignum limbs were 32 bits wide when the
+interpreter's num-bigint uses 64. Nothing recorded a reason. The 32-bit form
+came in with the bignum itself, `baaa3b0e`, and it is the convenient one in
+portable C: a limb product fits a `uint64_t`, and Knuth's division needs a
+64-by-32 divide, which C has. Both native targets multiply 64 by 64 into 128
+bits in one instruction, so the convenience was costing division, printing
+and multi-limb products.
+
+The runtime now stores 64-bit limbs behind an eight-byte sign word. A limb
+product is an `unsigned __int128` multiply, which wasm32 lowers to
+compiler-rt's `__multi3`, and `wasm/shim.c` already supplies that. A
+quotient digit comes from `k_div_2by1`, which is one `divq` on x86-64 and
+Hacker's Delight's `divlu` elsewhere. That keeps any 128-bit division out of
+the runtime, since wasm32's compiler-rt has no `__udivti3`. Printing divides
+by 10^19 a pass and reading digits takes nineteen at a time. The copy and
+rewind paths can leave a bignum's bytes at any alignment, so a limb is read
+through a type that promises none.
+
+Instructions on the dev tier, before and after, each program printing the
+same bytes on both and on the interpreter:
+
+    program                               before        after
+    3000! printed                         12,994,553     7,889,063
+    digit sum of 1500!, by % 10 and / 10  42,436,815    10,657,709
+    gcd of the 4000th and 3999th Fibonacci
+      numbers, 3,998 remainders           30,223,900    19,554,376
+    2 doubled 60,000 times                238,579,642   237,443,192
+    3^30000 by repeated `acc * 3`          96,093,717    95,517,656
+
+The last two barely move because x86-64 already multiplied a long number by
+one limb two 32-bit limbs at a time. The interpreter takes 395, 149 and 143
+ms on the first three, and the native binaries 11, 30 and 16.
+
+The limb functions were checked against GMP before any of this was trusted.
+A harness pulls `k_mag_cmp`, `k_mag_add`, `k_mag_sub`, `k_mag_row`,
+`k_div_2by1` and `k_mag_divmod` out of `src/runtime.c` as text and compares
+them with `__gmpn_tdiv_qr`, `__gmpn_mul`, `__gmpn_add` and `__gmpn_sub` on
+operands from one to 300 limbs. The operands are built to hit the corners:
+all-ones limbs, dividends just under and just over a multiple of the
+divisor, and dividends of the form (v - 1) * 2^64k plus low limbs, where the
+remainder's top limb equals the divisor's after the first quotient digit.
+It runs twice, once as x86-64 compiles it and once with the `divq` branch
+removed, which is the code arm64 and wasm32 run. Both read 10,000,000 cases
+and no failures. Removing the add-back's decrement fails 30,614 cases in
+200,000, a wrong correction in the portable divide fails 105,409, and a
+wrong estimate in the equal-top case fails 92,732. Skipping the refinement
+loop in the equal-top case fails none; the add-back corrects every estimate
+it leaves one too large, and no generated case left one two too large.
+
+A differential fuzzer built 150 programs of random bignum arithmetic, each
+with twelve operand triples from one to 4,000 bits, and ran each on the
+interpreter, the dev binary and the release binary. All 150 agree.
+`tests/golden/micro/a_long_division_meets_the_divisor_at_its_top_limb.kso`
+divides at two- and three-limb divisors with the dividends above. Giving the
+equal-top estimate a wrong digit turns its first lines red.
+
+The entry before this one said a program building 3^100000 three times
+cost more natively than interpreted because of the limb width. That was a
+guess, and the change it predicted has now been made: the program's
+instructions moved from 3,038,963,635 to 3,033,193,581, under 0.2%, and the
+binary still takes about 1.3 seconds against the interpreter's 0.44. The
+gap is memory. The binary peaks at 1,949,852 KB with 487,053 minor page
+faults, where the interpreter peaks at 10,044 KB with 348. The loop
+`pw (acc * 3) (n - 1)` is a self tail call that allocates nothing but its
+bignum, and `beat.rs` gives a loop a rewind only when it allocates, counting
+arithmetic as free. So every intermediate power stays in the arena until
+the loop ends. s900624 from the entry before, which doubles an accumulator
+inside a non-tail recursion, peaks at 618,392 KB with 154,187 faults for the
+same reason. The claim also went into a Readwise summary and a reply to
+Clay; both are corrected.
+
+CI's first reading of the branch put the browser engine's compile at
+391,614,023 instructions against main's 389,803,790, a rise of 1,810,233
+(0.46%), and this host reads the same figure from the same rustc. The new
+analysis was not what cost it. With `widens` answering false before it read
+anything, so that every loop was judged exactly as on main, the row read
+391,491,971; with the new `Beats` field alone and main's `beat.rs` otherwise,
+it read 389,807,903; and moving the cheap test ahead of `crossing_positions`,
+or walking the program once instead of once per loop, each moved it by less
+than 200,000. Marking `group_param_set` and `tail_exprs` `#[inline]` put it at
+387,724,060, which is 2,079,730 (0.53%) under main. Both helpers gained a
+caller in this change, and `group_param_set` is called in
+`crossing_positions`'s loop over every parameter, so the likeliest reading is
+that the extra caller cost them their inlining there. That reading has not
+been isolated: the measurement shows the row moving with the attribute and
+nothing else.
+
+CI's rows for the tree as pushed: `compile_instructions` 25,855,719 to
+25,829,822, `entry_instructions` 85,257,442 to 85,178,721 and
+`library_instructions` 85,813,347 to 85,734,452, all lower; `emit_instructions`
+7,035,904 to 7,062,270, 26,366 or 0.37% higher, and `interp_instructions`
+488,869,908 to 488,913,120. The emit row is where the attribute shows on
+native: the codegen pass runs the helpers it inlined. The runtime rows are the
+projection exactly.
+
+The trend gate's names for what rose, each at the value it landed on:
+`basket_alloc_bytes` 7,522,273; `basket_allocs` 27,264; `basket_buf_reuse`
+119; `basket_sh_buf` 689,952; `branches` 53; `calls` 88; `lines` 1,589;
+`interp_instructions` 488,913,120; `emit_instructions` 7,062,270;
+`work_basket` 32,362,738; `emitted_other_branches` 16,032;
+`emitted_other_calls` 17,104; `emitted_other_lines` 144,174; `text`
+4,586,926; `a_map_whose_keys_arrived_in_order_is_its_own_view_beat_iters`
+1,000; `force_path_beat_iters` 2,000; `lazy_verdict_is_per_arm_beat_iters`
+2,000; `many_cells_beat_iters` 140; `returned_thunk_beat_iters` 2,000;
+`stream_fold_beat_iters` 10,000;
+`the_length_of_an_indexed_character_needs_no_scan_beat_iters` 4,021;
+`two_bound_columns_are_one_allocation_beat_iters` 3,000.
+
+Taken together the two sides net to a fall in welfare of 0.0000025, from
+90.25702372 to 90.25702120. The floor is lowered by that much. Clay asked
+why the two engines stored integers differently, and there was no reason;
+this branch is the answer to that question, so the floor follows it.
+
+## 2026-10-10 — four faults the ports found
+
+Twenty programs were ported to kanso to see where the language gets in a
+programmer's way, and their journals carry bug reductions as well as
+complaints. Four of the reductions are fixed here, each with the fixture that
+fails without its fix.
+
+**A tie settled by an arm that never meets it.** `check_arm_ties` calls two
+arms tied when each is more specific somewhere, unless a third arm covers
+both. It compared patterns by rank alone, so `"+"` and `"eq"` ranked equal,
+and an arm for `"eq"` could settle a tie that only `"+"` calls fall into.
+The lox port had two arms of `apply` that could both take `"+"` with two
+floats, settled on paper by an `"eq"` arm, and the two engines picked
+different arms at run time. The comparison now answers "disjoint" for
+patterns no single value matches: two different literals, a literal and a
+marker, a literal and a type that cannot hold it, a marker and a type it is
+not. A disjoint pair cannot tie and cannot settle anything.
+`errors/a_literal_arm_cannot_settle_a_tie_it_never_meets.kso` is the lox
+shape and passed `kanso check` on main;
+`micro/arms_that_never_meet_are_not_a_tie.kso` is the other direction, two
+arms main called tied that no call can reach together. The bc port's
+`option` group has a real tie the old rule hid, `"--quiet" opts` beside
+`arg (options ...)`, and the stricter check now reports it. So does this
+repository's own `scripts/golden_prose`: `writing_back false _ _ _` and
+`writing_back _ false _ _` both take `false false`, settled on paper by the
+`true true` arm. Both answer 0, so the program never misbehaved; the third arm
+is now `true false`.
+
+**`[if b "x" "y"]`.** The checker refuses a named function written bare in a
+list literal, since a list element is one atom, but it read `if`'s count from
+a table that leaves `if` out, so the interpreter built a four-element list and
+native refused with no location. `call_shaped_at` now knows `if` takes three
+and reads the ambient builtins' counts. `errors/an_if_in_a_list_is_one_call.kso`.
+
+**`\D`, `\W` and `\S`.** std/regexp read an escape it did not know as the
+letter itself, so `o\W` matched an o and a capital W. The three negated
+classes are now the classes `\d`, `\w` and `\s` with the negation flag set.
+`micro/regexp_negated_class_escapes.kso`.
+
+**A name bound to a lazy err.** A match arm that binds a name sees a thunk,
+not what it forces to, so the thunk passes the arm's check and can still
+force to an err later. Native recorded every name a pattern bound as unable to
+fail, and a read that forced the thunk skipped its check: the toml port's
+reduction printed `size 6`, the err's payload read as a list length, where
+the interpreter stopped with `refused 5`. The pattern now keeps the FAIL bit
+on a name whose value is a thunk. Inference makes the same assumption in
+`bind_pattern`, but reverting it there leaves the fixture correct, so it is
+left alone until a program shows it matters.
+`runtime/a_name_bound_to_a_lazy_err_keeps_its_check.kso`; reverting the
+codegen line turns it red.
+
+Rows for this branch, from CI, against main as it stands after the bignum
+loop rewind. Every compile row that reads the larger regexp module or the
+checker's new disjointness test rises: compile_instructions from 25,829,822 to
+25,832,340, entry_instructions from 85,178,721 to 85,435,525,
+library_instructions from 85,734,452 to 85,988,213, and emit_instructions
+from 7,062,270 to 7,062,336. compile_allocs goes from 14,529 to 14,530. The
+interpreter's run asks the allocator twice more, interp_allocs 587,281 to
+587,283, with its peak unchanged. The browser compiles the same library and
+checker, and browser_compile_instructions rises from 387,724,060 to
+388,182,464.
+
+Four benchmark binaries changed. basket, scanbench and runbench grew and
+pendbench shrank by one call and three lines, which sums to
+emitted_other_branches 16,032 to 16,079, emitted_other_calls 17,104 to 17,128
+and emitted_other_lines 144,174 to 144,409. The text is 4,586,926 to 4,588,958
+summed, all of it in the three that grew. Runtime work rises in two of them:
+work_basket from 32,362,738 to 32,382,760 and work_runbench from 1,129,588,698
+to 1,129,588,845, 147 instructions. Which of the four fixes moved which binary
+is not isolated here. Welfare falls, and the floor follows under the
+2026-09-13 rule.
+
+## 2026-10-10 — two native crashes the ports found in the arena
+
+The toml port grew a list by calling a helper that pushed onto it, and the
+native binary died at sixty-four elements, dev and release alike. Sixty-three
+worked on every engine, and so did pushing directly in the tail call.
+
+The pop that hands a loop's result back to its caller asks whether the
+result's interior survives the rewind. For a list of `K_ISV_MIN` (64) or more
+elements it asks a memo table, `k_isv_list`, keyed against the outermost
+beat's mark, and the table is opened when that mark's position differs from
+the one it last saw. Both start as NULL. A program whose outermost beat began
+before the arena held anything compares NULL with NULL, never opens the
+table, and the first lookup grows zero slots to zero and probes with a mask
+of all ones. gdb put the fault on that probe. A list grown through a helper
+reaches the branch because the carry repairs the list's interior every
+iteration rather than copying it, so the list header is old and the pop asks
+the memo about it. The table now opens on its first use as well as on a new
+mark.
+
+The fault needs an entry file, because an entry's statements are what leave
+the arena empty when the first beat begins; the same functions run from a
+`play` did not crash. `tests/golden/entryfile/a_list_pushed_through_a_helper_past_sixty_four`
+builds a 64-element list first and a 1,000-element one after it, and
+`tests/entry_file.rs` checks native against the interpreter. Removing the
+new condition turns the spec red on the crash itself.
+
+The first suspect was the arena's free shelf. The carry's copy of a list has
+room for exactly its length, so every push after a carry grows the list, and
+the outgrown storage is donated to the shelf when its capacity is a power of
+two. Tracing every grow showed that storage was ordinary arena memory, and at
+64 elements the last grow is from a capacity of 63, which the shelf does not
+keep. That change was reverted.
+
+The port's other native report, an arm that ran with an err when its sibling
+had `_` in the same position, is the lazy-err check from the entry before
+this one: `grown` is a thunk that forces to the err, and with that change the
+binary stops at `refused 5` as the interpreter does.
+
+The diff port's native binary died on a three-step effect chain after two
+file reads, sometimes as "ran out of stack" and sometimes as `free(): invalid
+pointer`. valgrind put the bad free in `k_beat_rewind_slow`, on an address
+13,328 bytes inside an arena block, and a trace of the view registry showed
+the path. Myers' search carries its two frontier maps through a loop and
+reads them, which builds each map a sorted view. The headers live in the
+loop's carry buffer, which is outside the arena, so `k_born_this_beat` calls
+them new and the views register at the loop's depth. When the loop's beat
+popped it copied its result out of the carry buffer and then migrated every
+registration to the enclosing depth, the same as it would for a region it
+keeps. A later loop at the same depth overwrote the carry buffer, and when
+the enclosing depth finally rewound it flushed a header that held other
+data. A map at the same address was registered again at the loop's depth
+before the end, which is what the trace caught.
+
+On a pop that copies out of the carry pair, entries whose header lies in
+that depth's carry buffers are now released then and there, while the
+headers are still intact, and the rest migrate as before. The permanent-
+storage registry has the same shape, since it registers a field inside a
+header, and gets the same treatment. The port's own reduction, a 217-line
+module and an eight-line entry, is the fixture:
+`tests/golden/entryfile/a_view_left_in_a_carry_buffer`, run from a scratch
+directory because it writes two files. Removing the release turns the spec
+red on the crash. The diff port's `check.sh` passes all 54 fixtures on the
+three engines with this compiler. Three smaller programs that carry and read
+maps did not reproduce the crash, because their puts happened in place and
+left the maps in the arena.
+
+The two fixes cost a little everywhere the runtime is measured, most of it in
+the second registry pass a carried pop now makes. On CI's rows:
+
+- `text` grows 1,472 bytes a binary, to 4,609,566 in all.
+- `work_deepbench` rises 103,990 to 370,195,223 and `work_runbench` 14,986 to
+  1,129,603,831. `work_encodebench` lands on 2,384,338,163,
+  `work_oneshot` on 13,027,293, `work_widebench` on 28,094,348,
+  `work_indexbench` on 2,458,507 and `work_scanbench` on 281,715, each within
+  a few hundred instructions of main.
+- `codegen_instructions_dev` rises to 118,867,296 and
+  `codegen_instructions_release` to 453,787,838.
+- `browser_run_instructions` rises to 33,519,546.
+
+Welfare falls from 90.25811251 to 90.25801113, and the floor follows under the
+2026-09-13 rule: two programs that crashed natively now run.
