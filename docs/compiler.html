@@ -3875,6 +3875,8 @@ welfare                      77.37         82.09</code></pre>
 
 <p>Neither arena counter saw the fault, because both count blocks in use and the leaked blocks were idle. A new counter, <code>spare_peak_bytes</code>, records the most the spare list held, and the trend gate treats a rise in it as a regression.</p>
 
+<p>A record rebuilt in a beat loop had a related leak. Record reuse writes the new state into the old record's storage, and inside a beat loop that storage can sit below the loop's mark, where no rewind reaches it. A loop that interpolated a one-megabyte string into its state on each pass reached an arena peak of 211 MB at 400 passes. A record is now reused in place only when it lies between the loop's mark and the arena's current position; anywhere else it is built fresh above the mark and the old one is left for the rewind. The same loop peaks at 3 MB, for the cost of one record allocation per stage.</p>
+
 <p>The same pull request retires <code>k_b_adopt</code>, the runtime call that turned a non-string seed into a string builder on its first join. The fold join taught the join itself to do that for any seed with no room, so the adoption had nothing left to convert, and the ratchet confirmed it: both mutations of the adoption left every gate green. Removing the call takes about 26,000 instructions off the run program and 65,000 off a release build.</p>
 
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
