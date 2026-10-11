@@ -49,7 +49,7 @@ fn root() -> &'static Path {
 /// `kanso check` is the whole of what the three compile gates run. A container
 /// only these paths build is never constructed while that command is counted.
 const OFF_THE_COUNTED_PATH: &[(&str, &str)] = &[(
-    "src/main.rs",
+    "src/main/tail_calls.rs",
     "narrow_tailcc, which rewrites emitted LLVM IR. The compile rows stop \
          before codegen; only `kanso build` reaches it.",
 )];
@@ -59,11 +59,20 @@ fn the_compile_path_hashes_with_a_fixed_seed() {
     let src = root().join("src");
     let mut loose: Vec<String> = Vec::new();
 
-    let mut files: Vec<_> = std::fs::read_dir(&src)
-        .expect("src/ is readable")
-        .filter_map(|e| e.ok().map(|e| e.path()))
-        .filter(|p| p.extension().is_some_and(|x| x == "rs"))
-        .collect();
+    // Recursive, because src/codegen.rs and src/main.rs include files from
+    // the directories beside them.
+    let mut files = Vec::new();
+    let mut dirs = vec![src];
+    while let Some(dir) = dirs.pop() {
+        for entry in std::fs::read_dir(&dir).expect("src/ is readable") {
+            let path = entry.expect("a directory entry reads").path();
+            if path.is_dir() {
+                dirs.push(path);
+            } else if path.extension().is_some_and(|x| x == "rs") {
+                files.push(path);
+            }
+        }
+    }
     files.sort();
     assert!(files.len() > 10, "src/ holds the compiler's modules");
 
