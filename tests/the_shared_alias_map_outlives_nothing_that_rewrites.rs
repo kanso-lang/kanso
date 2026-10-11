@@ -20,7 +20,12 @@
 //! before `apply_wrappers`, because by then only owned `String`s are left.
 //! That gap is what this file reads the source for.
 
-const SOURCE: &str = include_str!("../src/lib.rs");
+/// The entry path lives in lib.rs and the module path in the file lib.rs
+/// includes for it.
+const SOURCES: [(&str, &str); 2] = [
+    ("src/lib.rs", include_str!("../src/lib.rs")),
+    ("src/lib/modules.rs", include_str!("../src/lib/modules.rs")),
+];
 
 /// The statements between `wrapper_table` and `apply_wrappers`, per path.
 fn between_the_table_and_the_rewrite(source: &str) -> Vec<(usize, Vec<String>)> {
@@ -54,21 +59,26 @@ fn between_the_table_and_the_rewrite(source: &str) -> Vec<(usize, Vec<String>)> 
 
 #[test]
 fn nothing_touches_the_program_between_the_alias_table_and_the_call_site_pass() {
-    let regions = between_the_table_and_the_rewrite(SOURCE);
+    let regions: Vec<(&str, usize, Vec<String>)> = SOURCES
+        .iter()
+        .flat_map(|(file, source)| {
+            between_the_table_and_the_rewrite(source).into_iter().map(|(at, s)| (*file, at, s))
+        })
+        .collect();
     assert_eq!(
         regions.len(),
         2,
         "the entry path and the module path share the map; this found {} such region(s)",
         regions.len()
     );
-    for (at, statements) in &regions {
+    for (file, at, statements) in &regions {
         let rewrites: Vec<&String> = statements
             .iter()
             .filter(|s| s.contains("&mut merged") || s.contains("(&mut "))
             .collect();
         assert!(
             rewrites.is_empty(),
-            "src/lib.rs:{at} hands a pass the program between the alias table and the \
+            "{file}:{at} hands a pass the program between the alias table and the \
              call-site rewrite, so the table describes a program that no longer exists:\n  {}",
             rewrites.iter().map(|s| s.as_str()).collect::<Vec<_>>().join("\n  ")
         );
