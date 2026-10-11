@@ -6,8 +6,8 @@
 # parameter meets an operator, an index, a field or a reading builtin, and
 # without that the error corpus's a_box_a_lambda_reads checks clean.
 set -e
-f=src/check.rs
-grep -q 'fn read_as_value' src/check.rs
+f=src/check/after_infer.rs
+grep -q 'fn read_as_value' src/check/after_infer.rs
 line='                    if param != "_" && is_box(arg) {'
 [ "$(grep -cxF "$line" "$f")" -eq 1 ] || {
   echo "the lambda parameter's box check moved; this mutation needs rewriting" >&2
