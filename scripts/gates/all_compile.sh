@@ -26,22 +26,6 @@
 # row in the summary, and that is what fails a pull request. This exists so
 # a container can tell a moved vein from an unmeasurable one before pushing.
 set -e
-# BUILD FIRST. The gates below read `*.ll` and the linked binaries out of the
-# working directory, and nothing in them produces those files -- so a sweep run
-# without this line reads whatever the last build happened to leave behind. On
-# 2026-09-06 that was artifacts from a patched tree three minutes stale, and the
-# sweep reported `machine_code` and `emitted_code` MOVED on a tree identical to
-# HEAD. The false positive is the harmless direction. The same staleness the
-# other way round -- artifacts older than the source -- is a sweep that says
-# nothing moved after an edit that moved a vein, which is the failure this whole
-# script exists to prevent.
-#
-# `all_counters.sh` opens with `cargo build --release` for the same reason and
-# CLAUDE.md says why: `lib/*.kso` is `include_str!`'d into the compiler, so a
-# library edit does not reach a program until the compiler is rebuilt.
-# `build_benchmarks.sh` starts with that build and then compiles all thirteen.
-sh scripts/gates/build_benchmarks.sh > /dev/null
-
 # Derived from the goldens rather than remembered: these are the gates whose
 # script names a compile-side golden (bench/compile_*_golden,
 # bench/entry_*_golden, bench/library_*_golden, text_golden, emitted_golden).
@@ -59,6 +43,31 @@ sh scripts/gates/build_benchmarks.sh > /dev/null
 # the per-chip table on 2026-09-05, and the compile row now compares against its
 # single golden inside `compile_instructions` itself.
 gates="machine_code emitted_code compile_memory compile_allocs compile_instructions entry_instructions library_instructions compile_libraries codegen_instructions emit_instructions"
+
+# The list above is the one record of what this sweep covers. `--list` prints
+# it and stops; the spec beside it compares that output with the gates on disk.
+if [ "$1" = "--list" ]; then
+  for g in $gates; do
+    echo "$g"
+  done
+  exit 0
+fi
+
+# BUILD FIRST. The gates below read `*.ll` and the linked binaries out of the
+# working directory, and nothing in them produces those files -- so a sweep run
+# without this line reads whatever the last build happened to leave behind. On
+# 2026-09-06 that was artifacts from a patched tree three minutes stale, and the
+# sweep reported `machine_code` and `emitted_code` MOVED on a tree identical to
+# HEAD. The false positive is the harmless direction. The same staleness the
+# other way round -- artifacts older than the source -- is a sweep that says
+# nothing moved after an edit that moved a vein, which is the failure this whole
+# script exists to prevent.
+#
+# `all_counters.sh` opens with `cargo build --release` for the same reason and
+# CLAUDE.md says why: `lib/*.kso` is `include_str!`'d into the compiler, so a
+# library edit does not reach a program until the compiler is rebuilt.
+# `build_benchmarks.sh` starts with that build and then compiles all thirteen.
+sh scripts/gates/build_benchmarks.sh > /dev/null
 moved=""
 refused=""
 regen=""
