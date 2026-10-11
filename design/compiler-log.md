@@ -3162,3 +3162,125 @@ reads, naming the golden or gate it had lost.
 
 So the scripts are the single source for which veins and gates exist, and
 CLAUDE.md no longer has to carry either list or a count.
+
+## 2026-10-11 — the welfare verdict compares exactly, and kanso#1840's shape joins the run program
+
+The welfare verdict passed any score within 0.001 of the floor, on either side.
+Its comment said the margin was for compile peak bytes, which read 56 bytes
+apart on linux and macos. That stopped applying when welfare began scoring the
+committed goldens: both hosts read the same file. The script combines its terms
+with `+`, `-`, `*` and `/` alone, and IEEE 754 rounds each of those exactly, so
+two hosts score one tree to the same double. `math/round` appears only in the
+history note `--set` writes. kanso#1820 fell 0.00099 and passed inside the
+margin, which is what kanso#1845 reported.
+
+The verdict now compares exactly. A score below the floor fails as a fall, and
+a score above it fails as a rise nobody banked. `--set` writes the score through
+`json/encode`, and a plain run reads it back to the same bits: a floor banked
+on this branch held against its own tree with nothing to spare. Two specs in
+`tests/a_welfare_fall_is_bought.rs` stage the floor a billionth of a point above
+and below the recorded one. With the margin restored, both runs exited clean
+and both specs went red.
+
+`--set` still banks a fall smaller than 0.01. That path writes the new floor
+and its reason into `bench/welfare_floor.json`, where a reviewer reads both,
+and this change leaves it alone.
+
+Main sat 0.0000081 below its floor when this was written, inside the margin.
+kanso#1840 cost that much on the rows the objective reads, and what it bought
+was in a shape the run program never ran. The corpus-first gavel of 2026-09-05
+puts the shape into the corpus, measured on the compiler without the fix, and
+the fix then scores against it. kanso#1840 had already merged, so the compiler
+without it is main at kanso#1839, 30ffadf4, the tree kanso#1840 was cut from.
+
+The new phase, `restate`, is the mem fixture
+`an_interpolated_state_string_is_not_kept_under_the_mark` with its pass count
+lifted into a parameter and its seed string cut from a megabyte to 64 KiB. At
+128 passes, on kanso#1839's compiler, it raises the arena peak from 4,718,608
+to 6,815,760, which is two more one-megabyte blocks and about one decoded
+document, sized the way `machine` and `fold` were. It raises the program's
+instructions from 1,152,728,396 to 1,166,079,984. Built alone, less the empty
+program's 6,760,257, it costs 13,151,636, which is 1.13% of the program. The
+header's table of port phases gains that row.
+
+On main the arena peak stays at 4,718,608, and the program reads 1,170,030,652.
+That is 3,950,668 more than kanso#1839's compiler spends on the same program,
+so the fix costs instructions on this shape as well as saving memory. The
+mechanism was not isolated.
+
+Welfare's two run baselines are re-based the way the four port phases were, so
+that adding the phase costs kanso#1839's compiler nothing. Each is multiplied
+by the reading with the phase over the reading without it, both on kanso#1839's
+compiler. run_instructions goes from 3,349,060,500 to 3,387,851,317, by
+1,166,079,984 over 1,152,728,396. The run peak, which the objective reads as
+the arena, held and permanent peaks summed, goes from 4,948,512 to 7,045,664
+with the phase, so run_peak_bytes' baseline goes from 489,255,962 to
+696,599,932. Both baselines are rounded up. The instruction pair was read in
+this container. Both readings come from one compiler on one host, so the ratio
+carries no difference between hosts that matters. The peak pair is counted and
+is the same on every host.
+
+The run vein moves by the phase's own work. run_alloc_bytes lands on
+330,057,404, run_allocs on 1,771,562, run_beat_iters on 47,708,
+run_bytes_malloc on 9,134, run_evac_allocs on 49,183, run_evac_bytes on
+14,916,544, run_perm_allocs on 98, run_sh_rec on 1,508,784, run_sh_str on
+17,048,976, run_str_scans on 1,023 and run_str_scan_bytes on 17,996,094. The
+evacuated bytes are the string copied at each stage, which the mem fixture's
+entry already names as the price of carrying it.
+
+CI read the rest. work_runbench lands on 1,170,030,999, 347 above this
+container's 1,170,030,652. The phase adds eight functions to the run program,
+so its machine code grows to 618,633 bytes, which moves text to 4,828,574, and
+its emitted code moves emitted_other_defines to 2,010, emitted_other_calls to
+17,507, emitted_other_branches to 16,468 and emitted_other_lines to 147,279.
+Welfare on CI's rows is 91.1114 against main's floor of 91.0338, and the floor
+banks that.
+
+`tests/the_run_program_carries_the_shapes_unchanged.rs` lists `restate` with
+the four port phases that, like it, came from a fixture rather than from a
+benchmark.
+
+## 2026-10-11 — the interpreter row reads the same on every runner
+
+kanso#1843 asked for `interp_instructions` to read one number on every CI host,
+after two jobs at one source read 2,178,502,266 and 2,178,502,272 on
+2026-09-15. Every cost-goldens job prints an `interp_sample` notice carrying
+its CPU, the binary's hash and the row, so the question can be answered from
+the annotations rather than by a new measurement.
+
+The annotations of 144 jobs survive, from 2026-10-08 to this morning. They
+hold 20 distinct rows, one for each interpreter source those jobs built. 19 of
+the 20 were read on more than one CPU model, and none of them was read as two
+numbers. The six models are AMD family 0x19 models 0x1 and 0x11, family 0x1a
+model 0x2, and Intel family 0x6 models 0x6a, 0xad and 0xcf. 488,913,120 alone
+was read by 45 jobs on all six.
+
+Two pairs of rows sit close together, 488,869,908 against 488,869,940 and
+568,708,684 against 568,709,639. Each value in both pairs was read on two or
+more CPU models, and each step from one value to the next is a commit that
+moved the golden: 4119f057 for the first pair and 3b981430 for the second. The
+older jobs' annotations had expired, so the record starts eight days after the
+2026-09-30 change that took the heap's address out of the interpreter's cache
+keys.
+
+So the row reads identically across runner hosts, which is what kanso#1843
+asked for, and nothing needs excluding from the golden's header.
+
+## 2026-10-11 — where the restate phase's extra instructions go
+
+Main's compiler spends 3,950,668 more instructions on the run program with
+`restate` than kanso#1839's compiler does. A per-function callgrind diff of the
+two builds puts 3,870,494 of them in glibc's `memmove`, and every other
+function moves by under 17,000. That is the stage evacuation copying each
+pass's 64 KiB string below the loop's mark, which the 2026-10-10 entry on
+record reuse names as the price of carrying it: run_evac_bytes reads
+14,916,544 on main against 6,442,592 without the phase. Built alone, the phase
+costs fewer instructions on main than on kanso#1839's compiler: the run program
+with every other count set to zero reads 17,451,186 against 19,911,907. Why the
+phase costs more in the full program and less alone was not looked into.
+
+Handing the string's block down instead of copying it is not available: an
+allocation gets a block of its own only above 1 MiB, so a 64 KiB string shares
+a block with whatever else the stage allocated. Keeping survivors where they
+were built would need a different region discipline, and nothing here builds
+one.

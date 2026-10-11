@@ -1,0 +1,18 @@
+type state
+  count
+  body
+
+fn spin 0 st
+  st
+
+fn spin n st
+  spin (n - 1) (state (st.count + 1) "{st.body}{st.count % 10}")
+
+fn seed 0 acc
+  acc
+
+fn seed n acc
+  seed (n - 1) "{acc}{acc}"
+
+pub fn total n
+  length (spin n (state 0 (seed 16 "x"))).body
