@@ -19,28 +19,6 @@
 > The last forty entries. Everything older is in `log/compiler-log-archive.md`,
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
-## 2026-10-10 — gavel: a field may hold a list of `tie` references
-
-Clay, on whether a node built by `list/tie` may hold its links as a list: "of
-course field can be an array". The 2026-10-04 gavel "a data-sized cycle is tied
-with `list/tie`, and `list/tie!` insists" says a reference may be stored in a
-constructor's field and nothing else. The build read that strictly: a list
-literal is not a field, so `node id [(ref "b") (ref "c")]` was refused, and the
-graph fixture held each node's edges as a chain of one-reference records ending
-in a `no_road` marker.
-
-**The clarification.** A field may hold any value, and a list of references in
-a field is storage. The 2026-10-04 rule was about reading, and a list that
-holds references reads none of them. A list or map literal whose elements are
-references, written as a constructor's argument, is admitted. Everything the
-rule refused stays refused: during making, nothing may index, measure, walk or
-pass that list anywhere, because each of those reads through it.
-
-Owes: the check admits a collection literal of references as a field's value,
-with an error golden for a read of such a list in the maker; the graph fixture
-holds each node's neighbours as a list and drops the chain of records; ch03 or
-wherever `tie` is taught shows the list form.
-
 ## 2026-10-10 — a carried rewind waits for the lap to leave something behind
 
 The mal port ran out of memory natively. Its tail-recursive `sum2` held
@@ -2163,3 +2141,32 @@ recorded here, unedited in substance:
   judgment call, and the principle is in the log.
 
 A parked item becomes a `needs-clay` issue when a real case arrives.
+
+## 2026-10-11 — gavel: a bare imported name answers only a call holding its owner's type
+
+Clay, while ruling the ports' namespace question (#1883): "you can only get
+directly to the unscoped identifier if you're passing at least one arg that
+comes from that module." This is the 2026-08-29 gavel "arms travel with the
+type, under the ownership rule" read at full width. That gavel was built for
+the two cases it was argued over, `to_string` and operator arms, and the
+2026-09-17 audit marked it built on those. Ordinary functions were never
+brought under it: `enroll_bare` in src/lib.rs still gives every pub function of
+every import a bare twin, whatever the call passes.
+
+**The ruling.** An imported module's function is reachable by its bare name
+only from a call that passes at least one value of a type that module owns.
+Every other call to it is qualified: `list/sum xs`, `text/join parts ", "`. A
+module's own declarations are unaffected, and so are qualified spellings.
+
+On main today, a module whose `core.kso` builds a private record with
+`step 3` stops compiling when a test file beside it imports std/list:
+`list/step is foreign`, at `core.kso`. The call passes an integer, which std/list
+does not own, so under this ruling std/list's `step` could never have been a
+candidate, and the module's own `step` answers.
+
+Owes: bare enrollment keyed to argument ownership, refusing a bare call to an
+import's function with no owned argument and naming the qualified spelling in
+the diagnostic; the reduced fixture above as an error golden, seen red on main;
+the corpus, the samples, lib and the sibling repositories moved to the qualified
+spelling where they relied on the old reach; ch07 and ch11 rewritten to state
+the rule, since both describe the old behaviour.
