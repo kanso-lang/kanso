@@ -9,8 +9,8 @@
 # this breaks. The mutation sits in the interpreter because the sweep itself
 # runs native: breaking the C side breaks the harness before it can compare.
 set -e
-f=src/eval.rs
-grep -q 'fn execute_chain' src/eval.rs
+f=src/eval/run.rs
+grep -q 'fn execute_chain' src/eval/run.rs
 anchor='                Desc::Bind(inner, callee) => {'
 line='                    let yielded = self.execute(inner, executor)?;'
 [ "$(grep -cxF "$anchor" "$f")" -eq 1 ] || {

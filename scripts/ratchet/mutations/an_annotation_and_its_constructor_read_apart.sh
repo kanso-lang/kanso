@@ -5,7 +5,7 @@
 # an_annotation_and_its_constructor_overlap reports nothing.
 set -e
 old='            x == y && fields.iter().all(|f| matches!(f, Pattern::Var(..) | Pattern::Wildcard(..)))'
-[ "$(grep -cxF "$old" src/check.rs)" -eq 1 ]
-sed -i.bak 's#^            x == y && fields.iter().all(#            false \&\& x == y \&\& fields.iter().all(#' src/check.rs
-rm -f src/check.rs.bak
-! grep -qxF "$old" src/check.rs
+[ "$(grep -cxF "$old" src/check/arms.rs)" -eq 1 ]
+sed -i.bak 's#^            x == y && fields.iter().all(#            false \&\& x == y \&\& fields.iter().all(#' src/check/arms.rs
+rm -f src/check/arms.rs.bak
+! grep -qxF "$old" src/check/arms.rs

@@ -22,8 +22,9 @@ fn every_shipped_module_checks_clean() {
 /// import and checked by nothing.
 #[test]
 fn the_list_is_the_loaders_table() {
-    let source = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/lib.rs"))
-        .expect("the loader's source reads");
+    let source =
+        std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/lib/imports.rs"))
+            .expect("the loader's source reads");
     let mut table: Vec<&str> = source
         .lines()
         .filter_map(|l| l.trim_start().strip_prefix("\"std/"))
