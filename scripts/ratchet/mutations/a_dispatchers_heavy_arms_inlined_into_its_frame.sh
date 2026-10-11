@@ -8,7 +8,7 @@
 # livebench and runbench all rise.
 set -e
 target='        let apart = if self.kept_out.contains(name) { " noinline" } else { "" };'
-n=$(grep -cF "$target" src/codegen.rs)
+n=$(grep -cF "$target" src/codegen/dispatchers.rs)
 [ "$n" -eq 2 ] || { echo "the noinline mark changed shape ($n); rewrite this" >&2; exit 1; }
-sed -i 's|^        let apart = if self.kept_out.contains(name) { " noinline" } else { "" };$|        let apart = if self.kept_out.contains(name) { "" } else { "" };|' src/codegen.rs
-[ "$(grep -cF 'let apart = if self.kept_out.contains(name) { "" } else { "" };' src/codegen.rs)" -eq 2 ]
+sed -i 's|^        let apart = if self.kept_out.contains(name) { " noinline" } else { "" };$|        let apart = if self.kept_out.contains(name) { "" } else { "" };|' src/codegen/dispatchers.rs
+[ "$(grep -cF 'let apart = if self.kept_out.contains(name) { "" } else { "" };' src/codegen/dispatchers.rs)" -eq 2 ]

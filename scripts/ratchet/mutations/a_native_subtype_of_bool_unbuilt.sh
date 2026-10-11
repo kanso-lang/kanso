@@ -5,7 +5,7 @@
 # build where the interpreter prints.
 set -e
 old='            "bool" => -100,'
-[ "$(grep -cxF "$old" src/codegen.rs)" -eq 1 ]
-sed -i.bak '/^            "bool" => -100,$/d' src/codegen.rs
-rm -f src/codegen.rs.bak
-! grep -qxF "$old" src/codegen.rs
+[ "$(grep -cxF "$old" src/codegen/dispatchers.rs)" -eq 1 ]
+sed -i.bak '/^            "bool" => -100,$/d' src/codegen/dispatchers.rs
+rm -f src/codegen/dispatchers.rs.bak
+! grep -qxF "$old" src/codegen/dispatchers.rs

@@ -6,9 +6,9 @@
 # switches.
 set -e
 line='        if branches_to(&f.out, "nomatch") {'
-grep -qF "$line" src/codegen.rs || {
+grep -qF "$line" src/codegen/dispatchers.rs || {
   echo "the nomatch check moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i 's/^        if branches_to(&f.out, "nomatch") {$/        if !f.out.is_empty() || branches_to(\&f.out, "nomatch") {/' src/codegen.rs
-[ "$(grep -cF '        if !f.out.is_empty() || branches_to(&f.out, "nomatch") {' src/codegen.rs)" -eq 1 ]
+sed -i 's/^        if branches_to(&f.out, "nomatch") {$/        if !f.out.is_empty() || branches_to(\&f.out, "nomatch") {/' src/codegen/dispatchers.rs
+[ "$(grep -cF '        if !f.out.is_empty() || branches_to(&f.out, "nomatch") {' src/codegen/dispatchers.rs)" -eq 1 ]
