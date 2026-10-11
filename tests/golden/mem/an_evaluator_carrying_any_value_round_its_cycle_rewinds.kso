@@ -1,0 +1,43 @@
+# The shape of mal's evaluator: `ev` hands a value to `ret`, and `ret` hands
+# the next step back to `ev`, so the two are one tail cycle. The value they
+# pass is sometimes a string and sometimes bytes, as an interpreter's value
+# register is, and the cycle is entered by a tail call from `run`. Until
+# 2026-10-10 either fact kept the cycle from rewinding: a slot that might hold
+# bytes was refused, and so was a carrying cycle reached by a tail call. mal
+# held 729 MB at two hundred thousand iterations. Each step here makes a new
+# world and a string the next step drops, and the arena's peak below must not
+# grow with the count.
+#
+# The carried rewind also waits until the lap has left a quarter megabyte
+# behind. `evac_bytes` counts what the stages copied: staging at every edge,
+# as the rewind did before, copies 4,754,864 bytes here.
+import "std/text"
+
+type halt
+
+type k_step
+  n
+  k
+
+type world
+  count
+  last
+
+fn ev n k w
+  ret (k_step n k) (note n w) (world (w.count + 1) "step {n}")
+
+fn note n w
+  return text/to_bytes [(n % 256)] if n % 7 == 0
+  w.last
+
+fn ret halt _ w
+  w.count
+
+fn ret (k_step n k) v w
+  return ret k v w if n == 0
+  ev (n - 1) k (world w.count v)
+
+fn run n
+  ev n halt (world 0 "")
+
+pub play = print "{run 20000}"

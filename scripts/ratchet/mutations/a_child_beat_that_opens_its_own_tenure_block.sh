@@ -6,11 +6,10 @@
 # all forty-nine. Since 2026-09-07 an inner beat that has no block yet opens
 # its tenure in the outer depth's block instead, while that block has room,
 # so the outer depth ends the phase holding one block instead of forty-nine.
-# This mutation makes every inner beat open its own block again. ten_blocks
-# in bench/cost_golden_run.txt reads 6 with the sharing and 55 without it,
-# and the run program counters go red on that row; the mem fixture
-# an_inner_beat_opens_its_tenure_in_the_block_outside pins the same shape at
-# five laps.
+# This mutation makes every inner beat open its own block again. The mem
+# fixture an_inner_beat_opens_its_tenure_in_the_block_outside pins the shape
+# at five laps and goes red. The run program pinned it too until the lap
+# carry, under which runbench's tenure fits one block either way.
 set -e
 grep -q '^    if (!b && d > 0) {$' src/runtime.c || {
   echo "k_ten_alloc's parent-block opening changed shape; rewrite this" >&2

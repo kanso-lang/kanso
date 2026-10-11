@@ -1,0 +1,28 @@
+import "std/io"
+import "std/list"
+
+# A fold whose folder answers `"{acc}..."` extends the accumulator in place,
+# by lambda or by name, once the fold owns it. Each binding below is a way the
+# string could be shared, and each must print as if every join copied.
+fn piece acc i
+  "{acc}<{i}>"
+
+fn shapes nums
+  by_name = list/fold nums "" piece
+  by_lambda = list/fold nums "" (acc n -> "{acc}[{n}]")
+  held = "held:"
+  grown = list/fold nums held (acc n -> "{acc}{n}")
+  first = list/fold nums "a" piece
+  second = list/fold nums first piece
+  left = list/fold [7] first piece
+  right = list/fold [8] first piece
+  up = list/fold [5] by_lambda (acc n -> "{acc}+{n}")
+  down = list/fold [6] by_lambda (acc n -> "{acc}-{n}")
+  kept = "k"
+  once = piece kept 9
+  evens = list/fold [1 2 3 4] "" (acc n -> if (n % 2 == 0) "{acc}{n}" acc)
+  top = "{by_name}\n{by_lambda}\n{held} {grown}\n"
+  pair = "{left} {right}\n{up} {down}\n"
+  "{top}{first} {second}\n{pair}{kept} {once}\n{evens}\n"
+
+pub play = io/write (shapes [1 2 3])

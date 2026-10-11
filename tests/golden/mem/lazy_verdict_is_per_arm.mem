@@ -45,6 +45,7 @@ view_frees=0
 ten_blocks=0
 ten_frees=0
 ten_handups=0
+chain_finds=0
 sh_str=64
 sh_rec=96
 sh_buf=0

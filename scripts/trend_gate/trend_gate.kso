@@ -253,7 +253,10 @@ higher_c = ["push_mut_fast" "put_mut_fast" "bytes_freed" "carry_dedup"]
 # `seek_steps` is an index answered by stepping the cursor one character on.
 # Losing the step sends each index through the general seek, which still
 # resumes from the cursor, so `seek_resumes` holds and only this goes to nought.
-higher_d = ["ten_handups" "seek_resumes" "ryu_short" "seek_steps"]
+# `chain_finds` is a survival question answered from the block index instead
+# of a walk of the chain. Losing the index answers the same questions by
+# walking, so nothing else moves and only this goes to nought.
+higher_d = ["ten_handups" "seek_resumes" "ryu_short" "seek_steps" "chain_finds"]
 
 higher_cd = text/concat higher_c higher_d
 

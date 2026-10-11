@@ -1,0 +1,22 @@
+# `v = m[i]` on its own line before `put m i (v + 1)` is the same program as
+# `put m i (m[i] + 1)`: the read answers an int and is forced as an operand
+# of the put before the put writes. Naming it used to count as a second use
+# of `m`, so every put copied the map: 2,000 updates over 100 keys made 6,013
+# allocations and 88 MB, where the inline spelling makes 8.
+fn fill m i n
+  return m if n < i
+  fill (put m i 0) (i + 1) n
+
+fn bump m k steps n
+  return m if steps == 0
+  i = k % n + 1
+  v = m[i]
+  bump (put m i (v + 1)) ((k * 7 + 3) % 1000003) (steps - 1) n
+
+fn total m i n acc
+  return acc if n < i
+  total m (i + 1) n (acc + m[i])
+
+pub play =
+  m = bump (fill {} 1 100) 1 2000 100
+  print "{total m 1 100 0}"

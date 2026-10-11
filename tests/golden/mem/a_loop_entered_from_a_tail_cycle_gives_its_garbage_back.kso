@@ -1,0 +1,45 @@
+# The shape of a tree-walking interpreter: `exec` is a tail cycle (a block
+# runs its first statement, then tail-calls itself on the rest), and a loop
+# statement enters `spin` from inside it. The loop carries the machine's state
+# and the statement it repeats, which comes out of a record field. Each pass
+# makes a new state and a string the next pass drops. Until 2026-10-10 the
+# entry from the cycle kept the loop from rewinding, and every pass stayed in
+# the arena: the lox port's for-loop held 3 GB at fifty thousand passes. The
+# arena's peak below must not grow with the count.
+type state
+  count
+  note
+
+type repeat
+  body
+  times
+
+type bump
+
+type block
+  first
+  rest
+
+fn exec (repeat body times) st
+  spin body times st
+
+fn exec (block first rest) st
+  exec rest (exec first st)
+
+fn exec bump st
+  state (st.count + 1) "pass {st.count}"
+
+fn exec _ st
+  st
+
+fn spin _ 0 st
+  st
+
+fn spin body n st
+  spin body (n - 1) (exec body st)
+
+program = block (repeat bump 20000) none
+
+start = state 0 ""
+
+pub play = print "{(exec program start).count}"

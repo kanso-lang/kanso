@@ -1,0 +1,38 @@
+import "std/list"
+
+# A map read through its sorted view, handed out of a loop at a pop that
+# copies deep.
+#
+# `grow` adds a key a lap and reads the map back, so the map keeps a sorted
+# view of its pairs. Every tenth lap leaves enough garbage to stage, which
+# puts the keys so far in the depth's carry pair, and the laps after it build
+# a new map around those keys. The last laps skip their stage, so the pop
+# walks the whole result and copies each key out of the pair. It rewrote the
+# pairs and left the view naming the old keys. The second `grow` stages into
+# the same pair, and `total` searched the first map's view through storage
+# that now held the second map's keys.
+fn junk i
+  return [] if i % 10 != 1
+  list/to_list (list/take (list/repeat 7) 20000)
+
+fn grow p m i n acc
+  return m if n < i
+  g = junk i
+  m2 = put m "{p}{i * 37 % 101}" (i + length g)
+  grow p m2 (i + 1) n (acc + or_zero m["{p}37"] + or_zero m2["{p}37"])
+
+fn total p m i n acc
+  return acc if n < i
+  total p m (i + 1) n (acc + or_zero m["{p}{i * 37 % 101}"])
+
+fn or_zero none
+  0
+
+fn or_zero x
+  x
+
+fn after m
+  other = grow "j" { "a":0 } 1 80 0
+  "{total "k" m 1 80 0} {total "j" other 1 80 0}"
+
+pub play = print (after (grow "k" { "a":0 } 1 80 0))

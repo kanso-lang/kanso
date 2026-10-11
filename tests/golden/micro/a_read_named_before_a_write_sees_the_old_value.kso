@@ -1,0 +1,28 @@
+# A read bound to a name before the map is written answers the map as it
+# was. Where the name only feeds the write, the write may happen in place;
+# where it is used after the write, or kept in a list the write stores, the
+# map is copied, and every line here prints the old value beside the new.
+fn bump m
+  v = m["a"]
+  put m "a" (v + 1)
+
+fn after m
+  v = m["a"]
+  n = put m "a" (v + 10)
+  "{v} {n["a"]} {m["a"]}"
+
+fn kept m
+  v = m["a"]
+  put m "b" [v]
+
+fn twice m
+  v = m["a"]
+  w = v * 2
+  put m "a" (v + w)
+
+pub play =
+  m = { "a":1 }
+  print "{(bump m)["a"]} {m["a"]}"
+    .> (_ -> print (after m))
+    .> (_ -> print "{(kept m)["b"]} {m["a"]}")
+    .> (_ -> print "{(twice m)["a"]} {m["a"]}")

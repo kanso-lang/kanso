@@ -1,0 +1,36 @@
+import "std/list"
+
+# A loop's result handed out at its pop after the loop's last lap skipped
+# its stage.
+#
+# `nest` carries a box and wraps it once a lap. Its first lap stages, which
+# puts the box in the depth's carry pair, and its laps after that skip,
+# because a lap that builds one box leaves too little to reclaim. Each
+# skipped lap builds its box in the arena around the one in the pair. The
+# pop copies the result out, and its walk stops at the first node whose
+# interior is fresh too, so it left the innermost box where it was. `churn`
+# then runs a loop at the same depth, its laps stage into the same pair, and
+# the box `nest` answered came back as a list of twenty thousand sevens.
+type box
+  inner
+
+fn nest t n
+  return t if n == 0
+  nest (box t) (n - 1)
+
+fn churn t n
+  return t if n == 0
+  g = list/to_list (list/take (list/repeat 7) 20000)
+  churn (box [(length g + n)]) (n - 1)
+
+fn show (box x)
+  "<{show x}>"
+
+fn show xs
+  "{xs}"
+
+fn after_churn a
+  b = churn (box [0]) 3
+  "{show a} {show b}"
+
+pub play = print (after_churn (nest [1 2 3] 4))
