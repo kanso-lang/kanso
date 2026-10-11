@@ -3014,9 +3014,12 @@ request of its own. On CI's rows the spare fix alone scores 91.0337007,
 below the carrier's floor of 91.0337226, most of the gap in
 `codegen_instructions_release`, which lands 109,925 above the carrier at
 454,517,107. The adoption's retirement is projected onto those rows from the
-deltas above, and the two together score 91.0338379, which is the floor this
-pull request banks. Against the carrier, three rows still read worse:
+deltas above, and the two together score 91.0338379. The browser tab compiles
+with the same emitter, so browser_compile_instructions falls 7,415 to
+390,029,358, measured here with the pinned rustc that builds
+`docs/kanso.wasm`. With that row the floor this pull request banks is
+91.0338442. Against the carrier, three rows still read worse:
 codegen_instructions_release on 454,452,163, work_livebench on 1,474,871,601
 and work_oneshot on 13,223,705, the release row from the spare fix's layout
-and the two run rows 147 and 7 above the carrier. CI's rows
-for the pair replace the projection.
+and the two run rows 147 and 7 above the carrier. CI's rows for the pair
+replace the projection.
