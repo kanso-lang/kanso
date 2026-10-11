@@ -266,15 +266,15 @@ rescue_licence = row
   (breaking "a_rescue_that_enters_its_own_packages_callback")
   no_setup
 
-# A measured decision that goes to Clay must have an entry in the ledger to
-# go to. Two sends were found sitting in the log with none, two days apart,
-# so the spec reads the log for the family. The mutation takes the ledger's
-# name out of the paragraph that files the `.rodata` page pin, and the spec
-# names that send as unanswered.
+# A measured decision that goes to Clay must name where it went: the ledger
+# before 2026-10-10, a `needs-clay` issue since. Two sends were found sitting
+# in the log with neither, two days apart, so the spec reads the log for the
+# family. The mutation takes the ledger's name out of the paragraph that files
+# the `.rodata` page pin, and the spec names that send as unanswered.
 clay_send_filed = row
-  "a measured decision sent to Clay with no ledger entry to go to"
+  "a measured decision sent to Clay with nowhere to go"
   true
-  "cargo test --release --test a_question_sent_to_clay_has_a_ledger_entry"
+  "cargo test --release --test a_question_sent_to_clay_has_somewhere_to_go"
   "specs (unit, golden, differential)"
   (breaking "a_send_to_clay_with_no_ledger_entry")
   no_setup
