@@ -18,7 +18,7 @@
 //!
 //! THE TEXT IS LIFTED, NOT COPIED. The helpers are cut out of `src/runtime.c`
 //! and compiled here, and the emitter's two comparisons are read out of
-//! `src/codegen.rs` by the lines that spell them.
+//! `src/codegen/declares.rs` by the lines that spell them.
 //!
 //! Watched red: with `k_buf_set_cap` writing `2 * cap - 1` for a malloc'd
 //! buffer the sweep reports the first capacity it reads back short, and with
@@ -42,7 +42,7 @@ fn cut<'a>(src: &'a str, open: &str, shut: &str) -> &'a str {
 
 #[test]
 fn the_emitted_room_tests_are_the_doubled_ones() {
-    let codegen = read("src/codegen.rs");
+    let codegen = read("src/codegen/declares.rs");
     for line in [
         "  %llen2 = shl i64 %llen, 1",
         "  %lneed = add i64 %llen2, 2",

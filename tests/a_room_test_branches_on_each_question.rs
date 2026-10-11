@@ -20,7 +20,8 @@ use std::path::Path;
 #[test]
 fn no_room_test_joins_its_questions() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let codegen = std::fs::read_to_string(root.join("src/codegen.rs")).expect("codegen reads");
+    let codegen =
+        std::fs::read_to_string(root.join("src/codegen/declares.rs")).expect("codegen reads");
     let joined: Vec<&str> = codegen
         .lines()
         .filter(|l| l.trim_start().starts_with('%') && l.contains(" = and i1 %"))

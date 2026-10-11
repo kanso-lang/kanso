@@ -5,8 +5,8 @@
 # Loaded between the two tests, the pair stays two branches. Loaded first,
 # both compares sit side by side and LLVM folds them back into flags.
 set -e
-f=src/codegen.rs
-grep -q '%qspanhi' src/codegen.rs
+f=src/codegen/declares.rs
+grep -q '%qspanhi' src/codegen/declares.rs
 line='  %qclen = load i64, ptr %qc'
 [ "$(grep -cxF "$line" "$f")" -eq 1 ] || {
   echo "the span's length load moved; this mutation needs rewriting" >&2

@@ -6,10 +6,10 @@
 set -e
 first='  store i8 %xb, ptr %dst'
 second='  store i8 %yb, ptr %dst1'
-[ "$(grep -cxF "$first" src/codegen.rs)" -eq 1 ] && [ "$(grep -cxF "$second" src/codegen.rs)" -eq 1 ] || {
+[ "$(grep -cxF "$first" src/codegen/declares.rs)" -eq 1 ] && [ "$(grep -cxF "$second" src/codegen/declares.rs)" -eq 1 ] || {
   echo "the byte pair's stores moved; this mutation needs rewriting" >&2
   exit 1
 }
 sed -i -e 's/^  store i8 %xb, ptr %dst$/  store i8 %xb, ptr %dst1/' \
-       -e 's/^  store i8 %yb, ptr %dst1$/  store i8 %yb, ptr %dst/' src/codegen.rs
-if grep -qxF "$first" src/codegen.rs; then exit 1; fi
+       -e 's/^  store i8 %yb, ptr %dst1$/  store i8 %yb, ptr %dst/' src/codegen/declares.rs
+if grep -qxF "$first" src/codegen/declares.rs; then exit 1; fi

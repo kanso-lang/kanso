@@ -53,6 +53,9 @@ jobs:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
           components: rustfmt
       - run: cargo fmt --check
+      # cargo fmt walks `mod` declarations only, so a file read with include!
+      # is checked by name.
+      - run: rustfmt --edition 2021 --check src/codegen/declares.rs
 
   python-free:
     name: python-free (the harnesses stay kanso)

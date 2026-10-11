@@ -7,10 +7,10 @@
 # length of 690,000 one-character strings in its index phase, and each ask
 # goes back to a call, a jump table and six pushed and popped registers.
 set -e
-grep -q '^  br i1 %is_str, label %memo, label %slow$' src/codegen.rs || {
+grep -q '^  br i1 %is_str, label %memo, label %slow$' src/codegen/declares.rs || {
   echo "the length twin's string arm changed shape; this needs rewriting" >&2
   exit 1
 }
 sed -i 's|^  br i1 %is_str, label %memo, label %slow$|  br i1 %is_str, label %slow, label %slow|' \
-  src/codegen.rs
-grep -q '^  br i1 %is_str, label %slow, label %slow$' src/codegen.rs
+  src/codegen/declares.rs
+grep -q '^  br i1 %is_str, label %slow, label %slow$' src/codegen/declares.rs
