@@ -5,7 +5,7 @@
 # a_typeset_arm_behind_a_wider_one reports nothing.
 set -e
 old='        if !n.iter().all(|m| w.contains(m)) {'
-[ "$(grep -cxF "$old" src/check.rs)" -eq 1 ]
-sed -i.bak 's#^        if !n.iter().all(|m| w.contains(m)) {$#        if true {#' src/check.rs
-rm -f src/check.rs.bak
-! grep -qxF "$old" src/check.rs
+[ "$(grep -cxF "$old" src/check/arms.rs)" -eq 1 ]
+sed -i.bak 's#^        if !n.iter().all(|m| w.contains(m)) {$#        if true {#' src/check/arms.rs
+rm -f src/check/arms.rs.bak
+! grep -qxF "$old" src/check/arms.rs

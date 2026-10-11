@@ -7,10 +7,10 @@
 # where it wants "a?".
 set -e
 line='        LOADED_ELSEWHERE.with(|c| c.set(true));'
-test "$(grep -cxF "$line" src/lib.rs)" = 1 || {
+test "$(grep -cxF "$line" src/lib/imports.rs)" = 1 || {
   echo "the loader's note for a module on disk changed shape; rewrite this" >&2
   exit 1
 }
-grep -vxF "$line" src/lib.rs > src/lib.rs.new
-mv src/lib.rs.new src/lib.rs
-test "$(grep -cxF "$line" src/lib.rs)" = 0
+grep -vxF "$line" src/lib/imports.rs > src/lib/imports.rs.new
+mv src/lib/imports.rs.new src/lib/imports.rs
+test "$(grep -cxF "$line" src/lib/imports.rs)" = 0

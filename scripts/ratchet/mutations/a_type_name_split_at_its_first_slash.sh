@@ -7,9 +7,9 @@
 # matches. The qualified_yield module is refused twice for a program that
 # compiles, so its spec goes red.
 set -e
-grep -q "^        for part in name.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '/')) {$" src/lib.rs || {
+grep -q "^        for part in name.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '/')) {$" src/lib/imports.rs || {
   echo "the qualifier scan changed shape; this needs rewriting" >&2
   exit 1
 }
-sed -i "s@^        for part in name.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '/')) {\$@        for part in [name] {@" src/lib.rs
-grep -q '^        for part in \[name\] {$' src/lib.rs
+sed -i "s@^        for part in name.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '/')) {\$@        for part in [name] {@" src/lib/imports.rs
+grep -q '^        for part in \[name\] {$' src/lib/imports.rs

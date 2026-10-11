@@ -5,7 +5,7 @@
 # a_list_arm_reads_no_element_type reports nothing.
 set -e
 old='            x == y || tested_as(x) == tested_as(y)'
-[ "$(grep -cxF "$old" src/check.rs)" -eq 1 ]
-sed -i.bak 's#^            x == y || tested_as(x) == tested_as(y)$#            x == y || (crate::ast::is_effect_type(x) \&\& crate::ast::is_effect_type(y))#' src/check.rs
-rm -f src/check.rs.bak
-! grep -qxF "$old" src/check.rs
+[ "$(grep -cxF "$old" src/check/arms.rs)" -eq 1 ]
+sed -i.bak 's#^            x == y || tested_as(x) == tested_as(y)$#            x == y || (crate::ast::is_effect_type(x) \&\& crate::ast::is_effect_type(y))#' src/check/arms.rs
+rm -f src/check/arms.rs.bak
+! grep -qxF "$old" src/check/arms.rs

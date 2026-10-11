@@ -11,9 +11,9 @@
 # this sweep is the only place that question is put to a real directory.
 set -e
 target='if let Some(false) = exports.get(name.as_str()) {'
-grep -qF "$target" src/lib.rs || {
+grep -qF "$target" src/lib/imports.rs || {
   echo "the import visibility check moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i 's|if let Some(false) = exports.get(name.as_str()) {|if let Some(false) = exports.get("a name no module declares") {|' src/lib.rs
-grep -qF 'exports.get("a name no module declares")' src/lib.rs
+sed -i 's|if let Some(false) = exports.get(name.as_str()) {|if let Some(false) = exports.get("a name no module declares") {|' src/lib/imports.rs
+grep -qF 'exports.get("a name no module declares")' src/lib/imports.rs
