@@ -3085,6 +3085,17 @@ floor stays where the spare fix left it.
 `text` totals 4,825,470, 80 bytes a binary above the spare fix for the mark
 check.
 
+CI then read this branch on the spare fix with k_b_adopt retired, and those
+rows replace the ones above. codegen_instructions_dev lands on 118,940,032,
+codegen_instructions_release on 454,512,392, work_basket on 30,873,237,
+work_encodebench on 2,398,369,266, work_livebench on 1,474,870,859,
+work_oneshot on 13,224,090 and work_runbench on 1,152,729,429, and `text`
+totals 4,825,438. Against the spare fix's CI rows, the dev row rises 2,514, the
+release row 2,552, basket 60,732, oneshot 189 and runbench 686; encodebench
+falls 756 and livebench 343. Welfare scores 91.0338012, 0.0000081 under the
+91.0338093 the spare fix banks from its CI rows and inside the gate's 0.001
+allowance, so the floor stays where the spare fix left it.
+
 ## 2026-10-11 — the first join makes its own builder, and `k_b_adopt` goes
 
 A builder seed that is not a string reached its first join through
@@ -3119,3 +3130,15 @@ codegen_instructions_release on 454,452,163, work_livebench on 1,474,871,601
 and work_oneshot on 13,223,705, the release row from the spare fix's layout
 and the two run rows 147 and 7 above the carrier. CI's rows for the pair
 replace the projection.
+
+CI's rows for the pair replace the projection. codegen_instructions_dev lands
+on 118,937,518 and codegen_instructions_release on 454,509,840, the release row
+57,677 above the projection. work_encodebench lands on 2,398,370,022,
+work_livebench on 1,474,871,202, work_oneshot on 13,223,901 and work_runbench
+on 1,152,728,743. runbench's text falls 32 bytes to 615,417, so `text` totals
+4,824,318, and its emitted code is one call and two lines shorter than
+projected. Welfare on these rows is 91.0338093, which is 0.0000867 above the
+carrier's floor and 0.0000349 below the 91.0338442 banked from the projection.
+The floor now records CI's figure. Banking the projection before CI had read
+it was the error; a projected floor can only be wrong in a direction nobody
+has checked.
