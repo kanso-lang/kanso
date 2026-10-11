@@ -2952,6 +2952,12 @@ on 118,958,562, work_encodebench on 2,398,370,022, work_livebench on
 1,474,871,748, work_oneshot on 13,224,265 and work_runbench on 1,152,754,602,
 and `text` totals 4,829,278. CI's reading replaces each of them.
 
+CI's rows replace the projection. codegen_instructions_dev lands on
+118,939,055 and codegen_instructions_release on 454,517,107, the release tier
+230,743 above the projection. work_encodebench lands on 2,398,369,553,
+work_livebench on 1,474,871,531, work_oneshot on 13,223,698 and work_runbench
+on 1,152,754,392. `text` totals 4,829,278, as projected.
+
 ## 2026-10-10 — a counting loop keeps every pass's key; copying keys out measured and declined
 
 A loop that counts into a map it was handed, under a key it interpolates each
