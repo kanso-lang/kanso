@@ -2,8 +2,9 @@
 # callers may hand it any value: `"{s}x"` renders whatever `s` holds. Native
 # converted the seed at the call and died on anything that was not a string,
 # printing `a string builder starts from a string` where the interpreter
-# rendered it. The seed is now left as it came and the first join adopts its
-# rendering, so a base arm that answers the seed untouched answers `id 13`.
+# rendered it. The seed is now left as it came and the first join makes its
+# rendering the builder, so a base arm that answers the seed untouched answers
+# `id 13`.
 # The long loop takes the beat's carry with a builder seeded mid-loop. Found
 # by a generated program on 2026-09-29.
 import "std/os"

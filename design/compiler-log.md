@@ -2952,6 +2952,12 @@ on 118,958,562, work_encodebench on 2,398,370,022, work_livebench on
 1,474,871,748, work_oneshot on 13,224,265 and work_runbench on 1,152,754,602,
 and `text` totals 4,829,278. CI's reading replaces each of them.
 
+CI's rows replace the projection. codegen_instructions_dev lands on
+118,939,055 and codegen_instructions_release on 454,517,107, the release tier
+230,743 above the projection. work_encodebench lands on 2,398,369,553,
+work_livebench on 1,474,871,531, work_oneshot on 13,223,698 and work_runbench
+on 1,152,754,392. `text` totals 4,829,278, as projected.
+
 ## 2026-10-10 — a counting loop keeps every pass's key; copying keys out measured and declined
 
 A loop that counts into a map it was handed, under a key it interpolates each
@@ -3065,3 +3071,47 @@ an_evaluator_carrying_any_value_round_its_cycle_rewinds_alloc_bytes lands on
 91,445 and an_evaluator_carrying_any_value_round_its_cycle_rewinds_sh_rec on
 2,561,216. CI's reading
 replaces the projected rows.
+
+CI's rows for this branch were read on the spare fix before k_b_adopt was
+retired beneath it. With that retirement's deltas added, the rows land on
+codegen_instructions_dev 118,935,145, codegen_instructions_release
+454,454,756, work_basket 30,873,237, work_encodebench 2,398,370,771,
+work_livebench 1,474,870,922, work_oneshot 13,224,076 and work_runbench
+1,152,728,036. Against the spare fix the dev row rises 1,901, the release row 2,593, basket
+60,732, encodebench 1,120 and oneshot 371, and livebench falls 679. Welfare
+scores 91.0338345, 0.0000034 below the floor the spare fix banked and inside
+the gate's 0.001 allowance, so the floor stays where the spare fix left it.
+`text` totals 4,825,470, 80 bytes a binary above the spare fix for the mark
+check.
+
+## 2026-10-11 — the first join makes its own builder, and `k_b_adopt` goes
+
+A builder seed that is not a string reached its first join through
+`k_b_adopt`, which rendered it and made the rendering the builder. The fold
+join (kanso#1825) taught `k_concat_arr_mut` to do the same for any seed that
+arrives with no room, and from then on the adoption had nothing left to
+convert. The ratchet showed it: both rows that mutated the adoption stayed
+green on the carrier, and were replaced by one row that restores the old
+refusal in `k_concat_arr_mut`. This change removes the call, its declaration
+and the runtime function.
+
+Measured in this container against the carrier, runbench reads 26,076
+instructions fewer, because the run program's builder loops no longer call
+the adoption on their first join; its emitted code loses one call and two
+lines. `codegen_instructions_dev` falls by 5,811, `codegen_instructions_release`
+by 64,944 and `emit_instructions` by 479, and each runtime binary sheds 352
+bytes of text. encodebench reads 98 more, livebench 70 more and oneshot 7
+more, with no change to what they call. The front-end rows and every
+allocation counter agree with the carrier. CI's rows replace these.
+
+This change rides kanso#1839, the oversize-spare fix, rather than a pull
+request of its own. On CI's rows the spare fix alone scores 91.0337007,
+below the carrier's floor of 91.0337226, most of the gap in
+`codegen_instructions_release`, which lands 109,925 above the carrier at
+454,517,107. The adoption's retirement is projected onto those rows from the
+deltas above, and the two together score 91.0338379, which is the floor this
+pull request banks. Against the carrier, three rows still read worse:
+codegen_instructions_release on 454,452,163, work_livebench on 1,474,871,601
+and work_oneshot on 13,223,705, the release row from the spare fix's layout
+and the two run rows 147 and 7 above the carrier. CI's rows
+for the pair replace the projection.

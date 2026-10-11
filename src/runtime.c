@@ -4522,8 +4522,9 @@ KValue k_sub_base(KValue v);
 /* A seed that is not a string stays what it is. `"{p}!"` renders whatever `p`
    holds, so the group is a builder whatever its callers hand in, and a seed of
    `id 13` is legal; answered unjoined by a base arm, it has to come back as
-   `id 13`. The first join seeds from what it renders instead, in
-   `k_b_adopt`. A subtype of string builds from the string it wraps. */
+   `id 13`. The first join finds no room in what it renders and makes the
+   builder there, in `k_concat_arr_mut`. A subtype of string builds from the
+   string it wraps. */
 KValue k_b_str_builder(KValue sv) {
     if (!k_not_failure(sv)) return sv;
     KValue wrapped = sv.tag == K_SUB ? k_sub_base(sv) : sv;
@@ -4551,22 +4552,10 @@ KValue k_b_str_builder(KValue sv) {
 }
 
 
-/* The first piece of a join, where the builder is the value it rendered. A
-   builder that was a string all along is handed on, and `k_concat_arr_mut`
-   still refuses one that was never converted. A seed that was not a string
-   was left as it came by `k_b_str_builder`, and its rendering becomes the
-   builder here, on the first join. */
-KValue k_b_adopt(KValue raw, KValue rendered) {
-    if (raw.tag == K_STR || !k_not_failure(rendered)) return rendered;
-    return k_b_str_builder(rendered);
-}
-
-/* Joining into a builder. This only ever writes into the header it was given
-   and never makes a new one, because the shelf carries that header across a
-   rewind and a fresh one would be allocated above the mark and reclaimed
-   underneath it. A string that is not a builder arriving here means the seed
-   was not converted, which is a compiler bug: it says so rather than quietly
-   allocating and leaving a dangling carry behind. */
+/* Joining into a builder. Once the builder exists every join writes into the
+   header it was given, because the shelf carries that header across a rewind.
+   The first join may find a seed with no room: a fold's literal, a value that
+   was not a string, or a string bound lazily. It makes the builder there. */
 KValue k_concat_arr_mut(long long n, const KValue* parts) {
     if (n == 0) return k_concat_arr(n, parts);
     for (long long i = 0; i < n; i++) {
