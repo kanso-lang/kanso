@@ -6,8 +6,8 @@
 # Without that reading, the error corpus's a_box_carried_through_a_parameter
 # checks clean and dies at run time with "no overload of `seen` matches".
 set -e
-f=src/check.rs
-grep -q 'let mut handed_here' src/check.rs
+f=src/check/after_infer.rs
+grep -q 'let mut handed_here' src/check/after_infer.rs
 line='    if handed.is_empty() {'
 [ "$(grep -cxF "$line" "$f")" -eq 1 ] || {
   echo "the held-parameter pass's entry moved; this mutation needs rewriting" >&2

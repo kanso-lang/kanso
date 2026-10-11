@@ -5,7 +5,7 @@
 # on every_nan_is_one_value_and_zero_is_one_value.
 set -e
 old='        (Value::Float(x), Value::Float(y)) => Some(float_order(*x, *y)),'
-[ "$(grep -cxF "$old" src/eval.rs)" -eq 1 ]
-sed -i.bak 's#^        (Value::Float(x), Value::Float(y)) => Some(float_order(\*x, \*y)),$#        (Value::Float(x), Value::Float(y)) => Some(x.total_cmp(y)),#' src/eval.rs
-rm -f src/eval.rs.bak
-grep -qxF '        (Value::Float(x), Value::Float(y)) => Some(x.total_cmp(y)),' src/eval.rs
+[ "$(grep -cxF "$old" src/eval/values.rs)" -eq 1 ]
+sed -i.bak 's#^        (Value::Float(x), Value::Float(y)) => Some(float_order(\*x, \*y)),$#        (Value::Float(x), Value::Float(y)) => Some(x.total_cmp(y)),#' src/eval/values.rs
+rm -f src/eval/values.rs.bak
+grep -qxF '        (Value::Float(x), Value::Float(y)) => Some(x.total_cmp(y)),' src/eval/values.rs

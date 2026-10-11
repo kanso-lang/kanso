@@ -6,8 +6,8 @@
 # Without it, the error corpus's a_printed_box_where_a_value_is_expected checks
 # clean and dies at run time with "`+` is not defined for these values".
 set -e
-f=src/check.rs
-grep -q 'if name == "effect" || name == "print") =>' src/check.rs
+f=src/check/after_infer.rs
+grep -q 'if name == "effect" || name == "print") =>' src/check/after_infer.rs
 line='                        if name == "effect" || name == "print") =>'
 [ "$(grep -cxF "$line" "$f")" -eq 1 ] || {
   echo "the hand-built box's arm moved; this mutation needs rewriting" >&2

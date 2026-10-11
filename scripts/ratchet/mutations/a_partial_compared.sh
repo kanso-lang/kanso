@@ -4,7 +4,7 @@
 # runtime corpus goes red.
 set -e
 old='        Value::FnRef(_) | Value::Closure(_) | Value::Desc(_) | Value::Partial(..) => true,'
-[ "$(grep -cxF "$old" src/eval.rs)" -eq 1 ]
-sed -i.bak 's#^        Value::FnRef(_) | Value::Closure(_) | Value::Desc(_) | Value::Partial(..) => true,$#        Value::FnRef(_) | Value::Closure(_) | Value::Desc(_) => true,#' src/eval.rs
-rm -f src/eval.rs.bak
-! grep -qxF "$old" src/eval.rs
+[ "$(grep -cxF "$old" src/eval/values.rs)" -eq 1 ]
+sed -i.bak 's#^        Value::FnRef(_) | Value::Closure(_) | Value::Desc(_) | Value::Partial(..) => true,$#        Value::FnRef(_) | Value::Closure(_) | Value::Desc(_) => true,#' src/eval/values.rs
+rm -f src/eval/values.rs.bak
+! grep -qxF "$old" src/eval/values.rs

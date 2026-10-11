@@ -21,7 +21,7 @@
 # the `};` that ends the match rather than on the closure's `});`.
 set -e
 target='        false => phase::watched("check_merged", || {'
-n=$(grep -cF "$target" src/lib.rs)
+n=$(grep -cF "$target" src/lib/modules.rs)
 [ "$n" -eq 1 ] || { echo "the merged check moved or multiplied ($n); rewrite this" >&2; exit 1; }
 awk '
   { print }
@@ -33,6 +33,6 @@ awk '
       print "    trmc::rewrite(&mut merged);"
       open = 0
   }
-' src/lib.rs > src/lib.rs.mut && mv src/lib.rs.mut src/lib.rs
+' src/lib/modules.rs > src/lib/modules.rs.mut && mv src/lib/modules.rs.mut src/lib/modules.rs
 grep -qF '    trmc::rewrite(&mut merged);
-    inline::inline_builtin_wrappers(&mut merged);' src/lib.rs
+    inline::inline_builtin_wrappers(&mut merged);' src/lib/modules.rs
