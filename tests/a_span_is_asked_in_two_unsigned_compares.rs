@@ -10,7 +10,7 @@
 //!
 //! THE TEXT IS LIFTED, NOT COPIED. `k_span_in` is cut out of `src/runtime.c`
 //! and swept here against the signed definition, and the emitter's two
-//! compares are read out of `src/codegen.rs` by the lines that spell them.
+//! compares are read out of `src/codegen/declares.rs` by the lines that spell them.
 //!
 //! Watched red: with `k_span_in` testing `from < to` instead of
 //! `from - 1 < to`, the sweep names the first span it gets wrong.
@@ -25,7 +25,7 @@ fn read(rel: &str) -> String {
 
 #[test]
 fn the_emitted_span_test_is_the_unsigned_one() {
-    let codegen = read("src/codegen.rs");
+    let codegen = read("src/codegen/declares.rs");
     for line in [
         "  %qoff = add i64 %qfrom, -1",
         "  %qorder = icmp ult i64 %qoff, %qto",

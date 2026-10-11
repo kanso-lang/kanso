@@ -4,9 +4,9 @@
 # word's eight bytes, so the bytes past the literal become text:
 # a_short_literal_is_appended_whole prints them.
 set -e
-grep -q '^  %lenn = add i64 %len, %n$' src/codegen.rs || {
+grep -q '^  %lenn = add i64 %len, %n$' src/codegen/declares.rs || {
   echo "the literal word's length changed shape; rewrite this" >&2
   exit 1
 }
-sed -i 's/^  %lenn = add i64 %len, %n$/  %lenn = add i64 %len, 8/' src/codegen.rs
-grep -q '^  %lenn = add i64 %len, 8$' src/codegen.rs
+sed -i 's/^  %lenn = add i64 %len, %n$/  %lenn = add i64 %len, 8/' src/codegen/declares.rs
+grep -q '^  %lenn = add i64 %len, 8$' src/codegen/declares.rs
