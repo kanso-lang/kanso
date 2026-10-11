@@ -6,9 +6,9 @@
 # corpus's `a_graph_holds_its_roads_in_a_list` keeps each town's roads in one,
 # and stops compiling.
 set -e
-grep -qxF '            Expr::List(items, _) if in_field => {' src/check.rs || {
+grep -qxF '            Expr::List(items, _) if in_field => {' src/check/ties.rs || {
   echo "the tie check's list arm moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i 's/^            Expr::List(items, _) if in_field => {$/            Expr::List(items, _) if in_field \&\& false => {/' src/check.rs
-! grep -qxF '            Expr::List(items, _) if in_field => {' src/check.rs
+sed -i 's/^            Expr::List(items, _) if in_field => {$/            Expr::List(items, _) if in_field \&\& false => {/' src/check/ties.rs
+! grep -qxF '            Expr::List(items, _) if in_field => {' src/check/ties.rs
