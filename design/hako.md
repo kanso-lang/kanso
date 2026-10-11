@@ -173,14 +173,14 @@ The foreign-universe bit the err-arm rule needs stays crisp under all
 of this: a module is foreign iff it entered the build through *any
 source* (`std/` included); relative resolution is the one local path.
 
-## Open questions for the observation clause
+## Questions the observation clause raised
 
-All three moved to design/pending-gavels.md on 2026-08-25 so the ledger
-indexes every open question in one place:
+- Whether `std/` ships inside the toolchain binary or as a pinned hako was
+  ruled on 2026-08-29: it ships inside the binary, `include_str!`'d in
+  `src/lib.rs`.
+- Tag-signing and checksum policy is parked until something is worth
+  attacking. The lock already carries a sha.
+- Monorepo hakos (several modules per repo) are parked. The path shape allows
+  them, and the lock-granularity decision waits for a real case.
 
-- Whether `std/` ships inside the toolchain binary or as a pinned hako —
-  filed as **Where `std/` comes from**, with a recommendation.
-- Tag-signing / checksum policy once anything matters enough to attack —
-  parked there.
-- Monorepo hakos (multiple modules per repo) — parked there; the path
-  shape allows it and the lock-granularity decision waits for a real case.
+A parked question becomes a `needs-clay` issue when a real case arrives.
