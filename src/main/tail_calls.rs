@@ -3,7 +3,7 @@
 // with include!, so the items stay in the binary's root module and the
 // compiler builds to the same instructions it did when they sat in main.rs
 // (kanso#1848). cargo fmt does not reach an included file, so CI's format
-// job checks this one by name.
+// job checks the files under src/'s subdirectories itself.
 
 /// The widest arm, in argument words, that keeps `tailcc` in a release build.
 ///
