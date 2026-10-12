@@ -4942,6 +4942,19 @@ kept_box = row
 
 rows_c1zzzzzzy2 = text/concat rows_c1zzzzzzy3 [kept_box]
 
+# A runtime diagnostic names an err it was handed (2026-10-12). The mutation
+# renders it the way a program does, which hands the err back unrendered,
+# and native crashes and reports running out of stack.
+err_shown = row
+  "a diagnostic handed an unrendered err"
+  true
+  "cargo test --release --test golden runtime_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_diagnostic_handed_an_unrendered_err")
+  release
+
+rows_c1zzzzzzyd = text/concat rows_c1zzzzzzy2 [err_shown]
+
 # A native build emits only the groups its entry reaches, the walk the tab
 # has made since 2026-10-08 (2026-10-09). The mutation empties the walk's
 # answer, every imported group is emitted and pruned afterwards, and the emit
@@ -4954,7 +4967,7 @@ native_reached = row
   (breaking "a_native_build_emits_every_group")
   release
 
-rows_c1zzzzzzy1 = text/concat rows_c1zzzzzzy2 [native_reached]
+rows_c1zzzzzzy1 = text/concat rows_c1zzzzzzyd [native_reached]
 
 # A record goes back to its caller in two words only when every arm of its
 # group answers that record or a failure (2026-10-09). The mutation skips the

@@ -19,28 +19,6 @@
 > The last forty entries. Everything older is in `log/compiler-log-archive.md`,
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
-## 2026-10-10 — gavel: a field may hold a list of `tie` references
-
-Clay, on whether a node built by `list/tie` may hold its links as a list: "of
-course field can be an array". The 2026-10-04 gavel "a data-sized cycle is tied
-with `list/tie`, and `list/tie!` insists" says a reference may be stored in a
-constructor's field and nothing else. The build read that strictly: a list
-literal is not a field, so `node id [(ref "b") (ref "c")]` was refused, and the
-graph fixture held each node's edges as a chain of one-reference records ending
-in a `no_road` marker.
-
-**The clarification.** A field may hold any value, and a list of references in
-a field is storage. The 2026-10-04 rule was about reading, and a list that
-holds references reads none of them. A list or map literal whose elements are
-references, written as a constructor's argument, is admitted. Everything the
-rule refused stays refused: during making, nothing may index, measure, walk or
-pass that list anywhere, because each of those reads through it.
-
-Owes: the check admits a collection literal of references as a field's value,
-with an error golden for a read of such a list in the maker; the graph fixture
-holds each node's neighbours as a list and drops the chain of records; ch03 or
-wherever `tie` is taught shows the list form.
-
 ## 2026-10-10 — a carried rewind waits for the lap to leave something behind
 
 The mal port ran out of memory natively. Its tail-recursive `sum2` held
@@ -2163,3 +2141,22 @@ recorded here, unedited in substance:
   judgment call, and the principle is in the log.
 
 A parked item becomes a `needs-clay` issue when a real case arrives.
+
+## 2026-10-12 — a runtime diagnostic names the err it was handed
+
+The inflate port destructured a value that was sometimes an err, and native
+reported "the program ran out of stack" where the interpreter said "cannot
+destructure err ... as `pair`". There was no recursion. `k_die_destructure`
+rendered its value with `k_render`, which hands an err back unrendered so that
+it can ride through a program, and then read the err as a string. The read
+faulted, and the parent reports any segmentation fault as stack exhaustion.
+
+The diagnostics that name a value they were handed now render through
+`k_shown`, which renders an err in full: the destructure and keyed-read
+refusals, the field-read refusals and `k_die_value` and `k_die_got`. The
+interpreter's message is the one both engines print.
+
+`tests/golden/runtime/an_err_cannot_be_destructured` is the port's shape: a
+group that answers a record or an err, its answer bound with `pair a b = p`.
+The ratchet row "a diagnostic handed an unrendered err" puts the plain render
+back, and native's stderr reads out of stack again.
