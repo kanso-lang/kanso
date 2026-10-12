@@ -19,81 +19,6 @@
 > The last forty entries. Everything older is in `log/compiler-log-archive.md`,
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
-## 2026-10-10 — a map's view belongs to the beat that frees the map
-
-A map read by key, rendered, compared or measured gets a sorted view, and the
-view is malloc'd. It is released when the beat whose rewind reclaims the map's
-header rewinds. Until today the view was registered for release only when the
-map was born in the innermost beat. A map built in an outer loop and read
-inside an inner one was never registered, so its view was never freed. mal's
-evaluator builds its environments in its tail cycle and looks symbols up one
-region call further in, and at two hundred thousand iterations it built
-209,210 views and freed 10,519.
-
-`k_viewreg_own` now asks each depth from the innermost outward whether its
-rewind reclaims the header, and registers the view at the first that does. A
-header outside every arena block, in a carry buffer or a tenure block,
-registers at the innermost depth, which rewinds no later than that storage is
-released. A frozen constant keeps its view for the life of the program.
-
-That alone made mal fifteen times slower. The lap carry stages whenever a
-registry at its depth holds anything, and mal's views now registered at the
-cycle's own depth, so every edge staged again. The view registry no longer
-forces a stage. A view is never larger than its map, and the map is either
-garbage the drift test already counts or still live, so a skipped lap holds no
-more view memory than the test bounds.
-
-mal now holds 9 MB at two hundred thousand iterations and at four hundred
-thousand, where lap carry alone held 21 MB and 39 MB. It runs in 0.63 s and
-1.26 s, the same as lap carry alone.
-
-Two fixtures pin the two halves.
-`a_view_built_one_beat_down_is_freed_by_the_beat_that_built_its_map` builds
-twenty thousand views one beat below their maps and frees all of them; with
-the old registration it frees none and holds 2,240,000 bytes of views.
-`a_cycle_that_sorts_a_map_each_step_still_waits_for_its_lap` copies 6,224
-bytes in its carried rewinds; letting the view registry force a stage copies
-3,200,304.
-Merged with main's constant storage it copies 6,128, since the constants it
-names are no longer copied, and its one tenure block is gone. The evaluator
-fixture's lap rule copies 3,360 where it copied 3,488, for the same reason.
-
-The native cost veins and the lazy tier do not move: no benchmark builds a
-view one beat below its map. The tab's run does. `bench/interp_corpus` builds
-1,320 views and now frees them all, so `browser_run_instructions` rises
-517,253 to 34,038,136 and `browser_run_peak_bytes` falls 131,072 to 1,179,648.
-Natively the same corpus costs 336,930 more instructions, about 240,000 of
-them in glibc's `free`. The browser side of welfare rises from 83.42 to 83.55.
-A fast path that registered a head-block header without the walk cost more on
-this corpus than it saved, because its maps sit below the innermost mark, and
-was dropped.
-
-CI's rows for the three pieces together, against main. The work rows that fall
-are `work_runbench`, 1,129,603,831 to 1,127,640,368, and `work_basket`,
-32,382,758 to 30,339,466. The ones that rise are `work_encodebench` by 2,866 to
-2,384,341,029, `work_oneshot` by 2,810 to 13,030,103, `work_indexbench` by 514
-to 2,459,021, `work_scanbench` by 309 to 282,024 and `work_livebench` by 3,146
-to 1,473,488,334: none of them carries a cluster, and the rise is the larger
-runtime each binary links. The run program's tenure falls with its staging:
-`run_ten_blocks` from 6 to 1, `run_ten_frees` from 6 to 1 and
-`run_ten_handups` from 2 to 1. `text` grows
-1,072 bytes in every binary, to 4,624,574 in all. `codegen_instructions_dev`
-rises 8,776 to 118,876,072, `compile_instructions` 25,851 to 25,858,191,
-`entry_instructions` 79,015 to 85,514,540 and `library_instructions` 79,237 to
-86,067,450, for the slot checks and the lambda-edge marking in `beat.rs`.
-`codegen_instructions_release` falls 15,674 to 453,772,164, `emit_instructions`
-4,229 to 7,058,107 and `interp_instructions` 47,893 to 488,865,227. The tab
-reads `browser_compile_instructions` 390,305,438, up 2,122,974, with
-`browser_compile_peak_bytes` up 1,998 to 675,725, `browser_run_instructions` up
-518,590 to 34,038,136 and `browser_run_peak_bytes` down 131,072 to 1,179,648.
-Welfare rises from 90.25801113 to 90.26974705, and the floor follows it.
-
-While building the fixtures I found that a file imported from a
-subdirectory, `import "./lib/fx"`, loses its cycle's rewind: the evaluator
-fixture above holds 4 MiB and never rewinds that way, and 1 MiB with 40,002
-rewinds imported as `./fx`. Self-loops are unaffected. main reproduces it.
-That is the next piece.
-
 ## 2026-10-10 — a survival question about an old block asks an index
 
 The lap carry made the lox port's F18 loop quadratic. Its 40,000 passes took
@@ -2128,3 +2053,44 @@ code: codegen_instructions_dev rises to 118,955,572, browser_run_instructions
 to 34,125,823, work_livebench to 1,474,870,952 and work_oneshot to
 13,224,330. Release codegen falls to 454,254,551, and the other benches and
 the text sizes fall a little with the runtime's new layout.
+
+## 2026-10-12 — a lambda called in tail position costs no stack
+
+The toml port kept `put` in place by passing a continuation: each insertion
+step took a `then` and called it last. A 300 KB document then ran the
+interpreter out of stack, and the dev build died with a segmentation fault.
+Appendix A says a tail call costs no stack at all; it held for calls to named
+functions and arms and failed for a call to a function value.
+
+The interpreter's tail position already handed a named group's call back to
+the dispatcher's loop. A call to a closure now comes back the same way, as
+`Flow::Closure`, and runs in whichever loop called the body: the dispatcher's,
+or a loop in `call_closure` for a lambda called from outside a tail.
+
+Native code calls a closure through `k_call{n}`, which calls the lambda's
+wrapper, so every step held two frames. A closure now also carries a pointer to
+the lambda's own body, which is on the tailcc convention. A call to a local
+function value in tail position becomes a musttail jump to `k_tcall{n}`, which
+checks that it holds a closure of the right arity with no failing argument
+and a body, then jumps to that body. Anything else (a closure the runtime
+built, a partial, a reference to a group) goes to `k_call{n}` as before. The
+arity and capture count became 32-bit fields so the pointer fits in the 32
+bytes the closure already took.
+
+Release narrows the convention to functions on a musttail edge, and the jump
+through a pointer names no symbol, so the narrowing would have stripped it and
+LLVM refused the module. Every lambda keeps the convention in a module that
+has the jump, and the jump keeps it too.
+
+`tests/golden/micro/a_lambda_called_in_tail_position_costs_no_stack` runs
+100,000 steps of the port's loop on every engine. Before the fix the
+interpreter reported running out of stack and the dev build exited 139. The
+ratchet rows "a lambda called as a nested call" and "a lambda called without
+a jump" remove each half and expect the micro corpus to fail.
+
+The clang-to-wasm32 layout harness leaves the fixture out: by its own header
+it compiles a call returning a `KValue` as an ordinary call, and a loop that
+goes through a pointer cannot be inlined into one. The page's translator makes
+the jump a tail call, and `ir_to_wasm` runs the fixture.
+
+This is the toml item on #1892.

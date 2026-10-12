@@ -5022,7 +5022,31 @@ stdout_settled = row
 
 rows_c1zzzzzzx5 = text/concat rows_c1zzzzzzx6 [stdout_settled]
 
-rows_c = text/concat rows_c1zzzzzzx5 [itself]
+# A lambda called in tail position costs no stack on any engine
+# (2026-10-12). The first mutation has the interpreter call it as a nested
+# call, the second has native call it without the jump; either way the
+# continuation-passing fixture runs out of stack.
+lambda_nested = row
+  "a lambda called as a nested call"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_lambda_called_as_a_nested_call")
+  no_setup
+
+rows_c1zzzzzzx4 = text/concat rows_c1zzzzzzx5 [lambda_nested]
+
+lambda_jump = row
+  "a lambda called without a jump"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_lambda_called_without_a_jump")
+  no_setup
+
+rows_c1zzzzzzx3 = text/concat rows_c1zzzzzzx4 [lambda_jump]
+
+rows_c = text/concat rows_c1zzzzzzx3 [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
