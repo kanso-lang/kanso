@@ -19,89 +19,6 @@
 > The last forty entries. Everything older is in `log/compiler-log-archive.md`,
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
-## 2026-10-10 — a carried rewind waits for the lap to leave something behind
-
-The mal port ran out of memory natively. Its tail-recursive `sum2` held
-729 MB at two hundred thousand iterations, where the interpreter holds a few
-megabytes. kanso#1824's entry left it there: mal's evaluator is one tail cycle
-of about forty groups, and a cycle carried only scalars and threaded
-parameters through its rewind.
-
-Two refusals in `beat.rs` kept the cycle from rewinding at all. A carried slot
-whose type set included bytes was refused, in case it hid a byte builder that
-would be copied whole at every rewind. mal's value register can hold anything,
-so its set includes bytes. A cluster entered by a tail call was refused if it
-carried any slot, because the json string scanner once paid 8 GB of copies for
-that licence. mal's evaluator is entered by a tail call. A slot that can only
-be bytes is still refused, and so is a slot inference cannot type.
-
-Lifting the bytes refusal admitted one cycle that must stay out. golden_prose
-walks its directory tree through `os/is_dir here .> (d -> entered ...)`, and
-`expand_tail` reads a tail inside a piped lambda as the caller's own, which is
-true when the pipe inlines and false when the piped value is an effect: `k_exec`
-calls the lambda later, after `onward` has returned its description. Carrying
-the cycle's slots across that edge freed strings a pending continuation still
-held, and the gate died in `k_concat_arr`; the runtime reports any segfault as
-running out of stack, which is what it printed. A carrying cluster with an edge
-through a piped lambda is now refused, and golden_prose goes red without that
-refusal.
-
-Lifting the entry refusal admitted a second. grammar_check's capture loop is a
-three-member cluster entered by a tail call, and it grows its carried list with
-`grown = push acc x` and hands on `grown`. Growth in a carried slot refuses a
-cluster, but the check read only the argument itself, so `push acc x` written in
-place was refused and the same push behind a name was carried. The gate died in
-`k_deep_copy` under `k_repair_interior`, reading a heap pointer of 6, with the
-lap rule and with a stage at every edge alike. The check now reads through a
-name the body bound. grammar_check runs again, and
-`a_cluster_growing_its_carried_list_through_a_name_stays_out` fails without the
-lookthrough. I could not reduce the crash itself: a thirty-line copy of the
-loop, with nested capture maps and sliced group text, carries and rewinds
-cleanly. Why carrying that list corrupts a node is still open. The lookthrough
-costs the tab compiler 8,440 instructions, to 390,305,438.
-
-Lifting the refusals alone made mal ten times slower. A cluster rewinds at
-every edge between its members, and mal crosses about fifty edges for each
-call it evaluates. Each rewind sized the carried slots, copied them into the
-carry pair and reset the arena: 0.47 s at ten thousand iterations against
-0.067 s with no rewind at all. Near eighteen thousand iterations tenure
-opened its tenth block and the copy per rewind began to grow with the count,
-so forty thousand iterations took 7.2 s.
-
-Compiled loops now call `k_beat_lap_carry` in place of `k_beat_iter_carry`. It
-stages only once the arena has drifted a quarter megabyte past where the last
-stage left it, in the same block, with nothing in the depth's registries. That
-is the test the bind chain already applies to its own steps. Skipping a stage
-is always sound, since the carried values stay where they are and the next
-stage copies whatever is still reachable; the test bounds the garbage held in
-between. The registries are asked because their storage is malloc'd and the
-block test cannot see it grow. A first version that skipped while more than
-256 KiB of the block remained raised the run program's `perm_peak_bytes` from
-32,200 to 81,544, and pend's 450 KB laps pushed it into a second arena block.
-The cohort pop and the chain still call `k_beat_iter_carry` directly.
-
-mal at two hundred thousand iterations now runs in 0.68 s at 21 MB, against
-1.15 s and 729 MB. It still grows by about 80 bytes an iteration: 209,210 map
-views are built and 10,519 freed, because a view is registered for release only
-when its map was allocated in the current beat. The next entry fixes that.
-
-`tests/golden/mem/an_evaluator_carrying_any_value_round_its_cycle_rewinds`
-builds the shape in forty lines and pins `arena_peak_bytes` at 1,048,576 for
-twenty thousand steps; main's compiler holds 4,194,304 for it and never
-rewinds. Putting either refusal back turns it red, and so does staging at
-every edge, which copies 4,754,864 bytes where the lap rule copies 3,488.
-
-Two cost veins move with the lap rule. The run program's `evac_bytes` falls
-from 10,018,720 to 6,671,008 and its tenure from six blocks to one, and the
-basket program's carried rewinds stage less often. Of the tab compiler's rise
-in `browser_compile_instructions`, 1,710,393 arrived with the lambda-edge
-refusal. The next entry prices the whole change on CI's rows.
-
-The ratchet's tenure-sharing row gated on the run program's counters, and with
-one tenure block there instead of six the mutation stopped moving them. It now
-gates on the mem corpus, where
-`an_inner_beat_opens_its_tenure_in_the_block_outside` goes red.
-
 ## 2026-10-10 — a map's view belongs to the beat that frees the map
 
 A map read by key, rendered, compared or measured gets a sorted view, and the
@@ -2141,6 +2058,25 @@ recorded here, unedited in substance:
   judgment call, and the principle is in the log.
 
 A parked item becomes a `needs-clay` issue when a real case arrives.
+
+## 2026-10-12 — a test that runs out of stack fails alone
+
+`kanso test` ran its tests on the main thread, whose stack is 8 MiB. The
+interpreter's depth limit is sized for the 1 GiB thread `run --interp` starts,
+so a test that recursed too far overflowed Rust's stack before the limit
+reported it, and the process aborted with every later test unreported. The lox
+port met this from a recursion 700 calls deep. The runner now starts the same
+deep thread, and the test fails with the interpreter's diagnostic, "the
+program ran out of stack".
+
+`tests/test_verb.rs` runs `deep_test.kso`, one shallow test and one that
+recurses a million deep, and expects the first to pass, the second to fail and
+the run to exit 1. The ratchet row "a test run on the main stack" gives the
+thread 8 MiB and the spec sees the abort.
+
+This is part of the recursion item on #1892. The native side of that item is
+open: a deep enough recursion through the lox port's trie write still ends in
+a segmentation fault with no message.
 
 ## 2026-10-12 — a built binary names its own stack overflow
 
