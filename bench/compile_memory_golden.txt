@@ -130,7 +130,7 @@
 # 2026-09-24, this branch (claude/std-checked-once). An import of a shipped
 # module no longer asks that module's merged check, whose answer is fixed when
 # the binary is built. front_end_rounds 47 -> 15, a FALL of 32 (-68.0851%).
-front_end_rounds=15
+front_end_rounds=19
 # 2026-09-06 (the array's second walk over the same whitespace): visits 17,169
 # -> 17,115, a fall of 54, or 0.31%, and rounds hold at 40. Two expressions
 # leave lib/json — `array_items`'s `skip_ws` binding and its use — so the front
@@ -218,7 +218,7 @@ front_end_rounds=15
 # 2026-10-05 (list/tie, ruled 2026-10-04): std/list gains `tie`, `tie!` and
 # their helper, and lib/list is in the corpus's imports. front_end_visits
 # 7,526 -> 7,555, a RISE of 29 (+0.3853%).
-front_end_visits=7982
+front_end_visits=8112
 # 2026-08-31 (the AST's identifiers are inline names): 728,030 -> 713,606, a
 # fall of 14,424, or 1.98%. Banked. The peak falls with the traffic because a
 # short name's bytes now live inside the AST node the allocator already gave

@@ -2056,10 +2056,22 @@ settled by position alone. A constant is read through the arity-0 entries of
 the raisers table. Errs from builtins, such as `text/to_int` on text the
 program computes, are not raised errs, and they still ride to the endpoint.
 
-Three error goldens pin it: a name reaching an operator, a name reaching a
-group with no arm for it, and a constant reaching an operator. The ratchet row
-"a name that forgets the err of its call" removes both halves and watches
-error_corpus go red.
+Five error goldens pin it: a name reaching an operator, a name reaching a
+group with no arm for it, a constant reaching an operator, a name bound in a
+branch of an `if`, and a name bound past a `return` inside a branch. The
+ratchet row "a name that forgets the err of its call" removes both halves and
+watches error_corpus go red.
+
+The first version collected bindings from a body's statements and from a
+guard's rest, and never from a branch. A branch of an `if` is a block with
+statements of its own, so `each = share cents people` followed by `each + 1`
+inside a branch compiled. The collector now walks a branch's block as it walks
+a body. Before collecting, the check asks whether any binding in the
+declaration is handed a raising call at all, and most declarations answer no;
+that look walks the same statements, branches and guards included. A look
+that stopped at the top level cost 136,432 fewer instructions on the compile
+corpus and let both branch fixtures through, which is how each fixture was
+seen red.
 
 The rule reached 26 programs in the tree, about 150 sites, and every one was
 already refused on main once its binding was inlined. Each was repaired with a
@@ -2076,8 +2088,18 @@ pass-through `e@(err _)` arm, a `.>` step, or a helper with an err arm:
   `.>`. It allocates 4 more blocks, 160 bytes, and no peak moved. A version
   with helper arms instead held the document as a thunk and raised the arena
   peak by 1 MiB, so it was dropped.
-- interp_corpus and oneshot take the decoded document in a helper with an
-  err arm, which costs no closure.
+- oneshot takes the decoded document in a helper with an err arm, which
+  costs no closure.
+- interp_corpus reaches its document through `.>`. The first repair passed
+  it to a helper with an err arm, and that call was a tail call from
+  `total`: the frame's region rewinds before a tail call, so the freshly
+  decoded document was deep-copied out of it on every round. The native run
+  of the corpus went from 16,005,829 instructions to 19,483,131, and the
+  browser's run row from 34,124,990 to 46,702,454 with one more 256 KiB
+  block of peak. With `.>` the browser rows read 34,126,478 and 1,179,648
+  here, on CI's rustc. Any program whose tail call carries a large value
+  built in the same frame pays that copy; the corpus did not exercise one
+  before.
 - Thirteen scripts under `scripts/` were repaired and each was run against
   the same input with the old and the new compiler; where nothing failed the
   output was byte for byte the same.

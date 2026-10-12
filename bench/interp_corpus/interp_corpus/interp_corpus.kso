@@ -12,14 +12,10 @@ fn total _ 0 acc
   acc
 
 fn total source n acc
-  counted source n acc (json/decode source)
+  json/decode source .> (doc -> total source (n - 1) (acc + sized doc))
 
-fn counted _ _ _ e@(err _)
-  e
-
-fn counted source n acc doc
-  back = json/encode doc
-  total source (n - 1) (acc + length back)
+fn sized doc
+  length (json/encode doc)
 
 fn document n
   "[{text/join (list/to_list (list/map (span n) row)) ","}]"
