@@ -5,6 +5,84 @@
 // (kanso#1848). cargo fmt does not reach an included file, so CI's format
 // job checks the files under src/'s subdirectories itself.
 
+/// The widest arm, in argument words, that keeps `tailcc` in an arm64 release
+/// build: the register file, x0 through x7. Past it the convention is
+/// miscompiled at -O1 and above (see `narrow_tailcc`). x86-64 lowers a `tailcc`
+/// call whose arguments spill onto the stack correctly, so there every
+/// `musttail` the emitter wrote reaches clang as written.
+const ARM64_TAILCC_WIDEST: usize = 8;
+
+/// How many argument registers a parameter list wants: a %KValue and a %parsed
+/// are each two i64s, everything else is one.
+fn arg_registers(params: &str) -> usize {
+    params
+        .split(", ")
+        .filter(|p| !p.trim().is_empty())
+        .map(|p| match p.starts_with("%KValue") || p.starts_with("%parsed") {
+            true => 2,
+            false => 1,
+        })
+        .sum()
+}
+
+fn defined_symbol(line: &str) -> Option<(String, usize)> {
+    let open = line.find('(')?;
+    let close = line.rfind(')')?;
+    let name = line[..open].rsplit('@').next()?.trim().trim_matches('"').to_string();
+    Some((name, arg_registers(&line[open + 1..close])))
+}
+
+fn called_symbol(line: &str) -> Option<String> {
+    let at = line.find(" @")?;
+    let rest = &line[at + 2..];
+    let end = rest.find('(')?;
+    Some(rest[..end].trim().trim_matches('"').to_string())
+}
+
+/// tailcc kept on every arm no wider than `widest` argument words, on arm64.
+///
+/// `tailcc` is what the beat machinery's `musttail` needs, and at -O1 and above
+/// on arm64 the convention is miscompiled for an arm whose arguments spill past
+/// x7 — the binary jumps to an address that was a value. The boundary is exactly
+/// the register file: the micro corpus is clean at eight and one sample
+/// segfaults at nine, growing to ten samples by twelve. So a wide arm keeps the
+/// C convention and every call into it becomes ordinary, and everything narrow
+/// enough keeps the guarantee the optimized build used to give up.
+///
+/// What a wide arm gives up is the jump: it spends a frame per hop, and a deep
+/// recursion through one overflows the stack, which is loud.
+fn narrow_tailcc(ir: String, widest: usize) -> String {
+    let wide: std::collections::HashSet<String> = ir
+        .lines()
+        .filter(|l| l.starts_with("define tailcc ") || l.starts_with("declare tailcc "))
+        .filter_map(defined_symbol)
+        .filter(|(_, regs)| *regs > widest)
+        .map(|(name, _)| name)
+        .collect();
+    let mut here = String::new();
+    let mut out = String::new();
+    for line in ir.lines() {
+        let mut line = line.to_string();
+        if line.starts_with("define ") || line.starts_with("declare ") {
+            here = defined_symbol(&line).map(|(n, _)| n).unwrap_or_default();
+            if wide.contains(&here) {
+                line = line.replacen("tailcc ", "", 1);
+            }
+        } else if line.contains(" call ") {
+            let callee = called_symbol(&line).unwrap_or_default();
+            if wide.contains(&here) {
+                line = line.replace("musttail ", "");
+            }
+            if wide.contains(&callee) {
+                line = line.replace("musttail ", "").replace("tailcc ", "");
+            }
+        }
+        out.push_str(&line);
+        out.push('\n');
+    }
+    out
+}
+
 /// How many argument registers `preserve_nonecc` has on x86-64: r12 to r15,
 /// rdi, rsi, rdx, rcx, r8, r9, r11 and rax.
 const PRESERVE_NONE_REGISTERS: usize = 12;

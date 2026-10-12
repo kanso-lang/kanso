@@ -866,15 +866,17 @@ fn build(program: ast::Program, file: &str, release: bool, built_as: Option<Stri
         return ExitCode::from(2);
     }
     let ll_path = format!("{stem}.ll");
-    // x86-64 alone: this convention has not been measured on arm64. Every
-    // `musttail` the emitter wrote reaches clang as written, on every build:
-    // a tail call consumes no stack, in every engine.
+    // x86-64 alone: this convention has not been measured on arm64. On x86-64
+    // every `musttail` the emitter wrote reaches clang as written, so a tail
+    // call consumes no stack. An arm64 release build still takes the jump
+    // from an arm wider than the register file, which that backend miscompiles.
     let flatten = release
         && cfg!(target_arch = "x86_64")
         && closure_convention() == kanso::codegen::ClosureConvention::PreserveNone;
-    let ir = match flatten {
-        true => preserve_none_calls(preserve_none_tails(ir), include_str!("runtime.c")),
-        false => ir,
+    let ir = match (flatten, release && cfg!(target_arch = "aarch64")) {
+        (true, _) => preserve_none_calls(preserve_none_tails(ir), include_str!("runtime.c")),
+        (false, true) => narrow_tailcc(ir, ARM64_TAILCC_WIDEST),
+        (false, false) => ir,
     };
     if let Err(io) = std::fs::write(&ll_path, ir) {
         eprintln!("error: cannot write {ll_path}: {io}");
