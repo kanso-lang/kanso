@@ -6,6 +6,7 @@
 # a_closed_pipe_stops_every_engine_quietly sees the interpreter's stderr.
 set -e
 f=src/main.rs
+grep -q "fn reader_may_close" src/main.rs
 line='    reader_may_close();'
 [ "$(grep -cxF "$line" "$f")" -eq 1 ] || {
   echo "the SIGPIPE reset at start-up moved; this mutation needs rewriting" >&2
