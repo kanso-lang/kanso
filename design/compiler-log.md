@@ -1984,6 +1984,25 @@ recorded here, unedited in substance:
 
 A parked item becomes a `needs-clay` issue when a real case arrives.
 
+## 2026-10-12 — a test that runs out of stack fails alone
+
+`kanso test` ran its tests on the main thread, whose stack is 8 MiB. The
+interpreter's depth limit is sized for the 1 GiB thread `run --interp` starts,
+so a test that recursed too far overflowed Rust's stack before the limit
+reported it, and the process aborted with every later test unreported. The lox
+port met this from a recursion 700 calls deep. The runner now starts the same
+deep thread, and the test fails with the interpreter's diagnostic, "the
+program ran out of stack".
+
+`tests/test_verb.rs` runs `deep_test.kso`, one shallow test and one that
+recurses a million deep, and expects the first to pass, the second to fail and
+the run to exit 1. The ratchet row "a test run on the main stack" gives the
+thread 8 MiB and the spec sees the abort.
+
+This is part of the recursion item on #1892. The native side of that item is
+open: a deep enough recursion through the lox port's trie write still ends in
+a segmentation fault with no message.
+
 ## 2026-10-12 — an operator answers what its arms answer
 
 The ray tracer port's release build printed a few rows of its image and then

@@ -1,0 +1,14 @@
+# one test recurses past the interpreter's depth limit; it fails on its own,
+# and the test beside it still reports
+fn depth 0
+  0
+
+fn depth n
+  mix (depth (n - 1)) n
+
+fn mix total n
+  total + n % 7
+
+test_shallow = depth 10 == 27
+
+test_deep = depth 1000000 > 0
