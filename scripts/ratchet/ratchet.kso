@@ -4984,7 +4984,20 @@ op_arms_answer = row
 
 rows_c1zzzzzzx8 = text/concat rows_c1zzzzzzx9 [op_arms_answer]
 
-rows_c = text/concat rows_c1zzzzzzx8 [itself]
+# An operator's arms stay boxed now that inference widens their parameters
+# (2026-10-12). The mutation lets a proven-int parameter go unboxed, and the
+# wasm translator refuses four operator fixtures.
+op_arms_boxed = row
+  "an operator arm given an unboxed int"
+  true
+  "cargo test --release --test ir_to_wasm"
+  "specs (unit, golden, differential)"
+  (breaking "an_operator_arm_given_an_unboxed_int")
+  release
+
+rows_c1zzzzzzx7 = text/concat rows_c1zzzzzzx8 [op_arms_boxed]
+
+rows_c = text/concat rows_c1zzzzzzx7 [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

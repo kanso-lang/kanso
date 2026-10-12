@@ -10,6 +10,7 @@
 # number arm.
 set -e
 f=src/infer.rs
+grep -q "fn widen_param" src/infer.rs
 line='                Some(&(start, end, _)) if (a | b) & REC != 0 => {'
 [ "$(grep -cxF "$line" "$f")" -eq 1 ] || {
   echo "the operator-arm match in eval_expr moved; this mutation needs rewriting" >&2
