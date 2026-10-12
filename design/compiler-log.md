@@ -2050,10 +2050,12 @@ The rows moved by small amounts, read off CI. The signal call at start-up
 costs 123 instructions in every compile: compile_instructions lands on
 25,761,338, entry_instructions on 85,207,685, library_instructions on
 85,760,345 and startup_instructions on 52,519. The flushes are new runtime
-code: codegen_instructions_dev rises to 118,955,572, browser_run_instructions
-to 34,125,823, work_livebench to 1,474,870,952 and work_oneshot to
-13,224,330. Release codegen falls to 454,254,551, and the other benches and
-the text sizes fall a little with the runtime's new layout.
+code. On the tree merged with #1899, codegen_instructions_dev lands on
+118,956,771, work_encodebench on 2,398,369,956, work_livebench on
+1,474,871,792, work_oneshot on 13,224,134 and work_runbench on 1,170,031,874,
+and browser_run_instructions was 34,125,823 before the merge. Release codegen
+falls to 454,318,432, and the other benches and the text sizes fall a little
+with the runtime's new layout.
 
 The macOS runner failed the interpreter's half of the closed-pipe spec. With
 SIGPIPE's default put back, the interpreter's thread there still met the
