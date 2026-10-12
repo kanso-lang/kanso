@@ -170,6 +170,55 @@ impl<'a> TieCheck<'a> {
                     }
                     return;
                 }
+                // A field may hold a list built from data, ruled 2026-10-11:
+                // `list/to_list (list/map xs ref)`, or a one-parameter lambda
+                // whose answer is stored. `list/to_list` forces every call
+                // inside the maker, so the field holds cells `list/tie`
+                // resolves. A bare `list/map` is lazy and would call `ref`
+                // after the knot is tied.
+                if in_field {
+                    if let (Some("list/to_list"), [inner]) = (callee, args.as_slice()) {
+                        if let Some((xs, f)) = mapped_over(inner) {
+                            if self.maps_ref(f, r, literal) {
+                                self.reads(xs, r, literal, false);
+                                return;
+                            }
+                        }
+                    }
+                    // The same list after fusion, which a module's code has
+                    // been through by the time an importer checks it:
+                    // `fold xs [] (acc x -> push acc item)`.
+                    if let Some((xs, item)) = pushed_onto(e) {
+                        self.reads(xs, r, literal, false);
+                        self.reads(item, r, literal, true);
+                        return;
+                    }
+                    // A lambda applied where a field is written answers the
+                    // field, as fusion writes `(k -> ref k) x`.
+                    if let Expr::Lambda { params, body, .. } = head.as_ref() {
+                        if params.iter().all(|(p, _)| p != r) {
+                            for a in args {
+                                self.reads(a, r, literal, false);
+                            }
+                            self.reads(body, r, literal, true);
+                            return;
+                        }
+                    }
+                    if let Some((_, f)) = mapped_over(e) {
+                        if refers(f, r) {
+                            self.diags.push(Diagnostic::new(
+                                "tie",
+                                format!(
+                                    "`list/map` is lazy, so the `{r}` calls it holds would run \
+                                     after `list/tie` returns; write `list/to_list (list/map ...)` \
+                                     so each reference is made inside the maker"
+                                ),
+                                *span,
+                            ));
+                            return;
+                        }
+                    }
+                }
                 let builds = callee.is_some_and(|n| self.ctors.contains(n));
                 for (at, a) in args.iter().enumerate() {
                     if matches!(a, Expr::Ident(n, _, _) if n == r) {
@@ -206,6 +255,19 @@ impl<'a> TieCheck<'a> {
         }
     }
 
+    /// `f` is `ref` itself, or a one-parameter lambda whose answer is stored,
+    /// so each element `list/map` makes is a field's worth of storage.
+    fn maps_ref(&mut self, f: &'a Expr, r: &str, literal: Option<&HashSet<String>>) -> bool {
+        match f {
+            Expr::Ident(n, _, _) => n == r,
+            Expr::Lambda { params, body, .. } if params.len() == 1 && params[0].0 != r => {
+                self.reads(body, r, literal, true);
+                true
+            }
+            _ => false,
+        }
+    }
+
     /// `ref` itself, handed to `callee` at position `at`.
     fn handed(&mut self, callee: Option<&str>, at: usize, r: &str, span: Span) {
         let declared = callee.and_then(|n| self.groups.get_key_value(n));
@@ -225,5 +287,73 @@ impl<'a> TieCheck<'a> {
             ),
             span,
         ));
+    }
+}
+
+/// The collection and the function of a `list/map xs f` call.
+fn mapped_over(e: &Expr) -> Option<(&Expr, &Expr)> {
+    let Expr::App { head, args, .. } = e else { return None };
+    match (head.as_ref(), args.as_slice()) {
+        (Expr::Ident(n, _, _), [xs, f]) if n == "list/map" => Some((xs, f)),
+        _ => None,
+    }
+}
+
+/// `f` is `ref`, or a lambda that mentions it.
+fn refers(f: &Expr, r: &str) -> bool {
+    match f {
+        Expr::Ident(n, _, _) => n == r,
+        Expr::Lambda { params, body, .. } => {
+            params.iter().all(|(p, _)| p != r) && mentions(body, r)
+        }
+        _ => false,
+    }
+}
+
+fn mentions(e: &Expr, r: &str) -> bool {
+    if matches!(e, Expr::Ident(n, _, _) if n == r) {
+        return true;
+    }
+    let mut found = false;
+    crate::for_each_child(e, |c| found = found || mentions(c, r));
+    found
+}
+
+/// The collection and the pushed item of `fold xs [] (acc x -> push acc item)`,
+/// which is what fusion makes of `list/to_list (list/map xs f)`.
+fn pushed_onto(e: &Expr) -> Option<(&Expr, &Expr)> {
+    let Expr::App { head, args, .. } = e else { return None };
+    let Expr::Ident(fold, _, _) = head.as_ref() else { return None };
+    if fold != "fold" && !fold.ends_with("/fold") {
+        return None;
+    }
+    let [xs, Expr::List(start, _), Expr::Lambda { params, body, .. }] = args.as_slice() else {
+        return None;
+    };
+    let [(acc, _), _] = params.as_slice() else { return None };
+    if !start.is_empty() {
+        return None;
+    }
+    Some((xs, pushed(body, acc)?))
+}
+
+/// The item of `push acc item`, or of the consumer's own reducer applied to
+/// it, `(a y -> push a y) acc item`, which is how fusion writes a map step.
+fn pushed<'e>(body: &'e Expr, acc: &str) -> Option<&'e Expr> {
+    let Expr::App { head, args, .. } = body else { return None };
+    match (head.as_ref(), args.as_slice()) {
+        (Expr::Ident(push, _, _), [Expr::Ident(onto, _, _), item])
+            if push == "push" && onto == acc =>
+        {
+            Some(item)
+        }
+        (Expr::Lambda { params, body, .. }, [Expr::Ident(onto, _, _), item]) if onto == acc => {
+            let [(a, _), (y, _)] = params.as_slice() else { return None };
+            match pushed(body, a) {
+                Some(Expr::Ident(n, _, _)) if n == y => Some(item),
+                _ => None,
+            }
+        }
+        _ => None,
     }
 }

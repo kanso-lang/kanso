@@ -4605,7 +4605,36 @@ tie_list = row
   (breaking "a_tie_list_read_as_a_reference")
   release
 
-rows_c1zzzzzzzd = text/concat rows_c1zzzzzzze [tie_check tie_list]
+# A field may hold a list of references built from data, written
+# `list/to_list (list/map xs ref)`, and `push` stores a cell still being made
+# on both engines (2026-10-11).
+tie_mapped = row
+  "a tie map of references refused"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_tie_map_of_references_refused")
+  release
+
+tie_push_interp = row
+  "an interpreted push that forces a tie cell"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "an_interpreted_push_forces_a_tie_cell")
+  release
+
+tie_push_native = row
+  "a native push that forces a tie cell"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_native_push_forces_a_tie_cell")
+  release
+
+tie_rows = [tie_check tie_list tie_mapped tie_push_interp tie_push_native]
+
+rows_c1zzzzzzzd = text/concat rows_c1zzzzzzze tie_rows
 
 # A record constructor handed over as a function lowers to the lambda that
 # calls it on native, as the interpreter treats it (2026-10-10, lox F20).

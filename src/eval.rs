@@ -2421,8 +2421,13 @@ impl<'a> Interp<'a> {
         // kanso#1621 changed only the emitter and the interpreted row rose
         // 4,189,569, all of it this one collect laid out as a call.
         let mut args = args;
-        for slot in args.iter_mut() {
+        for (at, slot) in args.iter_mut().enumerate() {
             if let Value::Thunk(cell) = slot {
+                // A list stores what it is handed: the item `push` adds may be
+                // a `list/tie` cell still being made, as a list literal's may.
+                if at == 1 && name == "push" && matches!(&*cell.borrow(), ThunkState::Blackhole) {
+                    continue;
+                }
                 let thunk = Value::Thunk(cell.clone());
                 *slot = self.force_thunk(thunk)?;
             }

@@ -504,9 +504,12 @@ fn unwrap_found found
 # and answers the map from key to the node it made. `ref k` is a reference to
 # the node made for `k`, and the maker may only store it in a constructor's
 # field, alone or in a list or map written there, because that node may not
-# be made yet: `node id [(ref "b") (ref "c")]` keeps two. When every key is
-# made the references resolve, so the nodes may form cycles. A reference to a
-# key that is not in the list answers a `broken_link` instead of the map.
+# be made yet: `node id [(ref "b") (ref "c")]` keeps two. Links read from
+# data are made the same way with `node id (list/to_list (list/map links ref))`;
+# a bare `list/map` is lazy and would call `ref` too late, so it is refused.
+# When every key is made the references resolve, so the nodes may form
+# cycles. A reference to a key that is not in the list answers a
+# `broken_link` instead of the map.
 pub fn tie ids maker
   builtin_tie ids maker (from to -> broken_link from to)
 
