@@ -347,6 +347,7 @@ const USAGE: &str = "usage: kanso <verb> [arguments]
 /// folding it into the shim that calls it and taking the anchor with it.
 #[inline(never)]
 fn main() -> ExitCode {
+    reader_may_close();
     let code = driven();
     kanso::phase::report();
     code
@@ -2174,6 +2175,7 @@ fn execute(
         Ok(code) => match code.code() {
             Some(n) => ExitCode::from(n.clamp(0, 255) as u8),
             None => {
+                ended_with_the_reader(&code);
                 eprintln!("{}", explain(&code));
                 ExitCode::FAILURE
             }
@@ -2184,6 +2186,43 @@ fn execute(
         }
     }
 }
+
+#[cfg(unix)]
+const SIGPIPE: i32 = 13;
+
+#[cfg(unix)]
+extern "C" {
+    fn signal(signum: i32, handler: usize) -> usize;
+    fn raise(sig: i32) -> i32;
+}
+
+/// A write to a pipe whose reader has gone, as `head` leaves it, ends the
+/// process by SIGPIPE and says nothing. That is what a built binary does. Rust
+/// ignores the signal before `main`, so the interpreter's `print` met the
+/// broken pipe as an error instead and panicked with two backtraces. Putting
+/// the default back makes the interpreter stop the way the binary does.
+fn reader_may_close() {
+    #[cfg(unix)]
+    unsafe {
+        signal(SIGPIPE, 0);
+    }
+}
+
+/// A program the reader stopped reading was ended by SIGPIPE, and the driver
+/// ends the same way, saying nothing, so `kanso play` behind `head` stops as
+/// the binary alone would.
+#[cfg(unix)]
+fn ended_with_the_reader(status: &std::process::ExitStatus) {
+    use std::os::unix::process::ExitStatusExt;
+    if status.signal() == Some(SIGPIPE) {
+        unsafe {
+            raise(SIGPIPE);
+        }
+    }
+}
+
+#[cfg(not(unix))]
+fn ended_with_the_reader(_status: &std::process::ExitStatus) {}
 
 /// A program the operating system killed has no exit code to report, and
 /// saying nothing leaves the reader with a bare failure and no cause.
