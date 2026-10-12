@@ -19,28 +19,6 @@
 > The last forty entries. Everything older is in `log/compiler-log-archive.md`,
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
-## 2026-10-10 — gavel: a field may hold a list of `tie` references
-
-Clay, on whether a node built by `list/tie` may hold its links as a list: "of
-course field can be an array". The 2026-10-04 gavel "a data-sized cycle is tied
-with `list/tie`, and `list/tie!` insists" says a reference may be stored in a
-constructor's field and nothing else. The build read that strictly: a list
-literal is not a field, so `node id [(ref "b") (ref "c")]` was refused, and the
-graph fixture held each node's edges as a chain of one-reference records ending
-in a `no_road` marker.
-
-**The clarification.** A field may hold any value, and a list of references in
-a field is storage. The 2026-10-04 rule was about reading, and a list that
-holds references reads none of them. A list or map literal whose elements are
-references, written as a constructor's argument, is admitted. Everything the
-rule refused stays refused: during making, nothing may index, measure, walk or
-pass that list anywhere, because each of those reads through it.
-
-Owes: the check admits a collection literal of references as a field's value,
-with an error golden for a read of such a list in the maker; the graph fixture
-holds each node's neighbours as a list and drops the chain of records; ch03 or
-wherever `tie` is taught shows the list form.
-
 ## 2026-10-10 — a carried rewind waits for the lap to leave something behind
 
 The mal port ran out of memory natively. Its tail-recursive `sum2` held
@@ -2163,3 +2141,29 @@ recorded here, unedited in substance:
   judgment call, and the principle is in the log.
 
 A parked item becomes a `needs-clay` issue when a real case arrives.
+
+## 2026-10-12 — a built binary names its own stack overflow
+
+A recursion deeper than the stack ends in a fault on the guard page below it.
+`kanso run` reports a child that died that way as having run out of stack, but
+a binary run directly died with the bare signal and printed nothing. The lox
+port is run directly, and a Lox recursion 20,000 calls deep ended in
+"Segmentation fault" with exit 139 on this tree.
+
+The runtime now installs a SIGSEGV handler at start-up, on a 64 KiB stack of
+its own because the program's is the one that ran out. A fault whose address
+lies between the top of the main stack and one MiB past its limit prints the
+interpreter's diagnostic, "the program ran out of stack", and exits 1. Any
+other fault restores the default handler and faults again, so a wild pointer
+still dies by the signal. With no stack limit there is no floor to measure
+from, and the handler is not installed. The wasm runtime has no signals and is
+left alone.
+
+`tests/a_built_binary_names_its_stack_overflow.rs` builds a recursion a
+million deep that no engine can turn into a loop, runs the binary directly and
+reads its stderr and exit status. The ratchet row "a binary that does not watch
+its stack" removes the installation and the spec reads an empty stderr.
+
+This closes the native half of the recursion item on #1892. The depth itself
+still differs by engine: the interpreter stops at 10,000 calls and native at
+whatever the stack holds.
