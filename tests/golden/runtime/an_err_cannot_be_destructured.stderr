@@ -1,0 +1,1 @@
+error[runtime]: cannot destructure err "nothing to halve" as `an_err_cannot_be_destructured/pair`; bindings are irrefutable, so handle other types by dispatch first
