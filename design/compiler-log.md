@@ -2160,3 +2160,13 @@ interpreter's message is the one both engines print.
 group that answers a record or an err, its answer bound with `pair a b = p`.
 The ratchet row "a diagnostic handed an unrendered err" puts the plain render
 back, and native's stderr reads out of stack again.
+
+The first version of `k_shown` called `k_render_at` with the err flag set.
+That gave `k_render_at` six callers outside itself where it had one,
+`k_render`, and clang stopped inlining it there, so every print paid for a
+call: basket rose 111,561 instructions and runbench 172,212 on this
+container. `k_shown` now unwraps a thunk or a subtype itself, renders an err
+through `k_render_whole` and hands anything else to `k_render`; it is cold and
+out of line, so the functions that call it on their refusal path stay the size
+they were. Measured the same way, basket is 14 instructions from main and
+runbench 315.

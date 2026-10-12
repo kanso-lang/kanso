@@ -6,7 +6,7 @@
 # stack. an_err_cannot_be_destructured sees native's stderr.
 set -e
 f=src/runtime.c
-grep -q "static KValue k_shown" src/runtime.c
+grep -q "KValue k_shown(KValue v, long long quote)" src/runtime.c
 line='    KValue shown = k_shown(v, 1);'
 [ "$(grep -cxF "$line" "$f")" -eq 2 ] || {
   echo "the diagnostics' renders moved; this mutation needs rewriting" >&2

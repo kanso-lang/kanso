@@ -4647,11 +4647,21 @@ extern const char* k_type_field_name(long long type_id, long long i);
 KValue k_render(KValue v, long long quote);
 static KValue k_render_at(KValue v, long long quote, int held);
 
+static KValue k_render_whole(KValue v);
+
 /* What a runtime diagnostic shows of the value it names. A plain render
    hands an err back unrendered so that it rides through the program, and a
    diagnostic that printed that as text read the err as a string and crashed;
-   the parent then reported the crash as running out of stack. */
-static KValue k_shown(KValue v, long long quote) { return k_render_at(v, quote, 1); }
+   the parent then reported the crash as running out of stack. The err is
+   unwrapped and rendered here rather than through k_render_at, which has one
+   caller outside itself and is inlined into k_render on the print path; six
+   more callers stopped that, and every print paid for a call. */
+static __attribute__((cold, noinline)) KValue k_shown(KValue v, long long quote) {
+    if (v.tag == K_THUNK) v = k_force(v);
+    if (v.tag == K_SUB) v = k_sub_base(v);
+    if (v.tag == K_ERR) return k_render_whole(v);
+    return k_render(v, quote);
+}
 
 /* keyed reads: `{ author: writer title } = post` — fields resolve by name
    against the record's declared type */
