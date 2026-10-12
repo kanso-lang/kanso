@@ -2070,3 +2070,10 @@ The json suite turned up an interpreter bug once it imported its module. A
 bare `json_null` from an importer printed and compared as the importer's own
 type, while native code resolved it to `json/json_null`. That fix is #1904,
 with a micro golden, and this branch carries it.
+
+Rows from CI. The loader drops test files and the compiler grew
+`module_beside`, so the front-end rows rise: compile_instructions from
+25,761,215 to 25,762,128, entry_instructions from 85,207,562 to 85,207,630,
+library_instructions from 85,760,222 to 85,760,297, and startup_instructions
+from 52,396 to 52,405. interp_instructions falls from 488,792,115 to
+488,791,866, which is #1904's fix. The floor drops by what the gavel costs.

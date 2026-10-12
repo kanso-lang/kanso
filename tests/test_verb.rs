@@ -98,7 +98,8 @@ fn a_malformed_test_file_does_not_stop_the_program_beside_it() {
     }
     let tested = in_fixtures(&["test", "runs_beside"]);
     assert!(
-        String::from_utf8_lossy(&tested.stderr).contains("runs_beside/runs_beside/greet_test.kso:3"),
+        String::from_utf8_lossy(&tested.stderr)
+            .contains("runs_beside/runs_beside/greet_test.kso:3"),
         "{}",
         String::from_utf8_lossy(&tested.stderr)
     );

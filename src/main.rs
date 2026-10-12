@@ -2063,7 +2063,10 @@ fn run_tests_on_stack(target: &str, suites: &[(ast::Program, String, String)]) -
                 Ok(eval::Value::True) => println!("{name} ... ok"),
                 Ok(other) => {
                     failed += 1;
-                    println!("{name} ... FAILED (returned {})", eval::render(&interp, &other, true));
+                    println!(
+                        "{name} ... FAILED (returned {})",
+                        eval::render(&interp, &other, true)
+                    );
                 }
                 Err(runtime) => {
                     failed += 1;
