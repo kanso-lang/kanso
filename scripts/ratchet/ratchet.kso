@@ -541,10 +541,24 @@ scan_counters = row
 # proved can fail. scan_counters above is the other half of the same lesson from
 # the same day: it had this row from the first and no CI step ran the gate at
 # all, so the ratchet could break something the normal path never checked.
+#
+# The chain-head mutation it was written with stopped moving readbench, whose
+# loop now carries nothing across its rewind, and the row ran blind
+# (2026-10-12). readbench is now broken where its loop gets its beat, and the
+# chain-head mutation moved to oneshot, which reads the same chain and still
+# sees it.
 read_counters = row
-  "a chain head that names a declaration, answered by the top set"
+  "an allocating loop read as pure"
   true
   (gating "read_counters")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "an_allocating_loop_read_as_pure")
+  benchmarks
+
+oneshot_counters = row
+  "a chain head that names a declaration, answered by the top set"
+  true
+  (gating "oneshot_counters")
   "cost goldens (deterministic ratchet, no clocks)"
   (breaking "a_bang_read_loses_its_beat")
   benchmarks
@@ -1751,7 +1765,9 @@ rows_a = text/concat rows_a0 [mem_shapes release_profile]
 
 rows_b1a = [decode_counters escape_counters pend_counters digest_counters]
 
-rows_b1z = [thunk_walk scan_counters read_counters compile_libraries]
+rows_b1y = [thunk_walk scan_counters read_counters compile_libraries]
+
+rows_b1z = text/concat rows_b1y [oneshot_counters]
 
 rows_b1 = text/concat rows_b1a (text/concat rows_b1z [live_counters clean_run])
 

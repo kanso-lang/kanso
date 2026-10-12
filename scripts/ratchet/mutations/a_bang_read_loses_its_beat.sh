@@ -1,25 +1,17 @@
 #!/bin/sh
 # A chain head that names a declaration the program made stops being asked what
-# that declaration yields, and falls to the top set instead. That is the hole
-# readbench exists for, in the shape it actually had: `os/read_file!` is a
-# declared wrapper, and inference used to answer a chain's yield from a table
-# keyed on the head's BARE name — `os/read_file` collided with the builtin's
-# name and hit the table, `os/read_file!` did not. The document reaching the
-# loop then has no type where the loop analysis reads one, and the loop runs on
-# a grow-only arena.
-#
-# THE GROUP CONSULT IS WHAT READBENCH PINS, and it is not the per-declaration
-# join in `call_yield`: dropping `| ctx.decl_yields[i]` there leaves this
-# benchmark reading 1 block and 201 beats, because what `os/read_file!` returns
-# already carries its type. The yield table earns its keep on the socket path
-# instead, where `net/read c` is a bare builtin call with no declaration to ask.
-# Both were measured before this was written, because the obvious edit proves
-# nothing here and looked like it would.
+# that declaration yields, and falls to the top set instead. That was the hole
+# readbench was built for: `os/read_file!` is a declared wrapper, and inference
+# used to answer a chain's yield from a table keyed on the head's BARE name, so
+# `os/read_file` hit the table and `os/read_file!` did not.
 #
 # It edits the consult rather than the golden, because the golden is what an
-# edit would prove nothing about. On this mutation readbench reads arena_blocks
-# 41 against 1, arena_peak_bytes 42,991,616 against 1,048,576, and beat_iters 1
-# against 201.
+# edit would prove nothing about.
+#
+# readbench no longer sees it (2026-10-12). Its loop carries nothing across the
+# rewind, so the beat analysis never asks the document's type, and the mutation
+# leaves every counter where it was. oneshot reads the same `os/read_file!`
+# chain and still does: on this mutation its cohort_kept reads 0 against 1.
 set -e
 A='                if let Some(y) = group_yield(ctx, n.as_str(), args.len()) {'
 B='                    return y;'
