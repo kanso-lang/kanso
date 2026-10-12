@@ -2066,3 +2066,10 @@ through `k_render_whole` and hands anything else to `k_render`; it is cold and
 out of line, so the functions that call it on their refusal path stay the size
 they were. Measured the same way, basket is 14 instructions from main and
 runbench 315.
+
+The out-of-line `k_shown` is about 80 bytes of `.text` in every native
+binary, and the rows that count a whole program carry it. On CI's rows,
+`text` went from 4,828,574 to 4,829,694, `codegen_instructions_dev` to
+118,944,914, `work_encodebench` to 2,398,369,910, `work_livebench` to
+1,474,870,950 and `work_runbench` to 1,170,031,314. `work_oneshot` fell to
+13,223,887.
