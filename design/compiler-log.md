@@ -19,60 +19,6 @@
 > The last forty entries. Everything older is in `log/compiler-log-archive.md`,
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
-## 2026-10-10 — a survival question about an old block asks an index
-
-The lap carry made the lox port's F18 loop quadratic. Its 40,000 passes took
-2.5 s on main and 30.6 s on this branch, and 80,000 took 152 s. Memory was the
-same on both, 2.3 GB at 40,000 passes, because lox's heap only grows; F18
-itself is still open.
-
-The time was in the survival checks. `k_survives` and `k_where` answer "does
-this pointer outlive the rewind" by finding the arena block that holds it, and
-they found it by walking the chain of blocks from the mark's block towards the
-oldest. Lox holds every object it ever made, so by pass 10,000 the chain was
-375 one-megabyte blocks long, and every check on an old object walked most of
-it. Main asked few of those questions in this program. The lap carry admits
-the clusters lox's evaluator runs in, so each stage and each carried pop asks
-one for every carried node, and the walk grew with the heap. Rebuilding with
-64 MiB blocks put the 40,000 passes at 1.9 s, which isolated the walk.
-
-The live chain is now also kept sorted by address, and each block's header
-records its position in the chain. Once the chain is longer than eight blocks
-the two questions binary-search the index and compare positions. Shorter
-chains keep the walk, so the programs in the benchmark corpus, none of which
-reach eight blocks, take the same path as before. Lox runs 10,000, 20,000 and
-40,000 passes in 0.47, 0.97 and 2.12 s, against main's 0.58, 1.26 and 2.48.
-mal's 200,000 iterations still run in 0.66 s at 9 MB.
-
-`chain_finds` counts the questions the index answered, and is zero on every
-benchmark. `tests/golden/mem/a_long_chain_answers_survival_from_its_index`
-keeps fifteen blocks of rows live under a carrying loop and reads 477,919;
-raising the threshold past any chain reads 0 with every other counter equal,
-and the ratchet row "a long chain walked instead of searched" makes that
-mutation.
-
-CI's rows for the branch with the index in it, after main's constant storage
-merged in, against main: `work_runbench` 1,131,250,979 to 1,129,336,309,
-`codegen_instructions_release` 453,707,138 to 453,867,566,
-`codegen_instructions_dev` 118,896,762 to 118,918,413 and `emit_instructions`
-7,062,299 to 7,058,075. The browser compiles in 390,304,777 instructions, up
-2,122,974, and `browser_run_instructions` lands on 34,089,215, up 596,152. Every
-benchmark's machine code is about 7,900 bytes larger than main's, so `text`
-rises to 4,722,910 in all. Moving the index's two branches out of line saved
-960 of those bytes and was not kept, so most of the growth is somewhere other
-than the index; where has not been measured. The book's two counters samples
-gain the `chain_finds=0` line.
-
-Nine of the fourteen work rows rise, and `runbench`, `pendbench`, `widebench`,
-`deepbench` and `basket` fall. The rises are small: `work_oneshot` lands on
-13,207,117, up 30,630, `work_encodebench` on 2,383,882,573, `work_jsonbench` on
-860,558,623, `work_livebench` on 1,472,862,368, `work_digestbench` on
-5,561,968, `work_indexbench` on 2,458,407, `work_scanbench` on 269,663,
-`work_readbench` on 4,577,482 and `work_escapebench` on 39,045,847. None of
-those nine runs a loop the lap carry admits, and what moved them has not been
-isolated. `basket` falls by 1,969,638 to 30,405,476, and its survivor slots
-drop from 16,002 to 6 in the same change. Welfare rises to 90.26 and the floor is raised to hold it.
-
 ## 2026-10-10 — a directory called lib is an ordinary directory
 
 The beat analysis keeps an imported library's loops out of the carry tier,
@@ -2037,6 +1983,42 @@ drops from 91.1114 to 91.1094 under the rule that a change making the engines
 agree is not priced.
 
 This is the ray tracer item on #1892.
+
+## 2026-10-12 — a runtime diagnostic names the err it was handed
+
+The inflate port destructured a value that was sometimes an err, and native
+reported "the program ran out of stack" where the interpreter said "cannot
+destructure err ... as `pair`". There was no recursion. `k_die_destructure`
+rendered its value with `k_render`, which hands an err back unrendered so that
+it can ride through a program, and then read the err as a string. The read
+faulted, and the parent reports any segmentation fault as stack exhaustion.
+
+The diagnostics that name a value they were handed now render through
+`k_shown`, which renders an err in full: the destructure and keyed-read
+refusals, the field-read refusals and `k_die_value` and `k_die_got`. The
+interpreter's message is the one both engines print.
+
+`tests/golden/runtime/an_err_cannot_be_destructured` is the port's shape: a
+group that answers a record or an err, its answer bound with `pair a b = p`.
+The ratchet row "a diagnostic handed an unrendered err" puts the plain render
+back, and native's stderr reads out of stack again.
+
+The first version of `k_shown` called `k_render_at` with the err flag set.
+That gave `k_render_at` six callers outside itself where it had one,
+`k_render`, and clang stopped inlining it there, so every print paid for a
+call: basket rose 111,561 instructions and runbench 172,212 on this
+container. `k_shown` now unwraps a thunk or a subtype itself, renders an err
+through `k_render_whole` and hands anything else to `k_render`; it is cold and
+out of line, so the functions that call it on their refusal path stay the size
+they were. Measured the same way, basket is 14 instructions from main and
+runbench 315.
+
+The out-of-line `k_shown` is about 80 bytes of `.text` in every native
+binary, and the rows that count a whole program carry it. On CI's rows,
+`text` went from 4,828,574 to 4,829,694, `codegen_instructions_dev` to
+118,944,914, `work_encodebench` to 2,398,369,910, `work_livebench` to
+1,474,870,950 and `work_runbench` to 1,170,031,314. `work_oneshot` fell to
+13,223,887.
 
 ## 2026-10-12 — a name bound to a raising call carries its err into the check
 
