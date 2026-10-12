@@ -19,89 +19,6 @@
 > The last forty entries. Everything older is in `log/compiler-log-archive.md`,
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
-## 2026-10-10 — a carried rewind waits for the lap to leave something behind
-
-The mal port ran out of memory natively. Its tail-recursive `sum2` held
-729 MB at two hundred thousand iterations, where the interpreter holds a few
-megabytes. kanso#1824's entry left it there: mal's evaluator is one tail cycle
-of about forty groups, and a cycle carried only scalars and threaded
-parameters through its rewind.
-
-Two refusals in `beat.rs` kept the cycle from rewinding at all. A carried slot
-whose type set included bytes was refused, in case it hid a byte builder that
-would be copied whole at every rewind. mal's value register can hold anything,
-so its set includes bytes. A cluster entered by a tail call was refused if it
-carried any slot, because the json string scanner once paid 8 GB of copies for
-that licence. mal's evaluator is entered by a tail call. A slot that can only
-be bytes is still refused, and so is a slot inference cannot type.
-
-Lifting the bytes refusal admitted one cycle that must stay out. golden_prose
-walks its directory tree through `os/is_dir here .> (d -> entered ...)`, and
-`expand_tail` reads a tail inside a piped lambda as the caller's own, which is
-true when the pipe inlines and false when the piped value is an effect: `k_exec`
-calls the lambda later, after `onward` has returned its description. Carrying
-the cycle's slots across that edge freed strings a pending continuation still
-held, and the gate died in `k_concat_arr`; the runtime reports any segfault as
-running out of stack, which is what it printed. A carrying cluster with an edge
-through a piped lambda is now refused, and golden_prose goes red without that
-refusal.
-
-Lifting the entry refusal admitted a second. grammar_check's capture loop is a
-three-member cluster entered by a tail call, and it grows its carried list with
-`grown = push acc x` and hands on `grown`. Growth in a carried slot refuses a
-cluster, but the check read only the argument itself, so `push acc x` written in
-place was refused and the same push behind a name was carried. The gate died in
-`k_deep_copy` under `k_repair_interior`, reading a heap pointer of 6, with the
-lap rule and with a stage at every edge alike. The check now reads through a
-name the body bound. grammar_check runs again, and
-`a_cluster_growing_its_carried_list_through_a_name_stays_out` fails without the
-lookthrough. I could not reduce the crash itself: a thirty-line copy of the
-loop, with nested capture maps and sliced group text, carries and rewinds
-cleanly. Why carrying that list corrupts a node is still open. The lookthrough
-costs the tab compiler 8,440 instructions, to 390,305,438.
-
-Lifting the refusals alone made mal ten times slower. A cluster rewinds at
-every edge between its members, and mal crosses about fifty edges for each
-call it evaluates. Each rewind sized the carried slots, copied them into the
-carry pair and reset the arena: 0.47 s at ten thousand iterations against
-0.067 s with no rewind at all. Near eighteen thousand iterations tenure
-opened its tenth block and the copy per rewind began to grow with the count,
-so forty thousand iterations took 7.2 s.
-
-Compiled loops now call `k_beat_lap_carry` in place of `k_beat_iter_carry`. It
-stages only once the arena has drifted a quarter megabyte past where the last
-stage left it, in the same block, with nothing in the depth's registries. That
-is the test the bind chain already applies to its own steps. Skipping a stage
-is always sound, since the carried values stay where they are and the next
-stage copies whatever is still reachable; the test bounds the garbage held in
-between. The registries are asked because their storage is malloc'd and the
-block test cannot see it grow. A first version that skipped while more than
-256 KiB of the block remained raised the run program's `perm_peak_bytes` from
-32,200 to 81,544, and pend's 450 KB laps pushed it into a second arena block.
-The cohort pop and the chain still call `k_beat_iter_carry` directly.
-
-mal at two hundred thousand iterations now runs in 0.68 s at 21 MB, against
-1.15 s and 729 MB. It still grows by about 80 bytes an iteration: 209,210 map
-views are built and 10,519 freed, because a view is registered for release only
-when its map was allocated in the current beat. The next entry fixes that.
-
-`tests/golden/mem/an_evaluator_carrying_any_value_round_its_cycle_rewinds`
-builds the shape in forty lines and pins `arena_peak_bytes` at 1,048,576 for
-twenty thousand steps; main's compiler holds 4,194,304 for it and never
-rewinds. Putting either refusal back turns it red, and so does staging at
-every edge, which copies 4,754,864 bytes where the lap rule copies 3,488.
-
-Two cost veins move with the lap rule. The run program's `evac_bytes` falls
-from 10,018,720 to 6,671,008 and its tenure from six blocks to one, and the
-basket program's carried rewinds stage less often. Of the tab compiler's rise
-in `browser_compile_instructions`, 1,710,393 arrived with the lambda-edge
-refusal. The next entry prices the whole change on CI's rows.
-
-The ratchet's tenure-sharing row gated on the run program's counters, and with
-one tenure block there instead of six the mutation stopped moving them. It now
-gates on the mem corpus, where
-`an_inner_beat_opens_its_tenure_in_the_block_outside` goes red.
-
 ## 2026-10-10 — a map's view belongs to the beat that frees the map
 
 A map read by key, rendered, compared or measured gets a sorted view, and the
@@ -2142,31 +2059,68 @@ recorded here, unedited in substance:
 
 A parked item becomes a `needs-clay` issue when a real case arrives.
 
-## 2026-10-11 — gavel: a bare imported name answers only a call holding its owner's type
+## 2026-10-12 — gavel: arms travel with the value, and a file names only what it can see
 
-Clay, while ruling the ports' namespace question (#1883): "you can only get
-directly to the unscoped identifier if you're passing at least one arg that
-comes from that module." This is the 2026-08-29 gavel "arms travel with the
-type, under the ownership rule" read at full width. That gavel was built for
-the two cases it was argued over, `to_string` and operator arms, and the
-2026-09-17 audit marked it built on those. Ordinary functions were never
-brought under it: `enroll_bare` in src/lib.rs still gives every pub function of
-every import a bare twin, whatever the call passes.
+Clay ruled the namespace half of #1883 in dialog, on 2026-10-11 and 2026-10-12.
+It restates the 2026-08-29 gavel "arms travel with the type, under the
+ownership rule" at full width: that gavel was built for `to_string` and
+operator arms, and ordinary functions were never brought under it.
+`enroll_bare` in src/lib.rs still gives every pub function of every import a
+bare twin whatever the call passes, which is how a test file's
+`import "std/list"` turned a module's own `step 3` into `list/step` on main.
 
-**The ruling.** An imported module's function is reachable by its bare name
-only from a call that passes at least one value of a type that module owns.
-Every other call to it is qualified: `list/sum xs`, `text/join parts ", "`. A
-module's own declarations are unaffected, and so are qualified spellings.
+Clay: "it's fine to call that method on an argument that's passed to a
+function because its arms will travel with it. you just can't call it on your
+own internal things if you haven't imported anything that defines it." And on
+a name a file never imported: "you can't reference a type if you don't know
+what version of the library it even came from... there could be a million
+different libraries that all define that same thing."
 
-On main today, a module whose `core.kso` builds a private record with
-`step 3` stops compiling when a test file beside it imports std/list:
-`list/step is foreign`, at `core.kso`. The call passes an integer, which std/list
-does not own, so under this ruling std/list's `step` could never have been a
-candidate, and the module's own `step` answers.
+**The ruling.**
 
-Owes: bare enrollment keyed to argument ownership, refusing a bare call to an
-import's function with no owned argument and naming the qualified spelling in
-the diagnostic; the reduced fixture above as an error golden, seen red on main;
-the corpus, the samples, lib and the sibling repositories moved to the qualified
-spelling where they relied on the old reach; ch07 and ch11 rewritten to state
-the rule, since both describe the old behaviour.
+1. A value carries the arms its type's owner wrote. Code holding the value
+   calls them bare, without importing the owner: a function handed a `circle`
+   may write `area x`. A value reached through one that arrived counts as
+   arriving with it: a field of a parameter, an element of a list passed in,
+   the result of a traveling arm called on it.
+2. On values a file made itself (literals, its own records, what it built from
+   them) a name resolves only if the file can see it, declared in its own
+   module or in a module it imports. Otherwise it is `error[name]`.
+3. A qualified call `geo/area x` needs the import, takes any arguments, and
+   reaches only `geo`'s own arms.
+4. An arm is legal only when one of its parameter types belongs to the module
+   that writes it, so a value's traveling arms come from exactly one place,
+   its type's owner. In a mixed call such as `combine x 3`, `x`'s owner's arms
+   answer. Two owners' arms equally specific for one call are refused, as the
+   2026-08-29 gavel on the ambiguous bare call already says, and a local arm
+   of the same shape shadows a traveling one.
+
+`kanso check` stays exact: a library is checked alone with `area x` on a
+parameter accepted and `area 3` refused, and the program that passes the value
+confirms an arm exists or is refused at its own call site.
+
+Owes, on #1894: bare enrollment replaced by the two rules above; the
+reproduction (a module's `step 3` hijacked by a test file's import) as an
+error golden, seen red on main; a golden for an arm traveling into a library
+that never imported its owner; an error golden for an internal value calling
+a name the file cannot see; the corpus, samples, lib and the sibling
+repositories moved to qualified spellings where they leaned on the old reach;
+ch07 and ch11 rewritten to state the rule.
+
+## 2026-10-12 — gavel: a test file is an outside consumer of its module
+
+Clay ruled the other half of #1883: "kanso test certainly cannot see private
+definitions. that would hugely violate the point of privacy." On main a
+`*_test.kso` is a member of its module: it reads private names, its
+definitions join the module's namespace, and `kanso run` checks it, so a
+formatting slip in a test stopped the program it tests from running.
+
+**The ruling.** A test file is compiled as an outside consumer that imports
+the module it sits beside. It sees only pub names, adds nothing to the module,
+and only `kanso test` reads it; `kanso run`, `check` and `build` ignore it.
+
+Owes, on #1883: the loader keeps `*_test.kso` out of the module and compiles
+each as an importer; goldens for a test that reads a private name (refused), a
+test helper sharing a production name (no collision) and a malformed test
+beside a program that still runs; existing tests that read private names
+moved onto the pub surface.
