@@ -19,60 +19,6 @@
 > The last forty entries. Everything older is in `log/compiler-log-archive.md`,
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
-## 2026-10-10 — a survival question about an old block asks an index
-
-The lap carry made the lox port's F18 loop quadratic. Its 40,000 passes took
-2.5 s on main and 30.6 s on this branch, and 80,000 took 152 s. Memory was the
-same on both, 2.3 GB at 40,000 passes, because lox's heap only grows; F18
-itself is still open.
-
-The time was in the survival checks. `k_survives` and `k_where` answer "does
-this pointer outlive the rewind" by finding the arena block that holds it, and
-they found it by walking the chain of blocks from the mark's block towards the
-oldest. Lox holds every object it ever made, so by pass 10,000 the chain was
-375 one-megabyte blocks long, and every check on an old object walked most of
-it. Main asked few of those questions in this program. The lap carry admits
-the clusters lox's evaluator runs in, so each stage and each carried pop asks
-one for every carried node, and the walk grew with the heap. Rebuilding with
-64 MiB blocks put the 40,000 passes at 1.9 s, which isolated the walk.
-
-The live chain is now also kept sorted by address, and each block's header
-records its position in the chain. Once the chain is longer than eight blocks
-the two questions binary-search the index and compare positions. Shorter
-chains keep the walk, so the programs in the benchmark corpus, none of which
-reach eight blocks, take the same path as before. Lox runs 10,000, 20,000 and
-40,000 passes in 0.47, 0.97 and 2.12 s, against main's 0.58, 1.26 and 2.48.
-mal's 200,000 iterations still run in 0.66 s at 9 MB.
-
-`chain_finds` counts the questions the index answered, and is zero on every
-benchmark. `tests/golden/mem/a_long_chain_answers_survival_from_its_index`
-keeps fifteen blocks of rows live under a carrying loop and reads 477,919;
-raising the threshold past any chain reads 0 with every other counter equal,
-and the ratchet row "a long chain walked instead of searched" makes that
-mutation.
-
-CI's rows for the branch with the index in it, after main's constant storage
-merged in, against main: `work_runbench` 1,131,250,979 to 1,129,336,309,
-`codegen_instructions_release` 453,707,138 to 453,867,566,
-`codegen_instructions_dev` 118,896,762 to 118,918,413 and `emit_instructions`
-7,062,299 to 7,058,075. The browser compiles in 390,304,777 instructions, up
-2,122,974, and `browser_run_instructions` lands on 34,089,215, up 596,152. Every
-benchmark's machine code is about 7,900 bytes larger than main's, so `text`
-rises to 4,722,910 in all. Moving the index's two branches out of line saved
-960 of those bytes and was not kept, so most of the growth is somewhere other
-than the index; where has not been measured. The book's two counters samples
-gain the `chain_finds=0` line.
-
-Nine of the fourteen work rows rise, and `runbench`, `pendbench`, `widebench`,
-`deepbench` and `basket` fall. The rises are small: `work_oneshot` lands on
-13,207,117, up 30,630, `work_encodebench` on 2,383,882,573, `work_jsonbench` on
-860,558,623, `work_livebench` on 1,472,862,368, `work_digestbench` on
-5,561,968, `work_indexbench` on 2,458,407, `work_scanbench` on 269,663,
-`work_readbench` on 4,577,482 and `work_escapebench` on 39,045,847. None of
-those nine runs a loop the lap carry admits, and what moved them has not been
-isolated. `basket` falls by 1,969,638 to 30,405,476, and its survivor slots
-drop from 16,002 to 6 in the same change. Welfare rises to 90.26 and the floor is raised to hold it.
-
 ## 2026-10-10 — a directory called lib is an ordinary directory
 
 The beat analysis keeps an imported library's loops out of the carry tier,
@@ -2073,3 +2019,43 @@ binary, and the rows that count a whole program carry it. On CI's rows,
 118,944,914, `work_encodebench` to 2,398,369,910, `work_livebench` to
 1,474,870,950 and `work_runbench` to 1,170,031,314. `work_oneshot` fell to
 13,223,887.
+
+## 2026-10-12 — a built binary names its own stack overflow
+
+A recursion deeper than the stack ends in a fault on the guard page below it.
+`kanso run` reports a child that died that way as having run out of stack, but
+a binary run directly died with the bare signal and printed nothing. The lox
+port is run directly, and a Lox recursion 20,000 calls deep ended in
+"Segmentation fault" with exit 139 on this tree.
+
+The runtime now installs a SIGSEGV handler at start-up, on a 64 KiB stack of
+its own because the program's is the one that ran out. A fault whose address
+lies between the top of the main stack and one MiB past its limit prints the
+interpreter's diagnostic, "the program ran out of stack", and exits 1. Any
+other fault restores the default handler and faults again, so a wild pointer
+still dies by the signal. With no stack limit there is no floor to measure
+from, and the handler is not installed. The wasm runtime has no signals and is
+left alone.
+
+`tests/a_built_binary_names_its_stack_overflow.rs` builds a recursion a
+million deep that no engine can turn into a loop, runs the binary directly and
+reads its stderr and exit status. The ratchet row "a binary that does not watch
+its stack" removes the installation and the spec reads an empty stderr.
+
+This closes the native half of the recursion item on #1892. The depth itself
+still differs by engine: the interpreter stops at 10,000 calls and native at
+whatever the stack holds.
+
+Installing the handler costs every native program the same start-up work: a
+`getrlimit`, a `sigaltstack` and a `sigaction`, about 3,300 instructions, and
+368 bytes of `.text`. On CI's rows for the tree merged with #1899, `text`
+went to 4,834,846 and `codegen_instructions_dev` to 119,002,829. The work rows
+moved by that constant: `work_basket` to 30,876,488, `work_deepbench` to
+393,579,644, `work_digestbench` to 5,603,118, `work_encodebench` to
+2,398,373,226, `work_escapebench` to 39,049,158, `work_indexbench` to
+2,462,486, `work_jsonbench` to 860,562,984, `work_livebench` to 1,474,875,071,
+`work_oneshot` to 13,226,930, `work_pendbench` to 190,054,350,
+`work_readbench` to 4,580,966, `work_runbench` to 1,170,035,080,
+`work_scanbench` to 273,523 and `work_widebench` to 28,178,509.
+`codegen_instructions_release` fell to 454,179,413, which outweighs the rest,
+and the rise is banked.
