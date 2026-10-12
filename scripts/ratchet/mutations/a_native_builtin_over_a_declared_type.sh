@@ -6,7 +6,7 @@
 set -e
 f=src/codegen.rs
 line='            !was_builtin && (self.declares(name) || self.type_ids.contains_key(name));'
-[ "$(grep -cxF "$line" "$f")" -eq 1 ] || {
+[ "$(grep -cxF "$line" src/codegen.rs)" -eq 1 ] || {
   echo "the native shadow moved; this mutation needs rewriting" >&2
   exit 1
 }

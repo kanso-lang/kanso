@@ -7,7 +7,7 @@
 set -e
 f=src/check.rs
 line='    if known.is_none() && !named.fields.contains_key(name) {'
-[ "$(grep -cxF "$line" "$f")" -eq 1 ] || {
+[ "$(grep -cxF "$line" src/check.rs)" -eq 1 ] || {
   echo "the arity guard moved; this mutation needs rewriting" >&2
   exit 1
 }

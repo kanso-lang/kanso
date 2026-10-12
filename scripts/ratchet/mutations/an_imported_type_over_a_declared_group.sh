@@ -8,7 +8,7 @@
 set -e
 f=src/eval.rs
 line='            if ty.origin.is_none() || !self.fns.contains_key(name) {'
-[ "$(grep -cxF "$line" "$f")" -eq 1 ] || {
+[ "$(grep -cxF "$line" src/eval.rs)" -eq 1 ] || {
   echo "the group-first guard moved; this mutation needs rewriting" >&2
   exit 1
 }
