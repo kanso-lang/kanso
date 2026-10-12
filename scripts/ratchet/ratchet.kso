@@ -4970,7 +4970,21 @@ parsed_arms = row
 
 rows_c1zzzzzzx9 = text/concat rows_c1zzzzzzy1 [parsed_arms]
 
-rows_c = text/concat rows_c1zzzzzzx9 [itself]
+# A record on either side of an operator goes to the program's own arms, so
+# inference adds what they answer (2026-10-12). The mutation reads the
+# operator as arithmetic alone, release assumes a float where a record comes
+# back, and the micro fixture prints its record through the number arm.
+op_arms_answer = row
+  "an operator answering arithmetic alone"
+  true
+  "cargo test --release --test golden micro_corpus_survives_a_release_build"
+  "specs (unit, golden, differential)"
+  (breaking "an_operator_answering_arithmetic_alone")
+  release
+
+rows_c1zzzzzzx8 = text/concat rows_c1zzzzzzx9 [op_arms_answer]
+
+rows_c = text/concat rows_c1zzzzzzx8 [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
