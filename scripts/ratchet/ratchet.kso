@@ -4983,7 +4983,19 @@ pipe_quiet = row
 
 rows_c1zzzzzzx7 = text/concat rows_c1zzzzzzx9 [pipe_quiet]
 
-rows_c = text/concat rows_c1zzzzzzx7 [itself]
+# A native program's stdout reaches its reader before it writes to stderr,
+# waits or stops (2026-10-12). The mutation leaves stdout in its buffer.
+stdout_settled = row
+  "stdout left in its buffer"
+  true
+  "cargo test --release --test stdout_reaches_its_reader"
+  "specs (unit, golden, differential)"
+  (breaking "stdout_left_in_its_buffer")
+  release
+
+rows_c1zzzzzzx6 = text/concat rows_c1zzzzzzx7 [stdout_settled]
+
+rows_c = text/concat rows_c1zzzzzzx6 [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
