@@ -1,0 +1,5 @@
+fn base item
+  length item
+
+pub fn total item
+  base item + 1

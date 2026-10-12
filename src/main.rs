@@ -323,7 +323,8 @@ const USAGE: &str = "usage: kanso <verb> [arguments]
   play <file> [--interp]             run a little program: definitions and
                                      statements in one file, stdlib imports only
   check <file|dir>                   report what run would refuse, and stop
-  test <file|dir>                    evaluate every `test_*` constant
+  test <file|dir>                    run the `test_*` constants in each
+                                     `*_test.kso` file, which sees only pub names
   build <file|dir> [--release]       write a native binary here, named for
                                      the program
   repl                               evaluate expressions as you type them
@@ -478,30 +479,12 @@ fn driven() -> ExitCode {
         }
         false => file,
     };
-    // A test file is a member of its module, and a module's files share their
-    // declarations — so testing one compiles the module it belongs to, or the
-    // file cannot see the very functions it is testing.
-    let among_siblings = command == "test"
-        && std::path::Path::new(&file).is_file()
-        && std::path::Path::new(&file).parent().is_some_and(|dir| {
-            std::fs::read_dir(dir).into_iter().flatten().flatten().any(|e| {
-                let path = e.path();
-                path.extension().is_some_and(|x| x == "kso")
-                    && path.file_name() != std::path::Path::new(&file).file_name()
-                    && e.file_name() != "main.kso"
-            })
-        });
-    let only_from = match among_siblings {
-        true => std::path::Path::new(&file).file_name().map(|n| n.to_string_lossy().into_owned()),
-        false => None,
-    };
-    let file = match among_siblings {
-        true => std::path::Path::new(&file)
-            .parent()
-            .map(|d| d.to_string_lossy().into_owned())
-            .unwrap_or(file),
-        false => file,
-    };
+    // A test file is an outside consumer of the module beside it (the
+    // 2026-10-12 gavel): each one compiles on its own as an importer of that
+    // module, and testing the directory runs every one of them.
+    if command == "test" {
+        return test(&file);
+    }
     let path = std::path::Path::new(&file);
     let (program, source) = match path.is_dir() {
         true => match kanso::compile_module(path, require_entry) {
@@ -544,9 +527,6 @@ fn driven() -> ExitCode {
         }
         println!("{file}: ok");
         return ExitCode::SUCCESS;
-    }
-    if command == "test" {
-        return run_tests(&program, &file, &source, only_from.as_deref());
     }
     if command == "build" {
         return build(program, &file, release, built_as);
@@ -1997,67 +1977,108 @@ fn cached_object(profile: &str, source: &str, opt: &[&str]) -> std::io::Result<s
     Ok(object)
 }
 
-/// `only_from` names one of the module's files: `kanso test lib/list/list_test.kso`
-/// compiles the module and runs that file's tests, where the bare directory
-/// runs them all.
-///
+/// `kanso test <target>`: a test file, or a directory whose test files all
+/// run. Each test file is compiled alone, as an importer of the module it
+/// sits beside, so one test file never sees another's helpers.
+fn test(target: &str) -> ExitCode {
+    let path = std::path::Path::new(target);
+    let files: Vec<String> = match path.is_dir() {
+        true => {
+            let mut found: Vec<String> = std::fs::read_dir(path)
+                .into_iter()
+                .flatten()
+                .flatten()
+                .map(|e| e.path())
+                .filter(|p| kanso::is_test_file(p))
+                .map(|p| p.to_string_lossy().into_owned())
+                .collect();
+            found.sort();
+            found
+        }
+        false => vec![target.to_string()],
+    };
+    if files.is_empty() {
+        eprintln!("{target}: no test files (a test file is named `*_test.kso`)");
+        return ExitCode::from(2);
+    }
+    let mut suites = Vec::new();
+    for file in files {
+        let source = match std::fs::read_to_string(&file) {
+            Ok(source) => source,
+            Err(io) => {
+                eprintln!("error: cannot read {file}: {io}");
+                return ExitCode::from(2);
+            }
+        };
+        let compiled = match kanso::is_test_file(std::path::Path::new(&file)) {
+            true => kanso::compile_test_file(&file, &source),
+            false => kanso::compile_source("test", &file, &source),
+        };
+        match compiled {
+            Ok(program) => suites.push((program, file, source)),
+            Err(rendered) => {
+                eprint!("{}", diag::paint(&rendered));
+                return ExitCode::from(2);
+            }
+        }
+    }
+    run_tests(target, &suites)
+}
+
 /// The tests run on the interpreter's deep stack, as `run --interp` does. On
 /// the main thread's stack a test that recursed too far overflowed Rust's
 /// stack before the interpreter's depth limit could report it, and the abort
 /// took every other test's result with it.
-fn run_tests(
-    program: &ast::Program,
-    file: &str,
-    source: &str,
-    only_from: Option<&str>,
-) -> ExitCode {
+fn run_tests(target: &str, suites: &[(ast::Program, String, String)]) -> ExitCode {
     std::thread::scope(|scope| {
         std::thread::Builder::new()
             .stack_size(1 << 30)
-            .spawn_scoped(scope, || run_tests_on_stack(program, file, source, only_from))
+            .spawn_scoped(scope, || run_tests_on_stack(target, suites))
             .expect("spawns")
             .join()
             .expect("test thread completes")
     })
 }
 
-fn run_tests_on_stack(
-    program: &ast::Program,
-    file: &str,
-    source: &str,
-    only_from: Option<&str>,
-) -> ExitCode {
-    let interp = eval::Interp::new(program);
-    let mut names: Vec<&str> = program
-        .fns
-        .iter()
-        .filter(|d| d.name.starts_with("test_") && d.params.is_empty())
-        .filter(|d| only_from.is_none_or(|want| d.file.ends_with(want)))
-        .map(|d| d.name.as_str())
-        .collect();
-    names.dedup();
-    if names.is_empty() {
-        eprintln!("{file}: no tests found (a test is a constant named `test_*`)");
-        return ExitCode::from(2);
-    }
+fn run_tests_on_stack(target: &str, suites: &[(ast::Program, String, String)]) -> ExitCode {
+    let mut ran = 0;
     let mut failed = 0;
-    for name in &names {
-        let outcome = interp.run_named(name).expect("filtered on zero-arg fns");
-        match outcome {
-            Ok(eval::Value::True) => println!("{name} ... ok"),
-            Ok(other) => {
-                failed += 1;
-                println!("{name} ... FAILED (returned {})", eval::render(&interp, &other, true));
-            }
-            Err(runtime) => {
-                failed += 1;
-                let d = diag::Diagnostic::new("runtime", runtime.message, runtime.span);
-                println!("{name} ... FAILED");
-                eprint!("{}", diag::paint(&diag::render(&[d], file, source)));
+    for (program, file, source) in suites {
+        let interp = eval::Interp::new(program);
+        // the module's own pub names come along with the import, and a
+        // `test_*` among them is the module's, not this file's
+        let own = std::path::Path::new(file).file_name().map(|n| n.to_string_lossy().into_owned());
+        let mut names: Vec<&str> = program
+            .fns
+            .iter()
+            .filter(|d| d.name.starts_with("test_") && d.params.is_empty())
+            .filter(|d| own.as_deref().is_none_or(|want| d.file.ends_with(want)))
+            .map(|d| d.name.as_str())
+            .collect();
+        names.dedup();
+        for name in &names {
+            ran += 1;
+            let outcome = interp.run_named(name).expect("filtered on zero-arg fns");
+            match outcome {
+                Ok(eval::Value::True) => println!("{name} ... ok"),
+                Ok(other) => {
+                    failed += 1;
+                    println!("{name} ... FAILED (returned {})", eval::render(&interp, &other, true));
+                }
+                Err(runtime) => {
+                    failed += 1;
+                    let d = diag::Diagnostic::new("runtime", runtime.message, runtime.span);
+                    println!("{name} ... FAILED");
+                    eprint!("{}", diag::paint(&diag::render(&[d], file, source)));
+                }
             }
         }
     }
-    println!("{} passed, {failed} failed", names.len() - failed);
+    if ran == 0 {
+        eprintln!("{target}: no tests found (a test is a constant named `test_*`)");
+        return ExitCode::from(2);
+    }
+    println!("{} passed, {failed} failed", ran - failed);
     match failed {
         0 => ExitCode::SUCCESS,
         _ => ExitCode::FAILURE,

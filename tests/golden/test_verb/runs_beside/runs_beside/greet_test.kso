@@ -1,0 +1,3 @@
+# Half written: the test file does not parse. The program beside it still
+# runs, because only `kanso test` reads a test file.
+test_greet = greet "kanso" ==

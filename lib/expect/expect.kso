@@ -23,11 +23,11 @@
 #
 # `expect` is the identity. It reads as the subject of the sentence and costs
 # nothing, which is the point: the chain is the surface, not a wrapper type.
-type mismatch
+pub type mismatch
   wanted
   got
 
-type not_true
+pub type not_true
   got
 
 pub fn expect v
@@ -39,7 +39,7 @@ pub fn to v m
 pub fn equal want
   (got -> equal_answer want got (want == got))
 
-be_true = (got -> true_answer got got)
+pub be_true = (got -> true_answer got got)
 
 fn equal_answer _ _ true
   true

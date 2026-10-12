@@ -7,14 +7,26 @@ test_be_true_matches = expect (1 == 1) . to be_true
 
 # And a mismatch answers the RECORD, which is the whole point: these assert
 # the failure's shape, so the diff a reader sees is pinned rather than assumed.
+# A test file reads the records the way any importer does, by pattern, since
+# only `expect` builds them.
 test_equal_says_what_it_wanted =
   said = expect 42 . to (equal 43)
-  said == mismatch 43 42
+  wanted_and_got? said 43 42
 
 test_equal_says_it_for_text =
   said = expect "a" . to (equal "b")
-  said == mismatch "b" "a"
+  wanted_and_got? said "b" "a"
 
-test_be_true_says_what_it_got =
-  said = expect false . to be_true
-  said == not_true false
+test_be_true_says_what_it_got = got_back? (expect false . to be_true) false
+
+fn got_back? (not_true got) want
+  got == want
+
+fn got_back? _ _
+  false
+
+fn wanted_and_got? (mismatch wanted got) w g
+  wanted == w and got == g
+
+fn wanted_and_got? _ _ _
+  false
