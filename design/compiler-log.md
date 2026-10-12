@@ -2051,3 +2051,6 @@ bare `json_null`.
 
 From CI, the interpreter's run of the corpus reads 249 instructions fewer,
 interp_instructions 488,792,115 to 488,791,866. No other row moved.
+
+On the tree merged with #1900, CI's interpreter row fell from 488,792,115 to
+488,791,866, and welfare banks the rise.
