@@ -2086,4 +2086,6 @@ Rows from CI. The loader drops test files and the compiler grew
 25,761,215 to 25,762,128, entry_instructions from 85,207,562 to 85,207,630,
 library_instructions from 85,760,222 to 85,760,297, and startup_instructions
 from 52,396 to 52,405. interp_instructions falls from 488,792,115 to
-488,791,866, which is #1904's fix. The floor drops by what the gavel costs.
+488,791,866, which is #1904's fix. On the tree merged with #1900,
+browser_compile_instructions rises 335 to 391,974,395. The floor drops by
+what the gavel costs.
