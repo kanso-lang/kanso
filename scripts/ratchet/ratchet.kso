@@ -4970,7 +4970,20 @@ parsed_arms = row
 
 rows_c1zzzzzzx9 = text/concat rows_c1zzzzzzy1 [parsed_arms]
 
-rows_c = text/concat rows_c1zzzzzzx9 [itself]
+# A reader that stops early ends every engine by SIGPIPE, quietly
+# (2026-10-12). The mutation leaves the signal ignored, and the interpreter
+# panics on the closed pipe.
+pipe_quiet = row
+  "a closed pipe met as an error"
+  true
+  "cargo test --release --test a_closed_pipe_stops_every_engine_quietly"
+  "specs (unit, golden, differential)"
+  (breaking "a_closed_pipe_met_as_an_error")
+  release
+
+rows_c1zzzzzzx7 = text/concat rows_c1zzzzzzx9 [pipe_quiet]
+
+rows_c = text/concat rows_c1zzzzzzx7 [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
