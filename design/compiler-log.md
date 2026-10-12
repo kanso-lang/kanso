@@ -2038,3 +2038,6 @@ the interpreter printed `a_bare_imported_unit_is_its_module_s/json_null` and
 json's own test suite found it. Under #1883 a test file imports its module,
 and `test_decode_nested` compares a decoded document against a map holding a
 bare `json_null`.
+
+From CI, the interpreter's run of the corpus reads 249 instructions fewer,
+interp_instructions 488,792,115 to 488,791,866. No other row moved.
