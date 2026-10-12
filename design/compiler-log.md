@@ -19,35 +19,6 @@
 > The last forty entries. Everything older is in `log/compiler-log-archive.md`,
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
-## 2026-10-10 — a directory called lib is an ordinary directory
-
-The beat analysis keeps an imported library's loops out of the carry tier,
-because a shared driver threads its caller's invariant source through the loop
-and carrying it would copy an unbounded value at every rewind. It recognised a
-library by its declaration's file name, which had to begin `std/` or `lib/`.
-Shipped modules are filed as `std/<module>/<file>`. Nothing shipped begins
-`lib/`, and every user directory called `lib` does, so a package kept in one
-compiled to a program that never reclaimed a block. The 2026-08-31 entries
-found this, measured it at five times the peak, and pinned it in
-`tests/a_program_is_not_its_directory.rs` with the instruction to delete the
-assertion when the two directories agreed.
-
-The `lib/` arm is gone and the `std/` arm stays. The arm had one user in the
-tree: the json beat unit test compiled `lib/json` as a root, and the arm made
-that root look like an installed module. The test now reads the library
-through `import "std/json"`, which is how a program meets it, and it still goes
-red when the `std/` arm is removed: `json/array_open` and `json/obj_open`
-become beats. The spec now asserts that `lib/app` and `elsewhere/app` both
-peak at 1,048,576, and with the arm put back the `lib/` side reads 5,242,880.
-
-I found it while building the fixtures for the lap carry. The evaluator
-fixture, imported as `./lib/fx`, held 4 MiB and never rewound.
-
-The tab compiler reads 661 fewer instructions, `browser_compile_instructions`
-388,181,803. CI moved one other row: `emit_instructions` falls 37, to
-7,062,299. Both codegen tiers held. The ratchet's mutation for this filter
-patched the old two-arm line, so it now patches the one-arm line.
-
 ## 2026-10-10 — a constant lives in storage the carry knows is permanent
 
 A map built before a carrying loop came out of the loop with keys the next
@@ -2020,6 +1991,45 @@ binary, and the rows that count a whole program carry it. On CI's rows,
 1,474,870,950 and `work_runbench` to 1,170,031,314. `work_oneshot` fell to
 13,223,887.
 
+## 2026-10-12 — a built binary names its own stack overflow
+
+A recursion deeper than the stack ends in a fault on the guard page below it.
+`kanso run` reports a child that died that way as having run out of stack, but
+a binary run directly died with the bare signal and printed nothing. The lox
+port is run directly, and a Lox recursion 20,000 calls deep ended in
+"Segmentation fault" with exit 139 on this tree.
+
+The runtime now installs a SIGSEGV handler at start-up, on a 64 KiB stack of
+its own because the program's is the one that ran out. A fault whose address
+lies between the top of the main stack and one MiB past its limit prints the
+interpreter's diagnostic, "the program ran out of stack", and exits 1. Any
+other fault restores the default handler and faults again, so a wild pointer
+still dies by the signal. With no stack limit there is no floor to measure
+from, and the handler is not installed. The wasm runtime has no signals and is
+left alone.
+
+`tests/a_built_binary_names_its_stack_overflow.rs` builds a recursion a
+million deep that no engine can turn into a loop, runs the binary directly and
+reads its stderr and exit status. The ratchet row "a binary that does not watch
+its stack" removes the installation and the spec reads an empty stderr.
+
+This closes the native half of the recursion item on #1892. The depth itself
+still differs by engine: the interpreter stops at 10,000 calls and native at
+whatever the stack holds.
+
+Installing the handler costs every native program the same start-up work: a
+`getrlimit`, a `sigaltstack` and a `sigaction`, about 3,300 instructions, and
+368 bytes of `.text`. On CI's rows for the tree merged with #1899, `text`
+went to 4,834,846 and `codegen_instructions_dev` to 119,002,829. The work rows
+moved by that constant: `work_basket` to 30,876,488, `work_deepbench` to
+393,579,644, `work_digestbench` to 5,603,118, `work_encodebench` to
+2,398,373,226, `work_escapebench` to 39,049,158, `work_indexbench` to
+2,462,486, `work_jsonbench` to 860,562,984, `work_livebench` to 1,474,875,071,
+`work_oneshot` to 13,226,930, `work_pendbench` to 190,054,350,
+`work_readbench` to 4,580,966, `work_runbench` to 1,170,035,080,
+`work_scanbench` to 273,523 and `work_widebench` to 28,178,509.
+`codegen_instructions_release` fell to 454,179,413, which outweighs the rest,
+and the rise is banked.
 
 ## 2026-10-12 — a test file is an outside consumer of its module
 
