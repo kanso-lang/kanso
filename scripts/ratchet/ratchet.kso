@@ -4956,6 +4956,20 @@ native_reached = row
 
 rows_c1zzzzzzy1 = text/concat rows_c1zzzzzzy2 [native_reached]
 
+# kanso test runs its tests on the deep thread `run --interp` uses, so a test
+# that recurses too far fails with the depth diagnostic and the rest still
+# report (2026-10-12). The mutation gives the thread 8 MiB, and Rust's own
+# overflow aborts the run.
+test_stack = row
+  "a test run on the main stack"
+  true
+  "cargo test --release --test test_verb"
+  "specs (unit, golden, differential)"
+  (breaking "a_test_run_on_the_main_stack")
+  no_setup
+
+rows_c1zzzzzzy0 = text/concat rows_c1zzzzzzy1 [test_stack]
+
 # A record goes back to its caller in two words only when every arm of its
 # group answers that record or a failure (2026-10-09). The mutation skips the
 # check, and the two micro fixtures built from `list/take` print the wrong
@@ -4968,7 +4982,7 @@ parsed_arms = row
   (breaking "a_group_answering_other_values_goes_by_value")
   no_setup
 
-rows_c1zzzzzzx9 = text/concat rows_c1zzzzzzy1 [parsed_arms]
+rows_c1zzzzzzx9 = text/concat rows_c1zzzzzzy0 [parsed_arms]
 
 rows_c = text/concat rows_c1zzzzzzx9 [itself]
 

@@ -19,28 +19,6 @@
 > The last forty entries. Everything older is in `log/compiler-log-archive.md`,
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
-## 2026-10-10 — gavel: a field may hold a list of `tie` references
-
-Clay, on whether a node built by `list/tie` may hold its links as a list: "of
-course field can be an array". The 2026-10-04 gavel "a data-sized cycle is tied
-with `list/tie`, and `list/tie!` insists" says a reference may be stored in a
-constructor's field and nothing else. The build read that strictly: a list
-literal is not a field, so `node id [(ref "b") (ref "c")]` was refused, and the
-graph fixture held each node's edges as a chain of one-reference records ending
-in a `no_road` marker.
-
-**The clarification.** A field may hold any value, and a list of references in
-a field is storage. The 2026-10-04 rule was about reading, and a list that
-holds references reads none of them. A list or map literal whose elements are
-references, written as a constructor's argument, is admitted. Everything the
-rule refused stays refused: during making, nothing may index, measure, walk or
-pass that list anywhere, because each of those reads through it.
-
-Owes: the check admits a collection literal of references as a field's value,
-with an error golden for a read of such a list in the maker; the graph fixture
-holds each node's neighbours as a list and drops the chain of records; ch03 or
-wherever `tie` is taught shows the list form.
-
 ## 2026-10-10 — a carried rewind waits for the lap to leave something behind
 
 The mal port ran out of memory natively. Its tail-recursive `sum2` held
@@ -2163,3 +2141,22 @@ recorded here, unedited in substance:
   judgment call, and the principle is in the log.
 
 A parked item becomes a `needs-clay` issue when a real case arrives.
+
+## 2026-10-12 — a test that runs out of stack fails alone
+
+`kanso test` ran its tests on the main thread, whose stack is 8 MiB. The
+interpreter's depth limit is sized for the 1 GiB thread `run --interp` starts,
+so a test that recursed too far overflowed Rust's stack before the limit
+reported it, and the process aborted with every later test unreported. The lox
+port met this from a recursion 700 calls deep. The runner now starts the same
+deep thread, and the test fails with the interpreter's diagnostic, "the
+program ran out of stack".
+
+`tests/test_verb.rs` runs `deep_test.kso`, one shallow test and one that
+recurses a million deep, and expects the first to pass, the second to fail and
+the run to exit 1. The ratchet row "a test run on the main stack" gives the
+thread 8 MiB and the spec sees the abort.
+
+This is part of the recursion item on #1892. The native side of that item is
+open: a deep enough recursion through the lox port's trie write still ends in
+a segmentation fault with no message.
