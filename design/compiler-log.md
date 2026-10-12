@@ -2072,16 +2072,19 @@ pass-through `e@(err _)` arm, a `.>` step, or a helper with an err arm:
   peak by 1 MiB, so it was dropped.
 - oneshot takes the decoded document in a helper with an err arm, which
   costs no closure.
-- interp_corpus reaches its document through `.>`. The first repair passed
-  it to a helper with an err arm, and that call was a tail call from
-  `total`: the frame's region rewinds before a tail call, so the freshly
-  decoded document was deep-copied out of it on every round. The native run
-  of the corpus went from 16,005,829 instructions to 19,483,131, and the
-  browser's run row from 34,124,990 to 46,702,454 with one more 256 KiB
-  block of peak. With `.>` the browser rows read 34,126,478 and 1,179,648
-  here, on CI's rustc. Any program whose tail call carries a large value
-  built in the same frame pays that copy; the corpus did not exercise one
-  before.
+- interp_corpus binds the decoded document and sizes it through `.>`
+  before it recurses. The first repair passed the document to a helper with
+  an err arm, and that call was a tail call from `total`: the frame's region
+  rewinds before a tail call, so the document was deep-copied out of it on
+  every round. The native run of the corpus went from 16,005,829
+  instructions to 19,483,131, and the browser's run row from 34,124,990 to
+  46,702,454. Recursing from inside a `.>` step costs no copy, but the
+  interpreter holds every round's document until the recursion returns, and
+  its peak rose from 687,159 to 1,043,112 bytes on CI. The spelling kept
+  sizes the document before the tail call; here it reads 34,172,021 browser
+  run instructions and 702,031 interpreter bytes, at the price of one more
+  256 KiB block of browser peak (1,179,648 to 1,441,792). Scored against
+  the other two it gives up the least welfare.
 - Thirteen scripts under `scripts/` were repaired and each was run against
   the same input with the old and the new compiler; where nothing failed the
   output was byte for byte the same.
