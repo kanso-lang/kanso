@@ -48,7 +48,10 @@ fn hops(fixture: &str, interpreted: bool) -> Vec<String> {
         String::from_utf8_lossy(&done.stdout),
         String::from_utf8_lossy(&done.stderr),
     );
-    assert!(said.contains("\"flan\" is not an integer"), "{fixture} did not reach the err at all:\n{said}",);
+    assert!(
+        said.contains("\"flan\" is not an integer"),
+        "{fixture} did not reach the err at all:\n{said}",
+    );
     said.lines()
         .map(str::trim)
         .filter(|l| l.starts_with("passed through "))
