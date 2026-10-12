@@ -1077,9 +1077,9 @@ const LTO_O3_WITHOUT_DEADARGELIM: &str = concat!(
 /// says, or none.
 ///
 /// The pipeline is LLVM 19's, and another release's default may differ, so
-/// it is used only when clang says it is 19 and a one-line LTO program links
-/// with it through lld. Elsewhere the link keeps its own default. The answer
-/// is remembered under clang's identity, as `lld_links_lto`'s is.
+/// it is used only when clang says it is 19 or 18 and a one-line LTO program
+/// links with it through lld. Elsewhere the link keeps its own default. The
+/// answer is remembered under clang's identity, as `lld_links_lto`'s is.
 fn lto_pipeline_args() -> Vec<String> {
     if lld_args().is_empty() {
         return Vec::new();
@@ -1087,13 +1087,14 @@ fn lto_pipeline_args() -> Vec<String> {
     let Some(clang) = tool_identity("clang") else {
         return Vec::new();
     };
-    let key = format!("{clang}|{}", LTO_O3_WITHOUT_DEADARGELIM)
+    let key = format!("{clang}|major|{}", LTO_O3_WITHOUT_DEADARGELIM)
         .bytes()
         .fold(0xcbf29ce484222325u64, |h, b| (h ^ b as u64).wrapping_mul(0x100000001b3));
     let path = std::env::temp_dir().join(format!("kanso_lto_pipeline_answer_{}", hex16(key)));
     let answer = match std::fs::read(&path).ok().as_deref() {
-        Some(b"1") => true,
-        Some(b"0") => false,
+        Some(b"19") => Some(19),
+        Some(b"18") => Some(18),
+        Some(b"0") => None,
         _ => {
             let answer = lto_pipeline_probe();
             let staged = std::env::temp_dir().join(format!(
@@ -1101,28 +1102,51 @@ fn lto_pipeline_args() -> Vec<String> {
                 hex16(key),
                 pid_tag()
             ));
-            if std::fs::write(&staged, if answer { b"1" } else { b"0" }).is_ok() {
+            let word = answer.map_or("0".to_string(), |m| m.to_string());
+            if std::fs::write(&staged, word).is_ok() {
                 let _ = std::fs::rename(&staged, &path);
             }
             answer
         }
     };
     match answer {
-        true => {
-            vec!["-Xlinker".to_string(), format!("--lto-newpm-passes={LTO_O3_WITHOUT_DEADARGELIM}")]
+        Some(major) => {
+            vec!["-Xlinker".to_string(), format!("--lto-newpm-passes={}", lto_pipeline_for(major))]
         }
-        false => Vec::new(),
+        None => Vec::new(),
     }
 }
 
-fn lto_pipeline_probe() -> bool {
+/// `LTO_O3_WITHOUT_DEADARGELIM` as the given LLVM release spells it.
+///
+/// 18's `lto<O3>`, as its `opt -print-pipeline-passes` writes it, is 19's
+/// pass for pass, less simplifycfg's `speculate-unpredictables` option, which
+/// 19 added. 18 needs the pipeline as much as 19 does: kq's LTO link under
+/// clang 18 aborted in `deadargelim` once tail calls through closures became
+/// `musttail` in tailcc lambdas, the same disagreement of two-word returns the
+/// constant's comment describes.
+fn lto_pipeline_for(major: u32) -> String {
+    match major {
+        18 => LTO_O3_WITHOUT_DEADARGELIM
+            .replace(";no-speculate-unpredictables", "")
+            .replace(";speculate-unpredictables", ""),
+        _ => LTO_O3_WITHOUT_DEADARGELIM.to_string(),
+    }
+}
+
+/// The LLVM release whose spelling of the pipeline links here, if one does.
+fn lto_pipeline_probe() -> Option<u32> {
+    [19, 18].into_iter().find(|&major| lto_pipeline_links(major))
+}
+
+fn lto_pipeline_links(major: u32) -> bool {
     let dir = std::env::temp_dir();
     let c = dir.join(format!("kanso_lto_pipeline_probe_{}.c", pid_tag()));
     let ll = dir.join(format!("kanso_lto_pipeline_probe_{}.ll", pid_tag()));
     let out = dir.join(format!("kanso_lto_pipeline_probe_{}", pid_tag()));
-    // The pipeline string is LLVM 19's, so another major version is asked
-    // with the preprocessor: a status, where reading `--version` would drain
-    // a pipe. Output thrown away rather than read, for the reason
+    // The pipeline is spelled for one major version, which is asked with the
+    // preprocessor: a status, where reading `--version` would drain a pipe.
+    // Output thrown away rather than read, for the reason
     // `preserve_none_probe` gives.
     let quiet = |cmd: &mut std::process::Command| {
         cmd.stdout(std::process::Stdio::null())
@@ -1131,7 +1155,8 @@ fn lto_pipeline_probe() -> bool {
             .map(|s| s.success())
             .unwrap_or(false)
     };
-    let ok = std::fs::write(&c, "#if __clang_major__ != 19\n#error\n#endif\n").is_ok()
+    let check = format!("#if __clang_major__ != {major}\n#error\n#endif\n");
+    let ok = std::fs::write(&c, check).is_ok()
         && std::fs::write(&ll, "define i32 @main() {\n  ret i32 0\n}\n").is_ok()
         && quiet(std::process::Command::new("clang").arg("-fsyntax-only").arg(&c))
         && quiet(
@@ -1139,7 +1164,7 @@ fn lto_pipeline_probe() -> bool {
                 .args(["-O1", "-flto", "-Wno-override-module"])
                 .args(lld_args())
                 .arg("-Xlinker")
-                .arg(format!("--lto-newpm-passes={LTO_O3_WITHOUT_DEADARGELIM}"))
+                .arg(format!("--lto-newpm-passes={}", lto_pipeline_for(major)))
                 .arg(&ll)
                 .arg("-o")
                 .arg(&out),
