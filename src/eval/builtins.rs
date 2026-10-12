@@ -482,9 +482,7 @@ impl<'a> Interp<'a> {
                 let as_items = |v: &Value| -> Option<Vec<Value>> {
                     match v {
                         Value::List(xs) => Some((**xs).clone()),
-                        Value::Bytes(raw) => {
-                            Some(raw.iter().map(|&b| Value::int(b)).collect())
-                        }
+                        Value::Bytes(raw) => Some(raw.iter().map(|&b| Value::int(b)).collect()),
                         _ => None,
                     }
                 };
