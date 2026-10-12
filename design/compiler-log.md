@@ -2081,3 +2081,7 @@ broken pipe into SIGPIPE. On Linux the signal arrives first and that path
 does not run; with the start-up reset removed, the interpreter still stops
 quietly through it, and the ratchet row goes red on the native run instead,
 whose driver cannot re-raise an ignored signal.
+Writing through a stdout lock with an error arm cost the interpreted corpus
+688 instructions on CI's row: `interp_instructions` went to 488,792,803.
+The welfare floor drops to 91.10945 under the rule that a change making the
+engines agree is not priced.
