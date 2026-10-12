@@ -27,7 +27,9 @@ pub fn byte_dispatched(
     let mut seen: HashSet<(&str, usize)> = HashSet::default();
     for decl in &program.fns {
         let key = (decl.name.as_str(), decl.params.len());
-        if !seen.insert(key) {
+        // An operator's arms are handed both values boxed by the operator's
+        // own dispatch, so none of their parameters is a raw byte.
+        if !seen.insert(key) || crate::is_operator(&decl.name) {
             continue;
         }
         let group: Vec<&FnDecl> = program

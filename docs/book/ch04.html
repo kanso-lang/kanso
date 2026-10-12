@@ -86,10 +86,10 @@ ratio <span class="o">=</span> <span class="f">text/to_int</span> word
 
 <div class="code-panel">
   <div class="code-panel-title">kanso play unasked.kso</div>
-  <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the executor: "flan is seasonal"
+  <pre><code>soup: 450 cents
+<span class="k">error[endpoint]</span>: unhandled err reached the executor: "flan is seasonal"
   born in price at unasked.kso:5
-  passed through label
-soup: 450 cents</code></pre>
+  passed through label</code></pre>
 </div>
 
 <p><code>label</code> takes two arguments. on the first line both are values and it runs. on the second, one of the two is a failure, and it arrives through the name <code>seasonal</code>: the checker reads calls, and a name is not a call, so this is the case it cannot prove. the call answers the failure and the body never starts&#8212;the trace says <code>passed through label</code>, which is the language reporting exactly that. written as <code>label "flan" (price "flan")</code>, with the call in plain view, the program would not compile. one function, compiled once, serving both lines. nothing about <code>label</code> changed to make the second line legal, and nothing could: there is no annotation to add, no wrapper type to return, no <code>?</code> to sprinkle. the plumbing that other languages ask every signature to carry is done once, at every call site, by the rule itself.</p>
@@ -156,9 +156,9 @@ bad <span class="o">=</span> <span class="f">steeped</span> <span class="n">0</s
 
 <div class="code-panel">
   <div class="code-panel-title">kanso run boundary.kso</div>
-<pre><code><span class="k">error[endpoint]</span>: unhandled err reached the executor: "i burnt it myself"
-  born in kitchen/scorched at kitchen/kitchen.kso:10
-sorry, no tea</code></pre>
+<pre><code>sorry, no tea
+<span class="k">error[endpoint]</span>: unhandled err reached the executor: "i burnt it myself"
+  born in kitchen/scorched at kitchen/kitchen.kso:10</code></pre>
 </div>
 
 <p>one callback, two <code>.?</code> steps, opposite answers. an err carries where it was born, and a <code>.?</code> written in the module that raised it hands the failure on without entering the callback, which is why <code>apologise</code> is absent from the report. inside your own module the arm is the tool, and <code>.?</code> is for the failures that reach you from elsewhere.</p>

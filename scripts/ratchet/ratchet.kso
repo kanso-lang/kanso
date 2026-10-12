@@ -4970,7 +4970,59 @@ parsed_arms = row
 
 rows_c1zzzzzzx9 = text/concat rows_c1zzzzzzy1 [parsed_arms]
 
-rows_c = text/concat rows_c1zzzzzzx9 [itself]
+# A record on either side of an operator goes to the program's own arms, so
+# inference adds what they answer (2026-10-12). The mutation reads the
+# operator as arithmetic alone, release assumes a float where a record comes
+# back, and the micro fixture prints its record through the number arm.
+op_arms_answer = row
+  "an operator answering arithmetic alone"
+  true
+  "cargo test --release --test golden micro_corpus_survives_a_release_build"
+  "specs (unit, golden, differential)"
+  (breaking "an_operator_answering_arithmetic_alone")
+  release
+
+rows_c1zzzzzzx8 = text/concat rows_c1zzzzzzx9 [op_arms_answer]
+
+# An operator's arms stay boxed now that inference widens their parameters
+# (2026-10-12). The mutation lets a proven-int parameter go unboxed, and the
+# wasm translator refuses four operator fixtures.
+op_arms_boxed = row
+  "an operator arm given an unboxed int"
+  true
+  "cargo test --release --test ir_to_wasm"
+  "specs (unit, golden, differential)"
+  (breaking "an_operator_arm_given_an_unboxed_int")
+  release
+
+rows_c1zzzzzzx7 = text/concat rows_c1zzzzzzx8 [op_arms_boxed]
+
+# A reader that stops early ends every engine by SIGPIPE, quietly
+# (2026-10-12). The mutation leaves the signal ignored, and the interpreter
+# panics on the closed pipe.
+pipe_quiet = row
+  "a closed pipe met as an error"
+  true
+  "cargo test --release --test a_closed_pipe_stops_every_engine_quietly"
+  "specs (unit, golden, differential)"
+  (breaking "a_closed_pipe_met_as_an_error")
+  release
+
+rows_c1zzzzzzx6 = text/concat rows_c1zzzzzzx7 [pipe_quiet]
+
+# A native program's stdout reaches its reader before it writes to stderr,
+# waits or stops (2026-10-12). The mutation leaves stdout in its buffer.
+stdout_settled = row
+  "stdout left in its buffer"
+  true
+  "cargo test --release --test stdout_reaches_its_reader"
+  "specs (unit, golden, differential)"
+  (breaking "stdout_left_in_its_buffer")
+  release
+
+rows_c1zzzzzzx5 = text/concat rows_c1zzzzzzx6 [stdout_settled]
+
+rows_c = text/concat rows_c1zzzzzzx5 [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
