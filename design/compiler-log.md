@@ -2068,5 +2068,5 @@ a `sorted`.
 
 The json suite turned up an interpreter bug once it imported its module. A
 bare `json_null` from an importer printed and compared as the importer's own
-type, while native code resolved it to `json/json_null`. That fix is its own
-pull request, with a micro golden, and this branch carries it.
+type, while native code resolved it to `json/json_null`. That fix is #1904,
+with a micro golden, and this branch carries it.
