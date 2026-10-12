@@ -14,8 +14,12 @@
 # out of the line rather than cloned. browser_compile_instructions
 # 396,716,054 -> 389,803,790, a FALL of 6,912,264 (-1.74%). The run rows are
 # byte-identical, so the module the tab builds did not change.
+# 2026-10-12: inference widens an operator's own arms when a record meets
+# the operator. browser_compile_instructions 390,029,358 -> 391,974,060, a
+# RISE of 1,944,702 (+0.50%), on rustc 1.98.1 as CI builds it. The run rows
+# are unchanged.
 # measured-on rustc=1.98.1
-browser_compile_instructions=390029358
+browser_compile_instructions=391974060
 browser_compile_peak_bytes=675725
 browser_run_instructions=34124990
 browser_run_peak_bytes=1179648
