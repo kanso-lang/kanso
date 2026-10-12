@@ -2167,4 +2167,12 @@ that showed it. Without the fix its release build prints a `v2` through the
 number arm. The ratchet row "an operator answering arithmetic alone" removes
 the fix and expects the micro corpus's release build to fail.
 
+Inference does more work for each operator with a record operand, and every
+compile row rose on CI: compile_instructions to 25,761,215 (+46,112),
+entry_instructions to 85,207,562 (+162,685), library_instructions to
+85,760,222 (+161,046), emit_instructions to 7,016,409 (+2,717) and
+browser_compile_instructions to 391,974,060 (+1,944,702). The welfare floor
+drops from 91.1114 to 91.1094 under the rule that a change making the engines
+agree is not priced.
+
 This is the ray tracer item on #1892.
