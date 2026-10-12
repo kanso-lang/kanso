@@ -2081,10 +2081,13 @@ pass-through `e@(err _)` arm, a `.>` step, or a helper with an err arm:
   46,702,454. Recursing from inside a `.>` step costs no copy, but the
   interpreter holds every round's document until the recursion returns, and
   its peak rose from 687,159 to 1,043,112 bytes on CI. The spelling kept
-  sizes the document before the tail call; here it reads 34,172,021 browser
-  run instructions and 702,031 interpreter bytes, at the price of one more
-  256 KiB block of browser peak (1,179,648 to 1,441,792). Scored against
-  the other two it gives up the least welfare.
+  sizes the document before the tail call. On CI it reads 34,172,021
+  browser run instructions, 488,636,161 interpreted instructions and
+  701,975 interpreter bytes, at the price of one more 256 KiB block of
+  browser peak (1,179,648 to 1,441,792). The corpus's text is longer, so
+  compiling it in the browser costs 402,835,440 instructions where it cost
+  401,459,207, and its peak is 683,140 bytes where it was 681,745. Scored
+  against the other two it gives up the least welfare.
 - Thirteen scripts under `scripts/` were repaired and each was run against
   the same input with the old and the new compiler; where nothing failed the
   output was byte for byte the same.
@@ -2108,6 +2111,17 @@ The playground's redux example bound an `update` that can overdraw to a name
 and passed it on; it now dispatches on the answer the way
 `examples/redux.kso` does. `json/unicode_at` joins the decoder's string
 scanners in `src/beat.rs`'s list of the library's beats.
+
+The rows below are CI's, on the tree merged with #1899, and each worsened.
+The front end does the new check and compiles the repaired library:
+compile_instructions lands on 26,280,991, entry_instructions on 86,208,525,
+library_instructions on 86,806,845, compile_allocs on 14,620,
+compile_peak_bytes on 681,983, front_end_rounds on 19 and front_end_visits on
+8,112. The interpreter and the browser run the corpus's new spelling:
+interp_allocs lands on 587,584, interp_peak_bytes on 701,975,
+browser_compile_instructions on 402,835,440, browser_compile_peak_bytes on
+683,140, browser_run_instructions on 34,172,021 and browser_run_peak_bytes on
+1,441,792. The native binaries' code, text, lands on 4,849,246.
 
 The counters this moves, on this container: in `bench/cost_golden_run.txt`,
 `run_allocs` to 1,771,566 and `run_alloc_bytes` to 330,057,564. In
