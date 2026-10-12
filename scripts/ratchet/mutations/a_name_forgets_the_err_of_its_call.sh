@@ -9,7 +9,7 @@
 set -e
 f=src/check/after_infer.rs
 grep -qF 'named.raising.push((name, *at));' src/check/after_infer.rs
-grep -qxF '        Expr::Ident(name, _, _) => raisers.contains_key(&(name.as_str(), 0)),' "$f"
+grep -qxF '        Expr::Ident(name, _, _) => named.constants && raisers.contains_key(&(name.as_str(), 0)),' "$f"
 sed -i 's/^            named.raising.push((name, \*at));$/            let _ = at;/' "$f"
-sed -i '/^        Expr::Ident(name, _, _) => raisers.contains_key(&(name.as_str(), 0)),$/d' "$f"
+sed -i 's/^        Expr::Ident(name, _, _) => named.constants \&\& raisers.contains_key(&(name.as_str(), 0)),$/        Expr::Ident(_, _, _) => named.constants \&\& false,/' "$f"
 ! grep -qF 'named.raising.push' "$f"

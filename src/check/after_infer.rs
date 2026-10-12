@@ -98,11 +98,14 @@ fn raises(
             }
             _ => false,
         },
-        Expr::Ident(name, at, _) if named.local.contains(name.as_str()) => named
-            .raising
-            .iter()
-            .any(|(n, bound)| *n == name.as_str() && (bound.line, bound.col) < (at.line, at.col)),
-        Expr::Ident(name, _, _) => raisers.contains_key(&(name.as_str(), 0)),
+        Expr::Ident(name, at, _)
+            if !named.local.is_empty() && named.local.contains(name.as_str()) =>
+        {
+            named.raising.iter().any(|(n, bound)| {
+                *n == name.as_str() && (bound.line, bound.col) < (at.line, at.col)
+            })
+        }
+        Expr::Ident(name, _, _) => named.constants && raisers.contains_key(&(name.as_str(), 0)),
         _ => false,
     }
 }
@@ -113,6 +116,8 @@ fn raises(
 struct BoundRaises<'a> {
     raising: Vec<(&'a str, crate::diag::Span)>,
     local: crate::hash::Set<&'a str>,
+    /// Some constant's body raises, so a name read as a value may be one.
+    constants: bool,
 }
 
 /// The names in `decl` bound to a call that can raise, with where each is
@@ -125,6 +130,7 @@ fn raising_names<'a>(
     decl: &'a crate::ast::FnDecl,
     raisers: &crate::hash::Map<(&str, usize), Vec<&[Pattern]>>,
     consts: &crate::infer::Consts<'_>,
+    constants: bool,
 ) -> BoundRaises<'a> {
     fn binds_in_stmts<'a>(
         body: &'a [Stmt],
@@ -154,15 +160,64 @@ fn raising_names<'a>(
         if let Expr::Guard { rest, .. } = e {
             binds_in_stmts(rest, out);
         }
+        // a branch of an `if` is a block with bindings of its own
+        if let Expr::Block(stmts, _) = e {
+            return binds_in_stmts(stmts, out);
+        }
         crate::for_each_child(e, |c| binds_in_expr(c, out));
+    }
+    // Most declarations bind nothing to a raise, and for them the answer is
+    // empty: a name can only carry an err that some binding was handed first.
+    // Asking that before collecting keeps the common case free of the two
+    // tables below.
+    // It walks the statements `binds_in_stmts` walks, a guard's rest and a
+    // branch's block included wherever they sit, so it misses no binding
+    // that collection would record with its expression.
+    fn bound_to_a_raise(
+        body: &[Stmt],
+        raisers: &crate::hash::Map<(&str, usize), Vec<&[Pattern]>>,
+        consts: &crate::infer::Consts<'_>,
+        none: &BoundRaises<'_>,
+    ) -> bool {
+        body.iter().any(|stmt| match stmt {
+            Stmt::Bind { pattern: Pattern::Var(..), expr } => {
+                raises(expr, raisers, consts, none) || nested_binds(expr, raisers, consts, none)
+            }
+            Stmt::Bind { expr, .. } | Stmt::Expr(expr) => nested_binds(expr, raisers, consts, none),
+        })
+    }
+    fn nested_binds(
+        e: &Expr,
+        raisers: &crate::hash::Map<(&str, usize), Vec<&[Pattern]>>,
+        consts: &crate::infer::Consts<'_>,
+        none: &BoundRaises<'_>,
+    ) -> bool {
+        if let Expr::Guard { rest, .. } = e {
+            if bound_to_a_raise(rest, raisers, consts, none) {
+                return true;
+            }
+        }
+        if let Expr::Block(stmts, _) = e {
+            return bound_to_a_raise(stmts, raisers, consts, none);
+        }
+        let mut found = false;
+        crate::for_each_child(e, |c| found = found || nested_binds(c, raisers, consts, none));
+        found
+    }
+    let none = BoundRaises { constants, ..BoundRaises::default() };
+    if !bound_to_a_raise(&decl.body, raisers, consts, &none) {
+        return none;
     }
     let mut binds = Vec::new();
     for param in &decl.params {
         for_each_param_name(param, &mut |n| binds.push((n, None)));
     }
     binds_in_stmts(&decl.body, &mut binds);
-    let mut named =
-        BoundRaises { raising: Vec::new(), local: binds.iter().map(|(n, _)| *n).collect() };
+    let mut named = BoundRaises {
+        raising: Vec::new(),
+        local: binds.iter().map(|(n, _)| *n).collect(),
+        constants,
+    };
     for (i, (name, at)) in binds.iter().enumerate() {
         let Some((at, expr)) = at else { continue };
         if binds.iter().enumerate().any(|(j, (other, _))| j != i && other == name) {
@@ -897,6 +952,8 @@ fn check_after_infer<'p>(
     // does — a mutation that leaves items behind keeps the whole error corpus
     // green — so the reuse does not rest on it.
     let mut stack: Vec<&Expr> = Vec::new();
+    // Asked once: a name read as a value can raise only if some constant does.
+    let constants_raise = raisers.keys().any(|(_, arity)| *arity == 0);
     // every group position a box was let into, with the declaration whose call
     // let it in, for the pass after this walk
     let mut handed: Vec<(Handed<'p>, u32)> = Vec::new();
@@ -907,7 +964,7 @@ fn check_after_infer<'p>(
         // be rebuilt per declaration even though nothing else here is.
         let shadow = |n: &str| shadows(i, n);
         let marks = (effect_diags.len(), box_diags.len(), none_diags.len());
-        let named = raising_names(decl, &raisers, &consts);
+        let named = raising_names(decl, &raisers, &consts, constants_raise);
         for stmt in &decl.body {
             let e = match stmt {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
