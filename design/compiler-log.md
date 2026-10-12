@@ -19,35 +19,6 @@
 > The last forty entries. Everything older is in `log/compiler-log-archive.md`,
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
-## 2026-10-10 — a directory called lib is an ordinary directory
-
-The beat analysis keeps an imported library's loops out of the carry tier,
-because a shared driver threads its caller's invariant source through the loop
-and carrying it would copy an unbounded value at every rewind. It recognised a
-library by its declaration's file name, which had to begin `std/` or `lib/`.
-Shipped modules are filed as `std/<module>/<file>`. Nothing shipped begins
-`lib/`, and every user directory called `lib` does, so a package kept in one
-compiled to a program that never reclaimed a block. The 2026-08-31 entries
-found this, measured it at five times the peak, and pinned it in
-`tests/a_program_is_not_its_directory.rs` with the instruction to delete the
-assertion when the two directories agreed.
-
-The `lib/` arm is gone and the `std/` arm stays. The arm had one user in the
-tree: the json beat unit test compiled `lib/json` as a root, and the arm made
-that root look like an installed module. The test now reads the library
-through `import "std/json"`, which is how a program meets it, and it still goes
-red when the `std/` arm is removed: `json/array_open` and `json/obj_open`
-become beats. The spec now asserts that `lib/app` and `elsewhere/app` both
-peak at 1,048,576, and with the arm put back the `lib/` side reads 5,242,880.
-
-I found it while building the fixtures for the lap carry. The evaluator
-fixture, imported as `./lib/fx`, held 4 MiB and never rewound.
-
-The tab compiler reads 661 fewer instructions, `browser_compile_instructions`
-388,181,803. CI moved one other row: `emit_instructions` falls 37, to
-7,062,299. Both codegen tiers held. The ratchet's mutation for this filter
-patched the old two-arm line, so it now patches the one-arm line.
-
 ## 2026-10-10 — a constant lives in storage the carry knows is permanent
 
 A map built before a carrying loop came out of the loop with keys the next
@@ -2059,3 +2030,38 @@ moved by that constant: `work_basket` to 30,876,488, `work_deepbench` to
 `work_scanbench` to 273,523 and `work_widebench` to 28,178,509.
 `codegen_instructions_release` fell to 454,179,413, which outweighs the rest,
 and the rise is banked.
+
+## 2026-10-12 — a file names only what its module declares and its own imports bring
+
+The second rule of the 2026-10-12 gavel on #1894. A module's files share
+their declarations, and each file sees only the imports it writes. Before
+this, the check enforced that only for qualified spellings: a file writing
+`list/fold` without importing std/list was refused, and the same file writing
+`fold` checked clean because a sibling's import had enrolled the bare name for
+the whole module.
+
+`compile_module_loaded` now hands each file of a several-file module the
+build's names minus the ones it cannot see: a bare name surfaced only by
+imports this file does not write, which no file of the module declares, and
+a rename's spelling that only a sibling's import makes. The refusal names the
+import that would bring the name. A module of one file sees exactly its
+imports, so the work is skipped there.
+
+Two book samples leaned on the old reach. The ch09 simulator's
+`enumerable.kso`, in both `vse/` and `squeeze/`, called `fold` through
+`methods.kso`'s import of std/list. Each now imports it, the ch09 panel shows
+the line, and the paragraph before it says each file imports what it calls.
+The vse repository holds the same file and gets the same line in vse#87. kq
+and kanso-json have no file that leans on a sibling's import. ch07 states the
+rule where it describes a module's files.
+
+`tests/golden/errors_module/a_file_calls_a_name_only_its_sibling_imports`
+pins the refusal: a two-file module where one file imports std/list and the
+other calls `fold` on a list it built. Main checks it clean. The ratchet row
+"a sibling's import seen from every file" hides nothing and turns the corpus
+red.
+
+The rest of #1894 is still owed: arms that travel with a value into a file
+that never imported their owner, and the issue's reproduction, a test file's
+import reaching the module it tests, which #1907 closes by keeping test files
+out of the module.
