@@ -6,9 +6,9 @@
 set -e
 f=src/eval.rs
 line='                if at == 1 && name == "push" && matches!(&*cell.borrow(), ThunkState::Blackhole) {'
-[ "$(grep -cxF "$line" "$f")" -eq 1 ] || {
+[ "$(grep -cxF "$line" src/eval.rs)" -eq 1 ] || {
   echo "the interpreter's push keep moved; this mutation needs rewriting" >&2
   exit 1
 }
 sed -i 's/^                if at == 1 \&\& name == "push" \&\& matches!(/                if false \&\& at == 1 \&\& name == "push" \&\& matches!(/' "$f"
-grep -qF 'if false && at == 1 && name == "push"' "$f"
+grep -qF 'if false && at == 1 && name == "push"' src/eval.rs

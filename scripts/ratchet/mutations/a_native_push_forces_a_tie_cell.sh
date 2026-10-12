@@ -6,9 +6,9 @@
 set -e
 f=src/codegen.rs
 line='                .map(|(at, e)| match name == "push" && at == 1 && self.defers_self_reference {'
-[ "$(grep -cxF "$line" "$f")" -eq 1 ] || {
+[ "$(grep -cxF "$line" src/codegen.rs)" -eq 1 ] || {
   echo "native push's keep moved; this mutation needs rewriting" >&2
   exit 1
 }
 sed -i 's/^                .map(|(at, e)| match name == "push" \&\& at == 1 \&\& self.defers_self_reference {/                .map(|(at, e)| match false \&\& name == "push" \&\& at == 1 \&\& self.defers_self_reference {/' "$f"
-grep -qF 'match false && name == "push"' "$f"
+grep -qF 'match false && name == "push"' src/codegen.rs
