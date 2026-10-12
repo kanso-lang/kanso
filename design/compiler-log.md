@@ -2072,3 +2072,12 @@ code: codegen_instructions_dev rises to 118,955,572, browser_run_instructions
 to 34,125,823, work_livebench to 1,474,870,952 and work_oneshot to
 13,224,330. Release codegen falls to 454,254,551, and the other benches and
 the text sizes fall a little with the runtime's new layout.
+
+The macOS runner failed the interpreter's half of the closed-pipe spec. With
+SIGPIPE's default put back, the interpreter's thread there still met the
+write to a closed pipe as an error, and `println!` panicked on it. The
+executor's `print` and `write` now write to stdout themselves and turn a
+broken pipe into SIGPIPE. On Linux the signal arrives first and that path
+does not run; with the start-up reset removed, the interpreter still stops
+quietly through it, and the ratchet row goes red on the native run instead,
+whose driver cannot re-raise an ignored signal.
