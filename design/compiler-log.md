@@ -19,35 +19,6 @@
 > The last forty entries. Everything older is in `log/compiler-log-archive.md`,
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
-## 2026-10-10 — a directory called lib is an ordinary directory
-
-The beat analysis keeps an imported library's loops out of the carry tier,
-because a shared driver threads its caller's invariant source through the loop
-and carrying it would copy an unbounded value at every rewind. It recognised a
-library by its declaration's file name, which had to begin `std/` or `lib/`.
-Shipped modules are filed as `std/<module>/<file>`. Nothing shipped begins
-`lib/`, and every user directory called `lib` does, so a package kept in one
-compiled to a program that never reclaimed a block. The 2026-08-31 entries
-found this, measured it at five times the peak, and pinned it in
-`tests/a_program_is_not_its_directory.rs` with the instruction to delete the
-assertion when the two directories agreed.
-
-The `lib/` arm is gone and the `std/` arm stays. The arm had one user in the
-tree: the json beat unit test compiled `lib/json` as a root, and the arm made
-that root look like an installed module. The test now reads the library
-through `import "std/json"`, which is how a program meets it, and it still goes
-red when the `std/` arm is removed: `json/array_open` and `json/obj_open`
-become beats. The spec now asserts that `lib/app` and `elsewhere/app` both
-peak at 1,048,576, and with the arm put back the `lib/` side reads 5,242,880.
-
-I found it while building the fixtures for the lap carry. The evaluator
-fixture, imported as `./lib/fx`, held 4 MiB and never rewound.
-
-The tab compiler reads 661 fewer instructions, `browser_compile_instructions`
-388,181,803. CI moved one other row: `emit_instructions` falls 37, to
-7,062,299. Both codegen tiers held. The ratchet's mutation for this filter
-patched the old two-arm line, so it now patches the one-arm line.
-
 ## 2026-10-10 — a constant lives in storage the carry knows is permanent
 
 A map built before a carrying loop came out of the loop with keys the next
@@ -2059,3 +2030,39 @@ moved by that constant: `work_basket` to 30,876,488, `work_deepbench` to
 `work_scanbench` to 273,523 and `work_widebench` to 28,178,509.
 `codegen_instructions_release` fell to 454,179,413, which outweighs the rest,
 and the rise is banked.
+
+## 2026-10-12 — a wide tail call keeps its jump
+
+The book promises that a call in tail position takes no stack, in every
+engine. A release build broke that for wide arms. `narrow_tailcc` took
+`tailcc` and `musttail` away from every arm wider than a limit (twelve words on
+x86-64 under `preserve_nonecc`, nine without it, eight on arm64), and each
+call into such an arm became an ordinary call. LLVM turns some of those back
+into jumps, but not one whose arm builds a record on the stack and hands its
+address to the runtime. The regex port's Pike VM loop is thirteen words, and
+`regex --steps '(a*)*b'` on a 40,000-character line ran out of stack in a
+release build while the dev build and the interpreter printed
+`steps: 440010`.
+
+An x86-64 release build no longer narrows: every `musttail` the emitter wrote
+reaches clang, arms of twelve words or fewer take the flat `preserve_nonecc`
+signature, and wider ones keep `tailcc`, whose stack arguments x86-64 lowers
+correctly. arm64 keeps the narrowing at eight words, because with it gone the
+macOS job ran `a_match_holds_the_literal_its_pattern_spells` to an empty
+stdout; the arm64 backend still miscompiles a `tailcc` call that spills past
+x7. #1912 holds the arm64 gap.
+
+`tests/a_big_object_decodes_in_a_release_build.rs` gains a seven-parameter
+self call that builds a record each hop, a million deep. Main's release
+binary prints "the program ran out of stack". The ratchet row `nine_words` now
+strips `musttail` from calls into arms left on `tailcc`, and both wide-arm
+tests fail with the overflow.
+
+CI's rows: `work_runbench` 1,170,035,080 -> 1,170,626,374 and
+`work_digestbench` 5,603,118 -> 5,905,902 (+5.4%). sha256's block and round
+loops take ten and eleven parameters, and each hop now copies its stack
+arguments where LLVM had built a loop. `text` rose for scanbench (448,985 ->
+451,401), digestbench (319,241 -> 319,705) and runbench (619,081 ->
+619,849), and the emitted line count fell by 540 for both scanbench and
+runbench. The language fix lowers the welfare floor by exactly what it costs,
+to 91.11.
