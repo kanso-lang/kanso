@@ -4970,7 +4970,20 @@ leader_slots = row
   (breaking "a_leaders_slot_chosen_at_run_time")
   release
 
-rows_c1zzzzzzy3 = text/concat rows_c1zzzzzzy4 [lone_arm leader_slots]
+rows_c1zzzzzzy3 = text/concat rows_c1zzzzzzye [lone_arm leader_slots]
+
+# A built binary run directly reports a recursion deeper than its stack the
+# way the interpreter does (2026-10-12). The mutation leaves the stack
+# unwatched, and the binary dies by the bare signal.
+stack_watch = row
+  "a binary that does not watch its stack"
+  true
+  "cargo test --release --test a_built_binary_names_its_stack_overflow"
+  "specs (unit, golden, differential)"
+  (breaking "a_binary_that_does_not_watch_its_stack")
+  release
+
+rows_c1zzzzzzye = text/concat rows_c1zzzzzzy4 [stack_watch]
 
 # A push, put or append the analysis proved in place writes through the
 # container's pointer and hands back the `Rc` it was given, where it used to
