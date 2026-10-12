@@ -4671,11 +4671,27 @@ extern const char* k_type_field_name(long long type_id, long long i);
 KValue k_render(KValue v, long long quote);
 static KValue k_render_at(KValue v, long long quote, int held);
 
+static KValue k_render_whole(KValue v);
+
+/* What a runtime diagnostic shows of the value it names. A plain render
+   hands an err back unrendered so that it rides through the program, and a
+   diagnostic that printed that as text read the err as a string and crashed;
+   the parent then reported the crash as running out of stack. The err is
+   unwrapped and rendered here rather than through k_render_at, which has one
+   caller outside itself and is inlined into k_render on the print path; six
+   more callers stopped that, and every print paid for a call. */
+static __attribute__((cold, noinline)) KValue k_shown(KValue v, long long quote) {
+    if (v.tag == K_THUNK) v = k_force(v);
+    if (v.tag == K_SUB) v = k_sub_base(v);
+    if (v.tag == K_ERR) return k_render_whole(v);
+    return k_render(v, quote);
+}
+
 /* keyed reads: `{ author: writer title } = post` — fields resolve by name
    against the record's declared type */
 KValue k_keyed_check(KValue v, long long entries) {
     if (v.tag != K_REC) {
-        KValue r = k_render(v, 1);
+        KValue r = k_shown(v, 1);
         fprintf(stderr, "%serror[runtime]:%s cannot read fields of %s; keyed reads take a record\n",
                 k_c_err(), k_c_off(), k_cstr(k_as_str(r)));
         exit(1);
@@ -4700,7 +4716,7 @@ __attribute__((noreturn, noinline)) void k_die_destructure(KValue v, const char*
     /* QUOTED, matching `render(self, &value, true)` at eval.rs:1283. Unquoted
        agrees for an int, a float and a list and diverges on a string — which a
        fixture holding one int would never have shown. */
-    KValue shown = k_render(v, 1);
+    KValue shown = k_shown(v, 1);
     fprintf(stderr,
             "%serror[runtime]:%s cannot destructure %s as `%s`; bindings are irrefutable, "
             "so handle other types by dispatch first\n",
@@ -4713,7 +4729,7 @@ __attribute__((noreturn, noinline)) void k_die_destructure(KValue v, const char*
 // failure is a field error in their words, not a dispatch error in ours.
 void k_no_field(KValue v, const char* name) {
     if (v.tag != K_REC) {
-        KValue shown = k_render(v, 1);
+        KValue shown = k_shown(v, 1);
         fprintf(stderr, "%serror[runtime]:%s `.` reads a field of a record, not %s\n",
                 k_c_err(), k_c_off(), k_cstr(k_as_str(shown)));
         exit(1);
@@ -4725,14 +4741,14 @@ void k_no_field(KValue v, const char* name) {
 }
 
 __attribute__((noreturn, noinline)) static void k_die_got(const char* msg, KValue v) {
-    KValue shown = k_render(v, 0);
+    KValue shown = k_shown(v, 0);
     fprintf(stderr, "%serror[runtime]:%s %s, got %s\n", k_c_err(), k_c_off(), msg,
             k_cstr(k_as_str(shown)));
     exit(1);
 }
 
 __attribute__((noreturn, noinline)) static void k_die_value(const char* msg, KValue v) {
-    KValue shown = k_render(v, 1);
+    KValue shown = k_shown(v, 1);
     fprintf(stderr, "%serror[runtime]:%s %s, not %s\n", k_c_err(), k_c_off(), msg,
             k_cstr(k_as_str(shown)));
     exit(1);
@@ -4744,7 +4760,7 @@ KValue k_b_field(KValue v, const char* name) {
        the same reason one matches */
     if (v.tag == K_SUB) v = k_sub_base(v);
     if (v.tag != K_REC) {
-        KValue shown = k_render(v, 1);
+        KValue shown = k_shown(v, 1);
         fprintf(stderr, "%serror[runtime]:%s `.` reads a field of a record, not %s\n",
                 k_c_err(), k_c_off(), k_cstr(k_as_str(shown)));
         exit(1);
@@ -12907,8 +12923,56 @@ static void k_report_err(KValue e, const char* reached) {
 
 void k_caf_init(void);
 
+#ifndef __wasm__
+#include <sys/resource.h>
+/* A recursion deeper than the stack ends in a fault on the guard page below
+   it. `kanso run` explains a child's segmentation fault as running out of
+   stack, but a binary run directly died with the bare signal, and the lox port
+   is run that way. The handler runs on a stack of its own, since the program's
+   is the one that ran out, and answers only for a fault inside the main
+   stack's reach: anything else goes back to the default and faults again. */
+static char* k_stack_top;
+static char* k_stack_floor;
+static void k_on_segv(int sig, siginfo_t* info, void* context) {
+    (void)context;
+    char* at = (char*)info->si_addr;
+    if (k_stack_floor && at >= k_stack_floor && at <= k_stack_top) {
+        fflush(stdout);
+        fprintf(stderr,
+                "%serror[runtime]:%s the program ran out of stack: recursion went "
+                "deeper than the stack holds\n",
+                k_c_err(), k_c_off());
+        _exit(1);
+    }
+    signal(sig, SIG_DFL);
+}
+static void k_watch_the_stack(void) {
+    struct rlimit limit;
+    if (getrlimit(RLIMIT_STACK, &limit) != 0 || limit.rlim_cur == RLIM_INFINITY) return;
+    static char spare[1 << 16];
+    stack_t alt;
+    alt.ss_sp = spare;
+    alt.ss_size = sizeof spare;
+    alt.ss_flags = 0;
+    if (sigaltstack(&alt, 0) != 0) return;
+    k_stack_top = (char*)__builtin_frame_address(0);
+    /* the guard sits just below the limit; a page or two of slack past it
+       covers a frame that jumped the guard */
+    k_stack_floor = k_stack_top - limit.rlim_cur - (1 << 20);
+    struct sigaction on;
+    memset(&on, 0, sizeof on);
+    on.sa_sigaction = k_on_segv;
+    on.sa_flags = SA_SIGINFO | SA_ONSTACK;
+    sigemptyset(&on.sa_mask);
+    sigaction(SIGSEGV, &on, 0);
+}
+#endif
+
 int main(int argc, char** argv) {
     k_argc_global = argc;
+#ifndef __wasm__
+    k_watch_the_stack();
+#endif
     k_argv_global = argv;
     /* constants are built once, before any user code runs, so reading one is
        a load rather than a check */

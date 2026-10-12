@@ -153,9 +153,44 @@ impl Sockets {
     }
 }
 
+/// Write to stdout. A reader that has gone away, as `head` leaves the pipe,
+/// ends the interpreter by SIGPIPE, the way it ends a built binary. The driver
+/// puts SIGPIPE's default back at start-up, and on Linux the failed write is
+/// enough. On macOS the interpreter's thread met the write as an error
+/// instead, and `print!` panicked on it, so the error is turned into the
+/// signal here.
+fn out(text: &str, end: &[u8]) {
+    use std::io::Write;
+    let mut stdout = std::io::stdout().lock();
+    match stdout.write_all(text.as_bytes()).and_then(|()| stdout.write_all(end)) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe => reader_gone(),
+        Err(e) => panic!("failed printing to stdout: {e}"),
+    }
+}
+
+#[cfg(unix)]
+fn reader_gone() -> ! {
+    extern "C" {
+        fn signal(signum: i32, handler: usize) -> usize;
+        fn raise(sig: i32) -> i32;
+    }
+    const SIGPIPE: i32 = 13;
+    unsafe {
+        signal(SIGPIPE, 0);
+        raise(SIGPIPE);
+    }
+    std::process::exit(141)
+}
+
+#[cfg(not(unix))]
+fn reader_gone() -> ! {
+    std::process::exit(1)
+}
+
 impl Executor for RealExecutor {
     fn print(&mut self, text: &str) {
-        println!("{text}");
+        out(text, b"\n");
     }
 
     fn start(&mut self, cmd: &str, args: &[String]) -> Result<i64, String> {
@@ -303,7 +338,7 @@ impl Executor for RealExecutor {
 
     fn write(&mut self, text: &str) {
         use std::io::Write;
-        print!("{text}");
+        out(text, b"");
         let _ = std::io::stdout().flush();
     }
 

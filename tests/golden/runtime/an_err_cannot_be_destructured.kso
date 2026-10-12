@@ -1,0 +1,20 @@
+# A binding takes an err apart the way it takes any other wrong value apart:
+# it stops with the value named. Native's diagnostic printed the value with a
+# render that hands an err back unrendered, read it as a string and crashed,
+# and the crash was reported as running out of stack.
+pub type pair
+  left
+  right
+
+fn halves 0
+  err "nothing to halve"
+
+fn halves n
+  pair (n / 2) (n - n / 2)
+
+fn total n
+  p = halves n
+  pair a b = p
+  a + b
+
+pub play = print "{total 0}"

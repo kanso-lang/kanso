@@ -1,9 +1,11 @@
 #!/bin/sh
 # kanso leaves SIGPIPE ignored, as Rust sets it before `main`.
 #
-# The interpreter's `print` then meets a closed pipe as an error and panics
-# with two backtraces, where a built binary stops quietly.
-# a_closed_pipe_stops_every_engine_quietly sees the interpreter's stderr.
+# The interpreter still stops by SIGPIPE, because its writes turn a broken
+# pipe into the signal themselves. `kanso play` does not: a built binary
+# behind it ends by SIGPIPE, the driver raises the same signal to end the same
+# way, and an ignored signal leaves the driver running to report the end.
+# a_closed_pipe_stops_every_engine_quietly sees the native run's status.
 set -e
 f=src/main.rs
 grep -q "fn reader_may_close" src/main.rs

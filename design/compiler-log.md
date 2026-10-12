@@ -19,118 +19,6 @@
 > The last forty entries. Everything older is in `log/compiler-log-archive.md`,
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
-## 2026-10-10 — a directory called lib is an ordinary directory
-
-The beat analysis keeps an imported library's loops out of the carry tier,
-because a shared driver threads its caller's invariant source through the loop
-and carrying it would copy an unbounded value at every rewind. It recognised a
-library by its declaration's file name, which had to begin `std/` or `lib/`.
-Shipped modules are filed as `std/<module>/<file>`. Nothing shipped begins
-`lib/`, and every user directory called `lib` does, so a package kept in one
-compiled to a program that never reclaimed a block. The 2026-08-31 entries
-found this, measured it at five times the peak, and pinned it in
-`tests/a_program_is_not_its_directory.rs` with the instruction to delete the
-assertion when the two directories agreed.
-
-The `lib/` arm is gone and the `std/` arm stays. The arm had one user in the
-tree: the json beat unit test compiled `lib/json` as a root, and the arm made
-that root look like an installed module. The test now reads the library
-through `import "std/json"`, which is how a program meets it, and it still goes
-red when the `std/` arm is removed: `json/array_open` and `json/obj_open`
-become beats. The spec now asserts that `lib/app` and `elsewhere/app` both
-peak at 1,048,576, and with the arm put back the `lib/` side reads 5,242,880.
-
-I found it while building the fixtures for the lap carry. The evaluator
-fixture, imported as `./lib/fx`, held 4 MiB and never rewound.
-
-The tab compiler reads 661 fewer instructions, `browser_compile_instructions`
-388,181,803. CI moved one other row: `emit_instructions` falls 37, to
-7,062,299. Both codegen tiers held. The ratchet's mutation for this filter
-patched the old two-arm line, so it now patches the one-arm line.
-
-## 2026-10-10 — a constant lives in storage the carry knows is permanent
-
-A map built before a carrying loop came out of the loop with keys the next
-round's rewind freed. `tests/golden/micro/a_map_kept_across_a_carried_loop_keeps_its_keys`
-is the shape: `spin` carries a map made by its caller, an outer loop calls
-`spin` four times, and native printed `<none> <none>` where the interpreter
-prints both values. Main has the defect; it does not depend on the lap carry.
-
-The keys were string literals. The runtime builds a literal once, in malloc'd
-storage, and hands the same string out for the rest of the run, and does the
-same for one-character strings, for marker records with no fields and for
-closures over nothing. None of that storage lies in an arena block, and the
-copy walk answers "does this survive the rewind" for an outside pointer by
-asking whether it is a short token, a tenure block or a frozen CAF. A literal
-is none of those, so the walk took it for something it had to rescue, which
-wasted a copy at every stage and did damage in one place. When a surviving
-node points at something that does not survive, the walk leaves the node
-where it is, copies what it points at, and settles the copy in the
-current loop's region. The map's keys moved into `spin`'s region, the map
-stayed in its caller's, and the outer loop's next rewind freed the keys under
-it.
-
-`k_alloc_const` now hands those constants out of chunks registered with the
-frozen ranges, so the walk counts them as surviving, and the walk stops at
-a node in one of those chunks without asking about its interior, since nothing
-writes to a constant after it is built. The one-character and wide caches
-keep their bytes inline, where they had a second `malloc`. A frozen CAF is
-left out of the short stop: a proven in-place push can move a frozen list's
-items out of frozen storage, and pendbench does exactly that, so a frozen list
-still gets the repair it needs. Bignums moved to permanent storage stay on
-`k_alloc_perm`, because they are the run's data and every outside pointer is
-checked against the frozen ranges.
-
-This is also why grammar_check died in `k_deep_copy` on the lap carry branch
-with the growth lookthrough taken out, the crash the 2026-10-10 lap carry
-entry left unexplained. The capture loop carried `caps`, a map from the
-grammar file whose keys `"1"` to `"4"` come from the one-character cache.
-The first stage repaired the map by moving its keys into the loop's region,
-the region was reclaimed, and the next stage copied a key whose header the
-arena had reused. With constants registered, that build of grammar_check
-passes with the lookthrough removed. The lookthrough stays, because it
-refuses a cluster for what growth would cost.
-
-Every runtime counter that moved fell. `evac_allocs` and `evac_bytes` fall on
-every benchmark, the run program's by 14,328 copies and 229,376 bytes, and
-`carry_dedup` goes to zero wherever it was counting the same literal reached
-twice. The cohort pin in `tests/cohort.rs` falls 96 bytes, to 800,672, because
-three of the constants it used to copy are no longer copied.
-
-The chunks start at 4 KiB and double up to 64 KiB. The first build opened one
-64 KiB chunk, and CI showed the browser run taking one more 64 KiB page for it,
-1,310,720 to 1,376,256 bytes. Most programs hold a few dozen constants: the
-run program has seventy, in one chunk. With the small first chunk the browser
-peak stays at 1,310,720 and its run falls 26,483 instructions.
-
-The fix costs welfare 0.0065, which the floor gives up because the defect was
-a miscompile. `runbench` rises 1,647,148 instructions, 0.15%. The copy walk
-itself got cheaper by about 2.8 million: `k_copy_size`, `k_deep_copy`,
-`k_copy_map_put` and `k_copy_alloc` together. What rose is `realloc`, under
-`k_buf_perm_regrow`. That function makes the same 3,872 calls on both sides,
-and they cost 561,440 instructions before and 3,248,608 after, because realloc
-now copies buffers that it used to extend in place. The run makes seventy fewer
-small mallocs, which changes where glibc puts each accumulator's buffer. The
-location of the cost is measured. Why glibc places the buffers differently is
-not established. Opening the constant chunk before anything else is allocated
-left the count unchanged to the instruction, so the chunk does not sit in the
-way. `encodebench` and `livebench` fall about 375,000 each with the smaller
-chunk, and `deepbench` falls 4.4 million. Release codegen falls 80,700
-instructions and dev codegen rises 29,466; each benchmark's text grows 192
-bytes.
-
-By key: `work_runbench` lands on 1,131,250,979, `work_oneshot` on 13,176,487,
-`work_jsonbench` on 860,548,891, `work_escapebench` on 39,045,280 and
-`work_widebench` on 28,094,541. `codegen_instructions_dev` lands on 118,896,762
-and `text` on 4,612,254 across the fourteen binaries. `carry_dedup` falls to 0
-wherever it counted: `run_carry_dedup` from 71, `encode_carry_dedup`,
-`oneshot_carry_dedup`, `wide_carry_dedup`, `digest_carry_dedup`,
-`read_carry_dedup` and `live_carry_dedup` from 3, and in the lazy tier
-`a_maps_two_columns_are_one_allocation_carry_dedup` from 1,998 and
-`a_nested_map_gives_back_its_entries_carry_dedup` from 29,990. A dedup is a
-copy the walk found it had already made; constants are no longer copied, so
-there is nothing to find twice.
-
 ## 2026-10-10 — a node an inner pop repairs stays on the outer loop's list
 
 The lox port's `tests/functions.lox` crashed natively once kanso#1824 let its
@@ -337,7 +225,6 @@ checks and runs on the interpreter now builds natively.
 The tie-list ruling landed first. Carried over it, the browser compile row
 lands at 388,276,582, the constructor's 84,381 on top of main's 388,192,201,
 and the floor at 90.25039901483147.
-
 
 ## 2026-10-10 — two values a carry handed back while they were still held
 
@@ -1340,6 +1227,7 @@ on 675,725 and browser_run_instructions on 34,124,829. The run program's
 emitted code gains 29 lines, which moves emitted_other_branches to 16,399,
 emitted_other_calls to 17,406 and emitted_other_lines to 146,724, and `text`
 totals 4,833,086. Welfare reads 91.0317 on CI's rows, and the rise is banked.
+
 ## 2026-10-10 — an oversize block that cannot be reused is freed when it misses
 
 A loop that appends a byte a pass to a one-megabyte string ran 6,000 passes
@@ -1984,6 +1872,81 @@ agree is not priced.
 
 This is the ray tracer item on #1892.
 
+## 2026-10-12 — a runtime diagnostic names the err it was handed
+
+The inflate port destructured a value that was sometimes an err, and native
+reported "the program ran out of stack" where the interpreter said "cannot
+destructure err ... as `pair`". There was no recursion. `k_die_destructure`
+rendered its value with `k_render`, which hands an err back unrendered so that
+it can ride through a program, and then read the err as a string. The read
+faulted, and the parent reports any segmentation fault as stack exhaustion.
+
+The diagnostics that name a value they were handed now render through
+`k_shown`, which renders an err in full: the destructure and keyed-read
+refusals, the field-read refusals and `k_die_value` and `k_die_got`. The
+interpreter's message is the one both engines print.
+
+`tests/golden/runtime/an_err_cannot_be_destructured` is the port's shape: a
+group that answers a record or an err, its answer bound with `pair a b = p`.
+The ratchet row "a diagnostic handed an unrendered err" puts the plain render
+back, and native's stderr reads out of stack again.
+
+The first version of `k_shown` called `k_render_at` with the err flag set.
+That gave `k_render_at` six callers outside itself where it had one,
+`k_render`, and clang stopped inlining it there, so every print paid for a
+call: basket rose 111,561 instructions and runbench 172,212 on this
+container. `k_shown` now unwraps a thunk or a subtype itself, renders an err
+through `k_render_whole` and hands anything else to `k_render`; it is cold and
+out of line, so the functions that call it on their refusal path stay the size
+they were. Measured the same way, basket is 14 instructions from main and
+runbench 315.
+
+The out-of-line `k_shown` is about 80 bytes of `.text` in every native
+binary, and the rows that count a whole program carry it. On CI's rows,
+`text` went from 4,828,574 to 4,829,694, `codegen_instructions_dev` to
+118,944,914, `work_encodebench` to 2,398,369,910, `work_livebench` to
+1,474,870,950 and `work_runbench` to 1,170,031,314. `work_oneshot` fell to
+13,223,887.
+
+## 2026-10-12 — a built binary names its own stack overflow
+
+A recursion deeper than the stack ends in a fault on the guard page below it.
+`kanso run` reports a child that died that way as having run out of stack, but
+a binary run directly died with the bare signal and printed nothing. The lox
+port is run directly, and a Lox recursion 20,000 calls deep ended in
+"Segmentation fault" with exit 139 on this tree.
+
+The runtime now installs a SIGSEGV handler at start-up, on a 64 KiB stack of
+its own because the program's is the one that ran out. A fault whose address
+lies between the top of the main stack and one MiB past its limit prints the
+interpreter's diagnostic, "the program ran out of stack", and exits 1. Any
+other fault restores the default handler and faults again, so a wild pointer
+still dies by the signal. With no stack limit there is no floor to measure
+from, and the handler is not installed. The wasm runtime has no signals and is
+left alone.
+
+`tests/a_built_binary_names_its_stack_overflow.rs` builds a recursion a
+million deep that no engine can turn into a loop, runs the binary directly and
+reads its stderr and exit status. The ratchet row "a binary that does not watch
+its stack" removes the installation and the spec reads an empty stderr.
+
+This closes the native half of the recursion item on #1892. The depth itself
+still differs by engine: the interpreter stops at 10,000 calls and native at
+whatever the stack holds.
+
+Installing the handler costs every native program the same start-up work: a
+`getrlimit`, a `sigaltstack` and a `sigaction`, about 3,300 instructions, and
+368 bytes of `.text`. On CI's rows for the tree merged with #1899, `text`
+went to 4,834,846 and `codegen_instructions_dev` to 119,002,829. The work rows
+moved by that constant: `work_basket` to 30,876,488, `work_deepbench` to
+393,579,644, `work_digestbench` to 5,603,118, `work_encodebench` to
+2,398,373,226, `work_escapebench` to 39,049,158, `work_indexbench` to
+2,462,486, `work_jsonbench` to 860,562,984, `work_livebench` to 1,474,875,071,
+`work_oneshot` to 13,226,930, `work_pendbench` to 190,054,350,
+`work_readbench` to 4,580,966, `work_runbench` to 1,170,035,080,
+`work_scanbench` to 273,523 and `work_widebench` to 28,178,509.
+`codegen_instructions_release` fell to 454,179,413, which outweighs the rest,
+and the rise is banked.
 
 ## 2026-10-12 — stdout reaches its reader, and a closed pipe stops every engine quietly
 
@@ -2014,10 +1977,25 @@ The rows moved by small amounts, read off CI. The signal call at start-up
 costs 123 instructions in every compile: compile_instructions lands on
 25,761,338, entry_instructions on 85,207,685, library_instructions on
 85,760,345 and startup_instructions on 52,519. The flushes are new runtime
-code: codegen_instructions_dev rises to 118,955,572, browser_run_instructions
-to 34,125,823, work_livebench to 1,474,870,952 and work_oneshot to
-13,224,330. Release codegen falls to 454,254,551, and the other benches and
-the text sizes fall a little with the runtime's new layout.
+code. On the tree merged with #1899, codegen_instructions_dev lands on
+118,956,771, work_encodebench on 2,398,369,956, work_livebench on
+1,474,871,792, work_oneshot on 13,224,134 and work_runbench on 1,170,031,874,
+and browser_run_instructions was 34,125,823 before the merge. Release codegen
+falls to 454,318,432, and the other benches and the text sizes fall a little
+with the runtime's new layout.
+
+The macOS runner failed the interpreter's half of the closed-pipe spec. With
+SIGPIPE's default put back, the interpreter's thread there still met the
+write to a closed pipe as an error, and `println!` panicked on it. The
+executor's `print` and `write` now write to stdout themselves and turn a
+broken pipe into SIGPIPE. On Linux the signal arrives first and that path
+does not run; with the start-up reset removed, the interpreter still stops
+quietly through it, and the ratchet row goes red on the native run instead,
+whose driver cannot re-raise an ignored signal.
+Writing through a stdout lock with an error arm cost the interpreted corpus
+688 instructions on CI's row: `interp_instructions` went to 488,792,803.
+The welfare floor drops to 91.10945 under the rule that a change making the
+engines agree is not priced.
 
 ## 2026-10-12 — a lambda called in tail position costs no stack
 

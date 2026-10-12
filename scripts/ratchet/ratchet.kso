@@ -4941,7 +4941,20 @@ leader_slots = row
   (breaking "a_leaders_slot_chosen_at_run_time")
   release
 
-rows_c1zzzzzzy3 = text/concat rows_c1zzzzzzy4 [lone_arm leader_slots]
+rows_c1zzzzzzy3 = text/concat rows_c1zzzzzzye [lone_arm leader_slots]
+
+# A built binary run directly reports a recursion deeper than its stack the
+# way the interpreter does (2026-10-12). The mutation leaves the stack
+# unwatched, and the binary dies by the bare signal.
+stack_watch = row
+  "a binary that does not watch its stack"
+  true
+  "cargo test --release --test a_built_binary_names_its_stack_overflow"
+  "specs (unit, golden, differential)"
+  (breaking "a_binary_that_does_not_watch_its_stack")
+  release
+
+rows_c1zzzzzzye = text/concat rows_c1zzzzzzy4 [stack_watch]
 
 # A push, put or append the analysis proved in place writes through the
 # container's pointer and hands back the `Rc` it was given, where it used to
@@ -4958,6 +4971,19 @@ kept_box = row
 
 rows_c1zzzzzzy2 = text/concat rows_c1zzzzzzy3 [kept_box]
 
+# A runtime diagnostic names an err it was handed (2026-10-12). The mutation
+# renders it the way a program does, which hands the err back unrendered,
+# and native crashes and reports running out of stack.
+err_shown = row
+  "a diagnostic handed an unrendered err"
+  true
+  "cargo test --release --test golden runtime_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_diagnostic_handed_an_unrendered_err")
+  release
+
+rows_c1zzzzzzyd = text/concat rows_c1zzzzzzy2 [err_shown]
+
 # A native build emits only the groups its entry reaches, the walk the tab
 # has made since 2026-10-08 (2026-10-09). The mutation empties the walk's
 # answer, every imported group is emitted and pruned afterwards, and the emit
@@ -4970,7 +4996,7 @@ native_reached = row
   (breaking "a_native_build_emits_every_group")
   release
 
-rows_c1zzzzzzy1 = text/concat rows_c1zzzzzzy2 [native_reached]
+rows_c1zzzzzzy1 = text/concat rows_c1zzzzzzyd [native_reached]
 
 # kanso test runs its tests on the deep thread `run --interp` uses, so a test
 # that recurses too far fails with the depth diagnostic and the rest still
