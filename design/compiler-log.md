@@ -2049,3 +2049,11 @@ and drops its chain of `road` records, with the same output on both engines.
 where `lib/list/list.kso` teaches `tie` shows the data-sized form. Three
 ratchet rows take away the check's admission, the interpreter's keep and the
 native keep, and each turns the micro corpus red.
+
+The rows that moved are CI's, on the tree merged with #1899. The check reads
+every field written inside a maker, and the library comment and the new
+fixtures are more text to compile: compile_instructions lands on 25,764,487,
+entry_instructions on 85,217,023, library_instructions on 85,769,178,
+emit_instructions on 7,016,791 and browser_compile_instructions on
+392,024,143. The interpreter asks whether each item `push` is handed is a cell
+still being made, and interp_instructions lands on 489,120,716.
