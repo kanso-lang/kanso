@@ -19,35 +19,6 @@
 > The last forty entries. Everything older is in `log/compiler-log-archive.md`,
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
-## 2026-10-10 — a directory called lib is an ordinary directory
-
-The beat analysis keeps an imported library's loops out of the carry tier,
-because a shared driver threads its caller's invariant source through the loop
-and carrying it would copy an unbounded value at every rewind. It recognised a
-library by its declaration's file name, which had to begin `std/` or `lib/`.
-Shipped modules are filed as `std/<module>/<file>`. Nothing shipped begins
-`lib/`, and every user directory called `lib` does, so a package kept in one
-compiled to a program that never reclaimed a block. The 2026-08-31 entries
-found this, measured it at five times the peak, and pinned it in
-`tests/a_program_is_not_its_directory.rs` with the instruction to delete the
-assertion when the two directories agreed.
-
-The `lib/` arm is gone and the `std/` arm stays. The arm had one user in the
-tree: the json beat unit test compiled `lib/json` as a root, and the arm made
-that root look like an installed module. The test now reads the library
-through `import "std/json"`, which is how a program meets it, and it still goes
-red when the `std/` arm is removed: `json/array_open` and `json/obj_open`
-become beats. The spec now asserts that `lib/app` and `elsewhere/app` both
-peak at 1,048,576, and with the arm put back the `lib/` side reads 5,242,880.
-
-I found it while building the fixtures for the lap carry. The evaluator
-fixture, imported as `./lib/fx`, held 4 MiB and never rewound.
-
-The tab compiler reads 661 fewer instructions, `browser_compile_instructions`
-388,181,803. CI moved one other row: `emit_instructions` falls 37, to
-7,062,299. Both codegen tiers held. The ratchet's mutation for this filter
-patched the old two-arm line, so it now patches the one-arm line.
-
 ## 2026-10-10 — a constant lives in storage the carry knows is permanent
 
 A map built before a carrying loop came out of the loop with keys the next
@@ -2059,3 +2030,27 @@ moved by that constant: `work_basket` to 30,876,488, `work_deepbench` to
 `work_scanbench` to 273,523 and `work_widebench` to 28,178,509.
 `codegen_instructions_release` fell to 454,179,413, which outweighs the rest,
 and the rise is banked.
+
+## 2026-10-12 — `&`, `|` and `^` mixed without parentheses are refused
+
+From #1893, four ports. The three bit operators share one precedence and
+read left to right, so `a & b | c` is `(a & b) | c` and `a | b & c` is
+`(a | b) & c`. C binds `&` tighter than `^` and `^` tighter than `|`, and
+code carried over from it computed a different number in the second shape
+with no complaint. A chain that mixes two of them is now a syntax error that
+asks for parentheses around the part that goes first. A chain of one
+operator, `1 | 2 | 4`, is unchanged.
+
+The rule that refuses parentheses which group nothing had to learn the case:
+`(a & b) | c` parses the same without them, and without them it is refused.
+Parentheses around a bit chain that meets a different bit operator are now
+kept. Around one that meets the same operator they still group nothing and
+are still refused.
+
+std/sha256 relied on the old reading in three lines, `spun`, `choice` and
+`majority`, each of which meant the C grouping. They gain parentheses, as do
+the micro fixture that copies them and `bitwise_operators`'s chained line.
+Both engines print the same bytes for all three fixtures before and after.
+`tests/golden/errors/bit_operators_mixed_without_parentheses` pins the
+refusal, which main accepts and prints 10 for. The ratchet row "bit operators
+mixed freely" lets the chain through and turns the error corpus red.

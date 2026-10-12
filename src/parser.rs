@@ -1969,11 +1969,30 @@ impl<'a> P<'a> {
     /// `&`, `|` and `^` over whole numbers. The glyphs are free here because
     /// space is semantic: `&add` hugs its name and is the partial sigil, which
     /// the atom parser reads; a spaced `&` can only be this.
+    ///
+    /// The three share one precedence, so a chain that mixes them is refused
+    /// until parentheses say which goes first. C binds `&` tighter than `|`,
+    /// and code transcribed from it computed a different number here.
     fn parse_bits(&mut self) -> Result<Expr, Diagnostic> {
         let mut lhs = self.parse_add()?;
+        let mut first: Option<&str> = None;
         while let Some(Tok::Op(op @ ("&" | "|" | "^"))) = self.peek() {
             let op = *op;
             let span = self.span_here();
+            match first {
+                Some(before) if before != op => {
+                    return Err(Diagnostic::new(
+                        "syntax",
+                        format!(
+                            "`{before}` and `{op}` bind equally, so a chain that mixes them \
+                             is ambiguous — parenthesize the part that goes first, as in \
+                             `(a {before} b) {op} c`"
+                        ),
+                        span,
+                    ));
+                }
+                _ => first = Some(op),
+            }
             self.pos += 1;
             self.consumed(BITS);
             let rhs = self.parse_add()?;
@@ -2310,7 +2329,23 @@ impl<'a> P<'a> {
                 // syntax rather than a grouping choice
                 let before = tolerated_before(opened.checked_sub(1).and_then(|i| self.tok_at(i)));
                 let after = tolerated_after(self.peek());
-                if written && inside >= before.max(after) {
+                // `(a & b) | c` parses the same without its parentheses, and
+                // without them it is refused for mixing `&` and `|`, so they
+                // group something.
+                let bit = |t: Option<&Tok>| match t {
+                    Some(Tok::Op(o @ ("&" | "|" | "^"))) => Some(*o),
+                    _ => None,
+                };
+                let mixes = match &inner {
+                    Expr::BinOp { op: inner_op @ ("&" | "|" | "^"), .. } => {
+                        [bit(opened.checked_sub(1).and_then(|i| self.tok_at(i))), bit(self.peek())]
+                            .into_iter()
+                            .flatten()
+                            .any(|o| o != *inner_op)
+                    }
+                    _ => false,
+                };
+                if written && !mixes && inside >= before.max(after) {
                     return Err(Diagnostic::new(
                         "formatting",
                         "these parentheses group nothing — the expression parses \
