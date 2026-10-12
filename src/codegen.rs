@@ -3908,8 +3908,12 @@ impl<'a> Backend<'a> {
     /// extract we emit here — so only a raw i64 travels the musttail edge LLVM
     /// cannot otherwise see through. Sound because inference forces every param
     /// of a function used as a first-class value to TOP, never a bare `int`.
+    ///
+    /// Not an operator's arms: `a + b` reaches them through the operator's own
+    /// dispatch, which hands them both values boxed, as escape analysis keeps
+    /// them for the same reason.
     fn unboxed_param(&self, name: &str, arity: usize, param: usize) -> bool {
-        self.group_param_set(name, arity, param) == INT
+        self.group_param_set(name, arity, param) == INT && !crate::is_operator(name)
     }
 
     /// What the body being emitted knows of a parameter: the group's set, or
@@ -3942,6 +3946,7 @@ impl<'a> Backend<'a> {
 
     fn twin_param(&self, name: &str, arity: usize, param: usize) -> bool {
         self.group_param_set(name, arity, param) == infer::ANY_INT
+            && !crate::is_operator(name)
             && !self.is_byte_disc(name, arity, param)
             && self.escape.carries_ty(name, arity, param).is_none()
     }
