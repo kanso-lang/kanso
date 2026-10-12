@@ -2140,3 +2140,12 @@ The counters this moves, on this container: in `bench/cost_golden_run.txt`,
 110 and `emitted_lines` to 10,188. In its sibling, `emitted_other_calls` to
 17,603, `emitted_other_defines` to 2,037 and `emitted_other_lines` to
 147,804. The instruction and browser rows come from CI.
+
+On the tree merged with #1900, CI's work rows fell: `work_runbench` to
+1,167,982,009, `work_jsonbench` to 858,183,234, `work_encodebench` to
+2,398,361,941, `work_livebench` to 1,474,853,886 and `work_oneshot` to
+13,206,113. `text` rose for runbench (626,473), jsonbench (335,721), oneshot
+(350,793) and livebench (353,657) and fell for encodebench (342,089) and
+widebench (350,249). The browser compile's rise outweighs the run's fall, and
+this builds a ruled part of the language, so the welfare floor drops by what
+it costs.
