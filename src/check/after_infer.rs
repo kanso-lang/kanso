@@ -91,9 +91,11 @@ fn raises(
     match e {
         Expr::App { head, args, piped: false, .. } => match head.as_ref() {
             Expr::Ident(name, _, _) if name == "err" => true,
-            Expr::Ident(name, _, _) => raisers
-                .get(&(name.as_str(), args.len()))
-                .is_some_and(|arms| arms.iter().any(|arm| crate::infer::arm_can_run(arm, args, consts))),
+            Expr::Ident(name, _, _) => {
+                raisers.get(&(name.as_str(), args.len())).is_some_and(|arms| {
+                    arms.iter().any(|arm| crate::infer::arm_can_run(arm, args, consts))
+                })
+            }
             _ => false,
         },
         Expr::Ident(name, at, _) if named.local.contains(name.as_str()) => named
@@ -124,7 +126,10 @@ fn raising_names<'a>(
     raisers: &crate::hash::Map<(&str, usize), Vec<&[Pattern]>>,
     consts: &crate::infer::Consts<'_>,
 ) -> BoundRaises<'a> {
-    fn binds_in_stmts<'a>(body: &'a [Stmt], out: &mut Vec<(&'a str, Option<(crate::diag::Span, &'a Expr)>)>) {
+    fn binds_in_stmts<'a>(
+        body: &'a [Stmt],
+        out: &mut Vec<(&'a str, Option<(crate::diag::Span, &'a Expr)>)>,
+    ) {
         for stmt in body {
             match stmt {
                 Stmt::Bind { pattern: Pattern::Var(n, at), expr } => {
@@ -139,7 +144,10 @@ fn raising_names<'a>(
             }
         }
     }
-    fn binds_in_expr<'a>(e: &'a Expr, out: &mut Vec<(&'a str, Option<(crate::diag::Span, &'a Expr)>)>) {
+    fn binds_in_expr<'a>(
+        e: &'a Expr,
+        out: &mut Vec<(&'a str, Option<(crate::diag::Span, &'a Expr)>)>,
+    ) {
         if let Expr::Lambda { params, .. } = e {
             out.extend(params.iter().map(|(n, _)| (n.as_str(), None)));
         }
@@ -153,7 +161,8 @@ fn raising_names<'a>(
         for_each_param_name(param, &mut |n| binds.push((n, None)));
     }
     binds_in_stmts(&decl.body, &mut binds);
-    let mut named = BoundRaises { raising: Vec::new(), local: binds.iter().map(|(n, _)| *n).collect() };
+    let mut named =
+        BoundRaises { raising: Vec::new(), local: binds.iter().map(|(n, _)| *n).collect() };
     for (i, (name, at)) in binds.iter().enumerate() {
         let Some((at, expr)) = at else { continue };
         if binds.iter().enumerate().any(|(j, (other, _))| j != i && other == name) {
