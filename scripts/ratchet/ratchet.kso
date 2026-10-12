@@ -5067,7 +5067,20 @@ sibling_import = row
 
 rows_c1zzzzzzw9 = text/concat rows_c1zzzzzzx7 [sibling_import]
 
-rows_c = text/concat rows_c1zzzzzzw9 [itself]
+# A value carries the arms its owner wrote into a library that never imported
+# the owner. The mutation lets no call travel, and the library's `area c` is
+# an unknown name again.
+arm_travels = row
+  "an arm left behind by its value"
+  true
+  "cargo test --release --test arms_travel"
+  "specs (unit, golden, differential)"
+  (breaking "an_arm_left_behind_by_its_value")
+  no_setup
+
+rows_c1zzzzzzw8 = text/concat rows_c1zzzzzzw9 [arm_travels]
+
+rows_c = text/concat rows_c1zzzzzzw8 [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
