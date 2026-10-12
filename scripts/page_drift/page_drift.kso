@@ -65,7 +65,7 @@ fn depth r
   full (text/trim r.stdout == "false")
 
 fn full true
-  asked ["log" "-1" "--format=%H" "--" "docs/compiler.html"] .> measured
+  asked ["log" "--format=%H" "--" "docs/compiler.html"] .> measured
 
 fn full false
   io/write_err shallow .> (_ -> os/exit 1)
@@ -76,12 +76,57 @@ shallow = """
   whatever the log did. Fetch the history before asking.
 """
 
+# The page moved at the newest commit that changed its prose. golden_prose
+# rewrites the numbers in data-golden spans whenever a golden moves, and a
+# commit that does only that leaves every section as it was. Counting it
+# as a page edit let a row change pay the page's debt: on #1913 the rewritten
+# compile spans reset this count to zero while #1905 still owed sections for
+# the day's entries. A commit counts once its removed and added lines differ
+# with the digits, commas and points taken out.
 fn measured r
-  parts = text/split r.stdout "\n"
-  against (list/first parts)
+  shas = list/to_list (list/reject (text/split r.stdout "\n") blank?)
+  walk shas 1
+
+fn blank? l
+  text/trim l == ""
+
+page = "docs/compiler.html"
+
+fn walk shas i
+  if (i > length shas) (against "") (looked shas i)
+
+fn looked shas i
+  sha = shas[i]
+  asked ["show" "-U0" "--format=" "--diff-merges=first-parent" sha "--" page]
+    .> (r -> moved shas i sha (numbers_only? r.stdout))
+
+fn moved shas i _ true
+  walk shas (i + 1)
+
+fn moved _ _ sha false
+  against sha
+
+fn numbers_only? d
+  lines = text/split d "\n"
+  gone = list/to_list (list/map (list/select lines removed?) bare)
+  come = list/to_list (list/map (list/select lines added?) bare)
+  text/join gone "\n" == text/join come "\n"
+
+fn removed? l
+  text/slice l 1 1 == "-" and text/slice l 1 3 != "---"
+
+fn added? l
+  text/slice l 1 1 == "+" and text/slice l 1 3 != "+++"
+
+fn bare l
+  kept = list/reject (text/chars (text/slice l 2 (length l))) numeral?
+  text/join (list/to_list kept) ""
+
+fn numeral? c
+  has? "0123456789,." c
 
 fn against ""
-  io/write "no commit has touched docs/compiler.html — nothing to compare\n"
+  io/write "no commit has changed the prose of docs/compiler.html\n"
 
 fn against sha
   asked ["diff" "{sha}..HEAD" "--" "design/compiler-log.md"] .> counted
