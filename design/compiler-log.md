@@ -19,28 +19,6 @@
 > The last forty entries. Everything older is in `log/compiler-log-archive.md`,
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
-## 2026-10-10 — gavel: a field may hold a list of `tie` references
-
-Clay, on whether a node built by `list/tie` may hold its links as a list: "of
-course field can be an array". The 2026-10-04 gavel "a data-sized cycle is tied
-with `list/tie`, and `list/tie!` insists" says a reference may be stored in a
-constructor's field and nothing else. The build read that strictly: a list
-literal is not a field, so `node id [(ref "b") (ref "c")]` was refused, and the
-graph fixture held each node's edges as a chain of one-reference records ending
-in a `no_road` marker.
-
-**The clarification.** A field may hold any value, and a list of references in
-a field is storage. The 2026-10-04 rule was about reading, and a list that
-holds references reads none of them. A list or map literal whose elements are
-references, written as a constructor's argument, is admitted. Everything the
-rule refused stays refused: during making, nothing may index, measure, walk or
-pass that list anywhere, because each of those reads through it.
-
-Owes: the check admits a collection literal of references as a field's value,
-with an error golden for a read of such a list in the maker; the graph fixture
-holds each node's neighbours as a list and drops the chain of records; ch03 or
-wherever `tie` is taught shows the list form.
-
 ## 2026-10-10 — a carried rewind waits for the lap to leave something behind
 
 The mal port ran out of memory natively. Its tail-recursive `sum2` held
@@ -2163,3 +2141,30 @@ recorded here, unedited in substance:
   judgment call, and the principle is in the log.
 
 A parked item becomes a `needs-clay` issue when a real case arrives.
+
+## 2026-10-12 — an operator answers what its arms answer
+
+The ray tracer port's release build printed a few rows of its image and then
+stopped with "no overload of `-` matches these arguments". The interpreter and
+the dev build drew the whole image. Linking the release IR at `-O0` drew it
+correctly, and so did the full release link with every `llvm.assume` removed.
+Bisecting the 148 assumes left one: after reading a hit record's `p`, release
+assumed the value carried the float tag.
+
+The cause was in inference. Native's `emit_binop` and the interpreter send a
+record on either side of an operator to the program's own arms for that
+operator, and inference read `a + b` as arithmetic alone. It never widened the
+arms' parameters and never added what they return. The ray tracer's `at` is
+`origin + direction * t`, and `direction` is sometimes a float drawn from the
+generator, so inference concluded that `at` answers a float, and so does the
+`p` field that holds its result.
+
+Inference now treats an operator with a record operand as a call to the
+operator's group when the program declares one: the arms' parameters widen
+with the operands, and the arms' answers join the operator's. The micro
+fixture `an_operator_answers_what_its_arms_answer` is the smallest program
+that showed it. Without the fix its release build prints a `v2` through the
+number arm. The ratchet row "an operator answering arithmetic alone" removes
+the fix and expects the micro corpus's release build to fail.
+
+This is the ray tracer item on #1892.
