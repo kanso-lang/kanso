@@ -2120,5 +2120,11 @@ with the error colour from `k_c_err`, so the flush there puts a program's
 output ahead of any error it ends with. `tests/stdout_reaches_its_reader.rs`
 pins the three cases.
 
-The browser run row rises by 833 instructions, the flushes on the wasm
-runtime's write paths.
+The rows moved by small amounts, read off CI. The signal call at start-up
+costs 123 instructions in every compile: compile_instructions lands on
+25,761,338, entry_instructions on 85,207,685, library_instructions on
+85,760,345 and startup_instructions on 52,519. The flushes are new runtime
+code: codegen_instructions_dev rises to 118,955,572, browser_run_instructions
+to 34,125,823, work_livebench to 1,474,870,952 and work_oneshot to
+13,224,330. Release codegen falls to 454,254,551, and the other benches and
+the text sizes fall a little with the runtime's new layout.

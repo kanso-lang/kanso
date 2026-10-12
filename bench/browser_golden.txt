@@ -18,8 +18,11 @@
 # the operator. browser_compile_instructions 390,029,358 -> 391,974,060, a
 # RISE of 1,944,702 (+0.50%), on rustc 1.98.1 as CI builds it. The run rows
 # are unchanged.
+# 2026-10-12: the wasm runtime empties stdout before stderr, a read, a sleep
+# or a fork. browser_run_instructions 34,124,990 -> 34,125,823, a RISE of
+# 833, on rustc 1.98.1 as CI builds it.
 # measured-on rustc=1.98.1
 browser_compile_instructions=391974060
 browser_compile_peak_bytes=675725
-browser_run_instructions=34124990
+browser_run_instructions=34125823
 browser_run_peak_bytes=1179648
