@@ -234,16 +234,16 @@
 # of text/utf8. oneshot, livebench and runbench moved; runbench reads
 # calls 6,240 -> 6,238, branches 5,622 -> 5,614 and lines 48,976 -> 48,912;
 # livebench gains three calls and loses nine branches.
-encodebench defines=135 calls=1114 branches=1027 lines=10324
-oneshot defines=137 calls=1184 branches=1218 lines=11487
-basket defines=125 calls=1105 branches=1026 lines=8876
-widebench defines=151 calls=1269 branches=1145 lines=11392
-deepbench defines=52 calls=272 branches=281 lines=2588
+encodebench defines=135 calls=1114 branches=1027 lines=10276
+oneshot defines=137 calls=1184 branches=1218 lines=11455
+basket defines=125 calls=1105 branches=1026 lines=8854
+widebench defines=151 calls=1269 branches=1145 lines=11332
+deepbench defines=52 calls=272 branches=281 lines=2466
 escapebench defines=20 calls=91 branches=93 lines=967
-pendbench defines=70 calls=491 branches=414 lines=3826
-scanbench defines=318 calls=3049 branches=2948 lines=24996
+pendbench defines=70 calls=491 branches=414 lines=3506
+scanbench defines=319 calls=3051 branches=2952 lines=24480
 indexbench defines=19 calls=67 branches=47 lines=705
-digestbench defines=132 calls=936 branches=949 lines=7996
-readbench defines=20 calls=69 branches=44 lines=727
-livebench defines=139 calls=1227 branches=1263 lines=11818
-runbench defines=692 calls=6633 branches=6013 lines=51577
+digestbench defines=132 calls=936 branches=949 lines=7964
+readbench defines=20 calls=69 branches=44 lines=695
+livebench defines=139 calls=1227 branches=1263 lines=11796
+runbench defines=693 calls=6635 branches=6017 lines=50505

@@ -2039,4 +2039,14 @@ it compiles a call returning a `KValue` as an ordinary call, and a loop that
 goes through a pointer cannot be inlined into one. The page's translator makes
 the jump a tail call, and `ir_to_wasm` runs the fixture.
 
+CI's rows, on the tree carrying #1896: codegen_instructions_release rises
+4.7% to 475,481,653, because every lambda in a module with the jump keeps the
+tail convention. interp_instructions rises 1.4% to 495,424,970,
+work_runbench 0.17% to 1,171,985,904 and work_deepbench 2.5% to 403,499,508;
+work_encodebench falls 0.49% to 2,386,714,424. The emitter writes fewer lines
+(runbench's IR 51,577 to 50,505) and spends 1.1% more doing it,
+emit_instructions 7,090,315. The three compile rows fall about 0.13%. The
+welfare floor drops to 91.08971 under the rule that building the language is
+priced at what it costs.
+
 This is the toml item on #1892.
