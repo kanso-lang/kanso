@@ -66,6 +66,35 @@ fn effect_discarded_at(e: &Expr, tables: &AfterInfer, diags: &mut Vec<Diagnostic
     }
 }
 
+/// Whether `e` hands on an err the program spelled. A call raises when some
+/// arm that can raise can be the one that runs. The arms are read one at a
+/// time rather than as the group's joined answer because a literal argument
+/// settles a literal pattern here and now: `text/split s "\n"` cannot reach
+/// `split _ ""`, the only arm of that group that raises, so the call is not a
+/// raise. What a literal cannot match is decided by shape alone — a string is
+/// never a record and never a none — and every other pattern is taken to
+/// match. A name raises when an earlier statement of the same body bound it
+/// to something that raises, so `e = boom 1` then `f e` is refused as
+/// `f (boom 1)` is.
+fn raises(
+    e: &Expr,
+    raisers: &crate::hash::Map<(&str, usize), Vec<&[Pattern]>>,
+    consts: &crate::infer::Consts<'_>,
+    bound: &[&str],
+) -> bool {
+    match e {
+        Expr::App { head, args, piped: false, .. } => match head.as_ref() {
+            Expr::Ident(name, _, _) if name == "err" => true,
+            Expr::Ident(name, _, _) => raisers.get(&(name.as_str(), args.len())).is_some_and(|arms| {
+                arms.iter().any(|arm| crate::infer::arm_can_run(arm, args, consts))
+            }),
+            _ => false,
+        },
+        Expr::Ident(name, _, _) => bound.contains(&name.as_str()),
+        _ => false,
+    }
+}
+
 /// The 2026-09-15 ruling's third part: a bare err a program raised, arriving
 /// where a value is wanted, does not compile. The sites are the ruling's
 /// three — an operator's operand, an index's base or key, and a call at a
@@ -82,30 +111,11 @@ fn raised_err_at(
     raisers: &crate::hash::Map<(&str, usize), Vec<&[Pattern]>>,
     consts: &crate::infer::Consts<'_>,
     err_arms: &crate::hash::Map<(&str, usize), u64>,
+    bound: &[&str],
     owner: &str,
     diags: &mut Vec<Diagnostic>,
 ) {
-    // A call raises when some arm that can raise can be the one that runs.
-    // The arms are read one at a time rather than as the group's joined
-    // answer because a literal argument settles a literal pattern here and
-    // now: `text/split s "\n"` cannot reach `split _ ""`, the only arm of
-    // that group that raises, so the call is not a raise. What a literal
-    // cannot match is decided by shape alone — a string is never a record
-    // and never a none — and every other pattern is taken to match.
-    let raised = |e: &Expr| -> bool {
-        match e {
-            Expr::App { head, args, piped: false, .. } => match head.as_ref() {
-                Expr::Ident(name, _, _) if name == "err" => true,
-                Expr::Ident(name, _, _) => {
-                    raisers.get(&(name.as_str(), args.len())).is_some_and(|arms| {
-                        arms.iter().any(|arm| crate::infer::arm_can_run(arm, args, consts))
-                    })
-                }
-                _ => false,
-            },
-            _ => false,
-        }
-    };
+    let raised = |e: &Expr| raises(e, raisers, consts, bound);
     let short = |owner: &str| -> String {
         owner
             .rsplit_once("/lib/")
@@ -807,6 +817,8 @@ fn check_after_infer<'p>(
     // does — a mutation that leaves items behind keeps the whole error corpus
     // green — so the reuse does not rest on it.
     let mut stack: Vec<&Expr> = Vec::new();
+    // the names this declaration bound to a raised err, so far
+    let mut bound: Vec<&str> = Vec::new();
     // every group position a box was let into, with the declaration whose call
     // let it in, for the pass after this walk
     let mut handed: Vec<(Handed<'p>, u32)> = Vec::new();
@@ -817,6 +829,7 @@ fn check_after_infer<'p>(
         // be rebuilt per declaration even though nothing else here is.
         let shadow = |n: &str| shadows(i, n);
         let marks = (effect_diags.len(), box_diags.len(), none_diags.len());
+        bound.clear();
         for stmt in &decl.body {
             let e = match stmt {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
@@ -826,9 +839,14 @@ fn check_after_infer<'p>(
             while let Some(cur) = stack.pop() {
                 effect_discarded_at(cur, &tables, effect_diags);
                 none_exhaustive_at(cur, &tables, &decl.file, none_diags);
-                raised_err_at(cur, &raisers, &consts, &err_arms, &decl.file, none_diags);
+                raised_err_at(cur, &raisers, &consts, &err_arms, &bound, &decl.file, none_diags);
                 site(cur, &shadow, &[], &mut handed_here, box_diags);
                 crate::for_each_child(cur, |c| stack.push(c));
+            }
+            if let Stmt::Bind { pattern: Pattern::Var(name, _), expr } = stmt {
+                if raises(expr, &raisers, &consts, &bound) {
+                    bound.push(name.as_str());
+                }
             }
         }
         handed.extend(handed_here.drain(..).map(|h| (h, i as u32)));
