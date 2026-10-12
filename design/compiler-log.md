@@ -2048,15 +2048,14 @@ whatever the stack holds.
 
 Installing the handler costs every native program the same start-up work: a
 `getrlimit`, a `sigaltstack` and a `sigaction`, about 3,300 instructions, and
-368 bytes of `.text`. On CI's rows `text` went to 4,833,726 and
-`codegen_instructions_dev` to 119,012,887. The work rows moved by that
-constant: `work_basket` to 30,876,488, `work_deepbench` to 393,579,644,
-`work_digestbench` to 5,603,118, `work_encodebench` to 2,398,372,911,
-`work_escapebench` to 39,049,158, `work_indexbench` to 2,462,486,
-`work_jsonbench` to 860,562,984, `work_livebench` to 1,474,874,483,
-`work_oneshot` to 13,228,267, `work_pendbench` to 190,054,350,
-`work_readbench` to 4,580,966, `work_runbench` to 1,170,034,485,
+368 bytes of `.text`. On CI's rows for the tree merged with #1899, `text`
+went to 4,834,846 and `codegen_instructions_dev` to 119,002,829. The work rows
+moved by that constant: `work_basket` to 30,876,488, `work_deepbench` to
+393,579,644, `work_digestbench` to 5,603,118, `work_encodebench` to
+2,398,373,226, `work_escapebench` to 39,049,158, `work_indexbench` to
+2,462,486, `work_jsonbench` to 860,562,984, `work_livebench` to 1,474,875,071,
+`work_oneshot` to 13,226,930, `work_pendbench` to 190,054,350,
+`work_readbench` to 4,580,966, `work_runbench` to 1,170,035,080,
 `work_scanbench` to 273,523 and `work_widebench` to 28,178,509.
-`codegen_instructions_release` fell to 454,281,259.
-The welfare floor drops from 91.10941 to 91.10937, under the rule that a
-change making the engines agree is not priced.
+`codegen_instructions_release` fell to 454,179,413, which outweighs the rest,
+and the rise is banked.
