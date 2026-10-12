@@ -1,0 +1,21 @@
+# `a + b` sends a record to the program's own `+`, so what `add` answers is
+# a float or a `v2`. Inference read the operator as arithmetic alone and
+# called `add` a float, and release assumed that tag at `show`, which then
+# ran its number arm on a record
+type v2
+  x
+  y
+
+fn + (v2 ax ay) (v2 bx by)
+  v2 (ax + bx) (ay + by)
+
+fn add a b
+  a + b
+
+fn show (v2 x y)
+  "v2 {x} {y}"
+
+fn show f
+  "number {f}"
+
+pub play = print "{show (add 1.0 2.0)}, {show (add (v2 1.0 2.0) (v2 3.0 4.0))}"
