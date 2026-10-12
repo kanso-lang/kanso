@@ -2067,4 +2067,5 @@ fixtures are more text to compile: compile_instructions lands on 25,764,487,
 entry_instructions on 85,217,023, library_instructions on 85,769,178,
 emit_instructions on 7,016,791 and browser_compile_instructions on
 392,024,143. The interpreter asks whether each item `push` is handed is a cell
-still being made, and interp_instructions lands on 489,120,716.
+still being made, and interp_instructions lands on 489,120,716. This builds a
+ruled part of the language, so the welfare floor drops by what it costs.
