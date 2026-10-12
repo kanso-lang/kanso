@@ -2077,5 +2077,8 @@ quietly through it, and the ratchet row goes red on the native run instead,
 whose driver cannot re-raise an ignored signal.
 Writing through a stdout lock with an error arm cost the interpreted corpus
 688 instructions on CI's row: `interp_instructions` went to 488,792,803.
-The welfare floor drops to 91.10945 under the rule that a change making the
-engines agree is not priced.
+On the tree merged with #1900, CI's rows put codegen_instructions_dev at
+119,012,401, codegen_instructions_release at 454,260,490 and work_runbench at
+1,170,035,058, and every bench's text is 1,744 bytes smaller. The welfare
+floor drops to 91.10933 under the rule that a change making the engines agree
+is not priced.
