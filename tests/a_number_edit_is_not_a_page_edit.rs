@@ -37,9 +37,7 @@ fn drift(key: &str, after: &str) -> (bool, String) {
     git(&stage, &["config", "user.email", "spec@example.invalid"]);
     git(&stage, &["config", "user.name", "the spec"]);
 
-    let page = |first: &str| {
-        format!("{first}\n<p>a second paragraph that stays.</p>\n")
-    };
+    let page = |first: &str| format!("{first}\n<p>a second paragraph that stays.</p>\n");
     let before = "<p>compiling takes <span data-golden=\"compile\">25,761,215</span></p>";
     std::fs::write(stage.join("design/compiler-log.md"), "# log\n").expect("the log writes");
     std::fs::write(stage.join("docs/compiler.html"), page(before)).expect("the page writes");
@@ -76,10 +74,8 @@ fn drift(key: &str, after: &str) -> (bool, String) {
 /// What `golden_prose --write` commits: one span's number, and a wider one.
 #[test]
 fn a_rewritten_number_leaves_the_page_where_it_was() {
-    let (green, said) = drift(
-        "number",
-        "<p>compiling takes <span data-golden=\"compile\">125,881,551</span></p>",
-    );
+    let (green, said) =
+        drift("number", "<p>compiling takes <span data-golden=\"compile\">125,881,551</span></p>");
     assert!(!green, "a number edit pays none of the four: {said}");
     assert!(said.contains("the log is 4 entries ahead"), "the four still count: {said}");
 }
