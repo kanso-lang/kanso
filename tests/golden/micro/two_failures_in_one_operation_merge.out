@@ -1,4 +1,4 @@
-both: ["a" "b"]
-left: a
-right: b
-compared: ["a" "b"]
+both: [""a" is not an integer" ""b" is not an integer"]
+left: "a" is not an integer
+right: "b" is not an integer
+compared: [""a" is not an integer" ""b" is not an integer"]

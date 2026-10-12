@@ -117,8 +117,14 @@ fn one_page pages at names site page raw
   fixed = references raw names 1
   written page raw fixed .> (_ -> page_loop pages (at + 1) names site)
 
+fn written _ _ e@(err _)
+  e
+
 fn written page _ fixed
   os/write_file page fixed
+
+fn references e@(err _) _ _
+  e
 
 fn references raw names at
   pointing raw names at (at > length names)
@@ -157,6 +163,9 @@ fn guarded c true
 
 fn guarded c false
   "\\{c}"
+
+fn guarded _ e@(err _)
+  e
 
 fn under dir
   os/list_dir dir .> (names -> walk_names dir names 1 [])

@@ -2,11 +2,28 @@ import "std/text"
 
 fn decode_u s
   cs = text/bytes s
-  h1 = hex_digit cs[1]
-  h2 = hex_digit cs[2]
-  h3 = hex_digit cs[3]
-  h4 = hex_digit cs[4]
-  text/from_code (h1 * 4096 + h2 * 256 + h3 * 16 + h4)
+  char_of (hex_on (hex_three cs 1) (hex_digit cs[4]))
+
+fn char_of e@(err _)
+  e
+
+fn char_of code
+  text/from_code code
+
+fn hex_three cs p
+  hex_on (hex_on (hex_digit cs[p]) (hex_digit cs[p + 1])) (hex_digit cs[p + 2])
+
+fn hex_on e@(err _) (err _)
+  e
+
+fn hex_on e@(err _) _
+  e
+
+fn hex_on _ e@(err _)
+  e
+
+fn hex_on n d
+  n * 16 + d
 
 fn hex_alpha c
   if (96 < c and c < 103) (c - 87) (hex_upper c)

@@ -1,8 +1,7 @@
 # Three patterns can hold an err — `(err …)`, an `:err` annotation, and a
-# typeset with err among its members — and a table with two columns says
-# which, against a failure this module raised and a failure std/json raised.
-# It lived in three scattered fixtures covering three of its cells before it
-# was one table.
+# typeset with err among its members — and the table says which, for every
+# pattern form a parameter can take. It lived in three scattered fixtures
+# covering three of its cells before it was one table.
 #
 # Two divergences were cells of it. `_:some` took a foreign failure on two
 # engines and was refused outright at build time on the third (#1052). A
@@ -11,22 +10,20 @@
 # (#1056). In both cases the row existed in somebody's head and nowhere in
 # the tree.
 #
-# So: every pattern form a parameter can take. `took` means the arm fired.
-# `past` means the failure went by as though the arm were not written.
-#
-# The two columns read the same. Until 2026-09-15 the own column was `past`
-# in every row — an err skipped every arm its own hako wrote — and the
-# ruling of that day made a bare err data, so the three err-admitting
-# patterns take a failure whoever raised it and the other seven decline one
-# whoever raised it. Adding a spelling to the language means adding a row
-# here.
+# `took` means the arm fired. `past` means the failure went by as though the
+# arm were not written. The table had a second column for a failure this
+# module spelled. Since #1884 a spelled err reaches only the three rows that
+# admit one; the other seven refuse it at check, bound to a name or not. So
+# the failure here is the runtime's, `text/to_int` refusing text it cannot
+# read, which is the one that can still reach a pattern unannounced. Adding a
+# spelling to the language means adding a row here.
 #
 # `when_failed` hands the reason to its callback and answers `false` when
 # there was no failure, so `outcome` reads that `false` as `took`. It is
 # std's arm that reads the err, which keeps the table about the patterns
 # rather than about which module wrote them.
-import "std/json"
 import "std/testing"
+import "std/text"
 
 type maybe err int
 
@@ -40,7 +37,7 @@ fn outcome v
   v
 
 fn boom what
-  err what
+  text/to_int what
 
 fn wildcard _
   "took"
@@ -72,58 +69,36 @@ fn absent _:none
 fn exact 1
   "took"
 
-own = boom "own"
+failed = boom "x"
 
-far = json/decode "[1, 2"
+wildcard_seen = outcome (testing/when_failed (wildcard failed) slipped)
 
-wildcard_own = outcome (testing/when_failed (wildcard own) slipped)
+variable_seen = outcome (testing/when_failed (variable failed) slipped)
 
-wildcard_far = outcome (testing/when_failed (wildcard far) slipped)
+annotated_seen = outcome (testing/when_failed (annotated failed) slipped)
 
-variable_own = outcome (testing/when_failed (variable own) slipped)
+reason_seen = outcome (testing/when_failed (reason failed) slipped)
 
-variable_far = outcome (testing/when_failed (variable far) slipped)
+member_seen = outcome (testing/when_failed (member failed) slipped)
 
-annotated_own = outcome (testing/when_failed (annotated own) slipped)
+anything_seen = outcome (testing/when_failed (anything failed) slipped)
 
-annotated_far = outcome (testing/when_failed (annotated far) slipped)
+whole_seen = outcome (testing/when_failed (whole failed) slipped)
 
-reason_own = outcome (testing/when_failed (reason own) slipped)
+text_seen = outcome (testing/when_failed (text failed) slipped)
 
-reason_far = outcome (testing/when_failed (reason far) slipped)
+absent_seen = outcome (testing/when_failed (absent failed) slipped)
 
-member_own = outcome (testing/when_failed (member own) slipped)
+exact_seen = outcome (testing/when_failed (exact failed) slipped)
 
-member_far = outcome (testing/when_failed (member far) slipped)
-
-anything_own = outcome (testing/when_failed (anything own) slipped)
-
-anything_far = outcome (testing/when_failed (anything far) slipped)
-
-whole_own = outcome (testing/when_failed (whole own) slipped)
-
-whole_far = outcome (testing/when_failed (whole far) slipped)
-
-text_own = outcome (testing/when_failed (text own) slipped)
-
-text_far = outcome (testing/when_failed (text far) slipped)
-
-absent_own = outcome (testing/when_failed (absent own) slipped)
-
-absent_far = outcome (testing/when_failed (absent far) slipped)
-
-exact_own = outcome (testing/when_failed (exact own) slipped)
-
-exact_far = outcome (testing/when_failed (exact far) slipped)
-
-pub play = print "pattern   own   foreign"
-  .> (_ -> print "_         {wildcard_own}  {wildcard_far}")
-  .> (_ -> print "v         {variable_own}  {variable_far}")
-  .> (_ -> print "v:err     {annotated_own}  {annotated_far}")
-  .> (_ -> print "(err r)   {reason_own}  {reason_far}")
-  .> (_ -> print "v:maybe   {member_own}  {member_far}")
-  .> (_ -> print "v:some    {anything_own}  {anything_far}")
-  .> (_ -> print "v:int     {whole_own}  {whole_far}")
-  .> (_ -> print "v:string  {text_own}  {text_far}")
-  .> (_ -> print "v:none    {absent_own}  {absent_far}")
-  .> (_ -> print "1         {exact_own}  {exact_far}")
+pub play = print "pattern   failure"
+  .> (_ -> print "_         {wildcard_seen}")
+  .> (_ -> print "v         {variable_seen}")
+  .> (_ -> print "v:err     {annotated_seen}")
+  .> (_ -> print "(err r)   {reason_seen}")
+  .> (_ -> print "v:maybe   {member_seen}")
+  .> (_ -> print "v:some    {anything_seen}")
+  .> (_ -> print "v:int     {whole_seen}")
+  .> (_ -> print "v:string  {text_seen}")
+  .> (_ -> print "v:none    {absent_seen}")
+  .> (_ -> print "1         {exact_seen}")

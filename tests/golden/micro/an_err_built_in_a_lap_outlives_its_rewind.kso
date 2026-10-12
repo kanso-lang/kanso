@@ -6,7 +6,7 @@ import "std/text"
 # the arena on the edge back into `walk`. The cursor crosses that rewind as
 # a number, which needs nothing copied. On the lap that meets the `x` after
 # the `#`, `skip` answers an err instead, holding a record built in the
-# lap's own storage, and `walk` passes it on through its index. A rewind
+# lap's own storage, and `walk`'s err arm hands it on. A rewind
 # taken on that edge handed the record's storage back, the err picked up a
 # hop on its way out and the hop was written over the record, and the
 # caller met a record with no type: the err arm below did not match it and
@@ -18,6 +18,9 @@ type failure
 fn skip cs p
   return err (failure p "stopped") if cs[p + 1] == 120
   p + 1
+
+fn walk _ e@(err _)
+  e
 
 fn walk cs p
   look cs cs[p] p

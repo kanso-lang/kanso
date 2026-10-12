@@ -77,25 +77,28 @@ fn plain body
   untagged = regexp/replace_all "<[^>]+>" body ""
   unescaped untagged
 
+fn unescaped e@(err _)
+  e
+
 fn unescaped s
-  lt = regexp/replace_all "&lt;" s "<"
-  gt = regexp/replace_all "&gt;" lt ">"
-  regexp/replace_all "&amp;" gt "&"
+  regexp/replace_all "&lt;" s "<"
+    .> (lt -> regexp/replace_all "&gt;" lt ">")
+    .> (gt -> regexp/replace_all "&amp;" gt "&")
 
 fn code_only s
-  bare = regexp/replace_all "#[^\n]*" s ""
-  quoted = regexp/replace_all "\"(?:\\\\.|[^\"\\\\])*\"" bare "\"\""
-  plain_names = unannotated quoted
-  regexp/replace_all qualified plain_names ""
+  regexp/replace_all "#[^\n]*" s ""
+    .> (bare -> regexp/replace_all "\"(?:\\\\.|[^\"\\\\])*\"" bare "\"\"")
+    .> unannotated
+    .> (plain_names -> regexp/replace_all qualified plain_names "")
 
 # The three shapes an annotation takes, longest first so `:[]json` does not
 # leave its element type behind. A panel writes these where the file it quotes
 # leaves the field bare, so they are presentation and not names to check.
 fn unannotated s
-  mapped = regexp/replace_all map_ann s ""
-  listed = regexp/replace_all list_ann mapped ""
-  named = regexp/replace_all qual_ann listed ""
-  regexp/replace_all ":{ident_pattern}" named ""
+  regexp/replace_all map_ann s ""
+    .> (mapped -> regexp/replace_all list_ann mapped "")
+    .> (listed -> regexp/replace_all qual_ann listed "")
+    .> (named -> regexp/replace_all ":{ident_pattern}" named "")
 
 fn lines_of s
   text/split s "\n"
@@ -107,6 +110,9 @@ fn exported name
 
 fn heads_in body pattern
   head_loop (lines_of body) 1 [] pattern
+
+fn head_loop _ _ e@(err _) _
+  e
 
 fn head_loop ls at acc pattern
   heading ls at acc pattern (at > length ls)
@@ -123,6 +129,9 @@ fn with_head acc line pattern
   hits = regexp/matches pattern line
   first_group acc hits
 
+fn first_group _ e@(err _)
+  e
+
 fn first_group acc hits
   taken acc hits (length hits == 0)
 
@@ -134,9 +143,15 @@ fn taken acc hits false
 
 # The identifier pattern captures nothing, so each hit is read back off the
 # body by the span it matched.
+fn idents_in e@(err _)
+  e
+
 fn idents_in body
   hits = regexp/matches ident_pattern body
   ident_loop body hits 1 []
+
+fn ident_loop _ e@(err _) _ _
+  e
 
 fn ident_loop body hits at acc
   identing body hits at acc (at > length hits)
@@ -185,18 +200,23 @@ literals = ["true" "false" "none"]
 
 fn reachable bodies
   code = code_only (joined bodies)
-  names = idents_in code
-  list/to_list (text/concat literals names)
+  idents_in code .> (names -> list/to_list (text/concat literals names))
+
+fn shown e@(err _)
+  e
 
 fn shown panel
-  heads = heads_in panel decl_head
-  list/to_list (list/map heads (n -> exported n))
+  heads_in panel decl_head
+    .> (heads -> list/to_list (list/map heads (n -> exported n)))
+
+fn named_in e@(err _)
+  e
 
 fn named_in panel
   code = code_only panel
-  names = idents_in code
-  wanted = list/map names (n -> exported n)
-  list/to_list (list/select wanted (n -> length n > 0))
+  idents_in code
+    .> (names -> list/map names (n -> exported n))
+    .> (wanted -> list/to_list (list/select wanted (n -> length n > 0)))
 
 fn dir_of path
   parts = text/split path "/"
@@ -246,7 +266,8 @@ fn found_for q file bodies
   declared = heads_in file decl_head
   gone = missing declared (shown panel)
   loose = missing (reachable bodies) (named_in panel)
-  as_findings q lead "declares" gone (as_findings q lead "names" loose [])
+  named = as_findings q lead "names" loose []
+  named .> (acc -> as_findings q lead "declares" gone acc)
 
 # A pattern that does not compile answers an err, and these hand it on.
 fn leading e@(err _)
@@ -260,6 +281,15 @@ fn first _ true
 
 fn first names false
   "`{names[1]}`"
+
+fn as_findings _ e@(err _) _ (err _) _
+  e
+
+fn as_findings _ e@(err _) _ _ _
+  e
+
+fn as_findings _ _ _ e@(err _) _
+  e
 
 fn as_findings q lead kind names acc
   finding_loop q lead kind names 1 acc
@@ -293,6 +323,9 @@ fn quotes_in name raw
   hits = regexp/matches quote_pattern raw
   quote_loop_of name hits 1 []
 
+fn quote_loop_of _ e@(err _) _ _
+  e
+
 fn quote_loop_of name hits at acc
   quoting_at name hits at acc (at > length hits)
 
@@ -303,6 +336,9 @@ fn quoting_at name hits at acc false
   m = hits[at]
   one = quote name (samples_of name) m.groups[1] m.groups[2]
   quote_loop_of name hits (at + 1) (push acc one)
+
+fn checked e@(err _) _ _ _
+  e
 
 fn checked qs at found after
   checking qs at found after (at > length qs)
@@ -403,8 +439,8 @@ fn with_package qs at found after q mine wanted
 
 fn with_bodies qs at found after q mine wanted bodies
   declared = joined_of mine wanted bodies
-  more = found_for q declared bodies
-  checked qs (at + 1) (concat found more) after
+  on = (more -> checked qs (at + 1) (concat found more) after)
+  found_for q declared bodies .> on
 
 # What the panel may DECLARE: one file when the title named one, the whole
 # module when it named a directory.

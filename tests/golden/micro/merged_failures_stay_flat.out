@@ -1,4 +1,3 @@
-left first: ["a" "b" "c"]
-right first: ["a" "b" "c"]
-list reason: [["a" "b"] "c"]
-the wall: a
+left first: [""a" is not an integer" ""b" is not an integer" ""c" is not an integer"]
+right first: [""a" is not an integer" ""b" is not an integer" ""c" is not an integer"]
+the wall: "a" is not an integer

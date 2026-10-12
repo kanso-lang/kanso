@@ -12,7 +12,12 @@ fn total _ 0 acc
   acc
 
 fn total source n acc
-  doc = json/decode source
+  counted source n acc (json/decode source)
+
+fn counted _ _ _ e@(err _)
+  e
+
+fn counted source n acc doc
   back = json/encode doc
   total source (n - 1) (acc + length back)
 

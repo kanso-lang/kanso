@@ -22,6 +22,12 @@
 //! said that question "belongs to a gavel rather than to an optimization's side
 //! effects", and it still does.
 //!
+//! The fixtures first handed `label` an err that `price` raised. Since #1884 a
+//! name bound to a raising call carries that err into the check, and `label`
+//! with no err arm is refused before it runs, so the fixtures now hand it the
+//! err `text/to_int` answers for computed text, which nothing raises and which
+//! still rides into the call.
+//!
 //! The fixtures are here rather than in the commit message because a bug that
 //! had no home in the corpus is a gap in the corpus.
 
@@ -42,7 +48,7 @@ fn hops(fixture: &str, interpreted: bool) -> Vec<String> {
         String::from_utf8_lossy(&done.stdout),
         String::from_utf8_lossy(&done.stderr),
     );
-    assert!(said.contains("flan is seasonal"), "{fixture} did not reach the err at all:\n{said}",);
+    assert!(said.contains("\"flan\" is not an integer"), "{fixture} did not reach the err at all:\n{said}",);
     said.lines()
         .map(str::trim)
         .filter(|l| l.starts_with("passed through "))

@@ -19,81 +19,6 @@
 > The last forty entries. Everything older is in `log/compiler-log-archive.md`,
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
-## 2026-10-10 — a map's view belongs to the beat that frees the map
-
-A map read by key, rendered, compared or measured gets a sorted view, and the
-view is malloc'd. It is released when the beat whose rewind reclaims the map's
-header rewinds. Until today the view was registered for release only when the
-map was born in the innermost beat. A map built in an outer loop and read
-inside an inner one was never registered, so its view was never freed. mal's
-evaluator builds its environments in its tail cycle and looks symbols up one
-region call further in, and at two hundred thousand iterations it built
-209,210 views and freed 10,519.
-
-`k_viewreg_own` now asks each depth from the innermost outward whether its
-rewind reclaims the header, and registers the view at the first that does. A
-header outside every arena block, in a carry buffer or a tenure block,
-registers at the innermost depth, which rewinds no later than that storage is
-released. A frozen constant keeps its view for the life of the program.
-
-That alone made mal fifteen times slower. The lap carry stages whenever a
-registry at its depth holds anything, and mal's views now registered at the
-cycle's own depth, so every edge staged again. The view registry no longer
-forces a stage. A view is never larger than its map, and the map is either
-garbage the drift test already counts or still live, so a skipped lap holds no
-more view memory than the test bounds.
-
-mal now holds 9 MB at two hundred thousand iterations and at four hundred
-thousand, where lap carry alone held 21 MB and 39 MB. It runs in 0.63 s and
-1.26 s, the same as lap carry alone.
-
-Two fixtures pin the two halves.
-`a_view_built_one_beat_down_is_freed_by_the_beat_that_built_its_map` builds
-twenty thousand views one beat below their maps and frees all of them; with
-the old registration it frees none and holds 2,240,000 bytes of views.
-`a_cycle_that_sorts_a_map_each_step_still_waits_for_its_lap` copies 6,224
-bytes in its carried rewinds; letting the view registry force a stage copies
-3,200,304.
-Merged with main's constant storage it copies 6,128, since the constants it
-names are no longer copied, and its one tenure block is gone. The evaluator
-fixture's lap rule copies 3,360 where it copied 3,488, for the same reason.
-
-The native cost veins and the lazy tier do not move: no benchmark builds a
-view one beat below its map. The tab's run does. `bench/interp_corpus` builds
-1,320 views and now frees them all, so `browser_run_instructions` rises
-517,253 to 34,038,136 and `browser_run_peak_bytes` falls 131,072 to 1,179,648.
-Natively the same corpus costs 336,930 more instructions, about 240,000 of
-them in glibc's `free`. The browser side of welfare rises from 83.42 to 83.55.
-A fast path that registered a head-block header without the walk cost more on
-this corpus than it saved, because its maps sit below the innermost mark, and
-was dropped.
-
-CI's rows for the three pieces together, against main. The work rows that fall
-are `work_runbench`, 1,129,603,831 to 1,127,640,368, and `work_basket`,
-32,382,758 to 30,339,466. The ones that rise are `work_encodebench` by 2,866 to
-2,384,341,029, `work_oneshot` by 2,810 to 13,030,103, `work_indexbench` by 514
-to 2,459,021, `work_scanbench` by 309 to 282,024 and `work_livebench` by 3,146
-to 1,473,488,334: none of them carries a cluster, and the rise is the larger
-runtime each binary links. The run program's tenure falls with its staging:
-`run_ten_blocks` from 6 to 1, `run_ten_frees` from 6 to 1 and
-`run_ten_handups` from 2 to 1. `text` grows
-1,072 bytes in every binary, to 4,624,574 in all. `codegen_instructions_dev`
-rises 8,776 to 118,876,072, `compile_instructions` 25,851 to 25,858,191,
-`entry_instructions` 79,015 to 85,514,540 and `library_instructions` 79,237 to
-86,067,450, for the slot checks and the lambda-edge marking in `beat.rs`.
-`codegen_instructions_release` falls 15,674 to 453,772,164, `emit_instructions`
-4,229 to 7,058,107 and `interp_instructions` 47,893 to 488,865,227. The tab
-reads `browser_compile_instructions` 390,305,438, up 2,122,974, with
-`browser_compile_peak_bytes` up 1,998 to 675,725, `browser_run_instructions` up
-518,590 to 34,038,136 and `browser_run_peak_bytes` down 131,072 to 1,179,648.
-Welfare rises from 90.25801113 to 90.26974705, and the floor follows it.
-
-While building the fixtures I found that a file imported from a
-subdirectory, `import "./lib/fx"`, loses its cycle's rewind: the evaluator
-fixture above holds 4 MiB and never rewinds that way, and 1 MiB with 40,002
-rewinds imported as `./fx`. Self-loops are unaffected. main reproduces it.
-That is the next piece.
-
 ## 2026-10-10 — a survival question about an old block asks an index
 
 The lap carry made the lox port's F18 loop quadratic. Its 40,000 passes took
@@ -2112,3 +2037,74 @@ drops from 91.1114 to 91.1094 under the rule that a change making the engines
 agree is not priced.
 
 This is the ray tracer item on #1892.
+
+## 2026-10-12 — a name bound to a raising call carries its err into the check
+
+#1884, under part 3 of the 2026-09-15 gavel. The checker refused
+`half 3 + 1` when `half` has an arm that answers an err, but accepted
+`h = half 3` followed by `h + 1`: it read calls and never the names they were
+bound to, so binding a value to a name switched the check off. Eighteen of the
+twenty ports in the committee report met it. A local or a constant bound to a
+call that can raise now carries that err to every operator, index and
+argument position that reads it, and an inlined binding and an extracted one
+compile alike.
+
+`raising_names` in `src/check/after_infer.rs` collects the names a
+declaration binds to such a call and the place each is bound; a name bound
+twice in one declaration is left out, since which binding a read sees is not
+settled by position alone. A constant is read through the arity-0 entries of
+the raisers table. Errs from builtins, such as `text/to_int` on text the
+program computes, are not raised errs, and they still ride to the endpoint.
+
+Three error goldens pin it: a name reaching an operator, a name reaching a
+group with no arm for it, and a constant reaching an operator. The ratchet row
+"a name that forgets the err of its call" removes both halves and watches
+error_corpus go red.
+
+The rule reached 26 programs in the tree, about 150 sites, and every one was
+already refused on main once its binding was inlined. Each was repaired with a
+pass-through `e@(err _)` arm, a `.>` step, or a helper with an err arm:
+
+- `lib/json/text.kso` combines the four `\u` digits through `hex_on`, which
+  hands the first bad digit on, nested two calls deep with nothing bound to
+  a name. A self-recursive version counted one loop beat per digit, and kq's
+  escapes run read 52,325 beats against 2; binding the first pair to a name
+  made each one a thunk, 17,441 of them. The nested form moves no counter in
+  kq. The decoder's emitted code grew 4 functions and 118 lines (10,070 to
+  10,188), and `bench/emitted_golden.txt` and its sibling are regenerated.
+- runbench routes the decoded document and its two raising totals through
+  `.>`. It allocates 4 more blocks, 160 bytes, and no peak moved. A version
+  with helper arms instead held the document as a thunk and raised the arena
+  peak by 1 MiB, so it was dropped.
+- interp_corpus and oneshot take the decoded document in a helper with an
+  err arm, which costs no closure.
+- Thirteen scripts under `scripts/` were repaired and each was run against
+  the same input with the old and the new compiler; where nothing failed the
+  output was byte for byte the same.
+- In the book, ch04's railway is built on an err the checker cannot prove, a
+  `text/to_int` of text out of a list, and the rule paragraph says that a
+  name bound to a raising call is checked like the call. `unasked` and
+  `unhandled` take their err the same way, and teahouse (ch07) and the json
+  sample (ch08) reach their raising values through `.>`.
+
+An explicit `e@(err _)` arm hands the err on without adding a frame to the
+"passed through" trace; only the implicit pass-through wrote those frames. The
+trace of an err the checker can prove is now shorter by every function that
+needed an arm. `examples/trace_demo`'s broken-input run, which no test pins,
+now reads `passed through text/to_int` where it read three functions.
+
+The three provenance fixtures behind `tests/a_hop_is_recorded_for_a_name.rs`
+handed `label` an err that `price` raised, and the rule now refuses that
+before it runs. They hand it the err `text/to_int` answers for a slice of
+text instead, which nothing raises, and the hops they record are unchanged.
+The playground's redux example bound an `update` that can overdraw to a name
+and passed it on; it now dispatches on the answer the way
+`examples/redux.kso` does. `json/unicode_at` joins the decoder's string
+scanners in `src/beat.rs`'s list of the library's beats.
+
+The counters this moves, on this container: in `bench/cost_golden_run.txt`,
+`run_allocs` to 1,771,566 and `run_alloc_bytes` to 330,057,564. In
+`bench/emitted_golden.txt`, `emitted_calls` to 1,023, `emitted_defines` to
+110 and `emitted_lines` to 10,188. In its sibling, `emitted_other_calls` to
+17,603, `emitted_other_defines` to 2,037 and `emitted_other_lines` to
+147,804. The instruction and browser rows come from CI.

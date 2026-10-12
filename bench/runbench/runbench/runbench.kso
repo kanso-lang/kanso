@@ -165,11 +165,13 @@ fn tally raw doc a b
   ported = scatter/total scatter_keys + bump/total bump_steps
   ported2 = machine/total machine_passes + fold/total fold_pieces
   ported3 = ported2 + restate/total restate_passes
-  bulk + shapes + scanned + ported + ported3 + digested raw digest_bytes
+  rest = digested raw digest_bytes
+  on = (k -> scanned .> (s -> k + shapes + s + ported + ported3 + rest))
+  bulk .> on
 
 fn shaped raw doc a
   pend/total pend_cards .> (b -> io/write "runbench {tally raw doc a b}\n")
 
 pub fn run raw
-  doc = json/decode raw
-  deep/total deep_trials .> (a -> shaped raw doc a)
+  on = (doc -> deep/total deep_trials .> (a -> shaped raw doc a))
+  json/decode raw .> on

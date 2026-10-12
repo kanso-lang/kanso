@@ -1,2 +1,2 @@
-error[endpoint]: unhandled err reached the entry: "refused 5"
-  born in a_name_bound_to_a_lazy_err_keeps_its_check/checked at a_name_bound_to_a_lazy_err_keeps_its_check.kso:8
+error[endpoint]: unhandled err reached the entry: ""5x" is not an integer"
+  born in text/to_int at std/text/text.kso:92

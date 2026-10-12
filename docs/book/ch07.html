@@ -34,7 +34,7 @@ extra_css: /book/book.css
 
 dango <span class="o">=</span> <span class="f">price</span> <span class="s">"dango"</span>
 pocky <span class="o">=</span> <span class="f">price</span> <span class="s">"pocky"</span>
-<span class="f">print</span> (<span class="f">describe</span> dango)
+<span class="f">dango</span> <span class="o">.&gt;</span> <span class="f">describe</span> <span class="o">.&gt;</span> <span class="f">print</span>
   <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">testing/when_failed</span> pocky (r <span class="o">-&gt;</span> <span class="s">"gomen: <span class="i">{r}</span>"</span>)))</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run teahouse</div>
@@ -43,7 +43,7 @@ gomen: we do not serve pocky</code></pre>
   </div>
 </div>
 
-<p>point the toolchain at the directory and it runs the module. <code>main.kso</code> calls <code>price</code> from <code>menu.kso</code> as if it were next door, because it is. notice three earlier chapters shaking hands in a dozen lines: string-literal dispatch is the menu, an <code>err</code> is the missing item, and <code>price</code> hands it on as it is: <code>with_service</code> has an arm for an err and an arm for a number, and its <code>+ 50</code> runs on the number alone. the err travels out as a value to the arm in <code>main.kso</code>, which is the only place that wants to read it.</p>
+<p>point the toolchain at the directory and it runs the module. <code>main.kso</code> calls <code>price</code> from <code>menu.kso</code> as if it were next door, because it is. notice three earlier chapters shaking hands in a dozen lines: string-literal dispatch is the menu, an <code>err</code> is the missing item, and <code>price</code> hands it on as it is: <code>with_service</code> has an arm for an err and an arm for a number, and its <code>+ 50</code> runs on the number alone. the err travels out as a value to the arm in <code>main.kso</code>, which is the only place that wants to read it. <code>describe</code> has no arm for an err, so <code>dango</code> reaches it through <code>.&gt;</code>, which hands a value on and steps past an err.</p>
 
 <h2>one namespace, many files</h2>
 

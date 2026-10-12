@@ -1,12 +1,12 @@
-operated:  ["a" "b"]
-compared:  ["a" "b"]
-built:     ["a" "b"]
-grouped:   ["a" "b"]
-called:    a
-woven:     a
-sequenced: a
-listed:    [err "a" 2]
-mapped:    { "k":err "a" }
-reached:   a
-indexed:   a
-sized:     a
+operated:  [""a" is not an integer" ""b" is not an integer"]
+compared:  [""a" is not an integer" ""b" is not an integer"]
+built:     [""a" is not an integer" ""b" is not an integer"]
+grouped:   [""a" is not an integer" ""b" is not an integer"]
+called:    "a" is not an integer
+woven:     "a" is not an integer
+sequenced: "a" is not an integer
+listed:    [err ""a" is not an integer" 2]
+mapped:    { "k":err ""a" is not an integer" }
+reached:   "a" is not an integer
+indexed:   "a" is not an integer
+sized:     "a" is not an integer

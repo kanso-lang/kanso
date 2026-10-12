@@ -11,5 +11,8 @@ pub fn make 0
 pub fn make n
   pair n "v"
 
+pub fn joined e@(err _)
+  e
+
 pub fn joined (pair p v)
   "{p}/{v}"

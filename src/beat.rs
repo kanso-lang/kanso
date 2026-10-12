@@ -2969,6 +2969,11 @@ mod tests {
         // in them, and decoding five 300,000-character strings with an
         // escape every three characters read 78,278,587 instructions with
         // the licence and without it.
+        //
+        // `unicode_at` joined on 2026-10-12, when the four hex digits of a
+        // `\u` escape stopped riding a name past their err and the escape's
+        // tail moved into a function of its own. It takes the scanners' slots
+        // and tail-calls `str_chars`, so it is one more scanner.
         let scanners: Vec<(String, usize)> = [
             ("json/str_chars", 3),
             ("json/str_low", 5),
@@ -2977,6 +2982,7 @@ mod tests {
             ("json/str_surrogate", 4),
             ("json/str_unicode", 3),
             ("json/string_scan", 3),
+            ("json/unicode_at", 4),
         ]
         .into_iter()
         .map(|(n, a)| (n.to_string(), a))

@@ -1,18 +1,14 @@
-total = subtotal 120 0
+import "std/text"
+
+total = subtotal 120 "nobody"
 print (receipt total)
 
 fn receipt total
   "order total: {total}"
 
-fn share_of _ 0
-  err "no one to share the bill with"
-
-fn share_of cents people
-  cents / people
-
-fn subtotal cents people
-  share = share_of cents people
-  with_tip share
+fn subtotal cents party
+  people = text/to_int party
+  with_tip (cents / people)
 
 fn with_tip share
   share + share / 10

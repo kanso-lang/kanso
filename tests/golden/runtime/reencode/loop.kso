@@ -2,9 +2,16 @@ import "std/json"
 
 pub doc = "[[1,2],[3],[4.5,true,null]]"
 
-pub fn reencode _ _ 0 acc
+# a decode can fail, so its answer is dispatched on before it is encoded
+pub fn start (err e) _
+  print "failed: {e}"
+
+pub fn start v m
+  reencode v m 2 0
+
+fn reencode _ _ 0 acc
   print "twice: {acc}"
 
-pub fn reencode v m n acc
+fn reencode v m n acc
   grown = acc + length (json/encode v) + length (json/encode m)
   reencode v m (n - 1) grown

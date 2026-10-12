@@ -291,6 +291,17 @@ raised_err = row
   (breaking "a_raised_err_reaching_a_value_site_compiles")
   no_setup
 
+# A name bound to a call that can raise carries the call's err into the
+# check (#1884). The mutation forgets it for locals and constants alike, and
+# the three error fixtures that bind the err first then compile clean.
+named_err = row
+  "a name that forgets the err of its call"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_name_forgets_the_err_of_its_call")
+  no_setup
+
 # A failure crossing a beat carry in the two-word record convention was boxed
 # as a record and read back out of one; the mutation puts the read back and
 # the mem fixture a_failure_crosses_a_beat_carry_in_two_words dies on native
@@ -2941,7 +2952,9 @@ rows_c1j = text/concat rows_c1i [coverage_native]
 
 rows_c1k = text/concat rows_c1j [coverage_oracle coverage_oracle_format]
 
-rows_c1m0 = text/concat rows_c1k [beat_cursor rescue_licence raised_err]
+rows_c1l = text/concat rows_c1k [named_err]
+
+rows_c1m0 = text/concat rows_c1l [beat_cursor rescue_licence raised_err]
 
 rows_c1m = text/concat rows_c1m0 [clay_send_filed]
 
