@@ -19,212 +19,6 @@
 > The last forty entries. Everything older is in `log/compiler-log-archive.md`,
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
-## 2026-10-10 — a node an inner pop repairs stays on the outer loop's list
-
-The lox port's `tests/functions.lox` crashed natively once kanso#1824 let its
-evaluator loops carry. The cause is older than that branch. A record built
-before the evaluator's loop held a string in the outer loop's tenure block.
-An inner loop returned a value that reached the record, and its pop copied
-the result out of its carry pair. The pop's walk counts nothing outside the
-arena as a survivor, so it copied the string to the arena's frontier and
-repaired the record in place to point at the copy. The frontier was in the
-evaluator's lap. At the evaluator's next stage the walk reached the record
-through an older node whose own fields all survived, stopped there, and
-rewound the lap with the copy in it. The record then pointed at freed memory.
-
-Main's compiler crashes on the reduction too, so the bug did not need
-kanso#1824. `tests/golden/mem/a_node_repaired_by_an_inner_pop_outlives_the_outer_stage`
-is three nested loops and a box built before the middle one. Built against
-main's runtime it segfaults, and its stdout golden fails.
-
-The pop now keeps the nodes it repaired that lie below the enclosing mark, on
-a list beside `k_repaired`. Each stage walks the entries below its own mark as
-extra roots before it rewinds, sized with the carried slots, so a node that
-points above the mark is repaired into the carry and settled back under the
-raised mark like any other. That makes the node safe for the depth that
-staged and not for the one outside it, so an entry below the outer mark stays
-on the list, and so does a node the stage itself repaired below the outer
-mark. A rewind frees what lies above its mark, and the list must not keep an
-address that has been handed out again. While the list holds anything, a bit
-in `k_buf_dirty` sends every rewind to the slow path, and the slow path drops
-the entries above its mark, and a rewind to the outermost mark clears the list,
-since no stage outside it will revisit anything. The fast path reads nothing
-new.
-
-I first tried narrowing the pop's walk instead: an enclosing depth's tenure
-outlives the pop, so the pop could leave a pointer into it alone. That fixed
-`functions.lox` and broke `binary_trees.lox`. The lox interpreter writes into
-tenured environment maps in place, so an enclosing tenure node can hold a
-pointer into the inner carry pair, and the copy-out has to see it.
-
-With the fix, main's compiler passes all 28 lox fixtures on the interpreter,
-a dev build and a release build. On a tree carrying kanso#1827 and kanso#1824
-as well, the same 28 pass under the lap rule and with every edge staging. The
-twelve cost veins and the mem tier are unchanged apart from the new fixture's
-own file: no program in the corpus repairs a node below an enclosing mark.
-
-The list costs something when it is empty. `k_beat_iter_carry` now asks its
-depth for an outer mark and walks the nodes it repaired against it, and the
-pop does the same, at about fourteen instructions a call whether anything is
-pushed or not. deepbench stages 52,310 times and pops 52,003 times, so it pays
-the most, 0.40%. The runtime's text is 2,208 bytes larger in every binary,
-which the `text` total and both codegen rows carry. CI's rows, old to new:
-
-    work_deepbench               365,792,692 -> 367,269,411
-    work_basket                   32,375,114 ->  32,505,156
-    work_runbench              1,131,250,979 -> 1,131,470,937
-    work_pendbench               190,390,436 -> 190,396,306
-    work_livebench             1,472,859,260 -> 1,472,861,300
-    work_jsonbench               860,548,891 -> 860,549,545
-    work_encodebench           2,383,861,305 -> 2,383,861,896
-    work_digestbench               5,560,569 ->   5,561,143
-    work_indexbench                2,456,650 ->   2,457,185
-    work_scanbench                   268,468 ->     268,793
-    work_widebench                28,094,541 ->  28,094,810
-    work_readbench                 4,577,050 ->   4,577,104
-    work_oneshot                  13,176,487 ->  13,176,528
-    work_escapebench              39,045,280 ->  39,045,300
-    text                           4,612,254 ->   4,643,166
-    codegen_instructions_dev     118,896,762 -> 118,918,430
-    codegen_instructions_release 453,707,138 -> 453,994,118
-    browser_run_instructions      33,493,063 ->  33,507,353
-
-Welfare fell by less than a hundredth, and the floor moves down with it under
-the rule for a change that makes the language do what it says: the program
-crashed.
-
-**Main's repair list, merged into the lap carry.** The two branches touch
-different parts of the carry, and the code merged without a conflict. One golden
-moved. `a_node_repaired_by_an_inner_pop_outlives_the_outer_stage.mem` was
-written before the lap carry, when every edge staged, and under the lap carry
-the same program stages less: `evac_allocs` 237 -> 121, `evac_bytes` 8,288 ->
-4,128, `survive_slots` 82 -> 40, `allocs` 302 -> 246, `alloc_bytes` 7,088,284
--> 7,086,268, and the new `chain_finds` row reads 0. Its output is unchanged.
-The fixture still does its job on the merged tree: with
-`k_pend_keep_repaired` returning at once, the program segfaults. The goldens
-both branches moved were combined as the sum of the two deltas, and CI's rows
-for the merged head follow.
-
-CI's rows for the merged head. The projection from the two branches' deltas was
-close but not exact: each benchmark's text is 672 bytes larger than the sum, basket
-runs 129,985 instructions fewer, deepbench 104,915 more and runbench 14,885 more.
-Against main, every row that worsened, with the value it landed on:
-
-    run_ten_frees                                6 ->               1
-    run_ten_handups                              2 ->               1
-    compile_instructions                25,832,340 ->      25,858,191
-    entry_instructions                  85,435,525 ->      85,514,540
-    library_instructions                85,988,213 ->      86,067,450
-    codegen_instructions_dev           118,918,430 ->     118,945,861
-    codegen_instructions_release       453,994,118 ->     454,057,202
-    browser_compile_instructions       388,181,803 ->     390,304,777
-    browser_compile_peak_bytes             673,727 ->         675,725
-    browser_run_instructions            33,507,353 ->      34,098,461
-    work_digestbench                     5,561,143 ->       5,562,545
-    work_encodebench                 2,383,861,896 ->   2,383,883,896
-    work_escapebench                    39,045,300 ->      39,045,867
-    work_indexbench                      2,457,185 ->       2,459,004
-    work_jsonbench                     860,549,545 ->     860,559,280
-    work_livebench                   1,472,861,300 ->   1,472,863,852
-    work_oneshot                        13,176,528 ->      13,207,890
-    work_readbench                       4,577,104 ->       4,577,539
-    work_scanbench                         268,793 ->         270,025
-    text                                 4,643,166 ->       4,763,230
-
-The lap carry stages once per 256KB of drift where it staged at every edge, which
-is what the work rows above pay for; the runtime grows by the chain index and the
-lap bookkeeping, which is the text row. Against that, runbench falls to
-1,129,571,152, basket to 30,405,533 and deepbench to 366,705,890, the run
-program evacuates 6,441,632 bytes where it evacuated 9,789,344, and the browser
-run peaks at 1,179,648 bytes. `run_ten_frees` and `run_ten_handups` count work on
-tenured blocks, and they fall because the program now tenures one block where it
-tenured six. Welfare rises from 90.2505 to 90.2618, and the floor is raised to
-hold it.
-
-## 2026-10-10 — a `tie` node holds its references in a list
-
-Built the gavel "a field may hold a list of `tie` references". The maker check
-in `src/check.rs` walked a constructor's arguments with a flag saying each one
-was a field, and handed every other expression's children down with the flag
-cleared. A list literal was one of those other expressions, so `ref` called
-inside `town "ash" [(ref "birch") (ref "cedar")]` was refused as a read. A list
-literal or map literal that is itself a field now passes the flag to its
-elements, and for a map to its values only, since a key is read to place its
-pair. Anything else that holds the list is refused as before: binding it to a
-name first, measuring it, indexing it or handing it to a function.
-
-Neither engine needed a change. The interpreter's `resolve_tied` and native's
-`k_tie_resolve` already walk lists and maps when they swap each cell for its
-node, because a record field's value was always allowed to be any value once
-the tie returned.
-
-The diagnostic now says the reference goes straight into a field "alone or in a
-list or map written there", and the four tie goldens that quote it moved with
-it. `tests/golden/micro/a_graph_holds_its_roads_in_a_list` keeps each town's
-roads as a list and a map of named roads beside it, and prints the same text on
-the interpreter, a dev build and a release build; the compiler on main refuses
-it at `town "ash" [(ref "birch") ...]`.
-`tests/golden/errors/a_tie_maker_measures_a_list_of_references` binds the list
-to a name and measures it, and is refused at both references.
-
-`a_graph_tied_from_a_map_of_edges` keeps its chain of `road` records. Its edges
-come from a map, so its list of references would be built by a call, `list/map
-names ref` or a fold, and a reference handed to a function from std is out of
-the check's sight. The gavel's text admits a literal, and the ruling's own
-Owes asked for this fixture to drop the chain, which it cannot do under that
-text. That question has gone to the ledger as "May a list built from data hold
-`tie` references?". `docs/compiler.html` §193 says which form each case takes.
-
-The book teaches cyclic structures with `build` and does not mention `tie`, so
-the place `tie` is taught is its own comment in `lib/list/list.kso`. That
-comment now names the list form and shows `node id [(ref "b") (ref "c")]`.
-
-CI's rows for this branch, with main's repair list merged in. The check walks
-two more expression kinds in a constructor's arguments, and `lib/list/list.kso`
-carries two more comment lines, which every compile of the library lexes:
-
-    compile_instructions             25,832,340 ->  25,832,534
-    entry_instructions               85,435,525 ->  85,436,634
-    library_instructions             85,988,213 ->  85,988,060
-    browser_compile_instructions    388,181,803 -> 388,192,201
-
-The ruling is a part of the language, so the floor follows whatever these cost.
-
-## 2026-10-10 — a constructor handed over as a function builds
-
-The lox port found that a record constructor passed where a function is wanted
-checks and runs on the interpreter and stops the native build with "`pair` as
-a bare value is not yet supported" (lox F20). The port wrapped each one in a
-lambda, `(l o r -> logical l o r)`, which is what native now does by itself.
-When codegen lowers a name that is not a function group, a builtin or one of
-the words with a value of its own, and the name is a record type with one to
-four fields, it lowers the lambda that calls the constructor. Four is the
-native lambda's limit, so a record of five or more fields handed over is still
-refused at build with the same message.
-
-`tests/golden/micro/a_constructor_handed_over_as_a_function` hands a
-one-field constructor to `list/map`, a two-field one to a function that calls
-it and a three-field one to another, and prints the same line on the
-interpreter, a dev build and a release build. The compiler on main refuses to
-build it. The ratchet row "a constructor refused as a value" puts the refusal
-back and the micro corpus goes red.
-
-`tests/a_type_name_as_a_bare_value.rs` had pinned the refusal for a
-two-field record printed bare. It now pins that both engines print `<fn>`.
-
-CI's rows for this branch, with main's repair list merged in. Two rows moved,
-both by the size of the new lowering in the emitter:
-
-    emit_instructions                7,062,299 ->   7,062,491
-    browser_compile_instructions   388,181,803 -> 388,266,184
-
-Welfare falls from 90.2505 to 90.2504, and the floor follows it down under the
-rule for a change that makes the language do what it says: a program that
-checks and runs on the interpreter now builds natively.
-
-The tie-list ruling landed first. Carried over it, the browser compile row
-lands at 388,276,582, the constructor's 84,381 on top of main's 388,192,201,
-and the floor at 90.25039901483147.
 
 
 ## 2026-10-10 — two values a carry handed back while they were still held
@@ -1994,6 +1788,92 @@ worth more than the three rises cost, and welfare banks the difference at
 91.11. `compile_allocs` rose 68 to 14,598 and `interp_allocs` 68 to 587,351, and
 the floor drops by what they cost, since this builds a ruled part of the
 language.
+
+## 2026-10-12 — concat reads the bytes text/bytes answers, on every engine
+
+From #1891, the third item: the 2026-08-23 gavel says a list is never bytes,
+and what `concat` declares decides which engine is right. Appendix b declares
+`text/bytes string → int[]` and `text/concat` as appending two lists, so a
+value `text/bytes` answered is a list to `concat`. Native code already read a
+bytes value as its byte values on either side and answered a list. The
+interpreter matched only two `List`s and refused anything else with "concat
+takes two lists", which is what the httpd, mustache, chip8 and ugit ports hit.
+The interpreter now reads a `Bytes` operand as its byte values, and the answer
+is a list on both engines. The gavel's other direction is unchanged: a list is
+still never read as bytes.
+
+`tests/golden/micro/concat_reads_the_bytes_text_bytes_answers` puts bytes on
+the left, on the right, on both sides, and as a slice of `text/bytes`. Main's
+interpreter stopped at the first line.
+
+Appendix b also says `concat` takes strings, and neither engine does: both
+refuse two strings with the same message. #1906 asks which way that goes.
+
+## 2026-10-12 — gavel: arms travel with the value, and a file names only what it can see
+
+Clay ruled the namespace half of #1883 in dialog, on 2026-10-11 and 2026-10-12.
+It restates the 2026-08-29 gavel "arms travel with the type, under the
+ownership rule" at full width: that gavel was built for `to_string` and
+operator arms, and ordinary functions were never brought under it.
+`enroll_bare` in src/lib.rs still gives every pub function of every import a
+bare twin whatever the call passes, which is how a test file's
+`import "std/list"` turned a module's own `step 3` into `list/step` on main.
+
+Clay: "it's fine to call that method on an argument that's passed to a
+function because its arms will travel with it. you just can't call it on your
+own internal things if you haven't imported anything that defines it." And on
+a name a file never imported: "you can't reference a type if you don't know
+what version of the library it even came from... there could be a million
+different libraries that all define that same thing."
+
+**The ruling.**
+
+1. A value carries the arms its type's owner wrote. Code holding the value
+   calls them bare, without importing the owner: a function handed a `circle`
+   may write `area x`. A value reached through one that arrived counts as
+   arriving with it: a field of a parameter, an element of a list passed in,
+   the result of a traveling arm called on it.
+2. On values a file made itself (literals, its own records, what it built from
+   them) a name resolves only if the file can see it, declared in its own
+   module or in a module it imports. Otherwise it is `error[name]`.
+3. A qualified call `geo/area x` needs the import, takes any arguments, and
+   reaches only `geo`'s own arms.
+4. An arm is legal only when one of its parameter types belongs to the module
+   that writes it, so a value's traveling arms come from exactly one place,
+   its type's owner. In a mixed call such as `combine x 3`, `x`'s owner's arms
+   answer. Two owners' arms equally specific for one call are refused, as the
+   2026-08-29 gavel on the ambiguous bare call already says, and a local arm
+   of the same shape shadows a traveling one.
+
+`kanso check` stays exact: a library is checked alone with `area x` on a
+parameter accepted and `area 3` refused, and the program that passes the value
+confirms an arm exists or is refused at its own call site.
+
+Owes, on #1894: bare enrollment replaced by the two rules above; the
+reproduction (a module's `step 3` hijacked by a test file's import) as an
+error golden, seen red on main; a golden for an arm traveling into a library
+that never imported its owner; an error golden for an internal value calling
+a name the file cannot see; the corpus, samples, lib and the sibling
+repositories moved to qualified spellings where they leaned on the old reach;
+ch07 and ch11 rewritten to state the rule.
+
+## 2026-10-12 — gavel: a test file is an outside consumer of its module
+
+Clay ruled the other half of #1883: "kanso test certainly cannot see private
+definitions. that would hugely violate the point of privacy." On main a
+`*_test.kso` is a member of its module: it reads private names, its
+definitions join the module's namespace, and `kanso run` checks it, so a
+formatting slip in a test stopped the program it tests from running.
+
+**The ruling.** A test file is compiled as an outside consumer that imports
+the module it sits beside. It sees only pub names, adds nothing to the module,
+and only `kanso test` reads it; `kanso run`, `check` and `build` ignore it.
+
+Owes, on #1883: the loader keeps `*_test.kso` out of the module and compiles
+each as an importer; goldens for a test that reads a private name (refused), a
+test helper sharing a production name (no collision) and a malformed test
+beside a program that still runs; existing tests that read private names
+moved onto the pub surface.
 
 ## 2026-10-12 — a wide tail call keeps its jump
 
