@@ -1692,6 +1692,12 @@ from 17,664 to 17,760, `emitted_other_defines` from 2,036 to 2,063 and
 jsonbench by 2,379,750. The floor drops by the difference under the #1884
 ruling.
 
+Two goldens the merge with main left stale now read this tree:
+`front_end_visits` on compile_corpus from 7,990 to 8,120 and
+`compile_peak_bytes` from 694,044 to 701,567, and in the run program
+`run_allocs` from 1,812,274 to 1,812,278 and `run_alloc_bytes` from 303,607,404
+to 303,607,564.
+
 ## 2026-10-12 — arms travel with the value
 
 The first rule of the 2026-10-12 gavel on #1894. A value carries the arms its
