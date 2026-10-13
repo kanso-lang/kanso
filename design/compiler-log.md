@@ -19,32 +19,6 @@
 > The last forty entries. Everything older is in `log/compiler-log-archive.md`,
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
-## 2026-10-10 — the log goes back under its cap a second time
-
-design/compiler-log.md held 526 entries and 25,301 lines against a cap of
-forty. The archive was last fed on 2026-09-18, and in the three weeks since
-every change appended to the live file and nothing moved the older end.
-
-This closes #1850. The 487 oldest entries move to design/log/compiler-log-archive.md
-unedited, appended after its last entry. The live file keeps the newest 39 plus
-this one. Nothing is deleted. Before the move there were 1,456 archived and 526
-live entries; after it there are 1,943 archived and 39 live, so 1,982 entries
-either way. The sorted heading lists of the two files match before and after
-the move, and so do their non-blank lines, so the move changed no content.
-
-The readers that broke last time were checked first. `page_drift` and the
-trend gate count only added lines of the live log (`+## ` and `+`), so moving
-lines out costs neither of them anything.
-`a_question_sent_to_clay_has_a_ledger_entry` and its ratchet mutation read
-both files since 2026-09-18, and
-`a_log_heading_is_one_line` always has.
-
-- **DONE** live log at forty entries.
-- **OPEN** the cap has no gate. It was restored by hand on 2026-09-17 and again
-  today, and both times it had run to many times the limit. A spec that counts
-  the live file's headings and fails above forty would hold it. That spec is
-  `tests/`, so it is cloud's: #1854.
-
 ## 2026-10-10 — three design notes retire, and a July ruling reaches the log
 
 This closes #1851. CLAUDE.md says a design note whose work has shipped is
@@ -1686,3 +1660,21 @@ Owes, on #1890: the change on every engine; micro goldens for a range past the
 end, a start past the end and a range that ends exactly at the end; the
 exhaustiveness check sees `none` in `text/slice`'s answer; lib, samples and
 sibling repositories that leaned on clamping moved to dispatch on `none`.
+
+## 2026-10-13 — gavel: `list/concat` joins two lists, and strings join by interpolation
+
+Clay ruled #1906 on the committee's view, on the condition that it rest on
+first principles rather than on what the language already had. Appendix B
+described `text/concat` as joining two lists or two strings; every engine
+joined only lists, and a string argument stopped at run time.
+
+**The ruling, and its reasons.** Joining two lists is `list/concat a b`, in
+std/list, and `text/concat` goes. A function lives with the type it works on,
+so a list operation belongs in `list`. There is one way to combine strings:
+interpolation (`"{a}{b}"`), with `text/join` for a list of pieces. A `concat`
+for strings would be a second way, so none is added.
+
+Owes, on #1906: `list/concat` on every engine with `text/concat` removed and
+its callers moved; the checker refuses a string argument to `list/concat`; an
+error golden for a call to the removed name that points at `list/concat`;
+appendix B's entry rewritten under std/list.
