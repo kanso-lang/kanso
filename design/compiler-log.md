@@ -21,35 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-10 — gavel: GitHub issues are the tracker, and hygiene is continuous
-
-Clay, on the proposal to track a cleanup list as GitHub issues: "why on Earth
-not just use githubs issues feature? seems it would be a much more methodical
-way to track and prioritize work." And on keeping the repository clean: "the
-instructions should explicitly maintain ongoing refactoring so that things stay
-hygienic over time and I don't have to explicitly remind you."
-
-**The tracker.** Open work and open decisions are GitHub issues in
-kanso-lang/kanso, labelled by kind (`needs-clay`, `ruled`, `cleanup`, `perf`),
-lane (`lane:chat`, `lane:cloud`) and priority (`p1` to `p3`). A pull request
-that finishes one closes it with `Fixes #N`. The log stays the record of what
-was ruled and measured. STATUS.md's "Ruled, unbuilt" section and
-design/pending-gavels.md retire; #1852 carries the steps, including the two
-specs that keep their counts in step. The case for the change was made the same
-day the two newest "Ruled, unbuilt" rows were found already built and never
-taken off, and a ruling of 2026-10-07 was found never to have had a row.
-
-Opened the same day: #1842, the one open decision (whether `list/map xs ref`
-may build a node's list of references), and #1843, the three-parts-per-billion
-row, the last standing "Ruled, unbuilt" entry; and nine `cleanup` issues from a
-hygiene review, #1844 to #1852.
-
-**Hygiene.** CLAUDE.md gains a section, "Hygiene is continuous": each pull
-request leaves the files it touches cleaner; a fact has one home; cloud lands a
-`cleanup` pull request for every five others; cloud sweeps the repository
-weekly and files what it finds; a refactor is a pure move; and instructions
-state rules, with their history in the log.
-
 ## 2026-10-10 — the log goes back under its cap a second time
 
 design/compiler-log.md held 526 entries and 25,301 lines against a cap of
@@ -1902,3 +1873,37 @@ The record-field fixture #1926 added takes the same regrows:
 `a_list_held_in_a_record_grows_where_it_stands_allocs` lands on 76 and
 `a_list_held_in_a_record_grows_where_it_stands_bytes_malloc` on 19, three each
 above #1926's reading, while its peak falls as above.
+
+## 2026-10-13 — the ratchet's own checkout reads its library again
+
+Two faults on main kept the ratchet from reading what it was built to read.
+Neither came from the branches that showed them.
+
+The first came with #1927. Its mutation `a_fifth_push_takes_sixteen` anchors
+on the grow's extra doubling, and #1927 rewrote that line as
+`if (cap > 16 && !perm) cap <<= 1;`. The mutation stopped applying, so the
+whole-tree ratchet job reported it stale on every branch merged with main;
+#1904 was the first to show it. The mutation now anchors on the new line and
+doubles every time again, and the mem corpus goes red under it
+(`a_cap_around_a_count_is_a_range` reads `allocs=14` against 13).
+
+The second is older and shows only on a branch that edits
+`scripts/perf_record`, because only then does a shard pick the perf-history
+row. The ratchet links each scratch worktree's `target` to
+`/tmp/kanso-ratchet-target`, so the compiler it builds lives outside the
+checkout. `in_shipped_library` looked for the library beside the binary
+(`current_exe()/../../lib`, here `/tmp/lib`) and nowhere else, so
+`kanso check lib/json` refused `builtin_built_text` as internal to a library
+it was not in. With no compile counters on stderr, perf_record's row lost
+`compile_alloc_bytes` and `compile_passes`, and the gate was red before any
+mutation. #1931 showed it, since it rewrites perf_record's lists in the
+spanning form. The import loader already had the right fallback:
+`resolve_import` tries `lib/` beside the working directory when the
+toolchain's copy is absent. The check now tries the same root.
+`a_checkout_library_checks_from_any_binary` copies the compiler to a
+directory of its own and checks `lib/json` from the checkout; it read the
+refusal before the fix and reads nothing after.
+
+The tab's build leaves the new root out, since it has no checkout to stand
+in. With the root compiled in, `browser_compile_instructions` read 392,449,729
+against 392,378,375; without it the browser row does not move.
