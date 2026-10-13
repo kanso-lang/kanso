@@ -295,11 +295,13 @@ pub fn rewrite(program: &mut Program) {
             new_fns.push(FnDecl {
                 name: helper.clone(),
                 is_pub: false,
+                written_pub: false,
                 span,
                 params,
                 body,
                 file: decl.file.clone(),
                 synthetic: true,
+                shades: None,
             });
         }
         let span = decls[0].span;
@@ -376,11 +378,13 @@ pub fn rewrite(program: &mut Program) {
         new_fns.push(FnDecl {
             name: name.to_string(),
             is_pub: decls.iter().any(|d| d.is_pub),
+            written_pub: decls.iter().any(|d| d.written_pub),
             span,
             params: wrapper_params,
             body: entry,
             file: decls[0].file.clone(),
             synthetic: true,
+            shades: None,
         });
     }
     for (index, params, body) in in_place {
