@@ -21,777 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-10 — the log goes back under its cap a second time
-
-design/compiler-log.md held 526 entries and 25,301 lines against a cap of
-forty. The archive was last fed on 2026-09-18, and in the three weeks since
-every change appended to the live file and nothing moved the older end.
-
-This closes #1850. The 487 oldest entries move to design/log/compiler-log-archive.md
-unedited, appended after its last entry. The live file keeps the newest 39 plus
-this one. Nothing is deleted. Before the move there were 1,456 archived and 526
-live entries; after it there are 1,943 archived and 39 live, so 1,982 entries
-either way. The sorted heading lists of the two files match before and after
-the move, and so do their non-blank lines, so the move changed no content.
-
-The readers that broke last time were checked first. `page_drift` and the
-trend gate count only added lines of the live log (`+## ` and `+`), so moving
-lines out costs neither of them anything.
-`a_question_sent_to_clay_has_a_ledger_entry` and its ratchet mutation read
-both files since 2026-09-18, and
-`a_log_heading_is_one_line` always has.
-
-- **DONE** live log at forty entries.
-- **OPEN** the cap has no gate. It was restored by hand on 2026-09-17 and again
-  today, and both times it had run to many times the limit. A spec that counts
-  the live file's headings and fails above forty would hold it. That spec is
-  `tests/`, so it is cloud's: #1854.
-
-## 2026-10-10 — three design notes retire, and a July ruling reaches the log
-
-This closes #1851. CLAUDE.md says a design note whose work has shipped is
-deleted, and that no file but the tracker carries pending-decision text. Five
-notes were read against the tree.
-
-**`design/enumerable.md` is deleted.** Its vocabulary is in `lib/list` and is
-taught in ch12 and appendix B, including the collision rule. The two rulings
-its status line called interim were ratified by Clay on 2026-08-14 (`range` is
-unbound and the statistic is `spread`; map builders are last-write-wins, like
-`put`), and §6 of the note already said so. Its one item marked open,
-`first coll n` beside `take n . to_list`, was settled by what shipped:
-`lib/list` has `first coll` alone, so `take` and `to_list` is the one way to
-take n. Its §7 described build blocks, which retired today.
-
-**`design/testing.md` is deleted.** The `testing` hako ships in `lib/testing`,
-`lib/json/json_test.kso` uses `when_failed`, and ch07 and ch08 teach it. The
-note's deferrals stay deferred and are recorded here so they keep a home: the
-2026-07-28 describe/context sketch is superseded until real suites show the
-need, with its two-deep limit still the right cage if they do; effectful tests
-are out of scope until io testing gets its own design against the boundary
-language; and two small observations were noted and not proposed, that a lambda
-cannot carry arms (so dispatching on a reason inside `when_failed` takes a named
-group) and that `when_failed` answering false on success folds "did not fail"
-into "failed the wrong way".
-
-**The work-ahead engine was ruled on 2026-07-22 and the ruling was never
-logged.** It lived only in `design/workahead-engine.md`. Recorded now: when a
-fiber parks on io, the scheduler runs proven-needed work in first-use order,
-then speculative work, keyed off logical scheduler state so the counters stay
-deterministic; v1 is proven work alone. The wall-credit substrate and the
-`bench/workahead/` rig shipped, and the engine did not. The note's
-implementation detail moves to #1856 (`ruled`, `lane:cloud`), and the note is
-deleted. docs/compiler.html's section remains the public description.
-
-**`design/hako.md` stays.** It is the only specification of `kanso install`,
-`list` and `update`, which ship, and `src/hako.rs` cites it. Its open-questions
-section pointed at the ledger, which is retiring under #1852; it now says the
-`std/` question was ruled on 2026-08-29 (std ships inside the binary) and keeps
-signing and monorepo hakos as parked.
-
-**`design/memory-frontier-research.md` stays.** Its table is the record of
-which memory ideas shipped, which were declined on measurement and which were
-refuted, and its refuted list is what stops an idea from being rebuilt. Rows
-4.1 and 4.4 concerned build blocks and are marked moot.
-
-The oldest live entry moves to the archive with this one, so the live file
-stays at forty.
-
-- **DONE** #1851.
-- **OPEN** #1856, the work-ahead engine, cloud's.
-
-## 2026-10-10 — CLAUDE.md states its rules once
-
-This closes #1849. CLAUDE.md had grown to 927 lines, most of them the history
-of its own rules: dated stories of how each was learned, counts with the dates
-they went stale, and corrections to earlier corrections. Its design-flow rule
-says chronology belongs in the log, and its hygiene section says instructions
-are rules. It is now 498 lines.
-
-Every rule the old file stated with a bold lead is still there, checked by
-listing the old file's bold leads and finding each one in the new text. What
-went is the stories, the session tables and the dated counts. The full earlier
-text is `git show be71feb8:CLAUDE.md`, and the stories are in the log entries
-of their own dates.
-
-Three things changed beyond trimming:
-
-- The two-grep ruling count was written as one pipeline that fed the first
-  count into the second grep, so it printed one meaningless number. It is two
-  commands now.
-- "Branches are free" moved from "Do not stop" to "Access and permissions",
-  beside the other rules about what needs Clay's permission.
-- The chat's lane names the design notes, which it has edited since the lanes
-  were drawn and which #1851 was filed against.
-
-Two specs read CLAUDE.md's wording, and both still pass. One wants the
-cost-golden count word in "all TWELVE cost goldens,", the one count left in
-the file, and #1846 asks cloud to retire it. The other wants every compile
-gate named in the bullet containing "are separate gates". It went red during
-the rewrap when that phrase broke across a line, which confirmed it reads the
-phrase literally.
-
-The oldest live entry moves to the archive with this one.
-
-## 2026-10-10 — a pop after a skipped lap walks the whole result
-
-With the two carry faults of kanso#1834 fixed, the sat port still failed under
-the lap carry: `rand75_unsat` reported a satisfying assignment, and mal's
-self-hosted runs died with a segmentation fault. Both came back right with the
-pop's copy-out made deep, so the search went there.
-
-When a carrying loop returns, `k_beat_pop_slow` copies its result out of the
-loop's storage. That walk has no mark, so it counts every arena node as a
-survivor, and it stops at a node whose direct interior survives as well. Under
-the old rule every lap staged, so whatever the result held in the depth's carry
-pair sat under the pair's own nodes, and the walk reached and copied it. The
-lap carry lets laps go by without staging. Such a lap builds its new nodes in
-the arena, around values that are still in the pair. The pop's walk meets the
-fresh outer node first, finds its interior fresh too, and stops. The value in
-the pair is left where it was. The next loop entered at the same depth stages
-into the same pair and writes over it.
-
-`tests/golden/micro/a_pop_after_a_skipped_lap_keeps_what_the_lap_built.kso` is
-the shape in a dozen lines: a loop that wraps a box four times, of which only
-the first lap stages, followed by a loop at the same depth that builds twenty
-thousand elements a lap. The second loop's list replaced the first loop's
-innermost box, and the program printed `<<<record>>>` where the interpreter
-prints `<<<<[1 2 3]>>>>`.
-
-The carry now records when a lap skipped its stage, in the lap carry's drift
-test and in the chain's. A stage clears the record, and so does the push that
-opens a depth. A pop that finds it set walks the whole result, as it already
-did when a write had reached the carry. A pop after a loop whose last lap
-staged is unchanged.
-
-mal still crashed after that, in a map lookup reading a key whose length word
-held a pointer. A hardware watchpoint on the key showed it written twice by
-stage copies into a carry buffer and then overwritten by a later stage that
-reused the buffer. The deep walk at the pop had found a map whose header and
-pairs lay in the arena and whose keys lay in the pair. It copied the keys out
-and rewrote the pairs in place. The map's sorted view is a second, malloc'd
-copy of the pairs that the walk never reaches, so it went on naming the old
-keys, and the next lookup searched it. The walk now drops the view whenever
-it moves a key or a value in a map it repairs in place, and the next read
-sorts again.
-
-`tests/golden/micro/a_sorted_view_follows_the_keys_a_pop_moves.kso` builds
-the shape: a loop that adds a key a lap and reads the map back, staging every
-tenth lap, followed by a second run of the same loop with keys of the same
-length. Without the change the program dies with a segmentation fault; with
-it, it prints what the interpreter prints. Main does not reach this path,
-because its pops copy deep only after a write has reached the carry.
-
-The deep walk first cost memory where it should not have. It meets a string
-builder whose header survives and goes straight to the in-place repair, which
-asks only whether the builder's storage lies in the arena. A builder's storage
-is malloc'd, so that answer was no, and the repair copied it into the arena and
-dropped the builder's capacity, leaving a plain string the next append had to
-copy again. The survival test the shallow walk uses already passes a builder,
-and a malloc'd byte buffer, for this reason. The repair now passes them too.
-With that, `string_builder_shape`, `builder_counts_once` and
-`a_builder_handed_on_is_still_a_builder` are back to main's counts; with the
-repair copying, `string_builder_shape` had evacuated 4,096 bytes where it
-evacuates 80.
-
-Against main, the counters that see a pop fall or hold. basket allocates
-27,263 nodes, one fewer, and asks 4 survival questions where it asked 16,002;
-the run program's survive count falls from 105,679 slots to 4,854 and it
-evacuates 6,441,632 bytes where it evacuated 9,789,344. `record_reuse_shape`
-asks 8 survival questions where it asked 16,006, and `effect_push_shape` 10
-where it asked 15.
-
-The ports' long-running loops, measured by peak resident memory on this branch
-with main's fixes merged in, against main alone. mal's `(fib 25)` held 764 MB
-on main and holds 9 MB here, and a 40,000-step tail call that held 147 MB
-holds 9 MB; both print what they printed before. That closes mal's F8. lox's
-F18, a loop that builds a `Point` a pass, is not closed by this change alone:
-it holds 1,131 MB at 20,000 passes on both trees. With kanso#1824 added as
-well it holds 24 MB at 20,000 passes and 88 MB at 80,000, which is what the
-interpreter holds, 31 MB and 93 MB. The lox port keeps every object in a heap
-of cells that it never collects, so that growth is the program's own. What
-stays slow is time: each stage copies the whole live heap again, and 200,000
-passes still had not finished after 120 seconds.
-
-CI measured the rest against main, and most of it costs. Every benchmark's
-machine code grows by between 9,200 and 9,472 bytes, the runtime's share of
-the lap carry; runbench's is 611,769 bytes and the fourteen together 4,781,774.
-work_deepbench does the most extra work, landing on 393,576,371 against
-main's 367,269,411, 7.2% more. runbench, with the four phases kanso#1836 added, does 1,247,098,999 against main's 1,245,043,324, 0.17% more; encodebench
-2,398,358,806, 0.19% more; livebench 1,473,968,154; jsonbench 860,559,756;
-oneshot 13,210,643; work_widebench 28,175,109; digestbench 5,599,654; escapebench
-39,045,879; indexbench 2,459,068; scanbench 270,069; readbench 4,577,565.
-basket does less, 30,415,829 against 32,505,156, and so does pendbench,
-190,050,778 against 190,396,306. The deep walk at the pop and the record of a
-skipped lap are what this change adds to those paths, but no build has
-separated the two, so the delta arrived with the change and its split between
-them is open. On the compile side, release codegen counts 454,310,397, dev
-codegen 118,946,233, compile_instructions 25,858,385, entry_instructions
-85,515,649 and library_instructions 86,067,297, each a little higher, and
-emit_instructions falls to 7,058,267. In the browser, compiling the corpus
-takes 390,605,563 instructions with a peak of 675,725 bytes, and running it
-34,102,877.
-
-Together those cost the objective 0.0035: the meta reads 90.2465 against a
-floor of 90.2499. The change is a correctness fix, because a loop that holds
-764 MB to compute `(fib 25)` is a program that fails on a larger input, and
-the floor goes down by exactly that much under the rule for changes that make
-the language work as specified.
-
-## 2026-10-10 — a fold that joins onto its accumulator writes in place
-
-The mustache port renders a template by folding over its pieces, and its
-folder answers `"{acc}{piece}"`. Natively, every step copied the whole string
-built so far, so 20,000 pieces held 2.77 GB before the program finished. The
-interpreter was not affected.
-
-The string-builder analysis already wrote a join in place when the
-accumulator is carried by a recursive function. A lambda handed to a fold was
-never looked at, because `walk_for_builder` stops at every lambda. A fold's
-folder runs once per element on the accumulator the fold threads through, so
-when `fold_owns_accumulator` says the fold owns its seed, a join onto the
-folder's first parameter has the same shape as the recursive case. The walk
-now marks those joins: in the folder's body, in either arm of an `if`, and
-through the wrapper lambda that `body_is_folder` already accepts.
-
-A folder passed by name, as in `list/fold xs "" piece`, is handled the same
-way under three conditions. Every arm of `piece` must end in a join onto its
-first parameter. Every direct call of `piece` must hand that argument over.
-Every use of the name as a value must be the folder of a fold whose seed
-nothing else holds. A partial application of `piece` keeps what it was given,
-so it disqualifies the group.
-
-The runtime's in-place join stopped the program when its accumulator was not
-already a builder. A fold's seed is usually a literal, so `k_concat_arr_mut`
-now converts it on the first join, the way a builder parameter's caller does.
-
-`tests/golden/mem/a_fold_that_joins_onto_its_accumulator_grows_one_string`
-folds 2,000 pieces with a named folder and with a lambda. `alloc_bytes` falls
-from 21,839,568 to 1,221,150 and `arena_peak_bytes` from 22,020,096 to
-2,097,152. `tests/golden/micro/a_fold_joins_onto_its_own_accumulator` covers
-the ways the string can be shared: a seed bound to a name, one fold's result
-folded twice more, and a direct call of the named folder. Making
-`fold_owns_accumulator` answer yes unconditionally turns it red. The two folds
-over one lambda result then wrote into the same buffer, and both printed
-`[1][2][3]+5-6`.
-
-No benchmark folds a string, so every allocation counter agrees with main.
-The runtime's join grows 320 bytes of machine code, and CI's rows move with
-it:
-
-- `text` grows 320 bytes a binary, to 4,593,438 in all.
-- `work_basket` lands on 32,404,790, `work_runbench` on 1,129,589,259,
-  `work_livebench` on 1,473,486,345, `work_encodebench` on 2,384,338,137,
-  `work_oneshot` on 13,027,190, `work_digestbench` on 5,566,917 and
-  `work_scanbench` on 281,806, each within 22,030 instructions of main.
-- The analysis costs `compile_instructions` 25,857,543,
-  `entry_instructions` 85,513,471 and `library_instructions` 86,066,360.
-  `emit_instructions` falls to 7,058,306, `interp_instructions` to
-  488,868,354, and both codegen rows fall.
-- `browser_compile_instructions` rises from 388,182,464 to 391,515,764,
-  0.86%, and the browser run row falls 6, to 33,510,702. The rise does not
-  come from the new pass: with `named_folder_joins` switched off the row reads
-  392,251,588, higher still, so it follows the wasm binary's layout rather
-  than the work done.
-
-On main as it stood before kanso#1836, welfare fell from 90.25811251 to
-90.25519022 on those rows, because no benchmark folded a string.
-
-The floor question closed on the corpus-first gavel, and kanso#1836 put the
-shape into the run program as its `fold` phase: 800 pieces folded onto one
-string, measured on main before this fix at 858,398 instructions. With main
-merged in, runbench falls from 1,245,043,324 to 1,244,977,121, a projection
-from this container's 1,244,976,714 plus the 407 instructions by which CI read
-main above it; CI's row replaces it. The phase's memory is where the fix pays.
-run_arena_peak_bytes falls from 8,912,912 to 7,864,336, run_arena_blocks from
-8 to 7, run_alloc_bytes from 326,862,802 to 325,331,283, run_allocs from
-1,773,132 to 1,772,340 and run_sh_str from 10,188,896 to 8,648,960. Two run
-counters rise with the fix: run_str_scans goes from 229 to 1,021 while
-run_str_scan_bytes falls to 17,930,429, and run_bytes_malloc rises by 7 to
-9,127. Nothing here isolates which step of the in-place join each comes from.
-The rows the runtime's 320 bytes moved above
-carry onto main's values: `text` totals 4,656,446, work_basket lands on
-32,527,186, work_livebench on 1,472,861,727, work_encodebench on
-2,393,926,750, work_oneshot on 13,176,997, work_digestbench on 5,598,179 and
-work_scanbench on 268,886. The analysis's rows carry the same way:
-compile_instructions lands on 25,857,737, entry_instructions on 85,514,580,
-library_instructions on 86,066,207 and browser_compile_instructions on
-391,827,307. All of these are projected until CI reads them. Welfare rises from 90.2499
-to 90.3104 on those rows, and the rise is banked.
-
-CI's rows replace the projection. work_runbench lands on 1,244,977,121, as
-projected. The other rows CI corrects are small: `text` totals 4,656,478,
-work_encodebench lands on 2,393,926,869, work_livebench on 1,472,861,230 and
-browser_compile_instructions on 391,826,076. The run program's emitted code
-reads one call and two lines more than this container wrote, so
-emitted_other_calls lands on 17,394 and emitted_other_lines on 146,698.
-Welfare reads 90.3105 on CI's rows, and the rise is banked.
-
-The conversion in `k_concat_arr_mut` made `k_b_adopt` redundant, and the
-ratchet found it on the carrier. Two rows mutated the adoption: "a join that
-never adopts its seed" removed it, and "a lazy seed taken for a builder"
-handed it the forced value. Both stayed green, because a seed the adoption
-misses now reaches the first join without room and is made into a builder
-there. Neither mechanism could be removed and seen red while the other stood.
-The two rows are replaced by "a first join that never makes its builder",
-which restores the old refusal in `k_concat_arr_mut`. Under it
-`a_fold_joins_onto_its_own_accumulator` prints nothing from native and the
-micro corpus goes red. `k_b_adopt` is left in place for now and goes in a
-change of its own, since removing it moves the text and codegen rows and
-needs CI to read them.
-
-## 2026-10-10 — a loop entered from a tail cycle gives its garbage back
-
-The lox and mal ports both ran their interpreters out of memory. A Lox `for`
-loop of fifty thousand passes that builds two small objects per pass held
-3.0 GB at its peak natively, and mal's tail-recursive `sum2` kept 3.7 KB per
-iteration until exit. The interpreter under `--interp` ran the same programs
-in about 11 MB.
-
-Each port's machine loop is a self-recursive function, the shape the beat
-analysis rewinds, and neither rewound. The lox loop, `spin`, failed two
-tests. The first was its entry. `exec` tail-calls `spin` from its while arm,
-and `exec` sits in a tail cycle of its own, since a block runs its first
-statement and tail-calls itself on the rest. The analysis demoted a tail
-entry to a plain call only when the caller was in no tail cycle at all, on
-the reasoning that a plain call inside a cycle grows the stack. That holds
-only when the cycle runs through the demoted edge, which happens when the
-loop can reach its caller back by tail calls. `spin` returns its state to
-`exec` and never tail-calls it, so the plain call holds one frame while the
-loop runs and the caller returns before its cycle goes round again. The
-condition now asks exactly that: the entry is demoted unless the loop
-tail-reaches the caller.
-
-The second was the loop's own arguments. `spin` hands its body and condition
-on unchanged, and both come out of a record field, which inference reads as
-any value at all. A slot of unknown type was never carried through a
-rewind, in case it hid a growing accumulator behind a helper call. A
-parameter every self-tail-call passes on as itself cannot grow: it arrived at
-entry, lives below the mark, and the evacuation shares it rather than copying
-it. Such a position is now carried whatever its type.
-
-With both changes the lox loop rewinds every pass. At fifty thousand passes
-the release binary peaks at 77 MB, down from 3.0 GB, and runs in 1.17 s
-against 3.01 s. What remains is the port's own heap of instance fields, which
-it never frees by design. The fixture
-`a_loop_entered_from_a_tail_cycle_gives_its_garbage_back` builds the same
-shape in thirty lines and pins `arena_peak_bytes` at 1,048,576 for twenty
-thousand passes; main holds 3,145,728 for it.
-
-mal's machine is not fixed by this. Its `ev` is one member of a tail cycle
-with `ret`, `throw` and `settle`, which makes it a cluster, and a cluster
-carries only scalars and threaded parameters through its rewind. Carrying a
-heap value round a cluster is the next piece of work.
-
-No benchmark's run changed: every runtime cost vein agrees with its golden.
-The analysis is dearer to run, on CI's rows after merging main:
-`compile_instructions` rises to 25,861,592, `entry_instructions` to
-85,526,009 and `library_instructions` to 86,078,947, while
-`emit_instructions` falls to 7,032,277 and `interp_instructions` to
-488,876,843. `browser_compile_instructions` rises from 388,182,464 to
-390,287,782 with this tree's rustc. On main as it stood before kanso#1836,
-welfare fell from 90.25811251 to 90.25621395, because no benchmark ran a loop
-entered from a cycle.
-
-The floor question closed on the corpus-first gavel, and kanso#1836 put the
-shape into the run program as its `machine` phase: 20,000 passes of a loop in
-a cycle, measured on main before this fix at 8,825,906 instructions. Rewinding
-the loop costs instructions and gives memory back. With main merged in,
-work_runbench rises from 1,245,043,324 to 1,263,682,936, a projection from
-this container's 1,263,682,529 plus the 407 instructions by which CI read main
-above it; CI's row replaces it. run_arena_peak_bytes falls from 8,912,912 to
-6,815,760 and run_arena_blocks from 8 to 6. The rewind's own work shows in the
-rows that rise: run_beat_iters lands on 47,564, run_evac_allocs on 128,717,
-run_evac_bytes on 11,709,440, run_alloc_bytes on 326,929,762, run_allocs on
-1,773,139, run_sh_buf on 119,108,240 and run_buf_reuse on 134. Carried onto
-main's rows, compile_instructions lands on 25,861,786, entry_instructions on
-85,527,118, library_instructions on 86,078,794 and
-browser_compile_instructions on 390,599,325, all projected until CI reads
-them. The objective weighs the peak above the instructions: welfare rises from
-90.2499 to 90.3087 on those rows, and the rise is banked. The fix's own
-fixture, `a_loop_entered_from_a_tail_cycle_gives_its_garbage_back`, reads
-four fewer evacuations on main's runtime: evac_allocs lands on 80,013 and
-evac_bytes on 1,920,368.
-
-CI's rows replace the projection. work_runbench lands on 1,263,682,936, as
-projected. The rewind's code in the run program's machine phase shows in its
-emitted counts: emitted_other_calls lands on 17,405, emitted_other_branches on
-16,399 and emitted_other_lines on 146,723. `text` totals 4,652,398 and
-browser_compile_instructions lands on 390,597,579. Welfare reads 90.3087 on
-CI's rows, the score already banked.
-
-## 2026-10-10 — a read named before the write keeps the write in place
-
-Three ports hit the same cliff. The sat solver, the toml parser and the lox
-interpreter each read a map entry into a name and then wrote the map:
-
-```
-v = m[i]
-bump (put m i (v + 1)) ...
-```
-
-Written inline as `put m i (m[i] + 1)`, the put happens in place. Written
-with the name, `linear.rs` counted `v = m[i]` as a second use of `m`, so `m`
-was not unique at the put and every put copied the map. The sat port's
-reduction, 20,000 steps over 100 keys, ran in 27.5 seconds natively with the
-name and 0.010 seconds without it.
-
-The two programs are the same as far as the map is concerned. The read
-answers an element, and `v` is used only as an operand of the put's own
-arguments, which are evaluated before the put writes. `effective_uses` now
-discounts a binding's mentions of the map when the bound name meets three
-conditions: neither the name nor the map is rebound in the block, the
-binding does not hold the map itself, and every later mention of the name is
-reached from the sibling arguments of a `put`, `push` or `append` on that
-map through arithmetic and comparison alone. A mention anywhere else (inside
-a lambda, a list, another call, or a second binding such as `w = v * 2`)
-could force the read after the write, and the binding still counts. A loop's
-bindings usually sit under its `return ... if` guard, so the search goes down
-through the guard's rest.
-
-`tests/golden/mem/a_read_named_before_the_write_stays_in_place.kso` is the
-sat reduction at 2,000 steps. Its golden pins 8 allocations; the compiler
-before this change made 6,013 on it.
-`tests/golden/micro/a_read_named_before_a_write_sees_the_old_value.kso`
-covers the other side: a name used after the write, a name stored in the
-list the put writes, and a name that feeds a second binding all keep the
-copy, and each line prints the old value beside the new on every engine.
-
-The analysis costs the front end a little on every route: compile_instructions
-lands on 25,857,737, entry_instructions on 85,514,349, library_instructions on
-86,065,981, emit_instructions on 7,065,059 and interp_instructions on
-489,220,284. browser_compile_instructions lands on 392,737,085. These are
-carried onto main's rows from this branch's own readings and are projected
-until CI reads them.
-
-The floor question closed on the corpus-first gavel, and kanso#1836 put the
-shape into the run program as its `bump` phase: 350 updates through a named
-read, measured on main before this fix at 53,247,360 instructions. With main
-merged in, runbench falls from 1,245,043,324 to 1,192,648,013, a projection
-from this container's 1,192,647,606 plus the 407 instructions by which CI read
-main above it; CI's row replaces it. run_held_peak_bytes falls from 3,222,256
-to 197,704 and run_arena_peak_bytes from 8,912,912 to 7,864,336, because the
-phase no longer keeps a copy of its map per update. run_alloc_bytes falls to
-322,971,202, run_allocs to 1,772,081 and run_sh_map to 0. run_buf_reuse falls
-by one to 136, and run_view_allocs and run_view_frees fall from 360 to 10 with
-the fix; nothing here isolates why the scatter phase's views moved.
-
-CI's rows replace the projection. work_runbench lands on 1,192,648,013, as
-projected. The front-end rows land on entry_instructions 85,514,580,
-library_instructions 86,066,207, interp_instructions 488,962,208 and
-emit_instructions 7,059,706, and browser_compile_instructions on 392,738,164.
-`text` totals 4,652,222. The run program's emitted code reads one line fewer,
-50,993. Welfare reads 90.6830 on CI's rows, and the rise is banked.
-
-## 2026-10-10 — a map's view takes keys out of order without moving itself
-
-Three ports found the same cliff from three directions. xsv's
-`stats --cardinality` spent 2.6 of its 2.7 seconds counting a column of
-distinct values, ugit's Myers diff on a 3,000-line file took 4.0 seconds
-against the interpreter's 0.4, and `list/tally` over 40,000 distinct
-strings took 4.95 seconds natively where the interpreter took 0.2. All of
-them read a map between puts. A read builds the map's sorted view, and
-from then on each put of a new key was inserted into the view in order,
-which for a key landing in the middle meant moving every pair after it
-one slot along. Callgrind on the ugit diff put 80% of the time there.
-
-A key that would land in the middle of a view of more than sixty-four
-pairs now goes to a second sorted run beside it, which the runtime calls
-the side. A key past the view's last still goes on its end, so a map
-filled in ascending order never starts one. Reads search the view and
-then the side, so a read between two puts merges nothing. When the side
-holds more keys than the square root of the view, the two are merged,
-from the back and into the view's own buffer when it has room. Anything
-that wants the whole order, such as printing, `entries` or equality,
-merges first.
-
-The side costs the map header nothing. A view's buffer is preceded by a
-header slot whose first word is its capacity, and the second word, which
-was unused, now points to the side. A mark on the map's view pointer
-says a side is waiting, so a read that finds the bit clear asks nothing
-more, and the emitted fast put, which only tests the pointer for null,
-still takes the call when a view exists. The side is kept, emptied, after
-a merge, so the next key out of order does not allocate.
-
-`list/tally` over 40,000 distinct strings went from 4.95 seconds to 0.21,
-and xsv's reproduction from 4.75 to 0.17. `tests/golden/mem/
-a_tally_of_scattered_keys_merges_its_view.kso` pins the shape: 4,000
-scrambled keys, each read before it is put, take 15 view allocations where
-main took 12, and hold 206,448 bytes at peak where main held 196,576.
-Two mem goldens move with it. `fused_tally` takes one more allocation (65
-to 66, alloc_bytes 41,536 to 42,064), and `growing_map` two more (1,613 to
-1,615), with held_peak_bytes 49,120 to 55,408 and alloc_bytes 181,952 to
-189,312.
-`tests/golden/micro/a_map_written_out_of_order_past_its_room.kso` puts 211
-keys in scrambled order with reads, a length, a missing key and a print in
-between, and one in-place loop visits every key twice, so its second visit
-reads and replaces keys that are still in the side. Every engine prints the
-same. Leaving the side out of the search turns it red: the loop reads a key
-it has already put as missing, puts it again, and prints 217 keys.
-
-The first version of that fixture could not fail. Its loop was also handed
-a map the play went on reading, so the linearity analysis gave none of its
-puts the in-place write, no view ever grew a side, and removing the side
-search changed nothing. A separate loop that only ever receives a fresh map
-is what made the side reachable.
-
-A put that replaces a key already in the map still walks the pairs log
-backwards to find its last write, so a tally whose keys repeat pays for
-the distance back to that key's last occurrence. That walk is untouched
-here.
-
-The first round of CI put welfare 0.0000 below its floor, and all of the
-fall was in the run program: runbench rose from 1,129,588,698 to
-1,130,533,679. Callgrind on both builds put the whole difference in one
-function, `k_b_columns`, which `keys` and `values` reach on every call, and
-its disassembly showed why. It asks `k_map_sorted` for the view, and the
-check before that call grew from one test (is there a view?) to two (is
-there a view, and does it have a side?), five instructions where main had
-two. The side mark was the pointer's low bit.
-
-The mark now sits in the pointer's top bit. A 64-bit address never sets it,
-so read as a signed number the view pointer is positive with no side, zero
-with no view and negative with a side, and one test against zero asks both
-questions. `k_b_columns` came back to main's instructions with one alignment
-nop added before its copy loop. Measured locally from one directory against
-a build of main's runtime, runbench is 207,423 instructions above main and
-livebench 903,510, down from 945,000 and 4,208,000. wasm32 keeps the low
-bit, because a 32-bit address can have its top bit set.
-
-CI's rows for this head with main's constant storage merged in, against
-main: work_runbench rises from 1,131,250,979 to 1,131,457,856 and
-work_livebench from 1,472,859,260 to 1,473,762,140, the remains of the check
-described above. work_basket rises from 32,375,114 to 32,926,353, 1.7%,
-work_encodebench to 2,383,871,632, work_oneshot to 13,189,990 and
-work_pendbench to 190,390,734. Every binary's text is about 4,800 bytes
-larger, which sums to text 4,612,254 to 4,679,230. browser_run_instructions
-goes from 33,493,063 to 33,502,036, codegen_instructions_dev from 118,896,762
-to 118,916,117 and codegen_instructions_release from 453,707,138 to
-454,001,319, all carrying the larger runtime. basket builds maps and reads
-them between puts, so it is the benchmark that meets the side; which of its
-maps grows one is not isolated here. The mem rows are the ones named above:
-fused_tally_allocs 65 to 66 and fused_tally_alloc_bytes 41,536 to 42,064;
-growing_map_allocs 1,613 to 1,615, growing_map_alloc_bytes 181,952 to 189,312
-and growing_map_held_peak_bytes 49,120 to 55,408. Welfare falls from
-90.25153 to 90.25054. The gate passes that, because it allows 0.001 for
-disagreement between hosts, but every term here is deterministic, so the fall
-is real. It raised the floor question for this fix and three other port
-fixes, and the paragraph below records how that question closed.
-
-The floor question closed on the corpus-first gavel, and kanso#1836 put the
-shape into the run program as its `scatter` phase: 2,340 keys counted in
-scrambled order, measured on main before this fix at 50,901,814 instructions.
-With main merged in, runbench falls from 1,245,043,324 to 1,201,828,599, a
-projection from this container's 1,201,828,192 plus the 407 instructions by
-which CI read main above it; CI's row replaces it. The run's held peak falls
-from 3,222,256 bytes to 3,166,752, run_alloc_bytes falls to 326,749,138 and
-run_allocs rises by two to 1,773,134. Welfare rises from 90.2499 to 90.4099 on
-those rows, and the rise is banked.
-
-CI's rows for the merged tree replace the projection and agree with it on the
-run program: work_runbench lands on 1,201,828,611. The merge had carried main's
-rows for the other benchmarks, and CI restores this fix's own cost on them.
-The view code adds 4,784 bytes to every binary, so `text` totals 4,718,942.
-work_basket lands on 33,056,395, work_livebench on 1,473,763,578,
-work_encodebench on 2,393,936,650, work_oneshot on 13,190,150 and
-work_pendbench on 190,396,604. codegen_instructions_dev lands on 118,940,067
-and browser_run_instructions on 33,517,389. Welfare reads 90.4099 on CI's rows,
-the score already banked.
-
-## 2026-10-10 — the five port fixes land together
-
-kanso#1820, kanso#1822, kanso#1824, kanso#1825 and kanso#1827 each merged main
-and scored against the run program on their own. Each also moves the runbench
-row and the floor, so landing them one at a time would cost a CI round per pull
-request. This branch merges all five onto main and is measured as one tree.
-
-The fixes do not add up. Measured separately against main, their runbench
-deltas sum to -74,980,545, which would put the row at 1,170,062,384. The
-combined tree reads 1,152,573,228 in this container, 17,489,149 lower, so it is
-projected at 1,152,573,635 until CI reads it. The loop rewind (kanso#1824) and
-the lap carry (kanso#1827) both change what a rewound loop keeps, and the loop
-fixture `a_loop_entered_from_a_tail_cycle_gives_its_garbage_back` shows the
-overlap most plainly: with both fixes evac_allocs falls from 80,013 to 49 and
-evac_bytes from 1,920,368 to 1,232. Which of the two fixes accounts for the
-runbench difference is not isolated here.
-
-The run program's counters land on the combined tree as run_beat_iters on 47,564, run_buf_reuse on 132, run_bytes_malloc on 9,127, run_sh_buf on 119,108,240, run_str_scans on 1,021, run_ten_frees on 1, run_ten_handups on 1, run_view_allocs on 12, run_view_frees on 12. The mem
-fixtures the map fix moved land as fused_tally_alloc_bytes on 42,064, fused_tally_allocs on 66, fused_tally_view_allocs on 16, growing_map_alloc_bytes on 189,312, growing_map_allocs on 1,615, growing_map_held_peak_bytes on 55,408, growing_map_view_allocs on 12, growing_map_view_frees on 10. The benchmarks' work rows carry
-each fix's own delta onto main's row until CI measures them together:
-work_deepbench on 393,576,370, work_digestbench on 5,599,739, work_encodebench on 2,398,369,413, work_escapebench on 39,045,874, work_indexbench on 2,459,056, work_jsonbench on 860,559,605, work_livebench on 1,474,870,880, work_oneshot on 13,223,306, work_readbench on 4,577,564, work_scanbench on 270,158, work_widebench on 28,175,107. So do the compile and browser rows: compile_instructions on 25,938,043, entry_instructions on 85,762,025, library_instructions on 86,314,325, codegen_instructions_dev on 118,966,405, codegen_instructions_release on 454,110,241, browser_compile_instructions on 400,285,361, browser_compile_peak_bytes on 675,725, browser_run_instructions on 34,111,788. `text` totals
-4,853,950. Every mem fixture that predates the lap carry gains its
-`chain_finds=0` line.
-
-Welfare reads 91.0246 on these rows against the five floors banked separately,
-the highest of which was 90.6830, and the rise is banked.
-
-Main moved under the branch when kanso#1837 retired `build`, and the carrier
-took main in a merge commit. The compiler's front end lost the passes `build`
-needed, so the rows the carrier's analysis had raised land below where they
-stood before the merge and above main's: compile_instructions lands on
-25,715,103 against main's 25,712,749, entry_instructions on 85,044,877 against
-85,036,744, and library_instructions on 85,599,176 against 85,590,951.
-interp_instructions lands on 488,792,115 against 488,375,858. The two codegen
-tiers land on 118,954,619 for codegen_instructions_dev and 454,407,182 for
-codegen_instructions_release, against main's 118,906,508 and 453,887,359.
-browser_compile_instructions lands on 390,036,773 against 388,285,810. Each
-runtime binary sheds 448 bytes with `build` gone, and `text` totals 4,826,814
-against main's 4,645,694. The work rows CI read on the merged tree are
-work_encodebench on 2,398,369,791, work_livebench on 1,474,871,454 and
-work_oneshot on 13,223,698; work_runbench lands on 1,152,754,428, against
-main's 1,245,043,177. Welfare reads 91.0337 on CI's rows against the floor of
-91.0317, and the rise is banked.
-
-## 2026-10-10 — a lap waits for twice what the last stage copied
-
-Testing the combined tree on the lox port's F18 loop found two things the five
-fixes did not do on their own. Peak memory fell as expected: at 40,000 passes
-the loop held 45 MB against main's 2,333 MB. But past about 135,000 passes the
-run slowed sharply, from 2.7 seconds at 130,000 to 99 seconds at 160,000. Stack
-samples put the time in `k_copy_size` and `k_deep_copy` under
-`k_beat_lap_carry`, and the counters showed evac_allocs jumping from 5.8
-million at 130,000 passes to 139 million at 140,000. Tenure stops at
-`K_TEN_CAP`, 64 MiB, and lox's heap map keeps every object it allocates, so
-from that point on every stage copied the whole live state, once per quarter
-megabyte of drift.
-
-A smaller program then showed a worse case. The loop of
-`a_loop_entered_from_a_tail_cycle_gives_its_garbage_back`, with a map in its
-state that keeps one entry a pass, ran 20,000 passes in 0.01 seconds on main
-and in 3.2 seconds with kanso#1824 alone, allocating 9.5 GB. kanso#1824 is what
-makes this loop rewind at all. Each stage copies the map out of the arena, the
-next put copies it back, and that copy is a quarter megabyte of drift on its
-own, so a stage followed almost every pass.
-
-`k_beat_lap_carry` now waits for twice what the last stage copied before it
-stages again, and never less than the quarter megabyte it waited before.
-Copying then stays proportional to the drift it answers, which is how a copying
-collector sizes its heap. When the arena has opened blocks since the last stage
-and the wait has grown past the quarter megabyte, the drift is measured across
-them: the rest of the old block, every block between, and what the newest
-holds. A loop whose stages copy little behaves as it did, including staging
-when the arena opens a block. The first version counted the newest block at
-its full size, and with a 2 MiB block that staged on most passes.
-
-`tests/golden/mem/a_growing_map_in_a_rewound_loop_waits_for_its_copy` is that
-small program at 20,000 passes. Its alloc_bytes is 44,612,576; without the wait
-it reads 9,165,495,888. No other mem fixture and no cost golden moves. On the
-lox loop, 160,000 passes now take 5.3 seconds and 320,000 take 33.
-
-Time still grows faster than the pass count, and the counters say where.
-Allocation is linear: alloc_bytes reads 2,457,232,021 at 40,000 passes,
-5,168,271,765 at 80,000 and 10,642,119,589 at 160,000, about 66 KB a pass.
-evac_bytes is not. It reads 63,965,040, 132,744,688 and then 1,296,200,208,
-ten times the step before, while ten_blocks only goes from 8 to 9. That is the
-pass count at which the port's heap outgrows tenure. Below it, tenure holds the
-heap and a stage copies only what the pass made. Above it, each stage copies the
-live heap, and the wait keeps that to half of the drift at most, so copying is
-bounded by allocation but no longer small next to it. The cost per byte copied
-also rises as the heap grows, because the copy keeps a pointer map for shared
-values and the map grows with the heap. Removing it would mean letting tenure
-grow past `K_TEN_CAP` for a loop whose survivors keep surviving. The cap exists
-so that no loop holds storage that only the pop frees, and changing it is a
-separate piece of work.
-runbench reads 180,786 instructions more for the wait's arithmetic and is
-projected at 1,152,754,421 until CI reads it. Welfare falls from 91.0246 to
-91.0239, which this fix pays to remove a regression the carried kanso#1824
-would otherwise ship.
-
-CI has now read the combined tree, lap wait included. runbench reads
-1,152,754,435, fourteen instructions over the projection, so the wait's
-180,786 holds. The rows the projections had carried land as follows.
-work_encodebench lands on 2,398,370,183, work_escapebench on 39,045,884,
-work_indexbench on 2,459,212, work_livebench on 1,474,870,796, work_oneshot on
-13,223,628 and work_scanbench on 270,249. work_basket falls to 30,812,505.
-compile_instructions lands on 25,832,558, entry_instructions on 85,436,280,
-library_instructions on 85,987,742, emit_instructions on 7,037,238 and
-interp_instructions on 489,012,183. codegen_instructions_dev lands on
-118,951,226 and codegen_instructions_release on 454,427,018.
-browser_compile_instructions lands on 391,401,241, browser_compile_peak_bytes
-on 675,725 and browser_run_instructions on 34,124,829. The run program's
-emitted code gains 29 lines, which moves emitted_other_branches to 16,399,
-emitted_other_calls to 17,406 and emitted_other_lines to 146,724, and `text`
-totals 4,833,086. Welfare reads 91.0317 on CI's rows, and the rise is banked.
-## 2026-10-10 — an oversize block that cannot be reused is freed when it misses
-
-A loop that appends a byte a pass to a one-megabyte string ran 6,000 passes
-with an arena peak of 3,157,760 bytes and a resident peak of 777 MB. The arena
-gives a value over a megabyte a block of exactly its size. When the loop
-rewinds, that block goes to the spare list, and the next pass asks for a block
-a few bytes larger, which no spare can serve. So every pass opened a new block,
-and the old ones stayed in the spare list until the loop ended. Valgrind
-counted 99 mallocs and 82 frees at 300 passes, nearly all of the frees at the
-loop's end. Main reaches 394 MB on the same program, and the five port fixes
-had roughly doubled it, because they rewind more often.
-
-`k_arena_push` now frees the oversize spares smaller than the request when an
-oversize request misses. The standard 1 MiB spares are kept, since they serve
-ordinary refills. The program's resident peak falls from 777 MB to 10 MB, and
-it runs in 0.96 seconds against 1.2.
-
-No counter could see this. `arena_peak_bytes` counts blocks in use and
-`arena_blocks` counts mallocs, and both read the same before and after: 752
-blocks and a peak of 3,157,760. A new counter, `spare_peak_bytes`, records the
-most the spare list held, and it is lower-is-better in the trend gate. It is
-counted only in counting builds, so no program pays for it. Every cost golden,
-every mem fixture and the two book samples that print counters gain the line
-and nothing else.
-
-`tests/golden/mem/a_string_that_grows_each_pass_reuses_its_block` is the
-reduction at 400 passes. Its spare_peak_bytes is 2,097,984; with the miss path
-left as it was, it reads 52,440,000. The run program's spare_peak_bytes is
-2,621,456. runbench reads 248 instructions more, measured in one worktree
-against the same tree without the fix, and is projected at 1,152,754,683.
-
-One reading from this container does not agree with CI. Measured in the
-carrier's own worktree, runbench read 1,152,573,288, below the lap wait's
-figure; CI reads the carrier at 1,152,754,435, which agrees with the wait's
-cost. That stray reading is not explained here, and the projection above is
-taken from CI's row plus the 248.
-
-A second shape retains far more and is not fixed here. When a loop builds the
-new string by interpolating the old one directly, as in `"{st.body}{x}"`, the
-arena peak grows a megabyte a pass on main (420,568,976 bytes at 400 passes)
-and half that on the carrier. Every version of the string stays in a block in
-use. Slicing the string first, as the fixture does, keeps the peak flat at
-3 MB.
-
-The mechanism is the repair. The interpolation lets the record-reuse analysis
-write each new state into the old record's storage, and that record was built
-before the loop, below its mark. At a stage the record survives but its new
-string does not, so the walk repairs it: `k_repaired_settle` copies the string
-into the arena and raises the mark over the copy, because a surviving node
-points at it. The next pass writes a newer string into the same record, and the
-settled copy is dead under the mark until the loop ends. A trace of the beat
-carry shows the mark's block moving 48 bytes up at each of the 200 stages of a
-400-pass run, with a megabyte more live beneath it each time. Raising the mark
-is right for a node repaired once. What it lacks is a way to take back a
-settled region when the same node is repaired again, and that is a separate
-change.
-
-CI's rows replace the projection. runbench reads 1,152,754,609, which is 174
-instructions above the carrier's row rather than the 248 measured here.
-Measured against main, the rows that end worse on this branch, the carrier's
-changes included, are codegen_instructions_dev at 118,955,169,
-codegen_instructions_release at 454,306,200, browser_run_instructions at
-34,124,990, work_encodebench at 2,398,370,414, work_livebench at
-1,474,871,090, work_oneshot at 13,224,195 and text at 4,835,550. Against the
-carrier alone, the release row falls by 120,818 and the dev row rises by
-3,943; every benchmark's runtime text grows 176 bytes, which is the spare
-list's accounting and its drop path.
-
-The carrier took main's retired `build` and CI's rows for it, and this branch
-took the carrier in a merge commit. Each conflicted row is projected as this
-fix's own CI delta laid on the carrier's CI row: codegen_instructions_dev lands
-on 118,958,562, work_encodebench on 2,398,370,022, work_livebench on
-1,474,871,748, work_oneshot on 13,224,265 and work_runbench on 1,152,754,602,
-and `text` totals 4,829,278. CI's reading replaces each of them.
-
-CI's rows replace the projection. codegen_instructions_dev lands on
-118,939,055 and codegen_instructions_release on 454,517,107, the release tier
-230,743 above the projection. work_encodebench lands on 2,398,369,553,
-work_livebench on 1,474,871,531, work_oneshot on 13,223,698 and work_runbench
-on 1,152,754,392. `text` totals 4,829,278, as projected.
-
 ## 2026-10-10 — a counting loop keeps every pass's key; copying keys out measured and declined
 
 A loop that counts into a map it was handed, under a key it interpolates each
@@ -1912,3 +1141,223 @@ refusal before the fix and reads nothing after.
 The tab's build leaves the new root out, since it has no checkout to stand
 in. With the root compiled in, `browser_compile_instructions` read 392,449,729
 against 392,378,375; without it the browser row does not move.
+
+## 2026-10-13 — gavel: `merge` copies a record with named fields replaced
+
+Clay ruled #1886. Sixteen of the twenty ports complained that changing one
+field of a record meant rebuilding it by position, and three of their bugs
+were fields passed in the wrong order at such a site. Construction by field
+name stays declined (2026-07-29, named arguments); this is an update form
+only.
+
+**The ruling.** `merge u {"role": "chef"}` answers a copy of the record `u`
+with the named fields replaced and every other field carried over. The map is
+a literal whose keys name fields of `u`'s type. The checker refuses a key that
+is not a field of that type. It also refuses a value that the field's
+declared typeset does not admit, where the field declares one. `merge` builds a
+record, so it is allowed only where construction is, in the module that owns
+the type (2026-08-20, "only a type's owner constructs one").
+
+Clay chose this spelling over a keyword form (`u with role "chef"`), which
+meant the same thing.
+
+Owes, on #1886: the builtin on every engine; error goldens for an unknown
+field, a value the field does not admit, and a merge outside the owning
+module; a micro golden showing unnamed fields carried over; appendix B and
+the chapter that teaches records.
+
+## 2026-10-13 — gavel: a bracketed list or map may span lines
+
+Clay ruled #1882. All twenty ports wrote a list or map too long for 80
+columns, and nothing let one break. Text blocks (`"""`) already cover long
+strings.
+
+**The ruling.** A list or map literal may span lines. The opening bracket ends
+its line, each element (or key and value) sits on a line of its own indented
+one level, and the closing bracket stands alone at the opening line's indent.
+Canonical form keeps one way to write each literal: one that fits in 80 columns
+on one line is written on one line, and one that does not is written in the
+spanning form. Operator chains, `if` and guards are not covered, and they are
+still broken by naming their parts.
+
+Owes, on #1882: the lexer and parser accept the spanning form on every
+engine; error goldens for a short literal spanned, a long literal on one line
+and a misplaced closing bracket; the samples that build long literals by hand
+moved onto it; the chapter that teaches lists.
+
+## 2026-10-13 — gavel: parentheses are required where `and` meets `or`, and refused wherever else they group nothing
+
+Clay ruled the first part of #1887. The ports asked for parentheses to be
+optional where two operators meet, for clarity. Clay: "not just no but hell no.
+we are all about one right way and avoiding redundancy. you either require the
+parentheses or they're not allowed." And on the rule below: "I'm fine doing
+that as long as it's 100% consistent and not optional."
+
+**The ruling.** Wherever `and` and `or` appear in one expression without
+parentheses between them, the expression is refused, and the diagnostic shows
+the parenthesized spelling: `(a and b) or c`. This is the same rule #1915
+builds for `&`, `|` and `^`. Every other pair of parentheses that groups
+nothing stays refused, as today: `not (f x)` because application always binds
+tightest, `(a * b) + c` because that precedence is not misread. There is no
+optional form: each expression has exactly one accepted spelling.
+
+Owes, on #1887: the refusal and its diagnostic on every engine; error goldens
+for `a and b or c`, for `(a and b) or c` accepted and for a redundant pair
+still refused; the corpus, samples, lib and sibling repositories moved onto
+the required spelling.
+
+## 2026-10-13 — gavel: a file may open with a header comment and one blank line
+
+Clay ruled the second part of #1887. A comment directly above a file's first
+declaration is accepted today and reads as that declaration's comment. A
+comment at the top of a file followed by a blank line is refused, and the
+refusal is wrong about why: "the file may not begin with a blank line", at
+line 2, because the check skips the comment when it finds the file's start.
+
+**The ruling.** A file may begin with a block of comment lines followed by
+exactly one blank line, and that block is the file's header, separate from any
+declaration. Without the blank line the block is the first declaration's
+comment, as today. Nothing else about comment placement changes.
+
+Owes, on #1887: the formatting check accepts the header shape; error goldens
+for a header followed by two blank lines and for a blank line before the
+header; a golden that the header-plus-blank-line file checks clean on every
+engine.
+
+## 2026-10-13 — gavel: overload arms stay in specificity order
+
+Clay ruled #1888, which asked whether the order rule for overload arms could go
+now that the checker detects disjoint arms. Clay: "if you're talking about
+ordering by the hierarchy of subtypes then yes you absolutely preserve
+specificity order." The rule stands as built: an overload's arms are written
+most specific first, a literal before a concrete type and a concrete type
+before the catch-all, and the formatting check refuses any other order. The
+2026-07-25 gavel that freed top-level declaration order does not reach arms.
+Nothing is owed.
+
+## 2026-10-13 — gavel: hex and binary integers and exponent floats
+
+Clay ruled #1889. Seven ports needed numbers that kanso refuses as spacing
+errors: an emulator wrote its opcodes and a TOML parser its constants in
+hand-converted decimal.
+
+**The ruling.** An integer literal may be written in hexadecimal (`0xff`) or
+binary (`0b1010`) as well as decimal, and a float literal may carry an exponent
+(`1e-8`, `6.02e23`). The value is the same whatever the spelling, so the author
+picks the spelling that shows what the number means. The renderer is unchanged:
+it already prints exponents where it needs to. A byte literal, also in the
+issue, was not ruled.
+
+Owes, on #1889: the lexer on every engine; micro goldens for each form,
+including negative and upper-case-digit cases; error goldens for a malformed
+literal (`0x`, `0b2`, `1e`); the chapter that teaches numbers.
+
+## 2026-10-13 — gavel: `text/slice` past the end answers `none`
+
+Clay ruled #1890. `text/slice "abc" 1 10` returned `"bc"`, quietly shorter than
+the range asked for, and three ports called that silent data loss. An index
+past the end already answers `none`.
+
+**The ruling.** A `text/slice` whose range runs past the end of the value, or
+starts past it, answers `none`, as an index past the end does, and the caller
+dispatches on it. A range wholly inside the value is unchanged.
+
+Owes, on #1890: the change on every engine; micro goldens for a range past the
+end, a start past the end and a range that ends exactly at the end; the
+exhaustiveness check sees `none` in `text/slice`'s answer; lib, samples and
+sibling repositories that leaned on clamping moved to dispatch on `none`.
+
+## 2026-10-13 — gavel: `list/concat` joins two lists, and strings join by interpolation
+
+Clay ruled #1906 on the committee's view, on the condition that it rest on
+first principles rather than on what the language already had. Appendix B
+described `text/concat` as joining two lists or two strings; every engine
+joined only lists, and a string argument stopped at run time.
+
+**The ruling, and its reasons.** Joining two lists is `list/concat a b`, in
+std/list, and `text/concat` goes. A function lives with the type it works on,
+so a list operation belongs in `list`. There is one way to combine strings:
+interpolation (`"{a}{b}"`), with `text/join` for a list of pieces. A `concat`
+for strings would be a second way, so none is added.
+
+Owes, on #1906: `list/concat` on every engine with `text/concat` removed and
+its callers moved; the checker refuses a string argument to `list/concat`; an
+error golden for a call to the removed name that points at `list/concat`;
+appendix B's entry rewritten under std/list.
+
+## 2026-10-13 — gavel: `list/to_sorted` builds the `sorted` that `find` bisects
+
+Clay ruled #1903. std/list declares `pub type sorted`, and `find` has an arm
+for it that bisects instead of scanning (archive, 2026-07-24, "find gets its
+fast arm"). Only std/list may build a `sorted`, and it exposed no function that
+does, so no caller could reach the fast arm.
+
+**The ruling.** `list/to_sorted xs` sorts `xs` by the order `list/sort` uses and
+answers it as a `sorted`. It takes any list `list/sort` takes. Because it sorts
+as it wraps, a `sorted` is always in order and the bisect cannot answer wrong.
+No function wraps a list unchecked. When type parameters are built (#1941),
+`sorted` becomes `<k>sorted` and this function's signature follows without a
+change in meaning.
+
+Owes, on #1903: `list/to_sorted` in std/list; the bisect tests back in
+`list_test.kso` through it; a micro golden in which `find` on a `to_sorted`
+answers the same as on the plain list; the counter that shows the bisect ran;
+appendix B.
+
+## 2026-10-13 — gavel: names for the library gaps the ports hit
+
+Clay ruled #1914 one name at a time. Each name was decided from what it should
+mean. Three of the answers overturn the issue's recommendations, which had
+argued from resemblance to existing names.
+
+**The rulings.**
+
+- `io/read_line` is a description that yields the next line of standard
+  input without its newline, or `done` at the end of input. An interactive
+  program prompts between reads, and one call per line puts each read where
+  the program says it happens.
+- `delete map key` answers the map without that key. It is a bare builtin
+  beside `put`, and the two names say the opposite things.
+- `list/sort_by xs key` sorts by what `key` answers for each element, and
+  `list/reverse xs` reverses. The key gets its own name because a second
+  argument to `sort` would read as a comparator.
+- `text/uppercase s` and `text/lowercase s`. A `to_` name means the answer is
+  a different kind of thing (`to_int "42"` is a number). Changing case leaves
+  a string, so the name is a verb for what happens to it, as `trim` and
+  `sort` are.
+- `text/starts_with? s prefix` and `text/ends_with? s suffix`. A trailing `?`
+  means the function answers true or false.
+- `text/pad_start s width fill` and `text/pad_end s width fill`. Left and
+  right name where text lands on a screen, which depends on the script; start
+  and end name the end of the string that grows, in the same words
+  `starts_with?` uses.
+- No `os/write_bytes`. The content passed to `os/write_file` is already a
+  string or bytes, so the argument says which kind is written, and
+  `write_file` has accepted both since 2026-09-09. Reading needs two names
+  because a path cannot say which kind the caller wants back.
+- `os/modified path` answers the file's last-modified time in milliseconds
+  since the epoch, the unit `time/now` uses, and `file_not_found` as data
+  for a missing file. There is no `os/stat`: one name answers one fact.
+
+Owes, on #1914: each name on every engine with a micro golden; `read_line`
+reaching `done` on an empty and an unterminated last line; `modified` on a
+missing file; appendix B's entries; the ports that worked around a gap moved
+onto the name.
+
+## 2026-10-13 — gavel: an argument nobody reads is never computed, err or not
+
+Clay ruled #1928. In the toml port's reduction, `e = boom 1` binds an err
+lazily and `ignores 5 e` passes it to a parameter the body never reads.
+Every engine prints the body's answer and the err never occurs. Chapter 04
+says a catch-all arm declines an err, which read as if `ignores` should not
+run; making it decline would mean computing every argument at every call to
+learn whether it is an err, ending call-by-need at every call.
+
+**The ruling.** A value nobody asks for is never computed, so an err nobody
+asks for never occurs. A catch-all declines an err it is handed. Every
+engine already does this, and nothing changes in the compiler. Chapter 04
+gains the sentence, in this change. The port's fix is to dispatch on the
+validation result before passing it on.
+
+Owes, on #1928: the toml reduction kept as a micro golden pinning today's
+output on every engine; #1891's second item closed with a pointer here.
