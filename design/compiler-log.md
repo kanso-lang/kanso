@@ -21,66 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-10 — gavel: `build` retires, and `tie` is the one way to write a cycle
-
-Clay, on the ledger entry "Does `build` still earn its place beside `tie`?":
-"retire build". The entry recommended it once `tie` was built and its
-compile-time check on literal data was pinned, and both are on main: `list/tie`
-runs on every engine (log, 2026-10-05), a broken link in literal data is
-refused at check, and ten thousand tied rings dropped in a loop hold one arena
-block.
-
-**What leaves the language.** The `build` block, the hole `_` that only a
-`build` block could fill, the field write that filled it, and the
-`error[build]` family that policed all three. A cycle is written with
-`list/tie` or `list/tie!`, whether its nodes are two names in the source or a
-graph read from a file. The 2026-10-01 gavel's reason for there being no loop
-construct is unaffected, and so is the top-level constant knot
-(`ring = node 1 ring`), which is a separate construct and is not part of this
-ruling.
-
-**Why.** `tie` does everything `build` did. With literal keys and links the
-compiler sees the whole graph and refuses a broken link before the program
-runs, which was the one thing `build` caught earlier, and a tied call's nodes
-are one birth cohort, so the birthday theorem and the cohort's memory
-guarantee hold as they did for a block. Two spellings of one thing is what
-kanso declines to offer.
-
-Owes: the parser, the checker and all three engines drop `build`, `_` and the
-field write; the `error[build]` goldens and `tests/golden/mem/build_cycle.kso`
-move to `tie` or go; every `build` in the corpora, the samples, the examples
-and lib is rewritten as a `tie`; ch03's "two records that point at each other"
-teaches the cycle with `tie`; appendix A loses `error[build]`; the compiler
-page and the playground stop offering it. A program that still writes `build`
-gets one diagnostic naming `list/tie` as the replacement.
-
-## 2026-10-10 — the four port fixes' floor question closes on the corpus-first gavel
-
-The ledger's Blocking entry "May four port fixes lower the welfare floor?",
-filed today, asked whether kanso#1820, kanso#1822, kanso#1824 and kanso#1825
-may each lower the floor by a few thousandths. Each fixes a native cliff a port
-journal found (sat's map put loop, lox's loop entered from a tail cycle,
-`list/tally` over many distinct strings, mustache's fold onto its accumulator),
-and each pays only in compile rows because no benchmark contains its shape.
-
-That is the case the archive's 2026-09-05 "gavel: corpus first — a blind
-corpus is repaired, never excused" ruled. Clay declined, then, the
-recommendation to move the floor with "the corpus is blind" as the reason:
-**the remedy is to add the benchmark the objective could not see, measure its
-baseline on the pre-fix code, land the fix on top, and let it score**, so the
-floor rises rather than falls. The entry's search looked for a ruling on fixes
-that make native finish what the interpreter finishes and missed this one,
-because the ruling is about what the corpus can see. The entry leaves the
-ledger in this commit on that citation.
-
-So no floor moves for these four. Each PR promotes its fix's shape into the
-benchmark corpus as a run-speed or run-memory phase under the granted-baseline
-machinery, with its baseline measured on main without the fix, and banks the
-rise with `--set`. The entry's option 1 also asked to widen the 2026-09-13
-exception to every change that lets native finish a program the interpreter
-finishes; under corpus-first such a change scores as a gain once the corpus
-holds its shape, so the widening is not needed, and it is not made here.
-
 ## 2026-10-10 — four port shapes join the run program, measured before their fixes
 
 The corpus-first gavel, applied today to kanso#1820, kanso#1822, kanso#1824 and
@@ -1843,7 +1783,7 @@ CI's rows put `compile_instructions` at 26,052,299 (+170,748, +0.66%),
 at 86,505,153 (+569,571, +0.66%) and `emit_instructions` at 7,019,534
 (+6,057). `compile_allocs` rose 75 to 14,605 and `interp_allocs` 74 to 587,357.
 `interp_instructions` fell 402 to 488,739,414. The tab runs the same front end,
-and `browser_compile_instructions` rose to 392,942,504 (+1,631,002, +0.42%).
+and `browser_compile_instructions` rose to 393,182,630 (+804,255, +0.20% on main after #1927).
 This builds a ruled part of the language, so the welfare floor drops by what
 it costs.
 
@@ -1892,3 +1832,122 @@ The program's code grows with it: across the other benchmarks' emitted rows,
 `emitted_other_branches` on 16,555 and `emitted_other_lines` on 148,239, all
 of it runbench's (51,577 -> 52,537 lines), and `text` on 4,838,622, runbench
 619,081 -> 622,857 bytes.
+
+## 2026-10-13 — a list held in a record grows where it stands
+
+From #1892, the eleventh item: the lox, markdown, datalog and sat ports each
+kept an accumulator in a record field and pushed onto it through the record,
+`bag (b.count + 1) (push b.items i)`. The linearity analysis proved a list
+unique only when a variable held it, so `push b.items i` copied the list while
+the record still held it, and n pushes cost the square of n: 40,000 of them
+allocated 37 GB, and the native run took 4.4 seconds where it now takes 0.06.
+
+`src/linear.rs` now proves a field unique as well. A greatest fixpoint runs
+over (function, arity, parameter, field), seeded with the fields some push,
+append, put or concat writes into. A field stays in the set while every caller
+hands that parameter over with the field alone: a constructor argument that is
+itself unique, an `if` or guard whose arms all are, a parameter already in the
+set, or a call to a function that returns the field alone. A field read moves
+the list out of the record only when the record is handed over, every mention
+of the parameter is a field read, the field is read exactly once, and no
+mention sits under a lambda. Anything else keeps the copy.
+
+`tests/golden/mem/a_list_held_in_a_record_grows_where_it_stands` runs 20,000
+pushes through a record and four cases the analysis must refuse: a list two
+records share, a field read twice, a record filled twice from one start, and a
+record a later line reads again. It counts 73 allocations and 1,994,928 bytes
+where main counts 53,881 and 9,160,278,336. The ratchet row "a record field
+copied on every push" turns it red when the move is refused.
+
+On the run program's `bag` phase, which #1925 added on main: `work_runbench`
+1,234,827,314 -> 1,177,927,314 on CI, 56,900,000 fewer, the phase alone
+58,073,973 -> 911,987 instructions in this container. The run vein
+lands on `run_allocs` 1,812,272, `run_alloc_bytes` 335,416,908,
+`run_evac_allocs` 49,188, `run_evac_bytes` 14,985,856, `run_sh_rec`
+3,778,880, `run_sh_buf` 121,778,720, `run_survive_slots` 4,856,
+`run_chain_finds` 11,948, `run_bytes_malloc` 9,138 and `run_bytes_freed`
+9,007. Each push now writes in place onto a header born in an earlier lap, so
+`run_push_mut_slow` counts it: 1,554,416, `bag`'s 4,300 more.
+
+The list now outlives each lap's rewind, so it lives outside the arena:
+`run_perm_peak_bytes` and `run_perm_live_bytes` land on 277,960, and the run
+peak rises 10,191,392 -> 10,437,152 bytes. Most of that is the growth policy
+rather than the list: 4,300 values fill 68,800 bytes, and a buffer that
+doubles once more past sixteen slots holds 16,384 of them. A buffer outside
+the arena already grows by `realloc`, so that second doubling buys it
+nothing; dropping it there is a lead, not built here. `text` lands on
+4,838,766, runbench 622,857 -> 623,001 bytes.
+
+CI's compile rows. The analysis asks one more question of each field write,
+and the interpreter skips the copy at the same sites:
+`compile_instructions` 25,881,551 -> 25,803,156, `entry_instructions`
+85,381,313 -> 85,149,258, `library_instructions` 85,935,582 -> 85,703,128,
+`emit_instructions` 7,013,477 -> 7,035,926 (+22,449),
+`interp_instructions` 488,739,816 -> 487,429,689, `interp_allocs` 587,351 ->
+587,479 (+128), and `browser_compile_instructions` 391,311,502 ->
+392,378,375 (+1,066,873, +0.27%).
+
+## 2026-10-13 — a buffer outside the arena grows by one doubling
+
+`k_b_push_grow` picks a list's next capacity as the smallest power of two that
+holds it, doubled once more past sixteen slots. In the arena that second
+doubling saves grows, because each grow there is a fresh buffer and a copy. An
+accumulator's buffer outside the arena already grows by `realloc`, so the
+second doubling only held memory: #1926's 4,300-element list sat in 16,384
+slots. A buffer outside the arena now takes the smallest power of two.
+
+On the run program `run_perm_peak_bytes` lands on 146,888 and
+`run_perm_live_bytes` on 146,888 (277,960 before), and the run peak falls
+10,437,152 -> 10,306,080 bytes. The extra regrows cost `work_runbench`
+1,177,927,314 -> 1,177,965,832 on CI, 38,518 more, and `run_alloc_bytes` falls to 303,607,404 because the counter adds
+each buffer's full size and the buffers are smaller. `run_allocs` lands on
+1,812,274, `run_bytes_malloc` on 9,140 and `run_bytes_freed` on 9,009.
+basket's permanent peak halves to 2,162,720 (`basket_perm_peak_bytes`, with
+`basket_perm_live_bytes` the same), `basket_alloc_bytes` falls to 6,162,481,
+and `basket_allocs` lands on 27,271, `basket_bytes_malloc` on 32 and
+`basket_bytes_freed` on 13. escape regrows more often: `escape_allocs` 38 ->
+63, `escape_alloc_bytes` 41,924,192, `escape_bytes_malloc` and
+`escape_bytes_freed` 55. In the mem vein, five shapes' permanent peaks halve
+and the record-field golden's falls 1,179,840 -> 655,552. Every benchmark's
+machine code grows sixteen bytes, and `text` lands on 4,838,990.
+
+The same regrows cost the mem vein's other accumulators more allocations (one
+to sixteen), and of these only `early_exit` holds less for it:
+`a_long_list_renders_in_one_pass_allocs` 2,018,
+`a_long_list_renders_in_one_pass_alloc_bytes` 248,272,
+`a_long_list_renders_in_one_pass_bytes_malloc` 5;
+`a_loop_that_only_grows_its_list_takes_no_rewind_allocs` 42,
+`a_loop_that_only_grows_its_list_takes_no_rewind_alloc_bytes` 8,373,392,
+`a_loop_that_only_grows_its_list_takes_no_rewind_bytes_malloc` 36;
+`an_accumulator_regrows_where_it_is_allocs` 83,
+`an_accumulator_regrows_where_it_is_alloc_bytes` 577,072,
+`an_accumulator_regrows_where_it_is_bytes_malloc` 60; `early_exit_allocs` 17,
+`early_exit_bytes_malloc` 4; `fold_push_shape_allocs` 17,
+`fold_push_shape_alloc_bytes` 214,992, `fold_push_shape_bytes_malloc` 5;
+`fused_map_shape_allocs` 17, `fused_map_shape_alloc_bytes` 214,992,
+`fused_map_shape_bytes_malloc` 5; `fused_reducer_allocs` 7,
+`fused_reducer_alloc_bytes` 28,960, `fused_reducer_bytes_malloc` 3;
+`fused_select_shape_allocs` 18, `fused_select_shape_alloc_bytes` 215,024,
+`fused_select_shape_bytes_malloc` 5; `piped_reducer_allocs` 7,
+`piped_reducer_alloc_bytes` 28,960, `piped_reducer_bytes_malloc` 3;
+`skip_shape_allocs` 37, `skip_shape_alloc_bytes` 129,456,
+`skip_shape_bytes_malloc` 5; `take_shape_allocs` 20, `take_shape_alloc_bytes`
+215,152, `take_shape_bytes_malloc` 5; `tally_shape_allocs` 19,
+`tally_shape_alloc_bytes` 133,280, `tally_shape_bytes_malloc` 5.
+
+CI's instruction rows. The other benchmarks pay for the extra regrows too:
+`work_basket` 30,876,488 -> 30,946,055 (+69,567), `work_encodebench`
+2,398,373,226 -> 2,398,405,934 (+32,708), `work_escapebench` 39,049,158 ->
+39,058,255 (+9,097), `work_pendbench` 190,054,350 -> 190,061,194 (+6,844),
+`work_jsonbench` 860,562,984 -> 860,565,984 (+3,000), `work_digestbench`
+5,603,118 -> 5,604,458 (+1,340), `work_oneshot` 13,226,930 -> 13,227,314
+(+384) and `work_widebench` 28,178,509 -> 28,178,544 (+35); `work_livebench`
+falls 477 to 1,474,874,594. In the tab, where the same runtime runs the
+interpreted corpus, `browser_run_instructions` 34,124,990 -> 34,125,332
+(+342). `codegen_instructions_dev` reads 119,002,829 -> 119,002,656 and
+`codegen_instructions_release` 454,179,413 -> 454,179,390.
+
+The record-field fixture #1926 added takes the same regrows:
+`a_list_held_in_a_record_grows_where_it_stands_allocs` lands on 76 and
+`a_list_held_in_a_record_grows_where_it_stands_bytes_malloc` on 19, three each
+above #1926's reading, while its peak falls as above.

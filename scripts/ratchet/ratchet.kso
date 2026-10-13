@@ -5080,7 +5080,21 @@ arm_travels = row
 
 rows_c1zzzzzzw8 = text/concat rows_c1zzzzzzw9 [arm_travels]
 
-rows_c = text/concat rows_c1zzzzzzw8 [itself]
+# A list held in a record and pushed onto through the record is written in
+# place once the record is handed over whole and the field is alone. The
+# mutation refuses every field read, and the mem corpus's record fixture goes
+# from 73 allocations to tens of thousands.
+field_in_place = row
+  "a record field copied on every push"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_record_field_copied_every_push")
+  no_setup
+
+rows_c1zzzzzzv3b = text/concat rows_c1zzzzzzw8 [field_in_place]
+
+rows_c = text/concat rows_c1zzzzzzv3b [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
