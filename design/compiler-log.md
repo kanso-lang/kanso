@@ -19,119 +19,7 @@
 > The last forty entries. Everything older is in `log/compiler-log-archive.md`,
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
-## 2026-10-10 — a constructor handed over as a function builds
 
-The lox port found that a record constructor passed where a function is wanted
-checks and runs on the interpreter and stops the native build with "`pair` as
-a bare value is not yet supported" (lox F20). The port wrapped each one in a
-lambda, `(l o r -> logical l o r)`, which is what native now does by itself.
-When codegen lowers a name that is not a function group, a builtin or one of
-the words with a value of its own, and the name is a record type with one to
-four fields, it lowers the lambda that calls the constructor. Four is the
-native lambda's limit, so a record of five or more fields handed over is still
-refused at build with the same message.
-
-`tests/golden/micro/a_constructor_handed_over_as_a_function` hands a
-one-field constructor to `list/map`, a two-field one to a function that calls
-it and a three-field one to another, and prints the same line on the
-interpreter, a dev build and a release build. The compiler on main refuses to
-build it. The ratchet row "a constructor refused as a value" puts the refusal
-back and the micro corpus goes red.
-
-`tests/a_type_name_as_a_bare_value.rs` had pinned the refusal for a
-two-field record printed bare. It now pins that both engines print `<fn>`.
-
-CI's rows for this branch, with main's repair list merged in. Two rows moved,
-both by the size of the new lowering in the emitter:
-
-    emit_instructions                7,062,299 ->   7,062,491
-    browser_compile_instructions   388,181,803 -> 388,266,184
-
-Welfare falls from 90.2505 to 90.2504, and the floor follows it down under the
-rule for a change that makes the language do what it says: a program that
-checks and runs on the interpreter now builds natively.
-
-The tie-list ruling landed first. Carried over it, the browser compile row
-lands at 388,276,582, the constructor's 84,381 on top of main's 388,192,201,
-and the floor at 90.25039901483147.
-
-
-## 2026-10-10 — two values a carry handed back while they were still held
-
-The lap carry (kanso#1827) let the toml port parse a comment holding a
-control character and then lose the error it meant to report. The program
-died with an unhandled err whose record had no type, born in `toml/fail`.
-The interpreter printed `toml/toml_error 10 1 "control character 7 in
-comment" "a = 1 # xy"`.
-
-The bug is older than the lap carry. `end_at` reads the byte after a `#`,
-calls `skip_comment`, and hands what comes back to `newline_at` in tail
-position. The two form a loop that rewinds the arena on the edge back into
-`newline_at`. The cursor crosses that rewind uncopied, because inference
-counts a slot that holds an int or an err as one that may cross a rewind
-the way a number does. On the lap that meets the control character,
-`skip_comment` answers an err wrapping a `parse_failure` record, and both
-were built in the lap's own storage. The rewind handed that storage back,
-`newline_at` answered the err by adding a hop to it, and the hop was
-allocated over the record. A hardware watchpoint on the record's type word
-caught `k_err_hop` writing it. Main has the same hole: the fixture below
-dies on main's compiler in the same way. toml reached it only once #1827
-admitted its loop, which main refused because the loop's carried byte may
-be bytes.
-
-The carry path already had the answer. `k_beat_iter_carry` returns without
-rewinding when a carried slot holds an err, since the callee only passes
-the failure on. A plain rewind asked nothing of the arguments it lets
-cross. Codegen now tests each argument whose set includes a failure, and
-skips the rewind when one of them is an err. That applies on a carrying
-edge too, for the arguments the carry does not take. The test is a tag
-compare and a branch at each rewinding edge where such an argument exists.
-
-`tests/golden/micro/an_err_built_in_a_lap_outlives_its_rewind.kso` is the
-toml loop cut down to three functions. Main's compiler prints `unhandled err
-... record born in f/skip`. With the test in place it prints `failed at 3:
-stopped` on both engines and in a release build.
-
-The toml port's `many-tables` document showed the second fault once the
-first was fixed: the last header's path came back as the path of a key read
-two lines later. A carry stage copies its slots in order, and the first time
-the walk meets a node that has already been through one copy it switches to
-tenured storage for the rest of the stage. A node copied into the carry pair
-before that switch could then be shared by a node tenured after it, through
-the map that makes a node shared twice copy once. The tenured parent
-survived the next stage, the stage's walk stopped there because everything
-the parent held directly survived too, and the stage after that wrote over
-the pair the shared node lay in. Main has this one as well. When the map
-answers with a copy in the pair and the walk is tenuring, the node is now
-copied again into tenure and the map points at that copy from then on.
-
-`tests/golden/micro/a_tenured_node_shares_nothing_with_the_carry.kso` builds
-the shape directly: a loop carrying a fresh list, last lap's tree, and a new
-tree node wrapping the list, with enough garbage per lap that every lap
-stages. Main's compiler prints `[200]` in three places where `[400]`, `[600]`
-and `[800]` belong.
-
-Neither fix moves an allocation counter. The test before a rewind adds a
-compare and a branch at each rewinding edge with an argument that may be an
-err, which the emitted code shows: runbench gains 22 branches and 125 lines,
-the decoder 4 branches and 15 lines, and seven other benchmarks between 2 and
-13 branches.
-
-CI's rows, measured with main's constructor change merged in. The code the
-compiler writes grows with the new tests: emitted_branches lands on 1,105 and
-emitted_lines on 10,070 for the decoder, emitted_other_branches on 16,143 and
-emitted_other_lines on 144,731 across the other benchmarks, and the machine
-code total, text, on 4,644,478 bytes, from 16 bytes more on scanbench to 368
-on runbench. The work rows move with the change, and which branch costs what
-has not been isolated: work_encodebench lands on 2,393,926,456, up 10,064,560
-or 0.42%; work_runbench on 1,131,539,079, up 68,142; work_digestbench on
-5,597,963, up 36,820; work_jsonbench on 860,549,995 and work_oneshot on
-13,176,892, up 450 and 364; and livebench falls 259. Building costs a little
-more: codegen_instructions_dev lands on 118,918,569, up 139, and release
-codegen falls 8 to 453,994,110. In the browser, browser_compile_instructions
-lands on 388,494,007, up 217,425, and browser_run_instructions on 33,508,472,
-up 1,119. Both changes fix what programs print, so the floor follows them,
-from 90.25040 to 90.24995.
 
 ## 2026-10-10 — gavel: `build` retires, and `tie` is the one way to write a cycle
 
@@ -1843,6 +1731,72 @@ interpreter stopped at the first line.
 
 Appendix b also says `concat` takes strings, and neither engine does: both
 refuse two strings with the same message. #1906 asks which way that goes.
+
+## 2026-10-12 — gavel: arms travel with the value, and a file names only what it can see
+
+Clay ruled the namespace half of #1883 in dialog, on 2026-10-11 and 2026-10-12.
+It restates the 2026-08-29 gavel "arms travel with the type, under the
+ownership rule" at full width: that gavel was built for `to_string` and
+operator arms, and ordinary functions were never brought under it.
+`enroll_bare` in src/lib.rs still gives every pub function of every import a
+bare twin whatever the call passes, which is how a test file's
+`import "std/list"` turned a module's own `step 3` into `list/step` on main.
+
+Clay: "it's fine to call that method on an argument that's passed to a
+function because its arms will travel with it. you just can't call it on your
+own internal things if you haven't imported anything that defines it." And on
+a name a file never imported: "you can't reference a type if you don't know
+what version of the library it even came from... there could be a million
+different libraries that all define that same thing."
+
+**The ruling.**
+
+1. A value carries the arms its type's owner wrote. Code holding the value
+   calls them bare, without importing the owner: a function handed a `circle`
+   may write `area x`. A value reached through one that arrived counts as
+   arriving with it: a field of a parameter, an element of a list passed in,
+   the result of a traveling arm called on it.
+2. On values a file made itself (literals, its own records, what it built from
+   them) a name resolves only if the file can see it, declared in its own
+   module or in a module it imports. Otherwise it is `error[name]`.
+3. A qualified call `geo/area x` needs the import, takes any arguments, and
+   reaches only `geo`'s own arms.
+4. An arm is legal only when one of its parameter types belongs to the module
+   that writes it, so a value's traveling arms come from exactly one place,
+   its type's owner. In a mixed call such as `combine x 3`, `x`'s owner's arms
+   answer. Two owners' arms equally specific for one call are refused, as the
+   2026-08-29 gavel on the ambiguous bare call already says, and a local arm
+   of the same shape shadows a traveling one.
+
+`kanso check` stays exact: a library is checked alone with `area x` on a
+parameter accepted and `area 3` refused, and the program that passes the value
+confirms an arm exists or is refused at its own call site.
+
+Owes, on #1894: bare enrollment replaced by the two rules above; the
+reproduction (a module's `step 3` hijacked by a test file's import) as an
+error golden, seen red on main; a golden for an arm traveling into a library
+that never imported its owner; an error golden for an internal value calling
+a name the file cannot see; the corpus, samples, lib and the sibling
+repositories moved to qualified spellings where they leaned on the old reach;
+ch07 and ch11 rewritten to state the rule.
+
+## 2026-10-12 — gavel: a test file is an outside consumer of its module
+
+Clay ruled the other half of #1883: "kanso test certainly cannot see private
+definitions. that would hugely violate the point of privacy." On main a
+`*_test.kso` is a member of its module: it reads private names, its
+definitions join the module's namespace, and `kanso run` checks it, so a
+formatting slip in a test stopped the program it tests from running.
+
+**The ruling.** A test file is compiled as an outside consumer that imports
+the module it sits beside. It sees only pub names, adds nothing to the module,
+and only `kanso test` reads it; `kanso run`, `check` and `build` ignore it.
+
+Owes, on #1883: the loader keeps `*_test.kso` out of the module and compiles
+each as an importer; goldens for a test that reads a private name (refused), a
+test helper sharing a production name (no collision) and a malformed test
+beside a program that still runs; existing tests that read private names
+moved onto the pub surface.
 
 ## 2026-10-13 — three port shapes join the run program before their fixes
 
