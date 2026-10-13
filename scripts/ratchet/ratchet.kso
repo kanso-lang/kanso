@@ -467,6 +467,9 @@ error_corpus = row
   (breaking "a_diagnostic_stops_being_raised")
   release
 
+# The mutation takes tailcc off every arm on both architectures. It used to
+# lower only the arm64 cap, which an x86-64 release build no longer reads, and
+# the row went blind there.
 release_profile = row
   "a release build that gives up the guaranteed tail call"
   true
@@ -2033,15 +2036,15 @@ known_tag = row
 
 rows_b1kt = text/concat rows_b1nm [known_tag]
 
-# A nine-word arm keeps its tail calls on x86-64. The mutation narrows at
-# eight, and a release build running a three-million-step cycle through a
-# twelve-word arm overflows its stack.
+# A release build hands clang every `musttail` the emitter wrote, however
+# wide the arm. The mutation takes it off every call into an arm that stays
+# on `tailcc`, and a self call through a thirteen-word arm runs out of stack.
 nine_words = row
-  "a nine-word arm narrowed on x86"
+  "a wide arm called without musttail"
   true
   "cargo test --release --test a_big_object_decodes_in_a_release_build"
   "specs (unit, golden, differential)"
-  (breaking "a_nine_word_arm_narrowed_on_x86")
+  (breaking "a_wide_arm_called_without_musttail")
   release
 
 rows_b1nw = text/concat rows_b1kt [nine_words]
