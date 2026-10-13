@@ -1,4 +1,18 @@
+# Compiler log — archive
 
+> # ⚠️ THIS FILE IS APPEND ONLY ⚠️
+>
+> **Never edit or delete an existing entry. Only ADD new entries at the bottom.**
+>
+> Every performance/memory approach considered, decision made, thing
+> tried-and-reverted, and thread left open goes here — so no thread is ever
+> silently dropped again. (The dead-reuse thread in the first entry is *exactly*
+> why this file exists: a prior session wired `linear.rs` to nothing and no one
+> noticed for weeks.)
+>
+> Newest entries at the bottom. Date every entry. Tag each item:
+> **OPEN / DONE / REVERTED / REFUTED / SPECULATIVE**. When you close an OPEN
+> thread, do NOT edit it — append a new entry that references it.
 
 ---
 
