@@ -1601,61 +1601,63 @@ against 392,378,375; without it the browser row does not move.
 
 ## 2026-10-13 — the ruled queue lands in one carrier
 
-Fourteen pull requests built rulings at the same time: #1882, #1883, #1886,
-#1887, #1891, #1892, #1893 and #1842. Branch protection is strict and CI runs
-one job at a time, so each merge sent the rest back through CI for twenty
-minutes apiece. kanso#1938 merges all of them onto main in one tree. Each
-change's own entry above says what it did and what it cost alone; this entry
-prices the combined tree as CI measured it on e8fd676b, against main at
-38fd2e60.
+Sixteen pull requests were open at once, most of them building rulings: #1842,
+#1856, #1882, #1883, #1884, #1886, #1887, #1891, #1892 and #1893. Branch
+protection is strict and CI runs one job at a time, so each merge sent the
+rest back through CI for twenty minutes apiece. kanso#1938 merges all of them
+onto main in one tree. Each change's own entry above says what it did and what
+it cost alone; this entry prices the combined tree as CI measured it on
+ce1297c0, against main at 8710ac11.
 
 Compile work rose with the new checks and lowering:
 
-- `compile_instructions` from 26,463,317 to 27,487,528
-- `entry_instructions` from 88,129,856 to 91,388,227
-- `library_instructions` from 87,707,726 to 90,971,757
-- `compile_allocs` from 15,358 to 15,881
+- `compile_instructions` from 26,463,317 to 28,012,335
+- `entry_instructions` from 88,129,856 to 92,423,959
+- `library_instructions` from 87,707,726 to 92,019,476
+- `compile_allocs` from 15,358 to 15,984
+- `front_end_visits` from 7,990 to 8,133, and `compile_peak_bytes` from
+  694,044 to 703,170
 - `startup_instructions` from 52,396 to 52,528
-- `emit_instructions` from 7,052,040 to 7,129,967
-- `codegen_instructions_dev` from 119,002,656 to 119,069,016
-- `codegen_instructions_release` from 454,179,390 to 475,509,385
-- `browser_compile_instructions` from 393,209,858 to 401,770,760
-- `browser_compile_peak_bytes` from 677,261 to 678,057
+- `emit_instructions` from 7,052,040 to 7,240,982
+- `codegen_instructions_dev` from 119,002,656 to 119,351,105
+- `codegen_instructions_release` from 454,179,390 to 477,040,687
+- `browser_compile_instructions` from 393,209,858 to 413,925,406
+- `browser_compile_peak_bytes` from 677,261 to 686,192
 
-The interpreter and the native runs:
+The interpreter, the browser's run and the native runs:
 
-- `interp_instructions` from 486,939,316 to 493,867,557
-- `interp_allocs` from 588,491 to 589,364
-- `interp_peak_bytes` from 692,375 to 694,492
-- `work_digestbench` from 5,604,458 to 5,909,392
-- `work_livebench` from 1,474,874,594 to 1,474,875,307
-- `work_oneshot` from 13,227,314 to 13,227,860
-- `work_pendbench` from 190,061,194 to 191,674,127
-- `work_runbench` from 1,177,965,832 to 1,180,255,750
-- `work_scanbench` from 273,523 to 273,667
+- `interp_instructions` from 486,939,316 to 495,529,381
+- `interp_allocs` from 588,491 to 589,689
+- `interp_peak_bytes` from 692,375 to 722,393
+- `browser_run_instructions` from 34,125,332 to 34,173,068
+- `work_deepbench` from 393,579,644 to 403,499,282
+- `work_digestbench` from 5,604,458 to 5,909,013
+- `work_pendbench` from 190,061,194 to 191,673,790
+- `work_runbench` from 1,177,965,832 to 1,178,202,157
+- `work_widebench` from 28,178,544 to 28,274,435
 
-The emitted code across the other benchmarks has more branches and calls and
-fewer lines: `emitted_other_branches` from 16,555 to 16,571,
-`emitted_other_calls` from 17,664 to 17,702, and `emitted_other_lines` from
-148,239 to 145,735. The binaries' `text` grew from 4,838,990 to 4,903,966
-bytes.
+`work_encodebench` fell from 2,398,405,934 to 2,386,636,505 and
+`work_jsonbench` from 860,565,984 to 858,185,997; the other benchmarks moved by
+less than 22,000 instructions each.
 
-The largest single move is release codegen, up 4.7%. Which carried change
-produced it is not isolated here; the branches' own readings are in their
-entries. Every carried change builds a ruled part of the language, so the
-floor drops by what the combined tree costs.
+The decoder's emitted code has `emitted_defines` 111 where it had 106 and
+`emitted_lines` 10,161 where it had 10,070. Across the other benchmarks
+`emitted_other_defines` lands on 2,078 from 2,036 and `emitted_other_calls` on
+17,798 from 17,664, while branches and lines fell. The binaries' `text` grew
+from 4,838,990 to 4,932,142 bytes.
 
-The first carrier push missed two goldens. The merge that built it took main's
-`bench/cost_golden_run.txt` and `bench/compile_memory_golden.txt` over the
-carried branches' copies, so neither held the combined tree's reading. The run
-program prints the same `runbench 46132896` on main and on this tree, and its
-counters now read `run_arena_peak_bytes` 4,718,608 against main's 9,961,488 and
-`run_allocs` 1,812,039 against 1,812,274. Three run counters rose:
+The largest single moves are release codegen, up 5.0%, and the browser's
+compile, up 5.3%. Which carried change produced each is not isolated here; the
+branches' own readings are in their entries.
+
+The run program prints the same `runbench 46132896` on main and on this tree.
+Its counters read `run_arena_peak_bytes` 4,718,608 against main's 9,961,488 and
+`run_allocs` 1,812,043 against 1,812,274. Three run counters rose:
 `run_beat_iters` from 52,008 to 92,008, `run_evac_allocs` from 49,188 to 49,221
-and `run_push_mut_slow` from 1,554,416 to 1,554,428. The front end's
-`front_end_visits` on compile_corpus went from 7,990 to 8,003 and
-`compile_peak_bytes` from 694,044 to 695,647. Welfare rises to 91.3652 on the
-lower run peak, and the floor is banked there.
+and `run_push_mut_slow` from 1,554,416 to 1,554,428.
+
+Welfare reads 91.3353 on CI's rows against main's floor of 91.2916, so the
+combined tree is a rise, and the floor is banked there.
 
 ## 2026-10-13 — gavel: `merge` copies a record with named fields replaced
 
