@@ -120,6 +120,7 @@ fn the_micro_corpus_answers_the_same_through_the_translator() {
             }
         }
     }
+    let _ = std::fs::remove_dir_all(&work);
     assert!(
         failures.is_empty(),
         "{} of {} programs differ:\n{}",
