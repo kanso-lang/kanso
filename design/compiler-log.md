@@ -1687,6 +1687,11 @@ On CI's rows for the tree merged with main after #1904: `compile_instructions`
 -> 7,048,046 and `interp_allocs` 587,479 -> 587,485; `interp_instructions`
 falls 298,363 to 487,131,077.
 
+On CI's rows for the tree merged with main after #1937: compile_instructions
+lands on 26,463,317, entry_instructions on 88,129,856, library_instructions on
+87,707,726, emit_instructions on 7,052,040 and interp_allocs on 588,491.
+interp_instructions falls to 486,939,316.
+
 ## 2026-10-12 — a bare imported type with no fields is its module's value
 
 An importer may name a type with no fields bare: `import "std/json"` enrols
