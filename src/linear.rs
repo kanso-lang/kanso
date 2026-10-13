@@ -472,10 +472,11 @@ impl<'a> Analysis<'a> {
     ) -> bool {
         let (name, arity, i, f) = q;
         if let Expr::App { head, args, .. } = e {
-            if matches!(head.as_ref(), Expr::Ident(n, _, _) if n == name) && args.len() == arity {
-                if under_lambda || !self.holds_field_alone(&args[i], f, ctx) {
-                    return false;
-                }
+            if matches!(head.as_ref(), Expr::Ident(n, _, _) if n == name)
+                && args.len() == arity
+                && (under_lambda || !self.holds_field_alone(&args[i], f, ctx))
+            {
+                return false;
             }
         }
         let inner = under_lambda || matches!(e, Expr::Lambda { .. });

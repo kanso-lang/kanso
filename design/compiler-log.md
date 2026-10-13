@@ -1830,8 +1830,8 @@ Built alone on main, each less the empty program's 6,766,088, `rewind` costs
 sized near five per cent like `scatter` and `bump`; it adds nothing to the peak.
 The run program's header carries the table.
 
-Together they take `work_runbench` 1,170,035,080 -> 1,234,663,911 (the
-container's difference over CI's row, until CI reads its own) and the run peak
+Together they take `work_runbench` 1,170,035,080 -> 1,234,827,314 on CI (the
+container projected 1,234,663,911) and the run peak
 4,948,512 -> 10,191,392 bytes. `run_instructions` and `run_peak_bytes` are
 re-based by the same ratios, so welfare scores what it scored, and the floor's
 history says so; `run_arena_peak_bytes` is the part of the peak that moved,
@@ -1880,8 +1880,8 @@ where main counts 53,881 and 9,160,278,336. The ratchet row "a record field
 copied on every push" turns it red when the move is refused.
 
 On the run program's `bag` phase, which #1925 added on main: `work_runbench`
-1,234,663,911 -> 1,177,765,528 (the container's difference, until CI reads
-its own), the phase alone 58,073,973 -> 911,987 instructions. The run vein
+1,234,827,314 -> 1,177,927,314 on CI, 56,900,000 fewer, the phase alone
+58,073,973 -> 911,987 instructions in this container. The run vein
 lands on `run_allocs` 1,812,272, `run_alloc_bytes` 335,416,908,
 `run_evac_allocs` 49,188, `run_evac_bytes` 14,985,856, `run_sh_rec`
 3,778,880, `run_sh_buf` 121,778,720, `run_survive_slots` 4,856,
@@ -1898,6 +1898,15 @@ the arena already grows by `realloc`, so that second doubling buys it
 nothing; dropping it there is a lead, not built here. `text` lands on
 4,838,766, runbench 622,857 -> 623,001 bytes.
 
+CI's compile rows. The analysis asks one more question of each field write,
+and the interpreter skips the copy at the same sites:
+`compile_instructions` 25,881,551 -> 25,803,156, `entry_instructions`
+85,381,313 -> 85,149,258, `library_instructions` 85,935,582 -> 85,703,128,
+`emit_instructions` 7,013,477 -> 7,035,926 (+22,449),
+`interp_instructions` 488,739,816 -> 487,429,689, `interp_allocs` 587,351 ->
+587,479 (+128), and `browser_compile_instructions` 391,311,502 ->
+392,378,375 (+1,066,873, +0.27%).
+
 ## 2026-10-13 — a buffer outside the arena grows by one doubling
 
 `k_b_push_grow` picks a list's next capacity as the smallest power of two that
@@ -1910,8 +1919,7 @@ slots. A buffer outside the arena now takes the smallest power of two.
 On the run program `run_perm_peak_bytes` lands on 146,888 and
 `run_perm_live_bytes` on 146,888 (277,960 before), and the run peak falls
 10,437,152 -> 10,306,080 bytes. The extra regrows cost `work_runbench`
-1,177,765,528 -> 1,177,803,297 (the container's difference, until CI reads
-its own), and `run_alloc_bytes` falls to 303,607,404 because the counter adds
+1,177,927,314 -> 1,177,965,832 on CI, 38,518 more, and `run_alloc_bytes` falls to 303,607,404 because the counter adds
 each buffer's full size and the buffers are smaller. `run_allocs` lands on
 1,812,274, `run_bytes_malloc` on 9,140 and `run_bytes_freed` on 9,009.
 basket's permanent peak halves to 2,162,720 (`basket_perm_peak_bytes`, with
@@ -1946,3 +1954,15 @@ to sixteen), and of these only `early_exit` holds less for it:
 `skip_shape_bytes_malloc` 5; `take_shape_allocs` 20, `take_shape_alloc_bytes`
 215,152, `take_shape_bytes_malloc` 5; `tally_shape_allocs` 19,
 `tally_shape_alloc_bytes` 133,280, `tally_shape_bytes_malloc` 5.
+
+CI's instruction rows. The other benchmarks pay for the extra regrows too:
+`work_basket` 30,876,488 -> 30,946,055 (+69,567), `work_encodebench`
+2,398,373,226 -> 2,398,405,934 (+32,708), `work_escapebench` 39,049,158 ->
+39,058,255 (+9,097), `work_pendbench` 190,054,350 -> 190,061,194 (+6,844),
+`work_jsonbench` 860,562,984 -> 860,565,984 (+3,000), `work_digestbench`
+5,603,118 -> 5,604,458 (+1,340), `work_oneshot` 13,226,930 -> 13,227,314
+(+384) and `work_widebench` 28,178,509 -> 28,178,544 (+35); `work_livebench`
+falls 477 to 1,474,874,594. In the tab, where the same runtime runs the
+interpreted corpus, `browser_run_instructions` 34,124,990 -> 34,125,332
+(+342). `codegen_instructions_dev` reads 119,002,829 -> 119,002,656 and
+`codegen_instructions_release` 454,179,413 -> 454,179,390.
