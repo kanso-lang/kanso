@@ -1,0 +1,4 @@
+error[name]: unknown name `area`
+  --> tests/golden/errors_module/an_arm_called_on_a_value_the_file_made/report/report.kso:3:14
+   3 |   "{area c} {area 3}"
+                    ^

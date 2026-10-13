@@ -1679,6 +1679,61 @@ test helper sharing a production name (no collision) and a malformed test
 beside a program that still runs; existing tests that read private names
 moved onto the pub surface.
 
+91.11.
+
+## 2026-10-12 — arms travel with the value
+
+The first rule of the 2026-10-12 gavel on #1894. A value carries the arms its
+type's owner wrote, so a module handed a `circle` may call `area c` without
+importing geo.
+
+The check decides which calls travel. The resolver marks a local as arrived
+when the function was handed it: a parameter, a name bound to a field or
+element of one, a lambda's parameter when the lambda goes to a call that also
+carries an arrived value, and the answer of a traveling call on one. A bare
+call that names nothing the file can see, with an arrived argument, is
+recorded instead of refused. The answer of a local function is not arrived,
+as the gavel lists it, so `area (twice c)` stays an unknown name.
+
+Each recorded call is renamed into a traveling group, `~area`, a spelling no
+program can write. A dependency compiles with the call left there. The root
+of the program, an entry file or a directory with `main.kso`, fills each group
+it calls with clones of every pub arm of that name whose module owns one of
+its parameter types, which is rule 4's ownership condition. When no owner
+wrote the name, the call is refused where it was written: "no module in this
+program writes `perimeter` for a type it owns, so no value carries it". Checked
+alone, a library takes the call on a parameter and refuses it on a value it
+made. Native code quotes a symbol with `~` in it, as it does one with `/`.
+
+`tests/arms_travel.rs` runs `tests/golden/travel/area` on both engines: a
+report module that never imports geo calls `area` on a circle it was handed
+and on each circle of a list. Main refused both calls, from `kanso run` and
+from `kanso check report`. Two error goldens pin the refusals:
+`an_arm_called_on_a_value_the_file_made` and
+`a_traveling_call_no_owner_answers`. The ratchet row "an arm left behind by
+its value" lets no call travel and turns the run test red. ch11 states the
+rule and ch07 points to it.
+
+Still open on #1894: a local arm of the same name shadows the traveling ones
+outright, where rule 4 asks for a local arm of the same shape to shadow and
+the rest to stay reachable. A module that declares its own `area` for a
+square and is handed a circle cannot reach geo's arm yet.
+
+CI's rows put `compile_instructions` at 26,052,299 (+170,748, +0.66%),
+`entry_instructions` at 86,286,307 (+904,994, +1.06%), `library_instructions`
+at 86,505,153 (+569,571, +0.66%) and `emit_instructions` at 7,019,534
+(+6,057). `compile_allocs` rose 75 to 14,605 and `interp_allocs` 74 to 587,357.
+`interp_instructions` fell 402 to 488,739,414. The tab runs the same front end,
+and `browser_compile_instructions` rose to 393,182,630 (+804,255, +0.20% on main after #1927).
+This builds a ruled part of the language, so the welfare floor drops by what
+it costs.
+
+On CI's rows for the tree merged with main after #1904: `compile_instructions`
+25,803,156 -> 26,057,907, `entry_instructions` 85,149,258 -> 86,302,801,
+`library_instructions` 85,703,128 -> 86,519,482, `emit_instructions` 7,035,926
+-> 7,048,046 and `interp_allocs` 587,479 -> 587,485; `interp_instructions`
+falls 298,363 to 487,131,077.
+
 ## 2026-10-12 — a bare imported type with no fields is its module's value
 
 An importer may name a type with no fields bare: `import "std/json"` enrols
