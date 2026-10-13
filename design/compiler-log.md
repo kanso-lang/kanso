@@ -2035,5 +2035,14 @@ Measured here, the tab's compile row went from 391,974,060 to 392,906,566.
 With the new call kept and the check returning at its first line it read
 392,914,374, and with the call removed 391,981,161. The rise is in how the
 wasm build lays out the walk the call sits in, not in work the check does:
-across `bench/interp_corpus` five calls get past its first test. The rows that
-move come from CI and are priced before merge.
+across `bench/interp_corpus` five calls get past its first test.
+
+On CI's rows for the tree merged with #1913, browser_compile_instructions
+lands on 392,430,393, up 1,118,891. compile_instructions lands on 26,006,341,
+entry_instructions on 85,527,812 and library_instructions on 86,082,490,
+rises of 124,790, 146,499 and 146,908 for the check's walk and the corpus's
+extra `list/to_list`. emit_instructions lands on 7,013,581, up 104, and
+compile_allocs on 14,637, up 39. front_end_visits lands on 7,995, up 13, the
+front end walking the corpus's new call. The refusal is
+#1892's item, which makes `kanso check` say what every engine already
+refused, so the floor drops by what it costs.
