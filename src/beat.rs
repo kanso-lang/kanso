@@ -3067,6 +3067,11 @@ mod tests {
         // escape every three characters read 78,278,587 instructions with
         // the licence and without it.
         //
+        // `unicode_at` joined on 2026-10-12, when the four hex digits of a
+        // `\u` escape stopped riding a name past their err and the escape's
+        // tail moved into a function of its own. It takes the scanners' slots
+        // and tail-calls `str_chars`, so it is one more scanner.
+        //
         // The blank skip before a value joined on 2026-10-13. `value_for`
         // and `value_blank` are one cycle, entered by a tail call from
         // `parse_value`, and the cycle reaches `parse_value` again only under
@@ -3079,6 +3084,7 @@ mod tests {
             ("json/str_surrogate", 4),
             ("json/str_unicode", 3),
             ("json/string_scan", 3),
+            ("json/unicode_at", 4),
             ("json/value_blank", 3),
         ]
         .into_iter()

@@ -683,6 +683,9 @@ fn ran? line runs false
   pieces = text/split line runs[1]
   stepped_run? line runs runs[1] pieces
 
+fn stepped_run? _ _ _ e@(err _)
+  e
+
 fn stepped_run? line runs r pieces
   onward? line runs r pieces (length pieces == 1)
 

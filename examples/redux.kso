@@ -22,7 +22,12 @@ fn step _ _ _ _ out none
   out .> (_ -> print "the till closes")
 
 fn step store actions i sub out action
-  next = update store action
+  advance (update store action) actions i sub out action
+
+fn advance (err reason) _ _ _ out _
+  out .> (_ -> print "the till refuses: {reason}")
+
+fn advance next actions i sub out action
   paced = out .> (_ -> notify sub action next) .> (_ -> time/sleep 350)
   drive next actions (i + 1) sub paced
 

@@ -147,12 +147,25 @@ fn str_escape _ none p _
 fn str_escape _ c p _
   fail p "invalid escape `\\{text/utf8 [c]}`"
 
+# four hex digits: each is dispatched on before it is added, because an err
+# is not a number, and the first bad digit is the failure handed on
 fn str_hex4 cs p
-  h1 = hex_digit cs[p]
-  h2 = hex_digit (cs[p + 1])
-  h3 = hex_digit (cs[p + 2])
-  h4 = hex_digit (cs[p + 3])
-  h1 * 4096 + h2 * 256 + h3 * 16 + h4
+  hex_on (hex_three cs p) (hex_digit cs[p + 3])
+
+fn hex_three cs p
+  hex_on (hex_on (hex_digit cs[p]) (hex_digit cs[p + 1])) (hex_digit cs[p + 2])
+
+fn hex_on e@(err _) (err _)
+  e
+
+fn hex_on e@(err _) _
+  e
+
+fn hex_on _ e@(err _)
+  e
+
+fn hex_on n d
+  n * 16 + d
 
 fn str_low _ _ _ _ e@(err _)
   e
@@ -178,7 +191,12 @@ fn str_surrogate cs p acc high
     str_pair cs p acc high
 
 fn str_unicode cs p acc
-  code = str_hex4 cs (p + 2)
+  unicode_at cs p acc (str_hex4 cs (p + 2))
+
+fn unicode_at _ _ _ e@(err _)
+  e
+
+fn unicode_at cs p acc code
   if (code < 55296 or 57343 < code)
     str_chars cs (p + 6) (text/append acc (text/from_code code))
     str_surrogate cs p acc code

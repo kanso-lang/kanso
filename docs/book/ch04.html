@@ -33,35 +33,31 @@ ratio <span class="o">=</span> <span class="f">text/to_int</span> word
 
 <div class="code-panel">
   <div class="code-panel-title">railway.kso</div>
-  <pre><code>total <span class="o">=</span> <span class="f">subtotal</span> <span class="n">120</span> <span class="n">0</span>
+  <pre><code><span class="k">import</span> <span class="s">"std/text"</span>
+
+total <span class="o">=</span> <span class="f">subtotal</span> <span class="n">120</span> <span class="s">"nobody"</span>
 <span class="f">print</span> (<span class="f">receipt</span> total)
 
 <span class="k">fn</span> <span class="f">receipt</span> total
   <span class="s">"order total: <span class="i">{total}</span>"</span>
 
-<span class="k">fn</span> <span class="f">share_of</span> _ <span class="n">0</span>
-  <span class="f">err</span> <span class="s">"no one to share the bill with"</span>
-
-<span class="k">fn</span> <span class="f">share_of</span> cents people
-  cents <span class="o">/</span> people
-
-<span class="k">fn</span> <span class="f">subtotal</span> cents people
-  share <span class="o">=</span> <span class="f">share_of</span> cents people
-  <span class="f">with_tip</span> share
+<span class="k">fn</span> <span class="f">subtotal</span> cents party
+  people <span class="o">=</span> <span class="f">text/to_int</span> party
+  <span class="f">with_tip</span> (cents <span class="o">/</span> people)
 
 <span class="k">fn</span> <span class="f">with_tip</span> share
   share <span class="o">+</span> share <span class="o">/</span> <span class="n">10</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso play railway.kso</div>
-    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the entry: "no one to share the bill with"
-  born in share_of at railway.kso:8
+    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the entry: ""nobody" is not an integer"
+  born in text/to_int at std/text/text.kso:92
   passed through receipt ← with_tip</code></pre>
   </div>
 </div>
 
-<p>count the lines of error handling in this program: zero. <code>share_of</code> decides that a bill split no ways is a failure and says so; the err flows into <code>with_tip</code>, which never runs; back out to <code>main</code>; into <code>receipt</code>, which never runs; through <code>print</code>; and off the end of the program, where the endpoint rule files the report. this is the railway: the sad track runs parallel to the happy one, and a station stops the train only where the checker can see it coming. functions state their happy-path logic and nothing else.</p>
+<p>count the lines of error handling in this program: zero. <code>text/to_int</code> cannot read "nobody" as a number and says so with an err; the err flows through the division, which hands it on; into <code>with_tip</code>, which never runs; back out to the top of the program; into <code>receipt</code>, which never runs; through <code>print</code>; and off the end of the program, where the endpoint rule files the report. this is the railway: the sad track runs parallel to the happy one, and a station stops the train only where the checker can see it coming. functions state their happy-path logic and nothing else.</p>
 
-<p>one rule sits beside this, and the checker enforces it. an err is data, and a function that is handed one either names it with an <code>(err _)</code> arm or does not take it. where the checker can see a raised err arriving—the argument is itself a call to a function with an <code>err</code> arm, as <code>with_tip (share_of cents people)</code> would be—it refuses the program and names the function that has no arm. <code>share</code> above is a name, and the checker reads calls, not the names they are bound to, so the failure rides past <code>with_tip</code> at run time and the endpoint reports it. an operator and an index are held to the same rule: <code>share_of cents people + 1</code> does not compile, because <code>+</code> wants a value and an err is not one.</p>
+<p>one rule sits beside this, and the checker enforces it. an err is data, and a function that is handed one either names it with an <code>(err _)</code> arm or does not take it. where the checker can see a raised err arriving, it refuses the program and names the function that has no arm. it sees one when the argument is a call to a function with an <code>err</code> arm, or a name bound to such a call. a <code>share_of</code> that answered <code>err "no one to share the bill with"</code> for a party of zero could not be handed to <code>with_tip</code> either way: <code>with_tip (share_of cents people)</code> and <code>share = share_of cents people</code> followed by <code>with_tip share</code> are refused alike. an operator and an index are held to the same rule: <code>share_of cents people + 1</code> does not compile, because <code>+</code> wants a value and an err is not one. <code>text/to_int</code> is different, because whether it fails depends on text the program has not seen yet, so the checker lets it through and the endpoint reports it. when a step should run only on a value, <code>.&gt;</code> says so: <code>share_of cents people .&gt; with_tip</code> calls <code>with_tip</code> with a share and steps past an err.</p>
 
 <p>the err built the report as it traveled. the first line is the reason. the second is the birthplace—function, file, line—baked in at the moment of failure. the third is the trace: every function the err rode past, newest on the left, so <code>receipt ← with_tip</code> reads "past <code>with_tip</code> first, then past <code>receipt</code>." in a language where failure never unwinds a stack, the trace is how the stack story survives—carried on the value itself, printed only if the err makes it all the way out.</p>
 
@@ -71,14 +67,12 @@ ratio <span class="o">=</span> <span class="f">text/to_int</span> word
 
 <div class="code-panel">
   <div class="code-panel-title">unasked.kso</div>
-  <pre><code>seasonal <span class="o">=</span> <span class="f">price</span> <span class="s">"flan"</span>
-<span class="f">print</span> (<span class="f">label</span> <span class="s">"soup"</span> (<span class="f">price</span> <span class="s">"soup"</span>)) <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">label</span> <span class="s">"flan"</span> seasonal))
+  <pre><code><span class="k">import</span> <span class="s">"std/text"</span>
 
-<span class="k">fn</span> <span class="f">price</span> <span class="s">"flan"</span>
-  <span class="f">err</span> <span class="s">"flan is seasonal"</span>
-
-<span class="k">fn</span> <span class="f">price</span> _
-  <span class="n">450</span>
+board <span class="o">=</span> [<span class="s">"450"</span> <span class="s">"seasonal"</span>]
+soup <span class="o">=</span> <span class="f">text/to_int</span> board[<span class="n">1</span>]
+flan <span class="o">=</span> <span class="f">text/to_int</span> board[<span class="n">2</span>]
+<span class="f">print</span> (<span class="f">label</span> <span class="s">"soup"</span> soup) <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">label</span> <span class="s">"flan"</span> flan))
 
 <span class="k">fn</span> <span class="f">label</span> dish cents
   <span class="s">"<span class="i">{dish}</span>: <span class="i">{cents}</span> cents"</span></code></pre>
@@ -87,12 +81,12 @@ ratio <span class="o">=</span> <span class="f">text/to_int</span> word
 <div class="code-panel">
   <div class="code-panel-title">kanso play unasked.kso</div>
   <pre><code>soup: 450 cents
-<span class="k">error[endpoint]</span>: unhandled err reached the executor: "flan is seasonal"
-  born in price at unasked.kso:5
+<span class="k">error[endpoint]</span>: unhandled err reached the executor: ""seasonal" is not an integer"
+  born in text/to_int at std/text/text.kso:92
   passed through label</code></pre>
 </div>
 
-<p><code>label</code> takes two arguments. on the first line both are values and it runs. on the second, one of the two is a failure, and it arrives through the name <code>seasonal</code>: the checker reads calls, and a name is not a call, so this is the case it cannot prove. the call answers the failure and the body never starts&#8212;the trace says <code>passed through label</code>, which is the language reporting exactly that. written as <code>label "flan" (price "flan")</code>, with the call in plain view, the program would not compile. one function, compiled once, serving both lines. nothing about <code>label</code> changed to make the second line legal, and nothing could: there is no annotation to add, no wrapper type to return, no <code>?</code> to sprinkle. the plumbing that other languages ask every signature to carry is done once, at every call site, by the rule itself.</p>
+<p><code>label</code> takes two arguments. on the first line both are values and it runs. on the second, one of the two is a failure: <code>text/to_int</code> could not read "seasonal" as a number. whether it fails depends on the text it is handed, which here comes out of a list, so the checker cannot prove the failure and the call compiles. the call answers the failure and the body never starts&#8212;the trace says <code>passed through label</code>, which is the language reporting exactly that. a failure the checker can prove is refused instead: a <code>price</code> with an arm answering <code>err "flan is seasonal"</code> could not be handed to <code>label</code>, whether the call to it is written in place or bound to a name first. one function, compiled once, serving both lines. nothing about <code>label</code> changed to make the second line legal, and nothing could: there is no annotation to add, no wrapper type to return, no <code>?</code> to sprinkle. the plumbing that other languages ask every signature to carry is done once, at every call site, by the rule itself.</p>
 
 <p>when more than one argument fails, a call keeps the first failure; an operator keeps both, because neither operand caused the other. the full accounting of what each construct does with an arriving failure&#8212;which merge, which take the first, which hold, which pass through&#8212;is a pinned table on the compiler page, and every row of it is a fixture that runs on all three engines.</p>
 
@@ -102,24 +96,21 @@ ratio <span class="o">=</span> <span class="f">text/to_int</span> word
 
 <div class="code-panel">
   <div class="code-panel-title">unhandled.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">describe</span> none
+  <pre><code><span class="k">import</span> <span class="s">"std/text"</span>
+
+<span class="k">fn</span> <span class="f">describe</span> none
   <span class="s">"nothing"</span>
 
 <span class="k">fn</span> <span class="f">describe</span> x
   <span class="s">"got <span class="i">{x}</span>"</span>
 
-<span class="k">fn</span> <span class="f">steeped</span> <span class="n">0</span>
-  <span class="f">err</span> <span class="s">"nothing steeped"</span>
-
-<span class="k">fn</span> <span class="f">steeped</span> n
-  <span class="f">n</span>
-
-bad <span class="o">=</span> <span class="f">steeped</span> <span class="n">0</span>
+steeps <span class="o">=</span> [<span class="s">"3"</span> <span class="s">"not yet"</span>]
+bad <span class="o">=</span> <span class="f">text/to_int</span> steeps[<span class="n">2</span>]
 <span class="f">print</span> (<span class="f">describe</span> bad)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso play unhandled.kso</div>
-    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the entry: "nothing steeped"
-  born in steeped at unhandled.kso:8
+    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the entry: ""not yet" is not an integer"
+  born in text/to_int at std/text/text.kso:92
   passed through describe</code></pre>
   </div>
 </div>

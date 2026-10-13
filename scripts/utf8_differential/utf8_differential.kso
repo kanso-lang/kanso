@@ -108,9 +108,8 @@ header = """
 """
 
 fn body_of src sig
-  parts = text/split src sig
-  start = "{sig}{parts[2]}"
-  text/slice start 1 (closing_brace start 0 1)
+  text/split src sig .> (parts -> "{sig}{parts[2]}")
+    .> (start -> text/slice start 1 (closing_brace start 0 1))
 
 # The function ends at the brace that closes the one its signature opens.
 fn closing_brace src depth i
@@ -131,6 +130,9 @@ fn at_brace src depth i _
 # `return k_err(...)` reports which byte was bad; the harness only compares a
 # yes or no, so every failure arm answers the same 0. The argument list holds
 # no semicolon, so the statement ends at the first one.
+fn no_err e@(err _)
+  e
+
 fn no_err body
   parts = text/split body "return k_err("
   return body if length parts < 1
@@ -141,9 +143,11 @@ fn rejoined acc chunk
   rest = text/join (list/to_list (list/drop tail 1)) ";"
   "{acc}return 0;{rest}"
 
+fn swapped e@(err _) _ _
+  e
+
 fn swapped src from to
-  parts = text/split src from
-  text/join parts to
+  text/split src from .> (parts -> text/join parts to)
 
 fn as_harness src
   ascii = body_of src ascii_sig
@@ -167,13 +171,22 @@ fn threshold_of src
 fn cut_at_newline s
   (text/split s "\n")[1]
 
+fn as_scalar e@(err _)
+  e
+
 fn as_scalar body
   named = swapped body scalar_sig harness_scalar_sig
   swapped named "return k_none();" "return 1;"
 
+fn as_wide e@(err _)
+  e
+
 fn as_wide body
   named = swapped body wide_sig harness_wide_sig
   swapped named "return k_none();" "return 1;"
+
+fn as_door e@(err _)
+  e
 
 fn as_door body
   named = swapped body signature harness_sig
@@ -206,6 +219,9 @@ fn dropped s "\n"
 
 fn dropped s _
   s
+
+fn written e@(err _)
+  e
 
 fn written source
   os/write_file extracted_path source .> (_ -> os/run "uname" ["-m"])

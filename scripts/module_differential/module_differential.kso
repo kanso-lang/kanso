@@ -736,6 +736,9 @@ fn named _ _ true
 fn named k c false
   "refused, but not with {shown k.expected}: {clipped c.stderr}"
 
+fn named _ _ e@(err _)
+  e
+
 fn ruled _ target k c after
   compiled target k c after (c.status == 0)
 

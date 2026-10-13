@@ -1,0 +1,13 @@
+# A name carries the err of the call it was bound to (#1884). Binding
+# `steeped 0` first and adding to the name is refused as adding to the call
+# is, so inlining a binding or pulling one out never changes what compiles.
+# The direct form is `an_err_reaches_an_operator`.
+fn steeped 0
+  err "nothing steeped"
+
+fn steeped n
+  n
+
+pub play =
+  total = steeped 0
+  print "{total + 1}"

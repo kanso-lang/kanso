@@ -1,6 +1,9 @@
 import "std/os"
 import "std/text"
 
+fn banner e@(err _)
+  e
+
 fn banner line
   "== {line} =="
 
@@ -11,6 +14,9 @@ fn check text
 
 fn chosen argv
   if (length argv == 0) "examples/trace_demo/VERSION" argv[1]
+
+fn describe e@(err _)
+  e
 
 fn describe v
   "major version {v} detected"
@@ -29,8 +35,7 @@ fn dot_hunt cs i
 
 fn major_of text
   cs = text/chars text
-  dot = dot_hunt cs 1
-  digits = text/join (text/slice cs 1 (dot - 1)) ""
+  digits = dot_hunt cs 1 .> (dot -> text/join (text/slice cs 1 (dot - 1)) "")
   text/to_int digits
 
 pub fn announce argv

@@ -30,7 +30,9 @@ stale = "STALE"
 # it. Splitting on a string that occurs once answers two pieces, and the first
 # marker in the second piece is the first one after the title.
 fn staled src title
-  parts = text/split src title
+  text/split src title .> (parts -> staled_in src title parts)
+
+fn staled_in src title parts
   return src if length parts < 2
   bits = text/split parts[2] marker
   return src if length bits < 1

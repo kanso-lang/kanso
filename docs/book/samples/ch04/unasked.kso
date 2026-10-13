@@ -1,11 +1,9 @@
-seasonal = price "flan"
-print (label "soup" (price "soup")) .> (_ -> print (label "flan" seasonal))
+import "std/text"
 
-fn price "flan"
-  err "flan is seasonal"
-
-fn price _
-  450
+board = ["450" "seasonal"]
+soup = text/to_int board[1]
+flan = text/to_int board[2]
+print (label "soup" soup) .> (_ -> print (label "flan" flan))
 
 fn label dish cents
   "{dish}: {cents} cents"

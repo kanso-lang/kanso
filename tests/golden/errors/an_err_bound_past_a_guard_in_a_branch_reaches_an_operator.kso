@@ -1,0 +1,19 @@
+# A `return` inside a branch makes the rest of the branch a guard's rest, and
+# a name bound there still carries the err of its call (#1884). The check
+# looks for such a binding before it collects names, so this pins that the
+# look goes into a branch and past its guard.
+fn share cents people
+  return err "no one to share the bill with" if people == 0
+  cents / people
+
+fn tipped cents people split
+  owed = if split
+    return 0 if cents < 0
+    each = share cents people
+    each + 1
+  else
+    whole = cents
+    whole + 1
+  owed
+
+pub play = print "{tipped 100 0 true}"

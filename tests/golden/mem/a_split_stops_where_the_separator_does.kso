@@ -13,7 +13,13 @@ fn grow 0 acc
 fn grow n acc
   grow (n - 1) (text/append acc "xyz")
 
+# a split can fail, so its answer is dispatched on before it is read
+fn report (err e)
+  print "{e}"
+
+fn report pieces
+  print "{length pieces} pieces, the last {length pieces[3]} long"
+
 pub play =
   tail = text/utf8 (grow 100 (text/bytes ""))
-  pieces = regexp/split ", " "a, b, {tail}"
-  print "{length pieces} pieces, the last {length pieces[3]} long"
+  report (regexp/split ", " "a, b, {tail}")

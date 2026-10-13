@@ -1105,7 +1105,7 @@ fn say_of m
 fn silent? added m
   key_absent = not_named? added m.key
   value_absent = not_named? added (commas m.after)
-  either? key_absent value_absent
+  key_absent .> (k -> value_absent .> (v -> either? k v))
 
 fn not_named? haystack needle
   length (text/split haystack needle) == 1

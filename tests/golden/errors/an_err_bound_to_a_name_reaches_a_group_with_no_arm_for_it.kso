@@ -1,0 +1,16 @@
+# A name carries the err of the call it was bound to (#1884), into a call as
+# well as into an operator. `brewed` has no arm for an err, so handing it the
+# name is refused as handing it `steeped 0` is. The direct form is
+# `an_err_reaches_a_group_with_no_arm_for_it`.
+fn steeped 0
+  err "nothing steeped"
+
+fn steeped n
+  n
+
+fn brewed n
+  "brewed {n}"
+
+pub play =
+  cup = steeped 0
+  print (brewed cup)

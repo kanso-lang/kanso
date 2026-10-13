@@ -170,6 +170,9 @@ fn trying line rules i at acc false
 fn landed line rules i at acc _ none
   tried line rules (i + 1) at acc
 
+fn landed _ _ _ _ _ _ e@(err _)
+  e
+
 fn landed line rules _ at acc one m
   spanned line rules at acc one m (one.ends == none)
 
@@ -181,7 +184,9 @@ fn spanned line rules at acc one m true
 # A span paints from its opener through its closer, which is what a reader
 # sees. Where the closer never arrives the line ends the run.
 fn spanned line rules at acc one m false
-  stop = closing one.ends line m.to
+  closing one.ends line m.to .> (stop -> closed line rules at acc one stop)
+
+fn closed line rules at acc one stop
   whole = text/slice line at (stop - 1)
   paint line rules stop (push acc (painted whole one.paints))
 
@@ -197,6 +202,9 @@ fn seeking ends line at false
 
 fn reached ends line at none
   closing ends line (at + 1)
+
+fn reached _ _ _ e@(err _)
+  e
 
 fn reached _ _ _ m
   m.to
@@ -259,6 +267,9 @@ fn walking _ _ acc true
 fn walking rules at acc false
   one = expectations[at]
   out = paint one.line rules 1 []
+  out .> (o -> walked rules at acc one o)
+
+fn walked rules at acc one out
   seen = list/to_list (list/map (in_scope out one.scope) (p -> p.text))
   gaps = missing one seen 1 []
   over_lines rules (at + 1) (list/to_list (text/concat acc gaps))
@@ -288,6 +299,9 @@ fn noted acc _ _ _ true
 fn noted acc one want seen false
   said = "'{one.line}': '{want}' is not painted {one.scope}"
   push acc "{said} (painted: {seen})"
+
+fn reported e@(err _)
+  e
 
 fn reported faults
   clean faults (length faults == 0)

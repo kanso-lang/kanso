@@ -3,5 +3,5 @@ import "std/testing"
 
 dango = price "dango"
 pocky = price "pocky"
-print (describe dango)
+dango .> describe .> print
   .> (_ -> print (testing/when_failed pocky (r -> "gomen: {r}")))

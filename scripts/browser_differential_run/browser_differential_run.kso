@@ -81,6 +81,9 @@ fn either? true _
 fn either? _ answer
   answer
 
+fn door_of e@(err _)
+  e
+
 fn door_of src
   chosen src (library? src)
 
@@ -138,6 +141,9 @@ fn with_page progs
   page = page_for progs
   on = (w -> with_runtime progs page w)
   os/read_bytes! "docs/kanso.wasm" .> on
+
+fn with_runtime _ e@(err _) _
+  e
 
 fn with_runtime progs page w
   on = (r -> with_engine progs page w r)
@@ -202,6 +208,9 @@ fn more_files paths at acc book false
   return more_files paths at acc book true if at < 1 or length paths < at
   on = (src -> one_file paths at acc book src)
   os/read_file! paths[at] .> on
+
+fn book_read _ _ e@(err _)
+  e
 
 fn book_read paths at acc
   more_book_files paths at acc (at > length paths)
@@ -313,8 +322,7 @@ fn hunted? _ _ _ true
 fn hunted? src needles at false
   return false if at < 1 or length needles < at
   here = length (text/split src needles[at]) > 1
-  rest = names_any? src needles (at + 1)
-  either? here rest
+  names_any? src needles (at + 1) .> (rest -> either? here rest)
 
 fn a_test? path
   parts = text/split path "/"
@@ -330,10 +338,8 @@ fn recorded_of path
 # recorded output began with its error, and stdout now comes first.
 fn book_keep acc path src said
   refused = text/slice said 1 5 == "error"
-  machine = names_any? src needs_a_machine 1
-  beside = local_import? src
-  skip = either? refused (either? machine beside)
-  put_unless acc path src skip
+  names_any? src needs_a_machine 1
+    .> (machine -> put_unless acc path src (either? refused (either? machine (local_import? src))))
 
 fn put_unless acc _ _ true
   acc
@@ -359,9 +365,11 @@ fn unescaped raw
   twice = replaced once "\\`" "`"
   replaced twice "\\$" "$"
 
+fn replaced e@(err _) _ _
+  e
+
 fn replaced text from to
-  parts = text/split text from
-  text/join parts to
+  text/split text from .> (parts -> text/join parts to)
 
 fn name_before piece
   lines = text/split piece "\n"
@@ -754,7 +762,9 @@ fn reported progs raw
   os/run "pkill" ["-f" "kanso-differential-profile"] .> on
 
 fn tallied progs raw
-  read = json/decode raw
+  json/decode raw .> (read -> tallied_from progs read)
+
+fn tallied_from progs read
   results = read["results"]
   counts = by_kind results 1 {}
   said = "the tab: {length results} answers, {counts}"
@@ -910,6 +920,9 @@ fn filed progs seen gaps at bad agreed skipped p r said false
   theirs = tab_said said said["kind"]
   why = "{p.path}: {mine} — {theirs}"
   against progs seen gaps (at + 1) (text/concat bad [why]) agreed skipped
+
+fn filed _ _ _ _ _ _ _ _ _ _ e@(err _)
+  e
 
 # A crashed case answers no code and no text, so the ordinary line reads
 # `tab <none> <none>` and throws away the reason the tab already captured.

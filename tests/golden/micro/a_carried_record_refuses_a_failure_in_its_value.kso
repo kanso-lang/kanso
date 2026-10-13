@@ -9,8 +9,8 @@
 #
 # `take` ignores the value, so nothing after the pattern would notice a
 # failure let through: it would print a position read out of the err's own
-# word. `read 0` fails, and `take` has no arm for that, so the failure leaves
-# as itself and `when_failed` names it.
+# word. `read 0` fails, `take`'s err arm hands the failure on as itself, and
+# `when_failed` names it. The `step` arm is still the one that must refuse it.
 import "std/testing"
 
 type step
@@ -22,6 +22,9 @@ fn read 0
 
 fn read n
   step n (n * 2)
+
+fn take e@(err _)
+  e
 
 fn take (step p _)
   "read up to {p}"

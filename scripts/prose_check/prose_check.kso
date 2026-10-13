@@ -126,12 +126,18 @@ fn onward pages at acc after here
 # The page with its code stripped, so a sample is never a finding.
 fn prose raw
   bare = regexp/replace_all "(?s)<pre.*?</pre>" raw " "
-  regexp/replace_all "(?s)<code>.*?</code>" bare " "
+  bare .> (b -> regexp/replace_all "(?s)<code>.*?</code>" b " ")
+
+fn in_page _ e@(err _)
+  e
 
 fn in_page page text
   first = from_family page text "antithesis flip" flips 1 []
   second = from_family page text "self-announcing" said 1 first
   from_family page text "throat-clearing" throat 1 second
+
+fn from_family _ _ _ _ _ e@(err _)
+  e
 
 fn from_family page text family patterns at acc
   walking page text family patterns at acc (at > length patterns)
@@ -142,14 +148,16 @@ fn walking _ _ _ _ _ acc true
 fn walking page text family patterns at acc false
   return acc if at < 1 or length patterns < at
   found = hits patterns[at] text
-  here = list/to_list (list/map found (m -> told page text family m))
-  grown = list/to_list (text/concat acc here)
+  here = found .> (ms -> told_all page text family ms)
+  grown = here .> (h -> list/to_list (text/concat acc h))
   from_family page text family patterns (at + 1) grown
+
+fn told_all page text family found
+  list/to_list (list/map found (m -> told page text family m))
 
 fn told page text family m
   whole = text/slice text m.from (m.to - 1)
-  squeezed = regexp/replace_all "\\s+" whole " "
-  quote = text/trim squeezed
+  quote = regexp/replace_all "\\s+" whole " " .> text/trim
   finding page (line_of text m.from) family quote
 
 fn line_of text at

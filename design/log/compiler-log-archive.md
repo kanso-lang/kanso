@@ -102391,3 +102391,38 @@ thread 8 MiB and the spec sees the abort.
 This is part of the recursion item on #1892. The native side of that item is
 open: a deep enough recursion through the lox port's trie write still ends in
 a segmentation fault with no message.
+
+## 2026-10-12 — an operator answers what its arms answer
+
+The ray tracer port's release build printed a few rows of its image and then
+stopped with "no overload of `-` matches these arguments". The interpreter and
+the dev build drew the whole image. Linking the release IR at `-O0` drew it
+correctly, and so did the full release link with every `llvm.assume` removed.
+Bisecting the 148 assumes left one: after reading a hit record's `p`, release
+assumed the value carried the float tag.
+
+The cause was in inference. Native's `emit_binop` and the interpreter send a
+record on either side of an operator to the program's own arms for that
+operator, and inference read `a + b` as arithmetic alone. It never widened the
+arms' parameters and never added what they return. The ray tracer's `at` is
+`origin + direction * t`, and `direction` is sometimes a float drawn from the
+generator, so inference concluded that `at` answers a float, and so does the
+`p` field that holds its result.
+
+Inference now treats an operator with a record operand as a call to the
+operator's group when the program declares one: the arms' parameters widen
+with the operands, and the arms' answers join the operator's. The micro
+fixture `an_operator_answers_what_its_arms_answer` is the smallest program
+that showed it. Without the fix its release build prints a `v2` through the
+number arm. The ratchet row "an operator answering arithmetic alone" removes
+the fix and expects the micro corpus's release build to fail.
+
+Inference does more work for each operator with a record operand, and every
+compile row rose on CI: compile_instructions to 25,761,215 (+46,112),
+entry_instructions to 85,207,562 (+162,685), library_instructions to
+85,760,222 (+161,046), emit_instructions to 7,016,409 (+2,717) and
+browser_compile_instructions to 391,974,060 (+1,944,702). The welfare floor
+drops from 91.1114 to 91.1094 under the rule that a change making the engines
+agree is not priced.
+
+This is the ray tracer item on #1892.
