@@ -27,8 +27,12 @@
 # browser_run_peak_bytes 1,179,648 -> 1,441,792, on rustc 1.98.1 as CI builds
 # it. The peak is #1901's: its log entry prices the 256 KiB block the corpus's
 # railway sample now holds while it sizes the document before a tail call.
+# 2026-10-13: the lexer reads hex and binary integers and floats with an
+# exponent (kanso#1944). browser_compile_instructions 413,925,406 ->
+# 413,936,384, a RISE of 10,978, on rustc 1.98.1 as CI builds it. The run
+# rows are unchanged.
 # measured-on rustc=1.98.1
-browser_compile_instructions=413925406
+browser_compile_instructions=413936384
 browser_compile_peak_bytes=686192
 browser_run_instructions=34173068
 browser_run_peak_bytes=1441792
