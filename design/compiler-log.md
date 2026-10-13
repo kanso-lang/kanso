@@ -1867,8 +1867,8 @@ Built alone on main, each less the empty program's 6,766,088, `rewind` costs
 sized near five per cent like `scatter` and `bump`; it adds nothing to the peak.
 The run program's header carries the table.
 
-Together they take `work_runbench` 1,170,035,080 -> 1,234,663,911 (the
-container's difference over CI's row, until CI reads its own) and the run peak
+Together they take `work_runbench` 1,170,035,080 -> 1,234,827,314 on CI (the
+container projected 1,234,663,911) and the run peak
 4,948,512 -> 10,191,392 bytes. `run_instructions` and `run_peak_bytes` are
 re-based by the same ratios, so welfare scores what it scored, and the floor's
 history says so; `run_arena_peak_bytes` is the part of the peak that moved,
@@ -1917,8 +1917,8 @@ where main counts 53,881 and 9,160,278,336. The ratchet row "a record field
 copied on every push" turns it red when the move is refused.
 
 On the run program's `bag` phase, which #1925 added on main: `work_runbench`
-1,234,663,911 -> 1,177,765,528 (the container's difference, until CI reads
-its own), the phase alone 58,073,973 -> 911,987 instructions. The run vein
+1,234,827,314 -> 1,177,927,314 on CI, 56,900,000 fewer, the phase alone
+58,073,973 -> 911,987 instructions in this container. The run vein
 lands on `run_allocs` 1,812,272, `run_alloc_bytes` 335,416,908,
 `run_evac_allocs` 49,188, `run_evac_bytes` 14,985,856, `run_sh_rec`
 3,778,880, `run_sh_buf` 121,778,720, `run_survive_slots` 4,856,
@@ -1934,3 +1934,12 @@ doubles once more past sixteen slots holds 16,384 of them. A buffer outside
 the arena already grows by `realloc`, so that second doubling buys it
 nothing; dropping it there is a lead, not built here. `text` lands on
 4,838,766, runbench 622,857 -> 623,001 bytes.
+
+CI's compile rows. The analysis asks one more question of each field write,
+and the interpreter skips the copy at the same sites:
+`compile_instructions` 25,881,551 -> 25,803,156, `entry_instructions`
+85,381,313 -> 85,149,258, `library_instructions` 85,935,582 -> 85,703,128,
+`emit_instructions` 7,013,477 -> 7,035,926 (+22,449),
+`interp_instructions` 488,739,816 -> 487,429,689, `interp_allocs` 587,351 ->
+587,479 (+128), and `browser_compile_instructions` 391,311,502 ->
+392,378,375 (+1,066,873, +0.27%).
