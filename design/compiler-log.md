@@ -2056,7 +2056,11 @@ x7. #1912 holds the arm64 gap.
 self call that builds a record each hop, a million deep. Main's release
 binary prints "the program ran out of stack". The ratchet row `nine_words` now
 strips `musttail` from calls into arms left on `tailcc`, and both wide-arm
-tests fail with the overflow.
+tests fail with the overflow. The older row "a release build that gives up the
+guaranteed tail call" lowered only the arm64 cap, which an x86-64 release no
+longer reads, so CI's ratchet called it blind. Its mutation now takes `tailcc`
+off every arm on both architectures, and `a_loop_carries_a_bignum_across_its_rewind`
+loses its last line in the release-built micro corpus.
 
 CI's rows: `work_runbench` 1,170,035,080 -> 1,170,626,374 and
 `work_digestbench` 5,603,118 -> 5,905,902 (+5.4%). sha256's block and round

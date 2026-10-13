@@ -467,6 +467,9 @@ error_corpus = row
   (breaking "a_diagnostic_stops_being_raised")
   release
 
+# The mutation takes tailcc off every arm on both architectures. It used to
+# lower only the arm64 cap, which an x86-64 release build no longer reads, and
+# the row went blind there.
 release_profile = row
   "a release build that gives up the guaranteed tail call"
   true
