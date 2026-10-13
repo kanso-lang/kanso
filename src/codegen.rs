@@ -703,6 +703,23 @@ fn emit_written(
     // went on to fail in `list/next`, two frames later and under other names.
     // Forcing where the program as written would have looked keeps the trace
     // the interpreter's.
+    let program = match crate::ahead::lifts(&program) {
+        true => {
+            let mut owned = match program {
+                Given::Owned(p) => p,
+                Given::Lent(p) => Program {
+                    fns: p.fns.clone(),
+                    types: p.types.clone(),
+                    imports: p.imports.clone(),
+                    reexports: p.reexports.clone(),
+                    root: p.root.clone(),
+                },
+            };
+            crate::ahead::lift(&mut owned);
+            Given::Owned(owned)
+        }
+        false => program,
+    };
     let (program, unread_positions) = match without_unbuilt_arms(&program) {
         Some((keep, unread)) => (Given::Owned(kept_arms(program, &keep)), unread),
         None => (program, Vec::new()),
@@ -896,6 +913,7 @@ fn emit_with(
         knotted,
         print_value_wrapper: false,
         caf_cells: Vec::new(),
+        ahead_cells: Vec::new(),
         closure_cells: Vec::new(),
         closure_consts: Vec::new(),
         demand: crate::demand::analyze(program),
@@ -1189,6 +1207,9 @@ struct Backend<'a> {
     /// Zero-arity names that reach themselves through other constants.
     knotted: crate::hash::Set<String>,
     print_value_wrapper: bool,
+    /// Work-ahead's lifted constants (#1856) and the cell each was given,
+    /// in the order they were emitted: the pool forces these.
+    ahead_cells: Vec<(String, String)>,
     /// One cache cell per frozen constant, emitted as globals at the end,
     /// each beside an `i8` that says whether its builder has run. Nothing
     /// fills these before main any more: a constant builds itself on the
@@ -3266,11 +3287,7 @@ fn tail_call_twin(n: usize) -> String {
 /// LLVM symbol for a dispatcher: quoted when the kanso name carries a
 /// module qualifier's slash.
 fn wsym(name: &str, arity: usize) -> String {
-    // fn-value wrapper symbols share dsym's quoted-identifier rule
-    match name.contains(['/', '!', '?', '+', '-', '*', '%', '<', '>', '=', '~']) {
-        true => format!("\"w_{name}_{arity}\""),
-        false => format!("w_{name}_{arity}"),
-    }
+    quoted(&format!("w_{name}_{arity}"))
 }
 
 /// The static a `k_fnref` value points at: the wrapper, its arity, and the
@@ -4967,6 +4984,57 @@ impl<'a> Backend<'a> {
             self.body,
             "define void @k_caf_init() {{\nentry:\n{ids}{fills}  ret void\n}}\n"
         );
+        // Work-ahead (#1856): the constants `ahead::lift` made, forced in the
+        // order it made them when a fiber first parks. Every binary defines
+        // the pool, empty when nothing was lifted, because the runtime calls it.
+        // Each constant is read through `k_ahead_try`, which catches a death
+        // and empties the cells it left half-built; the table it is handed
+        // is every constant's cell beside its ready flag, since the work may
+        // have been building any of them.
+        let mut pool = String::new();
+        let mut shims = String::new();
+        let lifted: Vec<String> = self
+            .program
+            .fns
+            .iter()
+            .filter(|d| d.params.is_empty() && d.name.starts_with(crate::ahead::PREFIX))
+            .map(|d| dsym(&d.name, 0))
+            .collect();
+        let forced: Vec<&(String, String)> = lifted
+            .iter()
+            .filter_map(|sym| self.ahead_cells.iter().find(|(s, _)| s == sym))
+            .collect();
+        if !forced.is_empty() {
+            let n = self.caf_cells.len();
+            let pairs: Vec<String> =
+                self.caf_cells.iter().map(|c| format!("ptr @{c}, ptr @{c}_ready")).collect();
+            let _ = writeln!(
+                shims,
+                "@k_ahead_cells = internal constant [{} x ptr] [{}]",
+                2 * n,
+                pairs.join(", ")
+            );
+            for (i, (sym, _)) in forced.iter().enumerate() {
+                let _ = writeln!(
+                    shims,
+                    "define internal void @k_ahead_force_{i}() {{\nentry:\n  \
+                     %v = call tailcc %KValue @{sym}()\n  ret void\n}}"
+                );
+                let _ = writeln!(
+                    pool,
+                    "  %go{i} = call i32 @k_ahead_try(ptr @k_ahead_force_{i}, ptr @k_ahead_cells, i64 {n})\n  \
+                     %on{i} = icmp ne i32 %go{i}, 0\n  \
+                     br i1 %on{i}, label %next{i}, label %done\n\
+                     next{i}:"
+                );
+            }
+            let _ = writeln!(shims, "declare i32 @k_ahead_try(ptr, ptr, i64)");
+            let _ = writeln!(pool, "  br label %done\ndone:");
+        }
+        self.room(shims.len() + pool.len() + 128);
+        self.body.push_str(&shims);
+        let _ =
+            writeln!(self.body, "define void @k_ahead_pool() {{\nentry:\n{pool}  ret void\n}}\n");
         // A library has no entry to call, and a stub calling one that is not
         // there is a symbol the linker would ask about.
         if self.declares(crate::ast::ENTRY) {

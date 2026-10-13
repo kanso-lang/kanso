@@ -102426,3 +102426,39 @@ drops from 91.1114 to 91.1094 under the rule that a change making the engines
 agree is not priced.
 
 This is the ray tracer item on #1892.
+
+## 2026-10-12 — a runtime diagnostic names the err it was handed
+
+The inflate port destructured a value that was sometimes an err, and native
+reported "the program ran out of stack" where the interpreter said "cannot
+destructure err ... as `pair`". There was no recursion. `k_die_destructure`
+rendered its value with `k_render`, which hands an err back unrendered so that
+it can ride through a program, and then read the err as a string. The read
+faulted, and the parent reports any segmentation fault as stack exhaustion.
+
+The diagnostics that name a value they were handed now render through
+`k_shown`, which renders an err in full: the destructure and keyed-read
+refusals, the field-read refusals and `k_die_value` and `k_die_got`. The
+interpreter's message is the one both engines print.
+
+`tests/golden/runtime/an_err_cannot_be_destructured` is the port's shape: a
+group that answers a record or an err, its answer bound with `pair a b = p`.
+The ratchet row "a diagnostic handed an unrendered err" puts the plain render
+back, and native's stderr reads out of stack again.
+
+The first version of `k_shown` called `k_render_at` with the err flag set.
+That gave `k_render_at` six callers outside itself where it had one,
+`k_render`, and clang stopped inlining it there, so every print paid for a
+call: basket rose 111,561 instructions and runbench 172,212 on this
+container. `k_shown` now unwraps a thunk or a subtype itself, renders an err
+through `k_render_whole` and hands anything else to `k_render`; it is cold and
+out of line, so the functions that call it on their refusal path stay the size
+they were. Measured the same way, basket is 14 instructions from main and
+runbench 315.
+
+The out-of-line `k_shown` is about 80 bytes of `.text` in every native
+binary, and the rows that count a whole program carry it. On CI's rows,
+`text` went from 4,828,574 to 4,829,694, `codegen_instructions_dev` to
+118,944,914, `work_encodebench` to 2,398,369,910, `work_livebench` to
+1,474,870,950 and `work_runbench` to 1,170,031,314. `work_oneshot` fell to
+13,223,887.

@@ -21,42 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-12 — a runtime diagnostic names the err it was handed
-
-The inflate port destructured a value that was sometimes an err, and native
-reported "the program ran out of stack" where the interpreter said "cannot
-destructure err ... as `pair`". There was no recursion. `k_die_destructure`
-rendered its value with `k_render`, which hands an err back unrendered so that
-it can ride through a program, and then read the err as a string. The read
-faulted, and the parent reports any segmentation fault as stack exhaustion.
-
-The diagnostics that name a value they were handed now render through
-`k_shown`, which renders an err in full: the destructure and keyed-read
-refusals, the field-read refusals and `k_die_value` and `k_die_got`. The
-interpreter's message is the one both engines print.
-
-`tests/golden/runtime/an_err_cannot_be_destructured` is the port's shape: a
-group that answers a record or an err, its answer bound with `pair a b = p`.
-The ratchet row "a diagnostic handed an unrendered err" puts the plain render
-back, and native's stderr reads out of stack again.
-
-The first version of `k_shown` called `k_render_at` with the err flag set.
-That gave `k_render_at` six callers outside itself where it had one,
-`k_render`, and clang stopped inlining it there, so every print paid for a
-call: basket rose 111,561 instructions and runbench 172,212 on this
-container. `k_shown` now unwraps a thunk or a subtype itself, renders an err
-through `k_render_whole` and hands anything else to `k_render`; it is cold and
-out of line, so the functions that call it on their refusal path stay the size
-they were. Measured the same way, basket is 14 instructions from main and
-runbench 315.
-
-The out-of-line `k_shown` is about 80 bytes of `.text` in every native
-binary, and the rows that count a whole program carry it. On CI's rows,
-`text` went from 4,828,574 to 4,829,694, `codegen_instructions_dev` to
-118,944,914, `work_encodebench` to 2,398,369,910, `work_livebench` to
-1,474,870,950 and `work_runbench` to 1,170,031,314. `work_oneshot` fell to
-13,223,887.
-
 ## 2026-10-12 — a built binary names its own stack overflow
 
 A recursion deeper than the stack ends in a fault on the guard page below it.
@@ -1184,6 +1148,109 @@ Two goldens the merge with main left stale now read this tree:
 `compile_peak_bytes` from 694,044 to 701,567, and in the run program
 `run_allocs` from 1,812,274 to 1,812,278 and `run_alloc_bytes` from 303,607,404
 to 303,607,564.
+
+## 2026-10-13 — work-ahead forces what follows a park, and holds a pooled failure
+
+Builds #1856's v1 under the 2026-07-22 ruling and the 2026-10-11 gavel. Native
+only; the interpreter is the oracle and does not pool.
+
+**What is lifted.** `src/ahead.rs` reads the entry's statements. One whose
+chain starts with a `sleep` has continuations that run, in order, once the
+sleep ends. In each continuation, a call to one of the program's own functions
+whose arguments name nothing local is certain to be evaluated when it is an
+argument of `print` or `write`, or a piece of a string such an argument
+interpolates. A continuation that names an entry binding is followed into that
+binding's chain. Each such call becomes a constant named `ahead~N`, which no
+author can spell, and the call is replaced by a read of it.
+
+**What runs it.** A constant builds its own cell on first read, so forcing one
+early fills the cell the continuation reads later. The compiler emits
+`k_ahead_pool`, which forces the lifted constants in the order they were made;
+the runtime runs it once, at the first bare sleep, and takes the time the pool
+spent off the wait. Which work runs is fixed by the compiler, and the clock
+decides only how long the process then sleeps. `bench/workahead/aswritten.kso`
+sleeps 2,000 ms and then grinds for about 830 ms; it took 2.83 s on main and
+2.01 s here, three runs each in this container, with the same output.
+
+**A pooled failure.** An err the work answers is a value, held in the cell and
+answered at the read like any other. A death is not a value: on main the
+runtime prints and exits, and a pooled death would end the process before
+output the program prints first. While the pool runs, every exit in the runtime
+and the stack-overflow handler jump back to `k_ahead_try` instead, with stderr
+pointed at `/dev/null`. The try clears the ready flag of every constant cell
+still holding its builder's blackhole, restores the beat depth, and stops the
+pool. The program then builds those cells again where it reads them and fails
+there, which for every program that terminates is the transcript it produces
+without the pool.
+
+`tests/work_ahead.rs` pins two transcripts against the interpreter's. In one,
+the pooled call recurses a million frames deep and runs out of stack; in the
+other, a module's pooled call demands a constant that names itself, which
+leaves two cells half-built. With the catch removed, neither prints `first`.
+With the catch kept and the cells left as they were, the overflow fixture
+reports "a lazy binding demands its own value" where the program ran out of
+stack.
+
+**The counter.** `tests/golden/mem/work_ahead_forces_what_follows_a_park` pins
+`ahead_forced=1` and `ahead_dropped=0`. Both lines print only once the pool has
+run, so no vein whose program never sleeps moved. That fixture's
+`beat_iters` reads 2 where main's compiler reads 1,002: inside the constant's
+builder the beat pass gives the integer loop no bracket, since it allocates
+nothing to rewind. A loop that allocates keeps its bracket; with a string built
+per lap, 100,000 laps read the same counters on both compilers, one arena block
+included.
+
+**The tab** runs no pool. Its runtime is linked apart from the program and its
+sleep is the host's, so the pool call is compiled out of the wasm runtime.
+
+Divergence is the case the gavel accepted: a pooled call that never returns
+stalls before output the program prints first. The page's work-ahead section
+owes a sentence on each case, under the gavel.
+
+**What it costs**, from CI's rows. Every program now defines `k_ahead_pool`,
+empty when nothing was lifted, because the runtime calls it at a sleep: one
+define and five lines per benchmark (`emitted_defines` 106 -> 107,
+`emitted_lines` 10,070 -> 10,075; over the thirteen others
+`emitted_other_defines` 2,010 -> 2,023 and `emitted_other_lines` 147,279 ->
+147,344), and the module compile row's `module_defines` 29 -> 30 and
+`module_lines` 1,284 -> 1,288. `k_ahead_try` and its jump buffer put 320 bytes in
+each binary (`text` 4,834,846 -> 4,839,326 summed). The compiler's rows rose:
+`emit_instructions` 7,013,477 -> 7,137,222 (+1.76%), `codegen_instructions_dev`
+119,002,829 -> 119,332,985 (+0.28%), `codegen_instructions_release`
+454,179,413 -> 455,947,986 (+0.39%), `browser_compile_instructions`
+391,311,502 -> 393,313,454 (+0.51%), `compile_instructions` 25,881,551 ->
+25,887,870, `entry_instructions` 85,381,313 -> 85,406,213 and
+`library_instructions` 85,935,582 -> 85,959,939. The run rows fell by 50 to
+1,178 instructions each (`runbench` 1,170,035,080 -> 1,170,033,902) and
+`interp_instructions` by 13,571 to 488,726,245; no benchmark sleeps, so these
+are the binary's layout. Work-ahead is a ruled part of the language, so the
+floor moves by what it costs.
+
+- **OPEN** #1856, until this lands.
+
+Each of the four compile-cost programs gains the pool's define and its four
+lines, so `bench/compile_golden.txt` moves from 38 defines to 42 and from 1,340
+lines to 1,356.
+
+On main after #1904 the tab's compile reads `browser_compile_instructions`
+393,668,581, up 1,290,206 from main's 392,378,375 on the same tree.
+
+91.11.
+
+With main merged after #1918, browser_compile_instructions lands on
+393,374,069.
+
+CI's rows against main: `compile_instructions` from 26,463,317 to 26,477,664,
+`entry_instructions` from 88,129,856 to 88,171,192, `library_instructions` from
+87,707,726 to 87,748,995, `emit_instructions` from 7,052,040 to 7,168,640,
+`codegen_instructions_dev` from 119,002,656 to 119,334,030 and
+`codegen_instructions_release` from 454,179,390 to 455,948,524. Every native
+binary carries the pool's start and its forcing, so `text` grew from 4,838,990
+to 4,843,470 bytes, `emitted_other_defines` from 2,036 to 2,049 and
+`emitted_other_lines` from 148,239 to 148,304. `work_encodebench` landed at
+2,398,406,493, up 559, and most other benchmarks fell by a few hundred
+instructions. The floor drops by the difference under the 2026-10-11 ruling
+(#1862).
 
 ## 2026-10-12 — arms travel with the value
 

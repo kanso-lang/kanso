@@ -1,0 +1,10 @@
+# `x` demands itself while it is being built, which the runtime reports and
+# dies on. The pooled `weigh 7` starts building `x`, so the pool leaves two
+# cells half-built when the work dies: `x`, and the lifted call's own.
+type cell
+  v
+
+x = (cell x).v
+
+pub fn weigh n
+  n + x

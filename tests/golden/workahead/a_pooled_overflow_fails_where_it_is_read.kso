@@ -1,0 +1,18 @@
+# The size of `deep 1000000` is certain to be computed after the sleep and
+# names nothing local, so it is lifted and forced while the program is parked.
+# The recursion runs out of stack there, before "first" has printed. Ruled on
+# 2026-10-11: a pooled failure is raised where the program as written raises
+# it, so the pool drops the work, leaves its cell unbuilt, and the program
+# prints "first" and then fails reading the size.
+import "std/time"
+
+fn deep 0
+  [0]
+
+fn deep n
+  [n (deep (n - 1))]
+
+fn size xs
+  length xs
+
+sleep 10 .> (_ -> print "first") .> (_ -> print "then {size (deep 1000000)}")
