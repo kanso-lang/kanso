@@ -1733,8 +1733,7 @@ front end walking the corpus's new call, and compile_peak_bytes lands on
 refused, so the floor drops by what it costs.
 
 On main after #1904 the tab's compile reads `browser_compile_instructions`
-393,497,266, up from main's 392,378,375, for the kind check the front end now
-runs on every call that takes a list.
+393,497,266, up 1,118,891 from main's 392,378,375 on the same tree.
 
 ## 2026-10-12 — a bare imported type with no fields is its module's value
 
