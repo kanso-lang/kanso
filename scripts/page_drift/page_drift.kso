@@ -65,7 +65,7 @@ fn depth r
   full (text/trim r.stdout == "false")
 
 fn full true
-  asked ["log" "--format=%H" "--" "docs/compiler.html"] .> measured
+  asked ["log" "--first-parent" "--format=%H" "--" page] .> measured
 
 fn full false
   io/write_err shallow .> (_ -> os/exit 1)
@@ -82,7 +82,10 @@ shallow = """
 # as a page edit let a row change pay the page's debt: on #1913 the rewritten
 # compile spans reset this count to zero while #1905 still owed sections for
 # the day's entries. A commit counts once its removed and added lines differ
-# with the digits, commas and points taken out.
+# with the digits, commas and points taken out. The walk follows first
+# parents: a merge that brings the page's sections in from a side branch is
+# where the page moved on this line, and the side branch's own commit is
+# older than whatever the line logged while it waited.
 fn measured r
   shas = list/to_list (list/reject (text/split r.stdout "\n") blank?)
   walk shas 1

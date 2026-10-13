@@ -1587,6 +1587,15 @@ Main reads 4/3 under the fixed gate, so every pull request is red on
 
 91.11.
 
+The first version walked every commit that touched the page in date order.
+Merged with main after #1922, it reached the commit on the page branch where
+the sections were written, which is older than eight entries main logged while
+that branch waited, and read the page eight entries behind. The walk now
+follows first parents, so the merge that brought the sections in is where the
+page moved. A third spec builds that history: sections on a side branch, four
+entries on the trunk, then the merge, and expects 0/3. It read 4 entries ahead
+before the change.
+
 ## 2026-10-12 — arms travel with the value
 
 The first rule of the 2026-10-12 gavel on #1894. A value carries the arms its

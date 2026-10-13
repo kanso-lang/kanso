@@ -91,3 +91,76 @@ fn a_rewritten_sentence_moves_the_page() {
     assert!(green, "a prose edit moves the page: {said}");
     assert!(said.contains("page drift 0/3"), "nothing is owed after it: {said}");
 }
+
+fn git_at(dir: &Path, when: &str, args: &[&str]) {
+    let done = Command::new("git")
+        .args(args)
+        .env("GIT_AUTHOR_DATE", when)
+        .env("GIT_COMMITTER_DATE", when)
+        .current_dir(dir)
+        .output()
+        .expect("git runs");
+    assert!(done.status.success(), "git {args:?}: {done:?}");
+}
+
+/// The page's sections are written on a side branch, the four entries land
+/// on the trunk after that, and then the side branch merges. The page moved
+/// on the trunk at the merge, so nothing is owed. Walking every commit that
+/// touched the page by date reached the side branch's own commit, which is
+/// older than the four, and read the page four entries behind.
+#[test]
+fn a_page_merged_in_moves_where_it_merges() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let stage = std::env::temp_dir().join("kanso-number-edit-merged");
+    let _ = std::fs::remove_dir_all(&stage);
+    std::fs::create_dir_all(stage.join("docs")).expect("a docs directory");
+    std::fs::create_dir_all(stage.join("design")).expect("a design directory");
+
+    git(&stage, &["init", "-q", "-b", "trunk", "."]);
+    git(&stage, &["config", "user.email", "spec@example.invalid"]);
+    git(&stage, &["config", "user.name", "the spec"]);
+
+    std::fs::write(stage.join("design/compiler-log.md"), "# log\n").expect("the log writes");
+    std::fs::write(stage.join("docs/compiler.html"), "<p>a first paragraph.</p>\n")
+        .expect("the page writes");
+    git(&stage, &["add", "-A"]);
+    git_at(&stage, "2026-10-12T01:00:00Z", &["commit", "-qm", "the page moves"]);
+
+    git(&stage, &["checkout", "-q", "-b", "sections"]);
+    std::fs::write(
+        stage.join("docs/compiler.html"),
+        "<p>a first paragraph.</p>\n<p>a section for the day.</p>\n",
+    )
+    .expect("the page grows");
+    git(&stage, &["add", "docs/compiler.html"]);
+    git_at(&stage, "2026-10-12T02:00:00Z", &["commit", "-qm", "the sections"]);
+
+    git(&stage, &["checkout", "-q", "trunk"]);
+    let mut log = String::from("# log\n");
+    for entry in ENTRIES {
+        log.push_str(&format!("\n## {entry}\n\nwhat it says.\n"));
+    }
+    std::fs::write(stage.join("design/compiler-log.md"), log).expect("the log grows");
+    git(&stage, &["add", "design/compiler-log.md"]);
+    git_at(&stage, "2026-10-12T03:00:00Z", &["commit", "-qm", "entries"]);
+    git_at(
+        &stage,
+        "2026-10-12T04:00:00Z",
+        &["merge", "-q", "--no-ff", "-m", "the sections merge", "sections"],
+    );
+
+    let done = Command::new(env!("CARGO_BIN_EXE_kanso"))
+        .arg("run")
+        .arg(root.join("scripts/page_drift"))
+        .current_dir(&stage)
+        .output()
+        .expect("page_drift runs");
+    let said = format!(
+        "{}{}",
+        String::from_utf8_lossy(&done.stdout),
+        String::from_utf8_lossy(&done.stderr)
+    );
+    let _ = std::fs::remove_dir_all(&stage);
+    assert!(done.status.success(), "the merge moved the page: {said}");
+    assert!(said.contains("page drift 0/3"), "nothing is owed after it: {said}");
+}
