@@ -2022,7 +2022,22 @@ every lap" stops marking the sites and turns the mem corpus red.
 
 `a_digest_holds_every_block_it_walked` moved too. std/sha256 builds its table
 of round constants from nested `concat` calls, and the outer call's first
-argument is the inner call's fresh list, so those calls now extend in place:
-four fewer allocations and 2,240 more bytes, since an element pushed onto a
-full buffer grows it by doubling where the copying concat allocated the exact
-length. Its arena peak is unchanged.
+argument is the inner call's fresh list, so those calls now extend in place.
+A push onto a full buffer grows it by doubling where the copying concat
+allocated the exact length, so it allocates less often and more each time. Its
+arena peak is unchanged.
+
+The cost veins move the same way. On digestbench and runbench, which both hash
+with std/sha256, the copied lists become pushes onto a growing buffer:
+digest_alloc_bytes lands on 697,025 and run_alloc_bytes on 330,059,644, each
+2,240 higher; digest_sh_buf on 579,648 and run_sh_buf on 119,110,544, each
+2,304 higher; digest_push_mut_slow on 337 and run_push_mut_slow on 1,550,122,
+six more growths each. Their allocs fall four. The fixture's own rows move the
+same amounts: a_digest_holds_every_block_it_walked_alloc_bytes lands on
+18,657, a_digest_holds_every_block_it_walked_sh_buf on 12,288 and
+a_digest_holds_every_block_it_walked_push_mut_slow on 33. encodebench grows
+output lists with `concat`, so it gains more: encode_allocs 5,327,424 to
+5,323,947 and encode_alloc_bytes 665,563,968 to 665,384,048, with
+encode_push_mut_fast up to 34,874. encode_buf_reuse lands on 2,386, down 726,
+because lists that were copied and freed each lap, leaving a buffer for the
+next to reuse, now stay where they are. The instruction rows come from CI.
