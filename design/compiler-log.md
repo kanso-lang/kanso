@@ -21,240 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-10 — gavel: `build` retires, and `tie` is the one way to write a cycle
-
-Clay, on the ledger entry "Does `build` still earn its place beside `tie`?":
-"retire build". The entry recommended it once `tie` was built and its
-compile-time check on literal data was pinned, and both are on main: `list/tie`
-runs on every engine (log, 2026-10-05), a broken link in literal data is
-refused at check, and ten thousand tied rings dropped in a loop hold one arena
-block.
-
-**What leaves the language.** The `build` block, the hole `_` that only a
-`build` block could fill, the field write that filled it, and the
-`error[build]` family that policed all three. A cycle is written with
-`list/tie` or `list/tie!`, whether its nodes are two names in the source or a
-graph read from a file. The 2026-10-01 gavel's reason for there being no loop
-construct is unaffected, and so is the top-level constant knot
-(`ring = node 1 ring`), which is a separate construct and is not part of this
-ruling.
-
-**Why.** `tie` does everything `build` did. With literal keys and links the
-compiler sees the whole graph and refuses a broken link before the program
-runs, which was the one thing `build` caught earlier, and a tied call's nodes
-are one birth cohort, so the birthday theorem and the cohort's memory
-guarantee hold as they did for a block. Two spellings of one thing is what
-kanso declines to offer.
-
-Owes: the parser, the checker and all three engines drop `build`, `_` and the
-field write; the `error[build]` goldens and `tests/golden/mem/build_cycle.kso`
-move to `tie` or go; every `build` in the corpora, the samples, the examples
-and lib is rewritten as a `tie`; ch03's "two records that point at each other"
-teaches the cycle with `tie`; appendix A loses `error[build]`; the compiler
-page and the playground stop offering it. A program that still writes `build`
-gets one diagnostic naming `list/tie` as the replacement.
-
-## 2026-10-10 — the four port fixes' floor question closes on the corpus-first gavel
-
-The ledger's Blocking entry "May four port fixes lower the welfare floor?",
-filed today, asked whether kanso#1820, kanso#1822, kanso#1824 and kanso#1825
-may each lower the floor by a few thousandths. Each fixes a native cliff a port
-journal found (sat's map put loop, lox's loop entered from a tail cycle,
-`list/tally` over many distinct strings, mustache's fold onto its accumulator),
-and each pays only in compile rows because no benchmark contains its shape.
-
-That is the case the archive's 2026-09-05 "gavel: corpus first — a blind
-corpus is repaired, never excused" ruled. Clay declined, then, the
-recommendation to move the floor with "the corpus is blind" as the reason:
-**the remedy is to add the benchmark the objective could not see, measure its
-baseline on the pre-fix code, land the fix on top, and let it score**, so the
-floor rises rather than falls. The entry's search looked for a ruling on fixes
-that make native finish what the interpreter finishes and missed this one,
-because the ruling is about what the corpus can see. The entry leaves the
-ledger in this commit on that citation.
-
-So no floor moves for these four. Each PR promotes its fix's shape into the
-benchmark corpus as a run-speed or run-memory phase under the granted-baseline
-machinery, with its baseline measured on main without the fix, and banks the
-rise with `--set`. The entry's option 1 also asked to widen the 2026-09-13
-exception to every change that lets native finish a program the interpreter
-finishes; under corpus-first such a change scores as a gain once the corpus
-holds its shape, so the widening is not needed, and it is not made here.
-
-## 2026-10-10 — four port shapes join the run program, measured before their fixes
-
-The corpus-first gavel, applied today to kanso#1820, kanso#1822, kanso#1824 and
-kanso#1825, says none of the four lowers the floor: the shape each fixes goes
-into the benchmark corpus first, measured on the compiler without the fix, and
-the fix then scores against it. This entry is the first half. The run program
-gains four phases, each the PR's own reduced fixture with its count lifted into
-a parameter, and nothing in the compiler changes. The columns are
-instructions on main with each phase built alone, less the empty program's
-6,662,610, and the shares are of the whole program's 1,245,042,917.
-
-    scatter  2,340 keys counted in scrambled order   50,901,814  4.09%
-    bump     350 updates through a named read        53,247,360  4.28%
-    machine  20,000 passes of a loop in a cycle       8,825,906  0.71%
-    fold     800 pieces folded onto one string          858,398  0.07%
-
-`scatter` counts keys that arrive out of order (kanso#1820), `bump` updates a
-map through a read named on the line before the write (kanso#1822), `machine`
-runs a loop entered from inside a tail cycle (kanso#1824), and `fold` folds
-pieces onto a string (kanso#1825). The counts follow the rule the header
-already states for the stress shapes: `scatter` and `bump` are quadratic on
-main, and each count lands its phase near five per cent of the program.
-`machine` and `fold` cost little in instructions and a great deal in memory,
-so their counts are sized to add about one decoded document to the peak.
-
-The header keeps its changeover table as it was. That table is the mix
-bench/runbench_phases.txt replays when history from before 2026-09-06 is
-reconstructed, and a phase with no counter in that history has no place in it.
-The four new phases have a table of their own below it, and
-`tests/the_phase_map_matches_the_run_programs_header.rs` now stops reading at
-the changeover table's total.
-
-Every row the run program carries moves, because it now does more work. In the
-run vein, run_allocs lands on 1,773,132, run_alloc_bytes on 326,862,802,
-run_arena_blocks on 8, run_perm_allocs on 97, run_beat_iters on 27,564,
-run_put_mut_grow on 15, run_str_scans on 229 and run_str_scan_bytes on
-17,932,036. The shape counters follow the new values the phases build:
-run_sh_str lands on 10,188,896, run_sh_rec on 1,500,528, run_sh_buf on
-119,041,376 and run_sh_map on 11,200. `scatter` reads its map between puts, so
-the run now builds and frees sorted views: run_view_allocs and run_view_frees
-are both 360. The run program's machine code grows to 602,217 bytes, which
-moves the text total to 4,651,966, and its emitted code to 684 defines, 6,519
-calls, 5,938 branches and 50,994 lines, which moves emitted_other_defines to
-2,002, emitted_other_calls to 17,393, emitted_other_branches to 16,393 and
-emitted_other_lines to 146,696.
-
-A counter that measures something new is re-based so that landing it costs the
-floor nothing, as the codegen rows were on 2026-10-07 when their gates began
-counting the clang the benchmarks use. `run_instructions` and `run_peak_bytes`
-keep their ratio to their baselines: each baseline is multiplied by the reading
-with the phases over the reading without them, both on main's compiler.
-work_runbench lands on 1,245,043,324 on CI, against main's 1,131,539,079,
-so run_instructions' baseline goes from 3,043,743,748 to 3,349,060,500. The run peak, which the objective reads as the arena, held and
-permanent peaks summed, goes from 3,899,936 bytes to 12,167,368:
-run_arena_peak_bytes lands on 8,912,912 and run_held_peak_bytes on 3,222,256,
-and run_peak_bytes' baseline goes from 156,818,380 to 489,255,962. Both
-baselines are rounded up. The score is unchanged, and the four fixes now
-have something to score against.
-
-## 2026-10-10 — `build` retires, and `tie` is the one way to write a cycle
-
-The gavel of the same day retired the `build` block and everything that existed
-to serve it: the hole `_` in a construction's argument, the field write
-`a.f = v`, and the checker's proof that a write reaches only a record born in
-the block. This entry is the build.
-
-The parser no longer produces `Expr::Build`, `Expr::Hole` or `Stmt::Set`, and
-the three variants are gone from the AST, so every pass that matched them lost
-an arm. The checker loses the block-born walk and its cohort table. The
-interpreter loses its field write and the native backend loses the
-`k_set_field` call it emitted for one, along with the runtime function behind
-it. A program written for the old form meets one syntax diagnostic for each
-spelling, and each one names `list/tie`: a `build` header, a bare `_` where a
-value goes, and `a.f = v`. The wildcard pattern and a lambda's `_` parameter
-are read before the expression parser is asked, so they keep their meaning.
-
-The error corpus loses the twenty-six fixtures that pinned the block's own
-refusals and gains three for the retired spellings,
-`a_build_block_is_retired`, `a_hole_is_retired` and
-`a_field_write_is_retired`. Each was seen red with the diagnostic's wording
-changed. `uncertain_reads_are_not_counted` loses its block-bound case and
-keeps its other six. The micro corpus loses four fixtures that existed only for
-the block. `a_description_rides_in_a_field` now builds its record with the
-description in place, and the re-export spec for a door spelling loses its
-`build` position and keeps the other four. The ratchet loses the seven rows
-that disarmed a hole refusal, with their mutation scripts, and the construct
-census in `tests/golden/shapes.txt` loses `Build`, `Hole` and `s:Set`.
-
-The examples, the ch03 sample and the knot-equality golden were rewritten with
-`tie` earlier on this branch. The mem fixture that pinned a cycle's cost moves
-from `build_cycle` to `tie_cycle`, and `tie` costs more than the block did for
-the same two cycles: 38 allocations against 18, 2,096 bytes against 784,
-evac_allocs 15 against 13 and evac_bytes 560 against 496. sh_buf goes from 144
-to 928 and sh_map from 0 to 192, which are the key list and the map `tie`
-answers; sh_str falls from 192 to 176.
-
-ch03 teaches `tie` in the section on records that point at each other, and
-shows a field holding a list of references, which the same day's gavel "a field
-may hold a list of `tie` references" owes the book. Appendix A replaces its `error[build]` section with `error[tie]`, the check
-that refuses a literal link to a key the list does not hold. The playground's
-two knot samples are rewritten with `tie`, and the compiler page's account of
-the memory model now describes a cycle as a tie's birth cohort.
-design/build-blocks.md is deleted; the log keeps its history.
-
-Moving the cycle fixture onto `tie` found a disagreement between engines.
-The interpreter builds a tie's nodes with thunk cells and settles each record's
-fields once the knot is closed, but `resolve_tied` settled only a field that
-was itself a cell. A cell inside a list or a map held by a field stayed a cell,
-and every later read forced it again: `tie_cycle` counted 5 `thunk_forces` on
-the interpreter and 0 natively. `settled_link` now replaces a forced cell
-inside a list or map field with the node it holds, and the two engines agree on
-the fixture. The spec is `mem_corpus_interp_matches_the_semantic_counters` in
-`tests/oracle.rs`, which runs every mem fixture on the interpreter and compares
-its semantic counters with the golden's. With the list and map arms of
-`settled_link` removed it goes red on `tie_cycle`, reading 5 forces against 0.
-The mem golden alone stays green, because it is read off the native binary.
-
-`tests/compile_cost.rs` timed a `build_block` sample, which no longer parses,
-so the sample and its row in `bench/compile_golden.txt` are gone. A `tie`
-sample cannot take its place there, because the harness compiles a file with no
-imports and `tie` lives in `list`. Removing the passes that served the block
-moves the compile, entry, library, emit and interpreter rows and the size of
-every binary. On CI every one of them falls. compile_instructions lands on
-25,712,749, entry_instructions on 85,036,744, library_instructions on
-85,590,951, emit_instructions on 7,038,004 and interp_instructions on
-488,375,858. codegen_instructions_dev lands on 118,906,508 and
-codegen_instructions_release on 453,887,359. browser_compile_instructions
-lands on 388,285,810. Every binary is 448 bytes smaller, and the text total
-lands on 4,645,694. work_runbench lands on 1,245,043,177, as projected, with
-work_encodebench on 2,393,925,910, work_livebench on 1,472,860,747 and
-work_oneshot on 13,176,864. No row rises, so the floor does not have to move to
-admit the retirement, and the score rises from 90.24995 to 90.2512, which is
-banked.
-
-Three diagnostics lost their golden with the block. The unused-expression rule
-lives in two walks, the function body's and the block's, and
-a_build_body_line_goes_nowhere was the only program that reached either: in a
-body, consecutive expression lines fold into one effect group, and a binding
-after an expression line is refused first by "bindings precede the effects in a
-body". The indented-block rule never had a reachable program. It was counted as
-pinned by tests/golden/play/decls_after_statements.stderr, a file no test reads
-and whose fixture now runs and prints `first`. Dropping `build` from the
-message's wording took the stale copy out of agreement. All three are listed in
-tests/golden/unpinned_diagnostics.txt with the programs that were tried.
-
-## 2026-10-10 — gavel: GitHub issues are the tracker, and hygiene is continuous
-
-Clay, on the proposal to track a cleanup list as GitHub issues: "why on Earth
-not just use githubs issues feature? seems it would be a much more methodical
-way to track and prioritize work." And on keeping the repository clean: "the
-instructions should explicitly maintain ongoing refactoring so that things stay
-hygienic over time and I don't have to explicitly remind you."
-
-**The tracker.** Open work and open decisions are GitHub issues in
-kanso-lang/kanso, labelled by kind (`needs-clay`, `ruled`, `cleanup`, `perf`),
-lane (`lane:chat`, `lane:cloud`) and priority (`p1` to `p3`). A pull request
-that finishes one closes it with `Fixes #N`. The log stays the record of what
-was ruled and measured. STATUS.md's "Ruled, unbuilt" section and
-design/pending-gavels.md retire; #1852 carries the steps, including the two
-specs that keep their counts in step. The case for the change was made the same
-day the two newest "Ruled, unbuilt" rows were found already built and never
-taken off, and a ruling of 2026-10-07 was found never to have had a row.
-
-Opened the same day: #1842, the one open decision (whether `list/map xs ref`
-may build a node's list of references), and #1843, the three-parts-per-billion
-row, the last standing "Ruled, unbuilt" entry; and nine `cleanup` issues from a
-hygiene review, #1844 to #1852.
-
-**Hygiene.** CLAUDE.md gains a section, "Hygiene is continuous": each pull
-request leaves the files it touches cleaner; a fact has one home; cloud lands a
-`cleanup` pull request for every five others; cloud sweeps the repository
-weekly and files what it finds; a refactor is a pure move; and instructions
-state rules, with their history in the log.
-
 ## 2026-10-10 — the log goes back under its cap a second time
 
 design/compiler-log.md held 526 entries and 25,301 lines against a cap of
@@ -1819,6 +1585,83 @@ reads 0/3 and fails.
 Main reads 4/3 under the fixed gate, so every pull request is red on
 `page_drift` until the page carries the sections #1905 asks for.
 
+91.11.
+
+## 2026-10-12 — arms travel with the value
+
+The first rule of the 2026-10-12 gavel on #1894. A value carries the arms its
+type's owner wrote, so a module handed a `circle` may call `area c` without
+importing geo.
+
+The check decides which calls travel. The resolver marks a local as arrived
+when the function was handed it: a parameter, a name bound to a field or
+element of one, a lambda's parameter when the lambda goes to a call that also
+carries an arrived value, and the answer of a traveling call on one. A bare
+call that names nothing the file can see, with an arrived argument, is
+recorded instead of refused. The answer of a local function is not arrived,
+as the gavel lists it, so `area (twice c)` stays an unknown name.
+
+Each recorded call is renamed into a traveling group, `~area`, a spelling no
+program can write. A dependency compiles with the call left there. The root
+of the program, an entry file or a directory with `main.kso`, fills each group
+it calls with clones of every pub arm of that name whose module owns one of
+its parameter types, which is rule 4's ownership condition. When no owner
+wrote the name, the call is refused where it was written: "no module in this
+program writes `perimeter` for a type it owns, so no value carries it". Checked
+alone, a library takes the call on a parameter and refuses it on a value it
+made. Native code quotes a symbol with `~` in it, as it does one with `/`.
+
+`tests/arms_travel.rs` runs `tests/golden/travel/area` on both engines: a
+report module that never imports geo calls `area` on a circle it was handed
+and on each circle of a list. Main refused both calls, from `kanso run` and
+from `kanso check report`. Two error goldens pin the refusals:
+`an_arm_called_on_a_value_the_file_made` and
+`a_traveling_call_no_owner_answers`. The ratchet row "an arm left behind by
+its value" lets no call travel and turns the run test red. ch11 states the
+rule and ch07 points to it.
+
+Still open on #1894: a local arm of the same name shadows the traveling ones
+outright, where rule 4 asks for a local arm of the same shape to shadow and
+the rest to stay reachable. A module that declares its own `area` for a
+square and is handed a circle cannot reach geo's arm yet.
+
+CI's rows put `compile_instructions` at 26,052,299 (+170,748, +0.66%),
+`entry_instructions` at 86,286,307 (+904,994, +1.06%), `library_instructions`
+at 86,505,153 (+569,571, +0.66%) and `emit_instructions` at 7,019,534
+(+6,057). `compile_allocs` rose 75 to 14,605 and `interp_allocs` 74 to 587,357.
+`interp_instructions` fell 402 to 488,739,414. The tab runs the same front end,
+and `browser_compile_instructions` rose to 393,182,630 (+804,255, +0.20% on main after #1927).
+This builds a ruled part of the language, so the welfare floor drops by what
+it costs.
+
+On CI's rows for the tree merged with main after #1904: `compile_instructions`
+25,803,156 -> 26,057,907, `entry_instructions` 85,149,258 -> 86,302,801,
+`library_instructions` 85,703,128 -> 86,519,482, `emit_instructions` 7,035,926
+-> 7,048,046 and `interp_allocs` 587,479 -> 587,485; `interp_instructions`
+falls 298,363 to 487,131,077.
+
+## 2026-10-12 — a bare imported type with no fields is its module's value
+
+An importer may name a type with no fields bare: `import "std/json"` enrols
+`json_null` beside `json/json_null`. Native code resolved the bare name to the
+type it stands for. The interpreter built a record under the bare spelling, so
+it printed as the importer's own type and compared unequal to `json/json_null`.
+A constructor call already took the type's origin; the fieldless path in
+`resolve` now does the same.
+
+`tests/golden/micro/a_bare_imported_unit_is_its_module_s` prints the bare value
+and compares it with the qualified one, inside a list and out. Before the fix
+the interpreter printed `a_bare_imported_unit_is_its_module_s/json_null` and
+`false` twice where native printed `json/json_null` and `true`.
+
+json's own test suite found it. Under #1883 a test file imports its module,
+and `test_decode_nested` compares a decoded document against a map holding a
+bare `json_null`.
+
+From CI, the interpreter's run of the corpus reads 249 instructions fewer,
+interp_instructions 488,739,816 to 488,739,567 on the merged tree. No other
+row moved, and welfare banks the rise.
+
 ## 2026-10-13 — three port shapes join the run program before their fixes
 
 Three of #1892's items are fixed on open branches, and the run program was
@@ -1864,3 +1707,156 @@ The program's code grows with it: across the other benchmarks' emitted rows,
 `emitted_other_branches` on 16,555 and `emitted_other_lines` on 148,239, all
 of it runbench's (51,577 -> 52,537 lines), and `text` on 4,838,622, runbench
 619,081 -> 622,857 bytes.
+
+## 2026-10-13 — a list held in a record grows where it stands
+
+From #1892, the eleventh item: the lox, markdown, datalog and sat ports each
+kept an accumulator in a record field and pushed onto it through the record,
+`bag (b.count + 1) (push b.items i)`. The linearity analysis proved a list
+unique only when a variable held it, so `push b.items i` copied the list while
+the record still held it, and n pushes cost the square of n: 40,000 of them
+allocated 37 GB, and the native run took 4.4 seconds where it now takes 0.06.
+
+`src/linear.rs` now proves a field unique as well. A greatest fixpoint runs
+over (function, arity, parameter, field), seeded with the fields some push,
+append, put or concat writes into. A field stays in the set while every caller
+hands that parameter over with the field alone: a constructor argument that is
+itself unique, an `if` or guard whose arms all are, a parameter already in the
+set, or a call to a function that returns the field alone. A field read moves
+the list out of the record only when the record is handed over, every mention
+of the parameter is a field read, the field is read exactly once, and no
+mention sits under a lambda. Anything else keeps the copy.
+
+`tests/golden/mem/a_list_held_in_a_record_grows_where_it_stands` runs 20,000
+pushes through a record and four cases the analysis must refuse: a list two
+records share, a field read twice, a record filled twice from one start, and a
+record a later line reads again. It counts 73 allocations and 1,994,928 bytes
+where main counts 53,881 and 9,160,278,336. The ratchet row "a record field
+copied on every push" turns it red when the move is refused.
+
+On the run program's `bag` phase, which #1925 added on main: `work_runbench`
+1,234,827,314 -> 1,177,927,314 on CI, 56,900,000 fewer, the phase alone
+58,073,973 -> 911,987 instructions in this container. The run vein
+lands on `run_allocs` 1,812,272, `run_alloc_bytes` 335,416,908,
+`run_evac_allocs` 49,188, `run_evac_bytes` 14,985,856, `run_sh_rec`
+3,778,880, `run_sh_buf` 121,778,720, `run_survive_slots` 4,856,
+`run_chain_finds` 11,948, `run_bytes_malloc` 9,138 and `run_bytes_freed`
+9,007. Each push now writes in place onto a header born in an earlier lap, so
+`run_push_mut_slow` counts it: 1,554,416, `bag`'s 4,300 more.
+
+The list now outlives each lap's rewind, so it lives outside the arena:
+`run_perm_peak_bytes` and `run_perm_live_bytes` land on 277,960, and the run
+peak rises 10,191,392 -> 10,437,152 bytes. Most of that is the growth policy
+rather than the list: 4,300 values fill 68,800 bytes, and a buffer that
+doubles once more past sixteen slots holds 16,384 of them. A buffer outside
+the arena already grows by `realloc`, so that second doubling buys it
+nothing; dropping it there is a lead, not built here. `text` lands on
+4,838,766, runbench 622,857 -> 623,001 bytes.
+
+CI's compile rows. The analysis asks one more question of each field write,
+and the interpreter skips the copy at the same sites:
+`compile_instructions` 25,881,551 -> 25,803,156, `entry_instructions`
+85,381,313 -> 85,149,258, `library_instructions` 85,935,582 -> 85,703,128,
+`emit_instructions` 7,013,477 -> 7,035,926 (+22,449),
+`interp_instructions` 488,739,816 -> 487,429,689, `interp_allocs` 587,351 ->
+587,479 (+128), and `browser_compile_instructions` 391,311,502 ->
+392,378,375 (+1,066,873, +0.27%).
+
+## 2026-10-13 — a buffer outside the arena grows by one doubling
+
+`k_b_push_grow` picks a list's next capacity as the smallest power of two that
+holds it, doubled once more past sixteen slots. In the arena that second
+doubling saves grows, because each grow there is a fresh buffer and a copy. An
+accumulator's buffer outside the arena already grows by `realloc`, so the
+second doubling only held memory: #1926's 4,300-element list sat in 16,384
+slots. A buffer outside the arena now takes the smallest power of two.
+
+On the run program `run_perm_peak_bytes` lands on 146,888 and
+`run_perm_live_bytes` on 146,888 (277,960 before), and the run peak falls
+10,437,152 -> 10,306,080 bytes. The extra regrows cost `work_runbench`
+1,177,927,314 -> 1,177,965,832 on CI, 38,518 more, and `run_alloc_bytes` falls to 303,607,404 because the counter adds
+each buffer's full size and the buffers are smaller. `run_allocs` lands on
+1,812,274, `run_bytes_malloc` on 9,140 and `run_bytes_freed` on 9,009.
+basket's permanent peak halves to 2,162,720 (`basket_perm_peak_bytes`, with
+`basket_perm_live_bytes` the same), `basket_alloc_bytes` falls to 6,162,481,
+and `basket_allocs` lands on 27,271, `basket_bytes_malloc` on 32 and
+`basket_bytes_freed` on 13. escape regrows more often: `escape_allocs` 38 ->
+63, `escape_alloc_bytes` 41,924,192, `escape_bytes_malloc` and
+`escape_bytes_freed` 55. In the mem vein, five shapes' permanent peaks halve
+and the record-field golden's falls 1,179,840 -> 655,552. Every benchmark's
+machine code grows sixteen bytes, and `text` lands on 4,838,990.
+
+The same regrows cost the mem vein's other accumulators more allocations (one
+to sixteen), and of these only `early_exit` holds less for it:
+`a_long_list_renders_in_one_pass_allocs` 2,018,
+`a_long_list_renders_in_one_pass_alloc_bytes` 248,272,
+`a_long_list_renders_in_one_pass_bytes_malloc` 5;
+`a_loop_that_only_grows_its_list_takes_no_rewind_allocs` 42,
+`a_loop_that_only_grows_its_list_takes_no_rewind_alloc_bytes` 8,373,392,
+`a_loop_that_only_grows_its_list_takes_no_rewind_bytes_malloc` 36;
+`an_accumulator_regrows_where_it_is_allocs` 83,
+`an_accumulator_regrows_where_it_is_alloc_bytes` 577,072,
+`an_accumulator_regrows_where_it_is_bytes_malloc` 60; `early_exit_allocs` 17,
+`early_exit_bytes_malloc` 4; `fold_push_shape_allocs` 17,
+`fold_push_shape_alloc_bytes` 214,992, `fold_push_shape_bytes_malloc` 5;
+`fused_map_shape_allocs` 17, `fused_map_shape_alloc_bytes` 214,992,
+`fused_map_shape_bytes_malloc` 5; `fused_reducer_allocs` 7,
+`fused_reducer_alloc_bytes` 28,960, `fused_reducer_bytes_malloc` 3;
+`fused_select_shape_allocs` 18, `fused_select_shape_alloc_bytes` 215,024,
+`fused_select_shape_bytes_malloc` 5; `piped_reducer_allocs` 7,
+`piped_reducer_alloc_bytes` 28,960, `piped_reducer_bytes_malloc` 3;
+`skip_shape_allocs` 37, `skip_shape_alloc_bytes` 129,456,
+`skip_shape_bytes_malloc` 5; `take_shape_allocs` 20, `take_shape_alloc_bytes`
+215,152, `take_shape_bytes_malloc` 5; `tally_shape_allocs` 19,
+`tally_shape_alloc_bytes` 133,280, `tally_shape_bytes_malloc` 5.
+
+CI's instruction rows. The other benchmarks pay for the extra regrows too:
+`work_basket` 30,876,488 -> 30,946,055 (+69,567), `work_encodebench`
+2,398,373,226 -> 2,398,405,934 (+32,708), `work_escapebench` 39,049,158 ->
+39,058,255 (+9,097), `work_pendbench` 190,054,350 -> 190,061,194 (+6,844),
+`work_jsonbench` 860,562,984 -> 860,565,984 (+3,000), `work_digestbench`
+5,603,118 -> 5,604,458 (+1,340), `work_oneshot` 13,226,930 -> 13,227,314
+(+384) and `work_widebench` 28,178,509 -> 28,178,544 (+35); `work_livebench`
+falls 477 to 1,474,874,594. In the tab, where the same runtime runs the
+interpreted corpus, `browser_run_instructions` 34,124,990 -> 34,125,332
+(+342). `codegen_instructions_dev` reads 119,002,829 -> 119,002,656 and
+`codegen_instructions_release` 454,179,413 -> 454,179,390.
+
+The record-field fixture #1926 added takes the same regrows:
+`a_list_held_in_a_record_grows_where_it_stands_allocs` lands on 76 and
+`a_list_held_in_a_record_grows_where_it_stands_bytes_malloc` on 19, three each
+above #1926's reading, while its peak falls as above.
+
+## 2026-10-13 — the ratchet's own checkout reads its library again
+
+Two faults on main kept the ratchet from reading what it was built to read.
+Neither came from the branches that showed them.
+
+The first came with #1927. Its mutation `a_fifth_push_takes_sixteen` anchors
+on the grow's extra doubling, and #1927 rewrote that line as
+`if (cap > 16 && !perm) cap <<= 1;`. The mutation stopped applying, so the
+whole-tree ratchet job reported it stale on every branch merged with main;
+#1904 was the first to show it. The mutation now anchors on the new line and
+doubles every time again, and the mem corpus goes red under it
+(`a_cap_around_a_count_is_a_range` reads `allocs=14` against 13).
+
+The second is older and shows only on a branch that edits
+`scripts/perf_record`, because only then does a shard pick the perf-history
+row. The ratchet links each scratch worktree's `target` to
+`/tmp/kanso-ratchet-target`, so the compiler it builds lives outside the
+checkout. `in_shipped_library` looked for the library beside the binary
+(`current_exe()/../../lib`, here `/tmp/lib`) and nowhere else, so
+`kanso check lib/json` refused `builtin_built_text` as internal to a library
+it was not in. With no compile counters on stderr, perf_record's row lost
+`compile_alloc_bytes` and `compile_passes`, and the gate was red before any
+mutation. #1931 showed it, since it rewrites perf_record's lists in the
+spanning form. The import loader already had the right fallback:
+`resolve_import` tries `lib/` beside the working directory when the
+toolchain's copy is absent. The check now tries the same root.
+`a_checkout_library_checks_from_any_binary` copies the compiler to a
+directory of its own and checks `lib/json` from the checkout; it read the
+refusal before the fix and reads nothing after.
+
+The tab's build leaves the new root out, since it has no checkout to stand
+in. With the root compiled in, `browser_compile_instructions` read 392,449,729
+against 392,378,375; without it the browser row does not move.

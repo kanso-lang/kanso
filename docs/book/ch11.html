@@ -58,6 +58,12 @@ a ride: 3.963325623765981</code></pre>
 
 <p>two modules will export the same word, and a local function may use it too. all of them land in one overload space, and dispatch picks by specificity—the same mechanism that chooses between a <code>fact 0</code> arm and a <code>fact n</code> arm chooses between a local <code>select</code> on invoices and the list module's <code>select</code>. a local arm sorts before an imported one when the shapes tie, so your own definitions win the close calls. when two imports collide head-on—the same name, the same shape, and no local arm to break the tie—a bare call is refused, and the fix is one qualifier.</p>
 
+<h2>a value brings its arms</h2>
+
+<p>a module can be handed a value whose type it has never imported. geometry writes <code>area</code> for its own <code>circle</code>, and a report module that takes a circle as a parameter may call <code>area c</code> without importing geo: the circle arrived as an argument, and it carries the arms its owner wrote. the same holds for a field of an argument, an element of a list passed in, and whatever such an arm answers.</p>
+
+<p>a value the file made itself carries nothing extra. <code>area 3</code> in the report module is an unknown name, because nothing the module declares or imports is called <code>area</code>. an arm travels only from the module that owns the type, so a module that does not own <code>circle</code> cannot add an arm that goes wherever circles go. checked on its own, the report module accepts <code>area c</code> on a parameter. the program that hands it a circle is where the compiler finds geo's arm, or refuses the call when no owner wrote one.</p>
+
 <h2>privacy holds at the boundary</h2>
 
 <p>inside a module, files see everything; <code>pub</code> only matters to outsiders. reach for private machinery across an import and the boundary answers:</p>
@@ -154,6 +160,7 @@ area came through: 3.14159</code></pre>
 <li>a module is a directory; its files share one namespace.</li>
 <li><code>import "path"</code> declares the dependency and enrolls every pub name, bare and qualified. the compiler prunes what you don't use.</li>
 <li>overloading is the resolution mechanism. specificity picks; a local arm outranks an import on a tie; a head-on collision between imports is an error with a one-word fix.</li>
+<li>a value carries the arms its type's owner wrote: code handed one calls them bare without importing the owner. a value the file made reaches only names its module declares or imports.</li>
 <li><code>import g { theirs:yours } "path"</code> aliases the qualifier and renames a token. a rename replaces the bare spelling.</li>
 <li>a surface is a module's own pubs plus its explicit re-exports—<code>pub name</code>, <code>pub qualifier</code>, <code>pub theirs:yours</code>. nothing leaks through on its own.</li>
 </ul>
