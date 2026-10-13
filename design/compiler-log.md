@@ -21,69 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-10 — a read named before the write keeps the write in place
-
-Three ports hit the same cliff. The sat solver, the toml parser and the lox
-interpreter each read a map entry into a name and then wrote the map:
-
-```
-v = m[i]
-bump (put m i (v + 1)) ...
-```
-
-Written inline as `put m i (m[i] + 1)`, the put happens in place. Written
-with the name, `linear.rs` counted `v = m[i]` as a second use of `m`, so `m`
-was not unique at the put and every put copied the map. The sat port's
-reduction, 20,000 steps over 100 keys, ran in 27.5 seconds natively with the
-name and 0.010 seconds without it.
-
-The two programs are the same as far as the map is concerned. The read
-answers an element, and `v` is used only as an operand of the put's own
-arguments, which are evaluated before the put writes. `effective_uses` now
-discounts a binding's mentions of the map when the bound name meets three
-conditions: neither the name nor the map is rebound in the block, the
-binding does not hold the map itself, and every later mention of the name is
-reached from the sibling arguments of a `put`, `push` or `append` on that
-map through arithmetic and comparison alone. A mention anywhere else (inside
-a lambda, a list, another call, or a second binding such as `w = v * 2`)
-could force the read after the write, and the binding still counts. A loop's
-bindings usually sit under its `return ... if` guard, so the search goes down
-through the guard's rest.
-
-`tests/golden/mem/a_read_named_before_the_write_stays_in_place.kso` is the
-sat reduction at 2,000 steps. Its golden pins 8 allocations; the compiler
-before this change made 6,013 on it.
-`tests/golden/micro/a_read_named_before_a_write_sees_the_old_value.kso`
-covers the other side: a name used after the write, a name stored in the
-list the put writes, and a name that feeds a second binding all keep the
-copy, and each line prints the old value beside the new on every engine.
-
-The analysis costs the front end a little on every route: compile_instructions
-lands on 25,857,737, entry_instructions on 85,514,349, library_instructions on
-86,065,981, emit_instructions on 7,065,059 and interp_instructions on
-489,220,284. browser_compile_instructions lands on 392,737,085. These are
-carried onto main's rows from this branch's own readings and are projected
-until CI reads them.
-
-The floor question closed on the corpus-first gavel, and kanso#1836 put the
-shape into the run program as its `bump` phase: 350 updates through a named
-read, measured on main before this fix at 53,247,360 instructions. With main
-merged in, runbench falls from 1,245,043,324 to 1,192,648,013, a projection
-from this container's 1,192,647,606 plus the 407 instructions by which CI read
-main above it; CI's row replaces it. run_held_peak_bytes falls from 3,222,256
-to 197,704 and run_arena_peak_bytes from 8,912,912 to 7,864,336, because the
-phase no longer keeps a copy of its map per update. run_alloc_bytes falls to
-322,971,202, run_allocs to 1,772,081 and run_sh_map to 0. run_buf_reuse falls
-by one to 136, and run_view_allocs and run_view_frees fall from 360 to 10 with
-the fix; nothing here isolates why the scatter phase's views moved.
-
-CI's rows replace the projection. work_runbench lands on 1,192,648,013, as
-projected. The front-end rows land on entry_instructions 85,514,580,
-library_instructions 86,066,207, interp_instructions 488,962,208 and
-emit_instructions 7,059,706, and browser_compile_instructions on 392,738,164.
-`text` totals 4,652,222. The run program's emitted code reads one line fewer,
-50,993. Welfare reads 90.6830 on CI's rows, and the rise is banked.
-
 ## 2026-10-10 — a map's view takes keys out of order without moving itself
 
 Three ports found the same cliff from three directions. xsv's
@@ -1080,6 +1017,61 @@ worth more than the three rises cost, and welfare banks the difference at
 91.11. `compile_allocs` rose 68 to 14,598 and `interp_allocs` 68 to 587,351, and
 the floor drops by what they cost, since this builds a ruled part of the
 language.
+
+## 2026-10-13 — a loop entered from the callee it calls rewinds
+
+From #1892's bc port. A `for` loop in bc held every lap's allocation: 300,000
+laps of `s += i` took 548 MB, and the binary counted 8 beat iterations for
+20,000 laps. The port's interpreter has the shape every tree-walker has.
+`loop_for` and `for_next` are one tail cycle, each lap runs the body through
+`exec` with a plain call, and the `nested` arm of `exec` enters the cycle by a
+tail call, because a loop inside the body is the same cycle again.
+
+A cluster entered by a tail call gets its bracket by emitting the entering
+edge as a plain call. Since #920 that demotion is refused when the cluster can
+reach the caller again, because a caller the cycle re-enters with nothing held
+would stack one frame per lap. The reach counted every mention, so the plain
+call `r = exec body m` refused the entry. A plain call holds its own frame
+while the callee runs, so the stack already grows with each level of nesting,
+and demoting the entry adds one frame to each level and none to each lap. The
+reach now follows what can enter the caller with no frame held: the heads of
+tail calls, every name inside a lambda, and every name used as a value.
+
+`tests/golden/mem/a_loop_entered_from_the_callee_it_calls_rewinds` is the
+reduced program, 100,000 laps through a `nested` entry. Main counts no beat
+and holds eleven arena blocks; with the change it counts 200,000 beat
+iterations and holds one. No other mem golden moved. The bc port's 300,000
+laps take 9 MB, and its 33 fixtures and 47 unit tests agree on all three
+engines. The ratchet row "a cluster refused for a callee it reaches under a
+frame" counts every mention again and turns the mem corpus red.
+
+Two loops in the standard library gain a bracket the same way. std/json's
+blank skip before a value, `value_for` and `value_blank`, is entered by a
+tail call from `parse_value` and reaches it again only under the plain call
+an array or object makes for each element. std/regexp's matcher cycle is in
+the same position, and its groups lose the padding a wider tail group had
+given them. Of the fourteen benchmarks only runbench and scanbench emit
+different code. Measured here against main's compiler on the same host,
+runbench ran 829 fewer instructions and scanbench 6 more, and every
+allocation counter in the twelve cost veins is unchanged.
+`a_cluster_the_entering_caller_is_reached_from_stays_grow_only` now hands the
+re-entering function on as a value, which still refuses the entry, and
+`a_cluster_reaching_its_caller_under_a_plain_call_is_a_beat` pins the plain
+call.
+
+CI's rows. The two benchmarks whose IR changed gain their brackets:
+work_runbench lands on 1,170,034,251, 829 fewer, and work_scanbench on
+273,515, eight fewer. The brackets are code: text lands on 4,840,798, up
+5,952 (scanbench 3,888, runbench 2,064), emitted_other_calls on 17,531,
+emitted_other_branches on 16,476 and emitted_other_lines on 147,327.
+emit_instructions falls 522 to 7,012,955. The tab runs the same analysis,
+which now walks each body for its frameless names:
+browser_compile_instructions lands on 392,099,969, up 788,467, and
+browser_compile_peak_bytes on 676,511, up 786.
+
+Merged with main after #1904, the same rows land on `emitted_other_calls`
+17,676, `emitted_other_branches` 16,559, `emitted_other_lines` 148,263 and
+`browser_compile_instructions` 393,489,081.
 
 ## 2026-10-12 — concat reads the bytes text/bytes answers, on every engine
 

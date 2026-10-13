@@ -5256,7 +5256,17 @@ header_blank = row
 
 rows_c1zzzzzztbbbbbbb = text/concat rows_c1zzzzzztbbbbbb [header_blank]
 
-rows_c = text/concat rows_c1zzzzzztbbbbbbb [itself]
+callee_under_a_frame = row
+  "a cluster refused for a callee it reaches under a frame"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_cluster_refused_for_a_callee_under_a_frame")
+  no_setup
+
+rows_c1zzzzzztbbbbbbbb = text/concat rows_c1zzzzzztbbbbbbb [callee_under_a_frame]
+
+rows_c = text/concat rows_c1zzzzzztbbbbbbbb [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
