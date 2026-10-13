@@ -1924,3 +1924,8 @@ falls 477 to 1,474,874,594. In the tab, where the same runtime runs the
 interpreted corpus, `browser_run_instructions` 34,124,990 -> 34,125,332
 (+342). `codegen_instructions_dev` reads 119,002,829 -> 119,002,656 and
 `codegen_instructions_release` 454,179,413 -> 454,179,390.
+
+The record-field fixture #1926 added takes the same regrows:
+`a_list_held_in_a_record_grows_where_it_stands_allocs` lands on 76 and
+`a_list_held_in_a_record_grows_where_it_stands_bytes_malloc` on 19, three each
+above #1926's reading, while its peak falls as above.
