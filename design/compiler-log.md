@@ -21,25 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-12 — a test that runs out of stack fails alone
-
-`kanso test` ran its tests on the main thread, whose stack is 8 MiB. The
-interpreter's depth limit is sized for the 1 GiB thread `run --interp` starts,
-so a test that recursed too far overflowed Rust's stack before the limit
-reported it, and the process aborted with every later test unreported. The lox
-port met this from a recursion 700 calls deep. The runner now starts the same
-deep thread, and the test fails with the interpreter's diagnostic, "the
-program ran out of stack".
-
-`tests/test_verb.rs` runs `deep_test.kso`, one shallow test and one that
-recurses a million deep, and expects the first to pass, the second to fail and
-the run to exit 1. The ratchet row "a test run on the main stack" gives the
-thread 8 MiB and the spec sees the abort.
-
-This is part of the recursion item on #1892. The native side of that item is
-open: a deep enough recursion through the lox port's trie write still ends in
-a segmentation fault with no message.
-
 ## 2026-10-12 — an operator answers what its arms answer
 
 The ray tracer port's release build printed a few rows of its image and then
@@ -1046,6 +1027,38 @@ On main after #1904 the tab's compile reads `browser_compile_instructions`
 
 With main merged after #1922, browser_compile_instructions lands on
 393,361,582.
+
+## 2026-10-12 — a number edit is not a page edit
+
+`page_drift` counts log entries since docs/compiler.html last moved, and took
+the page's newest commit as the move. `golden_prose --write` commits the page
+whenever a golden it quotes moves, rewriting a span's number and no sentence,
+so a row change paid the page's debt. On main the operator arms' compile and
+browser rows (470ae17f) did that, and the gate read 3/3 where the page was
+four entries behind its last prose edit (2cac608c). #1913's span rewrite
+would have reset it to zero while #1905 still owed sections.
+
+The gate now walks the page's commits from the newest and stops at the first
+whose removed and added lines differ once digits, commas and points are taken
+out. Diffs are read against the first parent, so a merge counts only for what
+it brought. `tests/a_number_edit_is_not_a_page_edit.rs` commits a span-only
+rewrite after four entries and expects the four to stand, and a prose edit
+after them to clear the count. With the comparison forced false the first
+reads 0/3 and fails.
+
+Main reads 4/3 under the fixed gate, so every pull request is red on
+`page_drift` until the page carries the sections #1905 asks for.
+
+91.11.
+
+The first version walked every commit that touched the page in date order.
+Merged with main after #1922, it reached the commit on the page branch where
+the sections were written, which is older than eight entries main logged while
+that branch waited, and read the page eight entries behind. The walk now
+follows first parents, so the merge that brought the sections in is where the
+page moved. A third spec builds that history: sections on a side branch, four
+entries on the trunk, then the merge, and expects 0/3. It read 4 entries ahead
+before the change.
 
 ## 2026-10-12 — arms travel with the value
 
