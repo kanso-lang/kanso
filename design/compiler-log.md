@@ -19,55 +19,6 @@
 > The last forty entries. Everything older is in `log/compiler-log-archive.md`,
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
-## 2026-10-10 — a `tie` node holds its references in a list
-
-Built the gavel "a field may hold a list of `tie` references". The maker check
-in `src/check.rs` walked a constructor's arguments with a flag saying each one
-was a field, and handed every other expression's children down with the flag
-cleared. A list literal was one of those other expressions, so `ref` called
-inside `town "ash" [(ref "birch") (ref "cedar")]` was refused as a read. A list
-literal or map literal that is itself a field now passes the flag to its
-elements, and for a map to its values only, since a key is read to place its
-pair. Anything else that holds the list is refused as before: binding it to a
-name first, measuring it, indexing it or handing it to a function.
-
-Neither engine needed a change. The interpreter's `resolve_tied` and native's
-`k_tie_resolve` already walk lists and maps when they swap each cell for its
-node, because a record field's value was always allowed to be any value once
-the tie returned.
-
-The diagnostic now says the reference goes straight into a field "alone or in a
-list or map written there", and the four tie goldens that quote it moved with
-it. `tests/golden/micro/a_graph_holds_its_roads_in_a_list` keeps each town's
-roads as a list and a map of named roads beside it, and prints the same text on
-the interpreter, a dev build and a release build; the compiler on main refuses
-it at `town "ash" [(ref "birch") ...]`.
-`tests/golden/errors/a_tie_maker_measures_a_list_of_references` binds the list
-to a name and measures it, and is refused at both references.
-
-`a_graph_tied_from_a_map_of_edges` keeps its chain of `road` records. Its edges
-come from a map, so its list of references would be built by a call, `list/map
-names ref` or a fold, and a reference handed to a function from std is out of
-the check's sight. The gavel's text admits a literal, and the ruling's own
-Owes asked for this fixture to drop the chain, which it cannot do under that
-text. That question has gone to the ledger as "May a list built from data hold
-`tie` references?". `docs/compiler.html` §193 says which form each case takes.
-
-The book teaches cyclic structures with `build` and does not mention `tie`, so
-the place `tie` is taught is its own comment in `lib/list/list.kso`. That
-comment now names the list form and shows `node id [(ref "b") (ref "c")]`.
-
-CI's rows for this branch, with main's repair list merged in. The check walks
-two more expression kinds in a constructor's arguments, and `lib/list/list.kso`
-carries two more comment lines, which every compile of the library lexes:
-
-    compile_instructions             25,832,340 ->  25,832,534
-    entry_instructions               85,435,525 ->  85,436,634
-    library_instructions             85,988,213 ->  85,988,060
-    browser_compile_instructions    388,181,803 -> 388,192,201
-
-The ruling is a part of the language, so the floor follows whatever these cost.
-
 ## 2026-10-10 — a constructor handed over as a function builds
 
 The lox port found that a record constructor passed where a function is wanted
@@ -1872,6 +1823,26 @@ worth more than the three rises cost, and welfare banks the difference at
 91.11. `compile_allocs` rose 68 to 14,598 and `interp_allocs` 68 to 587,351, and
 the floor drops by what they cost, since this builds a ruled part of the
 language.
+
+## 2026-10-12 — concat reads the bytes text/bytes answers, on every engine
+
+From #1891, the third item: the 2026-08-23 gavel says a list is never bytes,
+and what `concat` declares decides which engine is right. Appendix b declares
+`text/bytes string → int[]` and `text/concat` as appending two lists, so a
+value `text/bytes` answered is a list to `concat`. Native code already read a
+bytes value as its byte values on either side and answered a list. The
+interpreter matched only two `List`s and refused anything else with "concat
+takes two lists", which is what the httpd, mustache, chip8 and ugit ports hit.
+The interpreter now reads a `Bytes` operand as its byte values, and the answer
+is a list on both engines. The gavel's other direction is unchanged: a list is
+still never read as bytes.
+
+`tests/golden/micro/concat_reads_the_bytes_text_bytes_answers` puts bytes on
+the left, on the right, on both sides, and as a slice of `text/bytes`. Main's
+interpreter stopped at the first line.
+
+Appendix b also says `concat` takes strings, and neither engine does: both
+refuse two strings with the same message. #1906 asks which way that goes.
 
 ## 2026-10-12 — gavel: arms travel with the value, and a file names only what it can see
 
