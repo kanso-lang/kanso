@@ -206,6 +206,18 @@ struct Analysis<'a> {
     /// a caller that does not hand its value over is not a refusal, and the
     /// call is written down here instead, keyed `(file, line, col, index)`.
     handles: Option<std::cell::RefCell<Edges>>,
+    /// (function, arity, parameter, field): every call hands in, at that
+    /// parameter, a record whose field holds a value nothing else holds.
+    /// Seeded only with the fields some push, put or concat writes through.
+    field_params: HashSet<(String, usize, usize, String)>,
+    /// (function, arity, field): every arm returns a record whose field
+    /// holds a value nothing else holds.
+    returns_field: HashSet<(String, usize, String)>,
+    /// The record parameters every caller hands over, read before the field
+    /// sets are filled, so asking it never reaches a field read.
+    records_handed: HashSet<(String, usize, usize)>,
+    /// Each record type's fields in the order its constructor takes them.
+    type_fields: crate::hash::Map<String, Vec<String>>,
 }
 
 /// Where a name occurs, gathered once, so `escapes_as_value` stops re-walking
@@ -336,6 +348,14 @@ impl<'a> Analysis<'a> {
             folds,
             mentions,
             handles,
+            field_params: HashSet::default(),
+            returns_field: HashSet::default(),
+            records_handed: HashSet::default(),
+            type_fields: program
+                .types
+                .iter()
+                .map(|t| (t.name.clone(), t.fields.iter().map(|(f, _, _)| f.clone()).collect()))
+                .collect(),
         };
         // A parameter enters the set only if the half of its linearity
         // that no removal can change already holds: every arm moves it, and
@@ -359,7 +379,171 @@ impl<'a> Analysis<'a> {
             }
         }
         a.fixpoint();
+        a.field_fixpoint();
         a
+    }
+
+    /// Which written fields hold a value nothing else holds.
+    ///
+    /// `bag (b.count + 1) (push b.items i)` copies the list on every call
+    /// unless the push may write into it, and a record handed over whole
+    /// says nothing about its fields: `bag 0 xs` twice shares `xs`. The field
+    /// is alone when every record that reaches the parameter was built with
+    /// a unique value there, or passed through from a parameter or a group
+    /// whose records were. That is cyclic in the same way linearity is, so
+    /// it is a greatest fixpoint of its own, run after the first so that
+    /// nothing in the first reads a field fact.
+    fn field_fixpoint(&mut self) {
+        let written = written_fields(self.program);
+        if written.is_empty() {
+            return;
+        }
+        let mut seeds = Vec::new();
+        for decl in real_fns(self.program) {
+            let arity = decl.params.len();
+            for f in &written {
+                self.returns_field.insert((decl.name.clone(), arity, f.clone()));
+                for i in 0..arity {
+                    seeds.push((decl.name.clone(), arity, i, f.clone()));
+                }
+            }
+        }
+        let mut handed = HashSet::default();
+        for (name, arity, i, f) in seeds {
+            if !self.called_by_name(&name, arity) {
+                continue;
+            }
+            if self.callers_hand_over(&name, arity, i) {
+                handed.insert((name.clone(), arity, i));
+            }
+            self.field_params.insert((name, arity, i, f));
+        }
+        self.records_handed = handed;
+        loop {
+            let drop_params: Vec<_> = self
+                .field_params
+                .iter()
+                .filter(|(name, arity, i, f)| !self.fields_handed_over(name, *arity, *i, f))
+                .cloned()
+                .collect();
+            let drop_returns: Vec<_> = self
+                .returns_field
+                .iter()
+                .filter(|(name, arity, f)| {
+                    !self.group(name, *arity).all(|d| {
+                        matches!(d.body.last(), Some(Stmt::Expr(e)) if self.holds_field_alone(e, f, d))
+                    })
+                })
+                .cloned()
+                .collect();
+            if drop_params.is_empty() && drop_returns.is_empty() {
+                return;
+            }
+            for k in drop_params {
+                self.field_params.remove(&k);
+            }
+            for k in drop_returns {
+                self.returns_field.remove(&k);
+            }
+        }
+    }
+
+    /// Every call to the group hands in, at `i`, a record whose field `f` is
+    /// alone. A call under a lambda runs when somebody else decides, so it
+    /// answers no.
+    fn fields_handed_over(&self, name: &str, arity: usize, i: usize, f: &str) -> bool {
+        self.mentions.mentioning(name).iter().all(|&d| {
+            let caller = &self.program.fns[d];
+            caller.body.iter().all(|stmt| {
+                let e = match stmt {
+                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
+                };
+                self.field_sites_alone(caller, e, (name, arity, i, f), false)
+            })
+        })
+    }
+
+    fn field_sites_alone(
+        &self,
+        ctx: &FnDecl,
+        e: &Expr,
+        q: (&str, usize, usize, &str),
+        under_lambda: bool,
+    ) -> bool {
+        let (name, arity, i, f) = q;
+        if let Expr::App { head, args, .. } = e {
+            if matches!(head.as_ref(), Expr::Ident(n, _, _) if n == name) && args.len() == arity {
+                if under_lambda || !self.holds_field_alone(&args[i], f, ctx) {
+                    return false;
+                }
+            }
+        }
+        let inner = under_lambda || matches!(e, Expr::Lambda { .. });
+        child_exprs(e).all(|c| self.field_sites_alone(ctx, c, q, inner))
+    }
+
+    /// The record `e` evaluates to holds, in field `f`, a value nothing else
+    /// holds.
+    fn holds_field_alone(&self, e: &Expr, f: &str, ctx: &FnDecl) -> bool {
+        match e {
+            Expr::App { head, args, .. } => match head.as_ref() {
+                Expr::Ident(n, _, _) if n == "if" && args.len() == 3 => {
+                    self.holds_field_alone(&args[1], f, ctx)
+                        && self.holds_field_alone(&args[2], f, ctx)
+                }
+                Expr::Ident(n, _, _) => match self.type_fields.get(n.as_str()) {
+                    Some(fields) => {
+                        fields.len() == args.len()
+                            && fields
+                                .iter()
+                                .position(|x| x == f)
+                                .is_some_and(|k| self.unique_in(&args[k], ctx, None))
+                    }
+                    None => self.returns_field.contains(&(n.to_string(), args.len(), f.to_string())),
+                },
+                _ => false,
+            },
+            Expr::Guard { early, rest, .. } => {
+                self.holds_field_alone(early, f, ctx)
+                    && matches!(rest.last(), Some(Stmt::Expr(t)) if self.holds_field_alone(t, f, ctx))
+            }
+            Expr::Ident(n, _, _) => {
+                let arity = ctx.params.len();
+                match ctx.params.iter().position(|p| matches!(p, Pattern::Var(v, _) if v == n)) {
+                    Some(j) => {
+                        self.field_params.contains(&(ctx.name.clone(), arity, j, f.to_string()))
+                    }
+                    None => bound_in(&ctx.body, n).is_some_and(|b| self.holds_field_alone(b, f, ctx)),
+                }
+            }
+            _ => false,
+        }
+    }
+
+    /// A read of field `f` of parameter `p` that takes the value away: the
+    /// field is alone, every caller hands the record over, and in this arm
+    /// the record is read only through its fields, `f` once and none of them
+    /// under a lambda. Nothing reads the field after the write, so writing
+    /// into it is the same as writing into a list nobody else holds.
+    fn field_moves(&self, p: &str, f: &str, ctx: &FnDecl) -> bool {
+        let arity = ctx.params.len();
+        let Some(j) = ctx.params.iter().position(|q| matches!(q, Pattern::Var(v, _) if v == p))
+        else {
+            return false;
+        };
+        if !self.field_params.contains(&(ctx.name.clone(), arity, j, f.to_string()))
+            || !self.records_handed.contains(&(ctx.name.clone(), arity, j))
+        {
+            return false;
+        }
+        let mut tally = FieldTally::default();
+        for stmt in &ctx.body {
+            let e = match stmt {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
+            };
+            tally.walk(p, f, e, false);
+        }
+        !tally.refused && tally.mentions == tally.field_reads && tally.reads_of_f == 1
     }
 
     fn fixpoint(&mut self) {
@@ -699,6 +883,9 @@ impl<'a> Analysis<'a> {
         scoped: Option<&str>,
         exempt: &[&Expr],
     ) -> bool {
+        if let Some((p, f)) = field_read(e) {
+            return self.field_moves(p, f, ctx);
+        }
         match e {
             // a literal is interned or freshly written and an interpolation
             // allocates its result, so nothing else holds the value; an
@@ -805,6 +992,85 @@ impl<'a> Analysis<'a> {
         match bound_in(&ctx.body, var) {
             Some(expr) => self.unique_in_with(expr, ctx, scoped, exempt),
             None => false,
+        }
+    }
+}
+
+/// The parameter and field a read names, spelled `p.f` or as its getter.
+fn field_read(e: &Expr) -> Option<(&str, &str)> {
+    match e {
+        Expr::Field { base, name, .. } => match base.as_ref() {
+            Expr::Ident(p, _, _) => Some((p.as_str(), name.as_str())),
+            _ => None,
+        },
+        Expr::App { head, args, .. } if args.len() == 1 => match (head.as_ref(), &args[0]) {
+            (Expr::Ident(g, _, _), Expr::Ident(p, _, _)) => {
+                crate::ast::getter_field(g).map(|f| (p.as_str(), f))
+            }
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// The fields some write takes as its target: the first argument of a push,
+/// a put or a concat, read off a record.
+fn written_fields(program: &Program) -> HashSet<String> {
+    fn walk(e: &Expr, out: &mut HashSet<String>) {
+        if let Expr::App { head, args, .. } = e {
+            if matches!(head.as_ref(), Expr::Ident(n, _, _) if matches!(n.as_str(),
+                "push" | "append" | "builtin_append" | "put"
+                    | "concat" | "text/concat" | "builtin_concat"))
+            {
+                if let Some((_, f)) = args.first().and_then(field_read) {
+                    out.insert(f.to_string());
+                }
+            }
+        }
+        for c in child_exprs(e) {
+            walk(c, out);
+        }
+    }
+    let mut out = HashSet::default();
+    for decl in real_fns(program) {
+        for stmt in &decl.body {
+            let (Stmt::Bind { expr, .. } | Stmt::Expr(expr)) = stmt;
+            walk(expr, &mut out);
+        }
+    }
+    out
+}
+
+/// Every mention of a parameter in one arm, counted without the
+/// one-arm-of-an-if discount the use counts give: how often it is named,
+/// how often as the base of a field read, how often that field is `f`, and
+/// whether any mention sits under a lambda.
+#[derive(Default)]
+struct FieldTally {
+    mentions: usize,
+    field_reads: usize,
+    reads_of_f: usize,
+    refused: bool,
+}
+
+impl FieldTally {
+    fn walk(&mut self, p: &str, f: &str, e: &Expr, under_lambda: bool) {
+        if let Some((base, field)) = field_read(e) {
+            if base == p {
+                self.mentions += 1;
+                self.field_reads += 1;
+                self.reads_of_f += (field == f) as usize;
+                self.refused |= under_lambda;
+                return;
+            }
+        }
+        if matches!(e, Expr::Ident(n, _, _) if n == p) {
+            self.mentions += 1;
+            self.refused |= under_lambda;
+        }
+        let inner = under_lambda || matches!(e, Expr::Lambda { .. });
+        for c in child_exprs(e) {
+            self.walk(p, f, c, inner);
         }
     }
 }
