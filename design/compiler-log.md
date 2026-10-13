@@ -21,46 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-12 — a built binary names its own stack overflow
-
-A recursion deeper than the stack ends in a fault on the guard page below it.
-`kanso run` reports a child that died that way as having run out of stack, but
-a binary run directly died with the bare signal and printed nothing. The lox
-port is run directly, and a Lox recursion 20,000 calls deep ended in
-"Segmentation fault" with exit 139 on this tree.
-
-The runtime now installs a SIGSEGV handler at start-up, on a 64 KiB stack of
-its own because the program's is the one that ran out. A fault whose address
-lies between the top of the main stack and one MiB past its limit prints the
-interpreter's diagnostic, "the program ran out of stack", and exits 1. Any
-other fault restores the default handler and faults again, so a wild pointer
-still dies by the signal. With no stack limit there is no floor to measure
-from, and the handler is not installed. The wasm runtime has no signals and is
-left alone.
-
-`tests/a_built_binary_names_its_stack_overflow.rs` builds a recursion a
-million deep that no engine can turn into a loop, runs the binary directly and
-reads its stderr and exit status. The ratchet row "a binary that does not watch
-its stack" removes the installation and the spec reads an empty stderr.
-
-This closes the native half of the recursion item on #1892. The depth itself
-still differs by engine: the interpreter stops at 10,000 calls and native at
-whatever the stack holds.
-
-Installing the handler costs every native program the same start-up work: a
-`getrlimit`, a `sigaltstack` and a `sigaction`, about 3,300 instructions, and
-368 bytes of `.text`. On CI's rows for the tree merged with #1899, `text`
-went to 4,834,846 and `codegen_instructions_dev` to 119,002,829. The work rows
-moved by that constant: `work_basket` to 30,876,488, `work_deepbench` to
-393,579,644, `work_digestbench` to 5,603,118, `work_encodebench` to
-2,398,373,226, `work_escapebench` to 39,049,158, `work_indexbench` to
-2,462,486, `work_jsonbench` to 860,562,984, `work_livebench` to 1,474,875,071,
-`work_oneshot` to 13,226,930, `work_pendbench` to 190,054,350,
-`work_readbench` to 4,580,966, `work_runbench` to 1,170,035,080,
-`work_scanbench` to 273,523 and `work_widebench` to 28,178,509.
-`codegen_instructions_release` fell to 454,179,413, which outweighs the rest,
-and the rise is banked.
-
 ## 2026-10-12 — a file names only what its module declares and its own imports bring
 
 The second rule of the 2026-10-12 gavel on #1894. A module's files share
@@ -1878,3 +1838,25 @@ validation result before passing it on.
 
 Owes, on #1928: the toml reduction kept as a micro golden pinning today's
 output on every engine; #1891's second item closed with a pointer here.
+
+## 2026-10-13 — hex and binary integers, and floats with an exponent
+
+#1889 builds the gavel "hex and binary integers and exponent floats". The
+lexer reads `0x` followed by hex digits, in either case, and `0b` followed by
+binary digits as integers: `0xff` is 255 and `0b1010` is 10. A literal past
+64 bits becomes a big integer, as a long decimal does. A decimal followed by
+`e`, an optional sign and digits is a float: `1e-8`, `6.02e23`, `2.5e3`. A
+minus in front reads as it does for a decimal, so `-0x10` is -16. The
+prefixes and the `e` are lower case only, as every other word in the
+language is.
+
+Three malformed spellings stop at lexing, each with an error golden: `0x`
+with no digits after it, a digit other than 0 or 1 in a binary literal
+(`0b2`), and an `e` with no exponent digits (`1e`). Each message names the
+literal and says how to write it.
+
+Every engine reads the same tokens because they share the lexer. The micro
+golden `hex_binary_and_exponent_literals` runs on the interpreter, the
+native build and the page. The editor grammar and the playground's
+highlighter colour the new forms, and chapter 02 says what each spelling
+means. The byte literal in #1889's title was not ruled and is not built.
