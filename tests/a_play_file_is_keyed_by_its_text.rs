@@ -89,11 +89,8 @@ fn a_warm_play_ended_by_a_signal_names_it() {
     use std::process::Stdio;
     let dir = fresh("signalled");
     let file = dir.join("main.kso");
-    std::fs::write(
-        &file,
-        "import \"std/io\"\n\nio/stdin .> (text -> print \"{length text}\")\n",
-    )
-    .unwrap();
+    std::fs::write(&file, "import \"std/io\"\n\nio/stdin .> (text -> print \"{length text}\")\n")
+        .unwrap();
     for round in ["first", "second"] {
         let mut run = Command::new(env!("CARGO_BIN_EXE_kanso"))
             .arg("play")
