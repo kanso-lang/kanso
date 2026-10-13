@@ -19,43 +19,6 @@
 > The last forty entries. Everything older is in `log/compiler-log-archive.md`,
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
-## 2026-10-10 — a constructor handed over as a function builds
-
-The lox port found that a record constructor passed where a function is wanted
-checks and runs on the interpreter and stops the native build with "`pair` as
-a bare value is not yet supported" (lox F20). The port wrapped each one in a
-lambda, `(l o r -> logical l o r)`, which is what native now does by itself.
-When codegen lowers a name that is not a function group, a builtin or one of
-the words with a value of its own, and the name is a record type with one to
-four fields, it lowers the lambda that calls the constructor. Four is the
-native lambda's limit, so a record of five or more fields handed over is still
-refused at build with the same message.
-
-`tests/golden/micro/a_constructor_handed_over_as_a_function` hands a
-one-field constructor to `list/map`, a two-field one to a function that calls
-it and a three-field one to another, and prints the same line on the
-interpreter, a dev build and a release build. The compiler on main refuses to
-build it. The ratchet row "a constructor refused as a value" puts the refusal
-back and the micro corpus goes red.
-
-`tests/a_type_name_as_a_bare_value.rs` had pinned the refusal for a
-two-field record printed bare. It now pins that both engines print `<fn>`.
-
-CI's rows for this branch, with main's repair list merged in. Two rows moved,
-both by the size of the new lowering in the emitter:
-
-    emit_instructions                7,062,299 ->   7,062,491
-    browser_compile_instructions   388,181,803 -> 388,266,184
-
-Welfare falls from 90.2505 to 90.2504, and the floor follows it down under the
-rule for a change that makes the language do what it says: a program that
-checks and runs on the interpreter now builds natively.
-
-The tie-list ruling landed first. Carried over it, the browser compile row
-lands at 388,276,582, the constructor's 84,381 on top of main's 388,192,201,
-and the floor at 90.25039901483147.
-
-
 ## 2026-10-10 — two values a carry handed back while they were still held
 
 The lap carry (kanso#1827) let the toml port parse a comment holding a
@@ -1909,3 +1872,27 @@ each as an importer; goldens for a test that reads a private name (refused), a
 test helper sharing a production name (no collision) and a malformed test
 beside a program that still runs; existing tests that read private names
 moved onto the pub surface.
+
+## 2026-10-13 — gavel: `merge` copies a record with named fields replaced
+
+Clay ruled #1886. Sixteen of the twenty ports complained that changing one
+field of a record meant rebuilding it by position, and three of their bugs
+were fields passed in the wrong order at such a site. Construction by field
+name stays declined (2026-07-29, named arguments); this is an update form
+only.
+
+**The ruling.** `merge u {"role": "chef"}` answers a copy of the record `u`
+with the named fields replaced and every other field carried over. The map is
+a literal whose keys name fields of `u`'s type. The checker refuses a key that
+is not a field of that type. It also refuses a value that the field's
+declared typeset does not admit, where the field declares one. `merge` builds a
+record, so it is allowed only where construction is, in the module that owns
+the type (2026-08-20, "only a type's owner constructs one").
+
+Clay chose this spelling over a keyword form (`u with role "chef"`), which
+meant the same thing.
+
+Owes, on #1886: the builtin on every engine; error goldens for an unknown
+field, a value the field does not admit, and a merge outside the owning
+module; a micro golden showing unnamed fields carried over; appendix B and
+the chapter that teaches records.
