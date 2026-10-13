@@ -1,0 +1,7 @@
+type user
+  age
+  name
+
+clay = user 47 "clay"
+older = merge clay { "age":48 }
+print "{older}" .> (_ -> print "{clay}")

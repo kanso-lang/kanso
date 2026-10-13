@@ -1,0 +1,4 @@
+error[type]: a field `merge` replaces is named by a plain string literal
+  --> tests/golden/errors/a_merge_names_a_field_with_a_number.kso:8:13
+   8 |   merge u { 1:"b" }
+                   ^

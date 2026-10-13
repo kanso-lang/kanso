@@ -1,0 +1,8 @@
+# `merge` copies a record with the named fields replaced (ruled 2026-10-13,
+# #1886). Where the value's type is known at the merge, a name its type does not
+# declare is refused there, the way a field read of it is.
+type user
+  age
+  name
+
+pub play = print "{merge (user 47 "clay") { "rank":1 }}"

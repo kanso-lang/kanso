@@ -21,87 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-10 — an oversize block that cannot be reused is freed when it misses
-
-A loop that appends a byte a pass to a one-megabyte string ran 6,000 passes
-with an arena peak of 3,157,760 bytes and a resident peak of 777 MB. The arena
-gives a value over a megabyte a block of exactly its size. When the loop
-rewinds, that block goes to the spare list, and the next pass asks for a block
-a few bytes larger, which no spare can serve. So every pass opened a new block,
-and the old ones stayed in the spare list until the loop ended. Valgrind
-counted 99 mallocs and 82 frees at 300 passes, nearly all of the frees at the
-loop's end. Main reaches 394 MB on the same program, and the five port fixes
-had roughly doubled it, because they rewind more often.
-
-`k_arena_push` now frees the oversize spares smaller than the request when an
-oversize request misses. The standard 1 MiB spares are kept, since they serve
-ordinary refills. The program's resident peak falls from 777 MB to 10 MB, and
-it runs in 0.96 seconds against 1.2.
-
-No counter could see this. `arena_peak_bytes` counts blocks in use and
-`arena_blocks` counts mallocs, and both read the same before and after: 752
-blocks and a peak of 3,157,760. A new counter, `spare_peak_bytes`, records the
-most the spare list held, and it is lower-is-better in the trend gate. It is
-counted only in counting builds, so no program pays for it. Every cost golden,
-every mem fixture and the two book samples that print counters gain the line
-and nothing else.
-
-`tests/golden/mem/a_string_that_grows_each_pass_reuses_its_block` is the
-reduction at 400 passes. Its spare_peak_bytes is 2,097,984; with the miss path
-left as it was, it reads 52,440,000. The run program's spare_peak_bytes is
-2,621,456. runbench reads 248 instructions more, measured in one worktree
-against the same tree without the fix, and is projected at 1,152,754,683.
-
-One reading from this container does not agree with CI. Measured in the
-carrier's own worktree, runbench read 1,152,573,288, below the lap wait's
-figure; CI reads the carrier at 1,152,754,435, which agrees with the wait's
-cost. That stray reading is not explained here, and the projection above is
-taken from CI's row plus the 248.
-
-A second shape retains far more and is not fixed here. When a loop builds the
-new string by interpolating the old one directly, as in `"{st.body}{x}"`, the
-arena peak grows a megabyte a pass on main (420,568,976 bytes at 400 passes)
-and half that on the carrier. Every version of the string stays in a block in
-use. Slicing the string first, as the fixture does, keeps the peak flat at
-3 MB.
-
-The mechanism is the repair. The interpolation lets the record-reuse analysis
-write each new state into the old record's storage, and that record was built
-before the loop, below its mark. At a stage the record survives but its new
-string does not, so the walk repairs it: `k_repaired_settle` copies the string
-into the arena and raises the mark over the copy, because a surviving node
-points at it. The next pass writes a newer string into the same record, and the
-settled copy is dead under the mark until the loop ends. A trace of the beat
-carry shows the mark's block moving 48 bytes up at each of the 200 stages of a
-400-pass run, with a megabyte more live beneath it each time. Raising the mark
-is right for a node repaired once. What it lacks is a way to take back a
-settled region when the same node is repaired again, and that is a separate
-change.
-
-CI's rows replace the projection. runbench reads 1,152,754,609, which is 174
-instructions above the carrier's row rather than the 248 measured here.
-Measured against main, the rows that end worse on this branch, the carrier's
-changes included, are codegen_instructions_dev at 118,955,169,
-codegen_instructions_release at 454,306,200, browser_run_instructions at
-34,124,990, work_encodebench at 2,398,370,414, work_livebench at
-1,474,871,090, work_oneshot at 13,224,195 and text at 4,835,550. Against the
-carrier alone, the release row falls by 120,818 and the dev row rises by
-3,943; every benchmark's runtime text grows 176 bytes, which is the spare
-list's accounting and its drop path.
-
-The carrier took main's retired `build` and CI's rows for it, and this branch
-took the carrier in a merge commit. Each conflicted row is projected as this
-fix's own CI delta laid on the carrier's CI row: codegen_instructions_dev lands
-on 118,958,562, work_encodebench on 2,398,370,022, work_livebench on
-1,474,871,748, work_oneshot on 13,224,265 and work_runbench on 1,152,754,602,
-and `text` totals 4,829,278. CI's reading replaces each of them.
-
-CI's rows replace the projection. codegen_instructions_dev lands on
-118,939,055 and codegen_instructions_release on 454,517,107, the release tier
-230,743 above the projection. work_encodebench lands on 2,398,369,553,
-work_livebench on 1,474,871,531, work_oneshot on 13,223,698 and work_runbench
-on 1,152,754,392. `text` totals 4,829,278, as projected.
-
 ## 2026-10-10 — a counting loop keeps every pass's key; copying keys out measured and declined
 
 A loop that counts into a map it was handed, under a key it interpolates each
@@ -1465,6 +1384,64 @@ On main after #1904 the tab's compile reads `browser_compile_instructions`
 
 With main merged after #1922, browser_compile_instructions lands on
 393,286,002.
+
+## 2026-10-13 — `merge` copies a record with named fields replaced
+
+Built under #1886 (gavel: `merge` copies a record with named fields replaced).
+`merge u { "role":"chef" }` answers a copy of `u` with the named fields
+replaced and every other field carried over.
+
+**How it runs.** After the checks, each `merge` becomes a call to a group the
+compiler writes for the set of names it replaces, with one arm per record the
+calling module declares that has every one of those fields:
+`Merge_4role (user Kept0 Kept1 _) Given0 = user Kept0 Kept1 Given0`. Every
+engine already runs a dispatch and a construction, so none of them learned
+anything new, and the tab compiles the same group. A field read is built the
+same way, through the getter groups. Two things surfaced on the way. A group
+written for a library carried only its first arm into the program that
+imports it, because its arms shared the call site's span; each arm now
+carries its own type's span. And a value whose type has no arm misses the
+group at run time, so the miss is reported as a miss of `merge` rather than
+of the group's internal name.
+
+**What the checker refuses.** The fields are named by plain string literals
+in a map literal; a computed map is refused, since the copy is built from the
+names. Where the value's type is known at the merge (a construction written
+there, or a local bound to one), a name that type does not declare is refused
+as `` `user` has no field `rank` ``, the field read's wording. Otherwise a name
+no record declares is refused, and so is a set of names no record of this
+module has all of. A set that only an imported record has is refused as an
+opacity error, the construction rule's (2026-08-20). Five goldens pin these:
+four error fixtures, one of them a module tree, and a runtime fixture for the
+miss on both engines. `a_merge_carries_the_fields_it_does_not_name` pins the
+copy as a library on both engines. On main every one of them stops at
+`` unknown name `merge` ``.
+
+**What the ruling named that cannot be built yet.** The owed list asks for
+an error golden for "a value that a declared field typeset does not admit".
+A field carries no declared type: `check_field_annotations` refuses every
+field annotation ("a record field carries no type"), so there is no typeset
+for a `merge` to check against. The item waits on fields carrying types.
+
+`merge` is ambient now, which takes the name from every program;
+`lib/list`'s private sort helper was `merge` and is `merge_runs`. kq, vse and
+kanso-json declare no `merge`; two ports on `claude/ports-corpus` do and will
+rename when they are next built. Chapter 02 shows `merge` beside
+destructuring, and appendix B gives it an entry under records.
+
+The compile rows move with the binary and the renamed helper; CI's rows are
+priced here before merge.
+
+- **OPEN** #1886, until this lands.
+
+On main after #1904 the tab's compile reads `browser_compile_instructions`
+396,842,603, up 4,464,228 from main's 392,378,375, and
+`browser_compile_peak_bytes` 675,735, up 10, on the same tree.
+
+91.11.
+
+With main merged after #1922, browser_compile_instructions lands on 398,041,240
+and browser_compile_peak_bytes on 675,735.
 
 ## 2026-10-12 — arms travel with the value
 

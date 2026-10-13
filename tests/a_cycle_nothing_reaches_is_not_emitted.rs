@@ -2,7 +2,7 @@
 //! program runs can reach, is not emitted.
 //!
 //! std/list sorts by merging, and the merge is four functions calling round:
-//! `merge`, `merge_on`, `pick` and `advance`. The prune used to strike a
+//! `merge_runs`, `merge_on`, `pick` and `advance`. The prune used to strike a
 //! definition once no other surviving definition named it, so it struck
 //! `sort`, `msort` and `span` and kept the four, since each was still named by
 //! the one before it. On the codegen corpus, which never sorts, the cycles it
@@ -12,7 +12,7 @@
 //! must print what the interpreter prints.
 //!
 //! Watched red with the prune counting mentions: the summing program's module
-//! defined `d_list/merge_5`.
+//! defined `d_list/merge_runs_5`.
 //!
 //! Since 2026-10-09 a native build walks from its entry before it emits, so a
 //! group no body names is never emitted and the prune has nothing to strike
@@ -53,7 +53,7 @@ fn built(name: &str, source: &str) -> (String, String, String) {
     )
 }
 
-const MERGE: &str = "define tailcc %KValue @\"d_list/merge_5\"(";
+const MERGE: &str = "define tailcc %KValue @\"d_list/merge_runs_5\"(";
 
 #[test]
 fn a_program_that_never_sorts_carries_no_merge() {

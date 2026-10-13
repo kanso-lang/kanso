@@ -419,6 +419,11 @@ pub fn bare_space(qual: &str, name: &str) -> String {
 /// wrote at the call site the sentence points at. A traveling group, `~area`
 /// or a module's `~geo~area`, is spoken as the `area` its calls wrote.
 pub fn spoken(text: &str) -> std::borrow::Cow<'_, str> {
+    // a `merge` runs as a group the compiler made for the fields it names, and
+    // a value none of its arms takes is a miss of the `merge` the author wrote
+    if split_qual(text).map_or(text, |(_, bare)| bare).starts_with("Merge_") {
+        return std::borrow::Cow::Borrowed(crate::MERGE);
+    }
     if let Some(group) = text.strip_prefix(BARE_MARK) {
         let short = group.rsplit(BARE_MARK).next().unwrap_or(group);
         return std::borrow::Cow::Borrowed(short);

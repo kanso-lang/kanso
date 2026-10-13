@@ -1,0 +1,10 @@
+# A `merge` names each field it replaces with a string literal; a number
+# names no field (#1886).
+type user
+  age
+  name
+
+fn rename u
+  merge u { 1:"b" }
+
+pub play = print "{rename (user 1 "a")}"
