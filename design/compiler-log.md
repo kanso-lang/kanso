@@ -2060,3 +2060,8 @@ On the merged tree the ratchet called "a warm play that dies in silence"
 blind. Since #1900 the binary names its own stack overflow, so the warm play's
 wording of the signal never runs for one. The mutation now also stops the
 binary watching its stack, and the second play prints nothing.
+
+On the tree merged with #1913, the same 123 and 688 instructions sit on
+main's new rows: compile_instructions lands on 25,881,674,
+entry_instructions on 85,381,436, library_instructions on 85,935,705 and
+interp_instructions on 488,740,504.
