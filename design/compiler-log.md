@@ -2029,3 +2029,12 @@ Still open on #1894: a local arm of the same name shadows the traveling ones
 outright, where rule 4 asks for a local arm of the same shape to shadow and
 the rest to stay reachable. A module that declares its own `area` for a
 square and is handed a circle cannot reach geo's arm yet.
+
+CI's rows put `compile_instructions` at 26,052,299 (+170,748, +0.66%),
+`entry_instructions` at 86,286,307 (+904,994, +1.06%), `library_instructions`
+at 86,505,153 (+569,571, +0.66%) and `emit_instructions` at 7,019,534
+(+6,057). `compile_allocs` rose 75 to 14,605 and `interp_allocs` 74 to 587,357.
+`interp_instructions` fell 402 to 488,739,414. The tab runs the same front end,
+and `browser_compile_instructions` rose to 392,942,504 (+1,631,002, +0.42%).
+This builds a ruled part of the language, so the welfare floor drops by what
+it costs.
