@@ -1872,6 +1872,11 @@ emit_instructions lands on 7,028,480, up 8,946. interp_instructions falls
 434,783 to 488,304,631. This builds rule 4 of the 2026-10-12 gavel, so the
 floor drops by what it costs.
 
+The front end holds 19,360 more bytes while it checks the compile corpus:
+compile_peak_bytes lands on 694,044, up from 674,684. CI's cost job and this
+container read the same number under rustc 1.98.1, the host the golden's
+measured-on line names.
+
 ## 2026-10-13 — three port shapes join the run program before their fixes
 
 Three of #1892's items are fixed on open branches, and the run program was
