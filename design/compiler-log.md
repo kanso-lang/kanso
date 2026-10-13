@@ -21,50 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-10 — the five port fixes land together
-
-kanso#1820, kanso#1822, kanso#1824, kanso#1825 and kanso#1827 each merged main
-and scored against the run program on their own. Each also moves the runbench
-row and the floor, so landing them one at a time would cost a CI round per pull
-request. This branch merges all five onto main and is measured as one tree.
-
-The fixes do not add up. Measured separately against main, their runbench
-deltas sum to -74,980,545, which would put the row at 1,170,062,384. The
-combined tree reads 1,152,573,228 in this container, 17,489,149 lower, so it is
-projected at 1,152,573,635 until CI reads it. The loop rewind (kanso#1824) and
-the lap carry (kanso#1827) both change what a rewound loop keeps, and the loop
-fixture `a_loop_entered_from_a_tail_cycle_gives_its_garbage_back` shows the
-overlap most plainly: with both fixes evac_allocs falls from 80,013 to 49 and
-evac_bytes from 1,920,368 to 1,232. Which of the two fixes accounts for the
-runbench difference is not isolated here.
-
-The run program's counters land on the combined tree as run_beat_iters on 47,564, run_buf_reuse on 132, run_bytes_malloc on 9,127, run_sh_buf on 119,108,240, run_str_scans on 1,021, run_ten_frees on 1, run_ten_handups on 1, run_view_allocs on 12, run_view_frees on 12. The mem
-fixtures the map fix moved land as fused_tally_alloc_bytes on 42,064, fused_tally_allocs on 66, fused_tally_view_allocs on 16, growing_map_alloc_bytes on 189,312, growing_map_allocs on 1,615, growing_map_held_peak_bytes on 55,408, growing_map_view_allocs on 12, growing_map_view_frees on 10. The benchmarks' work rows carry
-each fix's own delta onto main's row until CI measures them together:
-work_deepbench on 393,576,370, work_digestbench on 5,599,739, work_encodebench on 2,398,369,413, work_escapebench on 39,045,874, work_indexbench on 2,459,056, work_jsonbench on 860,559,605, work_livebench on 1,474,870,880, work_oneshot on 13,223,306, work_readbench on 4,577,564, work_scanbench on 270,158, work_widebench on 28,175,107. So do the compile and browser rows: compile_instructions on 25,938,043, entry_instructions on 85,762,025, library_instructions on 86,314,325, codegen_instructions_dev on 118,966,405, codegen_instructions_release on 454,110,241, browser_compile_instructions on 400,285,361, browser_compile_peak_bytes on 675,725, browser_run_instructions on 34,111,788. `text` totals
-4,853,950. Every mem fixture that predates the lap carry gains its
-`chain_finds=0` line.
-
-Welfare reads 91.0246 on these rows against the five floors banked separately,
-the highest of which was 90.6830, and the rise is banked.
-
-Main moved under the branch when kanso#1837 retired `build`, and the carrier
-took main in a merge commit. The compiler's front end lost the passes `build`
-needed, so the rows the carrier's analysis had raised land below where they
-stood before the merge and above main's: compile_instructions lands on
-25,715,103 against main's 25,712,749, entry_instructions on 85,044,877 against
-85,036,744, and library_instructions on 85,599,176 against 85,590,951.
-interp_instructions lands on 488,792,115 against 488,375,858. The two codegen
-tiers land on 118,954,619 for codegen_instructions_dev and 454,407,182 for
-codegen_instructions_release, against main's 118,906,508 and 453,887,359.
-browser_compile_instructions lands on 390,036,773 against 388,285,810. Each
-runtime binary sheds 448 bytes with `build` gone, and `text` totals 4,826,814
-against main's 4,645,694. The work rows CI read on the merged tree are
-work_encodebench on 2,398,369,791, work_livebench on 1,474,871,454 and
-work_oneshot on 13,223,698; work_runbench lands on 1,152,754,428, against
-main's 1,245,043,177. Welfare reads 91.0337 on CI's rows against the floor of
-91.0317, and the rise is banked.
-
 ## 2026-10-10 — a lap waits for twice what the last stage copied
 
 Testing the combined tree on the lox port's F18 loop found two things the five
@@ -1449,6 +1405,59 @@ lands on 26,064,732, entry_instructions on 86,313,974, library_instructions on
 7,046,962.
 
 393,279,063.
+
+## 2026-10-12 — a field holds a list of `tie` references read from data
+
+#1842, under the 2026-10-11 gavel. A constructor field written inside a
+`list/tie` maker may now hold `list/to_list (list/map xs ref)`, or the same
+with a one-parameter lambda in place of `ref`. `list/to_list` calls `ref` for
+every element while the maker runs, so the field holds the cells `list/tie`
+resolves. A bare `list/map` of references in that position is refused with a
+diagnostic that names `list/to_list`.
+
+The check sees the form in two shapes. In the program's own code it is the
+call as written. In a module's code it has been through fusion by the time an
+importer's merged check reads it, and `list/to_list (list/map xs f)` reads as
+`fold xs [] (acc x -> (a y -> push a y) acc (f x))`. `src/check/ties.rs`
+admits both, and a lambda applied where a field is written, which is how
+fusion leaves `(k -> ref k) x`.
+
+The fused shape found a second gap. `push` forced the item it was handed, and
+a `list/tie` cell still being made is a blackhole, so the push demanded the
+value it was in the middle of making and stopped with "a lazy binding demands
+its own value". A list literal already kept such a cell unforced. `push` now
+does the same with its item, in the interpreter (`src/eval.rs`) and in native
+code when the program ties (`force_unless_knot` in `src/codegen.rs`).
+
+`a_graph_tied_from_a_map_of_edges` reads each town's roads from a map of edges
+and drops its chain of `road` records, with the same output on both engines.
+`a_tie_field_holds_a_lazy_map_of_references` is the refusal. The comment
+where `lib/list/list.kso` teaches `tie` shows the data-sized form. Three
+ratchet rows take away the check's admission, the interpreter's keep and the
+native keep, and each turns the micro corpus red.
+
+The rows that moved are CI's, on the tree merged with #1899. The check reads
+every field written inside a maker, and the library comment and the new
+fixtures are more text to compile: compile_instructions lands on 25,764,487,
+entry_instructions on 85,217,023, library_instructions on 85,769,178,
+emit_instructions on 7,016,791 and browser_compile_instructions on
+392,024,143. The interpreter asks whether each item `push` is handed is a cell
+still being made, and interp_instructions lands on 489,120,716. This builds a
+ruled part of the language, so the welfare floor drops by what it costs.
+
+On the tree merged with #1913 the same costs sit on main's new rows:
+compile_instructions lands on 25,884,823, entry_instructions on 85,390,774,
+library_instructions on 85,944,538, emit_instructions on 7,013,859,
+browser_compile_instructions on 391,328,276 and interp_instructions on
+489,068,417.
+
+On main after #1904 the tab's compile reads `browser_compile_instructions`
+392,396,387, up 18,012 from main's 392,378,375 on the same tree.
+
+91.11.
+
+With main merged after #1922, browser_compile_instructions lands on
+393,286,002.
 
 ## 2026-10-12 — arms travel with the value
 

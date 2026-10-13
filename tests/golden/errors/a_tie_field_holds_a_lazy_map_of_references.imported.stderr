@@ -1,0 +1,8 @@
+error[tie]: `list/map` is lazy, so the `ref` calls it holds would run after `list/tie` returns; write `list/to_list (list/map ...)` so each reference is made inside the maker (module a_tie_field_holds_a_lazy_map_of_references)
+  --> a_tie_field_holds_a_lazy_map_of_references.kso:13:15
+  13 |   town "ash" (list/map ["birch"] ref)
+                     ^
+error[tie]: `list/map` is lazy, so the `ref` calls it holds would run after `list/tie` returns; write `list/to_list (list/map ...)` so each reference is made inside the maker (module a_tie_field_holds_a_lazy_map_of_references)
+  --> a_tie_field_holds_a_lazy_map_of_references.kso:16:14
+  16 |   town name (list/map ["ash"] ref)
+                    ^

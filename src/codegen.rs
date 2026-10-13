@@ -8892,8 +8892,17 @@ impl<'a> Backend<'a> {
             }
             // builtins scrutinize every argument; a thunk forces here (the
             // gated force emits nothing when the set proves it can't be one)
-            let emitted: Vec<String> =
-                emitted.into_iter().map(|e| self.maybe_force(f, e)).collect();
+            // A list stores what it is handed, so the item `push` adds may be
+            // a `list/tie` cell still being made, as a list literal's may:
+            // `list/to_list (list/map xs ref)` fuses to a push of each `ref`.
+            let emitted: Vec<String> = emitted
+                .into_iter()
+                .enumerate()
+                .map(|(at, e)| match name == "push" && at == 1 && self.defers_self_reference {
+                    true => self.force_unless_knot(f, e),
+                    false => self.maybe_force(f, e),
+                })
+                .collect();
             // `length` of a value the sets already prove is bytes is the
             // header's first field. The twin tests the tag and keeps a call
             // arm for everything else, and that arm is a block merge: a
