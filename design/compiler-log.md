@@ -1728,6 +1728,12 @@ and `browser_compile_instructions` rose to 393,182,630 (+804,255, +0.20% on main
 This builds a ruled part of the language, so the welfare floor drops by what
 it costs.
 
+On CI's rows for the tree merged with main after #1904: `compile_instructions`
+25,803,156 -> 26,057,907, `entry_instructions` 85,149,258 -> 86,302,801,
+`library_instructions` 85,703,128 -> 86,519,482, `emit_instructions` 7,035,926
+-> 7,048,046 and `interp_allocs` 587,479 -> 587,485; `interp_instructions`
+falls 298,363 to 487,131,077.
+
 ## 2026-10-12 — a bare imported type with no fields is its module's value
 
 An importer may name a type with no fields bare: `import "std/json"` enrols
