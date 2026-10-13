@@ -1680,6 +1680,18 @@ On the tree merged with main, the tab's compile reads 404,068,547 instructions
 against main's 393,209,858, and its peak reads 684,676 bytes against 677,261.
 The floor drops by what that costs, under the #1884 ruling.
 
+CI's rows on the merged tree, against main: `compile_instructions` from
+26,463,317 to 26,988,479, `entry_instructions` from 88,129,856 to 89,160,295,
+`library_instructions` from 87,707,726 to 88,767,419, `compile_allocs` from
+15,358 to 15,454, `interp_instructions` from 486,939,316 to 488,604,425,
+`interp_allocs` from 588,491 to 588,801 and `interp_peak_bytes` from 692,375 to
+721,711. The emitted code for the other benchmarks grew: `emitted_other_calls`
+from 17,664 to 17,760, `emitted_other_defines` from 2,036 to 2,063 and
+`emitted_other_lines` from 148,239 to 148,764, and `text` from 4,838,990 to
+4,858,430 bytes. The native runs fell: runbench by 2,052,628 instructions and
+jsonbench by 2,379,750. The floor drops by the difference under the #1884
+ruling.
+
 ## 2026-10-12 — arms travel with the value
 
 The first rule of the 2026-10-12 gavel on #1894. A value carries the arms its
