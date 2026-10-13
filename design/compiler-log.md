@@ -19,33 +19,6 @@
 > The last forty entries. Everything older is in `log/compiler-log-archive.md`,
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
-## 2026-10-10 — the four port fixes' floor question closes on the corpus-first gavel
-
-The ledger's Blocking entry "May four port fixes lower the welfare floor?",
-filed today, asked whether kanso#1820, kanso#1822, kanso#1824 and kanso#1825
-may each lower the floor by a few thousandths. Each fixes a native cliff a port
-journal found (sat's map put loop, lox's loop entered from a tail cycle,
-`list/tally` over many distinct strings, mustache's fold onto its accumulator),
-and each pays only in compile rows because no benchmark contains its shape.
-
-That is the case the archive's 2026-09-05 "gavel: corpus first — a blind
-corpus is repaired, never excused" ruled. Clay declined, then, the
-recommendation to move the floor with "the corpus is blind" as the reason:
-**the remedy is to add the benchmark the objective could not see, measure its
-baseline on the pre-fix code, land the fix on top, and let it score**, so the
-floor rises rather than falls. The entry's search looked for a ruling on fixes
-that make native finish what the interpreter finishes and missed this one,
-because the ruling is about what the corpus can see. The entry leaves the
-ledger in this commit on that citation.
-
-So no floor moves for these four. Each PR promotes its fix's shape into the
-benchmark corpus as a run-speed or run-memory phase under the granted-baseline
-machinery, with its baseline measured on main without the fix, and banks the
-rise with `--set`. The entry's option 1 also asked to widen the 2026-09-13
-exception to every change that lets native finish a program the interpreter
-finishes; under corpus-first such a change scores as a gain once the corpus
-holds its shape, so the widening is not needed, and it is not made here.
-
 ## 2026-10-10 — four port shapes join the run program, measured before their fixes
 
 The corpus-first gavel, applied today to kanso#1820, kanso#1822, kanso#1824 and
@@ -1826,3 +1799,21 @@ Owes, on #1887: the refusal and its diagnostic on every engine; error goldens
 for `a and b or c`, for `(a and b) or c` accepted and for a redundant pair
 still refused; the corpus, samples, lib and sibling repositories moved onto
 the required spelling.
+
+## 2026-10-13 — gavel: a file may open with a header comment and one blank line
+
+Clay ruled the second part of #1887. A comment directly above a file's first
+declaration is accepted today and reads as that declaration's comment. A
+comment at the top of a file followed by a blank line is refused, and the
+refusal is wrong about why: "the file may not begin with a blank line", at
+line 2, because the check skips the comment when it finds the file's start.
+
+**The ruling.** A file may begin with a block of comment lines followed by
+exactly one blank line, and that block is the file's header, separate from any
+declaration. Without the blank line the block is the first declaration's
+comment, as today. Nothing else about comment placement changes.
+
+Owes, on #1887: the formatting check accepts the header shape; error goldens
+for a header followed by two blank lines and for a blank line before the
+header; a golden that the header-plus-blank-line file checks clean on every
+engine.

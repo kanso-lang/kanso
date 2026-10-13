@@ -100890,3 +100890,30 @@ and lib is rewritten as a `tie`; ch03's "two records that point at each other"
 teaches the cycle with `tie`; appendix A loses `error[build]`; the compiler
 page and the playground stop offering it. A program that still writes `build`
 gets one diagnostic naming `list/tie` as the replacement.
+
+## 2026-10-10 — the four port fixes' floor question closes on the corpus-first gavel
+
+The ledger's Blocking entry "May four port fixes lower the welfare floor?",
+filed today, asked whether kanso#1820, kanso#1822, kanso#1824 and kanso#1825
+may each lower the floor by a few thousandths. Each fixes a native cliff a port
+journal found (sat's map put loop, lox's loop entered from a tail cycle,
+`list/tally` over many distinct strings, mustache's fold onto its accumulator),
+and each pays only in compile rows because no benchmark contains its shape.
+
+That is the case the archive's 2026-09-05 "gavel: corpus first — a blind
+corpus is repaired, never excused" ruled. Clay declined, then, the
+recommendation to move the floor with "the corpus is blind" as the reason:
+**the remedy is to add the benchmark the objective could not see, measure its
+baseline on the pre-fix code, land the fix on top, and let it score**, so the
+floor rises rather than falls. The entry's search looked for a ruling on fixes
+that make native finish what the interpreter finishes and missed this one,
+because the ruling is about what the corpus can see. The entry leaves the
+ledger in this commit on that citation.
+
+So no floor moves for these four. Each PR promotes its fix's shape into the
+benchmark corpus as a run-speed or run-memory phase under the granted-baseline
+machinery, with its baseline measured on main without the fix, and banks the
+rise with `--set`. The entry's option 1 also asked to widen the 2026-09-13
+exception to every change that lets native finish a program the interpreter
+finishes; under corpus-first such a change scores as a gain once the corpus
+holds its shape, so the widening is not needed, and it is not made here.
