@@ -1,0 +1,4 @@
+# `&`, `|` and `^` share one precedence, so a chain that mixes them is
+# refused. C binds `&` tighter than `|`, and code carried over from it
+# computed a different number here.
+pub play = print "{6 & 3 | 8}"

@@ -1,0 +1,4 @@
+fn ready signed paid admin
+  signed and paid or admin
+
+pub play = print "{ready true false true}"

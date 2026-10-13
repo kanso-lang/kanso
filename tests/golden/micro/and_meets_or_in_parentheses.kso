@@ -1,0 +1,14 @@
+# Parentheses say which part of a condition goes first wherever `and` meets
+# `or`, on either side.
+
+fn check a b c
+  first = (a and b) or c
+  last = a or (b and c)
+  outer = (a or b) and c
+  "{first} {last} {outer}"
+
+pub play =
+  one = check true false true
+  print one
+    .> (_ -> print (check false true false))
+    .> (_ -> print (check true true false))

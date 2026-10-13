@@ -22,7 +22,7 @@
 # or a fork. browser_run_instructions 34,124,990 -> 34,125,823, a RISE of
 # 833, on rustc 1.98.1 as CI builds it.
 # measured-on rustc=1.98.1
-browser_compile_instructions=393186348
+browser_compile_instructions=393279063
 browser_compile_peak_bytes=675725
 browser_run_instructions=34126073
 browser_run_peak_bytes=1179648

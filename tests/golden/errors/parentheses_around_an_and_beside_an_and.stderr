@@ -1,0 +1,4 @@
+error[formatting]: these parentheses group nothing — the expression parses the same without them
+  --> parentheses_around_an_and_beside_an_and.kso:3:20
+   3 | pub play = print "{(true and false) and true}"
+                          ^

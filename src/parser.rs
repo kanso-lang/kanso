@@ -94,7 +94,7 @@ pub fn parse_play(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
         let found = (a + 1..b).find(|n| blanks.contains(n));
         decl_blanks.push(found.unwrap_or(a + 1));
     }
-    let decl_half = Lexed { lines: decl_lines, blank_lines: decl_blanks };
+    let decl_half = Lexed { lines: decl_lines, blank_lines: decl_blanks, header: 0 };
     let mut program = match parse(&decl_half) {
         Ok(program) => program,
         Err(more) => {
@@ -496,13 +496,17 @@ fn blanks_between(blanks: &[usize], after: usize, before: usize) -> usize {
 
 fn check_blank_policy(lexed: &Lexed, diags: &mut Vec<Diagnostic>) {
     let Some(first) = lexed.lines.first() else { return };
+    // A file may open with a header comment and one blank line under it
+    // (2026-10-13, #1887); any other blank above the first line of code is
+    // refused, and named for what it is.
     for blank in &lexed.blank_lines {
-        if *blank < first.number {
-            diags.push(Diagnostic::new(
-                "formatting",
-                "the file may not begin with a blank line".to_string(),
-                Span::at(*blank, 1),
-            ));
+        let under_header = lexed.header > 0 && *blank == lexed.header + 1;
+        if *blank < first.number && !under_header {
+            let message = match *blank < lexed.header || lexed.header == 0 {
+                true => "the file may not begin with a blank line",
+                false => "one blank line separates the header comment from the code",
+            };
+            diags.push(Diagnostic::new("formatting", message.to_string(), Span::at(*blank, 1)));
         }
     }
     if let Some(last) = lexed.lines.last() {
@@ -1402,6 +1406,17 @@ fn ends_an_atom(tok: &Tok) -> bool {
     )
 }
 
+/// `a and b or c` is refused where the second of the two operators stands.
+fn and_meets_or(span: Span) -> Diagnostic {
+    Diagnostic::new(
+        "syntax",
+        "`and` and `or` meet without parentheses — parenthesize the part that goes first, \
+         as in `(a and b) or c`"
+            .to_string(),
+        span,
+    )
+}
+
 fn level(op: &str) -> u8 {
     match op {
         "or" => OR,
@@ -1911,13 +1926,23 @@ impl<'a> P<'a> {
         Ok(lhs)
     }
 
+    /// `and` binds tighter than `or`, but a chain that mixes them is refused
+    /// until parentheses say which goes first (2026-10-13, #1887): a reader
+    /// should not need the precedence table to read a condition.
     fn parse_or(&mut self) -> Result<Expr, Diagnostic> {
-        let mut lhs = self.parse_and()?;
+        let (mut lhs, mut and) = self.parse_and()?;
         while let Some(Tok::Op("or")) = self.peek() {
             let span = self.span_here();
+            if and.is_some() {
+                return Err(and_meets_or(span));
+            }
             self.pos += 1;
             self.consumed(OR);
-            let rhs = self.parse_and()?;
+            let rhs;
+            (rhs, and) = self.parse_and()?;
+            if let Some(and) = and {
+                return Err(and_meets_or(and));
+            }
             lhs = logical_if(
                 lhs,
                 Expr::Ident(Name::new("true"), span, crate::ast::Resolution::default()),
@@ -1928,10 +1953,14 @@ impl<'a> P<'a> {
         Ok(lhs)
     }
 
-    fn parse_and(&mut self) -> Result<Expr, Diagnostic> {
+    /// The chain, and where its first `and` stands if it holds one outside
+    /// parentheses.
+    fn parse_and(&mut self) -> Result<(Expr, Option<Span>), Diagnostic> {
         let mut lhs = self.parse_not()?;
+        let mut first = None;
         while let Some(Tok::Op("and")) = self.peek() {
             let span = self.span_here();
+            first.get_or_insert(span);
             self.pos += 1;
             self.consumed(AND);
             let rhs = self.parse_not()?;
@@ -1942,7 +1971,7 @@ impl<'a> P<'a> {
                 span,
             );
         }
-        Ok(lhs)
+        Ok((lhs, first))
     }
 
     /// `not` binds tighter than `and` and `or` and looser than a comparison,
@@ -1981,11 +2010,30 @@ impl<'a> P<'a> {
     /// `&`, `|` and `^` over whole numbers. The glyphs are free here because
     /// space is semantic: `&add` hugs its name and is the partial sigil, which
     /// the atom parser reads; a spaced `&` can only be this.
+    ///
+    /// The three share one precedence, so a chain that mixes them is refused
+    /// until parentheses say which goes first. C binds `&` tighter than `|`,
+    /// and code transcribed from it computed a different number here.
     fn parse_bits(&mut self) -> Result<Expr, Diagnostic> {
         let mut lhs = self.parse_add()?;
+        let mut first: Option<&str> = None;
         while let Some(Tok::Op(op @ ("&" | "|" | "^"))) = self.peek() {
             let op = *op;
             let span = self.span_here();
+            match first {
+                Some(before) if before != op => {
+                    return Err(Diagnostic::new(
+                        "syntax",
+                        format!(
+                            "`{before}` and `{op}` bind equally, so a chain that mixes them \
+                             is ambiguous — parenthesize the part that goes first, as in \
+                             `(a {before} b) {op} c`"
+                        ),
+                        span,
+                    ));
+                }
+                _ => first = Some(op),
+            }
             self.pos += 1;
             self.consumed(BITS);
             let rhs = self.parse_add()?;
@@ -2322,7 +2370,23 @@ impl<'a> P<'a> {
                 // syntax rather than a grouping choice
                 let before = tolerated_before(opened.checked_sub(1).and_then(|i| self.tok_at(i)));
                 let after = tolerated_after(self.peek());
-                if written && inside >= before.max(after) {
+                // `(a & b) | c` parses the same without its parentheses, and
+                // without them it is refused for mixing `&` and `|`, so they
+                // group something.
+                let bit = |t: Option<&Tok>| match t {
+                    Some(Tok::Op(o @ ("&" | "|" | "^"))) => Some(*o),
+                    _ => None,
+                };
+                let beside = [opened.checked_sub(1).and_then(|i| self.tok_at(i)), self.peek()];
+                let mixes = match &inner {
+                    Expr::BinOp { op: inner_op @ ("&" | "|" | "^"), .. } => {
+                        beside.into_iter().filter_map(bit).any(|o| o != *inner_op)
+                    }
+                    // `(a and b) or c` likewise: the `and` chain's
+                    // parentheses are required where an `or` meets it
+                    _ => inside == AND && beside.contains(&Some(&Tok::Op("or"))),
+                };
+                if written && !mixes && inside >= before.max(after) {
                     return Err(Diagnostic::new(
                         "formatting",
                         "these parentheses group nothing — the expression parses \

@@ -101307,3 +101307,185 @@ floor of 90.2499. The change is a correctness fix, because a loop that holds
 764 MB to compute `(fib 25)` is a program that fails on a larger input, and
 the floor goes down by exactly that much under the rule for changes that make
 the language work as specified.
+
+## 2026-10-10 — a fold that joins onto its accumulator writes in place
+
+The mustache port renders a template by folding over its pieces, and its
+folder answers `"{acc}{piece}"`. Natively, every step copied the whole string
+built so far, so 20,000 pieces held 2.77 GB before the program finished. The
+interpreter was not affected.
+
+The string-builder analysis already wrote a join in place when the
+accumulator is carried by a recursive function. A lambda handed to a fold was
+never looked at, because `walk_for_builder` stops at every lambda. A fold's
+folder runs once per element on the accumulator the fold threads through, so
+when `fold_owns_accumulator` says the fold owns its seed, a join onto the
+folder's first parameter has the same shape as the recursive case. The walk
+now marks those joins: in the folder's body, in either arm of an `if`, and
+through the wrapper lambda that `body_is_folder` already accepts.
+
+A folder passed by name, as in `list/fold xs "" piece`, is handled the same
+way under three conditions. Every arm of `piece` must end in a join onto its
+first parameter. Every direct call of `piece` must hand that argument over.
+Every use of the name as a value must be the folder of a fold whose seed
+nothing else holds. A partial application of `piece` keeps what it was given,
+so it disqualifies the group.
+
+The runtime's in-place join stopped the program when its accumulator was not
+already a builder. A fold's seed is usually a literal, so `k_concat_arr_mut`
+now converts it on the first join, the way a builder parameter's caller does.
+
+`tests/golden/mem/a_fold_that_joins_onto_its_accumulator_grows_one_string`
+folds 2,000 pieces with a named folder and with a lambda. `alloc_bytes` falls
+from 21,839,568 to 1,221,150 and `arena_peak_bytes` from 22,020,096 to
+2,097,152. `tests/golden/micro/a_fold_joins_onto_its_own_accumulator` covers
+the ways the string can be shared: a seed bound to a name, one fold's result
+folded twice more, and a direct call of the named folder. Making
+`fold_owns_accumulator` answer yes unconditionally turns it red. The two folds
+over one lambda result then wrote into the same buffer, and both printed
+`[1][2][3]+5-6`.
+
+No benchmark folds a string, so every allocation counter agrees with main.
+The runtime's join grows 320 bytes of machine code, and CI's rows move with
+it:
+
+- `text` grows 320 bytes a binary, to 4,593,438 in all.
+- `work_basket` lands on 32,404,790, `work_runbench` on 1,129,589,259,
+  `work_livebench` on 1,473,486,345, `work_encodebench` on 2,384,338,137,
+  `work_oneshot` on 13,027,190, `work_digestbench` on 5,566,917 and
+  `work_scanbench` on 281,806, each within 22,030 instructions of main.
+- The analysis costs `compile_instructions` 25,857,543,
+  `entry_instructions` 85,513,471 and `library_instructions` 86,066,360.
+  `emit_instructions` falls to 7,058,306, `interp_instructions` to
+  488,868,354, and both codegen rows fall.
+- `browser_compile_instructions` rises from 388,182,464 to 391,515,764,
+  0.86%, and the browser run row falls 6, to 33,510,702. The rise does not
+  come from the new pass: with `named_folder_joins` switched off the row reads
+  392,251,588, higher still, so it follows the wasm binary's layout rather
+  than the work done.
+
+On main as it stood before kanso#1836, welfare fell from 90.25811251 to
+90.25519022 on those rows, because no benchmark folded a string.
+
+The floor question closed on the corpus-first gavel, and kanso#1836 put the
+shape into the run program as its `fold` phase: 800 pieces folded onto one
+string, measured on main before this fix at 858,398 instructions. With main
+merged in, runbench falls from 1,245,043,324 to 1,244,977,121, a projection
+from this container's 1,244,976,714 plus the 407 instructions by which CI read
+main above it; CI's row replaces it. The phase's memory is where the fix pays.
+run_arena_peak_bytes falls from 8,912,912 to 7,864,336, run_arena_blocks from
+8 to 7, run_alloc_bytes from 326,862,802 to 325,331,283, run_allocs from
+1,773,132 to 1,772,340 and run_sh_str from 10,188,896 to 8,648,960. Two run
+counters rise with the fix: run_str_scans goes from 229 to 1,021 while
+run_str_scan_bytes falls to 17,930,429, and run_bytes_malloc rises by 7 to
+9,127. Nothing here isolates which step of the in-place join each comes from.
+The rows the runtime's 320 bytes moved above
+carry onto main's values: `text` totals 4,656,446, work_basket lands on
+32,527,186, work_livebench on 1,472,861,727, work_encodebench on
+2,393,926,750, work_oneshot on 13,176,997, work_digestbench on 5,598,179 and
+work_scanbench on 268,886. The analysis's rows carry the same way:
+compile_instructions lands on 25,857,737, entry_instructions on 85,514,580,
+library_instructions on 86,066,207 and browser_compile_instructions on
+391,827,307. All of these are projected until CI reads them. Welfare rises from 90.2499
+to 90.3104 on those rows, and the rise is banked.
+
+CI's rows replace the projection. work_runbench lands on 1,244,977,121, as
+projected. The other rows CI corrects are small: `text` totals 4,656,478,
+work_encodebench lands on 2,393,926,869, work_livebench on 1,472,861,230 and
+browser_compile_instructions on 391,826,076. The run program's emitted code
+reads one call and two lines more than this container wrote, so
+emitted_other_calls lands on 17,394 and emitted_other_lines on 146,698.
+Welfare reads 90.3105 on CI's rows, and the rise is banked.
+
+The conversion in `k_concat_arr_mut` made `k_b_adopt` redundant, and the
+ratchet found it on the carrier. Two rows mutated the adoption: "a join that
+never adopts its seed" removed it, and "a lazy seed taken for a builder"
+handed it the forced value. Both stayed green, because a seed the adoption
+misses now reaches the first join without room and is made into a builder
+there. Neither mechanism could be removed and seen red while the other stood.
+The two rows are replaced by "a first join that never makes its builder",
+which restores the old refusal in `k_concat_arr_mut`. Under it
+`a_fold_joins_onto_its_own_accumulator` prints nothing from native and the
+micro corpus goes red. `k_b_adopt` is left in place for now and goes in a
+change of its own, since removing it moves the text and codegen rows and
+needs CI to read them.
+
+## 2026-10-10 — a loop entered from a tail cycle gives its garbage back
+
+The lox and mal ports both ran their interpreters out of memory. A Lox `for`
+loop of fifty thousand passes that builds two small objects per pass held
+3.0 GB at its peak natively, and mal's tail-recursive `sum2` kept 3.7 KB per
+iteration until exit. The interpreter under `--interp` ran the same programs
+in about 11 MB.
+
+Each port's machine loop is a self-recursive function, the shape the beat
+analysis rewinds, and neither rewound. The lox loop, `spin`, failed two
+tests. The first was its entry. `exec` tail-calls `spin` from its while arm,
+and `exec` sits in a tail cycle of its own, since a block runs its first
+statement and tail-calls itself on the rest. The analysis demoted a tail
+entry to a plain call only when the caller was in no tail cycle at all, on
+the reasoning that a plain call inside a cycle grows the stack. That holds
+only when the cycle runs through the demoted edge, which happens when the
+loop can reach its caller back by tail calls. `spin` returns its state to
+`exec` and never tail-calls it, so the plain call holds one frame while the
+loop runs and the caller returns before its cycle goes round again. The
+condition now asks exactly that: the entry is demoted unless the loop
+tail-reaches the caller.
+
+The second was the loop's own arguments. `spin` hands its body and condition
+on unchanged, and both come out of a record field, which inference reads as
+any value at all. A slot of unknown type was never carried through a
+rewind, in case it hid a growing accumulator behind a helper call. A
+parameter every self-tail-call passes on as itself cannot grow: it arrived at
+entry, lives below the mark, and the evacuation shares it rather than copying
+it. Such a position is now carried whatever its type.
+
+With both changes the lox loop rewinds every pass. At fifty thousand passes
+the release binary peaks at 77 MB, down from 3.0 GB, and runs in 1.17 s
+against 3.01 s. What remains is the port's own heap of instance fields, which
+it never frees by design. The fixture
+`a_loop_entered_from_a_tail_cycle_gives_its_garbage_back` builds the same
+shape in thirty lines and pins `arena_peak_bytes` at 1,048,576 for twenty
+thousand passes; main holds 3,145,728 for it.
+
+mal's machine is not fixed by this. Its `ev` is one member of a tail cycle
+with `ret`, `throw` and `settle`, which makes it a cluster, and a cluster
+carries only scalars and threaded parameters through its rewind. Carrying a
+heap value round a cluster is the next piece of work.
+
+No benchmark's run changed: every runtime cost vein agrees with its golden.
+The analysis is dearer to run, on CI's rows after merging main:
+`compile_instructions` rises to 25,861,592, `entry_instructions` to
+85,526,009 and `library_instructions` to 86,078,947, while
+`emit_instructions` falls to 7,032,277 and `interp_instructions` to
+488,876,843. `browser_compile_instructions` rises from 388,182,464 to
+390,287,782 with this tree's rustc. On main as it stood before kanso#1836,
+welfare fell from 90.25811251 to 90.25621395, because no benchmark ran a loop
+entered from a cycle.
+
+The floor question closed on the corpus-first gavel, and kanso#1836 put the
+shape into the run program as its `machine` phase: 20,000 passes of a loop in
+a cycle, measured on main before this fix at 8,825,906 instructions. Rewinding
+the loop costs instructions and gives memory back. With main merged in,
+work_runbench rises from 1,245,043,324 to 1,263,682,936, a projection from
+this container's 1,263,682,529 plus the 407 instructions by which CI read main
+above it; CI's row replaces it. run_arena_peak_bytes falls from 8,912,912 to
+6,815,760 and run_arena_blocks from 8 to 6. The rewind's own work shows in the
+rows that rise: run_beat_iters lands on 47,564, run_evac_allocs on 128,717,
+run_evac_bytes on 11,709,440, run_alloc_bytes on 326,929,762, run_allocs on
+1,773,139, run_sh_buf on 119,108,240 and run_buf_reuse on 134. Carried onto
+main's rows, compile_instructions lands on 25,861,786, entry_instructions on
+85,527,118, library_instructions on 86,078,794 and
+browser_compile_instructions on 390,599,325, all projected until CI reads
+them. The objective weighs the peak above the instructions: welfare rises from
+90.2499 to 90.3087 on those rows, and the rise is banked. The fix's own
+fixture, `a_loop_entered_from_a_tail_cycle_gives_its_garbage_back`, reads
+four fewer evacuations on main's runtime: evac_allocs lands on 80,013 and
+evac_bytes on 1,920,368.
+
+CI's rows replace the projection. work_runbench lands on 1,263,682,936, as
+projected. The rewind's code in the run program's machine phase shows in its
+emitted counts: emitted_other_calls lands on 17,405, emitted_other_branches on
+16,399 and emitted_other_lines on 146,723. `text` totals 4,652,398 and
+browser_compile_instructions lands on 390,597,579. Welfare reads 90.3087 on
+CI's rows, the score already banked.

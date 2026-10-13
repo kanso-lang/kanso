@@ -1,0 +1,4 @@
+error[syntax]: `and` and `or` meet without parentheses — parenthesize the part that goes first, as in `(a and b) or c`
+  --> and_or_check.kso:2:19
+   2 |   signed and paid or admin
+                         ^

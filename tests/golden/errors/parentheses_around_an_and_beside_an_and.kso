@@ -1,0 +1,3 @@
+# Parentheses around an `and` are required only where an `or` meets it.
+# Beside another `and` they group nothing.
+pub play = print "{(true and false) and true}"

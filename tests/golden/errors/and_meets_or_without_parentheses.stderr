@@ -1,0 +1,4 @@
+error[syntax]: `and` and `or` meet without parentheses — parenthesize the part that goes first, as in `(a and b) or c`
+  --> and_meets_or_without_parentheses.kso:3:35
+   3 | pub play = print "{true and false or true}"
+                                         ^

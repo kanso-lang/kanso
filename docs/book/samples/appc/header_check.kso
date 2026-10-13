@@ -1,0 +1,7 @@
+# Weekly totals, read from the ledger.
+
+
+fn total xs
+  list/sum xs
+
+pub play = print "{total [1 2 3]}"

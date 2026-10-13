@@ -1,0 +1,4 @@
+# A file may open with a header comment and exactly one blank line.
+
+
+pub play = print "x"

@@ -81,13 +81,13 @@ fn big_sigma1 x
 # A rotate is the two halves of a shift laid side by side, and the left half
 # is masked because it can carry past the top.
 fn spun x places
-  bits/shl x (32 - places) & whole | bits/shr x places
+  (bits/shl x (32 - places) & whole) | bits/shr x places
 
 fn choice x y z
-  x & y ^ (bits/complement x & whole & z)
+  (x & y) ^ (bits/complement x & whole & z)
 
 fn majority x y z
-  x & y ^ (x & z) ^ (y & z)
+  (x & y) ^ (x & z) ^ (y & z)
 
 # The first thirty-two bits of the fractional parts of the square roots of the
 # first eight primes, which is where the standard's starting words come from.

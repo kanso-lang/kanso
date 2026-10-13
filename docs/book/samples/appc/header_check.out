@@ -1,0 +1,4 @@
+error[formatting]: one blank line separates the header comment from the code
+  --> header_check.kso:3:1
+   3 | 
+       ^

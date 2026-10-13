@@ -5219,7 +5219,44 @@ own_group_interp = row
 
 rows_c1zzzzzztbbbb = text/concat rows_c1zzzzzztbbb [own_group_interp]
 
-rows_c = text/concat rows_c1zzzzzztbbbb [itself]
+# `&`, `|` and `^` mixed without parentheses are refused. The mutation lets the
+# chain through, and the error corpus's fixture reads left to right instead.
+bits_mixed = row
+  "bit operators mixed freely"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "bit_operators_mixed_freely")
+  no_setup
+
+rows_c1zzzzzztbbbbb = text/concat rows_c1zzzzzztbbbb [bits_mixed]
+
+# `and` and `or` meeting without parentheses are refused. The mutation lets the
+# condition through, and the error corpus's fixture prints instead.
+and_or_mixed = row
+  "and meets or freely"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "and_meets_or_freely")
+  no_setup
+
+rows_c1zzzzzztbbbbbb = text/concat rows_c1zzzzzztbbbbb [and_or_mixed]
+
+# A file may open with a header comment and one blank line. The mutation
+# refuses that blank, and the micro corpus's fixture that opens with a header
+# stops building.
+header_blank = row
+  "header comment refused"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "header_comment_refused")
+  no_setup
+
+rows_c1zzzzzztbbbbbbb = text/concat rows_c1zzzzzztbbbbbb [header_blank]
+
+rows_c = text/concat rows_c1zzzzzztbbbbbbb [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
