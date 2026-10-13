@@ -1,0 +1,11 @@
+# `text/bytes` answers an int list, and `text/concat` appends two lists, so
+# the two compose on every engine. Native code read a bytes value as its byte
+# values on either side of `concat`; the interpreter refused it with "concat
+# takes two lists". The answer is a list either way.
+import "std/text"
+
+pub play =
+  print "{text/concat [1] (text/bytes "ab")}"
+  print "{text/concat (text/bytes "ab") [1]}"
+  print "{text/concat (text/bytes "a") (text/bytes "b")}"
+  print "{text/concat (text/slice (text/bytes "abc") 2 3) [9]}"
