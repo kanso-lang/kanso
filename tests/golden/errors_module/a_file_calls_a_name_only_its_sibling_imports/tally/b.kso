@@ -1,0 +1,1 @@
+pub total = fold [1 2 3] 0 (sum x -> sum + x)
