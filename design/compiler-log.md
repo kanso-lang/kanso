@@ -21,65 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-10 — four port shapes join the run program, measured before their fixes
-
-The corpus-first gavel, applied today to kanso#1820, kanso#1822, kanso#1824 and
-kanso#1825, says none of the four lowers the floor: the shape each fixes goes
-into the benchmark corpus first, measured on the compiler without the fix, and
-the fix then scores against it. This entry is the first half. The run program
-gains four phases, each the PR's own reduced fixture with its count lifted into
-a parameter, and nothing in the compiler changes. The columns are
-instructions on main with each phase built alone, less the empty program's
-6,662,610, and the shares are of the whole program's 1,245,042,917.
-
-    scatter  2,340 keys counted in scrambled order   50,901,814  4.09%
-    bump     350 updates through a named read        53,247,360  4.28%
-    machine  20,000 passes of a loop in a cycle       8,825,906  0.71%
-    fold     800 pieces folded onto one string          858,398  0.07%
-
-`scatter` counts keys that arrive out of order (kanso#1820), `bump` updates a
-map through a read named on the line before the write (kanso#1822), `machine`
-runs a loop entered from inside a tail cycle (kanso#1824), and `fold` folds
-pieces onto a string (kanso#1825). The counts follow the rule the header
-already states for the stress shapes: `scatter` and `bump` are quadratic on
-main, and each count lands its phase near five per cent of the program.
-`machine` and `fold` cost little in instructions and a great deal in memory,
-so their counts are sized to add about one decoded document to the peak.
-
-The header keeps its changeover table as it was. That table is the mix
-bench/runbench_phases.txt replays when history from before 2026-09-06 is
-reconstructed, and a phase with no counter in that history has no place in it.
-The four new phases have a table of their own below it, and
-`tests/the_phase_map_matches_the_run_programs_header.rs` now stops reading at
-the changeover table's total.
-
-Every row the run program carries moves, because it now does more work. In the
-run vein, run_allocs lands on 1,773,132, run_alloc_bytes on 326,862,802,
-run_arena_blocks on 8, run_perm_allocs on 97, run_beat_iters on 27,564,
-run_put_mut_grow on 15, run_str_scans on 229 and run_str_scan_bytes on
-17,932,036. The shape counters follow the new values the phases build:
-run_sh_str lands on 10,188,896, run_sh_rec on 1,500,528, run_sh_buf on
-119,041,376 and run_sh_map on 11,200. `scatter` reads its map between puts, so
-the run now builds and frees sorted views: run_view_allocs and run_view_frees
-are both 360. The run program's machine code grows to 602,217 bytes, which
-moves the text total to 4,651,966, and its emitted code to 684 defines, 6,519
-calls, 5,938 branches and 50,994 lines, which moves emitted_other_defines to
-2,002, emitted_other_calls to 17,393, emitted_other_branches to 16,393 and
-emitted_other_lines to 146,696.
-
-A counter that measures something new is re-based so that landing it costs the
-floor nothing, as the codegen rows were on 2026-10-07 when their gates began
-counting the clang the benchmarks use. `run_instructions` and `run_peak_bytes`
-keep their ratio to their baselines: each baseline is multiplied by the reading
-with the phases over the reading without them, both on main's compiler.
-work_runbench lands on 1,245,043,324 on CI, against main's 1,131,539,079,
-so run_instructions' baseline goes from 3,043,743,748 to 3,349,060,500. The run peak, which the objective reads as the arena, held and
-permanent peaks summed, goes from 3,899,936 bytes to 12,167,368:
-run_arena_peak_bytes lands on 8,912,912 and run_held_peak_bytes on 3,222,256,
-and run_peak_bytes' baseline goes from 156,818,380 to 489,255,962. Both
-baselines are rounded up. The score is unchanged, and the four fixes now
-have something to score against.
-
 ## 2026-10-10 — `build` retires, and `tie` is the one way to write a cycle
 
 The gavel of the same day retired the `build` block and everything that existed
@@ -1737,6 +1678,61 @@ each as an importer; goldens for a test that reads a private name (refused), a
 test helper sharing a production name (no collision) and a malformed test
 beside a program that still runs; existing tests that read private names
 moved onto the pub surface.
+
+91.11.
+
+## 2026-10-12 — arms travel with the value
+
+The first rule of the 2026-10-12 gavel on #1894. A value carries the arms its
+type's owner wrote, so a module handed a `circle` may call `area c` without
+importing geo.
+
+The check decides which calls travel. The resolver marks a local as arrived
+when the function was handed it: a parameter, a name bound to a field or
+element of one, a lambda's parameter when the lambda goes to a call that also
+carries an arrived value, and the answer of a traveling call on one. A bare
+call that names nothing the file can see, with an arrived argument, is
+recorded instead of refused. The answer of a local function is not arrived,
+as the gavel lists it, so `area (twice c)` stays an unknown name.
+
+Each recorded call is renamed into a traveling group, `~area`, a spelling no
+program can write. A dependency compiles with the call left there. The root
+of the program, an entry file or a directory with `main.kso`, fills each group
+it calls with clones of every pub arm of that name whose module owns one of
+its parameter types, which is rule 4's ownership condition. When no owner
+wrote the name, the call is refused where it was written: "no module in this
+program writes `perimeter` for a type it owns, so no value carries it". Checked
+alone, a library takes the call on a parameter and refuses it on a value it
+made. Native code quotes a symbol with `~` in it, as it does one with `/`.
+
+`tests/arms_travel.rs` runs `tests/golden/travel/area` on both engines: a
+report module that never imports geo calls `area` on a circle it was handed
+and on each circle of a list. Main refused both calls, from `kanso run` and
+from `kanso check report`. Two error goldens pin the refusals:
+`an_arm_called_on_a_value_the_file_made` and
+`a_traveling_call_no_owner_answers`. The ratchet row "an arm left behind by
+its value" lets no call travel and turns the run test red. ch11 states the
+rule and ch07 points to it.
+
+Still open on #1894: a local arm of the same name shadows the traveling ones
+outright, where rule 4 asks for a local arm of the same shape to shadow and
+the rest to stay reachable. A module that declares its own `area` for a
+square and is handed a circle cannot reach geo's arm yet.
+
+CI's rows put `compile_instructions` at 26,052,299 (+170,748, +0.66%),
+`entry_instructions` at 86,286,307 (+904,994, +1.06%), `library_instructions`
+at 86,505,153 (+569,571, +0.66%) and `emit_instructions` at 7,019,534
+(+6,057). `compile_allocs` rose 75 to 14,605 and `interp_allocs` 74 to 587,357.
+`interp_instructions` fell 402 to 488,739,414. The tab runs the same front end,
+and `browser_compile_instructions` rose to 393,182,630 (+804,255, +0.20% on main after #1927).
+This builds a ruled part of the language, so the welfare floor drops by what
+it costs.
+
+On CI's rows for the tree merged with main after #1904: `compile_instructions`
+25,803,156 -> 26,057,907, `entry_instructions` 85,149,258 -> 86,302,801,
+`library_instructions` 85,703,128 -> 86,519,482, `emit_instructions` 7,035,926
+-> 7,048,046 and `interp_allocs` 587,479 -> 587,485; `interp_instructions`
+falls 298,363 to 487,131,077.
 
 ## 2026-10-12 — a bare imported type with no fields is its module's value
 
