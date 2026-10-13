@@ -94,6 +94,27 @@
 # points to, so every pass's string stayed. 128 passes over a 64 KiB string add
 # 2 MiB to the peak, about one decoded document, like `machine` and `fold`.
 # With the fix the peak does not move at all.
+#
+# Three more joined on 2026-10-13, from the ports #1892 tracks, each measured
+# on main before its fix (main at kanso#1909) the same way: built alone, less
+# the empty program's 6,766,088, and shared of the whole program on that
+# compiler, 1,234,826,007.
+#
+#   rewind   20,000 laps of a loop entered from exec    4,020,895  0.33%
+#   stack    115 chunks concatenated onto one list      2,621,918  0.21%
+#   bag      4,300 pushes onto a list held in a record 58,073,973  4.70%
+#
+# `rewind` is bc's `for` statement (kanso#1920): a tail cycle entered by a
+# tail call from the function it calls each lap, which main refuses a beat,
+# so every lap's records stay. `stack` is the kv port's accumulator
+# (kanso#1924), a fold that grows its list with `concat` and keeps each old
+# copy until the fold returns. Each adds 2 MiB to the peak when built alone,
+# and each is sized by that, like `machine` and `fold`. `bag` is the record
+# accumulator four ports wrote (#1892's eleventh item): every push copies the
+# list the record still holds, so it is quadratic in its count, and the count
+# lands it near five per cent like `scatter` and `bump`. It adds nothing to
+# the peak, because each copy is dropped on the next push.
+import "./bag"
 import "./bump"
 import "./deep"
 import "./escape"
@@ -102,8 +123,10 @@ import "./index"
 import "./machine"
 import "./pend"
 import "./restate"
+import "./rewind"
 import "./scatter"
 import "./split"
+import "./stack"
 import "std/io"
 import "std/json"
 import "std/sha256"
@@ -135,6 +158,12 @@ fold_pieces = 800
 
 restate_passes = 128
 
+rewind_laps = 20000
+
+stack_laps = 115
+
+bag_items = 4300
+
 fn decoded _ 0 sofar
   sofar
 
@@ -165,7 +194,9 @@ fn tally raw doc a b
   ported = scatter/total scatter_keys + bump/total bump_steps
   ported2 = machine/total machine_passes + fold/total fold_pieces
   ported3 = ported2 + restate/total restate_passes
-  bulk + shapes + scanned + ported + ported3 + digested raw digest_bytes
+  ported4 = rewind/total rewind_laps + stack/total stack_laps
+  ported5 = ported3 + ported4 + bag/total bag_items
+  bulk + shapes + scanned + ported + ported5 + digested raw digest_bytes
 
 fn shaped raw doc a
   pend/total pend_cards .> (b -> io/write "runbench {tally raw doc a b}\n")
