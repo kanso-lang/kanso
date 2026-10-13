@@ -1861,13 +1861,18 @@ that never imported their owner, and the issue's reproduction, a test file's
 import reaching the module it tests, which #1907 closes by keeping test files
 out of the module.
 
-CI's rows: compile instructions 25,761,215 -> 25,881,551, entry 85,207,562 ->
-85,381,313 and library 85,760,222 -> 85,935,582, the cost of handing each file
+CI's rows: `compile_instructions` 25,761,215 -> 25,881,551,
+`entry_instructions` 85,207,562 -> 85,381,313 and `library_instructions`
+85,760,222 -> 85,935,582, the cost of handing each file
 of a module its own set of names. The browser compile fell 391,974,060 ->
 391,311,502, emitting 7,016,409 -> 7,013,477 and the interpreter 488,792,115
 -> 488,739,816. This change does not touch the code those rows run, so their
 moves are put down to layout, though no run isolated it. The browser fall is
 worth more than the three rises cost, and welfare banks the difference at
+91.11. `compile_allocs` rose 68 to 14,598 and `interp_allocs` 68 to 587,351, and
+the floor drops by what they cost, since this builds a ruled part of the
+language.
+
 91.11.
 
 ## 2026-10-12 — arms travel with the value
