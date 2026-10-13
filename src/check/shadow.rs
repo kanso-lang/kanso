@@ -12,6 +12,11 @@ struct Local<'a> {
     name: &'a str,
     span: Span,
     used: bool,
+    /// Bound to something the function was handed: a parameter, a field of
+    /// one, an element of a list passed in, or what a traveling arm answered
+    /// for one. A bare name this module cannot see may still be called on
+    /// such a value, because the value carries its owner's arms (2026-10-12).
+    arrived: bool,
 }
 
 /// What the program declares, gathered once and asked about everywhere. The
@@ -22,6 +27,9 @@ struct Declared<'a> {
     /// group must match one (arity 0 opts out: a constant's value may be
     /// callable, which only the runtime can arbitrate).
     fn_arities: &'a Arities<'a>,
+    /// The functions the module's other files declare. With this file's own
+    /// they are the arms a traveling call of the same name is offered beside.
+    sibling_fns: &'a HashSet<&'a str>,
     /// How many fields each record type declares. Construction is positional,
     /// so an application of a type name has to hand over all of them.
     type_arity: &'a crate::hash::Map<&'a str, (usize, Option<&'a str>)>,
@@ -44,11 +52,16 @@ fn in_shipped_library(file: &str) -> bool {
     let Ok(file) = std::fs::canonicalize(file) else { return false };
     let Some(module) = file.parent() else { return false };
     // A unit test runs from target/<profile>/deps, one directory deeper than
-    // the compiler, so the second root misses the checkout there; the third
-    // names it, and exists only in that build.
+    // the compiler, so the second root misses the checkout there; the fourth
+    // names it, and exists only in that build. The third is the loader's own
+    // fallback in `resolve_import`: a source checkout's lib/ beside the working
+    // directory, which a binary built into a target directory elsewhere needs.
+    // The tab has no checkout to stand in, so its build leaves that root out.
     let roots = [
         std::env::var("KANSO_STD").ok().map(std::path::PathBuf::from),
         std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.join("../../lib"))),
+        #[cfg(not(target_arch = "wasm32"))]
+        Some(std::path::PathBuf::from("lib")),
         #[cfg(test)]
         Some(std::path::PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/lib"))),
     ];
@@ -71,15 +84,28 @@ struct Resolver<'a> {
     /// The file, for the one case `std_origin` misses: a std module tested
     /// from the checkout, which the loader stamps `lib/...`.
     file: &'a str,
+    /// Whether the names being bound now arrived with the function: set while
+    /// its parameters bind, and while a binding takes an arrived value.
+    arriving: bool,
+    /// Set just before a lambda handed to a call that also carries an arrived
+    /// value, so the lambda's parameters arrive too: `list/map xs (x -> area
+    /// x)` reaches each element of a list passed in.
+    lambda_arrives: bool,
+    /// The calls of a name this module cannot see whose arguments carry an
+    /// arrived value. Each is renamed into the traveling group of that name,
+    /// which the whole program fills with its owners' arms. Beside them, and
+    /// marked, the calls of a function the module declares made on one.
+    travels: Vec<(&'a str, Span, bool)>,
 }
 
 fn check_fn_body_shadow<'a>(
-    decl: &'a FnDecl,
+    (index, decl): (usize, &'a FnDecl),
     globals: &'a HashSet<&'a str>,
     diags: &mut Vec<Diagnostic>,
     shadowable: &'a HashSet<String>,
     declared: &'a Declared<'a>,
     locals: &mut Vec<Local<'a>>,
+    travels: &mut Vec<Travel>,
 ) {
     let mut resolver = Resolver {
         globals,
@@ -89,15 +115,20 @@ fn check_fn_body_shadow<'a>(
         file: &decl.file,
         shadowable,
         declared,
+        arriving: true,
+        lambda_arrives: false,
+        travels: Vec::new(),
     };
     for param in &decl.params {
         resolver.bind_pattern(param);
     }
+    resolver.arriving = false;
     let last = decl.body.len() - 1;
     for (i, stmt) in decl.body.iter().enumerate() {
         match stmt {
             Stmt::Bind { pattern, expr } => {
                 resolver.resolve_expr(expr);
+                resolver.arriving = resolver.arrived(expr);
                 if i == last {
                     resolver.diags.push(Diagnostic::new(
                         "unused",
@@ -106,6 +137,7 @@ fn check_fn_body_shadow<'a>(
                     ));
                 }
                 resolver.bind_target(pattern);
+                resolver.arriving = false;
             }
             Stmt::Expr(expr) => {
                 resolver.resolve_expr(expr);
@@ -123,6 +155,9 @@ fn check_fn_body_shadow<'a>(
     }
     resolver.flush_unused(0);
     diags.append(&mut resolver.diags);
+    travels.extend(resolver.travels.iter().map(|&(name, span, shaded)| {
+        (crate::name::Name::new(name), span, shaded.then_some(index))
+    }));
     *locals = resolver.locals;
 }
 
@@ -206,7 +241,7 @@ impl<'a> Resolver<'a> {
                 span,
             ));
         }
-        self.locals.push(Local { name, span, used: false });
+        self.locals.push(Local { name, span, used: false, arrived: self.arriving });
     }
 
     fn rebind(&mut self, name: &'a str, span: Span) {
@@ -267,7 +302,9 @@ impl<'a> Resolver<'a> {
                     match stmt {
                         Stmt::Bind { pattern, expr } => {
                             self.resolve_expr(expr);
+                            self.arriving = self.arrived(expr);
                             self.bind_pattern(pattern);
+                            self.arriving = false;
                         }
                         // The same rule the outer walk applies, applied here
                         // too. A non-final line whose value goes nowhere is a
@@ -326,9 +363,27 @@ impl<'a> Resolver<'a> {
                 }
             }
             Expr::App { head, args, .. } => {
-                self.resolve_expr(head);
+                // Asked only of a call that could travel or that hands a lambda
+                // on, so a call to a known name pays nothing for the rule.
+                let travels = matches!(&**head, Expr::Ident(name, ..) if self.travels_to(name));
+                let shades = matches!(&**head, Expr::Ident(name, ..) if self.shades(name));
+                let lambdas = args.iter().any(|a| matches!(a, Expr::Lambda { .. }));
+                let carries =
+                    (travels || shades || lambdas) && args.iter().any(|a| self.arrived(a));
+                match &**head {
+                    Expr::Ident(name, span, _) if carries && travels => {
+                        self.travels.push((name.as_str(), *span, false));
+                    }
+                    Expr::Ident(name, span, _) if carries && shades => {
+                        self.travels.push((name.as_str(), *span, true));
+                        self.resolve_expr(head);
+                    }
+                    _ => self.resolve_expr(head),
+                }
                 for arg in args {
+                    self.lambda_arrives = carries && matches!(arg, Expr::Lambda { .. });
                     self.resolve_expr(arg);
+                    self.lambda_arrives = false;
                 }
                 if let Expr::Ident(name, span, _) = &**head {
                     let local = self.locals.iter().any(|l| l.name == name.as_str());
@@ -367,11 +422,14 @@ impl<'a> Resolver<'a> {
             }
             Expr::Lambda { params, body, .. } => {
                 let base = self.locals.len();
+                let outer = std::mem::replace(&mut self.arriving, self.lambda_arrives);
+                self.lambda_arrives = false;
                 for (name, span) in params {
                     if name != "_" {
                         self.push_local(name, *span);
                     }
                 }
+                self.arriving = outer;
                 self.resolve_expr(body);
                 self.flush_unused(base);
             }
@@ -387,7 +445,9 @@ impl<'a> Resolver<'a> {
                     match stmt {
                         Stmt::Bind { pattern, expr } => {
                             self.resolve_expr(expr);
+                            self.arriving = self.arrived(expr);
                             self.bind_pattern(pattern);
+                            self.arriving = false;
                         }
                         Stmt::Expr(expr) => self.resolve_expr(expr),
                     }
@@ -395,6 +455,46 @@ impl<'a> Resolver<'a> {
                 self.flush_unused(base);
             }
         }
+    }
+
+    /// Whether a value came in with the function rather than being made in it.
+    fn arrived(&self, expr: &Expr) -> bool {
+        match expr {
+            Expr::Ident(name, ..) => self
+                .locals
+                .iter()
+                .rev()
+                .find(|l| l.name == name.as_str())
+                .is_some_and(|l| l.arrived),
+            Expr::Field { base, .. } | Expr::Index { base, .. } => self.arrived(base),
+            Expr::Upcast { expr, .. } => self.arrived(expr),
+            // What a traveling arm answers for an arrived value arrives too.
+            Expr::App { head, args, .. } => match &**head {
+                Expr::Ident(name, ..) => {
+                    self.travels_to(name) && args.iter().any(|a| self.arrived(a))
+                }
+                _ => false,
+            },
+            _ => false,
+        }
+    }
+
+    /// A bare name nothing here declares: no local, no global this file can
+    /// see, no builtin. Called on an arrived value, it names an arm the
+    /// value's owner wrote, and the whole program finds it.
+    fn travels_to(&self, name: &str) -> bool {
+        !name.contains('/')
+            && !self.globals.contains(name)
+            && !name.starts_with("builtin_")
+            && !self.locals.iter().any(|l| l.name == name)
+    }
+
+    /// A function the module declares, called on an arrived value: the call
+    /// still reaches the module's own arms, and the arms the value's owner
+    /// wrote join them unless one of the module's has the same shape.
+    fn shades(&self, name: &str) -> bool {
+        (self.declared.fn_arities.declares(name) || self.declared.sibling_fns.contains(name))
+            && !self.locals.iter().any(|l| l.name == name)
     }
 
     fn resolve_name(&mut self, name: &str, span: Span) {

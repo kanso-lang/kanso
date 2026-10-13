@@ -1,0 +1,3 @@
+# A value this module made carries nothing: `area` names no arm here.
+pub fn one c
+  "{area c} {area 3}"

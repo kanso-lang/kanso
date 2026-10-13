@@ -535,7 +535,7 @@ fn without_unbuilt_arms(program: &Program) -> Option<(Vec<bool>, UnreadPositions
         d.name == crate::ast::ENTRY
             || d.params.is_empty()
             || d.name == RENDER_GROUP
-            || !d.name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '/')
+            || !d.name.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '/' | '~'))
     };
     if !program.fns.iter().any(|d| d.name == crate::ast::ENTRY) {
         return None;

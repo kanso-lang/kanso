@@ -1,0 +1,18 @@
+import "std/list"
+import "std/text"
+
+fn kept acc more
+  text/concat acc more
+
+pub fn said flags
+  each = list/to_list (list/fold flags [] kept)
+  list/to_list (list/map each answer)
+
+fn answer v
+  told? v v
+
+fn told? _ true
+  "yes"
+
+fn told? b false
+  b

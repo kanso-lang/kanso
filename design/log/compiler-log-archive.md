@@ -100976,3 +100976,144 @@ run_arena_peak_bytes lands on 8,912,912 and run_held_peak_bytes on 3,222,256,
 and run_peak_bytes' baseline goes from 156,818,380 to 489,255,962. Both
 baselines are rounded up. The score is unchanged, and the four fixes now
 have something to score against.
+
+## 2026-10-10 — `build` retires, and `tie` is the one way to write a cycle
+
+The gavel of the same day retired the `build` block and everything that existed
+to serve it: the hole `_` in a construction's argument, the field write
+`a.f = v`, and the checker's proof that a write reaches only a record born in
+the block. This entry is the build.
+
+The parser no longer produces `Expr::Build`, `Expr::Hole` or `Stmt::Set`, and
+the three variants are gone from the AST, so every pass that matched them lost
+an arm. The checker loses the block-born walk and its cohort table. The
+interpreter loses its field write and the native backend loses the
+`k_set_field` call it emitted for one, along with the runtime function behind
+it. A program written for the old form meets one syntax diagnostic for each
+spelling, and each one names `list/tie`: a `build` header, a bare `_` where a
+value goes, and `a.f = v`. The wildcard pattern and a lambda's `_` parameter
+are read before the expression parser is asked, so they keep their meaning.
+
+The error corpus loses the twenty-six fixtures that pinned the block's own
+refusals and gains three for the retired spellings,
+`a_build_block_is_retired`, `a_hole_is_retired` and
+`a_field_write_is_retired`. Each was seen red with the diagnostic's wording
+changed. `uncertain_reads_are_not_counted` loses its block-bound case and
+keeps its other six. The micro corpus loses four fixtures that existed only for
+the block. `a_description_rides_in_a_field` now builds its record with the
+description in place, and the re-export spec for a door spelling loses its
+`build` position and keeps the other four. The ratchet loses the seven rows
+that disarmed a hole refusal, with their mutation scripts, and the construct
+census in `tests/golden/shapes.txt` loses `Build`, `Hole` and `s:Set`.
+
+The examples, the ch03 sample and the knot-equality golden were rewritten with
+`tie` earlier on this branch. The mem fixture that pinned a cycle's cost moves
+from `build_cycle` to `tie_cycle`, and `tie` costs more than the block did for
+the same two cycles: 38 allocations against 18, 2,096 bytes against 784,
+evac_allocs 15 against 13 and evac_bytes 560 against 496. sh_buf goes from 144
+to 928 and sh_map from 0 to 192, which are the key list and the map `tie`
+answers; sh_str falls from 192 to 176.
+
+ch03 teaches `tie` in the section on records that point at each other, and
+shows a field holding a list of references, which the same day's gavel "a field
+may hold a list of `tie` references" owes the book. Appendix A replaces its `error[build]` section with `error[tie]`, the check
+that refuses a literal link to a key the list does not hold. The playground's
+two knot samples are rewritten with `tie`, and the compiler page's account of
+the memory model now describes a cycle as a tie's birth cohort.
+design/build-blocks.md is deleted; the log keeps its history.
+
+Moving the cycle fixture onto `tie` found a disagreement between engines.
+The interpreter builds a tie's nodes with thunk cells and settles each record's
+fields once the knot is closed, but `resolve_tied` settled only a field that
+was itself a cell. A cell inside a list or a map held by a field stayed a cell,
+and every later read forced it again: `tie_cycle` counted 5 `thunk_forces` on
+the interpreter and 0 natively. `settled_link` now replaces a forced cell
+inside a list or map field with the node it holds, and the two engines agree on
+the fixture. The spec is `mem_corpus_interp_matches_the_semantic_counters` in
+`tests/oracle.rs`, which runs every mem fixture on the interpreter and compares
+its semantic counters with the golden's. With the list and map arms of
+`settled_link` removed it goes red on `tie_cycle`, reading 5 forces against 0.
+The mem golden alone stays green, because it is read off the native binary.
+
+`tests/compile_cost.rs` timed a `build_block` sample, which no longer parses,
+so the sample and its row in `bench/compile_golden.txt` are gone. A `tie`
+sample cannot take its place there, because the harness compiles a file with no
+imports and `tie` lives in `list`. Removing the passes that served the block
+moves the compile, entry, library, emit and interpreter rows and the size of
+every binary. On CI every one of them falls. compile_instructions lands on
+25,712,749, entry_instructions on 85,036,744, library_instructions on
+85,590,951, emit_instructions on 7,038,004 and interp_instructions on
+488,375,858. codegen_instructions_dev lands on 118,906,508 and
+codegen_instructions_release on 453,887,359. browser_compile_instructions
+lands on 388,285,810. Every binary is 448 bytes smaller, and the text total
+lands on 4,645,694. work_runbench lands on 1,245,043,177, as projected, with
+work_encodebench on 2,393,925,910, work_livebench on 1,472,860,747 and
+work_oneshot on 13,176,864. No row rises, so the floor does not have to move to
+admit the retirement, and the score rises from 90.24995 to 90.2512, which is
+banked.
+
+Three diagnostics lost their golden with the block. The unused-expression rule
+lives in two walks, the function body's and the block's, and
+a_build_body_line_goes_nowhere was the only program that reached either: in a
+body, consecutive expression lines fold into one effect group, and a binding
+after an expression line is refused first by "bindings precede the effects in a
+body". The indented-block rule never had a reachable program. It was counted as
+pinned by tests/golden/play/decls_after_statements.stderr, a file no test reads
+and whose fixture now runs and prints `first`. Dropping `build` from the
+message's wording took the stale copy out of agreement. All three are listed in
+tests/golden/unpinned_diagnostics.txt with the programs that were tried.
+
+## 2026-10-10 — gavel: GitHub issues are the tracker, and hygiene is continuous
+
+Clay, on the proposal to track a cleanup list as GitHub issues: "why on Earth
+not just use githubs issues feature? seems it would be a much more methodical
+way to track and prioritize work." And on keeping the repository clean: "the
+instructions should explicitly maintain ongoing refactoring so that things stay
+hygienic over time and I don't have to explicitly remind you."
+
+**The tracker.** Open work and open decisions are GitHub issues in
+kanso-lang/kanso, labelled by kind (`needs-clay`, `ruled`, `cleanup`, `perf`),
+lane (`lane:chat`, `lane:cloud`) and priority (`p1` to `p3`). A pull request
+that finishes one closes it with `Fixes #N`. The log stays the record of what
+was ruled and measured. STATUS.md's "Ruled, unbuilt" section and
+design/pending-gavels.md retire; #1852 carries the steps, including the two
+specs that keep their counts in step. The case for the change was made the same
+day the two newest "Ruled, unbuilt" rows were found already built and never
+taken off, and a ruling of 2026-10-07 was found never to have had a row.
+
+Opened the same day: #1842, the one open decision (whether `list/map xs ref`
+may build a node's list of references), and #1843, the three-parts-per-billion
+row, the last standing "Ruled, unbuilt" entry; and nine `cleanup` issues from a
+hygiene review, #1844 to #1852.
+
+**Hygiene.** CLAUDE.md gains a section, "Hygiene is continuous": each pull
+request leaves the files it touches cleaner; a fact has one home; cloud lands a
+`cleanup` pull request for every five others; cloud sweeps the repository
+weekly and files what it finds; a refactor is a pure move; and instructions
+state rules, with their history in the log.
+
+## 2026-10-10 — the log goes back under its cap a second time
+
+design/compiler-log.md held 526 entries and 25,301 lines against a cap of
+forty. The archive was last fed on 2026-09-18, and in the three weeks since
+every change appended to the live file and nothing moved the older end.
+
+This closes #1850. The 487 oldest entries move to design/log/compiler-log-archive.md
+unedited, appended after its last entry. The live file keeps the newest 39 plus
+this one. Nothing is deleted. Before the move there were 1,456 archived and 526
+live entries; after it there are 1,943 archived and 39 live, so 1,982 entries
+either way. The sorted heading lists of the two files match before and after
+the move, and so do their non-blank lines, so the move changed no content.
+
+The readers that broke last time were checked first. `page_drift` and the
+trend gate count only added lines of the live log (`+## ` and `+`), so moving
+lines out costs neither of them anything.
+`a_question_sent_to_clay_has_a_ledger_entry` and its ratchet mutation read
+both files since 2026-09-18, and
+`a_log_heading_is_one_line` always has.
+
+- **DONE** live log at forty entries.
+- **OPEN** the cap has no gate. It was restored by hand on 2026-09-17 and again
+  today, and both times it had run to many times the limit. A spec that counts
+  the live file's headings and fails above forty would hold it. That spec is
+  `tests/`, so it is cloud's: #1854.

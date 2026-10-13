@@ -49,7 +49,11 @@ pub fn check_shipped(path: &str) -> Result<(), String> {
 pub fn compile_module(dir: &std::path::Path, require_entry: bool) -> Result<ast::Program, String> {
     LOCK.with(|l| *l.borrow_mut() = hako::read_lock(dir));
     let mut visited = crate::hash::Set::default();
-    compile_module_root(dir, require_entry, &mut visited)
+    let mut program = compile_module_root(dir, require_entry, &mut visited)?;
+    if !require_entry {
+        forget_shades(&mut program.fns);
+    }
+    Ok(program)
 }
 
 /// hako's own verbs, written in kanso and carried in the binary the way the
@@ -549,6 +553,14 @@ fn compile_module_loaded(
         1 => crate::hash::Set::default(),
         _ => parsed.iter().flat_map(|(_, _, p)| check::declared_names(p)).collect(),
     };
+    // The functions the module's other files declare: a call of one on a
+    // value a function was handed is shaded, as a call of the file's own is.
+    // A module of one file has no others.
+    let module_fns: crate::hash::Set<&str> = match parsed.len() {
+        1 => crate::hash::Set::default(),
+        _ => parsed.iter().flat_map(|(_, _, p)| p.fns.iter().map(|f| f.name.as_str())).collect(),
+    };
+    let mut file_travels: Vec<Vec<check::Travel>> = Vec::with_capacity(parsed.len());
     for ((file, source, program), mut diags) in parsed.iter().zip(marker_diags) {
         let hidden = match parsed.len() {
             1 => crate::hash::Map::default(),
@@ -567,13 +579,17 @@ fn compile_module_loaded(
                 .collect()
         };
         diags.extend(check::check_typesets(program, &module_types, &dep_types));
+        let mut travels = Vec::new();
         diags.extend(check::check_file_shadow(
             program,
             &extern_globals,
             &shadowable,
             &module_types,
             &module_decls,
+            &module_fns,
+            &mut travels,
         ));
+        file_travels.push(travels);
         for d in &mut diags {
             if let Some(quals) = d
                 .message
@@ -615,9 +631,13 @@ fn compile_module_loaded(
     };
     merged.types.extend(dep_program.types);
     merged.fns.extend(dep_program.fns);
-    for (_, _, program) in parsed {
+    for ((_, _, mut program), travels) in parsed.into_iter().zip(file_travels) {
+        rename_travels(&mut program, &travels);
         merged.types.extend(program.types);
         merged.fns.extend(program.fns);
+    }
+    if require_entry {
+        enroll_travelers(&mut merged)?;
     }
     phase::watched("canonicalize_types", || canonicalize_types(&mut merged));
     // kanso#1328 moved this pass in front of the check on the module path and

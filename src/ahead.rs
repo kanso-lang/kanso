@@ -94,11 +94,13 @@ pub fn lift(program: &mut Program) -> Vec<String> {
         program.fns.push(FnDecl {
             name: name.clone(),
             is_pub: false,
+            written_pub: false,
             span: call.span(),
             params: Vec::new(),
             body: vec![Stmt::Expr(call)],
             file: file.clone(),
             synthetic: false,
+            shades: None,
         });
         made.push(name);
     }
