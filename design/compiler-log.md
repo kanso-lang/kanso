@@ -19,128 +19,6 @@
 > The last forty entries. Everything older is in `log/compiler-log-archive.md`,
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
-## 2026-10-10 — a node an inner pop repairs stays on the outer loop's list
-
-The lox port's `tests/functions.lox` crashed natively once kanso#1824 let its
-evaluator loops carry. The cause is older than that branch. A record built
-before the evaluator's loop held a string in the outer loop's tenure block.
-An inner loop returned a value that reached the record, and its pop copied
-the result out of its carry pair. The pop's walk counts nothing outside the
-arena as a survivor, so it copied the string to the arena's frontier and
-repaired the record in place to point at the copy. The frontier was in the
-evaluator's lap. At the evaluator's next stage the walk reached the record
-through an older node whose own fields all survived, stopped there, and
-rewound the lap with the copy in it. The record then pointed at freed memory.
-
-Main's compiler crashes on the reduction too, so the bug did not need
-kanso#1824. `tests/golden/mem/a_node_repaired_by_an_inner_pop_outlives_the_outer_stage`
-is three nested loops and a box built before the middle one. Built against
-main's runtime it segfaults, and its stdout golden fails.
-
-The pop now keeps the nodes it repaired that lie below the enclosing mark, on
-a list beside `k_repaired`. Each stage walks the entries below its own mark as
-extra roots before it rewinds, sized with the carried slots, so a node that
-points above the mark is repaired into the carry and settled back under the
-raised mark like any other. That makes the node safe for the depth that
-staged and not for the one outside it, so an entry below the outer mark stays
-on the list, and so does a node the stage itself repaired below the outer
-mark. A rewind frees what lies above its mark, and the list must not keep an
-address that has been handed out again. While the list holds anything, a bit
-in `k_buf_dirty` sends every rewind to the slow path, and the slow path drops
-the entries above its mark, and a rewind to the outermost mark clears the list,
-since no stage outside it will revisit anything. The fast path reads nothing
-new.
-
-I first tried narrowing the pop's walk instead: an enclosing depth's tenure
-outlives the pop, so the pop could leave a pointer into it alone. That fixed
-`functions.lox` and broke `binary_trees.lox`. The lox interpreter writes into
-tenured environment maps in place, so an enclosing tenure node can hold a
-pointer into the inner carry pair, and the copy-out has to see it.
-
-With the fix, main's compiler passes all 28 lox fixtures on the interpreter,
-a dev build and a release build. On a tree carrying kanso#1827 and kanso#1824
-as well, the same 28 pass under the lap rule and with every edge staging. The
-twelve cost veins and the mem tier are unchanged apart from the new fixture's
-own file: no program in the corpus repairs a node below an enclosing mark.
-
-The list costs something when it is empty. `k_beat_iter_carry` now asks its
-depth for an outer mark and walks the nodes it repaired against it, and the
-pop does the same, at about fourteen instructions a call whether anything is
-pushed or not. deepbench stages 52,310 times and pops 52,003 times, so it pays
-the most, 0.40%. The runtime's text is 2,208 bytes larger in every binary,
-which the `text` total and both codegen rows carry. CI's rows, old to new:
-
-    work_deepbench               365,792,692 -> 367,269,411
-    work_basket                   32,375,114 ->  32,505,156
-    work_runbench              1,131,250,979 -> 1,131,470,937
-    work_pendbench               190,390,436 -> 190,396,306
-    work_livebench             1,472,859,260 -> 1,472,861,300
-    work_jsonbench               860,548,891 -> 860,549,545
-    work_encodebench           2,383,861,305 -> 2,383,861,896
-    work_digestbench               5,560,569 ->   5,561,143
-    work_indexbench                2,456,650 ->   2,457,185
-    work_scanbench                   268,468 ->     268,793
-    work_widebench                28,094,541 ->  28,094,810
-    work_readbench                 4,577,050 ->   4,577,104
-    work_oneshot                  13,176,487 ->  13,176,528
-    work_escapebench              39,045,280 ->  39,045,300
-    text                           4,612,254 ->   4,643,166
-    codegen_instructions_dev     118,896,762 -> 118,918,430
-    codegen_instructions_release 453,707,138 -> 453,994,118
-    browser_run_instructions      33,493,063 ->  33,507,353
-
-Welfare fell by less than a hundredth, and the floor moves down with it under
-the rule for a change that makes the language do what it says: the program
-crashed.
-
-**Main's repair list, merged into the lap carry.** The two branches touch
-different parts of the carry, and the code merged without a conflict. One golden
-moved. `a_node_repaired_by_an_inner_pop_outlives_the_outer_stage.mem` was
-written before the lap carry, when every edge staged, and under the lap carry
-the same program stages less: `evac_allocs` 237 -> 121, `evac_bytes` 8,288 ->
-4,128, `survive_slots` 82 -> 40, `allocs` 302 -> 246, `alloc_bytes` 7,088,284
--> 7,086,268, and the new `chain_finds` row reads 0. Its output is unchanged.
-The fixture still does its job on the merged tree: with
-`k_pend_keep_repaired` returning at once, the program segfaults. The goldens
-both branches moved were combined as the sum of the two deltas, and CI's rows
-for the merged head follow.
-
-CI's rows for the merged head. The projection from the two branches' deltas was
-close but not exact: each benchmark's text is 672 bytes larger than the sum, basket
-runs 129,985 instructions fewer, deepbench 104,915 more and runbench 14,885 more.
-Against main, every row that worsened, with the value it landed on:
-
-    run_ten_frees                                6 ->               1
-    run_ten_handups                              2 ->               1
-    compile_instructions                25,832,340 ->      25,858,191
-    entry_instructions                  85,435,525 ->      85,514,540
-    library_instructions                85,988,213 ->      86,067,450
-    codegen_instructions_dev           118,918,430 ->     118,945,861
-    codegen_instructions_release       453,994,118 ->     454,057,202
-    browser_compile_instructions       388,181,803 ->     390,304,777
-    browser_compile_peak_bytes             673,727 ->         675,725
-    browser_run_instructions            33,507,353 ->      34,098,461
-    work_digestbench                     5,561,143 ->       5,562,545
-    work_encodebench                 2,383,861,896 ->   2,383,883,896
-    work_escapebench                    39,045,300 ->      39,045,867
-    work_indexbench                      2,457,185 ->       2,459,004
-    work_jsonbench                     860,549,545 ->     860,559,280
-    work_livebench                   1,472,861,300 ->   1,472,863,852
-    work_oneshot                        13,176,528 ->      13,207,890
-    work_readbench                       4,577,104 ->       4,577,539
-    work_scanbench                         268,793 ->         270,025
-    text                                 4,643,166 ->       4,763,230
-
-The lap carry stages once per 256KB of drift where it staged at every edge, which
-is what the work rows above pay for; the runtime grows by the chain index and the
-lap bookkeeping, which is the text row. Against that, runbench falls to
-1,129,571,152, basket to 30,405,533 and deepbench to 366,705,890, the run
-program evacuates 6,441,632 bytes where it evacuated 9,789,344, and the browser
-run peaks at 1,179,648 bytes. `run_ten_frees` and `run_ten_handups` count work on
-tenured blocks, and they fall because the program now tenures one block where it
-tenured six. Welfare rises from 90.2505 to 90.2618, and the floor is raised to
-hold it.
-
 ## 2026-10-10 — a `tie` node holds its references in a list
 
 Built the gavel "a field may hold a list of `tie` references". The maker check
@@ -1994,6 +1872,26 @@ worth more than the three rises cost, and welfare banks the difference at
 91.11. `compile_allocs` rose 68 to 14,598 and `interp_allocs` 68 to 587,351, and
 the floor drops by what they cost, since this builds a ruled part of the
 language.
+
+## 2026-10-12 — concat reads the bytes text/bytes answers, on every engine
+
+From #1891, the third item: the 2026-08-23 gavel says a list is never bytes,
+and what `concat` declares decides which engine is right. Appendix b declares
+`text/bytes string → int[]` and `text/concat` as appending two lists, so a
+value `text/bytes` answered is a list to `concat`. Native code already read a
+bytes value as its byte values on either side and answered a list. The
+interpreter matched only two `List`s and refused anything else with "concat
+takes two lists", which is what the httpd, mustache, chip8 and ugit ports hit.
+The interpreter now reads a `Bytes` operand as its byte values, and the answer
+is a list on both engines. The gavel's other direction is unchanged: a list is
+still never read as bytes.
+
+`tests/golden/micro/concat_reads_the_bytes_text_bytes_answers` puts bytes on
+the left, on the right, on both sides, and as a slice of `text/bytes`. Main's
+interpreter stopped at the first line.
+
+Appendix b also says `concat` takes strings, and neither engine does: both
+refuse two strings with the same message. #1906 asks which way that goes.
 
 ## 2026-10-12 — `&`, `|` and `^` mixed without parentheses are refused
 
