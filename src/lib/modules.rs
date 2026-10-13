@@ -541,14 +541,30 @@ fn compile_module_loaded(
         .collect();
     let module_decls: Vec<&ast::TypeDecl> =
         parsed.iter().flat_map(|(_, _, program)| &program.types).collect();
+    // A file names only what it can see (2026-10-12): what the module's files
+    // declare, and what this file's own imports bring. A bare name that only
+    // a sibling's import surfaces is hidden from it. A module of one file
+    // sees exactly its imports, so only a module of several asks.
+    let declared_here: crate::hash::Set<&str> = match parsed.len() {
+        1 => crate::hash::Set::default(),
+        _ => parsed.iter().flat_map(|(_, _, p)| check::declared_names(p)).collect(),
+    };
     for ((file, source, program), mut diags) in parsed.iter().zip(marker_diags) {
+        let hidden = match parsed.len() {
+            1 => crate::hash::Map::default(),
+            _ => hidden_from(program, &parsed, &surfaced, &declared_here),
+        };
         // Every name in the build except this file's own, as references into
         // `all_names`. This used to clone the whole set per file and then
         // remove from the copy — a `String` per name per file, for a set the
         // shadow check only ever reads.
         let extern_globals: crate::hash::Set<&str> = {
             let own = check::declared_names(program);
-            all_names.iter().map(Name::as_str).filter(|n| !own.contains(n)).collect()
+            all_names
+                .iter()
+                .map(Name::as_str)
+                .filter(|n| !own.contains(n) && !hidden.contains_key(*n))
+                .collect()
         };
         diags.extend(check::check_typesets(program, &module_types, &dep_types));
         diags.extend(check::check_file_shadow(
@@ -558,6 +574,19 @@ fn compile_module_loaded(
             &module_types,
             &module_decls,
         ));
+        for d in &mut diags {
+            if let Some(quals) = d
+                .message
+                .strip_prefix("unknown name `")
+                .and_then(|rest| rest.split('`').next())
+                .and_then(|name| hidden.get(name))
+            {
+                d.message.push_str(&format!(
+                    " — `{quals}` exports it and this file does not import it; an \
+                     import reaches only the file that writes it"
+                ));
+            }
+        }
         diags.sort_by_key(|d| (d.span.line, d.span.col));
         if !diags.is_empty() {
             return Err(diag::render(&diags, file, source));
@@ -666,4 +695,46 @@ fn compile_module_loaded(
     trmc::rewrite(&mut merged);
     merged.root = root_name(&dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf()));
     Ok(merged)
+}
+
+/// The bare names one file of a several-file module cannot see, each with the
+/// imports that would bring it: a name that only a sibling's import surfaces,
+/// and that no file of the module declares. A rename's spelling counts the
+/// same way. std/render is ambient, so its names are seen everywhere.
+fn hidden_from<'a>(
+    program: &ast::Program,
+    parsed: &'a [(String, String, ast::Program)],
+    surfaced: &'a Surfaced,
+    declared_here: &crate::hash::Set<&str>,
+) -> crate::hash::Map<&'a str, String> {
+    let qual_of =
+        |i: &ast::Import| i.alias.clone().unwrap_or_else(|| short_name(&i.path).to_string());
+    let mine: crate::hash::Set<String> = program.imports.iter().map(qual_of).collect();
+    let mut hidden = crate::hash::Map::default();
+    for (name, by) in surfaced {
+        if declared_here.contains(name.as_str())
+            || by.keys().any(|q| q == "render" || mine.contains(q))
+        {
+            continue;
+        }
+        let mut quals: Vec<&str> = by.keys().map(String::as_str).collect();
+        quals.sort();
+        hidden.insert(name.as_str(), quals.join("`, `"));
+    }
+    let spelled_here: crate::hash::Set<&str> = program
+        .imports
+        .iter()
+        .flat_map(|i| i.renames.iter().map(|(_, yours)| yours.as_str()))
+        .collect();
+    for (_, _, other) in parsed {
+        for import in &other.imports {
+            for (_, yours) in &import.renames {
+                if !spelled_here.contains(yours.as_str()) && !declared_here.contains(yours.as_str())
+                {
+                    hidden.entry(yours.as_str()).or_insert_with(|| qual_of(import));
+                }
+            }
+        }
+    }
+    hidden
 }
