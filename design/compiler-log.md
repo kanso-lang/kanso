@@ -19,90 +19,6 @@
 > The last forty entries. Everything older is in `log/compiler-log-archive.md`,
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
-## 2026-10-10 — a `tie` node holds its references in a list
-
-Built the gavel "a field may hold a list of `tie` references". The maker check
-in `src/check.rs` walked a constructor's arguments with a flag saying each one
-was a field, and handed every other expression's children down with the flag
-cleared. A list literal was one of those other expressions, so `ref` called
-inside `town "ash" [(ref "birch") (ref "cedar")]` was refused as a read. A list
-literal or map literal that is itself a field now passes the flag to its
-elements, and for a map to its values only, since a key is read to place its
-pair. Anything else that holds the list is refused as before: binding it to a
-name first, measuring it, indexing it or handing it to a function.
-
-Neither engine needed a change. The interpreter's `resolve_tied` and native's
-`k_tie_resolve` already walk lists and maps when they swap each cell for its
-node, because a record field's value was always allowed to be any value once
-the tie returned.
-
-The diagnostic now says the reference goes straight into a field "alone or in a
-list or map written there", and the four tie goldens that quote it moved with
-it. `tests/golden/micro/a_graph_holds_its_roads_in_a_list` keeps each town's
-roads as a list and a map of named roads beside it, and prints the same text on
-the interpreter, a dev build and a release build; the compiler on main refuses
-it at `town "ash" [(ref "birch") ...]`.
-`tests/golden/errors/a_tie_maker_measures_a_list_of_references` binds the list
-to a name and measures it, and is refused at both references.
-
-`a_graph_tied_from_a_map_of_edges` keeps its chain of `road` records. Its edges
-come from a map, so its list of references would be built by a call, `list/map
-names ref` or a fold, and a reference handed to a function from std is out of
-the check's sight. The gavel's text admits a literal, and the ruling's own
-Owes asked for this fixture to drop the chain, which it cannot do under that
-text. That question has gone to the ledger as "May a list built from data hold
-`tie` references?". `docs/compiler.html` §193 says which form each case takes.
-
-The book teaches cyclic structures with `build` and does not mention `tie`, so
-the place `tie` is taught is its own comment in `lib/list/list.kso`. That
-comment now names the list form and shows `node id [(ref "b") (ref "c")]`.
-
-CI's rows for this branch, with main's repair list merged in. The check walks
-two more expression kinds in a constructor's arguments, and `lib/list/list.kso`
-carries two more comment lines, which every compile of the library lexes:
-
-    compile_instructions             25,832,340 ->  25,832,534
-    entry_instructions               85,435,525 ->  85,436,634
-    library_instructions             85,988,213 ->  85,988,060
-    browser_compile_instructions    388,181,803 -> 388,192,201
-
-The ruling is a part of the language, so the floor follows whatever these cost.
-
-## 2026-10-10 — a constructor handed over as a function builds
-
-The lox port found that a record constructor passed where a function is wanted
-checks and runs on the interpreter and stops the native build with "`pair` as
-a bare value is not yet supported" (lox F20). The port wrapped each one in a
-lambda, `(l o r -> logical l o r)`, which is what native now does by itself.
-When codegen lowers a name that is not a function group, a builtin or one of
-the words with a value of its own, and the name is a record type with one to
-four fields, it lowers the lambda that calls the constructor. Four is the
-native lambda's limit, so a record of five or more fields handed over is still
-refused at build with the same message.
-
-`tests/golden/micro/a_constructor_handed_over_as_a_function` hands a
-one-field constructor to `list/map`, a two-field one to a function that calls
-it and a three-field one to another, and prints the same line on the
-interpreter, a dev build and a release build. The compiler on main refuses to
-build it. The ratchet row "a constructor refused as a value" puts the refusal
-back and the micro corpus goes red.
-
-`tests/a_type_name_as_a_bare_value.rs` had pinned the refusal for a
-two-field record printed bare. It now pins that both engines print `<fn>`.
-
-CI's rows for this branch, with main's repair list merged in. Two rows moved,
-both by the size of the new lowering in the emitter:
-
-    emit_instructions                7,062,299 ->   7,062,491
-    browser_compile_instructions   388,181,803 -> 388,266,184
-
-Welfare falls from 90.2505 to 90.2504, and the floor follows it down under the
-rule for a change that makes the language do what it says: a program that
-checks and runs on the interpreter now builds natively.
-
-The tie-list ruling landed first. Carried over it, the browser compile row
-lands at 388,276,582, the constructor's 84,381 on top of main's 388,192,201,
-and the floor at 90.25039901483147.
 
 
 ## 2026-10-10 — two values a carry handed back while they were still held
@@ -1892,6 +1808,72 @@ interpreter stopped at the first line.
 
 Appendix b also says `concat` takes strings, and neither engine does: both
 refuse two strings with the same message. #1906 asks which way that goes.
+
+## 2026-10-12 — gavel: arms travel with the value, and a file names only what it can see
+
+Clay ruled the namespace half of #1883 in dialog, on 2026-10-11 and 2026-10-12.
+It restates the 2026-08-29 gavel "arms travel with the type, under the
+ownership rule" at full width: that gavel was built for `to_string` and
+operator arms, and ordinary functions were never brought under it.
+`enroll_bare` in src/lib.rs still gives every pub function of every import a
+bare twin whatever the call passes, which is how a test file's
+`import "std/list"` turned a module's own `step 3` into `list/step` on main.
+
+Clay: "it's fine to call that method on an argument that's passed to a
+function because its arms will travel with it. you just can't call it on your
+own internal things if you haven't imported anything that defines it." And on
+a name a file never imported: "you can't reference a type if you don't know
+what version of the library it even came from... there could be a million
+different libraries that all define that same thing."
+
+**The ruling.**
+
+1. A value carries the arms its type's owner wrote. Code holding the value
+   calls them bare, without importing the owner: a function handed a `circle`
+   may write `area x`. A value reached through one that arrived counts as
+   arriving with it: a field of a parameter, an element of a list passed in,
+   the result of a traveling arm called on it.
+2. On values a file made itself (literals, its own records, what it built from
+   them) a name resolves only if the file can see it, declared in its own
+   module or in a module it imports. Otherwise it is `error[name]`.
+3. A qualified call `geo/area x` needs the import, takes any arguments, and
+   reaches only `geo`'s own arms.
+4. An arm is legal only when one of its parameter types belongs to the module
+   that writes it, so a value's traveling arms come from exactly one place,
+   its type's owner. In a mixed call such as `combine x 3`, `x`'s owner's arms
+   answer. Two owners' arms equally specific for one call are refused, as the
+   2026-08-29 gavel on the ambiguous bare call already says, and a local arm
+   of the same shape shadows a traveling one.
+
+`kanso check` stays exact: a library is checked alone with `area x` on a
+parameter accepted and `area 3` refused, and the program that passes the value
+confirms an arm exists or is refused at its own call site.
+
+Owes, on #1894: bare enrollment replaced by the two rules above; the
+reproduction (a module's `step 3` hijacked by a test file's import) as an
+error golden, seen red on main; a golden for an arm traveling into a library
+that never imported its owner; an error golden for an internal value calling
+a name the file cannot see; the corpus, samples, lib and the sibling
+repositories moved to qualified spellings where they leaned on the old reach;
+ch07 and ch11 rewritten to state the rule.
+
+## 2026-10-12 — gavel: a test file is an outside consumer of its module
+
+Clay ruled the other half of #1883: "kanso test certainly cannot see private
+definitions. that would hugely violate the point of privacy." On main a
+`*_test.kso` is a member of its module: it reads private names, its
+definitions join the module's namespace, and `kanso run` checks it, so a
+formatting slip in a test stopped the program it tests from running.
+
+**The ruling.** A test file is compiled as an outside consumer that imports
+the module it sits beside. It sees only pub names, adds nothing to the module,
+and only `kanso test` reads it; `kanso run`, `check` and `build` ignore it.
+
+Owes, on #1883: the loader keeps `*_test.kso` out of the module and compiles
+each as an importer; goldens for a test that reads a private name (refused), a
+test helper sharing a production name (no collision) and a malformed test
+beside a program that still runs; existing tests that read private names
+moved onto the pub surface.
 
 ## 2026-10-12 — a name bound to a raising call carries its err into the check
 
