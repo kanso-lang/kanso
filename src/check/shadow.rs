@@ -49,11 +49,16 @@ fn in_shipped_library(file: &str) -> bool {
     let Ok(file) = std::fs::canonicalize(file) else { return false };
     let Some(module) = file.parent() else { return false };
     // A unit test runs from target/<profile>/deps, one directory deeper than
-    // the compiler, so the second root misses the checkout there; the third
-    // names it, and exists only in that build.
+    // the compiler, so the second root misses the checkout there; the fourth
+    // names it, and exists only in that build. The third is the loader's own
+    // fallback in `resolve_import`: a source checkout's lib/ beside the working
+    // directory, which a binary built into a target directory elsewhere needs.
+    // The tab has no checkout to stand in, so its build leaves that root out.
     let roots = [
         std::env::var("KANSO_STD").ok().map(std::path::PathBuf::from),
         std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.join("../../lib"))),
+        #[cfg(not(target_arch = "wasm32"))]
+        Some(std::path::PathBuf::from("lib")),
         #[cfg(test)]
         Some(std::path::PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/lib"))),
     ];
