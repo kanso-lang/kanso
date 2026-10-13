@@ -1,0 +1,4 @@
+error[name]: unknown name `perimeter` — no module in this program writes `perimeter` for a type it owns, so no value carries it
+  --> tests/golden/errors_module/a_traveling_call_no_owner_answers/report/report.kso:3:5
+   3 |   "{perimeter c}"
+           ^
