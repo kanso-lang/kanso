@@ -1,0 +1,3 @@
+# The `and` may stand on either side of the `or`; the refusal points at
+# whichever of the two operators comes second.
+pub play = print "{true or false and true}"

@@ -5079,7 +5079,30 @@ bits_mixed = row
 
 rows_c1zzzzzzv9 = text/concat rows_c1zzzzzzw9 [bits_mixed]
 
-rows_c = text/concat rows_c1zzzzzzv9 [itself]
+# `and` and `or` meeting without parentheses are refused. The mutation lets the
+# condition through, and the error corpus's fixture prints instead.
+and_or_mixed = row
+  "and meets or freely"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "and_meets_or_freely")
+  no_setup
+
+# A file may open with a header comment and one blank line. The mutation
+# refuses that blank, and the micro corpus's fixture that opens with a header
+# stops building.
+header_blank = row
+  "header comment refused"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "header_comment_refused")
+  no_setup
+
+rows_c1zzzzzzv8 = text/concat rows_c1zzzzzzv9 [and_or_mixed header_blank]
+
+rows_c = text/concat rows_c1zzzzzzv8 [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

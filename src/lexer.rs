@@ -68,6 +68,9 @@ struct LexedLine {
 pub struct Lexed {
     pub lines: Vec<Line>,
     pub blank_lines: Vec<usize>,
+    /// The last line of the comment block the file opens with, or 0 when its
+    /// first line of content is not a comment.
+    pub header: usize,
 }
 
 const OPS: [&str; 14] = [">=", "<=", "==", "!=", "+", "-", "*", "/", "%", "<", ">", "&", "|", "^"];
@@ -78,6 +81,7 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
     let mut diags = Vec::new();
     let mut lines = Vec::new();
     let mut blank_lines = Vec::new();
+    let mut header = 0;
     if !source.is_empty() && !source.ends_with('\n') {
         diags.push(Diagnostic::new(
             "formatting",
@@ -257,6 +261,11 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
             continue;
         }
         if content.starts_with('#') {
+            // the first comment block, if nothing but blanks stands above it
+            let first_block = header == 0 && blank_lines.len() == number - 1;
+            if first_block || (header > 0 && header == number - 1) {
+                header = number;
+            }
             continue;
         }
         match lex_line(content, number, indent + 1) {
@@ -280,7 +289,7 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
         check_needless_continuation(line, &mut pieces, &mut diags);
     }
     if diags.is_empty() {
-        Ok(Lexed { lines, blank_lines })
+        Ok(Lexed { lines, blank_lines, header })
     } else {
         Err(diags)
     }
