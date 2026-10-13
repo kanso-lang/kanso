@@ -474,16 +474,25 @@ impl<'a> Interp<'a> {
                 }
                 Ok(Value::Bytes(Rc::new(raw)))
             }
+            // `text/bytes` answers an int list (appendix b), and native code
+            // reads a bytes value as the list of its byte values on either
+            // side. The answer is a list either way.
             b"concat" => {
                 let [a, b] = arity(args, name, span)?;
-                let (Value::List(xs), Value::List(ys)) = (&a, &b) else {
+                let as_items = |v: &Value| -> Option<Vec<Value>> {
+                    match v {
+                        Value::List(xs) => Some((**xs).clone()),
+                        Value::Bytes(raw) => Some(raw.iter().map(|&b| Value::int(b)).collect()),
+                        _ => None,
+                    }
+                };
+                let (Some(mut joined), Some(tail)) = (as_items(&a), as_items(&b)) else {
                     return Err(RuntimeError {
                         message: "concat takes two lists".to_string(),
                         span,
                     });
                 };
-                let mut joined = (**xs).clone();
-                joined.extend(ys.iter().cloned());
+                joined.extend(tail);
                 Ok(Value::List(Rc::new(joined)))
             }
             // The one declared acceptance the bytes gavel left standing: utf8
