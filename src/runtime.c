@@ -7363,12 +7363,16 @@ static KValue k_exec(KDesc* d) {
                runs is decided by the compiler and never by the clock; only
                the length of the physical wait reads it. */
             long long ms = d->x.tag == K_INT ? d->x.payload : 0;
+#ifndef __wasm__
+            /* The tab's runtime is linked apart from the program and its
+               sleep is the host's, so it has no pool to run. */
             if (!k_ahead_ran) {
                 k_ahead_ran = 1;
                 long long before = k_ahead_now_ms();
                 k_ahead_pool();
                 ms -= k_ahead_now_ms() - before;
             }
+#endif
             if (ms > 0) usleep((useconds_t)(ms * 1000));
             return k_done();
         }
