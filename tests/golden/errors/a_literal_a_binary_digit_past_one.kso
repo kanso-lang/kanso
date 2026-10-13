@@ -1,0 +1,2 @@
+# `0b2` is not a number: the lexer names what is missing.
+pub play = print "{0b2}"

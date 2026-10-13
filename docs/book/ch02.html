@@ -93,6 +93,8 @@ mixed <span class="o">=</span> <span class="n">3</span> <span class="o">+</span>
 
 <p>two rules, both visible in one line. <code>7 / 2</code> keeps whole-number arithmetic and drops the remainder to give <code>3</code>. <code>7 / 2.0</code> and <code>3 + 0.5</code> each mix the two types, so the int widens and the answer is a float, printed with its point. widening only ever runs one direction—int to float, never a float quietly rounded to an int—because that direction loses nothing. when you want the reverse, you ask for it by name: <code>text/to_int</code>, <code>text/to_float</code>, <code>math/round</code>, and <code>math/sqrt</code> are the conversions—imported from std modules you will meet properly in chapter 07—and each states exactly what it does to the value.</p>
 
+<p>an int can also be written in hex or binary. <code>0xff</code> and <code>0xFF</code> are both 255, and <code>0b1010</code> is 10. the prefix is lower case, and hex digits may be either. a float can carry an exponent, as in <code>1e-8</code> or <code>6.02e23</code>, and a literal with an <code>e</code> in it is always a float, so <code>1e3</code> is <code>1000.0</code>. a minus touching any of these forms is part of the number, as it is in <code>-3</code>.</p>
+
 <h2>strings interpolate</h2>
 
 <p>strings are utf-8 text in double quotes. the one piece of machinery they carry is interpolation—<code>{expression}</code>—and because the braces take a full expression, you rarely need to concatenate anything. build the sentence you want directly:</p>
