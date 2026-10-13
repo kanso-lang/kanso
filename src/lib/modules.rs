@@ -341,6 +341,20 @@ fn module_sources(
     // root of a build or somebody's dependency.
     sources
         .retain(|(file, _)| std::path::Path::new(file).file_name().is_none_or(|n| n != "main.kso"));
+    // A test file is an outside consumer of the module (the 2026-10-12
+    // gavel): `kanso test` compiles it as an importer, and the module itself
+    // never reads it. A file module is the file it names, test or not.
+    if embedded.is_none() && dir.is_dir() {
+        let before = sources.len();
+        sources.retain(|(file, _)| !crate::is_test_file(std::path::Path::new(file)));
+        if sources.is_empty() && before > 0 {
+            return Err(format!(
+                "error: {} holds only test files — a module is its library \
+                 files, and a test file imports the module beside it\n",
+                dir.display()
+            ));
+        }
+    }
     if sources.is_empty() {
         return Err(format!(
             "error: {} holds only an entry file — a module is its library \

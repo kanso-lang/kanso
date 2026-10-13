@@ -1,0 +1,5 @@
+fn label n
+  "{n} yen"
+
+pub fn price n
+  label (n + 50)

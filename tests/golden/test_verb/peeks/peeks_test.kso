@@ -1,0 +1,5 @@
+# A test file imports the module beside it, so it sees what any importer
+# sees. `base` is private to `peeks`, and reading it is refused.
+test_total = total "tea" == 4
+
+test_base = base "tea" == 3

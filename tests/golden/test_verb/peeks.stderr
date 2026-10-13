@@ -1,0 +1,4 @@
+error[name]: unknown name `base`
+  --> peeks/peeks_test.kso:5:13
+   5 | test_base = base "tea" == 3
+                   ^

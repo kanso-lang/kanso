@@ -426,6 +426,86 @@ fn compile_one(file: &str, source: &str, drop_unused: bool) -> Result<ast::Progr
 /// as a library and loads its imports (plus the ambient module) like any
 /// other root compile.
 pub fn compile_library(file: &str, source: &str) -> Result<ast::Program, String> {
+    compile_library_beside(file, source, None)
+}
+
+/// A test file, under the 2026-10-12 gavel (#1883): an outside consumer of
+/// the module it sits beside. It imports that module the way any importer
+/// does, so it reads the pub surface and nothing private, and the module's
+/// loader never reads the test file, so nothing it declares or imports
+/// reaches the module. A test file with no library files beside it has no
+/// module to import and tests what it declares itself.
+pub fn compile_test_file(file: &str, source: &str) -> Result<ast::Program, String> {
+    let beside = module_beside(file);
+    // the module is the test file's own directory, which an import from
+    // inside it would otherwise refuse as the module importing itself
+    ENTRY_COMPILE.with(|c| c.set(true));
+    let built = compile_library_beside(file, source, beside);
+    ENTRY_COMPILE.with(|c| c.set(false));
+    built
+}
+
+/// Whether a file names a test file: `kanso test` is the only verb that
+/// reads one, and a module's loader leaves it out.
+pub fn is_test_file(path: &std::path::Path) -> bool {
+    path.file_name().is_some_and(|n| n.to_string_lossy().ends_with("_test.kso"))
+}
+
+/// The import a test file is compiled with: its own directory, spelled from
+/// inside it, when that directory holds library files. An empty parent is
+/// the working directory, whose name only the filesystem knows.
+fn module_beside(file: &str) -> Option<ast::Import> {
+    let dir = std::path::Path::new(file).parent()?;
+    let listed = match dir.as_os_str().is_empty() {
+        true => std::path::Path::new("."),
+        false => dir,
+    };
+    let mut library = false;
+    for entry in std::fs::read_dir(listed).into_iter().flatten().flatten() {
+        let path = entry.path();
+        if path.extension().is_none_or(|x| x != "kso")
+            || entry.file_name() == "main.kso"
+            || is_test_file(&path)
+        {
+            continue;
+        }
+        // A directory holding a program beside the test file is a folder of
+        // programs, the book's sample chapters among them, and there is no
+        // module there to import: the test file tests what it declares. A file
+        // that parses as nothing at all still counts as the module's, so its
+        // syntax error is what the test run reports.
+        let source = std::fs::read_to_string(&path).unwrap_or_default();
+        let Ok(lexed) = lexer::lex(&source) else {
+            library = true;
+            continue;
+        };
+        if parser::parse(&lexed).is_err()
+            && (parser::parse_entry(&lexed).is_ok() || parser::parse_play(&lexed).is_ok())
+        {
+            return None;
+        }
+        library = true;
+    }
+    if !library {
+        return None;
+    }
+    let name = match dir.file_name() {
+        Some(name) => name.to_string_lossy().into_owned(),
+        None => std::fs::canonicalize(listed).ok()?.file_name()?.to_string_lossy().into_owned(),
+    };
+    Some(ast::Import {
+        path: format!("../{name}"),
+        span: diag::Span::at(0, 0),
+        alias: None,
+        renames: Vec::new(),
+    })
+}
+
+fn compile_library_beside(
+    file: &str,
+    source: &str,
+    beside: Option<ast::Import>,
+) -> Result<ast::Program, String> {
     let lexed = lexer::lex(source).map_err(|d| diag::render(&d, file, source))?;
     let mut program = parser::parse(&lexed).map_err(|d| diag::render(&d, file, source))?;
     finish_program(&mut program);
@@ -436,6 +516,9 @@ pub fn compile_library(file: &str, source: &str) -> Result<ast::Program, String>
     }
     let base = std::path::Path::new(file).parent().map(|p| p.to_path_buf()).unwrap_or_default();
     let mut import_list: Vec<ast::Import> = program.imports.clone();
+    // the module under test is loaded with the file's own imports but never
+    // joins `program.imports`, so it cannot read as an import left unused
+    import_list.extend(beside);
     ambient_imports(&mut import_list);
     let mut visited = crate::hash::Set::default();
     let (mut dep_program, exports, surfaced) =

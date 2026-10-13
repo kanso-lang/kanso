@@ -6,8 +6,8 @@
 //! the whole board stayed green.
 //!
 //! Both shapes are covered here, because they take different paths through the
-//! verb: the directory runs a module's tests, and a file runs its own inside
-//! the module it belongs to.
+//! verb: the directory runs every test file beside the module, and a file runs
+//! its own against the module it imports.
 
 use std::process::Command;
 
@@ -54,8 +54,8 @@ fn every_standard_module_with_tests_passes_them() {
     assert!(refused.is_empty(), "standard suites that do not pass:\n{}", refused.join("\n"));
 }
 
-/// The file form takes a different path — it has to compile the module the
-/// file belongs to, or the test cannot see what it is testing.
+/// The file form takes a different path — it has to import the module the
+/// file sits beside, or the test cannot see what it is testing.
 #[test]
 fn every_standard_suite_passes_named_as_a_file() {
     let mut refused = Vec::new();

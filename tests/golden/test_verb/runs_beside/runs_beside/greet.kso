@@ -1,0 +1,2 @@
+pub fn greet name
+  "hello, {name}"

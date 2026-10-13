@@ -1,0 +1,9 @@
+# The test's own `label` shares a name with a private function of the module
+# it tests. Each file keeps its own: `price` still calls the module's `label`,
+# and the test's helper answers only inside the test file.
+fn label n
+  "price: {n}"
+
+test_price = price 350 == "400 yen"
+
+test_label_is_the_tests_own = label 1 == "price: 1"

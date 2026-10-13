@@ -6,8 +6,8 @@ fn costs? _ (err _)
 fn costs? want n
   n == want
 
-test_base_price_raw = costs? 350 (base_price "dango")
-
 test_dango_price = costs? 400 (price "dango")
+
+test_describe = describe 400 == "400 yen, service included"
 
 test_unknown_item_fails = testing/failed? (price "pocky")

@@ -101863,3 +101863,34 @@ CI's rows replace the projection. codegen_instructions_dev lands on
 230,743 above the projection. work_encodebench lands on 2,398,369,553,
 work_livebench on 1,474,871,531, work_oneshot on 13,223,698 and work_runbench
 on 1,152,754,392. `text` totals 4,829,278, as projected.
+
+## 2026-10-10 — a counting loop keeps every pass's key; copying keys out measured and declined
+
+A loop that counts into a map it was handed, under a key it interpolates each
+pass, never rewinds. `put m k (m[k] + 1)` is an in-place put and replaces the
+count, so the key string is garbage once the put has found its slot. The beat
+licence refuses the loop anyway, because a key the put does store would be
+freed under the map by the next rewind. At 100,000 passes over ten keys the
+arena peak is 4,194,304 bytes, 32 bytes a pass. A loop that builds a new string
+value each pass into a map, `put m "body" "{m["body"]}{x}"`, keeps every
+version the same way: 105,913,696 bytes of arena at 100 passes of a one-megabyte
+string, 420,568,976 at 400, on main and on every branch in flight.
+
+The fix tried was to let the put copy a key it inserts out of the arena, and
+license the loop. The copy is registered with the map's pairs and freed when
+they are, so a function that builds a map of fresh keys in a loop does not leak
+across calls: peak RSS held at 10 MB from 2,000 to 200,000 calls. Inside a loop
+that rewinds, a put with a string key calls the runtime instead of the emitter's
+inline fast path, which would store the key uncopied. Routing every string-key
+put to the runtime whenever any beat was live cost jsonbench 16.6% and runbench
+8.2%; routing only the puts inside the newly licensed loop cost nothing
+measurable on the instruction rows. The counting loop's arena peak fell to
+1,048,576 bytes and stays there.
+
+It is declined on memory. Licensing the loop moves its map's pairs out of the
+arena into malloc'd storage, which the objective counts, and in the run program
+nothing came back from the arena to pay for it: run_peak_bytes rose from
+4,948,512 to 5,202,176, and welfare fell from 91.0318 to 91.0163. basket also
+read 901,269 more instructions. A version worth trying keeps the pairs in the arena and
+copies the key into the region below the loop's mark, which needs an allocation
+point the arena does not have.

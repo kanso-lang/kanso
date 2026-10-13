@@ -42,7 +42,7 @@ parse failed at byte 10: invalid literal</code></pre>
   <li><code>json_test.kso</code>—the suite</li>
 </ul>
 
-<p><code>value.kso</code> calls <code>scan.kso</code>'s helpers without ceremony, and the test file reaches private helpers when it wants to. (the underscored names you'll see are house style from before <code>pub</code> arrived—the sweep that retires them rides with import enforcement.) the api file is where every read should start:</p>
+<p><code>value.kso</code> calls <code>scan.kso</code>'s helpers without ceremony, and the test file sees only what the module marks <code>pub</code>, the same as any importer. (the underscored names you'll see are house style from before <code>pub</code> arrived—the sweep that retires them rides with import enforcement.) the api file is where every read should start:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">lib/json/json.kso</div>

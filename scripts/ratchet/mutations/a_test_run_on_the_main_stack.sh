@@ -8,7 +8,7 @@
 set -e
 f=src/main.rs
 grep -q "fn run_tests_on_stack" src/main.rs
-line='            .spawn_scoped(scope, || run_tests_on_stack(program, file, source, only_from))'
+line='            .spawn_scoped(scope, || run_tests_on_stack(target, suites))'
 [ "$(grep -cxF "$line" "$f")" -eq 1 ] || {
   echo "the deep test thread moved; this mutation needs rewriting" >&2
   exit 1
