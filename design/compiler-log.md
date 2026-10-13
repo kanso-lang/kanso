@@ -21,121 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-10 — `build` retires, and `tie` is the one way to write a cycle
-
-The gavel of the same day retired the `build` block and everything that existed
-to serve it: the hole `_` in a construction's argument, the field write
-`a.f = v`, and the checker's proof that a write reaches only a record born in
-the block. This entry is the build.
-
-The parser no longer produces `Expr::Build`, `Expr::Hole` or `Stmt::Set`, and
-the three variants are gone from the AST, so every pass that matched them lost
-an arm. The checker loses the block-born walk and its cohort table. The
-interpreter loses its field write and the native backend loses the
-`k_set_field` call it emitted for one, along with the runtime function behind
-it. A program written for the old form meets one syntax diagnostic for each
-spelling, and each one names `list/tie`: a `build` header, a bare `_` where a
-value goes, and `a.f = v`. The wildcard pattern and a lambda's `_` parameter
-are read before the expression parser is asked, so they keep their meaning.
-
-The error corpus loses the twenty-six fixtures that pinned the block's own
-refusals and gains three for the retired spellings,
-`a_build_block_is_retired`, `a_hole_is_retired` and
-`a_field_write_is_retired`. Each was seen red with the diagnostic's wording
-changed. `uncertain_reads_are_not_counted` loses its block-bound case and
-keeps its other six. The micro corpus loses four fixtures that existed only for
-the block. `a_description_rides_in_a_field` now builds its record with the
-description in place, and the re-export spec for a door spelling loses its
-`build` position and keeps the other four. The ratchet loses the seven rows
-that disarmed a hole refusal, with their mutation scripts, and the construct
-census in `tests/golden/shapes.txt` loses `Build`, `Hole` and `s:Set`.
-
-The examples, the ch03 sample and the knot-equality golden were rewritten with
-`tie` earlier on this branch. The mem fixture that pinned a cycle's cost moves
-from `build_cycle` to `tie_cycle`, and `tie` costs more than the block did for
-the same two cycles: 38 allocations against 18, 2,096 bytes against 784,
-evac_allocs 15 against 13 and evac_bytes 560 against 496. sh_buf goes from 144
-to 928 and sh_map from 0 to 192, which are the key list and the map `tie`
-answers; sh_str falls from 192 to 176.
-
-ch03 teaches `tie` in the section on records that point at each other, and
-shows a field holding a list of references, which the same day's gavel "a field
-may hold a list of `tie` references" owes the book. Appendix A replaces its `error[build]` section with `error[tie]`, the check
-that refuses a literal link to a key the list does not hold. The playground's
-two knot samples are rewritten with `tie`, and the compiler page's account of
-the memory model now describes a cycle as a tie's birth cohort.
-design/build-blocks.md is deleted; the log keeps its history.
-
-Moving the cycle fixture onto `tie` found a disagreement between engines.
-The interpreter builds a tie's nodes with thunk cells and settles each record's
-fields once the knot is closed, but `resolve_tied` settled only a field that
-was itself a cell. A cell inside a list or a map held by a field stayed a cell,
-and every later read forced it again: `tie_cycle` counted 5 `thunk_forces` on
-the interpreter and 0 natively. `settled_link` now replaces a forced cell
-inside a list or map field with the node it holds, and the two engines agree on
-the fixture. The spec is `mem_corpus_interp_matches_the_semantic_counters` in
-`tests/oracle.rs`, which runs every mem fixture on the interpreter and compares
-its semantic counters with the golden's. With the list and map arms of
-`settled_link` removed it goes red on `tie_cycle`, reading 5 forces against 0.
-The mem golden alone stays green, because it is read off the native binary.
-
-`tests/compile_cost.rs` timed a `build_block` sample, which no longer parses,
-so the sample and its row in `bench/compile_golden.txt` are gone. A `tie`
-sample cannot take its place there, because the harness compiles a file with no
-imports and `tie` lives in `list`. Removing the passes that served the block
-moves the compile, entry, library, emit and interpreter rows and the size of
-every binary. On CI every one of them falls. compile_instructions lands on
-25,712,749, entry_instructions on 85,036,744, library_instructions on
-85,590,951, emit_instructions on 7,038,004 and interp_instructions on
-488,375,858. codegen_instructions_dev lands on 118,906,508 and
-codegen_instructions_release on 453,887,359. browser_compile_instructions
-lands on 388,285,810. Every binary is 448 bytes smaller, and the text total
-lands on 4,645,694. work_runbench lands on 1,245,043,177, as projected, with
-work_encodebench on 2,393,925,910, work_livebench on 1,472,860,747 and
-work_oneshot on 13,176,864. No row rises, so the floor does not have to move to
-admit the retirement, and the score rises from 90.24995 to 90.2512, which is
-banked.
-
-Three diagnostics lost their golden with the block. The unused-expression rule
-lives in two walks, the function body's and the block's, and
-a_build_body_line_goes_nowhere was the only program that reached either: in a
-body, consecutive expression lines fold into one effect group, and a binding
-after an expression line is refused first by "bindings precede the effects in a
-body". The indented-block rule never had a reachable program. It was counted as
-pinned by tests/golden/play/decls_after_statements.stderr, a file no test reads
-and whose fixture now runs and prints `first`. Dropping `build` from the
-message's wording took the stale copy out of agreement. All three are listed in
-tests/golden/unpinned_diagnostics.txt with the programs that were tried.
-
-## 2026-10-10 — gavel: GitHub issues are the tracker, and hygiene is continuous
-
-Clay, on the proposal to track a cleanup list as GitHub issues: "why on Earth
-not just use githubs issues feature? seems it would be a much more methodical
-way to track and prioritize work." And on keeping the repository clean: "the
-instructions should explicitly maintain ongoing refactoring so that things stay
-hygienic over time and I don't have to explicitly remind you."
-
-**The tracker.** Open work and open decisions are GitHub issues in
-kanso-lang/kanso, labelled by kind (`needs-clay`, `ruled`, `cleanup`, `perf`),
-lane (`lane:chat`, `lane:cloud`) and priority (`p1` to `p3`). A pull request
-that finishes one closes it with `Fixes #N`. The log stays the record of what
-was ruled and measured. STATUS.md's "Ruled, unbuilt" section and
-design/pending-gavels.md retire; #1852 carries the steps, including the two
-specs that keep their counts in step. The case for the change was made the same
-day the two newest "Ruled, unbuilt" rows were found already built and never
-taken off, and a ruling of 2026-10-07 was found never to have had a row.
-
-Opened the same day: #1842, the one open decision (whether `list/map xs ref`
-may build a node's list of references), and #1843, the three-parts-per-billion
-row, the last standing "Ruled, unbuilt" entry; and nine `cleanup` issues from a
-hygiene review, #1844 to #1852.
-
-**Hygiene.** CLAUDE.md gains a section, "Hygiene is continuous": each pull
-request leaves the files it touches cleaner; a fact has one home; cloud lands a
-`cleanup` pull request for every five others; cloud sweeps the repository
-weekly and files what it finds; a refactor is a pure move; and instructions
-state rules, with their history in the log.
-
 ## 2026-10-10 — the log goes back under its cap a second time
 
 design/compiler-log.md held 526 entries and 25,301 lines against a cap of
@@ -1721,6 +1606,64 @@ building the language is priced at its cost.
 On main after #1904 the tab's compile reads `browser_compile_instructions`
 392,382,093, up 3,718 from main's 392,378,375 on the same tree.
 
+91.11.
+
+With main merged after #1937, browser_compile_instructions lands on
+393,186,348.
+
+## 2026-10-12 — arms travel with the value
+
+The first rule of the 2026-10-12 gavel on #1894. A value carries the arms its
+type's owner wrote, so a module handed a `circle` may call `area c` without
+importing geo.
+
+The check decides which calls travel. The resolver marks a local as arrived
+when the function was handed it: a parameter, a name bound to a field or
+element of one, a lambda's parameter when the lambda goes to a call that also
+carries an arrived value, and the answer of a traveling call on one. A bare
+call that names nothing the file can see, with an arrived argument, is
+recorded instead of refused. The answer of a local function is not arrived,
+as the gavel lists it, so `area (twice c)` stays an unknown name.
+
+Each recorded call is renamed into a traveling group, `~area`, a spelling no
+program can write. A dependency compiles with the call left there. The root
+of the program, an entry file or a directory with `main.kso`, fills each group
+it calls with clones of every pub arm of that name whose module owns one of
+its parameter types, which is rule 4's ownership condition. When no owner
+wrote the name, the call is refused where it was written: "no module in this
+program writes `perimeter` for a type it owns, so no value carries it". Checked
+alone, a library takes the call on a parameter and refuses it on a value it
+made. Native code quotes a symbol with `~` in it, as it does one with `/`.
+
+`tests/arms_travel.rs` runs `tests/golden/travel/area` on both engines: a
+report module that never imports geo calls `area` on a circle it was handed
+and on each circle of a list. Main refused both calls, from `kanso run` and
+from `kanso check report`. Two error goldens pin the refusals:
+`an_arm_called_on_a_value_the_file_made` and
+`a_traveling_call_no_owner_answers`. The ratchet row "an arm left behind by
+its value" lets no call travel and turns the run test red. ch11 states the
+rule and ch07 points to it.
+
+Still open on #1894: a local arm of the same name shadows the traveling ones
+outright, where rule 4 asks for a local arm of the same shape to shadow and
+the rest to stay reachable. A module that declares its own `area` for a
+square and is handed a circle cannot reach geo's arm yet.
+
+CI's rows put `compile_instructions` at 26,052,299 (+170,748, +0.66%),
+`entry_instructions` at 86,286,307 (+904,994, +1.06%), `library_instructions`
+at 86,505,153 (+569,571, +0.66%) and `emit_instructions` at 7,019,534
+(+6,057). `compile_allocs` rose 75 to 14,605 and `interp_allocs` 74 to 587,357.
+`interp_instructions` fell 402 to 488,739,414. The tab runs the same front end,
+and `browser_compile_instructions` rose to 393,182,630 (+804,255, +0.20% on main after #1927).
+This builds a ruled part of the language, so the welfare floor drops by what
+it costs.
+
+On CI's rows for the tree merged with main after #1904: `compile_instructions`
+25,803,156 -> 26,057,907, `entry_instructions` 85,149,258 -> 86,302,801,
+`library_instructions` 85,703,128 -> 86,519,482, `emit_instructions` 7,035,926
+-> 7,048,046 and `interp_allocs` 587,479 -> 587,485; `interp_instructions`
+falls 298,363 to 487,131,077.
+
 ## 2026-10-12 — a bare imported type with no fields is its module's value
 
 An importer may name a type with no fields bare: `import "std/json"` enrols
@@ -1907,3 +1850,37 @@ The record-field fixture #1926 added takes the same regrows:
 `a_list_held_in_a_record_grows_where_it_stands_allocs` lands on 76 and
 `a_list_held_in_a_record_grows_where_it_stands_bytes_malloc` on 19, three each
 above #1926's reading, while its peak falls as above.
+
+## 2026-10-13 — the ratchet's own checkout reads its library again
+
+Two faults on main kept the ratchet from reading what it was built to read.
+Neither came from the branches that showed them.
+
+The first came with #1927. Its mutation `a_fifth_push_takes_sixteen` anchors
+on the grow's extra doubling, and #1927 rewrote that line as
+`if (cap > 16 && !perm) cap <<= 1;`. The mutation stopped applying, so the
+whole-tree ratchet job reported it stale on every branch merged with main;
+#1904 was the first to show it. The mutation now anchors on the new line and
+doubles every time again, and the mem corpus goes red under it
+(`a_cap_around_a_count_is_a_range` reads `allocs=14` against 13).
+
+The second is older and shows only on a branch that edits
+`scripts/perf_record`, because only then does a shard pick the perf-history
+row. The ratchet links each scratch worktree's `target` to
+`/tmp/kanso-ratchet-target`, so the compiler it builds lives outside the
+checkout. `in_shipped_library` looked for the library beside the binary
+(`current_exe()/../../lib`, here `/tmp/lib`) and nowhere else, so
+`kanso check lib/json` refused `builtin_built_text` as internal to a library
+it was not in. With no compile counters on stderr, perf_record's row lost
+`compile_alloc_bytes` and `compile_passes`, and the gate was red before any
+mutation. #1931 showed it, since it rewrites perf_record's lists in the
+spanning form. The import loader already had the right fallback:
+`resolve_import` tries `lib/` beside the working directory when the
+toolchain's copy is absent. The check now tries the same root.
+`a_checkout_library_checks_from_any_binary` copies the compiler to a
+directory of its own and checks `lib/json` from the checkout; it read the
+refusal before the fix and reads nothing after.
+
+The tab's build leaves the new root out, since it has no checkout to stand
+in. With the root compiled in, `browser_compile_instructions` read 392,449,729
+against 392,378,375; without it the browser row does not move.
