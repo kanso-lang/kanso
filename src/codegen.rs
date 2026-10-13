@@ -4930,15 +4930,14 @@ impl<'a> Backend<'a> {
             .filter(|d| d.params.is_empty() && d.name.starts_with(crate::ahead::PREFIX))
             .map(|d| dsym(&d.name, 0))
             .collect();
-        let forced: Vec<&(String, String)> =
-            lifted.iter().filter_map(|sym| self.ahead_cells.iter().find(|(s, _)| s == sym)).collect();
+        let forced: Vec<&(String, String)> = lifted
+            .iter()
+            .filter_map(|sym| self.ahead_cells.iter().find(|(s, _)| s == sym))
+            .collect();
         if !forced.is_empty() {
             let n = self.caf_cells.len();
-            let pairs: Vec<String> = self
-                .caf_cells
-                .iter()
-                .map(|c| format!("ptr @{c}, ptr @{c}_ready"))
-                .collect();
+            let pairs: Vec<String> =
+                self.caf_cells.iter().map(|c| format!("ptr @{c}, ptr @{c}_ready")).collect();
             let _ = writeln!(
                 shims,
                 "@k_ahead_cells = internal constant [{} x ptr] [{}]",
@@ -4964,7 +4963,8 @@ impl<'a> Backend<'a> {
         }
         self.room(shims.len() + pool.len() + 128);
         self.body.push_str(&shims);
-        let _ = writeln!(self.body, "define void @k_ahead_pool() {{\nentry:\n{pool}  ret void\n}}\n");
+        let _ =
+            writeln!(self.body, "define void @k_ahead_pool() {{\nentry:\n{pool}  ret void\n}}\n");
         // A library has no entry to call, and a stub calling one that is not
         // there is a symbol the linker would ask about.
         if self.declares(crate::ast::ENTRY) {

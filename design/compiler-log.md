@@ -19,43 +19,6 @@
 > The last forty entries. Everything older is in `log/compiler-log-archive.md`,
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
-## 2026-10-10 — a constructor handed over as a function builds
-
-The lox port found that a record constructor passed where a function is wanted
-checks and runs on the interpreter and stops the native build with "`pair` as
-a bare value is not yet supported" (lox F20). The port wrapped each one in a
-lambda, `(l o r -> logical l o r)`, which is what native now does by itself.
-When codegen lowers a name that is not a function group, a builtin or one of
-the words with a value of its own, and the name is a record type with one to
-four fields, it lowers the lambda that calls the constructor. Four is the
-native lambda's limit, so a record of five or more fields handed over is still
-refused at build with the same message.
-
-`tests/golden/micro/a_constructor_handed_over_as_a_function` hands a
-one-field constructor to `list/map`, a two-field one to a function that calls
-it and a three-field one to another, and prints the same line on the
-interpreter, a dev build and a release build. The compiler on main refuses to
-build it. The ratchet row "a constructor refused as a value" puts the refusal
-back and the micro corpus goes red.
-
-`tests/a_type_name_as_a_bare_value.rs` had pinned the refusal for a
-two-field record printed bare. It now pins that both engines print `<fn>`.
-
-CI's rows for this branch, with main's repair list merged in. Two rows moved,
-both by the size of the new lowering in the emitter:
-
-    emit_instructions                7,062,299 ->   7,062,491
-    browser_compile_instructions   388,181,803 -> 388,266,184
-
-Welfare falls from 90.2505 to 90.2504, and the floor follows it down under the
-rule for a change that makes the language do what it says: a program that
-checks and runs on the interpreter now builds natively.
-
-The tie-list ruling landed first. Carried over it, the browser compile row
-lands at 388,276,582, the constructor's 84,381 on top of main's 388,192,201,
-and the floor at 90.25039901483147.
-
-
 ## 2026-10-10 — two values a carry handed back while they were still held
 
 The lap carry (kanso#1827) let the toml port parse a comment holding a
@@ -1909,3 +1872,66 @@ each as an importer; goldens for a test that reads a private name (refused), a
 test helper sharing a production name (no collision) and a malformed test
 beside a program that still runs; existing tests that read private names
 moved onto the pub surface.
+
+## 2026-10-13 — work-ahead forces what follows a park, and holds a pooled failure
+
+Builds #1856's v1 under the 2026-07-22 ruling and the 2026-10-11 gavel. Native
+only; the interpreter is the oracle and does not pool.
+
+**What is lifted.** `src/ahead.rs` reads the entry's statements. One whose
+chain starts with a `sleep` has continuations that run, in order, once the
+sleep ends. In each continuation, a call to one of the program's own functions
+whose arguments name nothing local is certain to be evaluated when it is an
+argument of `print` or `write`, or a piece of a string such an argument
+interpolates. A continuation that names an entry binding is followed into that
+binding's chain. Each such call becomes a constant named `ahead~N`, which no
+author can spell, and the call is replaced by a read of it.
+
+**What runs it.** A constant builds its own cell on first read, so forcing one
+early fills the cell the continuation reads later. The compiler emits
+`k_ahead_pool`, which forces the lifted constants in the order they were made;
+the runtime runs it once, at the first bare sleep, and takes the time the pool
+spent off the wait. Which work runs is fixed by the compiler, and the clock
+decides only how long the process then sleeps. `bench/workahead/aswritten.kso`
+sleeps 2,000 ms and then grinds for about 830 ms; it took 2.83 s on main and
+2.01 s here, three runs each in this container, with the same output.
+
+**A pooled failure.** An err the work answers is a value, held in the cell and
+answered at the read like any other. A death is not a value: on main the
+runtime prints and exits, and a pooled death would end the process before
+output the program prints first. While the pool runs, every exit in the runtime
+and the stack-overflow handler jump back to `k_ahead_try` instead, with stderr
+pointed at `/dev/null`. The try clears the ready flag of every constant cell
+still holding its builder's blackhole, restores the beat depth, and stops the
+pool. The program then builds those cells again where it reads them and fails
+there, which for every program that terminates is the transcript it produces
+without the pool.
+
+`tests/work_ahead.rs` pins two transcripts against the interpreter's. In one,
+the pooled call recurses a million frames deep and runs out of stack; in the
+other, a module's pooled call demands a constant that names itself, which
+leaves two cells half-built. With the catch removed, neither prints `first`.
+With the catch kept and the cells left as they were, the overflow fixture
+reports "a lazy binding demands its own value" where the program ran out of
+stack.
+
+**The counter.** `tests/golden/mem/work_ahead_forces_what_follows_a_park` pins
+`ahead_forced=1` and `ahead_dropped=0`. Both lines print only once the pool has
+run, so no vein whose program never sleeps moved. That fixture's
+`beat_iters` reads 2 where main's compiler reads 1,002: inside the constant's
+builder the beat pass gives the integer loop no bracket, since it allocates
+nothing to rewind. A loop that allocates keeps its bracket; with a string built
+per lap, 100,000 laps read the same counters on both compilers, one arena block
+included.
+
+**The tab** runs no pool. Its runtime is linked apart from the program and its
+sleep is the host's, so the pool call is compiled out of the wasm runtime.
+
+Divergence is the case the gavel accepted: a pooled call that never returns
+stalls before output the program prints first. The page's work-ahead section
+owes a sentence on each case, under the gavel.
+
+Compile rows move with the binary and come from CI; they are priced here before
+merge.
+
+- **OPEN** #1856, until this lands.
