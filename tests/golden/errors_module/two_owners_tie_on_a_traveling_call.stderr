@@ -1,0 +1,2 @@
+error[dispatch]: these `combine` arms tie: each is the more specific one somewhere, and a call could match both — write the arm that is most specific in every position
+  --> tests/golden/errors_module/two_owners_tie_on_a_traveling_call/bee/bee.kso:7:8

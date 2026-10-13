@@ -1,0 +1,8 @@
+pub type thing
+  n
+
+pub fn make n
+  thing n
+
+pub fn combine (thing n) _
+  "ay {n}"

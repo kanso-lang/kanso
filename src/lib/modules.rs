@@ -49,7 +49,11 @@ pub fn check_shipped(path: &str) -> Result<(), String> {
 pub fn compile_module(dir: &std::path::Path, require_entry: bool) -> Result<ast::Program, String> {
     LOCK.with(|l| *l.borrow_mut() = hako::read_lock(dir));
     let mut visited = crate::hash::Set::default();
-    compile_module_root(dir, require_entry, &mut visited)
+    let mut program = compile_module_root(dir, require_entry, &mut visited)?;
+    if !require_entry {
+        forget_shades(&mut program.fns);
+    }
+    Ok(program)
 }
 
 /// hako's own verbs, written in kanso and carried in the binary the way the
@@ -549,7 +553,14 @@ fn compile_module_loaded(
         1 => crate::hash::Set::default(),
         _ => parsed.iter().flat_map(|(_, _, p)| check::declared_names(p)).collect(),
     };
-    let mut file_travels: Vec<Vec<(String, diag::Span)>> = Vec::with_capacity(parsed.len());
+    // The functions the module's other files declare: a call of one on a
+    // value a function was handed is shaded, as a call of the file's own is.
+    // A module of one file has no others.
+    let module_fns: crate::hash::Set<&str> = match parsed.len() {
+        1 => crate::hash::Set::default(),
+        _ => parsed.iter().flat_map(|(_, _, p)| p.fns.iter().map(|f| f.name.as_str())).collect(),
+    };
+    let mut file_travels: Vec<Vec<check::Travel>> = Vec::with_capacity(parsed.len());
     for ((file, source, program), mut diags) in parsed.iter().zip(marker_diags) {
         let hidden = match parsed.len() {
             1 => crate::hash::Map::default(),
@@ -575,6 +586,7 @@ fn compile_module_loaded(
             &shadowable,
             &module_types,
             &module_decls,
+            &module_fns,
             &mut travels,
         ));
         file_travels.push(travels);

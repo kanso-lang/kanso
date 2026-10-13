@@ -116,8 +116,10 @@ pub fn parse_play(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
         body,
         span,
         is_pub: false,
+        written_pub: false,
         file: crate::ast::unstamped(),
         synthetic: false,
+        shades: None,
     });
     Ok(program)
 }
@@ -199,8 +201,10 @@ pub fn parse_entry(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
         body,
         span,
         is_pub: false,
+        written_pub: false,
         file: crate::ast::unstamped(),
         synthetic: false,
+        shades: None,
     };
     Ok(Program {
         fns: vec![main],
@@ -581,11 +585,13 @@ fn parse_fn(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
     Ok(FnDecl {
         name,
         is_pub,
+        written_pub: is_pub,
         span,
         params,
         body: stmts,
         file: crate::ast::unstamped(),
         synthetic: false,
+        shades: None,
     })
 }
 
@@ -629,11 +635,13 @@ fn parse_constant(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
         return Ok(FnDecl {
             name,
             is_pub,
+            written_pub: is_pub,
             span,
             params: Vec::new(),
             body: stmts,
             file: crate::ast::unstamped(),
             synthetic: false,
+            shades: None,
         });
     }
     if is_block_head(&header.tokens) {
@@ -654,11 +662,13 @@ fn parse_constant(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
         return Ok(FnDecl {
             name,
             is_pub,
+            written_pub: is_pub,
             span,
             params: Vec::new(),
             body: vec![Stmt::Expr(expr)],
             file: crate::ast::unstamped(),
             synthetic: false,
+            shades: None,
         });
     }
     if !body.is_empty() {
@@ -674,11 +684,13 @@ fn parse_constant(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
     Ok(FnDecl {
         name,
         is_pub,
+        written_pub: is_pub,
         span,
         params: Vec::new(),
         body: vec![Stmt::Expr(expr)],
         file: crate::ast::unstamped(),
         synthetic: false,
+        shades: None,
     })
 }
 
