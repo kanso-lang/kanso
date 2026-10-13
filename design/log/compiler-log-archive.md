@@ -101202,3 +101202,108 @@ the rewrap when that phrase broke across a line, which confirmed it reads the
 phrase literally.
 
 The oldest live entry moves to the archive with this one.
+
+## 2026-10-10 — a pop after a skipped lap walks the whole result
+
+With the two carry faults of kanso#1834 fixed, the sat port still failed under
+the lap carry: `rand75_unsat` reported a satisfying assignment, and mal's
+self-hosted runs died with a segmentation fault. Both came back right with the
+pop's copy-out made deep, so the search went there.
+
+When a carrying loop returns, `k_beat_pop_slow` copies its result out of the
+loop's storage. That walk has no mark, so it counts every arena node as a
+survivor, and it stops at a node whose direct interior survives as well. Under
+the old rule every lap staged, so whatever the result held in the depth's carry
+pair sat under the pair's own nodes, and the walk reached and copied it. The
+lap carry lets laps go by without staging. Such a lap builds its new nodes in
+the arena, around values that are still in the pair. The pop's walk meets the
+fresh outer node first, finds its interior fresh too, and stops. The value in
+the pair is left where it was. The next loop entered at the same depth stages
+into the same pair and writes over it.
+
+`tests/golden/micro/a_pop_after_a_skipped_lap_keeps_what_the_lap_built.kso` is
+the shape in a dozen lines: a loop that wraps a box four times, of which only
+the first lap stages, followed by a loop at the same depth that builds twenty
+thousand elements a lap. The second loop's list replaced the first loop's
+innermost box, and the program printed `<<<record>>>` where the interpreter
+prints `<<<<[1 2 3]>>>>`.
+
+The carry now records when a lap skipped its stage, in the lap carry's drift
+test and in the chain's. A stage clears the record, and so does the push that
+opens a depth. A pop that finds it set walks the whole result, as it already
+did when a write had reached the carry. A pop after a loop whose last lap
+staged is unchanged.
+
+mal still crashed after that, in a map lookup reading a key whose length word
+held a pointer. A hardware watchpoint on the key showed it written twice by
+stage copies into a carry buffer and then overwritten by a later stage that
+reused the buffer. The deep walk at the pop had found a map whose header and
+pairs lay in the arena and whose keys lay in the pair. It copied the keys out
+and rewrote the pairs in place. The map's sorted view is a second, malloc'd
+copy of the pairs that the walk never reaches, so it went on naming the old
+keys, and the next lookup searched it. The walk now drops the view whenever
+it moves a key or a value in a map it repairs in place, and the next read
+sorts again.
+
+`tests/golden/micro/a_sorted_view_follows_the_keys_a_pop_moves.kso` builds
+the shape: a loop that adds a key a lap and reads the map back, staging every
+tenth lap, followed by a second run of the same loop with keys of the same
+length. Without the change the program dies with a segmentation fault; with
+it, it prints what the interpreter prints. Main does not reach this path,
+because its pops copy deep only after a write has reached the carry.
+
+The deep walk first cost memory where it should not have. It meets a string
+builder whose header survives and goes straight to the in-place repair, which
+asks only whether the builder's storage lies in the arena. A builder's storage
+is malloc'd, so that answer was no, and the repair copied it into the arena and
+dropped the builder's capacity, leaving a plain string the next append had to
+copy again. The survival test the shallow walk uses already passes a builder,
+and a malloc'd byte buffer, for this reason. The repair now passes them too.
+With that, `string_builder_shape`, `builder_counts_once` and
+`a_builder_handed_on_is_still_a_builder` are back to main's counts; with the
+repair copying, `string_builder_shape` had evacuated 4,096 bytes where it
+evacuates 80.
+
+Against main, the counters that see a pop fall or hold. basket allocates
+27,263 nodes, one fewer, and asks 4 survival questions where it asked 16,002;
+the run program's survive count falls from 105,679 slots to 4,854 and it
+evacuates 6,441,632 bytes where it evacuated 9,789,344. `record_reuse_shape`
+asks 8 survival questions where it asked 16,006, and `effect_push_shape` 10
+where it asked 15.
+
+The ports' long-running loops, measured by peak resident memory on this branch
+with main's fixes merged in, against main alone. mal's `(fib 25)` held 764 MB
+on main and holds 9 MB here, and a 40,000-step tail call that held 147 MB
+holds 9 MB; both print what they printed before. That closes mal's F8. lox's
+F18, a loop that builds a `Point` a pass, is not closed by this change alone:
+it holds 1,131 MB at 20,000 passes on both trees. With kanso#1824 added as
+well it holds 24 MB at 20,000 passes and 88 MB at 80,000, which is what the
+interpreter holds, 31 MB and 93 MB. The lox port keeps every object in a heap
+of cells that it never collects, so that growth is the program's own. What
+stays slow is time: each stage copies the whole live heap again, and 200,000
+passes still had not finished after 120 seconds.
+
+CI measured the rest against main, and most of it costs. Every benchmark's
+machine code grows by between 9,200 and 9,472 bytes, the runtime's share of
+the lap carry; runbench's is 611,769 bytes and the fourteen together 4,781,774.
+work_deepbench does the most extra work, landing on 393,576,371 against
+main's 367,269,411, 7.2% more. runbench, with the four phases kanso#1836 added, does 1,247,098,999 against main's 1,245,043,324, 0.17% more; encodebench
+2,398,358,806, 0.19% more; livebench 1,473,968,154; jsonbench 860,559,756;
+oneshot 13,210,643; work_widebench 28,175,109; digestbench 5,599,654; escapebench
+39,045,879; indexbench 2,459,068; scanbench 270,069; readbench 4,577,565.
+basket does less, 30,415,829 against 32,505,156, and so does pendbench,
+190,050,778 against 190,396,306. The deep walk at the pop and the record of a
+skipped lap are what this change adds to those paths, but no build has
+separated the two, so the delta arrived with the change and its split between
+them is open. On the compile side, release codegen counts 454,310,397, dev
+codegen 118,946,233, compile_instructions 25,858,385, entry_instructions
+85,515,649 and library_instructions 86,067,297, each a little higher, and
+emit_instructions falls to 7,058,267. In the browser, compiling the corpus
+takes 390,605,563 instructions with a peak of 675,725 bytes, and running it
+34,102,877.
+
+Together those cost the objective 0.0035: the meta reads 90.2465 against a
+floor of 90.2499. The change is a correctness fix, because a loop that holds
+764 MB to compute `(fib 25)` is a program that fails on a larger input, and
+the floor goes down by exactly that much under the rule for changes that make
+the language work as specified.

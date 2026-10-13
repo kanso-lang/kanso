@@ -2470,7 +2470,11 @@ impl<'a> Interp<'a> {
             return Callee::EntryType;
         }
         if let Some(ty) = self.types.get(name).copied() {
-            return Callee::Constructor(ty);
+            // An imported type enrolled under its bare name gives way to a
+            // group the program declares: the author's own name wins.
+            if ty.origin.is_none() || !self.fns.contains_key(name) {
+                return Callee::Constructor(ty);
+            }
         }
         match self.fns.get(name) {
             Some(overloads) => Callee::Group(overloads.clone()),

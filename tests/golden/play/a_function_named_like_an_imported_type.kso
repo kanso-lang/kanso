@@ -1,0 +1,9 @@
+import "std/list"
+
+fn apply f
+  f 1 1
+
+fn counting a b
+  a + b
+
+print "{list/sum [(apply counting)]}"

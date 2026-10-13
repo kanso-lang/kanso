@@ -5169,7 +5169,57 @@ lazy_as_list = row
 
 rows_c1zzzzzzt = text/concat rows_c1zzzzzzv3bb [lazy_as_list]
 
-rows_c = text/concat rows_c1zzzzzzt [itself]
+# A type the program declares shadows a builtin of that name (2026-10-12).
+# The mutation drops the checker's arity guard, and `type run` built with
+# `run 1 2 3` is refused with the builtin's count.
+own_type_count = row
+  "a builtin count over a declared type"
+  true
+  "cargo test --release --test play_verb"
+  "specs (unit, golden, differential)"
+  (breaking "a_builtin_count_over_a_declared_type")
+  no_setup
+
+rows_c1zzzzzztb = text/concat rows_c1zzzzzzt [own_type_count]
+
+# The checker's literal check lets a declared type shadow a builtin too. The
+# mutation drops it, and `run 1 2 3` is refused for not starting with a string.
+own_type_demand = row
+  "a builtin demand over a declared type"
+  true
+  "cargo test --release --test play_verb"
+  "specs (unit, golden, differential)"
+  (breaking "a_builtin_demand_over_a_declared_type")
+  no_setup
+
+rows_c1zzzzzztbb = text/concat rows_c1zzzzzztb [own_type_demand]
+
+# Native code lets a declared type shadow a builtin. The mutation drops it,
+# and the play file's build stops on the builtin's count.
+own_type_native = row
+  "a native builtin over a declared type"
+  true
+  "cargo test --release --test play_verb"
+  "specs (unit, golden, differential)"
+  (breaking "a_native_builtin_over_a_declared_type")
+  no_setup
+
+rows_c1zzzzzztbbb = text/concat rows_c1zzzzzztbb [own_type_native]
+
+# The interpreter calls a declared group before an imported type of the same
+# bare name. The mutation builds the type, and std/list's `counting` stops on
+# its field count.
+own_group_interp = row
+  "an imported type over a declared group"
+  true
+  "cargo test --release --test play_verb"
+  "specs (unit, golden, differential)"
+  (breaking "an_imported_type_over_a_declared_group")
+  no_setup
+
+rows_c1zzzzzztbbbb = text/concat rows_c1zzzzzztbbb [own_group_interp]
+
+rows_c = text/concat rows_c1zzzzzztbbbb [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

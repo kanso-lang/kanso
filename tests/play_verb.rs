@@ -39,6 +39,50 @@ fn declarations_and_statements_share_the_file() {
     }
 }
 
+/// A type the file declares is the file's name, even where a builtin shares
+/// it. `run` is the builtin std/os wraps, and this file imports nothing; the
+/// checker refused `run 1 2 3` with the builtin's count and native code did
+/// the same at the build.
+#[test]
+fn a_type_named_like_a_builtin_is_the_files_own() {
+    let golden = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/golden/play/a_type_named_like_a_builtin.stdout");
+    let want = std::fs::read_to_string(&golden).expect("the golden reads");
+    for engine in [&[][..], &["--interp"][..]] {
+        let run = play("a_type_named_like_a_builtin.kso", engine);
+
+        assert_eq!(
+            String::from_utf8_lossy(&run.stdout),
+            want,
+            "engine {engine:?}: {}",
+            String::from_utf8_lossy(&run.stderr)
+        );
+        assert!(run.status.success(), "engine {engine:?}");
+    }
+}
+
+/// A function the file declares wins over a type an import enrols under the
+/// same bare name. std/list exports a record `counting`; the interpreter built
+/// one from this file's two-argument `counting` and stopped on its field count,
+/// where native code called the function.
+#[test]
+fn a_function_named_like_an_imported_type_is_the_files_own() {
+    let golden = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/golden/play/a_function_named_like_an_imported_type.stdout");
+    let want = std::fs::read_to_string(&golden).expect("the golden reads");
+    for engine in [&[][..], &["--interp"][..]] {
+        let run = play("a_function_named_like_an_imported_type.kso", engine);
+
+        assert_eq!(
+            String::from_utf8_lossy(&run.stdout),
+            want,
+            "engine {engine:?}: {}",
+            String::from_utf8_lossy(&run.stderr)
+        );
+        assert!(run.status.success(), "engine {engine:?}");
+    }
+}
+
 /// Nothing can import a play file, so `pub` inside one claims an audience
 /// that cannot exist.
 #[test]

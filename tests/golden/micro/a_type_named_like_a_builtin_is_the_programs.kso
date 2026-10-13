@@ -1,0 +1,17 @@
+# A type the program declares is the program's name, even where a builtin
+# shares it. `run` and `random` are builtins std/os and std/math wrap, and
+# this file imports neither. The checker read `run 1 2 3` as the builtin's
+# call and refused the count; native code built `random 7 1` as a call to
+# the random builtin.
+type run
+  a
+  b
+  c
+
+type random
+  byte
+  x
+
+pub play =
+  print "{run 1 2 3}"
+  print "{random 7 1}"

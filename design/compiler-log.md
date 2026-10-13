@@ -21,111 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-10 — a pop after a skipped lap walks the whole result
-
-With the two carry faults of kanso#1834 fixed, the sat port still failed under
-the lap carry: `rand75_unsat` reported a satisfying assignment, and mal's
-self-hosted runs died with a segmentation fault. Both came back right with the
-pop's copy-out made deep, so the search went there.
-
-When a carrying loop returns, `k_beat_pop_slow` copies its result out of the
-loop's storage. That walk has no mark, so it counts every arena node as a
-survivor, and it stops at a node whose direct interior survives as well. Under
-the old rule every lap staged, so whatever the result held in the depth's carry
-pair sat under the pair's own nodes, and the walk reached and copied it. The
-lap carry lets laps go by without staging. Such a lap builds its new nodes in
-the arena, around values that are still in the pair. The pop's walk meets the
-fresh outer node first, finds its interior fresh too, and stops. The value in
-the pair is left where it was. The next loop entered at the same depth stages
-into the same pair and writes over it.
-
-`tests/golden/micro/a_pop_after_a_skipped_lap_keeps_what_the_lap_built.kso` is
-the shape in a dozen lines: a loop that wraps a box four times, of which only
-the first lap stages, followed by a loop at the same depth that builds twenty
-thousand elements a lap. The second loop's list replaced the first loop's
-innermost box, and the program printed `<<<record>>>` where the interpreter
-prints `<<<<[1 2 3]>>>>`.
-
-The carry now records when a lap skipped its stage, in the lap carry's drift
-test and in the chain's. A stage clears the record, and so does the push that
-opens a depth. A pop that finds it set walks the whole result, as it already
-did when a write had reached the carry. A pop after a loop whose last lap
-staged is unchanged.
-
-mal still crashed after that, in a map lookup reading a key whose length word
-held a pointer. A hardware watchpoint on the key showed it written twice by
-stage copies into a carry buffer and then overwritten by a later stage that
-reused the buffer. The deep walk at the pop had found a map whose header and
-pairs lay in the arena and whose keys lay in the pair. It copied the keys out
-and rewrote the pairs in place. The map's sorted view is a second, malloc'd
-copy of the pairs that the walk never reaches, so it went on naming the old
-keys, and the next lookup searched it. The walk now drops the view whenever
-it moves a key or a value in a map it repairs in place, and the next read
-sorts again.
-
-`tests/golden/micro/a_sorted_view_follows_the_keys_a_pop_moves.kso` builds
-the shape: a loop that adds a key a lap and reads the map back, staging every
-tenth lap, followed by a second run of the same loop with keys of the same
-length. Without the change the program dies with a segmentation fault; with
-it, it prints what the interpreter prints. Main does not reach this path,
-because its pops copy deep only after a write has reached the carry.
-
-The deep walk first cost memory where it should not have. It meets a string
-builder whose header survives and goes straight to the in-place repair, which
-asks only whether the builder's storage lies in the arena. A builder's storage
-is malloc'd, so that answer was no, and the repair copied it into the arena and
-dropped the builder's capacity, leaving a plain string the next append had to
-copy again. The survival test the shallow walk uses already passes a builder,
-and a malloc'd byte buffer, for this reason. The repair now passes them too.
-With that, `string_builder_shape`, `builder_counts_once` and
-`a_builder_handed_on_is_still_a_builder` are back to main's counts; with the
-repair copying, `string_builder_shape` had evacuated 4,096 bytes where it
-evacuates 80.
-
-Against main, the counters that see a pop fall or hold. basket allocates
-27,263 nodes, one fewer, and asks 4 survival questions where it asked 16,002;
-the run program's survive count falls from 105,679 slots to 4,854 and it
-evacuates 6,441,632 bytes where it evacuated 9,789,344. `record_reuse_shape`
-asks 8 survival questions where it asked 16,006, and `effect_push_shape` 10
-where it asked 15.
-
-The ports' long-running loops, measured by peak resident memory on this branch
-with main's fixes merged in, against main alone. mal's `(fib 25)` held 764 MB
-on main and holds 9 MB here, and a 40,000-step tail call that held 147 MB
-holds 9 MB; both print what they printed before. That closes mal's F8. lox's
-F18, a loop that builds a `Point` a pass, is not closed by this change alone:
-it holds 1,131 MB at 20,000 passes on both trees. With kanso#1824 added as
-well it holds 24 MB at 20,000 passes and 88 MB at 80,000, which is what the
-interpreter holds, 31 MB and 93 MB. The lox port keeps every object in a heap
-of cells that it never collects, so that growth is the program's own. What
-stays slow is time: each stage copies the whole live heap again, and 200,000
-passes still had not finished after 120 seconds.
-
-CI measured the rest against main, and most of it costs. Every benchmark's
-machine code grows by between 9,200 and 9,472 bytes, the runtime's share of
-the lap carry; runbench's is 611,769 bytes and the fourteen together 4,781,774.
-work_deepbench does the most extra work, landing on 393,576,371 against
-main's 367,269,411, 7.2% more. runbench, with the four phases kanso#1836 added, does 1,247,098,999 against main's 1,245,043,324, 0.17% more; encodebench
-2,398,358,806, 0.19% more; livebench 1,473,968,154; jsonbench 860,559,756;
-oneshot 13,210,643; work_widebench 28,175,109; digestbench 5,599,654; escapebench
-39,045,879; indexbench 2,459,068; scanbench 270,069; readbench 4,577,565.
-basket does less, 30,415,829 against 32,505,156, and so does pendbench,
-190,050,778 against 190,396,306. The deep walk at the pop and the record of a
-skipped lap are what this change adds to those paths, but no build has
-separated the two, so the delta arrived with the change and its split between
-them is open. On the compile side, release codegen counts 454,310,397, dev
-codegen 118,946,233, compile_instructions 25,858,385, entry_instructions
-85,515,649 and library_instructions 86,067,297, each a little higher, and
-emit_instructions falls to 7,058,267. In the browser, compiling the corpus
-takes 390,605,563 instructions with a peak of 675,725 bytes, and running it
-34,102,877.
-
-Together those cost the objective 0.0035: the meta reads 90.2465 against a
-floor of 90.2499. The change is a correctness fix, because a loop that holds
-764 MB to compute `(fib 25)` is a program that fails on a larger input, and
-the floor goes down by exactly that much under the rule for changes that make
-the language work as specified.
-
 ## 2026-10-10 — a fold that joins onto its accumulator writes in place
 
 The mustache port renders a template by folding over its pieces, and its
@@ -1668,6 +1563,48 @@ refused, so the floor drops by what it costs.
 On main after #1904 the tab's compile reads `browser_compile_instructions`
 393,497,266, up 1,118,891 from main's 392,378,375 on the same tree.
 
+## 2026-10-12 — a name the author declared wins over a builtin and an import
+
+#1891's first item, from the ports. Three reductions broke the 2026-08-29
+ruling that an author's own name wins over an import's.
+
+- **A type named like a builtin.** mustache declared `type run` and built one
+  with `run 1 2 3`, importing nothing. The checker refused it twice over, with
+  the count of the builtin std/os wraps and with that builtin's demand for a
+  string. chip8's `type random` drew the same arity refusal. The checker let a
+  declared function shadow a builtin and forgot a declared type; it now asks
+  both. Native code had the same gap on the play route, where the name arrives
+  bare: the build stopped on the builtin's count. Through an import the name
+  arrives qualified and native already built the record.
+- **A function named like an imported type.** mustache imported std/list and
+  declared `fn counting a b`. std/list exports a record `counting`, which the
+  import enrols under its bare name, and the interpreter built that record
+  before looking for the file's group. It stopped on the field count where
+  native called the function. A declared group now wins over an imported
+  type of the same bare name.
+
+`tests/play_verb.rs` pins both on both engines:
+`a_type_named_like_a_builtin_is_the_files_own` and
+`a_function_named_like_an_imported_type_is_the_files_own`, with fixtures in
+`tests/golden/play`. The first also runs through an import as
+`tests/golden/micro/a_type_named_like_a_builtin_is_the_programs`, which adds
+`type random`. Main refuses both play fixtures. Four ratchet rows break one
+guard each, and each turns its spec red.
+
+The test-file half of the item (a test file's `import "std/list"` replacing a
+private constructor) is #1883's, in kanso#1907.
+
+CI's rows, on the tree merged with #1913: the shadow check costs each compile
+a little. compile_instructions lands on 25,888,376 (+6,825),
+entry_instructions on 85,392,486 (+11,173) and library_instructions on
+85,946,778 (+11,196); browser_compile_instructions on 391,315,220 (+3,718) and
+interp_instructions on 488,739,924 (+108). emit_instructions falls 1,084 to
+7,012,393. The welfare floor drops by what this costs, under the rule that
+building the language is priced at its cost.
+
+On main after #1904 the tab's compile reads `browser_compile_instructions`
+392,382,093, up 3,718 from main's 392,378,375 on the same tree.
+
 91.11.
 
 With main merged after #1937, browser_compile_instructions lands on
@@ -1676,6 +1613,13 @@ With main merged after #1937, browser_compile_instructions lands on
 On CI's rows for the tree merged with main after #1937: compile_instructions
 lands on 26,183,028, entry_instructions on 86,449,300, library_instructions on
 86,666,390, emit_instructions on 7,048,150 and compile_allocs on 14,644.
+
+393,186,348.
+
+On CI's rows for the tree merged with main after #1937: compile_instructions
+lands on 26,064,732, entry_instructions on 86,313,974, library_instructions on
+86,530,678 and interp_instructions on 487,131,185. emit_instructions falls to
+7,046,962.
 
 ## 2026-10-12 — arms travel with the value
 

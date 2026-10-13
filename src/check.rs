@@ -2238,7 +2238,9 @@ fn arity_at(name: &str, span: Span, argc: usize, named: &Named<'_>, diags: &mut 
             diags.push(Diagnostic::new("arity", message, span));
         }
     }
-    if known.is_none() {
+    // A type the program declares is its own name too, and its field count
+    // was asked above: a record named `run` is not std/os's builtin.
+    if known.is_none() && !named.fields.contains_key(name) {
         if let Some(takes) = builtin_arity(name) {
             if argc != takes {
                 diags.push(Diagnostic::new(
@@ -2493,7 +2495,9 @@ fn literal_argument_at(
     // decision, an accident of which names have wrappers.
     let forwards = alias.is_some();
     let declared = groups.has(name, args.len());
-    let shadowed = !forwards && declared;
+    // A type the program declares shadows a builtin of that name as a
+    // function does: `type run` is built with `run 1 2 3`.
+    let shadowed = !forwards && (declared || types.contains_key(name.as_str()));
     for (i, arg) in args.iter().enumerate() {
         let Some(kind) = literal_kind(arg) else { continue };
         let Some(allowed) = builtin_demand(bare, i).filter(|_| !shadowed) else {

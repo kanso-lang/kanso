@@ -8555,7 +8555,9 @@ impl<'a> Backend<'a> {
         // further down says so, and this has to say it too, because it runs
         // first. lib/sha256 declares `bytes`, and a guard that skipped this
         // condition refused its three-argument call as a wrong-count builtin.
-        let shadows = !was_builtin && self.declares(name);
+        // A type the program declares shadows a builtin too: a file that
+        // declares `type run` builds one with `run 1 2 3`.
+        let shadows = !was_builtin && (self.declares(name) || self.type_ids.contains_key(name));
         if !shadows {
             if let Some(takes) = crate::check::builtin_arity(name) {
                 if emitted.len() != takes {
