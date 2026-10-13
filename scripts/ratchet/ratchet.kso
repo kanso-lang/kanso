@@ -5191,7 +5191,7 @@ lazy_as_list = row
   (breaking "a_lazy_sequence_where_a_list_goes_checks_clean")
   no_setup
 
-rows_c1zzzzzzt = text/concat rows_c1zzzzzzv3bb [lazy_as_list]
+rows_cq1 = text/concat rows_c1zzzzzzv3bb [lazy_as_list]
 
 # A type the program declares shadows a builtin of that name (2026-10-12).
 # The mutation drops the checker's arity guard, and `type run` built with
@@ -5204,7 +5204,7 @@ own_type_count = row
   (breaking "a_builtin_count_over_a_declared_type")
   no_setup
 
-rows_c1zzzzzztb = text/concat rows_c1zzzzzzt [own_type_count]
+rows_cq2 = text/concat rows_cq1 [own_type_count]
 
 # The checker's literal check lets a declared type shadow a builtin too. The
 # mutation drops it, and `run 1 2 3` is refused for not starting with a string.
@@ -5216,7 +5216,7 @@ own_type_demand = row
   (breaking "a_builtin_demand_over_a_declared_type")
   no_setup
 
-rows_c1zzzzzztbb = text/concat rows_c1zzzzzztb [own_type_demand]
+rows_cq3 = text/concat rows_cq2 [own_type_demand]
 
 # Native code lets a declared type shadow a builtin. The mutation drops it,
 # and the play file's build stops on the builtin's count.
@@ -5228,7 +5228,7 @@ own_type_native = row
   (breaking "a_native_builtin_over_a_declared_type")
   no_setup
 
-rows_c1zzzzzztbbb = text/concat rows_c1zzzzzztbb [own_type_native]
+rows_cq4 = text/concat rows_cq3 [own_type_native]
 
 # The interpreter calls a declared group before an imported type of the same
 # bare name. The mutation builds the type, and std/list's `counting` stops on
@@ -5241,7 +5241,7 @@ own_group_interp = row
   (breaking "an_imported_type_over_a_declared_group")
   no_setup
 
-rows_c1zzzzzztbbbb = text/concat rows_c1zzzzzztbbb [own_group_interp]
+rows_cq5 = text/concat rows_cq4 [own_group_interp]
 
 # `&`, `|` and `^` mixed without parentheses are refused. The mutation lets the
 # chain through, and the error corpus's fixture reads left to right instead.
@@ -5253,7 +5253,7 @@ bits_mixed = row
   (breaking "bit_operators_mixed_freely")
   no_setup
 
-rows_c1zzzzzztbbbbb = text/concat rows_c1zzzzzztbbbb [bits_mixed]
+rows_cq6 = text/concat rows_cq5 [bits_mixed]
 
 # `and` and `or` meeting without parentheses are refused. The mutation lets the
 # condition through, and the error corpus's fixture prints instead.
@@ -5265,7 +5265,7 @@ and_or_mixed = row
   (breaking "and_meets_or_freely")
   no_setup
 
-rows_c1zzzzzztbbbbbb = text/concat rows_c1zzzzzztbbbbb [and_or_mixed]
+rows_cq7 = text/concat rows_cq6 [and_or_mixed]
 
 # A file may open with a header comment and one blank line. The mutation
 # refuses that blank, and the micro corpus's fixture that opens with a header
@@ -5278,7 +5278,7 @@ header_blank = row
   (breaking "header_comment_refused")
   no_setup
 
-rows_c1zzzzzztbbbbbbb = text/concat rows_c1zzzzzztbbbbbb [header_blank]
+rows_cq8 = text/concat rows_cq7 [header_blank]
 
 callee_under_a_frame = row
   "a cluster refused for a callee it reaches under a frame"
@@ -5288,7 +5288,7 @@ callee_under_a_frame = row
   (breaking "a_cluster_refused_for_a_callee_under_a_frame")
   no_setup
 
-rows_c1zzzzzztbbbbbbbb = text/concat rows_c1zzzzzztbbbbbbb [callee_under_a_frame]
+rows_cq9 = text/concat rows_cq8 [callee_under_a_frame]
 
 concat_in_place = row
   "a concat accumulator copied every lap"
@@ -5298,9 +5298,9 @@ concat_in_place = row
   (breaking "a_concat_accumulator_copied_every_lap")
   no_setup
 
-rows_c1zzzzzztbbbbbbbbb = text/concat rows_c1zzzzzztbbbbbbbb [concat_in_place]
+rows_cq10 = text/concat rows_cq9 [concat_in_place]
 
-rows_c = text/concat rows_c1zzzzzztbbbbbbbbb [itself]
+rows_c = text/concat rows_cq10 [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
