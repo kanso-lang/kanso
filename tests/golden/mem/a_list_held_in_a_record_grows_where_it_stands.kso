@@ -1,0 +1,67 @@
+# A list held in a record and pushed onto through the record: the
+# accumulator lox, markdown, datalog and sat each wrote (#1892). The record
+# is handed over whole and read only through its fields, and every record
+# that reaches `add` was built with a list nothing else holds, so the push
+# writes into the list. Copied every lap, 40,000 laps allocated 37 GB.
+#
+# The same holds for a map written with `put`. `put_in` is `add` again, for
+# the records the proof must refuse: two bags built on one list, and a bag
+# read again after it was added to. One such caller is enough to keep the
+# push off the list for every caller of the function, which is why the long
+# loop has `add` to itself. Two fills that each start from an empty list
+# show the literal is not shared between them.
+type bag
+  count
+  items
+
+type tally
+  seen
+  marks
+
+fn add b i
+  bag (b.count + 1) (push b.items i)
+
+fn put_in b i
+  bag (b.count + 1) (push b.items i)
+
+fn fill b 0
+  b
+
+fn fill b n
+  fill (add b n) (n - 1)
+
+fn mark t k
+  tally (t.seen + 1) (put t.marks k t.seen)
+
+fn mark_all t 0
+  t
+
+fn mark_all t n
+  mark_all (mark t n) (n - 1)
+
+fn long_runs n
+  full = fill (bag 0 []) n
+  marked = mark_all (tally 0 { 0:0 }) (n / 10)
+  "{full.count} {length full.items} {marked.seen} {length marked.marks}"
+
+fn shared_list x
+  xs = [1 x]
+  one = put_in (bag 0 xs) 3
+  two = put_in (bag 0 xs) 4
+  "{one.items} {two.items} {xs}"
+
+fn read_again x
+  kept = bag 0 [x]
+  grown = put_in kept 1
+  "{kept.items} {grown.items}"
+
+fn two_fills n
+  short = fill (bag 0 []) n
+  shorter = fill (bag 0 []) (n - 1)
+  "{short.items} {shorter.items}"
+
+pub play =
+  print (long_runs 20000)
+  print (shared_list 2)
+  print (read_again 9)
+  print (two_fills 3)
