@@ -1,3 +1,4 @@
+import "../chrome"
 import "std/io"
 import "std/json"
 import "std/list"
@@ -147,16 +148,8 @@ fn with_engine progs page w r
   on = (told_where -> chosen progs set told_where)
   os/env "KANSO_CHROME" .> on
 
-chrome_paths = [
-  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-  "/usr/bin/google-chrome"
-  "/usr/bin/chromium-browser"
-  "/usr/bin/chromium"
-  "/usr/bin/google-chrome-stable"
-]
-
 fn chosen progs set none
-  first_chrome progs set chrome_paths 1
+  first_chrome progs set chrome/paths 1
 
 fn chosen progs set where
   os/exists where .> (there -> told_of progs set where there)
