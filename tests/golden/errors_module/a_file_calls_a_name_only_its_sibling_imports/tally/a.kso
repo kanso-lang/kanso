@@ -1,0 +1,4 @@
+import "std/list"
+
+pub fn doubled xs
+  list/to_list (list/map xs (x -> x * 2))
