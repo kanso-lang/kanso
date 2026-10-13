@@ -1,0 +1,21 @@
+# `merge` copies a record with the named fields replaced and every other field
+# carried over (ruled 2026-10-13, #1886). The original is untouched. One merge
+# serves every record the module declares that has the fields it names, so
+# `promote` copies a user and a badge alike.
+type badge
+  name
+  role
+
+type user
+  age
+  name
+  role
+
+fn promote r
+  merge r { "role":"chef" }
+
+u = user 47 "clay" "cook"
+
+pub play = print "{merge u { "age":48 "name":"clay s" }}"
+  .> (_ -> print "{promote u} {promote (badge "sam" "guest")}")
+  .> (_ -> print "{u}")

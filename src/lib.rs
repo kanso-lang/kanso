@@ -1664,11 +1664,157 @@ pub fn desugar_field_reads(program: &mut ast::Program) {
     // Inequality rides the same hook: it has to see every module the merge
     // produced, which is exactly what this pass already runs after.
     desugar_inequality(program);
+    desugar_merges(program);
     synthesize_reader_groups(program);
     for decl in &mut program.fns {
         for stmt in &mut decl.body {
             desugar_stmt(stmt);
         }
+    }
+}
+
+/// The builtin that copies a record with named fields replaced (#1886).
+pub const MERGE: &str = "merge";
+
+/// The field a `merge` key names, when it is a plain string literal.
+pub fn merge_key(key: &ast::Expr) -> Option<&str> {
+    match key {
+        ast::Expr::Str(parts, _) => match parts.as_slice() {
+            [ast::TemplatePart::Lit(text)] => Some(text.as_str()),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// A record this compilation unit declares, as the checker sees it: an
+/// imported record is a qualified name or the short clone the loader makes.
+pub fn merge_owned(ty: &ast::TypeDecl) -> bool {
+    !ty.synthetic && !ast::has_slash(&ty.name) && !ty.fields.is_empty()
+}
+
+/// `merge u { "b":2 }` becomes a call to a group with one arm per record the
+/// calling module declares that has every field named:
+///
+///     fn Merge_1b (t Kept0 _ Kept2) Given0 = t Kept0 Given0 Kept2
+///
+/// so every engine runs a dispatch and a construction it already has. One
+/// group per module and set of names, shared by every call that names them.
+/// A value of a type with no arm meets the dispatch's own refusal.
+fn desugar_merges(program: &mut ast::Program) {
+    let records: Vec<(String, Vec<String>, crate::diag::Span)> = program
+        .types
+        .iter()
+        .filter(|t| !t.synthetic && !t.fields.is_empty())
+        .map(|t| (t.name.clone(), t.fields.iter().map(|(f, _, _)| f.clone()).collect(), t.span))
+        .collect();
+    let mut made: crate::hash::Set<String> = crate::hash::Set::default();
+    let mut arms = Vec::new();
+    for decl in &mut program.fns {
+        let owner = ast::split_qual(&decl.name).map(|(o, _)| o.to_string()).unwrap_or_default();
+        let mut at = |e: &mut ast::Expr| merge_expr(e, &owner, &records, &mut made, &mut arms);
+        for stmt in &mut decl.body {
+            match stmt {
+                ast::Stmt::Bind { expr, .. } | ast::Stmt::Expr(expr) => at(expr),
+            }
+        }
+    }
+    program.fns.extend(arms);
+}
+
+fn merge_expr(
+    e: &mut ast::Expr,
+    owner: &str,
+    records: &[(String, Vec<String>, crate::diag::Span)],
+    made: &mut crate::hash::Set<String>,
+    arms: &mut Vec<ast::FnDecl>,
+) {
+    walk_children_mut(e, &mut |child| merge_expr(child, owner, records, made, arms));
+    let ast::Expr::App { head, args, span, .. } = e else { return };
+    let ast::Expr::Ident(name, _, _) = head.as_ref() else { return };
+    if name.as_str() != MERGE || args.len() != 2 {
+        return;
+    }
+    let ast::Expr::MapLit(entries, _) = &args[1] else { return };
+    let Some(keys) =
+        entries.iter().map(|(k, _)| merge_key(k).map(str::to_string)).collect::<Option<Vec<_>>>()
+    else {
+        return;
+    };
+    let span = *span;
+    // Each name carries its length, so two sets of names never spell the same
+    // group, and the result is a word every engine takes as a symbol.
+    let bare: String =
+        keys.iter().fold("Merge".to_string(), |acc, k| format!("{acc}_{}{k}", k.len()));
+    let group = match owner.is_empty() {
+        true => bare,
+        false => format!("{owner}/{bare}"),
+    };
+    if made.insert(group.clone()) {
+        for (ty, fields, declared) in records {
+            let ty_owner = ast::split_qual(ty).map(|(o, _)| o).unwrap_or("");
+            if ty_owner != owner || !keys.iter().all(|k| fields.contains(k)) {
+                continue;
+            }
+            let given = |k: &str| keys.iter().position(|g| g == k);
+            let pattern = fields
+                .iter()
+                .enumerate()
+                .map(|(at, f)| match given(f) {
+                    Some(_) => ast::Pattern::Wildcard(span),
+                    None => ast::Pattern::Var(Name::new(&format!("Kept{at}")), span),
+                })
+                .collect();
+            let mut params =
+                vec![ast::Pattern::Ctor { ty: Name::new(ty), fields: pattern, whole: None }];
+            params.extend(
+                (0..keys.len()).map(|at| ast::Pattern::Var(Name::new(&format!("Given{at}")), span)),
+            );
+            let built = fields
+                .iter()
+                .enumerate()
+                .map(|(at, f)| {
+                    let local = match given(f) {
+                        Some(g) => format!("Given{g}"),
+                        None => format!("Kept{at}"),
+                    };
+                    ast::Expr::Ident(Name::new(&local), span, crate::ast::Resolution::default())
+                })
+                .collect();
+            let body = ast::Expr::App {
+                head: Box::new(ast::Expr::Ident(
+                    Name::new(ty),
+                    span,
+                    crate::ast::Resolution::default(),
+                )),
+                args: built,
+                span,
+                piped: false,
+            };
+            // Each arm carries its type's span: arms of one group that share a
+            // span read as one declaration made twice when a module is merged.
+            arms.push(ast::FnDecl {
+                name: group.clone(),
+                is_pub: true,
+                span: *declared,
+                params,
+                body: vec![ast::Stmt::Expr(body)],
+                file: crate::ast::unstamped(),
+                synthetic: false,
+            });
+        }
+    }
+    let ast::Expr::App { args, .. } = e else { return };
+    let map = args.pop().expect("two arguments");
+    let ast::Expr::MapLit(entries, _) = map else { return };
+    args.extend(entries.into_iter().map(|(_, v)| v));
+    *head_of(e) = ast::Expr::Ident(Name::new(&group), span, crate::ast::Resolution::default());
+}
+
+fn head_of(e: &mut ast::Expr) -> &mut ast::Expr {
+    match e {
+        ast::Expr::App { head, .. } => head.as_mut(),
+        _ => unreachable!("a merge is an application"),
     }
 }
 

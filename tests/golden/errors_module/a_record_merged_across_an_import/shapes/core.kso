@@ -1,0 +1,5 @@
+pub type point
+  x
+  y
+
+pub origin = point 0 0

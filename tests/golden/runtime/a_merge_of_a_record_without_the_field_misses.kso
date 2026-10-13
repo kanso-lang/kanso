@@ -1,0 +1,15 @@
+# The checker asks a `merge` whose value's type it cannot see whether some
+# record the module declares has every field named (#1886). A value of another
+# record still reaches the merge at run time, and misses it there the way a call
+# misses a group none of whose arms takes its argument.
+type tag
+  label
+
+type user
+  age
+  name
+
+fn rename r
+  merge r { "name":"x" }
+
+pub play = print "{rename (tag "t")}"

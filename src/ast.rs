@@ -418,6 +418,11 @@ pub fn bare_space(qual: &str, name: &str) -> String {
 /// sentence about `dep/~join` says `dep/join`, which is what the author
 /// wrote at the call site the sentence points at.
 pub fn spoken(text: &str) -> std::borrow::Cow<'_, str> {
+    // a `merge` runs as a group the compiler made for the fields it names, and
+    // a value none of its arms takes is a miss of the `merge` the author wrote
+    if split_qual(text).map_or(text, |(_, bare)| bare).starts_with("Merge_") {
+        return std::borrow::Cow::Borrowed(crate::MERGE);
+    }
     match text.contains(BARE_MARK) {
         true => std::borrow::Cow::Owned(text.replace(&format!("/{BARE_MARK}"), "/")),
         false => std::borrow::Cow::Borrowed(text),

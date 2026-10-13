@@ -194,6 +194,26 @@ clay <span class="o">=</span> <span class="f">user</span> <span class="n">47</sp
 
 <p>you get the parts back out by <em>destructuring</em>, and there are two ways to do it. the positional form, <code>user years who = clay</code>, binds every field at once by position—<code>years</code> to <code>age</code>, <code>who</code> to <code>name</code>. the field form, <code>{ name:alias } = clay</code>, names just the field you want and binds it to a name of your choosing. there is no <code>clay.name</code> dotted access—the <code>.</code> is the pipe operator (chapter 06), so reaching into a record is always a destructure, stated plainly.</p>
 
+<p>a record is never changed after it is built, so a record with one field different is a new record. <code>merge</code> builds it: it takes the record and a map literal naming the fields to replace, and carries every other field over. the original is untouched:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">older.kso</div>
+  <pre><code><span class="k">type</span> user
+  <span class="f">age</span>
+  <span class="f">name</span>
+
+clay <span class="o">=</span> <span class="f">user</span> <span class="n">47</span> <span class="s">"clay"</span>
+older <span class="o">=</span> <span class="f">merge</span> clay { <span class="s">"age"</span>:<span class="n">48</span> }
+<span class="f">print</span> <span class="s">"<span class="i">{older}</span>"</span> <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"<span class="i">{clay}</span>"</span>)</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso play older.kso</div>
+    <pre><code>older/user 48 "clay"
+older/user 47 "clay"</code></pre>
+  </div>
+</div>
+
+<p>each name in the map has to be a field of the record's type, and the compiler refuses one that is not. like construction, <code>merge</code> is allowed only in the module that declares the type.</p>
+
 <h2>equality and comparison</h2>
 
 <p>equality in kanso is structural: two values are equal when they are built the same way, all the way down. two lists with the same elements are equal; two records with the same fields are equal—no notion of identity, no "same object" versus "equal object" distinction to trip over. comparison (<code>&lt;</code>, <code>&lt;=</code>, and their mirrors) works on numbers and orders strings lexicographically:</p>
