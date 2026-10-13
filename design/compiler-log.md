@@ -1629,6 +1629,18 @@ On main after #1904 the tab's compile reads `browser_compile_instructions`
 With main merged after #1918, browser_compile_instructions lands on
 393,374,069.
 
+CI's rows against main: `compile_instructions` from 26,463,317 to 26,477,664,
+`entry_instructions` from 88,129,856 to 88,171,192, `library_instructions` from
+87,707,726 to 87,748,995, `emit_instructions` from 7,052,040 to 7,168,640,
+`codegen_instructions_dev` from 119,002,656 to 119,334,030 and
+`codegen_instructions_release` from 454,179,390 to 455,948,524. Every native
+binary carries the pool's start and its forcing, so `text` grew from 4,838,990
+to 4,843,470 bytes, `emitted_other_defines` from 2,036 to 2,049 and
+`emitted_other_lines` from 148,239 to 148,304. `work_encodebench` landed at
+2,398,406,493, up 559, and most other benchmarks fell by a few hundred
+instructions. The floor drops by the difference under the 2026-10-11 ruling
+(#1862).
+
 ## 2026-10-12 — arms travel with the value
 
 The first rule of the 2026-10-12 gavel on #1894. A value carries the arms its
