@@ -2132,7 +2132,7 @@ compile_peak_bytes on 681,983, front_end_rounds on 19 and front_end_visits on
 interp_allocs lands on 587,584, interp_peak_bytes on 701,975,
 browser_compile_instructions on 402,835,440, browser_compile_peak_bytes on
 683,140, browser_run_instructions on 34,172,021 and browser_run_peak_bytes on
-1,441,792. The native binaries' code, text, lands on 4,849,246.
+1,441,792. The native binaries' code, `text`, lands on 4,854,398.
 
 The counters this moves, on this container: in `bench/cost_golden_run.txt`,
 `run_allocs` to 1,771,566 and `run_alloc_bytes` to 330,057,564. In
