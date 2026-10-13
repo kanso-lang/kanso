@@ -1762,3 +1762,15 @@ The largest single move is release codegen, up 4.7%. Which carried change
 produced it is not isolated here; the branches' own readings are in their
 entries. Every carried change builds a ruled part of the language, so the
 floor drops by what the combined tree costs.
+
+The first carrier push missed two goldens. The merge that built it took main's
+`bench/cost_golden_run.txt` and `bench/compile_memory_golden.txt` over the
+carried branches' copies, so neither held the combined tree's reading. The run
+program prints the same `runbench 46132896` on main and on this tree, and its
+counters now read `run_arena_peak_bytes` 4,718,608 against main's 9,961,488 and
+`run_allocs` 1,812,039 against 1,812,274. Three run counters rose:
+`run_beat_iters` from 52,008 to 92,008, `run_evac_allocs` from 49,188 to 49,221
+and `run_push_mut_slow` from 1,554,416 to 1,554,428. The front end's
+`front_end_visits` on compile_corpus went from 7,990 to 8,003 and
+`compile_peak_bytes` from 694,044 to 695,647. Welfare rises to 91.3652 on the
+lower run peak, and the floor is banked there.
