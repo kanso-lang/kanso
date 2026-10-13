@@ -10206,14 +10206,19 @@ static KValue k_b_push_grow(KValue lv, KList* l, KValue item, int mutate) {
        peak but moved every longer list onto 8, 32, 128, which overshoots a
        thousand elements by twice as much and doubled the book's counters
        sample's permanent peak. */
-    long long cap = 4;
-    while (cap < (l->len + 1)) cap <<= 1;
-    if (cap > 16) cap <<= 1;
     /* An accumulator's storage goes outside the arena, so the loop's rewind
        reclaims the iteration's garbage without reaching what the iteration
        was building. A transient's stays in the arena, where the rewind is
        exactly what should free it. */
     int perm = mutate && k_outlives_beat(l);
+    long long cap = 4;
+    while (cap < (l->len + 1)) cap <<= 1;
+    /* The extra doubling pays for itself in the arena, where a grow is a
+       fresh buffer and a copy. A buffer outside it grows by realloc, so it
+       takes the smallest power of two: a 4,300-element accumulator held
+       16,384 slots and now holds 8,192, and the run program's permanent
+       peak halved for +37,769 instructions of extra regrows. */
+    if (cap > 16 && !perm) cap <<= 1;
     if (perm && cap < 256) cap = 256;
     /* A buffer already out of the arena is grown where it is. The field it
        sits in was registered when it first left, and `l->items` is the same
