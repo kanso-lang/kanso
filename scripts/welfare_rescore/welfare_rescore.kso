@@ -536,7 +536,15 @@ fn written m phases epochs raw
   a = anchor decoded phases
   scored_rows m phases decoded a (epoch_divisors decoded epochs)
 
-# An epoch naming a commit no row carries answers an err, handed on as it is.
+# An epoch naming a commit no row carries answers an err, handed on as it is,
+# and it is the one reported when the splice's anchor is an err as well.
+fn scored_rows _ _ _ (err _) e@(err _)
+  e
+
+# A splice whose rows disagree answers an err from `anchor`, handed on too.
+fn scored_rows _ _ _ e@(err _) _
+  e
+
 fn scored_rows _ _ _ _ e@(err _)
   e
 

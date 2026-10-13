@@ -1,0 +1,4 @@
+import "./lonely"
+import "std/io"
+
+io/write "{lonely/anything 1}"

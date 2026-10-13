@@ -1,8 +1,4 @@
-fn price "flan"
-  err "flan is seasonal"
-
-fn price _
-  450
+import "std/text"
 
 fn label dish cents
   "{dish}: {cents} cents"
@@ -10,5 +6,5 @@ fn label dish cents
 fn lab dish cents
   label dish cents
 
-seasonal = price "flan"
+seasonal = text/to_int (text/slice "flank" 1 4)
 print (lab "flan" seasonal)

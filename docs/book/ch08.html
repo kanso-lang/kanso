@@ -16,8 +16,7 @@ extra_css: /book/book.css
 
 ok <span class="o">=</span> <span class="f">decode</span> <span class="s">"\<span class="i">{\"name\": \"kanso\", \"tags\": [\"fast\", \"simple\"]}</span>"</span>
 bad <span class="o">=</span> <span class="f">decode</span> <span class="s">"\<span class="i">{\"name\": nope}</span>"</span>
-<span class="f">print</span> (<span class="f">describe</span> ok)
-  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"recoded: <span class="i">{encode ok}</span>"</span>)
+<span class="f">ok</span> <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">describe</span> v) <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"recoded: <span class="i">{encode v}</span>"</span>))
   <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">testing/when_failed</span> bad told))</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run using</div>
@@ -27,7 +26,7 @@ parse failed at byte 10: invalid literal</code></pre>
   </div>
 </div>
 
-<p>the module behind this panel is the library itself—the sample directory links the real <code>lib/json</code> files next to that <code>main</code>. three chapters shake hands in twelve lines: <code>decode</code> returns a value or an <code>err</code>, dispatch pulls the failure apart in <code>describe</code>, and the happy path never checks anything. note what the failure says: byte 10, <code>invalid literal</code>—the parser saw <code>n</code>, committed to <code>null</code>, and reported exactly where the input betrayed it.</p>
+<p>the module behind this panel is the library itself—the sample directory links the real <code>lib/json</code> files next to that <code>main</code>. three chapters shake hands in twelve lines: <code>decode</code> returns a value or an <code>err</code>, dispatch pulls the failure apart in <code>describe</code>, and the happy path never checks anything. <code>ok</code> reaches <code>describe</code> and <code>encode</code> through <code>.&gt;</code>, because neither has an arm for an err and the checker knows <code>decode</code> can answer one. note what the failure says: byte 10, <code>invalid literal</code>—the parser saw <code>n</code>, committed to <code>null</code>, and reported exactly where the input betrayed it.</p>
 
 <h2>six files, one namespace</h2>
 
@@ -42,7 +41,7 @@ parse failed at byte 10: invalid literal</code></pre>
   <li><code>json_test.kso</code>—the suite</li>
 </ul>
 
-<p><code>value.kso</code> calls <code>scan.kso</code>'s helpers without ceremony, and the test file reaches private helpers when it wants to. (the underscored names you'll see are house style from before <code>pub</code> arrived—the sweep that retires them rides with import enforcement.) the api file is where every read should start:</p>
+<p><code>value.kso</code> calls <code>scan.kso</code>'s helpers without ceremony, and the test file sees only what the module marks <code>pub</code>, the same as any importer. (the underscored names you'll see are house style from before <code>pub</code> arrived—the sweep that retires them rides with import enforcement.) the api file is where every read should start:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">lib/json/json.kso</div>
@@ -228,20 +227,36 @@ err at 1: unexpected character `?`</code></pre>
   <span class="f">_fail</span> p <span class="s">"invalid escape `\\<span class="i">{utf8 [c]}</span>`"</span>
 
 <span class="k">fn</span> <span class="f">_str_hex4</span> cs p
-  h1 <span class="o">=</span> <span class="f">_hex_digit</span> cs[p]
-  h2 <span class="o">=</span> <span class="f">_hex_digit</span> (cs[p <span class="o">+</span> <span class="n">1</span>])
-  h3 <span class="o">=</span> <span class="f">_hex_digit</span> (cs[p <span class="o">+</span> <span class="n">2</span>])
-  h4 <span class="o">=</span> <span class="f">_hex_digit</span> (cs[p <span class="o">+</span> <span class="n">3</span>])
-  h1 <span class="o">*</span> <span class="n">4096</span> <span class="o">+</span> h2 <span class="o">*</span> <span class="n">256</span> <span class="o">+</span> h3 <span class="o">*</span> <span class="n">16</span> <span class="o">+</span> h4
+  <span class="f">_hex_on</span> (<span class="f">_hex_three</span> cs p) (<span class="f">_hex_digit</span> cs[p <span class="o">+</span> <span class="n">3</span>])
+
+<span class="k">fn</span> <span class="f">_hex_three</span> cs p
+  <span class="f">_hex_on</span> (<span class="f">_hex_on</span> (<span class="f">_hex_digit</span> cs[p]) (<span class="f">_hex_digit</span> cs[p <span class="o">+</span> <span class="n">1</span>])) (<span class="f">_hex_digit</span> cs[p <span class="o">+</span> <span class="n">2</span>])
+
+<span class="k">fn</span> <span class="f">_hex_on</span> e@(<span class="f">err</span> <span class="o">_</span>) (<span class="f">err</span> <span class="o">_</span>)
+  e
+
+<span class="k">fn</span> <span class="f">_hex_on</span> e@(<span class="f">err</span> <span class="o">_</span>) <span class="o">_</span>
+  e
+
+<span class="k">fn</span> <span class="f">_hex_on</span> <span class="o">_</span> e@(<span class="f">err</span> <span class="o">_</span>)
+  e
+
+<span class="k">fn</span> <span class="f">_hex_on</span> n d
+  n <span class="o">*</span> <span class="n">16</span> <span class="o">+</span> d
 
 <span class="k">fn</span> <span class="f">_str_unicode</span> cs p acc
-  code <span class="o">=</span> <span class="f">_str_hex4</span> cs (p <span class="o">+</span> <span class="n">2</span>)
+  <span class="f">_unicode_at</span> cs p acc (<span class="f">_str_hex4</span> cs (p <span class="o">+</span> <span class="n">2</span>))
+
+<span class="k">fn</span> <span class="f">_unicode_at</span> <span class="o">_</span> <span class="o">_</span> <span class="o">_</span> e@(<span class="f">err</span> <span class="o">_</span>)
+  e
+
+<span class="k">fn</span> <span class="f">_unicode_at</span> cs p acc code
   <span class="f">if</span> (code <span class="o">&lt;</span> <span class="n">55296</span> or <span class="n">57343</span> <span class="o">&lt;</span> code)
     <span class="f">_str_chars</span> cs (p <span class="o">+</span> <span class="n">6</span>) (<span class="f">append</span> acc (<span class="f">from_code</span> code))
     <span class="f">_str_surrogate</span> cs p acc code</code></pre>
 </div>
 
-<p>the file has eight arms for the named escapes—<code>110</code> is <code>\n</code>, and its siblings for <code>\"</code>, <code>\\</code>, <code>\/</code>, <code>\b</code>, <code>\f</code>, <code>\r</code>, <code>\t</code> read identically—plus an end-of-input arm and the two shown here. <code>\uXXXX</code> is the interesting one: <code>_str_hex4</code> reads four hex digits into a code point, <code>from_code</code> turns the code point into a character, and its utf-8 bytes join the accumulator. a code point in the surrogate range is half a character, and <code>_str_surrogate</code> goes looking for the other half. the digit math is worth running with your own eyes:</p>
+<p>the file has eight arms for the named escapes—<code>110</code> is <code>\n</code>, and its siblings for <code>\"</code>, <code>\\</code>, <code>\/</code>, <code>\b</code>, <code>\f</code>, <code>\r</code>, <code>\t</code> read identically—plus an end-of-input arm and the two shown here. <code>\uXXXX</code> is the interesting one: <code>_str_hex4</code> reads four hex digits into a code point, passing each through <code>_hex_on</code>, which hands the first bad digit on as the failure, <code>from_code</code> turns the code point into a character, and its utf-8 bytes join the accumulator. a code point in the surrogate range is half a character, and <code>_str_surrogate</code> goes looking for the other half. the digit math is worth running with your own eyes:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">unicode.kso</div>
@@ -249,11 +264,28 @@ err at 1: unexpected character `?`</code></pre>
 
 <span class="k">fn</span> <span class="f">decode_u</span> s
   cs <span class="o">=</span> <span class="f">text/bytes</span> s
-  h1 <span class="o">=</span> <span class="f">hex_digit</span> cs[<span class="n">1</span>]
-  h2 <span class="o">=</span> <span class="f">hex_digit</span> cs[<span class="n">2</span>]
-  h3 <span class="o">=</span> <span class="f">hex_digit</span> cs[<span class="n">3</span>]
-  h4 <span class="o">=</span> <span class="f">hex_digit</span> cs[<span class="n">4</span>]
-  <span class="f">text/from_code</span> (h1 <span class="o">*</span> <span class="n">4096</span> <span class="o">+</span> h2 <span class="o">*</span> <span class="n">256</span> <span class="o">+</span> h3 <span class="o">*</span> <span class="n">16</span> <span class="o">+</span> h4)
+  <span class="f">char_of</span> (<span class="f">hex_on</span> (<span class="f">hex_three</span> cs <span class="n">1</span>) (<span class="f">hex_digit</span> cs[<span class="n">4</span>]))
+
+<span class="k">fn</span> <span class="f">char_of</span> e@(<span class="f">err</span> _)
+  <span class="f">e</span>
+
+<span class="k">fn</span> <span class="f">char_of</span> code
+  <span class="f">text/from_code</span> code
+
+<span class="k">fn</span> <span class="f">hex_three</span> cs p
+  <span class="f">hex_on</span> (<span class="f">hex_on</span> (<span class="f">hex_digit</span> cs[p]) (<span class="f">hex_digit</span> cs[p <span class="o">+</span> <span class="n">1</span>])) (<span class="f">hex_digit</span> cs[p <span class="o">+</span> <span class="n">2</span>])
+
+<span class="k">fn</span> <span class="f">hex_on</span> e@(<span class="f">err</span> _) (<span class="f">err</span> _)
+  <span class="f">e</span>
+
+<span class="k">fn</span> <span class="f">hex_on</span> e@(<span class="f">err</span> _) _
+  <span class="f">e</span>
+
+<span class="k">fn</span> <span class="f">hex_on</span> _ e@(<span class="f">err</span> _)
+  <span class="f">e</span>
+
+<span class="k">fn</span> <span class="f">hex_on</span> n d
+  n <span class="o">*</span> <span class="n">16</span> <span class="o">+</span> d
 
 <span class="k">fn</span> <span class="f">hex_alpha</span> c
   <span class="f">if</span> (<span class="n">96</span> <span class="o">&lt;</span> c and c <span class="o">&lt;</span> <span class="n">103</span>) (c <span class="o">-</span> <span class="n">87</span>) (<span class="f">hex_upper</span> c)

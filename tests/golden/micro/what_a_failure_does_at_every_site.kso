@@ -16,13 +16,12 @@
 #   holds      a container holds what it was built from; it did not fail
 #   through    the failure passes and the operation does not happen
 #
-# Since the 2026-09-15 ruling a raised err handed straight to an operator or
-# to a group with no arm for it does not compile, so the failures here are
-# bound to names first. The checker reads a call's arguments and not the names
-# it is handed, the same deliberate blind spot the none rule keeps, and the
-# runtime contract these lines pin is reached through it. What the runtime
-# does with a bare err it was not warned about is the ledger's open question.
+# A raised err handed to an operator or to a group with no arm for it does
+# not compile, bound to a name or not (#1884), so the failures here are the
+# runtime's: `text/to_int` refusing text it cannot read. What the runtime does
+# with a failure the checker was not warned about is what these lines pin.
 import "std/testing"
+import "std/text"
 
 type couple
   left
@@ -32,7 +31,7 @@ fn as_text reason
   "{reason}"
 
 fn boom what
-  err what
+  text/to_int what
 
 fn joined a b
   "{a}{b}"

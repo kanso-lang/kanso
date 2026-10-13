@@ -746,12 +746,17 @@ fn eligible_clusters(
             .filter(|(from, to, _, _)| members.contains(to) && !members.contains(from))
             .map(|(from, to, _, _)| (*from, *to))
             .collect();
-        // An entering tail call is demotable when the caller cannot be
-        // reached from the cluster again: the entry then happens once per
-        // cluster entry, and the frame demotion retains is one. A caller the
-        // cluster reaches — through a lambda as readily as through a call —
-        // is entered once per iteration, and demoting there trades a
-        // constant arena for a stack that grows with the input.
+        // An entering tail call is demotable when the cluster cannot reach
+        // the caller again without a frame of its own on the stack. A caller
+        // the cluster reaches by tail calls, through a lambda or through a
+        // function value is entered once per lap with nothing held, and
+        // demoting there trades a constant arena for a stack that grows with
+        // the input. A caller reached through a plain call is entered under
+        // the frame that call holds, so the stack already grows with the
+        // nesting and demotion adds one frame to each level. bc's interpreter
+        // is that shape: its loop calls `exec` plainly for the body, `exec`
+        // tail-calls the loop for a nested one, and refusing the entry left
+        // every loop in the program on the grow-only arena (#1892).
         if !entries.is_empty() {
             let map = mentions.get_or_insert_with(|| mention_map(program));
             let seeds = scc.iter().map(|&g| groups[g].0.as_str());
@@ -2182,26 +2187,102 @@ fn group_param_set(
         .fold(0, |acc, (i, _)| acc | inference.param(i, position))
 }
 
-/// Does `name` appear as a function value — an identifier outside call-head
-/// position — anywhere in the program?
-/// Every name each declaration mentions — a call head, an argument, a lambda
-/// body, a guard, alike. Built once per analysis and read by every cluster
-/// that has an entry to judge.
+/// Every name each declaration can enter without holding its own frame: the
+/// heads of its tail calls, every name inside its lambdas and every name it
+/// uses as a value. Built once per analysis and read by every cluster that
+/// has an entry to judge.
 fn mention_map(program: &Program) -> HashMap<&str, HashSet<&str>> {
     let mut mentions: HashMap<&str, HashSet<&str>> = HashMap::default();
     for decl in &program.fns {
         let entry = mentions.entry(decl.name.as_str()).or_default();
         for stmt in &decl.body {
-            collect_names(guard_stmt_expr(stmt), entry);
+            frameless_names(guard_stmt_expr(stmt), entry);
+        }
+        if let Some(Stmt::Expr(last)) = decl.body.last() {
+            let mut tails = Vec::new();
+            marked_tails(last, false, &mut tails);
+            for (tail, _) in tails {
+                match tail {
+                    Expr::App { head, .. } if matches!(head.as_ref(), Expr::Ident(..)) => {
+                        if let Expr::Ident(n, _, _) = head.as_ref() {
+                            entry.insert(n.as_str());
+                        }
+                    }
+                    other => collect_names(other, entry),
+                }
+            }
         }
     }
     mentions
 }
 
-/// Every name reachable from `seeds`. Arity is ignored and a mention is taken
-/// for a call, so the answer over-approximates the call graph. That is the
-/// safe direction here: a caller wrongly judged reachable costs a cluster its
-/// bracket, where one wrongly judged unreachable costs a bounded stack.
+/// The names an expression can reach with no frame of its own held: every
+/// name inside a lambda, since the lambda may be called in tail position
+/// wherever it goes, and every name used as a value. A name at the head of a
+/// plain call is left out; `mention_map` adds the heads of tail calls.
+fn frameless_names<'a>(e: &'a Expr, out: &mut HashSet<&'a str>) {
+    match e {
+        Expr::Lambda { body, .. } => collect_names(body, out),
+        Expr::Ident(n, _, _) | Expr::Partial(n, _) => {
+            out.insert(n.as_str());
+        }
+        Expr::Block(stmts, _) => {
+            for st in stmts {
+                frameless_names(guard_stmt_expr(st), out);
+            }
+        }
+        Expr::App { head, args, .. } => {
+            if !matches!(head.as_ref(), Expr::Ident(..)) {
+                frameless_names(head, out);
+            }
+            for a in args {
+                frameless_names(a, out);
+            }
+        }
+        Expr::Field { base, .. } => frameless_names(base, out),
+        Expr::Upcast { expr, .. } => frameless_names(expr, out),
+        Expr::Index { base, index, .. } => {
+            frameless_names(base, out);
+            frameless_names(index, out);
+        }
+        Expr::BinOp { lhs, rhs, .. } | Expr::Join { lhs, rhs, .. } => {
+            frameless_names(lhs, out);
+            frameless_names(rhs, out);
+        }
+        Expr::Guard { cond, early, rest, .. } => {
+            frameless_names(cond, out);
+            frameless_names(early, out);
+            for s in rest.iter() {
+                frameless_names(guard_stmt_expr(s), out);
+            }
+        }
+        Expr::List(items, _) => {
+            for i in items {
+                frameless_names(i, out);
+            }
+        }
+        Expr::MapLit(pairs, _) => {
+            for (k, v) in pairs {
+                frameless_names(k, out);
+                frameless_names(v, out);
+            }
+        }
+        Expr::Str(parts, _) => {
+            for p in parts {
+                if let TemplatePart::Interp(inner) = p {
+                    frameless_names(inner, out);
+                }
+            }
+        }
+        Expr::Int(..) | Expr::Float(..) => {}
+    }
+}
+
+/// Every name reachable from `seeds` through `mention_map`. Arity is ignored
+/// and a name inside a lambda is taken for a tail call, so the answer
+/// over-approximates. That is the safe direction here: a caller wrongly
+/// judged reachable costs a cluster its bracket, where one wrongly judged
+/// unreachable costs a stack frame per lap.
 fn reachable_names<'a>(
     mentions: &HashMap<&'a str, HashSet<&'a str>>,
     seeds: impl Iterator<Item = &'a str>,
@@ -2760,15 +2841,31 @@ mod tests {
 
     #[test]
     fn a_cluster_the_entering_caller_is_reached_from_stays_grow_only() {
-        // counted enters the cycle by a tail call and the cycle reaches it
-        // back, so the entry recurs: demoting it would retain a frame per
-        // iteration and trade the arena for the stack.
-        let src = "fn stepping n tally\n  more n tally (n <= 0)\n\nfn more _ tally true\n  tally\n\nfn more n tally false\n  junk = \"k{n}\"\n  stepping (n - 1) (tally + length junk + tiny n)\n\nfn tiny 0\n  counted 0\n\nfn tiny _\n  0\n\nfn counted n\n  stepping n 0\n\nmain = print \"{counted 5}\"\n";
+        // counted enters the cycle by a tail call, and the cycle hands
+        // `tiny`, which tail-calls counted, on as a value. A value can be
+        // called in tail position wherever it goes, so the cycle may reach
+        // counted with no frame held, and demoting the entry could retain a
+        // frame per iteration and trade the arena for the stack.
+        let src = "fn stepping n tally\n  more n tally (n <= 0)\n\nfn more _ tally true\n  tally\n\nfn more n tally false\n  junk = \"k{n}\"\n  stepping (n - 1) (tally + length junk + apply tiny n)\n\nfn apply f x\n  f x\n\nfn tiny 0\n  counted 0\n\nfn tiny _\n  0\n\nfn counted n\n  stepping n 0\n\nmain = print \"{counted 5}\"\n";
         let (program, inference) = compiled(src);
         let beats =
             super::beat_loops(&program, &inference, &crate::linear::in_place_pushes(&program));
 
         assert!(!beats.ids.contains_key(&("stepping".to_string(), 2)));
+    }
+
+    #[test]
+    fn a_cluster_reaching_its_caller_under_a_plain_call_is_a_beat() {
+        // The cycle reaches counted only through `tiny n`, a plain call whose
+        // frame stays on the stack while counted runs. Demoting the entry
+        // adds a frame to each level of that nesting and none to a lap, so
+        // the cycle keeps its bracket (#1892, the bc port's loop statement).
+        let src = "fn stepping n tally\n  more n tally (n <= 0)\n\nfn more _ tally true\n  tally\n\nfn more n tally false\n  junk = \"k{n}\"\n  stepping (n - 1) (tally + length junk + tiny n)\n\nfn tiny 0\n  counted 0\n\nfn tiny _\n  0\n\nfn counted n\n  stepping n 0\n\nmain = print \"{counted 5}\"\n";
+        let (program, inference) = compiled(src);
+        let beats =
+            super::beat_loops(&program, &inference, &crate::linear::in_place_pushes(&program));
+
+        assert!(beats.ids.contains_key(&("stepping".to_string(), 2)));
     }
 
     #[test]
@@ -2969,6 +3066,16 @@ mod tests {
         // in them, and decoding five 300,000-character strings with an
         // escape every three characters read 78,278,587 instructions with
         // the licence and without it.
+        //
+        // `unicode_at` joined on 2026-10-12, when the four hex digits of a
+        // `\u` escape stopped riding a name past their err and the escape's
+        // tail moved into a function of its own. It takes the scanners' slots
+        // and tail-calls `str_chars`, so it is one more scanner.
+        //
+        // The blank skip before a value joined on 2026-10-13. `value_for`
+        // and `value_blank` are one cycle, entered by a tail call from
+        // `parse_value`, and the cycle reaches `parse_value` again only under
+        // the plain calls an array or object makes for each element.
         let scanners: Vec<(String, usize)> = [
             ("json/str_chars", 3),
             ("json/str_low", 5),
@@ -2977,15 +3084,18 @@ mod tests {
             ("json/str_surrogate", 4),
             ("json/str_unicode", 3),
             ("json/string_scan", 3),
+            ("json/unicode_at", 4),
+            ("json/value_blank", 3),
         ]
         .into_iter()
         .map(|(n, a)| (n.to_string(), a))
         .collect();
         assert_eq!(
             licensed, scanners,
-            "the string scanners are the library's only beats: the escaper \
-             and the encoders allocate nothing an iteration outlives, and \
-             scanners threading records or lists stay on the grow-only arena"
+            "the string scanners and the blank skip are the library's only \
+             beats: the escaper and the encoders allocate nothing an iteration \
+             outlives, and scanners threading records or lists stay on the \
+             grow-only arena"
         );
         let regions: Vec<usize> = loops.regions.iter().map(|(_, line, _)| *line).collect();
         assert_eq!(

@@ -1,0 +1,4 @@
+error[type]: `join` takes a list here, not an int
+  --> join_takes_a_list.kso:4:18
+   4 | print (text/join 3 "")
+                        ^

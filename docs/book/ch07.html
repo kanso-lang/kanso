@@ -34,7 +34,7 @@ extra_css: /book/book.css
 
 dango <span class="o">=</span> <span class="f">price</span> <span class="s">"dango"</span>
 pocky <span class="o">=</span> <span class="f">price</span> <span class="s">"pocky"</span>
-<span class="f">print</span> (<span class="f">describe</span> dango)
+<span class="f">dango</span> <span class="o">.&gt;</span> <span class="f">describe</span> <span class="o">.&gt;</span> <span class="f">print</span>
   <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">testing/when_failed</span> pocky (r <span class="o">-&gt;</span> <span class="s">"gomen: <span class="i">{r}</span>"</span>)))</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run teahouse</div>
@@ -43,7 +43,7 @@ gomen: we do not serve pocky</code></pre>
   </div>
 </div>
 
-<p>point the toolchain at the directory and it runs the module. <code>main.kso</code> calls <code>price</code> from <code>menu.kso</code> as if it were next door, because it is. notice three earlier chapters shaking hands in a dozen lines: string-literal dispatch is the menu, an <code>err</code> is the missing item, and <code>price</code> hands it on as it is: <code>with_service</code> has an arm for an err and an arm for a number, and its <code>+ 50</code> runs on the number alone. the err travels out as a value to the arm in <code>main.kso</code>, which is the only place that wants to read it.</p>
+<p>point the toolchain at the directory and it runs the module. <code>main.kso</code> calls <code>price</code> from <code>menu.kso</code> as if it were next door, because it is. notice three earlier chapters shaking hands in a dozen lines: string-literal dispatch is the menu, an <code>err</code> is the missing item, and <code>price</code> hands it on as it is: <code>with_service</code> has an arm for an err and an arm for a number, and its <code>+ 50</code> runs on the number alone. the err travels out as a value to the arm in <code>main.kso</code>, which is the only place that wants to read it. <code>describe</code> has no arm for an err, so <code>dango</code> reaches it through <code>.&gt;</code>, which hands a value on and steps past an err.</p>
 
 <h2>one namespace, many files</h2>
 
@@ -109,21 +109,21 @@ service <span class="o">=</span> <span class="n">50</span></code></pre>
 
 <h2>tests are constants</h2>
 
-<p>chapter 01 promised that tests are just <code>test_</code> constants. drop a test file into the module. it shares the one namespace, so it can call the public <code>price</code> and reach straight past it to the private <code>base_price</code>—which is occasionally exactly what a test wants:</p>
+<p>chapter 01 promised that tests are just <code>test_</code> constants. a test file sits in the module's directory and ends in <code>_test.kso</code>. <code>kanso test</code> compiles it as an importer of the module beside it, so it sees what any caller sees: <code>price</code> and <code>describe</code>, and not <code>base_price</code>. its own helpers stay in the test file, and <code>kanso run</code>, <code>check</code> and <code>build</code> never read it:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">teahouse/menu_test.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"std/testing"</span>
 
-test_base_price_raw <span class="o">=</span> <span class="f">base_price</span> <span class="s">"dango"</span> <span class="o">==</span> <span class="n">350</span>
-
 test_dango_price <span class="o">=</span> <span class="f">price</span> <span class="s">"dango"</span> <span class="o">==</span> <span class="n">400</span>
+
+test_describe <span class="o">=</span> <span class="f">describe</span> <span class="n">400</span> <span class="o">==</span> <span class="s">"400 yen, service included"</span>
 
 test_unknown_item_fails <span class="o">=</span> <span class="f">testing/failed?</span> (<span class="f">price</span> <span class="s">"pocky"</span>)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso test teahouse</div>
-    <pre><code>test_base_price_raw ... ok
-test_dango_price ... ok
+    <pre><code>test_dango_price ... ok
+test_describe ... ok
 test_unknown_item_fails ... ok
 3 passed, 0 failed</code></pre>
   </div>
@@ -189,7 +189,7 @@ test_double <span class="o">=</span> <span class="f">double</span> <span class="
 
 <h2>what you can do now</h2>
 
-<p>you can lay a program out as a directory of files that read like a table of contents, trusting one namespace to knit them together with no imports or exports between them. you know that types come first and everything else is alphabetical, enforced, so there is never a placement decision to make or relitigate. you can mark your public surface with <code>pub</code> and leave everything else private by omission. and you can test any of it—public or private—by naming a boolean <code>test_</code> and running <code>kanso test</code>, with no framework underneath and nothing in a suite of constants that can flake. that is enough machinery to build a real library, which is exactly where the next chapter goes.</p>
+<p>you can lay a program out as a directory of files that read like a table of contents, trusting one namespace to knit them together with no imports or exports between them. you know that types come first and everything else is alphabetical, enforced, so there is never a placement decision to make or relitigate. you can mark your public surface with <code>pub</code> and leave everything else private by omission. and you can test its public surface by naming a boolean <code>test_</code> in a <code>_test.kso</code> file and running <code>kanso test</code>, with no framework underneath and nothing in a suite of constants that can flake. that is enough machinery to build a real library, which is exactly where the next chapter goes.</p>
 
 <h2>exercises</h2>
 

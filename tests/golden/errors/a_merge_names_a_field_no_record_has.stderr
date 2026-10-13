@@ -1,0 +1,4 @@
+error[name]: no record type has a field `rank`
+  --> tests/golden/errors/a_merge_names_a_field_no_record_has.kso:8:13
+   8 |   merge u { "rank":1 }
+                   ^

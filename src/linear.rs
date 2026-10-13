@@ -836,8 +836,15 @@ impl<'a> Analysis<'a> {
                     // contract already gives; they are not declarations, so
                     // `returns_unique` never held them. They also force their
                     // arguments, so a sibling may read the accumulator.
-                    let builtin = (matches!(callee.as_str(), "push" | "append" | "builtin_append")
-                        && args.len() == 2)
+                    let builtin = (matches!(
+                        callee.as_str(),
+                        "push"
+                            | "append"
+                            | "builtin_append"
+                            | "concat"
+                            | "text/concat"
+                            | "builtin_concat"
+                    ) && args.len() == 2)
                         || (callee == "put" && args.len() == 3);
                     if !takes_acc_first_with(args, acc, builtin) {
                         return false;
@@ -1203,6 +1210,13 @@ fn walk_for_push_in(
         // push extends a list, append extends a byte builder, and each writes
         // into its own frontier when nobody else holds the value
         if matches!(head.as_ref(), Expr::Ident(n, _, _) if matches!(n.as_str(), "push" | "append" | "builtin_append"))
+            && args.len() == 2
+            && a.unique_in(&args[0], decl, scoped)
+        {
+            out.insert((decl.file.clone(), span.line as usize, span.col as usize));
+        }
+        // concat extends a list by every element of its second argument
+        if matches!(head.as_ref(), Expr::Ident(n, _, _) if matches!(n.as_str(), "concat" | "text/concat" | "builtin_concat"))
             && args.len() == 2
             && a.unique_in(&args[0], decl, scoped)
         {

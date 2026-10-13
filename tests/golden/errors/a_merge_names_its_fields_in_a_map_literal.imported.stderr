@@ -1,0 +1,4 @@
+error[type]: `merge` names the fields it replaces in a map literal: `merge u { "name":value }` (module a_merge_names_its_fields_in_a_map_literal)
+  --> a_merge_names_its_fields_in_a_map_literal.kso:8:11
+   8 |   merge u changes
+                 ^

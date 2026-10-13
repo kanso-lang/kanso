@@ -1,0 +1,4 @@
+error[syntax]: `&` and `|` bind equally, so a chain that mixes them is ambiguous — parenthesize the part that goes first, as in `(a & b) | c`
+  --> bit_operators_mixed_without_parentheses.kso:4:26
+   4 | pub play = print "{6 & 3 | 8}"
+                                ^

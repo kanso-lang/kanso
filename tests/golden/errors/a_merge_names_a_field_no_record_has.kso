@@ -1,0 +1,10 @@
+# Where the value's type is not known at the merge, the name still has to be a
+# field some record declares (#1886).
+type user
+  age
+  name
+
+fn bump u
+  merge u { "rank":1 }
+
+pub play = print "{bump (user 1 "a")}"

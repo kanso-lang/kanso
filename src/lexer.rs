@@ -68,6 +68,9 @@ struct LexedLine {
 pub struct Lexed {
     pub lines: Vec<Line>,
     pub blank_lines: Vec<usize>,
+    /// The last line of the comment block the file opens with, or 0 when its
+    /// first line of content is not a comment.
+    pub header: usize,
 }
 
 const OPS: [&str; 14] = [">=", "<=", "==", "!=", "+", "-", "*", "/", "%", "<", ">", "&", "|", "^"];
@@ -78,6 +81,7 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
     let mut diags = Vec::new();
     let mut lines = Vec::new();
     let mut blank_lines = Vec::new();
+    let mut header = 0;
     if !source.is_empty() && !source.ends_with('\n') {
         diags.push(Diagnostic::new(
             "formatting",
@@ -116,9 +120,13 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
         }
         let width = trimmed.chars().count();
         if width > MAX_WIDTH {
+            let hint = match holds_literal(trimmed) {
+                true => "; a list or map that long spans lines, one element to a line",
+                false => "",
+            };
             diags.push(Diagnostic::new(
                 "formatting",
-                format!("a line holds at most {MAX_WIDTH} characters — this one has {width}"),
+                format!("a line holds at most {MAX_WIDTH} characters — this one has {width}{hint}"),
                 Span::at(number, MAX_WIDTH + 1),
             ));
         }
@@ -153,6 +161,39 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
                 }
                 Err(d) => diags.push(d),
             }
+            continue;
+        }
+        // A line that ends by opening `[` or `{` holds a list or map that
+        // spans lines (ruled 2026-10-13, #1882): its elements follow, one to
+        // a line, and the closing bracket sits alone at this line's indent.
+        // It is only legal when the literal would not fit on the one line.
+        let dot_lead = content.starts_with(". ") || content.starts_with('.');
+        if let Some(open) = span_opener(content).filter(|_| !dot_lead) {
+            let lexed_line = match lex_line(content, number, indent + 1) {
+                Ok(l) => l,
+                Err(d) => {
+                    diags.push(d);
+                    continue;
+                }
+            };
+            validate_spacing(&lexed_line, number, &mut diags);
+            let span = gather_span(&raws, idx, indent, open, number, &mut diags);
+            idx = span.next;
+            let one_line = indent + content.chars().count() + span.one_line.chars().count() + 1;
+            if span.whole && one_line <= MAX_WIDTH {
+                let what = if open == b'[' { "list" } else { "map" };
+                diags.push(Diagnostic::new(
+                    "formatting",
+                    format!(
+                        "this {what} fits on one line ({one_line} characters) — a {what} spans \
+                         lines only when it does not"
+                    ),
+                    Span::at(number, indent + content.chars().count()),
+                ));
+            }
+            let mut tokens = lexed_line.tokens;
+            tokens.extend(span.tokens);
+            lines.push(Line { number, indent, tokens });
             continue;
         }
         // A continuation line starts with a chain operator (`.` or a fused
@@ -257,6 +298,11 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
             continue;
         }
         if content.starts_with('#') {
+            // the first comment block, if nothing but blanks stands above it
+            let first_block = header == 0 && blank_lines.len() == number - 1;
+            if first_block || (header > 0 && header == number - 1) {
+                header = number;
+            }
             continue;
         }
         match lex_line(content, number, indent + 1) {
@@ -280,7 +326,7 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
         check_needless_continuation(line, &mut pieces, &mut diags);
     }
     if diags.is_empty() {
-        Ok(Lexed { lines, blank_lines })
+        Ok(Lexed { lines, blank_lines, header })
     } else {
         Err(diags)
     }
@@ -400,6 +446,275 @@ fn gather_block(
     (body, at)
 }
 
+/// The bracket a line ends by opening, when its last character outside a
+/// string or comment is `[` or `{`. Such a line opens a list or map that
+/// spans lines (ruled 2026-10-13, #1882). Bytes, for the reason
+/// `block_opener` gives.
+fn span_opener(content: &str) -> Option<u8> {
+    let bytes = content.as_bytes();
+    let mut i = 0;
+    let mut in_str = false;
+    let mut last = 0u8;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'\\' if in_str => i += 2,
+            b'"' => {
+                in_str = !in_str;
+                last = b'"';
+                i += 1;
+            }
+            b'#' if !in_str => break,
+            b' ' if !in_str => i += 1,
+            b => {
+                last = if in_str { b'"' } else { b };
+                i += 1;
+            }
+        }
+    }
+    matches!(last, b'[' | b'{').then_some(last)
+}
+
+/// Whether a line holds more than one expression side by side: a space
+/// outside any string or bracket. One such line is a call, and the one-line
+/// form of a list needs it in parentheses.
+fn spaced_at_top(content: &str) -> bool {
+    let bytes = content.as_bytes();
+    let (mut i, mut depth, mut in_str) = (0, 0usize, false);
+    while i < bytes.len() {
+        match bytes[i] {
+            b'\\' if in_str => i += 1,
+            b'"' => in_str = !in_str,
+            b'(' | b'[' | b'{' if !in_str => depth += 1,
+            b')' | b']' | b'}' if !in_str => depth = depth.saturating_sub(1),
+            b' ' if !in_str && depth == 0 => return true,
+            _ => {}
+        }
+        i += 1;
+    }
+    false
+}
+
+/// Whether a line writes a list or map literal: a `[` or `{` outside any
+/// string that does not follow a name, the way an index's bracket does.
+fn holds_literal(content: &str) -> bool {
+    let bytes = content.as_bytes();
+    let (mut i, mut in_str) = (0, false);
+    while i < bytes.len() {
+        match bytes[i] {
+            b'\\' if in_str => i += 1,
+            b'"' => in_str = !in_str,
+            b'#' if !in_str => return false,
+            b'[' | b'{'
+                if !in_str && (i == 0 || matches!(bytes[i - 1], b' ' | b'(' | b'[' | b'{')) =>
+            {
+                return true;
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    false
+}
+
+/// Whether a line closes a bracket it never opened, as an element line does
+/// when the span's closing bracket is written on the end of it.
+fn closes_early(content: &str) -> bool {
+    let bytes = content.as_bytes();
+    let (mut i, mut depth, mut in_str) = (0, 0i32, false);
+    while i < bytes.len() {
+        match bytes[i] {
+            b'\\' if in_str => i += 1,
+            b'"' => in_str = !in_str,
+            b'#' if !in_str => break,
+            b'(' | b'[' | b'{' if !in_str => depth += 1,
+            b')' | b']' | b'}' if !in_str => {
+                depth -= 1;
+                if depth < 0 {
+                    return true;
+                }
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    false
+}
+
+/// A list or map that spans lines: what follows the line ending in `[` or
+/// `{`. Each element sits on a line of its own, two spaces deeper, and the
+/// closing bracket sits alone at the opening line's indent. A list's element
+/// line is one expression, grouped the way an indented argument line is; a
+/// map's holds one `key:value` entry. An element line may itself open a span.
+///
+/// Answers the tokens to splice after the opening bracket, the closing one
+/// included, the index of the first line after the span, and the literal as
+/// it would be written on one line. The caller holds the line that opened
+/// it and decides whether that one-line form would have fit.
+struct Spanned {
+    tokens: Vec<(Tok, Span, u32)>,
+    next: usize,
+    one_line: String,
+    /// False once the span was refused for its shape; its one-line form is
+    /// then a guess and nobody should be told it fits.
+    whole: bool,
+}
+
+fn gather_span(
+    raws: &[&str],
+    from: usize,
+    indent: usize,
+    open: u8,
+    open_line: usize,
+    diags: &mut Vec<Diagnostic>,
+) -> Spanned {
+    let (close, closer, what) = match open {
+        b'[' => (Tok::RBracket, "]", "list"),
+        _ => (Tok::RBrace, "}", "map"),
+    };
+    let inner = indent + 2;
+    let mut tokens = Vec::new();
+    let mut parts: Vec<String> = Vec::new();
+    let mut whole = true;
+    let mut at = from;
+    while at < raws.len() {
+        let raw = raws[at];
+        let number = at + 1;
+        let trimmed = raw.trim_end();
+        let found = trimmed.len() - trimmed.trim_start().len();
+        let content = &trimmed[found..];
+        if trimmed.is_empty() {
+            diags.push(Diagnostic::new(
+                "formatting",
+                format!("a {what} that spans lines holds no blank lines"),
+                Span::at(number, 1),
+            ));
+            at += 1;
+            continue;
+        }
+        if raw.trim_end() != raw {
+            diags.push(Diagnostic::new(
+                "formatting",
+                "trailing whitespace is not part of the canonical grammar".to_string(),
+                Span::at(number, trimmed.len() + 1),
+            ));
+        }
+        let width = trimmed.chars().count();
+        if width > MAX_WIDTH {
+            diags.push(Diagnostic::new(
+                "formatting",
+                format!("a line holds at most {MAX_WIDTH} characters — this one has {width}"),
+                Span::at(number, MAX_WIDTH + 1),
+            ));
+        }
+        if content == closer && found == indent {
+            tokens.push((close, Span::at(number, found + 1), (found + 2) as u32));
+            return Spanned { tokens, next: at + 1, one_line: parts.join(" "), whole };
+        }
+        // Anything at or left of the opening indent ends the span, and so
+        // does a closing bracket written deeper than it belongs.
+        if found <= indent || content == closer {
+            diags.push(Diagnostic::new(
+                "syntax",
+                format!(
+                    "a {what} that spans lines closes with `{closer}` alone on a line, at the \
+                     indent of the line that opened it"
+                ),
+                Span::at(number, found + 1),
+            ));
+            let next = if found <= indent && !content.starts_with(closer) { at } else { at + 1 };
+            return Spanned { tokens, next, one_line: parts.join(" "), whole: false };
+        }
+        at += 1;
+        if found != inner {
+            diags.push(Diagnostic::new(
+                "formatting",
+                format!(
+                    "each element of a {what} that spans lines sits on its own line, {inner} \
+                     spaces in"
+                ),
+                Span::at(number, found + 1),
+            ));
+            continue;
+        }
+        if content.starts_with('#') {
+            continue;
+        }
+        if closes_early(content) {
+            diags.push(Diagnostic::new(
+                "syntax",
+                format!(
+                    "a {what} that spans lines closes with `{closer}` alone on a line, at the \
+                     indent of the line that opened it"
+                ),
+                Span::at(number, found + content.chars().count()),
+            ));
+            return Spanned { tokens, next: at, one_line: parts.join(" "), whole: false };
+        }
+        // An element line that itself ends by opening a bracket spans too.
+        let nested = span_opener(content);
+        let lexed = match lex_line(content, number, found + 1) {
+            Ok(l) => l,
+            Err(d) => {
+                diags.push(d);
+                continue;
+            }
+        };
+        validate_spacing(&lexed, number, diags);
+        let mut text = content.to_string();
+        let mut element = lexed.tokens;
+        if let Some(inner_open) = nested {
+            let span = gather_span(raws, at, inner, inner_open, number, diags);
+            at = span.next;
+            let fits = inner + content.chars().count() + span.one_line.chars().count() + 1;
+            if span.whole && fits <= MAX_WIDTH {
+                let what = if inner_open == b'[' { "list" } else { "map" };
+                diags.push(Diagnostic::new(
+                    "formatting",
+                    format!(
+                        "this {what} fits on one line ({fits} characters) — a {what} spans \
+                         lines only when it does not"
+                    ),
+                    Span::at(number, inner + content.chars().count()),
+                ));
+            }
+            whole &= span.whole;
+            text.push_str(&span.one_line);
+            text.push_str(if inner_open == b'[' { "]" } else { "}" });
+            element.extend(span.tokens);
+        }
+        if open == b'{' {
+            if nested.is_none() && spaced_at_top(content) {
+                diags.push(Diagnostic::new(
+                    "syntax",
+                    "a map that spans lines holds one `key:value` entry to a line".to_string(),
+                    Span::at(number, found + 1),
+                ));
+            }
+            tokens.extend(element);
+        } else {
+            if nested.is_none() && spaced_at_top(content) {
+                text = format!("({text})");
+            }
+            let first = element.first().map_or(Span::at(number, found + 1), |t| t.1);
+            let last = element.last().map_or(first.col, |t| t.2);
+            tokens.push((Tok::LGroup, first, first.col));
+            tokens.extend(element);
+            tokens.push((Tok::RGroup, Span::at(number, last as usize), last));
+        }
+        parts.push(text);
+    }
+    diags.push(Diagnostic::new(
+        "syntax",
+        format!(
+            "this {what} is never closed — a {what} that spans lines closes with `{closer}` \
+             alone at column {}",
+            indent + 1
+        ),
+        Span::at(open_line, indent + 1),
+    ));
+    Spanned { tokens, next: at, one_line: parts.join(" "), whole: false }
+}
+
 /// One meaning, one rendering: a statement split across `.` continuation
 /// lines is only legal when the spliced one-line form would not fit.
 fn check_needless_continuation(
@@ -416,6 +731,14 @@ fn check_needless_continuation(
         }
     }
     if pieces.len() < 2 {
+        return;
+    }
+    // A list or map that spans lines measures its own one-line form.
+    let spans = line
+        .tokens
+        .windows(2)
+        .any(|w| matches!(w[0].0, Tok::LBracket | Tok::LBrace) && w[1].1.line > w[0].1.line);
+    if spans {
         return;
     }
     let mut width = pieces[0].1 - 1;

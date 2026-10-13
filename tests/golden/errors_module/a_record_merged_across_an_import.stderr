@@ -1,0 +1,4 @@
+error[opacity]: `merge` copies a `point` only in `shapes`, the module that declares it; ask it for the copy through a pub function
+  --> tests/golden/errors_module/a_record_merged_across_an_import/main.kso:4:32
+   4 | io/write "{merge shapes/origin { "x":1 }}"
+                                      ^

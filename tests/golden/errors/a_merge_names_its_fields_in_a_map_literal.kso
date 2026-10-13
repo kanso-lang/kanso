@@ -1,0 +1,10 @@
+# The copy is built from the field names, so `merge` takes them written out in a
+# map literal rather than in a map computed at run time (#1886).
+type user
+  age
+  name
+
+fn rename u changes
+  merge u changes
+
+pub play = print "{rename (user 1 "a") { "name":"b" }}"

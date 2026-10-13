@@ -291,6 +291,17 @@ raised_err = row
   (breaking "a_raised_err_reaching_a_value_site_compiles")
   no_setup
 
+# A name bound to a call that can raise carries the call's err into the
+# check (#1884). The mutation forgets it for locals and constants alike, and
+# the three error fixtures that bind the err first then compile clean.
+named_err = row
+  "a name that forgets the err of its call"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_name_forgets_the_err_of_its_call")
+  no_setup
+
 # A failure crossing a beat carry in the two-word record convention was boxed
 # as a record and read back out of one; the mutation puts the read back and
 # the mem fixture a_failure_crosses_a_beat_carry_in_two_words dies on native
@@ -467,6 +478,9 @@ error_corpus = row
   (breaking "a_diagnostic_stops_being_raised")
   release
 
+# The mutation takes tailcc off every arm on both architectures. It used to
+# lower only the arm64 cap, which an x86-64 release build no longer reads, and
+# the row went blind there.
 release_profile = row
   "a release build that gives up the guaranteed tail call"
   true
@@ -2033,15 +2047,15 @@ known_tag = row
 
 rows_b1kt = text/concat rows_b1nm [known_tag]
 
-# A nine-word arm keeps its tail calls on x86-64. The mutation narrows at
-# eight, and a release build running a three-million-step cycle through a
-# twelve-word arm overflows its stack.
+# A release build hands clang every `musttail` the emitter wrote, however
+# wide the arm. The mutation takes it off every call into an arm that stays
+# on `tailcc`, and a self call through a thirteen-word arm runs out of stack.
 nine_words = row
-  "a nine-word arm narrowed on x86"
+  "a wide arm called without musttail"
   true
   "cargo test --release --test a_big_object_decodes_in_a_release_build"
   "specs (unit, golden, differential)"
-  (breaking "a_nine_word_arm_narrowed_on_x86")
+  (breaking "a_wide_arm_called_without_musttail")
   release
 
 rows_b1nw = text/concat rows_b1kt [nine_words]
@@ -2941,7 +2955,9 @@ rows_c1j = text/concat rows_c1i [coverage_native]
 
 rows_c1k = text/concat rows_c1j [coverage_oracle coverage_oracle_format]
 
-rows_c1m0 = text/concat rows_c1k [beat_cursor rescue_licence raised_err]
+rows_c1l = text/concat rows_c1k [named_err]
+
+rows_c1m0 = text/concat rows_c1l [beat_cursor rescue_licence raised_err]
 
 rows_c1m = text/concat rows_c1m0 [clay_send_filed]
 
@@ -3976,9 +3992,7 @@ partial_nest_native = row
   (breaking "a_native_partial_answering_nothing")
   release
 
-partial_nests = [partial_nest partial_nest_native]
-
-rows_c1zzzz = text/concat rows_c1zzzze partial_nests
+rows_c1zzzz = text/concat rows_c1zzzze [partial_nest partial_nest_native]
 
 # Equality refuses a function wherever the walk meets one, a partial among
 # them. The interpreter answered false for a partial and for a function in a
@@ -4116,9 +4130,7 @@ hop_partial = row
   (breaking "a_partial_held_in_a_nameless_closure")
   release
 
-hops = [hop_value hop_partial]
-
-rows_c1zzzzd = text/concat rows_c1zzzzi hops
+rows_c1zzzzd = text/concat rows_c1zzzzi [hop_value hop_partial]
 
 # text/to_bytes keeps its frame like the other wrappers whose builtin can
 # birth an err, so a rescue in the caller's module reaches its callback.
@@ -4186,10 +4198,6 @@ high_pointers = row
 
 rows_c1zzzzn = text/concat rows_c1zzzzg [high_pointers]
 
-lazy_rows = []
-
-rows_c1zzzzu = text/concat rows_c1zzzzn lazy_rows
-
 # A string builder may be seeded with any value, since a join renders what it
 # joins onto. Native used to refuse the seed, and the first join adopts it.
 seed_refused = row
@@ -4211,7 +4219,7 @@ seed_unbuilt = row
   (breaking "a_first_join_that_never_makes_its_builder")
   release
 
-rows_c1zzzzs = text/concat rows_c1zzzzu [seed_refused seed_unbuilt]
+rows_c1zzzzs = text/concat rows_c1zzzzn [seed_refused seed_unbuilt]
 
 # A builtin in a program that declares a subtype unwraps its arguments, and
 # a lazy one is forced before the unwrap looks at it.
@@ -4605,7 +4613,36 @@ tie_list = row
   (breaking "a_tie_list_read_as_a_reference")
   release
 
-rows_c1zzzzzzzd = text/concat rows_c1zzzzzzze [tie_check tie_list]
+# A field may hold a list of references built from data, written
+# `list/to_list (list/map xs ref)`, and `push` stores a cell still being made
+# on both engines (2026-10-11).
+tie_mapped = row
+  "a tie map of references refused"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_tie_map_of_references_refused")
+  release
+
+tie_push_interp = row
+  "an interpreted push that forces a tie cell"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "an_interpreted_push_forces_a_tie_cell")
+  release
+
+tie_push_native = row
+  "a native push that forces a tie cell"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_native_push_forces_a_tie_cell")
+  release
+
+tie_rows = [tie_check tie_list tie_mapped tie_push_interp tie_push_native]
+
+rows_c1zzzzzzzd = text/concat rows_c1zzzzzzze tie_rows
 
 # A record constructor handed over as a function lowers to the lambda that
 # calls it on native, as the interpreter treats it (2026-10-10, lox F20).
@@ -5067,6 +5104,55 @@ sibling_import = row
 
 rows_c1zzzzzzw9 = text/concat rows_c1zzzzzzx7 [sibling_import]
 
+# A reader that stops early ends every engine by SIGPIPE, quietly
+# (2026-10-12). The mutation leaves the signal ignored, and the interpreter
+# panics on the closed pipe.
+pipe_quiet = row
+  "a closed pipe met as an error"
+  true
+  "cargo test --release --test a_closed_pipe_stops_every_engine_quietly"
+  "specs (unit, golden, differential)"
+  (breaking "a_closed_pipe_met_as_an_error")
+  release
+
+rows_c1zzzzzzx6 = text/concat rows_c1zzzzzzw9 [pipe_quiet]
+
+# A native program's stdout reaches its reader before it writes to stderr,
+# waits or stops (2026-10-12). The mutation leaves stdout in its buffer.
+stdout_settled = row
+  "stdout left in its buffer"
+  true
+  "cargo test --release --test stdout_reaches_its_reader"
+  "specs (unit, golden, differential)"
+  (breaking "stdout_left_in_its_buffer")
+  release
+
+rows_c1zzzzzzx5 = text/concat rows_c1zzzzzzx6 [stdout_settled]
+
+# A lambda called in tail position costs no stack on any engine
+# (2026-10-12). The first mutation has the interpreter call it as a nested
+# call, the second has native call it without the jump; either way the
+# continuation-passing fixture runs out of stack.
+lambda_nested = row
+  "a lambda called as a nested call"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_lambda_called_as_a_nested_call")
+  no_setup
+
+rows_c1zzzzzzx4 = text/concat rows_c1zzzzzzx5 [lambda_nested]
+
+lambda_jump = row
+  "a lambda called without a jump"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_lambda_called_without_a_jump")
+  no_setup
+
+rows_c1zzzzzzx3 = text/concat rows_c1zzzzzzx4 [lambda_jump]
+
 # A value carries the arms its owner wrote into a library that never imported
 # the owner. The mutation lets no call travel, and the library's `area c` is
 # an unknown name again.
@@ -5078,7 +5164,7 @@ arm_travels = row
   (breaking "an_arm_left_behind_by_its_value")
   no_setup
 
-rows_c1zzzzzzw8 = text/concat rows_c1zzzzzzw9 [arm_travels]
+rows_c1zzzzzzw8 = text/concat rows_c1zzzzzzx3 [arm_travels]
 
 # A module that writes a name for its own type keeps that arm and takes the
 # owners' arms of every other shape. The mutation keeps its calls off the
@@ -5107,7 +5193,127 @@ field_in_place = row
 
 rows_c1zzzzzzv3bb = text/concat rows_c1zzzzzzw7 [field_in_place]
 
-rows_c = text/concat rows_c1zzzzzzv3bb [itself]
+# A lazy sequence handed where a builtin takes a list is refused at check
+# (2026-10-13). The mutation deletes the one call that asks, and the error
+# fixture's two refusals go missing.
+lazy_as_list = row
+  "a lazy sequence where a list goes checks clean"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_lazy_sequence_where_a_list_goes_checks_clean")
+  no_setup
+
+rows_cq1 = text/concat rows_c1zzzzzzv3bb [lazy_as_list]
+
+# A type the program declares shadows a builtin of that name (2026-10-12).
+# The mutation drops the checker's arity guard, and `type run` built with
+# `run 1 2 3` is refused with the builtin's count.
+own_type_count = row
+  "a builtin count over a declared type"
+  true
+  "cargo test --release --test play_verb"
+  "specs (unit, golden, differential)"
+  (breaking "a_builtin_count_over_a_declared_type")
+  no_setup
+
+rows_cq2 = text/concat rows_cq1 [own_type_count]
+
+# The checker's literal check lets a declared type shadow a builtin too. The
+# mutation drops it, and `run 1 2 3` is refused for not starting with a string.
+own_type_demand = row
+  "a builtin demand over a declared type"
+  true
+  "cargo test --release --test play_verb"
+  "specs (unit, golden, differential)"
+  (breaking "a_builtin_demand_over_a_declared_type")
+  no_setup
+
+rows_cq3 = text/concat rows_cq2 [own_type_demand]
+
+# Native code lets a declared type shadow a builtin. The mutation drops it,
+# and the play file's build stops on the builtin's count.
+own_type_native = row
+  "a native builtin over a declared type"
+  true
+  "cargo test --release --test play_verb"
+  "specs (unit, golden, differential)"
+  (breaking "a_native_builtin_over_a_declared_type")
+  no_setup
+
+rows_cq4 = text/concat rows_cq3 [own_type_native]
+
+# The interpreter calls a declared group before an imported type of the same
+# bare name. The mutation builds the type, and std/list's `counting` stops on
+# its field count.
+own_group_interp = row
+  "an imported type over a declared group"
+  true
+  "cargo test --release --test play_verb"
+  "specs (unit, golden, differential)"
+  (breaking "an_imported_type_over_a_declared_group")
+  no_setup
+
+rows_cq5 = text/concat rows_cq4 [own_group_interp]
+
+# `&`, `|` and `^` mixed without parentheses are refused. The mutation lets the
+# chain through, and the error corpus's fixture reads left to right instead.
+bits_mixed = row
+  "bit operators mixed freely"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "bit_operators_mixed_freely")
+  no_setup
+
+rows_cq6 = text/concat rows_cq5 [bits_mixed]
+
+# `and` and `or` meeting without parentheses are refused. The mutation lets the
+# condition through, and the error corpus's fixture prints instead.
+and_or_mixed = row
+  "and meets or freely"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "and_meets_or_freely")
+  no_setup
+
+rows_cq7 = text/concat rows_cq6 [and_or_mixed]
+
+# A file may open with a header comment and one blank line. The mutation
+# refuses that blank, and the micro corpus's fixture that opens with a header
+# stops building.
+header_blank = row
+  "header comment refused"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "header_comment_refused")
+  no_setup
+
+rows_cq8 = text/concat rows_cq7 [header_blank]
+
+callee_under_a_frame = row
+  "a cluster refused for a callee it reaches under a frame"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_cluster_refused_for_a_callee_under_a_frame")
+  no_setup
+
+rows_cq9 = text/concat rows_cq8 [callee_under_a_frame]
+
+concat_in_place = row
+  "a concat accumulator copied every lap"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_concat_accumulator_copied_every_lap")
+  no_setup
+
+rows_cq10 = text/concat rows_cq9 [concat_in_place]
+
+rows_c = text/concat rows_cq10 [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

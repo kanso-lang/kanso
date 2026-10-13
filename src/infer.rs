@@ -1968,6 +1968,7 @@ pub fn builtin_set(name: &str, args: &[Set]) -> Set {
         | "filter" => LIST | fails,
         "map" => LIST | fails,
         "put" => MAP | fails,
+        "merge" => REC | fails,
         "join" => STR | fails,
         "to_int" => ANY_INT | ERR | fails,
         "to_float" => FLOAT | ERR | fails,

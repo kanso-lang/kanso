@@ -323,7 +323,8 @@ const USAGE: &str = "usage: kanso <verb> [arguments]
   play <file> [--interp]             run a little program: definitions and
                                      statements in one file, stdlib imports only
   check <file|dir>                   report what run would refuse, and stop
-  test <file|dir>                    evaluate every `test_*` constant
+  test <file|dir>                    run the `test_*` constants in each
+                                     `*_test.kso` file, which sees only pub names
   build <file|dir> [--release]       write a native binary here, named for
                                      the program
   repl                               evaluate expressions as you type them
@@ -347,6 +348,7 @@ const USAGE: &str = "usage: kanso <verb> [arguments]
 /// folding it into the shim that calls it and taking the anchor with it.
 #[inline(never)]
 fn main() -> ExitCode {
+    reader_may_close();
     let code = driven();
     kanso::phase::report();
     code
@@ -478,30 +480,12 @@ fn driven() -> ExitCode {
         }
         false => file,
     };
-    // A test file is a member of its module, and a module's files share their
-    // declarations — so testing one compiles the module it belongs to, or the
-    // file cannot see the very functions it is testing.
-    let among_siblings = command == "test"
-        && std::path::Path::new(&file).is_file()
-        && std::path::Path::new(&file).parent().is_some_and(|dir| {
-            std::fs::read_dir(dir).into_iter().flatten().flatten().any(|e| {
-                let path = e.path();
-                path.extension().is_some_and(|x| x == "kso")
-                    && path.file_name() != std::path::Path::new(&file).file_name()
-                    && e.file_name() != "main.kso"
-            })
-        });
-    let only_from = match among_siblings {
-        true => std::path::Path::new(&file).file_name().map(|n| n.to_string_lossy().into_owned()),
-        false => None,
-    };
-    let file = match among_siblings {
-        true => std::path::Path::new(&file)
-            .parent()
-            .map(|d| d.to_string_lossy().into_owned())
-            .unwrap_or(file),
-        false => file,
-    };
+    // A test file is an outside consumer of the module beside it (the
+    // 2026-10-12 gavel): each one compiles on its own as an importer of that
+    // module, and testing the directory runs every one of them.
+    if command == "test" {
+        return test(&file);
+    }
     let path = std::path::Path::new(&file);
     let (program, source) = match path.is_dir() {
         true => match kanso::compile_module(path, require_entry) {
@@ -544,9 +528,6 @@ fn driven() -> ExitCode {
         }
         println!("{file}: ok");
         return ExitCode::SUCCESS;
-    }
-    if command == "test" {
-        return run_tests(&program, &file, &source, only_from.as_deref());
     }
     if command == "build" {
         return build(program, &file, release, built_as);
@@ -866,18 +847,17 @@ fn build(program: ast::Program, file: &str, release: bool, built_as: Option<Stri
         return ExitCode::from(2);
     }
     let ll_path = format!("{stem}.ll");
-    // x86-64 alone: the arm64 limit `narrow_tailcc` keeps is a miscompile of
-    // wide tail calls, and this convention has not been measured there.
+    // x86-64 alone: this convention has not been measured on arm64. On x86-64
+    // every `musttail` the emitter wrote reaches clang as written, so a tail
+    // call consumes no stack. An arm64 release build still takes the jump
+    // from an arm wider than the register file, which that backend miscompiles.
     let flatten = release
         && cfg!(target_arch = "x86_64")
         && closure_convention() == kanso::codegen::ClosureConvention::PreserveNone;
-    let ir = match (release, flatten) {
-        (true, true) => preserve_none_calls(
-            preserve_none_tails(narrow_tailcc(ir, PRESERVE_NONE_REGISTERS)),
-            include_str!("runtime.c"),
-        ),
-        (true, false) => narrow_tailcc(ir, TAILCC_WIDEST),
-        (false, _) => ir,
+    let ir = match (flatten, release && cfg!(target_arch = "aarch64")) {
+        (true, _) => preserve_none_calls(preserve_none_tails(ir), include_str!("runtime.c")),
+        (false, true) => narrow_tailcc(ir, ARM64_TAILCC_WIDEST),
+        (false, false) => ir,
     };
     if let Err(io) = std::fs::write(&ll_path, ir) {
         eprintln!("error: cannot write {ll_path}: {io}");
@@ -1076,9 +1056,9 @@ const LTO_O3_WITHOUT_DEADARGELIM: &str = concat!(
 /// says, or none.
 ///
 /// The pipeline is LLVM 19's, and another release's default may differ, so
-/// it is used only when clang says it is 19 and a one-line LTO program links
-/// with it through lld. Elsewhere the link keeps its own default. The answer
-/// is remembered under clang's identity, as `lld_links_lto`'s is.
+/// it is used only when clang says it is 19 or 18 and a one-line LTO program
+/// links with it through lld. Elsewhere the link keeps its own default. The
+/// answer is remembered under clang's identity, as `lld_links_lto`'s is.
 fn lto_pipeline_args() -> Vec<String> {
     if lld_args().is_empty() {
         return Vec::new();
@@ -1086,13 +1066,14 @@ fn lto_pipeline_args() -> Vec<String> {
     let Some(clang) = tool_identity("clang") else {
         return Vec::new();
     };
-    let key = format!("{clang}|{}", LTO_O3_WITHOUT_DEADARGELIM)
+    let key = format!("{clang}|major|{}", LTO_O3_WITHOUT_DEADARGELIM)
         .bytes()
         .fold(0xcbf29ce484222325u64, |h, b| (h ^ b as u64).wrapping_mul(0x100000001b3));
     let path = std::env::temp_dir().join(format!("kanso_lto_pipeline_answer_{}", hex16(key)));
     let answer = match std::fs::read(&path).ok().as_deref() {
-        Some(b"1") => true,
-        Some(b"0") => false,
+        Some(b"19") => Some(19),
+        Some(b"18") => Some(18),
+        Some(b"0") => None,
         _ => {
             let answer = lto_pipeline_probe();
             let staged = std::env::temp_dir().join(format!(
@@ -1100,28 +1081,51 @@ fn lto_pipeline_args() -> Vec<String> {
                 hex16(key),
                 pid_tag()
             ));
-            if std::fs::write(&staged, if answer { b"1" } else { b"0" }).is_ok() {
+            let word = answer.map_or("0".to_string(), |m| m.to_string());
+            if std::fs::write(&staged, word).is_ok() {
                 let _ = std::fs::rename(&staged, &path);
             }
             answer
         }
     };
     match answer {
-        true => {
-            vec!["-Xlinker".to_string(), format!("--lto-newpm-passes={LTO_O3_WITHOUT_DEADARGELIM}")]
+        Some(major) => {
+            vec!["-Xlinker".to_string(), format!("--lto-newpm-passes={}", lto_pipeline_for(major))]
         }
-        false => Vec::new(),
+        None => Vec::new(),
     }
 }
 
-fn lto_pipeline_probe() -> bool {
+/// `LTO_O3_WITHOUT_DEADARGELIM` as the given LLVM release spells it.
+///
+/// 18's `lto<O3>`, as its `opt -print-pipeline-passes` writes it, is 19's
+/// pass for pass, less simplifycfg's `speculate-unpredictables` option, which
+/// 19 added. 18 needs the pipeline as much as 19 does: kq's LTO link under
+/// clang 18 aborted in `deadargelim` once tail calls through closures became
+/// `musttail` in tailcc lambdas, the same disagreement of two-word returns the
+/// constant's comment describes.
+fn lto_pipeline_for(major: u32) -> String {
+    match major {
+        18 => LTO_O3_WITHOUT_DEADARGELIM
+            .replace(";no-speculate-unpredictables", "")
+            .replace(";speculate-unpredictables", ""),
+        _ => LTO_O3_WITHOUT_DEADARGELIM.to_string(),
+    }
+}
+
+/// The LLVM release whose spelling of the pipeline links here, if one does.
+fn lto_pipeline_probe() -> Option<u32> {
+    [19, 18].into_iter().find(|&major| lto_pipeline_links(major))
+}
+
+fn lto_pipeline_links(major: u32) -> bool {
     let dir = std::env::temp_dir();
     let c = dir.join(format!("kanso_lto_pipeline_probe_{}.c", pid_tag()));
     let ll = dir.join(format!("kanso_lto_pipeline_probe_{}.ll", pid_tag()));
     let out = dir.join(format!("kanso_lto_pipeline_probe_{}", pid_tag()));
-    // The pipeline string is LLVM 19's, so another major version is asked
-    // with the preprocessor: a status, where reading `--version` would drain
-    // a pipe. Output thrown away rather than read, for the reason
+    // The pipeline is spelled for one major version, which is asked with the
+    // preprocessor: a status, where reading `--version` would drain a pipe.
+    // Output thrown away rather than read, for the reason
     // `preserve_none_probe` gives.
     let quiet = |cmd: &mut std::process::Command| {
         cmd.stdout(std::process::Stdio::null())
@@ -1130,7 +1134,8 @@ fn lto_pipeline_probe() -> bool {
             .map(|s| s.success())
             .unwrap_or(false)
     };
-    let ok = std::fs::write(&c, "#if __clang_major__ != 19\n#error\n#endif\n").is_ok()
+    let check = format!("#if __clang_major__ != {major}\n#error\n#endif\n");
+    let ok = std::fs::write(&c, check).is_ok()
         && std::fs::write(&ll, "define i32 @main() {\n  ret i32 0\n}\n").is_ok()
         && quiet(std::process::Command::new("clang").arg("-fsyntax-only").arg(&c))
         && quiet(
@@ -1138,7 +1143,7 @@ fn lto_pipeline_probe() -> bool {
                 .args(["-O1", "-flto", "-Wno-override-module"])
                 .args(lld_args())
                 .arg("-Xlinker")
-                .arg(format!("--lto-newpm-passes={LTO_O3_WITHOUT_DEADARGELIM}"))
+                .arg(format!("--lto-newpm-passes={}", lto_pipeline_for(major)))
                 .arg(&ll)
                 .arg("-o")
                 .arg(&out),
@@ -1997,67 +2002,111 @@ fn cached_object(profile: &str, source: &str, opt: &[&str]) -> std::io::Result<s
     Ok(object)
 }
 
-/// `only_from` names one of the module's files: `kanso test lib/list/list_test.kso`
-/// compiles the module and runs that file's tests, where the bare directory
-/// runs them all.
-///
+/// `kanso test <target>`: a test file, or a directory whose test files all
+/// run. Each test file is compiled alone, as an importer of the module it
+/// sits beside, so one test file never sees another's helpers.
+fn test(target: &str) -> ExitCode {
+    let path = std::path::Path::new(target);
+    let files: Vec<String> = match path.is_dir() {
+        true => {
+            let mut found: Vec<String> = std::fs::read_dir(path)
+                .into_iter()
+                .flatten()
+                .flatten()
+                .map(|e| e.path())
+                .filter(|p| kanso::is_test_file(p))
+                .map(|p| p.to_string_lossy().into_owned())
+                .collect();
+            found.sort();
+            found
+        }
+        false => vec![target.to_string()],
+    };
+    if files.is_empty() {
+        eprintln!("{target}: no test files (a test file is named `*_test.kso`)");
+        return ExitCode::from(2);
+    }
+    let mut suites = Vec::new();
+    for file in files {
+        let source = match std::fs::read_to_string(&file) {
+            Ok(source) => source,
+            Err(io) => {
+                eprintln!("error: cannot read {file}: {io}");
+                return ExitCode::from(2);
+            }
+        };
+        let compiled = match kanso::is_test_file(std::path::Path::new(&file)) {
+            true => kanso::compile_test_file(&file, &source),
+            false => kanso::compile_source("test", &file, &source),
+        };
+        match compiled {
+            Ok(program) => suites.push((program, file, source)),
+            Err(rendered) => {
+                eprint!("{}", diag::paint(&rendered));
+                return ExitCode::from(2);
+            }
+        }
+    }
+    run_tests(target, &suites)
+}
+
 /// The tests run on the interpreter's deep stack, as `run --interp` does. On
 /// the main thread's stack a test that recursed too far overflowed Rust's
 /// stack before the interpreter's depth limit could report it, and the abort
 /// took every other test's result with it.
-fn run_tests(
-    program: &ast::Program,
-    file: &str,
-    source: &str,
-    only_from: Option<&str>,
-) -> ExitCode {
+fn run_tests(target: &str, suites: &[(ast::Program, String, String)]) -> ExitCode {
     std::thread::scope(|scope| {
         std::thread::Builder::new()
             .stack_size(1 << 30)
-            .spawn_scoped(scope, || run_tests_on_stack(program, file, source, only_from))
+            .spawn_scoped(scope, || run_tests_on_stack(target, suites))
             .expect("spawns")
             .join()
             .expect("test thread completes")
     })
 }
 
-fn run_tests_on_stack(
-    program: &ast::Program,
-    file: &str,
-    source: &str,
-    only_from: Option<&str>,
-) -> ExitCode {
-    let interp = eval::Interp::new(program);
-    let mut names: Vec<&str> = program
-        .fns
-        .iter()
-        .filter(|d| d.name.starts_with("test_") && d.params.is_empty())
-        .filter(|d| only_from.is_none_or(|want| d.file.ends_with(want)))
-        .map(|d| d.name.as_str())
-        .collect();
-    names.dedup();
-    if names.is_empty() {
-        eprintln!("{file}: no tests found (a test is a constant named `test_*`)");
-        return ExitCode::from(2);
-    }
+fn run_tests_on_stack(target: &str, suites: &[(ast::Program, String, String)]) -> ExitCode {
+    let mut ran = 0;
     let mut failed = 0;
-    for name in &names {
-        let outcome = interp.run_named(name).expect("filtered on zero-arg fns");
-        match outcome {
-            Ok(eval::Value::True) => println!("{name} ... ok"),
-            Ok(other) => {
-                failed += 1;
-                println!("{name} ... FAILED (returned {})", eval::render(&interp, &other, true));
-            }
-            Err(runtime) => {
-                failed += 1;
-                let d = diag::Diagnostic::new("runtime", runtime.message, runtime.span);
-                println!("{name} ... FAILED");
-                eprint!("{}", diag::paint(&diag::render(&[d], file, source)));
+    for (program, file, source) in suites {
+        let interp = eval::Interp::new(program);
+        // the module's own pub names come along with the import, and a
+        // `test_*` among them is the module's, not this file's
+        let own = std::path::Path::new(file).file_name().map(|n| n.to_string_lossy().into_owned());
+        let mut names: Vec<&str> = program
+            .fns
+            .iter()
+            .filter(|d| d.name.starts_with("test_") && d.params.is_empty())
+            .filter(|d| own.as_deref().is_none_or(|want| d.file.ends_with(want)))
+            .map(|d| d.name.as_str())
+            .collect();
+        names.dedup();
+        for name in &names {
+            ran += 1;
+            let outcome = interp.run_named(name).expect("filtered on zero-arg fns");
+            match outcome {
+                Ok(eval::Value::True) => println!("{name} ... ok"),
+                Ok(other) => {
+                    failed += 1;
+                    println!(
+                        "{name} ... FAILED (returned {})",
+                        eval::render(&interp, &other, true)
+                    );
+                }
+                Err(runtime) => {
+                    failed += 1;
+                    let d = diag::Diagnostic::new("runtime", runtime.message, runtime.span);
+                    println!("{name} ... FAILED");
+                    eprint!("{}", diag::paint(&diag::render(&[d], file, source)));
+                }
             }
         }
     }
-    println!("{} passed, {failed} failed", names.len() - failed);
+    if ran == 0 {
+        eprintln!("{target}: no tests found (a test is a constant named `test_*`)");
+        return ExitCode::from(2);
+    }
+    println!("{} passed, {failed} failed", ran - failed);
     match failed {
         0 => ExitCode::SUCCESS,
         _ => ExitCode::FAILURE,
@@ -2195,6 +2244,7 @@ fn execute(
         Ok(code) => match code.code() {
             Some(n) => ExitCode::from(n.clamp(0, 255) as u8),
             None => {
+                ended_with_the_reader(&code);
                 eprintln!("{}", explain(&code));
                 ExitCode::FAILURE
             }
@@ -2205,6 +2255,43 @@ fn execute(
         }
     }
 }
+
+#[cfg(unix)]
+const SIGPIPE: i32 = 13;
+
+#[cfg(unix)]
+extern "C" {
+    fn signal(signum: i32, handler: usize) -> usize;
+    fn raise(sig: i32) -> i32;
+}
+
+/// A write to a pipe whose reader has gone, as `head` leaves it, ends the
+/// process by SIGPIPE and says nothing. That is what a built binary does. Rust
+/// ignores the signal before `main`, so the interpreter's `print` met the
+/// broken pipe as an error instead and panicked with two backtraces. Putting
+/// the default back makes the interpreter stop the way the binary does.
+fn reader_may_close() {
+    #[cfg(unix)]
+    unsafe {
+        signal(SIGPIPE, 0);
+    }
+}
+
+/// A program the reader stopped reading was ended by SIGPIPE, and the driver
+/// ends the same way, saying nothing, so `kanso play` behind `head` stops as
+/// the binary alone would.
+#[cfg(unix)]
+fn ended_with_the_reader(status: &std::process::ExitStatus) {
+    use std::os::unix::process::ExitStatusExt;
+    if status.signal() == Some(SIGPIPE) {
+        unsafe {
+            raise(SIGPIPE);
+        }
+    }
+}
+
+#[cfg(not(unix))]
+fn ended_with_the_reader(_status: &std::process::ExitStatus) {}
 
 /// A program the operating system killed has no exit code to report, and
 /// saying nothing leaves the reader with a bare failure and no cause.

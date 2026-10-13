@@ -1,0 +1,4 @@
+error[name]: `user` has no field `rank` (module a_merge_names_a_field_its_type_lacks)
+  --> a_merge_names_a_field_its_type_lacks.kso:8:45
+   8 | pub play = print "{merge (user 47 "clay") { "rank":1 }}"
+                                                   ^

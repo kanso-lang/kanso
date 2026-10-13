@@ -66,6 +66,170 @@ fn effect_discarded_at(e: &Expr, tables: &AfterInfer, diags: &mut Vec<Diagnostic
     }
 }
 
+/// Whether `e` can answer a bare err the program raised: a call to `err`, a
+/// call some raising arm of can be the one that runs, or a name bound to
+/// one. A call raises when some arm that can raise can be the one that runs.
+/// The arms are read one at a time rather than as the group's joined answer
+/// because a literal argument settles a literal pattern here and now:
+/// `text/split s "\n"` cannot reach `split _ ""`, the only arm of that group
+/// that raises, so the call is not a raise. What a literal cannot match is
+/// decided by shape alone — a string is never a record and never a none — and
+/// every other pattern is taken to match.
+///
+/// A name carries its call (#1884): `h = half 3` and then `h + 1` is refused
+/// as `half 3 + 1` is, so binding a value never changes what compiles. A
+/// local is one `raising_names` found, and a use counts only after its
+/// binding, which keeps a same-spelled outer name read earlier out of it. A
+/// name the declaration does not bind is a constant, which raises when its
+/// own body does, the way a call of it would.
+fn raises(
+    e: &Expr,
+    raisers: &crate::hash::Map<(&str, usize), Vec<&[Pattern]>>,
+    consts: &crate::infer::Consts<'_>,
+    named: &BoundRaises<'_>,
+) -> bool {
+    match e {
+        Expr::App { head, args, piped: false, .. } => match head.as_ref() {
+            Expr::Ident(name, _, _) if name == "err" => true,
+            Expr::Ident(name, _, _) => {
+                raisers.get(&(name.as_str(), args.len())).is_some_and(|arms| {
+                    arms.iter().any(|arm| crate::infer::arm_can_run(arm, args, consts))
+                })
+            }
+            _ => false,
+        },
+        Expr::Ident(name, at, _)
+            if !named.local.is_empty() && named.local.contains(name.as_str()) =>
+        {
+            named.raising.iter().any(|(n, bound)| {
+                *n == name.as_str() && (bound.line, bound.col) < (at.line, at.col)
+            })
+        }
+        Expr::Ident(name, _, _) => named.constants && raisers.contains_key(&(name.as_str(), 0)),
+        _ => false,
+    }
+}
+
+/// What `raises` needs to know about one declaration's own names: the ones
+/// bound once to a raise, with where, and every name it binds at all.
+#[derive(Default)]
+struct BoundRaises<'a> {
+    raising: Vec<(&'a str, crate::diag::Span)>,
+    local: crate::hash::Set<&'a str>,
+    /// Some constant's body raises, so a name read as a value may be one.
+    constants: bool,
+}
+
+/// The names in `decl` bound to a call that can raise, with where each is
+/// bound. A name the declaration binds more than once — a parameter, a
+/// second binding, a lambda's parameter — is left out, because the check
+/// cannot tell which binding a use reads and under-refuses rather than guess.
+/// Bindings are read in order, so a name bound to a name bound to a raise
+/// carries it too.
+fn raising_names<'a>(
+    decl: &'a crate::ast::FnDecl,
+    raisers: &crate::hash::Map<(&str, usize), Vec<&[Pattern]>>,
+    consts: &crate::infer::Consts<'_>,
+    constants: bool,
+) -> BoundRaises<'a> {
+    fn binds_in_stmts<'a>(
+        body: &'a [Stmt],
+        out: &mut Vec<(&'a str, Option<(crate::diag::Span, &'a Expr)>)>,
+    ) {
+        for stmt in body {
+            match stmt {
+                Stmt::Bind { pattern: Pattern::Var(n, at), expr } => {
+                    out.push((n.as_str(), Some((*at, expr))));
+                    binds_in_expr(expr, out);
+                }
+                Stmt::Bind { pattern, expr } => {
+                    for_each_param_name(pattern, &mut |n| out.push((n, None)));
+                    binds_in_expr(expr, out);
+                }
+                Stmt::Expr(expr) => binds_in_expr(expr, out),
+            }
+        }
+    }
+    fn binds_in_expr<'a>(
+        e: &'a Expr,
+        out: &mut Vec<(&'a str, Option<(crate::diag::Span, &'a Expr)>)>,
+    ) {
+        if let Expr::Lambda { params, .. } = e {
+            out.extend(params.iter().map(|(n, _)| (n.as_str(), None)));
+        }
+        if let Expr::Guard { rest, .. } = e {
+            binds_in_stmts(rest, out);
+        }
+        // a branch of an `if` is a block with bindings of its own
+        if let Expr::Block(stmts, _) = e {
+            return binds_in_stmts(stmts, out);
+        }
+        crate::for_each_child(e, |c| binds_in_expr(c, out));
+    }
+    // Most declarations bind nothing to a raise, and for them the answer is
+    // empty: a name can only carry an err that some binding was handed first.
+    // Asking that before collecting keeps the common case free of the two
+    // tables below.
+    // It walks the statements `binds_in_stmts` walks, a guard's rest and a
+    // branch's block included wherever they sit, so it misses no binding
+    // that collection would record with its expression.
+    fn bound_to_a_raise(
+        body: &[Stmt],
+        raisers: &crate::hash::Map<(&str, usize), Vec<&[Pattern]>>,
+        consts: &crate::infer::Consts<'_>,
+        none: &BoundRaises<'_>,
+    ) -> bool {
+        body.iter().any(|stmt| match stmt {
+            Stmt::Bind { pattern: Pattern::Var(..), expr } => {
+                raises(expr, raisers, consts, none) || nested_binds(expr, raisers, consts, none)
+            }
+            Stmt::Bind { expr, .. } | Stmt::Expr(expr) => nested_binds(expr, raisers, consts, none),
+        })
+    }
+    fn nested_binds(
+        e: &Expr,
+        raisers: &crate::hash::Map<(&str, usize), Vec<&[Pattern]>>,
+        consts: &crate::infer::Consts<'_>,
+        none: &BoundRaises<'_>,
+    ) -> bool {
+        if let Expr::Guard { rest, .. } = e {
+            if bound_to_a_raise(rest, raisers, consts, none) {
+                return true;
+            }
+        }
+        if let Expr::Block(stmts, _) = e {
+            return bound_to_a_raise(stmts, raisers, consts, none);
+        }
+        let mut found = false;
+        crate::for_each_child(e, |c| found = found || nested_binds(c, raisers, consts, none));
+        found
+    }
+    let none = BoundRaises { constants, ..BoundRaises::default() };
+    if !bound_to_a_raise(&decl.body, raisers, consts, &none) {
+        return none;
+    }
+    let mut binds = Vec::new();
+    for param in &decl.params {
+        for_each_param_name(param, &mut |n| binds.push((n, None)));
+    }
+    binds_in_stmts(&decl.body, &mut binds);
+    let mut named = BoundRaises {
+        raising: Vec::new(),
+        local: binds.iter().map(|(n, _)| *n).collect(),
+        constants,
+    };
+    for (i, (name, at)) in binds.iter().enumerate() {
+        let Some((at, expr)) = at else { continue };
+        if binds.iter().enumerate().any(|(j, (other, _))| j != i && other == name) {
+            continue;
+        }
+        if raises(expr, raisers, consts, &named) {
+            named.raising.push((name, *at));
+        }
+    }
+    named
+}
+
 /// The 2026-09-15 ruling's third part: a bare err a program raised, arriving
 /// where a value is wanted, does not compile. The sites are the ruling's
 /// three — an operator's operand, an index's base or key, and a call at a
@@ -82,30 +246,11 @@ fn raised_err_at(
     raisers: &crate::hash::Map<(&str, usize), Vec<&[Pattern]>>,
     consts: &crate::infer::Consts<'_>,
     err_arms: &crate::hash::Map<(&str, usize), u64>,
+    named: &BoundRaises<'_>,
     owner: &str,
     diags: &mut Vec<Diagnostic>,
 ) {
-    // A call raises when some arm that can raise can be the one that runs.
-    // The arms are read one at a time rather than as the group's joined
-    // answer because a literal argument settles a literal pattern here and
-    // now: `text/split s "\n"` cannot reach `split _ ""`, the only arm of
-    // that group that raises, so the call is not a raise. What a literal
-    // cannot match is decided by shape alone — a string is never a record
-    // and never a none — and every other pattern is taken to match.
-    let raised = |e: &Expr| -> bool {
-        match e {
-            Expr::App { head, args, piped: false, .. } => match head.as_ref() {
-                Expr::Ident(name, _, _) if name == "err" => true,
-                Expr::Ident(name, _, _) => {
-                    raisers.get(&(name.as_str(), args.len())).is_some_and(|arms| {
-                        arms.iter().any(|arm| crate::infer::arm_can_run(arm, args, consts))
-                    })
-                }
-                _ => false,
-            },
-            _ => false,
-        }
-    };
+    let raised = |e: &Expr| raises(e, raisers, consts, named);
     let short = |owner: &str| -> String {
         owner
             .rsplit_once("/lib/")
@@ -175,6 +320,69 @@ fn raised_err_at(
             }
         }
         _ => {}
+    }
+}
+
+/// A lazy sequence handed where a builtin takes a list. `list/map` answers a
+/// record of std/list's that walks its source on demand, and a builtin whose
+/// demand holds a list refuses that record on every engine, at run time and
+/// with no location. The argument is known to be one when it is a call of a
+/// std/list group whose every arm answers a record and nothing else. Anything
+/// less certain is left to the run, the under-refusing direction.
+fn lazy_where_a_list_goes(
+    e: &Expr,
+    aliases: &HashMap<(&str, usize), &str>,
+    returns: &HashMap<(&str, usize), crate::infer::Set>,
+    shadow: &dyn Fn(&str) -> bool,
+    diags: &mut Vec<Diagnostic>,
+) {
+    use crate::infer::{FAIL, REC};
+    let Expr::App { head, args, piped: false, .. } = e else { return };
+    let Expr::Ident(name, _, _) = head.as_ref() else { return };
+    // THE CHEAP TEST FIRST: an argument that calls a std/list group, read off
+    // the spelling. Every call in the program reaches this line, and the
+    // lookups below hash the callee's name; almost no call has such an
+    // argument.
+    let made_by_list = |a: &Expr| {
+        matches!(a, Expr::App { head, piped: false, .. }
+            if matches!(head.as_ref(), Expr::Ident(n, _, _) if n.starts_with("list/")))
+    };
+    if !args.iter().any(made_by_list) {
+        return;
+    }
+    // a std wrapper forwards to its builtin, and a name the program declares
+    // otherwise is its own (the literal check above reads them the same way)
+    let bare = match aliases.get(&(name.as_str(), args.len())) {
+        Some(builtin) => *builtin,
+        None if returns.contains_key(&(name.as_str(), args.len())) => return,
+        None => name.as_str(),
+    };
+    let bare = bare.strip_prefix("builtin_").unwrap_or(bare);
+    for (pos, arg) in args.iter().enumerate() {
+        let Some(demand) = builtin_demand(bare, pos) else { continue };
+        if !demand.contains(&LitKind::List) {
+            continue;
+        }
+        let Expr::App { head: inner, args: inner_args, piped: false, .. } = arg else { continue };
+        let Expr::Ident(maker, _, _) = inner.as_ref() else { continue };
+        if !maker.starts_with("list/") || shadow(maker.as_str()) || shadow(name.as_str()) {
+            continue;
+        }
+        let Some(&answers) = returns.get(&(maker.as_str(), inner_args.len())) else { continue };
+        if answers & !FAIL != REC {
+            continue;
+        }
+        let want: Vec<String> = demand.iter().map(|k| describe_literal(*k).to_string()).collect();
+        diags.push(Diagnostic::new(
+            "type",
+            format!(
+                "`{}` takes {} here, and `{}` answers a lazy sequence — make it a list with `list/to_list`",
+                crate::ast::spoken(name.as_str()),
+                or_join(want),
+                crate::ast::spoken(maker.as_str())
+            ),
+            arg.span(),
+        ));
     }
 }
 
@@ -268,6 +476,7 @@ fn check_after_infer<'p>(
     program: &'p Program,
     inference: &crate::infer::Inference,
     returns: &HashMap<(&str, usize), crate::infer::Set>,
+    aliases: &HashMap<(&str, usize), &str>,
     effect_diags: &mut Vec<Diagnostic>,
     box_diags: &mut Vec<Diagnostic>,
     none_diags: &mut Vec<Diagnostic>,
@@ -807,6 +1016,8 @@ fn check_after_infer<'p>(
     // does — a mutation that leaves items behind keeps the whole error corpus
     // green — so the reuse does not rest on it.
     let mut stack: Vec<&Expr> = Vec::new();
+    // Asked once: a name read as a value can raise only if some constant does.
+    let constants_raise = raisers.keys().any(|(_, arity)| *arity == 0);
     // every group position a box was let into, with the declaration whose call
     // let it in, for the pass after this walk
     let mut handed: Vec<(Handed<'p>, u32)> = Vec::new();
@@ -817,6 +1028,7 @@ fn check_after_infer<'p>(
         // be rebuilt per declaration even though nothing else here is.
         let shadow = |n: &str| shadows(i, n);
         let marks = (effect_diags.len(), box_diags.len(), none_diags.len());
+        let named = raising_names(decl, &raisers, &consts, constants_raise);
         for stmt in &decl.body {
             let e = match stmt {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
@@ -826,7 +1038,8 @@ fn check_after_infer<'p>(
             while let Some(cur) = stack.pop() {
                 effect_discarded_at(cur, &tables, effect_diags);
                 none_exhaustive_at(cur, &tables, &decl.file, none_diags);
-                raised_err_at(cur, &raisers, &consts, &err_arms, &decl.file, none_diags);
+                raised_err_at(cur, &raisers, &consts, &err_arms, &named, &decl.file, none_diags);
+                lazy_where_a_list_goes(cur, aliases, returns, &shadow, none_diags);
                 site(cur, &shadow, &[], &mut handed_here, box_diags);
                 crate::for_each_child(cur, |c| stack.push(c));
             }

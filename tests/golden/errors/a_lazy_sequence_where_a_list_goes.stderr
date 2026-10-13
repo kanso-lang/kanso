@@ -1,0 +1,8 @@
+error[type]: `length` takes a list, a map, or a string here, and `list/map` answers a lazy sequence — make it a list with `list/to_list`
+  --> a_lazy_sequence_where_a_list_goes.kso:8:16
+   8 | print (length (list/map [1 2] (n -> n + 1)))
+                      ^
+error[type]: `text/join` takes a list here, and `list/map` answers a lazy sequence — make it a list with `list/to_list`
+  --> a_lazy_sequence_where_a_list_goes.kso:7:19
+   7 | print (text/join (list/map ["a" "b"] (s -> "{s}!")) "")
+                         ^

@@ -1,6 +1,6 @@
 //! Every counter-bearing golden in bench/ is one the trend gate walks.
 //!
-//! The gate reads a hand-written list of `[["bench/…" "prefix_"]]` bindings,
+//! The gate reads a hand-written list of `["bench/…" "prefix_"]` rows,
 //! and that list has been short five times. Three cost goldens were simply
 //! never entered. Then readbench joined the OBJECTIVE with two of its rows as
 //! welfare terms while this gate could not see its golden at all, so either
@@ -29,7 +29,7 @@ const GATE: &str = include_str!("../scripts/trend_gate/trend_gate.kso");
 
 /// `bench/compile_libraries_golden.txt` holds five sonames rather than
 /// counters, and `scripts/gates/compile_libraries.sh` diffs it byte for byte.
-/// There is no number in it to trend. The gate's own comment on `bench_read`
+/// There is no number in it to trend. The gate's own comment on the read vein
 /// already says so, and this repeats it here because a reader of the excuse
 /// list should not have to go looking.
 const EXCUSED: [(&str, &str); 1] = [(
@@ -37,12 +37,12 @@ const EXCUSED: [(&str, &str); 1] = [(
     "five sonames rather than counters; its own gate diffs it byte for byte",
 )];
 
-/// Every `[["bench/…" …]]` binding the gate names.
+/// Every `["bench/…" …]` row the gate names.
 fn walked() -> BTreeSet<String> {
     let mut out = BTreeSet::new();
     for line in GATE.lines() {
-        let Some(open) = line.find("[[\"bench/") else { continue };
-        let rest = &line[open + 3..];
+        let Some(open) = line.find("[\"bench/") else { continue };
+        let rest = &line[open + 2..];
         let Some(close) = rest.find('"') else { continue };
         out.insert(rest[..close].trim_start_matches("bench/").to_string());
     }

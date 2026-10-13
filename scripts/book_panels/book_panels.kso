@@ -151,9 +151,8 @@ fn one_chapter names at drift write name raw
 
 fn with_paths names at drift write name raw dir paths
   seen = found_in raw
-  wanted = needed seen dir paths
   on = (files -> with_files names at drift write name raw seen files dir)
-  read_each wanted 1 [] on
+  seen .> (p -> read_each (needed p dir paths) 1 [] on)
 
 # Both panel shapes, matched once. Each pattern is a lazy `.*?` over the whole
 # chapter, which is the expensive thing this program does.
@@ -205,6 +204,9 @@ fn again acc _ true
 fn again acc found false
   push acc found
 
+fn with_files _ _ _ _ _ _ e@(err _) _ _
+  e
+
 fn with_files names at drift write name raw p files dir
   said = rebuilt raw (merged p.src p.out 1 1 []) name dir files write
   on = (_ -> next_chapter names at drift write name raw said)
@@ -245,6 +247,9 @@ fn trailed xs at acc shape false
 
 fn dir_of name
   "{chapters}/samples/{(text/split name ".")[1]}"
+
+fn next_chapter _ _ _ _ _ _ e@(err _)
+  e
 
 fn next_chapter names at drift write name raw said
   saved "{chapters}/{name}" raw said.text write
@@ -386,8 +391,8 @@ fn weighed raw m src sample name write
   gs = m.groups
   return outcome (whole_of raw m) 0 "" if length gs < 3
   shown = strip_tags gs[3]
-  same = trimmed shown == trimmed src
-  settled raw m src sample name write same
+  on = (s -> settled raw m src sample name write (trimmed s == trimmed src))
+  shown .> on
 
 fn settled raw m _ _ _ _ true
   outcome (whole_of raw m) 0 ""
@@ -411,8 +416,8 @@ fn weighed_out raw m rec base name write
   gs = m.groups
   return outcome (whole_of raw m) 0 "" if length gs < 4
   shown = strip_tags gs[4]
-  same = trimmed shown == trimmed rec
-  settled_out raw m rec base name write same
+  on = (s -> settled_out raw m rec base name write (trimmed s == trimmed rec))
+  shown .> on
 
 fn settled_out raw m _ _ _ _ true
   outcome (whole_of raw m) 0 ""
@@ -456,18 +461,17 @@ fn in? hay needle
 # What the panel body says, with its markup taken off, so it can be compared
 # with the file it claims to show.
 fn strip_tags body
-  untagged = regexp/replace_all "<[^>]+>" body ""
-  unescaped untagged
+  regexp/replace_all "<[^>]+>" body "" .> (untagged -> unescaped untagged)
 
 fn unescaped s
-  amp = regexp/replace_all "&lt;" s "<"
-  gt = regexp/replace_all "&gt;" amp ">"
-  regexp/replace_all "&amp;" gt "&"
+  regexp/replace_all "&lt;" s "<"
+    .> (amp -> regexp/replace_all "&gt;" amp ">")
+    .> (gt -> regexp/replace_all "&amp;" gt "&")
 
 fn escaped s
-  amp = regexp/replace_all "&" s "&amp;"
-  lt = regexp/replace_all "<" amp "&lt;"
-  regexp/replace_all ">" lt "&gt;"
+  regexp/replace_all "&" s "&amp;"
+    .> (amp -> regexp/replace_all "<" amp "&lt;")
+    .> (lt -> regexp/replace_all ">" lt "&gt;")
 
 fn render source
   lines = text/split (trimmed source) "\n"
@@ -484,13 +488,12 @@ fn joining lines at acc false
   joined_lines lines (at + 1) (push acc (highlight lines[at]))
 
 fn highlight line
-  toks = tokens_of line
-  painted toks 1 ""
+  tokens_of line .> (toks -> painted toks 1 "")
 
 fn tokens_of line
   hits = regexp/matches token_pattern line
   cut = (h -> token (text/slice line h.from (h.to - 1)) h.from)
-  list/to_list (list/map hits cut)
+  hits .> (found -> list/to_list (list/map found cut))
 
 fn painted toks at acc
   painting toks at acc (at > length toks)
@@ -518,8 +521,7 @@ fn by_shape _ _ t true
   "<span class=\"k\">{t}</span>"
 
 fn by_shape toks at t false
-  number = regexp/match? whole_num t
-  numeric toks at t number
+  regexp/match? whole_num t .> (number -> numeric toks at t number)
 
 fn numeric _ _ t true
   "<span class=\"n\">{t}</span>"
@@ -531,8 +533,7 @@ fn operator _ _ t true
   "<span class=\"o\">{escaped t}</span>"
 
 fn operator toks at t false
-  ident = regexp/match? whole_ident t
-  namelike toks at t ident
+  regexp/match? whole_ident t .> (ident -> namelike toks at t ident)
 
 fn namelike toks at t true
   mark_ident toks at t
@@ -605,7 +606,8 @@ fn found_open body at false
 fn mark_ident toks at t
   before = near toks (at - 1) (0 - 1)
   after = near toks (at + 1) 1
-  decided t before after (nth_text toks (at + 1))
+  next = nth_text toks (at + 1)
+  before .> (b -> after .> (a -> decided t b a next))
 
 fn near toks at step
   stepping toks at step (at < 1 or at > length toks)
@@ -615,8 +617,7 @@ fn stepping _ _ _ true
 
 fn stepping toks at step false
   here = toks[at].text
-  blank = trimmed_blank here
-  kept toks at step here (blank == "")
+  trimmed_blank here .> (blank -> kept toks at step here (blank == ""))
 
 fn kept toks at step _ true
   near toks (at + step) step
@@ -667,8 +668,7 @@ fn heads t _ _ false
   t
 
 fn heads t _ after true
-  argument = argumentish? after
-  applied t after argument
+  argumentish? after .> (argument -> applied t after argument)
 
 fn argumentish? ""
   true
@@ -713,8 +713,7 @@ fn outing lines at acc false
   out_lines lines (at + 1) (push acc (one_out lines[at]))
 
 fn one_out line
-  headed = regexp/match? "^(error|warning)\\[[a-z]+\\]" line
-  tagged line headed
+  regexp/match? "^(error|warning)\\[[a-z]+\\]" line .> (h -> tagged line h)
 
 fn tagged line true
   parts = text/split line ":"
@@ -723,8 +722,7 @@ fn tagged line true
   "<span class=\"k\">{escaped parts[1]}</span>:{escaped rest}"
 
 fn tagged line false
-  bare = lstripped line
-  pointed line (starts? bare "-->")
+  lstripped line .> (bare -> pointed line (starts? bare "-->"))
 
 fn lstripped line
   regexp/replace_all "^[ \t]+" line ""
@@ -733,22 +731,22 @@ fn pointed line true
   "<span class=\"c\">{escaped line}</span>"
 
 fn pointed line false
-  only_carets = caret_only? line
-  carets line only_carets
+  caret_only? line .> (only_carets -> carets line only_carets)
 
 fn caret_only? line
   bare = regexp/replace_all "[ \t^]" line ""
-  bare == "" and in? line "^"
+  bare .> (b -> b == "" and in? line "^")
 
 fn carets line true
-  hits = regexp/matches "\\^" line
-  at = hits[1].from
-  before = text/slice line 1 (at - 1)
-  rest = escaped (text/slice line at (length line))
-  "{before}<span class=\"k\">{rest}</span>"
+  regexp/matches "\\^" line .> (hits -> caret_at line hits[1].from)
 
 fn carets line false
   escaped line
+
+fn caret_at line at
+  before = text/slice line 1 (at - 1)
+  rest = escaped (text/slice line at (length line))
+  "{before}<span class=\"k\">{rest}</span>"
 
 fn reported drift write
   quiet = write or drift == 0

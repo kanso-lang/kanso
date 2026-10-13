@@ -1,0 +1,8 @@
+type order
+  item
+  qty
+  status
+
+placed = order "tea" 2 "placed"
+shipped = merge placed { "qty":3 "status":"shipped" }
+print "{shipped}" .> (_ -> print "{placed}")

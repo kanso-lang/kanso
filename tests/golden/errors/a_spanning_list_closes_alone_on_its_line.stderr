@@ -1,0 +1,4 @@
+error[syntax]: a list that spans lines closes with `]` alone on a line, at the indent of the line that opened it
+  --> a_spanning_list_closes_alone_on_its_line.kso:6:20
+   6 |   "the second word"]
+                          ^

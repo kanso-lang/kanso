@@ -40,7 +40,7 @@ extra_css: /book/book.css
 <span class="eyebrow">appendix b</span>
 <h1>builtin reference</h1>
 
-<p>kanso keeps its standard library small enough to hold in your head, and it draws one line through it. eight names are <em>ambient</em>—<code>if</code>, <code>print</code>, <code>push</code>, <code>put</code>, <code>length</code>, <code>entries</code>, <code>keys</code>, and <code>values</code> resolve in any file with no import, because nearly every program touches them. everything else arrives through a std module: <code>import "std/math"</code> gives you <code>math/sqrt</code>, <code>import "std/list"</code> gives you <code>list/map</code>, and the qualified spelling in your source is the same spelling you will find in the entry headers below. the functions come in two shapes. most are ordinary pure functions—<code>list/sort</code> takes a list and returns a sorted one, <code>math/sqrt</code> takes a number and returns its root, with no trace left behind. eight are <em>descriptions</em>: <code>print</code>, <code>os/read_file</code>, <code>io/write</code>, <code>os/write_file</code>, <code>os/args</code>, <code>io/stdin</code>, <code>time/sleep</code>, and <code>math/random</code> don't perform i/o when evaluated—they return a value describing i/o that the runtime performs later (chapter 05). this appendix marks those <span class="desc-tag">description</span> and treats the rest as plain functions.</p>
+<p>kanso keeps its standard library small enough to hold in your head, and it draws one line through it. nine names are <em>ambient</em>—<code>if</code>, <code>print</code>, <code>push</code>, <code>put</code>, <code>merge</code>, <code>length</code>, <code>entries</code>, <code>keys</code>, and <code>values</code> resolve in any file with no import, because nearly every program touches them. everything else arrives through a std module: <code>import "std/math"</code> gives you <code>math/sqrt</code>, <code>import "std/list"</code> gives you <code>list/map</code>, and the qualified spelling in your source is the same spelling you will find in the entry headers below. the functions come in two shapes. most are ordinary pure functions—<code>list/sort</code> takes a list and returns a sorted one, <code>math/sqrt</code> takes a number and returns its root, with no trace left behind. eight are <em>descriptions</em>: <code>print</code>, <code>os/read_file</code>, <code>io/write</code>, <code>os/write_file</code>, <code>os/args</code>, <code>io/stdin</code>, <code>time/sleep</code>, and <code>math/random</code> don't perform i/o when evaluated—they return a value describing i/o that the runtime performs later (chapter 05). this appendix marks those <span class="desc-tag">description</span> and treats the rest as plain functions.</p>
 
 <p>every function here follows the same failure convention. an <code>err</code> or <code>none</code> the checker can see arriving is refused at the call, the way chapter 04 describes; one it cannot see passes straight through, unlooked-at, so a failure still rides out to whoever asks for it. a genuine type mismatch—<code>list/sum</code> on a list containing a string, <code>math/sqrt</code> on a record—is a program bug, not a value, and raises a runtime error at the point of the call. each entry below states both: what the function does, and what it does when the input is wrong. every example was run through the interpreter; every output block is copied from the machine, and the sources live under <code>samples/appb/</code>.</p>
 
@@ -59,6 +59,7 @@ extra_css: /book/book.css
 <a href="#b-join"><code>text/join</code></a>
 <a href="#b-keys"><code>keys</code></a>
 <a href="#b-length"><code>length</code></a>
+<a href="#b-merge"><code>merge</code></a>
 <a href="#b-vocabulary"><code>list/…</code></a>
 <a href="#b-print"><code>print</code></a>
 <a href="#b-wrap_err"><code>wrap_err</code></a>
@@ -334,6 +335,29 @@ keys ["a" "b" "c"]
 values [1 2 3]
 length 3
 empty {}</code></pre>
+  </div>
+</div>
+
+<h2>records</h2>
+
+<h3 id="b-merge"><code>merge</code></h3>
+<p class="builtin-sig"><code>merge record { "field":value … } → record</code></p>
+<p>a copy of <code>record</code> with the named fields replaced and every other field carried over. the fields are named by string literals in a map literal, and each has to be a field of the record's type: a name the type does not declare is refused when the compiler can see the type, and otherwise when no record the module declares has every field named. a value that reaches the <code>merge</code> at run time with a type that lacks one of the fields is a runtime error. only the module that declares the type may <code>merge</code> it, the same rule as construction.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">shipping.kso</div>
+  <pre><code><span class="k">type</span> order
+  <span class="f">item</span>
+  <span class="f">qty</span>
+  <span class="f">status</span>
+
+placed <span class="o">=</span> <span class="f">order</span> <span class="s">"tea"</span> <span class="n">2</span> <span class="s">"placed"</span>
+shipped <span class="o">=</span> <span class="f">merge</span> placed { <span class="s">"qty"</span>:<span class="n">3</span> <span class="s">"status"</span>:<span class="s">"shipped"</span> }
+<span class="f">print</span> <span class="s">"<span class="i">{shipped}</span>"</span> <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"<span class="i">{placed}</span>"</span>)</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso play shipping.kso</div>
+    <pre><code>shipping/order "tea" 3 "shipped"
+shipping/order "tea" 2 "placed"</code></pre>
   </div>
 </div>
 

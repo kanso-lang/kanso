@@ -1,0 +1,4 @@
+error[formatting]: this list fits on one line (12 characters) — a list spans lines only when it does not
+  --> a_list_that_fits_on_one_line_does_not_span.kso:4:6
+   4 | xs = [
+            ^

@@ -77,9 +77,9 @@ pub const BUILTINS: [&str; 66] = [
 /// three chain words are here because a chain step is written wherever an
 /// effect is, and importing a module to spell one would be a tax on the
 /// failure channel.
-pub const AMBIENT: [&str; 12] = [
-    "annotate", "bind", "effect", "entries", "if", "keys", "length", "print", "push", "put",
-    "rescue", "values",
+pub const AMBIENT: [&str; 13] = [
+    "annotate", "bind", "effect", "entries", "if", "keys", "length", "merge", "print", "push",
+    "put", "rescue", "values",
 ];
 
 /// What each builtin takes. `if` is absent: its count is checked where its
@@ -94,7 +94,7 @@ pub const AMBIENT: [&str; 12] = [
 /// `native backend: `length` takes 1 argument(s)` and no span, the page
 /// died at the call, and `kanso check` said ok. So the counts live here,
 /// beside the names, and every reader takes them from one place.
-pub const BUILTIN_ARITY: [(&str, usize); 70] = [
+pub const BUILTIN_ARITY: [(&str, usize); 71] = [
     ("accept", 1),
     ("annotate", 2),
     ("append", 2),
@@ -130,6 +130,7 @@ pub const BUILTIN_ARITY: [(&str, usize); 70] = [
     ("listen", 1),
     ("make_dir", 1),
     ("map", 2),
+    ("merge", 2),
     ("net_close", 1),
     ("net_port", 1),
     ("net_read", 1),
@@ -281,7 +282,7 @@ struct PerNode<'a> {
     arities: crate::hash::Map<&'a str, usize>,
     groups: LiteralGroups<'a>,
     types: HashMap<&'a str, &'a TypeDecl>,
-    builtins: HashMap<(&'a str, usize), &'a str>,
+    builtins: &'a HashMap<(&'a str, usize), &'a str>,
     scan: FieldScan<'a>,
     /// The three questions the name walk asked on its own descent. One
     /// reference, like the four above it, because `Named` was already the
@@ -344,7 +345,7 @@ fn check_per_node<'a>(
     program: &'a Program,
     rewritten: &crate::Rewrites,
     diags: &mut Vec<Diagnostic>,
-    builtins: HashMap<(&'a str, usize), &'a str>,
+    builtins: &'a HashMap<(&'a str, usize), &'a str>,
 ) -> Vec<Diagnostic> {
     let mut arities: crate::hash::Map<&str, usize> =
         crate::hash::Map::with_capacity_and_hasher(program.fns.len(), Default::default());
@@ -558,6 +559,7 @@ fn per_node_walk<'a>(
     call_shaped_at(expr, &tables.arities, &state.bound, diags);
     literal_argument_at(expr, tables, &state.bound, state.file, diags);
     field_read_at(expr, &tables.scan, &state.local, &mut state.open, flags.certain, diags);
+    merge_at(expr, &tables.scan, &state.local, diags);
     named_at(expr, &tables.named, state.own, &mut state.named_diags, &mut state.shadowable);
     // Every child of every arm below is exactly what `for_each_child` yields
     // for that shape, in the same order. The arms exist to turn a flag off for
@@ -1748,6 +1750,100 @@ fn field_read_at<'a>(
     }
 }
 
+/// `merge u { "role":"chef" }` copies `u` with the named fields replaced
+/// (ruled 2026-10-13, #1886). The rewrite that builds the copy needs every name
+/// in hand, so the fields are named by string literals in a map literal. Each
+/// one has to be a field of the value's type, and the copy is a construction,
+/// so the type has to be one this module declares. Where the type is not
+/// known here the question is asked of every type the module declares: one of
+/// them has to have every field named, and a value of any other type reaches
+/// no arm of the copy.
+fn merge_at<'a>(
+    e: &'a Expr,
+    scan: &FieldScan<'a>,
+    local: &HashMap<&'a str, &'a str>,
+    diags: &mut Vec<Diagnostic>,
+) {
+    let Expr::App { head, args, .. } = e else { return };
+    let Expr::Ident(name, _, _) = head.as_ref() else { return };
+    if name.as_str() != crate::MERGE || args.len() != 2 {
+        return;
+    }
+    let Expr::MapLit(entries, map_span) = &args[1] else {
+        diags.push(Diagnostic::new(
+            "type",
+            "`merge` names the fields it replaces in a map literal: `merge u { \"name\":value }`"
+                .to_string(),
+            args[1].span(),
+        ));
+        return;
+    };
+    if entries.is_empty() {
+        diags.push(Diagnostic::new(
+            "type",
+            "this `merge` replaces no field, so it is the value it was given".to_string(),
+            *map_span,
+        ));
+        return;
+    }
+    let mut keys: Vec<(&str, Span)> = Vec::new();
+    for (key, _) in entries {
+        match crate::merge_key(key) {
+            Some(k) => keys.push((k, key.span())),
+            None => diags.push(Diagnostic::new(
+                "type",
+                "a field `merge` replaces is named by a plain string literal".to_string(),
+                key.span(),
+            )),
+        }
+    }
+    if keys.len() != entries.len() {
+        return;
+    }
+    if let Some(ty) = base_type(&args[0], &scan.plain, local) {
+        for (key, span) in &keys {
+            if !scan.plain[ty].contains(key) {
+                diags.push(Diagnostic::new("name", format!("`{ty}` has no field `{key}`"), *span));
+            }
+        }
+        return;
+    }
+    let mut missing = false;
+    for (key, span) in &keys {
+        if !scan.declared.contains(key) {
+            diags.push(Diagnostic::new(
+                "name",
+                format!("no record type has a field `{key}`"),
+                *span,
+            ));
+            missing = true;
+        }
+    }
+    if missing {
+        return;
+    }
+    let has_all = |t: &TypeDecl| keys.iter().all(|(k, _)| t.fields.iter().any(|(f, _, _)| f == k));
+    let own = scan.program.types.iter().filter(|t| crate::merge_owned(t));
+    if own.clone().any(has_all) {
+        return;
+    }
+    let names: Vec<String> = keys.iter().map(|(k, _)| format!("`{k}`")).collect();
+    let foreign = scan.program.types.iter().find(|t| !crate::merge_owned(t) && has_all(t));
+    let (kind, message) = match foreign {
+        Some(t) => {
+            let full = t.origin.as_deref().unwrap_or(t.name.as_str());
+            let (owner, short) = crate::ast::split_qual(full).unwrap_or(("another module", full));
+            let message = format!(
+                "`merge` copies a `{short}` only in `{owner}`, the module that declares it; \
+                 ask it for the copy through a pub function"
+            );
+            ("opacity", message)
+        }
+        None => ("name", format!("no record type here has every field {}", names.join(", "))),
+    };
+    diags.push(Diagnostic::new(kind, message, *map_span));
+}
+
 /// The type of the value this field read is reading from, when the checker can
 /// know it: a construction written where it stands, or a local bound to one.
 fn base_type<'a>(
@@ -1798,7 +1894,7 @@ pub fn check_merged_after_aliases_with<'a>(
     // Three checks read what inference knows, and inference over a whole
     // program is the most expensive thing the front end does. One pass,
     // handed round.
-    let named_diags = check_per_node(program, rewritten, &mut diags, builtins);
+    let named_diags = check_per_node(program, rewritten, &mut diags, &builtins);
     let walked = diags.len();
     if diags.iter().any(|d| d.kind == "arity") {
         // inference indexes an if's branches, so it never runs over a shape
@@ -1849,6 +1945,7 @@ pub fn check_merged_after_aliases_with<'a>(
         program,
         &inference,
         &returns,
+        &builtins,
         &mut effect_diags,
         &mut box_diags,
         &mut none_diags,
@@ -2237,7 +2334,9 @@ fn arity_at(name: &str, span: Span, argc: usize, named: &Named<'_>, diags: &mut 
             diags.push(Diagnostic::new("arity", message, span));
         }
     }
-    if known.is_none() {
+    // A type the program declares is its own name too, and its field count
+    // was asked above: a record named `run` is not std/os's builtin.
+    if known.is_none() && !named.fields.contains_key(name) {
         if let Some(takes) = builtin_arity(name) {
             if argc != takes {
                 diags.push(Diagnostic::new(
@@ -2330,6 +2429,7 @@ fn builtin_demand(name: &str, index: usize) -> Option<&'static [LitKind]> {
     use LitKind::*;
     let table: &[(&str, &[&[LitKind]])] = &[
         ("length", &[&[Str, List, Map]]),
+        ("join", &[&[List], &[Str]]),
         ("entries", &[&[Map]]),
         ("keys", &[&[Map]]),
         ("values", &[&[Map]]),
@@ -2491,7 +2591,9 @@ fn literal_argument_at(
     // decision, an accident of which names have wrappers.
     let forwards = alias.is_some();
     let declared = groups.has(name, args.len());
-    let shadowed = !forwards && declared;
+    // A type the program declares shadows a builtin of that name as a
+    // function does: `type run` is built with `run 1 2 3`.
+    let shadowed = !forwards && (declared || types.contains_key(name.as_str()));
     for (i, arg) in args.iter().enumerate() {
         let Some(kind) = literal_kind(arg) else { continue };
         let Some(allowed) = builtin_demand(bare, i).filter(|_| !shadowed) else {

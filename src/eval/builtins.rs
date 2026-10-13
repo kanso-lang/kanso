@@ -486,6 +486,17 @@ impl<'a> Interp<'a> {
                         _ => None,
                     }
                 };
+                // a list nobody else holds is extended where it stands, as a
+                // push onto it is; `concat acc acc` is never proven, so the
+                // second list is not the one being grown
+                if let Value::List(xs) = &a {
+                    if self.writes_in_place(span, frame) {
+                        if let Some(tail) = as_items(&b) {
+                            Self::written_in_place(xs).extend(tail);
+                            return Ok(a);
+                        }
+                    }
+                }
                 let (Some(mut joined), Some(tail)) = (as_items(&a), as_items(&b)) else {
                     return Err(RuntimeError {
                         message: "concat takes two lists".to_string(),

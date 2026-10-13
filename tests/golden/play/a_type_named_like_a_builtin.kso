@@ -1,0 +1,6 @@
+type run
+  a
+  b
+  c
+
+print "{run 1 2 3}"

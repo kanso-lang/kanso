@@ -127,6 +127,25 @@ extra_css: /book/book.css
   </div>
 </div>
 
+<p>parentheses that group nothing are refused as well: if an expression parses the same without them, the compiler asks you to take them out. two kinds of chain need them anyway. <code>&amp;</code>, <code>|</code> and <code>^</code> share one level, so a chain that mixes them must say which goes first. <code>and</code> binds tighter than <code>or</code>, but a condition that mixes the two is refused until parentheses say which part goes first, so nobody has to remember the table to read it:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">and_or_check.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">ready</span> signed paid admin
+  <span class="f">signed</span> and paid or admin
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"<span class="i">{ready true false true}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso check and_or_check.kso</div>
+    <pre><code><span class="k">error[syntax]</span>: `and` and `or` meet without parentheses — parenthesize the part that goes first, as in `(a and b) or c`
+<span class="c">  --&gt; and_or_check.kso:2:19</span>
+   2 |   signed and paid or admin
+                         <span class="k">^</span></code></pre>
+  </div>
+</div>
+
+<p>the answer is <code>(signed and paid) or admin</code>, and those parentheses stay, because the line without them does not compile.</p>
+
 <h2>one order per file</h2>
 
 <p>wherever order carries no meaning, canonical order is mandatory, so that two programs differing only in shuffle are impossible: imports, the members of a typeset, the fields of a keyed read. declaration order is not one of those places—it carries narrative, and it stays yours. what the file does fix is the two groups: type declarations come first, then functions and constants. put a type below a function and the compiler tells you which one to move and where:</p>
@@ -213,6 +232,26 @@ extra_css: /book/book.css
   </div>
 </div>
 
+<p>a file may open with a header comment: a block of comment lines about the whole file, then exactly one blank line, then the code. the blank line keeps the header from reading as a comment on the first declaration. a second blank line is refused, and so is a blank line above the header:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">header_check.kso</div>
+  <pre><code><span class="c"># Weekly totals, read from the ledger.</span>
+
+
+<span class="k">fn</span> <span class="f">total</span> xs
+  <span class="f">list/sum</span> xs
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"<span class="i">{total [1 2 3]}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso check header_check.kso</div>
+    <pre><code><span class="k">error[formatting]</span>: one blank line separates the header comment from the code
+<span class="c">  --&gt; header_check.kso:3:1</span>
+   3 | 
+       <span class="k">^</span></code></pre>
+  </div>
+</div>
+
 <h2>eighty columns, and the continuation line</h2>
 
 <p>a line holds at most eighty characters. the diagnostic even counts them for you:</p>
@@ -276,6 +315,25 @@ ranked <span class="o">=</span> [<span class="n">40</span> <span class="n">15</s
   </div>
 </div>
 
+<p>a list or map literal too long for its line spans lines instead, one element to a line, with the closing bracket alone at the indent of the line that opened it. chapter 02 shows the form. the same rule applies to it: a literal that fits on one line must be written on one line, and the diagnostic gives the width it would take:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">span_short_check.kso</div>
+  <pre><code>steps <span class="o">=</span> [
+  <span class="s">"boil"</span>
+  <span class="s">"steep"</span>
+  <span class="s">"pour"</span>
+]
+<span class="f">print</span> <span class="s">"<span class="i">{steps}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso check span_short_check.kso</div>
+    <pre><code><span class="k">error[formatting]</span>: this list fits on one line (31 characters) — a list spans lines only when it does not
+<span class="c">  --&gt; span_short_check.kso:1:9</span>
+   1 | steps = [
+               <span class="k">^</span></code></pre>
+  </div>
+</div>
+
 <h2>names: snake_case, lowercase, always</h2>
 
 <p>identifiers are lowercase snake_case, with no exceptions and no second convention to remember. no camelCase, no PascalCase, no SCREAMING_CONSTANTS. a single naming scheme means a name looks identical everywhere it appears, and a reader never wonders whether case carries meaning—it does not:</p>
@@ -325,7 +383,7 @@ ranked <span class="o">=</span> [<span class="n">40</span> <span class="n">15</s
 </div>
 </div>
 
-<p>that is the whole law. you can now read any diagnostic in the <code>error[formatting]</code> family and know it names a rule with exactly one legal answer, and you can write a file that <code>kanso check</code> passes on the first try: two-space indents, one space around every <code>=</code> and operator, no commas and no call parentheses, types before functions and both alphabetical, one blank line between declarations and none inside a body, eighty columns with <code>.</code>, <code>.&gt;</code>, <code>.!</code> and <code>.?</code> continuation lines when a statement runs long, snake_case names, and double-quoted strings. nothing here is a preference. it is the grammar, and the grammar is the reason every kanso diff you read contains only decisions.</p>
+<p>that is the whole law. you can now read any diagnostic in the <code>error[formatting]</code> family and know it names a rule with exactly one legal answer, and you can write a file that <code>kanso check</code> passes on the first try: two-space indents, one space around every <code>=</code> and operator, no commas and no call parentheses, parentheses only where they group something, types before functions and both alphabetical, one blank line between declarations and none inside a body, one under a header comment, eighty columns with <code>.</code>, <code>.&gt;</code>, <code>.!</code> and <code>.?</code> continuation lines when a statement runs long, a list or map one element to a line when it runs long, snake_case names, and double-quoted strings. nothing here is a preference. it is the grammar, and the grammar is the reason every kanso diff you read contains only decisions.</p>
 
 <h2>exercises</h2>
 

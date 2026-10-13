@@ -1,0 +1,17 @@
+# A branch of an `if` binds names of its own, and a name bound there to a
+# call that can raise carries the call's err as one bound in the body does
+# (#1884). `each + 1` is refused as `share cents people + 1` would be.
+fn share cents people
+  return err "no one to share the bill with" if people == 0
+  cents / people
+
+fn tipped cents people split
+  owed = if split
+    each = share cents people
+    each + 1
+  else
+    whole = cents
+    whole + 1
+  owed
+
+pub play = print "{tipped 100 0 true}"

@@ -9,17 +9,19 @@
 # in a message about a backend — the declare for its check sat in the preamble
 # with nothing behind it.
 #
-# So: a failure reaches neither arm, and leaves with a hop, the way it does
-# past any group whose arms all refuse it. A value still reaches the `some`
-# arm, which is what the annotation is for. The failure arrives by name: the
-# checker refuses a raised err handed straight to a group with no arm for
-# it, and reads calls rather than names, so the binding is what lets this
-# pin the runtime's answer.
+# So: a failure never reaches the `some` arm. A value still does, which is
+# what the annotation is for. A raised err handed to a group with no arm for
+# it does not compile, bound to a name or not (#1884), so `taken` names the
+# failure in an arm of its own and hands it on; the `some` arm beside it is
+# the one that must refuse it.
 import "std/json"
 import "std/testing"
 
 fn as_text reason
   "{reason}"
+
+fn taken e@(err _)
+  e
 
 fn taken _:some
   "the some arm took it"

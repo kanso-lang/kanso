@@ -1,3 +1,4 @@
+import "../chrome"
 import "std/io"
 import "std/json"
 import "std/list"
@@ -80,6 +81,9 @@ fn either? true _
 fn either? _ answer
   answer
 
+fn door_of e@(err _)
+  e
+
 fn door_of src
   chosen src (library? src)
 
@@ -138,6 +142,9 @@ fn with_page progs
   on = (w -> with_runtime progs page w)
   os/read_bytes! "docs/kanso.wasm" .> on
 
+fn with_runtime _ e@(err _) _
+  e
+
 fn with_runtime progs page w
   on = (r -> with_engine progs page w r)
   os/read_bytes! "docs/kanso-runtime.wasm" .> on
@@ -147,18 +154,8 @@ fn with_engine progs page w r
   on = (told_where -> chosen progs set told_where)
   os/env "KANSO_CHROME" .> on
 
-mac_chrome = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-
-linux_chrome = ["/usr/bin/google-chrome" "/usr/bin/chromium-browser"]
-
-other_chrome = ["/usr/bin/chromium" "/usr/bin/google-chrome-stable"]
-
-rest_chrome = text/concat linux_chrome other_chrome
-
-chrome_paths = text/concat [mac_chrome] rest_chrome
-
 fn chosen progs set none
-  first_chrome progs set chrome_paths 1
+  first_chrome progs set chrome/paths 1
 
 fn chosen progs set where
   os/exists where .> (there -> told_of progs set where there)
@@ -211,6 +208,9 @@ fn more_files paths at acc book false
   return more_files paths at acc book true if at < 1 or length paths < at
   on = (src -> one_file paths at acc book src)
   os/read_file! paths[at] .> on
+
+fn book_read _ _ e@(err _)
+  e
 
 fn book_read paths at acc
   more_book_files paths at acc (at > length paths)
@@ -300,13 +300,18 @@ pub play = gather_dirs dirs 1 []
 # What a tab cannot give a program. book-play.js upgrades a panel only when a
 # sample passes the same test, so the differential covers exactly the samples
 # a reader can press run on.
-machine_calls = ["os/read_file" "os/write_file" "os/args" "io/stdin"]
-
-more_calls = ["os/list_dir" "os/run" "os/make_dir" "os/exists" "os/is_dir"]
-
-byte_calls = ["os/read_bytes"]
-
-needs_a_machine = text/concat machine_calls (text/concat more_calls byte_calls)
+needs_a_machine = [
+  "os/read_file"
+  "os/write_file"
+  "os/args"
+  "io/stdin"
+  "os/list_dir"
+  "os/run"
+  "os/make_dir"
+  "os/exists"
+  "os/is_dir"
+  "os/read_bytes"
+]
 
 fn names_any? src needles at
   hunted? src needles at (at > length needles)
@@ -317,8 +322,7 @@ fn hunted? _ _ _ true
 fn hunted? src needles at false
   return false if at < 1 or length needles < at
   here = length (text/split src needles[at]) > 1
-  rest = names_any? src needles (at + 1)
-  either? here rest
+  names_any? src needles (at + 1) .> (rest -> either? here rest)
 
 fn a_test? path
   parts = text/split path "/"
@@ -329,11 +333,15 @@ fn recorded_of path
   parts = text/split path ".kso"
   "{parts[1]}.out"
 
+# A sample that imports a module beside it needs a directory, and the tab is
+# handed one source. ch04's boundary.kso was left out only because its
+# recorded output began with its error, and stdout now comes first.
 fn book_keep acc path src said
   refused = text/slice said 1 5 == "error"
-  machine = names_any? src needs_a_machine 1
-  skip = either? refused machine
-  put_unless acc path src skip
+  beside = local_import? src
+  skip = (machine -> either? refused (either? machine beside))
+  names_any? src needs_a_machine 1
+    .> (machine -> put_unless acc path src (skip machine))
 
 fn put_unless acc _ _ true
   acc
@@ -359,9 +367,11 @@ fn unescaped raw
   twice = replaced once "\\`" "`"
   replaced twice "\\$" "$"
 
+fn replaced e@(err _) _ _
+  e
+
 fn replaced text from to
-  parts = text/split text from
-  text/join parts to
+  text/split text from .> (parts -> text/join parts to)
 
 fn name_before piece
   lines = text/split piece "\n"
@@ -754,7 +764,9 @@ fn reported progs raw
   os/run "pkill" ["-f" "kanso-differential-profile"] .> on
 
 fn tallied progs raw
-  read = json/decode raw
+  json/decode raw .> (read -> tallied_from progs read)
+
+fn tallied_from progs read
   results = read["results"]
   counts = by_kind results 1 {}
   said = "the tab: {length results} answers, {counts}"
@@ -910,6 +922,9 @@ fn filed progs seen gaps at bad agreed skipped p r said false
   theirs = tab_said said said["kind"]
   why = "{p.path}: {mine} — {theirs}"
   against progs seen gaps (at + 1) (text/concat bad [why]) agreed skipped
+
+fn filed _ _ _ _ _ _ _ _ _ _ e@(err _)
+  e
 
 # A crashed case answers no code and no text, so the ordinary line reads
 # `tab <none> <none>` and throws away the reason the tab already captured.

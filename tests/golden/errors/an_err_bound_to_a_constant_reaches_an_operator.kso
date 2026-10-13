@@ -1,0 +1,12 @@
+# A constant carries the err of the call it was bound to (#1884), as a local
+# name does. `rest` is bound to a call that answers an err, and adding to it
+# in another declaration is refused as adding to the call would be.
+fn steeped 0
+  err "nothing steeped"
+
+fn steeped n
+  n
+
+rest = steeped 0
+
+pub play = print "{rest + 1}"

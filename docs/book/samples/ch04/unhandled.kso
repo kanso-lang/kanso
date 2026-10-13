@@ -1,14 +1,11 @@
+import "std/text"
+
 fn describe none
   "nothing"
 
 fn describe x
   "got {x}"
 
-fn steeped 0
-  err "nothing steeped"
-
-fn steeped n
-  n
-
-bad = steeped 0
+steeps = ["3" "not yet"]
+bad = text/to_int steeps[2]
 print (describe bad)

@@ -1,7 +1,9 @@
 # a skipped binding whose computation would produce an err. errs are
 # values and effects are inert, so skipping it is observably invisible —
 # the .mem golden pins the deeper fact: the err is never even born
-# (thunk_evals=0), on both engines, with identical stdout.
+# (thunk_evals=0), on both engines, with identical stdout. The err is a zero
+# divisor's: a raised one handed to `pick`, which has no arm for it, does not
+# compile, bound to a name or not (#1884).
 fn pick false _
   0
 
@@ -13,4 +15,4 @@ pub play =
   print "picked: {pick false danger}"
 
 fn risky n
-  err "boom {n}"
+  n / (n - n)

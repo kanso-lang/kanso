@@ -1,0 +1,4 @@
+error[exhaustive]: this can be an err and `+` wants a value — dispatch on it first with an `(err _)` arm (in an_err_bound_to_a_constant_reaches_an_operator.kso) (module an_err_bound_to_a_constant_reaches_an_operator)
+  --> an_err_bound_to_a_constant_reaches_an_operator.kso:12:20
+  12 | pub play = print "{rest + 1}"
+                          ^

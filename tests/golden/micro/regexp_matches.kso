@@ -1,8 +1,13 @@
 import "std/regexp"
 
-pub play =
-  found = regexp/matches "[0-9]+" "a12 b345 c6"
+# a match can fail, so its answer is dispatched on before it is read
+fn report (err e)
+  print "{e}"
+
+fn report found
   one = found[1]
   two = found[2]
   print "{length found} matches"
     .> (_ -> print "first {one.from}-{one.to} second {two.from}-{two.to}")
+
+pub play = report (regexp/matches "[0-9]+" "a12 b345 c6")

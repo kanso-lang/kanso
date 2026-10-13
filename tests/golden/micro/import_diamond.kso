@@ -7,6 +7,13 @@ import "std/text"
 
 decoded = json/decode "[1, 2]"
 
-print "{text/slice "abcdef" 2 4}"
+# a decode can fail, so its answer is dispatched on before it is encoded
+fn encoded (err e)
+  "{e}"
+
+fn encoded v
+  json/encode v
+
+pub play = print "{text/slice "abcdef" 2 4}"
   .> (_ -> print "{decoded}")
-  .> (_ -> print "{json/encode decoded}")
+  .> (_ -> print "{encoded decoded}")

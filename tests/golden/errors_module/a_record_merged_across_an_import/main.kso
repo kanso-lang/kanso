@@ -1,0 +1,4 @@
+import "./shapes"
+import "std/io"
+
+io/write "{merge shapes/origin { "x":1 }}"

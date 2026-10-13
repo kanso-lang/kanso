@@ -1,5 +1,6 @@
 use crate::name::Name;
 pub mod advisory;
+pub mod ahead;
 pub mod ast;
 pub mod beat;
 pub mod check;
@@ -426,6 +427,86 @@ fn compile_one(file: &str, source: &str, drop_unused: bool) -> Result<ast::Progr
 /// as a library and loads its imports (plus the ambient module) like any
 /// other root compile.
 pub fn compile_library(file: &str, source: &str) -> Result<ast::Program, String> {
+    compile_library_beside(file, source, None)
+}
+
+/// A test file, under the 2026-10-12 gavel (#1883): an outside consumer of
+/// the module it sits beside. It imports that module the way any importer
+/// does, so it reads the pub surface and nothing private, and the module's
+/// loader never reads the test file, so nothing it declares or imports
+/// reaches the module. A test file with no library files beside it has no
+/// module to import and tests what it declares itself.
+pub fn compile_test_file(file: &str, source: &str) -> Result<ast::Program, String> {
+    let beside = module_beside(file);
+    // the module is the test file's own directory, which an import from
+    // inside it would otherwise refuse as the module importing itself
+    ENTRY_COMPILE.with(|c| c.set(true));
+    let built = compile_library_beside(file, source, beside);
+    ENTRY_COMPILE.with(|c| c.set(false));
+    built
+}
+
+/// Whether a file names a test file: `kanso test` is the only verb that
+/// reads one, and a module's loader leaves it out.
+pub fn is_test_file(path: &std::path::Path) -> bool {
+    path.file_name().is_some_and(|n| n.to_string_lossy().ends_with("_test.kso"))
+}
+
+/// The import a test file is compiled with: its own directory, spelled from
+/// inside it, when that directory holds library files. An empty parent is
+/// the working directory, whose name only the filesystem knows.
+fn module_beside(file: &str) -> Option<ast::Import> {
+    let dir = std::path::Path::new(file).parent()?;
+    let listed = match dir.as_os_str().is_empty() {
+        true => std::path::Path::new("."),
+        false => dir,
+    };
+    let mut library = false;
+    for entry in std::fs::read_dir(listed).into_iter().flatten().flatten() {
+        let path = entry.path();
+        if path.extension().is_none_or(|x| x != "kso")
+            || entry.file_name() == "main.kso"
+            || is_test_file(&path)
+        {
+            continue;
+        }
+        // A directory holding a program beside the test file is a folder of
+        // programs, the book's sample chapters among them, and there is no
+        // module there to import: the test file tests what it declares. A file
+        // that parses as nothing at all still counts as the module's, so its
+        // syntax error is what the test run reports.
+        let source = std::fs::read_to_string(&path).unwrap_or_default();
+        let Ok(lexed) = lexer::lex(&source) else {
+            library = true;
+            continue;
+        };
+        if parser::parse(&lexed).is_err()
+            && (parser::parse_entry(&lexed).is_ok() || parser::parse_play(&lexed).is_ok())
+        {
+            return None;
+        }
+        library = true;
+    }
+    if !library {
+        return None;
+    }
+    let name = match dir.file_name() {
+        Some(name) => name.to_string_lossy().into_owned(),
+        None => std::fs::canonicalize(listed).ok()?.file_name()?.to_string_lossy().into_owned(),
+    };
+    Some(ast::Import {
+        path: format!("../{name}"),
+        span: diag::Span::at(0, 0),
+        alias: None,
+        renames: Vec::new(),
+    })
+}
+
+fn compile_library_beside(
+    file: &str,
+    source: &str,
+    beside: Option<ast::Import>,
+) -> Result<ast::Program, String> {
     let lexed = lexer::lex(source).map_err(|d| diag::render(&d, file, source))?;
     let mut program = parser::parse(&lexed).map_err(|d| diag::render(&d, file, source))?;
     finish_program(&mut program);
@@ -436,6 +517,9 @@ pub fn compile_library(file: &str, source: &str) -> Result<ast::Program, String>
     }
     let base = std::path::Path::new(file).parent().map(|p| p.to_path_buf()).unwrap_or_default();
     let mut import_list: Vec<ast::Import> = program.imports.clone();
+    // the module under test is loaded with the file's own imports but never
+    // joins `program.imports`, so it cannot read as an import left unused
+    import_list.extend(beside);
     ambient_imports(&mut import_list);
     let mut visited = crate::hash::Set::default();
     let (mut dep_program, exports, surfaced) =
@@ -1681,11 +1765,161 @@ pub fn desugar_field_reads(program: &mut ast::Program) {
     // Inequality rides the same hook: it has to see every module the merge
     // produced, which is exactly what this pass already runs after.
     desugar_inequality(program);
+    desugar_merges(program);
     synthesize_reader_groups(program);
     for decl in &mut program.fns {
         for stmt in &mut decl.body {
             desugar_stmt(stmt);
         }
+    }
+}
+
+/// The builtin that copies a record with named fields replaced (#1886).
+pub const MERGE: &str = "merge";
+
+/// The field a `merge` key names, when it is a plain string literal.
+pub fn merge_key(key: &ast::Expr) -> Option<&str> {
+    match key {
+        ast::Expr::Str(parts, _) => match parts.as_slice() {
+            [ast::TemplatePart::Lit(text)] => Some(text.as_str()),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// A record this compilation unit declares, as the checker sees it: an
+/// imported record is a qualified name or the short clone the loader makes.
+pub fn merge_owned(ty: &ast::TypeDecl) -> bool {
+    !ty.synthetic && !ast::has_slash(&ty.name) && !ty.fields.is_empty()
+}
+
+/// `merge u { "b":2 }` becomes a call to a group with one arm per record the
+/// calling module declares that has every field named:
+///
+/// ```text
+/// fn Merge_1b (t Kept0 _ Kept2) Given0 = t Kept0 Given0 Kept2
+/// ```
+///
+/// so every engine runs a dispatch and a construction it already has. One
+/// group per module and set of names, shared by every call that names them.
+/// A value of a type with no arm meets the dispatch's own refusal.
+fn desugar_merges(program: &mut ast::Program) {
+    let records: Vec<(String, Vec<String>, crate::diag::Span)> = program
+        .types
+        .iter()
+        .filter(|t| !t.synthetic && !t.fields.is_empty())
+        .map(|t| (t.name.clone(), t.fields.iter().map(|(f, _, _)| f.clone()).collect(), t.span))
+        .collect();
+    let mut made: crate::hash::Set<String> = crate::hash::Set::default();
+    let mut arms = Vec::new();
+    for decl in &mut program.fns {
+        let owner = ast::split_qual(&decl.name).map(|(o, _)| o.to_string()).unwrap_or_default();
+        let mut at = |e: &mut ast::Expr| merge_expr(e, &owner, &records, &mut made, &mut arms);
+        for stmt in &mut decl.body {
+            match stmt {
+                ast::Stmt::Bind { expr, .. } | ast::Stmt::Expr(expr) => at(expr),
+            }
+        }
+    }
+    program.fns.extend(arms);
+}
+
+fn merge_expr(
+    e: &mut ast::Expr,
+    owner: &str,
+    records: &[(String, Vec<String>, crate::diag::Span)],
+    made: &mut crate::hash::Set<String>,
+    arms: &mut Vec<ast::FnDecl>,
+) {
+    walk_children_mut(e, &mut |child| merge_expr(child, owner, records, made, arms));
+    let ast::Expr::App { head, args, span, .. } = e else { return };
+    let ast::Expr::Ident(name, _, _) = head.as_ref() else { return };
+    if name.as_str() != MERGE || args.len() != 2 {
+        return;
+    }
+    let ast::Expr::MapLit(entries, _) = &args[1] else { return };
+    let Some(keys) =
+        entries.iter().map(|(k, _)| merge_key(k).map(str::to_string)).collect::<Option<Vec<_>>>()
+    else {
+        return;
+    };
+    let span = *span;
+    // Each name carries its length, so two sets of names never spell the same
+    // group, and the result is a word every engine takes as a symbol.
+    let bare: String =
+        keys.iter().fold("Merge".to_string(), |acc, k| format!("{acc}_{}{k}", k.len()));
+    let group = match owner.is_empty() {
+        true => bare,
+        false => format!("{owner}/{bare}"),
+    };
+    if made.insert(group.clone()) {
+        for (ty, fields, declared) in records {
+            let ty_owner = ast::split_qual(ty).map(|(o, _)| o).unwrap_or("");
+            if ty_owner != owner || !keys.iter().all(|k| fields.contains(k)) {
+                continue;
+            }
+            let given = |k: &str| keys.iter().position(|g| g == k);
+            let pattern = fields
+                .iter()
+                .enumerate()
+                .map(|(at, f)| match given(f) {
+                    Some(_) => ast::Pattern::Wildcard(span),
+                    None => ast::Pattern::Var(Name::new(&format!("Kept{at}")), span),
+                })
+                .collect();
+            let mut params =
+                vec![ast::Pattern::Ctor { ty: Name::new(ty), fields: pattern, whole: None }];
+            params.extend(
+                (0..keys.len()).map(|at| ast::Pattern::Var(Name::new(&format!("Given{at}")), span)),
+            );
+            let built = fields
+                .iter()
+                .enumerate()
+                .map(|(at, f)| {
+                    let local = match given(f) {
+                        Some(g) => format!("Given{g}"),
+                        None => format!("Kept{at}"),
+                    };
+                    ast::Expr::Ident(Name::new(&local), span, crate::ast::Resolution::default())
+                })
+                .collect();
+            let body = ast::Expr::App {
+                head: Box::new(ast::Expr::Ident(
+                    Name::new(ty),
+                    span,
+                    crate::ast::Resolution::default(),
+                )),
+                args: built,
+                span,
+                piped: false,
+            };
+            // Each arm carries its type's span: arms of one group that share a
+            // span read as one declaration made twice when a module is merged.
+            arms.push(ast::FnDecl {
+                name: group.clone(),
+                is_pub: true,
+                written_pub: false,
+                span: *declared,
+                params,
+                body: vec![ast::Stmt::Expr(body)],
+                file: crate::ast::unstamped(),
+                synthetic: false,
+                shades: None,
+            });
+        }
+    }
+    let ast::Expr::App { args, .. } = e else { return };
+    let map = args.pop().expect("two arguments");
+    let ast::Expr::MapLit(entries, _) = map else { return };
+    args.extend(entries.into_iter().map(|(_, v)| v));
+    *head_of(e) = ast::Expr::Ident(Name::new(&group), span, crate::ast::Resolution::default());
+}
+
+fn head_of(e: &mut ast::Expr) -> &mut ast::Expr {
+    match e {
+        ast::Expr::App { head, .. } => head.as_mut(),
+        _ => unreachable!("a merge is an application"),
     }
 }
 

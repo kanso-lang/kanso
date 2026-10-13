@@ -5,22 +5,12 @@
 // (kanso#1848). cargo fmt does not reach an included file, so CI's format
 // job checks the files under src/'s subdirectories itself.
 
-/// The widest arm, in argument words, that keeps `tailcc` in a release build.
-///
-/// On arm64 it is the register file, x0 through x7, past which the
-/// convention is miscompiled (see `narrow_tailcc`). x86-64 lowers a `tailcc`
-/// call whose arguments spill onto the stack correctly, so there the limit is
-/// a cost and was measured. At eight it narrowed the JSON decoder's
-/// `obj_key_end`, nine words, and a release build decoding an object of
-/// 300,000 keys spent a frame per key and overflowed its stack. At nine the
-/// decoder keeps its jumps and runbench reads 0.25% less. At ten and above the
-/// wider std/regexp arms keep theirs too, and scanbench reads 1.9% more: a
-/// tail call copies its stack arguments into the caller's, and past three of
-/// them that costs more than the frame it saves.
-const TAILCC_WIDEST: usize = match cfg!(target_arch = "aarch64") {
-    true => 8,
-    false => 9,
-};
+/// The widest arm, in argument words, that keeps `tailcc` in an arm64 release
+/// build: the register file, x0 through x7. Past it the convention is
+/// miscompiled at -O1 and above (see `narrow_tailcc`). x86-64 lowers a `tailcc`
+/// call whose arguments spill onto the stack correctly, so there every
+/// `musttail` the emitter wrote reaches clang as written.
+const ARM64_TAILCC_WIDEST: usize = 8;
 
 /// How many argument registers a parameter list wants: a %KValue and a %parsed
 /// are each two i64s, everything else is one.
@@ -49,10 +39,7 @@ fn called_symbol(line: &str) -> Option<String> {
     Some(rest[..end].trim().trim_matches('"').to_string())
 }
 
-/// tailcc kept on every arm no wider than `widest` argument words:
-/// `TAILCC_WIDEST`, or twelve where `preserve_none_tails` follows, since that
-/// convention passes twelve words in registers and an arm that fits keeps its
-/// jump. On scanbench the twelve reads 1.52% less than the nine.
+/// tailcc kept on every arm no wider than `widest` argument words, on arm64.
 ///
 /// `tailcc` is what the beat machinery's `musttail` needs, and at -O1 and above
 /// on arm64 the convention is miscompiled for an arm whose arguments spill past

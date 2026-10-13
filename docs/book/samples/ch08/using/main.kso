@@ -3,6 +3,5 @@ import "std/testing"
 
 ok = decode "\{\"name\": \"kanso\", \"tags\": [\"fast\", \"simple\"]}"
 bad = decode "\{\"name\": nope}"
-print (describe ok)
-  .> (_ -> print "recoded: {encode ok}")
+ok .> (v -> print (describe v) .> (_ -> print "recoded: {encode v}"))
   .> (_ -> print (testing/when_failed bad told))

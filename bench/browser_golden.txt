@@ -18,8 +18,17 @@
 # the operator. browser_compile_instructions 390,029,358 -> 391,974,060, a
 # RISE of 1,944,702 (+0.50%), on rustc 1.98.1 as CI builds it. The run rows
 # are unchanged.
+# 2026-10-12: the wasm runtime empties stdout before stderr, a read, a sleep
+# or a fork. browser_run_instructions 34,124,990 -> 34,125,823, a RISE of
+# 833, on rustc 1.98.1 as CI builds it.
+# 2026-10-13: the carried ruled queue (kanso#1938), sixteen pull requests
+# that build ruled parts of the language. browser_compile_instructions
+# 401,770,760 -> 413,925,406, a RISE of 12,154,646 (+3.03%), and
+# browser_run_peak_bytes 1,179,648 -> 1,441,792, on rustc 1.98.1 as CI builds
+# it. The peak is #1901's: its log entry prices the 256 KiB block the corpus's
+# railway sample now holds while it sizes the document before a tail call.
 # measured-on rustc=1.98.1
-browser_compile_instructions=393209858
-browser_compile_peak_bytes=677261
-browser_run_instructions=34125332
-browser_run_peak_bytes=1179648
+browser_compile_instructions=413925406
+browser_compile_peak_bytes=686192
+browser_run_instructions=34173068
+browser_run_peak_bytes=1441792

@@ -172,6 +172,29 @@ ages[<span class="s">"nobody"</span>]! <span class="o">.&gt;</span> (age <span c
   </div>
 </div>
 
+<p>a list or map too long for one line is written one element to a line. the opening bracket ends the line that starts the literal, each element sits on a line of its own two spaces further in, and the closing bracket sits alone at the indent the literal started from. a map puts one <code>key:value</code> entry on each line:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">long_list.kso</div>
+  <pre><code>teas <span class="o">=</span> [
+  <span class="s">"sencha from the hills above shizuoka, steamed for thirty seconds"</span>
+  <span class="s">"gyokuro, grown in the shade for three weeks before the picking"</span>
+  <span class="s">"hojicha"</span>
+]
+cups <span class="o">=</span> {
+  <span class="s">"a guest who came early and waited by the gate without complaint"</span>:<span class="n">2</span>
+  <span class="s">"sam"</span>:<span class="n">1</span>
+}
+<span class="f">print</span> <span class="s">"<span class="i">{length teas}</span> teas"</span> <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"<span class="i">{cups}</span>"</span>)</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run long_list.kso</div>
+    <pre><code>3 teas
+{ "a guest who came early and waited by the gate without complaint":2 "sam":1 }</code></pre>
+  </div>
+</div>
+
+<p>a list that fits on one line is written on one line. the compiler refuses the spanning form for it, for the same reason it refuses a needless continuation (appendix c).</p>
+
 <h2>records</h2>
 
 <p>when a value has named parts, give it a <code>type</code>. a type declaration lists its fields—each with a name and a type—in alphabetical order, and that order becomes the shape you construct with. <code>user 47 "clay"</code> fills <code>age</code> then <code>name</code>, positionally, in the order the fields were declared:</p>
@@ -193,6 +216,26 @@ clay <span class="o">=</span> <span class="f">user</span> <span class="n">47</sp
 </div>
 
 <p>you get the parts back out by <em>destructuring</em>, and there are two ways to do it. the positional form, <code>user years who = clay</code>, binds every field at once by position—<code>years</code> to <code>age</code>, <code>who</code> to <code>name</code>. the field form, <code>{ name:alias } = clay</code>, names just the field you want and binds it to a name of your choosing. there is no <code>clay.name</code> dotted access—the <code>.</code> is the pipe operator (chapter 06), so reaching into a record is always a destructure, stated plainly.</p>
+
+<p>a record is never changed after it is built, so a record with one field different is a new record. <code>merge</code> builds it: it takes the record and a map literal naming the fields to replace, and carries every other field over. the original is untouched:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">older.kso</div>
+  <pre><code><span class="k">type</span> user
+  <span class="f">age</span>
+  <span class="f">name</span>
+
+clay <span class="o">=</span> <span class="f">user</span> <span class="n">47</span> <span class="s">"clay"</span>
+older <span class="o">=</span> <span class="f">merge</span> clay { <span class="s">"age"</span>:<span class="n">48</span> }
+<span class="f">print</span> <span class="s">"<span class="i">{older}</span>"</span> <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"<span class="i">{clay}</span>"</span>)</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso play older.kso</div>
+    <pre><code>older/user 48 "clay"
+older/user 47 "clay"</code></pre>
+  </div>
+</div>
+
+<p>each name in the map has to be a field of the record's type, and the compiler refuses one that is not. like construction, <code>merge</code> is allowed only in the module that declares the type.</p>
 
 <h2>equality and comparison</h2>
 

@@ -4,8 +4,14 @@
 # engine. Native used to drop the FAIL bit from any name a pattern bound, so
 # `size_of` forced the thunk and read the err's payload as a list's length,
 # and the program printed `size 6`.
+#
+# The err is the runtime's: `text/to_int` refusing text it cannot read. A
+# raised one handed to `pick`, which has no arm for it, does not compile,
+# bound to a name or not (#1884).
+import "std/text"
+
 fn checked xs n
-  return err "refused {n}" if n > 2
+  return text/to_int "{n}x" if n > 2
   push xs n
 
 fn pick 125 xs

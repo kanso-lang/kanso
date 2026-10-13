@@ -703,6 +703,23 @@ fn emit_written(
     // went on to fail in `list/next`, two frames later and under other names.
     // Forcing where the program as written would have looked keeps the trace
     // the interpreter's.
+    let program = match crate::ahead::lifts(&program) {
+        true => {
+            let mut owned = match program {
+                Given::Owned(p) => p,
+                Given::Lent(p) => Program {
+                    fns: p.fns.clone(),
+                    types: p.types.clone(),
+                    imports: p.imports.clone(),
+                    reexports: p.reexports.clone(),
+                    root: p.root.clone(),
+                },
+            };
+            crate::ahead::lift(&mut owned);
+            Given::Owned(owned)
+        }
+        false => program,
+    };
     let (program, unread_positions) = match without_unbuilt_arms(&program) {
         Some((keep, unread)) => (Given::Owned(kept_arms(program, &keep)), unread),
         None => (program, Vec::new()),
@@ -896,6 +913,7 @@ fn emit_with(
         knotted,
         print_value_wrapper: false,
         caf_cells: Vec::new(),
+        ahead_cells: Vec::new(),
         closure_cells: Vec::new(),
         closure_consts: Vec::new(),
         demand: crate::demand::analyze(program),
@@ -973,6 +991,11 @@ impl Written {
         let call_twins: String = (0..=4)
             .filter(|n| body_calls.contains(format!("k_call{n}_fast").as_str()))
             .map(|n| call_twin(n, self.convention, self.inline_helpers))
+            .chain(
+                (0..=4)
+                    .filter(|n| body_calls.contains(format!("k_tcall{n}").as_str()))
+                    .map(tail_call_twin),
+            )
             .collect();
         let declares: String = {
             // BOTH SIDES OF THIS BUILT THE SAME INDEX. kanso#1461 landed one
@@ -1011,11 +1034,13 @@ impl Written {
         {
             // K_INT 0 is the env a zero-capture closure never reads; K_CLOSURE
             // is tag 11. The KClosure layout is the runtime's:
-            // { fn, env, ncaps, arity }.
+            // { fn, env, int ncaps, int arity, body }, the body being the
+            // lambda the wrapper `w_` calls.
             let _ = writeln!(out, "@{cell}_env = internal constant %KValue zeroinitializer");
             let _ = writeln!(
                 out,
-                "@{cell}_clo = internal constant {{ ptr, ptr, i64, i64 }}                  {{ ptr @{w}, ptr @{cell}_env, i64 0, i64 {arity} }}"
+                "@{cell}_clo = internal constant {{ ptr, ptr, i32, i32, ptr }}                  {{ ptr @{w}, ptr @{cell}_env, i32 0, i32 {arity}, ptr @{} }}",
+                w.strip_prefix("w_").unwrap_or(w)
             );
             let _ = writeln!(
                 out,
@@ -1182,6 +1207,9 @@ struct Backend<'a> {
     /// Zero-arity names that reach themselves through other constants.
     knotted: crate::hash::Set<String>,
     print_value_wrapper: bool,
+    /// Work-ahead's lifted constants (#1856) and the cell each was given,
+    /// in the order they were emitted: the pool forces these.
+    ahead_cells: Vec<(String, String)>,
     /// One cache cell per frozen constant, emitted as globals at the end,
     /// each beside an `i8` that says whether its builder has run. Nothing
     /// fills these before main any more: a constant builds itself on the
@@ -3148,9 +3176,9 @@ fn call_twin(n: usize, convention: ClosureConvention, inline: bool) -> String {
     let _ = writeln!(s, "arity:");
     let _ = writeln!(s, "  %fp = extractvalue %KValue %f, 1");
     let _ = writeln!(s, "  %c = inttoptr i64 %fp to ptr");
-    let _ = writeln!(s, "  %arp = getelementptr i8, ptr %c, i64 24");
-    let _ = writeln!(s, "  %ar = load i64, ptr %arp");
-    let _ = writeln!(s, "  %okar = icmp eq i64 %ar, {n}");
+    let _ = writeln!(s, "  %arp = getelementptr i8, ptr %c, i64 20");
+    let _ = writeln!(s, "  %ar = load i32, ptr %arp");
+    let _ = writeln!(s, "  %okar = icmp eq i32 %ar, {n}");
     let _ = writeln!(s, "  br i1 %okar, label %args, label %slow");
     let _ = writeln!(s, "args:");
     for i in 0..n {
@@ -3193,14 +3221,73 @@ fn call_twin(n: usize, convention: ClosureConvention, inline: bool) -> String {
     s
 }
 
+/// The twin of `k_call{n}` for a call in tail position. A lambda's body is on the
+/// tailcc convention and the closure carries a pointer to it, so a function
+/// value called last jumps to the lambda instead of calling its wrapper: a
+/// loop written in continuation-passing style runs in constant stack, as
+/// Appendix A says a tail call does. Anything the jump does not take (a
+/// closure the runtime built, a partial, a reference to a group, a failing
+/// argument) goes to `k_call{n}`, which answers as before. The caller
+/// reaches this with a musttail of its own, so the helper is a function and
+/// never inlined.
+fn tail_call_twin(n: usize) -> String {
+    let args: String = (0..n).map(|i| format!(", %KValue %a{i}")).collect();
+    let mut s = String::new();
+    let _ = writeln!(s, "define internal tailcc %KValue @k_tcall{n}(%KValue %f{args}) {{");
+    let _ = writeln!(s, "  %ftag = extractvalue %KValue %f, 0");
+    let _ = writeln!(s, "  %isclo = icmp eq i64 %ftag, 11");
+    let _ = writeln!(s, "  br i1 %isclo, label %arity, label %slow");
+    let _ = writeln!(s, "arity:");
+    let _ = writeln!(s, "  %fp = extractvalue %KValue %f, 1");
+    let _ = writeln!(s, "  %c = inttoptr i64 %fp to ptr");
+    let _ = writeln!(s, "  %arp = getelementptr i8, ptr %c, i64 20");
+    let _ = writeln!(s, "  %ar = load i32, ptr %arp");
+    let _ = writeln!(s, "  %okar = icmp eq i32 %ar, {n}");
+    let _ = writeln!(s, "  br i1 %okar, label %args, label %slow");
+    let _ = writeln!(s, "args:");
+    for i in 0..n {
+        let _ = writeln!(s, "  %t{i} = extractvalue %KValue %a{i}, 0");
+        let _ = writeln!(s, "  %e{i} = icmp eq i64 %t{i}, 5");
+    }
+    for i in 1..n {
+        let prev = match i {
+            1 => "%e0".to_string(),
+            _ => format!("%or{}", i - 1),
+        };
+        let _ = writeln!(s, "  %or{i} = or i1 {prev}, %e{i}");
+    }
+    match n {
+        0 => {
+            let _ = writeln!(s, "  br label %body");
+        }
+        1 => {
+            let _ = writeln!(s, "  br i1 %e0, label %slow, label %body");
+        }
+        _ => {
+            let _ = writeln!(s, "  br i1 %or{}, label %slow, label %body", n - 1);
+        }
+    }
+    let _ = writeln!(s, "body:");
+    let _ = writeln!(s, "  %bodyp = getelementptr i8, ptr %c, i64 24");
+    let _ = writeln!(s, "  %lam = load ptr, ptr %bodyp");
+    let _ = writeln!(s, "  %has = icmp ne ptr %lam, null");
+    let _ = writeln!(s, "  br i1 %has, label %go, label %slow");
+    let _ = writeln!(s, "go:");
+    let _ = writeln!(s, "  %envp = getelementptr i8, ptr %c, i64 8");
+    let _ = writeln!(s, "  %env = load ptr, ptr %envp");
+    let _ = writeln!(s, "  %r = musttail call tailcc %KValue %lam(ptr %env{args})");
+    let _ = writeln!(s, "  ret %KValue %r");
+    let _ = writeln!(s, "slow:");
+    let _ = writeln!(s, "  %s = call %KValue @k_call{n}(%KValue %f{args})");
+    let _ = writeln!(s, "  ret %KValue %s");
+    let _ = writeln!(s, "}}");
+    s
+}
+
 /// LLVM symbol for a dispatcher: quoted when the kanso name carries a
 /// module qualifier's slash.
 fn wsym(name: &str, arity: usize) -> String {
-    // fn-value wrapper symbols share dsym's quoted-identifier rule
-    match name.contains(['/', '!', '?', '+', '-', '*', '%', '<', '>', '=', '~']) {
-        true => format!("\"w_{name}_{arity}\""),
-        false => format!("w_{name}_{arity}"),
-    }
+    quoted(&format!("w_{name}_{arity}"))
 }
 
 /// The static a `k_fnref` value points at: the wrapper, its arity, and the
@@ -4897,6 +4984,57 @@ impl<'a> Backend<'a> {
             self.body,
             "define void @k_caf_init() {{\nentry:\n{ids}{fills}  ret void\n}}\n"
         );
+        // Work-ahead (#1856): the constants `ahead::lift` made, forced in the
+        // order it made them when a fiber first parks. Every binary defines
+        // the pool, empty when nothing was lifted, because the runtime calls it.
+        // Each constant is read through `k_ahead_try`, which catches a death
+        // and empties the cells it left half-built; the table it is handed
+        // is every constant's cell beside its ready flag, since the work may
+        // have been building any of them.
+        let mut pool = String::new();
+        let mut shims = String::new();
+        let lifted: Vec<String> = self
+            .program
+            .fns
+            .iter()
+            .filter(|d| d.params.is_empty() && d.name.starts_with(crate::ahead::PREFIX))
+            .map(|d| dsym(&d.name, 0))
+            .collect();
+        let forced: Vec<&(String, String)> = lifted
+            .iter()
+            .filter_map(|sym| self.ahead_cells.iter().find(|(s, _)| s == sym))
+            .collect();
+        if !forced.is_empty() {
+            let n = self.caf_cells.len();
+            let pairs: Vec<String> =
+                self.caf_cells.iter().map(|c| format!("ptr @{c}, ptr @{c}_ready")).collect();
+            let _ = writeln!(
+                shims,
+                "@k_ahead_cells = internal constant [{} x ptr] [{}]",
+                2 * n,
+                pairs.join(", ")
+            );
+            for (i, (sym, _)) in forced.iter().enumerate() {
+                let _ = writeln!(
+                    shims,
+                    "define internal void @k_ahead_force_{i}() {{\nentry:\n  \
+                     %v = call tailcc %KValue @{sym}()\n  ret void\n}}"
+                );
+                let _ = writeln!(
+                    pool,
+                    "  %go{i} = call i32 @k_ahead_try(ptr @k_ahead_force_{i}, ptr @k_ahead_cells, i64 {n})\n  \
+                     %on{i} = icmp ne i32 %go{i}, 0\n  \
+                     br i1 %on{i}, label %next{i}, label %done\n\
+                     next{i}:"
+                );
+            }
+            let _ = writeln!(shims, "declare i32 @k_ahead_try(ptr, ptr, i64)");
+            let _ = writeln!(pool, "  br label %done\ndone:");
+        }
+        self.room(shims.len() + pool.len() + 128);
+        self.body.push_str(&shims);
+        let _ =
+            writeln!(self.body, "define void @k_ahead_pool() {{\nentry:\n{pool}  ret void\n}}\n");
         // A library has no entry to call, and a stub calling one that is not
         // there is a symbol the linker would ask about.
         if self.declares(crate::ast::ENTRY) {
@@ -6313,7 +6451,7 @@ impl<'a> Backend<'a> {
                 let t = f.tmp();
                 // the ccc wrapper, never the tailcc fn: C calls this pointer
                 f.line_fmt(format_args!(
-                    "{t} = call %KValue @k_closure(ptr @w_{lifted}, i64 {}, i64 {}, ptr {arr})",
+                    "{t} = call %KValue @k_closure(ptr @w_{lifted}, i64 {}, i64 {}, ptr {arr}, ptr @{lifted})",
                     params.len(),
                     captures.len()
                 ));
@@ -6819,9 +6957,50 @@ impl<'a> Backend<'a> {
                 }
             }
         }
+        if self.emit_value_tail_call(f, expr)? {
+            return Ok(());
+        }
         let value = self.emit_expr(f, expr)?;
         self.emit_ret(f, &value);
         Ok(())
+    }
+
+    /// A call to a bound function value in tail position, as `then (acc + i)`
+    /// is in a loop written in continuation-passing style: the frame goes,
+    /// and `k_tcall{n}` jumps to the lambda. Only where the plain tail would be
+    /// the call and its return with nothing between them, so a frame that
+    /// still holds a header or a lazy cell keeps the ordinary call.
+    fn emit_value_tail_call(&mut self, f: &mut FnEmit, expr: &Expr) -> Result<bool, String> {
+        let Expr::App { head, args, piped: false, .. } = expr else {
+            return Ok(false);
+        };
+        let Expr::Ident(name, _, _) = head.as_ref() else {
+            return Ok(false);
+        };
+        if f.lookup(name).is_none()
+            || f.frame_held
+            || !f.lazy_cells.is_empty()
+            || f.ret_ty != "%KValue"
+            || args.len() > 4
+        {
+            return Ok(false);
+        }
+        let callee = self.emit_expr(f, head)?;
+        let mut args_ir = Vec::with_capacity(args.len());
+        for a in args {
+            let v = self.emit_expr(f, a)?;
+            let v = self.as_value(f, &v);
+            args_ir.push(format!(", %KValue {v}"));
+        }
+        let callee = self.as_value(f, &callee);
+        let n = args.len();
+        let t = f.tmp();
+        f.line_fmt(format_args!(
+            "{t} = musttail call tailcc %KValue @k_tcall{n}(%KValue {callee}{})",
+            args_ir.concat()
+        ));
+        f.line_fmt(format_args!("ret %KValue {t}"));
+        Ok(true)
     }
 
     /// `x[p + k] == c and x[p + k'] == c' ...` over one bytes value and one
@@ -8444,7 +8623,9 @@ impl<'a> Backend<'a> {
         // further down says so, and this has to say it too, because it runs
         // first. lib/sha256 declares `bytes`, and a guard that skipped this
         // condition refused its three-argument call as a wrong-count builtin.
-        let shadows = !was_builtin && self.declares(name);
+        // A type the program declares shadows a builtin too: a file that
+        // declares `type run` builds one with `run 1 2 3`.
+        let shadows = !was_builtin && (self.declares(name) || self.type_ids.contains_key(name));
         if !shadows {
             if let Some(takes) = crate::check::builtin_arity(name) {
                 if emitted.len() != takes {
@@ -8779,8 +8960,17 @@ impl<'a> Backend<'a> {
             }
             // builtins scrutinize every argument; a thunk forces here (the
             // gated force emits nothing when the set proves it can't be one)
-            let emitted: Vec<String> =
-                emitted.into_iter().map(|e| self.maybe_force(f, e)).collect();
+            // A list stores what it is handed, so the item `push` adds may be
+            // a `list/tie` cell still being made, as a list literal's may:
+            // `list/to_list (list/map xs ref)` fuses to a push of each `ref`.
+            let emitted: Vec<String> = emitted
+                .into_iter()
+                .enumerate()
+                .map(|(at, e)| match name == "push" && at == 1 && self.defers_self_reference {
+                    true => self.force_unless_knot(f, e),
+                    false => self.maybe_force(f, e),
+                })
+                .collect();
             // `length` of a value the sets already prove is bytes is the
             // header's first field. The twin tests the tag and keeps a call
             // arm for everything else, and that arm is a block merge: a
@@ -8826,6 +9016,10 @@ impl<'a> Backend<'a> {
                     true => "push_mut_known",
                     false => "push_mut_fast",
                 }
+            } else if name == "concat" && in_place {
+                // every element of the second list goes onto the first's
+                // frontier; the first list is the one nobody else holds
+                "concat_mut"
             } else if name == "put" && in_place {
                 // the twin writes the frontier pair itself where the map has
                 // no sorted view; everything else falls to the C by call
@@ -9124,6 +9318,7 @@ fn narrowed_in_place(text: String, from: usize) -> String {
     let defines =
         lines_holding(ir, "define ").filter(|&(start, _)| ir[start..].starts_with("define "));
     let musttails = lines_holding(ir, "musttail call");
+    let jumps_to_lambdas = ir.contains("define internal tailcc %KValue @k_tcall");
     for (start, end) in merged_lines(defines, musttails) {
         let line = &ir[start..end];
         if !code(line) {
@@ -9133,6 +9328,16 @@ fn narrowed_in_place(text: String, from: usize) -> String {
             current = symbol_of(rest);
             if rest.starts_with("tailcc ") {
                 tailcc_defines.push(line);
+            }
+            // `k_tcall{n}` jumps to a lambda through the pointer its closure
+            // carries, an edge this reading cannot see, so every lambda keeps
+            // the convention in a module that has one.
+            if jumps_to_lambdas
+                && current.as_deref().is_some_and(|n| {
+                    n.strip_prefix("klam").is_some_and(|d| d.bytes().all(|b| b.is_ascii_digit()))
+                })
+            {
+                keep.extend(current.clone());
             }
         }
         if line.contains("musttail call") {
@@ -9197,6 +9402,11 @@ fn narrowed_in_place(text: String, from: usize) -> String {
             continue;
         }
         let named = symbol_of(line);
+        // `k_tcall{n}`'s jump through a closure names no symbol. Every lambda
+        // it can reach kept the convention above, so the jump keeps it too.
+        if named.is_none() && holds(line, "musttail call", 0) {
+            continue;
+        }
         let reroute = !holds(line, "musttail call", 0)
             && line.contains("call tailcc ")
             && named.as_ref().is_some_and(|n| spilling.contains(n));
@@ -9403,20 +9613,21 @@ mod a_trampoline_is_emitted_for_a_call_that_uses_it {
 /// before them is a `long long`. These are the ones that follow a pointer:
 /// `KStr` is `{ char*, int, int }`, so its length and capacity move up four
 /// bytes; `KMap`'s `sorted` follows two pointers where `pairs` follows a
-/// `long long`; and `KClosure` is `{ fn, env, ncaps, arity }`, so `env`
-/// follows the function pointer and `arity` follows a capture count that
-/// itself sits after two pointers.
+/// `long long`; and `KClosure` is `{ fn, env, int ncaps, int arity, body }`,
+/// so `env` follows the function pointer and `arity` and `body` follow two
+/// pointers.
 ///
 /// A line is matched whole, so a helper whose text changes stops matching
 /// rather than matching something else. tests/native_layout_on_wasm32.rs reads
 /// the emitter for each left-hand side and fails when one is missing, and
 /// runs the micro corpus through this pass against its goldens.
-pub const WASM32_LINES: [(&str, &str); 6] = [
+pub const WASM32_LINES: [(&str, &str); 7] = [
     ("%slenp = getelementptr i8, ptr %sp, i64 8", "%slenp = getelementptr i8, ptr %sp, i64 4"),
     ("%lenp = getelementptr i8, ptr %s, i64 8", "%lenp = getelementptr i8, ptr %s, i64 4"),
     ("%cp = getelementptr i8, ptr %sptr, i64 12", "%cp = getelementptr i8, ptr %sptr, i64 8"),
     ("%sortedp = getelementptr i8, ptr %m, i64 16", "%sortedp = getelementptr i8, ptr %m, i64 12"),
-    ("%arp = getelementptr i8, ptr %c, i64 24", "%arp = getelementptr i8, ptr %c, i64 16"),
+    ("%arp = getelementptr i8, ptr %c, i64 20", "%arp = getelementptr i8, ptr %c, i64 12"),
+    ("%bodyp = getelementptr i8, ptr %c, i64 24", "%bodyp = getelementptr i8, ptr %c, i64 16"),
     ("%envp = getelementptr i8, ptr %c, i64 8", "%envp = getelementptr i8, ptr %c, i64 4"),
 ];
 

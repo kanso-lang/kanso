@@ -1,0 +1,4 @@
+import "./weigh"
+import "std/time"
+
+sleep 10 .> (_ -> print "first") .> (_ -> print "then {weigh/weigh 7}")

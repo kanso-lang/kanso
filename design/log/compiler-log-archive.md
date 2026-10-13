@@ -101863,3 +101863,602 @@ CI's rows replace the projection. codegen_instructions_dev lands on
 230,743 above the projection. work_encodebench lands on 2,398,369,553,
 work_livebench on 1,474,871,531, work_oneshot on 13,223,698 and work_runbench
 on 1,152,754,392. `text` totals 4,829,278, as projected.
+
+## 2026-10-10 — a counting loop keeps every pass's key; copying keys out measured and declined
+
+A loop that counts into a map it was handed, under a key it interpolates each
+pass, never rewinds. `put m k (m[k] + 1)` is an in-place put and replaces the
+count, so the key string is garbage once the put has found its slot. The beat
+licence refuses the loop anyway, because a key the put does store would be
+freed under the map by the next rewind. At 100,000 passes over ten keys the
+arena peak is 4,194,304 bytes, 32 bytes a pass. A loop that builds a new string
+value each pass into a map, `put m "body" "{m["body"]}{x}"`, keeps every
+version the same way: 105,913,696 bytes of arena at 100 passes of a one-megabyte
+string, 420,568,976 at 400, on main and on every branch in flight.
+
+The fix tried was to let the put copy a key it inserts out of the arena, and
+license the loop. The copy is registered with the map's pairs and freed when
+they are, so a function that builds a map of fresh keys in a loop does not leak
+across calls: peak RSS held at 10 MB from 2,000 to 200,000 calls. Inside a loop
+that rewinds, a put with a string key calls the runtime instead of the emitter's
+inline fast path, which would store the key uncopied. Routing every string-key
+put to the runtime whenever any beat was live cost jsonbench 16.6% and runbench
+8.2%; routing only the puts inside the newly licensed loop cost nothing
+measurable on the instruction rows. The counting loop's arena peak fell to
+1,048,576 bytes and stays there.
+
+It is declined on memory. Licensing the loop moves its map's pairs out of the
+arena into malloc'd storage, which the objective counts, and in the run program
+nothing came back from the arena to pay for it: run_peak_bytes rose from
+4,948,512 to 5,202,176, and welfare fell from 91.0318 to 91.0163. basket also
+read 901,269 more instructions. A version worth trying keeps the pairs in the arena and
+copies the key into the region below the loop's mark, which needs an allocation
+point the arena does not have.
+
+## 2026-10-10 — a record is reused in place only above the loop's mark
+
+The retention at the end of the previous entry has a smaller fix than taking
+back settled regions. Record reuse writes a new state into the old record's
+storage, and inside a beat loop that storage can sit below the loop's mark,
+where a rewind cannot reach it. `k_rec_reuse` now reuses a record in place only
+when the record lies in the mark's own block, between the mark and the arena's
+current position. Anywhere else it builds the record fresh, above the mark,
+and the old one is left for the rewind. Outside a beat loop nothing changes.
+
+The cost of building fresh is one record allocation a stage. The cost it
+removes was a megabyte a pass: at 400 passes of the interpolating loop the
+arena peak falls from 211 MB on the carrier to 3 MB.
+
+`tests/golden/mem/an_interpolated_state_string_is_not_kept_under_the_mark`
+runs the shape for 100 passes, `"{st.body}{st.count % 10}"` on a one-megabyte
+string. Its arena_peak_bytes is 3,145,984; with the check removed it reads
+54,529,792. It makes 213 allocations and evacuates 52,435,792 bytes, which is
+the string copied at each stage and is the price of carrying it.
+
+Four mem fixtures and the basket golden move, each by records that are now
+built fresh where they were overwritten:
+
+- `record_reuse_shape`: allocs 4 to 6, alloc_bytes 176 to 304, evac_allocs 3
+  to 5, evac_bytes 80 to 144, survive_slots 8 to 4, sh_rec 64 to 192.
+- `a_long_chain_answers_survival_from_its_index`: allocs 240,008 to 240,004,
+  chain_finds 477,919 to 95,601, survive_slots 500,024 to 100,004, evac_bytes
+  448 to 608, sh_rec 224 to 608.
+- `a_cycle_that_sorts_a_map_each_step_still_waits_for_its_lap`: allocs 180,003
+  to 180,002, alloc_bytes 12,160,400 to 12,160,432, evac_bytes 6,128 to 6,160,
+  survive_slots 8 to 4, sh_rec 2,560,128 to 2,560,192.
+- `an_evaluator_carrying_any_value_round_its_cycle_rewinds`: allocs 91,429 to
+  91,445, alloc_bytes 4,114,384 to 4,115,408, sh_rec 2,560,192 to 2,561,216.
+- `bench/cost_golden_basket.txt`: allocs 27,263 to 27,265, alloc_bytes
+  7,522,129 to 7,522,257, evac_allocs 3 to 5, evac_bytes 192 to 256,
+  survive_slots 4 to 0, sh_rec 130,048 to 130,176.
+
+The chain fixture's chain_finds falling to a fifth is the walk no longer
+following records that were rewritten under it.
+
+Instructions were measured in one worktree against the spare-list branch this
+one sits on. basket reads 60,732 more, livebench 602 more; runbench reads 392
+fewer, encodebench 280 fewer and oneshot 644 fewer. They are projected into
+`bench/instructions_golden.txt` from that branch's figures, and CI's rows
+replace them.
+
+CI read every instruction row exactly as projected. Three rows end worse than
+main, the two branches below this one included: codegen_instructions_dev at
+118,957,002, codegen_instructions_release at 454,309,037 and text at 4,836,670.
+Against the spare fix alone the dev row rises 1,833 and the release row 2,837,
+and each benchmark's runtime text grows 80 bytes, which is the check before a
+reuse.
+
+By the trend gate's keys, the rows this change worsens land at basket_allocs
+27,265, basket_evac_allocs 5, basket_evac_bytes 256 and basket_sh_rec 130,176;
+record_reuse_shape_allocs 6, record_reuse_shape_alloc_bytes 304,
+record_reuse_shape_evac_allocs 5, record_reuse_shape_evac_bytes 144 and
+record_reuse_shape_sh_rec 192; and, projected, work_encodebench 2,398,370,134,
+work_livebench 1,474,871,692 and work_oneshot 13,223,551. Each record row is a
+record built fresh above the mark where it used to be written below it.
+
+The branch took the spare fix after that fix took the carrier, and each
+conflicted row is projected as this branch's CI delta on the spare fix's row.
+Measured against the spare fix, the rows that end worse are
+codegen_instructions_dev on 118,960,395, codegen_instructions_release on
+454,289,201, work_basket on 30,873,237, work_livebench on 1,474,872,350 and
+`text` on 4,830,398, 80 bytes a binary for the mark check. basket_alloc_bytes
+lands on 7,522,257. Three mem fixtures that keep a record across a cycle read
+it as a fresh allocation where they used to reuse it.
+a_cycle_that_sorts_a_map_each_step_still_waits_for_its_lap_alloc_bytes lands
+on 12,160,432,
+a_cycle_that_sorts_a_map_each_step_still_waits_for_its_lap_evac_bytes on 6,160
+and a_cycle_that_sorts_a_map_each_step_still_waits_for_its_lap_sh_rec on
+2,560,192. a_long_chain_answers_survival_from_its_index_alloc_bytes lands on
+19,672,832, a_long_chain_answers_survival_from_its_index_chain_finds on 95,601,
+a_long_chain_answers_survival_from_its_index_evac_bytes on 608 and
+a_long_chain_answers_survival_from_its_index_sh_rec on 608.
+an_evaluator_carrying_any_value_round_its_cycle_rewinds_alloc_bytes lands on
+4,115,408, an_evaluator_carrying_any_value_round_its_cycle_rewinds_allocs on
+91,445 and an_evaluator_carrying_any_value_round_its_cycle_rewinds_sh_rec on
+2,561,216. CI's reading
+replaces the projected rows.
+
+CI's rows for this branch were read on the spare fix before k_b_adopt was
+retired beneath it. With that retirement's deltas added, the rows land on
+codegen_instructions_dev 118,935,145, codegen_instructions_release
+454,454,756, work_basket 30,873,237, work_encodebench 2,398,370,771,
+work_livebench 1,474,870,922, work_oneshot 13,224,076 and work_runbench
+1,152,728,036. Against the spare fix the dev row rises 1,901, the release row 2,593, basket
+60,732, encodebench 1,120 and oneshot 371, and livebench falls 679. With the
+browser row the spare fix carries, welfare scores 91.0338407, 0.0000035 below
+the floor the spare fix banked and inside the gate's 0.001 allowance, so the
+floor stays where the spare fix left it.
+`text` totals 4,825,470, 80 bytes a binary above the spare fix for the mark
+check.
+
+CI then read this branch on the spare fix with k_b_adopt retired, and those
+rows replace the ones above. codegen_instructions_dev lands on 118,940,032,
+codegen_instructions_release on 454,512,392, work_basket on 30,873,237,
+work_encodebench on 2,398,369,266, work_livebench on 1,474,870,859,
+work_oneshot on 13,224,090 and work_runbench on 1,152,729,429, and `text`
+totals 4,825,438. Against the spare fix's CI rows, the dev row rises 2,514, the
+release row 2,552, basket 60,732, oneshot 189 and runbench 686; encodebench
+falls 756 and livebench 343. Welfare scores 91.0338012, 0.0000081 under the
+91.0338093 the spare fix banks from its CI rows and inside the gate's 0.001
+allowance, so the floor stays where the spare fix left it.
+
+## 2026-10-11 — the first join makes its own builder, and `k_b_adopt` goes
+
+A builder seed that is not a string reached its first join through
+`k_b_adopt`, which rendered it and made the rendering the builder. The fold
+join (kanso#1825) taught `k_concat_arr_mut` to do the same for any seed that
+arrives with no room, and from then on the adoption had nothing left to
+convert. The ratchet showed it: both rows that mutated the adoption stayed
+green on the carrier, and were replaced by one row that restores the old
+refusal in `k_concat_arr_mut`. This change removes the call, its declaration
+and the runtime function.
+
+Measured in this container against the carrier, runbench reads 26,076
+instructions fewer, because the run program's builder loops no longer call
+the adoption on their first join; its emitted code loses one call and two
+lines. `codegen_instructions_dev` falls by 5,811, `codegen_instructions_release`
+by 64,944 and `emit_instructions` by 479, and each runtime binary sheds 352
+bytes of text. encodebench reads 98 more, livebench 70 more and oneshot 7
+more, with no change to what they call. The front-end rows and every
+allocation counter agree with the carrier. CI's rows replace these.
+
+This change rides kanso#1839, the oversize-spare fix, rather than a pull
+request of its own. On CI's rows the spare fix alone scores 91.0337007,
+below the carrier's floor of 91.0337226, most of the gap in
+`codegen_instructions_release`, which lands 109,925 above the carrier at
+454,517,107. The adoption's retirement is projected onto those rows from the
+deltas above, and the two together score 91.0338379. The browser tab compiles
+with the same emitter, so browser_compile_instructions falls 7,415 to
+390,029,358, measured here with the pinned rustc that builds
+`docs/kanso.wasm`. With that row the floor this pull request banks is
+91.0338442. Against the carrier, three rows still read worse:
+codegen_instructions_release on 454,452,163, work_livebench on 1,474,871,601
+and work_oneshot on 13,223,705, the release row from the spare fix's layout
+and the two run rows 147 and 7 above the carrier. CI's rows for the pair
+replace the projection.
+
+CI's rows for the pair replace the projection. codegen_instructions_dev lands
+on 118,937,518 and codegen_instructions_release on 454,509,840, the release row
+57,677 above the projection. work_encodebench lands on 2,398,370,022,
+work_livebench on 1,474,871,202, work_oneshot on 13,223,901 and work_runbench
+on 1,152,728,743. runbench's text falls 32 bytes to 615,417, so `text` totals
+4,824,318, and its emitted code is one call and two lines shorter than
+projected; emitted_other_lines lands on 146,722, two below the carrier. Welfare
+on these rows is 91.0338093, which is 0.0000867 above the
+carrier's floor and 0.0000349 below the 91.0338442 banked from the projection.
+The floor now records CI's figure. Banking the projection before CI had read
+it was the error; a projected floor can only be wrong in a direction nobody
+has checked.
+
+## 2026-10-11 — the two sweeps print their own lists
+
+Two specs checked CLAUDE.md's wording. `every_counter_gate_is_in_the_sweep`
+read the word before "cost goldens," and `the_compile_sweep_names_every_compile_gate`
+read one bullet for every compile gate's name. Each kept a fact in two places
+and used a test to make them agree, which ties the instructions' prose to the
+tree and blocks rewriting it (kanso#1846).
+
+Both sweeps now take `--list`. `all_counters.sh --list` prints each vein and
+its golden, and `all_compile.sh --list` prints each gate, both before building
+anything. The two specs that read CLAUDE.md are replaced by
+`the_sweep_lists_every_cost_golden` and `the_sweep_lists_every_compile_gate`,
+which run the script with `--list` and compare its output with the files on
+disk in both directions. Each went red with one entry dropped from the list it
+reads, naming the golden or gate it had lost.
+
+So the scripts are the single source for which veins and gates exist, and
+CLAUDE.md no longer has to carry either list or a count.
+
+## 2026-10-11 — the welfare verdict compares exactly, and kanso#1840's shape joins the run program
+
+The welfare verdict passed any score within 0.001 of the floor, on either side.
+Its comment said the margin was for compile peak bytes, which read 56 bytes
+apart on linux and macos. That stopped applying when welfare began scoring the
+committed goldens: both hosts read the same file. The script combines its terms
+with `+`, `-`, `*` and `/` alone, and IEEE 754 rounds each of those exactly, so
+two hosts score one tree to the same double. `math/round` appears only in the
+history note `--set` writes. kanso#1820 fell 0.00099 and passed inside the
+margin, which is what kanso#1845 reported.
+
+The verdict now compares exactly. A score below the floor fails as a fall, and
+a score above it fails as a rise nobody banked. `--set` writes the score through
+`json/encode`, and a plain run reads it back to the same bits: a floor banked
+on this branch held against its own tree with nothing to spare. Two specs in
+`tests/a_welfare_fall_is_bought.rs` stage the floor a billionth of a point above
+and below the recorded one. With the margin restored, both runs exited clean
+and both specs went red.
+
+`--set` still banks a fall smaller than 0.01. That path writes the new floor
+and its reason into `bench/welfare_floor.json`, where a reviewer reads both,
+and this change leaves it alone.
+
+Main sat 0.0000081 below its floor when this was written, inside the margin.
+kanso#1840 cost that much on the rows the objective reads, and what it bought
+was in a shape the run program never ran. The corpus-first gavel of 2026-09-05
+puts the shape into the corpus, measured on the compiler without the fix, and
+the fix then scores against it. kanso#1840 had already merged, so the compiler
+without it is main at kanso#1839, 30ffadf4, the tree kanso#1840 was cut from.
+
+The new phase, `restate`, is the mem fixture
+`an_interpolated_state_string_is_not_kept_under_the_mark` with its pass count
+lifted into a parameter and its seed string cut from a megabyte to 64 KiB. At
+128 passes, on kanso#1839's compiler, it raises the arena peak from 4,718,608
+to 6,815,760, which is two more one-megabyte blocks and about one decoded
+document, sized the way `machine` and `fold` were. It raises the program's
+instructions from 1,152,728,396 to 1,166,079,984. Built alone, less the empty
+program's 6,760,257, it costs 13,151,636, which is 1.13% of the program. The
+header's table of port phases gains that row.
+
+On main the arena peak stays at 4,718,608, and the program reads 1,170,030,652.
+That is 3,950,668 more than kanso#1839's compiler spends on the same program,
+so the fix costs instructions on this shape as well as saving memory. The
+mechanism was not isolated.
+
+Welfare's two run baselines are re-based the way the four port phases were, so
+that adding the phase costs kanso#1839's compiler nothing. Each is multiplied
+by the reading with the phase over the reading without it, both on kanso#1839's
+compiler. run_instructions goes from 3,349,060,500 to 3,387,851,317, by
+1,166,079,984 over 1,152,728,396. The run peak, which the objective reads as
+the arena, held and permanent peaks summed, goes from 4,948,512 to 7,045,664
+with the phase, so run_peak_bytes' baseline goes from 489,255,962 to
+696,599,932. Both baselines are rounded up. The instruction pair was read in
+this container. Both readings come from one compiler on one host, so the ratio
+carries no difference between hosts that matters. The peak pair is counted and
+is the same on every host.
+
+The run vein moves by the phase's own work. run_alloc_bytes lands on
+330,057,404, run_allocs on 1,771,562, run_beat_iters on 47,708,
+run_bytes_malloc on 9,134, run_evac_allocs on 49,183, run_evac_bytes on
+14,916,544, run_perm_allocs on 98, run_sh_rec on 1,508,784, run_sh_str on
+17,048,976, run_str_scans on 1,023 and run_str_scan_bytes on 17,996,094. The
+evacuated bytes are the string copied at each stage, which the mem fixture's
+entry already names as the price of carrying it.
+
+CI read the rest. work_runbench lands on 1,170,030,999, 347 above this
+container's 1,170,030,652. The phase adds eight functions to the run program,
+so its machine code grows to 618,633 bytes, which moves text to 4,828,574, and
+its emitted code moves emitted_other_defines to 2,010, emitted_other_calls to
+17,507, emitted_other_branches to 16,468 and emitted_other_lines to 147,279.
+Welfare on CI's rows is 91.1114 against main's floor of 91.0338, and the floor
+banks that.
+
+`tests/the_run_program_carries_the_shapes_unchanged.rs` lists `restate` with
+the four port phases that, like it, came from a fixture rather than from a
+benchmark.
+
+## 2026-10-11 — the interpreter row reads the same on every runner
+
+kanso#1843 asked for `interp_instructions` to read one number on every CI host,
+after two jobs at one source read 2,178,502,266 and 2,178,502,272 on
+2026-09-15. Every cost-goldens job prints an `interp_sample` notice carrying
+its CPU, the binary's hash and the row, so the question can be answered from
+the annotations rather than by a new measurement.
+
+The annotations of 144 jobs survive, from 2026-10-08 to this morning. They
+hold 20 distinct rows, one for each interpreter source those jobs built. 19 of
+the 20 were read on more than one CPU model, and none of them was read as two
+numbers. The six models are AMD family 0x19 models 0x1 and 0x11, family 0x1a
+model 0x2, and Intel family 0x6 models 0x6a, 0xad and 0xcf. 488,913,120 alone
+was read by 45 jobs on all six.
+
+Two pairs of rows sit close together, 488,869,908 against 488,869,940 and
+568,708,684 against 568,709,639. Each value in both pairs was read on two or
+more CPU models, and each step from one value to the next is a commit that
+moved the golden: 4119f057 for the first pair and 3b981430 for the second. The
+older jobs' annotations had expired, so the record starts eight days after the
+2026-09-30 change that took the heap's address out of the interpreter's cache
+keys.
+
+So the row reads identically across runner hosts, which is what kanso#1843
+asked for, and nothing needs excluding from the golden's header.
+
+## 2026-10-11 — where the restate phase's extra instructions go
+
+Main's compiler spends 3,950,668 more instructions on the run program with
+`restate` than kanso#1839's compiler does. A per-function callgrind diff of the
+two builds puts 3,870,494 of them in glibc's `memmove`, and every other
+function moves by under 17,000. That is the stage evacuation copying each
+pass's 64 KiB string below the loop's mark, which the 2026-10-10 entry on
+record reuse names as the price of carrying it: run_evac_bytes reads
+14,916,544 on main against 6,442,592 without the phase. Built alone, the phase
+costs fewer instructions on main than on kanso#1839's compiler: the run program
+with every other count set to zero reads 17,451,186 against 19,911,907. Why the
+phase costs more in the full program and less alone was not looked into.
+
+Handing the string's block down instead of copying it is not available: an
+allocation gets a block of its own only above 1 MiB, so a 64 KiB string shares
+a block with whatever else the stage allocated. Keeping survivors where they
+were built would need a different region discipline, and nothing here builds
+one.
+
+## 2026-10-11 — the live log holds forty entries
+
+CLAUDE.md says this file holds the last forty
+entries, and nothing checked it. By 2026-10-10 the file held 526 entries in
+25,301 lines. The pull request fixing kanso#1850
+moved the older end by hand that day, and by the time this branch took main the
+count had climbed back to 58.
+
+`tests/the_live_log_holds_forty_entries.rs` now pins the count at exactly
+forty, checks that no heading appears in both files, and checks that the
+archive's last entry is no later than the live log's first.
+`scripts/archive_log.sh` moves the oldest entries, unedited, from the top of
+this file to the end of design/log/compiler-log-archive.md until forty remain.
+A branch that appends an entry runs it in the same commit, and the spec's
+failure message names the script and the first entry it will move.
+
+The first run moved 18 entries. The two files together hold the same lines
+before and after, compared as sorted multisets, and the line counts sum to the
+same 102,212.
+
+## 2026-10-11 — the specs stay one binary each
+
+kanso#1847 asked whether folding the 228 spec files into a few test crates
+would cut build and link time. Measured on main fd6167f7, release profile,
+four cores: after `touch src/lib.rs`, `cargo test --release --no-run` takes
+90.9 s, and the library alone is 35.5 s of it. The 230 test executables hold
+487,797,788 bytes.
+
+A prototype put every file in one crate as a `#[path]` module, with no spec
+edited. It compiled, and the same rebuild took 68.5 s. Its one binary is
+15,185,664 bytes. Run, it failed
+`bind_chain_depth::the_measurement_sees_a_shape_that_nests`, which passes
+alone. That spec reads its children's peak RSS from `getrusage`, and in one
+process the peak includes every other spec's children. Separate binaries run
+one after another, so no spec has shared a process with another file's spec
+before. 151 of the 227 files spawn processes or read rusage.
+
+Folding only the other 76 saves about 7 s and 160 MB. They would have to move
+to a subdirectory to keep autotests, and other files name 29 of them by path,
+including source comments, golden headers, two pages and four workflows. The
+spec binaries already link with rust-lld, so the linker offers nothing either.
+Neither fold is built, and the issue is closed as not planned.
+
+## 2026-10-11 — the carry-repair spec had stopped reaching the repair
+
+`tests/carry_repair.rs` was the regression test for kanso#823: a repair raised
+a mark's pointer over the bytes it copied and left the mark's room behind. Its
+program gathered four files of the repository's prose in a loop. With
+`m->left = k_arena_left;` deleted from `k_repaired_settle`, the spec passed on
+main, with those files and with fixed-size copies of them. A probe in
+`k_repaired_settle` printed nothing: the program no longer reaches the repair.
+Its check also lived in the rewind until kanso#1259 moved it to the push on
+2026-09-05, where it reads the mark it has just written and cannot see a stale
+one.
+
+Three mem fixtures do reach the repair:
+a_carried_value_written_into_an_older_node ten times,
+a_repaired_node_below_the_mark_holds_tenure eight times and
+a_node_repaired_by_an_inner_pop_outlives_the_outer_stage once. With the line
+deleted, the last of them exits 1 and its stdout and counters change, so the
+mem vein was already the real guard. The ratchet row `repaired_mark` now
+deletes the line and expects that red, and the spec is gone.
+
+## 2026-10-11 — gavel: work-ahead holds a pooled failure until the value is used
+
+Clay ruled #1862, taking the recommendation: option 1 now, option 2 if
+divergence turns out to matter.
+
+The 2026-07-22 ruling made work-ahead invisible because pooled work has no
+effects. That holds when the work succeeds. A pooled computation that fails or
+never returns can show its failure before output the program as written
+prints first: `bench/workahead/aswritten.kso` prints `delivery: made` after its
+sleep and then runs `grind`, and a pooled `grind` that failed would raise its
+error during the sleep, before that line.
+
+**The ruling.** A pooled computation that fails stores its failure in the cell,
+and the failure is raised at the cell's first use, where the program as
+written would have raised it. For every program that terminates, the
+transcript is identical to the one it would produce without work-ahead. A
+pooled computation that never returns may still stall before output that the
+program as written prints first. That case is accepted for v1, and a second
+thread with its own arena (#1862's option 2) is the remedy if real programs
+show it matters.
+
+Owes, on #1856: a way to catch a runtime failure inside a pooled evaluation
+and resume the scheduler, on every engine that pools (native `k_die` exits
+today); a golden in which a pooled computation fails and the transcript
+matches the program run without work-ahead, seen red with the failure raised
+at the park; the page's work-ahead section saying what holds for a failure
+and what holds for divergence.
+
+## 2026-10-11 — gavel: a field may hold a list of `tie` references built from data
+
+Clay ruled #1842, taking the recommendation as corrected on the issue.
+
+The 2026-10-10 gavel "a field may hold a list of `tie` references" admitted a
+list or map literal. A node whose links come from data cannot write a literal.
+`list/map` is lazy (`pub fn map coll f` is `mapped f (iter coll)`), so
+`list/map roads ref` in a field would store a record holding `ref`, and every
+`ref` call would happen after `tie` had returned, where `resolve_tied` and
+`k_tie_resolve` have no cell to swap.
+
+**The ruling.** `list/to_list (list/map xs ref)`, and the same with
+`(k -> ref k)`, written as a constructor's field, is admitted: every `ref` is
+called inside the maker, and the field holds a list of cells the engines
+already resolve. A bare `list/map` of references in that position is refused,
+with a diagnostic naming `list/to_list`. The rule is unchanged: during making,
+a reference is stored and never read.
+
+Owes, on #1842: the check admits the forced form; an error golden for the bare
+`list/map` with the new diagnostic; `a_graph_tied_from_a_map_of_edges` drops its
+chain of `road` records; the comment in `lib/list/list.kso` where `tie` is
+taught shows the data-sized form.
+
+## 2026-10-11 — the big source files split by `include!`, not by module
+
+kanso#1848 and kanso#1867 asked for codegen.rs, main.rs, eval.rs, check.rs and
+lib.rs to be cut along their seams. The first cut moved codegen.rs's runtime
+declarations into a submodule, `mod declares`. On CI that moved the browser
+compile row by +60,813 instructions, the emit row by +873, and the compile and
+entry rows by one each, and welfare fell by 0.000052. The release profile
+builds sixteen codegen units and rustc partitions them by module, so a new
+module changes which functions are compiled together and what gets inlined.
+The 2026-08-25 gavel refuses a refactoring that costs welfare, however little.
+
+`include!` keeps the moved items in the module they came from. Across
+kanso#1873, kanso#1875, kanso#1878 and kanso#1879 the moved pieces are
+codegen.rs's runtime declarations and dispatcher methods, main.rs's tail-call
+rewrites, eval.rs's executor, builtins, values and run loop, check.rs's
+`list/tie` checks, after-infer pass, arm and shadow checks, and lib.rs's
+enumerable fusion, module path, imports and hoisting. Each file sits in a
+directory named for the file that includes it. No golden moved, and CI's cost
+rows on every head equal main's. eval.rs went from 6,742 lines to 3,950,
+check.rs from 5,291 to 3,322 and lib.rs from 4,166 to 2,295.
+
+Three things the move exposed: `cargo fmt` reaches only files named by `mod`,
+so CI's format job now runs rustfmt on every file under a subdirectory of src/;
+`scripts/diagnostic_coverage` listed `src/` alone and saw none of the
+refusals that moved, until kanso#1875 made it descend; and four doc comments
+sat above the wrong item, each left behind when a function was inserted
+between a doc and the item it described.
+
+**Declined: codegen.rs's call emission.** Moving `emit_call_full` through
+`emit_call_rest`, 1,088 lines, into `src/codegen/calls.rs` left the native and
+wasm instruction multisets identical to main's and moved
+`browser_compile_instructions` from 390,029,358 to 390,029,410. Under the
+2026-08-25 gavel it did not ship. The wasm module is 24 bytes larger. Cloud's
+attribution is that panic locations embed the source path and a longer path
+shifts the data after it, changing the alignment the metered `memcpy` and
+`memcmp` loops see. That is unisolated. If it holds, the browser row is
+reading a file's name, which the 2026-09-15 normalization rule says is
+normalized or excluded. #1880 isolates it and, if it is confirmed,
+normalizes the browser build before the split is retried.
+
+## 2026-10-11 — STATUS.md and the ledger are deleted
+
+This closes #1852. The 2026-10-10 gavel made GitHub issues the tracker and left
+STATUS.md and design/pending-gavels.md as pointers until the two specs that
+read them retired. Both have retired, and nothing else reads either file, so
+both are deleted. Comments in four specs, two scripts and ci.yml still mention
+them; those are cloud's and are cosmetic.
+
+The ledger's Parked section was the one thing in it with no other home. It is
+recorded here, unedited in substance:
+
+- `<<` labels: walls cover staircases; revive on real DAG demand.
+- Labeled nameless patterns: parked 2026-08-19, needing a fresh look against
+  the post-24 language. Group headers stay behind it.
+- dot-absorbs-`>>`: argued no, because it erases the visible then/bind split.
+- Postfix index on `)`: `(sort xs)[1]` stays illegal; bind, then index.
+- `;` as an inline separator: the borrow if inline groups are ever demanded.
+- `&` as bitwise: orthogonal, someday.
+- `serve` and processes: the executor-loop primitive and the next design
+  campaign, where three investigations already end. The July reification form
+  died with gavel 1, and the campaign starts from the three combinators.
+- Hako tag-signing and checksum policy: parked in design/hako.md.
+- Monorepo hakos: parked in design/hako.md.
+- The survivor cap of four times the block threshold: the multiplier is a
+  judgment call, and the principle is in the log.
+
+A parked item becomes a `needs-clay` issue when a real case arrives.
+
+## 2026-10-12 — a test that runs out of stack fails alone
+
+`kanso test` ran its tests on the main thread, whose stack is 8 MiB. The
+interpreter's depth limit is sized for the 1 GiB thread `run --interp` starts,
+so a test that recursed too far overflowed Rust's stack before the limit
+reported it, and the process aborted with every later test unreported. The lox
+port met this from a recursion 700 calls deep. The runner now starts the same
+deep thread, and the test fails with the interpreter's diagnostic, "the
+program ran out of stack".
+
+`tests/test_verb.rs` runs `deep_test.kso`, one shallow test and one that
+recurses a million deep, and expects the first to pass, the second to fail and
+the run to exit 1. The ratchet row "a test run on the main stack" gives the
+thread 8 MiB and the spec sees the abort.
+
+This is part of the recursion item on #1892. The native side of that item is
+open: a deep enough recursion through the lox port's trie write still ends in
+a segmentation fault with no message.
+
+## 2026-10-12 — an operator answers what its arms answer
+
+The ray tracer port's release build printed a few rows of its image and then
+stopped with "no overload of `-` matches these arguments". The interpreter and
+the dev build drew the whole image. Linking the release IR at `-O0` drew it
+correctly, and so did the full release link with every `llvm.assume` removed.
+Bisecting the 148 assumes left one: after reading a hit record's `p`, release
+assumed the value carried the float tag.
+
+The cause was in inference. Native's `emit_binop` and the interpreter send a
+record on either side of an operator to the program's own arms for that
+operator, and inference read `a + b` as arithmetic alone. It never widened the
+arms' parameters and never added what they return. The ray tracer's `at` is
+`origin + direction * t`, and `direction` is sometimes a float drawn from the
+generator, so inference concluded that `at` answers a float, and so does the
+`p` field that holds its result.
+
+Inference now treats an operator with a record operand as a call to the
+operator's group when the program declares one: the arms' parameters widen
+with the operands, and the arms' answers join the operator's. The micro
+fixture `an_operator_answers_what_its_arms_answer` is the smallest program
+that showed it. Without the fix its release build prints a `v2` through the
+number arm. The ratchet row "an operator answering arithmetic alone" removes
+the fix and expects the micro corpus's release build to fail.
+
+Inference does more work for each operator with a record operand, and every
+compile row rose on CI: compile_instructions to 25,761,215 (+46,112),
+entry_instructions to 85,207,562 (+162,685), library_instructions to
+85,760,222 (+161,046), emit_instructions to 7,016,409 (+2,717) and
+browser_compile_instructions to 391,974,060 (+1,944,702). The welfare floor
+drops from 91.1114 to 91.1094 under the rule that a change making the engines
+agree is not priced.
+
+This is the ray tracer item on #1892.
+
+## 2026-10-12 — a runtime diagnostic names the err it was handed
+
+The inflate port destructured a value that was sometimes an err, and native
+reported "the program ran out of stack" where the interpreter said "cannot
+destructure err ... as `pair`". There was no recursion. `k_die_destructure`
+rendered its value with `k_render`, which hands an err back unrendered so that
+it can ride through a program, and then read the err as a string. The read
+faulted, and the parent reports any segmentation fault as stack exhaustion.
+
+The diagnostics that name a value they were handed now render through
+`k_shown`, which renders an err in full: the destructure and keyed-read
+refusals, the field-read refusals and `k_die_value` and `k_die_got`. The
+interpreter's message is the one both engines print.
+
+`tests/golden/runtime/an_err_cannot_be_destructured` is the port's shape: a
+group that answers a record or an err, its answer bound with `pair a b = p`.
+The ratchet row "a diagnostic handed an unrendered err" puts the plain render
+back, and native's stderr reads out of stack again.
+
+The first version of `k_shown` called `k_render_at` with the err flag set.
+That gave `k_render_at` six callers outside itself where it had one,
+`k_render`, and clang stopped inlining it there, so every print paid for a
+call: basket rose 111,561 instructions and runbench 172,212 on this
+container. `k_shown` now unwraps a thunk or a subtype itself, renders an err
+through `k_render_whole` and hands anything else to `k_render`; it is cold and
+out of line, so the functions that call it on their refusal path stay the size
+they were. Measured the same way, basket is 14 instructions from main and
+runbench 315.
+
+The out-of-line `k_shown` is about 80 bytes of `.text` in every native
+binary, and the rows that count a whole program carry it. On CI's rows,
+`text` went from 4,828,574 to 4,829,694, `codegen_instructions_dev` to
+118,944,914, `work_encodebench` to 2,398,369,910, `work_livebench` to
+1,474,870,950 and `work_runbench` to 1,170,031,314. `work_oneshot` fell to
+13,223,887.

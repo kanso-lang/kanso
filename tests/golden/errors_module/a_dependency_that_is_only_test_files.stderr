@@ -1,0 +1,1 @@
+error: tests/golden/errors_module/a_dependency_that_is_only_test_files/lonely holds only test files — a module is its library files, and a test file imports the module beside it

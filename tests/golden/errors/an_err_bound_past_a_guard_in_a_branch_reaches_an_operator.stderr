@@ -1,0 +1,4 @@
+error[exhaustive]: this can be an err and `+` wants a value — dispatch on it first with an `(err _)` arm (in an_err_bound_past_a_guard_in_a_branch_reaches_an_operator.kso)
+  --> tests/golden/errors/an_err_bound_past_a_guard_in_a_branch_reaches_an_operator.kso:13:5
+  13 |     each + 1
+           ^
