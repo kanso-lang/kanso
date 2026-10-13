@@ -1916,8 +1916,8 @@ Built alone on main, each less the empty program's 6,766,088, `rewind` costs
 sized near five per cent like `scatter` and `bump`; it adds nothing to the peak.
 The run program's header carries the table.
 
-Together they take `work_runbench` 1,170,035,080 -> 1,234,663,911 (the
-container's difference over CI's row, until CI reads its own) and the run peak
+Together they take `work_runbench` 1,170,035,080 -> 1,234,827,314 on CI (the
+container projected 1,234,663,911) and the run peak
 4,948,512 -> 10,191,392 bytes. `run_instructions` and `run_peak_bytes` are
 re-based by the same ratios, so welfare scores what it scored, and the floor's
 history says so; `run_arena_peak_bytes` is the part of the peak that moved,
