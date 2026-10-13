@@ -338,8 +338,10 @@ fn recorded_of path
 # recorded output began with its error, and stdout now comes first.
 fn book_keep acc path src said
   refused = text/slice said 1 5 == "error"
+  beside = local_import? src
+  skip = (machine -> either? refused (either? machine beside))
   names_any? src needs_a_machine 1
-    .> (machine -> put_unless acc path src (either? refused (either? machine (local_import? src))))
+    .> (machine -> put_unless acc path src (skip machine))
 
 fn put_unless acc _ _ true
   acc
