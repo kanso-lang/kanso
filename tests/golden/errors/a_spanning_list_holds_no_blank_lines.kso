@@ -1,0 +1,9 @@
+# A list that spans lines holds no blank lines (ruled 2026-10-13, #1882).
+# Its elements stand one to a line with nothing between them.
+names = [
+  "a name long enough that the whole list could never sit on one line of eighty"
+
+  "ken"
+]
+
+pub play = print "{names}"
