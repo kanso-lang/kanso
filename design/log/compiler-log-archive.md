@@ -78132,7 +78132,8 @@ One did not, and what it cost is the point.
 
 The HTML was left unmerged. A script then rewrote the file for an unrelated
 reason — renumbering a section — which wrote the working tree's contents back
-out, markers included, and the commit went in with `and `>>>>>>> origin/main` sitting in the published page.
+out, markers included, and the commit went in with `<<<<<<< HEAD`, `=======`
+and `>>>>>>> origin/main` sitting in the published page.
 
 **All three page gates then ran on that tree and all three passed.**
 `golden_prose` reads the `data-golden` spans and there were none in the hunk.
@@ -100779,7 +100780,6 @@ checks and runs on the interpreter now builds natively.
 The tie-list ruling landed first. Carried over it, the browser compile row
 lands at 388,276,582, the constructor's 84,381 on top of main's 388,192,201,
 and the floor at 90.25039901483147.
-<<<<<<< HEAD
 
 ## 2026-10-10 — two values a carry handed back while they were still held
 
