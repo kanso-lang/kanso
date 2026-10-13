@@ -1925,24 +1925,28 @@ arms, so a circle it was handed found no arm and stopped at run time with "no
 overload of `report/area` matches these arguments".
 
 The resolver now also records an arrived call of a function the module itself
-declares. The call still resolves where it stands, and enrollment gives each
-such module a group of its own, `~report~area`: the module's arms of that name
-and every owner's arm whose shape none of them has. A shape is the type each
-parameter matches, read through a bare clone to the type it copies. When no
-owner's arm would join, the call goes back to the module's own group, where
-qualification would have sent it. Most calls a module makes of its own
-functions on a parameter are of that kind; the first build cloned a group for
-each, and the json library's string scanners stopped being found by name. A
-compile that never enrolls, the REPL's, a library's alone and a module's
-without an entry, puts every such call back the same way.
+declares. The call keeps its name and resolves where it stands; the declaration
+it sits in keeps a list of such calls, each by its span and the name it wrote.
+When the program is whole, enrollment looks at each listed call whose name some
+owner writes. If an owner's arm has a shape none of the module's arms has, the
+call goes to a group of its own, `~report~area`, holding the module's arms of
+that name and the owners' arms of other shapes. A shape is the type each
+parameter matches, read through a bare clone to the type it copies. Every other
+listed call stays on the module's own group, which is where most of them
+belong: in the entry corpus 716 calls are listed and 77 name a function an
+owner writes, all three of them (`fold`, `iter`, `next`) the library's own.
+The wrapper rewrite leaves a listed call alone until enrollment has decided,
+because the group it may join is not the wrapper's. A compile that never
+enrolls, the REPL's, a library's alone and a module's without an entry, drops
+the lists.
 
-A module the program imports is checked before the program fills the groups,
-so the check saw each such call reaching an empty group. A function only those
-calls reached read as never called: its parameters were empty, and
-`scripts/trend_gate`'s `minus?`, whose second arm answers its parameter, was
-refused by the `?` rule for answering text alone. The module is now checked
-with those calls put back on its own group, and renamed again afterwards for
-the program to fill. `tests/golden/travel/told` is the postcard.
+A module the program imports is checked before the program fills the groups.
+Its listed calls are still on the module's own group when it is checked, so a
+function only those calls reach is called; `tests/golden/travel/told` is the
+postcard, a module whose `told?` only a call on a parameter reaches. The first
+build renamed every such call into a traveling group and back, which cost the
+entry check 7.8M instructions; leaving the names alone costs 1.74M there and
+0.37M on the compile corpus, measured here against rule 1's branch.
 
 Two fixes came with it. An owner reached only through another module read as
 private, because a dependency's `pub` is demoted at each module boundary, so

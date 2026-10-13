@@ -88,18 +88,19 @@ struct Resolver<'a> {
     lambda_arrives: bool,
     /// The calls of a name this module cannot see whose arguments carry an
     /// arrived value. Each is renamed into the traveling group of that name,
-    /// which the whole program fills with its owners' arms.
-    travels: Vec<(&'a str, Span)>,
+    /// which the whole program fills with its owners' arms. Beside them, and
+    /// marked, the calls of a function the module declares made on one.
+    travels: Vec<(&'a str, Span, bool)>,
 }
 
 fn check_fn_body_shadow<'a>(
-    decl: &'a FnDecl,
+    (index, decl): (usize, &'a FnDecl),
     globals: &'a HashSet<&'a str>,
     diags: &mut Vec<Diagnostic>,
     shadowable: &'a HashSet<String>,
     declared: &'a Declared<'a>,
     locals: &mut Vec<Local<'a>>,
-    travels: &mut Vec<(String, Span)>,
+    travels: &mut Vec<Travel>,
 ) {
     let mut resolver = Resolver {
         globals,
@@ -149,7 +150,9 @@ fn check_fn_body_shadow<'a>(
     }
     resolver.flush_unused(0);
     diags.append(&mut resolver.diags);
-    travels.extend(resolver.travels.iter().map(|&(name, span)| (name.to_string(), span)));
+    travels.extend(resolver.travels.iter().map(|&(name, span, shaded)| {
+        (crate::name::Name::new(name), span, shaded.then_some(index))
+    }));
     *locals = resolver.locals;
 }
 
@@ -364,10 +367,10 @@ impl<'a> Resolver<'a> {
                     (travels || shades || lambdas) && args.iter().any(|a| self.arrived(a));
                 match &**head {
                     Expr::Ident(name, span, _) if carries && travels => {
-                        self.travels.push((name.as_str(), *span));
+                        self.travels.push((name.as_str(), *span, false));
                     }
                     Expr::Ident(name, span, _) if carries && shades => {
-                        self.travels.push((name.as_str(), *span));
+                        self.travels.push((name.as_str(), *span, true));
                         self.resolve_expr(head);
                     }
                     _ => self.resolve_expr(head),

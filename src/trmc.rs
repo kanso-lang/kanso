@@ -301,6 +301,7 @@ pub fn rewrite(program: &mut Program) {
                 body,
                 file: decl.file.clone(),
                 synthetic: true,
+                shades: None,
             });
         }
         let span = decls[0].span;
@@ -383,6 +384,7 @@ pub fn rewrite(program: &mut Program) {
             body: entry,
             file: decls[0].file.clone(),
             synthetic: true,
+            shades: None,
         });
     }
     for (index, params, body) in in_place {

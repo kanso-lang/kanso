@@ -51,7 +51,7 @@ pub fn compile_module(dir: &std::path::Path, require_entry: bool) -> Result<ast:
     let mut visited = crate::hash::Set::default();
     let mut program = compile_module_root(dir, require_entry, &mut visited)?;
     if !require_entry {
-        unshade(&mut program.fns);
+        forget_shades(&mut program.fns);
     }
     Ok(program)
 }
@@ -553,11 +553,14 @@ fn compile_module_loaded(
         1 => crate::hash::Set::default(),
         _ => parsed.iter().flat_map(|(_, _, p)| check::declared_names(p)).collect(),
     };
-    // The functions any file of the module declares: a traveling call of one
-    // is offered the module's arms beside the owners'.
-    let module_fns: crate::hash::Set<&str> =
-        parsed.iter().flat_map(|(_, _, p)| p.fns.iter().map(|f| f.name.as_str())).collect();
-    let mut file_travels: Vec<Vec<(String, diag::Span)>> = Vec::with_capacity(parsed.len());
+    // The functions the module's other files declare: a call of one on a
+    // value a function was handed is shaded, as a call of the file's own is.
+    // A module of one file has no others.
+    let module_fns: crate::hash::Set<&str> = match parsed.len() {
+        1 => crate::hash::Set::default(),
+        _ => parsed.iter().flat_map(|(_, _, p)| p.fns.iter().map(|f| f.name.as_str())).collect(),
+    };
+    let mut file_travels: Vec<Vec<check::Travel>> = Vec::with_capacity(parsed.len());
     for ((file, source, program), mut diags) in parsed.iter().zip(marker_diags) {
         let hidden = match parsed.len() {
             1 => crate::hash::Map::default(),
@@ -628,32 +631,14 @@ fn compile_module_loaded(
     };
     merged.types.extend(dep_program.types);
     merged.fns.extend(dep_program.fns);
-    // The module's own functions follow its dependencies'; only they can hold
-    // a call this module's check found traveling.
-    let own = merged.fns.len();
-    let travelled = file_travels.iter().any(|t| !t.is_empty());
     for ((_, _, mut program), travels) in parsed.into_iter().zip(file_travels) {
         rename_travels(&mut program, &travels);
         merged.types.extend(program.types);
         merged.fns.extend(program.fns);
     }
-    // A shipped library module, merged with its dependencies, holds nothing
-    // but the shipped library, which is fixed when this binary is built and
-    // checked clean as a root by `every_shipped_module_checks_clean`. Its
-    // merged check answers the same empty list in every program that imports
-    // it, and it was asked once per import in every compile.
-    let shipped =
-        SHIPPED_STD.with(|c| c.get()) && embedded.is_some() && !CHECK_SHIPPED.with(|c| c.get());
-    // A module a root imports is checked with its shaded calls at home, and
-    // a shipped one is not checked here at all.
-    let stood = match require_entry {
-        true => {
-            enroll_travelers(&mut merged)?;
-            Vec::new()
-        }
-        false if travelled && !shipped => unshade(&mut merged.fns[own..]),
-        false => Vec::new(),
-    };
+    if require_entry {
+        enroll_travelers(&mut merged)?;
+    }
     phase::watched("canonicalize_types", || canonicalize_types(&mut merged));
     // kanso#1328 moved this pass in front of the check on the module path and
     // handed the check nothing, so both readers below it saw a slash a person
@@ -667,7 +652,14 @@ fn compile_module_loaded(
     // built once and handed to each.
     let counts = inline::group_sizes(&merged);
     let builtins = inline::aliases_from(&merged, &counts);
-    let wrappers = kept_traveling(inline::wrapper_table(&builtins, &counts), &stood);
+    let wrappers = inline::wrapper_table(&builtins, &counts);
+    // A shipped library module, merged with its dependencies, holds nothing
+    // but the shipped library, which is fixed when this binary is built and
+    // checked clean as a root by `every_shipped_module_checks_clean`. Its
+    // merged check answers the same empty list in every program that imports
+    // it, and it was asked once per import in every compile.
+    let shipped =
+        SHIPPED_STD.with(|c| c.get()) && embedded.is_some() && !CHECK_SHIPPED.with(|c| c.get());
     let diags = match shipped {
         true => Vec::new(),
         false => phase::watched("check_merged", || {
@@ -675,7 +667,6 @@ fn compile_module_loaded(
         }),
     };
     inline::apply_wrappers(&mut merged, &wrappers);
-    reshade(&mut merged.fns, &stood);
     if !diags.is_empty() {
         // The name an import writes, never the file behind it. A module in a
         // directory read as `(module pkg)` and a module in one file as

@@ -1387,9 +1387,9 @@ pub fn check_file(program: &Program, extern_globals: &HashSet<&str>) -> Vec<Diag
         &mut travels,
     );
     // A call of a function the file declares was resolved where it stands.
-    let own: HashSet<&str> = program.fns.iter().map(|f| f.name.as_str()).collect();
-    for (name, span) in travels {
-        if !own.contains(name.as_str()) {
+    for (name, span, shaded) in travels {
+        if shaded.is_none() {
+            let name = name.as_str();
             diags.push(Diagnostic::new("name", format!("unknown name `{name}`"), span));
         }
     }
@@ -1397,9 +1397,17 @@ pub fn check_file(program: &Program, extern_globals: &HashSet<&str>) -> Vec<Diag
     diags
 }
 
+/// A call on a value a function was handed: the name, where it stands, and for
+/// a shaded call the index of its declaration.
+pub type Travel = (crate::name::Name, Span, Option<usize>);
+
 /// Bare-enrolled imports (synthetic clones) are shadowable: a local binding
 /// named like one is the local's to keep — the enrollment must never make
 /// every stdlib export a forbidden binding name.
+///
+/// `travels` gets each call made on a value a function was handed: of a name
+/// the file cannot see, which travels, or of a function the module declares,
+/// which is shaded and carries the index of the declaration it sits in.
 pub fn check_file_shadow(
     program: &Program,
     extern_globals: &HashSet<&str>,
@@ -1407,7 +1415,7 @@ pub fn check_file_shadow(
     sibling_types: &HashSet<String>,
     sibling_decls: &[&crate::ast::TypeDecl],
     sibling_fns: &HashSet<&str>,
-    travels: &mut Vec<(String, Span)>,
+    travels: &mut Vec<Travel>,
 ) -> Vec<Diagnostic> {
     let mut diags = Vec::new();
     check_type_order(program, &mut diags);
@@ -1449,9 +1457,9 @@ pub fn check_file_shadow(
     // One vector of locals for the whole file. Every body leaves it empty, and
     // a fresh one per declaration grew from nothing each time.
     let mut locals = Vec::new();
-    for decl in &program.fns {
+    for (index, decl) in program.fns.iter().enumerate() {
         check_fn_body_shadow(
-            decl,
+            (index, decl),
             &globals,
             &mut diags,
             shadowable,

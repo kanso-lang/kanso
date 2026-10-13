@@ -475,9 +475,21 @@ pub struct FnDecl {
     /// True for bare-enrollment clones of imported decls (the import
     /// incarnation): real for dispatch, invisible to provenance analyses.
     pub synthetic: bool,
+    /// The calls in the body of a function the module declares, made on a
+    /// value the function was handed: each call's span and the name it
+    /// wrote. They reach the module's own arms, and the root of the program
+    /// sends one to a group of its own when an owner's arm of another shape
+    /// would join (rule 4 of the 2026-10-12 gavel). Most declarations hold
+    /// none, and a declaration is moved often, so the list costs it one word.
+    pub shades: Option<Box<Vec<(Span, Name)>>>,
 }
 
 impl FnDecl {
+    /// The shaded calls the body holds, by the span of each call's head.
+    pub fn shaded(&self) -> &[(Span, Name)] {
+        self.shades.as_deref().map_or(&[], Vec::as_slice)
+    }
+
     /// A field getter, recognised by the binder no source can spell. It
     /// carries its field's span, so checks that read declaration order have
     /// to leave it out — it was never placed by an author.

@@ -119,6 +119,7 @@ pub fn parse_play(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
         written_pub: false,
         file: crate::ast::unstamped(),
         synthetic: false,
+        shades: None,
     });
     Ok(program)
 }
@@ -203,6 +204,7 @@ pub fn parse_entry(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
         written_pub: false,
         file: crate::ast::unstamped(),
         synthetic: false,
+        shades: None,
     };
     Ok(Program {
         fns: vec![main],
@@ -589,6 +591,7 @@ fn parse_fn(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
         body: stmts,
         file: crate::ast::unstamped(),
         synthetic: false,
+        shades: None,
     })
 }
 
@@ -638,6 +641,7 @@ fn parse_constant(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
             body: stmts,
             file: crate::ast::unstamped(),
             synthetic: false,
+            shades: None,
         });
     }
     if is_block_head(&header.tokens) {
@@ -664,6 +668,7 @@ fn parse_constant(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
             body: vec![Stmt::Expr(expr)],
             file: crate::ast::unstamped(),
             synthetic: false,
+            shades: None,
         });
     }
     if !body.is_empty() {
@@ -685,6 +690,7 @@ fn parse_constant(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
         body: vec![Stmt::Expr(expr)],
         file: crate::ast::unstamped(),
         synthetic: false,
+        shades: None,
     })
 }
 

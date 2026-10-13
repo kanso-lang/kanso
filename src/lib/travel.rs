@@ -14,15 +14,29 @@ fn traveling(name: &str) -> String {
     format!("~{name}")
 }
 
-/// Renames each call the check found travelling into its group. A file's
-/// spans are unique within it, and the names are checked as well, so a local
-/// of the same name elsewhere in the file keeps its own.
-fn rename_travels(program: &mut ast::Program, travels: &[(String, diag::Span)]) {
+/// Renames each call the check found travelling into its group, and hands
+/// each declaration the shaded calls it holds. A file's spans are unique
+/// within it, and the names are checked as well, so a local of the same name
+/// elsewhere in the file keeps its own.
+fn rename_travels(program: &mut ast::Program, travels: &[check::Travel]) {
     if travels.is_empty() {
         return;
     }
-    let at: crate::hash::Map<(u32, u32), &str> =
-        travels.iter().map(|(name, span)| ((span.line, span.col), name.as_str())).collect();
+    let mut shaded: Vec<(usize, diag::Span, &Name)> =
+        travels.iter().filter_map(|(name, span, at)| at.map(|i| (i, *span, name))).collect();
+    shaded.sort_by_key(|(i, ..)| *i);
+    for run in shaded.chunk_by(|a, b| a.0 == b.0) {
+        program.fns[run[0].0].shades =
+            Some(Box::new(run.iter().map(|&(_, span, name)| (span, name.clone())).collect()));
+    }
+    let at: crate::hash::Map<(u32, u32), &str> = travels
+        .iter()
+        .filter(|(.., at)| at.is_none())
+        .map(|(name, span, _)| ((span.line, span.col), name.as_str()))
+        .collect();
+    if at.is_empty() {
+        return;
+    }
     for decl in &mut program.fns {
         for stmt in &mut decl.body {
             travel_stmt(stmt, &at);
@@ -100,11 +114,18 @@ fn travel_expr(e: &mut ast::Expr, at: &crate::hash::Map<(u32, u32), &str>) {
 /// A file of the program's own holds unqualified declarations; a module's
 /// file can also hold an arm qualified for another group, `render/to_string`
 /// among them, so a file is a module's only when it holds nothing bare, and
-/// then the qualifier most of its declarations carry is the module's.
-fn file_modules(fns: &[ast::FnDecl]) -> crate::hash::Map<std::sync::Arc<str>, Option<String>> {
+/// then the qualifier most of its declarations carry is the module's. Asked
+/// only of the files named.
+fn file_modules(
+    fns: &[ast::FnDecl],
+    files: &[&std::sync::Arc<str>],
+) -> crate::hash::Map<std::sync::Arc<str>, Option<String>> {
     let mut counts: crate::hash::Map<std::sync::Arc<str>, crate::hash::Map<Option<&str>, usize>> =
         crate::hash::Map::default();
     for decl in fns.iter().filter(|d| !d.synthetic && !d.is_getter()) {
+        if !files.iter().any(|f| std::sync::Arc::ptr_eq(f, &decl.file) || **f == decl.file) {
+            continue;
+        }
         let qual = ast::split_qual(&decl.name).map(|(q, _)| q);
         *counts.entry(decl.file.clone()).or_default().entry(qual).or_default() += 1;
     }
@@ -123,67 +144,13 @@ fn file_modules(fns: &[ast::FnDecl]) -> crate::hash::Map<std::sync::Arc<str>, Op
         .collect()
 }
 
-/// Where a shaded call stood: its file and position, the name the check gave
-/// it and the module's own group it was put back on.
-type Stood = Vec<(std::sync::Arc<str>, (u32, u32), String, String)>;
-
-/// Puts each module's call of its own function back on the module's own
-/// group, and answers where each stood. A program no root enrolls keeps them
-/// there. A module a root imports is checked in this shape and renamed again
-/// by `reshade` for the root: a shaded group is empty until the root fills
-/// it, so a function only shaded calls reach would read as never called.
-/// A traveling call of a name nobody declares stays as it is, for the
-/// program that will hand the value over.
-fn unshade(fns: &mut [ast::FnDecl]) -> Stood {
-    let declares: crate::hash::Set<String> = fns.iter().map(|f| f.name.clone()).collect();
-    let calls = traveling_calls(fns, &declares);
-    let to: crate::hash::Map<String, (String, String)> = calls
-        .into_iter()
-        .filter(|(_, _, local, ..)| !local.is_empty())
-        .map(|(group, short, local, ..)| (group, (local, traveling(&short))))
-        .collect();
-    let mut stood = Vec::new();
-    if to.is_empty() {
-        return stood;
+/// Drops what each declaration recorded of its shaded calls. A program no
+/// root enrolls keeps every such call on the module's own arms, and the
+/// wrapper rewrite may then reach it like any other call.
+fn forget_shades(fns: &mut [ast::FnDecl]) {
+    for decl in fns.iter_mut() {
+        decl.shades = None;
     }
-    each_name(fns, &mut |file, name, span| {
-        if let Some((local, written)) = to.get(name.as_str()) {
-            stood.push((file.clone(), (span.line, span.col), written.clone(), local.clone()));
-            *name = Name::new(local);
-        }
-    });
-    stood
-}
-
-/// Renames each call `unshade` put back as the check found it, for the root
-/// that enrolls the program to find again.
-fn reshade(fns: &mut [ast::FnDecl], stood: &Stood) {
-    if stood.is_empty() {
-        return;
-    }
-    let at: crate::hash::Map<(&str, (u32, u32)), usize> =
-        stood.iter().enumerate().map(|(i, (file, at, ..))| ((&**file, *at), i)).collect();
-    each_name(fns, &mut |file, name, span| {
-        if let Some(&i) = at.get(&(&**file, (span.line, span.col))) {
-            let (_, _, written, local) = &stood[i];
-            if name.as_str() == local {
-                *name = Name::new(written);
-            }
-        }
-    });
-}
-
-/// The wrapper table without the groups a put-back call names. Those calls
-/// travel again once the check is done, and the root may yet fill their group
-/// with an owner's arm, so none of them is rewritten into the builtin here.
-fn kept_traveling<V>(
-    mut wrappers: crate::hash::Map<String, V>,
-    stood: &Stood,
-) -> crate::hash::Map<String, V> {
-    for (_, _, _, local) in stood {
-        wrappers.remove(local);
-    }
-    wrappers
 }
 
 /// The group a module's own function of that name belongs to.
@@ -194,122 +161,92 @@ fn local_group(qual: Option<&str>, short: &str) -> String {
     }
 }
 
-/// The group a traveling call joins when its module declares the name too:
-/// the module's arms and the owners' arms of other shapes, kept apart from
-/// every other module's.
+/// The group a shaded call joins when an owner's arm would: the module's arms
+/// and the owners' arms of other shapes, kept apart from every other module's.
 fn shaded_group(qual: Option<&str>, short: &str) -> String {
     format!("~{}~{short}", qual.unwrap_or(""))
 }
 
-/// Renames each traveling call whose module declares the name into that
-/// module's shaded group, and answers every group the program's calls name:
-/// the group, the short name, the module's own group (empty when the module
-/// declares none) and the first call's span and file.
-fn traveling_calls(
-    fns: &mut [ast::FnDecl],
-    declares: &crate::hash::Set<String>,
-) -> Vec<(String, String, String, diag::Span, std::sync::Arc<str>)> {
-    let modules = file_modules(fns);
+/// Every traveling group a whole program's calls name, each with the first
+/// call that named it: the call's span and its declaration's file.
+fn traveling_calls(fns: &[ast::FnDecl]) -> Vec<(String, diag::Span, std::sync::Arc<str>)> {
     let mut found = Vec::new();
-    let mut seen = crate::hash::Set::default();
-    for decl in fns.iter_mut() {
-        let qual = modules.get(&decl.file).cloned().flatten();
-        let mut names = Vec::new();
-        for stmt in &mut decl.body {
-            stmt_travels(stmt, qual.as_deref(), declares, &mut names);
-        }
-        for (group, short, local, span) in names {
-            if seen.insert(group.clone()) {
-                found.push((group, short, local, span, decl.file.clone()));
-            }
+    let mut seen: crate::hash::Set<&str> = crate::hash::Set::default();
+    for decl in fns {
+        for stmt in &decl.body {
+            stmt_travels(stmt, &mut |short, span| {
+                if seen.insert(short) {
+                    found.push((traveling(short), span, decl.file.clone()));
+                }
+            });
         }
     }
     found
 }
 
-type Named = Vec<(String, String, String, diag::Span)>;
-
-fn stmt_travels(
-    stmt: &mut ast::Stmt,
-    qual: Option<&str>,
-    declares: &crate::hash::Set<String>,
-    out: &mut Named,
-) {
+/// Hands each traveling call a body spells to `f`: its short name and span.
+/// A name already shaded, or spelled with a module, is not one.
+fn stmt_travels<'a>(stmt: &'a ast::Stmt, f: &mut impl FnMut(&'a str, diag::Span)) {
     match stmt {
-        ast::Stmt::Bind { expr, .. } | ast::Stmt::Expr(expr) => {
-            expr_travels(expr, qual, declares, out)
-        }
+        ast::Stmt::Bind { expr, .. } | ast::Stmt::Expr(expr) => expr_travels(expr, f),
     }
 }
 
-fn expr_travels(
-    e: &mut ast::Expr,
-    qual: Option<&str>,
-    declares: &crate::hash::Set<String>,
-    out: &mut Named,
-) {
-    let each = |e: &mut ast::Expr, out: &mut Named| expr_travels(e, qual, declares, out);
+fn expr_travels<'a>(e: &'a ast::Expr, f: &mut impl FnMut(&'a str, diag::Span)) {
     match e {
         ast::Expr::Ident(name, span, _) => {
             let Some(short) = name.as_str().strip_prefix('~') else { return };
-            if short.contains('~') || ast::has_slash(short) {
-                return;
-            }
-            let short = short.to_string();
-            let local = local_group(qual, &short);
-            if declares.contains(&local) {
-                let group = shaded_group(qual, &short);
-                *name = Name::new(&group);
-                out.push((group, short, local, *span));
-            } else {
-                out.push((name.as_str().to_string(), short, String::new(), *span));
+            if !short.contains('~') && !ast::has_slash(short) {
+                f(short, *span);
             }
         }
         ast::Expr::Partial(..) | ast::Expr::Int(..) | ast::Expr::Float(..) => {}
         ast::Expr::MapLit(pairs, _) => {
             for (k, v) in pairs {
-                each(k, out);
-                each(v, out);
+                expr_travels(k, f);
+                expr_travels(v, f);
             }
         }
         ast::Expr::Str(parts, _) => {
             for part in parts {
                 if let ast::TemplatePart::Interp(inner) = part {
-                    each(inner, out);
+                    expr_travels(inner, f);
                 }
             }
         }
         ast::Expr::List(items, _) => {
             for item in items {
-                each(item, out);
+                expr_travels(item, f);
             }
         }
         ast::Expr::App { head, args, .. } => {
-            each(head, out);
+            expr_travels(head, f);
             for a in args {
-                each(a, out);
+                expr_travels(a, f);
             }
         }
-        ast::Expr::Field { base, .. } => each(base, out),
+        ast::Expr::Field { base, .. } => expr_travels(base, f),
         ast::Expr::Index { base, index, .. } => {
-            each(base, out);
-            each(index, out);
+            expr_travels(base, f);
+            expr_travels(index, f);
         }
         ast::Expr::Join { lhs, rhs, .. } | ast::Expr::BinOp { lhs, rhs, .. } => {
-            each(lhs, out);
-            each(rhs, out);
+            expr_travels(lhs, f);
+            expr_travels(rhs, f);
         }
-        ast::Expr::Lambda { body, .. } | ast::Expr::Upcast { expr: body, .. } => each(body, out),
+        ast::Expr::Lambda { body, .. } | ast::Expr::Upcast { expr: body, .. } => {
+            expr_travels(body, f)
+        }
         ast::Expr::Block(stmts, _) => {
             for stmt in stmts {
-                stmt_travels(stmt, qual, declares, out);
+                stmt_travels(stmt, f);
             }
         }
         ast::Expr::Guard { cond, early, rest, .. } => {
-            each(cond, out);
-            each(early, out);
-            for stmt in rest.iter_mut() {
-                stmt_travels(stmt, qual, declares, out);
+            expr_travels(cond, f);
+            expr_travels(early, f);
+            for stmt in rest.iter() {
+                stmt_travels(stmt, f);
             }
         }
     }
@@ -348,75 +285,136 @@ fn owned_parameter(param: &ast::Pattern, qual: &str, owned: &crate::hash::Set<&s
 
 /// Fills each traveling group a whole program calls with every arm of that
 /// name an owner wrote: a pub arm with a parameter of a type its module owns
-/// (rule 4 of the gavel, so a value's arms come from one owner). A call in a
-/// module that declares the name too is offered the module's own arms, and an
-/// owner's arm of the same shape as one of them is left out. Answers the
-/// calls whose group stayed empty, rendered for the file that wrote each.
+/// (rule 4 of the gavel, so a value's arms come from one owner). A shaded
+/// call, of a function its module declares too, goes to a group of its own
+/// when an owner's arm of a shape none of the module's has would join it, and
+/// otherwise stays where it is. Answers the calls whose group stayed empty,
+/// rendered for the file that wrote each.
 fn enroll_travelers(program: &mut ast::Program) -> Result<(), String> {
-    let declares: crate::hash::Set<String> = program.fns.iter().map(|f| f.name.clone()).collect();
-    let calls = traveling_calls(&mut program.fns, &declares);
-    if calls.is_empty() {
+    let calls = traveling_calls(&program.fns);
+    let shading = program.fns.iter().any(|d| d.shades.is_some());
+    if calls.is_empty() && !shading {
         return Ok(());
     }
-    let wanted: crate::hash::Set<&str> =
-        calls.iter().map(|(_, short, ..)| short.as_str()).collect();
-    let owned: crate::hash::Set<&str> =
-        program.types.iter().filter(|t| !t.synthetic).map(|t| t.name.as_str()).collect();
-    let origins: crate::hash::Map<&str, &str> = program
-        .types
-        .iter()
-        .filter_map(|t| t.origin.as_deref().map(|o| (t.name.as_str(), o)))
-        .collect();
-    let mut owners: crate::hash::Map<&str, Vec<&ast::FnDecl>> = crate::hash::Map::default();
-    for decl in &program.fns {
-        if decl.synthetic || !decl.written_pub {
-            continue;
+    // Decided over the program as it stands, by index: each group filled
+    // with the declarations it clones, and each shaded call sent to a group.
+    let (fills, sent) = {
+        let fns = &program.fns;
+        let mut wanted: crate::hash::Set<&str> = calls.iter().map(|(g, ..)| &g[1..]).collect();
+        wanted.extend(fns.iter().flat_map(|d| d.shaded().iter().map(|(_, n)| n.as_str())));
+        let owned: crate::hash::Set<&str> =
+            program.types.iter().filter(|t| !t.synthetic).map(|t| t.name.as_str()).collect();
+        let mut owners: crate::hash::Map<&str, Vec<usize>> = crate::hash::Map::default();
+        for (i, decl) in fns.iter().enumerate() {
+            if decl.synthetic || !decl.written_pub {
+                continue;
+            }
+            let Some((qual, short)) = ast::split_qual(&decl.name) else { continue };
+            if wanted.contains(short)
+                && decl.params.iter().any(|p| owned_parameter(p, qual, &owned))
+            {
+                owners.entry(short).or_default().push(i);
+            }
         }
-        let Some((qual, short)) = ast::split_qual(&decl.name) else { continue };
-        if wanted.contains(short) && decl.params.iter().any(|p| owned_parameter(p, qual, &owned)) {
-            owners.entry(short).or_default().push(decl);
+        let mut fills: Vec<(String, Vec<usize>)> = calls
+            .iter()
+            .map(|(group, ..)| {
+                (group.clone(), owners.get(&group[1..]).cloned().unwrap_or_default())
+            })
+            .collect();
+        let mut sent: Vec<(usize, diag::Span, Name)> = Vec::new();
+        // Most shaded calls name a function no owner writes, and they are
+        // settled here without asking which module made them.
+        let shaded: Vec<(usize, diag::Span, &str)> = fns
+            .iter()
+            .enumerate()
+            .flat_map(|(i, d)| d.shaded().iter().map(move |(span, n)| (i, *span, n.as_str())))
+            .filter(|(_, _, short)| owners.contains_key(short))
+            .collect();
+        if !shaded.is_empty() {
+            let origins: crate::hash::Map<&str, &str> = program
+                .types
+                .iter()
+                .filter_map(|t| t.origin.as_deref().map(|o| (t.name.as_str(), o)))
+                .collect();
+            let mut files: Vec<&std::sync::Arc<str>> = Vec::new();
+            for &(i, ..) in &shaded {
+                if !files.iter().any(|f| std::sync::Arc::ptr_eq(f, &fns[i].file)) {
+                    files.push(&fns[i].file);
+                }
+            }
+            let modules = file_modules(fns, &files);
+            let located: Vec<(usize, diag::Span, Option<&str>, &str, String)> = shaded
+                .into_iter()
+                .map(|(i, span, short)| {
+                    let qual = modules.get(&fns[i].file).and_then(|q| q.as_deref());
+                    (i, span, qual, short, local_group(qual, short))
+                })
+                .collect();
+            // the module's own arms of each name a call shades, found in one pass
+            let mut mine: crate::hash::Map<&str, Vec<usize>> =
+                located.iter().map(|l| (l.4.as_str(), Vec::new())).collect();
+            let mut shorts: Vec<&str> = located.iter().map(|l| l.3).collect();
+            shorts.sort_unstable();
+            shorts.dedup();
+            for (j, decl) in fns.iter().enumerate() {
+                let short = ast::split_qual(&decl.name).map_or(decl.name.as_str(), |(_, s)| s);
+                if !shorts.contains(&short) {
+                    continue;
+                }
+                if let Some(arms) = mine.get_mut(decl.name.as_str()) {
+                    arms.push(j);
+                }
+            }
+            let mut decided: crate::hash::Map<&str, Option<Name>> = crate::hash::Map::default();
+            for (i, span, qual, short, local) in &located {
+                let group = decided.entry(local.as_str()).or_insert_with(|| {
+                    let own = &mine[local.as_str()];
+                    let taken: Vec<Vec<Option<String>>> =
+                        own.iter().map(|&j| shape(&fns[j], &origins)).collect();
+                    let joining: Vec<usize> = owners[short]
+                        .iter()
+                        .copied()
+                        .filter(|&j| !taken.contains(&shape(&fns[j], &origins)))
+                        .collect();
+                    if own.is_empty() || joining.is_empty() {
+                        return None;
+                    }
+                    let group = shaded_group(*qual, short);
+                    fills.push((group.clone(), own.iter().copied().chain(joining).collect()));
+                    Some(Name::new(&group))
+                });
+                if let Some(group) = group {
+                    sent.push((*i, *span, group.clone()));
+                }
+            }
         }
-    }
+        (fills, sent)
+    };
+    // The calls move before any arm is cloned, so a clone of a declaration
+    // that holds one calls the group too.
+    send_shaded(&mut program.fns, sent);
     let mut arms = Vec::new();
-    // A module's call that no owner's arm would join goes back to the
-    // module's own group, where qualification would have sent it. Most calls
-    // a module makes of its own functions on a parameter are of this kind,
-    // and a clone of the group for each would be a second copy of the code.
-    let mut restored: crate::hash::Map<String, String> = crate::hash::Map::default();
-    for (group, short, local, ..) in &calls {
-        let mine: Vec<&ast::FnDecl> = match local.is_empty() {
-            true => Vec::new(),
-            false => program.fns.iter().filter(|f| &f.name == local).collect(),
-        };
-        let taken: Vec<Vec<Option<String>>> = mine.iter().map(|d| shape(d, &origins)).collect();
-        let theirs = owners.get(short.as_str()).into_iter().flatten();
-        let joining: Vec<&ast::FnDecl> =
-            theirs.copied().filter(|d| !taken.contains(&shape(d, &origins))).collect();
-        if !mine.is_empty() && joining.is_empty() {
-            restored.insert(group.clone(), local.clone());
-            continue;
-        }
-        for decl in mine.iter().copied().chain(joining) {
-            let mut arm = decl.clone();
+    let mut filled = crate::hash::Set::default();
+    for (group, from) in &fills {
+        for &j in from {
+            let mut arm = program.fns[j].clone();
             arm.name = group.clone();
             arm.synthetic = true;
             arms.push(arm);
         }
+        if !from.is_empty() {
+            filled.insert(group.as_str());
+        }
     }
-    let filled: crate::hash::Set<String> = arms.iter().map(|a| a.name.clone()).collect();
-    drop(wanted);
-    drop(owned);
-    drop(origins);
-    drop(owners);
     program.fns.extend(arms);
-    if !restored.is_empty() {
-        restore(&mut program.fns, &restored);
-    }
+    forget_shades(&mut program.fns);
     let mut rendered = String::new();
-    for (group, short, _, span, file) in &calls {
-        if filled.contains(group) || restored.contains_key(group) {
+    for (group, span, file) in &calls {
+        if filled.contains(group.as_str()) {
             continue;
         }
+        let short = &group[1..];
         let d = diag::Diagnostic::new(
             "name",
             format!(
@@ -434,16 +432,19 @@ fn enroll_travelers(program: &mut ast::Program) -> Result<(), String> {
     }
 }
 
-/// Hands every name the bodies of a program spell to `f`, with the file the
-/// body is in.
-fn each_name(
-    fns: &mut [ast::FnDecl],
-    f: &mut impl FnMut(&std::sync::Arc<str>, &mut Name, diag::Span),
-) {
-    for decl in fns.iter_mut() {
+/// Renames each shaded call sent to a group, visiting only the declarations
+/// that hold one.
+fn send_shaded(fns: &mut [ast::FnDecl], mut sent: Vec<(usize, diag::Span, Name)>) {
+    sent.sort_by_key(|(i, ..)| *i);
+    for run in sent.chunk_by(|a, b| a.0 == b.0) {
+        let decl = &mut fns[run[0].0];
         let file = decl.file.clone();
         for stmt in &mut decl.body {
-            name_stmt(stmt, &file, f);
+            name_stmt(stmt, &file, &mut |_, name, span| {
+                if let Some((.., group)) = run.iter().find(|(_, at, _)| *at == span) {
+                    *name = group.clone();
+                }
+            });
         }
     }
 }
@@ -515,13 +516,4 @@ fn name_expr(
             }
         }
     }
-}
-
-/// Puts each call of a group in `to` back on the module's own group.
-fn restore(fns: &mut [ast::FnDecl], to: &crate::hash::Map<String, String>) {
-    each_name(fns, &mut |_, name, _| {
-        if let Some(local) = to.get(name.as_str()) {
-            *name = Name::new(local);
-        }
-    });
 }

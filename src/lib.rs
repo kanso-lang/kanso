@@ -388,7 +388,7 @@ fn compile_one(file: &str, source: &str, drop_unused: bool) -> Result<ast::Progr
     rename_travels(&mut program, &travels);
     program.types.extend(dep_program.types);
     program.fns.extend(dep_program.fns);
-    unshade(&mut program.fns);
+    forget_shades(&mut program.fns);
     // AHEAD OF THE CHECK, the third and last of the three paths to take this
     // shape -- kanso#1328 did it on the module path and kanso#1335 on the
     // entry path, and the reasons are the same here: the whole-program check
@@ -493,7 +493,7 @@ pub fn compile_library(file: &str, source: &str) -> Result<ast::Program, String>
     rename_travels(&mut program, &travels);
     program.types.extend(dep_program.types);
     program.fns.extend(dep_program.fns);
-    unshade(&mut program.fns);
+    forget_shades(&mut program.fns);
     // AHEAD OF THE CHECK, the third and last of the three paths to take this
     // shape -- kanso#1328 did it on the module path and kanso#1335 on the
     // entry path, and the reasons are the same here: the whole-program check
@@ -804,6 +804,7 @@ fn synthesize_getters(program: &mut ast::Program) {
                 ))],
                 file: crate::ast::unstamped(),
                 synthetic: false,
+                shades: None,
             });
         }
     }
@@ -1721,6 +1722,7 @@ fn synthesize_reader_groups(program: &mut ast::Program) {
             ))],
             file: crate::ast::unstamped(),
             synthetic: false,
+            shades: None,
         });
     }
 }
