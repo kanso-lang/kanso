@@ -1686,6 +1686,17 @@ emitted_other_defines 2,037.
 With main merged after #1937, browser_compile_instructions lands on 394,156,258
 and browser_run_instructions on 34,126,073.
 
+On CI's rows for the tree merged with main after #1937: interp_instructions
+lands on 494,060,975, codegen_instructions_dev on 119,058,990,
+codegen_instructions_release on 475,482,049, emit_instructions on 7,120,495 and
+text on 4,850,094. Among the benches, work_pendbench lands on 191,674,062,
+work_runbench on 1,179,917,338 and work_widebench on 28,274,796; work_basket
+30,946,295, work_digestbench 5,604,610, work_escapebench 39,058,332,
+work_jsonbench 860,566,126, work_livebench 1,474,875,027 and work_oneshot
+13,227,755 move by a few hundred instructions each. The emitted totals for the
+other programs: emitted_other_branches 16,563, emitted_other_calls 17,668 and
+emitted_other_defines 2,038.
+
 ## 2026-10-12 — arms travel with the value
 
 The first rule of the 2026-10-12 gavel on #1894. A value carries the arms its
