@@ -1,0 +1,9 @@
+import "std/list"
+
+# This module never imports geo. A circle it is handed carries the
+# arms geo wrote, and so does each circle in a list it is handed.
+pub fn one c
+  "{area c}"
+
+pub fn each cs
+  "{list/to_list (list/map cs (c -> area c))}"
