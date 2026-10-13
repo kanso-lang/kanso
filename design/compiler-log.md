@@ -2045,11 +2045,12 @@ bare `json_null` from an importer printed and compared as the importer's own
 type, while native code resolved it to `json/json_null`. That fix is #1904,
 with a micro golden, and this branch carries it.
 
-Rows from CI. The loader drops test files and the compiler grew
-`module_beside`, so the front-end rows rise: compile_instructions from
-25,761,215 to 25,762,128, entry_instructions from 85,207,562 to 85,207,630,
-library_instructions from 85,760,222 to 85,760,297, and startup_instructions
-from 52,396 to 52,405. interp_instructions falls from 488,792,115 to
-488,791,866, which is #1904's fix. On the tree merged with #1900,
-browser_compile_instructions rises 335 to 391,974,395. The floor drops by
-what the gavel costs.
+Rows from CI, on the tree merged with #1913. The loader drops test files and
+the compiler grew `module_beside`, so the front-end rows rise:
+compile_instructions lands on 25,882,462, up 911; entry_instructions on
+85,381,376, up 63; library_instructions on 85,935,657, up 75; and
+startup_instructions on 52,405, up nine. interp_instructions lands on
+488,739,567, 249 fewer, which is #1904's fix. browser_compile_instructions
+lands on 391,170,536, 140,966 fewer; the tab compiles no test files either,
+though no run isolated how much of the fall that is. The floor drops by what
+the gavel costs.
