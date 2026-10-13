@@ -7,7 +7,7 @@ extra_css: /book/book.css
 <span class="eyebrow">chapter 07</span>
 <h1>modules and tests</h1>
 
-<p>a kanso module is a directory. that's the whole definition. the files inside share one namespace—no import statements between them, no export lists, no manifest declaring what lives where. you split a module across files for the reader's benefit, and the compiler treats the result as one program. imports are the exception: each file imports the modules it calls, so a file that calls <code>fold</code> imports <code>std/list</code> even when the file beside it already does. here is a two-file teahouse:</p>
+<p>a kanso module is a directory. that's the whole definition. the files inside share one namespace—no import statements between them, no export lists, no manifest declaring what lives where. you split a module across files for the reader's benefit, and the compiler treats the result as one program. imports are the exception: each file imports the modules it calls, so a file that calls <code>fold</code> imports <code>std/list</code> even when the file beside it already does. a value handed in from another module is the one case that needs no import, and chapter 11 shows it. here is a two-file teahouse:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">teahouse/menu.kso</div>

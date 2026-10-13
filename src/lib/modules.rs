@@ -563,6 +563,7 @@ fn compile_module_loaded(
         1 => crate::hash::Set::default(),
         _ => parsed.iter().flat_map(|(_, _, p)| check::declared_names(p)).collect(),
     };
+    let mut file_travels: Vec<Vec<(String, diag::Span)>> = Vec::with_capacity(parsed.len());
     for ((file, source, program), mut diags) in parsed.iter().zip(marker_diags) {
         let hidden = match parsed.len() {
             1 => crate::hash::Map::default(),
@@ -581,13 +582,16 @@ fn compile_module_loaded(
                 .collect()
         };
         diags.extend(check::check_typesets(program, &module_types, &dep_types));
+        let mut travels = Vec::new();
         diags.extend(check::check_file_shadow(
             program,
             &extern_globals,
             &shadowable,
             &module_types,
             &module_decls,
+            &mut travels,
         ));
+        file_travels.push(travels);
         for d in &mut diags {
             if let Some(quals) = d
                 .message
@@ -629,9 +633,13 @@ fn compile_module_loaded(
     };
     merged.types.extend(dep_program.types);
     merged.fns.extend(dep_program.fns);
-    for (_, _, program) in parsed {
+    for ((_, _, mut program), travels) in parsed.into_iter().zip(file_travels) {
+        rename_travels(&mut program, &travels);
         merged.types.extend(program.types);
         merged.fns.extend(program.fns);
+    }
+    if require_entry {
+        enroll_travelers(&mut merged)?;
     }
     phase::watched("canonicalize_types", || canonicalize_types(&mut merged));
     // kanso#1328 moved this pass in front of the check on the module path and
