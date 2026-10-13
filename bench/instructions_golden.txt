@@ -736,20 +736,20 @@
 #   digestbench 5,450,865 -> 5,450,851 (-14)
 #   livebench 1,830,428,581 -> 1,706,880,197 (-123,548,384)
 #   runbench 1,221,877,776 -> 1,192,561,047 (-29,316,729)
-jsonbench 860566126
-encodebench 2386643356
-oneshot 13227860
-basket 30946295
-widebench 28274796
-deepbench 403499508
-escapebench 39058332
-pendbench 191674127
-indexbench 2462563
-scanbench 273667
-digestbench 5909392
-readbench 4581129
-livebench 1474875307
-runbench 1180255750
+jsonbench 858185997
+encodebench 2386636505
+oneshot 13205733
+basket 30946003
+widebench 28274435
+deepbench 403499282
+escapebench 39058106
+pendbench 191673790
+indexbench 2462337
+scanbench 273441
+digestbench 5909013
+readbench 4580722
+livebench 1474853659
+runbench 1178202157
 # 2026-09-06 (the run program joins): `runbench 3043743748` is a NEW row and
 # nothing regressed to make it appear. It is the program Clay's gavel that day
 # made the objective's whole run-speed term, and the thirteen rows above it
