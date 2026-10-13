@@ -19,7 +19,10 @@ import "std/text"
 pub fn workload s
   json/decode s
     . (v -> json/encode v)
-    . (t -> text/append t (text/join (list/take ["a" "b" "c"] 2) ","))
+    . (t -> text/append t (text/join (taken 2) ","))
+
+fn taken n
+  list/to_list (list/take ["a" "b" "c"] n)
 
 pub fn checked? s
   testing/failed? (workload s)

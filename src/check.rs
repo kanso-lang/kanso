@@ -281,7 +281,7 @@ struct PerNode<'a> {
     arities: crate::hash::Map<&'a str, usize>,
     groups: LiteralGroups<'a>,
     types: HashMap<&'a str, &'a TypeDecl>,
-    builtins: HashMap<(&'a str, usize), &'a str>,
+    builtins: &'a HashMap<(&'a str, usize), &'a str>,
     scan: FieldScan<'a>,
     /// The three questions the name walk asked on its own descent. One
     /// reference, like the four above it, because `Named` was already the
@@ -344,7 +344,7 @@ fn check_per_node<'a>(
     program: &'a Program,
     rewritten: &crate::Rewrites,
     diags: &mut Vec<Diagnostic>,
-    builtins: HashMap<(&'a str, usize), &'a str>,
+    builtins: &'a HashMap<(&'a str, usize), &'a str>,
 ) -> Vec<Diagnostic> {
     let mut arities: crate::hash::Map<&str, usize> =
         crate::hash::Map::with_capacity_and_hasher(program.fns.len(), Default::default());
@@ -1798,7 +1798,7 @@ pub fn check_merged_after_aliases_with<'a>(
     // Three checks read what inference knows, and inference over a whole
     // program is the most expensive thing the front end does. One pass,
     // handed round.
-    let named_diags = check_per_node(program, rewritten, &mut diags, builtins);
+    let named_diags = check_per_node(program, rewritten, &mut diags, &builtins);
     let walked = diags.len();
     if diags.iter().any(|d| d.kind == "arity") {
         // inference indexes an if's branches, so it never runs over a shape
@@ -1849,6 +1849,7 @@ pub fn check_merged_after_aliases_with<'a>(
         program,
         &inference,
         &returns,
+        &builtins,
         &mut effect_diags,
         &mut box_diags,
         &mut none_diags,
@@ -2330,6 +2331,7 @@ fn builtin_demand(name: &str, index: usize) -> Option<&'static [LitKind]> {
     use LitKind::*;
     let table: &[(&str, &[&[LitKind]])] = &[
         ("length", &[&[Str, List, Map]]),
+        ("join", &[&[List], &[Str]]),
         ("entries", &[&[Map]]),
         ("keys", &[&[Map]]),
         ("values", &[&[Map]]),

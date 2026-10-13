@@ -1,5 +1,8 @@
+# The check refuses `text/join 7 ","` written out; a value it holds by name
+# is left to the run, which stops with the builtin's sentence.
 import "std/text"
 
 pub play =
-  joined = text/join 7 ","
+  seven = 7
+  joined = text/join seven ","
   print "{joined}"

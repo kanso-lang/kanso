@@ -1,0 +1,4 @@
+# text/join forwards to the join builtin, whose first argument is a list.
+import "std/text"
+
+print (text/join 3 "")

@@ -1,0 +1,9 @@
+# list/map answers a lazy sequence, and join, length and push take a list.
+# Every engine stopped at run time with no location; the check names the call
+# and the way out.
+import "std/list"
+import "std/text"
+
+print (text/join (list/map ["a" "b"] (s -> "{s}!")) "")
+print (length (list/map [1 2] (n -> n + 1)))
+print (text/join (list/to_list (list/map ["a" "b"] (s -> "{s}!"))) "")

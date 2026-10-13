@@ -101169,3 +101169,36 @@ stays at forty.
 
 - **DONE** #1851.
 - **OPEN** #1856, the work-ahead engine, cloud's.
+
+## 2026-10-10 — CLAUDE.md states its rules once
+
+This closes #1849. CLAUDE.md had grown to 927 lines, most of them the history
+of its own rules: dated stories of how each was learned, counts with the dates
+they went stale, and corrections to earlier corrections. Its design-flow rule
+says chronology belongs in the log, and its hygiene section says instructions
+are rules. It is now 498 lines.
+
+Every rule the old file stated with a bold lead is still there, checked by
+listing the old file's bold leads and finding each one in the new text. What
+went is the stories, the session tables and the dated counts. The full earlier
+text is `git show be71feb8:CLAUDE.md`, and the stories are in the log entries
+of their own dates.
+
+Three things changed beyond trimming:
+
+- The two-grep ruling count was written as one pipeline that fed the first
+  count into the second grep, so it printed one meaningless number. It is two
+  commands now.
+- "Branches are free" moved from "Do not stop" to "Access and permissions",
+  beside the other rules about what needs Clay's permission.
+- The chat's lane names the design notes, which it has edited since the lanes
+  were drawn and which #1851 was filed against.
+
+Two specs read CLAUDE.md's wording, and both still pass. One wants the
+cost-golden count word in "all TWELVE cost goldens,", the one count left in
+the file, and #1846 asks cloud to retire it. The other wants every compile
+gate named in the bullet containing "are separate gates". It went red during
+the rewrap when that phrase broke across a line, which confirmed it reads the
+phrase literally.
+
+The oldest live entry moves to the archive with this one.
