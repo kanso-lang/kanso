@@ -1762,12 +1762,11 @@ A push onto a full buffer grows it by doubling where the copying concat
 allocated the exact length, so it allocates less often and more each time. Its
 arena peak is unchanged.
 
-The cost veins move the same way. On digestbench and runbench, which both hash
-with std/sha256, the copied lists become pushes onto a growing buffer:
-digest_alloc_bytes lands on 697,025 and run_alloc_bytes on 330,059,644, each
-2,240 higher; digest_sh_buf on 579,648 and run_sh_buf on 119,110,544, each
-2,304 higher; digest_push_mut_slow on 337 and run_push_mut_slow on 1,550,122,
-six more growths each. Their allocs fall four. The fixture's own rows move the
+The cost veins move the same way. On digestbench, which hashes with
+std/sha256, the copied lists become pushes onto a growing buffer:
+digest_alloc_bytes lands on 697,025, 2,240 higher; digest_sh_buf on 579,648,
+2,304 higher; digest_push_mut_slow on 337, six more growths. Its allocs fall
+four. The fixture's own rows move the
 same amounts: a_digest_holds_every_block_it_walked_alloc_bytes lands on
 18,657, a_digest_holds_every_block_it_walked_sh_buf on 12,288 and
 a_digest_holds_every_block_it_walked_push_mut_slow on 33. encodebench grows
@@ -1777,7 +1776,7 @@ encode_push_mut_fast up to 34,874. encode_buf_reuse lands on 2,386, down 726,
 because lists that were copied and freed each lap, leaving a buffer for the
 next to reuse, now stay where they are. The instruction rows come from CI.
 
-CI's rows. The runtime gains `k_b_concat_mut`, 3,104 bytes of text in every
+CI's rows, on the tree before kanso#1925. The runtime gains `k_b_concat_mut`, 3,104 bytes of text in every
 benchmark. `work_runbench` lands on 1,170,036,819 (+1,739) and
 `work_digestbench` on 5,605,158 (+2,040), the doubling growth's copies;
 `work_encodebench` falls 99,808 to 2,398,273,418 and `work_livebench` 399 to
@@ -1789,13 +1788,19 @@ the new site: `compile_instructions` 25,846,237 (-35,314), `entry_instructions`
 `browser_compile_instructions` 391,400,519 (+89,017). The interpreter's
 in-place extend reads `interp_instructions` 488,691,869 (-47,947),
 `interp_allocs` 587,352 (+1) and `interp_peak_bytes` 689,271 (+2,112).
-digestbench and runbench each emit one more line.
+digestbench and runbench each emit one more line, and emitted_other_lines lands
+on 148,240.
 
-On main's run program the objective sees the compile cost and none of the
-fix, and welfare falls below the floor by less than a hundredth. The fold
-joins the run program as its `stack` phase in kanso#1925, measured before this
-fix under the corpus-first gavel; once that lands this branch takes main and
-scores against it.
+kanso#1925 joined the fold to the run program as its `stack` phase, measured
+before this fix. On main after it, the run vein's allocation rows fall:
+run_alloc_bytes lands on 386,136,876 (-2,581,984), run_sh_buf on 172,766,944,
+run_sh_rec on 3,791,872 and run_allocs on 1,816,757. run_arena_blocks goes 9 ->
+6, run_arena_peak_bytes 9,961,488 -> 6,815,760 and run_spare_peak_bytes
+7,864,336 -> 4,718,608. run_push_mut_fast rises to 1,189,304, run_buf_reuse to
+134 and run_push_mut_slow by twelve to 1,550,128. run_chain_finds goes back to
+0, the value it had before kanso#1925 added the phases; the index's own counter
+stays pinned by `a_long_chain_answers_survival_from_its_index` at 95,601. The
+run program's instruction rows come from CI.
 
 ## 2026-10-12 — gavel: arms travel with the value, and a file names only what it can see
 
