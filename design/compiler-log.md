@@ -21,33 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-10 — the four port fixes' floor question closes on the corpus-first gavel
-
-The ledger's Blocking entry "May four port fixes lower the welfare floor?",
-filed today, asked whether kanso#1820, kanso#1822, kanso#1824 and kanso#1825
-may each lower the floor by a few thousandths. Each fixes a native cliff a port
-journal found (sat's map put loop, lox's loop entered from a tail cycle,
-`list/tally` over many distinct strings, mustache's fold onto its accumulator),
-and each pays only in compile rows because no benchmark contains its shape.
-
-That is the case the archive's 2026-09-05 "gavel: corpus first — a blind
-corpus is repaired, never excused" ruled. Clay declined, then, the
-recommendation to move the floor with "the corpus is blind" as the reason:
-**the remedy is to add the benchmark the objective could not see, measure its
-baseline on the pre-fix code, land the fix on top, and let it score**, so the
-floor rises rather than falls. The entry's search looked for a ruling on fixes
-that make native finish what the interpreter finishes and missed this one,
-because the ruling is about what the corpus can see. The entry leaves the
-ledger in this commit on that citation.
-
-So no floor moves for these four. Each PR promotes its fix's shape into the
-benchmark corpus as a run-speed or run-memory phase under the granted-baseline
-machinery, with its baseline measured on main without the fix, and banks the
-rise with `--set`. The entry's option 1 also asked to widen the 2026-09-13
-exception to every change that lets native finish a program the interpreter
-finishes; under corpus-first such a change scores as a gain once the corpus
-holds its shape, so the widening is not needed, and it is not made here.
-
 ## 2026-10-10 — four port shapes join the run program, measured before their fixes
 
 The corpus-first gavel, applied today to kanso#1820, kanso#1822, kanso#1824 and
@@ -1929,3 +1902,33 @@ The record-field fixture #1926 added takes the same regrows:
 `a_list_held_in_a_record_grows_where_it_stands_allocs` lands on 76 and
 `a_list_held_in_a_record_grows_where_it_stands_bytes_malloc` on 19, three each
 above #1926's reading, while its peak falls as above.
+
+## 2026-10-13 — the ratchet's own checkout reads its library again
+
+Two faults on main kept the ratchet from reading what it was built to read.
+Neither came from the branches that showed them.
+
+The first came with #1927. Its mutation `a_fifth_push_takes_sixteen` anchors
+on the grow's extra doubling, and #1927 rewrote that line as
+`if (cap > 16 && !perm) cap <<= 1;`. The mutation stopped applying, so the
+whole-tree ratchet job reported it stale on every branch merged with main;
+#1904 was the first to show it. The mutation now anchors on the new line and
+doubles every time again, and the mem corpus goes red under it
+(`a_cap_around_a_count_is_a_range` reads `allocs=14` against 13).
+
+The second is older and shows only on a branch that edits
+`scripts/perf_record`, because only then does a shard pick the perf-history
+row. The ratchet links each scratch worktree's `target` to
+`/tmp/kanso-ratchet-target`, so the compiler it builds lives outside the
+checkout. `in_shipped_library` looked for the library beside the binary
+(`current_exe()/../../lib`, here `/tmp/lib`) and nowhere else, so
+`kanso check lib/json` refused `builtin_built_text` as internal to a library
+it was not in. With no compile counters on stderr, perf_record's row lost
+`compile_alloc_bytes` and `compile_passes`, and the gate was red before any
+mutation. #1931 showed it, since it rewrites perf_record's lists in the
+spanning form. The import loader already had the right fallback:
+`resolve_import` tries `lib/` beside the working directory when the
+toolchain's copy is absent. The check now tries the same root.
+`a_checkout_library_checks_from_any_binary` copies the compiler to a
+directory of its own and checks `lib/json` from the checkout; it read the
+refusal before the fix and reads nothing after.
