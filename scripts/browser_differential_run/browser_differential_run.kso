@@ -329,10 +329,14 @@ fn recorded_of path
   parts = text/split path ".kso"
   "{parts[1]}.out"
 
+# A sample that imports a module beside it needs a directory, and the tab is
+# handed one source. ch04's boundary.kso was left out only because its
+# recorded output began with its error, and stdout now comes first.
 fn book_keep acc path src said
   refused = text/slice said 1 5 == "error"
   machine = names_any? src needs_a_machine 1
-  skip = either? refused machine
+  beside = local_import? src
+  skip = either? refused (either? machine beside)
   put_unless acc path src skip
 
 fn put_unless acc _ _ true

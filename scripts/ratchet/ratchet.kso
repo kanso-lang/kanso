@@ -5067,6 +5067,55 @@ sibling_import = row
 
 rows_c1zzzzzzw9 = text/concat rows_c1zzzzzzx7 [sibling_import]
 
+# A reader that stops early ends every engine by SIGPIPE, quietly
+# (2026-10-12). The mutation leaves the signal ignored, and the interpreter
+# panics on the closed pipe.
+pipe_quiet = row
+  "a closed pipe met as an error"
+  true
+  "cargo test --release --test a_closed_pipe_stops_every_engine_quietly"
+  "specs (unit, golden, differential)"
+  (breaking "a_closed_pipe_met_as_an_error")
+  release
+
+rows_c1zzzzzzx6 = text/concat rows_c1zzzzzzw9 [pipe_quiet]
+
+# A native program's stdout reaches its reader before it writes to stderr,
+# waits or stops (2026-10-12). The mutation leaves stdout in its buffer.
+stdout_settled = row
+  "stdout left in its buffer"
+  true
+  "cargo test --release --test stdout_reaches_its_reader"
+  "specs (unit, golden, differential)"
+  (breaking "stdout_left_in_its_buffer")
+  release
+
+rows_c1zzzzzzx5 = text/concat rows_c1zzzzzzx6 [stdout_settled]
+
+# A lambda called in tail position costs no stack on any engine
+# (2026-10-12). The first mutation has the interpreter call it as a nested
+# call, the second has native call it without the jump; either way the
+# continuation-passing fixture runs out of stack.
+lambda_nested = row
+  "a lambda called as a nested call"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_lambda_called_as_a_nested_call")
+  no_setup
+
+rows_c1zzzzzzx4 = text/concat rows_c1zzzzzzx5 [lambda_nested]
+
+lambda_jump = row
+  "a lambda called without a jump"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_lambda_called_without_a_jump")
+  no_setup
+
+rows_c1zzzzzzx3 = text/concat rows_c1zzzzzzx4 [lambda_jump]
+
 # A value carries the arms its owner wrote into a library that never imported
 # the owner. The mutation lets no call travel, and the library's `area c` is
 # an unknown name again.
@@ -5078,7 +5127,7 @@ arm_travels = row
   (breaking "an_arm_left_behind_by_its_value")
   no_setup
 
-rows_c1zzzzzzw8 = text/concat rows_c1zzzzzzw9 [arm_travels]
+rows_c1zzzzzzw8 = text/concat rows_c1zzzzzzx3 [arm_travels]
 
 # A module that writes a name for its own type keeps that arm and takes the
 # owners' arms of every other shape. The mutation keeps its calls off the

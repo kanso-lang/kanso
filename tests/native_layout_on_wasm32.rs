@@ -63,6 +63,16 @@ fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
+/// Programs that need a call returning a `KValue` to be a real tail call.
+/// This harness keeps the standard ABI on the emitted module, so such a call
+/// is an ordinary one (see the header), and a loop that goes through a
+/// function pointer cannot be inlined into one. The translator the page uses
+/// makes the call a tail call, and `ir_to_wasm` runs this program.
+const DEPTH: [(&str, &str); 1] = [(
+    "a_lambda_called_in_tail_position_costs_no_stack",
+    "jumps through a closure pointer 100,000 times",
+)];
+
 /// Programs whose answer is a fact about the host they run on.
 const HOST: [(&str, &str); 7] = [
     ("process_run", "runs a command"),
@@ -324,7 +334,7 @@ fn the_micro_corpus_answers_the_same_on_native_layout_in_wasm32() {
         .filter(|p| std::fs::read_to_string(p).expect("the program reads").contains("\npub play"))
         .filter(|p| {
             let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-            !HOST.iter().any(|(name, _)| *name == stem)
+            !HOST.iter().chain(&DEPTH).any(|(name, _)| *name == stem)
         })
         .collect();
     programs.sort();

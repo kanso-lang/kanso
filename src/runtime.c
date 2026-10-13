@@ -470,7 +470,19 @@ typedef struct {
    `tests/the_doors_the_program_calls_agree.rs` holds the two lists equal. */
 #define K_DOORCC K_CLOSCC
 
-typedef struct { KValue (K_CLOSCC *fn)(void*, KValue); void* env; long long ncaps; long long arity; } KClosure;
+/* `fn` is the wrapper C calls through. `body` is the lambda itself on the
+   tailcc convention, for a call in tail position to jump to: the wrapper is
+   a frame of its own, and a loop that hands itself on through a lambda ran
+   the toml port out of stack. Runtime-built closures have no body, and a
+   call to one goes through `fn`. The two counts are ints so the body fits
+   in the 32 bytes the struct already took, and no allocation grows. */
+typedef struct {
+    KValue (K_CLOSCC *fn)(void*, KValue);
+    void* env;
+    int ncaps;
+    int arity;
+    void* body;
+} KClosure;
 /* A named group handed out as a value. The emitter writes one of these per
    wrapper as a static, so the collector never sees it, and it carries the
    name because the group's diagnostic says which group. `builtin` says which
@@ -515,7 +527,7 @@ static KValue k_list_own(KValue* items, long long n);
 KValue k_call1(KValue f, KValue a);
 static KValue k_partial_apply(KClosure* p, long long n, KValue* fresh);
 static KValue k_partial_run(KClosure* p);
-KValue k_closure(KValue (K_CLOSCC *fn)(void*, KValue), long long arity, long long ncaps, KValue* caps);
+KValue k_closure(KValue (K_CLOSCC *fn)(void*, KValue), long long arity, long long ncaps, KValue* caps, void* body);
 KValue k_env_get(void* env, long long i);
 static KValue* k_map_sorted(KMap* m, long long* out_len);
 
@@ -2632,6 +2644,7 @@ static KValue k_deep_copy(KValue v, KCopy* cp) {
             nc->env = env;
             nc->ncaps = cl->ncaps;
             nc->arity = cl->arity;
+            nc->body = cl->body;
             out.payload = k_ptr(nc);
             break;
         }
@@ -3411,6 +3424,14 @@ static int k_is_heap(long long tag) {
     return (int)((0x2AFE0U >> (tag & 31)) & 1U);
 }
 
+/* stdout is written through stdio's buffer and stderr is not. Text a program
+   printed reached a shared pipe after a later error, and a program killed
+   while it waited lost all of it, where the interpreter had already written
+   both. So the buffer is emptied before anything goes to stderr, before the
+   program waits on input, a connection or the clock, and before it starts a
+   child that shares the stream. */
+static void k_out_settle(void) { fflush(stdout); }
+
 /* Diagnostics color from the site palette, only when stderr is a tty and
    NO_COLOR is unset: vermillion (24-bit 0xf03a00; 256-color 202) for the
    error kind, dim for trace lines. Piped output stays plain. */
@@ -3424,6 +3445,9 @@ static int k_color_mode(void) {
 }
 
 static const char* k_c_err(void) {
+    /* every runtime diagnostic opens with this color, so it is where the
+       program's own output is put ahead of the error */
+    k_out_settle();
     switch (k_color_mode()) {
         case 2: return "\x1b[38;2;240;58;0m";
         case 1: return "\x1b[38;5;202m";
@@ -6992,7 +7016,7 @@ static KValue k_sited_word(KValue subject, KValue callback, const char* origin,
                            K_CLOSCC KValue (*wrap)(void*, KValue)) {
     KValue site; site.tag = K_INT; site.payload = (long long)(intptr_t)origin;
     KValue caps[2]; caps[0] = callback; caps[1] = site;
-    KValue wrapped = k_closure(wrap, 1, 2, caps);
+    KValue wrapped = k_closure(wrap, 1, 2, caps, 0);
     if (subject.tag == K_DESC) return k_mkdesc(29, subject, wrapped);
     return k_worded_step(29, subject, wrapped);
 }
@@ -7086,6 +7110,7 @@ static KValue k_exec(KDesc* d) {
             size_t cap = 1 << 16, len = 0;
             char* data = malloc(cap);
             size_t got;
+            k_out_settle();
             while ((got = fread(data + len, 1, cap - len, stdin)) > 0) {
                 len += got;
                 if (len == cap) { cap *= 2; data = realloc(data, cap); }
@@ -7197,6 +7222,7 @@ static KValue k_exec(KDesc* d) {
             int fd = k_socket_of(d->x.payload);
             if (fd < 0) return k_err(k_str("that is not a connection"), NULL);
             char buf[65536];
+            k_out_settle();
             ssize_t got = read(fd, buf, sizeof(buf));
             if (got < 0) return k_err(k_str("cannot read"), NULL);
             return k_str_n(buf, (long long)got);
@@ -7280,6 +7306,7 @@ static KValue k_exec(KDesc* d) {
         case 8: {
             /* a bare sleep executed outside a group: pause for real */
             long long ms = d->x.tag == K_INT ? d->x.payload : 0;
+            k_out_settle();
             if (ms > 0) usleep((useconds_t)(ms * 1000));
             return k_done();
         }
@@ -7297,6 +7324,7 @@ static KValue k_exec(KDesc* d) {
         }
         case 12: {
             KStr* s = k_as_str(d->x);
+            k_out_settle();
             fwrite(s->data, 1, s->len, stderr);
             return k_done();
         }
@@ -7339,6 +7367,7 @@ static KValue k_exec(KDesc* d) {
                 free(argv);
                 return k_err(k_concat(k_str("cannot start "), d->x), NULL);
             }
+            k_out_settle();
             pid_t kid = fork();
             if (kid < 0) {
                 free(argv);
@@ -7570,6 +7599,7 @@ static long long k_fork_kid(KValue cmd, KValue argv_list) {
         free(argv);
         return -1;
     }
+    k_out_settle();
     pid_t kid = fork();
     if (kid < 0) {
         free(argv);
@@ -7794,6 +7824,7 @@ static KValue k_schedule(KDesc* join) {
                         pick, wake[pick], k_ms_since(&sched_t0));
             }
             /* loop to the deadline: usleep may return early on a signal */
+            k_out_settle();
             for (;;) {
                 long long elapsed = k_ms_since(&sched_t0);
                 if ((long long)wake[pick] <= elapsed) break;
@@ -8101,7 +8132,7 @@ KValue k_list_empty(void) {
     KValue v; v.tag = K_LIST; v.payload = k_ptr(l); return v;
 }
 
-KValue k_closure(KValue (K_CLOSCC *fn)(void*, KValue), long long arity, long long ncaps, KValue* caps) {
+KValue k_closure(KValue (K_CLOSCC *fn)(void*, KValue), long long arity, long long ncaps, KValue* caps, void* body) {
     KClosure* c = k_alloc(sizeof(KClosure));
     KValue* env = k_alloc(sizeof(KValue) * (ncaps ? ncaps : 1));
     if (ncaps <= 8) {
@@ -8109,7 +8140,7 @@ KValue k_closure(KValue (K_CLOSCC *fn)(void*, KValue), long long arity, long lon
     } else {
         k_copy_cold(env, caps, sizeof(KValue) * ncaps);
     }
-    c->fn = fn; c->env = env; c->ncaps = ncaps; c->arity = arity;
+    c->fn = fn; c->env = env; c->ncaps = (int)ncaps; c->arity = (int)arity; c->body = body;
     KValue v; v.tag = K_CLOSURE; v.payload = k_ptr(c); return v;
 }
 
@@ -8128,7 +8159,7 @@ KValue k_closure_lit(KValue (K_CLOSCC *fn)(void*, KValue), long long arity, KVal
         KClosure* c = k_alloc_const(sizeof(KClosure));
         KValue* env = k_alloc_const(sizeof(KValue));
         env->tag = K_INT; env->payload = 0;
-        c->fn = fn; c->env = env; c->ncaps = 0; c->arity = arity;
+        c->fn = fn; c->env = env; c->ncaps = 0; c->arity = (int)arity; c->body = 0;
         slot->tag = K_CLOSURE; slot->payload = k_ptr(c);
     }
     return *slot;
@@ -8304,7 +8335,7 @@ static KValue k_partial_build(KValue callee, long long n, KValue* args) {
     KValue* env = k_alloc(sizeof(KValue) * (1 + n));
     env[0] = callee;
     for (long long i = 0; i < n; i++) env[1 + i] = args[i];
-    c->fn = 0; c->env = env; c->ncaps = 1 + n; c->arity = -1;
+    c->fn = 0; c->env = env; c->ncaps = (int)(1 + n); c->arity = -1; c->body = 0;
     KValue v; v.tag = K_CLOSURE; v.payload = k_ptr(c); return v;
 }
 
@@ -11834,7 +11865,7 @@ __attribute__((cold, optnone, noinline)) KValue k_b_tie(KValue ids, KValue maker
         held[0].tag = K_INT;
         held[0].payload = serial;
         held[1] = l->items[i];
-        KValue ref = k_closure(k_tie_ref, 1, 2, held);
+        KValue ref = k_closure(k_tie_ref, 1, 2, held, 0);
         KValue node = k_force(k_call2(maker, l->items[i], ref));
         if (!k_not_failure(node)) {
             k_tie_depth--;

@@ -21,84 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-10 — the log goes back under its cap a second time
-
-design/compiler-log.md held 526 entries and 25,301 lines against a cap of
-forty. The archive was last fed on 2026-09-18, and in the three weeks since
-every change appended to the live file and nothing moved the older end.
-
-This closes #1850. The 487 oldest entries move to design/log/compiler-log-archive.md
-unedited, appended after its last entry. The live file keeps the newest 39 plus
-this one. Nothing is deleted. Before the move there were 1,456 archived and 526
-live entries; after it there are 1,943 archived and 39 live, so 1,982 entries
-either way. The sorted heading lists of the two files match before and after
-the move, and so do their non-blank lines, so the move changed no content.
-
-The readers that broke last time were checked first. `page_drift` and the
-trend gate count only added lines of the live log (`+## ` and `+`), so moving
-lines out costs neither of them anything.
-`a_question_sent_to_clay_has_a_ledger_entry` and its ratchet mutation read
-both files since 2026-09-18, and
-`a_log_heading_is_one_line` always has.
-
-- **DONE** live log at forty entries.
-- **OPEN** the cap has no gate. It was restored by hand on 2026-09-17 and again
-  today, and both times it had run to many times the limit. A spec that counts
-  the live file's headings and fails above forty would hold it. That spec is
-  `tests/`, so it is cloud's: #1854.
-
-## 2026-10-10 — three design notes retire, and a July ruling reaches the log
-
-This closes #1851. CLAUDE.md says a design note whose work has shipped is
-deleted, and that no file but the tracker carries pending-decision text. Five
-notes were read against the tree.
-
-**`design/enumerable.md` is deleted.** Its vocabulary is in `lib/list` and is
-taught in ch12 and appendix B, including the collision rule. The two rulings
-its status line called interim were ratified by Clay on 2026-08-14 (`range` is
-unbound and the statistic is `spread`; map builders are last-write-wins, like
-`put`), and §6 of the note already said so. Its one item marked open,
-`first coll n` beside `take n . to_list`, was settled by what shipped:
-`lib/list` has `first coll` alone, so `take` and `to_list` is the one way to
-take n. Its §7 described build blocks, which retired today.
-
-**`design/testing.md` is deleted.** The `testing` hako ships in `lib/testing`,
-`lib/json/json_test.kso` uses `when_failed`, and ch07 and ch08 teach it. The
-note's deferrals stay deferred and are recorded here so they keep a home: the
-2026-07-28 describe/context sketch is superseded until real suites show the
-need, with its two-deep limit still the right cage if they do; effectful tests
-are out of scope until io testing gets its own design against the boundary
-language; and two small observations were noted and not proposed, that a lambda
-cannot carry arms (so dispatching on a reason inside `when_failed` takes a named
-group) and that `when_failed` answering false on success folds "did not fail"
-into "failed the wrong way".
-
-**The work-ahead engine was ruled on 2026-07-22 and the ruling was never
-logged.** It lived only in `design/workahead-engine.md`. Recorded now: when a
-fiber parks on io, the scheduler runs proven-needed work in first-use order,
-then speculative work, keyed off logical scheduler state so the counters stay
-deterministic; v1 is proven work alone. The wall-credit substrate and the
-`bench/workahead/` rig shipped, and the engine did not. The note's
-implementation detail moves to #1856 (`ruled`, `lane:cloud`), and the note is
-deleted. docs/compiler.html's section remains the public description.
-
-**`design/hako.md` stays.** It is the only specification of `kanso install`,
-`list` and `update`, which ship, and `src/hako.rs` cites it. Its open-questions
-section pointed at the ledger, which is retiring under #1852; it now says the
-`std/` question was ruled on 2026-08-29 (std ships inside the binary) and keeps
-signing and monorepo hakos as parked.
-
-**`design/memory-frontier-research.md` stays.** Its table is the record of
-which memory ideas shipped, which were declined on measurement and which were
-refuted, and its refuted list is what stops an idea from being rebuilt. Rows
-4.1 and 4.4 concerned build blocks and are marked moot.
-
-The oldest live entry moves to the archive with this one, so the live file
-stays at forty.
-
-- **DONE** #1851.
-- **OPEN** #1856, the work-ahead engine, cloud's.
-
 ## 2026-10-10 — CLAUDE.md states its rules once
 
 This closes #1849. CLAUDE.md had grown to 927 lines, most of them the history
@@ -711,6 +633,7 @@ on 675,725 and browser_run_instructions on 34,124,829. The run program's
 emitted code gains 29 lines, which moves emitted_other_branches to 16,399,
 emitted_other_calls to 17,406 and emitted_other_lines to 146,724, and `text`
 totals 4,833,086. Welfare reads 91.0317 on CI's rows, and the rise is banked.
+
 ## 2026-10-10 — an oversize block that cannot be reused is freed when it misses
 
 A loop that appends a byte a pass to a one-megabyte string ran 6,000 passes
@@ -1564,7 +1487,163 @@ test helper sharing a production name (no collision) and a malformed test
 beside a program that still runs; existing tests that read private names
 moved onto the pub surface.
 
-91.11.
+## 2026-10-12 — stdout reaches its reader, and a closed pipe stops every engine quietly
+
+Two runtime items on #1892 were about stdout.
+
+A reader that stops early, as `head` does, closes the pipe the program is
+writing to. A built binary is ended by SIGPIPE and says nothing. The
+interpreter met the same write as an error and panicked with two Rust
+backtraces, because Rust sets SIGPIPE to ignored before `main`, and
+`kanso play` reported a native program's end as "the program was ended by
+signal 13". kanso now restores the default disposition at start-up, and when
+the program it ran was ended by SIGPIPE the driver ends the same way, silently.
+`tests/a_closed_pipe_stops_every_engine_quietly.rs` reads one line from each
+engine and drops the pipe.
+
+A native program writes stdout through stdio's buffer, and stderr goes out
+unbuffered. Text printed before a write to stderr reached a shared pipe after
+it, which the lox port saw on its error path, and a program killed while it
+waited lost everything it had printed, which is how the httpd port's access
+log disappeared. The interpreter does neither. The runtime now empties the
+buffer before anything goes to stderr, before it reads stdin or a connection,
+before it sleeps, and before it starts a child. Every runtime diagnostic opens
+with the error colour from `k_c_err`, so the flush there puts a program's
+output ahead of any error it ends with. `tests/stdout_reaches_its_reader.rs`
+pins the three cases.
+
+The rows moved by small amounts, read off CI. The signal call at start-up
+costs 123 instructions in every compile: compile_instructions lands on
+25,761,338, entry_instructions on 85,207,685, library_instructions on
+85,760,345 and startup_instructions on 52,519. The flushes are new runtime
+code. On the tree merged with #1899, codegen_instructions_dev lands on
+118,956,771, work_encodebench on 2,398,369,956, work_livebench on
+1,474,871,792, work_oneshot on 13,224,134 and work_runbench on 1,170,031,874,
+and browser_run_instructions was 34,125,823 before the merge. Release codegen
+falls to 454,318,432, and the other benches and the text sizes fall a little
+with the runtime's new layout.
+
+The macOS runner failed the interpreter's half of the closed-pipe spec. With
+SIGPIPE's default put back, the interpreter's thread there still met the
+write to a closed pipe as an error, and `println!` panicked on it. The
+executor's `print` and `write` now write to stdout themselves and turn a
+broken pipe into SIGPIPE. On Linux the signal arrives first and that path
+does not run; with the start-up reset removed, the interpreter still stops
+quietly through it, and the ratchet row goes red on the native run instead,
+whose driver cannot re-raise an ignored signal.
+Writing through a stdout lock with an error arm cost the interpreted corpus
+688 instructions on CI's row: `interp_instructions` went to 488,792,803.
+On the tree merged with #1900, CI's rows put codegen_instructions_dev at
+119,012,401, codegen_instructions_release at 454,260,490 and work_runbench at
+1,170,035,058, and every bench's text is 1,744 bytes smaller. The welfare
+floor drops to 91.10933 under the rule that a change making the engines agree
+is not priced.
+
+Each benchmark binary now empties stdout before it reads its input, and the
+benches that read or wait more than once pay it each time. On CI's rows
+`work_deepbench`, `work_escapebench`, `work_indexbench`, `work_scanbench` and
+`work_widebench` each rose 77 instructions, to 393,579,721, 39,049,235,
+2,462,563, 273,600 and 28,178,586. `work_jsonbench` and `work_digestbench`
+rose 100, to 860,563,084 and 5,603,218; `work_pendbench` and `work_readbench`
+123, to 190,054,473 and 4,581,089; `work_basket` 130, to 30,876,618;
+`work_livebench` 310, to 1,474,875,381; and `work_oneshot` 373, to 13,227,303.
+
+On the merged tree the ratchet called "a warm play that dies in silence"
+blind. Since #1900 the binary names its own stack overflow, so the warm play's
+wording of the signal never runs for one. The mutation now also stops the
+binary watching its stack, and the second play prints nothing.
+
+## 2026-10-12 — a lambda called in tail position costs no stack
+
+The toml port kept `put` in place by passing a continuation: each insertion
+step took a `then` and called it last. A 300 KB document then ran the
+interpreter out of stack, and the dev build died with a segmentation fault.
+Appendix A says a tail call costs no stack at all; it held for calls to named
+functions and arms and failed for a call to a function value.
+
+The interpreter's tail position already handed a named group's call back to
+the dispatcher's loop. A call to a closure now comes back the same way, as
+`Flow::Closure`, and runs in whichever loop called the body: the dispatcher's,
+or a loop in `call_closure` for a lambda called from outside a tail.
+
+Native code calls a closure through `k_call{n}`, which calls the lambda's
+wrapper, so every step held two frames. A closure now also carries a pointer to
+the lambda's own body, which is on the tailcc convention. A call to a local
+function value in tail position becomes a musttail jump to `k_tcall{n}`, which
+checks that it holds a closure of the right arity with no failing argument
+and a body, then jumps to that body. Anything else (a closure the runtime
+built, a partial, a reference to a group) goes to `k_call{n}` as before. The
+arity and capture count became 32-bit fields so the pointer fits in the 32
+bytes the closure already took.
+
+Release narrows the convention to functions on a musttail edge, and the jump
+through a pointer names no symbol, so the narrowing would have stripped it and
+LLVM refused the module. Every lambda keeps the convention in a module that
+has the jump, and the jump keeps it too.
+
+`tests/golden/micro/a_lambda_called_in_tail_position_costs_no_stack` runs
+100,000 steps of the port's loop on every engine. Before the fix the
+interpreter reported running out of stack and the dev build exited 139. The
+ratchet rows "a lambda called as a nested call" and "a lambda called without
+a jump" remove each half and expect the micro corpus to fail.
+
+The clang-to-wasm32 layout harness leaves the fixture out: by its own header
+it compiles a call returning a `KValue` as an ordinary call, and a loop that
+goes through a pointer cannot be inlined into one. The page's translator makes
+the jump a tail call, and `ir_to_wasm` runs the fixture.
+
+CI's rows, on the tree carrying #1896: codegen_instructions_release rises
+4.7% to 475,481,653, because every lambda in a module with the jump keeps the
+tail convention. interp_instructions rises 1.4% to 495,424,970,
+work_runbench 0.17% to 1,171,985,904 and work_deepbench 2.5% to 403,499,508;
+work_encodebench falls 0.49% to 2,386,714,424. The emitter writes fewer lines
+(runbench's IR 51,577 to 50,505) and spends 1.1% more doing it,
+emit_instructions 7,090,315. The three compile rows fall about 0.13%. The
+welfare floor drops to 91.08971 under the rule that building the language is
+priced at what it costs.
+
+With #1896 underneath, the rest of CI's rows on this tree:
+`codegen_instructions_dev` 119,060,047, `browser_run_instructions` 34,125,731
+and `text` 4,845,118. Among the benches, `work_pendbench` lands on 191,667,218
+(+0.85%) and `work_widebench` on 28,274,761 (+0.34%); `work_basket`
+30,876,728, `work_digestbench` 5,603,270, `work_jsonbench` 860,563,126,
+`work_oneshot` 13,227,357, `work_readbench` 4,581,129 and `work_scanbench`
+273,675 move by a few hundred instructions each.
+The emitted totals: `emitted_other_branches` 16,476, `emitted_other_calls`
+17,511 and `emitted_other_defines` 2,012.
+
+This is the toml item on #1892.
+
+On CI's rows for the tree merged with #1913: interp_instructions lands on
+495,372,671, emit_instructions on 7,089,710, compile_instructions on
+25,881,675, entry_instructions on 85,381,437 and library_instructions on
+85,935,705. browser_compile_instructions lands on 393,094,499, up 1,782,997
+or 0.46%, since the page's translator turns each new jump into a tail call.
+
+On CI's rows for the tree merged with #1923: compile_instructions lands on
+25,882,102, entry_instructions on 85,381,864, library_instructions on
+85,936,071 and interp_instructions on 495,372,854, each a few hundred
+instructions up. The merge brought twelve changed lines in the interpreter's
+builtins and nothing else in `src/`; nothing here isolates which of the two
+moved these rows.
+
+On main after #1925 the emitted counts for the other programs land on
+emitted_other_branches 16,559, emitted_other_calls 17,666 and
+emitted_other_defines 2,037.
+
+With main merged after #1937, browser_compile_instructions lands on 394,156,258
+and browser_run_instructions on 34,126,073.
+
+On CI's rows for the tree merged with main after #1937: interp_instructions
+lands on 494,060,975, codegen_instructions_dev on 119,058,990,
+codegen_instructions_release on 475,482,049, emit_instructions on 7,120,495 and
+text on 4,850,094. Among the benches, work_pendbench lands on 191,674,062,
+work_runbench on 1,179,917,338 and work_widebench on 28,274,796; work_basket
+30,946,295, work_digestbench 5,604,610, work_escapebench 39,058,332,
+work_jsonbench 860,566,126, work_livebench 1,474,875,027 and work_oneshot
+13,227,755 move by a few hundred instructions each. The emitted totals for the
+other programs: emitted_other_branches 16,563, emitted_other_calls 17,668 and
+emitted_other_defines 2,038.
 
 ## 2026-10-12 — arms travel with the value
 

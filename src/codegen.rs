@@ -973,6 +973,11 @@ impl Written {
         let call_twins: String = (0..=4)
             .filter(|n| body_calls.contains(format!("k_call{n}_fast").as_str()))
             .map(|n| call_twin(n, self.convention, self.inline_helpers))
+            .chain(
+                (0..=4)
+                    .filter(|n| body_calls.contains(format!("k_tcall{n}").as_str()))
+                    .map(tail_call_twin),
+            )
             .collect();
         let declares: String = {
             // BOTH SIDES OF THIS BUILT THE SAME INDEX. kanso#1461 landed one
@@ -1011,11 +1016,13 @@ impl Written {
         {
             // K_INT 0 is the env a zero-capture closure never reads; K_CLOSURE
             // is tag 11. The KClosure layout is the runtime's:
-            // { fn, env, ncaps, arity }.
+            // { fn, env, int ncaps, int arity, body }, the body being the
+            // lambda the wrapper `w_` calls.
             let _ = writeln!(out, "@{cell}_env = internal constant %KValue zeroinitializer");
             let _ = writeln!(
                 out,
-                "@{cell}_clo = internal constant {{ ptr, ptr, i64, i64 }}                  {{ ptr @{w}, ptr @{cell}_env, i64 0, i64 {arity} }}"
+                "@{cell}_clo = internal constant {{ ptr, ptr, i32, i32, ptr }}                  {{ ptr @{w}, ptr @{cell}_env, i32 0, i32 {arity}, ptr @{} }}",
+                w.strip_prefix("w_").unwrap_or(w)
             );
             let _ = writeln!(
                 out,
@@ -3148,9 +3155,9 @@ fn call_twin(n: usize, convention: ClosureConvention, inline: bool) -> String {
     let _ = writeln!(s, "arity:");
     let _ = writeln!(s, "  %fp = extractvalue %KValue %f, 1");
     let _ = writeln!(s, "  %c = inttoptr i64 %fp to ptr");
-    let _ = writeln!(s, "  %arp = getelementptr i8, ptr %c, i64 24");
-    let _ = writeln!(s, "  %ar = load i64, ptr %arp");
-    let _ = writeln!(s, "  %okar = icmp eq i64 %ar, {n}");
+    let _ = writeln!(s, "  %arp = getelementptr i8, ptr %c, i64 20");
+    let _ = writeln!(s, "  %ar = load i32, ptr %arp");
+    let _ = writeln!(s, "  %okar = icmp eq i32 %ar, {n}");
     let _ = writeln!(s, "  br i1 %okar, label %args, label %slow");
     let _ = writeln!(s, "args:");
     for i in 0..n {
@@ -3185,6 +3192,69 @@ fn call_twin(n: usize, convention: ClosureConvention, inline: bool) -> String {
     // above, so the fnref family (no env parameter) never reaches here.
     let cc = convention.keyword();
     let _ = writeln!(s, "  %r = call {cc}%KValue %fnp(ptr %env{args})");
+    let _ = writeln!(s, "  ret %KValue %r");
+    let _ = writeln!(s, "slow:");
+    let _ = writeln!(s, "  %s = call %KValue @k_call{n}(%KValue %f{args})");
+    let _ = writeln!(s, "  ret %KValue %s");
+    let _ = writeln!(s, "}}");
+    s
+}
+
+/// The twin of `k_call{n}` for a call in tail position. A lambda's body is on the
+/// tailcc convention and the closure carries a pointer to it, so a function
+/// value called last jumps to the lambda instead of calling its wrapper: a
+/// loop written in continuation-passing style runs in constant stack, as
+/// Appendix A says a tail call does. Anything the jump does not take (a
+/// closure the runtime built, a partial, a reference to a group, a failing
+/// argument) goes to `k_call{n}`, which answers as before. The caller
+/// reaches this with a musttail of its own, so the helper is a function and
+/// never inlined.
+fn tail_call_twin(n: usize) -> String {
+    let args: String = (0..n).map(|i| format!(", %KValue %a{i}")).collect();
+    let mut s = String::new();
+    let _ = writeln!(s, "define internal tailcc %KValue @k_tcall{n}(%KValue %f{args}) {{");
+    let _ = writeln!(s, "  %ftag = extractvalue %KValue %f, 0");
+    let _ = writeln!(s, "  %isclo = icmp eq i64 %ftag, 11");
+    let _ = writeln!(s, "  br i1 %isclo, label %arity, label %slow");
+    let _ = writeln!(s, "arity:");
+    let _ = writeln!(s, "  %fp = extractvalue %KValue %f, 1");
+    let _ = writeln!(s, "  %c = inttoptr i64 %fp to ptr");
+    let _ = writeln!(s, "  %arp = getelementptr i8, ptr %c, i64 20");
+    let _ = writeln!(s, "  %ar = load i32, ptr %arp");
+    let _ = writeln!(s, "  %okar = icmp eq i32 %ar, {n}");
+    let _ = writeln!(s, "  br i1 %okar, label %args, label %slow");
+    let _ = writeln!(s, "args:");
+    for i in 0..n {
+        let _ = writeln!(s, "  %t{i} = extractvalue %KValue %a{i}, 0");
+        let _ = writeln!(s, "  %e{i} = icmp eq i64 %t{i}, 5");
+    }
+    for i in 1..n {
+        let prev = match i {
+            1 => "%e0".to_string(),
+            _ => format!("%or{}", i - 1),
+        };
+        let _ = writeln!(s, "  %or{i} = or i1 {prev}, %e{i}");
+    }
+    match n {
+        0 => {
+            let _ = writeln!(s, "  br label %body");
+        }
+        1 => {
+            let _ = writeln!(s, "  br i1 %e0, label %slow, label %body");
+        }
+        _ => {
+            let _ = writeln!(s, "  br i1 %or{}, label %slow, label %body", n - 1);
+        }
+    }
+    let _ = writeln!(s, "body:");
+    let _ = writeln!(s, "  %bodyp = getelementptr i8, ptr %c, i64 24");
+    let _ = writeln!(s, "  %lam = load ptr, ptr %bodyp");
+    let _ = writeln!(s, "  %has = icmp ne ptr %lam, null");
+    let _ = writeln!(s, "  br i1 %has, label %go, label %slow");
+    let _ = writeln!(s, "go:");
+    let _ = writeln!(s, "  %envp = getelementptr i8, ptr %c, i64 8");
+    let _ = writeln!(s, "  %env = load ptr, ptr %envp");
+    let _ = writeln!(s, "  %r = musttail call tailcc %KValue %lam(ptr %env{args})");
     let _ = writeln!(s, "  ret %KValue %r");
     let _ = writeln!(s, "slow:");
     let _ = writeln!(s, "  %s = call %KValue @k_call{n}(%KValue %f{args})");
@@ -6313,7 +6383,7 @@ impl<'a> Backend<'a> {
                 let t = f.tmp();
                 // the ccc wrapper, never the tailcc fn: C calls this pointer
                 f.line_fmt(format_args!(
-                    "{t} = call %KValue @k_closure(ptr @w_{lifted}, i64 {}, i64 {}, ptr {arr})",
+                    "{t} = call %KValue @k_closure(ptr @w_{lifted}, i64 {}, i64 {}, ptr {arr}, ptr @{lifted})",
                     params.len(),
                     captures.len()
                 ));
@@ -6819,9 +6889,50 @@ impl<'a> Backend<'a> {
                 }
             }
         }
+        if self.emit_value_tail_call(f, expr)? {
+            return Ok(());
+        }
         let value = self.emit_expr(f, expr)?;
         self.emit_ret(f, &value);
         Ok(())
+    }
+
+    /// A call to a bound function value in tail position, as `then (acc + i)`
+    /// is in a loop written in continuation-passing style: the frame goes,
+    /// and `k_tcall{n}` jumps to the lambda. Only where the plain tail would be
+    /// the call and its return with nothing between them, so a frame that
+    /// still holds a header or a lazy cell keeps the ordinary call.
+    fn emit_value_tail_call(&mut self, f: &mut FnEmit, expr: &Expr) -> Result<bool, String> {
+        let Expr::App { head, args, piped: false, .. } = expr else {
+            return Ok(false);
+        };
+        let Expr::Ident(name, _, _) = head.as_ref() else {
+            return Ok(false);
+        };
+        if f.lookup(name).is_none()
+            || f.frame_held
+            || !f.lazy_cells.is_empty()
+            || f.ret_ty != "%KValue"
+            || args.len() > 4
+        {
+            return Ok(false);
+        }
+        let callee = self.emit_expr(f, head)?;
+        let mut args_ir = Vec::with_capacity(args.len());
+        for a in args {
+            let v = self.emit_expr(f, a)?;
+            let v = self.as_value(f, &v);
+            args_ir.push(format!(", %KValue {v}"));
+        }
+        let callee = self.as_value(f, &callee);
+        let n = args.len();
+        let t = f.tmp();
+        f.line_fmt(format_args!(
+            "{t} = musttail call tailcc %KValue @k_tcall{n}(%KValue {callee}{})",
+            args_ir.concat()
+        ));
+        f.line_fmt(format_args!("ret %KValue {t}"));
+        Ok(true)
     }
 
     /// `x[p + k] == c and x[p + k'] == c' ...` over one bytes value and one
@@ -9124,6 +9235,7 @@ fn narrowed_in_place(text: String, from: usize) -> String {
     let defines =
         lines_holding(ir, "define ").filter(|&(start, _)| ir[start..].starts_with("define "));
     let musttails = lines_holding(ir, "musttail call");
+    let jumps_to_lambdas = ir.contains("define internal tailcc %KValue @k_tcall");
     for (start, end) in merged_lines(defines, musttails) {
         let line = &ir[start..end];
         if !code(line) {
@@ -9133,6 +9245,16 @@ fn narrowed_in_place(text: String, from: usize) -> String {
             current = symbol_of(rest);
             if rest.starts_with("tailcc ") {
                 tailcc_defines.push(line);
+            }
+            // `k_tcall{n}` jumps to a lambda through the pointer its closure
+            // carries, an edge this reading cannot see, so every lambda keeps
+            // the convention in a module that has one.
+            if jumps_to_lambdas
+                && current.as_deref().is_some_and(|n| {
+                    n.strip_prefix("klam").is_some_and(|d| d.bytes().all(|b| b.is_ascii_digit()))
+                })
+            {
+                keep.extend(current.clone());
             }
         }
         if line.contains("musttail call") {
@@ -9197,6 +9319,11 @@ fn narrowed_in_place(text: String, from: usize) -> String {
             continue;
         }
         let named = symbol_of(line);
+        // `k_tcall{n}`'s jump through a closure names no symbol. Every lambda
+        // it can reach kept the convention above, so the jump keeps it too.
+        if named.is_none() && holds(line, "musttail call", 0) {
+            continue;
+        }
         let reroute = !holds(line, "musttail call", 0)
             && line.contains("call tailcc ")
             && named.as_ref().is_some_and(|n| spilling.contains(n));
@@ -9403,20 +9530,21 @@ mod a_trampoline_is_emitted_for_a_call_that_uses_it {
 /// before them is a `long long`. These are the ones that follow a pointer:
 /// `KStr` is `{ char*, int, int }`, so its length and capacity move up four
 /// bytes; `KMap`'s `sorted` follows two pointers where `pairs` follows a
-/// `long long`; and `KClosure` is `{ fn, env, ncaps, arity }`, so `env`
-/// follows the function pointer and `arity` follows a capture count that
-/// itself sits after two pointers.
+/// `long long`; and `KClosure` is `{ fn, env, int ncaps, int arity, body }`,
+/// so `env` follows the function pointer and `arity` and `body` follow two
+/// pointers.
 ///
 /// A line is matched whole, so a helper whose text changes stops matching
 /// rather than matching something else. tests/native_layout_on_wasm32.rs reads
 /// the emitter for each left-hand side and fails when one is missing, and
 /// runs the micro corpus through this pass against its goldens.
-pub const WASM32_LINES: [(&str, &str); 6] = [
+pub const WASM32_LINES: [(&str, &str); 7] = [
     ("%slenp = getelementptr i8, ptr %sp, i64 8", "%slenp = getelementptr i8, ptr %sp, i64 4"),
     ("%lenp = getelementptr i8, ptr %s, i64 8", "%lenp = getelementptr i8, ptr %s, i64 4"),
     ("%cp = getelementptr i8, ptr %sptr, i64 12", "%cp = getelementptr i8, ptr %sptr, i64 8"),
     ("%sortedp = getelementptr i8, ptr %m, i64 16", "%sortedp = getelementptr i8, ptr %m, i64 12"),
-    ("%arp = getelementptr i8, ptr %c, i64 24", "%arp = getelementptr i8, ptr %c, i64 16"),
+    ("%arp = getelementptr i8, ptr %c, i64 20", "%arp = getelementptr i8, ptr %c, i64 12"),
+    ("%bodyp = getelementptr i8, ptr %c, i64 24", "%bodyp = getelementptr i8, ptr %c, i64 16"),
     ("%envp = getelementptr i8, ptr %c, i64 8", "%envp = getelementptr i8, ptr %c, i64 4"),
 ];
 

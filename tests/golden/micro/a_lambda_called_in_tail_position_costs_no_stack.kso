@@ -1,0 +1,11 @@
+# a loop written in continuation-passing style calls its continuation in tail
+# position, and a call there costs no stack whatever the callee is: a named
+# function, an arm, or a lambda held in a parameter
+fn loop acc i n
+  return acc if n < i
+  step acc i (next -> loop next (i + 1) n)
+
+fn step acc i then
+  then (acc + i)
+
+pub play = print "{loop 0 1 100000}"

@@ -891,11 +891,15 @@ thread_local! {
         const { std::cell::RefCell::new(None) };
 }
 
-/// What a body's tail handed back: a finished value, or a named-group call
-/// for the dispatcher to loop on instead of growing the stack.
+/// What a body's tail handed back: a finished value, or a call for the
+/// dispatcher to loop on instead of growing the stack. A call to a function
+/// value is one too: a loop written in continuation-passing style hands
+/// itself back through a lambda every step, and calling that lambda as a
+/// nested call ran the toml port out of stack at 10,000 steps.
 enum Flow<'a> {
     Done(Value),
     Tail(Rc<str>, Rc<Vec<&'a FnDecl>>, Vec<Value>, Span),
+    Closure(Rc<ClosureData>, Vec<Value>, Span),
 }
 
 thread_local! {
@@ -1419,9 +1423,10 @@ impl<'a> Interp<'a> {
             for arg in &args[1..] {
                 values.push(self.eval(arg, env, frame)?);
             }
-            return match group_of(&callee) {
-                Some((name, group)) => Ok(Flow::Tail(name, group, values, *span)),
-                None => Ok(Flow::Done(self.call(callee, values, *span, frame)?)),
+            return match (group_of(&callee), callee) {
+                (Some((name, group)), _) => Ok(Flow::Tail(name, group, values, *span)),
+                (None, Value::Closure(c)) => Ok(Flow::Closure(c, values, *span)),
+                (None, callee) => Ok(Flow::Done(self.call(callee, values, *span, frame)?)),
             };
         }
         let callee = self.eval(head, env, frame)?;
@@ -1441,9 +1446,10 @@ impl<'a> Interp<'a> {
         for arg in args {
             values.push(self.eval(arg, env, frame)?);
         }
-        match group_of(&callee) {
-            Some((name, group)) => Ok(Flow::Tail(name, group, values, *span)),
-            None => Ok(Flow::Done(self.call(callee, values, *span, frame)?)),
+        match (group_of(&callee), callee) {
+            (Some((name, group)), _) => Ok(Flow::Tail(name, group, values, *span)),
+            (None, Value::Closure(c)) => Ok(Flow::Closure(c, values, *span)),
+            (None, callee) => Ok(Flow::Done(self.call(callee, values, *span, frame)?)),
         }
     }
 
@@ -2260,6 +2266,27 @@ impl<'a> Interp<'a> {
     }
 
     fn call_closure(&self, closure: &ClosureData, args: Vec<Value>, span: Span) -> EvalResult {
+        let mut flow = self.closure_flow(closure, args, span)?;
+        loop {
+            match flow {
+                Flow::Done(value) => return Ok(value),
+                Flow::Tail(name, group, args, span) => {
+                    return self.dispatch_loop(name, group, args, span)
+                }
+                Flow::Closure(next, args, span) => flow = self.closure_flow(&next, args, span)?,
+            }
+        }
+    }
+
+    /// A closure's body run to its tail. What the tail hands back goes to the
+    /// caller's loop: `call_closure` for a call that is not itself in tail
+    /// position, the dispatcher's loop for one that is.
+    fn closure_flow(
+        &self,
+        closure: &ClosureData,
+        args: Vec<Value>,
+        span: Span,
+    ) -> Result<Flow<'a>, RuntimeError> {
         if closure.params.len() != args.len() {
             return Err(RuntimeError {
                 message: format!(
@@ -2271,13 +2298,13 @@ impl<'a> Interp<'a> {
             });
         }
         if args.iter().any(is_failure) {
-            return Ok(merged_failures(&args));
+            return Ok(Flow::Done(merged_failures(&args)));
         }
         let mut env = closure.env.clone();
         for (name, value) in closure.params.iter().zip(args) {
             env = bind(env, name.clone(), value);
         }
-        self.eval(&closure.body, &env, &closure.frame)
+        self.eval_tail(&closure.body, &env, &closure.frame)
     }
 
     /// Dispatch fires the moment the supplied count matches an arity the
@@ -2812,7 +2839,14 @@ impl<'a> Interp<'a> {
                             pool = Some(rc);
                         }
                     }
-                    match flowed? {
+                    // A closure the tail called runs here, in this loop, so a
+                    // group and a lambda that hand each other on cost no stack.
+                    let mut flowed = flowed?;
+                    while let Flow::Closure(next, next_args, next_span) = flowed {
+                        flowed = self.closure_flow(&next, next_args, next_span)?;
+                    }
+                    match flowed {
+                        Flow::Closure(..) => unreachable!("closures run in the loop above"),
                         Flow::Done(value) => return Ok(value),
                         Flow::Tail(next, group, next_args, next_span) => {
                             overloads = group;

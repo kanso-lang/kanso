@@ -12,11 +12,13 @@ use kanso::codegen::{emit_ir, ClosureConvention};
 
 /// A capture-free lambda handed to a function that applies it: the shape that
 /// lifts to a `klam` body with a `w_klam` wrapper, and whose application goes
-/// through the inlined dispatcher. Self-contained on purpose -- `kanso::compile`
-/// on a bare string resolves no imports, the way the other codegen specs work.
+/// through the inlined dispatcher. The application is not the body's last
+/// call, because a call in tail position jumps to the lambda's own body and
+/// never meets the wrapper. Self-contained on purpose -- `kanso::compile` on a
+/// bare string resolves no imports, the way the other codegen specs work.
 const PROGRAM: &str = "\
 fn apply f x
-  f x
+  1 + f x
 
 play = apply (y -> y + 1) 41
 ";
