@@ -19,35 +19,6 @@
 > The last forty entries. Everything older is in `log/compiler-log-archive.md`,
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
-## 2026-10-10 — gavel: GitHub issues are the tracker, and hygiene is continuous
-
-Clay, on the proposal to track a cleanup list as GitHub issues: "why on Earth
-not just use githubs issues feature? seems it would be a much more methodical
-way to track and prioritize work." And on keeping the repository clean: "the
-instructions should explicitly maintain ongoing refactoring so that things stay
-hygienic over time and I don't have to explicitly remind you."
-
-**The tracker.** Open work and open decisions are GitHub issues in
-kanso-lang/kanso, labelled by kind (`needs-clay`, `ruled`, `cleanup`, `perf`),
-lane (`lane:chat`, `lane:cloud`) and priority (`p1` to `p3`). A pull request
-that finishes one closes it with `Fixes #N`. The log stays the record of what
-was ruled and measured. STATUS.md's "Ruled, unbuilt" section and
-design/pending-gavels.md retire; #1852 carries the steps, including the two
-specs that keep their counts in step. The case for the change was made the same
-day the two newest "Ruled, unbuilt" rows were found already built and never
-taken off, and a ruling of 2026-10-07 was found never to have had a row.
-
-Opened the same day: #1842, the one open decision (whether `list/map xs ref`
-may build a node's list of references), and #1843, the three-parts-per-billion
-row, the last standing "Ruled, unbuilt" entry; and nine `cleanup` issues from a
-hygiene review, #1844 to #1852.
-
-**Hygiene.** CLAUDE.md gains a section, "Hygiene is continuous": each pull
-request leaves the files it touches cleaner; a fact has one home; cloud lands a
-`cleanup` pull request for every five others; cloud sweeps the repository
-weekly and files what it finds; a refactor is a pure move; and instructions
-state rules, with their history in the log.
-
 ## 2026-10-10 — the log goes back under its cap a second time
 
 design/compiler-log.md held 526 entries and 25,301 lines against a cap of
@@ -1700,3 +1671,18 @@ issue, was not ruled.
 Owes, on #1889: the lexer on every engine; micro goldens for each form,
 including negative and upper-case-digit cases; error goldens for a malformed
 literal (`0x`, `0b2`, `1e`); the chapter that teaches numbers.
+
+## 2026-10-13 — gavel: `text/slice` past the end answers `none`
+
+Clay ruled #1890. `text/slice "abc" 1 10` returned `"bc"`, quietly shorter than
+the range asked for, and three ports called that silent data loss. An index
+past the end already answers `none`.
+
+**The ruling.** A `text/slice` whose range runs past the end of the value, or
+starts past it, answers `none`, as an index past the end does, and the caller
+dispatches on it. A range wholly inside the value is unchanged.
+
+Owes, on #1890: the change on every engine; micro goldens for a range past the
+end, a start past the end and a range that ends exactly at the end; the
+exhaustiveness check sees `none` in `text/slice`'s answer; lib, samples and
+sibling repositories that leaned on clamping moved to dispatch on `none`.
