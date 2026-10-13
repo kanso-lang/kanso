@@ -21,54 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-11 — the first join makes its own builder, and `k_b_adopt` goes
-
-A builder seed that is not a string reached its first join through
-`k_b_adopt`, which rendered it and made the rendering the builder. The fold
-join (kanso#1825) taught `k_concat_arr_mut` to do the same for any seed that
-arrives with no room, and from then on the adoption had nothing left to
-convert. The ratchet showed it: both rows that mutated the adoption stayed
-green on the carrier, and were replaced by one row that restores the old
-refusal in `k_concat_arr_mut`. This change removes the call, its declaration
-and the runtime function.
-
-Measured in this container against the carrier, runbench reads 26,076
-instructions fewer, because the run program's builder loops no longer call
-the adoption on their first join; its emitted code loses one call and two
-lines. `codegen_instructions_dev` falls by 5,811, `codegen_instructions_release`
-by 64,944 and `emit_instructions` by 479, and each runtime binary sheds 352
-bytes of text. encodebench reads 98 more, livebench 70 more and oneshot 7
-more, with no change to what they call. The front-end rows and every
-allocation counter agree with the carrier. CI's rows replace these.
-
-This change rides kanso#1839, the oversize-spare fix, rather than a pull
-request of its own. On CI's rows the spare fix alone scores 91.0337007,
-below the carrier's floor of 91.0337226, most of the gap in
-`codegen_instructions_release`, which lands 109,925 above the carrier at
-454,517,107. The adoption's retirement is projected onto those rows from the
-deltas above, and the two together score 91.0338379. The browser tab compiles
-with the same emitter, so browser_compile_instructions falls 7,415 to
-390,029,358, measured here with the pinned rustc that builds
-`docs/kanso.wasm`. With that row the floor this pull request banks is
-91.0338442. Against the carrier, three rows still read worse:
-codegen_instructions_release on 454,452,163, work_livebench on 1,474,871,601
-and work_oneshot on 13,223,705, the release row from the spare fix's layout
-and the two run rows 147 and 7 above the carrier. CI's rows for the pair
-replace the projection.
-
-CI's rows for the pair replace the projection. codegen_instructions_dev lands
-on 118,937,518 and codegen_instructions_release on 454,509,840, the release row
-57,677 above the projection. work_encodebench lands on 2,398,370,022,
-work_livebench on 1,474,871,202, work_oneshot on 13,223,901 and work_runbench
-on 1,152,728,743. runbench's text falls 32 bytes to 615,417, so `text` totals
-4,824,318, and its emitted code is one call and two lines shorter than
-projected; emitted_other_lines lands on 146,722, two below the carrier. Welfare
-on these rows is 91.0338093, which is 0.0000867 above the
-carrier's floor and 0.0000349 below the 91.0338442 banked from the projection.
-The floor now records CI's figure. Banking the projection before CI had read
-it was the error; a projected floor can only be wrong in a direction nobody
-has checked.
-
 ## 2026-10-11 — the two sweeps print their own lists
 
 Two specs checked CLAUDE.md's wording. `every_counter_gate_is_in_the_sweep`
@@ -1764,3 +1716,49 @@ refusal before the fix and reads nothing after.
 The tab's build leaves the new root out, since it has no checkout to stand
 in. With the root compiled in, `browser_compile_instructions` read 392,449,729
 against 392,378,375; without it the browser row does not move.
+
+## 2026-10-13 — the ruled queue lands in one carrier
+
+Fourteen pull requests built rulings at the same time: #1882, #1883, #1886,
+#1887, #1891, #1892, #1893 and #1842. Branch protection is strict and CI runs
+one job at a time, so each merge sent the rest back through CI for twenty
+minutes apiece. kanso#1938 merges all of them onto main in one tree. Each
+change's own entry above says what it did and what it cost alone; this entry
+prices the combined tree as CI measured it on e8fd676b, against main at
+38fd2e60.
+
+Compile work rose with the new checks and lowering:
+
+- `compile_instructions` from 26,463,317 to 27,487,528
+- `entry_instructions` from 88,129,856 to 91,388,227
+- `library_instructions` from 87,707,726 to 90,971,757
+- `compile_allocs` from 15,358 to 15,881
+- `startup_instructions` from 52,396 to 52,528
+- `emit_instructions` from 7,052,040 to 7,129,967
+- `codegen_instructions_dev` from 119,002,656 to 119,069,016
+- `codegen_instructions_release` from 454,179,390 to 475,509,385
+- `browser_compile_instructions` from 393,209,858 to 401,770,760
+- `browser_compile_peak_bytes` from 677,261 to 678,057
+
+The interpreter and the native runs:
+
+- `interp_instructions` from 486,939,316 to 493,867,557
+- `interp_allocs` from 588,491 to 589,364
+- `interp_peak_bytes` from 692,375 to 694,492
+- `work_digestbench` from 5,604,458 to 5,909,392
+- `work_livebench` from 1,474,874,594 to 1,474,875,307
+- `work_oneshot` from 13,227,314 to 13,227,860
+- `work_pendbench` from 190,061,194 to 191,674,127
+- `work_runbench` from 1,177,965,832 to 1,180,255,750
+- `work_scanbench` from 273,523 to 273,667
+
+The emitted code across the other benchmarks has more branches and calls and
+fewer lines: `emitted_other_branches` from 16,555 to 16,571,
+`emitted_other_calls` from 17,664 to 17,702, and `emitted_other_lines` from
+148,239 to 145,735. The binaries' `text` grew from 4,838,990 to 4,903,966
+bytes.
+
+The largest single move is release codegen, up 4.7%. Which carried change
+produced it is not isolated here; the branches' own readings are in their
+entries. Every carried change builds a ruled part of the language, so the
+floor drops by what the combined tree costs.

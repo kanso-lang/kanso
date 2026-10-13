@@ -102001,3 +102001,51 @@ release row 2,552, basket 60,732, oneshot 189 and runbench 686; encodebench
 falls 756 and livebench 343. Welfare scores 91.0338012, 0.0000081 under the
 91.0338093 the spare fix banks from its CI rows and inside the gate's 0.001
 allowance, so the floor stays where the spare fix left it.
+
+## 2026-10-11 — the first join makes its own builder, and `k_b_adopt` goes
+
+A builder seed that is not a string reached its first join through
+`k_b_adopt`, which rendered it and made the rendering the builder. The fold
+join (kanso#1825) taught `k_concat_arr_mut` to do the same for any seed that
+arrives with no room, and from then on the adoption had nothing left to
+convert. The ratchet showed it: both rows that mutated the adoption stayed
+green on the carrier, and were replaced by one row that restores the old
+refusal in `k_concat_arr_mut`. This change removes the call, its declaration
+and the runtime function.
+
+Measured in this container against the carrier, runbench reads 26,076
+instructions fewer, because the run program's builder loops no longer call
+the adoption on their first join; its emitted code loses one call and two
+lines. `codegen_instructions_dev` falls by 5,811, `codegen_instructions_release`
+by 64,944 and `emit_instructions` by 479, and each runtime binary sheds 352
+bytes of text. encodebench reads 98 more, livebench 70 more and oneshot 7
+more, with no change to what they call. The front-end rows and every
+allocation counter agree with the carrier. CI's rows replace these.
+
+This change rides kanso#1839, the oversize-spare fix, rather than a pull
+request of its own. On CI's rows the spare fix alone scores 91.0337007,
+below the carrier's floor of 91.0337226, most of the gap in
+`codegen_instructions_release`, which lands 109,925 above the carrier at
+454,517,107. The adoption's retirement is projected onto those rows from the
+deltas above, and the two together score 91.0338379. The browser tab compiles
+with the same emitter, so browser_compile_instructions falls 7,415 to
+390,029,358, measured here with the pinned rustc that builds
+`docs/kanso.wasm`. With that row the floor this pull request banks is
+91.0338442. Against the carrier, three rows still read worse:
+codegen_instructions_release on 454,452,163, work_livebench on 1,474,871,601
+and work_oneshot on 13,223,705, the release row from the spare fix's layout
+and the two run rows 147 and 7 above the carrier. CI's rows for the pair
+replace the projection.
+
+CI's rows for the pair replace the projection. codegen_instructions_dev lands
+on 118,937,518 and codegen_instructions_release on 454,509,840, the release row
+57,677 above the projection. work_encodebench lands on 2,398,370,022,
+work_livebench on 1,474,871,202, work_oneshot on 13,223,901 and work_runbench
+on 1,152,728,743. runbench's text falls 32 bytes to 615,417, so `text` totals
+4,824,318, and its emitted code is one call and two lines shorter than
+projected; emitted_other_lines lands on 146,722, two below the carrier. Welfare
+on these rows is 91.0338093, which is 0.0000867 above the
+carrier's floor and 0.0000349 below the 91.0338442 banked from the projection.
+The floor now records CI's figure. Banking the projection before CI had read
+it was the error; a projected floor can only be wrong in a direction nobody
+has checked.
