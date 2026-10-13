@@ -2082,3 +2082,8 @@ On the tree merged with #1900, CI's rows put codegen_instructions_dev at
 1,170,035,058, and every bench's text is 1,744 bytes smaller. The welfare
 floor drops to 91.10933 under the rule that a change making the engines agree
 is not priced.
+
+On the merged tree the ratchet called "a warm play that dies in silence"
+blind. Since #1900 the binary names its own stack overflow, so the warm play's
+wording of the signal never runs for one. The mutation now also stops the
+binary watching its stack, and the second play prints nothing.
