@@ -30,11 +30,14 @@ const CARRIED: &[(&str, &str)] = &[
 /// drift from; the mem fixture each fix adds says where a move came from.
 /// `restate` joined on 2026-10-11, measured on the compiler before kanso#1840.
 const BORN_HERE: &[&str] = &[
+    "bench/runbench/runbench/bag/bag.kso",
     "bench/runbench/runbench/bump/bump.kso",
     "bench/runbench/runbench/fold/fold.kso",
     "bench/runbench/runbench/machine/machine.kso",
     "bench/runbench/runbench/restate/restate.kso",
+    "bench/runbench/runbench/rewind/rewind.kso",
     "bench/runbench/runbench/scatter/scatter.kso",
+    "bench/runbench/runbench/stack/stack.kso",
 ];
 
 fn read(rel: &str) -> String {
@@ -89,7 +92,7 @@ fn every_carried_module_is_listed() {
     let mut listed: Vec<String> = CARRIED.iter().map(|(copy, _)| copy.to_string()).collect();
     listed.extend(BORN_HERE.iter().map(|copy| copy.to_string()));
     listed.sort();
-    assert_eq!(BORN_HERE.len(), 5, "a phase joined or left the run program without a line here");
+    assert_eq!(BORN_HERE.len(), 8, "a phase joined or left the run program without a line here");
     assert_eq!(found, listed, "a module under bench/runbench/runbench is not pinned above");
 }
 
