@@ -1898,11 +1898,13 @@ fn merge_expr(
             arms.push(ast::FnDecl {
                 name: group.clone(),
                 is_pub: true,
+                written_pub: false,
                 span: *declared,
                 params,
                 body: vec![ast::Stmt::Expr(body)],
                 file: crate::ast::unstamped(),
                 synthetic: false,
+                shades: None,
             });
         }
     }
