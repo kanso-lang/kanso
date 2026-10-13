@@ -30,13 +30,13 @@
 use std::collections::HashMap;
 use std::path::Path;
 
-/// Every `[["bench/…" "prefix_"]]` binding in the gate, so the prefixes come
-/// from the gate itself rather than a second copy here.
+/// Every `["bench/…" "prefix_"]` row of the gate's `bench_goldens`, so the
+/// prefixes come from the gate itself rather than a second copy here.
 fn watched(gate: &str) -> Vec<(String, String)> {
     let mut out = Vec::new();
     for line in gate.lines() {
-        let Some(open) = line.find("[[\"bench/") else { continue };
-        let rest = &line[open + 3..];
+        let Some(open) = line.find("[\"bench/") else { continue };
+        let rest = &line[open + 2..];
         let mut parts = rest.split('"').filter(|p| !p.contains("[") && !p.contains("]"));
         let (Some(file), Some(_gap), Some(prefix)) = (parts.next(), parts.next(), parts.next())
         else {

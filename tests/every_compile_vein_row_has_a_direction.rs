@@ -20,21 +20,19 @@
 //! compile path opening a vein under a fourth name is covered on the day the
 //! file lands. A hardcoded list is the shape that went stale here twice.
 
-/// The counter names the trend gate's `lower_*` bindings list. Read out of the
-/// gate's source because the gate is written in kanso and there is no other way
-/// in; a restructuring of those bindings breaks this loudly.
+/// The counter names the trend gate's `lower` table lists, one to a line
+/// between `lower = [` and the `]` that closes it. Read out of the gate's
+/// source because the gate is written in kanso and there is no other way in; a
+/// restructuring of the table breaks this loudly.
 fn classified_lower(gate: &str) -> Vec<String> {
     let mut out = Vec::new();
-    for line in gate.lines() {
-        let Some(rest) = line.strip_prefix("lower_") else { continue };
-        let Some(open) = rest.find('[') else { continue };
-        let Some(shut) = rest.find(']') else { continue };
-        for word in rest[open + 1..shut].split('"') {
-            let word = word.trim();
-            if !word.is_empty() {
-                out.push(word.to_string());
-            }
+    let body = gate.lines().skip_while(|l| *l != "lower = [").skip(1);
+    for line in body.take_while(|l| *l != "]") {
+        let line = line.trim();
+        if line.starts_with('#') {
+            continue;
         }
+        out.extend(line.split('"').skip(1).step_by(2).map(str::to_string));
     }
     out
 }
@@ -68,7 +66,7 @@ fn every_row_of_every_compile_vein_is_named_by_a_direction_table() {
     let named = classified_lower(&gate);
     assert!(
         named.len() > 20,
-        "the lower_* bindings parsed to {} names, which means the shape moved \
+        "the lower table parsed to {} names, which means the shape moved \
          and this spec is reading nothing",
         named.len()
     );
