@@ -47,6 +47,9 @@ pub fn split s sep
 # `split` raises on an empty separator, and an answer that can be a raised err
 # may not reach `step_in`, which has no arm for one. The separator here is a
 # character, never empty, and the builtin answers a list and nothing else.
+fn padding? none
+  false
+
 fn padding? c
   length (builtin_split " \t\n\r" c) > 1
 
