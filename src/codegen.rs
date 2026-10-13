@@ -4917,20 +4917,53 @@ impl<'a> Backend<'a> {
         // Work-ahead (#1856): the constants `ahead::lift` made, forced in the
         // order it made them when a fiber first parks. Every binary defines
         // the pool, empty when nothing was lifted, because the runtime calls it.
+        // Each constant is read through `k_ahead_try`, which catches a death
+        // and empties the cells it left half-built; the table it is handed
+        // is every constant's cell beside its ready flag, since the work may
+        // have been building any of them.
         let mut pool = String::new();
+        let mut shims = String::new();
         let lifted: Vec<String> = self
             .program
             .fns
             .iter()
             .filter(|d| d.params.is_empty() && d.name.starts_with(crate::ahead::PREFIX))
-            .map(|d| d.name.clone())
+            .map(|d| dsym(&d.name, 0))
             .collect();
-        for name in &lifted {
-            if self.declares_at(name, 0) {
-                let ret = self.ret_ty(name, 0);
-                let _ = writeln!(pool, "  call tailcc {ret} @{}()", dsym(name, 0));
+        let forced: Vec<&(String, String)> =
+            lifted.iter().filter_map(|sym| self.ahead_cells.iter().find(|(s, _)| s == sym)).collect();
+        if !forced.is_empty() {
+            let n = self.caf_cells.len();
+            let pairs: Vec<String> = self
+                .caf_cells
+                .iter()
+                .map(|c| format!("ptr @{c}, ptr @{c}_ready"))
+                .collect();
+            let _ = writeln!(
+                shims,
+                "@k_ahead_cells = internal constant [{} x ptr] [{}]",
+                2 * n,
+                pairs.join(", ")
+            );
+            for (i, (sym, _)) in forced.iter().enumerate() {
+                let _ = writeln!(
+                    shims,
+                    "define internal void @k_ahead_force_{i}() {{\nentry:\n  \
+                     %v = call tailcc %KValue @{sym}()\n  ret void\n}}"
+                );
+                let _ = writeln!(
+                    pool,
+                    "  %go{i} = call i32 @k_ahead_try(ptr @k_ahead_force_{i}, ptr @k_ahead_cells, i64 {n})\n  \
+                     %on{i} = icmp ne i32 %go{i}, 0\n  \
+                     br i1 %on{i}, label %next{i}, label %done\n\
+                     next{i}:"
+                );
             }
+            let _ = writeln!(shims, "declare i32 @k_ahead_try(ptr, ptr, i64)");
+            let _ = writeln!(pool, "  br label %done\ndone:");
         }
+        self.room(shims.len() + pool.len() + 128);
+        self.body.push_str(&shims);
         let _ = writeln!(self.body, "define void @k_ahead_pool() {{\nentry:\n{pool}  ret void\n}}\n");
         // A library has no entry to call, and a stub calling one that is not
         // there is a symbol the linker would ask about.

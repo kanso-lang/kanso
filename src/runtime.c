@@ -42,6 +42,24 @@
 #include <fcntl.h>
 #include <signal.h>
 
+#ifndef __wasm__
+#include <setjmp.h>
+/* Work-ahead's catch (#1856, ruled 2026-10-11). Pooled work runs while a
+   fiber is parked, ahead of output the program as written prints first, so a
+   death inside it cannot be allowed to end the process there. While the pool
+   runs, every exit in this file comes back to `k_ahead_try` instead; the try
+   empties the cells the work left half-built, and the program as written
+   computes them again where it reads them and fails at that point, as it
+   would have without the pool. */
+static volatile int k_ahead_pooling = 0;
+static sigjmp_buf k_ahead_out;
+__attribute__((noreturn)) static void k_ahead_exit(int code) {
+    if (k_ahead_pooling) siglongjmp(k_ahead_out, 1);
+    exit(code);
+}
+#define exit(c) k_ahead_exit(c)
+#endif
+
 #if defined(__aarch64__)
 #include <arm_neon.h>
 #elif defined(__x86_64__)
@@ -7010,6 +7028,46 @@ KValue k_b_annotate(KValue subject, KValue callback, const char* origin) {
    first bare sleep. */
 void k_ahead_pool(void);
 static int k_ahead_ran = 0;
+
+/* One pooled constant: `force` reads it, which builds its cell. A death on the
+   way jumps back here. The cells table pairs each constant's cell with its
+   ready flag; a cell still holding its builder's blackhole was being built
+   when the work died, and clearing its flag leaves it unbuilt. Answers
+   whether the pool may go on. */
+int k_ahead_try(void (*force)(void), void** cells, long long n) {
+#ifdef __wasm__
+    (void)force; (void)cells; (void)n;
+    return 0;
+#else
+    int depth = k_beat_depth;
+    fflush(stderr);
+    int err = dup(2);
+    int quiet = open("/dev/null", O_WRONLY);
+    if (err >= 0 && quiet >= 0) dup2(quiet, 2);
+    int ok = 1;
+    k_ahead_pooling = 1;
+    if (sigsetjmp(k_ahead_out, 1) == 0) {
+        force();
+    } else {
+        ok = 0;
+        for (long long i = 0; i < n; i++) {
+            KValue* cell = (KValue*)cells[2 * i];
+            char* ready = (char*)cells[2 * i + 1];
+            if (*ready && cell->tag == K_THUNK
+                && ((KThunk*)cell->payload)->site == K_SITE_BLACKHOLE
+                && ((KThunk*)cell->payload)->forced == K_MEMO_NONE) {
+                *ready = 0;
+            }
+        }
+        k_beat_set_depth(depth);
+    }
+    k_ahead_pooling = 0;
+    fflush(stderr);
+    if (err >= 0) { dup2(err, 2); close(err); }
+    if (quiet >= 0) close(quiet);
+    return ok;
+#endif
+}
 static long long k_ahead_now_ms(void) {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
@@ -12927,6 +12985,7 @@ static void k_on_segv(int sig, siginfo_t* info, void* context) {
     (void)context;
     char* at = (char*)info->si_addr;
     if (k_stack_floor && at >= k_stack_floor && at <= k_stack_top) {
+        if (k_ahead_pooling) siglongjmp(k_ahead_out, 1);
         fflush(stdout);
         fprintf(stderr,
                 "%serror[runtime]:%s the program ran out of stack: recursion went "
