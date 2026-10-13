@@ -1967,3 +1967,15 @@ refusal: two owners' arms each more specific in a different position, one of
 them reached through a module that imports it. The ratchet row "a local arm
 that shadows every shape" keeps such calls off the traveling path and turns
 the run test red. ch11 states the rule.
+
+CI's rows, against #1916's: entry_instructions lands on 87,981,735, up
+1,695,428, and library_instructions on 87,561,579, up 1,056,426, the listed
+calls the resolver records and enrollment reads; compile_instructions lands
+on 26,419,302, up 367,003. compile_allocs lands on 15,358, up 760, one list per
+declaration that shades a call, and front_end_visits on compile_corpus
+on 7,990, up eight. The interpreter's run of the corpus allocates more:
+interp_allocs lands on 588,363, up 1,012, and interp_peak_bytes on 692,375, up
+5,216, because a module's declarations carry their lists into the run.
+emit_instructions lands on 7,028,480, up 8,946. interp_instructions falls
+434,783 to 488,304,631. This builds rule 4 of the 2026-10-12 gavel, so the
+floor drops by what it costs.
