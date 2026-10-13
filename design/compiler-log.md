@@ -1983,48 +1983,13 @@ that never imported their owner, and the issue's reproduction, a test file's
 import reaching the module it tests, which #1907 closes by keeping test files
 out of the module.
 
-CI's rows: `compile_instructions` 25,761,215 -> 25,881,551,
-`entry_instructions` 85,207,562 -> 85,381,313 and `library_instructions`
-85,760,222 -> 85,935,582, the cost of handing each file
-of a module its own set of names. The browser compile fell 391,974,060 ->
-391,311,502, emitting 7,016,409 -> 7,013,477 and the interpreter 488,792,115
--> 488,739,816. This change does not touch the code those rows run, so their
-moves are put down to layout, though no run isolated it. The browser fall is
-worth more than the three rises cost, and welfare banks the difference at
-91.11. `compile_allocs` rose 68 to 14,598 and `interp_allocs` 68 to 587,351, and
-the floor drops by what they cost, since this builds a ruled part of the
-language.
-
-## 2026-10-12 — `&`, `|` and `^` mixed without parentheses are refused
-
-From #1893, four ports. The three bit operators share one precedence and
-read left to right, so `a & b | c` is `(a & b) | c` and `a | b & c` is
-`(a | b) & c`. C binds `&` tighter than `^` and `^` tighter than `|`, and
-code carried over from it computed a different number in the second shape
-with no complaint. A chain that mixes two of them is now a syntax error that
-asks for parentheses around the part that goes first. A chain of one
-operator, `1 | 2 | 4`, is unchanged.
-
-The rule that refuses parentheses which group nothing had to learn the case:
-`(a & b) | c` parses the same without them, and without them it is refused.
-Parentheses around a bit chain that meets a different bit operator are now
-kept. Around one that meets the same operator they still group nothing and
-are still refused.
-
-std/sha256 relied on the old reading in three lines, `spun`, `choice` and
-`majority`, each of which meant the C grouping. They gain parentheses, as do
-the micro fixture that copies them and `bitwise_operators`'s chained line.
-Both engines print the same bytes for all three fixtures before and after.
-`tests/golden/errors/bit_operators_mixed_without_parentheses` pins the
-refusal, which main accepts and prints 10 for. The ratchet row "bit operators
-mixed freely" lets the chain through and turns the error corpus red.
-
-CI's rows: `compile_instructions` 25,761,215 -> 25,787,933,
-`entry_instructions` 85,207,562 -> 85,304,017 and `library_instructions`
-85,760,222 -> 85,856,927, the parser's check and the
-parentheses std/sha256 now carries. The browser compile fell 391,974,060 ->
-391,427,375, emitting 7,016,409 -> 7,013,792 and the interpreter 488,792,115
--> 488,788,155. The tab runs the same parser, so nothing in the change
-explains the browser fall; it is put down to layout, though no run isolated
-it. The fall is worth more than the three rises cost, and welfare banks the
-difference at 91.11.
+On CI's rows for the tree merged with #1913, compile_instructions lands on
+25,908,556, entry_instructions on 85,478,744 and library_instructions on
+86,033,220, rises of 27,005, 97,431 and 97,638 for the parser's check and the
+parentheses std/sha256 now carries. browser_compile_instructions lands on
+391,456,491, up 144,989, because the tab runs the same parser.
+emit_instructions falls 2,649 to 7,010,828. The first CI run, before the
+merge, showed the browser compile falling 546,685; the merged tree does not
+repeat it, so that fall was layout and is withdrawn. The refusal is #1893's
+item, which the issue lists as needing no ruling; it stops C-shaped bit code
+computing a different number, so the floor drops by what it costs.
