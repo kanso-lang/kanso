@@ -5053,6 +5053,20 @@ op_arms_boxed = row
 
 rows_c1zzzzzzx7 = text/concat rows_c1zzzzzzx8 [op_arms_boxed]
 
+# A file of a several-file module names only what the module declares and
+# what its own imports bring. The mutation lets every file see every
+# sibling's imports, and a file calling `fold` with no import of std/list
+# checks clean.
+sibling_import = row
+  "a sibling's import seen from every file"
+  true
+  "cargo test --release --test errors_module"
+  "specs (unit, golden, differential)"
+  (breaking "a_sibling_import_seen_from_every_file")
+  no_setup
+
+rows_c1zzzzzzw9 = text/concat rows_c1zzzzzzx7 [sibling_import]
+
 # A type the program declares shadows a builtin of that name (2026-10-12).
 # The mutation drops the checker's arity guard, and `type run` built with
 # `run 1 2 3` is refused with the builtin's count.
@@ -5064,7 +5078,7 @@ own_type_count = row
   (breaking "a_builtin_count_over_a_declared_type")
   no_setup
 
-rows_c1zzzzzzx6 = text/concat rows_c1zzzzzzx7 [own_type_count]
+rows_c1zzzzzzx6 = text/concat rows_c1zzzzzzw9 [own_type_count]
 
 # The checker's literal check lets a declared type shadow a builtin too. The
 # mutation drops it, and `run 1 2 3` is refused for not starting with a string.
