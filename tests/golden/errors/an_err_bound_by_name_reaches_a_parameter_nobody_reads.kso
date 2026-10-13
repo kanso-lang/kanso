@@ -1,0 +1,12 @@
+# The toml port's reduction (#1928). `e` is bound to a call that always
+# raises, so the checker carries the err to `ignores`, which has no arm for
+# it, and refuses the call.
+fn boom n
+  err "boom {n}"
+
+fn ignores x _
+  "ignored body ran with {x}"
+
+pub play =
+  e = boom 1
+  print (ignores 5 e)
