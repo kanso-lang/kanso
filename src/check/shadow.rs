@@ -27,6 +27,9 @@ struct Declared<'a> {
     /// group must match one (arity 0 opts out: a constant's value may be
     /// callable, which only the runtime can arbitrate).
     fn_arities: &'a Arities<'a>,
+    /// The functions the module's other files declare. With this file's own
+    /// they are the arms a traveling call of the same name is offered beside.
+    sibling_fns: &'a HashSet<&'a str>,
     /// How many fields each record type declares. Construction is positional,
     /// so an application of a type name has to hand over all of them.
     type_arity: &'a crate::hash::Map<&'a str, (usize, Option<&'a str>)>,
@@ -355,11 +358,17 @@ impl<'a> Resolver<'a> {
                 // Asked only of a call that could travel or that hands a lambda
                 // on, so a call to a known name pays nothing for the rule.
                 let travels = matches!(&**head, Expr::Ident(name, ..) if self.travels_to(name));
+                let shades = matches!(&**head, Expr::Ident(name, ..) if self.shades(name));
                 let lambdas = args.iter().any(|a| matches!(a, Expr::Lambda { .. }));
-                let carries = (travels || lambdas) && args.iter().any(|a| self.arrived(a));
+                let carries =
+                    (travels || shades || lambdas) && args.iter().any(|a| self.arrived(a));
                 match &**head {
                     Expr::Ident(name, span, _) if carries && travels => {
                         self.travels.push((name.as_str(), *span));
+                    }
+                    Expr::Ident(name, span, _) if carries && shades => {
+                        self.travels.push((name.as_str(), *span));
+                        self.resolve_expr(head);
                     }
                     _ => self.resolve_expr(head),
                 }
@@ -469,6 +478,14 @@ impl<'a> Resolver<'a> {
         !name.contains('/')
             && !self.globals.contains(name)
             && !name.starts_with("builtin_")
+            && !self.locals.iter().any(|l| l.name == name)
+    }
+
+    /// A function the module declares, called on an arrived value: the call
+    /// still reaches the module's own arms, and the arms the value's owner
+    /// wrote join them unless one of the module's has the same shape.
+    fn shades(&self, name: &str) -> bool {
+        (self.declared.fn_arities.declares(name) || self.declared.sibling_fns.contains(name))
             && !self.locals.iter().any(|l| l.name == name)
     }
 

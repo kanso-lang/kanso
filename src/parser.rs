@@ -116,6 +116,7 @@ pub fn parse_play(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
         body,
         span,
         is_pub: false,
+        written_pub: false,
         file: crate::ast::unstamped(),
         synthetic: false,
     });
@@ -199,6 +200,7 @@ pub fn parse_entry(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
         body,
         span,
         is_pub: false,
+        written_pub: false,
         file: crate::ast::unstamped(),
         synthetic: false,
     };
@@ -581,6 +583,7 @@ fn parse_fn(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
     Ok(FnDecl {
         name,
         is_pub,
+        written_pub: is_pub,
         span,
         params,
         body: stmts,
@@ -629,6 +632,7 @@ fn parse_constant(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
         return Ok(FnDecl {
             name,
             is_pub,
+            written_pub: is_pub,
             span,
             params: Vec::new(),
             body: stmts,
@@ -654,6 +658,7 @@ fn parse_constant(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
         return Ok(FnDecl {
             name,
             is_pub,
+            written_pub: is_pub,
             span,
             params: Vec::new(),
             body: vec![Stmt::Expr(expr)],
@@ -674,6 +679,7 @@ fn parse_constant(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
     Ok(FnDecl {
         name,
         is_pub,
+        written_pub: is_pub,
         span,
         params: Vec::new(),
         body: vec![Stmt::Expr(expr)],

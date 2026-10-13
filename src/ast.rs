@@ -416,8 +416,13 @@ pub fn bare_space(qual: &str, name: &str) -> String {
 
 /// A name as a reader may see it: the bare-space mark comes off, so a
 /// sentence about `dep/~join` says `dep/join`, which is what the author
-/// wrote at the call site the sentence points at.
+/// wrote at the call site the sentence points at. A traveling group, `~area`
+/// or a module's `~geo~area`, is spoken as the `area` its calls wrote.
 pub fn spoken(text: &str) -> std::borrow::Cow<'_, str> {
+    if let Some(group) = text.strip_prefix(BARE_MARK) {
+        let short = group.rsplit(BARE_MARK).next().unwrap_or(group);
+        return std::borrow::Cow::Borrowed(short);
+    }
     match text.contains(BARE_MARK) {
         true => std::borrow::Cow::Owned(text.replace(&format!("/{BARE_MARK}"), "/")),
         false => std::borrow::Cow::Borrowed(text),
@@ -457,6 +462,11 @@ pub fn unstamped() -> std::sync::Arc<str> {
 pub struct FnDecl {
     pub name: String,
     pub is_pub: bool,
+    /// Whether the source wrote `pub` on it. `is_pub` is demoted at each
+    /// module boundary, so a dependency's dependency reads private by the
+    /// time the program is whole; an arm travels with its owner's value on
+    /// what its own module said.
+    pub written_pub: bool,
     pub span: Span,
     pub params: Vec<Pattern>,
     pub body: Vec<Stmt>,

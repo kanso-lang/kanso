@@ -295,6 +295,7 @@ pub fn rewrite(program: &mut Program) {
             new_fns.push(FnDecl {
                 name: helper.clone(),
                 is_pub: false,
+                written_pub: false,
                 span,
                 params,
                 body,
@@ -376,6 +377,7 @@ pub fn rewrite(program: &mut Program) {
         new_fns.push(FnDecl {
             name: name.to_string(),
             is_pub: decls.iter().any(|d| d.is_pub),
+            written_pub: decls.iter().any(|d| d.written_pub),
             span,
             params: wrapper_params,
             body: entry,

@@ -5080,7 +5080,20 @@ arm_travels = row
 
 rows_c1zzzzzzw8 = text/concat rows_c1zzzzzzw9 [arm_travels]
 
-rows_c = text/concat rows_c1zzzzzzw8 [itself]
+# A module that writes a name for its own type keeps that arm and takes the
+# owners' arms of every other shape. The mutation keeps its calls off the
+# traveling path, and a circle handed to it finds no arm.
+local_shade = row
+  "a local arm that shadows every shape"
+  true
+  "cargo test --release --test arms_travel"
+  "specs (unit, golden, differential)"
+  (breaking "a_local_arm_shadows_every_shape")
+  no_setup
+
+rows_c1zzzzzzw7 = text/concat rows_c1zzzzzzw8 [local_shade]
+
+rows_c = text/concat rows_c1zzzzzzw7 [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

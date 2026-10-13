@@ -1183,9 +1183,10 @@ pub fn check_arm_ties(program: &Program, diags: &mut Vec<Diagnostic>) {
                         Diagnostic::new(
                             "dispatch",
                             format!(
-                                "these `{name}` arms tie: each is the more specific \
+                                "these `{}` arms tie: each is the more specific \
                              one somewhere, and a call could match both — write \
-                             the arm that is most specific in every position"
+                             the arm that is most specific in every position",
+                                crate::ast::spoken(name)
                             ),
                             b.span,
                         )
@@ -1382,10 +1383,15 @@ pub fn check_file(program: &Program, extern_globals: &HashSet<&str>) -> Vec<Diag
         &HashSet::default(),
         &HashSet::default(),
         &[],
+        &HashSet::default(),
         &mut travels,
     );
+    // A call of a function the file declares was resolved where it stands.
+    let own: HashSet<&str> = program.fns.iter().map(|f| f.name.as_str()).collect();
     for (name, span) in travels {
-        diags.push(Diagnostic::new("name", format!("unknown name `{name}`"), span));
+        if !own.contains(name.as_str()) {
+            diags.push(Diagnostic::new("name", format!("unknown name `{name}`"), span));
+        }
     }
     diags.sort_by_key(|d| (d.span.line, d.span.col));
     diags
@@ -1400,6 +1406,7 @@ pub fn check_file_shadow(
     shadowable: &HashSet<String>,
     sibling_types: &HashSet<String>,
     sibling_decls: &[&crate::ast::TypeDecl],
+    sibling_fns: &HashSet<&str>,
     travels: &mut Vec<(String, Span)>,
 ) -> Vec<Diagnostic> {
     let mut diags = Vec::new();
@@ -1433,8 +1440,12 @@ pub fn check_file_shadow(
         .filter(|t| t.members.is_empty() && (t.parent.is_some() || !t.fields.is_empty()))
         .map(|t| (t.name.as_str(), (t.fields.len(), t.parent.as_deref())))
         .collect();
-    let declared =
-        Declared { fn_arities: &fn_arities, type_arity: &type_arity, types: declared_type_names };
+    let declared = Declared {
+        fn_arities: &fn_arities,
+        sibling_fns,
+        type_arity: &type_arity,
+        types: declared_type_names,
+    };
     // One vector of locals for the whole file. Every body leaves it empty, and
     // a fresh one per declaration grew from nothing each time.
     let mut locals = Vec::new();
@@ -2014,6 +2025,11 @@ struct Arities<'a> {
 }
 
 impl<'a> Arities<'a> {
+    /// Whether this file declares a function of that name.
+    fn declares(&self, name: &str) -> bool {
+        self.ranges.contains_key(name)
+    }
+
     /// Count the arms per name, turn the counts into starts, then place each
     /// declaration's arity at its name's cursor, skipping one already there.
     /// The counts bound the ranges from above, so a name declared three times
