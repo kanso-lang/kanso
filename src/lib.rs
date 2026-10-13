@@ -1696,7 +1696,9 @@ pub fn merge_owned(ty: &ast::TypeDecl) -> bool {
 /// `merge u { "b":2 }` becomes a call to a group with one arm per record the
 /// calling module declares that has every field named:
 ///
-///     fn Merge_1b (t Kept0 _ Kept2) Given0 = t Kept0 Given0 Kept2
+/// ```text
+/// fn Merge_1b (t Kept0 _ Kept2) Given0 = t Kept0 Given0 Kept2
+/// ```
 ///
 /// so every engine runs a dispatch and a construction it already has. One
 /// group per module and set of names, shared by every call that names them.
