@@ -1939,3 +1939,23 @@ output lists with `concat`, so it gains more: encode_allocs 5,327,424 to
 encode_push_mut_fast up to 34,874. encode_buf_reuse lands on 2,386, down 726,
 because lists that were copied and freed each lap, leaving a buffer for the
 next to reuse, now stay where they are. The instruction rows come from CI.
+
+CI's rows. The runtime gains `k_b_concat_mut`, 3,104 bytes of text in every
+benchmark. `work_runbench` lands on 1,170,036,819 (+1,739) and
+`work_digestbench` on 5,605,158 (+2,040), the doubling growth's copies;
+`work_encodebench` falls 99,808 to 2,398,273,418 and `work_livebench` 399 to
+1,474,874,672, `work_oneshot` rises 161 to 13,227,091. The compiler carries
+the new site: `compile_instructions` 25,846,237 (-35,314), `entry_instructions`
+85,273,377 (-107,936), `library_instructions` 85,828,356 (-107,226),
+`emit_instructions` 7,011,826 (-1,651), `codegen_instructions_dev` 119,010,910
+(+8,081), `codegen_instructions_release` 454,481,233 (+301,820), and
+`browser_compile_instructions` 391,400,519 (+89,017). The interpreter's
+in-place extend reads `interp_instructions` 488,691,869 (-47,947),
+`interp_allocs` 587,352 (+1) and `interp_peak_bytes` 689,271 (+2,112).
+digestbench and runbench each emit one more line.
+
+On main's run program the objective sees the compile cost and none of the
+fix, and welfare falls below the floor by less than a hundredth. The fold
+joins the run program as its `stack` phase in kanso#1925, measured before this
+fix under the corpus-first gavel; once that lands this branch takes main and
+scores against it.
