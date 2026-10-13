@@ -64,6 +64,8 @@ a ride: 3.963325623765981</code></pre>
 
 <p>a value the file made itself carries nothing extra. <code>area 3</code> in the report module is an unknown name, because nothing the module declares or imports is called <code>area</code>. an arm travels only from the module that owns the type, so a module that does not own <code>circle</code> cannot add an arm that goes wherever circles go. checked on its own, the report module accepts <code>area c</code> on a parameter. the program that hands it a circle is where the compiler finds geo's arm, or refuses the call when no owner wrote one.</p>
 
+<p>a module may write the same name for a type of its own. if the report module declares a <code>square</code> and an <code>area</code> for it, a square it is handed takes that arm and a circle it is handed still takes geo's. a local arm hides only an owner's arm of the same shape, one that matches the same types in the same places. when two owners write arms that are equally specific for one call, as when one matches its own type first and the other matches its own type second, the compiler refuses the pair and asks for an arm that is the more specific everywhere.</p>
+
 <h2>privacy holds at the boundary</h2>
 
 <p>inside a module, files see everything; <code>pub</code> only matters to outsiders. reach for private machinery across an import and the boundary answers:</p>
