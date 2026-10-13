@@ -167,11 +167,17 @@ pub fn apply_wrappers(program: &mut Program, alias: &HashMap<String, HashMap<usi
         return;
     }
     for decl in &mut program.fns {
+        // A shaded call keeps its name until the root of the program decides
+        // whether an owner's arm joins its group.
+        let shades = decl.shades.as_deref();
         for stmt in &mut decl.body {
             let expr = match stmt {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
             };
-            rewrite(expr, alias);
+            match shades {
+                None => rewrite(expr, alias),
+                Some(shades) => rewrite_around(expr, alias, shades),
+            }
         }
     }
 }
@@ -189,6 +195,27 @@ fn rewrite(expr: &mut Expr, alias: &HashMap<String, HashMap<usize, String>>) {
         }
     }
     for_each_child_mut(expr, &mut |child| rewrite(child, alias));
+}
+
+/// `rewrite` for a body that holds shaded calls, which it leaves alone.
+fn rewrite_around(
+    expr: &mut Expr,
+    alias: &HashMap<String, HashMap<usize, String>>,
+    shades: &[(crate::diag::Span, Name)],
+) {
+    if let Expr::App { head, args, .. } = expr {
+        if let Expr::Ident(name, span, _) = head.as_ref() {
+            let builtin = alias.get(name.as_str()).and_then(|a| a.get(&args.len()));
+            if let Some(builtin) = builtin.filter(|_| !shades.iter().any(|(at, _)| at == span)) {
+                **head = Expr::Ident(
+                    Name::new(&builtin.clone()),
+                    *span,
+                    crate::ast::Resolution::default(),
+                );
+            }
+        }
+    }
+    for_each_child_mut(expr, &mut |child| rewrite_around(child, alias, shades));
 }
 
 /// Every direct sub-expression, mutably. This was written when

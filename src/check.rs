@@ -1183,9 +1183,10 @@ pub fn check_arm_ties(program: &Program, diags: &mut Vec<Diagnostic>) {
                         Diagnostic::new(
                             "dispatch",
                             format!(
-                                "these `{name}` arms tie: each is the more specific \
+                                "these `{}` arms tie: each is the more specific \
                              one somewhere, and a call could match both — write \
-                             the arm that is most specific in every position"
+                             the arm that is most specific in every position",
+                                crate::ast::spoken(name)
                             ),
                             b.span,
                         )
@@ -1382,25 +1383,39 @@ pub fn check_file(program: &Program, extern_globals: &HashSet<&str>) -> Vec<Diag
         &HashSet::default(),
         &HashSet::default(),
         &[],
+        &HashSet::default(),
         &mut travels,
     );
-    for (name, span) in travels {
-        diags.push(Diagnostic::new("name", format!("unknown name `{name}`"), span));
+    // A call of a function the file declares was resolved where it stands.
+    for (name, span, shaded) in travels {
+        if shaded.is_none() {
+            let name = name.as_str();
+            diags.push(Diagnostic::new("name", format!("unknown name `{name}`"), span));
+        }
     }
     diags.sort_by_key(|d| (d.span.line, d.span.col));
     diags
 }
 
+/// A call on a value a function was handed: the name, where it stands, and for
+/// a shaded call the index of its declaration.
+pub type Travel = (crate::name::Name, Span, Option<usize>);
+
 /// Bare-enrolled imports (synthetic clones) are shadowable: a local binding
 /// named like one is the local's to keep — the enrollment must never make
 /// every stdlib export a forbidden binding name.
+///
+/// `travels` gets each call made on a value a function was handed: of a name
+/// the file cannot see, which travels, or of a function the module declares,
+/// which is shaded and carries the index of the declaration it sits in.
 pub fn check_file_shadow(
     program: &Program,
     extern_globals: &HashSet<&str>,
     shadowable: &HashSet<String>,
     sibling_types: &HashSet<String>,
     sibling_decls: &[&crate::ast::TypeDecl],
-    travels: &mut Vec<(String, Span)>,
+    sibling_fns: &HashSet<&str>,
+    travels: &mut Vec<Travel>,
 ) -> Vec<Diagnostic> {
     let mut diags = Vec::new();
     check_type_order(program, &mut diags);
@@ -1433,14 +1448,18 @@ pub fn check_file_shadow(
         .filter(|t| t.members.is_empty() && (t.parent.is_some() || !t.fields.is_empty()))
         .map(|t| (t.name.as_str(), (t.fields.len(), t.parent.as_deref())))
         .collect();
-    let declared =
-        Declared { fn_arities: &fn_arities, type_arity: &type_arity, types: declared_type_names };
+    let declared = Declared {
+        fn_arities: &fn_arities,
+        sibling_fns,
+        type_arity: &type_arity,
+        types: declared_type_names,
+    };
     // One vector of locals for the whole file. Every body leaves it empty, and
     // a fresh one per declaration grew from nothing each time.
     let mut locals = Vec::new();
-    for decl in &program.fns {
+    for (index, decl) in program.fns.iter().enumerate() {
         check_fn_body_shadow(
-            decl,
+            (index, decl),
             &globals,
             &mut diags,
             shadowable,
@@ -2014,6 +2033,11 @@ struct Arities<'a> {
 }
 
 impl<'a> Arities<'a> {
+    /// Whether this file declares a function of that name.
+    fn declares(&self, name: &str) -> bool {
+        self.ranges.contains_key(name)
+    }
+
     /// Count the arms per name, turn the counts into starts, then place each
     /// declaration's arity at its name's cursor, skipping one already there.
     /// The counts bound the ranges from above, so a name declared three times

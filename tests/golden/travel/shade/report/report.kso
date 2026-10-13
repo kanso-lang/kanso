@@ -1,0 +1,13 @@
+# This module writes `area` for its own square and never imports geo. A
+# square it is handed takes its own arm, and a circle takes geo's.
+pub type square
+  side
+
+pub fn make side
+  square side
+
+pub fn area (square side)
+  side * side
+
+pub fn one x
+  "{area x}"
