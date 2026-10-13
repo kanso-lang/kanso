@@ -844,5 +844,5 @@ indexbench text=277705
 scanbench text=448985
 digestbench text=319241
 readbench text=278489
-livebench text=353657
-runbench text=626473
+livebench text=348025
+runbench text=622857

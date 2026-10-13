@@ -245,5 +245,5 @@ scanbench defines=318 calls=3049 branches=2948 lines=24996
 indexbench defines=19 calls=67 branches=47 lines=705
 digestbench defines=132 calls=936 branches=949 lines=7996
 readbench defines=20 calls=69 branches=44 lines=727
-livebench defines=143 calls=1243 branches=1262 lines=11936
-runbench defines=702 calls=6685 branches=6034 lines=51898
+livebench defines=139 calls=1227 branches=1263 lines=11818
+runbench defines=718 calls=6790 branches=6100 lines=52537
