@@ -2066,6 +2066,6 @@ CI's rows, on the tree merged with #1900: the shadow check costs each compile
 a little, compile_instructions 25,768,040 (+6,825), entry_instructions
 85,218,735 (+11,173) and library_instructions 85,771,418 (+11,196);
 browser_compile_instructions rises 3,718 to 391,977,778 and
-interp_instructions 108. emit_instructions falls 1,084 to 7,015,325. The
+interp_instructions 108 to 488,792,223. emit_instructions falls 1,084 to 7,015,325. The
 welfare floor drops to 91.10941 under the rule that building the language is
 priced at what it costs.
