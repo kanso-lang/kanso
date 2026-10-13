@@ -1,0 +1,3 @@
+import "./tally"
+
+print "{tally/total}"

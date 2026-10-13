@@ -541,10 +541,24 @@ scan_counters = row
 # proved can fail. scan_counters above is the other half of the same lesson from
 # the same day: it had this row from the first and no CI step ran the gate at
 # all, so the ratchet could break something the normal path never checked.
+#
+# The chain-head mutation it was written with stopped moving readbench, whose
+# loop now carries nothing across its rewind, and the row ran blind
+# (2026-10-12). readbench is now broken where its loop gets its beat, and the
+# chain-head mutation moved to oneshot, which reads the same chain and still
+# sees it.
 read_counters = row
-  "a chain head that names a declaration, answered by the top set"
+  "an allocating loop read as pure"
   true
   (gating "read_counters")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "an_allocating_loop_read_as_pure")
+  benchmarks
+
+oneshot_counters = row
+  "a chain head that names a declaration, answered by the top set"
+  true
+  (gating "oneshot_counters")
   "cost goldens (deterministic ratchet, no clocks)"
   (breaking "a_bang_read_loses_its_beat")
   benchmarks
@@ -1751,7 +1765,9 @@ rows_a = text/concat rows_a0 [mem_shapes release_profile]
 
 rows_b1a = [decode_counters escape_counters pend_counters digest_counters]
 
-rows_b1z = [thunk_walk scan_counters read_counters compile_libraries]
+rows_b1y = [thunk_walk scan_counters read_counters compile_libraries]
+
+rows_b1z = text/concat rows_b1y [oneshot_counters]
 
 rows_b1 = text/concat rows_b1a (text/concat rows_b1z [live_counters clean_run])
 
@@ -4925,7 +4941,20 @@ leader_slots = row
   (breaking "a_leaders_slot_chosen_at_run_time")
   release
 
-rows_c1zzzzzzy3 = text/concat rows_c1zzzzzzy4 [lone_arm leader_slots]
+rows_c1zzzzzzy3 = text/concat rows_c1zzzzzzye [lone_arm leader_slots]
+
+# A built binary run directly reports a recursion deeper than its stack the
+# way the interpreter does (2026-10-12). The mutation leaves the stack
+# unwatched, and the binary dies by the bare signal.
+stack_watch = row
+  "a binary that does not watch its stack"
+  true
+  "cargo test --release --test a_built_binary_names_its_stack_overflow"
+  "specs (unit, golden, differential)"
+  (breaking "a_binary_that_does_not_watch_its_stack")
+  release
+
+rows_c1zzzzzzye = text/concat rows_c1zzzzzzy4 [stack_watch]
 
 # A push, put or append the analysis proved in place writes through the
 # container's pointer and hands back the `Rc` it was given, where it used to
@@ -4942,6 +4971,19 @@ kept_box = row
 
 rows_c1zzzzzzy2 = text/concat rows_c1zzzzzzy3 [kept_box]
 
+# A runtime diagnostic names an err it was handed (2026-10-12). The mutation
+# renders it the way a program does, which hands the err back unrendered,
+# and native crashes and reports running out of stack.
+err_shown = row
+  "a diagnostic handed an unrendered err"
+  true
+  "cargo test --release --test golden runtime_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_diagnostic_handed_an_unrendered_err")
+  release
+
+rows_c1zzzzzzyd = text/concat rows_c1zzzzzzy2 [err_shown]
+
 # A native build emits only the groups its entry reaches, the walk the tab
 # has made since 2026-10-08 (2026-10-09). The mutation empties the walk's
 # answer, every imported group is emitted and pruned afterwards, and the emit
@@ -4954,7 +4996,21 @@ native_reached = row
   (breaking "a_native_build_emits_every_group")
   release
 
-rows_c1zzzzzzy1 = text/concat rows_c1zzzzzzy2 [native_reached]
+rows_c1zzzzzzy1 = text/concat rows_c1zzzzzzyd [native_reached]
+
+# kanso test runs its tests on the deep thread `run --interp` uses, so a test
+# that recurses too far fails with the depth diagnostic and the rest still
+# report (2026-10-12). The mutation gives the thread 8 MiB, and Rust's own
+# overflow aborts the run.
+test_stack = row
+  "a test run on the main stack"
+  true
+  "cargo test --release --test test_verb"
+  "specs (unit, golden, differential)"
+  (breaking "a_test_run_on_the_main_stack")
+  no_setup
+
+rows_c1zzzzzzy0 = text/concat rows_c1zzzzzzy1 [test_stack]
 
 # A record goes back to its caller in two words only when every arm of its
 # group answers that record or a failure (2026-10-09). The mutation skips the
@@ -4968,9 +5024,50 @@ parsed_arms = row
   (breaking "a_group_answering_other_values_goes_by_value")
   no_setup
 
-rows_c1zzzzzzx9 = text/concat rows_c1zzzzzzy1 [parsed_arms]
+rows_c1zzzzzzx9 = text/concat rows_c1zzzzzzy0 [parsed_arms]
 
-rows_c = text/concat rows_c1zzzzzzx9 [itself]
+# A record on either side of an operator goes to the program's own arms, so
+# inference adds what they answer (2026-10-12). The mutation reads the
+# operator as arithmetic alone, release assumes a float where a record comes
+# back, and the micro fixture prints its record through the number arm.
+op_arms_answer = row
+  "an operator answering arithmetic alone"
+  true
+  "cargo test --release --test golden micro_corpus_survives_a_release_build"
+  "specs (unit, golden, differential)"
+  (breaking "an_operator_answering_arithmetic_alone")
+  release
+
+rows_c1zzzzzzx8 = text/concat rows_c1zzzzzzx9 [op_arms_answer]
+
+# An operator's arms stay boxed now that inference widens their parameters
+# (2026-10-12). The mutation lets a proven-int parameter go unboxed, and the
+# wasm translator refuses four operator fixtures.
+op_arms_boxed = row
+  "an operator arm given an unboxed int"
+  true
+  "cargo test --release --test ir_to_wasm"
+  "specs (unit, golden, differential)"
+  (breaking "an_operator_arm_given_an_unboxed_int")
+  release
+
+rows_c1zzzzzzx7 = text/concat rows_c1zzzzzzx8 [op_arms_boxed]
+
+# A file of a several-file module names only what the module declares and
+# what its own imports bring. The mutation lets every file see every
+# sibling's imports, and a file calling `fold` with no import of std/list
+# checks clean.
+sibling_import = row
+  "a sibling's import seen from every file"
+  true
+  "cargo test --release --test errors_module"
+  "specs (unit, golden, differential)"
+  (breaking "a_sibling_import_seen_from_every_file")
+  no_setup
+
+rows_c1zzzzzzw9 = text/concat rows_c1zzzzzzx7 [sibling_import]
+
+rows_c = text/concat rows_c1zzzzzzw9 [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

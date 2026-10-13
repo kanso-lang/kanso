@@ -1197,7 +1197,26 @@ fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut Env<'a>) -> Set {
             let a = eval_expr(ctx, lhs, env);
             let b = eval_expr(ctx, rhs, env);
             let fails = (a & FAIL) | (b & FAIL);
-            match *op {
+            // A record on either side goes to the operator's own arms, as
+            // native's `emit_binop` and the interpreter both send it, so the
+            // arms see these operands and their answers are this one's too.
+            // Without it, `a + b` over a float or a record read as a float
+            // alone, and release assumed the tag of a record that came back.
+            let armed = match ctx.groups.get(&(*op, 2)) {
+                Some(&(start, end, _)) if (a | b) & REC != 0 => {
+                    let mut out = 0;
+                    for k in start as usize..end as usize {
+                        let i = ctx.group_members[k];
+                        widen_param(ctx, i, 0, a);
+                        widen_param(ctx, i, 1, b);
+                        mark_reader(ctx, i);
+                        out |= ctx.returns[i];
+                    }
+                    out
+                }
+                _ => 0,
+            };
+            let builtin = match *op {
                 // int op int stays int; any float operand widens the other,
                 // so the result is float
                 "+" | "-" | "*" => fails | numeric_result(op, a, b),
@@ -1211,7 +1230,8 @@ fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut Env<'a>) -> Set {
                 // operator compares, and a comparison answers true or false
                 "&" | "|" | "^" => fails | INT,
                 _ => BOOL | fails,
-            }
+            };
+            builtin | armed
         }
         Expr::Guard { cond, early, rest, .. } => {
             let c = eval_expr(ctx, cond, env);

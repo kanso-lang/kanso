@@ -100332,3 +100332,366 @@ The ratchet's tenure-sharing row gated on the run program's counters, and with
 one tenure block there instead of six the mutation stopped moving them. It now
 gates on the mem corpus, where
 `an_inner_beat_opens_its_tenure_in_the_block_outside` goes red.
+
+## 2026-10-10 — a map's view belongs to the beat that frees the map
+
+A map read by key, rendered, compared or measured gets a sorted view, and the
+view is malloc'd. It is released when the beat whose rewind reclaims the map's
+header rewinds. Until today the view was registered for release only when the
+map was born in the innermost beat. A map built in an outer loop and read
+inside an inner one was never registered, so its view was never freed. mal's
+evaluator builds its environments in its tail cycle and looks symbols up one
+region call further in, and at two hundred thousand iterations it built
+209,210 views and freed 10,519.
+
+`k_viewreg_own` now asks each depth from the innermost outward whether its
+rewind reclaims the header, and registers the view at the first that does. A
+header outside every arena block, in a carry buffer or a tenure block,
+registers at the innermost depth, which rewinds no later than that storage is
+released. A frozen constant keeps its view for the life of the program.
+
+That alone made mal fifteen times slower. The lap carry stages whenever a
+registry at its depth holds anything, and mal's views now registered at the
+cycle's own depth, so every edge staged again. The view registry no longer
+forces a stage. A view is never larger than its map, and the map is either
+garbage the drift test already counts or still live, so a skipped lap holds no
+more view memory than the test bounds.
+
+mal now holds 9 MB at two hundred thousand iterations and at four hundred
+thousand, where lap carry alone held 21 MB and 39 MB. It runs in 0.63 s and
+1.26 s, the same as lap carry alone.
+
+Two fixtures pin the two halves.
+`a_view_built_one_beat_down_is_freed_by_the_beat_that_built_its_map` builds
+twenty thousand views one beat below their maps and frees all of them; with
+the old registration it frees none and holds 2,240,000 bytes of views.
+`a_cycle_that_sorts_a_map_each_step_still_waits_for_its_lap` copies 6,224
+bytes in its carried rewinds; letting the view registry force a stage copies
+3,200,304.
+Merged with main's constant storage it copies 6,128, since the constants it
+names are no longer copied, and its one tenure block is gone. The evaluator
+fixture's lap rule copies 3,360 where it copied 3,488, for the same reason.
+
+The native cost veins and the lazy tier do not move: no benchmark builds a
+view one beat below its map. The tab's run does. `bench/interp_corpus` builds
+1,320 views and now frees them all, so `browser_run_instructions` rises
+517,253 to 34,038,136 and `browser_run_peak_bytes` falls 131,072 to 1,179,648.
+Natively the same corpus costs 336,930 more instructions, about 240,000 of
+them in glibc's `free`. The browser side of welfare rises from 83.42 to 83.55.
+A fast path that registered a head-block header without the walk cost more on
+this corpus than it saved, because its maps sit below the innermost mark, and
+was dropped.
+
+CI's rows for the three pieces together, against main. The work rows that fall
+are `work_runbench`, 1,129,603,831 to 1,127,640,368, and `work_basket`,
+32,382,758 to 30,339,466. The ones that rise are `work_encodebench` by 2,866 to
+2,384,341,029, `work_oneshot` by 2,810 to 13,030,103, `work_indexbench` by 514
+to 2,459,021, `work_scanbench` by 309 to 282,024 and `work_livebench` by 3,146
+to 1,473,488,334: none of them carries a cluster, and the rise is the larger
+runtime each binary links. The run program's tenure falls with its staging:
+`run_ten_blocks` from 6 to 1, `run_ten_frees` from 6 to 1 and
+`run_ten_handups` from 2 to 1. `text` grows
+1,072 bytes in every binary, to 4,624,574 in all. `codegen_instructions_dev`
+rises 8,776 to 118,876,072, `compile_instructions` 25,851 to 25,858,191,
+`entry_instructions` 79,015 to 85,514,540 and `library_instructions` 79,237 to
+86,067,450, for the slot checks and the lambda-edge marking in `beat.rs`.
+`codegen_instructions_release` falls 15,674 to 453,772,164, `emit_instructions`
+4,229 to 7,058,107 and `interp_instructions` 47,893 to 488,865,227. The tab
+reads `browser_compile_instructions` 390,305,438, up 2,122,974, with
+`browser_compile_peak_bytes` up 1,998 to 675,725, `browser_run_instructions` up
+518,590 to 34,038,136 and `browser_run_peak_bytes` down 131,072 to 1,179,648.
+Welfare rises from 90.25801113 to 90.26974705, and the floor follows it.
+
+While building the fixtures I found that a file imported from a
+subdirectory, `import "./lib/fx"`, loses its cycle's rewind: the evaluator
+fixture above holds 4 MiB and never rewinds that way, and 1 MiB with 40,002
+rewinds imported as `./fx`. Self-loops are unaffected. main reproduces it.
+That is the next piece.
+
+## 2026-10-10 — a survival question about an old block asks an index
+
+The lap carry made the lox port's F18 loop quadratic. Its 40,000 passes took
+2.5 s on main and 30.6 s on this branch, and 80,000 took 152 s. Memory was the
+same on both, 2.3 GB at 40,000 passes, because lox's heap only grows; F18
+itself is still open.
+
+The time was in the survival checks. `k_survives` and `k_where` answer "does
+this pointer outlive the rewind" by finding the arena block that holds it, and
+they found it by walking the chain of blocks from the mark's block towards the
+oldest. Lox holds every object it ever made, so by pass 10,000 the chain was
+375 one-megabyte blocks long, and every check on an old object walked most of
+it. Main asked few of those questions in this program. The lap carry admits
+the clusters lox's evaluator runs in, so each stage and each carried pop asks
+one for every carried node, and the walk grew with the heap. Rebuilding with
+64 MiB blocks put the 40,000 passes at 1.9 s, which isolated the walk.
+
+The live chain is now also kept sorted by address, and each block's header
+records its position in the chain. Once the chain is longer than eight blocks
+the two questions binary-search the index and compare positions. Shorter
+chains keep the walk, so the programs in the benchmark corpus, none of which
+reach eight blocks, take the same path as before. Lox runs 10,000, 20,000 and
+40,000 passes in 0.47, 0.97 and 2.12 s, against main's 0.58, 1.26 and 2.48.
+mal's 200,000 iterations still run in 0.66 s at 9 MB.
+
+`chain_finds` counts the questions the index answered, and is zero on every
+benchmark. `tests/golden/mem/a_long_chain_answers_survival_from_its_index`
+keeps fifteen blocks of rows live under a carrying loop and reads 477,919;
+raising the threshold past any chain reads 0 with every other counter equal,
+and the ratchet row "a long chain walked instead of searched" makes that
+mutation.
+
+CI's rows for the branch with the index in it, after main's constant storage
+merged in, against main: `work_runbench` 1,131,250,979 to 1,129,336,309,
+`codegen_instructions_release` 453,707,138 to 453,867,566,
+`codegen_instructions_dev` 118,896,762 to 118,918,413 and `emit_instructions`
+7,062,299 to 7,058,075. The browser compiles in 390,304,777 instructions, up
+2,122,974, and `browser_run_instructions` lands on 34,089,215, up 596,152. Every
+benchmark's machine code is about 7,900 bytes larger than main's, so `text`
+rises to 4,722,910 in all. Moving the index's two branches out of line saved
+960 of those bytes and was not kept, so most of the growth is somewhere other
+than the index; where has not been measured. The book's two counters samples
+gain the `chain_finds=0` line.
+
+Nine of the fourteen work rows rise, and `runbench`, `pendbench`, `widebench`,
+`deepbench` and `basket` fall. The rises are small: `work_oneshot` lands on
+13,207,117, up 30,630, `work_encodebench` on 2,383,882,573, `work_jsonbench` on
+860,558,623, `work_livebench` on 1,472,862,368, `work_digestbench` on
+5,561,968, `work_indexbench` on 2,458,407, `work_scanbench` on 269,663,
+`work_readbench` on 4,577,482 and `work_escapebench` on 39,045,847. None of
+those nine runs a loop the lap carry admits, and what moved them has not been
+isolated. `basket` falls by 1,969,638 to 30,405,476, and its survivor slots
+drop from 16,002 to 6 in the same change. Welfare rises to 90.26 and the floor is raised to hold it.
+
+## 2026-10-10 — a directory called lib is an ordinary directory
+
+The beat analysis keeps an imported library's loops out of the carry tier,
+because a shared driver threads its caller's invariant source through the loop
+and carrying it would copy an unbounded value at every rewind. It recognised a
+library by its declaration's file name, which had to begin `std/` or `lib/`.
+Shipped modules are filed as `std/<module>/<file>`. Nothing shipped begins
+`lib/`, and every user directory called `lib` does, so a package kept in one
+compiled to a program that never reclaimed a block. The 2026-08-31 entries
+found this, measured it at five times the peak, and pinned it in
+`tests/a_program_is_not_its_directory.rs` with the instruction to delete the
+assertion when the two directories agreed.
+
+The `lib/` arm is gone and the `std/` arm stays. The arm had one user in the
+tree: the json beat unit test compiled `lib/json` as a root, and the arm made
+that root look like an installed module. The test now reads the library
+through `import "std/json"`, which is how a program meets it, and it still goes
+red when the `std/` arm is removed: `json/array_open` and `json/obj_open`
+become beats. The spec now asserts that `lib/app` and `elsewhere/app` both
+peak at 1,048,576, and with the arm put back the `lib/` side reads 5,242,880.
+
+I found it while building the fixtures for the lap carry. The evaluator
+fixture, imported as `./lib/fx`, held 4 MiB and never rewound.
+
+The tab compiler reads 661 fewer instructions, `browser_compile_instructions`
+388,181,803. CI moved one other row: `emit_instructions` falls 37, to
+7,062,299. Both codegen tiers held. The ratchet's mutation for this filter
+patched the old two-arm line, so it now patches the one-arm line.
+
+## 2026-10-10 — a constant lives in storage the carry knows is permanent
+
+A map built before a carrying loop came out of the loop with keys the next
+round's rewind freed. `tests/golden/micro/a_map_kept_across_a_carried_loop_keeps_its_keys`
+is the shape: `spin` carries a map made by its caller, an outer loop calls
+`spin` four times, and native printed `<none> <none>` where the interpreter
+prints both values. Main has the defect; it does not depend on the lap carry.
+
+The keys were string literals. The runtime builds a literal once, in malloc'd
+storage, and hands the same string out for the rest of the run, and does the
+same for one-character strings, for marker records with no fields and for
+closures over nothing. None of that storage lies in an arena block, and the
+copy walk answers "does this survive the rewind" for an outside pointer by
+asking whether it is a short token, a tenure block or a frozen CAF. A literal
+is none of those, so the walk took it for something it had to rescue, which
+wasted a copy at every stage and did damage in one place. When a surviving
+node points at something that does not survive, the walk leaves the node
+where it is, copies what it points at, and settles the copy in the
+current loop's region. The map's keys moved into `spin`'s region, the map
+stayed in its caller's, and the outer loop's next rewind freed the keys under
+it.
+
+`k_alloc_const` now hands those constants out of chunks registered with the
+frozen ranges, so the walk counts them as surviving, and the walk stops at
+a node in one of those chunks without asking about its interior, since nothing
+writes to a constant after it is built. The one-character and wide caches
+keep their bytes inline, where they had a second `malloc`. A frozen CAF is
+left out of the short stop: a proven in-place push can move a frozen list's
+items out of frozen storage, and pendbench does exactly that, so a frozen list
+still gets the repair it needs. Bignums moved to permanent storage stay on
+`k_alloc_perm`, because they are the run's data and every outside pointer is
+checked against the frozen ranges.
+
+This is also why grammar_check died in `k_deep_copy` on the lap carry branch
+with the growth lookthrough taken out, the crash the 2026-10-10 lap carry
+entry left unexplained. The capture loop carried `caps`, a map from the
+grammar file whose keys `"1"` to `"4"` come from the one-character cache.
+The first stage repaired the map by moving its keys into the loop's region,
+the region was reclaimed, and the next stage copied a key whose header the
+arena had reused. With constants registered, that build of grammar_check
+passes with the lookthrough removed. The lookthrough stays, because it
+refuses a cluster for what growth would cost.
+
+Every runtime counter that moved fell. `evac_allocs` and `evac_bytes` fall on
+every benchmark, the run program's by 14,328 copies and 229,376 bytes, and
+`carry_dedup` goes to zero wherever it was counting the same literal reached
+twice. The cohort pin in `tests/cohort.rs` falls 96 bytes, to 800,672, because
+three of the constants it used to copy are no longer copied.
+
+The chunks start at 4 KiB and double up to 64 KiB. The first build opened one
+64 KiB chunk, and CI showed the browser run taking one more 64 KiB page for it,
+1,310,720 to 1,376,256 bytes. Most programs hold a few dozen constants: the
+run program has seventy, in one chunk. With the small first chunk the browser
+peak stays at 1,310,720 and its run falls 26,483 instructions.
+
+The fix costs welfare 0.0065, which the floor gives up because the defect was
+a miscompile. `runbench` rises 1,647,148 instructions, 0.15%. The copy walk
+itself got cheaper by about 2.8 million: `k_copy_size`, `k_deep_copy`,
+`k_copy_map_put` and `k_copy_alloc` together. What rose is `realloc`, under
+`k_buf_perm_regrow`. That function makes the same 3,872 calls on both sides,
+and they cost 561,440 instructions before and 3,248,608 after, because realloc
+now copies buffers that it used to extend in place. The run makes seventy fewer
+small mallocs, which changes where glibc puts each accumulator's buffer. The
+location of the cost is measured. Why glibc places the buffers differently is
+not established. Opening the constant chunk before anything else is allocated
+left the count unchanged to the instruction, so the chunk does not sit in the
+way. `encodebench` and `livebench` fall about 375,000 each with the smaller
+chunk, and `deepbench` falls 4.4 million. Release codegen falls 80,700
+instructions and dev codegen rises 29,466; each benchmark's text grows 192
+bytes.
+
+By key: `work_runbench` lands on 1,131,250,979, `work_oneshot` on 13,176,487,
+`work_jsonbench` on 860,548,891, `work_escapebench` on 39,045,280 and
+`work_widebench` on 28,094,541. `codegen_instructions_dev` lands on 118,896,762
+and `text` on 4,612,254 across the fourteen binaries. `carry_dedup` falls to 0
+wherever it counted: `run_carry_dedup` from 71, `encode_carry_dedup`,
+`oneshot_carry_dedup`, `wide_carry_dedup`, `digest_carry_dedup`,
+`read_carry_dedup` and `live_carry_dedup` from 3, and in the lazy tier
+`a_maps_two_columns_are_one_allocation_carry_dedup` from 1,998 and
+`a_nested_map_gives_back_its_entries_carry_dedup` from 29,990. A dedup is a
+copy the walk found it had already made; constants are no longer copied, so
+there is nothing to find twice.
+
+## 2026-10-10 — a node an inner pop repairs stays on the outer loop's list
+
+The lox port's `tests/functions.lox` crashed natively once kanso#1824 let its
+evaluator loops carry. The cause is older than that branch. A record built
+before the evaluator's loop held a string in the outer loop's tenure block.
+An inner loop returned a value that reached the record, and its pop copied
+the result out of its carry pair. The pop's walk counts nothing outside the
+arena as a survivor, so it copied the string to the arena's frontier and
+repaired the record in place to point at the copy. The frontier was in the
+evaluator's lap. At the evaluator's next stage the walk reached the record
+through an older node whose own fields all survived, stopped there, and
+rewound the lap with the copy in it. The record then pointed at freed memory.
+
+Main's compiler crashes on the reduction too, so the bug did not need
+kanso#1824. `tests/golden/mem/a_node_repaired_by_an_inner_pop_outlives_the_outer_stage`
+is three nested loops and a box built before the middle one. Built against
+main's runtime it segfaults, and its stdout golden fails.
+
+The pop now keeps the nodes it repaired that lie below the enclosing mark, on
+a list beside `k_repaired`. Each stage walks the entries below its own mark as
+extra roots before it rewinds, sized with the carried slots, so a node that
+points above the mark is repaired into the carry and settled back under the
+raised mark like any other. That makes the node safe for the depth that
+staged and not for the one outside it, so an entry below the outer mark stays
+on the list, and so does a node the stage itself repaired below the outer
+mark. A rewind frees what lies above its mark, and the list must not keep an
+address that has been handed out again. While the list holds anything, a bit
+in `k_buf_dirty` sends every rewind to the slow path, and the slow path drops
+the entries above its mark, and a rewind to the outermost mark clears the list,
+since no stage outside it will revisit anything. The fast path reads nothing
+new.
+
+I first tried narrowing the pop's walk instead: an enclosing depth's tenure
+outlives the pop, so the pop could leave a pointer into it alone. That fixed
+`functions.lox` and broke `binary_trees.lox`. The lox interpreter writes into
+tenured environment maps in place, so an enclosing tenure node can hold a
+pointer into the inner carry pair, and the copy-out has to see it.
+
+With the fix, main's compiler passes all 28 lox fixtures on the interpreter,
+a dev build and a release build. On a tree carrying kanso#1827 and kanso#1824
+as well, the same 28 pass under the lap rule and with every edge staging. The
+twelve cost veins and the mem tier are unchanged apart from the new fixture's
+own file: no program in the corpus repairs a node below an enclosing mark.
+
+The list costs something when it is empty. `k_beat_iter_carry` now asks its
+depth for an outer mark and walks the nodes it repaired against it, and the
+pop does the same, at about fourteen instructions a call whether anything is
+pushed or not. deepbench stages 52,310 times and pops 52,003 times, so it pays
+the most, 0.40%. The runtime's text is 2,208 bytes larger in every binary,
+which the `text` total and both codegen rows carry. CI's rows, old to new:
+
+    work_deepbench               365,792,692 -> 367,269,411
+    work_basket                   32,375,114 ->  32,505,156
+    work_runbench              1,131,250,979 -> 1,131,470,937
+    work_pendbench               190,390,436 -> 190,396,306
+    work_livebench             1,472,859,260 -> 1,472,861,300
+    work_jsonbench               860,548,891 -> 860,549,545
+    work_encodebench           2,383,861,305 -> 2,383,861,896
+    work_digestbench               5,560,569 ->   5,561,143
+    work_indexbench                2,456,650 ->   2,457,185
+    work_scanbench                   268,468 ->     268,793
+    work_widebench                28,094,541 ->  28,094,810
+    work_readbench                 4,577,050 ->   4,577,104
+    work_oneshot                  13,176,487 ->  13,176,528
+    work_escapebench              39,045,280 ->  39,045,300
+    text                           4,612,254 ->   4,643,166
+    codegen_instructions_dev     118,896,762 -> 118,918,430
+    codegen_instructions_release 453,707,138 -> 453,994,118
+    browser_run_instructions      33,493,063 ->  33,507,353
+
+Welfare fell by less than a hundredth, and the floor moves down with it under
+the rule for a change that makes the language do what it says: the program
+crashed.
+
+**Main's repair list, merged into the lap carry.** The two branches touch
+different parts of the carry, and the code merged without a conflict. One golden
+moved. `a_node_repaired_by_an_inner_pop_outlives_the_outer_stage.mem` was
+written before the lap carry, when every edge staged, and under the lap carry
+the same program stages less: `evac_allocs` 237 -> 121, `evac_bytes` 8,288 ->
+4,128, `survive_slots` 82 -> 40, `allocs` 302 -> 246, `alloc_bytes` 7,088,284
+-> 7,086,268, and the new `chain_finds` row reads 0. Its output is unchanged.
+The fixture still does its job on the merged tree: with
+`k_pend_keep_repaired` returning at once, the program segfaults. The goldens
+both branches moved were combined as the sum of the two deltas, and CI's rows
+for the merged head follow.
+
+CI's rows for the merged head. The projection from the two branches' deltas was
+close but not exact: each benchmark's text is 672 bytes larger than the sum, basket
+runs 129,985 instructions fewer, deepbench 104,915 more and runbench 14,885 more.
+Against main, every row that worsened, with the value it landed on:
+
+    run_ten_frees                                6 ->               1
+    run_ten_handups                              2 ->               1
+    compile_instructions                25,832,340 ->      25,858,191
+    entry_instructions                  85,435,525 ->      85,514,540
+    library_instructions                85,988,213 ->      86,067,450
+    codegen_instructions_dev           118,918,430 ->     118,945,861
+    codegen_instructions_release       453,994,118 ->     454,057,202
+    browser_compile_instructions       388,181,803 ->     390,304,777
+    browser_compile_peak_bytes             673,727 ->         675,725
+    browser_run_instructions            33,507,353 ->      34,098,461
+    work_digestbench                     5,561,143 ->       5,562,545
+    work_encodebench                 2,383,861,896 ->   2,383,883,896
+    work_escapebench                    39,045,300 ->      39,045,867
+    work_indexbench                      2,457,185 ->       2,459,004
+    work_jsonbench                     860,549,545 ->     860,559,280
+    work_livebench                   1,472,861,300 ->   1,472,863,852
+    work_oneshot                        13,176,528 ->      13,207,890
+    work_readbench                       4,577,104 ->       4,577,539
+    work_scanbench                         268,793 ->         270,025
+    text                                 4,643,166 ->       4,763,230
+
+The lap carry stages once per 256KB of drift where it staged at every edge, which
+is what the work rows above pay for; the runtime grows by the chain index and the
+lap bookkeeping, which is the text row. Against that, runbench falls to
+1,129,571,152, basket to 30,405,533 and deepbench to 366,705,890, the run
+program evacuates 6,441,632 bytes where it evacuated 9,789,344, and the browser
+run peaks at 1,179,648 bytes. `run_ten_frees` and `run_ten_handups` count work on
+tenured blocks, and they fall because the program now tenures one block where it
+tenured six. Welfare rises from 90.2505 to 90.2618, and the floor is raised to
+hold it.

@@ -2000,7 +2000,28 @@ fn cached_object(profile: &str, source: &str, opt: &[&str]) -> std::io::Result<s
 /// `only_from` names one of the module's files: `kanso test lib/list/list_test.kso`
 /// compiles the module and runs that file's tests, where the bare directory
 /// runs them all.
+///
+/// The tests run on the interpreter's deep stack, as `run --interp` does. On
+/// the main thread's stack a test that recursed too far overflowed Rust's
+/// stack before the interpreter's depth limit could report it, and the abort
+/// took every other test's result with it.
 fn run_tests(
+    program: &ast::Program,
+    file: &str,
+    source: &str,
+    only_from: Option<&str>,
+) -> ExitCode {
+    std::thread::scope(|scope| {
+        std::thread::Builder::new()
+            .stack_size(1 << 30)
+            .spawn_scoped(scope, || run_tests_on_stack(program, file, source, only_from))
+            .expect("spawns")
+            .join()
+            .expect("test thread completes")
+    })
+}
+
+fn run_tests_on_stack(
     program: &ast::Program,
     file: &str,
     source: &str,
