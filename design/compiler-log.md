@@ -1611,6 +1611,11 @@ On main after #1904 the tab's compile reads `browser_compile_instructions`
 With main merged after #1937, browser_compile_instructions lands on
 393,186,348.
 
+On CI's rows for the tree merged with main after #1937: compile_instructions
+lands on 26,064,732, entry_instructions on 86,313,974, library_instructions on
+86,530,678 and interp_instructions on 487,131,185. emit_instructions falls to
+7,046,962.
+
 ## 2026-10-12 — arms travel with the value
 
 The first rule of the 2026-10-12 gavel on #1894. A value carries the arms its
