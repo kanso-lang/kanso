@@ -2072,6 +2072,15 @@ pass-through `e@(err _)` arm, a `.>` step, or a helper with an err arm:
   `unhandled` take their err the same way, and teahouse (ch07) and the json
   sample (ch08) reach their raising values through `.>`.
 
+On CI's rows for the tree merged with #1913, the check's new work lands
+compile_instructions on 26,400,119, entry_instructions on 86,385,190 and
+library_instructions on 86,983,929, rises of 518,568, 1,003,877 and 1,048,347.
+compile_allocs lands on 14,688, up 90, and interp_allocs on 587,652, up 301.
+browser_compile_instructions lands on 402,115,910, up 10,804,408, most of it
+the longer corpus text described above; its peak is 683,140 bytes. The
+interpreted corpus fell 156,512 instructions to 488,583,304. This builds the
+ruling on #1884, so the floor drops by what it costs.
+
 An explicit `e@(err _)` arm hands the err on without adding a frame to the
 "passed through" trace; only the implicit pass-through wrote those frames. The
 trace of an err the checker can prove is now shorter by every function that
