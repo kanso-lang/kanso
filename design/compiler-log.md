@@ -2067,6 +2067,6 @@ CI's rows: `work_runbench` 1,170,035,080 -> 1,170,626,374 and
 loops take ten and eleven parameters, and each hop now copies its stack
 arguments where LLVM had built a loop. `text` rose for scanbench (448,985 ->
 451,401), digestbench (319,241 -> 319,705) and runbench (619,081 ->
-619,849), and the emitted line count fell by 540 for both scanbench and
+619,849), so the `text` total went from 4,834,846 to 4,838,494, and the emitted line count fell by 540 for both scanbench and
 runbench. The language fix lowers the welfare floor by exactly what it costs,
 to 91.11.
