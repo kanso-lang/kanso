@@ -1,0 +1,3 @@
+# geo writes `area` for its circle, and nothing writes `perimeter`.
+pub fn one c
+  "{perimeter c}"
