@@ -5067,7 +5067,17 @@ sibling_import = row
 
 rows_c1zzzzzzw9 = text/concat rows_c1zzzzzzx7 [sibling_import]
 
-rows_c = text/concat rows_c1zzzzzzw9 [itself]
+concat_in_place = row
+  "a concat accumulator copied every lap"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_concat_accumulator_copied_every_lap")
+  no_setup
+
+rows_c1zzzzzzv5 = text/concat rows_c1zzzzzzw9 [concat_in_place]
+
+rows_c = text/concat rows_c1zzzzzzv5 [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

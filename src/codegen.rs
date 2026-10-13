@@ -8826,6 +8826,10 @@ impl<'a> Backend<'a> {
                     true => "push_mut_known",
                     false => "push_mut_fast",
                 }
+            } else if name == "concat" && in_place {
+                // every element of the second list goes onto the first's
+                // frontier; the first list is the one nobody else holds
+                "concat_mut"
             } else if name == "put" && in_place {
                 // the twin writes the frontier pair itself where the map has
                 // no sorted view; everything else falls to the C by call

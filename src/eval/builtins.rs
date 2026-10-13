@@ -482,6 +482,13 @@ impl<'a> Interp<'a> {
                         span,
                     });
                 };
+                // a list nobody else holds is extended where it stands, as a
+                // push onto it is; `concat acc acc` is never proven, so the
+                // second list is not the one being grown
+                if self.writes_in_place(span, frame) {
+                    Self::written_in_place(xs).extend(ys.iter().cloned());
+                    return Ok(a);
+                }
                 let mut joined = (**xs).clone();
                 joined.extend(ys.iter().cloned());
                 Ok(Value::List(Rc::new(joined)))

@@ -1,0 +1,22 @@
+# A fold that grows its accumulator with `concat` rather than `push`, the
+# shape kv's port wrote (#1892). The accumulator is the folder's own first
+# argument and is named nowhere else, so nobody else holds it, and each lap
+# extends it in place. Built fresh every lap, it kept every intermediate
+# list until the fold returned: 4,000 laps of 25 ints peaked at 3 GB.
+import "std/list"
+import "std/text"
+
+chunk = [1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25]
+
+fn stacked n
+  list/fold (list/take list/naturals n) [] (acc _ -> text/concat acc chunk)
+
+fn seeded n
+  seed = [0]
+  laps = list/take list/naturals n
+  out = list/fold laps seed (acc _ -> text/concat acc chunk)
+  length seed + length out
+
+pub play =
+  print "{length (stacked 2000)}"
+  print "{seeded 3}"
