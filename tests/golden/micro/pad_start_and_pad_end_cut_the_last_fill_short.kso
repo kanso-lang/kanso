@@ -1,0 +1,13 @@
+# A fill longer than one character repeats and is cut where the width ends.
+# A string already as wide, or an empty fill, comes back unchanged.
+import "std/text"
+
+zeros = text/pad_start "7" 3 "0"
+
+dashes = text/pad_end "ab" 6 "-="
+
+wide = text/pad_start "long" 2 " "
+
+empty = text/pad_start "x" 4 ""
+
+pub play = print "[{zeros}] [{dashes}] [{wide}] [{empty}]"

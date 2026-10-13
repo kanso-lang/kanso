@@ -410,6 +410,18 @@ pub fn reject coll pred
 pub fn repeat value
   repeated value
 
+# The last element first. The walk reads by index from the end, so building the
+# answer is one push per element.
+pub fn reverse coll
+  xs = to_list coll
+  backward [] xs (length xs)
+
+fn backward out _ 0
+  out
+
+fn backward out xs i
+  backward (push out xs[i]) xs (i - 1)
+
 pub fn select coll pred
   sifted true (iter coll) pred
 
@@ -465,6 +477,51 @@ fn advance false out left right i j
 
 fn drain out xs i
   if (i > length xs) out (drain (push out xs[i]) xs (i + 1))
+
+# Orders by what `key` answers for each element, smallest first. Elements whose
+# keys tie keep the order they arrived in: the merge takes from the right half
+# only when its key is strictly smaller. `key` runs at each comparison rather
+# than once per element, which costs a call where a cached key would cost a
+# list of pairs.
+pub fn sort_by coll key
+  xs = to_list coll
+  keyed_whole xs key (length xs)
+
+fn keyed_whole xs _ 0
+  xs
+
+fn keyed_whole xs key n
+  keyed_span xs key 1 n (n - 1)
+
+fn keyed_span xs _ lo _ 0
+  if (lo < 1 or length xs < lo) [] [xs[lo]]
+
+fn keyed_span xs key lo hi n
+  mid = lo + n / 2
+  left = keyed_span xs key lo mid (mid - lo)
+  right = keyed_span xs key (mid + 1) hi (hi - mid - 1)
+  keyed_runs [] left right 1 1 key
+
+fn keyed_runs out left right i j key
+  if (i > length left) (drain out right j) (keyed_on out left right i j key)
+
+fn keyed_on out left right i j key
+  if (j > length right) (drain out left i) (keyed_pick out left right i j key)
+
+fn keyed_pick out left right i j key
+  keyed_take (key right[j] < key left[i]) out left right i j key
+
+fn keyed_take false out left right i j key
+  keyed_runs (push out left[i]) left right (i + 1) j key
+
+fn keyed_take true out left right i j key
+  keyed_runs (push out right[j]) left right i (j + 1) key
+
+# `coll` in the order `sort` gives it, wrapped as a `sorted`, the shape `find`
+# bisects. Sorting as it wraps is what keeps a `sorted` in order, so the bisect
+# never answers from a list it cannot trust.
+pub fn to_sorted coll
+  sorted (sort coll)
 
 pub fn sum coll
   fold coll 0 (acc x -> acc + x)

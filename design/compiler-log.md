@@ -21,46 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-12 — a built binary names its own stack overflow
-
-A recursion deeper than the stack ends in a fault on the guard page below it.
-`kanso run` reports a child that died that way as having run out of stack, but
-a binary run directly died with the bare signal and printed nothing. The lox
-port is run directly, and a Lox recursion 20,000 calls deep ended in
-"Segmentation fault" with exit 139 on this tree.
-
-The runtime now installs a SIGSEGV handler at start-up, on a 64 KiB stack of
-its own because the program's is the one that ran out. A fault whose address
-lies between the top of the main stack and one MiB past its limit prints the
-interpreter's diagnostic, "the program ran out of stack", and exits 1. Any
-other fault restores the default handler and faults again, so a wild pointer
-still dies by the signal. With no stack limit there is no floor to measure
-from, and the handler is not installed. The wasm runtime has no signals and is
-left alone.
-
-`tests/a_built_binary_names_its_stack_overflow.rs` builds a recursion a
-million deep that no engine can turn into a loop, runs the binary directly and
-reads its stderr and exit status. The ratchet row "a binary that does not watch
-its stack" removes the installation and the spec reads an empty stderr.
-
-This closes the native half of the recursion item on #1892. The depth itself
-still differs by engine: the interpreter stops at 10,000 calls and native at
-whatever the stack holds.
-
-Installing the handler costs every native program the same start-up work: a
-`getrlimit`, a `sigaltstack` and a `sigaction`, about 3,300 instructions, and
-368 bytes of `.text`. On CI's rows for the tree merged with #1899, `text`
-went to 4,834,846 and `codegen_instructions_dev` to 119,002,829. The work rows
-moved by that constant: `work_basket` to 30,876,488, `work_deepbench` to
-393,579,644, `work_digestbench` to 5,603,118, `work_encodebench` to
-2,398,373,226, `work_escapebench` to 39,049,158, `work_indexbench` to
-2,462,486, `work_jsonbench` to 860,562,984, `work_livebench` to 1,474,875,071,
-`work_oneshot` to 13,226,930, `work_pendbench` to 190,054,350,
-`work_readbench` to 4,580,966, `work_runbench` to 1,170,035,080,
-`work_scanbench` to 273,523 and `work_widebench` to 28,178,509.
-`codegen_instructions_release` fell to 454,179,413, which outweighs the rest,
-and the rise is banked.
-
 ## 2026-10-12 — a file names only what its module declares and its own imports bring
 
 The second rule of the 2026-10-12 gavel on #1894. A module's files share
@@ -1878,3 +1838,46 @@ validation result before passing it on.
 
 Owes, on #1928: the toml reduction kept as a micro golden pinning today's
 output on every engine; #1891's second item closed with a pointer here.
+
+## 2026-10-13 — six names for the library gaps, and `list/to_sorted`
+
+#1914 rules nine names. Six of them are built here, in kanso, in
+`lib/text/text.kso` and `lib/list/list.kso`, so every engine runs the same
+source and no engine needs a new builtin:
+
+- `text/uppercase` and `text/lowercase` map the twenty-six ASCII letters and
+  pass every other character through. The walk takes `chars` once, looks
+  each letter up by its offset in a 26-letter string, and joins the pieces.
+  Case outside ASCII would need the Unicode tables, which no engine carries.
+- `text/starts_with?` and `text/ends_with?` compare one slice against the
+  prefix or suffix after checking the length, so the slice never runs past
+  the end. Every string begins and ends with the empty one.
+- `text/pad_start` and `text/pad_end` repeat the fill and cut it at the
+  width. A string already that wide, or an empty fill, comes back unchanged.
+- `list/sort_by xs key` merges the way `sort` does and takes from the right
+  half only when its key is strictly smaller, so tied keys keep their order.
+  `key` runs at each comparison; caching it would cost a list of pairs.
+  `list/reverse` reads the list by index from the end.
+
+`recase` has a `none` arm it never takes. The walk stops before it indexes
+past the end, but the checker cannot see that bound and asks for the arm.
+
+Each name has a micro golden, which the interpreter, the native build and
+the page run alike. Appendix B gains entries for the six text names and a
+sentence for the two list verbs, and drops its counts of the list verbs,
+which a second count in the library would have had to track.
+
+#1903's ruling is built beside them. `list/to_sorted xs` answers
+`sorted (sort xs)`, so a caller can reach the arm of `find` that bisects, and
+the list is always in order because the same call sorts it. The bisect tests
+are back in `list_test.kso` through it, and a micro golden checks that `find`
+agrees on the plain list and on `to_sorted`. The mem golden
+`find_bisects_a_list_built_by_to_sorted` pins the bisect: a scan over its
+4,096 elements builds a `step` record per element, and `sh_rec` reads 208
+bytes with the bisect against 512,400 when `find` loses its `sorted` arm.
+
+The other three rulings need the runtime: `delete map key`, `io/read_line`
+and `os/modified`. They follow in their own change. `os/write_bytes` was
+ruled out, so there is nothing to build for it. The ports that worked around
+these gaps live on the unmerged `claude/ports-corpus` branch, and moving
+them onto the names belongs to that branch.

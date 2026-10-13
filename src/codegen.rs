@@ -9727,7 +9727,10 @@ mod a_group_the_walk_misses_is_put_back {
         let program = program();
         let reached = reached_from_entry(&program).expect("the fixture has an entry");
         assert!(reached.contains("list/sum"), "the walk missed a call: {reached:?}");
-        assert!(!reached.contains("list/sort"), "the walk kept a group nothing calls: {reached:?}");
+        assert!(
+            !reached.contains("list/spread"),
+            "the walk kept a group nothing calls: {reached:?}"
+        );
     }
 
     /// Emits the program with the groups named `gone` taken out, as the tab
@@ -9745,7 +9748,7 @@ mod a_group_the_walk_misses_is_put_back {
 
     #[test]
     fn a_group_nothing_calls_left_out_goes_unremarked() {
-        assert!(!noticed_without(&["list/sort"]), "the emitter asked for a group nothing calls");
+        assert!(!noticed_without(&["list/spread"]), "the emitter asked for a group nothing calls");
     }
 
     #[test]
