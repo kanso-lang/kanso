@@ -178,6 +178,69 @@ fn raised_err_at(
     }
 }
 
+/// A lazy sequence handed where a builtin takes a list. `list/map` answers a
+/// record of std/list's that walks its source on demand, and a builtin whose
+/// demand holds a list refuses that record on every engine, at run time and
+/// with no location. The argument is known to be one when it is a call of a
+/// std/list group whose every arm answers a record and nothing else. Anything
+/// less certain is left to the run, the under-refusing direction.
+fn lazy_where_a_list_goes(
+    e: &Expr,
+    aliases: &HashMap<(&str, usize), &str>,
+    returns: &HashMap<(&str, usize), crate::infer::Set>,
+    shadow: &dyn Fn(&str) -> bool,
+    diags: &mut Vec<Diagnostic>,
+) {
+    use crate::infer::{FAIL, REC};
+    let Expr::App { head, args, piped: false, .. } = e else { return };
+    let Expr::Ident(name, _, _) = head.as_ref() else { return };
+    // THE CHEAP TEST FIRST: an argument that calls a std/list group, read off
+    // the spelling. Every call in the program reaches this line, and the
+    // lookups below hash the callee's name; almost no call has such an
+    // argument.
+    let made_by_list = |a: &Expr| {
+        matches!(a, Expr::App { head, piped: false, .. }
+            if matches!(head.as_ref(), Expr::Ident(n, _, _) if n.starts_with("list/")))
+    };
+    if !args.iter().any(made_by_list) {
+        return;
+    }
+    // a std wrapper forwards to its builtin, and a name the program declares
+    // otherwise is its own (the literal check above reads them the same way)
+    let bare = match aliases.get(&(name.as_str(), args.len())) {
+        Some(builtin) => *builtin,
+        None if returns.contains_key(&(name.as_str(), args.len())) => return,
+        None => name.as_str(),
+    };
+    let bare = bare.strip_prefix("builtin_").unwrap_or(bare);
+    for (pos, arg) in args.iter().enumerate() {
+        let Some(demand) = builtin_demand(bare, pos) else { continue };
+        if !demand.contains(&LitKind::List) {
+            continue;
+        }
+        let Expr::App { head: inner, args: inner_args, piped: false, .. } = arg else { continue };
+        let Expr::Ident(maker, _, _) = inner.as_ref() else { continue };
+        if !maker.starts_with("list/") || shadow(maker.as_str()) || shadow(name.as_str()) {
+            continue;
+        }
+        let Some(&answers) = returns.get(&(maker.as_str(), inner_args.len())) else { continue };
+        if answers & !FAIL != REC {
+            continue;
+        }
+        let want: Vec<String> = demand.iter().map(|k| describe_literal(*k).to_string()).collect();
+        diags.push(Diagnostic::new(
+            "type",
+            format!(
+                "`{}` takes {} here, and `{}` answers a lazy sequence — make it a list with `list/to_list`",
+                crate::ast::spoken(name.as_str()),
+                or_join(want),
+                crate::ast::spoken(maker.as_str())
+            ),
+            arg.span(),
+        ));
+    }
+}
+
 /// The gavel makes a receiver responsible for a none it can be handed, and
 /// lets the caller discharge that by resolving first. The report belongs at
 /// the argument, because that is the line an author edits.
@@ -268,6 +331,7 @@ fn check_after_infer<'p>(
     program: &'p Program,
     inference: &crate::infer::Inference,
     returns: &HashMap<(&str, usize), crate::infer::Set>,
+    aliases: &HashMap<(&str, usize), &str>,
     effect_diags: &mut Vec<Diagnostic>,
     box_diags: &mut Vec<Diagnostic>,
     none_diags: &mut Vec<Diagnostic>,
@@ -827,6 +891,7 @@ fn check_after_infer<'p>(
                 effect_discarded_at(cur, &tables, effect_diags);
                 none_exhaustive_at(cur, &tables, &decl.file, none_diags);
                 raised_err_at(cur, &raisers, &consts, &err_arms, &decl.file, none_diags);
+                lazy_where_a_list_goes(cur, aliases, returns, &shadow, none_diags);
                 site(cur, &shadow, &[], &mut handed_here, box_diags);
                 crate::for_each_child(cur, |c| stack.push(c));
             }

@@ -5053,7 +5053,20 @@ op_arms_boxed = row
 
 rows_c1zzzzzzx7 = text/concat rows_c1zzzzzzx8 [op_arms_boxed]
 
-rows_c = text/concat rows_c1zzzzzzx7 [itself]
+# A lazy sequence handed where a builtin takes a list is refused at check
+# (2026-10-13). The mutation deletes the one call that asks, and the error
+# fixture's two refusals go missing.
+lazy_as_list = row
+  "a lazy sequence where a list goes checks clean"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_lazy_sequence_where_a_list_goes_checks_clean")
+  no_setup
+
+rows_c1zzzzzzx6 = text/concat rows_c1zzzzzzx7 [lazy_as_list]
+
+rows_c = text/concat rows_c1zzzzzzx6 [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

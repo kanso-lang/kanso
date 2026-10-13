@@ -19,35 +19,6 @@
 > The last forty entries. Everything older is in `log/compiler-log-archive.md`,
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
-## 2026-10-10 — a directory called lib is an ordinary directory
-
-The beat analysis keeps an imported library's loops out of the carry tier,
-because a shared driver threads its caller's invariant source through the loop
-and carrying it would copy an unbounded value at every rewind. It recognised a
-library by its declaration's file name, which had to begin `std/` or `lib/`.
-Shipped modules are filed as `std/<module>/<file>`. Nothing shipped begins
-`lib/`, and every user directory called `lib` does, so a package kept in one
-compiled to a program that never reclaimed a block. The 2026-08-31 entries
-found this, measured it at five times the peak, and pinned it in
-`tests/a_program_is_not_its_directory.rs` with the instruction to delete the
-assertion when the two directories agreed.
-
-The `lib/` arm is gone and the `std/` arm stays. The arm had one user in the
-tree: the json beat unit test compiled `lib/json` as a root, and the arm made
-that root look like an installed module. The test now reads the library
-through `import "std/json"`, which is how a program meets it, and it still goes
-red when the `std/` arm is removed: `json/array_open` and `json/obj_open`
-become beats. The spec now asserts that `lib/app` and `elsewhere/app` both
-peak at 1,048,576, and with the arm put back the `lib/` side reads 5,242,880.
-
-I found it while building the fixtures for the lap carry. The evaluator
-fixture, imported as `./lib/fx`, held 4 MiB and never rewound.
-
-The tab compiler reads 661 fewer instructions, `browser_compile_instructions`
-388,181,803. CI moved one other row: `emit_instructions` falls 37, to
-7,062,299. Both codegen tiers held. The ratchet's mutation for this filter
-patched the old two-arm line, so it now patches the one-arm line.
-
 ## 2026-10-10 — a constant lives in storage the carry knows is permanent
 
 A map built before a carrying loop came out of the loop with keys the next
@@ -2059,3 +2030,46 @@ moved by that constant: `work_basket` to 30,876,488, `work_deepbench` to
 `work_scanbench` to 273,523 and `work_widebench` to 28,178,509.
 `codegen_instructions_release` fell to 454,179,413, which outweighs the rest,
 and the rise is banked.
+
+## 2026-10-13 — a lazy sequence handed where a list goes is refused at check
+
+Five ports hit the same failure: `list/map` answers a lazy sequence, `text/join`
+takes a list, `kanso check` said ok, and every engine stopped at run time with
+`error[runtime]: join takes a list of strings and a separator` and no file or
+line (#1892). `length` and `push` had the same gap, with a run-time hint
+naming `list/to_list` and still no location.
+
+The check now refuses the call at the argument. After inference it reads each
+call of a builtin, or of a std wrapper that forwards to one, whose
+`builtin_demand` entry holds a list. When the argument is a call of a std/list
+group whose every arm answers a record and nothing else, the argument is a lazy
+sequence, and the diagnostic says so: "`text/join` takes a list here, and
+`list/map` answers a lazy sequence — make it a list with `list/to_list`". A
+sequence held by name, a field, or any answer inference cannot pin to a record
+is left to the run. `print` is not touched, because its demand holds no list
+and printing a sequence forces it (gaveled).
+
+`join` had no `builtin_demand` entry, so `text/join 3 ""` checked clean while
+`length 3` was refused. It has one now: a list, then a string, which is what
+both engines refuse.
+
+`tests/golden/errors/a_lazy_sequence_where_a_list_goes` and
+`join_takes_a_list` pin the two refusals. Three run-time goldens wrote the
+failing call out and now hold the value by name, so they still reach the run
+and still pin its sentence: `join_takes_strings_and_a_separator`,
+`length_points_at_to_list` and `push_points_at_to_list`.
+
+The check found the same mistake in `bench/compile_corpus`: `workload` joins
+`list/take ["a" "b" "c"] 2`, which stops both engines when run. Nothing runs
+the corpus, so it went unseen. It now goes through `list/to_list`, so the
+corpus compiles a little more and the compile rows move with it.
+
+The ratchet row "a lazy sequence where a list goes checks clean" deletes the
+call that asks, and the error corpus goes red on the new fixture.
+
+Measured here, the tab's compile row went from 391,974,060 to 392,906,566.
+With the new call kept and the check returning at its first line it read
+392,914,374, and with the call removed 391,981,161. The rise is in how the
+wasm build lays out the walk the call sits in, not in work the check does:
+across `bench/interp_corpus` five calls get past its first test. The rows that
+move come from CI and are priced before merge.
