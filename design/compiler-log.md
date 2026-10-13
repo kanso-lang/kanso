@@ -1926,6 +1926,10 @@ widebench (350,249). The browser compile's rise outweighs the run's fall, and
 this builds a ruled part of the language, so the welfare floor drops by what
 it costs.
 
+On main after #1925 the emitted counts for the other programs land on
+emitted_other_calls 17,692, emitted_other_defines 2,049 and emitted_other_lines
+148,325, and the `text` total on 4,845,150.
+
 ## 2026-10-13 — three port shapes join the run program before their fixes
 
 Three of #1892's items are fixed on open branches, and the run program was
