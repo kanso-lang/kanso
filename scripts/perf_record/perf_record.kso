@@ -17,18 +17,28 @@ import "std/text"
 #
 # Decode: the flat-memory guarantee, the rewind count, and each kernel's
 # presence. A kernel silently dropped in a merge turns one of these to zero.
-decode_a = ["allocs" "alloc_bytes" "arena_blocks" "perm_allocs" "beat_iters"]
-
-decode_b = ["el_parses" "utf8_bytes" "find2_calls" "held_peak_bytes"]
-
-decode_watched = text/concat decode_a decode_b
+decode_watched = [
+  "allocs"
+  "alloc_bytes"
+  "arena_blocks"
+  "perm_allocs"
+  "beat_iters"
+  "el_parses"
+  "utf8_bytes"
+  "find2_calls"
+  "held_peak_bytes"
+]
 
 # Encode: the write path, where the builder and the float renderer live.
-encode_a = ["allocs" "arena_blocks" "ryu_renders" "append_fast"]
-
-encode_b = ["append_grow" "utf8_zerocopy" "held_peak_bytes"]
-
-encode_watched = text/concat encode_a encode_b
+encode_watched = [
+  "allocs"
+  "arena_blocks"
+  "ryu_renders"
+  "append_fast"
+  "append_grow"
+  "utf8_zerocopy"
+  "held_peak_bytes"
+]
 
 # One shot: decode, hold, print — the peak the rewinds cannot hide.
 oneshot_watched = ["allocs" "arena_blocks" "arena_peak_bytes" "held_peak_bytes"]

@@ -172,6 +172,29 @@ ages[<span class="s">"nobody"</span>]! <span class="o">.&gt;</span> (age <span c
   </div>
 </div>
 
+<p>a list or map too long for one line is written one element to a line. the opening bracket ends the line that starts the literal, each element sits on a line of its own two spaces further in, and the closing bracket sits alone at the indent the literal started from. a map puts one <code>key:value</code> entry on each line:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">long_list.kso</div>
+  <pre><code>teas <span class="o">=</span> [
+  <span class="s">"sencha from the hills above shizuoka, steamed for thirty seconds"</span>
+  <span class="s">"gyokuro, grown in the shade for three weeks before the picking"</span>
+  <span class="s">"hojicha"</span>
+]
+cups <span class="o">=</span> {
+  <span class="s">"a guest who came early and waited by the gate without complaint"</span>:<span class="n">2</span>
+  <span class="s">"sam"</span>:<span class="n">1</span>
+}
+<span class="f">print</span> <span class="s">"<span class="i">{length teas}</span> teas"</span> <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"<span class="i">{cups}</span>"</span>)</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run long_list.kso</div>
+    <pre><code>3 teas
+{ "a guest who came early and waited by the gate without complaint":2 "sam":1 }</code></pre>
+  </div>
+</div>
+
+<p>a list that fits on one line is written on one line. the compiler refuses the spanning form for it, for the same reason it refuses a needless continuation (appendix c).</p>
+
 <h2>records</h2>
 
 <p>when a value has named parts, give it a <code>type</code>. a type declaration lists its fields—each with a name and a type—in alphabetical order, and that order becomes the shape you construct with. <code>user 47 "clay"</code> fills <code>age</code> then <code>name</code>, positionally, in the order the fields were declared:</p>

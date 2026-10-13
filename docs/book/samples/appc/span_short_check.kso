@@ -1,0 +1,6 @@
+steps = [
+  "boil"
+  "steep"
+  "pour"
+]
+print "{steps}"

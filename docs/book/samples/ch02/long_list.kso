@@ -1,0 +1,10 @@
+teas = [
+  "sencha from the hills above shizuoka, steamed for thirty seconds"
+  "gyokuro, grown in the shade for three weeks before the picking"
+  "hojicha"
+]
+cups = {
+  "a guest who came early and waited by the gate without complaint":2
+  "sam":1
+}
+print "{length teas} teas" .> (_ -> print "{cups}")
