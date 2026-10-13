@@ -539,7 +539,7 @@ impl<'a> Resolver<'a> {
             false => {
                 self.diags.push(Diagnostic::new(
                     "name",
-                    format!("unknown name `{name}`{}", moved_to_os(name)),
+                    format!("unknown name `{name}`{}", moved_name(name)),
                     span,
                 ));
             }

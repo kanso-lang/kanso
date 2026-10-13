@@ -1,5 +1,4 @@
 import "std/list"
-import "std/text"
 
 # A fold that grows its list with `concat` rather than `push`, the shape the
 # kv port wrote. Until kanso#1924 each lap built a fresh list and kept the
@@ -11,4 +10,4 @@ fn upto n
   list/take (list/iterate 1 (i -> i + 1)) n
 
 pub fn total n
-  length (list/fold (upto n) [] (acc _ -> text/concat acc chunk))
+  length (list/fold (upto n) [] (acc _ -> list/concat acc chunk))

@@ -40,7 +40,7 @@ fn inner acc 0
   io/write "" .> (_ -> acc)
 
 fn inner acc j
-  grown = text/concat acc [(made j)]
+  grown = list/concat acc [(made j)]
   io/write "" .> (_ -> inner grown (j - 1))
 
 fn onward found 0
@@ -48,7 +48,7 @@ fn onward found 0
 
 fn onward found i
   inner [] 30
-    .> (batch -> text/concat found batch)
+    .> (batch -> list/concat found batch)
     .> (grown -> onward grown (i - 1))
 
 fn key_of m

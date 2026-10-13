@@ -28,7 +28,6 @@ const ROOT: &str = "a_tree_of_sample_outputs";
 
 const PROGRAM: &str = r#"import "std/list"
 import "std/os"
-import "std/text"
 
 type source_file
   path
@@ -59,7 +58,7 @@ fn read_one path names at acc kid body
   walk_names path names (at + 1) (push acc (source_file kid body))
 
 fn joined a b
-  list/to_list (text/concat a b)
+  list/to_list (list/concat a b)
 
 walk_all "a_tree_of_sample_outputs" .> (fs -> print (length fs))
 "#;
