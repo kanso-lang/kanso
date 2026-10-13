@@ -21,33 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-10 — the four port fixes' floor question closes on the corpus-first gavel
-
-The ledger's Blocking entry "May four port fixes lower the welfare floor?",
-filed today, asked whether kanso#1820, kanso#1822, kanso#1824 and kanso#1825
-may each lower the floor by a few thousandths. Each fixes a native cliff a port
-journal found (sat's map put loop, lox's loop entered from a tail cycle,
-`list/tally` over many distinct strings, mustache's fold onto its accumulator),
-and each pays only in compile rows because no benchmark contains its shape.
-
-That is the case the archive's 2026-09-05 "gavel: corpus first — a blind
-corpus is repaired, never excused" ruled. Clay declined, then, the
-recommendation to move the floor with "the corpus is blind" as the reason:
-**the remedy is to add the benchmark the objective could not see, measure its
-baseline on the pre-fix code, land the fix on top, and let it score**, so the
-floor rises rather than falls. The entry's search looked for a ruling on fixes
-that make native finish what the interpreter finishes and missed this one,
-because the ruling is about what the corpus can see. The entry leaves the
-ledger in this commit on that citation.
-
-So no floor moves for these four. Each PR promotes its fix's shape into the
-benchmark corpus as a run-speed or run-memory phase under the granted-baseline
-machinery, with its baseline measured on main without the fix, and banks the
-rise with `--set`. The entry's option 1 also asked to widen the 2026-09-13
-exception to every change that lets native finish a program the interpreter
-finishes; under corpus-first such a change scores as a gain once the corpus
-holds its shape, so the widening is not needed, and it is not made here.
-
 ## 2026-10-10 — four port shapes join the run program, measured before their fixes
 
 The corpus-first gavel, applied today to kanso#1820, kanso#1822, kanso#1824 and
@@ -1764,6 +1737,28 @@ each as an importer; goldens for a test that reads a private name (refused), a
 test helper sharing a production name (no collision) and a malformed test
 beside a program that still runs; existing tests that read private names
 moved onto the pub surface.
+
+## 2026-10-12 — a bare imported type with no fields is its module's value
+
+An importer may name a type with no fields bare: `import "std/json"` enrols
+`json_null` beside `json/json_null`. Native code resolved the bare name to the
+type it stands for. The interpreter built a record under the bare spelling, so
+it printed as the importer's own type and compared unequal to `json/json_null`.
+A constructor call already took the type's origin; the fieldless path in
+`resolve` now does the same.
+
+`tests/golden/micro/a_bare_imported_unit_is_its_module_s` prints the bare value
+and compares it with the qualified one, inside a list and out. Before the fix
+the interpreter printed `a_bare_imported_unit_is_its_module_s/json_null` and
+`false` twice where native printed `json/json_null` and `true`.
+
+json's own test suite found it. Under #1883 a test file imports its module,
+and `test_decode_nested` compares a decoded document against a map holding a
+bare `json_null`.
+
+From CI, the interpreter's run of the corpus reads 249 instructions fewer,
+interp_instructions 488,739,816 to 488,739,567 on the merged tree. No other
+row moved, and welfare banks the rise.
 
 ## 2026-10-13 — three port shapes join the run program before their fixes
 
