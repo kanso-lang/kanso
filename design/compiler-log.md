@@ -1896,7 +1896,6 @@ toolchain's copy is absent. The check now tries the same root.
 directory of its own and checks `lib/json` from the checkout; it read the
 refusal before the fix and reads nothing after.
 
-The tab's build leaves the new root out. It has no checkout to stand in, and
-with the root compiled in, `browser_compile_instructions` read 392,449,729
-against 392,378,375, because the tab asks every root for each builtin the
-library names. Without it the browser row does not move.
+The tab's build leaves the new root out, since it has no checkout to stand
+in. With the root compiled in, `browser_compile_instructions` read 392,449,729
+against 392,378,375; without it the browser row does not move.
