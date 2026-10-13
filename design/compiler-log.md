@@ -1877,6 +1877,10 @@ floor moves by what it costs.
 
 - **OPEN** #1856, until this lands.
 
+Each of the four compile-cost programs gains the pool's define and its four
+lines, so `bench/compile_golden.txt` moves from 38 defines to 42 and from 1,340
+lines to 1,356.
+
 ## 2026-10-13 — three port shapes join the run program before their fixes
 
 Three of #1892's items are fixed on open branches, and the run program was
