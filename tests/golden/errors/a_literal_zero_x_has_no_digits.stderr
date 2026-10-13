@@ -1,0 +1,4 @@
+error[syntax]: `0x` has no digits; a hex literal needs at least one
+  --> a_literal_zero_x_has_no_digits.kso:2:20
+   2 | pub play = print "{0x}"
+                          ^
