@@ -499,7 +499,9 @@ impl<'a> Analysis<'a> {
                                 .position(|x| x == f)
                                 .is_some_and(|k| self.unique_in(&args[k], ctx, None))
                     }
-                    None => self.returns_field.contains(&(n.to_string(), args.len(), f.to_string())),
+                    None => {
+                        self.returns_field.contains(&(n.to_string(), args.len(), f.to_string()))
+                    }
                 },
                 _ => false,
             },
@@ -513,7 +515,9 @@ impl<'a> Analysis<'a> {
                     Some(j) => {
                         self.field_params.contains(&(ctx.name.clone(), arity, j, f.to_string()))
                     }
-                    None => bound_in(&ctx.body, n).is_some_and(|b| self.holds_field_alone(b, f, ctx)),
+                    None => {
+                        bound_in(&ctx.body, n).is_some_and(|b| self.holds_field_alone(b, f, ctx))
+                    }
                 }
             }
             _ => false,
