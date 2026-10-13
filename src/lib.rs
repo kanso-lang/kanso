@@ -149,17 +149,20 @@ fn compile_parsed_entry(
         .collect();
     let mut diags = check::resolve_markers(&mut program, &all_markers);
     diags.extend(check::check_typesets(&program, &all_type_names, &Default::default()));
+    let mut travels = Vec::new();
     diags.extend(check::check_file_shadow(
         &program,
         &extern_globals,
         &shadowable,
         &Default::default(),
         &[],
+        &mut travels,
     ));
     diags.sort_by_key(|d| (d.span.line, d.span.col));
     if !diags.is_empty() {
         return Err(diag::render(&diags, file, source));
     }
+    rename_travels(&mut program, &travels);
     let mut merged = ast::Program {
         fns: Vec::new(),
         types: Vec::new(),
@@ -171,6 +174,7 @@ fn compile_parsed_entry(
     merged.fns.extend(dep_program.fns);
     merged.types.extend(program.types);
     merged.fns.extend(program.fns);
+    enroll_travelers(&mut merged)?;
     // AHEAD OF THE CHECK, so the whole-program check does not walk the synthetic
     // twins this pass is about to delete -- kanso#1328 did the same on the
     // module path. `canonicalize_types` stays in the success arm: moving it too
@@ -363,12 +367,14 @@ fn compile_one(file: &str, source: &str, drop_unused: bool) -> Result<ast::Progr
     all_type_names.extend(dep_program.types.iter().map(|t| t.name.clone()));
     let mut diags = check::resolve_markers(&mut program, &all_markers);
     diags.extend(check::check_typesets(&program, &all_type_names, &Default::default()));
+    let mut travels = Vec::new();
     diags.extend(check::check_file_shadow(
         &program,
         &extern_globals,
         &shadowable,
         &Default::default(),
         &[],
+        &mut travels,
     ));
     if drop_unused {
         diags.retain(|d| d.kind != "unused");
@@ -377,6 +383,7 @@ fn compile_one(file: &str, source: &str, drop_unused: bool) -> Result<ast::Progr
     if !diags.is_empty() {
         return Err(diag::render(&diags, file, source));
     }
+    rename_travels(&mut program, &travels);
     program.types.extend(dep_program.types);
     program.fns.extend(dep_program.fns);
     // AHEAD OF THE CHECK, the third and last of the three paths to take this
@@ -466,17 +473,20 @@ pub fn compile_library(file: &str, source: &str) -> Result<ast::Program, String>
     all_type_names.extend(dep_program.types.iter().map(|t| t.name.clone()));
     let mut diags = check::resolve_markers(&mut program, &all_markers);
     diags.extend(check::check_typesets(&program, &all_type_names, &Default::default()));
+    let mut travels = Vec::new();
     diags.extend(check::check_file_shadow(
         &program,
         &extern_globals,
         &shadowable,
         &Default::default(),
         &[],
+        &mut travels,
     ));
     diags.sort_by_key(|d| (d.span.line, d.span.col));
     if !diags.is_empty() {
         return Err(diag::render(&diags, file, source));
     }
+    rename_travels(&mut program, &travels);
     program.types.extend(dep_program.types);
     program.fns.extend(dep_program.fns);
     // AHEAD OF THE CHECK, the third and last of the three paths to take this
@@ -2439,5 +2449,7 @@ fn walk_children<'a, F: FnMut(&'a ast::Expr) -> bool>(e: &'a ast::Expr, f: &mut 
 }
 
 include!("lib/modules.rs");
+
+include!("lib/travel.rs");
 
 include!("lib/hoist.rs");

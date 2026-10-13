@@ -1375,7 +1375,22 @@ pub fn declared_names(program: &Program) -> HashSet<&str> {
 /// Per-file checks: canonical order plus name resolution against this file's
 /// globals extended with the rest of the module.
 pub fn check_file(program: &Program, extern_globals: &HashSet<&str>) -> Vec<Diagnostic> {
-    check_file_shadow(program, extern_globals, &HashSet::default(), &HashSet::default(), &[])
+    // A caller that cannot rename a traveling call has nowhere to send it, so
+    // here it stays the unknown name it was before arms traveled.
+    let mut travels = Vec::new();
+    let mut diags = check_file_shadow(
+        program,
+        extern_globals,
+        &HashSet::default(),
+        &HashSet::default(),
+        &[],
+        &mut travels,
+    );
+    for (name, span) in travels {
+        diags.push(Diagnostic::new("name", format!("unknown name `{name}`"), span));
+    }
+    diags.sort_by_key(|d| (d.span.line, d.span.col));
+    diags
 }
 
 /// Bare-enrolled imports (synthetic clones) are shadowable: a local binding
@@ -1387,6 +1402,7 @@ pub fn check_file_shadow(
     shadowable: &HashSet<String>,
     sibling_types: &HashSet<String>,
     sibling_decls: &[&crate::ast::TypeDecl],
+    travels: &mut Vec<(String, Span)>,
 ) -> Vec<Diagnostic> {
     let mut diags = Vec::new();
     check_type_order(program, &mut diags);
@@ -1425,7 +1441,15 @@ pub fn check_file_shadow(
     // a fresh one per declaration grew from nothing each time.
     let mut locals = Vec::new();
     for decl in &program.fns {
-        check_fn_body_shadow(decl, &globals, &mut diags, shadowable, &declared, &mut locals);
+        check_fn_body_shadow(
+            decl,
+            &globals,
+            &mut diags,
+            shadowable,
+            &declared,
+            &mut locals,
+            travels,
+        );
     }
     diags.sort_by_key(|d| (d.span.line, d.span.col));
     diags
