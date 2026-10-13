@@ -2055,8 +2055,9 @@ Both engines print the same bytes for all three fixtures before and after.
 refusal, which main accepts and prints 10 for. The ratchet row "bit operators
 mixed freely" lets the chain through and turns the error corpus red.
 
-CI's rows: compile instructions 25,761,215 -> 25,787,933, entry 85,207,562 ->
-85,304,017 and library 85,760,222 -> 85,856,927, the parser's check and the
+CI's rows: `compile_instructions` 25,761,215 -> 25,787,933,
+`entry_instructions` 85,207,562 -> 85,304,017 and `library_instructions`
+85,760,222 -> 85,856,927, the parser's check and the
 parentheses std/sha256 now carries. The browser compile fell 391,974,060 ->
 391,427,375, emitting 7,016,409 -> 7,013,792 and the interpreter 488,792,115
 -> 488,788,155. The tab runs the same parser, so nothing in the change
