@@ -216,6 +216,11 @@ static long long k_stat_sh_bytes = 0;
    since the arena's own peak counts only blocks in use. */
 static long long k_spare_bytes = 0;
 static long long k_stat_spare_peak = 0;
+/* Work-ahead (#1856): constants the pool forced while a fiber was parked, and
+   those it dropped because the work died. A program whose pool never ran
+   prints neither, so every vein without a sleep reads as it did. */
+static long long k_stat_ahead_forced = 0, k_stat_ahead_dropped = 0;
+static int k_ahead_ran = 0;
 static long long k_stat_bytes_freed = 0;
 static long long k_stat_buf_reuse = 0;
 /* A map's cached sorted view is malloc'd, so no rewind reclaims it and only an
@@ -747,6 +752,10 @@ static void k_stats_dump(void) {
         "sh_str=%lld\nsh_rec=%lld\nsh_buf=%lld\nsh_map=%lld\nsh_bytes=%lld\n",
         k_stat_sh_str, k_stat_sh_rec, k_stat_sh_buf, k_stat_sh_map, k_stat_sh_bytes);
     fprintf(stderr, "spare_peak_bytes=%lld\n", k_stat_spare_peak);
+    if (k_ahead_ran) {
+        fprintf(stderr, "ahead_forced=%lld\nahead_dropped=%lld\n",
+                k_stat_ahead_forced, k_stat_ahead_dropped);
+    }
 }
 
 /* A one-shot boundary returns its garbage to the allocator. A cohort
@@ -7027,7 +7036,6 @@ KValue k_b_annotate(KValue subject, KValue callback, const char* origin) {
    constant it lifted out of the work that follows a park. It runs once, at the
    first bare sleep. */
 void k_ahead_pool(void);
-static int k_ahead_ran = 0;
 
 /* One pooled constant: `force` reads it, which builds its cell. A death on the
    way jumps back here. The cells table pairs each constant's cell with its
@@ -7048,8 +7056,10 @@ int k_ahead_try(void (*force)(void), void** cells, long long n) {
     k_ahead_pooling = 1;
     if (sigsetjmp(k_ahead_out, 1) == 0) {
         force();
+        if (K_COUNTING) k_stat_ahead_forced++;
     } else {
         ok = 0;
+        if (K_COUNTING) k_stat_ahead_dropped++;
         for (long long i = 0; i < n; i++) {
             KValue* cell = (KValue*)cells[2 * i];
             char* ready = (char*)cells[2 * i + 1];
