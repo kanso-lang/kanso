@@ -1860,3 +1860,11 @@ golden `hex_binary_and_exponent_literals` runs on the interpreter, the
 native build and the page. The editor grammar and the playground's
 highlighter colour the new forms, and chapter 02 says what each spelling
 means. The byte literal in #1889's title was not ruled and is not built.
+
+On CI's rows the lexer's new arms cost the emitter 408 instructions,
+emit_instructions 7,240,982 -> 7,241,390, and the tab's compile 10,978,
+browser_compile_instructions 413,925,406 -> 413,936,384. The rest fell with the
+binary's layout: compile_instructions by 9,355 to 28,002,980,
+entry_instructions by 30,753 to 92,393,206, library_instructions by 30,149 to
+91,989,327 and interp_instructions by 3,960 to 495,525,421. The floor follows
+the score, since #1889 builds a ruled part of the language.

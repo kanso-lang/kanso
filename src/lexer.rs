@@ -1176,7 +1176,9 @@ impl Scanner<'_> {
         if self.pos == digits {
             return Err(Diagnostic::new(
                 "syntax",
-                format!("`{written}` has no exponent digits; write it as `{written}1` or drop the `e`"),
+                format!(
+                    "`{written}` has no exponent digits; write it as `{written}1` or drop the `e`"
+                ),
                 Span::at(self.line, self.col_offset + start),
             ));
         }
