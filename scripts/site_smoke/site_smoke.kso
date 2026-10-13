@@ -57,10 +57,6 @@ chart_port = 8752
 
 paint_port = 8753
 
-engine_assets = ["kanso-engine.js" "kanso.wasm" "kanso-runtime.wasm"]
-
-assets = text/concat engine_assets ["landing-play.js" "play.js"]
-
 # The page reports by posting to /report, which is the only path the server
 # treats as anything but a file.
 probe = """
