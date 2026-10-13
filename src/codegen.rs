@@ -535,7 +535,7 @@ fn without_unbuilt_arms(program: &Program) -> Option<(Vec<bool>, UnreadPositions
         d.name == crate::ast::ENTRY
             || d.params.is_empty()
             || d.name == RENDER_GROUP
-            || !d.name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '/')
+            || !d.name.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '/' | '~'))
     };
     if !program.fns.iter().any(|d| d.name == crate::ast::ENTRY) {
         return None;
@@ -3267,7 +3267,7 @@ fn tail_call_twin(n: usize) -> String {
 /// module qualifier's slash.
 fn wsym(name: &str, arity: usize) -> String {
     // fn-value wrapper symbols share dsym's quoted-identifier rule
-    match name.contains(['/', '!', '?', '+', '-', '*', '%', '<', '>', '=']) {
+    match name.contains(['/', '!', '?', '+', '-', '*', '%', '<', '>', '=', '~']) {
         true => format!("\"w_{name}_{arity}\""),
         false => format!("w_{name}_{arity}"),
     }
@@ -9400,7 +9400,7 @@ fn symbol_of(line: &str) -> Option<String> {
 /// identifier form. One list, because a second copy drifts and what it costs
 /// is a module clang refuses to read.
 fn quoted(name: &str) -> String {
-    match name.contains(['/', '!', '?', '+', '-', '*', '%', '<', '>', '=']) {
+    match name.contains(['/', '!', '?', '+', '-', '*', '%', '<', '>', '=', '~']) {
         true => format!("\"{name}\""),
         false => name.to_string(),
     }

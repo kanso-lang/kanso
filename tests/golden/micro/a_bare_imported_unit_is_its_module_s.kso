@@ -1,0 +1,11 @@
+# A type with no fields is a value, and an importer may name it bare: the
+# import enrols `json_null` beside `json/json_null`, and the two spellings are
+# one value. The interpreter named the bare one after the importer, so it
+# printed under the importer's name and compared unequal to the qualified
+# spelling, where native code printed `json/json_null` and true.
+import "std/json"
+
+pub play =
+  print "{json_null}"
+  print "{json_null == json/json_null}"
+  print "{[json_null] == [json/json_null]}"

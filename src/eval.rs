@@ -2121,7 +2121,9 @@ impl<'a> Interp<'a> {
         }
         if let Some(decl) = self.type_decl(name) {
             if decl.parent.is_none() && decl.members.is_empty() && decl.fields.is_empty() {
-                return Ok(Named::EmptyRecord(Rc::from(name)));
+                // a bare spelling an import enrolled is the type it stands
+                // for, as a constructor call's record already is
+                return Ok(Named::EmptyRecord(Rc::from(decl.origin.as_deref().unwrap_or(name))));
             }
         }
         match name {
