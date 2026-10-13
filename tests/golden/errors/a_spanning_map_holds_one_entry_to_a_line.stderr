@@ -1,0 +1,4 @@
+error[syntax]: a map that spans lines holds one `key:value` entry to a line
+  --> a_spanning_map_holds_one_entry_to_a_line.kso:5:3
+   5 |   "ken":5 "mai":8
+         ^

@@ -1,0 +1,5 @@
+# A list too long for the line is written one element to a line (ruled
+# 2026-10-13, #1882), and the width error says so where the line holds one.
+words = ["the first word of a list long enough" "that it cannot sit on one line at all"]
+
+pub play = print "{words}"

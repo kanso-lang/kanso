@@ -1,0 +1,10 @@
+# A list spans lines only when it cannot fit on one (ruled 2026-10-13, #1882).
+# Three short numbers fit in a dozen characters, so the spanning form here is
+# a second way to write the same line, and the language keeps one.
+xs = [
+  1
+  2
+  3
+]
+
+pub play = print "{xs}"

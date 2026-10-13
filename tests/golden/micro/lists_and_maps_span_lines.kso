@@ -1,0 +1,42 @@
+# A list or map too long for one line is written one element to a line, each
+# two spaces in, and closes alone at the opener's indent (ruled 2026-10-13,
+# #1882). An element is any expression: a call groups as if parenthesised.
+# A list inside a list spans on its own terms, and a short one stays put.
+fn double x
+  x * 2
+
+words = [
+  "the first word of a list long enough that it cannot sit on one line"
+  "the second word"
+  double 21
+  (double 4)
+]
+
+ages = {
+  "a name long enough to push the map past the width of a single line":40
+  "ken":5
+  "mai":8
+}
+
+grid = [
+  [
+    "a row long enough that it cannot share its line with the row after it"
+    "two"
+  ]
+  ["three" "four"]
+]
+
+fn total k
+  k * length [
+    100000000000
+    200000000000
+    300000000000
+    400000000000
+    500000000000
+    600000000000
+  ]
+
+pub play = print "{length words} {words}"
+  .> (_ -> print "{ages}")
+  .> (_ -> print "{grid}")
+  .> (_ -> print "{total 2}")

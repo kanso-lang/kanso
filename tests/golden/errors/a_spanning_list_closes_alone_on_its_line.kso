@@ -1,0 +1,8 @@
+# The closing bracket of a list that spans lines sits alone, at the indent of
+# the line that opened it (ruled 2026-10-13, #1882). Before the spanning form
+# the opening bracket alone was an unclosed list.
+words = [
+  "the first word of a list long enough that it cannot sit on one line"
+  "the second word"]
+
+pub play = print "{words}"

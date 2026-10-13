@@ -1,0 +1,4 @@
+4 ["the first word of a list long enough that it cannot sit on one line" "the second word" 42 8]
+{ "a name long enough to push the map past the width of a single line":40 "ken":5 "mai":8 }
+[["a row long enough that it cannot share its line with the row after it" "two"] ["three" "four"]]
+12
