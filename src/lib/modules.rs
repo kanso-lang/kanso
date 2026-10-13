@@ -667,15 +667,15 @@ fn compile_module_loaded(
     // built once and handed to each.
     let counts = inline::group_sizes(&merged);
     let builtins = inline::aliases_from(&merged, &counts);
-    let wrappers = inline::wrapper_table(&builtins, &counts);
+    let wrappers = kept_traveling(inline::wrapper_table(&builtins, &counts), &stood);
     let diags = match shipped {
         true => Vec::new(),
         false => phase::watched("check_merged", || {
             check::check_merged_after_aliases_with(&merged, require_entry, &rewritten, builtins)
         }),
     };
-    reshade(&mut merged.fns, &stood);
     inline::apply_wrappers(&mut merged, &wrappers);
+    reshade(&mut merged.fns, &stood);
     if !diags.is_empty() {
         // The name an import writes, never the file behind it. A module in a
         // directory read as `(module pkg)` and a module in one file as

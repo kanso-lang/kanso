@@ -173,6 +173,19 @@ fn reshade(fns: &mut [ast::FnDecl], stood: &Stood) {
     });
 }
 
+/// The wrapper table without the groups a put-back call names. Those calls
+/// travel again once the check is done, and the root may yet fill their group
+/// with an owner's arm, so none of them is rewritten into the builtin here.
+fn kept_traveling<V>(
+    mut wrappers: crate::hash::Map<String, V>,
+    stood: &Stood,
+) -> crate::hash::Map<String, V> {
+    for (_, _, _, local) in stood {
+        wrappers.remove(local);
+    }
+    wrappers
+}
+
 /// The group a module's own function of that name belongs to.
 fn local_group(qual: Option<&str>, short: &str) -> String {
     match qual {
