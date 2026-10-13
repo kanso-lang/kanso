@@ -1931,7 +1931,23 @@ Divergence is the case the gavel accepted: a pooled call that never returns
 stalls before output the program prints first. The page's work-ahead section
 owes a sentence on each case, under the gavel.
 
-Compile rows move with the binary and come from CI; they are priced here before
-merge.
+**What it costs**, from CI's rows. Every program now defines `k_ahead_pool`,
+empty when nothing was lifted, because the runtime calls it at a sleep: one
+define and five lines per benchmark (`emitted_defines` 106 -> 107,
+`emitted_lines` 10,070 -> 10,075; over the thirteen others
+`emitted_other_defines` 2,010 -> 2,023 and `emitted_other_lines` 147,279 ->
+147,344), and the module compile row's `module_defines` 29 -> 30 and
+`module_lines` 1,284 -> 1,288. `k_ahead_try` and its jump buffer put 320 bytes in
+each binary (`text` 4,834,846 -> 4,839,326 summed). The compiler's rows rose:
+`emit_instructions` 7,013,477 -> 7,137,222 (+1.76%), `codegen_instructions_dev`
+119,002,829 -> 119,332,985 (+0.28%), `codegen_instructions_release`
+454,179,413 -> 455,947,986 (+0.39%), `browser_compile_instructions`
+391,311,502 -> 393,313,454 (+0.51%), `compile_instructions` 25,881,551 ->
+25,887,870, `entry_instructions` 85,381,313 -> 85,406,213 and
+`library_instructions` 85,935,582 -> 85,959,939. The run rows fell by 50 to
+1,178 instructions each (`runbench` 1,170,035,080 -> 1,170,033,902) and
+`interp_instructions` by 13,571 to 488,726,245; no benchmark sleeps, so these
+are the binary's layout. Work-ahead is a ruled part of the language, so the
+floor moves by what it costs.
 
 - **OPEN** #1856, until this lands.
