@@ -474,23 +474,36 @@ impl<'a> Interp<'a> {
                 }
                 Ok(Value::Bytes(Rc::new(raw)))
             }
+            // `text/bytes` answers an int list (appendix b), and native code
+            // reads a bytes value as the list of its byte values on either
+            // side. The answer is a list either way.
             b"concat" => {
                 let [a, b] = arity(args, name, span)?;
-                let (Value::List(xs), Value::List(ys)) = (&a, &b) else {
+                let as_items = |v: &Value| -> Option<Vec<Value>> {
+                    match v {
+                        Value::List(xs) => Some((**xs).clone()),
+                        Value::Bytes(raw) => Some(raw.iter().map(|&b| Value::int(b)).collect()),
+                        _ => None,
+                    }
+                };
+                // a list nobody else holds is extended where it stands, as a
+                // push onto it is; `concat acc acc` is never proven, so the
+                // second list is not the one being grown
+                if let Value::List(xs) = &a {
+                    if self.writes_in_place(span, frame) {
+                        if let Some(tail) = as_items(&b) {
+                            Self::written_in_place(xs).extend(tail);
+                            return Ok(a);
+                        }
+                    }
+                }
+                let (Some(mut joined), Some(tail)) = (as_items(&a), as_items(&b)) else {
                     return Err(RuntimeError {
                         message: "concat takes two lists".to_string(),
                         span,
                     });
                 };
-                // a list nobody else holds is extended where it stands, as a
-                // push onto it is; `concat acc acc` is never proven, so the
-                // second list is not the one being grown
-                if self.writes_in_place(span, frame) {
-                    Self::written_in_place(xs).extend(ys.iter().cloned());
-                    return Ok(a);
-                }
-                let mut joined = (**xs).clone();
-                joined.extend(ys.iter().cloned());
+                joined.extend(tail);
                 Ok(Value::List(Rc::new(joined)))
             }
             // The one declared acceptance the bytes gavel left standing: utf8
