@@ -101117,3 +101117,55 @@ both files since 2026-09-18, and
   today, and both times it had run to many times the limit. A spec that counts
   the live file's headings and fails above forty would hold it. That spec is
   `tests/`, so it is cloud's: #1854.
+
+## 2026-10-10 — three design notes retire, and a July ruling reaches the log
+
+This closes #1851. CLAUDE.md says a design note whose work has shipped is
+deleted, and that no file but the tracker carries pending-decision text. Five
+notes were read against the tree.
+
+**`design/enumerable.md` is deleted.** Its vocabulary is in `lib/list` and is
+taught in ch12 and appendix B, including the collision rule. The two rulings
+its status line called interim were ratified by Clay on 2026-08-14 (`range` is
+unbound and the statistic is `spread`; map builders are last-write-wins, like
+`put`), and §6 of the note already said so. Its one item marked open,
+`first coll n` beside `take n . to_list`, was settled by what shipped:
+`lib/list` has `first coll` alone, so `take` and `to_list` is the one way to
+take n. Its §7 described build blocks, which retired today.
+
+**`design/testing.md` is deleted.** The `testing` hako ships in `lib/testing`,
+`lib/json/json_test.kso` uses `when_failed`, and ch07 and ch08 teach it. The
+note's deferrals stay deferred and are recorded here so they keep a home: the
+2026-07-28 describe/context sketch is superseded until real suites show the
+need, with its two-deep limit still the right cage if they do; effectful tests
+are out of scope until io testing gets its own design against the boundary
+language; and two small observations were noted and not proposed, that a lambda
+cannot carry arms (so dispatching on a reason inside `when_failed` takes a named
+group) and that `when_failed` answering false on success folds "did not fail"
+into "failed the wrong way".
+
+**The work-ahead engine was ruled on 2026-07-22 and the ruling was never
+logged.** It lived only in `design/workahead-engine.md`. Recorded now: when a
+fiber parks on io, the scheduler runs proven-needed work in first-use order,
+then speculative work, keyed off logical scheduler state so the counters stay
+deterministic; v1 is proven work alone. The wall-credit substrate and the
+`bench/workahead/` rig shipped, and the engine did not. The note's
+implementation detail moves to #1856 (`ruled`, `lane:cloud`), and the note is
+deleted. docs/compiler.html's section remains the public description.
+
+**`design/hako.md` stays.** It is the only specification of `kanso install`,
+`list` and `update`, which ship, and `src/hako.rs` cites it. Its open-questions
+section pointed at the ledger, which is retiring under #1852; it now says the
+`std/` question was ruled on 2026-08-29 (std ships inside the binary) and keeps
+signing and monorepo hakos as parked.
+
+**`design/memory-frontier-research.md` stays.** Its table is the record of
+which memory ideas shipped, which were declined on measurement and which were
+refuted, and its refuted list is what stops an idea from being rebuilt. Rows
+4.1 and 4.4 concerned build blocks and are marked moot.
+
+The oldest live entry moves to the archive with this one, so the live file
+stays at forty.
+
+- **DONE** #1851.
+- **OPEN** #1856, the work-ahead engine, cloud's.

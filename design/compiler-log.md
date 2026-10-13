@@ -19,58 +19,6 @@
 > The last forty entries. Everything older is in `log/compiler-log-archive.md`,
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
-## 2026-10-10 — three design notes retire, and a July ruling reaches the log
-
-This closes #1851. CLAUDE.md says a design note whose work has shipped is
-deleted, and that no file but the tracker carries pending-decision text. Five
-notes were read against the tree.
-
-**`design/enumerable.md` is deleted.** Its vocabulary is in `lib/list` and is
-taught in ch12 and appendix B, including the collision rule. The two rulings
-its status line called interim were ratified by Clay on 2026-08-14 (`range` is
-unbound and the statistic is `spread`; map builders are last-write-wins, like
-`put`), and §6 of the note already said so. Its one item marked open,
-`first coll n` beside `take n . to_list`, was settled by what shipped:
-`lib/list` has `first coll` alone, so `take` and `to_list` is the one way to
-take n. Its §7 described build blocks, which retired today.
-
-**`design/testing.md` is deleted.** The `testing` hako ships in `lib/testing`,
-`lib/json/json_test.kso` uses `when_failed`, and ch07 and ch08 teach it. The
-note's deferrals stay deferred and are recorded here so they keep a home: the
-2026-07-28 describe/context sketch is superseded until real suites show the
-need, with its two-deep limit still the right cage if they do; effectful tests
-are out of scope until io testing gets its own design against the boundary
-language; and two small observations were noted and not proposed, that a lambda
-cannot carry arms (so dispatching on a reason inside `when_failed` takes a named
-group) and that `when_failed` answering false on success folds "did not fail"
-into "failed the wrong way".
-
-**The work-ahead engine was ruled on 2026-07-22 and the ruling was never
-logged.** It lived only in `design/workahead-engine.md`. Recorded now: when a
-fiber parks on io, the scheduler runs proven-needed work in first-use order,
-then speculative work, keyed off logical scheduler state so the counters stay
-deterministic; v1 is proven work alone. The wall-credit substrate and the
-`bench/workahead/` rig shipped, and the engine did not. The note's
-implementation detail moves to #1856 (`ruled`, `lane:cloud`), and the note is
-deleted. docs/compiler.html's section remains the public description.
-
-**`design/hako.md` stays.** It is the only specification of `kanso install`,
-`list` and `update`, which ship, and `src/hako.rs` cites it. Its open-questions
-section pointed at the ledger, which is retiring under #1852; it now says the
-`std/` question was ruled on 2026-08-29 (std ships inside the binary) and keeps
-signing and monorepo hakos as parked.
-
-**`design/memory-frontier-research.md` stays.** Its table is the record of
-which memory ideas shipped, which were declined on measurement and which were
-refuted, and its refuted list is what stops an idea from being rebuilt. Rows
-4.1 and 4.4 concerned build blocks and are marked moot.
-
-The oldest live entry moves to the archive with this one, so the live file
-stays at forty.
-
-- **DONE** #1851.
-- **OPEN** #1856, the work-ahead engine, cloud's.
-
 ## 2026-10-10 — CLAUDE.md states its rules once
 
 This closes #1849. CLAUDE.md had grown to 927 lines, most of them the history
@@ -1678,3 +1626,22 @@ Owes, on #1906: `list/concat` on every engine with `text/concat` removed and
 its callers moved; the checker refuses a string argument to `list/concat`; an
 error golden for a call to the removed name that points at `list/concat`;
 appendix B's entry rewritten under std/list.
+
+## 2026-10-13 — gavel: `list/to_sorted` builds the `sorted` that `find` bisects
+
+Clay ruled #1903. std/list declares `pub type sorted`, and `find` has an arm
+for it that bisects instead of scanning (archive, 2026-07-24, "find gets its
+fast arm"). Only std/list may build a `sorted`, and it exposed no function that
+does, so no caller could reach the fast arm.
+
+**The ruling.** `list/to_sorted xs` sorts `xs` by the order `list/sort` uses and
+answers it as a `sorted`. It takes any list `list/sort` takes. Because it sorts
+as it wraps, a `sorted` is always in order and the bisect cannot answer wrong.
+No function wraps a list unchecked. When type parameters are built (#1941),
+`sorted` becomes `<k>sorted` and this function's signature follows without a
+change in meaning.
+
+Owes, on #1903: `list/to_sorted` in std/list; the bisect tests back in
+`list_test.kso` through it; a micro golden in which `find` on a `to_sorted`
+answers the same as on the plain list; the counter that shows the bisect ran;
+appendix B.
