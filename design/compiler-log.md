@@ -1829,8 +1829,11 @@ perf_record's two watched lists, which were assembled from halves joined by
 `text/concat` to stay under the width, are now single spanning lists with
 their comments inside.
 
-The lexer change moves the compile rows and the tab's compile row; CI's rows
-are priced here before merge.
+CI's rows, on main after #1925: compile_instructions lands on 26,216,275
+(+334,724), entry_instructions on 86,540,771 (+1,159,458), library_instructions
+on 87,096,300 (+1,160,718) and browser_compile_instructions on 392,203,148
+(+891,646). interp_instructions falls to 488,437,711 (-302,105) and
+emit_instructions to 7,012,968 (-509).
 
 - **OPEN** #1882, until this lands.
 
