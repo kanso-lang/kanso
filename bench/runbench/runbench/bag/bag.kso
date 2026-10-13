@@ -1,0 +1,20 @@
+# A list held in a record and pushed onto through the record: the
+# accumulator the lox, markdown, datalog and sat ports each wrote. Until
+# #1892's eleventh item was fixed, every push copied the list, because the
+# record still held it, so n pushes cost the square of n: 40,000 of them
+# allocated 37 GB.
+type bag
+  count
+  items
+
+fn add b i
+  bag (b.count + 1) (push b.items i)
+
+fn fill b 0
+  b
+
+fn fill b n
+  fill (add b n) (n - 1)
+
+pub fn total n
+  length (fill (bag 0 []) n).items
