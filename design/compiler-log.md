@@ -19,39 +19,6 @@
 > The last forty entries. Everything older is in `log/compiler-log-archive.md`,
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
-## 2026-10-10 — CLAUDE.md states its rules once
-
-This closes #1849. CLAUDE.md had grown to 927 lines, most of them the history
-of its own rules: dated stories of how each was learned, counts with the dates
-they went stale, and corrections to earlier corrections. Its design-flow rule
-says chronology belongs in the log, and its hygiene section says instructions
-are rules. It is now 498 lines.
-
-Every rule the old file stated with a bold lead is still there, checked by
-listing the old file's bold leads and finding each one in the new text. What
-went is the stories, the session tables and the dated counts. The full earlier
-text is `git show be71feb8:CLAUDE.md`, and the stories are in the log entries
-of their own dates.
-
-Three things changed beyond trimming:
-
-- The two-grep ruling count was written as one pipeline that fed the first
-  count into the second grep, so it printed one meaningless number. It is two
-  commands now.
-- "Branches are free" moved from "Do not stop" to "Access and permissions",
-  beside the other rules about what needs Clay's permission.
-- The chat's lane names the design notes, which it has edited since the lanes
-  were drawn and which #1851 was filed against.
-
-Two specs read CLAUDE.md's wording, and both still pass. One wants the
-cost-golden count word in "all TWELVE cost goldens,", the one count left in
-the file, and #1846 asks cloud to retire it. The other wants every compile
-gate named in the bullet containing "are separate gates". It went red during
-the rewrap when that phrase broke across a line, which confirmed it reads the
-phrase literally.
-
-The oldest live entry moves to the archive with this one.
-
 ## 2026-10-10 — a pop after a skipped lap walks the whole result
 
 With the two carry faults of kanso#1834 fixed, the sat port still failed under
@@ -1645,3 +1612,43 @@ Owes, on #1903: `list/to_sorted` in std/list; the bisect tests back in
 `list_test.kso` through it; a micro golden in which `find` on a `to_sorted`
 answers the same as on the plain list; the counter that shows the bisect ran;
 appendix B.
+
+## 2026-10-13 — gavel: names for the library gaps the ports hit
+
+Clay ruled #1914 one name at a time. Each name was decided from what it should
+mean. Three of the answers overturn the issue's recommendations, which had
+argued from resemblance to existing names.
+
+**The rulings.**
+
+- `io/read_line` is a description that yields the next line of standard
+  input without its newline, or `done` at the end of input. An interactive
+  program prompts between reads, and one call per line puts each read where
+  the program says it happens.
+- `delete map key` answers the map without that key. It is a bare builtin
+  beside `put`, and the two names say the opposite things.
+- `list/sort_by xs key` sorts by what `key` answers for each element, and
+  `list/reverse xs` reverses. The key gets its own name because a second
+  argument to `sort` would read as a comparator.
+- `text/uppercase s` and `text/lowercase s`. A `to_` name means the answer is
+  a different kind of thing (`to_int "42"` is a number). Changing case leaves
+  a string, so the name is a verb for what happens to it, as `trim` and
+  `sort` are.
+- `text/starts_with? s prefix` and `text/ends_with? s suffix`. A trailing `?`
+  means the function answers true or false.
+- `text/pad_start s width fill` and `text/pad_end s width fill`. Left and
+  right name where text lands on a screen, which depends on the script; start
+  and end name the end of the string that grows, in the same words
+  `starts_with?` uses.
+- No `os/write_bytes`. The content passed to `os/write_file` is already a
+  string or bytes, so the argument says which kind is written, and
+  `write_file` has accepted both since 2026-09-09. Reading needs two names
+  because a path cannot say which kind the caller wants back.
+- `os/modified path` answers the file's last-modified time in milliseconds
+  since the epoch, the unit `time/now` uses, and `file_not_found` as data
+  for a missing file. There is no `os/stat`: one name answers one fact.
+
+Owes, on #1914: each name on every engine with a micro golden; `read_line`
+reaching `done` on an empty and an unterminated last line; `modified` on a
+missing file; appendix B's entries; the ports that worked around a gap moved
+onto the name.
