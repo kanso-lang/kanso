@@ -15,11 +15,13 @@ extra_css: /book/book.css
 
 <h2>the shape of the program</h2>
 
-<p>chapter 07 said a module is a directory whose files share one namespace, and this program leans on that: <code>main.kso</code> calls <code>plurality_winner</code> from <code>methods.kso</code>, which calls <code>argmax</code> from <code>enumerable.kso</code>, with no imports anywhere. the files are chapters of one book. <code>enumerable.kso</code> is the vocabulary layer—the ambient names give it <code>push</code> and <code>length</code>, the subscript reads elements, and it derives the rest from a single recursive fold. <code>std/list</code> ships these verbs ready-made (chapter 12 reads that machinery); building them by hand here keeps the whole program legible down to its floor:</p>
+<p>chapter 07 said a module is a directory whose files share one namespace, and this program leans on that: <code>main.kso</code> calls <code>plurality_winner</code> from <code>methods.kso</code>, which calls <code>argmax</code> from <code>enumerable.kso</code>, and no file imports another. the files are chapters of one book. they share their declarations, and each file imports what it calls: <code>enumerable.kso</code> calls <code>fold</code>, so it imports <code>std/list</code> itself, though <code>methods.kso</code> imports it too. <code>enumerable.kso</code> is the vocabulary layer—the ambient names give it <code>push</code> and <code>length</code>, the subscript reads elements, and it derives the rest from a single recursive fold. <code>std/list</code> ships these verbs ready-made (chapter 12 reads that machinery); building them by hand here keeps the whole program legible down to its floor:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">vse/enumerable.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">argmax</span> list
+  <pre><code><span class="k">import</span> <span class="s">"std/list"</span>
+
+<span class="k">fn</span> <span class="f">argmax</span> list
   <span class="f">fold</span> (<span class="f">range</span> (<span class="f">length</span> list)) <span class="n">1</span> (<span class="f">b</span> i <span class="o">-&gt;</span> <span class="f">if</span> (list[b] <span class="o">&lt;</span> list[i]) i b)
 
 <span class="k">fn</span> <span class="f">range</span> n

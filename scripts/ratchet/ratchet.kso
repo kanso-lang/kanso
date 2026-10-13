@@ -5056,7 +5056,21 @@ op_arms_boxed = row
 
 rows_c1zzzzzzx7 = text/concat rows_c1zzzzzzx8 [op_arms_boxed]
 
-rows_c = text/concat rows_c1zzzzzzx7 [itself]
+# A file of a several-file module names only what the module declares and
+# what its own imports bring. The mutation lets every file see every
+# sibling's imports, and a file calling `fold` with no import of std/list
+# checks clean.
+sibling_import = row
+  "a sibling's import seen from every file"
+  true
+  "cargo test --release --test errors_module"
+  "specs (unit, golden, differential)"
+  (breaking "a_sibling_import_seen_from_every_file")
+  no_setup
+
+rows_c1zzzzzzw9 = text/concat rows_c1zzzzzzx7 [sibling_import]
+
+rows_c = text/concat rows_c1zzzzzzw9 [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
