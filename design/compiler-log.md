@@ -1931,3 +1931,10 @@ On CI's rows for the tree merged with #1913: interp_instructions lands on
 25,881,675, entry_instructions on 85,381,437 and library_instructions on
 85,935,705. browser_compile_instructions lands on 393,094,499, up 1,782,997
 or 0.46%, since the page's translator turns each new jump into a tail call.
+
+On CI's rows for the tree merged with #1923: compile_instructions lands on
+25,882,102, entry_instructions on 85,381,864, library_instructions on
+85,936,071 and interp_instructions on 495,372,854, each a few hundred
+instructions up. The merge brought twelve changed lines in the interpreter's
+builtins and nothing else in `src/`; nothing here isolates which of the two
+moved these rows.
