@@ -425,7 +425,7 @@ fn unsigned v
   minus? v (text/slice v 1 1 == "-")
 
 fn minus? v true
-  text/slice v 2 (length v)
+  or_empty (text/slice v 2 (length v))
 
 fn minus? v false
   v
@@ -569,7 +569,7 @@ fn commas n
   signed "{n}" (n < 0)
 
 fn signed s true
-  "-{grouped (text/slice s 2 (length s))}"
+  "-{grouped (or_empty (text/slice s 2 (length s)))}"
 
 fn signed s false
   grouped s
@@ -581,9 +581,17 @@ fn short s true
   s
 
 fn short s false
-  head = text/slice s 1 (length s - 3)
-  tail = text/slice s (length s - 2) (length s)
+  head = or_empty (text/slice s 1 (length s - 3))
+  tail = or_empty (text/slice s (length s - 2) (length s))
   "{grouped head},{tail}"
+
+# The slices in this file stay inside their value, so they are never none; the
+# arm is there because the checker cannot see that.
+fn or_empty none
+  ""
+
+fn or_empty piece
+  piece
 
 fn from_git base path
   asked ["show" "{base}:{path}"] .> (r -> answered r.status r.stdout)
@@ -723,7 +731,8 @@ fn log_delta base
 
 fn plus_lines out
   kept = list/select (text/split out "\n") added?
-  text/join (list/to_list (list/map kept (l -> text/slice l 2 (length l)))) "\n"
+  bodies = list/map kept (l -> or_empty (text/slice l 2 (length l)))
+  text/join (list/to_list bodies) "\n"
 
 # A fixture this branch adds has nothing to be compared against, and counting
 # its counters as movement would read every new pin as a regression.
@@ -850,7 +859,7 @@ fn bare_name name ""
   name
 
 fn bare_name name prefix
-  text/slice name (length prefix + 1) (length name)
+  or_empty (text/slice name (length prefix + 1) (length name))
 
 fn told golden name before after worse ruled rebased
   arrow = arrow_when rebased worse ruled
@@ -883,7 +892,7 @@ fn mem? name
   text/slice name (length name - 3) (length name) == ".mem"
 
 fn mem_golden name
-  stem = text/slice name 1 (length name - 4)
+  stem = or_empty (text/slice name 1 (length name - 4))
   ["{mem_dir}/{name}" "{stem}_"]
 
 fn mem_goldens names

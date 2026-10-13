@@ -47,9 +47,6 @@ pub fn split s sep
 # `split` raises on an empty separator, and an answer that can be a raised err
 # may not reach `step_in`, which has no arm for one. The separator here is a
 # character, never empty, and the builtin answers a list and nothing else.
-fn padding? none
-  false
-
 fn padding? c
   length (builtin_split " \t\n\r" c) > 1
 
@@ -81,7 +78,7 @@ fn step_back s from at true
   from_back s from (at - 1)
 
 fn step_back s from at false
-  slice s from at
+  kept (slice s from at)
 
 # `bytes` covers strings; this covers numbers. It refuses loudly outside 0-255
 # rather than truncating, because a number that is not a byte is a mistake.
@@ -102,3 +99,14 @@ pub fn utf8 codes
 # outside the bytes.
 pub fn number_span cs p
   builtin_number_span cs p
+
+# trim's two walks only ask for characters inside `s`, so neither slice is
+# ever none; these arms are there because the checker cannot see that.
+fn padding? none
+  false
+
+fn kept none
+  ""
+
+fn kept piece
+  piece

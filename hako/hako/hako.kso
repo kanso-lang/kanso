@@ -49,8 +49,16 @@ fn settled mark
   io/write "" .> (_ -> mark)
 
 fn line p mark
-  short = text/slice p.sha 1 12
+  short = shortened (text/slice p.sha 1 12) p.sha
   "{text/join [p.name p.tag short p.protocol] " "}{mark}\n"
+
+# A sha shorter than twelve characters, which a hand-written lock can hold,
+# runs the slice past its end; the whole sha is what it answered before.
+fn shortened none sha
+  sha
+
+fn shortened piece _
+  piece
 
 # The verb and its arguments arrive the way any program's do. `kanso list`
 # and `kanso update` hand them in; there is no third caller.

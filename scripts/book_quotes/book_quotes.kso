@@ -161,7 +161,7 @@ fn identing _ _ _ acc true
 
 fn identing body hits at acc false
   h = hits[at]
-  word = text/slice body h.from (h.to - 1)
+  word = or_empty (text/slice body h.from (h.to - 1))
   ident_loop body hits (at + 1) (push acc word)
 
 fn holds? names name
@@ -221,7 +221,15 @@ fn named_in panel
 fn dir_of path
   parts = text/split path "/"
   last = parts[length parts]
-  text/slice path 1 (length path - length last - 1)
+  or_empty (text/slice path 1 (length path - length last - 1))
+
+# The slices in this file stay inside their value, so they are never none; the
+# arm is there because the checker cannot see that.
+fn or_empty none
+  ""
+
+fn or_empty piece
+  piece
 
 fn kso? n
   regexp/match? "\\.kso$" n

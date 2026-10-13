@@ -1,0 +1,39 @@
+import "std/text"
+
+# A slice whose range runs past the end of the value, or starts past it,
+# answers none, as an index past the end does. A range that ends exactly at
+# the end is the tail, and the empty range just past the end is empty.
+fn shown none
+  "none"
+
+fn shown s
+  "[{s}]"
+
+fn listed none
+  "none"
+
+fn listed xs
+  "{xs}"
+
+fn decoded none
+  "none"
+
+fn decoded b
+  "[{text/utf8 b}]"
+
+lines = [
+  "text ends at the end: {shown (text/slice "abc" 2 3)}"
+  "text runs past: {shown (text/slice "abc" 2 4)}"
+  "text starts past: {shown (text/slice "abc" 5 6)}"
+  "text empty past the end: {shown (text/slice "abc" 4 3)}"
+  "wide text ends at the end: {shown (text/slice "héllo" 2 5)}"
+  "wide text runs past: {shown (text/slice "héllo" 4 9)}"
+  "list ends at the end: {listed (text/slice [1 2 3] 1 3)}"
+  "list runs past: {listed (text/slice [1 2 3] 3 4)}"
+  "bytes end at the end: {decoded (text/slice abc 1 3)}"
+  "bytes run past: {decoded (text/slice abc 1 4)}"
+]
+
+abc = text/bytes "abc"
+
+pub play = print (text/join lines "\n")

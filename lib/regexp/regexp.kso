@@ -381,7 +381,7 @@ fn skipping prog s at true
   hit at end.to (caught_in_order end.caught 1 [] prog.wanted)
 
 fn worth_trying? prog s at
-  open_start? prog.starters (at > length s) (text/slice s at at)
+  open_start? prog.starters (at > length s) (char_at s at)
 
 # Any one of three conditions opens the position, and written as three arms
 # each was the most specific one somewhere and none was most specific
@@ -641,7 +641,7 @@ fn flag_group? pattern at
   opens and in? "is" (letter_at pattern at)
 
 fn letter_at pattern at
-  text/slice pattern (at + 2) (at + 2)
+  char_at pattern (at + 2)
 
 fn more_flags _ at seen false
   parsed seen at
@@ -1214,7 +1214,7 @@ fn walked (group node slot) s at slots k
   walked node s at slots (to caught -> capturing s at slot to caught k)
 
 fn capturing s at slot to caught k
-  k to (push caught (grabbed slot (text/slice s at (to - 1))))
+  k to (push caught (grabbed slot (or_empty (text/slice s at (to - 1)))))
 
 # Lookahead consumes nothing: the inner pattern is asked whether it can match
 # here, the answer is compared? with what the sigil wanted, and the walk carries
@@ -1269,10 +1269,21 @@ fn walked (cls set negated) s at slots k
   matched_one s at slots k (here and in_class? set negated (sliced s at here))
 
 fn sliced s at true
-  text/slice s at at
+  char_at s at
 
 fn sliced _ _ false
   ""
+
+# One character of `s`, or "" past its end. Every caller has already asked
+# whether `at` is inside `s`, so the "" is the answer it expects there.
+fn char_at s at
+  or_empty (text/slice s at at)
+
+fn or_empty none
+  ""
+
+fn or_empty piece
+  piece
 
 fn in_class? set negated c
   flipped? (in? set c) negated
@@ -1307,7 +1318,7 @@ fn word_at? s at
   reads? s at (at >= 1 and at <= length s)
 
 fn reads? s at true
-  in? word_chars (text/slice s at at)
+  in? word_chars (char_at s at)
 
 fn reads? _ _ false
   false

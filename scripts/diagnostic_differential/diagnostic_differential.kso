@@ -56,7 +56,7 @@ fn signature? l
   text/slice l 1 7 == "pub fn "
 
 fn tokens l
-  rest = text/slice l 8 (length l)
+  rest = or_empty (text/slice l 8 (length l))
   list/to_list (list/reject (text/split rest " ") (t -> t == ""))
 
 # A destructuring parameter means the arm takes a shape rather than a value,
@@ -386,16 +386,24 @@ fn trimmed ""
   ""
 
 fn trimmed s
-  dropped s (text/slice s (length s) (length s))
+  dropped s (or_empty (text/slice s (length s) (length s)))
 
 fn dropped s "\n"
-  trimmed (text/slice s 1 (length s - 1))
+  trimmed (or_empty (text/slice s 1 (length s - 1)))
 
 fn dropped s " "
-  trimmed (text/slice s 1 (length s - 1))
+  trimmed (or_empty (text/slice s 1 (length s - 1)))
 
 fn dropped s _
   s
+
+# The slices in this file stay inside their value, so they are never none; the
+# arm is there because the checker cannot see that.
+fn or_empty none
+  ""
+
+fn or_empty piece
+  piece
 
 fn shortened s false
   s

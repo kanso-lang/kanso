@@ -28,8 +28,19 @@ fn protocol_of fields
 # tag are not releases, which is what stops a version race being won by
 # something nobody published.
 pub fn release? tag
-  parts = text/split (text/slice tag 2 (length tag)) "."
+  parts = text/split (past_v tag) "."
   text/slice tag 1 1 == "v" and triple? parts
+
+# What follows a tag's `v`. An empty tag has nothing there and the slice
+# answers none; "" is what it answered before, and it parses as no version.
+fn past_v tag
+  or_empty (text/slice tag 2 (length tag))
+
+fn or_empty none
+  ""
+
+fn or_empty piece
+  piece
 
 fn digit? c
   code = text/char_code c

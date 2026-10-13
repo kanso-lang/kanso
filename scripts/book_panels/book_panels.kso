@@ -293,7 +293,7 @@ fn empty_span _ _ _ true
   ""
 
 fn empty_span raw from to false
-  text/slice raw from (least to (length raw))
+  or_empty (text/slice raw from (least to (length raw)))
 
 fn least a b
   smaller a b (a < b)
@@ -438,7 +438,7 @@ fn verb false
   "drifted"
 
 fn whole_of raw m
-  text/slice raw m.from (m.to - 1)
+  or_empty (text/slice raw m.from (m.to - 1))
 
 fn trimmed s
   without_tail s (length s == 0)
@@ -453,7 +453,15 @@ fn shed s false
   s
 
 fn shed s true
-  trimmed (text/slice s 1 (length s - 1))
+  trimmed (or_empty (text/slice s 1 (length s - 1)))
+
+# Every slice in this file stays inside its value, so it is never none; the arm
+# is there because the checker cannot see that.
+fn or_empty none
+  ""
+
+fn or_empty piece
+  piece
 
 fn in? hay needle
   length (text/split hay needle) > 1
@@ -492,7 +500,7 @@ fn highlight line
 
 fn tokens_of line
   hits = regexp/matches token_pattern line
-  cut = (h -> token (text/slice line h.from (h.to - 1)) h.from)
+  cut = (h -> token (or_empty (text/slice line h.from (h.to - 1))) h.from)
   hits .> (found -> list/to_list (list/map found cut))
 
 fn painted toks at acc
@@ -506,7 +514,7 @@ fn painting toks at acc false
 
 fn one_token toks at
   t = toks[at]
-  classed toks at t.text (text/slice t.text 1 1)
+  classed toks at t.text (or_empty (text/slice t.text 1 1))
 
 fn classed _ _ t "\""
   highlight_string t
@@ -546,7 +554,7 @@ fn word? set t
 
 # A string literal: its interpolations get their own span, inside the string's.
 fn highlight_string t
-  body = text/slice t 2 (length t - 1)
+  body = or_empty (text/slice t 2 (length t - 1))
   "<span class=\"s\">\"{interpolated body 1 ""}\"</span>"
 
 fn interpolated body at acc
@@ -560,12 +568,13 @@ fn weaving body at acc false
 
 fn opens body at acc true
   shut = closing body (at + 1) 1
-  inner = text/slice body at (shut - 1)
+  inner = or_empty (text/slice body at (shut - 1))
   interpolated body shut "{acc}<span class=\"i\">{escaped inner}</span>"
 
 fn opens body at acc false
   stop = next_open body at
-  interpolated body stop "{acc}{escaped (text/slice body at (stop - 1))}"
+  piece = or_empty (text/slice body at (stop - 1))
+  interpolated body stop "{acc}{escaped piece}"
 
 fn closing body at depth
   shutting body at depth (at > length body or depth == 0)
@@ -574,7 +583,7 @@ fn shutting _ at _ true
   at
 
 fn shutting body at depth false
-  closing body (at + 1) (depth + step_of (text/slice body at at))
+  closing body (at + 1) (depth + step_of (or_empty (text/slice body at at)))
 
 fn step_of "\{"
   1
@@ -744,8 +753,8 @@ fn carets line false
   escaped line
 
 fn caret_at line at
-  before = text/slice line 1 (at - 1)
-  rest = escaped (text/slice line at (length line))
+  before = or_empty (text/slice line 1 (at - 1))
+  rest = escaped (or_empty (text/slice line at (length line)))
   "{before}<span class=\"k\">{rest}</span>"
 
 fn reported drift write

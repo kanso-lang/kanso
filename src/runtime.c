@@ -9637,6 +9637,8 @@ KValue k_b_utf8_slice_raw(const unsigned char* bytes, long long blen,
                           long long from, long long to, const char* origin) {
     const char* data = (const char*)bytes;
     long long len = 0;
+    /* past the end the slice is none, and utf8 says what it says of none */
+    if (__builtin_expect(to > blen || from > blen + 1, 0)) return k_b_utf8(k_none(), origin);
     if (k_span_in(from, to, blen)) {
         data += from - 1;
         len = to - from + 1;
@@ -11138,10 +11140,11 @@ __attribute__((noinline, cold)) KValue k_b_append_word_slow(KValue acc, const ch
    hand out; this reads the range straight out of `cs` and hands
    k_b_append_into a pointer and a length, so nothing is allocated for it.
 
-   The bounds rule is k_b_slice_raw's, to the character: an out-of-range or
-   inverted range is the empty slice, which appends nothing, and `acc` still
-   has to be bytes for that to be legal. Anything the tags turn away goes the
-   long way, so the two spellings cannot disagree. */
+   The bounds rule is k_b_slice_raw's, to the character: a range past the end
+   is none, and appending none is whatever the unfused append makes of it; an
+   inverted range or one starting before 1 is the empty slice, which appends
+   nothing, and `acc` still has to be bytes for that to be legal. Anything the
+   tags turn away goes the long way, so the two spellings cannot disagree. */
 KValue k_b_append_slice(KValue acc, KValue cs, KValue fromv, KValue tov,
                         long long mutate) {
     if (__builtin_expect(!k_not_failure(acc) || !k_not_failure(cs) || !k_not_failure(fromv)
@@ -11156,6 +11159,7 @@ KValue k_b_append_slice(KValue acc, KValue cs, KValue fromv, KValue tov,
     KBytes* a = k_as_bytes(acc);
     KBytes* src = k_as_bytes(cs);
     long long from = fromv.payload, to = tov.payload;
+    if (to > src->len || from > src->len + 1) return k_b_append_into(acc, k_none(), (int)mutate);
     /* The empty slice appends nothing, and the view it would have been is not
        built: a fifth of the runs between two escapes are empty, and a header
        allocated to carry zero bytes is 204,450 allocations a decode. */
@@ -11315,6 +11319,7 @@ KValue k_b_find2_below(KValue cs, KValue from, KValue a, KValue b, KValue lim) {
    away, and for the list and string containers, which do not come here. */
 KValue k_b_slice_raw(const unsigned char* data, long long len, long long from,
                      long long to) {
+    if (__builtin_expect(to > len || from > len + 1, 0)) return k_none();
     if (!k_span_in(from, to, len)) return k_bytes_view(data, 0);
     return k_bytes_view(data + (from - 1), to - from + 1);
 }
@@ -11360,15 +11365,21 @@ KValue k_b_slice(KValue container, KValue fromv, KValue tov) {
     }
     if (container.tag == K_LIST) {
         KList* l = k_as_list(container);
+        if (to > l->len || from > l->len + 1) return k_none();
         if (!k_span_in(from, to, l->len)) return k_mklist(0, NULL);
         return k_mklist(to - from + 1, l->items + (from - 1));
     }
     if (container.tag == K_STR) {
         KStr* s = k_as_str(container);
+        /* A range that runs past the end, or starts past it, answers none,
+           as an index past the end does (#1890). The count is the one the
+           ascii test below asks for, cached on the string. */
+        long long chars = k_str_chars(s);
+        if (to > chars || from > chars + 1) return k_none();
         /* Every character one byte, so a position is an offset and the walk
            that finds it is unnecessary. This is the case for html, source and
            anything else a gate reads. */
-        if (k_str_chars(s) == (long long)s->len) {
+        if (chars == (long long)s->len) {
             if (!k_span_in(from, to, (long long)s->len)) return k_str_n("", 0);
             /* One character first: a matcher slices one at a time, a million
                times a run on scanbench, and the ascii cache answers it. The

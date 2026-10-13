@@ -41,7 +41,7 @@ fn escape_rest acc bs n len
 
 # the clean run from p up to the found position, appended in one copy
 fn escape_run acc bs p n
-  if (p < n) (text/append acc (text/slice bs p (n - 1))) acc
+  if (p < n) (run_onto acc (text/slice bs p (n - 1))) acc
 
 fn escape_at acc bs n len
   return acc if n < 1 or length bs < n
@@ -112,7 +112,7 @@ fn str_chars cs p acc
   str_run cs p (text/find2 cs p 34 92) acc
 
 fn str_run cs p n acc
-  str_char cs cs[n] n (text/append acc (text/slice cs p (n - 1)))
+  str_char cs cs[n] n (run_onto acc (text/slice cs p (n - 1)))
 
 fn str_escape cs 34 p acc
   str_chars cs (p + 2) (text/append acc 34)
@@ -202,16 +202,30 @@ fn unicode_at cs p acc code
     str_surrogate cs p acc code
 
 fn string_at cs 34 start p
-  parsed (p + 1) (string_ok p (text/utf8 (text/slice cs start (p - 1))))
+  parsed (p + 1) (string_ok p (decoded (text/slice cs start (p - 1))))
 
 fn string_at cs 92 start p
-  str_chars cs p (text/append (text/bytes "") (text/slice cs start (p - 1)))
+  str_chars cs p (run_onto (text/bytes "") (text/slice cs start (p - 1)))
 
 fn string_at _ none _ p
   fail p "unterminated string"
 
 fn string_at cs _ start p
   string_scan cs start (p + 1)
+
+# A run's ends come from a scan of the same bytes, so its slice is never past
+# the end. If one were, the run is dropped and the string reads as invalid.
+fn run_onto acc none
+  acc
+
+fn run_onto acc run
+  text/append acc run
+
+fn decoded none
+  err "a run past the end"
+
+fn decoded run
+  text/utf8 run
 
 fn string_ok p (err _)
   err (parse_failure p "invalid utf-8 in string")

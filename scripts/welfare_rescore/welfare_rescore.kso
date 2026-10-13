@@ -117,7 +117,7 @@ fn over_read _ true
 fn over_read rows false
   return over_read rows true if length rows < 1
   line = rows[1]
-  parts = text/split (text/slice line 6 (length line)) "|"
+  parts = text/split (or_empty (text/slice line 6 (length line))) "|"
   return over 0.0 1.0 0.0 0.0 if length parts < 3
   a = text/to_float parts[1]
   b = text/to_float parts[2]
@@ -140,7 +140,7 @@ fn parsed_terms model
   list/to_list (list/map rows one_term)
 
 fn one_term line
-  parts = text/split (text/slice line 6 (length line)) "|"
+  parts = text/split (or_empty (text/slice line 6 (length line))) "|"
   return term "" 0.0 0.0 [] "production" if length parts < 4
   w = text/to_float parts[2]
   sat = text/to_float parts[3]
@@ -178,16 +178,25 @@ fn named _ true
 
 fn named rows false
   return named rows true if length rows < 1
-  text/slice rows[1] 9 (length rows[1])
+  or_empty (text/slice rows[1] 9 (length rows[1]))
 
 fn parsed_base model
   rows = list/select (model_lines model) (l -> text/slice l 1 5 == "base ")
   list/to_h (list/to_list (list/map rows one_base))
 
 fn one_base line
-  halves = text/split (text/slice line 6 (length line)) "="
+  halves = text/split (or_empty (text/slice line 6 (length line))) "="
   return ["" 0] if length halves < 2
   [halves[1] (text/to_int halves[2])]
+
+# Each row was selected for its prefix, so the slice past it starts at most one
+# past the end and is never none; the arm is there because the checker cannot
+# see that.
+fn or_empty none
+  ""
+
+fn or_empty piece
+  piece
 
 # --- the run term for a row measured before runbench existed ----------------
 # Ruling of 2026-09-07, "the welfare history's baseline" (kanso#1313): each

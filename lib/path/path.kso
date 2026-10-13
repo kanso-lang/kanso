@@ -1,7 +1,15 @@
 import { join:joined } "std/text"
 
 pub fn basename p
-  text/slice p (past_separator p (length p)) (length p)
+  whole (text/slice p (past_separator p (length p)) (length p))
+
+# The slice above ends at the end of `p` and starts at most one past it, so it
+# is never none; the arm is there because the checker cannot see that.
+fn whole none
+  ""
+
+fn whole name
+  name
 
 pub fn dirname p
   cut_at p (past_separator p (length p))

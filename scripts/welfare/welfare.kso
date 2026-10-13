@@ -698,9 +698,17 @@ fn short s true
   s
 
 fn short s false
-  head = text/slice s 1 (length s - 3)
-  tail = text/slice s (length s - 2) (length s)
+  head = or_empty (text/slice s 1 (length s - 3))
+  tail = or_empty (text/slice s (length s - 2) (length s))
   "{grouped head},{tail}"
+
+# The slices in this file stay inside their value, so they are never none; the
+# arm is there because the checker cannot see that.
+fn or_empty none
+  ""
+
+fn or_empty piece
+  piece
 
 fn commas n
   grouped "{n}"
@@ -1030,11 +1038,22 @@ fn why h false
 fn reported now base held value
   floor = held["floor"]
   head = "welfare {fixed value 2}   floor {fixed floor 2}"
-  reason = text/slice (last_why held) 1 52
+  reason = clipped (last_why held) 52
   tail = "(ceiling 100, ratchet {era_of held}: {reason}…)"
   io/write "{head}   {tail}\n"
     .> (_ -> sides now base)
     .> (_ -> detailed now base .> (_ -> verdict value floor))
+
+# A slice that runs past the end answers none, so a reason shorter than the
+# cut is kept whole, which is what the slice answered before.
+fn clipped s n
+  cut s n (length s > n)
+
+fn cut s n true
+  or_empty (text/slice s 1 n)
+
+fn cut s _ false
+  s
 
 # THE TWO SIDES UNDER THE META, printed because the meta alone cannot say which
 # way a trade went. They are diagnostics in the same sense the per-term

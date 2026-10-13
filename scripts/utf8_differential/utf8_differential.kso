@@ -109,11 +109,11 @@ header = """
 
 fn body_of src sig
   text/split src sig .> (parts -> "{sig}{parts[2]}")
-    .> (start -> text/slice start 1 (closing_brace start 0 1))
+    .> (start -> or_empty (text/slice start 1 (closing_brace start 0 1)))
 
 # The function ends at the brace that closes the one its signature opens.
 fn closing_brace src depth i
-  at_brace src depth i (text/slice src i i)
+  at_brace src depth i (or_empty (text/slice src i i))
 
 fn at_brace _ 1 i "}"
   i
@@ -212,13 +212,21 @@ fn trimmed ""
   ""
 
 fn trimmed s
-  dropped s (text/slice s (length s) (length s))
+  dropped s (or_empty (text/slice s (length s) (length s)))
 
 fn dropped s "\n"
-  trimmed (text/slice s 1 (length s - 1))
+  trimmed (or_empty (text/slice s 1 (length s - 1)))
 
 fn dropped s _
   s
+
+# The slices in this file stay inside their value, so they are never none; the
+# arm is there because the checker cannot see that.
+fn or_empty none
+  ""
+
+fn or_empty piece
+  piece
 
 fn written e@(err _)
   e
