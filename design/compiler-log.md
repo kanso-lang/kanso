@@ -2033,3 +2033,9 @@ emit_instructions on 7,016,791 and browser_compile_instructions on
 392,024,143. The interpreter asks whether each item `push` is handed is a cell
 still being made, and interp_instructions lands on 489,120,716. This builds a
 ruled part of the language, so the welfare floor drops by what it costs.
+
+On the tree merged with #1913 the same costs sit on main's new rows:
+compile_instructions lands on 25,884,823, entry_instructions on 85,390,774,
+library_instructions on 85,944,538, emit_instructions on 7,013,859,
+browser_compile_instructions on 391,328,276 and interp_instructions on
+489,068,417.
