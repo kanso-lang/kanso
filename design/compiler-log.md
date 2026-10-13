@@ -2014,5 +2014,5 @@ and `test_decode_nested` compares a decoded document against a map holding a
 bare `json_null`.
 
 From CI, the interpreter's run of the corpus reads 249 instructions fewer,
-interp_instructions 488,792,115 to 488,791,866. No other row moved, and
-welfare banks the rise.
+interp_instructions 488,739,816 to 488,739,567 on the merged tree. No other
+row moved, and welfare banks the rise.
