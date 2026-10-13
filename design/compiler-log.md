@@ -1999,3 +1999,9 @@ The emitted totals: `emitted_other_branches` 16,476, `emitted_other_calls`
 17,511 and `emitted_other_defines` 2,012.
 
 This is the toml item on #1892.
+
+On CI's rows for the tree merged with #1913: interp_instructions lands on
+495,372,671, emit_instructions on 7,089,710, compile_instructions on
+25,881,675, entry_instructions on 85,381,437 and library_instructions on
+85,935,705. browser_compile_instructions lands on 393,094,499, up 1,782,997
+or 0.46%, since the page's translator turns each new jump into a tail call.
