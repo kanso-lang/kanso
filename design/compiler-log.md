@@ -2035,3 +2035,13 @@ allocation counter in the twelve cost veins is unchanged.
 re-entering function on as a value, which still refuses the entry, and
 `a_cluster_reaching_its_caller_under_a_plain_call_is_a_beat` pins the plain
 call.
+
+CI's rows. The two benchmarks whose IR changed gain their brackets:
+work_runbench lands on 1,170,034,251, 829 fewer, and work_scanbench on
+273,515, eight fewer. The brackets are code: text lands on 4,840,798, up
+5,952 (scanbench 3,888, runbench 2,064), emitted_other_calls on 17,531,
+emitted_other_branches on 16,476 and emitted_other_lines on 147,327.
+emit_instructions falls 522 to 7,012,955. The tab runs the same analysis,
+which now walks each body for its frameless names:
+browser_compile_instructions lands on 392,099,969, up 788,467, and
+browser_compile_peak_bytes on 676,511, up 786.
