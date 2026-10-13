@@ -21,329 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-11 — the two sweeps print their own lists
-
-Two specs checked CLAUDE.md's wording. `every_counter_gate_is_in_the_sweep`
-read the word before "cost goldens," and `the_compile_sweep_names_every_compile_gate`
-read one bullet for every compile gate's name. Each kept a fact in two places
-and used a test to make them agree, which ties the instructions' prose to the
-tree and blocks rewriting it (kanso#1846).
-
-Both sweeps now take `--list`. `all_counters.sh --list` prints each vein and
-its golden, and `all_compile.sh --list` prints each gate, both before building
-anything. The two specs that read CLAUDE.md are replaced by
-`the_sweep_lists_every_cost_golden` and `the_sweep_lists_every_compile_gate`,
-which run the script with `--list` and compare its output with the files on
-disk in both directions. Each went red with one entry dropped from the list it
-reads, naming the golden or gate it had lost.
-
-So the scripts are the single source for which veins and gates exist, and
-CLAUDE.md no longer has to carry either list or a count.
-
-## 2026-10-11 — the welfare verdict compares exactly, and kanso#1840's shape joins the run program
-
-The welfare verdict passed any score within 0.001 of the floor, on either side.
-Its comment said the margin was for compile peak bytes, which read 56 bytes
-apart on linux and macos. That stopped applying when welfare began scoring the
-committed goldens: both hosts read the same file. The script combines its terms
-with `+`, `-`, `*` and `/` alone, and IEEE 754 rounds each of those exactly, so
-two hosts score one tree to the same double. `math/round` appears only in the
-history note `--set` writes. kanso#1820 fell 0.00099 and passed inside the
-margin, which is what kanso#1845 reported.
-
-The verdict now compares exactly. A score below the floor fails as a fall, and
-a score above it fails as a rise nobody banked. `--set` writes the score through
-`json/encode`, and a plain run reads it back to the same bits: a floor banked
-on this branch held against its own tree with nothing to spare. Two specs in
-`tests/a_welfare_fall_is_bought.rs` stage the floor a billionth of a point above
-and below the recorded one. With the margin restored, both runs exited clean
-and both specs went red.
-
-`--set` still banks a fall smaller than 0.01. That path writes the new floor
-and its reason into `bench/welfare_floor.json`, where a reviewer reads both,
-and this change leaves it alone.
-
-Main sat 0.0000081 below its floor when this was written, inside the margin.
-kanso#1840 cost that much on the rows the objective reads, and what it bought
-was in a shape the run program never ran. The corpus-first gavel of 2026-09-05
-puts the shape into the corpus, measured on the compiler without the fix, and
-the fix then scores against it. kanso#1840 had already merged, so the compiler
-without it is main at kanso#1839, 30ffadf4, the tree kanso#1840 was cut from.
-
-The new phase, `restate`, is the mem fixture
-`an_interpolated_state_string_is_not_kept_under_the_mark` with its pass count
-lifted into a parameter and its seed string cut from a megabyte to 64 KiB. At
-128 passes, on kanso#1839's compiler, it raises the arena peak from 4,718,608
-to 6,815,760, which is two more one-megabyte blocks and about one decoded
-document, sized the way `machine` and `fold` were. It raises the program's
-instructions from 1,152,728,396 to 1,166,079,984. Built alone, less the empty
-program's 6,760,257, it costs 13,151,636, which is 1.13% of the program. The
-header's table of port phases gains that row.
-
-On main the arena peak stays at 4,718,608, and the program reads 1,170,030,652.
-That is 3,950,668 more than kanso#1839's compiler spends on the same program,
-so the fix costs instructions on this shape as well as saving memory. The
-mechanism was not isolated.
-
-Welfare's two run baselines are re-based the way the four port phases were, so
-that adding the phase costs kanso#1839's compiler nothing. Each is multiplied
-by the reading with the phase over the reading without it, both on kanso#1839's
-compiler. run_instructions goes from 3,349,060,500 to 3,387,851,317, by
-1,166,079,984 over 1,152,728,396. The run peak, which the objective reads as
-the arena, held and permanent peaks summed, goes from 4,948,512 to 7,045,664
-with the phase, so run_peak_bytes' baseline goes from 489,255,962 to
-696,599,932. Both baselines are rounded up. The instruction pair was read in
-this container. Both readings come from one compiler on one host, so the ratio
-carries no difference between hosts that matters. The peak pair is counted and
-is the same on every host.
-
-The run vein moves by the phase's own work. run_alloc_bytes lands on
-330,057,404, run_allocs on 1,771,562, run_beat_iters on 47,708,
-run_bytes_malloc on 9,134, run_evac_allocs on 49,183, run_evac_bytes on
-14,916,544, run_perm_allocs on 98, run_sh_rec on 1,508,784, run_sh_str on
-17,048,976, run_str_scans on 1,023 and run_str_scan_bytes on 17,996,094. The
-evacuated bytes are the string copied at each stage, which the mem fixture's
-entry already names as the price of carrying it.
-
-CI read the rest. work_runbench lands on 1,170,030,999, 347 above this
-container's 1,170,030,652. The phase adds eight functions to the run program,
-so its machine code grows to 618,633 bytes, which moves text to 4,828,574, and
-its emitted code moves emitted_other_defines to 2,010, emitted_other_calls to
-17,507, emitted_other_branches to 16,468 and emitted_other_lines to 147,279.
-Welfare on CI's rows is 91.1114 against main's floor of 91.0338, and the floor
-banks that.
-
-`tests/the_run_program_carries_the_shapes_unchanged.rs` lists `restate` with
-the four port phases that, like it, came from a fixture rather than from a
-benchmark.
-
-## 2026-10-11 — the interpreter row reads the same on every runner
-
-kanso#1843 asked for `interp_instructions` to read one number on every CI host,
-after two jobs at one source read 2,178,502,266 and 2,178,502,272 on
-2026-09-15. Every cost-goldens job prints an `interp_sample` notice carrying
-its CPU, the binary's hash and the row, so the question can be answered from
-the annotations rather than by a new measurement.
-
-The annotations of 144 jobs survive, from 2026-10-08 to this morning. They
-hold 20 distinct rows, one for each interpreter source those jobs built. 19 of
-the 20 were read on more than one CPU model, and none of them was read as two
-numbers. The six models are AMD family 0x19 models 0x1 and 0x11, family 0x1a
-model 0x2, and Intel family 0x6 models 0x6a, 0xad and 0xcf. 488,913,120 alone
-was read by 45 jobs on all six.
-
-Two pairs of rows sit close together, 488,869,908 against 488,869,940 and
-568,708,684 against 568,709,639. Each value in both pairs was read on two or
-more CPU models, and each step from one value to the next is a commit that
-moved the golden: 4119f057 for the first pair and 3b981430 for the second. The
-older jobs' annotations had expired, so the record starts eight days after the
-2026-09-30 change that took the heap's address out of the interpreter's cache
-keys.
-
-So the row reads identically across runner hosts, which is what kanso#1843
-asked for, and nothing needs excluding from the golden's header.
-
-## 2026-10-11 — where the restate phase's extra instructions go
-
-Main's compiler spends 3,950,668 more instructions on the run program with
-`restate` than kanso#1839's compiler does. A per-function callgrind diff of the
-two builds puts 3,870,494 of them in glibc's `memmove`, and every other
-function moves by under 17,000. That is the stage evacuation copying each
-pass's 64 KiB string below the loop's mark, which the 2026-10-10 entry on
-record reuse names as the price of carrying it: run_evac_bytes reads
-14,916,544 on main against 6,442,592 without the phase. Built alone, the phase
-costs fewer instructions on main than on kanso#1839's compiler: the run program
-with every other count set to zero reads 17,451,186 against 19,911,907. Why the
-phase costs more in the full program and less alone was not looked into.
-
-Handing the string's block down instead of copying it is not available: an
-allocation gets a block of its own only above 1 MiB, so a 64 KiB string shares
-a block with whatever else the stage allocated. Keeping survivors where they
-were built would need a different region discipline, and nothing here builds
-one.
-
-## 2026-10-11 — the live log holds forty entries
-
-CLAUDE.md says this file holds the last forty
-entries, and nothing checked it. By 2026-10-10 the file held 526 entries in
-25,301 lines. The pull request fixing kanso#1850
-moved the older end by hand that day, and by the time this branch took main the
-count had climbed back to 58.
-
-`tests/the_live_log_holds_forty_entries.rs` now pins the count at exactly
-forty, checks that no heading appears in both files, and checks that the
-archive's last entry is no later than the live log's first.
-`scripts/archive_log.sh` moves the oldest entries, unedited, from the top of
-this file to the end of design/log/compiler-log-archive.md until forty remain.
-A branch that appends an entry runs it in the same commit, and the spec's
-failure message names the script and the first entry it will move.
-
-The first run moved 18 entries. The two files together hold the same lines
-before and after, compared as sorted multisets, and the line counts sum to the
-same 102,212.
-
-## 2026-10-11 — the specs stay one binary each
-
-kanso#1847 asked whether folding the 228 spec files into a few test crates
-would cut build and link time. Measured on main fd6167f7, release profile,
-four cores: after `touch src/lib.rs`, `cargo test --release --no-run` takes
-90.9 s, and the library alone is 35.5 s of it. The 230 test executables hold
-487,797,788 bytes.
-
-A prototype put every file in one crate as a `#[path]` module, with no spec
-edited. It compiled, and the same rebuild took 68.5 s. Its one binary is
-15,185,664 bytes. Run, it failed
-`bind_chain_depth::the_measurement_sees_a_shape_that_nests`, which passes
-alone. That spec reads its children's peak RSS from `getrusage`, and in one
-process the peak includes every other spec's children. Separate binaries run
-one after another, so no spec has shared a process with another file's spec
-before. 151 of the 227 files spawn processes or read rusage.
-
-Folding only the other 76 saves about 7 s and 160 MB. They would have to move
-to a subdirectory to keep autotests, and other files name 29 of them by path,
-including source comments, golden headers, two pages and four workflows. The
-spec binaries already link with rust-lld, so the linker offers nothing either.
-Neither fold is built, and the issue is closed as not planned.
-
-## 2026-10-11 — the carry-repair spec had stopped reaching the repair
-
-`tests/carry_repair.rs` was the regression test for kanso#823: a repair raised
-a mark's pointer over the bytes it copied and left the mark's room behind. Its
-program gathered four files of the repository's prose in a loop. With
-`m->left = k_arena_left;` deleted from `k_repaired_settle`, the spec passed on
-main, with those files and with fixed-size copies of them. A probe in
-`k_repaired_settle` printed nothing: the program no longer reaches the repair.
-Its check also lived in the rewind until kanso#1259 moved it to the push on
-2026-09-05, where it reads the mark it has just written and cannot see a stale
-one.
-
-Three mem fixtures do reach the repair:
-a_carried_value_written_into_an_older_node ten times,
-a_repaired_node_below_the_mark_holds_tenure eight times and
-a_node_repaired_by_an_inner_pop_outlives_the_outer_stage once. With the line
-deleted, the last of them exits 1 and its stdout and counters change, so the
-mem vein was already the real guard. The ratchet row `repaired_mark` now
-deletes the line and expects that red, and the spec is gone.
-
-## 2026-10-11 — gavel: work-ahead holds a pooled failure until the value is used
-
-Clay ruled #1862, taking the recommendation: option 1 now, option 2 if
-divergence turns out to matter.
-
-The 2026-07-22 ruling made work-ahead invisible because pooled work has no
-effects. That holds when the work succeeds. A pooled computation that fails or
-never returns can show its failure before output the program as written
-prints first: `bench/workahead/aswritten.kso` prints `delivery: made` after its
-sleep and then runs `grind`, and a pooled `grind` that failed would raise its
-error during the sleep, before that line.
-
-**The ruling.** A pooled computation that fails stores its failure in the cell,
-and the failure is raised at the cell's first use, where the program as
-written would have raised it. For every program that terminates, the
-transcript is identical to the one it would produce without work-ahead. A
-pooled computation that never returns may still stall before output that the
-program as written prints first. That case is accepted for v1, and a second
-thread with its own arena (#1862's option 2) is the remedy if real programs
-show it matters.
-
-Owes, on #1856: a way to catch a runtime failure inside a pooled evaluation
-and resume the scheduler, on every engine that pools (native `k_die` exits
-today); a golden in which a pooled computation fails and the transcript
-matches the program run without work-ahead, seen red with the failure raised
-at the park; the page's work-ahead section saying what holds for a failure
-and what holds for divergence.
-
-## 2026-10-11 — gavel: a field may hold a list of `tie` references built from data
-
-Clay ruled #1842, taking the recommendation as corrected on the issue.
-
-The 2026-10-10 gavel "a field may hold a list of `tie` references" admitted a
-list or map literal. A node whose links come from data cannot write a literal.
-`list/map` is lazy (`pub fn map coll f` is `mapped f (iter coll)`), so
-`list/map roads ref` in a field would store a record holding `ref`, and every
-`ref` call would happen after `tie` had returned, where `resolve_tied` and
-`k_tie_resolve` have no cell to swap.
-
-**The ruling.** `list/to_list (list/map xs ref)`, and the same with
-`(k -> ref k)`, written as a constructor's field, is admitted: every `ref` is
-called inside the maker, and the field holds a list of cells the engines
-already resolve. A bare `list/map` of references in that position is refused,
-with a diagnostic naming `list/to_list`. The rule is unchanged: during making,
-a reference is stored and never read.
-
-Owes, on #1842: the check admits the forced form; an error golden for the bare
-`list/map` with the new diagnostic; `a_graph_tied_from_a_map_of_edges` drops its
-chain of `road` records; the comment in `lib/list/list.kso` where `tie` is
-taught shows the data-sized form.
-
-## 2026-10-11 — the big source files split by `include!`, not by module
-
-kanso#1848 and kanso#1867 asked for codegen.rs, main.rs, eval.rs, check.rs and
-lib.rs to be cut along their seams. The first cut moved codegen.rs's runtime
-declarations into a submodule, `mod declares`. On CI that moved the browser
-compile row by +60,813 instructions, the emit row by +873, and the compile and
-entry rows by one each, and welfare fell by 0.000052. The release profile
-builds sixteen codegen units and rustc partitions them by module, so a new
-module changes which functions are compiled together and what gets inlined.
-The 2026-08-25 gavel refuses a refactoring that costs welfare, however little.
-
-`include!` keeps the moved items in the module they came from. Across
-kanso#1873, kanso#1875, kanso#1878 and kanso#1879 the moved pieces are
-codegen.rs's runtime declarations and dispatcher methods, main.rs's tail-call
-rewrites, eval.rs's executor, builtins, values and run loop, check.rs's
-`list/tie` checks, after-infer pass, arm and shadow checks, and lib.rs's
-enumerable fusion, module path, imports and hoisting. Each file sits in a
-directory named for the file that includes it. No golden moved, and CI's cost
-rows on every head equal main's. eval.rs went from 6,742 lines to 3,950,
-check.rs from 5,291 to 3,322 and lib.rs from 4,166 to 2,295.
-
-Three things the move exposed: `cargo fmt` reaches only files named by `mod`,
-so CI's format job now runs rustfmt on every file under a subdirectory of src/;
-`scripts/diagnostic_coverage` listed `src/` alone and saw none of the
-refusals that moved, until kanso#1875 made it descend; and four doc comments
-sat above the wrong item, each left behind when a function was inserted
-between a doc and the item it described.
-
-**Declined: codegen.rs's call emission.** Moving `emit_call_full` through
-`emit_call_rest`, 1,088 lines, into `src/codegen/calls.rs` left the native and
-wasm instruction multisets identical to main's and moved
-`browser_compile_instructions` from 390,029,358 to 390,029,410. Under the
-2026-08-25 gavel it did not ship. The wasm module is 24 bytes larger. Cloud's
-attribution is that panic locations embed the source path and a longer path
-shifts the data after it, changing the alignment the metered `memcpy` and
-`memcmp` loops see. That is unisolated. If it holds, the browser row is
-reading a file's name, which the 2026-09-15 normalization rule says is
-normalized or excluded. #1880 isolates it and, if it is confirmed,
-normalizes the browser build before the split is retried.
-
-## 2026-10-11 — STATUS.md and the ledger are deleted
-
-This closes #1852. The 2026-10-10 gavel made GitHub issues the tracker and left
-STATUS.md and design/pending-gavels.md as pointers until the two specs that
-read them retired. Both have retired, and nothing else reads either file, so
-both are deleted. Comments in four specs, two scripts and ci.yml still mention
-them; those are cloud's and are cosmetic.
-
-The ledger's Parked section was the one thing in it with no other home. It is
-recorded here, unedited in substance:
-
-- `<<` labels: walls cover staircases; revive on real DAG demand.
-- Labeled nameless patterns: parked 2026-08-19, needing a fresh look against
-  the post-24 language. Group headers stay behind it.
-- dot-absorbs-`>>`: argued no, because it erases the visible then/bind split.
-- Postfix index on `)`: `(sort xs)[1]` stays illegal; bind, then index.
-- `;` as an inline separator: the borrow if inline groups are ever demanded.
-- `&` as bitwise: orthogonal, someday.
-- `serve` and processes: the executor-loop primitive and the next design
-  campaign, where three investigations already end. The July reification form
-  died with gavel 1, and the campaign starts from the three combinators.
-- Hako tag-signing and checksum policy: parked in design/hako.md.
-- Monorepo hakos: parked in design/hako.md.
-- The survivor cap of four times the block threshold: the multiplier is a
-  judgment call, and the principle is in the log.
-
-A parked item becomes a `needs-clay` issue when a real case arrives.
-
 ## 2026-10-12 — a test that runs out of stack fails alone
 
 `kanso test` ran its tests on the main thread, whose stack is 8 MiB. The
@@ -1774,3 +1451,223 @@ and `run_push_mut_slow` from 1,554,416 to 1,554,428. The front end's
 `front_end_visits` on compile_corpus went from 7,990 to 8,003 and
 `compile_peak_bytes` from 694,044 to 695,647. Welfare rises to 91.3652 on the
 lower run peak, and the floor is banked there.
+
+## 2026-10-13 — gavel: `merge` copies a record with named fields replaced
+
+Clay ruled #1886. Sixteen of the twenty ports complained that changing one
+field of a record meant rebuilding it by position, and three of their bugs
+were fields passed in the wrong order at such a site. Construction by field
+name stays declined (2026-07-29, named arguments); this is an update form
+only.
+
+**The ruling.** `merge u {"role": "chef"}` answers a copy of the record `u`
+with the named fields replaced and every other field carried over. The map is
+a literal whose keys name fields of `u`'s type. The checker refuses a key that
+is not a field of that type. It also refuses a value that the field's
+declared typeset does not admit, where the field declares one. `merge` builds a
+record, so it is allowed only where construction is, in the module that owns
+the type (2026-08-20, "only a type's owner constructs one").
+
+Clay chose this spelling over a keyword form (`u with role "chef"`), which
+meant the same thing.
+
+Owes, on #1886: the builtin on every engine; error goldens for an unknown
+field, a value the field does not admit, and a merge outside the owning
+module; a micro golden showing unnamed fields carried over; appendix B and
+the chapter that teaches records.
+
+## 2026-10-13 — gavel: a bracketed list or map may span lines
+
+Clay ruled #1882. All twenty ports wrote a list or map too long for 80
+columns, and nothing let one break. Text blocks (`"""`) already cover long
+strings.
+
+**The ruling.** A list or map literal may span lines. The opening bracket ends
+its line, each element (or key and value) sits on a line of its own indented
+one level, and the closing bracket stands alone at the opening line's indent.
+Canonical form keeps one way to write each literal: one that fits in 80 columns
+on one line is written on one line, and one that does not is written in the
+spanning form. Operator chains, `if` and guards are not covered, and they are
+still broken by naming their parts.
+
+Owes, on #1882: the lexer and parser accept the spanning form on every
+engine; error goldens for a short literal spanned, a long literal on one line
+and a misplaced closing bracket; the samples that build long literals by hand
+moved onto it; the chapter that teaches lists.
+
+## 2026-10-13 — gavel: parentheses are required where `and` meets `or`, and refused wherever else they group nothing
+
+Clay ruled the first part of #1887. The ports asked for parentheses to be
+optional where two operators meet, for clarity. Clay: "not just no but hell no.
+we are all about one right way and avoiding redundancy. you either require the
+parentheses or they're not allowed." And on the rule below: "I'm fine doing
+that as long as it's 100% consistent and not optional."
+
+**The ruling.** Wherever `and` and `or` appear in one expression without
+parentheses between them, the expression is refused, and the diagnostic shows
+the parenthesized spelling: `(a and b) or c`. This is the same rule #1915
+builds for `&`, `|` and `^`. Every other pair of parentheses that groups
+nothing stays refused, as today: `not (f x)` because application always binds
+tightest, `(a * b) + c` because that precedence is not misread. There is no
+optional form: each expression has exactly one accepted spelling.
+
+Owes, on #1887: the refusal and its diagnostic on every engine; error goldens
+for `a and b or c`, for `(a and b) or c` accepted and for a redundant pair
+still refused; the corpus, samples, lib and sibling repositories moved onto
+the required spelling.
+
+## 2026-10-13 — gavel: a file may open with a header comment and one blank line
+
+Clay ruled the second part of #1887. A comment directly above a file's first
+declaration is accepted today and reads as that declaration's comment. A
+comment at the top of a file followed by a blank line is refused, and the
+refusal is wrong about why: "the file may not begin with a blank line", at
+line 2, because the check skips the comment when it finds the file's start.
+
+**The ruling.** A file may begin with a block of comment lines followed by
+exactly one blank line, and that block is the file's header, separate from any
+declaration. Without the blank line the block is the first declaration's
+comment, as today. Nothing else about comment placement changes.
+
+Owes, on #1887: the formatting check accepts the header shape; error goldens
+for a header followed by two blank lines and for a blank line before the
+header; a golden that the header-plus-blank-line file checks clean on every
+engine.
+
+## 2026-10-13 — gavel: overload arms stay in specificity order
+
+Clay ruled #1888, which asked whether the order rule for overload arms could go
+now that the checker detects disjoint arms. Clay: "if you're talking about
+ordering by the hierarchy of subtypes then yes you absolutely preserve
+specificity order." The rule stands as built: an overload's arms are written
+most specific first, a literal before a concrete type and a concrete type
+before the catch-all, and the formatting check refuses any other order. The
+2026-07-25 gavel that freed top-level declaration order does not reach arms.
+Nothing is owed.
+
+## 2026-10-13 — gavel: hex and binary integers and exponent floats
+
+Clay ruled #1889. Seven ports needed numbers that kanso refuses as spacing
+errors: an emulator wrote its opcodes and a TOML parser its constants in
+hand-converted decimal.
+
+**The ruling.** An integer literal may be written in hexadecimal (`0xff`) or
+binary (`0b1010`) as well as decimal, and a float literal may carry an exponent
+(`1e-8`, `6.02e23`). The value is the same whatever the spelling, so the author
+picks the spelling that shows what the number means. The renderer is unchanged:
+it already prints exponents where it needs to. A byte literal, also in the
+issue, was not ruled.
+
+Owes, on #1889: the lexer on every engine; micro goldens for each form,
+including negative and upper-case-digit cases; error goldens for a malformed
+literal (`0x`, `0b2`, `1e`); the chapter that teaches numbers.
+
+## 2026-10-13 — gavel: `text/slice` past the end answers `none`
+
+Clay ruled #1890. `text/slice "abc" 1 10` returned `"bc"`, quietly shorter than
+the range asked for, and three ports called that silent data loss. An index
+past the end already answers `none`.
+
+**The ruling.** A `text/slice` whose range runs past the end of the value, or
+starts past it, answers `none`, as an index past the end does, and the caller
+dispatches on it. A range wholly inside the value is unchanged.
+
+Owes, on #1890: the change on every engine; micro goldens for a range past the
+end, a start past the end and a range that ends exactly at the end; the
+exhaustiveness check sees `none` in `text/slice`'s answer; lib, samples and
+sibling repositories that leaned on clamping moved to dispatch on `none`.
+
+## 2026-10-13 — gavel: `list/concat` joins two lists, and strings join by interpolation
+
+Clay ruled #1906 on the committee's view, on the condition that it rest on
+first principles rather than on what the language already had. Appendix B
+described `text/concat` as joining two lists or two strings; every engine
+joined only lists, and a string argument stopped at run time.
+
+**The ruling, and its reasons.** Joining two lists is `list/concat a b`, in
+std/list, and `text/concat` goes. A function lives with the type it works on,
+so a list operation belongs in `list`. There is one way to combine strings:
+interpolation (`"{a}{b}"`), with `text/join` for a list of pieces. A `concat`
+for strings would be a second way, so none is added.
+
+Owes, on #1906: `list/concat` on every engine with `text/concat` removed and
+its callers moved; the checker refuses a string argument to `list/concat`; an
+error golden for a call to the removed name that points at `list/concat`;
+appendix B's entry rewritten under std/list.
+
+## 2026-10-13 — gavel: `list/to_sorted` builds the `sorted` that `find` bisects
+
+Clay ruled #1903. std/list declares `pub type sorted`, and `find` has an arm
+for it that bisects instead of scanning (archive, 2026-07-24, "find gets its
+fast arm"). Only std/list may build a `sorted`, and it exposed no function that
+does, so no caller could reach the fast arm.
+
+**The ruling.** `list/to_sorted xs` sorts `xs` by the order `list/sort` uses and
+answers it as a `sorted`. It takes any list `list/sort` takes. Because it sorts
+as it wraps, a `sorted` is always in order and the bisect cannot answer wrong.
+No function wraps a list unchecked. When type parameters are built (#1941),
+`sorted` becomes `<k>sorted` and this function's signature follows without a
+change in meaning.
+
+Owes, on #1903: `list/to_sorted` in std/list; the bisect tests back in
+`list_test.kso` through it; a micro golden in which `find` on a `to_sorted`
+answers the same as on the plain list; the counter that shows the bisect ran;
+appendix B.
+
+## 2026-10-13 — gavel: names for the library gaps the ports hit
+
+Clay ruled #1914 one name at a time. Each name was decided from what it should
+mean. Three of the answers overturn the issue's recommendations, which had
+argued from resemblance to existing names.
+
+**The rulings.**
+
+- `io/read_line` is a description that yields the next line of standard
+  input without its newline, or `done` at the end of input. An interactive
+  program prompts between reads, and one call per line puts each read where
+  the program says it happens.
+- `delete map key` answers the map without that key. It is a bare builtin
+  beside `put`, and the two names say the opposite things.
+- `list/sort_by xs key` sorts by what `key` answers for each element, and
+  `list/reverse xs` reverses. The key gets its own name because a second
+  argument to `sort` would read as a comparator.
+- `text/uppercase s` and `text/lowercase s`. A `to_` name means the answer is
+  a different kind of thing (`to_int "42"` is a number). Changing case leaves
+  a string, so the name is a verb for what happens to it, as `trim` and
+  `sort` are.
+- `text/starts_with? s prefix` and `text/ends_with? s suffix`. A trailing `?`
+  means the function answers true or false.
+- `text/pad_start s width fill` and `text/pad_end s width fill`. Left and
+  right name where text lands on a screen, which depends on the script; start
+  and end name the end of the string that grows, in the same words
+  `starts_with?` uses.
+- No `os/write_bytes`. The content passed to `os/write_file` is already a
+  string or bytes, so the argument says which kind is written, and
+  `write_file` has accepted both since 2026-09-09. Reading needs two names
+  because a path cannot say which kind the caller wants back.
+- `os/modified path` answers the file's last-modified time in milliseconds
+  since the epoch, the unit `time/now` uses, and `file_not_found` as data
+  for a missing file. There is no `os/stat`: one name answers one fact.
+
+Owes, on #1914: each name on every engine with a micro golden; `read_line`
+reaching `done` on an empty and an unterminated last line; `modified` on a
+missing file; appendix B's entries; the ports that worked around a gap moved
+onto the name.
+
+## 2026-10-13 — gavel: an argument nobody reads is never computed, err or not
+
+Clay ruled #1928. In the toml port's reduction, `e = boom 1` binds an err
+lazily and `ignores 5 e` passes it to a parameter the body never reads.
+Every engine prints the body's answer and the err never occurs. Chapter 04
+says a catch-all arm declines an err, which read as if `ignores` should not
+run; making it decline would mean computing every argument at every call to
+learn whether it is an err, ending call-by-need at every call.
+
+**The ruling.** A value nobody asks for is never computed, so an err nobody
+asks for never occurs. A catch-all declines an err it is handed. Every
+engine already does this, and nothing changes in the compiler. Chapter 04
+gains the sentence, in this change. The port's fix is to dispatch on the
+validation result before passing it on.
+
+Owes, on #1928: the toml reduction kept as a micro golden pinning today's
+output on every engine; #1891's second item closed with a pointer here.
