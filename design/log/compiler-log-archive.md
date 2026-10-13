@@ -101711,3 +101711,74 @@ work_encodebench on 2,398,369,791, work_livebench on 1,474,871,454 and
 work_oneshot on 13,223,698; work_runbench lands on 1,152,754,428, against
 main's 1,245,043,177. Welfare reads 91.0337 on CI's rows against the floor of
 91.0317, and the rise is banked.
+
+## 2026-10-10 — a lap waits for twice what the last stage copied
+
+Testing the combined tree on the lox port's F18 loop found two things the five
+fixes did not do on their own. Peak memory fell as expected: at 40,000 passes
+the loop held 45 MB against main's 2,333 MB. But past about 135,000 passes the
+run slowed sharply, from 2.7 seconds at 130,000 to 99 seconds at 160,000. Stack
+samples put the time in `k_copy_size` and `k_deep_copy` under
+`k_beat_lap_carry`, and the counters showed evac_allocs jumping from 5.8
+million at 130,000 passes to 139 million at 140,000. Tenure stops at
+`K_TEN_CAP`, 64 MiB, and lox's heap map keeps every object it allocates, so
+from that point on every stage copied the whole live state, once per quarter
+megabyte of drift.
+
+A smaller program then showed a worse case. The loop of
+`a_loop_entered_from_a_tail_cycle_gives_its_garbage_back`, with a map in its
+state that keeps one entry a pass, ran 20,000 passes in 0.01 seconds on main
+and in 3.2 seconds with kanso#1824 alone, allocating 9.5 GB. kanso#1824 is what
+makes this loop rewind at all. Each stage copies the map out of the arena, the
+next put copies it back, and that copy is a quarter megabyte of drift on its
+own, so a stage followed almost every pass.
+
+`k_beat_lap_carry` now waits for twice what the last stage copied before it
+stages again, and never less than the quarter megabyte it waited before.
+Copying then stays proportional to the drift it answers, which is how a copying
+collector sizes its heap. When the arena has opened blocks since the last stage
+and the wait has grown past the quarter megabyte, the drift is measured across
+them: the rest of the old block, every block between, and what the newest
+holds. A loop whose stages copy little behaves as it did, including staging
+when the arena opens a block. The first version counted the newest block at
+its full size, and with a 2 MiB block that staged on most passes.
+
+`tests/golden/mem/a_growing_map_in_a_rewound_loop_waits_for_its_copy` is that
+small program at 20,000 passes. Its alloc_bytes is 44,612,576; without the wait
+it reads 9,165,495,888. No other mem fixture and no cost golden moves. On the
+lox loop, 160,000 passes now take 5.3 seconds and 320,000 take 33.
+
+Time still grows faster than the pass count, and the counters say where.
+Allocation is linear: alloc_bytes reads 2,457,232,021 at 40,000 passes,
+5,168,271,765 at 80,000 and 10,642,119,589 at 160,000, about 66 KB a pass.
+evac_bytes is not. It reads 63,965,040, 132,744,688 and then 1,296,200,208,
+ten times the step before, while ten_blocks only goes from 8 to 9. That is the
+pass count at which the port's heap outgrows tenure. Below it, tenure holds the
+heap and a stage copies only what the pass made. Above it, each stage copies the
+live heap, and the wait keeps that to half of the drift at most, so copying is
+bounded by allocation but no longer small next to it. The cost per byte copied
+also rises as the heap grows, because the copy keeps a pointer map for shared
+values and the map grows with the heap. Removing it would mean letting tenure
+grow past `K_TEN_CAP` for a loop whose survivors keep surviving. The cap exists
+so that no loop holds storage that only the pop frees, and changing it is a
+separate piece of work.
+runbench reads 180,786 instructions more for the wait's arithmetic and is
+projected at 1,152,754,421 until CI reads it. Welfare falls from 91.0246 to
+91.0239, which this fix pays to remove a regression the carried kanso#1824
+would otherwise ship.
+
+CI has now read the combined tree, lap wait included. runbench reads
+1,152,754,435, fourteen instructions over the projection, so the wait's
+180,786 holds. The rows the projections had carried land as follows.
+work_encodebench lands on 2,398,370,183, work_escapebench on 39,045,884,
+work_indexbench on 2,459,212, work_livebench on 1,474,870,796, work_oneshot on
+13,223,628 and work_scanbench on 270,249. work_basket falls to 30,812,505.
+compile_instructions lands on 25,832,558, entry_instructions on 85,436,280,
+library_instructions on 85,987,742, emit_instructions on 7,037,238 and
+interp_instructions on 489,012,183. codegen_instructions_dev lands on
+118,951,226 and codegen_instructions_release on 454,427,018.
+browser_compile_instructions lands on 391,401,241, browser_compile_peak_bytes
+on 675,725 and browser_run_instructions on 34,124,829. The run program's
+emitted code gains 29 lines, which moves emitted_other_branches to 16,399,
+emitted_other_calls to 17,406 and emitted_other_lines to 146,724, and `text`
+totals 4,833,086. Welfare reads 91.0317 on CI's rows, and the rise is banked.

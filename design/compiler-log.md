@@ -21,77 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-10 — a lap waits for twice what the last stage copied
-
-Testing the combined tree on the lox port's F18 loop found two things the five
-fixes did not do on their own. Peak memory fell as expected: at 40,000 passes
-the loop held 45 MB against main's 2,333 MB. But past about 135,000 passes the
-run slowed sharply, from 2.7 seconds at 130,000 to 99 seconds at 160,000. Stack
-samples put the time in `k_copy_size` and `k_deep_copy` under
-`k_beat_lap_carry`, and the counters showed evac_allocs jumping from 5.8
-million at 130,000 passes to 139 million at 140,000. Tenure stops at
-`K_TEN_CAP`, 64 MiB, and lox's heap map keeps every object it allocates, so
-from that point on every stage copied the whole live state, once per quarter
-megabyte of drift.
-
-A smaller program then showed a worse case. The loop of
-`a_loop_entered_from_a_tail_cycle_gives_its_garbage_back`, with a map in its
-state that keeps one entry a pass, ran 20,000 passes in 0.01 seconds on main
-and in 3.2 seconds with kanso#1824 alone, allocating 9.5 GB. kanso#1824 is what
-makes this loop rewind at all. Each stage copies the map out of the arena, the
-next put copies it back, and that copy is a quarter megabyte of drift on its
-own, so a stage followed almost every pass.
-
-`k_beat_lap_carry` now waits for twice what the last stage copied before it
-stages again, and never less than the quarter megabyte it waited before.
-Copying then stays proportional to the drift it answers, which is how a copying
-collector sizes its heap. When the arena has opened blocks since the last stage
-and the wait has grown past the quarter megabyte, the drift is measured across
-them: the rest of the old block, every block between, and what the newest
-holds. A loop whose stages copy little behaves as it did, including staging
-when the arena opens a block. The first version counted the newest block at
-its full size, and with a 2 MiB block that staged on most passes.
-
-`tests/golden/mem/a_growing_map_in_a_rewound_loop_waits_for_its_copy` is that
-small program at 20,000 passes. Its alloc_bytes is 44,612,576; without the wait
-it reads 9,165,495,888. No other mem fixture and no cost golden moves. On the
-lox loop, 160,000 passes now take 5.3 seconds and 320,000 take 33.
-
-Time still grows faster than the pass count, and the counters say where.
-Allocation is linear: alloc_bytes reads 2,457,232,021 at 40,000 passes,
-5,168,271,765 at 80,000 and 10,642,119,589 at 160,000, about 66 KB a pass.
-evac_bytes is not. It reads 63,965,040, 132,744,688 and then 1,296,200,208,
-ten times the step before, while ten_blocks only goes from 8 to 9. That is the
-pass count at which the port's heap outgrows tenure. Below it, tenure holds the
-heap and a stage copies only what the pass made. Above it, each stage copies the
-live heap, and the wait keeps that to half of the drift at most, so copying is
-bounded by allocation but no longer small next to it. The cost per byte copied
-also rises as the heap grows, because the copy keeps a pointer map for shared
-values and the map grows with the heap. Removing it would mean letting tenure
-grow past `K_TEN_CAP` for a loop whose survivors keep surviving. The cap exists
-so that no loop holds storage that only the pop frees, and changing it is a
-separate piece of work.
-runbench reads 180,786 instructions more for the wait's arithmetic and is
-projected at 1,152,754,421 until CI reads it. Welfare falls from 91.0246 to
-91.0239, which this fix pays to remove a regression the carried kanso#1824
-would otherwise ship.
-
-CI has now read the combined tree, lap wait included. runbench reads
-1,152,754,435, fourteen instructions over the projection, so the wait's
-180,786 holds. The rows the projections had carried land as follows.
-work_encodebench lands on 2,398,370,183, work_escapebench on 39,045,884,
-work_indexbench on 2,459,212, work_livebench on 1,474,870,796, work_oneshot on
-13,223,628 and work_scanbench on 270,249. work_basket falls to 30,812,505.
-compile_instructions lands on 25,832,558, entry_instructions on 85,436,280,
-library_instructions on 85,987,742, emit_instructions on 7,037,238 and
-interp_instructions on 489,012,183. codegen_instructions_dev lands on
-118,951,226 and codegen_instructions_release on 454,427,018.
-browser_compile_instructions lands on 391,401,241, browser_compile_peak_bytes
-on 675,725 and browser_run_instructions on 34,124,829. The run program's
-emitted code gains 29 lines, which moves emitted_other_branches to 16,399,
-emitted_other_calls to 17,406 and emitted_other_lines to 146,724, and `text`
-totals 4,833,086. Welfare reads 91.0317 on CI's rows, and the rise is banked.
-
 ## 2026-10-10 — an oversize block that cannot be reused is freed when it misses
 
 A loop that appends a byte a pass to a one-megabyte string ran 6,000 passes
@@ -933,6 +862,84 @@ interpreter stopped at the first line.
 
 Appendix b also says `concat` takes strings, and neither engine does: both
 refuse two strings with the same message. #1906 asks which way that goes.
+
+## 2026-10-13 — a list concatenated onto in a fold grows where it stands
+
+From #1892's kv port. A fold that grew its accumulator with `concat` rather
+than `push`, `list/fold ns [] (acc _ -> text/concat acc chunk)`, built a fresh
+list every lap and kept them all until the fold returned: 4,000 laps of 25
+ints, 100,000 elements, peaked at 3,061 MB and took 4.6 seconds natively. The
+same fold written with `push` already ran in place.
+
+`concat` now joins the accumulator writes the linearity analysis knows. A call
+whose first argument nobody else holds is marked like an in-place push, and a
+folder whose body is `concat acc xs` is a folder like one whose body is
+`push acc x`. Native emits `k_b_concat_mut`, which puts each element of the
+second list on the first one's frontier through the in-place push, so growth,
+permanent storage and kept bignums follow the rules push already has. The
+interpreter extends its list in place at the same sites. `concat acc acc`
+names the accumulator twice and is never marked. kv's reduction now peaks at
+10 MB and finishes in under a tenth of a second.
+
+`tests/golden/mem/a_list_concatenated_onto_in_a_fold_grows_where_it_stands`
+folds 2,000 laps of 25 ints. Main allocates 800,467,632 bytes and holds 1,070
+arena blocks; with the change it allocates 1,401,904 and holds two. The same
+fixture folds onto a seed its caller reads afterwards, and both engines print
+the seed's length unchanged. The ratchet row "a concat accumulator copied
+every lap" stops marking the sites and turns the mem corpus red.
+
+`a_digest_holds_every_block_it_walked` moved too. std/sha256 builds its table
+of round constants from nested `concat` calls, and the outer call's first
+argument is the inner call's fresh list, so those calls now extend in place.
+A push onto a full buffer grows it by doubling where the copying concat
+allocated the exact length, so it allocates less often and more each time. Its
+arena peak is unchanged.
+
+The cost veins move the same way. On digestbench, which hashes with
+std/sha256, the copied lists become pushes onto a growing buffer:
+digest_alloc_bytes lands on 697,025, 2,240 higher; digest_sh_buf on 579,648,
+2,304 higher; digest_push_mut_slow on 337, six more growths. Its allocs fall
+four. The fixture's own rows move the
+same amounts: a_digest_holds_every_block_it_walked_alloc_bytes lands on
+18,657, a_digest_holds_every_block_it_walked_sh_buf on 12,288 and
+a_digest_holds_every_block_it_walked_push_mut_slow on 33. encodebench grows
+output lists with `concat`, so it gains more: encode_allocs 5,327,424 to
+5,323,947 and encode_alloc_bytes 665,563,968 to 665,384,048, with
+encode_push_mut_fast up to 34,874. encode_buf_reuse lands on 2,386, down 726,
+because lists that were copied and freed each lap, leaving a buffer for the
+next to reuse, now stay where they are. The instruction rows come from CI.
+
+CI's rows, on the tree before kanso#1925. The runtime gains `k_b_concat_mut`, 3,104 bytes of text in every
+benchmark. `work_runbench` lands on 1,170,036,819 (+1,739) and
+`work_digestbench` on 5,605,158 (+2,040), the doubling growth's copies;
+`work_encodebench` falls 99,808 to 2,398,273,418 and `work_livebench` 399 to
+1,474,874,672, `work_oneshot` rises 161 to 13,227,091. The compiler carries
+the new site: `compile_instructions` 25,846,237 (-35,314), `entry_instructions`
+85,273,377 (-107,936), `library_instructions` 85,828,356 (-107,226),
+`emit_instructions` 7,011,826 (-1,651), `codegen_instructions_dev` 119,010,910
+(+8,081), `codegen_instructions_release` 454,481,233 (+301,820), and
+`browser_compile_instructions` 391,400,519 (+89,017). The interpreter's
+in-place extend reads `interp_instructions` 488,691,869 (-47,947),
+`interp_allocs` 587,352 (+1) and `interp_peak_bytes` 689,271 (+2,112).
+digestbench and runbench each emit one more line, and emitted_other_lines lands
+on 148,240.
+
+kanso#1925 joined the fold to the run program as its `stack` phase, measured
+before this fix. On main after it, the run vein's allocation rows fall:
+run_alloc_bytes lands on 386,136,876 (-2,581,984), run_sh_buf on 172,766,944,
+run_sh_rec on 3,791,872 and run_allocs on 1,816,757. run_arena_blocks goes 9 ->
+6, run_arena_peak_bytes 9,961,488 -> 6,815,760 and run_spare_peak_bytes
+7,864,336 -> 4,718,608. run_push_mut_fast rises to 1,189,304, run_buf_reuse to
+134 and run_push_mut_slow by twelve to 1,550,128. run_chain_finds goes back to
+0, the value it had before kanso#1925 added the phases; the index's own counter
+stays pinned by `a_long_chain_answers_survival_from_its_index` at 95,601. The
+run program's instruction rows come from CI.
+
+On main after #1904 the tab's compile reads `browser_compile_instructions`
+392,470,701, up 92,326 from main's 392,378,375 on the same tree.
+
+With main merged after #1922, browser_compile_instructions lands on
+393,453,573.
 
 ## 2026-10-12 — gavel: arms travel with the value, and a file names only what it can see
 

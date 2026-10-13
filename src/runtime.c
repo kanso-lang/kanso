@@ -10333,6 +10333,28 @@ KValue k_b_push_mut(KValue lv, KValue item) {
     return k_b_push_grow(lv, l, item, 1);
 }
 
+/* In-place concat, emitted only where the linearity analysis proved the first
+   list is uniquely owned. Each element of the second goes onto the first's
+   frontier through the in-place push, which already knows how to grow, keep a
+   bignum and register permanent storage. A fold written `concat acc chunk`
+   built a fresh list every lap and held them all until the fold returned:
+   4,000 laps of 25 ints peaked at 3 GB (kv's port, #1892). The analysis never
+   proves `concat acc acc`, so the second list is not the one being grown. A
+   first argument that is bytes keeps the copying concat. */
+KValue k_b_concat_mut(KValue av, KValue bv) {
+    if (__builtin_expect(!k_not_failure(av) || !k_not_failure(bv), 0)) return k_failed2(av, bv);
+    if (av.tag != K_LIST) return k_b_concat(av, bv);
+    long long blen = k_seq_len(bv);
+    if (bv.tag == K_LIST) {
+        KValue* items = k_as_list(bv)->items;
+        for (long long i = 0; i < blen; i++) av = k_b_push_mut(av, items[i]);
+        return av;
+    }
+    KBytes* b = k_as_bytes(bv);
+    for (long long i = 0; i < blen; i++) av = k_b_push_mut(av, k_int(b->data[i]));
+    return av;
+}
+
 /* A lazy sequence refused by a structural operation: the reader is one call
    from what they wanted, and every one of these messages used to stop at what
    it would not take. Answers NULL for anything that is not one. */

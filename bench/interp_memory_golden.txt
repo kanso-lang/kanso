@@ -381,5 +381,5 @@ interp_allocs=588491
 # the run holds throughout: 709,847 -> 687,319.
 # 2026-10-09: an in-place write keeps its container in the allocation it was
 # born in. Read by the gate on this host: 687,319 -> 687,159, a FALL of 160.
-interp_peak_bytes=692375
+interp_peak_bytes=689271
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
