@@ -1,5 +1,5 @@
 allocs=1802
-alloc_bytes=12384080
+alloc_bytes=7468880
 arena_blocks=1
 arena_peak_bytes=1048576
 cohort_frees=0
@@ -33,7 +33,7 @@ carry_dedup=0
 bytes_malloc=1200
 bytes_freed=1200
 perm_live_bytes=0
-perm_peak_bytes=16400
+perm_peak_bytes=8208
 str_scans=0
 str_scan_bytes=0
 seek_resumes=0
