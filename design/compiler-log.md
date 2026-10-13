@@ -19,43 +19,6 @@
 > The last forty entries. Everything older is in `log/compiler-log-archive.md`,
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
-## 2026-10-10 — a constructor handed over as a function builds
-
-The lox port found that a record constructor passed where a function is wanted
-checks and runs on the interpreter and stops the native build with "`pair` as
-a bare value is not yet supported" (lox F20). The port wrapped each one in a
-lambda, `(l o r -> logical l o r)`, which is what native now does by itself.
-When codegen lowers a name that is not a function group, a builtin or one of
-the words with a value of its own, and the name is a record type with one to
-four fields, it lowers the lambda that calls the constructor. Four is the
-native lambda's limit, so a record of five or more fields handed over is still
-refused at build with the same message.
-
-`tests/golden/micro/a_constructor_handed_over_as_a_function` hands a
-one-field constructor to `list/map`, a two-field one to a function that calls
-it and a three-field one to another, and prints the same line on the
-interpreter, a dev build and a release build. The compiler on main refuses to
-build it. The ratchet row "a constructor refused as a value" puts the refusal
-back and the micro corpus goes red.
-
-`tests/a_type_name_as_a_bare_value.rs` had pinned the refusal for a
-two-field record printed bare. It now pins that both engines print `<fn>`.
-
-CI's rows for this branch, with main's repair list merged in. Two rows moved,
-both by the size of the new lowering in the emitter:
-
-    emit_instructions                7,062,299 ->   7,062,491
-    browser_compile_instructions   388,181,803 -> 388,266,184
-
-Welfare falls from 90.2505 to 90.2504, and the floor follows it down under the
-rule for a change that makes the language do what it says: a program that
-checks and runs on the interpreter now builds natively.
-
-The tie-list ruling landed first. Carried over it, the browser compile row
-lands at 388,276,582, the constructor's 84,381 on top of main's 388,192,201,
-and the floor at 90.25039901483147.
-
-
 ## 2026-10-10 — two values a carry handed back while they were still held
 
 The lap carry (kanso#1827) let the toml port parse a comment holding a
@@ -1934,3 +1897,52 @@ doubles once more past sixteen slots holds 16,384 of them. A buffer outside
 the arena already grows by `realloc`, so that second doubling buys it
 nothing; dropping it there is a lead, not built here. `text` lands on
 4,838,766, runbench 622,857 -> 623,001 bytes.
+
+## 2026-10-13 — a buffer outside the arena grows by one doubling
+
+`k_b_push_grow` picks a list's next capacity as the smallest power of two that
+holds it, doubled once more past sixteen slots. In the arena that second
+doubling saves grows, because each grow there is a fresh buffer and a copy. An
+accumulator's buffer outside the arena already grows by `realloc`, so the
+second doubling only held memory: #1926's 4,300-element list sat in 16,384
+slots. A buffer outside the arena now takes the smallest power of two.
+
+On the run program `run_perm_peak_bytes` lands on 146,888 and
+`run_perm_live_bytes` on 146,888 (277,960 before), and the run peak falls
+10,437,152 -> 10,306,080 bytes. The extra regrows cost `work_runbench`
+1,177,765,528 -> 1,177,803,297 (the container's difference, until CI reads
+its own), and `run_alloc_bytes` falls to 303,607,404 because the counter adds
+each buffer's full size and the buffers are smaller. `run_allocs` lands on
+1,812,274, `run_bytes_malloc` on 9,140 and `run_bytes_freed` on 9,009.
+basket's permanent peak halves to 2,162,720 (`basket_perm_peak_bytes`, with
+`basket_perm_live_bytes` the same), `basket_alloc_bytes` falls to 6,162,481,
+and `basket_allocs` lands on 27,271, `basket_bytes_malloc` on 32 and
+`basket_bytes_freed` on 13. escape regrows more often: `escape_allocs` 38 ->
+63, `escape_alloc_bytes` 41,924,192, `escape_bytes_malloc` and
+`escape_bytes_freed` 55. In the mem vein, five shapes' permanent peaks halve
+and the record-field golden's falls 1,179,840 -> 655,552. Every benchmark's
+machine code grows sixteen bytes, and `text` lands on 4,838,990.
+
+The same regrows cost the mem vein's other accumulators more allocations (one
+to sixteen), and of these only `early_exit` holds less for it:
+`a_long_list_renders_in_one_pass_allocs` 2,018,
+`a_long_list_renders_in_one_pass_alloc_bytes` 248,272,
+`a_long_list_renders_in_one_pass_bytes_malloc` 5;
+`a_loop_that_only_grows_its_list_takes_no_rewind_allocs` 42,
+`a_loop_that_only_grows_its_list_takes_no_rewind_alloc_bytes` 8,373,392,
+`a_loop_that_only_grows_its_list_takes_no_rewind_bytes_malloc` 36;
+`an_accumulator_regrows_where_it_is_allocs` 83,
+`an_accumulator_regrows_where_it_is_alloc_bytes` 577,072,
+`an_accumulator_regrows_where_it_is_bytes_malloc` 60; `early_exit_allocs` 17,
+`early_exit_bytes_malloc` 4; `fold_push_shape_allocs` 17,
+`fold_push_shape_alloc_bytes` 214,992, `fold_push_shape_bytes_malloc` 5;
+`fused_map_shape_allocs` 17, `fused_map_shape_alloc_bytes` 214,992,
+`fused_map_shape_bytes_malloc` 5; `fused_reducer_allocs` 7,
+`fused_reducer_alloc_bytes` 28,960, `fused_reducer_bytes_malloc` 3;
+`fused_select_shape_allocs` 18, `fused_select_shape_alloc_bytes` 215,024,
+`fused_select_shape_bytes_malloc` 5; `piped_reducer_allocs` 7,
+`piped_reducer_alloc_bytes` 28,960, `piped_reducer_bytes_malloc` 3;
+`skip_shape_allocs` 37, `skip_shape_alloc_bytes` 129,456,
+`skip_shape_bytes_malloc` 5; `take_shape_allocs` 20, `take_shape_alloc_bytes`
+215,152, `take_shape_bytes_malloc` 5; `tally_shape_allocs` 19,
+`tally_shape_alloc_bytes` 133,280, `tally_shape_bytes_malloc` 5.
