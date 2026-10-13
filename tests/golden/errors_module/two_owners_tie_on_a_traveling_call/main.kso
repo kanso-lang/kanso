@@ -1,0 +1,5 @@
+import "./ay"
+import "./mix"
+import "./src"
+
+print (mix/both (ay/make 1) (src/one 2))

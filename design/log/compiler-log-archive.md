@@ -101062,3 +101062,58 @@ pinned by tests/golden/play/decls_after_statements.stderr, a file no test reads
 and whose fixture now runs and prints `first`. Dropping `build` from the
 message's wording took the stale copy out of agreement. All three are listed in
 tests/golden/unpinned_diagnostics.txt with the programs that were tried.
+
+## 2026-10-10 — gavel: GitHub issues are the tracker, and hygiene is continuous
+
+Clay, on the proposal to track a cleanup list as GitHub issues: "why on Earth
+not just use githubs issues feature? seems it would be a much more methodical
+way to track and prioritize work." And on keeping the repository clean: "the
+instructions should explicitly maintain ongoing refactoring so that things stay
+hygienic over time and I don't have to explicitly remind you."
+
+**The tracker.** Open work and open decisions are GitHub issues in
+kanso-lang/kanso, labelled by kind (`needs-clay`, `ruled`, `cleanup`, `perf`),
+lane (`lane:chat`, `lane:cloud`) and priority (`p1` to `p3`). A pull request
+that finishes one closes it with `Fixes #N`. The log stays the record of what
+was ruled and measured. STATUS.md's "Ruled, unbuilt" section and
+design/pending-gavels.md retire; #1852 carries the steps, including the two
+specs that keep their counts in step. The case for the change was made the same
+day the two newest "Ruled, unbuilt" rows were found already built and never
+taken off, and a ruling of 2026-10-07 was found never to have had a row.
+
+Opened the same day: #1842, the one open decision (whether `list/map xs ref`
+may build a node's list of references), and #1843, the three-parts-per-billion
+row, the last standing "Ruled, unbuilt" entry; and nine `cleanup` issues from a
+hygiene review, #1844 to #1852.
+
+**Hygiene.** CLAUDE.md gains a section, "Hygiene is continuous": each pull
+request leaves the files it touches cleaner; a fact has one home; cloud lands a
+`cleanup` pull request for every five others; cloud sweeps the repository
+weekly and files what it finds; a refactor is a pure move; and instructions
+state rules, with their history in the log.
+
+## 2026-10-10 — the log goes back under its cap a second time
+
+design/compiler-log.md held 526 entries and 25,301 lines against a cap of
+forty. The archive was last fed on 2026-09-18, and in the three weeks since
+every change appended to the live file and nothing moved the older end.
+
+This closes #1850. The 487 oldest entries move to design/log/compiler-log-archive.md
+unedited, appended after its last entry. The live file keeps the newest 39 plus
+this one. Nothing is deleted. Before the move there were 1,456 archived and 526
+live entries; after it there are 1,943 archived and 39 live, so 1,982 entries
+either way. The sorted heading lists of the two files match before and after
+the move, and so do their non-blank lines, so the move changed no content.
+
+The readers that broke last time were checked first. `page_drift` and the
+trend gate count only added lines of the live log (`+## ` and `+`), so moving
+lines out costs neither of them anything.
+`a_question_sent_to_clay_has_a_ledger_entry` and its ratchet mutation read
+both files since 2026-09-18, and
+`a_log_heading_is_one_line` always has.
+
+- **DONE** live log at forty entries.
+- **OPEN** the cap has no gate. It was restored by hand on 2026-09-17 and again
+  today, and both times it had run to many times the limit. A spec that counts
+  the live file's headings and fails above forty would hold it. That spec is
+  `tests/`, so it is cloud's: #1854.

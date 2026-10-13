@@ -1,0 +1,4 @@
+# Handed an ay thing and a bee thing, `combine` finds an arm in each
+# owner, and neither is the more specific everywhere.
+pub fn both x y
+  combine x y

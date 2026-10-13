@@ -416,8 +416,13 @@ pub fn bare_space(qual: &str, name: &str) -> String {
 
 /// A name as a reader may see it: the bare-space mark comes off, so a
 /// sentence about `dep/~join` says `dep/join`, which is what the author
-/// wrote at the call site the sentence points at.
+/// wrote at the call site the sentence points at. A traveling group, `~area`
+/// or a module's `~geo~area`, is spoken as the `area` its calls wrote.
 pub fn spoken(text: &str) -> std::borrow::Cow<'_, str> {
+    if let Some(group) = text.strip_prefix(BARE_MARK) {
+        let short = group.rsplit(BARE_MARK).next().unwrap_or(group);
+        return std::borrow::Cow::Borrowed(short);
+    }
     match text.contains(BARE_MARK) {
         true => std::borrow::Cow::Owned(text.replace(&format!("/{BARE_MARK}"), "/")),
         false => std::borrow::Cow::Borrowed(text),
@@ -457,6 +462,11 @@ pub fn unstamped() -> std::sync::Arc<str> {
 pub struct FnDecl {
     pub name: String,
     pub is_pub: bool,
+    /// Whether the source wrote `pub` on it. `is_pub` is demoted at each
+    /// module boundary, so a dependency's dependency reads private by the
+    /// time the program is whole; an arm travels with its owner's value on
+    /// what its own module said.
+    pub written_pub: bool,
     pub span: Span,
     pub params: Vec<Pattern>,
     pub body: Vec<Stmt>,
@@ -465,9 +475,21 @@ pub struct FnDecl {
     /// True for bare-enrollment clones of imported decls (the import
     /// incarnation): real for dispatch, invisible to provenance analyses.
     pub synthetic: bool,
+    /// The calls in the body of a function the module declares, made on a
+    /// value the function was handed: each call's span and the name it
+    /// wrote. They reach the module's own arms, and the root of the program
+    /// sends one to a group of its own when an owner's arm of another shape
+    /// would join (rule 4 of the 2026-10-12 gavel). Most declarations hold
+    /// none, and a declaration is moved often, so the list costs it one word.
+    pub shades: Option<Box<Vec<(Span, Name)>>>,
 }
 
 impl FnDecl {
+    /// The shaded calls the body holds, by the span of each call's head.
+    pub fn shaded(&self) -> &[(Span, Name)] {
+        self.shades.as_deref().map_or(&[], Vec::as_slice)
+    }
+
     /// A field getter, recognised by the binder no source can spell. It
     /// carries its field's span, so checks that read declaration order have
     /// to leave it out — it was never placed by an author.

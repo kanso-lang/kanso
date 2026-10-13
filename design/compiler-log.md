@@ -21,61 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-10 — gavel: GitHub issues are the tracker, and hygiene is continuous
-
-Clay, on the proposal to track a cleanup list as GitHub issues: "why on Earth
-not just use githubs issues feature? seems it would be a much more methodical
-way to track and prioritize work." And on keeping the repository clean: "the
-instructions should explicitly maintain ongoing refactoring so that things stay
-hygienic over time and I don't have to explicitly remind you."
-
-**The tracker.** Open work and open decisions are GitHub issues in
-kanso-lang/kanso, labelled by kind (`needs-clay`, `ruled`, `cleanup`, `perf`),
-lane (`lane:chat`, `lane:cloud`) and priority (`p1` to `p3`). A pull request
-that finishes one closes it with `Fixes #N`. The log stays the record of what
-was ruled and measured. STATUS.md's "Ruled, unbuilt" section and
-design/pending-gavels.md retire; #1852 carries the steps, including the two
-specs that keep their counts in step. The case for the change was made the same
-day the two newest "Ruled, unbuilt" rows were found already built and never
-taken off, and a ruling of 2026-10-07 was found never to have had a row.
-
-Opened the same day: #1842, the one open decision (whether `list/map xs ref`
-may build a node's list of references), and #1843, the three-parts-per-billion
-row, the last standing "Ruled, unbuilt" entry; and nine `cleanup` issues from a
-hygiene review, #1844 to #1852.
-
-**Hygiene.** CLAUDE.md gains a section, "Hygiene is continuous": each pull
-request leaves the files it touches cleaner; a fact has one home; cloud lands a
-`cleanup` pull request for every five others; cloud sweeps the repository
-weekly and files what it finds; a refactor is a pure move; and instructions
-state rules, with their history in the log.
-
-## 2026-10-10 — the log goes back under its cap a second time
-
-design/compiler-log.md held 526 entries and 25,301 lines against a cap of
-forty. The archive was last fed on 2026-09-18, and in the three weeks since
-every change appended to the live file and nothing moved the older end.
-
-This closes #1850. The 487 oldest entries move to design/log/compiler-log-archive.md
-unedited, appended after its last entry. The live file keeps the newest 39 plus
-this one. Nothing is deleted. Before the move there were 1,456 archived and 526
-live entries; after it there are 1,943 archived and 39 live, so 1,982 entries
-either way. The sorted heading lists of the two files match before and after
-the move, and so do their non-blank lines, so the move changed no content.
-
-The readers that broke last time were checked first. `page_drift` and the
-trend gate count only added lines of the live log (`+## ` and `+`), so moving
-lines out costs neither of them anything.
-`a_question_sent_to_clay_has_a_ledger_entry` and its ratchet mutation read
-both files since 2026-09-18, and
-`a_log_heading_is_one_line` always has.
-
-- **DONE** live log at forty entries.
-- **OPEN** the cap has no gate. It was restored by hand on 2026-09-17 and again
-  today, and both times it had run to many times the limit. A spec that counts
-  the live file's headings and fails above forty would hold it. That spec is
-  `tests/`, so it is cloud's: #1854.
-
 ## 2026-10-10 — three design notes retire, and a July ruling reaches the log
 
 This closes #1851. CLAUDE.md says a design note whose work has shipped is
@@ -1731,6 +1676,10 @@ On main after #1916 the tab reads `browser_compile_instructions` 403,992,263,
 up 10,809,633 from main's 393,182,630, and `browser_run_instructions`
 34,172,363, up 47,031 from 34,125,332, on the same tree.
 
+On the tree merged with main, the tab's compile reads 404,068,547 instructions
+against main's 393,209,858, and its peak reads 684,676 bytes against 677,261.
+The floor drops by what that costs, under the #1884 ruling.
+
 ## 2026-10-12 — arms travel with the value
 
 The first rule of the 2026-10-12 gavel on #1894. A value carries the arms its
@@ -1778,11 +1727,84 @@ and `browser_compile_instructions` rose to 393,182,630 (+804,255, +0.20% on main
 This builds a ruled part of the language, so the welfare floor drops by what
 it costs.
 
+## 2026-10-12 — a local arm shadows only its own shape
+
+The fourth rule of the 2026-10-12 gavel on #1894. Rule 1 left a gap: a module
+that wrote `area` for its own square resolved every `area` call to its own
+arms, so a circle it was handed found no arm and stopped at run time with "no
+overload of `report/area` matches these arguments".
+
+The resolver now also records an arrived call of a function the module itself
+declares. The call keeps its name and resolves where it stands; the declaration
+it sits in keeps a list of such calls, each by its span and the name it wrote.
+When the program is whole, enrollment looks at each listed call whose name some
+owner writes. If an owner's arm has a shape none of the module's arms has, the
+call goes to a group of its own, `~report~area`, holding the module's arms of
+that name and the owners' arms of other shapes. A shape is the type each
+parameter matches, read through a bare clone to the type it copies. Every other
+listed call stays on the module's own group, which is where most of them
+belong: in the entry corpus 716 calls are listed and 77 name a function an
+owner writes, all three of them (`fold`, `iter`, `next`) the library's own.
+The wrapper rewrite leaves a listed call alone until enrollment has decided,
+because the group it may join is not the wrapper's. A compile that never
+enrolls, the REPL's, a library's alone and a module's without an entry, drops
+the lists.
+
+A module the program imports is checked before the program fills the groups.
+Its listed calls are still on the module's own group when it is checked, so a
+function only those calls reach is called; `tests/golden/travel/told` is the
+postcard, a module whose `told?` only a call on a parameter reaches. The first
+build renamed every such call into a traveling group and back, which cost the
+entry check 7.8M instructions; leaving the names alone costs 1.74M there and
+0.37M on the compile corpus, measured here against rule 1's branch.
+
+Two fixes came with it. An owner reached only through another module read as
+private, because a dependency's `pub` is demoted at each module boundary, so
+its arms never traveled. A declaration now keeps `written_pub`, what its own
+source said, and owners are judged on that. And a dispatch diagnostic on a
+traveling group named `~combine`; `ast::spoken` now gives the name the call
+wrote.
+
+`tests/golden/travel/shade` hands a module that writes `area` for a square
+both a circle and a square, and both engines print `12` and `25`.
+`two_owners_tie_on_a_traveling_call` in the module error corpus is rule 4's
+refusal: two owners' arms each more specific in a different position, one of
+them reached through a module that imports it. The ratchet row "a local arm
+that shadows every shape" keeps such calls off the traveling path and turns
+the run test red. ch11 states the rule.
+
+CI's rows, against #1916's: entry_instructions lands on 87,981,735, up
+1,695,428, and library_instructions on 87,561,579, up 1,056,426, the listed
+calls the resolver records and enrollment reads; compile_instructions lands
+on 26,419,302, up 367,003. compile_allocs lands on 15,358, up 760, one list per
+declaration that shades a call, and front_end_visits on compile_corpus
+on 7,990, up eight. The interpreter's run of the corpus allocates more:
+interp_allocs lands on 588,363, up 1,012, and interp_peak_bytes on 692,375, up
+5,216, because a module's declarations carry their lists into the run.
+emit_instructions lands on 7,028,480, up 8,946. interp_instructions falls
+434,783 to 488,304,631. This builds rule 4 of the 2026-10-12 gavel, so the
+floor drops by what it costs.
+
+The front end holds 19,360 more bytes while it checks the compile corpus:
+compile_peak_bytes lands on 694,044, up from 674,684. CI's cost job and this
+container read the same number under rustc 1.98.1, the host the golden's
+measured-on line names.
+
+Merged with #1916's branch after #1904, the tab's compile lands on
+`browser_compile_instructions` 393,209,858 and `browser_compile_peak_bytes`
+677,261: 27,228 instructions and 1,536 bytes above #1916's reading on the same
+main, for the shape check a local arm now makes.
+
 On CI's rows for the tree merged with main after #1904: `compile_instructions`
 25,803,156 -> 26,057,907, `entry_instructions` 85,149,258 -> 86,302,801,
 `library_instructions` 85,703,128 -> 86,519,482, `emit_instructions` 7,035,926
 -> 7,048,046 and `interp_allocs` 587,479 -> 587,485; `interp_instructions`
 falls 298,363 to 487,131,077.
+
+On CI's rows for the tree merged with main after #1937: compile_instructions
+lands on 26,463,317, entry_instructions on 88,129,856, library_instructions on
+87,707,726, emit_instructions on 7,052,040 and interp_allocs on 588,491.
+interp_instructions falls to 486,939,316.
 
 ## 2026-10-12 — a bare imported type with no fields is its module's value
 
@@ -1970,3 +1992,37 @@ The record-field fixture #1926 added takes the same regrows:
 `a_list_held_in_a_record_grows_where_it_stands_allocs` lands on 76 and
 `a_list_held_in_a_record_grows_where_it_stands_bytes_malloc` on 19, three each
 above #1926's reading, while its peak falls as above.
+
+## 2026-10-13 — the ratchet's own checkout reads its library again
+
+Two faults on main kept the ratchet from reading what it was built to read.
+Neither came from the branches that showed them.
+
+The first came with #1927. Its mutation `a_fifth_push_takes_sixteen` anchors
+on the grow's extra doubling, and #1927 rewrote that line as
+`if (cap > 16 && !perm) cap <<= 1;`. The mutation stopped applying, so the
+whole-tree ratchet job reported it stale on every branch merged with main;
+#1904 was the first to show it. The mutation now anchors on the new line and
+doubles every time again, and the mem corpus goes red under it
+(`a_cap_around_a_count_is_a_range` reads `allocs=14` against 13).
+
+The second is older and shows only on a branch that edits
+`scripts/perf_record`, because only then does a shard pick the perf-history
+row. The ratchet links each scratch worktree's `target` to
+`/tmp/kanso-ratchet-target`, so the compiler it builds lives outside the
+checkout. `in_shipped_library` looked for the library beside the binary
+(`current_exe()/../../lib`, here `/tmp/lib`) and nowhere else, so
+`kanso check lib/json` refused `builtin_built_text` as internal to a library
+it was not in. With no compile counters on stderr, perf_record's row lost
+`compile_alloc_bytes` and `compile_passes`, and the gate was red before any
+mutation. #1931 showed it, since it rewrites perf_record's lists in the
+spanning form. The import loader already had the right fallback:
+`resolve_import` tries `lib/` beside the working directory when the
+toolchain's copy is absent. The check now tries the same root.
+`a_checkout_library_checks_from_any_binary` copies the compiler to a
+directory of its own and checks `lib/json` from the checkout; it read the
+refusal before the fix and reads nothing after.
+
+The tab's build leaves the new root out, since it has no checkout to stand
+in. With the root compiled in, `browser_compile_instructions` read 392,449,729
+against 392,378,375; without it the browser row does not move.
