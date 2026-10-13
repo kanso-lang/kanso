@@ -1,0 +1,4 @@
+import "./geo"
+import "./report"
+
+print (report/one (geo/make 2))
