@@ -1,0 +1,12 @@
+import "std/text"
+
+# Where the browser harnesses look for Chrome when KANSO_CHROME is unset, in
+# the order they try them. site_smoke and browser_differential_run both read
+# this list, so a new install location is added here once.
+mac = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+
+linux = ["/usr/bin/google-chrome" "/usr/bin/chromium-browser"]
+
+other = ["/usr/bin/chromium" "/usr/bin/google-chrome-stable"]
+
+pub paths = text/concat [mac] (text/concat linux other)
