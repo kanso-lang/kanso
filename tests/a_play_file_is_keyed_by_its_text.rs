@@ -78,3 +78,62 @@ fn a_warm_play_that_runs_out_of_stack_still_says_so() {
     }
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// A binary that runs out of stack now says so itself, so the play's own
+/// wording is reached only by a death the program cannot explain: here, a
+/// signal sent from outside while it waits on stdin. Both plays name it.
+#[cfg(target_os = "linux")]
+#[test]
+fn a_warm_play_ended_by_a_signal_names_it() {
+    use std::io::Read;
+    use std::process::Stdio;
+    let dir = fresh("signalled");
+    let file = dir.join("main.kso");
+    std::fs::write(
+        &file,
+        "import \"std/io\"\n\nio/stdin .> (text -> print \"{length text}\")\n",
+    )
+    .unwrap();
+    for round in ["first", "second"] {
+        let mut run = Command::new(env!("CARGO_BIN_EXE_kanso"))
+            .arg("play")
+            .arg(&file)
+            .stdin(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("kanso runs");
+        let program = program_under(run.id());
+        assert_eq!(unsafe { kill(program, 15) }, 0, "{round} play's program takes the signal");
+        let status = run.wait().expect("the play ends");
+        let mut err = String::new();
+        run.stderr.take().unwrap().read_to_string(&mut err).unwrap();
+        assert!(!status.success(), "{round} play succeeded");
+        assert!(err.contains("ended by signal 15"), "{round} play said: {err:?}");
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[cfg(target_os = "linux")]
+extern "C" {
+    fn kill(pid: i32, sig: i32) -> i32;
+}
+
+/// The compiled program `kanso play` started, found among its children by the
+/// names the two caches give their binaries: `kanso_run_` on a cold play,
+/// `kanso_play_` on a warm one. Compiling starts other children first.
+#[cfg(target_os = "linux")]
+fn program_under(play: u32) -> i32 {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(120);
+    while std::time::Instant::now() < deadline {
+        let children = std::fs::read_to_string(format!("/proc/{play}/task/{play}/children"))
+            .unwrap_or_default();
+        for child in children.split_whitespace() {
+            let comm = std::fs::read_to_string(format!("/proc/{child}/comm")).unwrap_or_default();
+            if comm.starts_with("kanso_play_") || comm.starts_with("kanso_run_") {
+                return child.parse().unwrap();
+            }
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    panic!("kanso play started no program within two minutes");
+}

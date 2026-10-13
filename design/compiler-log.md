@@ -2034,3 +2034,12 @@ arguments where LLVM had built a loop. `text` rose for scanbench (448,985 ->
 619,849), so the `text` total went from 4,834,846 to 4,838,494, and the emitted line count fell by 540 for both scanbench and
 runbench. The language fix lowers the welfare floor by exactly what it costs,
 to 91.11.
+
+Because this branch edits src/main.rs, the ratchet ran the rows that patch it,
+and "a warm play that dies in silence" stayed green under its mutation. The
+row went blind when a built binary began naming its own stack overflow: the
+warm play no longer sees a signal from that program, so its own wording never
+runs. `a_warm_play_ended_by_a_signal_names_it` reaches the wording another
+way. The program waits on stdin, the spec sends it SIGTERM, and both plays
+must print "ended by signal 15". Under the mutation the second play printed an
+empty line. Linux only, since it finds the program through /proc.
