@@ -3976,9 +3976,7 @@ partial_nest_native = row
   (breaking "a_native_partial_answering_nothing")
   release
 
-partial_nests = [partial_nest partial_nest_native]
-
-rows_c1zzzz = text/concat rows_c1zzzze partial_nests
+rows_c1zzzz = text/concat rows_c1zzzze [partial_nest partial_nest_native]
 
 # Equality refuses a function wherever the walk meets one, a partial among
 # them. The interpreter answered false for a partial and for a function in a
@@ -4116,9 +4114,7 @@ hop_partial = row
   (breaking "a_partial_held_in_a_nameless_closure")
   release
 
-hops = [hop_value hop_partial]
-
-rows_c1zzzzd = text/concat rows_c1zzzzi hops
+rows_c1zzzzd = text/concat rows_c1zzzzi [hop_value hop_partial]
 
 # text/to_bytes keeps its frame like the other wrappers whose builtin can
 # birth an err, so a rescue in the caller's module reaches its callback.
@@ -4186,10 +4182,6 @@ high_pointers = row
 
 rows_c1zzzzn = text/concat rows_c1zzzzg [high_pointers]
 
-lazy_rows = []
-
-rows_c1zzzzu = text/concat rows_c1zzzzn lazy_rows
-
 # A string builder may be seeded with any value, since a join renders what it
 # joins onto. Native used to refuse the seed, and the first join adopts it.
 seed_refused = row
@@ -4211,7 +4203,7 @@ seed_unbuilt = row
   (breaking "a_first_join_that_never_makes_its_builder")
   release
 
-rows_c1zzzzs = text/concat rows_c1zzzzu [seed_refused seed_unbuilt]
+rows_c1zzzzs = text/concat rows_c1zzzzn [seed_refused seed_unbuilt]
 
 # A builtin in a program that declares a subtype unwraps its arguments, and
 # a lazy one is forced before the unwrap looks at it.

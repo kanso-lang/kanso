@@ -39,15 +39,13 @@ chapter_scripts = """
   <script src="/book-play.js"></script>
 """
 
-mac_chrome = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-
-linux_chrome = ["/usr/bin/google-chrome" "/usr/bin/chromium-browser"]
-
-other_chrome = ["/usr/bin/chromium" "/usr/bin/google-chrome-stable"]
-
-rest_chrome = text/concat linux_chrome other_chrome
-
-chrome_paths = text/concat [mac_chrome] rest_chrome
+chrome_paths = [
+  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+  "/usr/bin/google-chrome"
+  "/usr/bin/chromium-browser"
+  "/usr/bin/chromium"
+  "/usr/bin/google-chrome-stable"
+]
 
 landing_port = 8749
 
@@ -710,29 +708,21 @@ encoded = json/encode history
 
 chart_head = "{stub}\nconst HISTORY_TEXT = {encoded};\n"
 
-engine_files = ["docs/kanso-engine.js" "docs/kanso.wasm"]
-
-hero_files = ["docs/landing-play.js" "docs/play.js"]
-
-page_files = ["docs/_includes/site-header.html" "docs/index.html"]
-
-more_pages = ["docs/playground.html" "docs/book-play.js"]
-
-last_pages = ["docs/book/ch04.html" "docs/numbers.html"]
-
-# The runtime a compiled program links against, which the pages fetch beside
-# the engine. Without it every run on these pages would be interpreted.
-runtime_files = ["docs/kanso-runtime.wasm"]
-
-early_files = text/concat engine_files hero_files
-
-middle_files = text/concat page_files more_pages
-
-opening_files = text/concat early_files middle_files
-
-closing_files = text/concat last_pages runtime_files
-
-wanted_files = text/concat opening_files closing_files
+wanted_files = [
+  "docs/kanso-engine.js"
+  "docs/kanso.wasm"
+  "docs/landing-play.js"
+  "docs/play.js"
+  "docs/_includes/site-header.html"
+  "docs/index.html"
+  "docs/playground.html"
+  "docs/book-play.js"
+  "docs/book/ch04.html"
+  "docs/numbers.html"
+  # The runtime a compiled program links against, which the pages fetch beside
+  # the engine. Without it every run on these pages would be interpreted.
+  "docs/kanso-runtime.wasm"
+]
 
 pub play = read_each wanted_files 1 []
 

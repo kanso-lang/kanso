@@ -298,23 +298,19 @@ tab_peak_counters = ["browser_run_peak_bytes"]
 # program costs to run and what it cost to build for shipping. Development is
 # the edit-test loop: the front end `kanso test` runs on every invocation, the
 # dev-tier build, and the interpreted engine that runs the specs.
-run_terms = [d_run_speed d_run_memory]
+prod_terms = [d_run_speed d_run_memory d_codegen_release]
 
-prod_terms = text/concat run_terms [d_codegen_release]
+dev_terms = [
+  d_compile_speed
+  d_compile_memory
+  d_codegen_dev
+  d_emit
+  d_start
+  d_interp_speed
+  d_interp_memory
+]
 
-compile_terms = [d_compile_speed d_compile_memory]
-
-interp_terms = [d_start d_interp_speed d_interp_memory]
-
-build_terms = [d_codegen_dev d_emit]
-
-dev_terms = text/concat (text/concat compile_terms build_terms) interp_terms
-
-browser_compile_terms = [d_tab_compile d_tab_held]
-
-browser_run_terms = [d_tab_run d_tab_peak]
-
-browser_terms = text/concat browser_compile_terms browser_run_terms
+browser_terms = [d_tab_compile d_tab_held d_tab_run d_tab_peak]
 
 # Every term, for the reporting that is keyed by counter rather than by side.
 terms = text/concat (text/concat prod_terms dev_terms) browser_terms

@@ -147,15 +147,13 @@ fn with_engine progs page w r
   on = (told_where -> chosen progs set told_where)
   os/env "KANSO_CHROME" .> on
 
-mac_chrome = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-
-linux_chrome = ["/usr/bin/google-chrome" "/usr/bin/chromium-browser"]
-
-other_chrome = ["/usr/bin/chromium" "/usr/bin/google-chrome-stable"]
-
-rest_chrome = text/concat linux_chrome other_chrome
-
-chrome_paths = text/concat [mac_chrome] rest_chrome
+chrome_paths = [
+  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+  "/usr/bin/google-chrome"
+  "/usr/bin/chromium-browser"
+  "/usr/bin/chromium"
+  "/usr/bin/google-chrome-stable"
+]
 
 fn chosen progs set none
   first_chrome progs set chrome_paths 1
@@ -300,13 +298,18 @@ pub play = gather_dirs dirs 1 []
 # What a tab cannot give a program. book-play.js upgrades a panel only when a
 # sample passes the same test, so the differential covers exactly the samples
 # a reader can press run on.
-machine_calls = ["os/read_file" "os/write_file" "os/args" "io/stdin"]
-
-more_calls = ["os/list_dir" "os/run" "os/make_dir" "os/exists" "os/is_dir"]
-
-byte_calls = ["os/read_bytes"]
-
-needs_a_machine = text/concat machine_calls (text/concat more_calls byte_calls)
+needs_a_machine = [
+  "os/read_file"
+  "os/write_file"
+  "os/args"
+  "io/stdin"
+  "os/list_dir"
+  "os/run"
+  "os/make_dir"
+  "os/exists"
+  "os/is_dir"
+  "os/read_bytes"
+]
 
 fn names_any? src needles at
   hunted? src needles at (at > length needles)

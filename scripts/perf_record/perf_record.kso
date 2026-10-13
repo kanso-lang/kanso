@@ -46,11 +46,14 @@ oneshot_watched = ["allocs" "arena_blocks" "arena_peak_bytes" "held_peak_bytes"]
 # The basket: the wide workload welfare's run terms read. Recorded so the
 # history row carries every counter the objective consults — its absence is
 # why no chart line could ever include the basket without a step.
-basket_watched = ["allocs" "arena_blocks" "arena_peak_bytes" "held_peak_bytes"]
-
-basket_more = ["beat_iters" "utf8_bytes"]
-
-basket_all = text/concat basket_watched basket_more
+basket_watched = [
+  "allocs"
+  "arena_blocks"
+  "arena_peak_bytes"
+  "held_peak_bytes"
+  "beat_iters"
+  "utf8_bytes"
+]
 
 unwatched = """
   perf_record watches a counter the compiler no longer emits, so the row it
@@ -80,17 +83,21 @@ mangled = """
 # What deciding cost, and what got written.
 work_keys = ["rounds" "visits" "lines" "calls" "branches" "defines"]
 
-work_names = ["compile_rounds" "compile_visits" "emitted_lines"]
+work_out = [
+  "compile_rounds"
+  "compile_visits"
+  "emitted_lines"
+  "emitted_calls"
+  "emitted_branches"
+  "emitted_defines"
+]
 
-work_more = ["emitted_calls" "emitted_branches" "emitted_defines"]
-
-work_out = text/concat work_names work_more
-
-compiler_a = ["compile_alloc_bytes" "compile_allocs" "compile_peak_bytes"]
-
-compiler_b = ["compile_passes"]
-
-compiler_watched = text/concat compiler_a compiler_b
+compiler_watched = [
+  "compile_alloc_bytes"
+  "compile_allocs"
+  "compile_peak_bytes"
+  "compile_passes"
+]
 
 fn watched? group name
   list/any? group (g -> g == name)
@@ -132,7 +139,7 @@ fn every_watched d e o bk
   a = absent_in d decode_watched
   b = absent_in e encode_watched
   c = absent_in o oneshot_watched
-  d2 = absent_in bk basket_all
+  d2 = absent_in bk basket_watched
   gone = text/concat (text/concat a d2) (text/concat b c)
   all_there gone (length gone == 0)
 
@@ -330,7 +337,7 @@ fn assembled line d e o bk c cc w wc
   decode = counters d decode_watched ""
   encode = counters e encode_watched "encode_"
   oneshot = counters o oneshot_watched "oneshot_"
-  basket = counters bk basket_all "basket_"
+  basket = counters bk basket_watched "basket_"
   veins = text/concat decode encode
   own = counters cc.stderr compiler_watched ""
   banner = [["welfare" (score_in w)]]
@@ -355,7 +362,7 @@ fn key_of pair
 expected_keys =
   a = text/concat decode_watched (prefixed "encode_" encode_watched)
   b = text/concat (prefixed "oneshot_" oneshot_watched)
-    (prefixed "basket_" basket_all)
+    (prefixed "basket_" basket_watched)
   text/concat (text/concat a b) compiler_watched
 
 fn kept_out pairs
