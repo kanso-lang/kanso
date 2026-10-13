@@ -5102,7 +5102,34 @@ header_blank = row
 
 rows_c1zzzzzzv8 = text/concat rows_c1zzzzzzv9 [and_or_mixed header_blank]
 
-rows_c = text/concat rows_c1zzzzzzv8 [itself]
+# A value carries the arms its owner wrote into a library that never imported
+# the owner. The mutation lets no call travel, and the library's `area c` is
+# an unknown name again.
+arm_travels = row
+  "an arm left behind by its value"
+  true
+  "cargo test --release --test arms_travel"
+  "specs (unit, golden, differential)"
+  (breaking "an_arm_left_behind_by_its_value")
+  no_setup
+
+
+# A list held in a record and pushed onto through the record is written in
+# place once the record is handed over whole and the field is alone. The
+# mutation refuses every field read, and the mem corpus's record fixture goes
+# from 73 allocations to tens of thousands.
+field_in_place = row
+  "a record field copied on every push"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_record_field_copied_every_push")
+  no_setup
+
+rows_c1zzzzzzw8b = text/concat rows_c1zzzzzzv8 [arm_travels]
+rows_c1zzzzzzv3bb = text/concat rows_c1zzzzzzw8b [field_in_place]
+
+rows_c = text/concat rows_c1zzzzzzv3bb [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
