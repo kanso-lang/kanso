@@ -1906,6 +1906,10 @@ instructions up. The merge brought twelve changed lines in the interpreter's
 builtins and nothing else in `src/`; nothing here isolates which of the two
 moved these rows.
 
+On main after #1925 the emitted counts for the other programs land on
+emitted_other_branches 16,559, emitted_other_calls 17,666 and
+emitted_other_defines 2,037.
+
 ## 2026-10-13 — three port shapes join the run program before their fixes
 
 Three of #1892's items are fixed on open branches, and the run program was
