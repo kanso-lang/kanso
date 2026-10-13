@@ -14,23 +14,22 @@
 //! So this holds the two ends together: the counter the mutation raises in the
 //! digest golden must be absent from both direction tables.
 
-/// Every counter name the gate's `lower_*` and `higher_*` bindings list.
-fn classified(gate: &str) -> Vec<String> {
-    let mut out = Vec::new();
-    for line in gate.lines() {
-        let named = line.starts_with("lower_") || line.starts_with("higher_");
-        if !named {
-            continue;
-        }
+/// Every counter name the gate's direction tables list: the `lower_*`
+/// bindings, one to a line, and `higher`, which spans lines between
+/// `higher = [` and the `]` that closes it.
+fn classified(gate: &str) -> (Vec<String>, Vec<String>) {
+    let mut lower = Vec::new();
+    for line in gate.lines().filter(|l| l.starts_with("lower_")) {
         let (Some(open), Some(shut)) = (line.find('['), line.find(']')) else { continue };
-        for word in line[open + 1..shut].split('"') {
-            let word = word.trim();
-            if !word.is_empty() {
-                out.push(word.to_string());
-            }
-        }
+        lower.extend(line[open + 1..shut].split('"').skip(1).step_by(2).map(str::to_string));
     }
-    out
+    let body = gate.lines().skip_while(|l| *l != "higher = [").skip(1);
+    let higher = body
+        .take_while(|l| *l != "]")
+        .filter(|l| !l.trim().starts_with('#'))
+        .flat_map(|l| l.split('"').skip(1).step_by(2).map(str::to_string).collect::<Vec<_>>())
+        .collect();
+    (lower, higher)
 }
 
 /// The counter the mutation rewrites in `bench/cost_golden_digest.txt`, read
@@ -57,12 +56,14 @@ fn the_counter_the_mutation_leans_on_is_still_unclassified() {
     let gate = std::fs::read_to_string(root.join("scripts/trend_gate/trend_gate.kso"))
         .expect("the trend gate reads");
 
-    let named = classified(&gate);
+    let (lower, higher) = classified(&gate);
     assert!(
-        named.len() > 40,
-        "the direction tables parsed to {} names, so this spec is reading nothing",
-        named.len()
+        lower.len() > 40 && higher.len() > 10,
+        "the direction tables parsed to {} and {} names, so this spec is reading nothing",
+        lower.len(),
+        higher.len()
     );
+    let named: Vec<String> = lower.into_iter().chain(higher).collect();
 
     let counter = raised(&mutation);
     assert!(
