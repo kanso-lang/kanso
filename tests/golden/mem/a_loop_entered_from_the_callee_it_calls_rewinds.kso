@@ -1,0 +1,48 @@
+# The shape of a tree-walking interpreter's loop statement. `loop_for` and
+# `for_next` are one tail cycle. Each lap runs the body through `exec`, a
+# plain call, and the `nested` arm of `exec` enters the cycle by a tail call:
+# a loop inside the body is the same cycle again.
+#
+# A cluster entered by a tail call gets its bracket when that entering edge
+# is emitted as a plain call, and the edge was refused because the cycle
+# reaches `exec`. It reaches it under the frame of the plain call `r = exec
+# body m`, so demoting the entry adds one frame to each level of nesting and
+# none to each lap. beat_iters below is the bracket; without it the arena
+# held every lap's records, eleven blocks for these 100,000 laps.
+type machine
+  n
+  total
+
+type ran
+  m
+
+type broke
+  m
+
+type step
+  by
+
+type nested
+  limit
+
+fn exec (step by) m
+  ran (machine (m.n + by) (m.total + m.n))
+
+fn exec (nested limit) m
+  loop_for (step 1) limit m
+
+fn loop_for body limit m
+  return ran m if m.n >= limit
+  r = exec body m
+  for_next r body limit
+
+fn for_next (ran m) body limit
+  loop_for body limit m
+
+fn for_next (broke m) _ _
+  ran m
+
+fn run limit
+  exec (nested limit) (machine 0 0)
+
+pub play = print "{(run 100000).m.total}"

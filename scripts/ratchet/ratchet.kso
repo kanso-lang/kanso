@@ -5067,7 +5067,17 @@ sibling_import = row
 
 rows_c1zzzzzzw9 = text/concat rows_c1zzzzzzx7 [sibling_import]
 
-rows_c = text/concat rows_c1zzzzzzw9 [itself]
+callee_under_a_frame = row
+  "a cluster refused for a callee it reaches under a frame"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_cluster_refused_for_a_callee_under_a_frame")
+  no_setup
+
+rows_c1zzzzzzv9 = text/concat rows_c1zzzzzzw9 [callee_under_a_frame]
+
+rows_c = text/concat rows_c1zzzzzzv9 [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
