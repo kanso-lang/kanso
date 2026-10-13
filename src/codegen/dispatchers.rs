@@ -628,6 +628,9 @@ impl<'a> Backend<'a> {
         self.emit_dispatcher_as(&build, name, 0, decls)?;
         let cell = format!("caf_{}", self.caf_cells.len());
         self.caf_cells.push(cell.clone());
+        if name.starts_with(crate::ahead::PREFIX) {
+            self.ahead_cells.push((sym.clone(), cell.clone()));
+        }
         // Built on first demand, not before main. `k_caf_init` used to run
         // every builder at startup, which made an undemanded knot do its work
         // anyway — ruled 2026-08-23 to be wrong, because work defers until it

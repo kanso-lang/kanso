@@ -703,6 +703,23 @@ fn emit_written(
     // went on to fail in `list/next`, two frames later and under other names.
     // Forcing where the program as written would have looked keeps the trace
     // the interpreter's.
+    let program = match crate::ahead::lifts(&program) {
+        true => {
+            let mut owned = match program {
+                Given::Owned(p) => p,
+                Given::Lent(p) => Program {
+                    fns: p.fns.clone(),
+                    types: p.types.clone(),
+                    imports: p.imports.clone(),
+                    reexports: p.reexports.clone(),
+                    root: p.root.clone(),
+                },
+            };
+            crate::ahead::lift(&mut owned);
+            Given::Owned(owned)
+        }
+        false => program,
+    };
     let (program, unread_positions) = match without_unbuilt_arms(&program) {
         Some((keep, unread)) => (Given::Owned(kept_arms(program, &keep)), unread),
         None => (program, Vec::new()),
@@ -896,6 +913,7 @@ fn emit_with(
         knotted,
         print_value_wrapper: false,
         caf_cells: Vec::new(),
+        ahead_cells: Vec::new(),
         closure_cells: Vec::new(),
         closure_consts: Vec::new(),
         demand: crate::demand::analyze(program),
@@ -1182,6 +1200,9 @@ struct Backend<'a> {
     /// Zero-arity names that reach themselves through other constants.
     knotted: crate::hash::Set<String>,
     print_value_wrapper: bool,
+    /// Work-ahead's lifted constants (#1856) and the cell each was given,
+    /// in the order they were emitted: the pool forces these.
+    ahead_cells: Vec<(String, String)>,
     /// One cache cell per frozen constant, emitted as globals at the end,
     /// each beside an `i8` that says whether its builder has run. Nothing
     /// fills these before main any more: a constant builds itself on the
@@ -3196,11 +3217,7 @@ fn call_twin(n: usize, convention: ClosureConvention, inline: bool) -> String {
 /// LLVM symbol for a dispatcher: quoted when the kanso name carries a
 /// module qualifier's slash.
 fn wsym(name: &str, arity: usize) -> String {
-    // fn-value wrapper symbols share dsym's quoted-identifier rule
-    match name.contains(['/', '!', '?', '+', '-', '*', '%', '<', '>', '=']) {
-        true => format!("\"w_{name}_{arity}\""),
-        false => format!("w_{name}_{arity}"),
-    }
+    quoted(&format!("w_{name}_{arity}"))
 }
 
 /// The static a `k_fnref` value points at: the wrapper, its arity, and the
@@ -4897,6 +4914,24 @@ impl<'a> Backend<'a> {
             self.body,
             "define void @k_caf_init() {{\nentry:\n{ids}{fills}  ret void\n}}\n"
         );
+        // Work-ahead (#1856): the constants `ahead::lift` made, forced in the
+        // order it made them when a fiber first parks. Every binary defines
+        // the pool, empty when nothing was lifted, because the runtime calls it.
+        let mut pool = String::new();
+        let lifted: Vec<String> = self
+            .program
+            .fns
+            .iter()
+            .filter(|d| d.params.is_empty() && d.name.starts_with(crate::ahead::PREFIX))
+            .map(|d| d.name.clone())
+            .collect();
+        for name in &lifted {
+            if self.declares_at(name, 0) {
+                let ret = self.ret_ty(name, 0);
+                let _ = writeln!(pool, "  call tailcc {ret} @{}()", dsym(name, 0));
+            }
+        }
+        let _ = writeln!(self.body, "define void @k_ahead_pool() {{\nentry:\n{pool}  ret void\n}}\n");
         // A library has no entry to call, and a stub calling one that is not
         // there is a symbol the linker would ask about.
         if self.declares(crate::ast::ENTRY) {
@@ -9273,7 +9308,7 @@ fn symbol_of(line: &str) -> Option<String> {
 /// identifier form. One list, because a second copy drifts and what it costs
 /// is a module clang refuses to read.
 fn quoted(name: &str) -> String {
-    match name.contains(['/', '!', '?', '+', '-', '*', '%', '<', '>', '=']) {
+    match name.contains(['/', '!', '?', '+', '-', '*', '%', '<', '>', '=', '~']) {
         true => format!("\"{name}\""),
         false => name.to_string(),
     }

@@ -7005,6 +7005,17 @@ KValue k_b_annotate(KValue subject, KValue callback, const char* origin) {
     return k_sited_word(subject, callback, origin, k_annotate_wrap);
 }
 
+/* The work-ahead pool (#1856): the compiler defines it, forcing each
+   constant it lifted out of the work that follows a park. It runs once, at the
+   first bare sleep. */
+void k_ahead_pool(void);
+static int k_ahead_ran = 0;
+static long long k_ahead_now_ms(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (long long)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+}
+
 KValue k_desc_sleep(KValue ms) {
     if (!k_not_failure(ms)) return ms;
     /* a count past a word reads as none at all, as the interpreter reads it */
@@ -7278,8 +7289,18 @@ static KValue k_exec(KDesc* d) {
             return k_schedule(d);
         }
         case 8: {
-            /* a bare sleep executed outside a group: pause for real */
+            /* a bare sleep executed outside a group: pause for real. The first
+               one runs the work-ahead pool first (#1856), and the time the pool
+               took comes off the wait, so the work hides inside it. Which work
+               runs is decided by the compiler and never by the clock; only
+               the length of the physical wait reads it. */
             long long ms = d->x.tag == K_INT ? d->x.payload : 0;
+            if (!k_ahead_ran) {
+                k_ahead_ran = 1;
+                long long before = k_ahead_now_ms();
+                k_ahead_pool();
+                ms -= k_ahead_now_ms() - before;
+            }
             if (ms > 0) usleep((useconds_t)(ms * 1000));
             return k_done();
         }
