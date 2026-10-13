@@ -5113,7 +5113,6 @@ arm_travels = row
   (breaking "an_arm_left_behind_by_its_value")
   no_setup
 
-
 # A list held in a record and pushed onto through the record is written in
 # place once the record is handed over whole and the field is alone. The
 # mutation refuses every field read, and the mem corpus's record fixture goes
@@ -5127,6 +5126,7 @@ field_in_place = row
   no_setup
 
 rows_c1zzzzzzw8b = text/concat rows_c1zzzzzzv8 [arm_travels]
+
 rows_c1zzzzzzv3bb = text/concat rows_c1zzzzzzw8b [field_in_place]
 
 rows_c = text/concat rows_c1zzzzzzv3bb [itself]
