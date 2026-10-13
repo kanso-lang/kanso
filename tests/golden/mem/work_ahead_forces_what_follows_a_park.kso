@@ -1,0 +1,14 @@
+# The report's sum is certain to be computed after the sleep, and it names
+# nothing local, so the compiler lifts it and the runtime forces it while the
+# program is parked. The continuation then reads the filled cell. The pool
+# runs once, at the first bare sleep, and `ahead_forced` counts what it
+# forced; a vein that never sleeps prints neither line.
+import "std/time"
+
+fn spin 0 acc
+  acc
+
+fn spin n acc
+  spin (n - 1) (acc + n % 7)
+
+sleep 1 .> (_ -> print "made") .> (_ -> print "report: {spin 1000 0}")
