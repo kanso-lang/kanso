@@ -2000,6 +2000,20 @@ On the tree merged with #1900, CI's rows put codegen_instructions_dev at
 floor drops to 91.10933 under the rule that a change making the engines agree
 is not priced.
 
+Each benchmark binary now empties stdout before it reads its input, and the
+benches that read or wait more than once pay it each time. On CI's rows
+`work_deepbench`, `work_escapebench`, `work_indexbench`, `work_scanbench` and
+`work_widebench` each rose 77 instructions, to 393,579,721, 39,049,235,
+2,462,563, 273,600 and 28,178,586. `work_jsonbench` and `work_digestbench`
+rose 100, to 860,563,084 and 5,603,218; `work_pendbench` and `work_readbench`
+123, to 190,054,473 and 4,581,089; `work_basket` 130, to 30,876,618;
+`work_livebench` 310, to 1,474,875,381; and `work_oneshot` 373, to 13,227,303.
+
+On the merged tree the ratchet called "a warm play that dies in silence"
+blind. Since #1900 the binary names its own stack overflow, so the warm play's
+wording of the signal never runs for one. The mutation now also stops the
+binary watching its stack, and the second play prints nothing.
+
 ## 2026-10-12 — a lambda called in tail position costs no stack
 
 The toml port kept `put` in place by passing a continuation: each insertion
@@ -2048,5 +2062,15 @@ work_encodebench falls 0.49% to 2,386,714,424. The emitter writes fewer lines
 emit_instructions 7,090,315. The three compile rows fall about 0.13%. The
 welfare floor drops to 91.08971 under the rule that building the language is
 priced at what it costs.
+
+With #1896 underneath, the rest of CI's rows on this tree:
+`codegen_instructions_dev` 119,060,047, `browser_run_instructions` 34,125,731
+and `text` 4,845,118. Among the benches, `work_pendbench` lands on 191,667,218
+(+0.85%) and `work_widebench` on 28,274,761 (+0.34%); `work_basket`
+30,876,728, `work_digestbench` 5,603,270, `work_jsonbench` 860,563,126,
+`work_oneshot` 13,227,357, `work_readbench` 4,581,129 and `work_scanbench`
+273,675 move by a few hundred instructions each.
+The emitted totals: `emitted_other_branches` 16,476, `emitted_other_calls`
+17,511 and `emitted_other_defines` 2,012.
 
 This is the toml item on #1892.
