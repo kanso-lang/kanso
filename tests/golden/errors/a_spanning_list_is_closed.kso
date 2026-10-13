@@ -1,0 +1,6 @@
+# A list that spans lines and reaches the end of the file was never closed
+# (#1882). The error names the column its closing bracket belongs in.
+pub play = print "{xs}"
+
+xs = [
+  "the first word of a list long enough that it cannot sit on one line"

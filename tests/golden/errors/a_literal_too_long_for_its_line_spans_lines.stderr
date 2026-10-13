@@ -1,0 +1,4 @@
+error[formatting]: a line holds at most 80 characters — this one has 88; a list or map that long spans lines, one element to a line
+  --> a_literal_too_long_for_its_line_spans_lines.kso:3:81
+   3 | words = ["the first word of a list long enough" "that it cannot sit on one line at all"]
+                                                                                       ^

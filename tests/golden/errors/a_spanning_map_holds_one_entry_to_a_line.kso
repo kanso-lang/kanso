@@ -1,0 +1,8 @@
+# A map that spans lines holds one entry to a line (ruled 2026-10-13, #1882).
+# Two entries sharing a line are a map half spanned.
+ages = {
+  "a name long enough to push the map past the width of a single line":40
+  "ken":5 "mai":8
+}
+
+pub play = print "{ages}"

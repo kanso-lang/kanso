@@ -1,0 +1,8 @@
+# Each element of a list that spans lines sits on its own line, two spaces in
+# from the line that opened it (ruled 2026-10-13, #1882).
+names = [
+  "a name long enough that the whole list could never sit on one line of eighty"
+    "ken"
+]
+
+pub play = print "{names}"

@@ -315,6 +315,25 @@ ranked <span class="o">=</span> [<span class="n">40</span> <span class="n">15</s
   </div>
 </div>
 
+<p>a list or map literal too long for its line spans lines instead, one element to a line, with the closing bracket alone at the indent of the line that opened it. chapter 02 shows the form. the same rule applies to it: a literal that fits on one line must be written on one line, and the diagnostic gives the width it would take:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">span_short_check.kso</div>
+  <pre><code>steps <span class="o">=</span> [
+  <span class="s">"boil"</span>
+  <span class="s">"steep"</span>
+  <span class="s">"pour"</span>
+]
+<span class="f">print</span> <span class="s">"<span class="i">{steps}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso check span_short_check.kso</div>
+    <pre><code><span class="k">error[formatting]</span>: this list fits on one line (31 characters) — a list spans lines only when it does not
+<span class="c">  --&gt; span_short_check.kso:1:9</span>
+   1 | steps = [
+               <span class="k">^</span></code></pre>
+  </div>
+</div>
+
 <h2>names: snake_case, lowercase, always</h2>
 
 <p>identifiers are lowercase snake_case, with no exceptions and no second convention to remember. no camelCase, no PascalCase, no SCREAMING_CONSTANTS. a single naming scheme means a name looks identical everywhere it appears, and a reader never wonders whether case carries meaning—it does not:</p>
@@ -364,7 +383,7 @@ ranked <span class="o">=</span> [<span class="n">40</span> <span class="n">15</s
 </div>
 </div>
 
-<p>that is the whole law. you can now read any diagnostic in the <code>error[formatting]</code> family and know it names a rule with exactly one legal answer, and you can write a file that <code>kanso check</code> passes on the first try: two-space indents, one space around every <code>=</code> and operator, no commas and no call parentheses, parentheses only where they group something, types before functions and both alphabetical, one blank line between declarations and none inside a body, one under a header comment, eighty columns with <code>.</code>, <code>.&gt;</code>, <code>.!</code> and <code>.?</code> continuation lines when a statement runs long, snake_case names, and double-quoted strings. nothing here is a preference. it is the grammar, and the grammar is the reason every kanso diff you read contains only decisions.</p>
+<p>that is the whole law. you can now read any diagnostic in the <code>error[formatting]</code> family and know it names a rule with exactly one legal answer, and you can write a file that <code>kanso check</code> passes on the first try: two-space indents, one space around every <code>=</code> and operator, no commas and no call parentheses, parentheses only where they group something, types before functions and both alphabetical, one blank line between declarations and none inside a body, one under a header comment, eighty columns with <code>.</code>, <code>.&gt;</code>, <code>.!</code> and <code>.?</code> continuation lines when a statement runs long, a list or map one element to a line when it runs long, snake_case names, and double-quoted strings. nothing here is a preference. it is the grammar, and the grammar is the reason every kanso diff you read contains only decisions.</p>
 
 <h2>exercises</h2>
 

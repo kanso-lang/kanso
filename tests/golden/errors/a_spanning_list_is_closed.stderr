@@ -1,0 +1,4 @@
+error[syntax]: this list is never closed — a list that spans lines closes with `]` alone at column 1
+  --> a_spanning_list_is_closed.kso:5:1
+   5 | xs = [
+       ^

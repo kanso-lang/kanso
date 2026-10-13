@@ -21,113 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-10 — a record is reused in place only above the loop's mark
-
-The retention at the end of the previous entry has a smaller fix than taking
-back settled regions. Record reuse writes a new state into the old record's
-storage, and inside a beat loop that storage can sit below the loop's mark,
-where a rewind cannot reach it. `k_rec_reuse` now reuses a record in place only
-when the record lies in the mark's own block, between the mark and the arena's
-current position. Anywhere else it builds the record fresh, above the mark,
-and the old one is left for the rewind. Outside a beat loop nothing changes.
-
-The cost of building fresh is one record allocation a stage. The cost it
-removes was a megabyte a pass: at 400 passes of the interpolating loop the
-arena peak falls from 211 MB on the carrier to 3 MB.
-
-`tests/golden/mem/an_interpolated_state_string_is_not_kept_under_the_mark`
-runs the shape for 100 passes, `"{st.body}{st.count % 10}"` on a one-megabyte
-string. Its arena_peak_bytes is 3,145,984; with the check removed it reads
-54,529,792. It makes 213 allocations and evacuates 52,435,792 bytes, which is
-the string copied at each stage and is the price of carrying it.
-
-Four mem fixtures and the basket golden move, each by records that are now
-built fresh where they were overwritten:
-
-- `record_reuse_shape`: allocs 4 to 6, alloc_bytes 176 to 304, evac_allocs 3
-  to 5, evac_bytes 80 to 144, survive_slots 8 to 4, sh_rec 64 to 192.
-- `a_long_chain_answers_survival_from_its_index`: allocs 240,008 to 240,004,
-  chain_finds 477,919 to 95,601, survive_slots 500,024 to 100,004, evac_bytes
-  448 to 608, sh_rec 224 to 608.
-- `a_cycle_that_sorts_a_map_each_step_still_waits_for_its_lap`: allocs 180,003
-  to 180,002, alloc_bytes 12,160,400 to 12,160,432, evac_bytes 6,128 to 6,160,
-  survive_slots 8 to 4, sh_rec 2,560,128 to 2,560,192.
-- `an_evaluator_carrying_any_value_round_its_cycle_rewinds`: allocs 91,429 to
-  91,445, alloc_bytes 4,114,384 to 4,115,408, sh_rec 2,560,192 to 2,561,216.
-- `bench/cost_golden_basket.txt`: allocs 27,263 to 27,265, alloc_bytes
-  7,522,129 to 7,522,257, evac_allocs 3 to 5, evac_bytes 192 to 256,
-  survive_slots 4 to 0, sh_rec 130,048 to 130,176.
-
-The chain fixture's chain_finds falling to a fifth is the walk no longer
-following records that were rewritten under it.
-
-Instructions were measured in one worktree against the spare-list branch this
-one sits on. basket reads 60,732 more, livebench 602 more; runbench reads 392
-fewer, encodebench 280 fewer and oneshot 644 fewer. They are projected into
-`bench/instructions_golden.txt` from that branch's figures, and CI's rows
-replace them.
-
-CI read every instruction row exactly as projected. Three rows end worse than
-main, the two branches below this one included: codegen_instructions_dev at
-118,957,002, codegen_instructions_release at 454,309,037 and text at 4,836,670.
-Against the spare fix alone the dev row rises 1,833 and the release row 2,837,
-and each benchmark's runtime text grows 80 bytes, which is the check before a
-reuse.
-
-By the trend gate's keys, the rows this change worsens land at basket_allocs
-27,265, basket_evac_allocs 5, basket_evac_bytes 256 and basket_sh_rec 130,176;
-record_reuse_shape_allocs 6, record_reuse_shape_alloc_bytes 304,
-record_reuse_shape_evac_allocs 5, record_reuse_shape_evac_bytes 144 and
-record_reuse_shape_sh_rec 192; and, projected, work_encodebench 2,398,370,134,
-work_livebench 1,474,871,692 and work_oneshot 13,223,551. Each record row is a
-record built fresh above the mark where it used to be written below it.
-
-The branch took the spare fix after that fix took the carrier, and each
-conflicted row is projected as this branch's CI delta on the spare fix's row.
-Measured against the spare fix, the rows that end worse are
-codegen_instructions_dev on 118,960,395, codegen_instructions_release on
-454,289,201, work_basket on 30,873,237, work_livebench on 1,474,872,350 and
-`text` on 4,830,398, 80 bytes a binary for the mark check. basket_alloc_bytes
-lands on 7,522,257. Three mem fixtures that keep a record across a cycle read
-it as a fresh allocation where they used to reuse it.
-a_cycle_that_sorts_a_map_each_step_still_waits_for_its_lap_alloc_bytes lands
-on 12,160,432,
-a_cycle_that_sorts_a_map_each_step_still_waits_for_its_lap_evac_bytes on 6,160
-and a_cycle_that_sorts_a_map_each_step_still_waits_for_its_lap_sh_rec on
-2,560,192. a_long_chain_answers_survival_from_its_index_alloc_bytes lands on
-19,672,832, a_long_chain_answers_survival_from_its_index_chain_finds on 95,601,
-a_long_chain_answers_survival_from_its_index_evac_bytes on 608 and
-a_long_chain_answers_survival_from_its_index_sh_rec on 608.
-an_evaluator_carrying_any_value_round_its_cycle_rewinds_alloc_bytes lands on
-4,115,408, an_evaluator_carrying_any_value_round_its_cycle_rewinds_allocs on
-91,445 and an_evaluator_carrying_any_value_round_its_cycle_rewinds_sh_rec on
-2,561,216. CI's reading
-replaces the projected rows.
-
-CI's rows for this branch were read on the spare fix before k_b_adopt was
-retired beneath it. With that retirement's deltas added, the rows land on
-codegen_instructions_dev 118,935,145, codegen_instructions_release
-454,454,756, work_basket 30,873,237, work_encodebench 2,398,370,771,
-work_livebench 1,474,870,922, work_oneshot 13,224,076 and work_runbench
-1,152,728,036. Against the spare fix the dev row rises 1,901, the release row 2,593, basket
-60,732, encodebench 1,120 and oneshot 371, and livebench falls 679. With the
-browser row the spare fix carries, welfare scores 91.0338407, 0.0000035 below
-the floor the spare fix banked and inside the gate's 0.001 allowance, so the
-floor stays where the spare fix left it.
-`text` totals 4,825,470, 80 bytes a binary above the spare fix for the mark
-check.
-
-CI then read this branch on the spare fix with k_b_adopt retired, and those
-rows replace the ones above. codegen_instructions_dev lands on 118,940,032,
-codegen_instructions_release on 454,512,392, work_basket on 30,873,237,
-work_encodebench on 2,398,369,266, work_livebench on 1,474,870,859,
-work_oneshot on 13,224,090 and work_runbench on 1,152,729,429, and `text`
-totals 4,825,438. Against the spare fix's CI rows, the dev row rises 2,514, the
-release row 2,552, basket 60,732, oneshot 189 and runbench 686; encodebench
-falls 756 and livebench 343. Welfare scores 91.0338012, 0.0000081 under the
-91.0338093 the spare fix banks from its CI rows and inside the gate's 0.001
-allowance, so the floor stays where the spare fix left it.
-
 ## 2026-10-11 — the first join makes its own builder, and `k_b_adopt` goes
 
 A builder seed that is not a string reached its first join through
@@ -1282,6 +1175,51 @@ runs. `a_warm_play_ended_by_a_signal_names_it` reaches the wording another
 way. The program waits on stdin, the spec sends it SIGTERM, and both plays
 must print "ended by signal 15". Under the mutation the second play printed an
 empty line. Linux only, since it finds the program through /proc.
+
+## 2026-10-13 — a list or map too long for its line spans lines
+
+Built under #1882 (gavel: a bracketed list or map may span lines). A literal
+whose opening bracket ends its line continues one element to a line, each two
+spaces deeper, and closes with its bracket alone at the indent of the line that
+opened it. The lexer gathers the lines into the one statement they spell, so the
+parser and every engine see the literal they saw before. A list element is
+grouped the way a parenthesised one is, so `double 21` on its own line is one
+element; a map element is one `key:value` entry. A list inside a list spans on
+its own terms, and a comment line may sit between elements.
+
+Canonical form decides which form is written. The lexer measures the literal
+joined back onto one line, and a literal that fits in 80 columns is refused in
+the spanning form with the width it would take. A line too wide that holds a
+literal gets a second clause on the width error saying the literal can span.
+The other refusals each name the rule: a closing bracket that shares its line
+with an element, a map entry sharing a line, an element at the wrong indent, a
+blank line inside the literal, and a literal the file ends inside.
+
+Five error goldens pin those diagnostics and
+`tests/golden/micro/lists_and_maps_span_lines` pins a list, a map, a nested
+list and a list in a function body on both engines. On main's lexer every one
+of them is refused with a different message, and the micro sample stops at an
+indent error.
+
+Chapter 02 shows the form beside lists and maps, and appendix C states the
+rule beside the continuation line. trend_gate's `higher` table and
+perf_record's two watched lists, which were assembled from halves joined by
+`text/concat` to stay under the width, are now single spanning lists with
+their comments inside.
+
+CI's rows, on main after #1925: compile_instructions lands on 26,216,275
+(+334,724), entry_instructions on 86,540,771 (+1,159,458), library_instructions
+on 87,096,300 (+1,160,718) and browser_compile_instructions on 392,203,148
+(+891,646). interp_instructions falls to 488,437,711 (-302,105) and
+emit_instructions to 7,012,968 (-509).
+
+Moving `higher` onto the spanning form blinded
+tests/a_mutation_keeps_its_unclassified_counter.rs, which read the direction
+tables one line at a time. With `thunk_forces` added to `higher` it stayed
+green. It now reads the spanning table and asserts that both tables parsed, and
+the same edit turns it red.
+
+- **OPEN** #1882, until this lands.
 
 91.11.
 

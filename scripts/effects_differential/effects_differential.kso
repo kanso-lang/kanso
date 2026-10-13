@@ -173,25 +173,34 @@ renders = shape
   "a description renders"
   "<io>a"
 
-simple = [bind_drop bind_value bind_twice re_enter computed]
-
-nests = [nested_bind]
-
-groups = [two_lines three_lines bind_beside group_of_binds]
-
-world = [unset absent no_args no_dir]
-
-exits = [exit_in_bind exit_before exit_in_group]
-
-reads = [read_fails read_bound_twice read_beside]
-
-locals = [in_a_local twice_over from_a_list to_stderr compares renders]
-
-probes = text/concat (text/concat simple nests) (text/concat groups world)
-
-tail = text/concat (text/concat exits reads) locals
-
-all_probes = text/concat probes tail
+all_probes = [
+  bind_drop
+  bind_value
+  bind_twice
+  re_enter
+  computed
+  nested_bind
+  two_lines
+  three_lines
+  bind_beside
+  group_of_binds
+  unset
+  absent
+  no_args
+  no_dir
+  exit_in_bind
+  exit_before
+  exit_in_group
+  read_fails
+  read_bound_twice
+  read_beside
+  in_a_local
+  twice_over
+  from_a_list
+  to_stderr
+  compares
+  renders
+]
 
 # A probe is a whole program, so it carries exactly the imports it uses and no
 # others — an unused import is an error, and an error compares equal on both

@@ -1,0 +1,4 @@
+error[formatting]: this list fits on one line (31 characters) — a list spans lines only when it does not
+  --> span_short_check.kso:1:9
+   1 | steps = [
+               ^

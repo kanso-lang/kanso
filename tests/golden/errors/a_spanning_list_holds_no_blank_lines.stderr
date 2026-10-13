@@ -1,0 +1,4 @@
+error[formatting]: a list that spans lines holds no blank lines
+  --> a_spanning_list_holds_no_blank_lines.kso:5:1
+   5 | 
+       ^

@@ -1,0 +1,4 @@
+error[formatting]: each element of a list that spans lines sits on its own line, 2 spaces in
+  --> a_spanning_list_element_sits_two_spaces_in.kso:5:5
+   5 |     "ken"
+           ^

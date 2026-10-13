@@ -47,406 +47,358 @@ type move
   after
   rebased
 
-# Presence counters (kernel pins) are news in either direction, but the hard
-# golden diff already forces those to be deliberate; here they are
-# down-is-worse so a dropped kernel reads as a worsening and wants its sentence.
-lower_a = ["allocs" "alloc_bytes" "arena_blocks" "perm_allocs" "beat_iters"]
-
-# `ten_blocks` is the tenure allocator's storage claimed, so lower is better
-# like every other allocation counter. Its partner `ten_frees` is the same
-# storage given back and sits in `higher` beside `bytes_freed`, for the reason
-# that counter exists: with blocks held constant, a fall in frees is a leak,
-# and until 2026-09-01 no counter, no golden and no spec here could see one.
-lower_b = ["bytes_malloc" "thunk_allocs" "thunk_escaped" "ten_blocks"]
-
-lower_bb = ["thunk_live_exit" "spare_peak_bytes"]
-
-lower_c = ["arena_peak_bytes" "held_peak_bytes" "sh_str" "sh_rec" "sh_buf"]
-
-lower_d = ["sh_map" "sh_bytes" "lines" "calls" "branches" "defines"]
-
-lower_e = ["rounds" "visits"]
-
-lower_f = ["front_end_rounds" "front_end_visits" "compile_peak_bytes"]
-
-# The MEASURED compile veins. The first two became welfare's compile-speed
-# terms on 2026-08-26 and this gate could not see either of them, so an
-# instruction count could move by a million with the listing silent — which is
-# exactly what it did while gavel 24 was being built, and only the per-golden
-# diff caught it.
-lower_g = ["compile_instructions" "compile_allocs"]
-
-# `kanso check` routes a single file by content and the three routes are three
-# compiles, so the module row above has two siblings: `entry_instructions` from
-# kanso#1330 and `library_instructions` from kanso#1337. NEITHER JOINED THIS
-# TABLE WHEN IT JOINED THE TREE. Both were walked by the gate and unclassified
-# by it for as long as they existed, which is the digestbench failure one vein
-# down: a rise printed as drift and counted toward neither side of the
-# pure-regression rule. Running the gate on kanso#1338's own diff is what
-# surfaced it, and tests/every_compile_vein_row_has_a_direction.rs derives the
-# veins off disk so a fifth compile path cannot open one blind. Three sets of
-# rows were added across 2026-09-16 and 2026-09-17 and every one is named here
-# in the change that mints it rather than a round later: `startup_instructions`,
-# the interpreted run's three -- the only ones that count a program EXECUTING --
-# and `emit_instructions`, which is what the codegen rows stopped counting when
-# kanso's own process was excluded from them. Lower is better for all of them.
-lower_ge = ["library_instructions" "startup_instructions"]
-
-lower_gf = ["interp_instructions" "emit_instructions"]
-
-lower_gh = text/concat lower_ge lower_gf
-
-lower_gi = text/concat lower_gh ["interp_allocs" "interp_peak_bytes"]
-
-lower_gg = text/concat ["entry_instructions"] lower_gi
-
-lower_gs0 = text/concat lower_g lower_gg
-
-# The two codegen rows joined the walk on 2026-09-17 and this table never, for
-# the reason the paragraph above gives about the entry and library rows: the
-# spec deriving the veins off disk matched on a suffix their names do not end
-# with. So the release row's -56% in kanso#1585 counted toward neither side,
-# and a change that bought it with a run-program rise read as a pure
-# regression. Lower is better for both.
-lower_gc = ["codegen_instructions_dev" "codegen_instructions_release"]
-
-# The browser side's four, which joined with their golden on 2026-10-06 and
-# were given a direction in the same commit so they cannot repeat the codegen
-# rows' fortnight of counting toward neither side. Lower is better for all four.
-lower_gb = ["browser_compile_instructions" "browser_compile_peak_bytes"]
-
-lower_gr = ["browser_run_instructions" "browser_run_peak_bytes"]
-
-lower_gt = text/concat lower_gc (text/concat lower_gb lower_gr)
-
-lower_gs = text/concat lower_gs0 lower_gt
-
-# The runtime work vein, per benchmark. Four of these are welfare's run-speed
-# terms, so half the score's inputs were invisible to the gate that exists to
-# watch the score's inputs — the same argument the two compile veins above
-# were added on, one vein down. Named WITHOUT the file's prefix, because the
-# direction lookup strips it: what is classified is the counter, wherever it
-# was read from. `text` is the machine-code vein, summed over the binaries.
-lower_h = ["jsonbench" "encodebench" "oneshot" "basket" "widebench"]
-
-lower_i = ["deepbench" "escapebench" "pendbench" "indexbench" "text"]
-
-# digestbench joined the work vein on 2026-08-31 and this list did not, so a
-# rise in it read as UNCLASSIFIED drift — a 6.5x regression passed green. It is
-# the row that matters most for staying honest here: every change that buys the
-# digest's peak spends work, and the peak side was classified from the first day
-# because `digest_arena_peak_bytes` strips to a name lower_c already held.
-#
-# scanbench joined the work vein on 2026-09-02 and this list at the same time,
-# because the spec that caught digestbench's omission caught it in the pull
-# request that added the row. Its arena and peak sides were classified from the
-# first day for the same reason the digest's were.
-# readbench joined on 2026-09-04, in the pull request that added the row, for
-# the reason the two above give and one of its own: its work row is meant to
-# stay flat. The benchmark is in the objective for its arena, and this is the
-# entry that makes a rise in its instructions read as a regression rather than
-# as drift the listing shrugs at.
-# livebench joined on 2026-09-05, in the pull request that added the row, for
-# the reason the three above give. Its own reason to be here is that it exists
-# to make a library encode change visible at all: a benchmark added to see a
-# fall, whose rises read as drift, would be worse than not adding it.
-lower_j = ["digestbench" "scanbench" "readbench" "livebench" "runbench"]
-
-lower_ab = text/concat lower_a (text/concat lower_b lower_bb)
-
-lower_cd = text/concat lower_c lower_d
-
-lower_ef = text/concat lower_e (text/concat lower_f lower_gs)
-
-# emitted_golden's four counters need no entry: `lines`, `calls`, `branches`
-# and `defines` are in lower_d already, for compile_golden. The prefix on the
-# file keeps the two sums apart; the direction is the same question either way.
-lower_run = text/concat lower_h (text/concat lower_i lower_j)
-
-lower_efr = text/concat lower_ef lower_run
-
-lower_all = text/concat lower_cd lower_efr
-
-lower = text/concat lower_ab (text/concat lower_all lower_cost)
-
-# The runtime counters that are plainly a cost, swept in on 2026-09-01. Every
-# one of them had been unclassified since it was minted, so a change that
-# worsened it alone printed as drift and the pure-regression rule counted it
-# toward neither side. `evac_allocs` and `evac_bytes` are what a carry
-# evacuation spends; `str_scans`, `str_scan_bytes`, `find2_calls` and
-# `utf8_bytes` are bytes walked; `perm_live_bytes` and `perm_peak_bytes` are
-# malloc-backed storage the process is still holding, which only ever leaves
-# through free() — a peak that scales with iteration count is a leak by
-# definition. `thunk_evals` is a lazy binding actually running, which #1197
-# moved 8,256 to 129 with `thunk_forces` byte-identical.
-lower_k = ["evac_allocs" "evac_bytes" "str_scans" "str_scan_bytes"]
-
-lower_l = ["find2_calls" "utf8_bytes" "perm_live_bytes" "perm_peak_bytes"]
-
-# The slow halves of three fast/slow pairs whose fast halves are already in
-# `higher`. `append_grow` is the out-of-line growth k_b_append_grow does;
-# `push_mut_slow` and `put_mut_grow` are a push and a put that could not write
-# in place.
-lower_m = ["append_grow" "push_mut_slow" "put_mut_grow" "thunk_evals"]
-
-# What deciding a carry costs, beside `evac_allocs` and `evac_bytes` which are
-# what the copying costs. A slot examined is an algorithm-level step, so a
-# wider vector cannot move it and a second host reads the same number.
-lower_n = ["survive_slots"]
-
-lower_mn = text/concat lower_m lower_n
-
-lower_cost = text/concat lower_k (text/concat lower_l lower_mn)
-
-# `append_rendered` is a number written straight into the accumulator by the
-# fused `append acc "{x}"` door, where the unfused pair renders it into a
-# string first and copies that; more of them is more of the work taking the
-# short road, and a site that falls back moves it down.
-higher_a = ["el_parses" "ryu_renders" "append_fast" "utf8_zerocopy"]
-
-higher_b = ["append_rendered" "buf_reuse" "thunk_frees" "ten_frees"]
-
-# The fast halves, and two reclaim counters. `bytes_freed` is malloc-backed
-# storage given back, which is what `bytes_malloc` in `lower` is measured
-# against; `carry_dedup` is a node the carry found already copied and reused
-# rather than copying twice.
-#
-# The risk these carry, stated rather than left for somebody to find: a change
-# that does strictly LESS of the work lowers a presence counter, and this table
-# reads that as a worsening. `append_fast` and `utf8_zerocopy` have sat here
-# since the table was written and it has not bitten, because a change that
-# removes work almost always moves its slow twin the same way and the verdict
-# comes out mixed. A pure regression that is really a pure simplification is
-# the shape to watch for.
-higher_c = ["push_mut_fast" "put_mut_fast" "bytes_freed" "carry_dedup"]
-
-# What stays unclassified, and why each one is not an oversight.
-#
-# `cohort_frees` and `cohort_kept` are the two outcomes of the cohort dance,
-# and both scale with how many cohorts ran: a change that adds a loop raises
-# both while reclaiming exactly as well as before. What means something is the
-# ratio, which this gate has no way to say.
-#
-# `view_allocs` and `view_frees` are the same shape and runtime.c says so at
-# the counter: "view_allocs minus view_frees is memory the process is still
-# holding". The difference is the number; either side alone is not.
-#
-# `thunk_forces` counts asking a thunk for its value, not computing one. #1197
-# took `thunk_evals` from 8,256 to 129 on the digest with this counter
-# unchanged, which is what a working memo looks like; a change that made the
-# same program strict would lower it while doing identical work.
-# `ten_handups` is the presence counter for the hand-up itself, and it is here
-# for the reason `lower_a` states about presence counters: a change that drops
-# the kernel should read as a worsening and want its sentence. Its partners
-# cannot do that job. A hand-up moves a depth's blocks to the depth outside and
-# a release frees them where they are, so the block is allocated once and freed
-# once either way and `ten_blocks` and `ten_frees` are identical across the two.
-# Replacing `k_ten_hand_up` with `k_ten_release` at the one call site left every
-# .mem golden in the vein byte-identical; this counter goes to nought.
-# `seek_resumes` is the same kind of presence counter, for the seek cursor: a
-# walk that started from the remembered place instead of the front. Forgetting
-# the cursor moves no output and no allocation, so it is the only counter that
-# can say a scan went quadratic.
-# `ryu_short` is a float whose digits the short path found by scaling and
-# dividing back. Losing the path renders the same text through ryu's
-# multiplies, so no output or allocation moves and this counter goes to nought.
-# `seek_steps` is an index answered by stepping the cursor one character on.
-# Losing the step sends each index through the general seek, which still
-# resumes from the cursor, so `seek_resumes` holds and only this goes to nought.
-# `chain_finds` is a survival question answered from the block index instead
-# of a walk of the chain. Losing the index answers the same questions by
-# walking, so nothing else moves and only this goes to nought.
-higher_d = ["ten_handups" "seek_resumes" "ryu_short" "seek_steps" "chain_finds"]
-
-higher_cd = text/concat higher_c higher_d
-
-higher = text/concat higher_a (text/concat higher_b higher_cd)
-
-bench_a = [["bench/cost_golden.txt" ""]]
-
-bench_encode = [["bench/cost_golden_encode.txt" "encode_"]]
-
-bench_b = [["bench/cost_golden_oneshot.txt" "oneshot_"]]
-
-bench_c = [["bench/cost_golden_basket.txt" "basket_"]]
-
-bench_compile = [["bench/compile_golden.txt" ""]]
-
-bench_modules = [["bench/compile_golden_modules.txt" "module_"]]
-
-bench_memory = [["bench/compile_memory_golden.txt" ""]]
-
-bench_ir = [["bench/compile_instructions_golden.txt" ""]]
-
-# The entry path's own instruction row, added with the vein on 2026-09-08.
-# `kanso check <dir>` is a module and `kanso check <file>` is an entry, and
-# every compile gate watched the first until that day. Listed here in the same
-# commit that opens the vein, because this list has been short five times now
-# — the three cost goldens nobody had entered, then readbench, whose row was
-# an OBJECTIVE term while this gate could not see its golden at all — and each
-# one was found by hand. The spec beside it,
-# `tests/every_counter_golden_is_walked_by_the_trend_gate.rs`, is what stops
-# the sixth: it reads bench/ off disk and asks this program which files it
-# names. No prefix, for the reason `bench_ir` has none: `entry_instructions`
-# collides with nothing.
-bench_entry = [["bench/entry_instructions_golden.txt" ""]]
-
-# The library path's row, added with its vein on 2026-09-08. It is the third of
-# the three compiles `kanso check` routes to by content, and the only one
-# `kanso test` takes. Listed here in the commit that opens the vein, and this
-# time the list did not have to be caught by hand: the spec beside it reads
-# bench/ off disk and keys on the word `golden`, so it went red the moment the
-# file existed. Its sibling under tests/ keys on a PREFIX and did not, which is
-# the whole difference between the two.
-# No prefix, for the reason `bench_ir` and `bench_entry` have none:
-# `library_instructions` collides with nothing.
-bench_library = [["bench/library_instructions_golden.txt" ""]]
-
-# The two codegen rows, added with their gate on 2026-09-17. They count what
-# every compile row above stops before: the emitter writing IR, the clang
-# driver, clang -cc1, the linker and the linker's own child. Two rows rather
-# than one because the development and production tiers are different builds
-# with different jobs, ruled 2026-09-16, and a single number over both would
-# let either pay for the other. No prefix, for the reason the three rows above
-# have none: `codegen_instructions_dev` and `codegen_instructions_release`
-# collide with nothing.
-bench_codegen_dev = [["bench/codegen_instructions_dev_golden.txt" ""]]
-
-bench_codegen_release = [["bench/codegen_instructions_release_golden.txt" ""]]
-
-# What the compiler spends emitting, added with its gate on 2026-09-17. It is
-# the row between the two above and the three compile rows: a check stops
-# before codegen, and the codegen rows count the child tree with kanso's own
-# process excluded, because that process waits for a child and a loop the
-# scheduler sizes is external state. `codegen::emit_ir` is what was left, and
-# it is listed here in the commit that creates the file, because the spec
-# beside this one reads bench/ off disk and keys on the word `golden`. No
-# prefix: `emit_instructions` collides with nothing.
-bench_emit = [["bench/emit_instructions_golden.txt" ""]]
-
-bench_traffic = [["bench/compile_allocs_golden.txt" ""]]
-
-# Start-up and the interpreted run, five veins added on 2026-09-16. Start-up
-# is the only row here that sees codegen: the three compile rows run
-# `kanso check`, which stops before it. The interpreted run’s two are the
-# first that count a program EXECUTING rather than one being compiled.
-# Listed in the commits that open them, for the reason the library row gives
-# — the spec reads bench/ off disk and keys on the word `golden`, so it goes
-# red the moment the file exists. No prefix: none of the names collides.
-bench_startup = [["bench/startup_instructions_golden.txt" ""]]
-
-bench_interp_ir = [["bench/interp_instructions_golden.txt" ""]]
-
-bench_interp_mem = [["bench/interp_memory_golden.txt" ""]]
-
-bench_interp = text/concat bench_interp_ir bench_interp_mem
-
-bench_new = text/concat bench_startup bench_interp
-
-bench_pend = [["bench/cost_golden_pend.txt" "pend_"]]
-
-# The three RUNTIME veins, none of which this gate could read. `work_` and
-# `emitted_` are prefixed because the names collide otherwise: every benchmark
-# would clash with nothing, but `lines`, `calls`, `branches` and `defines`
-# belong to bench/compile_golden.txt already, and summing the decoder's IR
-# line count into a compile sample's would let a rise in one hide a fall in
-# the other. text_golden's rows share the field name `text`, so it sums to one
-# number across the eight binaries — the same treatment compile_golden's five
-# samples already get, and the per-golden diff is what says which binary.
-bench_work = [["bench/instructions_golden.txt" "work_"]]
-
-bench_emitted = [["bench/emitted_golden.txt" "emitted_"]]
-
-# The eight programs the emitted gate did not watch until 2026-08-27. A second
-# prefix rather than a second entry under `emitted_`, so a rise in a benchmark
-# cannot be hidden by a fall in the decoder — they are separate questions and
-# the decoder's series is the one with eleven entries of history behind it.
-bench_emitted_others = [["bench/emitted_golden_others.txt" "emitted_other_"]]
-
-bench_text = [["bench/text_golden.txt" ""]]
-
-# Three cost goldens that were simply never listed. They are `name=value` like
-# their four listed siblings, so nothing had to be taught to read them — the
-# list was short by three, which is a different failure from the one above and
-# found the same way: by asking which files in bench/ this program names.
-bench_escape = [["bench/cost_golden_escape.txt" "escape_"]]
-
-bench_scan = [["bench/cost_golden_scan.txt" "scan_"]]
-
-bench_wide = [["bench/cost_golden_wide.txt" "wide_"]]
-
-# The digest vein, added with the benchmark on 2026-08-31. `digest_peak_bytes`
-# is the row this whole benchmark exists for: it is what a streaming walk
-# holds, and it is linear in the message rather than constant.
-bench_digest = [["bench/cost_golden_digest.txt" "digest_"]]
-
-# The read vein, added with readbench on 2026-09-04 (kanso#1240) and listed
-# here on the same day it was found missing. Two of its rows are welfare terms
-# — `read_arena_blocks` and `read_peak_bytes` — so a benchmark joined the
-# OBJECTIVE while the gate that watches the objective's inputs could not see
-# its golden at all, and either row could have moved by any amount in silence.
-#
-# Found by asking which files in bench/ this program names, the same way the
-# three siblings above were, which is now the only method that has ever found
-# one of these. `bench/compile_libraries_golden.txt` is the other file the list
-# omits and it belongs omitted: it holds five sonames rather than counters, and
-# its own gate diffs it byte for byte.
-bench_read = [["bench/cost_golden_read.txt" "read_"]]
-
-# livebench joined on 2026-09-05. It is encodebench's program against the
-# library that ships rather than the frozen copy beside it, so this is the vein
-# a change to lib/json's encoder moves. A benchmark whose golden the gate does
-# not walk is one whose regressions arrive unpriced, which is the shape the
-# three siblings above were added to close.
-bench_live = [["bench/cost_golden_live.txt" "live_"]]
-
-bench_ab = text/concat bench_a (text/concat bench_encode bench_b)
-
-bench_cd = text/concat bench_c (text/concat bench_compile bench_modules)
-
-bench_traffic_up = text/concat bench_traffic bench_new
-
-bench_libcheck = text/concat bench_library bench_traffic_up
-
-bench_codegen_tiers = text/concat bench_codegen_dev bench_codegen_release
-
-# The browser side, added 2026-10-06 with the gavel that put it in the
-# objective. Fuel spent and allocator peaks under wasmi, written by
-# tests/browser_cost.rs. No prefix: every row already says `browser_`.
-bench_browser = [["bench/browser_golden.txt" ""]]
-
-bench_emit_tab = text/concat bench_emit bench_browser
-
-bench_codegen = text/concat bench_codegen_tiers bench_emit_tab
-
-bench_checked = text/concat bench_libcheck bench_codegen
-
-bench_compiled = text/concat bench_ir (text/concat bench_entry bench_checked)
-
-bench_de = text/concat bench_memory (text/concat bench_pend bench_compiled)
-
-bench_emits = text/concat bench_emitted bench_emitted_others
-
-bench_run = text/concat bench_work (text/concat bench_emits bench_text)
-
-bench_rl = text/concat bench_read bench_live
-
-bench_wd = text/concat bench_wide (text/concat bench_digest bench_rl)
-
-bench_rest = text/concat bench_escape (text/concat bench_scan bench_wd)
-
-bench_ce = text/concat bench_cd (text/concat bench_de bench_run)
-
-bench_cf = text/concat bench_ce bench_rest
-
-# The run program joined on 2026-09-06. Its three peak rows and its
-# instruction row are the objective's whole runtime side after Clay's gavel
-# that day, so this is the one cost golden whose movement moves welfare -- and
-# a golden the gate does not walk is one whose regressions arrive unpriced,
-# which is the shape the siblings above were each added to close.
-bench_runbench = [["bench/cost_golden_run.txt" "run_"]]
-
-bench_goldens = text/concat bench_runbench (text/concat bench_ab bench_cf)
+lower = [
+  # Presence counters (kernel pins) are news in either direction, but the hard
+  # golden diff already forces those to be deliberate; here they are
+  # down-is-worse so a dropped kernel reads as a worsening and wants its
+  # sentence.
+  "allocs"
+  "alloc_bytes"
+  "arena_blocks"
+  "perm_allocs"
+  "beat_iters"
+  # `ten_blocks` is the tenure allocator's storage claimed, so lower is better
+  # like every other allocation counter. Its partner `ten_frees` is the same
+  # storage given back and sits in `higher` beside `bytes_freed`, for the reason
+  # that counter exists: with blocks held constant, a fall in frees is a leak,
+  # and until 2026-09-01 no counter, no golden and no spec here could see one.
+  "bytes_malloc"
+  "thunk_allocs"
+  "thunk_escaped"
+  "ten_blocks"
+  "thunk_live_exit"
+  "spare_peak_bytes"
+  "arena_peak_bytes"
+  "held_peak_bytes"
+  "sh_str"
+  "sh_rec"
+  "sh_buf"
+  "sh_map"
+  "sh_bytes"
+  "lines"
+  "calls"
+  "branches"
+  "defines"
+  # emitted_golden's four counters need no entry: `lines`, `calls`, `branches`
+  # and `defines` are listed just above, for compile_golden. The prefix on the
+  # file keeps the two sums apart; the direction is the same question either
+  # way.
+  "rounds"
+  "visits"
+  "front_end_rounds"
+  "front_end_visits"
+  "compile_peak_bytes"
+  # The MEASURED compile veins. The first two became welfare's compile-speed
+  # terms on 2026-08-26 and this gate could not see either of them, so an
+  # instruction count could move by a million with the listing silent — which is
+  # exactly what it did while gavel 24 was being built, and only the per-golden
+  # diff caught it.
+  "compile_instructions"
+  "compile_allocs"
+  # `kanso check` routes a single file by content and the three routes are three
+  # compiles, so the module row above has two siblings: `entry_instructions`
+  # from kanso#1330 and `library_instructions` from kanso#1337. NEITHER JOINED
+  # THIS TABLE WHEN IT JOINED THE TREE. Both were walked by the gate and
+  # unclassified by it for as long as they existed, which is the digestbench
+  # failure one vein down: a rise printed as drift and counted toward neither
+  # side of the pure-regression rule. Running the gate on kanso#1338's own diff
+  # is what surfaced it, and tests/every_compile_vein_row_has_a_direction.rs
+  # derives the veins off disk so a fifth compile path cannot open one blind.
+  # Three sets of rows were added across 2026-09-16 and 2026-09-17 and every one
+  # is named here in the change that mints it rather than a round later:
+  # `startup_instructions`, the interpreted run's three -- the only ones that
+  # count a program EXECUTING -- and `emit_instructions`, which is what the
+  # codegen rows stopped counting when kanso's own process was excluded from
+  # them. Lower is better for all of them.
+  "entry_instructions"
+  "library_instructions"
+  "startup_instructions"
+  "interp_instructions"
+  "emit_instructions"
+  "interp_allocs"
+  "interp_peak_bytes"
+  # The two codegen rows joined the walk on 2026-09-17 and this table never, for
+  # the reason the paragraph above gives about the entry and library rows: the
+  # spec deriving the veins off disk matched on a suffix their names do not end
+  # with. So the release row's -56% in kanso#1585 counted toward neither side,
+  # and a change that bought it with a run-program rise read as a pure
+  # regression. Lower is better for both.
+  "codegen_instructions_dev"
+  "codegen_instructions_release"
+  # The browser side's four, which joined with their golden on 2026-10-06 and
+  # were given a direction in the same commit so they cannot repeat the codegen
+  # rows' fortnight of counting toward neither side. Lower is better for all
+  # four.
+  "browser_compile_instructions"
+  "browser_compile_peak_bytes"
+  "browser_run_instructions"
+  "browser_run_peak_bytes"
+  # The runtime work vein, per benchmark. Four of these are welfare's run-speed
+  # terms, so half the score's inputs were invisible to the gate that exists to
+  # watch the score's inputs — the same argument the two compile veins above
+  # were added on, one vein down. Named WITHOUT the file's prefix, because the
+  # direction lookup strips it: what is classified is the counter, wherever it
+  # was read from. `text` is the machine-code vein, summed over the binaries.
+  "jsonbench"
+  "encodebench"
+  "oneshot"
+  "basket"
+  "widebench"
+  "deepbench"
+  "escapebench"
+  "pendbench"
+  "indexbench"
+  "text"
+  # digestbench joined the work vein on 2026-08-31 and this list did not, so a
+  # rise in it read as UNCLASSIFIED drift — a 6.5x regression passed green. It
+  # is the row that matters most for staying honest here: every change that buys
+  # the digest's peak spends work, and the peak side was classified from the
+  # first day because `digest_arena_peak_bytes` strips to a name this table
+  # already held.
+  #
+  # scanbench joined the work vein on 2026-09-02 and this list at the same time,
+  # because the spec that caught digestbench's omission caught it in the pull
+  # request that added the row. Its arena and peak sides were classified from
+  # the first day for the same reason the digest's were.
+  # readbench joined on 2026-09-04, in the pull request that added the row, for
+  # the reason the two above give and one of its own: its work row is meant to
+  # stay flat. The benchmark is in the objective for its arena, and this is the
+  # entry that makes a rise in its instructions read as a regression rather than
+  # as drift the listing shrugs at.
+  # livebench joined on 2026-09-05, in the pull request that added the row, for
+  # the reason the three above give. Its own reason to be here is that it exists
+  # to make a library encode change visible at all: a benchmark added to see a
+  # fall, whose rises read as drift, would be worse than not adding it.
+  "digestbench"
+  "scanbench"
+  "readbench"
+  "livebench"
+  "runbench"
+  # The runtime counters that are plainly a cost, swept in on 2026-09-01. Every
+  # one of them had been unclassified since it was minted, so a change that
+  # worsened it alone printed as drift and the pure-regression rule counted it
+  # toward neither side. `evac_allocs` and `evac_bytes` are what a carry
+  # evacuation spends; `str_scans`, `str_scan_bytes`, `find2_calls` and
+  # `utf8_bytes` are bytes walked; `perm_live_bytes` and `perm_peak_bytes` are
+  # malloc-backed storage the process is still holding, which only ever leaves
+  # through free() — a peak that scales with iteration count is a leak by
+  # definition. `thunk_evals` is a lazy binding actually running, which #1197
+  # moved 8,256 to 129 with `thunk_forces` byte-identical.
+  "evac_allocs"
+  "evac_bytes"
+  "str_scans"
+  "str_scan_bytes"
+  "find2_calls"
+  "utf8_bytes"
+  "perm_live_bytes"
+  "perm_peak_bytes"
+  # The slow halves of three fast/slow pairs whose fast halves are already in
+  # `higher`. `append_grow` is the out-of-line growth k_b_append_grow does;
+  # `push_mut_slow` and `put_mut_grow` are a push and a put that could not write
+  # in place.
+  "append_grow"
+  "push_mut_slow"
+  "put_mut_grow"
+  "thunk_evals"
+  # What deciding a carry costs, beside `evac_allocs` and `evac_bytes` which are
+  # what the copying costs. A slot examined is an algorithm-level step, so a
+  # wider vector cannot move it and a second host reads the same number.
+  "survive_slots"
+]
+
+higher = [
+  "el_parses"
+  "ryu_renders"
+  "append_fast"
+  "utf8_zerocopy"
+  # `append_rendered` is a number written straight into the accumulator by the
+  # fused `append acc "{x}"` door, where the unfused pair renders it into a
+  # string first and copies that; more of them is more of the work taking the
+  # short road, and a site that falls back moves it down.
+  "append_rendered"
+  "buf_reuse"
+  "thunk_frees"
+  "ten_frees"
+  # The fast halves, and two reclaim counters. `bytes_freed` is malloc-backed
+  # storage given back, which is what `bytes_malloc` in `lower` is measured
+  # against; `carry_dedup` is a node the carry found already copied and reused
+  # rather than copying twice.
+  #
+  # The risk these carry, stated rather than left for somebody to find: a change
+  # that does strictly LESS of the work lowers a presence counter, and this
+  # table reads that as a worsening. `append_fast` and `utf8_zerocopy` have sat
+  # here since the table was written and it has not bitten, because a change
+  # that removes work almost always moves its slow twin the same way and the
+  # verdict comes out mixed. A pure regression that is really a pure
+  # simplification is the shape to watch for.
+  "push_mut_fast"
+  "put_mut_fast"
+  "bytes_freed"
+  "carry_dedup"
+  # What stays unclassified, and why each one is not an oversight.
+  #
+  # `cohort_frees` and `cohort_kept` are the two outcomes of the cohort dance,
+  # and both scale with how many cohorts ran: a change that adds a loop raises
+  # both while reclaiming exactly as well as before. What means something is the
+  # ratio, which this gate has no way to say.
+  #
+  # `view_allocs` and `view_frees` are the same shape and runtime.c says so at
+  # the counter: "view_allocs minus view_frees is memory the process is still
+  # holding". The difference is the number; either side alone is not.
+  #
+  # `thunk_forces` counts asking a thunk for its value, not computing one. #1197
+  # took `thunk_evals` from 8,256 to 129 on the digest with this counter
+  # unchanged, which is what a working memo looks like; a change that made the
+  # same program strict would lower it while doing identical work.
+  # `ten_handups` is the presence counter for the hand-up itself, and it is here
+  # for the reason the head of `lower` gives about presence counters: a change
+  # that drops the kernel should read as a worsening and want its sentence. Its
+  # partners cannot do that job. A hand-up moves a depth's blocks to the depth
+  # outside and a release frees them where they are, so the block is allocated
+  # once and freed once either way and `ten_blocks` and `ten_frees` are
+  # identical across the two. Replacing `k_ten_hand_up` with `k_ten_release` at
+  # the one call site left every .mem golden in the vein byte-identical; this
+  # counter goes to nought.
+  # `seek_resumes` is the same kind of presence counter, for the seek cursor: a
+  # walk that started from the remembered place instead of the front. Forgetting
+  # the cursor moves no output and no allocation, so it is the only counter that
+  # can say a scan went quadratic.
+  # `ryu_short` is a float whose digits the short path found by scaling and
+  # dividing back. Losing the path renders the same text through ryu's
+  # multiplies, so no output or allocation moves and this counter goes to
+  # nought.
+  # `seek_steps` is an index answered by stepping the cursor one character on.
+  # Losing the step sends each index through the general seek, which still
+  # resumes from the cursor, so `seek_resumes` holds and only this goes to
+  # nought.
+  # `chain_finds` is a survival question answered from the block index instead
+  # of a walk of the chain. Losing the index answers the same questions by
+  # walking, so nothing else moves and only this goes to nought.
+  "ten_handups"
+  "seek_resumes"
+  "ryu_short"
+  "seek_steps"
+  "chain_finds"
+]
+
+bench_goldens = [
+  # The run program joined on 2026-09-06. Its three peak rows and its
+  # instruction row are the objective's whole runtime side after Clay's gavel
+  # that day, so this is the one cost golden whose movement moves welfare -- and
+  # a golden the gate does not walk is one whose regressions arrive unpriced,
+  # which is the shape the siblings below were each added to close.
+  ["bench/cost_golden_run.txt" "run_"]
+  ["bench/cost_golden.txt" ""]
+  ["bench/cost_golden_encode.txt" "encode_"]
+  ["bench/cost_golden_oneshot.txt" "oneshot_"]
+  ["bench/cost_golden_basket.txt" "basket_"]
+  ["bench/compile_golden.txt" ""]
+  ["bench/compile_golden_modules.txt" "module_"]
+  ["bench/compile_memory_golden.txt" ""]
+  ["bench/cost_golden_pend.txt" "pend_"]
+  ["bench/compile_instructions_golden.txt" ""]
+  # The entry path's own instruction row, added with the vein on 2026-09-08.
+  # `kanso check <dir>` is a module and `kanso check <file>` is an entry, and
+  # every compile gate watched the first until that day. Listed here in the same
+  # commit that opens the vein, because this list has been short five times now
+  # — the three cost goldens nobody had entered, then readbench, whose row was
+  # an OBJECTIVE term while this gate could not see its golden at all — and each
+  # one was found by hand. The spec beside it,
+  # `tests/every_counter_golden_is_walked_by_the_trend_gate.rs`, is what stops
+  # the sixth: it reads bench/ off disk and asks this program which files it
+  # names. No prefix, for the reason the compile_instructions row has none:
+  # `entry_instructions` collides with nothing.
+  ["bench/entry_instructions_golden.txt" ""]
+  # The library path's row, added with its vein on 2026-09-08. It is the third
+  # of the three compiles `kanso check` routes to by content, and the only one
+  # `kanso test` takes. Listed here in the commit that opens the vein, and this
+  # time the list did not have to be caught by hand: the spec beside it reads
+  # bench/ off disk and keys on the word `golden`, so it went red the moment the
+  # file existed. Its sibling under tests/ keys on a PREFIX and did not, which
+  # is the whole difference between the two.
+  # No prefix, for the reason the two rows above have none:
+  # `library_instructions` collides with nothing.
+  ["bench/library_instructions_golden.txt" ""]
+  ["bench/compile_allocs_golden.txt" ""]
+  # Start-up and the interpreted run, five veins added on 2026-09-16. Start-up
+  # is the only row here that sees codegen: the three compile rows run
+  # `kanso check`, which stops before it. The interpreted run’s two are the
+  # first that count a program EXECUTING rather than one being compiled.
+  # Listed in the commits that open them, for the reason the library row gives
+  # — the spec reads bench/ off disk and keys on the word `golden`, so it goes
+  # red the moment the file exists. No prefix: none of the names collides.
+  ["bench/startup_instructions_golden.txt" ""]
+  ["bench/interp_instructions_golden.txt" ""]
+  ["bench/interp_memory_golden.txt" ""]
+  # The two codegen rows, added with their gate on 2026-09-17. They count what
+  # every compile row above stops before: the emitter writing IR, the clang
+  # driver, clang -cc1, the linker and the linker's own child. Two rows rather
+  # than one because the development and production tiers are different builds
+  # with different jobs, ruled 2026-09-16, and a single number over both would
+  # let either pay for the other. No prefix, for the reason the three rows above
+  # have none: `codegen_instructions_dev` and `codegen_instructions_release`
+  # collide with nothing.
+  ["bench/codegen_instructions_dev_golden.txt" ""]
+  ["bench/codegen_instructions_release_golden.txt" ""]
+  # What the compiler spends emitting, added with its gate on 2026-09-17. It is
+  # the row between the two above and the three compile rows: a check stops
+  # before codegen, and the codegen rows count the child tree with kanso's own
+  # process excluded, because that process waits for a child and a loop the
+  # scheduler sizes is external state. `codegen::emit_ir` is what was left, and
+  # it is listed here in the commit that creates the file, because the spec
+  # beside this one reads bench/ off disk and keys on the word `golden`. No
+  # prefix: `emit_instructions` collides with nothing.
+  ["bench/emit_instructions_golden.txt" ""]
+  # The browser side, added 2026-10-06 with the gavel that put it in the
+  # objective. Fuel spent and allocator peaks under wasmi, written by
+  # tests/browser_cost.rs. No prefix: every row already says `browser_`.
+  ["bench/browser_golden.txt" ""]
+  # The three RUNTIME veins, none of which this gate could read. `work_` and
+  # `emitted_` are prefixed because the names collide otherwise: every benchmark
+  # would clash with nothing, but `lines`, `calls`, `branches` and `defines`
+  # belong to bench/compile_golden.txt already, and summing the decoder's IR
+  # line count into a compile sample's would let a rise in one hide a fall in
+  # the other. text_golden's rows share the field name `text`, so it sums to one
+  # number across the eight binaries — the same treatment compile_golden's five
+  # samples already get, and the per-golden diff is what says which binary.
+  ["bench/instructions_golden.txt" "work_"]
+  ["bench/emitted_golden.txt" "emitted_"]
+  # The eight programs the emitted gate did not watch until 2026-08-27. A second
+  # prefix rather than a second entry under `emitted_`, so a rise in a benchmark
+  # cannot be hidden by a fall in the decoder — they are separate questions and
+  # the decoder's series is the one with eleven entries of history behind it.
+  ["bench/emitted_golden_others.txt" "emitted_other_"]
+  ["bench/text_golden.txt" ""]
+  # Three cost goldens that were simply never listed. They are `name=value` like
+  # their four listed siblings, so nothing had to be taught to read them — the
+  # list was short by three, which is a different failure from the one above and
+  # found the same way: by asking which files in bench/ this program names.
+  ["bench/cost_golden_escape.txt" "escape_"]
+  ["bench/cost_golden_scan.txt" "scan_"]
+  ["bench/cost_golden_wide.txt" "wide_"]
+  # The digest vein, added with the benchmark on 2026-08-31. `digest_peak_bytes`
+  # is the row this whole benchmark exists for: it is what a streaming walk
+  # holds, and it is linear in the message rather than constant.
+  ["bench/cost_golden_digest.txt" "digest_"]
+  # The read vein, added with readbench on 2026-09-04 (kanso#1240) and listed
+  # here on the same day it was found missing. Two of its rows are welfare terms
+  # — `read_arena_blocks` and `read_peak_bytes` — so a benchmark joined the
+  # OBJECTIVE while the gate that watches the objective's inputs could not see
+  # its golden at all, and either row could have moved by any amount in silence.
+  #
+  # Found by asking which files in bench/ this program names, the same way the
+  # three siblings above were, which is now the only method that has ever found
+  # one of these. `bench/compile_libraries_golden.txt` is the other file the
+  # list omits and it belongs omitted: it holds five sonames rather than
+  # counters, and its own gate diffs it byte for byte.
+  ["bench/cost_golden_read.txt" "read_"]
+  # livebench joined on 2026-09-05. It is encodebench's program against the
+  # library that ships rather than the frozen copy beside it, so this is the
+  # vein a change to lib/json's encoder moves. A benchmark whose golden the gate
+  # does not walk is one whose regressions arrive unpriced, which is the shape
+  # the three siblings above were added to close.
+  ["bench/cost_golden_live.txt" "live_"]
+]
 
 mem_dir = "tests/golden/mem"
 

@@ -40,21 +40,14 @@ layouts = ["abcdefghij\{n}" "ééééé\{n}abcde" "😀😀\{n}abcdefgh" "a€b�
 # written for; backward makes it walk back; the slice hand and the index hand
 # share one cursor, so a sweep that mixes them is the one that catches a
 # cursor either can leave wrong.
-hands_index = ["\{s[1]}\{s[4]}\{s[7]}" "\{s[7]}\{s[4]}\{s[1]}"]
-
-hands_slice = ["\{text/slice s 2 4}\{text/slice s 6 7}"]
-
-hands_slice_back = ["\{text/slice s 6 7}\{text/slice s 2 4}"]
-
-hands_both = ["\{s[6]}\{text/slice s 2 3}\{s[3]}\{text/slice s 5 6}"]
-
-hands_length = ["\{length s}\{s[2]}\{length s}\{text/slice s 1 2}"]
-
-hands_0 = text/concat hands_index hands_slice
-
-hands_1 = text/concat hands_0 hands_slice_back
-
-readers = text/concat (text/concat hands_1 hands_both) hands_length
+readers = [
+  "\{s[1]}\{s[4]}\{s[7]}"
+  "\{s[7]}\{s[4]}\{s[1]}"
+  "\{text/slice s 2 4}\{text/slice s 6 7}"
+  "\{text/slice s 6 7}\{text/slice s 2 4}"
+  "\{s[6]}\{text/slice s 2 3}\{s[3]}\{text/slice s 5 6}"
+  "\{length s}\{s[2]}\{length s}\{text/slice s 1 2}"
+]
 
 # `step` is a beat: it rebuilds `shaped` every iteration and threads the
 # answer through the carry, so the arena hands each iteration the addresses

@@ -52,8 +52,8 @@ fn root() -> PathBuf {
 fn watched(gate: &str) -> Vec<String> {
     let mut out = Vec::new();
     for line in gate.lines() {
-        let Some(open) = line.find("[[\"bench/") else { continue };
-        let rest = &line[open + 3..];
+        let Some(open) = line.find("[\"bench/") else { continue };
+        let rest = &line[open + 2..];
         let mut parts = rest.split('"').filter(|p| !p.contains('[') && !p.contains(']'));
         if let Some(file) = parts.next() {
             out.push(file.to_string());
