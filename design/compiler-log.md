@@ -19,41 +19,6 @@
 > The last forty entries. Everything older is in `log/compiler-log-archive.md`,
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
-## 2026-10-10 — a constructor handed over as a function builds
-
-The lox port found that a record constructor passed where a function is wanted
-checks and runs on the interpreter and stops the native build with "`pair` as
-a bare value is not yet supported" (lox F20). The port wrapped each one in a
-lambda, `(l o r -> logical l o r)`, which is what native now does by itself.
-When codegen lowers a name that is not a function group, a builtin or one of
-the words with a value of its own, and the name is a record type with one to
-four fields, it lowers the lambda that calls the constructor. Four is the
-native lambda's limit, so a record of five or more fields handed over is still
-refused at build with the same message.
-
-`tests/golden/micro/a_constructor_handed_over_as_a_function` hands a
-one-field constructor to `list/map`, a two-field one to a function that calls
-it and a three-field one to another, and prints the same line on the
-interpreter, a dev build and a release build. The compiler on main refuses to
-build it. The ratchet row "a constructor refused as a value" puts the refusal
-back and the micro corpus goes red.
-
-`tests/a_type_name_as_a_bare_value.rs` had pinned the refusal for a
-two-field record printed bare. It now pins that both engines print `<fn>`.
-
-CI's rows for this branch, with main's repair list merged in. Two rows moved,
-both by the size of the new lowering in the emitter:
-
-    emit_instructions                7,062,299 ->   7,062,491
-    browser_compile_instructions   388,181,803 -> 388,266,184
-
-Welfare falls from 90.2505 to 90.2504, and the floor follows it down under the
-rule for a change that makes the language do what it says: a program that
-checks and runs on the interpreter now builds natively.
-
-The tie-list ruling landed first. Carried over it, the browser compile row
-lands at 388,276,582, the constructor's 84,381 on top of main's 388,192,201,
-and the floor at 90.25039901483147.
 
 
 ## 2026-10-10 — two values a carry handed back while they were still held
@@ -1909,3 +1874,49 @@ each as an importer; goldens for a test that reads a private name (refused), a
 test helper sharing a production name (no collision) and a malformed test
 beside a program that still runs; existing tests that read private names
 moved onto the pub surface.
+
+## 2026-10-13 — three port shapes join the run program before their fixes
+
+Three of #1892's items are fixed on open branches, and the run program was
+blind to all three, so under the 2026-09-05 corpus-first gavel each shape goes
+in first, measured on main, and the fix scores as a rise when it lands.
+
+- `rewind`, 20,000 laps: bc's `for` statement, a tail cycle entered by a tail
+  call from `exec`, which each lap calls. Main gives the cycle no beat, so the
+  laps' records stay. kanso#1920 fixes it.
+- `stack`, 115 chunks of 25 ints concatenated onto one list in a fold: the kv
+  port's accumulator. Main keeps every earlier list until the fold returns.
+  kanso#1924 fixes it.
+- `bag`, 4,300 pushes onto a list held in a record field: the accumulator the
+  lox, markdown, datalog and sat ports wrote. Main copies the list on every
+  push. The record-field branch fixes it.
+
+Built alone on main, each less the empty program's 6,766,088, `rewind` costs
+4,020,895 instructions (0.33% of the whole), `stack` 2,621,918 (0.21%) and
+`bag` 58,073,973 (4.70%). `rewind` and `stack` are sized by memory like
+`machine` and `fold`: each adds 2 MiB to the peak alone. `bag` is quadratic and
+sized near five per cent like `scatter` and `bump`; it adds nothing to the peak.
+The run program's header carries the table.
+
+Together they take `work_runbench` 1,170,035,080 -> 1,234,827,314 on CI (the
+container projected 1,234,663,911) and the run peak
+4,948,512 -> 10,191,392 bytes. `run_instructions` and `run_peak_bytes` are
+re-based by the same ratios, so welfare scores what it scored, and the floor's
+history says so; `run_arena_peak_bytes` is the part of the peak that moved,
+4,718,608 -> 9,961,488.
+
+The rest of the run vein moves with the work the three phases add, and each
+phase built alone says which: `run_allocs` rises to 1,816,986, 40,000 of it
+`rewind`'s records. `run_alloc_bytes` rises to 388,718,860, `run_evac_allocs`
+to 50,009, `run_evac_bytes` to 28,709,472, `run_sh_buf` to 175,346,960 and
+`run_sh_rec` to 3,791,936, nearly all of it `bag`'s copies. `run_beat_iters`
+rises by `bag`'s 4,300 laps to 52,008. `run_arena_blocks` goes 4 -> 9 and
+`run_spare_peak_bytes` to 7,864,336, which `rewind` and `stack` each raise
+alone. `run_perm_allocs` rises by one to 99. `run_chain_finds` goes 0 ->
+12,762 although no phase alone finds a chain; only the whole program does, and
+nothing here isolated why.
+The program's code grows with it: across the other benchmarks' emitted rows,
+`emitted_other_defines` lands on 2,036, `emitted_other_calls` on 17,664,
+`emitted_other_branches` on 16,555 and `emitted_other_lines` on 148,239, all
+of it runbench's (51,577 -> 52,537 lines), and `text` on 4,838,622, runbench
+619,081 -> 622,857 bytes.
