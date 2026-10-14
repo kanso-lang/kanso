@@ -1856,3 +1856,21 @@ the same bytes for all 300.
 The other owed item, moving the JSON decoder onto `slice! … .>` chains, is
 #1960: a chain answers a box, so the move would make `json/decode` answer one.
 Until it is answered the decoder keeps `builtin_slice_in`.
+
+The rows move because lib/text grew a definition, and lib/text is compiled
+into every program that imports it. CI on f50c9ec4 read:
+
+- `compile_instructions` 32,407,659 -> 32,770,085, `entry_instructions`
+  103,133,571 -> 104,020,985 and `library_instructions` 102,649,522 ->
+  103,487,067.
+- `compile_allocs` 17,980 -> 18,250, `compile_peak_bytes` 795,133 -> 804,635
+  and `front_end_visits` 9,225 -> 9,242.
+- `emit_instructions` 7,655,444 -> 7,704,002.
+- `interp_instructions` 495,119,692 -> 496,124,589, `interp_allocs` 592,317
+  -> 592,648 and `interp_peak_bytes` 797,868 -> 807,370.
+- `browser_compile_instructions` 439,552,195 -> 441,096,528 and
+  `browser_compile_peak_bytes` 728,883 -> 731,449. The browser's run rows did
+  not move.
+
+No runtime counter moved. Welfare goes 91.2395 -> 91.2300, a fall of 0.0095.
+This builds a ruled part of the language, so the floor drops by exactly that.
