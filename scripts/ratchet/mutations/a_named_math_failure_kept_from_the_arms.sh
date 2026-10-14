@@ -9,8 +9,8 @@
 # it, native's `+` never asks, and the micro fixture is refused where the
 # interpreter runs the arm.
 set -e
-f=src/codegen.rs
-grep -q "fn zero_divisor_set(&self) -> Set" src/codegen.rs
+f=src/codegen/emit.rs
+grep -q "fn zero_divisor_set(&self) -> Set" src/codegen/emit.rs
 line='            true => REC,'
 [ "$(grep -cxF "$line" "$f")" -eq 1 ] || {
   echo "the zero-divisor set moved; this mutation needs rewriting" >&2

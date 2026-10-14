@@ -4,7 +4,7 @@
 # and the runtime corpus goes red.
 set -e
 old='        f.line_fmt(format_args!("br i1 {bad}, label %{skip}, label %{go}"));'
-[ "$(grep -cxF "$old" src/codegen.rs)" -eq 1 ]
-sed -i.bak 's#^        f.line_fmt(format_args!("br i1 {bad}, label %{skip}, label %{go}"));$#        f.line_fmt(format_args!("br i1 false, label %{skip}, label %{go}"));#' src/codegen.rs
-rm -f src/codegen.rs.bak
-! grep -qxF "$old" src/codegen.rs
+[ "$(grep -cxF "$old" src/codegen/emit.rs)" -eq 1 ]
+sed -i.bak 's#^        f.line_fmt(format_args!("br i1 {bad}, label %{skip}, label %{go}"));$#        f.line_fmt(format_args!("br i1 false, label %{skip}, label %{go}"));#' src/codegen/emit.rs
+rm -f src/codegen/emit.rs.bak
+! grep -qxF "$old" src/codegen/emit.rs

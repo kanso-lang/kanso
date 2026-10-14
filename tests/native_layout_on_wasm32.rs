@@ -419,9 +419,11 @@ fn the_interp_corpus_answers_on_native_layout_in_wasm32() {
 /// whose text changes turns this red rather than slipping past the rewrite.
 #[test]
 fn every_wasm32_line_is_one_the_emitter_writes() {
-    // The table is in codegen.rs and the runtime's lines are in declares.rs.
+    // The table is in codegen.rs, the body emitter in emit.rs and the
+    // runtime's lines in declares.rs.
     let read = |p: &str| std::fs::read_to_string(root().join(p)).expect("codegen reads");
-    let emitter = read("src/codegen.rs") + &read("src/codegen/declares.rs");
+    let emitter =
+        read("src/codegen.rs") + &read("src/codegen/emit.rs") + &read("src/codegen/declares.rs");
     for (native, _) in kanso::codegen::WASM32_LINES {
         let hits = emitter.matches(native).count();
         // once in the table, at least once where it is written

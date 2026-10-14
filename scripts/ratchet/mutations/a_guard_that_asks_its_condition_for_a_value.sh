@@ -6,8 +6,8 @@
 # Put back the value form it had before 2026-09-26 and the guard builds a
 # tagged boolean through a phi and asks the runtime whether it is true.
 set -e
-f=src/codegen.rs
-grep -q 'fn emit_tail(&mut self' src/codegen.rs
+f=src/codegen/emit.rs
+grep -q 'fn emit_tail(&mut self' src/codegen/emit.rs
 line='            self.emit_cond(f, cond, &early_label, &rest_label, None)?;'
 [ "$(grep -cxF "$line" "$f")" -eq 1 ] || {
   echo "the guard's condition moved; this mutation needs rewriting" >&2
