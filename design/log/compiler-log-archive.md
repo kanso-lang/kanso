@@ -103159,3 +103159,66 @@ The compile rows move with the binary; CI's rows are priced here before
 merge.
 
 - **OPEN** #1887, until this lands.
+
+## 2026-10-13 — a list or map too long for its line spans lines
+
+Built under #1882 (gavel: a bracketed list or map may span lines). A literal
+whose opening bracket ends its line continues one element to a line, each two
+spaces deeper, and closes with its bracket alone at the indent of the line that
+opened it. The lexer gathers the lines into the one statement they spell, so the
+parser and every engine see the literal they saw before. A list element is
+grouped the way a parenthesised one is, so `double 21` on its own line is one
+element; a map element is one `key:value` entry. A list inside a list spans on
+its own terms, and a comment line may sit between elements.
+
+Canonical form decides which form is written. The lexer measures the literal
+joined back onto one line, and a literal that fits in 80 columns is refused in
+the spanning form with the width it would take. A line too wide that holds a
+literal gets a second clause on the width error saying the literal can span.
+The other refusals each name the rule: a closing bracket that shares its line
+with an element, a map entry sharing a line, an element at the wrong indent, a
+blank line inside the literal, and a literal the file ends inside.
+
+Five error goldens pin those diagnostics and
+`tests/golden/micro/lists_and_maps_span_lines` pins a list, a map, a nested
+list and a list in a function body on both engines. On main's lexer every one
+of them is refused with a different message, and the micro sample stops at an
+indent error.
+
+Chapter 02 shows the form beside lists and maps, and appendix C states the
+rule beside the continuation line. trend_gate's `higher` table and
+perf_record's two watched lists, which were assembled from halves joined by
+`text/concat` to stay under the width, are now single spanning lists with
+their comments inside.
+
+CI's rows, on main after #1925: compile_instructions lands on 26,216,275
+(+334,724), entry_instructions on 86,540,771 (+1,159,458), library_instructions
+on 87,096,300 (+1,160,718) and browser_compile_instructions on 392,203,148
+(+891,646). interp_instructions falls to 488,437,711 (-302,105) and
+emit_instructions to 7,012,968 (-509).
+
+Moving `higher` onto the spanning form blinded
+tests/a_mutation_keeps_its_unclassified_counter.rs, which read the direction
+tables one line at a time. With `thunk_forces` added to `higher` it stayed
+green. It now reads the spanning table and asserts that both tables parsed, and
+the same edit turns it red.
+
+- **OPEN** #1882, until this lands.
+
+91.11.
+
+With main merged after #1937, browser_compile_instructions lands on
+394,301,683.
+
+On CI's rows for the tree merged with main after #1937: compile_instructions
+lands on 26,183,028, entry_instructions on 86,449,300, library_instructions on
+86,666,390, emit_instructions on 7,048,150 and compile_allocs on 14,644.
+
+393,186,348.
+
+On CI's rows for the tree merged with main after #1937: compile_instructions
+lands on 26,064,732, entry_instructions on 86,313,974, library_instructions on
+86,530,678 and interp_instructions on 487,131,185. emit_instructions falls to
+7,046,962.
+
+393,279,063.
