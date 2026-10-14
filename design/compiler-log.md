@@ -1647,7 +1647,8 @@ Still not built for #1856: a lambda's body, which has no statements to bind a
 cell in; a function with more than one arm of its name and count; and the cost
 gate's view of a pooled call, which admits any call of the program's own.
 
-CI's rows for the branch, before main's IR-scan move was merged in. The
+CI's rows for the branch. The runtime rows were read before main's IR-scan
+move was merged in, and the compiler's own rows after kanso#1976 was. The
 runtime grew by the queue and its drain, so every benchmark's machine code
 rose by 2,192 bytes: jsonbench text=336,265, encodebench text=345,129,
 oneshot text=351,145, basket text=313,289, widebench text=354,393,
@@ -1659,10 +1660,10 @@ the `text` total 4,878,606 -> 4,909,294. Work moved on five:
 -> 13,207,693, `work_pendbench` 191,674,024 -> 191,674,224, `work_livebench`
 1,474,835,683 -> 1,474,835,606 and `work_runbench` 1,177,697,090 ->
 1,177,696,062.
-The compiler's own rows: `compile_instructions` 22,664,963 -> 22,615,793,
-`entry_instructions` 75,111,766 -> 74,936,335, `library_instructions`
-74,798,192 -> 74,622,621, `emit_instructions` 5,439,036 -> 5,451,587,
-`interp_instructions` 492,629,961 -> 492,637,348,
+The compiler's own rows: `compile_instructions` 22,664,963 -> 22,595,494,
+`entry_instructions` 75,111,766 -> 74,872,489, `library_instructions`
+74,798,192 -> 74,559,617, `emit_instructions` 5,439,036 -> 5,449,223,
+`interp_instructions` 492,629,961 -> 492,636,904,
 `codegen_instructions_dev` 112,582,224 -> 112,677,448 and
 `codegen_instructions_release` 441,728,749 -> 441,885,670. The tab, read
 here on rustc 1.98.1 after the merge: `browser_compile_instructions`
