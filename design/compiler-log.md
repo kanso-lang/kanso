@@ -1869,3 +1869,7 @@ its output is byte-identical before and after, 84,137 bytes. Diagnostic
 coverage descends into src/runtime/ and reads the same 310 diagnostics. Three
 comments said the runtime was 450,100 bytes; it is 608,301, and they no longer
 state a size.
+
+One row moved, by layout: `entry_instructions` 103,133,571 -> 103,133,577.
+compile_instructions and library_instructions held, and so did every runtime
+and machine-code row.
