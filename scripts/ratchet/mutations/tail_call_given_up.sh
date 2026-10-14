@@ -5,15 +5,14 @@
 # cap was measured.
 set -e
 x86='        (true, _) => preserve_none_calls(preserve_none_tails(ir), kanso::RUNTIME_C),'
-apple='        (false, true) if cfg!(target_vendor = "apple") => narrow_tailcc(ir, ARM64_TAILCC_WIDEST),'
-arm='        (false, true) => wide_tailcc_keeps_its_jumps(ir, ARM64_TAILCC_WIDEST),'
-for line in "$x86" "$apple" "$arm"; do
+arm='        (false, true) => arm64_tails(ir),'
+for line in "$x86" "$arm"; do
   [ "$(grep -cxF "$line" src/main.rs)" -eq 1 ] || {
     echo "the release rewrite's call sites moved; this mutation needs rewriting" >&2
     exit 1
   }
 done
-sed -i 's/^        (true, _) => preserve_none_calls(preserve_none_tails(ir), kanso::RUNTIME_C),$/        (true, _) => preserve_none_calls(preserve_none_tails(narrow_tailcc(ir, 0)), kanso::RUNTIME_C),/' src/main.rs
-sed -i 's/^        (false, true) if cfg!(target_vendor = "apple") => narrow_tailcc(ir, ARM64_TAILCC_WIDEST),$/        (false, true) if cfg!(target_vendor = "apple") => narrow_tailcc(ir, 0),/' src/main.rs
-sed -i 's/^        (false, true) => wide_tailcc_keeps_its_jumps(ir, ARM64_TAILCC_WIDEST),$/        (false, true) => narrow_tailcc(ir, 0),/' src/main.rs
-if grep -qxF "$x86" src/main.rs || grep -qxF "$apple" src/main.rs || grep -qxF "$arm" src/main.rs; then exit 1; fi
+plain='ir.replace("musttail ", "").replace("tailcc ", "")'
+sed -i "s/^        (true, _) => preserve_none_calls(preserve_none_tails(ir), kanso::RUNTIME_C),\$/        (true, _) => preserve_none_calls(preserve_none_tails($plain), kanso::RUNTIME_C),/" src/main.rs
+sed -i "s/^        (false, true) => arm64_tails(ir),\$/        (false, true) => $plain,/" src/main.rs
+if grep -qxF "$x86" src/main.rs || grep -qxF "$arm" src/main.rs; then exit 1; fi
