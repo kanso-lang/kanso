@@ -859,8 +859,11 @@ fn build(program: ast::Program, file: &str, release: bool, built_as: Option<Stri
         && closure_convention() == kanso::codegen::ClosureConvention::PreserveNone;
     let ir = match (flatten, release && cfg!(target_arch = "aarch64")) {
         (true, _) => preserve_none_calls(preserve_none_tails(ir), kanso::RUNTIME_C),
-        (false, true) if cfg!(target_vendor = "apple") => narrow_tailcc(ir, ARM64_TAILCC_WIDEST),
-        (false, true) => wide_tailcc_keeps_its_jumps(ir, ARM64_TAILCC_WIDEST),
+        (false, true) => match std::env::var("KANSO_PROBE_TAIL").as_deref() {
+            Ok("none") => ir,
+            Ok("wide") => wide_tailcc_keeps_its_jumps(ir, ARM64_TAILCC_WIDEST),
+            _ => narrow_tailcc(ir, ARM64_TAILCC_WIDEST),
+        },
         (false, false) => ir,
     };
     if let Err(io) = std::fs::write(&ll_path, ir) {

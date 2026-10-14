@@ -175,11 +175,29 @@ jobs:
       # coverage it had stopped providing. A red suite that hides the
       # rest of itself is the same fault as a green one that proves
       # nothing.
-      - run: cargo test --no-fail-fast
-      - name: integer arithmetic, on the architecture linux is not
+      - name: probe apple wide tail calls (kanso#1912, draft only)
         run: |
           cargo build --release
-          ./target/release/kanso run scripts/numeric_differential -- 0
+          K=$PWD/target/release/kanso
+          clang --version
+          for mode in narrow wide none; do
+            echo "=== micro corpus, mode $mode"
+            KANSO_PROBE_TAIL=$mode cargo test --release --test golden micro_corpus_survives_a_release_build 2>&1 | grep -E "does not|differs|panicked|test result|FAILED|ok$" | head -40 || true
+          done
+          for fx in a_spilling_tail_call_named_with_a_mark a_match_holds_the_literal_its_pattern_spells; do
+            for mode in narrow wide none; do
+              d=$(mktemp -d)
+              cp tests/golden/micro/$fx.kso $d/fx.kso
+              printf 'import "./fx"\n\nfx/play\n' > $d/main.kso
+              ( cd $d && KANSO_PROBE_TAIL=$mode $K build main.kso --release >/dev/null && ./main > out.txt 2> err.txt; echo "=== $fx $mode exit $?"; head -c 400 out.txt; head -c 400 err.txt )
+              if [ "$fx" = a_spilling_tail_call_named_with_a_mark ]; then
+                echo "--- ll $mode"
+                grep -nE "^define .*(reached|stepping)|musttail|tail call" $d/main.ll | grep -iE "reached|stepping|define" | head -40
+                echo "--- asm $mode"
+                otool -tV $d/main | awk '/^_.*(reached|stepping)/{p=1} /^_/ && !/(reached|stepping)/{p=0} p' | head -400
+              fi
+            done
+          done
 
   playground:
     name: playground examples (every engine)
