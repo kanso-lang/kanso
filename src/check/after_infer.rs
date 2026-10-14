@@ -880,8 +880,11 @@ fn check_after_infer<'p>(
     let boxed_group = |name: &str, arity: usize| tails.group(name, arity);
     // the builtins that read a value. The words take the box; `print` and an
     // interpolation render it; `is_desc` asks about it; `push` and `put`
-    // store it, which is holding; `err` and `wrap_err` carry it as a reason
+    // store it, which is holding; `err` and `wrap_err` carry it as a reason.
+    // A std wrapper calls its builtin under the `builtin_` prefix, and a box a
+    // program hands the wrapper reaches the builtin under that spelling.
     let reads_value = |name: &str| {
+        let name = name.strip_prefix("builtin_").unwrap_or(name);
         BUILTINS.contains(&name)
             && !matches!(
                 name,
@@ -939,6 +942,34 @@ fn check_after_infer<'p>(
             b.loaded = i;
         }
         b.set.contains(name)
+    };
+    // Whether a standard-library group reads the parameter at `pos` as a
+    // value. A box a program hands `text/utf8` reaches `builtin_utf8` inside
+    // std, and the refusal belongs at the program's call rather than in the
+    // library's body, where the reader cannot change anything.
+    let std_reads = |head: u32, pos: usize| -> bool {
+        let mut j = head;
+        let mut reads = false;
+        while j != u32::MAX && !reads {
+            let decl = &program.fns[j as usize];
+            if !decl.file.starts_with("std/") {
+                return false;
+            }
+            // an arm that names an effect at this position is where a box goes
+            if let Some(Pattern::Annotated { ty, .. }) = decl.params.get(pos) {
+                if crate::ast::is_effect_type(ty) {
+                    return false;
+                }
+            }
+            if let Some(Pattern::Var(param, _)) = decl.params.get(pos) {
+                for stmt in &decl.body {
+                    let (Stmt::Bind { expr, .. } | Stmt::Expr(expr)) = stmt;
+                    read_as_value(expr, param, &reads_value, &mut |_, _| reads = true);
+                }
+            }
+            j = next[j as usize];
+        }
+        reads
     };
     // A parameter some call hands a box: the name, and the call where the box
     // first went into a parameter, as the declaration making it and the group
@@ -1042,6 +1073,10 @@ fn check_after_infer<'p>(
                     }
                     if let Some((_, head, _)) = found {
                         if pos >= 64 {
+                            continue;
+                        }
+                        if binds & (1u64 << pos) != 0 && std_reads(head, pos) {
+                            say(diags, &format!("`{name}`"), arg);
                             continue;
                         }
                         if binds & (1u64 << pos) != 0 {

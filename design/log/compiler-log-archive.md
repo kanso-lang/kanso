@@ -102971,3 +102971,38 @@ building the language is priced at its cost.
 
 On main after #1904 the tab's compile reads `browser_compile_instructions`
 392,382,093, up 3,718 from main's 392,378,375 on the same tree.
+
+## 2026-10-12 — `&`, `|` and `^` mixed without parentheses are refused
+
+From #1893, four ports. The three bit operators share one precedence and
+read left to right, so `a & b | c` is `(a & b) | c` and `a | b & c` is
+`(a | b) & c`. C binds `&` tighter than `^` and `^` tighter than `|`, and
+code carried over from it computed a different number in the second shape
+with no complaint. A chain that mixes two of them is now a syntax error that
+asks for parentheses around the part that goes first. A chain of one
+operator, `1 | 2 | 4`, is unchanged.
+
+The rule that refuses parentheses which group nothing had to learn the case:
+`(a & b) | c` parses the same without them, and without them it is refused.
+Parentheses around a bit chain that meets a different bit operator are now
+kept. Around one that meets the same operator they still group nothing and
+are still refused.
+
+std/sha256 relied on the old reading in three lines, `spun`, `choice` and
+`majority`, each of which meant the C grouping. They gain parentheses, as do
+the micro fixture that copies them and `bitwise_operators`'s chained line.
+Both engines print the same bytes for all three fixtures before and after.
+`tests/golden/errors/bit_operators_mixed_without_parentheses` pins the
+refusal, which main accepts and prints 10 for. The ratchet row "bit operators
+mixed freely" lets the chain through and turns the error corpus red.
+
+On CI's rows for the tree merged with #1913, compile_instructions lands on
+25,908,556, entry_instructions on 85,478,744 and library_instructions on
+86,033,220, rises of 27,005, 97,431 and 97,638 for the parser's check and the
+parentheses std/sha256 now carries. browser_compile_instructions lands on
+391,456,491, up 144,989, because the tab runs the same parser.
+emit_instructions falls 2,649 to 7,010,828. The first CI run, before the
+merge, showed the browser compile falling 546,685; the merged tree does not
+repeat it, so that fall was layout and is withdrawn. The refusal is #1893's
+item, which the issue lists as needing no ruling; it stops C-shaped bit code
+computing a different number, so the floor drops by what it costs.

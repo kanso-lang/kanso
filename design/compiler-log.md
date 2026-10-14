@@ -77,41 +77,6 @@ refused, so the floor drops by what it costs.
 On main after #1904 the tab's compile reads `browser_compile_instructions`
 393,497,266, up 1,118,891 from main's 392,378,375 on the same tree.
 
-## 2026-10-12 — `&`, `|` and `^` mixed without parentheses are refused
-
-From #1893, four ports. The three bit operators share one precedence and
-read left to right, so `a & b | c` is `(a & b) | c` and `a | b & c` is
-`(a | b) & c`. C binds `&` tighter than `^` and `^` tighter than `|`, and
-code carried over from it computed a different number in the second shape
-with no complaint. A chain that mixes two of them is now a syntax error that
-asks for parentheses around the part that goes first. A chain of one
-operator, `1 | 2 | 4`, is unchanged.
-
-The rule that refuses parentheses which group nothing had to learn the case:
-`(a & b) | c` parses the same without them, and without them it is refused.
-Parentheses around a bit chain that meets a different bit operator are now
-kept. Around one that meets the same operator they still group nothing and
-are still refused.
-
-std/sha256 relied on the old reading in three lines, `spun`, `choice` and
-`majority`, each of which meant the C grouping. They gain parentheses, as do
-the micro fixture that copies them and `bitwise_operators`'s chained line.
-Both engines print the same bytes for all three fixtures before and after.
-`tests/golden/errors/bit_operators_mixed_without_parentheses` pins the
-refusal, which main accepts and prints 10 for. The ratchet row "bit operators
-mixed freely" lets the chain through and turns the error corpus red.
-
-On CI's rows for the tree merged with #1913, compile_instructions lands on
-25,908,556, entry_instructions on 85,478,744 and library_instructions on
-86,033,220, rises of 27,005, 97,431 and 97,638 for the parser's check and the
-parentheses std/sha256 now carries. browser_compile_instructions lands on
-391,456,491, up 144,989, because the tab runs the same parser.
-emit_instructions falls 2,649 to 7,010,828. The first CI run, before the
-merge, showed the browser compile falling 546,685; the merged tree does not
-repeat it, so that fall was layout and is withdrawn. The refusal is #1893's
-item, which the issue lists as needing no ruling; it stops C-shaped bit code
-computing a different number, so the floor drops by what it costs.
-
 ## 2026-10-13 — `and` meets `or` in parentheses, and a file may open with a header comment
 
 Built under #1887 (ruled 2026-10-13), the two parts that change the grammar.
@@ -1713,6 +1678,32 @@ fusing `slice! ... .> utf8`, `.> append acc`, `.> to_int` and `.> to_float`;
 the decoder's call sites moved onto those chains; a micro golden for an
 in-range `slice!` and an error golden for one out of range; appendix B.
 
+## 2026-10-14 — a box handed to a library function that reads it is refused at the call
+
+#1957. The checker refuses a box handed to a builtin that takes a value, so
+`length (os/read_file! "x")` is refused where it is written. Handed to
+`text/utf8` instead, the same box checked clean, and both engines died with
+"utf8 takes a list of byte values". `text/utf8` is a library function whose
+body calls the builtin as `builtin_utf8`, and the table of builtins that read
+a value was asked under that spelling, which it does not hold.
+
+The table is now asked with the prefix taken off. That alone moved the
+refusal into std/text, naming `builtin_utf8` and a line the program's author
+cannot change. So when a box goes into a standard-library function whose body
+reads that parameter as a value, the refusal comes at the program's call and
+names the function called. An arm that takes an effect at that position is
+where a box belongs, and a group with one is left alone. A box handed to the
+program's own functions is still followed into the body, as ruled on
+2026-09-30. `a_box_handed_to_a_library_wrapper` pins the refusal and was red
+with the change taken back out.
+
+`browser_compile_instructions` moved 437,381,994 -> 437,416,347 for the
+extra walk over a std group's arms, under a ten-thousandth of a point. CI
+read `compile_instructions` 31,948,363 -> 31,940,603, `entry_instructions`
+101,372,705 -> 101,349,935 and `library_instructions` 100,887,003 ->
+100,864,357, a fall of a few hundredths of a percent that this change does not
+explain, so it is named as layout.
+
 ## 2026-10-14 — checking only what a module reaches, measured and set aside
 
 #1952 asked whether the merged check could skip the dependency functions a
@@ -1840,7 +1831,7 @@ main's golden back and scoring again.
 - release codegen 477,099,466 -> 476,979,642 (+0.0001). Dev codegen moved
   119,400,046 -> 119,402,816 and `emit_instructions` 7,622,247 -> 7,655,444,
   both under a ten-thousandth of a point.
-- the tab: `browser_compile_instructions` 437,381,994 -> 439,517,722 and
+- the tab: `browser_compile_instructions` 437,416,347 -> 439,552,195 and
   `browser_compile_peak_bytes` 726,939 -> 728,883, the same larger library
   compiled in wasm, together -0.0020.
 - the machine-code golden fell by 2,800 to 6,896 bytes on every benchmark,
