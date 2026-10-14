@@ -409,12 +409,13 @@ const CAPTURES: usize = 8;
 /// Whether `pool` could change anything.
 pub fn pools(program: &Program) -> bool {
     program.fns.iter().any(|f| poolable(program, f))
-        || program.fns.iter().any(|f| {
-            !f.name.starts_with(PREFIX)
-                && f.body.iter().any(|s| match s {
-                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) => holds_parking_lambda(expr),
-                })
-        })
+        || can_sleep(program)
+            && program.fns.iter().any(|f| {
+                !f.name.starts_with(PREFIX)
+                    && f.body.iter().any(|s| match s {
+                        Stmt::Bind { expr, .. } | Stmt::Expr(expr) => holds_parking_lambda(expr),
+                    })
+            })
 }
 
 /// A function whose result is a chain that begins with a sleep, and the only
@@ -508,6 +509,14 @@ fn pool_fn(f: &mut FnDecl, user: &Arities, made: &mut usize) {
 
 /// Whether an expression holds a lambda whose body is a chain that parks
 /// first.
+/// Whether the program reaches `sleep` at all. `std/time` defines it as
+/// `time/sleep`, and a program that never calls it has had it pruned, so a
+/// program without it has no lambda that parks and the walk for one is
+/// skipped.
+fn can_sleep(program: &Program) -> bool {
+    program.fns.iter().any(|f| f.name == "time/sleep" || f.name == "sleep")
+}
+
 fn holds_parking_lambda(e: &Expr) -> bool {
     if let Expr::Lambda { body, .. } = e {
         if side_parks(body) {
