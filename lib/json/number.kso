@@ -10,23 +10,10 @@ fn spanned cs start e
   if (e < 0) (number_done cs start (0 - e) true) (number_done cs start e false)
 
 fn number_done cs start p true
-  parsed p (number_ok start (float_of (text/slice cs start (p - 1))))
+  parsed p (number_ok start (text/to_float (builtin_slice_in cs start (p - 1))))
 
 fn number_done cs start p false
-  parsed p (number_ok start (int_of (text/slice cs start (p - 1))))
-
-# the scan found these bytes, so the slice is inside the input
-fn float_of none
-  err "a number past the end"
-
-fn float_of digits
-  text/to_float digits
-
-fn int_of none
-  err "a number past the end"
-
-fn int_of digits
-  text/to_int digits
+  parsed p (number_ok start (text/to_int (builtin_slice_in cs start (p - 1))))
 
 fn number_ok p (err _)
   fail p "invalid number"

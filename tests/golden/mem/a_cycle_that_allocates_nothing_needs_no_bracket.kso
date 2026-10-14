@@ -11,7 +11,14 @@ fn scan acc bs p len
   found acc bs p len (text/find2_below bs p 120 121 32)
 
 fn found acc bs p len n
-  run (text/append acc (text/slice bs p (n - 1))) bs n len
+  run (onto acc (text/slice bs p (n - 1))) bs n len
+
+# the run ends where find2_below stopped inside `bs`, so it is never none
+fn onto acc none
+  acc
+
+fn onto acc piece
+  text/append acc piece
 
 fn run acc bs n len
   if (len < n) acc (mark acc bs n len)

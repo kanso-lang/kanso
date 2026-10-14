@@ -26,6 +26,13 @@ fn laps acc 0 _
 fn laps acc k d
   s = "{d + 10}{pad}"
   below = if (k == 2) (level (d - 1)) 0
-  laps (acc + below + text/to_int (text/slice s 1 2)) (k - 1) d
+  laps (acc + below + level_in (text/slice s 1 2)) (k - 1) d
+
+# The string is far longer than two characters, so the slice is never none.
+fn level_in none
+  0
+
+fn level_in digits
+  text/to_int digits
 
 pub play = print (level 70)

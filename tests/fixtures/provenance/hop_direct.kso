@@ -3,5 +3,5 @@ import "std/text"
 fn label dish cents
   "{dish}: {cents} cents"
 
-seasonal = text/to_int (text/slice "flank" 1 4)
+seasonal = text/to_int (text/join ["fl" "an"] "")
 print (label "flan" seasonal)

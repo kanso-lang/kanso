@@ -1,21 +1,18 @@
 import "std/io"
-import "std/list"
 import "std/os"
-import "std/text"
 
-# Rebuild bench/jsonbench: the json module plus a main that reads
-# bench/large.json AT RUNTIME and decodes it 150 times, accumulating a
-# checksum so the loop provably runs (no hoisting / dead-code elimination).
-# Runtime read keeps the input opaque to the optimizer — an embedded
-# compile-time fixture would let LLVM fold the decode and flatter the number.
-# Run the built ./jsonbench from the repo root; divide its wall time by 150.
+# Rebuild bench/jsonbench: a main that reads bench/large.json AT RUNTIME and
+# decodes it 150 times with std/json, accumulating a checksum so the loop
+# provably runs (no hoisting / dead-code elimination). Runtime read keeps the
+# input opaque to the optimizer — an embedded compile-time fixture would let
+# LLVM fold the decode and flatter the number. Run the built ./jsonbench from
+# the repo root; divide its wall time by 150.
+#
+# The decoder is imported rather than copied into the benchmark. lib/json names
+# builtins only the standard library may call, and a copy is a user module.
 out = "bench/jsonbench"
 
 module_dir = "bench/jsonbench/jsonbench"
-
-# `failure_position` rescues an err this program raises, and a benchmark that
-# only decodes has no use for it.
-dropped = "fn failure_position"
 
 # The read insists, because a benchmark whose input is missing has nothing to
 # measure. It used to be written out into a `fed` pair here — `os/read_file`
@@ -26,6 +23,8 @@ dropped = "fn failure_position"
 # the same decoder. The yield is now carried per declaration, so the bang
 # costs the loop nothing and the pair is gone.
 bench_text = """
+  import "std/json"
+
   pub fn go cs
     print "decoded 150 times, checksum \{loop cs 150 0}"
 
@@ -33,7 +32,7 @@ bench_text = """
     acc
 
   fn loop cs n acc
-    loop cs (n - 1) (acc + length (decode cs))
+    loop cs (n - 1) (acc + length (json/decode cs))
 """
 
 main_text = """
@@ -47,40 +46,8 @@ ready = "{out} ready (150x runtime-read; run ./jsonbench from repo root)\n"
 
 pub play = built
 
-built = os/make_dir out .> (_ -> os/make_dir module_dir) .> (_ -> copied)
+built = os/make_dir out .> (_ -> os/make_dir module_dir) .> (_ -> written)
 
-copied = plain "number" .> (_ -> plain "scan") .> (_ -> plain "text")
-  .> (_ -> plain "value") .> (_ -> trimmed) .> (_ -> written)
-
-fn plain name
-  os/read_file! "lib/json/{name}.kso"
-    .> (s -> os/write_file "{module_dir}/{name}.kso" (checking s))
-
-trimmed = os/read_file! "lib/json/json.kso" .> stripped
-
-fn stripped source
-  os/write_file "{module_dir}/json.kso" (kept source)
-
-# The library hands built text over with `builtin_built_text`, which only the
-# standard library may name. This copy is an ordinary module, so each of those
-# calls becomes the checked `text/utf8` the library used before.
-vouched = "builtin_built_text"
-
-checked = "text/utf8"
-
-fn checking source
-  text/join (text/split source vouched) checked
-
-# Blocks are separated by a blank line, which is what makes the one function
-# this benchmark does not want addressable without parsing the file.
-fn kept source
-  blocks = text/split (text/trim source) "\n\n"
-  staying = list/to_list (list/reject blocks starts_dropped?)
-  checking "{text/join staying "\n\n"}\n"
-
-fn starts_dropped? block
-  text/slice block 1 (length dropped) == dropped
-
-written = os/write_file "{module_dir}/bench.kso" bench_text
+written = os/write_file "{module_dir}/jsonbench.kso" bench_text
   .> (_ -> os/write_file "{out}/main.kso" main_text)
   .> (_ -> io/write ready)

@@ -172,8 +172,8 @@ word <span class="o">=</span> <span class="f">text/trim</span> <span class="s">"
 <p>a count: characters of a string, elements of a list, entries of a map. one function serves all three because "how many" means the same thing across them. anything else is a runtime error.</p>
 
 <h3 id="b-slice"><code>text/slice</code></h3>
-<p class="builtin-sig"><code>text/slice (string | list) int int → (string | list)</code></p>
-<p>a sub-range by 1-based inclusive positions—<code>slice "kanso" 2 4</code> is <code>"ans"</code>, and the same call shape works on lists. out-of-range or inverted bounds yield an empty result rather than a failure, so slicing never surprises you with a <code>none</code> to handle.</p>
+<p class="builtin-sig"><code>text/slice (string | list) int int → string | list | none</code></p>
+<p>a sub-range by 1-based inclusive positions—<code>slice "kanso" 2 4</code> is <code>"ans"</code>, and the same call shape works on lists. a range that runs past the end, or starts past it, answers <code>none</code>, as an index past the end does, so <code>slice "kanso" 4 9</code> is <code>none</code> rather than a shorter string. a range that ends exactly at the end is the tail, and an inverted range is the empty result.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">strings.kso</div>

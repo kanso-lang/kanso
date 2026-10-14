@@ -1,0 +1,4 @@
+error[exhaustive]: this can be a none and `shout` has no arm for it — resolve it here, or give `shout` a `none` arm (in a_slice_handed_on_without_its_none.kso) (module a_slice_handed_on_without_its_none)
+  --> a_slice_handed_on_without_its_none.kso:9:26
+   9 | pub play = print (shout (text/slice "kanso" 4 9))
+                                ^

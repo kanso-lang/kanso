@@ -9,7 +9,15 @@
 import "std/text"
 
 fn cut s from to
-  text/slice s from to
+  inside (text/slice s from to)
+
+# Every range below starts inside `source` and ends inside it or before it
+# starts, so the slice is never none.
+fn inside none
+  ""
+
+fn inside piece
+  piece
 
 fn asked a b
   "{a == b} {a != b}"

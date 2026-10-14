@@ -4,6 +4,9 @@
 # `to_float` over a `slice`. A native build handed each of them the wrapper.
 # `json/encode` of a subtype of string crashed through the first, and every
 # slice refused. Found on 2026-09-28 by the generated-program differential.
+#
+# A slice past the end answers none (#1890), so each slice here is read
+# through a function with a `none` arm. The ranges are all inside.
 import "std/json"
 import "std/os"
 import "std/text"
@@ -18,10 +21,34 @@ fn width s
 
 fn shown z
   w = word "a{z}bc"
-  cut = text/utf8 (text/slice (text/bytes "xyz") (id 2) (id 3))
-  n = text/to_int (text/slice (word "12{z}") 1 2)
-  x = text/to_float (text/slice (word "1.5{z}") (id 1) 3)
-  more = text/utf8 (text/append (text/bytes "<") (text/slice w 1 2))
+  cut = decoded (text/slice (text/bytes "xyz") (id 2) (id 3))
+  n = whole (text/slice (word "12{z}") 1 2)
+  x = point (text/slice (word "1.5{z}") (id 1) 3)
+  more = onto (text/bytes "<") (text/slice w 1 2)
   "{json/encode w} {width w} {cut} {n} {x} {more}"
+
+fn decoded none
+  ""
+
+fn decoded piece
+  text/utf8 piece
+
+fn whole none
+  0
+
+fn whole piece
+  text/to_int piece
+
+fn point none
+  0.0
+
+fn point piece
+  text/to_float piece
+
+fn onto _ none
+  ""
+
+fn onto acc piece
+  text/utf8 (text/append acc piece)
 
 pub play = os/args .> (a -> print (shown (length a)))

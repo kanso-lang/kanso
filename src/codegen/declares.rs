@@ -409,30 +409,29 @@ qstat:
   %qso = load i32, ptr @k_stats_on
   %qcount = icmp ne i32 %qso, 0
   br i1 %qcount, label %qslow, label %qrange
-; An inverted range is the empty slice, which appends nothing — k_b_slice_raw's
-; rule, and the reason it is answered here rather than sent to the C: a fifth of
-; the runs between two escapes are empty, because two escapes sitting next to
-; each other leave no bytes between them. Such a run returns the accumulator as
-; it stands, from between the two bounds tests, rather than carrying a zero
-; length through the claim and the copy. A range past the end is none (#1890),
-; and the C says what appending none does.
+; An inverted range is the empty slice, which appends nothing, and it is
+; answered here rather than sent to the C: a fifth of the runs between two
+; escapes are empty, because two escapes sitting next to each other leave no
+; bytes between them. Such a run returns the accumulator as it stands, from
+; between the two bounds tests, rather than carrying a zero length through the
+; claim and the copy. A range past the end is none since #1890, so a program
+; cannot hand one to `append`; this door is written only for the standard
+; library's own ranges, which come from a scan of the same bytes, and it
+; treats one past the end as empty without asking.
 qrange:
   %qfrom = extractvalue %KValue %fv, 1
   %qto = extractvalue %KValue %tv, 1
   %qcp = extractvalue %KValue %cs, 1
   %qc = inttoptr i64 %qcp to ptr
   %qoff = add i64 %qfrom, -1
-  %qclen = load i64, ptr %qc
   %qorder = icmp ult i64 %qoff, %qto
-  br i1 %qorder, label %qspanhi, label %qinv
-qinv:
-  %qpast = icmp sgt i64 %qoff, %qclen
-  br i1 %qpast, label %qslow, label %qempty
+  br i1 %qorder, label %qspanhi, label %qempty
 qempty:
   ret %KValue %acc
 qspanhi:
+  %qclen = load i64, ptr %qc
   %qhi = icmp ule i64 %qto, %qclen
-  br i1 %qhi, label %qspan, label %qslow
+  br i1 %qhi, label %qspan, label %qempty
 qspan:
   %qcdp = getelementptr i8, ptr %qc, i64 8
   %qcdata = load ptr, ptr %qcdp

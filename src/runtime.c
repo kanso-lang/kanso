@@ -9637,8 +9637,6 @@ KValue k_b_utf8_slice_raw(const unsigned char* bytes, long long blen,
                           long long from, long long to, const char* origin) {
     const char* data = (const char*)bytes;
     long long len = 0;
-    /* past the end the slice is none, and utf8 says what it says of none */
-    if (__builtin_expect(to > blen || from > blen + 1, 0)) return k_b_utf8(k_none(), origin);
     if (k_span_in(from, to, blen)) {
         data += from - 1;
         len = to - from + 1;
@@ -11140,11 +11138,11 @@ __attribute__((noinline, cold)) KValue k_b_append_word_slow(KValue acc, const ch
    hand out; this reads the range straight out of `cs` and hands
    k_b_append_into a pointer and a length, so nothing is allocated for it.
 
-   The bounds rule is k_b_slice_raw's, to the character: a range past the end
-   is none, and appending none is whatever the unfused append makes of it; an
-   inverted range or one starting before 1 is the empty slice, which appends
+   An out-of-range or inverted range is the empty slice, which appends
    nothing, and `acc` still has to be bytes for that to be legal. Anything the
-   tags turn away goes the long way, so the two spellings cannot disagree. */
+   tags turn away goes the long way. A range past the end is none since #1890,
+   so a program cannot hand one to `append`: this door is written only for the
+   standard library's own ranges, which come from a scan of the same bytes. */
 KValue k_b_append_slice(KValue acc, KValue cs, KValue fromv, KValue tov,
                         long long mutate) {
     if (__builtin_expect(!k_not_failure(acc) || !k_not_failure(cs) || !k_not_failure(fromv)
@@ -11159,7 +11157,6 @@ KValue k_b_append_slice(KValue acc, KValue cs, KValue fromv, KValue tov,
     KBytes* a = k_as_bytes(acc);
     KBytes* src = k_as_bytes(cs);
     long long from = fromv.payload, to = tov.payload;
-    if (to > src->len || from > src->len + 1) return k_b_append_into(acc, k_none(), (int)mutate);
     /* The empty slice appends nothing, and the view it would have been is not
        built: a fifth of the runs between two escapes are empty, and a header
        allocated to carry zero bytes is 204,450 allocations a decode. */

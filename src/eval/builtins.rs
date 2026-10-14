@@ -824,7 +824,10 @@ impl<'a> Interp<'a> {
                 }
                 Ok(Value::int(at))
             }
-            b"slice" => {
+            // `slice_in` is std's spelling for a range it measured (#1890). It
+            // is renamed to `slice` after the check, before any engine runs, so
+            // this arm only keeps the two names answering alike.
+            b"slice" | b"slice_in" => {
                 let [container, from, to] = arity(args, name, span)?;
                 let (Value::Int(from), Value::Int(to)) = (&from, &to) else {
                     return Err(RuntimeError {

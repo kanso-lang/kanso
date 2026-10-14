@@ -34,9 +34,11 @@ fn staged(tag: &str, call: &str, literal: &str) -> PathBuf {
         stage.join("defs/defs.kso"),
         format!(
             "{json}import \"std/os\"\nimport \"std/text\"\n\n\
-             fn shown z\n  p = text/slice \"x\" 1 z\n  \
+             fn shown z\n  p = inside (text/slice \"x\" 1 z)\n  \
              s = text/join [\"{literal}\" p] \"\"\n  \
              \"{{{call} s}}\"\n\n\
+             fn inside none\n  \"\"\n\n\
+             fn inside s\n  s\n\n\
              pub play = os/args .> (a -> print (shown (length a)))\n"
         ),
     )

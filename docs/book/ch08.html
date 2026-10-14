@@ -463,11 +463,18 @@ err at 1: unexpected character `?`</code></pre>
   cs <span class="o">=</span> <span class="f">text/bytes</span> s
   p <span class="o">=</span> <span class="f">skip_ws</span> cs <span class="n">1</span>
   q <span class="o">=</span> <span class="f">digits_end</span> cs p
-  v <span class="o">=</span> <span class="f">text/to_int</span> (<span class="f">text/slice</span> cs p (q <span class="o">-</span> <span class="n">1</span>))
+  v <span class="o">=</span> <span class="f">digits_value</span> (<span class="f">text/slice</span> cs p (q <span class="o">-</span> <span class="n">1</span>))
   <span class="f">trailing</span> cs (<span class="f">skip_ws</span> cs q) v
 
 <span class="k">fn</span> <span class="f">digits_end</span> cs p
   <span class="f">if</span> (<span class="f">digit?</span> cs[p]) (<span class="f">digits_end</span> cs (p <span class="o">+</span> <span class="n">1</span>)) p
+
+<span class="c"># the run stops where the digits do, inside `cs`, so it is never none</span>
+<span class="k">fn</span> <span class="f">digits_value</span> none
+  <span class="n">0</span>
+
+<span class="k">fn</span> <span class="f">digits_value</span> run
+  <span class="f">text/to_int</span> run
 
 <span class="k">fn</span> <span class="f">fail</span> p reason
   <span class="f">err</span> (<span class="f">parse_failure</span> p reason)
