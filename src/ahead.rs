@@ -482,7 +482,7 @@ pub fn pool(program: &mut Program) -> usize {
             }
             let Expr::App { head, args, .. } = at else { unreachable!("the chain parks first") };
             let span = head.span();
-            *head = Box::new(Expr::Ident(Name::new(SLEEP_POOLED), span, Resolution::default()));
+            **head = Expr::Ident(Name::new(SLEEP_POOLED), span, Resolution::default());
             args.extend(cells.into_iter().map(|c| Expr::Ident(c, span, Resolution::default())));
         });
         program.fns[i].body.splice(tail..tail, binds);
@@ -569,7 +569,8 @@ fn reads_locals(
     match e {
         Expr::Int(..) | Expr::Float(..) => true,
         Expr::Ident(n, _, _) => {
-            n.as_str().starts_with(MOVED) || (locals.contains(n.as_str()) && !later.contains(n.as_str()))
+            n.as_str().starts_with(MOVED)
+                || (locals.contains(n.as_str()) && !later.contains(n.as_str()))
         }
         Expr::Str(parts, _) => parts.iter().all(|p| match p {
             TemplatePart::Lit(_) => true,
