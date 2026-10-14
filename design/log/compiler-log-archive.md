@@ -102549,3 +102549,78 @@ worth more than the three rises cost, and welfare banks the difference at
 91.11. `compile_allocs` rose 68 to 14,598 and `interp_allocs` 68 to 587,351, and
 the floor drops by what they cost, since this builds a ruled part of the
 language.
+
+## 2026-10-12 — concat reads the bytes text/bytes answers, on every engine
+
+From #1891, the third item: the 2026-08-23 gavel says a list is never bytes,
+and what `concat` declares decides which engine is right. Appendix b declares
+`text/bytes string → int[]` and `text/concat` as appending two lists, so a
+value `text/bytes` answered is a list to `concat`. Native code already read a
+bytes value as its byte values on either side and answered a list. The
+interpreter matched only two `List`s and refused anything else with "concat
+takes two lists", which is what the httpd, mustache, chip8 and ugit ports hit.
+The interpreter now reads a `Bytes` operand as its byte values, and the answer
+is a list on both engines. The gavel's other direction is unchanged: a list is
+still never read as bytes.
+
+`tests/golden/micro/concat_reads_the_bytes_text_bytes_answers` puts bytes on
+the left, on the right, on both sides, and as a slice of `text/bytes`. Main's
+interpreter stopped at the first line.
+
+Appendix b also says `concat` takes strings, and neither engine does: both
+refuse two strings with the same message. #1906 asks which way that goes.
+
+## 2026-10-13 — a loop entered from the callee it calls rewinds
+
+From #1892's bc port. A `for` loop in bc held every lap's allocation: 300,000
+laps of `s += i` took 548 MB, and the binary counted 8 beat iterations for
+20,000 laps. The port's interpreter has the shape every tree-walker has.
+`loop_for` and `for_next` are one tail cycle, each lap runs the body through
+`exec` with a plain call, and the `nested` arm of `exec` enters the cycle by a
+tail call, because a loop inside the body is the same cycle again.
+
+A cluster entered by a tail call gets its bracket by emitting the entering
+edge as a plain call. Since #920 that demotion is refused when the cluster can
+reach the caller again, because a caller the cycle re-enters with nothing held
+would stack one frame per lap. The reach counted every mention, so the plain
+call `r = exec body m` refused the entry. A plain call holds its own frame
+while the callee runs, so the stack already grows with each level of nesting,
+and demoting the entry adds one frame to each level and none to each lap. The
+reach now follows what can enter the caller with no frame held: the heads of
+tail calls, every name inside a lambda, and every name used as a value.
+
+`tests/golden/mem/a_loop_entered_from_the_callee_it_calls_rewinds` is the
+reduced program, 100,000 laps through a `nested` entry. Main counts no beat
+and holds eleven arena blocks; with the change it counts 200,000 beat
+iterations and holds one. No other mem golden moved. The bc port's 300,000
+laps take 9 MB, and its 33 fixtures and 47 unit tests agree on all three
+engines. The ratchet row "a cluster refused for a callee it reaches under a
+frame" counts every mention again and turns the mem corpus red.
+
+Two loops in the standard library gain a bracket the same way. std/json's
+blank skip before a value, `value_for` and `value_blank`, is entered by a
+tail call from `parse_value` and reaches it again only under the plain call
+an array or object makes for each element. std/regexp's matcher cycle is in
+the same position, and its groups lose the padding a wider tail group had
+given them. Of the fourteen benchmarks only runbench and scanbench emit
+different code. Measured here against main's compiler on the same host,
+runbench ran 829 fewer instructions and scanbench 6 more, and every
+allocation counter in the twelve cost veins is unchanged.
+`a_cluster_the_entering_caller_is_reached_from_stays_grow_only` now hands the
+re-entering function on as a value, which still refuses the entry, and
+`a_cluster_reaching_its_caller_under_a_plain_call_is_a_beat` pins the plain
+call.
+
+CI's rows. The two benchmarks whose IR changed gain their brackets:
+work_runbench lands on 1,170,034,251, 829 fewer, and work_scanbench on
+273,515, eight fewer. The brackets are code: text lands on 4,840,798, up
+5,952 (scanbench 3,888, runbench 2,064), emitted_other_calls on 17,531,
+emitted_other_branches on 16,476 and emitted_other_lines on 147,327.
+emit_instructions falls 522 to 7,012,955. The tab runs the same analysis,
+which now walks each body for its frameless names:
+browser_compile_instructions lands on 392,099,969, up 788,467, and
+browser_compile_peak_bytes on 676,511, up 786.
+
+Merged with main after #1904, the same rows land on `emitted_other_calls`
+17,676, `emitted_other_branches` 16,559, `emitted_other_lines` 148,263 and
+`browser_compile_instructions` 393,489,081.

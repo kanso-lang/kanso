@@ -21,81 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-13 — a loop entered from the callee it calls rewinds
-
-From #1892's bc port. A `for` loop in bc held every lap's allocation: 300,000
-laps of `s += i` took 548 MB, and the binary counted 8 beat iterations for
-20,000 laps. The port's interpreter has the shape every tree-walker has.
-`loop_for` and `for_next` are one tail cycle, each lap runs the body through
-`exec` with a plain call, and the `nested` arm of `exec` enters the cycle by a
-tail call, because a loop inside the body is the same cycle again.
-
-A cluster entered by a tail call gets its bracket by emitting the entering
-edge as a plain call. Since #920 that demotion is refused when the cluster can
-reach the caller again, because a caller the cycle re-enters with nothing held
-would stack one frame per lap. The reach counted every mention, so the plain
-call `r = exec body m` refused the entry. A plain call holds its own frame
-while the callee runs, so the stack already grows with each level of nesting,
-and demoting the entry adds one frame to each level and none to each lap. The
-reach now follows what can enter the caller with no frame held: the heads of
-tail calls, every name inside a lambda, and every name used as a value.
-
-`tests/golden/mem/a_loop_entered_from_the_callee_it_calls_rewinds` is the
-reduced program, 100,000 laps through a `nested` entry. Main counts no beat
-and holds eleven arena blocks; with the change it counts 200,000 beat
-iterations and holds one. No other mem golden moved. The bc port's 300,000
-laps take 9 MB, and its 33 fixtures and 47 unit tests agree on all three
-engines. The ratchet row "a cluster refused for a callee it reaches under a
-frame" counts every mention again and turns the mem corpus red.
-
-Two loops in the standard library gain a bracket the same way. std/json's
-blank skip before a value, `value_for` and `value_blank`, is entered by a
-tail call from `parse_value` and reaches it again only under the plain call
-an array or object makes for each element. std/regexp's matcher cycle is in
-the same position, and its groups lose the padding a wider tail group had
-given them. Of the fourteen benchmarks only runbench and scanbench emit
-different code. Measured here against main's compiler on the same host,
-runbench ran 829 fewer instructions and scanbench 6 more, and every
-allocation counter in the twelve cost veins is unchanged.
-`a_cluster_the_entering_caller_is_reached_from_stays_grow_only` now hands the
-re-entering function on as a value, which still refuses the entry, and
-`a_cluster_reaching_its_caller_under_a_plain_call_is_a_beat` pins the plain
-call.
-
-CI's rows. The two benchmarks whose IR changed gain their brackets:
-work_runbench lands on 1,170,034,251, 829 fewer, and work_scanbench on
-273,515, eight fewer. The brackets are code: text lands on 4,840,798, up
-5,952 (scanbench 3,888, runbench 2,064), emitted_other_calls on 17,531,
-emitted_other_branches on 16,476 and emitted_other_lines on 147,327.
-emit_instructions falls 522 to 7,012,955. The tab runs the same analysis,
-which now walks each body for its frameless names:
-browser_compile_instructions lands on 392,099,969, up 788,467, and
-browser_compile_peak_bytes on 676,511, up 786.
-
-Merged with main after #1904, the same rows land on `emitted_other_calls`
-17,676, `emitted_other_branches` 16,559, `emitted_other_lines` 148,263 and
-`browser_compile_instructions` 393,489,081.
-
-## 2026-10-12 — concat reads the bytes text/bytes answers, on every engine
-
-From #1891, the third item: the 2026-08-23 gavel says a list is never bytes,
-and what `concat` declares decides which engine is right. Appendix b declares
-`text/bytes string → int[]` and `text/concat` as appending two lists, so a
-value `text/bytes` answered is a list to `concat`. Native code already read a
-bytes value as its byte values on either side and answered a list. The
-interpreter matched only two `List`s and refused anything else with "concat
-takes two lists", which is what the httpd, mustache, chip8 and ugit ports hit.
-The interpreter now reads a `Bytes` operand as its byte values, and the answer
-is a list on both engines. The gavel's other direction is unchanged: a list is
-still never read as bytes.
-
-`tests/golden/micro/concat_reads_the_bytes_text_bytes_answers` puts bytes on
-the left, on the right, on both sides, and as a slice of `text/bytes`. Main's
-interpreter stopped at the first line.
-
-Appendix b also says `concat` takes strings, and neither engine does: both
-refuse two strings with the same message. #1906 asks which way that goes.
-
 ## 2026-10-13 — a list concatenated onto in a fold grows where it stands
 
 From #1892's kv port. A fold that grew its accumulator with `concat` rather
@@ -1858,3 +1783,76 @@ binary's layout: compile_instructions by 9,355 to 28,002,980,
 entry_instructions by 30,753 to 92,393,206, library_instructions by 30,149 to
 91,989,327 and interp_instructions by 3,960 to 495,525,421. The floor follows
 the score, since #1889 builds a ruled part of the language.
+
+## 2026-10-14 — kq's rise at the 2169a0ff pin is clang 18 linking without `deadargelim`
+
+When kq's pin moved to 2169a0ff (kq#190), its instruction rows rose: print_small
+by 5.7% and path_small by 13.5%. CI builds kq with the runner's clang, which
+is 18. Under clang 19 the same pin move is +1.5% on print_small and +0.07% on
+path_small.
+
+A bisect of #1938's carrier under clang 18 stops at its first step, #1898
+with #1896. That step lets clang 18 link through `LTO_O3_WITHOUT_DEADARGELIM`,
+which clang 19 already used. Clang 18's own `lto<O3>` aborted in `deadargelim`
+on kq once closure tail calls became `musttail`.
+
+To isolate the pipeline, I applied only the probe and pipeline change to
+38fd2e60, the tree before the carrier. Built that way, kq reads print_small
+27,704,820 and path_small 11,933,888, against 26,297,450 and 10,519,854
+without the change. The new pin reads 27,793,443 and 11,934,905, so the
+pipeline accounts for all of the rise except 88,623 on print_small and 1,017
+on path_small. All six readings were taken in this container under clang 18
+with `--counters`.
+
+So the cost is clang 18's `deadargelim`: the pass that dropped the dead
+arguments cannot run once tail calls are `musttail`. kanso's own cost goldens
+build with clang 19, and kq's rows were counted under 18.
+kq#191 records the attribution in kq's instructions golden and selects clang 19
+in kq's spec job, so its rows describe the build the rest of the project
+measures. CI read them there as print_small 25,716,192, print_big 245,768,599,
+path_small 10,603,649 and path_big 104,470,133, between 7.5% and 11.3% under
+the clang 18 rows at the same pin.
+
+## 2026-10-14 — a linux arm64 release build keeps every tail call a jump
+
+#1912. An arm64 release build took `tailcc` away from every arm wider than
+eight argument words (`narrow_tailcc`), so a loop through a wide arm spent a
+frame per hop. Dropping the narrowing had failed the macOS arm job:
+`a_match_holds_the_literal_its_pattern_spells` printed nothing.
+
+That failure reproduces off the arm job. The release IR, without the narrowing,
+built for `aarch64-linux-gnu` with clang 19 and run under `qemu-aarch64`, dies
+on SIGSEGV at -O1 and above and prints all eight lines at -O0. Running the
+middle end at -O1 and `llc` at -O0 prints them too, so the backend is at fault.
+`llc -opt-bisect-limit` puts the first bad step at CodeGenPrepare on
+`regexp/cutting_6`, an arm of six `%KValue`s, twelve words. Its last action on
+one path is an ordinary call to `k_b_push`. The middle end had marked that call
+`tail`, CodeGenPrepare duplicated the return to make it a sibling call, and the
+arm64 backend gets the stack wrong for a sibling call out of a `tailcc` function
+whose own arguments arrived on the stack.
+
+Marking every plain call in the wide arms `notail` after the middle end fixes the
+program. Before it does not, because the emitter's IR carries no `tail`
+markers: the middle end adds them, and inlining brings calls in with their own.
+The function attribute `"disable-tail-calls"="true"` is read at codegen, after
+both. On every `tailcc` function wider than eight words it turns those sibling
+calls back into calls and returns. It leaves `musttail` alone. With it, the
+fixture prints all eight lines at -O1 and -O3. In its assembly, 47 `musttail`
+edges in the marked functions are a `b` to their callee. The others I read had
+been inlined, and the jump that remained was a `b` or, through a closure, a
+`br`.
+
+On the macOS arm job the attribute fixed that fixture and the three wide-arm
+tests in `tests/a_big_object_decodes_in_a_release_build.rs`, and broke another:
+a release build of `a_spilling_tail_call_named_with_a_mark` printed nothing,
+where the interpreter prints `false`. That job builds with Apple's clang. The
+same program's IR, marked the same way, runs correctly under qemu built for
+`aarch64-linux-gnu` by clang 19 and by clang 18, and clang 19's assembly for
+`arm64-apple-macos` matches its linux assembly in the marked functions, so I
+have no reproduction of the Apple failure here.
+
+So `wide_tailcc_keeps_its_jumps` replaces `narrow_tailcc` on a linux arm64
+release build, and an Apple host keeps the narrowing. There a wide arm still
+takes the C convention, and the three tests stay off Apple arm64. On linux a
+wide arm gives up only its sibling calls into helpers, which become a call and a
+return. x86-64 builds are unchanged. #1912 stays open for the Apple half.
