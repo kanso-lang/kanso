@@ -142,74 +142,6 @@ On main after #1904 the tab's compile reads `browser_compile_instructions`
 With main merged after #1922, browser_compile_instructions lands on 398,041,240
 and browser_compile_peak_bytes on 675,735.
 
-## 2026-10-12 — a test file is an outside consumer of its module
-
-Built from the 2026-10-12 gavel on #1883. A test file, one named `*_test.kso`,
-now imports the module it sits beside and sees its pub names only. The
-module's loader leaves test files out, so `kanso run`, `check` and `build`
-never read one, and nothing a test file declares or imports reaches the
-module.
-
-`kanso test` on a directory compiles each test file on its own and runs them
-in name order, with one summary line. On a file it compiles that file.
-`module_beside` decides what the file imports. A directory holding a library
-file is a module, and the test file imports it under the directory's name, so
-`price` and `teahouse/price` both reach the pub function. A directory holding
-a program, a file that parses only as an entry or a play file, is a folder of
-programs; the book's sample chapters are this kind. A test file there imports
-nothing and tests what it declares, as `greet_test.kso` in chapter 01 does.
-
-Three fixtures in `tests/golden/test_verb` pin the ruling, each watched red
-on the shared-namespace runner:
-
-- `peeks` reads a private function and is refused with `unknown name`. The
-  old runner passed both of its tests.
-- In `shared_name`, the test's helper `label` and a private `label` in the
-  module each stay in their own file. The old runner refused the pair as
-  overlapping overloads.
-- In `runs_beside`, a test file that does not parse leaves the program beside
-  it running on both engines. The old runner's `run` stopped on the syntax
-  error.
-
-Four suites read private names and moved onto the pub surface:
-
-- teahouse's menu test.
-- expect's three tests that inspect a mismatch. `be_true`, `mismatch` and
-  `not_true` are pub now. The header already documented them as what a
-  reader sees, and building them from outside is still refused.
-- list's six bisect tests.
-- kq's `kq_test.kso`, which needs `parse_path`, `pretty` and `walk` pub (kq,
-  same branch name).
-
-The bisect tests built a `list/sorted`, which only `list` may build, and no
-pub function returns one. Since the 2026-09-30 opacity ruling, nothing
-outside `list` has been able to reach the bisecting arm of `find`. The tests
-now test `find` on a plain list, and #1903 asks Clay how a caller should get
-a `sorted`.
-
-The json suite turned up an interpreter bug once it imported its module. A
-bare `json_null` from an importer printed and compared as the importer's own
-type, while native code resolved it to `json/json_null`. That fix is #1904,
-with a micro golden, and this branch carries it.
-
-Rows from CI, on the tree merged with #1913. The loader drops test files and
-the compiler grew `module_beside`, so the front-end rows rise:
-compile_instructions lands on 25,882,462, up 911; entry_instructions on
-85,381,376, up 63; library_instructions on 85,935,657, up 75; and
-startup_instructions on 52,405, up nine. interp_instructions lands on
-488,739,567, 249 fewer, which is #1904's fix. browser_compile_instructions
-lands on 391,170,536, 140,966 fewer; the tab compiles no test files either,
-though no run isolated how much of the fall that is. The floor drops by what
-the gavel costs.
-
-On main after #1904 the tab's compile reads `browser_compile_instructions`
-392,378,710, up 335 from main's 392,378,375 on the same tree.
-
-91.11.
-
-With main merged after #1922, browser_compile_instructions lands on
-393,361,582.
-
 ## 2026-10-12 — a number edit is not a page edit
 
 `page_drift` counts log entries since docs/compiler.html last moved, and took
@@ -1859,3 +1791,42 @@ the mutation the release build prints `["" "" ""]` and the row goes red.
 Lazy parsing by declaration, the larger fix #1952 names, has not been built. This
 change narrows what is read; it does not make one declaration cheaper to
 read.
+
+## 2026-10-14 — An Apple release build keeps its wide arms through the link
+
+kanso#1951 kept `tailcc` on arm64 functions whose arguments overflow the
+eight argument registers, and marked them so the backend makes no sibling
+call there (`wide_tailcc_keeps_its_jumps`). Linux arm64 ran correctly. An
+Apple arm64 host did not: on the macOS job,
+`a_spilling_tail_call_named_with_a_mark` printed nothing, though the same IR
+ran under qemu for linux arm64. So Apple kept `narrow_tailcc`, which gives a
+wide function the C convention. Each hop through one then spends a frame, and
+the three tests that recurse deeply through a wide arm were gated off on
+Apple: `a_self_call_through_a_thirteen_word_arm_runs_in_one_frame`,
+`a_cycle_through_a_twelve_word_arm_runs_in_one_frame` and
+`an_object_of_300_000_keys_decodes` (#1912).
+
+The cause is ld64's LTO. It runs LLVM's default pipeline over the linked
+module, and that pipeline includes dead-argument elimination. Once LTO
+internalizes a wide `tailcc` function, the pass is free to drop the arguments
+it never reads. On the macOS job it cut `reached?_5_w` in the mark test to one
+argument and a plain `ret`, while its caller still ran `sub sp, sp, #0x10`
+after the call for the stack arguments it expected the callee to pop. The stack
+pointer came back sixteen bytes off. The Linux link takes the pass out already
+(`LTO_O3_WITHOUT_DEADARGELIM`, since kanso#1705), which is why the same IR was
+fine there.
+
+A function named in `@llvm.used` is never internalized, so the pass leaves its
+signature alone. That custom pipeline applies only when clang is 18 or 19 and
+lld takes the link, so every arm64 release build now marks its wide functions as
+before and also lists each `tailcc` definition with more argument words than
+the registers hold in `@llvm.used`, in the `llvm.metadata` section. A program
+with no such function gets no global. Two unit tests in `tail_calls.rs` pin the
+list: only a function past the registers is named, and a program without one
+names none. The three tests above run ungated, and on the macOS job all three
+pass.
+
+`narrow_tailcc` and its helper `called_symbol` are gone, and the
+tail-call-given-up mutation now strips both host arms. No row moved. The
+change is confined to the arm64 host arm, and every Linux row the branch's CI
+read matched main's goldens, `compile_instructions` included.
