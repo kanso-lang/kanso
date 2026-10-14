@@ -1,0 +1,19 @@
+# Every string begins and ends with the empty one, and a prefix longer than
+# the string is never one of its prefixes.
+import "std/text"
+
+starts = [
+  text/starts_with? "kanso" "kan"
+  text/starts_with? "kanso" "so"
+  text/starts_with? "" ""
+  text/starts_with? "ka" "kanso"
+]
+
+ends = [
+  text/ends_with? "kanso" "so"
+  text/ends_with? "kanso" "kan"
+  text/ends_with? "kanso" ""
+  text/ends_with? "so" "kanso"
+]
+
+pub play = print "{starts} {ends}"

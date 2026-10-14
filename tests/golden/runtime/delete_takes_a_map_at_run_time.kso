@@ -1,0 +1,6 @@
+# A value the check cannot see the kind of reaches `delete` at run time, and
+# every engine refuses it in the words `put` uses for the same fault.
+fn same x
+  x
+
+pub play = print "{delete (same [1 2]) 1}"

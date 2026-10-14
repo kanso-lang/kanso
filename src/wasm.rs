@@ -101,6 +101,11 @@ impl Executor for BrowserExecutor {
         false
     }
 
+    /// Nothing is there to have changed, which is how `exists` answers too.
+    fn modified(&mut self, _path: &str) -> Result<Option<i64>, String> {
+        Ok(None)
+    }
+
     /// A page has no clock the differential could agree on, so it reads zero
     /// — and a program that timestamps pins KANSO_NOW anyway.
     fn now(&mut self) -> i64 {
@@ -120,6 +125,10 @@ impl Executor for BrowserExecutor {
     }
 
     fn stdin(&mut self) -> Result<String, String> {
+        Err("the playground has no stdin".to_string())
+    }
+
+    fn read_line(&mut self) -> Result<Option<String>, String> {
         Err("the playground has no stdin".to_string())
     }
 

@@ -1,0 +1,6 @@
+# `list/reverse` takes a list or a finite lazy sequence.
+import "std/list"
+
+counted = list/reverse (list/take list/naturals 3)
+
+pub play = print "{list/reverse [1 2 3]} {list/reverse []} {counted}"

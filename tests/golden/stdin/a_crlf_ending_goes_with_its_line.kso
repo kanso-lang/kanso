@@ -1,0 +1,16 @@
+# A line ending in "\r\n" loses both bytes. A "\r" with no "\n" after it is
+# not a line ending, so a last line that ends in one keeps it. Each line is
+# shown with its length, so a "\r" left behind is counted rather than
+# hidden in the output.
+import "std/io"
+
+fn lines _
+  io/read_line .> shown
+
+fn shown done
+  print "done"
+
+fn shown line
+  print "{length line}: {line}" .> lines
+
+pub play = lines 0

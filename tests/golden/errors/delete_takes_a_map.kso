@@ -1,0 +1,3 @@
+# `delete` takes a map and a key, as `put` does, and a literal of another
+# kind in the map's place is refused before anything runs.
+print "{delete [1 2] 1}"

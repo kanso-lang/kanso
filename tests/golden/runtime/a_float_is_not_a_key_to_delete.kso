@@ -1,0 +1,3 @@
+# `delete` refuses a key the way `put` does: only an int or a string keys a
+# map, so a float is not a key there is anything to delete.
+pub play = print "{delete { 1:"a" } 2.5}"
