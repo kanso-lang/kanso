@@ -817,8 +817,6 @@ fn park_unreached_dependencies(
         .iter()
         .filter(|f| {
             own_files.contains(&*f.file)
-                || f.is_pub
-                || f.synthetic
                 || !f.name.bytes().any(|b| b.is_ascii_alphanumeric())
                 || matches!(f.name.as_str(), "render/to_string" | "keys" | "values")
         })
