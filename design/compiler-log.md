@@ -1855,3 +1855,21 @@ native and the interpreter. One test there waits for each prompt before typing
 the answer, so an unflushed prompt fails it. Each was watched red: native and
 interpreter `delete` keeping the key, `\r` left on the line, and the flush
 removed.
+
+CI's rows price the three builtins. Every native binary carries their runtime
+code, 2,688 bytes more text per bench, so `text` went from 4,932,142 to
+4,969,774 across the fourteen. Each bench also runs about 234 more
+instructions, the same on every one, so the rise is outside any decode loop:
+work_basket 30,946,278, work_deepbench 403,499,544, work_digestbench 5,909,247,
+work_escapebench 39,058,340, work_indexbench 2,462,571, work_jsonbench
+858,186,231, work_livebench 1,474,854,142, work_oneshot 13,205,901,
+work_pendbench 191,674,024, work_readbench 4,580,963, work_runbench
+1,178,202,929, work_scanbench 273,675 and work_widebench 28,274,676, while
+work_encodebench fell to 2,386,636,337. The compiler checks and lowers three
+more names and carries the larger runtime text: compile_instructions
+28,044,444, entry_instructions 92,512,951, library_instructions 92,130,190,
+emit_instructions 7,245,801, codegen_instructions_dev 119,400,046 and
+codegen_instructions_release 477,099,466. The interpreter's run went to
+interp_instructions 495,589,622, and the tab to browser_compile_instructions
+414,205,634 and browser_run_instructions 34,183,945. The floor drops by the
+cost under the language rule, since #1914 rules these names.
