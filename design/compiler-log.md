@@ -1831,4 +1831,33 @@ is inside. Building it showed that a `!` name answers a box under the
 way that goes. Until it is answered the decoder keeps `builtin_slice_in`,
 which no user program can name.
 
-The rows this moves are CI's, below.
+The rows below are CI's, except compile_peak_bytes and the browser rows,
+which were read here on the rustc each golden names. Each is priced by putting
+main's golden back and scoring again.
+
+- runbench 1,178,202,929 -> 1,177,696,285 instructions, worth +0.0018.
+  jsonbench reads 858,186,231 -> 830,048,931 because it now measures
+  `std/json`; it is not a welfare term. encodebench rose 448,210 and
+  widebench 176,756, the unfused `utf8` the frozen decoders now call.
+- compile_instructions 31,948,363 -> 32,415,383 (-0.0006) and
+  entry_instructions 101,372,705 -> 103,156,247 (-0.0025). The library grew:
+  `none` arms in lib/text, lib/path and lib/regexp, and a second slice
+  builtin to type. library_instructions moved 100,887,003 -> 102,672,077 for
+  the same reason and is not a term.
+- compile_allocs 17,941 -> 17,980 (-0.0002), compile_peak_bytes 789,911 ->
+  795,133 (-0.0012). front_end_visits went 9,326 -> 9,225 and rounds held at
+  19.
+- interp_instructions 496,215,717 -> 495,119,692 (+0.0006) and
+  interp_peak_bytes 792,646 -> 797,868 (-0.0010).
+- release codegen 477,099,466 -> 476,979,642 (+0.0001). Dev codegen moved
+  119,400,046 -> 119,402,816 and emitting 7,622,247 -> 7,655,444, both under
+  a ten-thousandth of a point.
+- the tab: browser compile 437,381,994 -> 439,517,722 and its peak 726,939 ->
+  728,883, the same larger library compiled in wasm, together -0.0020.
+- the machine-code golden fell by 2,800 to 6,896 bytes on every benchmark,
+  Encode allocations rose 5,323,947 -> 5,332,649 and its arena took a fourth
+  block, which arrived with the frozen decoder's unfused `utf8`; no
+  allocation counter is a welfare term.
+
+Welfare goes 91.2447 -> 91.2395, a fall of 0.0052. This builds a ruled part
+of the language, so the floor drops by exactly that.
