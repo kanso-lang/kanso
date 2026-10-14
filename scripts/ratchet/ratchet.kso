@@ -5373,7 +5373,58 @@ group_side_unread = row
 
 rows_cq13 = list/concat rows_cq12 [group_never_pools group_side_unread]
 
-rows_c = list/concat rows_cq13 [itself]
+# A call on a function's locals is pooled as a cell its sleep carries (#1856).
+chain_never_pooled = row
+  "a function's chain never pooled"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_function_chain_never_pooled")
+  no_setup
+
+cell_handed_over_when_built = row
+  "a pooled cell handed over when its sleep is built"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_pooled_cell_handed_over_when_built")
+  no_setup
+
+cell_forced_outside_the_try = row
+  "a pooled cell forced outside the try"
+  true
+  "cargo test --release --test work_ahead a_pooled_cell_fails_where_it_is_read"
+  "specs (unit, golden, differential)"
+  (breaking "a_pooled_cell_forced_outside_the_try")
+  no_setup
+
+pooled_binding_left_strict = row
+  "a pooled binding left strict"
+  true
+  "cargo test --release --test work_ahead a_pooled_cell_fails_where_it_is_read"
+  "specs (unit, golden, differential)"
+  (breaking "a_pooled_binding_left_strict")
+  no_setup
+
+cell_counted_as_a_thunk = row
+  "a pooled cell counted as a lazy binding"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_pooled_cell_counted_as_a_thunk")
+  no_setup
+
+pool_cells = [chain_never_pooled cell_handed_over_when_built]
+
+pool_counts = [cell_counted_as_a_thunk]
+
+pool_failures = [cell_forced_outside_the_try pooled_binding_left_strict]
+
+pool_rows = list/concat pool_cells (list/concat pool_counts pool_failures)
+
+rows_cq14 = list/concat rows_cq13 pool_rows
+
+rows_c = list/concat rows_cq14 [itself]
 
 rows = list/concat rows_a (list/concat rows_b rows_c)
 

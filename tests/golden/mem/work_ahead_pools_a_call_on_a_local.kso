@@ -1,0 +1,17 @@
+# `report` reads its own parameter after the sleep, so the call cannot become
+# a constant. The function binds it as a cell ahead of its chain, the sleep
+# hands the cell to the pool when it parks, and the pool forces it there.
+# `ahead_forced` counts it. The thunk counters, which the interpreter has to
+# agree with, leave the pool's cell out: it is not a lazy binding.
+import "std/time"
+
+fn spin 0 acc
+  acc
+
+fn spin n acc
+  spin (n - 1) (acc + n % 7)
+
+fn report n
+  sleep 1 .> (_ -> print "made") .> (_ -> print "report: {spin n 0}")
+
+report 1000

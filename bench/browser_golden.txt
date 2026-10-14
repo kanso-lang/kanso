@@ -38,8 +38,12 @@
 # file with a local import (kanso#1976). browser_compile_instructions
 # 382,155,032 -> 382,297,788, a RISE of 142,756 (+0.04%), on rustc 1.98.1.
 # The run rows are unchanged.
+# 2026-10-14: a call on a function's locals is pooled as a cell (kanso#1978).
+# browser_compile_instructions 382,297,788 -> 381,261,098, a FALL of 1,036,690;
+# browser_compile_peak_bytes 643,478 -> 643,605; browser_run_instructions
+# 34,181,240 -> 34,181,355. On rustc 1.98.1.
 # measured-on rustc=1.98.1
-browser_compile_instructions=382297788
-browser_compile_peak_bytes=643478
-browser_run_instructions=34181240
+browser_compile_instructions=381261098
+browser_compile_peak_bytes=643605
+browser_run_instructions=34181355
 browser_run_peak_bytes=1441792
