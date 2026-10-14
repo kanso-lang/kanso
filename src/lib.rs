@@ -78,15 +78,22 @@ fn compile_play_inner(file: &str, source: &str) -> Result<ast::Program, String> 
     let program = parser::parse_play(&lexed).map_err(|d| diag::render(&d, file, source))?;
     for import in &program.imports {
         if !import.path.starts_with("std/") {
-            let d = diag::Diagnostic::new(
-                "import",
-                format!(
+            // `kanso run` takes bare statements beside a local import, and
+            // refuses a file that also declares something, so only a file of
+            // statements is sent there.
+            let message = match program.fns.iter().any(|f| f.name != ast::ENTRY) {
+                true => format!(
+                    "a play file imports the stdlib and nothing else — to \
+                     import `{}`, {TO_A_MODULE}",
+                    import.path
+                ),
+                false => format!(
                     "a play file imports the stdlib and nothing else — \
                      `{}` needs a real program (`kanso run`)",
                     import.path
                 ),
-                import.span,
-            );
+            };
+            let d = diag::Diagnostic::new("import", message, import.span);
             return Err(diag::render(&[d], file, source));
         }
     }
@@ -645,6 +652,20 @@ fn exports_play(source: &str) -> bool {
     program.fns.iter().any(|d| d.name == "play" && d.is_pub)
 }
 
+/// What runs a file that declares something and imports a neighbour: neither
+/// verb takes it as it stands, so both refusals give this one route.
+const TO_A_MODULE: &str = "move the statements into a main.kso beside it, mark \
+     the definitions they use `pub`, and run the directory with `kanso run`";
+
+/// The first import that leaves the stdlib, as the file spells it. Read off
+/// the play parse, the one that accepts definitions beside statements; a file
+/// that does not parse that way names none.
+fn local_import(source: &str) -> Option<String> {
+    let lexed = lexer::lex(source).ok()?;
+    let program = parser::parse_play(&lexed).ok()?;
+    program.imports.into_iter().map(|i| i.path).find(|p| !p.starts_with("std/"))
+}
+
 /// Routes a single source file to the compile its verb and content call for:
 /// a file named main.kso, or one of bare statements, is an entry; a file of
 /// definitions is a library, which `check` and `test` compile and the running
@@ -678,6 +699,13 @@ pub fn compile_source(command: &str, file: &str, source: &str) -> Result<ast::Pr
             "error: `{file}` is a library — nothing to run. it exports \
              `play`: import the module from an entry file, or give the \
              module a main.kso entry\n"
+        )),
+        // `kanso play` refuses a local import, so a file that declares and
+        // imports a neighbour is sent to the module that runs it.
+        (_, true) if !library_verb && local_import(source).is_some() => Err(format!(
+            "error: `{file}` is a library — nothing to run, and `kanso play` \
+             cannot run it either, because it imports `{}`. {TO_A_MODULE}\n",
+            local_import(source).unwrap_or_default()
         )),
         (_, true) if !library_verb => Err(format!(
             "error: `{file}` is a library — nothing to run. give the module a \

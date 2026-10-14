@@ -1,0 +1,4 @@
+error[import]: a play file imports the stdlib and nothing else — to import `./calc`, move the statements into a main.kso beside it, mark the definitions they use `pub`, and run the directory with `kanso run`
+  --> tests/golden/play/beside/sum.kso:1:8
+   1 | import "./calc"
+              ^
