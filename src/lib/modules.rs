@@ -643,6 +643,7 @@ fn compile_module_loaded(
         reexports: Vec::new(),
         root: String::new(),
     };
+    let own_files: crate::hash::Set<String> = parsed.iter().map(|(f, _, _)| f.clone()).collect();
     merged.types.extend(dep_program.types);
     merged.fns.extend(dep_program.fns);
     for ((_, _, mut program), travels) in parsed.into_iter().zip(file_travels) {
@@ -661,6 +662,9 @@ fn compile_module_loaded(
     // readers as the entry path.
     let rewritten =
         phase::watched("canonicalize_bare_aliases", || canonicalize_bare_aliases(&mut merged));
+    let parked = phase::watched("park_unreached_dependencies", || {
+        park_unreached_dependencies(&mut merged, &own_files)
+    });
     // As on the entry path: the check and the rewrite ask the same program
     // the same question back to back, so the fixpoint and the group count are
     // built once and handed to each.
@@ -680,6 +684,7 @@ fn compile_module_loaded(
             check::check_merged_after_aliases_with(&merged, require_entry, &rewritten, builtins)
         }),
     };
+    unpark(&mut merged, parked);
     inline::apply_wrappers(&mut merged, &wrappers);
     if !diags.is_empty() {
         // The name an import writes, never the file behind it. A module in a
@@ -771,4 +776,108 @@ fn hidden_from<'a>(
         }
     }
     hidden
+}
+
+/// The dependency functions nothing in this module can reach, taken out of
+/// the program while the merged check reads it and handed back after
+/// (kanso#1952). An import brings its whole module, and the merged check
+/// inferred and checked every function of it, so a library grew the cost of
+/// every program that imports it. Each dependency is checked whole by its own
+/// module's compile. They go back because the program is also what an
+/// importer of this module receives, and an arm this module never calls can
+/// still travel to one that does. The roots are
+/// the module's own functions, whatever is on its surface, every synthetic
+/// declaration (a field read becomes a call to its getter later), the render
+/// group a print reaches by name, and the operator groups, which an
+/// expression reaches without naming them. A group is kept whole: every arm
+/// shares the name a body mentions.
+fn park_unreached_dependencies(
+    merged: &mut ast::Program,
+    own_files: &crate::hash::Set<String>,
+) -> Vec<(usize, ast::FnDecl)> {
+    fn mentions<'a>(e: &'a ast::Expr, out: &mut Vec<&'a str>) {
+        if let ast::Expr::Ident(n, _, _) | ast::Expr::Partial(n, _) = e {
+            out.push(n.as_str());
+        }
+        crate::for_each_child(e, |child| mentions(child, out));
+    }
+    // A bare name can travel: `combine x y` reaches `ay/combine` and
+    // `bee/combine` by the types it is handed, so it reaches every function
+    // whose last segment it spells.
+    let mut arms: crate::hash::Map<&str, Vec<usize>> = crate::hash::Map::default();
+    for (at, f) in merged.fns.iter().enumerate() {
+        arms.entry(f.name.as_str()).or_default().push(at);
+        if let Some((_, last)) = f.name.rsplit_once('/') {
+            arms.entry(last).or_default().push(at);
+        }
+    }
+    let mut reached: crate::hash::Set<&str> = crate::hash::Set::default();
+    let mut work: Vec<&str> = merged
+        .fns
+        .iter()
+        .filter(|f| {
+            own_files.contains(&*f.file)
+                || f.is_pub
+                || f.synthetic
+                || !f.name.bytes().any(|b| b.is_ascii_alphanumeric())
+                || matches!(f.name.as_str(), "render/to_string" | "keys" | "values")
+        })
+        .map(|f| f.name.as_str())
+        .collect();
+    let mut seen = Vec::new();
+    let mut keep = vec![false; merged.fns.len()];
+    while let Some(name) = work.pop() {
+        if !reached.insert(name) {
+            continue;
+        }
+        for &at in arms.get(name).map(Vec::as_slice).unwrap_or(&[]) {
+            keep[at] = true;
+            for stmt in &merged.fns[at].body {
+                match stmt {
+                    ast::Stmt::Bind { expr, .. } | ast::Stmt::Expr(expr) => {
+                        seen.clear();
+                        mentions(expr, &mut seen);
+                        // A traveling group (`~combine`, `~mix~combine`) is
+                        // filled later from every owner's arms of its short
+                        // name, so it reaches what the short name reaches.
+                        work.extend(
+                            seen.iter()
+                                .map(|n| n.rsplit('~').next().unwrap_or(n))
+                                .filter(|n| arms.contains_key(n)),
+                        );
+                    }
+                }
+            }
+        }
+    }
+    if keep.iter().all(|&k| k) {
+        return Vec::new();
+    }
+    let mut parked = Vec::new();
+    let mut kept = Vec::with_capacity(merged.fns.len());
+    for (at, f) in std::mem::take(&mut merged.fns).into_iter().enumerate() {
+        match keep[at] {
+            true => kept.push(f),
+            false => parked.push((at, f)),
+        }
+    }
+    merged.fns = kept;
+    parked
+}
+
+/// Puts parked declarations back where they stood, so the program reads in
+/// its original order again.
+fn unpark(merged: &mut ast::Program, parked: Vec<(usize, ast::FnDecl)>) {
+    if parked.is_empty() {
+        return;
+    }
+    let total = merged.fns.len() + parked.len();
+    let mut kept = std::mem::take(&mut merged.fns).into_iter();
+    let mut parked = parked.into_iter().peekable();
+    merged.fns = (0..total)
+        .map(|at| match parked.next_if(|(i, _)| *i == at) {
+            Some((_, f)) => f,
+            None => kept.next().expect("a kept declaration for every slot"),
+        })
+        .collect();
 }

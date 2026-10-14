@@ -172,6 +172,8 @@ fn compile_parsed_entry(
         reexports: Vec::new(),
         root: String::new(),
     };
+    let own_files: crate::hash::Set<String> =
+        program.fns.iter().map(|f| f.file.to_string()).collect();
     merged.types.extend(dep_program.types);
     merged.fns.extend(dep_program.fns);
     merged.types.extend(program.types);
@@ -185,6 +187,9 @@ fn compile_parsed_entry(
     // honest; see `Rewrites`.
     let rewritten =
         phase::watched("canonicalize_bare_aliases", || canonicalize_bare_aliases(&mut merged));
+    let parked = phase::watched("park_unreached_dependencies", || {
+        park_unreached_dependencies(&mut merged, &own_files)
+    });
     // One alias fixpoint and one group count for the two passes that read
     // them. The check runs first and the rewrite second over a program
     // neither changes in between, so asking twice was asking the same
@@ -193,6 +198,7 @@ fn compile_parsed_entry(
     let builtins = inline::aliases_from(&merged, &counts);
     let wrappers = inline::wrapper_table(&builtins, &counts);
     let merged_diags = check::check_merged_after_aliases_with(&merged, true, &rewritten, builtins);
+    unpark(&mut merged, parked);
     inline::apply_wrappers(&mut merged, &wrappers);
     match merged_diags.is_empty() {
         true => {
