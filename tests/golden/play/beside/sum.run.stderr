@@ -1,0 +1,1 @@
+error: `tests/golden/play/beside/sum.kso` is a library — nothing to run, and `kanso play` cannot run it either, because it imports `./calc`. move the statements into a main.kso beside it, mark the definitions they use `pub`, and run the directory with `kanso run`

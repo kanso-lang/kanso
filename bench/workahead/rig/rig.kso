@@ -1,0 +1,8 @@
+pub fn grind n
+  spin n 0
+
+fn spin 0 acc
+  acc
+
+fn spin n acc
+  spin (n - 1) (acc + n % 7)
