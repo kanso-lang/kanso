@@ -1630,3 +1630,20 @@ main, 2.02 to 2.09 s on this branch, with the same output.
 Pinned by `tests/golden/mem/work_ahead_lifts_a_parking_lambda`
 (`ahead_forced=1`) and the ratchet row "a parking lambda never lifted",
 seen red on that golden.
+
+CI's rows for the two pieces together, against kanso#1978:
+`emit_instructions` 5,449,223 -> 5,478,826, because every program the
+emitter sees is now walked for a lambda that parks. The front end's rows
+rose with the binary's layout, since `kanso check` never reaches the pass:
+`compile_instructions` 22,595,494 -> 22,699,939, `entry_instructions`
+74,872,489 -> 75,214,687, `library_instructions` 74,559,617 -> 74,901,268
+and `interp_instructions` 492,636,904 -> 492,637,347. The runtime, machine
+code, codegen and browser rows did not move. Welfare falls, and the floor
+moves by that amount under #1856's ruling, as it did for the group pool in
+kanso#1972.
+
+A pool-shaped differential ran 400 generated programs, each with a sleep
+whose continuations read locals, lambda parameters and builtins of them,
+some inside a function and some in nested lambdas. The interpreter and the
+native build agreed on all 399 the front end accepted; 85 of the first 100
+forced at least one pooled call.
