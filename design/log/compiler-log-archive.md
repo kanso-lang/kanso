@@ -103212,3 +103212,71 @@ On main after #1904 the tab's compile reads `browser_compile_instructions`
 
 With main merged after #1922, browser_compile_instructions lands on
 393,286,002.
+
+## 2026-10-12 — a test file is an outside consumer of its module
+
+Built from the 2026-10-12 gavel on #1883. A test file, one named `*_test.kso`,
+now imports the module it sits beside and sees its pub names only. The
+module's loader leaves test files out, so `kanso run`, `check` and `build`
+never read one, and nothing a test file declares or imports reaches the
+module.
+
+`kanso test` on a directory compiles each test file on its own and runs them
+in name order, with one summary line. On a file it compiles that file.
+`module_beside` decides what the file imports. A directory holding a library
+file is a module, and the test file imports it under the directory's name, so
+`price` and `teahouse/price` both reach the pub function. A directory holding
+a program, a file that parses only as an entry or a play file, is a folder of
+programs; the book's sample chapters are this kind. A test file there imports
+nothing and tests what it declares, as `greet_test.kso` in chapter 01 does.
+
+Three fixtures in `tests/golden/test_verb` pin the ruling, each watched red
+on the shared-namespace runner:
+
+- `peeks` reads a private function and is refused with `unknown name`. The
+  old runner passed both of its tests.
+- In `shared_name`, the test's helper `label` and a private `label` in the
+  module each stay in their own file. The old runner refused the pair as
+  overlapping overloads.
+- In `runs_beside`, a test file that does not parse leaves the program beside
+  it running on both engines. The old runner's `run` stopped on the syntax
+  error.
+
+Four suites read private names and moved onto the pub surface:
+
+- teahouse's menu test.
+- expect's three tests that inspect a mismatch. `be_true`, `mismatch` and
+  `not_true` are pub now. The header already documented them as what a
+  reader sees, and building them from outside is still refused.
+- list's six bisect tests.
+- kq's `kq_test.kso`, which needs `parse_path`, `pretty` and `walk` pub (kq,
+  same branch name).
+
+The bisect tests built a `list/sorted`, which only `list` may build, and no
+pub function returns one. Since the 2026-09-30 opacity ruling, nothing
+outside `list` has been able to reach the bisecting arm of `find`. The tests
+now test `find` on a plain list, and #1903 asks Clay how a caller should get
+a `sorted`.
+
+The json suite turned up an interpreter bug once it imported its module. A
+bare `json_null` from an importer printed and compared as the importer's own
+type, while native code resolved it to `json/json_null`. That fix is #1904,
+with a micro golden, and this branch carries it.
+
+Rows from CI, on the tree merged with #1913. The loader drops test files and
+the compiler grew `module_beside`, so the front-end rows rise:
+compile_instructions lands on 25,882,462, up 911; entry_instructions on
+85,381,376, up 63; library_instructions on 85,935,657, up 75; and
+startup_instructions on 52,405, up nine. interp_instructions lands on
+488,739,567, 249 fewer, which is #1904's fix. browser_compile_instructions
+lands on 391,170,536, 140,966 fewer; the tab compiles no test files either,
+though no run isolated how much of the fall that is. The floor drops by what
+the gavel costs.
+
+On main after #1904 the tab's compile reads `browser_compile_instructions`
+392,378,710, up 335 from main's 392,378,375 on the same tree.
+
+91.11.
+
+With main merged after #1922, browser_compile_instructions lands on
+393,361,582.
