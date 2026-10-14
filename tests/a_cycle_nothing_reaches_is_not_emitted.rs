@@ -77,10 +77,8 @@ const TO_FLOAT: &str = "@\"d_text/to_float_1\"(";
 
 #[test]
 fn a_library_function_only_a_fused_call_names_is_not_emitted() {
-    let (module, native, oracle) = built(
-        "fused",
-        "import \"std/json\"\n\nprint \"{json/decode \"1.5\"}\"\n",
-    );
+    let (module, native, oracle) =
+        built("fused", "import \"std/json\"\n\nprint \"{json/decode \"1.5\"}\"\n");
     assert_eq!(native, oracle, "the engines disagree");
     assert!(!module.contains(TO_FLOAT), "a fused call left the function it replaces in the module");
 }

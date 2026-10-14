@@ -197,10 +197,10 @@ err at 1: unexpected character `?`</code></pre>
 <div class="code-panel">
   <div class="code-panel-title">lib/json/text.kso</div>
   <pre><code><span class="k">fn</span> <span class="f">_string_at</span> cs <span class="n">34</span> start p
-  <span class="t">_parsed</span> (p <span class="o">+</span> <span class="n">1</span>) (<span class="f">_string_ok</span> p (<span class="f">utf8</span> (<span class="f">slice</span> cs start (p <span class="o">-</span> <span class="n">1</span>))))
+  <span class="t">_parsed</span> (p <span class="o">+</span> <span class="n">1</span>) (<span class="f">_string_ok</span> p (<span class="f">utf8</span> (<span class="f">builtin_slice_in</span> cs start (p <span class="o">-</span> <span class="n">1</span>))))
 
 <span class="k">fn</span> <span class="f">_string_at</span> cs <span class="n">92</span> start p
-  <span class="f">_str_chars</span> cs p (<span class="f">append</span> (<span class="f">bytes</span> <span class="s">""</span>) (<span class="f">slice</span> cs start (p <span class="o">-</span> <span class="n">1</span>)))
+  <span class="f">_str_chars</span> cs p (<span class="f">append</span> (<span class="f">bytes</span> <span class="s">""</span>) (<span class="f">builtin_slice_in</span> cs start (p <span class="o">-</span> <span class="n">1</span>)))
 
 <span class="k">fn</span> <span class="f">_string_at</span> <span class="o">_</span> <span class="t">none</span> <span class="o">_</span> p
   <span class="f">_fail</span> p <span class="s">"unterminated string"</span>
@@ -213,7 +213,7 @@ err at 1: unexpected character `?`</code></pre>
   <span class="f">_string_at</span> cs cs[n] start n</code></pre>
 </div>
 
-<p>read from the bottom. a quote (<code>34</code>) ends the string, and the value is one slice of the original input—no copying, no character loop. a backslash (<code>92</code>) abandons the bet: the bytes so far are moved into an accumulator and the slow path takes over, appending decoded bytes one escape at a time. <code>none</code> means the input ended inside the string. the slow path is another dispatch table—one arm per legal escape character, each pushing the byte it names:</p>
+<p>read from the bottom. a quote (<code>34</code>) ends the string, and the value is one slice of the original input—no copying, no character loop. a backslash (<code>92</code>) abandons the bet: the bytes so far are moved into an accumulator and the slow path takes over, appending decoded bytes one escape at a time. <code>none</code> means the input ended inside the string. the slice is spelled <code>builtin_slice_in</code>, a name only the standard library can use: its range comes from a scan of the same bytes, so it cannot leave them, and it is typed without the <code>none</code> that <code>text/slice</code> answers past the end. the slow path is another dispatch table—one arm per legal escape character, each pushing the byte it names:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">lib/json/text.kso</div>
@@ -333,10 +333,10 @@ err at 1: unexpected character `?`</code></pre>
   <span class="f">if</span> (e <span class="o">&lt;</span> <span class="n">0</span>) (<span class="f">number_done</span> cs start (<span class="n">0</span> <span class="o">-</span> e) <span class="t">true</span>) (<span class="f">number_done</span> cs start e <span class="t">false</span>)
 
 <span class="k">fn</span> <span class="f">number_done</span> cs start p <span class="t">true</span>
-  <span class="f">parsed</span> p (<span class="f">number_ok</span> start (<span class="f">text/to_float</span> (<span class="f">text/slice</span> cs start (p <span class="o">-</span> <span class="n">1</span>))))
+  <span class="f">parsed</span> p (<span class="f">number_ok</span> start (<span class="f">text/to_float</span> (<span class="f">builtin_slice_in</span> cs start (p <span class="o">-</span> <span class="n">1</span>))))
 
 <span class="k">fn</span> <span class="f">number_done</span> cs start p <span class="t">false</span>
-  <span class="f">parsed</span> p (<span class="f">number_ok</span> start (<span class="f">text/to_int</span> (<span class="f">text/slice</span> cs start (p <span class="o">-</span> <span class="n">1</span>))))</code></pre>
+  <span class="f">parsed</span> p (<span class="f">number_ok</span> start (<span class="f">text/to_int</span> (<span class="f">builtin_slice_in</span> cs start (p <span class="o">-</span> <span class="n">1</span>))))</code></pre>
 </div>
 
 <p>replay the decision on its own inputs. the sample below asks the two questions apart, one walk each, in kanso rather than in the runtime; it prints which converter would fire:</p>
