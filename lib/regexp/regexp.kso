@@ -256,8 +256,10 @@ fn swapped prog s at acc repl m false
   kept = "{acc}{before}{repl}"
   stepped_over prog s acc repl m kept (m.to == m.from)
 
+# An empty match can sit one past the end of `s`, where there is no character
+# to step over, so the slice is none and nothing is copied.
 fn stepped_over prog s _ repl m kept true
-  one = text/slice s m.from m.from
+  one = or_empty (text/slice s m.from m.from)
   rebuilt prog s (m.from + 1) "{kept}{one}" repl
 
 fn stepped_over prog s _ repl m kept false
@@ -439,7 +441,7 @@ fn chosen _ text true
 # dot that stops excluding one character. Nothing downstream learns a mode.
 fn compiled pattern
   flags = leading_flags pattern 1 ""
-  body = text/slice pattern flags.pos (length pattern)
+  body = or_empty (text/slice pattern flags.pos (length pattern))
   chars = text/chars body
   parsed_body = read_alt chars 1
   over = flags.pos + parsed_body.pos - length pattern - 2
@@ -648,7 +650,7 @@ fn more_flags _ at seen false
 
 fn more_flags pattern at seen true
   closing = flag_end pattern (at + 2)
-  letters = text/slice pattern (at + 2) (closing - 1)
+  letters = or_empty (text/slice pattern (at + 2) (closing - 1))
   leading_flags pattern (closing + 1) "{seen}{letters}"
 
 fn flag_end pattern at
@@ -1279,6 +1281,9 @@ fn sliced _ _ false
 fn char_at s at
   or_empty (text/slice s at at)
 
+# A slice past the end answers none (#1890). Where a range here can leave the
+# text, such as a pattern that is all flags or an empty match at the end, the
+# nothing it would have read is the empty string.
 fn or_empty none
   ""
 

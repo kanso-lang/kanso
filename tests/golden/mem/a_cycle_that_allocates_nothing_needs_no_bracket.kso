@@ -1,24 +1,23 @@
 import "std/text"
 
-# Four groups in one tail cycle that appends into a byte builder and reads
-# the input bytes, and allocates nothing in the arena: an append onto a
-# builder the linearity analysis proved unique grows its storage outside the
-# arena, a slice under such an append is the emitter's fused copy, and
-# find2_below answers an integer. A rewind here would free nothing, and the
-# entry's push and pop would bracket nothing. beat_iters below is zero: the
-# cycle is not a beat, and the arena's one block is the input.
+# Groups in one tail cycle that append into a byte builder and read the input
+# bytes, and allocate nothing in the arena: an append onto a builder the
+# linearity analysis proved unique grows its storage outside the arena, the
+# run between two finds is copied a byte at a time, and find2_below answers an
+# integer. A rewind here would free nothing, and the entry's push and pop would
+# bracket nothing. beat_iters below is zero: the cycle is not a beat, and the
+# arena's one block is the input.
 fn scan acc bs p len
   found acc bs p len (text/find2_below bs p 120 121 32)
 
 fn found acc bs p len n
-  run (onto acc (text/slice bs p (n - 1))) bs n len
+  copied acc bs p n len
 
-# the run ends where find2_below stopped inside `bs`, so it is never none
-fn onto acc none
-  acc
-
-fn onto acc piece
-  text/append acc piece
+# A slice past the end answers none (#1890), so the run is copied byte by byte
+# rather than sliced and appended.
+fn copied acc bs p n len
+  return run acc bs n len if n <= p or p < 1 or length bs < p
+  copied (text/append acc bs[p]) bs (p + 1) n len
 
 fn run acc bs n len
   if (len < n) acc (mark acc bs n len)

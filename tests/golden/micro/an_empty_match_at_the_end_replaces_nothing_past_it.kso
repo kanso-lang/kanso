@@ -1,0 +1,9 @@
+# `replace_all` with a pattern that can match nothing steps over one character
+# after each empty match, and the last empty match sits one past the end of
+# the subject. Since a slice past the end answers none (#1890), that step has
+# no character to copy, and the replaced text must not grow a stray word.
+import "std/regexp"
+
+pub play = print (regexp/replace_all "x*" "ab" "-")
+  .> (_ -> print (regexp/replace_all "b*" "ab" "<{"$"}>"))
+  .> (_ -> print (regexp/replace_all "" "" "!"))
