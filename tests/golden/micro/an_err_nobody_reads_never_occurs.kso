@@ -1,0 +1,16 @@
+import "std/list"
+
+# A value nobody asks for is never computed, so an err handed to a parameter
+# the body never reads never occurs (#1928). The err sits in a list element,
+# where the checker does not follow it; bound by name to the raising call, as
+# in the toml port's reduction, it is refused at check (the error golden
+# an_err_bound_by_name_reaches_a_parameter_nobody_reads).
+fn boom n
+  err "boom {n}"
+
+fn ignores x _
+  "ignored body ran with {x}"
+
+pub play =
+  e = list/first [(boom 1)]
+  print (ignores 5 e)

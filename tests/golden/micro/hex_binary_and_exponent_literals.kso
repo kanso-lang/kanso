@@ -1,0 +1,10 @@
+# The number forms the lexer reads besides plain decimals (ruled 2026-10-13):
+# `0x` hex with digits in either case, `0b` binary, and an `e` exponent, which
+# makes a float. A minus touching any of them is part of the literal, as it
+# is for a decimal. Each is a token, so every engine reads the same value.
+pub play =
+  print "hex: {0xff} {0xFF} {0x0} {0x7fffffffffffffff}"
+  print "binary: {0b1010} {0b0} {0b11111111}"
+  print "negative: {-0x10} {-0b11} {-1e2}"
+  print "exponent: {1e-8} {6.02e23} {2.5e3} {1e0} {1e+2}"
+  print "arithmetic: {0x10 + 0b1 + 16} {1.5e3 + 0.5}"
