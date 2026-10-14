@@ -117,7 +117,7 @@ fn onward_file module names found false
   os/read_file! "lib/{module}/{name}" .> (src -> gathered module rest found src)
 
 fn gathered module rest found src
-  walked_files module rest (text/concat found (entries_in module src))
+  walked_files module rest (list/concat found (entries_in module src))
 
 fn in_module module found
   os/list_dir "lib/{module}" .> (names -> only_sources module names found)
@@ -315,33 +315,33 @@ langn_src = """
 
 langn = [langn_says langn_src]
 
-lang_all0 = text/concat [langa] [langb]
+lang_all0 = list/concat [langa] [langb]
 
-lang_all1 = text/concat lang_all0 [langc]
+lang_all1 = list/concat lang_all0 [langc]
 
-lang_all2 = text/concat lang_all1 [langd]
+lang_all2 = list/concat lang_all1 [langd]
 
-lang_all3 = text/concat lang_all2 [lange]
+lang_all3 = list/concat lang_all2 [lange]
 
-lang_all4 = text/concat lang_all3 [langf]
+lang_all4 = list/concat lang_all3 [langf]
 
-lang_all5 = text/concat lang_all4 [langg]
+lang_all5 = list/concat lang_all4 [langg]
 
-lang_all6 = text/concat lang_all5 [langh]
+lang_all6 = list/concat lang_all5 [langh]
 
-lang_all7 = text/concat lang_all6 [langi]
+lang_all7 = list/concat lang_all6 [langi]
 
-lang_all8 = text/concat lang_all7 [langj]
+lang_all8 = list/concat lang_all7 [langj]
 
-lang_all9 = text/concat lang_all8 [langk]
+lang_all9 = list/concat lang_all8 [langk]
 
-lang_all10 = text/concat lang_all9 [langl]
+lang_all10 = list/concat lang_all9 [langl]
 
-lang_all11 = text/concat lang_all10 [langm]
+lang_all11 = list/concat lang_all10 [langm]
 
-lang_all12 = text/concat lang_all11 [langn]
+lang_all12 = list/concat lang_all11 [langn]
 
-language = text/concat lang_all12 [lango]
+language = list/concat lang_all12 [lango]
 
 # Every probe here is meant to fail, so two engines failing identically is the
 # expected reading and an engine that cannot run at all is indistinguishable
@@ -466,7 +466,7 @@ fn proceed false
 fn started found
   probes = std_probes found
   useful = list/to_list (list/select probes worth?)
-  all_probes = text/concat useful language
+  all_probes = list/concat useful language
   counts = "{length all_probes} probes ({length probes} std functions"
   head = "{counts} and {length language} language paths)"
   swept all_probes [] .> (found -> finished head found)

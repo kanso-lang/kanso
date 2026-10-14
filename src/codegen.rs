@@ -81,7 +81,7 @@ fn ties(program: &Program) -> bool {
     program.fns.iter().filter(|d| !d.name.starts_with("list/")).any(|d| d.body.iter().any(stmt))
 }
 
-pub(crate) const BUILTIN_CALLS: [&str; 62] = [
+pub(crate) const BUILTIN_CALLS: [&str; 64] = [
     "effect",
     "built_text",
     "net_port",
@@ -105,6 +105,7 @@ pub(crate) const BUILTIN_CALLS: [&str; 62] = [
     "env",
     "exists",
     "is_dir",
+    "modified",
     "list_dir",
     "make_dir",
     "write_file",
@@ -128,6 +129,7 @@ pub(crate) const BUILTIN_CALLS: [&str; 62] = [
     "map",
     "push",
     "put",
+    "delete",
     "slice",
     "sort",
     "render_value",
@@ -6275,6 +6277,12 @@ impl<'a> Backend<'a> {
                         f.record(&t, DESC);
                         Ok(t.to_string())
                     }
+                    "read_line" => {
+                        let t = f.tmp();
+                        f.line_fmt(format_args!("{t} = call %KValue @k_desc_read_line()"));
+                        f.record(&t, DESC);
+                        Ok(t.to_string())
+                    }
                     "now" => {
                         let t = f.tmp();
                         f.line_fmt(format_args!("{t} = call %KValue @k_desc_now()"));
@@ -9727,7 +9735,10 @@ mod a_group_the_walk_misses_is_put_back {
         let program = program();
         let reached = reached_from_entry(&program).expect("the fixture has an entry");
         assert!(reached.contains("list/sum"), "the walk missed a call: {reached:?}");
-        assert!(!reached.contains("list/sort"), "the walk kept a group nothing calls: {reached:?}");
+        assert!(
+            !reached.contains("list/spread"),
+            "the walk kept a group nothing calls: {reached:?}"
+        );
     }
 
     /// Emits the program with the groups named `gone` taken out, as the tab
@@ -9745,7 +9756,7 @@ mod a_group_the_walk_misses_is_put_back {
 
     #[test]
     fn a_group_nothing_calls_left_out_goes_unremarked() {
-        assert!(!noticed_without(&["list/sort"]), "the emitter asked for a group nothing calls");
+        assert!(!noticed_without(&["list/spread"]), "the emitter asked for a group nothing calls");
     }
 
     #[test]

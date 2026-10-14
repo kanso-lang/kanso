@@ -1,0 +1,4 @@
+error[syntax]: `1e` has no exponent digits; write it as `1e1` or drop the `e`
+  --> a_literal_an_exponent_with_no_digits.kso:2:20
+   2 | pub play = print "{1e}"
+                          ^

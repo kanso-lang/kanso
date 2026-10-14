@@ -120,7 +120,7 @@ function highlightLine(line) {
       i += name.length;
       continue;
     }
-    const number = rest.match(/^-?\d[\d_]*(\.\d+)?/);
+    const number = rest.match(/^-?(?:0x[0-9a-fA-F]+|0b[01]+|\d[\d_]*(\.\d+)?(e[+-]?\d+)?)/);
     if (number) {
       html += span('i', number[0]);
       i += number[0].length;

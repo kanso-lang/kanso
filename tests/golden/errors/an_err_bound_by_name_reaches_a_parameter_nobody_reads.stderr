@@ -1,0 +1,4 @@
+error[exhaustive]: this can be an err and `ignores` has no arm for it — dispatch on it here, or give `ignores` an `(err _)` arm (in an_err_bound_by_name_reaches_a_parameter_nobody_reads.kso) (module an_err_bound_by_name_reaches_a_parameter_nobody_reads)
+  --> an_err_bound_by_name_reaches_a_parameter_nobody_reads.kso:12:20
+  12 |   print (ignores 5 e)
+                          ^

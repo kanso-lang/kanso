@@ -1,0 +1,12 @@
+# `find` on a `sorted` bisects, and on a plain list it scans, stepping through
+# a `step` record per element until the predicate holds. The scan's records
+# are what `sh_rec` counts: on these 4,096 elements it read 512,352 bytes the
+# day this was written, and the bisect reads 208. A `find` that lost its
+# `sorted` arm would scan here, and this file's `sh_rec` would show it.
+import "std/list"
+
+xs = list/to_list (list/take list/naturals 4096)
+
+ys = list/to_sorted xs
+
+pub play = print "{list/find ys (v -> v > 4000)}"

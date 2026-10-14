@@ -1,0 +1,4 @@
+error[syntax]: `2` is not a binary digit in `0b2`
+  --> a_literal_a_binary_digit_past_one.kso:2:20
+   2 | pub play = print "{0b2}"
+                          ^

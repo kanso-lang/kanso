@@ -3,6 +3,20 @@ evens = [2 4 6 8 10 12]
 fn high? v
   7 < v
 
+test_bisect_agrees = find (to_sorted evens) high? == find evens high?
+
+test_bisect_empty = (find (to_sorted []) (v -> 0 < v)) == none
+
+test_bisect_finds_first = (find (to_sorted evens) (v -> 3 < v)) == 4
+
+test_bisect_misses = (find (to_sorted evens) (v -> 20 < v)) == none
+
+test_bisect_takes_head = (find (to_sorted evens) (v -> 0 < v)) == 2
+
+test_bisect_takes_last = (find (to_sorted evens) (v -> 11 < v)) == 12
+
+test_to_sorted_sorts = find (to_sorted [9 3 7]) (v -> v > 3) == 7
+
 test_find_empty = (find [] (v -> 0 < v)) == none
 
 test_find_first = (find evens (v -> 3 < v)) == 4

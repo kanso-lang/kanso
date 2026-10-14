@@ -10,9 +10,6 @@ pub fn char_code c
 pub fn chars s
   builtin_chars s
 
-pub fn concat a b
-  builtin_concat a b
-
 pub fn find2 cs p a b
   builtin_find2 cs p a b
 
@@ -99,6 +96,63 @@ pub fn utf8 codes
 # outside the bytes.
 pub fn number_span cs p
   builtin_number_span cs p
+
+# Whether `s` begins with `prefix`. Every string begins with the empty one.
+pub fn starts_with? s prefix
+  n = length prefix
+  n <= length s and builtin_slice_in s 1 n == prefix
+
+# Whether `s` ends with `suffix`. Every string ends with the empty one.
+pub fn ends_with? s suffix
+  n = length s
+  m = length suffix
+  m <= n and builtin_slice_in s (n - m + 1) n == suffix
+
+# The letters a to z become A to Z. Every other character, accented letters
+# among them, passes through unchanged.
+pub fn uppercase s
+  recased (chars s) [] 1 97 "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+# The letters A to Z become a to z, and nothing else changes.
+pub fn lowercase s
+  recased (chars s) [] 1 65 "abcdefghijklmnopqrstuvwxyz"
+
+fn recased cs out i lo to
+  return join out "" if i > length cs
+  recased cs (push out (recase cs[i] lo to)) (i + 1) lo to
+
+# The walk stops before it reads past the end, so the none arm is never taken.
+# The checker cannot see the bound and wants it written.
+fn recase none _ _
+  ""
+
+fn recase c lo to
+  at = char_code c - lo + 1
+  letter c to at (at < 1 or 26 < at)
+
+fn letter c _ _ true
+  c
+
+fn letter _ to at false
+  builtin_slice_in to at at
+
+# `s` with copies of `fill` in front until it is `width` characters long. The
+# last copy is cut short when it would overrun, and a string already that long,
+# or an empty fill, comes back as it was.
+pub fn pad_start s width fill
+  "{padding (width - length s) fill}{s}"
+
+# `s` with copies of `fill` after it, by the same rule as `pad_start`.
+pub fn pad_end s width fill
+  "{s}{padding (width - length s) fill}"
+
+fn padding n fill
+  return "" if n < 1 or fill == ""
+  builtin_slice_in (filled fill fill n) 1 n
+
+fn filled acc fill n
+  return acc if length acc >= n
+  filled "{acc}{fill}" fill n
 
 # trim's two walks only ask for characters inside `s`, so neither slice is
 # ever none; these arms are there because the checker cannot see that.

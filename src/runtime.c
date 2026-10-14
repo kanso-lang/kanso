@@ -521,8 +521,12 @@ struct KDesc { long long dtag; KValue x; KValue y; };
 /* dtag: 0 print, 2 args, 3 stdin, 4 read_file, 5 write_file, 6 bind,
    7 join, 8 sleep, 9 random, 10 nil, 11 write (stdout, no newline),
    12 write_err, 13 env, 14 exists, 15 list_dir, 16 now, 17 run,
-   18 is_dir, 26 start, 27 kill, 29 rescue, 30 read_bytes,
-   31 settled (a box already holding its answer: what `effect v` was handed) */
+   18 is_dir, 19 make_dir, 20 listen, 21 accept, 22 net_read, 23 net_write,
+   24 net_close, 25 await (a started child, inside a group), 26 start,
+   27 kill, 28 net_port, 29 rescue,
+   30 read_bytes,
+   31 settled (a box already holding its answer: what `effect v` was handed),
+   32 read_line, 33 modified */
 
 /* An err's propagation trace rides on the err value alone: the origin
    ("fn at file:line", interned at the construction site; NULL for
@@ -6694,6 +6698,8 @@ KValue k_desc_args(void) { return k_mkdesc(2, k_none(), k_none()); }
 KValue k_settled(KValue v) { return k_mkdesc(31, v, k_none()); }
 KValue k_b_effect(KValue v) { return k_settled(v); }
 KValue k_desc_stdin(void) { return k_mkdesc(3, k_none(), k_none()); }
+/* The next line of standard input, or done at its end (ruled 2026-10-13). */
+KValue k_desc_read_line(void) { return k_mkdesc(32, k_none(), k_none()); }
 KValue k_desc_now(void) { return k_mkdesc(16, k_none(), k_none()); }
 
 KValue k_b_read_file(KValue path) {
@@ -6873,6 +6879,15 @@ KValue k_b_is_dir(KValue path) {
     if (!k_not_failure(path)) return path;
     if (path.tag != K_STR) k_die("is_dir takes a string");
     return k_mkdesc(18, path, k_none());
+}
+
+/* When a file last changed, in milliseconds since the epoch, or none for a
+   file that is not there, which os/modified names file_not_found the way
+   os/read_file names it (ruled 2026-10-13). */
+KValue k_b_modified(KValue path) {
+    if (!k_not_failure(path)) return path;
+    if (path.tag != K_STR) k_die("modified takes a string");
+    return k_mkdesc(33, path, k_none());
 }
 
 KValue k_b_exists(KValue path) {
@@ -7530,6 +7545,57 @@ static KValue k_exec(KDesc* d) {
             struct stat st;
             int seen = stat(k_cstr(k_as_str(d->x)), &st) == 0;
             return k_bool(seen && S_ISDIR(st.st_mode));
+        }
+        case 33: {
+            /* The same split case 4 makes: ENOENT and ENOTDIR are the file
+               not being there, which is data, and any other reason is an
+               err worded as reading words it. */
+            struct stat st;
+            if (stat(k_cstr(k_as_str(d->x)), &st) != 0) {
+                if (errno == ENOENT || errno == ENOTDIR) return k_none();
+                return k_err(k_concat(k_concat(k_str("cannot read "), d->x),
+                                      k_str(": unreadable")), NULL);
+            }
+#ifdef __APPLE__
+            struct timespec at = st.st_mtimespec;
+#else
+            struct timespec at = st.st_mtim;
+#endif
+            /* a time before the epoch has a negative second and a positive
+               nanosecond, so this rounds down, as the interpreter does */
+            return k_int((long long)at.tv_sec * 1000 + at.tv_nsec / 1000000);
+        }
+        case 32: {
+            /* One line, its \n and a \r before that dropped. stdout goes out
+               first, so a prompt reaches a person before the program waits on
+               them. A stream that fails has ended, as it has for case 3. A
+               last line with no ending is a line; the read after it is done. */
+            k_out_settle();
+            size_t cap = 128, len = 0;
+            char* data = malloc(cap);
+            int c = EOF;
+            while ((c = getc(stdin)) != EOF) {
+                if (len == cap) { cap *= 2; data = realloc(data, cap); }
+                data[len++] = (char)c;
+                if (c == '\n') break;
+            }
+            if (len == 0) {
+                free(data);
+                return k_done();
+            }
+            if (data[len - 1] == '\n') {
+                len--;
+                if (len > 0 && data[len - 1] == '\r') len--;
+            }
+            long long chars;
+            if (k_utf8_bad(data, (long long)len, NULL, &chars).tag == K_ERR) {
+                free(data);
+                return k_err(k_str("cannot read standard input: the bytes are not text"), NULL);
+            }
+            KValue out = k_str_n(data, (long long)len);
+            k_str_seed_count(k_as_str(out), chars);
+            free(data);
+            return out;
         }
         case 15: {
             DIR* dh = opendir(k_cstr(k_as_str(d->x)));
@@ -9104,6 +9170,27 @@ KValue k_b_put(KValue mv, KValue key, KValue val) {
     out->len = m->len + 1;
     out->pairs = np;
     return ov;
+}
+
+/* The map without the key (ruled 2026-10-13, kanso#1914), built from the
+   sorted, deduplicated view so a key written twice goes in one step. A key
+   that is not there answers an equal map. The answer is always a fresh map:
+   an in-place put on it must never reach the map it was made from. */
+KValue k_b_delete(KValue mv, KValue key) {
+    if (__builtin_expect(!k_not_failure(mv) || !k_not_failure(key), 0)) return k_failed2(mv, key);
+    if (mv.tag != K_MAP) k_die("delete takes a map and a key");
+    k_check_map_key(key);
+    long long n;
+    KValue* s = k_map_sorted(k_as_map(mv), &n);
+    KValue* kept = k_buf(n ? 2 * n : 2);
+    long long w = 0;
+    for (long long i = 0; i < n; i++) {
+        if (k_key_cmp(s[i * 2], key) == 0) continue;
+        kept[w * 2] = s[i * 2];
+        kept[w * 2 + 1] = s[i * 2 + 1];
+        w++;
+    }
+    return k_map_lit(w, kept);
 }
 
 /* A failing field is the rare arm of `entries`, and k_rec is a plain call

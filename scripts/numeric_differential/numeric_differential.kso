@@ -126,7 +126,7 @@ fn pairs_for a
   list/fold edges [] (acc b -> joined acc (ops_for a b))
 
 fn joined acc more
-  list/to_list (text/concat acc more)
+  list/to_list (list/concat acc more)
 
 fn ops_for a "0"
   [[a "+" "0"] [a "-" "0"] [a "*" "0"]]

@@ -1092,6 +1092,11 @@ impl Scanner<'_> {
 
     fn lex_int(&mut self) -> Result<Tok, Diagnostic> {
         let start = self.pos;
+        // `0x` and `0b` spell an integer in base sixteen or two (ruled
+        // 2026-10-13). The prefix is lower case; hex digits may be either.
+        if self.chars[start] == '0' && matches!(self.peek(1), Some('x') | Some('b')) {
+            return self.lex_radix(start);
+        }
         while self.pos < self.chars.len() && self.chars[self.pos].is_ascii_digit() {
             self.pos += 1;
         }
@@ -1102,6 +1107,12 @@ impl Scanner<'_> {
             while self.pos < self.chars.len() && self.chars[self.pos].is_ascii_digit() {
                 self.pos += 1;
             }
+        }
+        // An exponent makes a float: `1e-8`, `6.02e23`.
+        if self.peek(0) == Some('e') {
+            return self.lex_exponent(start);
+        }
+        if is_float {
             let text: String = self.chars[start..self.pos].iter().collect();
             let value = text.parse::<f64>().expect("digit-dot-digit parses as f64");
             return Ok(Tok::Float(value));
@@ -1119,6 +1130,60 @@ impl Scanner<'_> {
         let text: String = self.chars[start..self.pos].iter().collect();
         let value = text.parse::<BigInt>().expect("digits parse as BigInt");
         Ok(Tok::Int(value))
+    }
+
+    fn lex_radix(&mut self, start: usize) -> Result<Tok, Diagnostic> {
+        let (radix, name) = match self.chars[start + 1] {
+            'x' => (16, "hex"),
+            _ => (2, "binary"),
+        };
+        self.pos = start + 2;
+        let digits = self.pos;
+        while self.pos < self.chars.len() && self.chars[self.pos].is_ascii_alphanumeric() {
+            self.pos += 1;
+        }
+        let text: String = self.chars[digits..self.pos].iter().collect();
+        let span = Span::at(self.line, self.col_offset + start);
+        let written: String = self.chars[start..self.pos].iter().collect();
+        if text.is_empty() {
+            return Err(Diagnostic::new(
+                "syntax",
+                format!("`{written}` has no digits; a {name} literal needs at least one"),
+                span,
+            ));
+        }
+        if let Some(bad) = text.chars().find(|c| !c.is_digit(radix)) {
+            return Err(Diagnostic::new(
+                "syntax",
+                format!("`{bad}` is not a {name} digit in `{written}`"),
+                span,
+            ));
+        }
+        let value = BigInt::parse_bytes(text.as_bytes(), radix).expect("checked digits parse");
+        Ok(Tok::Int(value))
+    }
+
+    fn lex_exponent(&mut self, start: usize) -> Result<Tok, Diagnostic> {
+        self.pos += 1;
+        if matches!(self.peek(0), Some('-') | Some('+')) {
+            self.pos += 1;
+        }
+        let digits = self.pos;
+        while self.pos < self.chars.len() && self.chars[self.pos].is_ascii_digit() {
+            self.pos += 1;
+        }
+        let written: String = self.chars[start..self.pos].iter().collect();
+        if self.pos == digits {
+            return Err(Diagnostic::new(
+                "syntax",
+                format!(
+                    "`{written}` has no exponent digits; write it as `{written}1` or drop the `e`"
+                ),
+                Span::at(self.line, self.col_offset + start),
+            ));
+        }
+        let value = written.parse::<f64>().expect("digits with an exponent parse as f64");
+        Ok(Tok::Float(value))
     }
 
     fn lex_word(&mut self) -> Result<Tok, Diagnostic> {

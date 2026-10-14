@@ -842,7 +842,7 @@ impl<'a> Analysis<'a> {
                             | "append"
                             | "builtin_append"
                             | "concat"
-                            | "text/concat"
+                            | "list/concat"
                             | "builtin_concat"
                     ) && args.len() == 2)
                         || (callee == "put" && args.len() == 3);
@@ -945,7 +945,7 @@ impl<'a> Analysis<'a> {
                 // `concat` always allocates a fresh list (k_b_concat), so its
                 // result is uniquely owned regardless of its arguments.
                 Expr::Ident(n, _, _)
-                    if matches!(n.as_str(), "concat" | "text/concat" | "builtin_concat")
+                    if matches!(n.as_str(), "concat" | "list/concat" | "builtin_concat")
                         && args.len() == 2 =>
                 {
                     true
@@ -1032,7 +1032,7 @@ fn written_fields(program: &Program) -> HashSet<String> {
         if let Expr::App { head, args, .. } = e {
             if matches!(head.as_ref(), Expr::Ident(n, _, _) if matches!(n.as_str(),
                 "push" | "append" | "builtin_append" | "put"
-                    | "concat" | "text/concat" | "builtin_concat"))
+                    | "concat" | "list/concat" | "builtin_concat"))
             {
                 if let Some((_, f)) = args.first().and_then(field_read) {
                     out.insert(f.to_string());
@@ -1216,7 +1216,7 @@ fn walk_for_push_in(
             out.insert((decl.file.clone(), span.line as usize, span.col as usize));
         }
         // concat extends a list by every element of its second argument
-        if matches!(head.as_ref(), Expr::Ident(n, _, _) if matches!(n.as_str(), "concat" | "text/concat" | "builtin_concat"))
+        if matches!(head.as_ref(), Expr::Ident(n, _, _) if matches!(n.as_str(), "concat" | "list/concat" | "builtin_concat"))
             && args.len() == 2
             && a.unique_in(&args[0], decl, scoped)
         {

@@ -2,7 +2,7 @@
 # native defer the interpolation, and the strict index that pulls the element
 # back out is what demands it. Sibling to
 # a_deferred_record_answers_its_field, which reads a field instead.
-import "std/text"
+import "std/list"
 
 type want
   why
@@ -15,7 +15,7 @@ fn noted acc _ true
   acc
 
 fn noted acc why false
-  text/concat acc [why]
+  list/concat acc [why]
 
 fn gathered acc at
   one = wants[at]

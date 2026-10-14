@@ -204,9 +204,9 @@ fn flags_for _
   []
 
 fn built flags
-  head = text/concat ["-O2"] flags
+  head = list/concat ["-O2"] flags
   tail = ["-o" binary_path "scripts/utf8/harness.c" "-Itarget"]
-  os/run "clang" (text/concat head tail)
+  os/run "clang" (list/concat head tail)
 
 fn trimmed ""
   ""

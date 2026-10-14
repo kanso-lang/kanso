@@ -1,5 +1,8 @@
-import "std/text"
+import "std/list"
 
+# The checker refuses a string it can see reaching `list/concat`; one it
+# cannot see, here an element read out of a list, still stops at run time
+# with the same sentence on every engine.
 pub play =
-  joined = text/concat "a" "b"
+  joined = list/concat (list/first ["a"]) (list/first ["b"])
   print "{joined}"

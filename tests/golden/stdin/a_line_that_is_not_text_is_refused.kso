@@ -1,0 +1,8 @@
+# A line is text, as a file `os/read_file` reads is: bytes that are not
+# utf-8 are refused, in the same words on every engine.
+import "std/io"
+
+fn said line
+  print "read {line}"
+
+pub play = io/read_line .> said .> (_ -> io/read_line .> said)

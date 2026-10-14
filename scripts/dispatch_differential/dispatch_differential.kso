@@ -248,47 +248,47 @@ pv = arm
   "f = which\n  print \"\{f 0}\""
   "zero"
 
-cases0 = text/concat [pa] [pb]
+cases0 = list/concat [pa] [pb]
 
-cases1 = text/concat cases0 [pc]
+cases1 = list/concat cases0 [pc]
 
-cases2 = text/concat cases1 [pd]
+cases2 = list/concat cases1 [pd]
 
-cases3 = text/concat cases2 [pe]
+cases3 = list/concat cases2 [pe]
 
-cases4 = text/concat cases3 [pf]
+cases4 = list/concat cases3 [pf]
 
-cases5 = text/concat cases4 [pg]
+cases5 = list/concat cases4 [pg]
 
-cases6 = text/concat cases5 [ph]
+cases6 = list/concat cases5 [ph]
 
-cases7 = text/concat cases6 [pi]
+cases7 = list/concat cases6 [pi]
 
-cases8 = text/concat cases7 [pj]
+cases8 = list/concat cases7 [pj]
 
-cases9 = text/concat cases8 [pk]
+cases9 = list/concat cases8 [pk]
 
-cases10 = text/concat cases9 [pl]
+cases10 = list/concat cases9 [pl]
 
-cases11 = text/concat cases10 [pm]
+cases11 = list/concat cases10 [pm]
 
-cases12 = text/concat cases11 [pn]
+cases12 = list/concat cases11 [pn]
 
-cases13 = text/concat cases12 [po]
+cases13 = list/concat cases12 [po]
 
-cases14 = text/concat cases13 [pp]
+cases14 = list/concat cases13 [pp]
 
-cases15 = text/concat cases14 [pq]
+cases15 = list/concat cases14 [pq]
 
-cases16 = text/concat cases15 [pr]
+cases16 = list/concat cases15 [pr]
 
-cases17 = text/concat cases16 [ps]
+cases17 = list/concat cases16 [ps]
 
-cases18 = text/concat cases17 [pt]
+cases18 = list/concat cases17 [pt]
 
-cases19 = text/concat cases18 [pu]
+cases19 = list/concat cases18 [pu]
 
-cases = text/concat cases19 [pv]
+cases = list/concat cases19 [pv]
 
 # A probe whose expression spans lines is written as statements; a single
 # expression is printed inline. Either way the probe is a play file, so its
@@ -307,7 +307,7 @@ fn source_for a
   shaped a (length (text/split a.shown "\n") == 1)
 
 fn asked argv
-  os/run "timeout" (text/concat [limit kanso] argv)
+  os/run "timeout" (list/concat [limit kanso] argv)
 
 fn hung? 124
   true

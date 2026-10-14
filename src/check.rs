@@ -3,7 +3,7 @@ use crate::diag::{article, Diagnostic, Span};
 use crate::hash::{Map as HashMap, Set as HashSet};
 use num_traits::Zero;
 
-pub const BUILTINS: [&str; 67] = [
+pub const BUILTINS: [&str; 70] = [
     "annotate",
     "built_text",
     "append",
@@ -30,9 +30,11 @@ pub const BUILTINS: [&str; 67] = [
     "print",
     "push",
     "put",
+    "delete",
     "random",
     "read_bytes",
     "read_file",
+    "read_line",
     "render_value",
     "rescue",
     "run",
@@ -54,6 +56,7 @@ pub const BUILTINS: [&str; 67] = [
     "env",
     "exists",
     "is_dir",
+    "modified",
     "stdin",
     "to_float",
     "to_int",
@@ -78,9 +81,9 @@ pub const BUILTINS: [&str; 67] = [
 /// three chain words are here because a chain step is written wherever an
 /// effect is, and importing a module to spell one would be a tax on the
 /// failure channel.
-pub const AMBIENT: [&str; 13] = [
-    "annotate", "bind", "effect", "entries", "if", "keys", "length", "merge", "print", "push",
-    "put", "rescue", "values",
+pub const AMBIENT: [&str; 14] = [
+    "annotate", "bind", "delete", "effect", "entries", "if", "keys", "length", "merge", "print",
+    "push", "put", "rescue", "values",
 ];
 
 /// What each builtin takes. `if` is absent: its count is checked where its
@@ -95,7 +98,7 @@ pub const AMBIENT: [&str; 13] = [
 /// `native backend: `length` takes 1 argument(s)` and no span, the page
 /// died at the call, and `kanso check` said ok. So the counts live here,
 /// beside the names, and every reader takes them from one place.
-pub const BUILTIN_ARITY: [(&str, usize); 72] = [
+pub const BUILTIN_ARITY: [(&str, usize); 75] = [
     ("accept", 1),
     ("annotate", 2),
     ("append", 2),
@@ -113,6 +116,7 @@ pub const BUILTIN_ARITY: [(&str, usize); 72] = [
     ("char_code", 1),
     ("chars", 1),
     ("concat", 2),
+    ("delete", 2),
     ("effect", 1),
     ("entries", 1),
     ("env", 1),
@@ -132,6 +136,7 @@ pub const BUILTIN_ARITY: [(&str, usize); 72] = [
     ("make_dir", 1),
     ("map", 2),
     ("merge", 2),
+    ("modified", 1),
     ("net_close", 1),
     ("net_port", 1),
     ("net_read", 1),
@@ -144,6 +149,7 @@ pub const BUILTIN_ARITY: [(&str, usize); 72] = [
     ("random", 1),
     ("read_bytes", 1),
     ("read_file", 1),
+    ("read_line", 0),
     ("render_value", 1),
     ("rescue", 2),
     ("round", 1),
@@ -1394,7 +1400,11 @@ pub fn check_file(program: &Program, extern_globals: &HashSet<&str>) -> Vec<Diag
     for (name, span, shaded) in travels {
         if shaded.is_none() {
             let name = name.as_str();
-            diags.push(Diagnostic::new("name", format!("unknown name `{name}`"), span));
+            diags.push(Diagnostic::new(
+                "name",
+                format!("unknown name `{name}`{}", moved_name(name)),
+                span,
+            ));
         }
     }
     diags.sort_by_key(|d| (d.span.line, d.span.col));
@@ -2454,6 +2464,7 @@ fn builtin_demand(name: &str, index: usize) -> Option<&'static [LitKind]> {
         ("env", &[&[Str]]),
         ("exists", &[&[Str]]),
         ("is_dir", &[&[Str]]),
+        ("modified", &[&[Str]]),
         ("list_dir", &[&[Str]]),
         ("read_bytes", &[&[Str]]),
         ("read_file", &[&[Str]]),
@@ -2468,8 +2479,10 @@ fn builtin_demand(name: &str, index: usize) -> Option<&'static [LitKind]> {
         ("net_read", &[&[Int]]),
         ("net_write", &[&[Int], &[Str]]),
         ("net_close", &[&[Int]]),
+        ("concat", &[&[List], &[List]]),
         ("push", &[&[List]]),
         ("put", &[&[Map]]),
+        ("delete", &[&[Map]]),
         ("sleep", &[&[Int]]),
         ("random", &[&[Int]]),
         ("from_code", &[&[Int]]),
@@ -3270,12 +3283,16 @@ fn other_span(pattern: &Pattern) -> Span {
 
 include!("check/shadow.rs");
 
-/// The fourteen names that left `std/io` for `std/os` when the library took
-/// Go's split. A program written before that says `io/read_file` and gets told
-/// the name is unknown, which is true and useless: the name is right and the
-/// module moved. Answers the empty string for everything else, so the ordinary
-/// unknown name reads as it always did.
-fn moved_to_os(name: &str) -> String {
+/// Where a name that left the library went. The fourteen names that left
+/// `std/io` for `std/os` when the library took Go's split, and `text/concat`,
+/// which became `list/concat` (#1906). A program written before says
+/// `io/read_file` and gets told the name is unknown, which is true and
+/// useless: the name is right and the module moved. Answers the empty string
+/// for everything else, so the ordinary unknown name reads as it always did.
+fn moved_name(name: &str) -> String {
+    if name == "text/concat" {
+        return " — two lists join with `list/concat`, and two strings by interpolation, `\"{a}{b}\"`".to_string();
+    }
     const MOVED: [&str; 14] = [
         "args",
         "env",

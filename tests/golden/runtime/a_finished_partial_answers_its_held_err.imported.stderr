@@ -1,2 +1,2 @@
 error[endpoint]: unhandled err reached the entry: "to_bytes takes byte values (0-255)"
-  born in text/to_bytes at std/text/text.kso:86
+  born in text/to_bytes at std/text/text.kso:83

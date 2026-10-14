@@ -1303,7 +1303,7 @@ fn ident_set<'a>(ctx: &mut Ctx<'a>, name: &'a str, env: &mut Env<'a>) -> Set {
         "false" => FALSE,
         "none" => NONE,
         "done" => DONE,
-        "args" | "stdin" | "now" => DESC,
+        "args" | "stdin" | "read_line" | "now" => DESC,
         _ => {
             // a zero-field type's bare mention is its marker value
             if let Some(i) =
@@ -1801,6 +1801,8 @@ fn desc_yield<'a>(ctx: &mut Ctx<'a>, e: &'a Expr) -> Set {
         // the io constants referenced bare: stdin yields the input string,
         // args the argument list
         Expr::Ident(n, _, _) if base(n) == "stdin" => STR,
+        // the next line, or `done` once the input has ended
+        Expr::Ident(n, _, _) if base(n) == "read_line" => STR | DONE,
         Expr::Ident(n, _, _) if base(n) == "args" => LIST,
         Expr::Ident(n, _, _) if base(n) == "now" => INT,
         // a strict index yields its element, forced on the way out
@@ -1846,6 +1848,7 @@ fn desc_yield<'a>(ctx: &mut Ctx<'a>, e: &'a Expr) -> Set {
                 // the same absence, and the bytes as they are
                 Expr::Ident(n, _, _) if base(n) == "read_bytes" => BYTES | NONE,
                 Expr::Ident(n, _, _) if base(n) == "stdin" => STR,
+                Expr::Ident(n, _, _) if base(n) == "read_line" => STR | DONE,
                 // status, stdout, stderr — the std wrapper reads them into a record
                 Expr::Ident(n, _, _) if base(n) == "run" => LIST,
                 // the handle a later kill names, and the three socket
@@ -1863,6 +1866,9 @@ fn desc_yield<'a>(ctx: &mut Ctx<'a>, e: &'a Expr) -> Set {
                 // dispatches on rather than a failure it has to trap
                 Expr::Ident(n, _, _) if base(n) == "env" => STR | NONE,
                 Expr::Ident(n, _, _) if matches!(base(n), "exists" | "is_dir") => TRUE | FALSE,
+                // milliseconds since the epoch, or none for a file that is not
+                // there, which os/modified names `file_not_found`
+                Expr::Ident(n, _, _) if base(n) == "modified" => INT | NONE,
                 Expr::Ident(n, _, _) if base(n) == "list_dir" => LIST,
                 Expr::Ident(n, _, _) if base(n) == "now" => INT,
                 // an unset variable yields none, which is a value the consumer
@@ -1970,7 +1976,7 @@ pub fn builtin_set(name: &str, args: &[Set]) -> Set {
         "push" | "concat" | "chars" | "split" | "entries" | "keys" | "values" | "sort"
         | "filter" => LIST | fails,
         "map" => LIST | fails,
-        "put" => MAP | fails,
+        "put" | "delete" => MAP | fails,
         "merge" => REC | fails,
         "join" => STR | fails,
         "to_int" => ANY_INT | ERR | fails,
@@ -1996,7 +2002,8 @@ pub fn builtin_set(name: &str, args: &[Set]) -> Set {
 
 /// The builtins that answer a description: the effects, by their bare name
 /// or with the `builtin_` prefix the standard library calls them by. The
-/// three nullary ones — `args`, `stdin`, `now` — are read as mentions.
+/// four nullary ones — `args`, `stdin`, `read_line`, `now` — are read as
+/// mentions.
 pub fn is_effect_builtin(name: &str) -> bool {
     matches!(
         name.strip_prefix("builtin_").unwrap_or(name),
@@ -2011,6 +2018,7 @@ pub fn is_effect_builtin(name: &str) -> bool {
             | "env"
             | "exists"
             | "is_dir"
+            | "modified"
             | "list_dir"
             | "now"
             | "run"
@@ -2024,5 +2032,6 @@ pub fn is_effect_builtin(name: &str) -> bool {
             | "net_close"
             | "args"
             | "stdin"
+            | "read_line"
     )
 }

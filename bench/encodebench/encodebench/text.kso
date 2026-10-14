@@ -143,7 +143,7 @@ fn unicode_at _ _ _ e@(err _)
   e
 
 fn unicode_at cs p acc code
-  str_chars cs (p + 6) (text/concat acc (text/bytes (text/from_code code)))
+  str_chars cs (p + 6) (list/concat acc (text/bytes (text/from_code code)))
 
 fn string_at cs 34 start p
   parsed (p + 1) (string_ok p (decoded (text/slice cs start (p - 1))))
@@ -169,7 +169,7 @@ fn begun none
   []
 
 fn begun run
-  text/concat [] run
+  list/concat [] run
 
 fn string_ok p (err _)
   err (parse_failure p "invalid utf-8 in string")

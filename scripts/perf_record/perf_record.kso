@@ -140,7 +140,7 @@ fn every_watched d e o bk
   b = absent_in e encode_watched
   c = absent_in o oneshot_watched
   d2 = absent_in bk basket_watched
-  gone = text/concat (text/concat a d2) (text/concat b c)
+  gone = list/concat (list/concat a d2) (list/concat b c)
   all_there gone (length gone == 0)
 
 fn all_there _ true
@@ -200,7 +200,7 @@ ir_benches = ["jsonbench" "encodebench" "oneshot" "basket"]
 
 ir_tail = ["oneshot_instructions" "basket_instructions"]
 
-ir_fields = text/concat ["instructions" "encode_instructions"] ir_tail
+ir_fields = list/concat ["instructions" "encode_instructions"] ir_tail
 
 fn instructions text
   counts = list/map ir_benches (n -> ir_line text n)
@@ -338,14 +338,14 @@ fn assembled line d e o bk c cc w wc
   encode = counters e encode_watched "encode_"
   oneshot = counters o oneshot_watched "oneshot_"
   basket = counters bk basket_watched "basket_"
-  veins = text/concat decode encode
+  veins = list/concat decode encode
   own = counters cc.stderr compiler_watched ""
   banner = [["welfare" (score_in w)]]
-  scored = text/concat banner (scored_counters wc.stdout)
-  rest = text/concat (text/concat oneshot basket) (compile_work c)
-  measured = text/concat own scored
-  tail = text/concat rest measured
-  rows = text/concat (described line) (text/concat veins tail)
+  scored = list/concat banner (scored_counters wc.stdout)
+  rest = list/concat (list/concat oneshot basket) (compile_work c)
+  measured = list/concat own scored
+  tail = list/concat rest measured
+  rows = list/concat (described line) (list/concat veins tail)
   os/read_file! "bench/instructions_golden.txt" .> (w -> with_work rows w)
 
 fn with_work rows w
@@ -360,10 +360,10 @@ fn key_of pair
 # Every key the five `counters` calls are supposed to have produced, spelled the
 # way they are spelled in the row.
 expected_keys =
-  a = text/concat decode_watched (prefixed "encode_" encode_watched)
-  b = text/concat (prefixed "oneshot_" oneshot_watched)
+  a = list/concat decode_watched (prefixed "encode_" encode_watched)
+  b = list/concat (prefixed "oneshot_" oneshot_watched)
     (prefixed "basket_" basket_watched)
-  text/concat (text/concat a b) compiler_watched
+  list/concat (list/concat a b) compiler_watched
 
 fn kept_out pairs
   seen_keys = list/to_list (list/map pairs key_of)
@@ -371,8 +371,8 @@ fn kept_out pairs
 
 fn written pairs w t
   sized = [["text_bytes" (size_of t)]]
-  worked = text/concat (instructions w) sized
-  all = text/concat pairs worked
+  worked = list/concat (instructions w) sized
+  all = list/concat pairs worked
   assembled_row all (kept_out all)
 
 fn assembled_row all gone

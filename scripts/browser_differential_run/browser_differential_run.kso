@@ -191,7 +191,7 @@ fn keeping acc _ _ true
 fn keeping acc path src false
   which = door_of src
   one = program which path src
-  text/concat acc [one]
+  list/concat acc [one]
 
 fn one_file paths at acc book src
   return read_all paths (at + 1) acc book if at < 1 or length paths < at
@@ -228,7 +228,7 @@ fn laid_out written at acc
   more_written written at acc (at > length written)
 
 fn more_written written _ acc true
-  counted (text/concat acc written)
+  counted (list/concat acc written)
 
 fn more_written written at acc false
   one = written[at]
@@ -261,7 +261,7 @@ fn with_names ds at acc names
   here = ds[at]
   kept = list/to_list (list/select names kso?)
   paths = list/to_list (list/map kept (n -> "{here}/{n}"))
-  gather_dirs ds (at + 1) (text/concat acc paths)
+  gather_dirs ds (at + 1) (list/concat acc paths)
 
 fn gather_dirs ds at acc
   more_dirs ds at acc (at > length ds)
@@ -288,7 +288,7 @@ fn book_files simple ds at acc here names
   kept = list/to_list (list/select names kso?)
   paths = list/to_list (list/map kept (n -> "{here}/{n}"))
   wanted = list/to_list (list/reject paths a_test?)
-  book_walk simple ds (at + 1) (text/concat acc wanted)
+  book_walk simple ds (at + 1) (list/concat acc wanted)
 
 fn more_dirs ds at acc false
   return more_dirs ds at acc true if at < 1 or length ds < at
@@ -305,11 +305,13 @@ needs_a_machine = [
   "os/write_file"
   "os/args"
   "io/stdin"
+  "io/read_line"
   "os/list_dir"
   "os/run"
   "os/make_dir"
   "os/exists"
   "os/is_dir"
+  "os/modified"
   "os/read_bytes"
 ]
 
@@ -349,7 +351,7 @@ fn put_unless acc _ _ true
 fn put_unless acc path src false
   which = door_of src
   one = program which path src
-  text/concat acc [one]
+  list/concat acc [one]
 
 # The playground's samples live in a JS object literal, so the sources are the
 # pieces between backticks and the names are what precedes each one. A visitor
@@ -392,7 +394,7 @@ fn gathered_samples parts at acc false
   src = unescaped parts[at + 1]
   where = "target/playground-corpus/{which}.kso"
   one = program (door_of src) where src
-  sample_at parts (at + 2) (text/concat acc [one])
+  sample_at parts (at + 2) (list/concat acc [one])
 
 fn playground_from js
   parts = text/split (examples_body js) "`"
@@ -695,7 +697,7 @@ fn more_cases _ _ acc true
 fn more_cases progs at acc false
   return more_cases progs at acc true if at < 1 or length progs < at
   one = case_json progs[at]
-  cases_json progs (at + 1) (text/concat acc [one])
+  cases_json progs (at + 1) (list/concat acc [one])
 
 fn page_for progs
   cases = cases_json progs 1 []
@@ -799,7 +801,7 @@ fn more_crashes results at acc false
   crashes results (at + 1) (kept_crash acc one one["kind"])
 
 fn kept_crash acc one "crash"
-  text/concat acc ["{one["name"]}: {one["reason"]}"]
+  list/concat acc ["{one["name"]}: {one["reason"]}"]
 
 fn kept_crash acc _ none
   acc
@@ -908,7 +910,7 @@ fn still_listed progs seen gaps at bad agreed skipped _ none
 fn still_listed progs seen gaps at bad agreed skipped p _
   listing = "tests/golden/native_route_gaps.txt"
   why = "{p.path}: agrees now — take it out of {listing}"
-  against progs seen gaps (at + 1) (text/concat bad [why]) agreed skipped
+  against progs seen gaps (at + 1) (list/concat bad [why]) agreed skipped
 
 fn noted_pair progs seen gaps at bad agreed skipped p r said false
   excused = excused? gaps p.path said
@@ -921,7 +923,7 @@ fn filed progs seen gaps at bad agreed skipped p r said false
   mine = "native {r.status} {said_natively r}"
   theirs = tab_said said said["kind"]
   why = "{p.path}: {mine} — {theirs}"
-  against progs seen gaps (at + 1) (text/concat bad [why]) agreed skipped
+  against progs seen gaps (at + 1) (list/concat bad [why]) agreed skipped
 
 fn filed _ _ _ _ _ _ _ _ _ _ e@(err _)
   e

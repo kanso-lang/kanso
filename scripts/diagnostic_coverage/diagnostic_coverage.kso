@@ -193,7 +193,7 @@ fn shape_of lit
 
 fn rejoined parts
   tails = list/to_list (list/map (list/to_list (list/drop parts 1)) after_brace)
-  text/join (text/concat [parts[1]] tails) "\{}"
+  text/join (list/concat [parts[1]] tails) "\{}"
 
 fn after_brace piece
   after_first (text/split piece "}") "}"
@@ -209,7 +209,7 @@ fn run_units s
 fn shape_runs msg
   parts = text/split msg "\{"
   rest = list/to_list (list/map (list/to_list (list/drop parts 1)) after_brace)
-  list/to_list (list/reject (text/concat [parts[1]] rest) (r -> r == ""))
+  list/to_list (list/reject (list/concat [parts[1]] rest) (r -> r == ""))
 
 fn message_in group
   pieces = text/split group "\""
@@ -521,14 +521,14 @@ fn read_src here true dir rest found
   os/read_file! here .> (src -> read_more dir rest found src)
 
 fn read_more dir rest found src
-  over_sources dir rest (text/concat found (sites_in src))
+  over_sources dir rest (list/concat found (sites_in src))
 
 fn sites_in src
-  plain = text/concat (driver_in src) (kinded_in src)
-  spoken = text/concat (native_in src) plain
-  oracle = text/concat (oracle_in src) (oracle_format_in src)
-  heard = text/concat oracle spoken
-  text/concat (raised_in src) heard
+  plain = list/concat (driver_in src) (kinded_in src)
+  spoken = list/concat (native_in src) plain
+  oracle = list/concat (oracle_in src) (oracle_format_in src)
+  heard = list/concat oracle spoken
+  list/concat (raised_in src) heard
 
 fn gathered found
   every = deduped (list/to_list (list/sort found))
@@ -743,7 +743,7 @@ fn reported every excused missing healed
 fn lines_for missing healed
   no_golden = list/to_list (list/map missing (e -> gap_line e))
   now_pinned = list/to_list (list/map healed (e -> healed_line e))
-  text/join (text/concat no_golden now_pinned) ""
+  text/join (list/concat no_golden now_pinned) ""
 
 fn gap_line e
   "  no golden: [{kind_of e}] {clipped (message_of e) 88}\n"

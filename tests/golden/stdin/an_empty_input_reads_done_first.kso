@@ -1,0 +1,4 @@
+# Nothing on standard input: the first read is already at the end.
+import "std/io"
+
+pub play = io/read_line .> (line -> print "first read: {line}")

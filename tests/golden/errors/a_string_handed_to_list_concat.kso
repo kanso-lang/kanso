@@ -1,0 +1,8 @@
+import "std/list"
+
+# `list/concat` joins two lists (#1906). A call whose every arm answers a
+# string is refused at check, because two strings join by interpolation.
+fn greeting name
+  "hello {name}"
+
+pub play = print "{list/concat (greeting "ann") [1]}"
