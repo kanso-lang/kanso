@@ -1828,14 +1828,21 @@ string through them. Its ranges come from a scan of the same bytes, so its
 fusions. Measured in a container by callgrind on the #1890 branch: jsonbench
 +33.0%, livebench +38.1%, runbench +28.0%, oneshot +149.7%.
 
-**The ruling.** `text/slice! s a b` answers the slice, or an err when the
-range leaves the string. A trailing `!` means the caller insists the call
-works and wants a loud failure if it does not, as in `read_file!`. A caller
-that has already bounded its range writes `slice!` and needs no `none` arm;
-one that has not writes `text/slice` and dispatches on `none`, as ruled
-on #1890.
+**The ruling.** `text/slice! s a b` takes a slice the caller insists is in
+range. Like every `!` name it answers a box (archive, 2026-09-16, "gavel,
+reversed the same day: `!` answers a box, at the index and at the name"):
+the slice, or the out-of-range failure, which bubbles. The caller opens it
+with `.>`, so the decoder writes `text/slice! cs a b .> text/utf8` and
+`.> text/append acc`. A caller that has not bounded its range writes
+`text/slice` and dispatches on `none`, as ruled on #1890.
 
-Owes, on #1943: `text/slice!` on every engine; the fusions of
-`utf8 (slice! ...)` and `append acc (slice! ...)`; the decoder's call sites
-moved onto `slice!`; a micro golden for an in-range `slice!` and an error
-golden for one out of range; appendix B.
+The decoder's speed comes from fusing those chains as the nested calls are
+fused today. That is emitter work with no surface, and it is cloud's, as the
+09-16 entry assigned the inlining of a bind whose callback is applied at once.
+#1956 asked whether `slice!` was the one bang that answers a bare value; the
+09-16 ruling already answers that it is not.
+
+Owes, on #1943: `text/slice!` answering a box on every engine; the emitter
+fusing `slice! ... .> utf8`, `.> append acc`, `.> to_int` and `.> to_float`;
+the decoder's call sites moved onto those chains; a micro golden for an
+in-range `slice!` and an error golden for one out of range; appendix B.
