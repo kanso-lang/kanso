@@ -21,53 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-12 — a file names only what its module declares and its own imports bring
-
-The second rule of the 2026-10-12 gavel on #1894. A module's files share
-their declarations, and each file sees only the imports it writes. Before
-this, the check enforced that only for qualified spellings: a file writing
-`list/fold` without importing std/list was refused, and the same file writing
-`fold` checked clean because a sibling's import had enrolled the bare name for
-the whole module.
-
-`compile_module_loaded` now hands each file of a several-file module the
-build's names minus the ones it cannot see: a bare name surfaced only by
-imports this file does not write, which no file of the module declares, and
-a rename's spelling that only a sibling's import makes. The refusal names the
-import that would bring the name. A module of one file sees exactly its
-imports, so the work is skipped there.
-
-Two book samples leaned on the old reach. The ch09 simulator's
-`enumerable.kso`, in both `vse/` and `squeeze/`, called `fold` through
-`methods.kso`'s import of std/list. Each now imports it, the ch09 panel shows
-the line, and the paragraph before it says each file imports what it calls.
-The vse repository holds the same file and gets the same line in vse#87. kq
-and kanso-json have no file that leans on a sibling's import. ch07 states the
-rule where it describes a module's files.
-
-`tests/golden/errors_module/a_file_calls_a_name_only_its_sibling_imports`
-pins the refusal: a two-file module where one file imports std/list and the
-other calls `fold` on a list it built. Main checks it clean. The ratchet row
-"a sibling's import seen from every file" hides nothing and turns the corpus
-red.
-
-The rest of #1894 is still owed: arms that travel with a value into a file
-that never imported their owner, and the issue's reproduction, a test file's
-import reaching the module it tests, which #1907 closes by keeping test files
-out of the module.
-
-CI's rows: `compile_instructions` 25,761,215 -> 25,881,551,
-`entry_instructions` 85,207,562 -> 85,381,313 and `library_instructions`
-85,760,222 -> 85,935,582, the cost of handing each file
-of a module its own set of names. The browser compile fell 391,974,060 ->
-391,311,502, emitting 7,016,409 -> 7,013,477 and the interpreter 488,792,115
--> 488,739,816. This change does not touch the code those rows run, so their
-moves are put down to layout, though no run isolated it. The browser fall is
-worth more than the three rises cost, and welfare banks the difference at
-91.11. `compile_allocs` rose 68 to 14,598 and `interp_allocs` 68 to 587,351, and
-the floor drops by what they cost, since this builds a ruled part of the
-language.
-
 ## 2026-10-13 — a loop entered from the callee it calls rewinds
 
 From #1892's bc port. A `for` loop in bc held every lap's allocation: 300,000
@@ -1868,3 +1821,37 @@ binary's layout: compile_instructions by 9,355 to 28,002,980,
 entry_instructions by 30,753 to 92,393,206, library_instructions by 30,149 to
 91,989,327 and interp_instructions by 3,960 to 495,525,421. The floor follows
 the score, since #1889 builds a ruled part of the language.
+
+## 2026-10-14 — `delete`, `io/read_line` and `os/modified`
+
+These are the three #1914 names that need the runtime. #1948 carries the six
+written in kanso. All three run on the interpreter, both native tiers and the
+page's translator.
+
+`delete map key` answers the map without the key. A key that is not there
+answers an equal map, and the map it was handed is not changed. It sits beside
+`put` as an ambient name, so a program that declares its own `delete` is now
+told the name is taken; kq, vse and kanso-json declare none. Natively the
+answer is built from the map's deduplicated sorted view, so a key written twice
+is gone after one `delete`. A first argument that is not a map is refused at
+check time, and a float key at run time.
+
+`io/read_line` is a description that yields the next line of standard input
+without its `\n` or `\r\n`, or `done` at the end. A lone `\r` is kept, since
+only those two endings were ruled. It flushes standard output before it waits,
+so a prompt written ahead of it reaches the terminal first. Bytes that are not
+text are refused the way `os/read_file` refuses them. A read error counts as
+the end of input, which is what `io/stdin` already did natively. The page has
+no standard input and refuses `read_line` as it refuses `stdin`.
+
+`os/modified path` yields when the file last changed, in milliseconds since
+the epoch, or `file_not_found`. A failure other than absence is reported in
+`os/read_file`'s words. In the page it yields `file_not_found`, matching
+`os/exists`.
+
+New goldens: four micro programs, one error and two runtime diagnostics, and a
+stdin corpus under `tests/golden/stdin/` that `tests/read_line.rs` feeds to
+native and the interpreter. One test there waits for each prompt before typing
+the answer, so an unflushed prompt fails it. Each was watched red: native and
+interpreter `delete` keeping the key, `\r` left on the line, and the flush
+removed.
