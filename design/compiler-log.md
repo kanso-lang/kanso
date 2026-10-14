@@ -21,62 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-13 — a lazy sequence handed where a list goes is refused at check
-
-Five ports hit the same failure: `list/map` answers a lazy sequence, `text/join`
-takes a list, `kanso check` said ok, and every engine stopped at run time with
-`error[runtime]: join takes a list of strings and a separator` and no file or
-line (#1892). `length` and `push` had the same gap, with a run-time hint
-naming `list/to_list` and still no location.
-
-The check now refuses the call at the argument. After inference it reads each
-call of a builtin, or of a std wrapper that forwards to one, whose
-`builtin_demand` entry holds a list. When the argument is a call of a std/list
-group whose every arm answers a record and nothing else, the argument is a lazy
-sequence, and the diagnostic says so: "`text/join` takes a list here, and
-`list/map` answers a lazy sequence — make it a list with `list/to_list`". A
-sequence held by name, a field, or any answer inference cannot pin to a record
-is left to the run. `print` is not touched, because its demand holds no list
-and printing a sequence forces it (gaveled).
-
-`join` had no `builtin_demand` entry, so `text/join 3 ""` checked clean while
-`length 3` was refused. It has one now: a list, then a string, which is what
-both engines refuse.
-
-`tests/golden/errors/a_lazy_sequence_where_a_list_goes` and
-`join_takes_a_list` pin the two refusals. Three run-time goldens wrote the
-failing call out and now hold the value by name, so they still reach the run
-and still pin its sentence: `join_takes_strings_and_a_separator`,
-`length_points_at_to_list` and `push_points_at_to_list`.
-
-The check found the same mistake in `bench/compile_corpus`: `workload` joins
-`list/take ["a" "b" "c"] 2`, which stops both engines when run. Nothing runs
-the corpus, so it went unseen. It now goes through `list/to_list`, so the
-corpus compiles a little more and the compile rows move with it.
-
-The ratchet row "a lazy sequence where a list goes checks clean" deletes the
-call that asks, and the error corpus goes red on the new fixture.
-
-Measured here, the tab's compile row went from 391,974,060 to 392,906,566.
-With the new call kept and the check returning at its first line it read
-392,914,374, and with the call removed 391,981,161. The rise is in how the
-wasm build lays out the walk the call sits in, not in work the check does:
-across `bench/interp_corpus` five calls get past its first test.
-
-On CI's rows for the tree merged with #1913, browser_compile_instructions
-lands on 392,430,393, up 1,118,891. compile_instructions lands on 26,006,341,
-entry_instructions on 85,527,812 and library_instructions on 86,082,490,
-rises of 124,790, 146,499 and 146,908 for the check's walk and the corpus's
-extra `list/to_list`. emit_instructions lands on 7,013,581, up 104, and
-compile_allocs on 14,637, up 39. front_end_visits lands on 7,995, up 13, the
-front end walking the corpus's new call, and compile_peak_bytes lands on
-676,277, up 1,593, for the same call's tree. The refusal is
-#1892's item, which makes `kanso check` say what every engine already
-refused, so the floor drops by what it costs.
-
-On main after #1904 the tab's compile reads `browser_compile_instructions`
-393,497,266, up 1,118,891 from main's 392,378,375 on the same tree.
-
 ## 2026-10-13 — `and` meets `or` in parentheses, and a file may open with a header comment
 
 Built under #1887 (ruled 2026-10-13), the two parts that change the grammar.
@@ -1873,3 +1817,50 @@ state a size.
 One row moved, by layout: `entry_instructions` 103,133,571 -> 103,133,577.
 compile_instructions and library_instructions held, and so did every runtime
 and machine-code row.
+
+## 2026-10-14 — `text/slice!` answers a box
+
+This builds the program-facing half of #1943's gavel, as the 2026-09-16 ruling
+shapes it: `text/slice! s a b` answers a box holding the slice, or an err when
+the range leaves the value. The err bubbles: `.>` passes it by, `.?` and a
+foreign `rescue` reach it, and unhandled it stops the program at the endpoint.
+An inverted range stays inside the value and is the empty slice, as it is for
+`text/slice`.
+
+It is written in lib/text over `slice`, the way `math/round!` is written over
+`round`, so every engine runs the same definition and no builtin was added.
+The definition sits at the end of the file because the runtime corpus quotes
+lib/text's line numbers, and a definition near the top moved them.
+
+`a_bang_slice_fails_inside_its_box` pins seven ranges on strings and lists on
+the interpreter and both native tiers; with the range check taken out, the
+out-of-range cases printed `<none>` and the program exited 0.
+`a_slice_bang_past_the_end_reaches_the_endpoint` pins the unhandled failure.
+Appendix B lists `text/slice!` beside `text/slice`.
+
+A generator of forty random ranges per program, over strings with multi-byte
+characters, lists and bytes, ran 150 programs through `text/slice` and 150
+through `text/slice!`. The interpreter, a dev build and a release build printed
+the same bytes for all 300.
+
+The other owed item, moving the JSON decoder onto `slice! … .>` chains, is
+#1960: a chain answers a box, so the move would make `json/decode` answer one.
+Until it is answered the decoder keeps `builtin_slice_in`.
+
+The rows move because lib/text grew a definition, and lib/text is compiled
+into every program that imports it. CI on f50c9ec4 read:
+
+- `compile_instructions` 32,407,659 -> 32,770,085, `entry_instructions`
+  103,133,571 -> 104,020,985 and `library_instructions` 102,649,522 ->
+  103,487,067.
+- `compile_allocs` 17,980 -> 18,250, `compile_peak_bytes` 795,133 -> 804,635
+  and `front_end_visits` 9,225 -> 9,242.
+- `emit_instructions` 7,655,444 -> 7,704,002.
+- `interp_instructions` 495,119,692 -> 496,124,589, `interp_allocs` 592,317
+  -> 592,648 and `interp_peak_bytes` 797,868 -> 807,370.
+- `browser_compile_instructions` 439,552,195 -> 441,096,528 and
+  `browser_compile_peak_bytes` 728,883 -> 731,449. The browser's run rows did
+  not move.
+
+No runtime counter moved. Welfare goes 91.2395 -> 91.2300, a fall of 0.0095.
+This builds a ruled part of the language, so the floor drops by exactly that.
