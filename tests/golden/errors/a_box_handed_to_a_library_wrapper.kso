@@ -1,0 +1,9 @@
+# `text/utf8` is a library function whose body hands its argument to the
+# builtin. A box handed to it reached the builtin unopened: `kanso check`
+# said ok, and both engines died with "utf8 takes a list of byte values"
+# (#1957). The refusal now comes at the program's call, where the box can be
+# opened, rather than inside the library.
+import "std/os"
+import "std/text"
+
+pub play = print "{text/utf8 (os/read_file! "notes.txt")}"

@@ -1,0 +1,4 @@
+error[effect]: this is an effect — a box the words open — and `text/utf8` takes a value; open it with `.>` (module a_box_handed_to_a_library_wrapper)
+  --> a_box_handed_to_a_library_wrapper.kso:9:31
+   9 | pub play = print "{text/utf8 (os/read_file! "notes.txt")}"
+                                     ^

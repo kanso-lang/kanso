@@ -102837,3 +102837,95 @@ On the merged tree the ratchet called "a warm play that dies in silence"
 blind. Since #1900 the binary names its own stack overflow, so the warm play's
 wording of the signal never runs for one. The mutation now also stops the
 binary watching its stack, and the second play prints nothing.
+
+## 2026-10-12 — a lambda called in tail position costs no stack
+
+The toml port kept `put` in place by passing a continuation: each insertion
+step took a `then` and called it last. A 300 KB document then ran the
+interpreter out of stack, and the dev build died with a segmentation fault.
+Appendix A says a tail call costs no stack at all; it held for calls to named
+functions and arms and failed for a call to a function value.
+
+The interpreter's tail position already handed a named group's call back to
+the dispatcher's loop. A call to a closure now comes back the same way, as
+`Flow::Closure`, and runs in whichever loop called the body: the dispatcher's,
+or a loop in `call_closure` for a lambda called from outside a tail.
+
+Native code calls a closure through `k_call{n}`, which calls the lambda's
+wrapper, so every step held two frames. A closure now also carries a pointer to
+the lambda's own body, which is on the tailcc convention. A call to a local
+function value in tail position becomes a musttail jump to `k_tcall{n}`, which
+checks that it holds a closure of the right arity with no failing argument
+and a body, then jumps to that body. Anything else (a closure the runtime
+built, a partial, a reference to a group) goes to `k_call{n}` as before. The
+arity and capture count became 32-bit fields so the pointer fits in the 32
+bytes the closure already took.
+
+Release narrows the convention to functions on a musttail edge, and the jump
+through a pointer names no symbol, so the narrowing would have stripped it and
+LLVM refused the module. Every lambda keeps the convention in a module that
+has the jump, and the jump keeps it too.
+
+`tests/golden/micro/a_lambda_called_in_tail_position_costs_no_stack` runs
+100,000 steps of the port's loop on every engine. Before the fix the
+interpreter reported running out of stack and the dev build exited 139. The
+ratchet rows "a lambda called as a nested call" and "a lambda called without
+a jump" remove each half and expect the micro corpus to fail.
+
+The clang-to-wasm32 layout harness leaves the fixture out: by its own header
+it compiles a call returning a `KValue` as an ordinary call, and a loop that
+goes through a pointer cannot be inlined into one. The page's translator makes
+the jump a tail call, and `ir_to_wasm` runs the fixture.
+
+CI's rows, on the tree carrying #1896: codegen_instructions_release rises
+4.7% to 475,481,653, because every lambda in a module with the jump keeps the
+tail convention. interp_instructions rises 1.4% to 495,424,970,
+work_runbench 0.17% to 1,171,985,904 and work_deepbench 2.5% to 403,499,508;
+work_encodebench falls 0.49% to 2,386,714,424. The emitter writes fewer lines
+(runbench's IR 51,577 to 50,505) and spends 1.1% more doing it,
+emit_instructions 7,090,315. The three compile rows fall about 0.13%. The
+welfare floor drops to 91.08971 under the rule that building the language is
+priced at what it costs.
+
+With #1896 underneath, the rest of CI's rows on this tree:
+`codegen_instructions_dev` 119,060,047, `browser_run_instructions` 34,125,731
+and `text` 4,845,118. Among the benches, `work_pendbench` lands on 191,667,218
+(+0.85%) and `work_widebench` on 28,274,761 (+0.34%); `work_basket`
+30,876,728, `work_digestbench` 5,603,270, `work_jsonbench` 860,563,126,
+`work_oneshot` 13,227,357, `work_readbench` 4,581,129 and `work_scanbench`
+273,675 move by a few hundred instructions each.
+The emitted totals: `emitted_other_branches` 16,476, `emitted_other_calls`
+17,511 and `emitted_other_defines` 2,012.
+
+This is the toml item on #1892.
+
+On CI's rows for the tree merged with #1913: interp_instructions lands on
+495,372,671, emit_instructions on 7,089,710, compile_instructions on
+25,881,675, entry_instructions on 85,381,437 and library_instructions on
+85,935,705. browser_compile_instructions lands on 393,094,499, up 1,782,997
+or 0.46%, since the page's translator turns each new jump into a tail call.
+
+On CI's rows for the tree merged with #1923: compile_instructions lands on
+25,882,102, entry_instructions on 85,381,864, library_instructions on
+85,936,071 and interp_instructions on 495,372,854, each a few hundred
+instructions up. The merge brought twelve changed lines in the interpreter's
+builtins and nothing else in `src/`; nothing here isolates which of the two
+moved these rows.
+
+On main after #1925 the emitted counts for the other programs land on
+emitted_other_branches 16,559, emitted_other_calls 17,666 and
+emitted_other_defines 2,037.
+
+With main merged after #1937, browser_compile_instructions lands on 394,156,258
+and browser_run_instructions on 34,126,073.
+
+On CI's rows for the tree merged with main after #1937: interp_instructions
+lands on 494,060,975, codegen_instructions_dev on 119,058,990,
+codegen_instructions_release on 475,482,049, emit_instructions on 7,120,495 and
+text on 4,850,094. Among the benches, work_pendbench lands on 191,674,062,
+work_runbench on 1,179,917,338 and work_widebench on 28,274,796; work_basket
+30,946,295, work_digestbench 5,604,610, work_escapebench 39,058,332,
+work_jsonbench 860,566,126, work_livebench 1,474,875,027 and work_oneshot
+13,227,755 move by a few hundred instructions each. The emitted totals for the
+other programs: emitted_other_branches 16,563, emitted_other_calls 17,668 and
+emitted_other_defines 2,038.
