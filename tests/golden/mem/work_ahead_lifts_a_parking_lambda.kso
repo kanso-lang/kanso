@@ -1,0 +1,14 @@
+# A lambda whose body is a chain that parks first is lifted into a function
+# of its own, taking `k` as a parameter ahead of the lambda's `a`. That
+# function pools its call on `a` like any other, so `ahead_forced` counts it.
+import "std/os"
+import "std/time"
+
+fn spin 0 acc
+  acc
+
+fn spin n acc
+  spin (n - 1) (acc + n % 7)
+
+k = 1000
+os/args .> (a -> sleep 1 .> (_ -> print "r: {spin (k + length a) 0}"))
