@@ -164,3 +164,15 @@ fn kept none
 
 fn kept piece
   piece
+
+# `slice!` is `slice` from a caller that insists its range is inside the
+# value. Like every `!` name it answers a box: the slice, or an err that
+# bubbles when the range leaves the value, where `slice` answers `none`.
+pub fn slice! s from to
+  effect (inside (slice s from to) from to)
+
+fn inside none from to
+  err "slice! takes a range inside the value, got {from} to {to}"
+
+fn inside piece _ _
+  piece

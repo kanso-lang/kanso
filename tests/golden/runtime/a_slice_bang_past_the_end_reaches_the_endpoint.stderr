@@ -1,0 +1,2 @@
+error[endpoint]: unhandled err reached the executor: "slice! takes a range inside the value, got 2 to 9"
+  born in text/inside at std/text/text.kso:175
