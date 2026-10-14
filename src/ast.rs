@@ -252,6 +252,31 @@ pub struct KeyedEntry {
 }
 
 impl Pattern {
+    /// Every name the pattern binds, the as-pattern's included.
+    pub fn each_name<'a>(&'a self, f: &mut impl FnMut(&'a str)) {
+        match self {
+            Pattern::Var(n, _) => f(n.as_str()),
+            Pattern::Annotated { name, .. } => f(name.as_str()),
+            Pattern::Ctor { fields, whole, .. } => {
+                for field in fields {
+                    field.each_name(f);
+                }
+                if let Some(w) = whole {
+                    f(w.0.as_str());
+                }
+            }
+            Pattern::Keyed { entries, .. } => {
+                for e in entries {
+                    f(e.bind_name.as_str());
+                }
+            }
+            Pattern::IntLit(..)
+            | Pattern::StrLit(..)
+            | Pattern::Nullary(..)
+            | Pattern::Wildcard(..) => {}
+        }
+    }
+
     pub fn rank(&self) -> u8 {
         match self {
             Pattern::IntLit(..) | Pattern::StrLit(..) | Pattern::Nullary(..) => 0,

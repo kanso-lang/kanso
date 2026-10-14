@@ -149,21 +149,7 @@ fn walk(expr: &Expr, visit: &mut dyn FnMut(&Expr)) {
 
 /// Names bound by a pattern, so the accumulator's name cannot shadow one.
 fn bound_names(p: &Pattern, out: &mut Vec<String>) {
-    match p {
-        Pattern::Var(n, _) => out.push(n.to_string()),
-        Pattern::Annotated { name, .. } => out.push(name.to_string()),
-        Pattern::Ctor { fields, .. } => {
-            for f in fields {
-                bound_names(f, out);
-            }
-        }
-        Pattern::Keyed { entries, .. } => {
-            for e in entries {
-                out.push(e.bind_name.clone());
-            }
-        }
-        _ => {}
-    }
+    p.each_name(&mut |n| out.push(n.to_string()));
 }
 
 pub fn rewrite(program: &mut Program) {

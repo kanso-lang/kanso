@@ -2156,28 +2156,9 @@ fn framed_views(
         locals: crate::hash::Set<&'a str>,
     }
     fn pattern_names<'a>(p: &'a Pattern, out: &mut crate::hash::Set<&'a str>) {
-        match p {
-            Pattern::Var(n, _) => {
-                out.insert(n.as_str());
-            }
-            Pattern::Annotated { name, .. } => {
-                out.insert(name.as_str());
-            }
-            Pattern::Ctor { fields, whole, .. } => {
-                for f in fields {
-                    pattern_names(f, out);
-                }
-                if let Some(w) = whole {
-                    out.insert(w.0.as_str());
-                }
-            }
-            Pattern::Keyed { entries, .. } => {
-                for e in entries {
-                    out.insert(e.bind_name.as_str());
-                }
-            }
-            _ => {}
-        }
+        p.each_name(&mut |n| {
+            out.insert(n);
+        });
     }
     fn stmt_expr(st: &Stmt) -> &Expr {
         match st {
