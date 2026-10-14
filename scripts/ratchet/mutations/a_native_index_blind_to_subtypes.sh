@@ -5,7 +5,7 @@
 # the interpreter prints.
 set -e
 old='    if (container.tag == K_SUB || index.tag == K_SUB) {'
-[ "$(grep -cxF "$old" src/runtime.c)" -eq 1 ]
-sed -i.bak 's#^    if (container.tag == K_SUB || index.tag == K_SUB) {$#    if (0) {#' src/runtime.c
-rm -f src/runtime.c.bak
-! grep -qxF "$old" src/runtime.c
+[ "$(grep -cxF "$old" src/runtime/text.c)" -eq 1 ]
+sed -i.bak 's#^    if (container.tag == K_SUB || index.tag == K_SUB) {$#    if (0) {#' src/runtime/text.c
+rm -f src/runtime/text.c.bak
+! grep -qxF "$old" src/runtime/text.c

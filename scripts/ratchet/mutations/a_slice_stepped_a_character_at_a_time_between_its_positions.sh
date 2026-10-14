@@ -9,7 +9,7 @@
 # work vein is the witness.
 set -e
 target='static void k_slice_skip(KStr* s, long* at, long long* seen, long long next) {'
-n=$(grep -cF "$target" src/runtime.c)
+n=$(grep -cF "$target" src/runtime/text.c)
 [ "$n" -eq 1 ] || { echo "k_slice_skip changed shape ($n); rewrite this" >&2; exit 1; }
-sed -i '/^static void k_slice_skip(KStr\* s, long\* at, long long\* seen, long long next) {$/{n;s|^    while (\*at + 8 <= s->len) {$|    while (0) {|}' src/runtime.c
-grep -qF '    while (0) {' src/runtime.c
+sed -i '/^static void k_slice_skip(KStr\* s, long\* at, long long\* seen, long long next) {$/{n;s|^    while (\*at + 8 <= s->len) {$|    while (0) {|}' src/runtime/text.c
+grep -qF '    while (0) {' src/runtime/text.c

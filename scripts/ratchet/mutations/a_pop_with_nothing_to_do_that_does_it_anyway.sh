@@ -12,10 +12,10 @@
 # so the work vein is the witness: runbench 2,717,267,333 -> 2,692,922,207 on
 # the container when the split landed.
 set -e
-grep -q '^            if (!rewound && !k_carries\[d\].used_flag && !k_reg_any_at(d)$' src/runtime.c || {
+grep -q '^            if (!rewound && !k_carries\[d\].used_flag && !k_reg_any_at(d)$' src/runtime/core.c || {
   echo "k_beat_pop's fast path changed shape; rewrite this" >&2
   exit 1
 }
 sed -i 's|^            if (!rewound && !k_carries\[d\].used_flag && !k_reg_any_at(d)$|            if (0 \&\& !rewound \&\& !k_carries[d].used_flag \&\& !k_reg_any_at(d)|' \
-  src/runtime.c
-grep -q '^            if (0 && !rewound && !k_carries\[d\].used_flag && !k_reg_any_at(d)$' src/runtime.c
+  src/runtime/core.c
+grep -q '^            if (0 && !rewound && !k_carries\[d\].used_flag && !k_reg_any_at(d)$' src/runtime/core.c

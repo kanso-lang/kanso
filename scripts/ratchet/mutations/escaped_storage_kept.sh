@@ -15,11 +15,11 @@ awk '
   !hit && $0 == ENVIRON["A"] { hit = 1; next }
   { print }
   END { if (!hit) exit 3 }
-' src/runtime.c > src/runtime.c.mut || {
-  rm -f src/runtime.c.mut
+' src/runtime/text.c > src/runtime/text.c.mut || {
+  rm -f src/runtime/text.c.mut
   echo "the list growth registration moved; this mutation needs rewriting" >&2
   exit 1
 }
-mv src/runtime.c.mut src/runtime.c
-grep -q 'k_permreg_add(l, &l->items)' src/runtime.c && exit 1
+mv src/runtime/text.c.mut src/runtime/text.c
+grep -q 'k_permreg_add(l, &l->items)' src/runtime/text.c && exit 1
 exit 0

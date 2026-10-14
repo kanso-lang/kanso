@@ -12,10 +12,10 @@
 # which is why this one is written over a local `dst` -- so the guard and the
 # sed name one site and not two.
 set -e
-grep -qF 'for (long long i = 0; i < n; i++) dst[i] = args[i];' src/runtime.c || {
+grep -qF 'for (long long i = 0; i < n; i++) dst[i] = args[i];' src/runtime/values.c || {
   echo "the small-record copy loop moved; this mutation needs rewriting" >&2
   exit 1
 }
 sed -i 's|for (long long i = 0; i < n; i++) dst\[i\] = args\[i\];|for (long long i = 0; i < n - 1; i++) dst[i] = args[i];|' \
-  src/runtime.c
-grep -qF 'for (long long i = 0; i < n - 1; i++) dst[i] = args[i];' src/runtime.c
+  src/runtime/values.c
+grep -qF 'for (long long i = 0; i < n - 1; i++) dst[i] = args[i];' src/runtime/values.c

@@ -7,17 +7,17 @@
 # back. Every scan answers the same position either way, so nothing but the
 # work vein can see it, which is what the row asserts.
 set -e
-grep -q "^__attribute__((always_inline)) long long k_b_find2_raw(" src/runtime.c || {
+grep -q "^__attribute__((always_inline)) long long k_b_find2_raw(" src/runtime/text.c || {
   echo "the find2 door changed shape; this mutation needs rewriting" >&2
   exit 1
 }
-grep -q "^__attribute__((always_inline)) long long k_b_find2_below_raw(" src/runtime.c || {
+grep -q "^__attribute__((always_inline)) long long k_b_find2_below_raw(" src/runtime/text.c || {
   echo "the find2_below door changed shape; this mutation needs rewriting" >&2
   exit 1
 }
 sed -e "s/^__attribute__((always_inline)) long long k_b_find2_raw(/long long k_b_find2_raw(/" \
     -e "s/^__attribute__((always_inline)) long long k_b_find2_below_raw(/long long k_b_find2_below_raw(/" \
-    src/runtime.c > src/runtime.c.mut
-mv src/runtime.c.mut src/runtime.c
-grep -q "^long long k_b_find2_raw(" src/runtime.c
-grep -q "^long long k_b_find2_below_raw(" src/runtime.c
+    src/runtime/text.c > src/runtime/text.c.mut
+mv src/runtime/text.c.mut src/runtime/text.c
+grep -q "^long long k_b_find2_raw(" src/runtime/text.c
+grep -q "^long long k_b_find2_below_raw(" src/runtime/text.c

@@ -858,7 +858,7 @@ fn build(program: ast::Program, file: &str, release: bool, built_as: Option<Stri
         && cfg!(target_arch = "x86_64")
         && closure_convention() == kanso::codegen::ClosureConvention::PreserveNone;
     let ir = match (flatten, release && cfg!(target_arch = "aarch64")) {
-        (true, _) => preserve_none_calls(preserve_none_tails(ir), include_str!("runtime.c")),
+        (true, _) => preserve_none_calls(preserve_none_tails(ir), kanso::RUNTIME_C),
         (false, true) if cfg!(target_vendor = "apple") => narrow_tailcc(ir, ARM64_TAILCC_WIDEST),
         (false, true) => wide_tailcc_keeps_its_jumps(ir, ARM64_TAILCC_WIDEST),
         (false, false) => ir,
@@ -1831,9 +1831,9 @@ fn jobs_of(text: &str) -> Option<Vec<Vec<String>>> {
 fn runtime_key(profile: &str, opt: &[&str], preserve: bool, counting: bool) -> u64 {
     use std::hash::{Hash, Hasher};
     let mut hasher = std::hash::DefaultHasher::new();
-    // THE SOURCE'S DIGEST, NOT THE SOURCE. `runtime.c` is a constant of this
+    // THE SOURCE'S DIGEST, NOT THE SOURCE. The runtime is a constant of this
     // binary, so what it hashes to was settled by the compiler that built it;
-    // walking its 450,100 bytes here cost a quarter of `kanso play`'s
+    // walking it here cost a quarter of `kanso play`'s
     // start-up and told every process the same thing. See `hash::digest_of`.
     kanso::hash::RUNTIME_DIGEST.hash(&mut hasher);
     profile.hash(&mut hasher);
@@ -1860,7 +1860,7 @@ fn runtime_key(profile: &str, opt: &[&str], preserve: bool, counting: bool) -> u
 }
 
 fn cached_runtime_object(profile: &str, opt: &[&str]) -> std::io::Result<std::path::PathBuf> {
-    cached_object(profile, include_str!("runtime.c"), opt)
+    cached_object(profile, kanso::RUNTIME_C, opt)
 }
 
 /// The helpers a release build keeps in its LTO link, as a translation unit
@@ -1877,7 +1877,7 @@ fn cached_runtime_object(profile: &str, opt: &[&str]) -> std::io::Result<std::pa
 /// The declarations below are the globals and functions the helpers reach,
 /// which `runtime.c` defines with external linkage for this unit's sake.
 fn hot_source() -> String {
-    hot_source_of(include_str!("runtime.c"))
+    hot_source_of(kanso::RUNTIME_C)
 }
 
 fn hot_source_of(runtime: &str) -> String {
@@ -2482,9 +2482,9 @@ mod the_hot_unit_is_taken_from_the_runtime {
     /// the attribute again.
     #[test]
     fn the_scanners_are_found_without_their_attribute() {
-        let bare = include_str!("runtime.c")
+        let bare = kanso::RUNTIME_C
             .replace("__attribute__((always_inline)) long long k_b_find2", "long long k_b_find2");
-        assert_ne!(bare, include_str!("runtime.c"), "the attribute is no longer there to remove");
+        assert_ne!(bare, kanso::RUNTIME_C, "the attribute is no longer there to remove");
         let unit = super::hot_source_of(&bare);
         for name in ["k_b_find2_raw", "k_b_find2_below_raw"] {
             assert!(

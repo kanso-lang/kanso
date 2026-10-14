@@ -12,16 +12,16 @@
 # emitted golden counts what the compiler wrote, not what llvm did with it.
 # The work vein is the only witness.
 set -e
-before=$(grep -c 'always_inline' src/runtime.c)
+before=$(grep -c 'always_inline' src/runtime/core.c)
 sed -i.bak 's/^static inline __attribute__((always_inline)) void k_\(viewreg_migrate\|permreg_migrate\|permreg_flush\)(int d) {$/static inline void k_\1(int d) {/' \
-  src/runtime.c
-rm -f src/runtime.c.bak
+  src/runtime/core.c
+rm -f src/runtime/core.c.bak
 # k_alloc and k_str_alloc carry the same attribute for their own reasons and
 # must not be touched, so this counts the three rather than asserting none are
 # left. A sed that matched two of three would leave a mutation proving less
 # than it claims, which is how a row goes quietly blind.
-after=$(grep -c 'always_inline' src/runtime.c)
+after=$(grep -c 'always_inline' src/runtime/core.c)
 [ "$((before - after))" = "3" ]
-grep -q '^static inline void k_viewreg_migrate(int d) {$' src/runtime.c
-grep -q '^static inline void k_permreg_migrate(int d) {$' src/runtime.c
-grep -q '^static inline void k_permreg_flush(int d) {$' src/runtime.c
+grep -q '^static inline void k_viewreg_migrate(int d) {$' src/runtime/core.c
+grep -q '^static inline void k_permreg_migrate(int d) {$' src/runtime/core.c
+grep -q '^static inline void k_permreg_flush(int d) {$' src/runtime/core.c

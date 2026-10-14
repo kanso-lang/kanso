@@ -20,11 +20,11 @@ awk '
   state == 3 { next }
   { print }
   END { if (state != 4) exit 3 }
-' src/runtime.c > src/runtime.c.mut || {
-  rm -f src/runtime.c.mut
+' src/runtime/core.c > src/runtime/core.c.mut || {
+  rm -f src/runtime/core.c.mut
   echo "the k_copy_size thunk walk moved; this mutation needs rewriting" >&2
   exit 1
 }
-mv src/runtime.c.mut src/runtime.c
-grep -q 'if (k_copy_seen_check(t)) return 0;' src/runtime.c && exit 1
+mv src/runtime/core.c.mut src/runtime/core.c
+grep -q 'if (k_copy_seen_check(t)) return 0;' src/runtime/core.c && exit 1
 exit 0

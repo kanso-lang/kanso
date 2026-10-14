@@ -10,13 +10,13 @@
 # so the work vein is the witness: runbench 2,453,160,233 -> 2,446,395,268
 # on the container.
 set -e
-n=$(grep -cF 'if (k_worth_sizing(((KValue*)cl->env)[i]))' src/runtime.c)
+n=$(grep -cF 'if (k_worth_sizing(((KValue*)cl->env)[i]))' src/runtime/core.c)
 [ "$n" -eq 1 ] || { echo "the closure arm changed shape ($n); rewrite this" >&2; exit 1; }
-sed -i 's|^                if (k_worth_sizing(((KValue\*)cl->env)\[i\]))$|                if (1)|' src/runtime.c
-sed -i 's|^            if (k_worth_sizing(d->x)) n += k_copy_size(d->x, m);$|            n += k_copy_size(d->x, m);|' src/runtime.c
-sed -i 's|^            if (k_worth_sizing(d->y)) n += k_copy_size(d->y, m);$|            n += k_copy_size(d->y, m);|' src/runtime.c
-sed -i 's|^            if (k_worth_sizing(sb->inner)) n += k_copy_size(sb->inner, m);$|            n += k_copy_size(sb->inner, m);|' src/runtime.c
-sed -i '/^static inline __attribute__((always_inline))$/{N;s|^static inline __attribute__((always_inline))\nsize_t k_ptrmap_probe(|static size_t k_ptrmap_probe(|;s|^static inline __attribute__((always_inline))\nKPtrSlot\* k_ptrmap_at(|static KPtrSlot* k_ptrmap_at(|}' src/runtime.c
-grep -qF '                if (1)' src/runtime.c
-grep -qF 'static size_t k_ptrmap_probe(KPtrMap* t, const void* key) {' src/runtime.c
-! grep -qF 'if (k_worth_sizing(d->x))' src/runtime.c
+sed -i 's|^                if (k_worth_sizing(((KValue\*)cl->env)\[i\]))$|                if (1)|' src/runtime/core.c
+sed -i 's|^            if (k_worth_sizing(d->x)) n += k_copy_size(d->x, m);$|            n += k_copy_size(d->x, m);|' src/runtime/core.c
+sed -i 's|^            if (k_worth_sizing(d->y)) n += k_copy_size(d->y, m);$|            n += k_copy_size(d->y, m);|' src/runtime/core.c
+sed -i 's|^            if (k_worth_sizing(sb->inner)) n += k_copy_size(sb->inner, m);$|            n += k_copy_size(sb->inner, m);|' src/runtime/core.c
+sed -i '/^static inline __attribute__((always_inline))$/{N;s|^static inline __attribute__((always_inline))\nsize_t k_ptrmap_probe(|static size_t k_ptrmap_probe(|;s|^static inline __attribute__((always_inline))\nKPtrSlot\* k_ptrmap_at(|static KPtrSlot* k_ptrmap_at(|}' src/runtime/core.c
+grep -qF '                if (1)' src/runtime/core.c
+grep -qF 'static size_t k_ptrmap_probe(KPtrMap* t, const void* key) {' src/runtime/core.c
+! grep -qF 'if (k_worth_sizing(d->x))' src/runtime/core.c

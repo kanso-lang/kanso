@@ -11,7 +11,7 @@
 # container when the one walk landed.
 set -e
 target='    int w = k_where(p, m);'
-n=$(grep -cF "$target" src/runtime.c)
+n=$(grep -cF "$target" src/runtime/core.c)
 [ "$n" -eq 1 ] || { echo "k_survives_x changed shape ($n); rewrite this" >&2; exit 1; }
-sed -i 's|^    int w = k_where(p, m);$|    if (k_survives(p, m) \|\| (k_ten_any \&\& k_ten_holds(p, m))) return 1;\n    int w = k_where(p, m);|' src/runtime.c
-grep -qF '    if (k_survives(p, m) || (k_ten_any && k_ten_holds(p, m))) return 1;' src/runtime.c
+sed -i 's|^    int w = k_where(p, m);$|    if (k_survives(p, m) \|\| (k_ten_any \&\& k_ten_holds(p, m))) return 1;\n    int w = k_where(p, m);|' src/runtime/core.c
+grep -qF '    if (k_survives(p, m) || (k_ten_any && k_ten_holds(p, m))) return 1;' src/runtime/core.c

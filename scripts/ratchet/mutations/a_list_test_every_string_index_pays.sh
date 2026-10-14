@@ -16,10 +16,10 @@ bytes_arm='    if (container.tag == K_BYTES && index.tag == K_INT) {'
 # runtime mutation does: the touched pass selects a row by reading the guard,
 # and a row it selects whose script never greps the file is a row that would go
 # on being selected after the code moved out from under it.
-grep -q "container.tag == K_STR && index.tag == K_INT" src/runtime.c \
+grep -q "container.tag == K_STR && index.tag == K_INT" src/runtime/text.c \
   || { echo "k_b_at has no string arm; rewrite this" >&2; exit 1; }
 for line in "$str_arm" "$list_arm" "$bytes_arm"; do
-  n=$(grep -cF "$line" src/runtime.c)
+  n=$(grep -cF "$line" src/runtime/text.c)
   [ "$n" -eq 1 ] || { echo "k_b_at changed shape ($n for '$line'); rewrite this" >&2; exit 1; }
 done
 # the string arm ends where the list arm begins, and the list arm where the
@@ -35,8 +35,8 @@ awk -v s="$str_arm" -v l="$list_arm" -v b="$bytes_arm" '
   state == 1 { strbuf[++sn] = $0; next }
   state == 2 { listbuf[++ln] = $0; next }
   { print }
-' src/runtime.c > src/runtime.c.mut
-mv src/runtime.c.mut src/runtime.c
+' src/runtime/text.c > src/runtime/text.c.mut
+mv src/runtime/text.c.mut src/runtime/text.c
 # the list arm now stands in front of the string arm
 awk -v s="$str_arm" -v l="$list_arm" '
   $0 == l { seen_list = NR }
@@ -44,4 +44,4 @@ awk -v s="$str_arm" -v l="$list_arm" '
   END {
     if (seen_list == 0 || seen_str == 0 || seen_list > seen_str) exit 1
   }
-' src/runtime.c
+' src/runtime/text.c

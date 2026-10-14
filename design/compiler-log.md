@@ -21,54 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-13 — `and` meets `or` in parentheses, and a file may open with a header comment
-
-Built under #1887 (ruled 2026-10-13), the two parts that change the grammar.
-The third part, types before functions, stands as ruled on 2026-07-25 and
-needs nothing.
-
-**`and` and `or`.** `parse_and` now reports where the first `and` of its chain
-stands, and `parse_or` refuses an `or` that meets one, on either side, at the
-second of the two operators: `a and b or c` at the `or`, `a or b and c` at the
-`and`. The diagnostic shows `(a and b) or c`. Those parentheses used to be
-refused as grouping nothing, since `and` binds tighter. The check that refuses
-a pair now keeps one whose contents are an `and` chain with an `or` beside it,
-the same exception #1915 made for `&`, `|` and `^`, and `(a and b) and c` is
-still refused. The refusal is in the parser, which every engine and the tab
-share.
-
-**The header comment.** The lexer drops comment lines, so the blank line under
-a header looked like a blank line at the head of the file, and the refusal
-named line 2 as where the file began. The lexer now records the last line of
-the comment block a file opens with, when only blank lines stand above it.
-One blank line directly under that block is allowed. A second is refused as
-"one blank line separates the header comment from the code", and a blank line
-above the header keeps "the file may not begin with a blank line". This holds
-where the blank-line policy holds, in libraries and modules. A play file has
-no blank-line policy, and it accepted all three shapes before this change too.
-
-**Goldens.** Five error fixtures: `and_meets_or_without_parentheses`,
-`an_and_on_the_right_of_an_or`, `parentheses_around_an_and_beside_an_and`,
-`a_header_comment_with_two_blank_lines_under_it` and
-`a_blank_line_above_the_header_comment`. The micro fixture
-`and_meets_or_in_parentheses` opens with a header and prints three conditions
-on both engines. On the base, the two `and`/`or` fixtures printed `true`, the
-micro stopped at the blank under its header, and the blank-above fixture
-reported lines 1 and 3 instead of line 1. The redundant-pair fixture reads the
-same on the base, since it pins that the exception stops at `or`. Two ratchet
-rows, "and meets or freely" and "header comment refused", were each watched
-turning their test red.
-
-**The corpus.** `kanso check` over every `.kso` file here and in kq, vse and
-kanso-json finds no `and` meeting an `or` without parentheses; the sweep was
-checked against a planted mix first. Nothing needed respelling. Appendix C
-states both rules with a panel each.
-
-The compile rows move with the binary; CI's rows are priced here before
-merge.
-
-- **OPEN** #1887, until this lands.
-
 ## 2026-10-13 — a list or map too long for its line spans lines
 
 Built under #1882 (gavel: a bracketed list or map may span lines). A literal
@@ -1771,6 +1723,53 @@ The counters below are not welfare terms, and each moved with the change:
 
 Welfare goes 91.2447 -> 91.2395, a fall of 0.0052. This builds a ruled part
 of the language, so the floor drops by exactly that.
+
+## 2026-10-14 — src/runtime.c in seven parts
+
+#1947. src/runtime.c had grown to 13,235 lines. It is now a list of seven
+`#include` lines, and the parts live in src/runtime/: core.c (values, thunks,
+regions, beats, carry), values.c (wide integers, failures, rendering,
+equality), effects.c (boxes, io, processes, work-ahead), collections.c (lists,
+maps, closures), text.c (utf-8, strings, bytes), numbers.c (number parsing,
+bit operators, float tables) and main.c. Each part is a contiguous range of
+the old file, cut at a seam the file already had, and the parts joined in
+order are the old file byte for byte.
+
+clang compiles src/runtime.c by path as before, and the includes resolve
+beside it. The compiler embeds the runtime instead and writes it out when a
+build needs it, so build.rs reads the include lines and joins the parts into
+`kanso::RUNTIME_C`, which every Rust reader takes in place of
+`include_str!("runtime.c")`. The digest, the cached object and the hot unit
+see the bytes they saw before. build.rs refuses any line in the list that is
+not a comment, a blank or a part, so clang and the compiler cannot be handed
+different runtimes. `the_constant_is_the_digest_of_the_bytes_it_names` now
+reads the parts from disk, joins them in the listed order and compares both
+the text and the digest, which catches a part build.rs failed to watch.
+
+121 mutations named src/runtime.c. Each was run on the old file, its
+rewritten form was run on the parts, and the joined results were compared;
+every one matched byte for byte. The two preserve_most sweeps patch several
+parts, and each part they patch is spelled on a guard line. Three patch a line
+of src/main.rs that read `include_str!("runtime.c")` and now reads
+`kanso::RUNTIME_C`. The branch ratchet selects per part from here on: a branch
+that touches text.c proves the rows whose mutations guard on text.c, where it
+used to prove every row that guarded on the one file.
+
+The other readers moved in the same change. Nine specs that cut function text
+out of the runtime read `kanso::RUNTIME_C`. The utf-8 differential reads
+src/runtime/text.c, which holds all five pieces it extracts, and passes with
+45,589,025 checked. The asan sweep's `--prove` patches the joined parts; this
+container has no sanitizer runtime, so the patch and its compile were checked
+here and the sanitized run was not. build_runtime_wasm.sh compiles by path and
+its output is byte-identical before and after, 84,137 bytes. Diagnostic
+coverage descends into src/runtime/ and reads the same 310 diagnostics. Three
+comments said the runtime was 450,100 bytes; it is 608,301, and they no longer
+state a size.
+
+One row moved, by layout: `entry_instructions` 103,133,571 -> 103,133,577
+against 01161dbc, and 104,020,985 -> 104,020,991 once main carried
+kanso#1962, six instructions both times. compile_instructions and
+library_instructions held, and so did every runtime and machine-code row.
 
 ## 2026-10-14 — `text/slice!` answers a box
 

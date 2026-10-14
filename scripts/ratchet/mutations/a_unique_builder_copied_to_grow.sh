@@ -6,9 +6,9 @@
 # a_builder_that_outgrows_its_buffer_is_never_held_twice, whose
 # held_peak_bytes counts both buffers again.
 set -e
-grep -qF '    if (mutate && !dies && k_bytes_malloced(a)) {' src/runtime.c || {
+grep -qF '    if (mutate && !dies && k_bytes_malloced(a)) {' src/runtime/text.c || {
   echo "the in-place regrow moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i 's|^    if (mutate \&\& !dies \&\& k_bytes_malloced(a)) {$|    if (0 \&\& mutate \&\& !dies \&\& k_bytes_malloced(a)) {|' src/runtime.c
-[ "$(grep -cF '    if (0 && mutate && !dies && k_bytes_malloced(a)) {' src/runtime.c)" -eq 1 ]
+sed -i 's|^    if (mutate \&\& !dies \&\& k_bytes_malloced(a)) {$|    if (0 \&\& mutate \&\& !dies \&\& k_bytes_malloced(a)) {|' src/runtime/text.c
+[ "$(grep -cF '    if (0 && mutate && !dies && k_bytes_malloced(a)) {' src/runtime/text.c)" -eq 1 ]

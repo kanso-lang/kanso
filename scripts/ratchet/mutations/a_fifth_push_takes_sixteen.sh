@@ -5,9 +5,9 @@
 # a_fifth_push_takes_eight_slots.
 set -e
 line='    if (cap > 16 && !perm) cap <<= 1;'
-[ "$(grep -cxF "$line" src/runtime.c)" -eq 1 ] || {
+[ "$(grep -cxF "$line" src/runtime/text.c)" -eq 1 ] || {
   echo "the grow's doubling moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i 's/^    if (cap > 16 \&\& !perm) cap <<= 1;$/    cap <<= 1;/' src/runtime.c
-grep -qxF '    cap <<= 1;' src/runtime.c
+sed -i 's/^    if (cap > 16 \&\& !perm) cap <<= 1;$/    cap <<= 1;/' src/runtime/text.c
+grep -qxF '    cap <<= 1;' src/runtime/text.c

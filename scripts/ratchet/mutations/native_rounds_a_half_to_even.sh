@@ -12,10 +12,10 @@
 # stopped going through `llround`; `rint` is the half-to-even twin under the
 # default rounding mode, as `llrint` was of `llround`.
 set -e
-grep -q '^        return k_int_of_whole_f(round(x));$' src/runtime.c || {
+grep -q '^        return k_int_of_whole_f(round(x));$' src/runtime/numbers.c || {
   echo "round's implementation moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i.bak 's/^        return k_int_of_whole_f(round(x));$/        return k_int_of_whole_f(rint(x));/' src/runtime.c
-rm -f src/runtime.c.bak
-grep -q '^        return k_int_of_whole_f(rint(x));$' src/runtime.c
+sed -i.bak 's/^        return k_int_of_whole_f(round(x));$/        return k_int_of_whole_f(rint(x));/' src/runtime/numbers.c
+rm -f src/runtime/numbers.c.bak
+grep -q '^        return k_int_of_whole_f(rint(x));$' src/runtime/numbers.c

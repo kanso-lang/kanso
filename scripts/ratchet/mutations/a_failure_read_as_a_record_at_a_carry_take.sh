@@ -11,6 +11,6 @@
 # `stopped: end of input` on native with the ask and the runtime error without
 # it, which the corpus reports as a stdout mismatch before it reads a counter.
 set -e
-grep -qF 'KValue k_parsed_words(KValue v) {' src/runtime.c
-sed -i '/^KValue k_parsed_words(KValue v) {$/,/^}$/ s/^    if (!k_not_failure(v)) return v;$/    (void)0;/' src/runtime.c
-! awk '/^KValue k_parsed_words\(KValue v\) \{$/,/^}$/' src/runtime.c | grep -qF 'k_not_failure(v)'
+grep -qF 'KValue k_parsed_words(KValue v) {' src/runtime/values.c
+sed -i '/^KValue k_parsed_words(KValue v) {$/,/^}$/ s/^    if (!k_not_failure(v)) return v;$/    (void)0;/' src/runtime/values.c
+! awk '/^KValue k_parsed_words\(KValue v\) \{$/,/^}$/' src/runtime/values.c | grep -qF 'k_not_failure(v)'

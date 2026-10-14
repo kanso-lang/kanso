@@ -10,7 +10,7 @@
 # count landed.
 set -e
 target='    return __builtin_ctzll((unsigned long long)cap) - 2;'
-n=$(grep -cF "$target" src/runtime.c)
+n=$(grep -cF "$target" src/runtime/collections.c)
 [ "$n" -eq 1 ] || { echo "the size class changed shape ($n); rewrite this" >&2; exit 1; }
-sed -i 's|^    return __builtin_ctzll((unsigned long long)cap) - 2;$|    { int c = 0; long long size = 4; while (size < cap \&\& c < K_BUF_CLASSES - 1) { size <<= 1; c++; } return size == cap ? c : -1; }|' src/runtime.c
-grep -qF 'while (size < cap && c < K_BUF_CLASSES - 1) { size <<= 1; c++; } return size == cap ? c : -1; }' src/runtime.c
+sed -i 's|^    return __builtin_ctzll((unsigned long long)cap) - 2;$|    { int c = 0; long long size = 4; while (size < cap \&\& c < K_BUF_CLASSES - 1) { size <<= 1; c++; } return size == cap ? c : -1; }|' src/runtime/collections.c
+grep -qF 'while (size < cap && c < K_BUF_CLASSES - 1) { size <<= 1; c++; } return size == cap ? c : -1; }' src/runtime/collections.c

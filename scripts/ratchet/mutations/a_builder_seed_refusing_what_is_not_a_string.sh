@@ -7,8 +7,8 @@
 # its rendering; dying there instead prints `a string builder starts from a
 # string` where the interpreter prints the rendering.
 set -e
-f=src/runtime.c
-grep -q 'KValue k_b_str_builder' src/runtime.c
+f=src/runtime/values.c
+grep -q 'KValue k_b_str_builder' src/runtime/values.c
 grep -qF '    if (wrapped.tag != K_STR) return sv;' "$f" || {
   echo "the seed's test moved; this mutation needs rewriting" >&2
   exit 1

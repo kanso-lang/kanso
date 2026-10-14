@@ -9,7 +9,7 @@
 # The (w, q) handed to eisel-lemire is identical either way, so nothing but
 # the work vein can see this, which is exactly what the row asserts.
 set -e
-grep -q "while (p < stop && \*p == '0') { any = 1; p++; }" src/runtime.c || {
+grep -q "while (p < stop && \*p == '0') { any = 1; p++; }" src/runtime/numbers.c || {
   echo "the leading-zero skip changed shape; this mutation needs rewriting" >&2
   exit 1
 }
@@ -17,12 +17,12 @@ sed -e "/^        while (p < stop && \*p == '0') { any = 1; p++; }$/d" \
     -e "/^            if (w == 0) {$/,/^            }$/d" \
     -e "s/(unsigned long long)(\*p - '0'); digits++; }/(unsigned long long)(*p - '0'); if (w) digits++; }/" \
     -e "s/^                    digits++;$/                    if (w) digits++;/" \
-    src/runtime.c > src/runtime.c.mut
-mv src/runtime.c.mut src/runtime.c
-grep -q "if (w) digits++; }" src/runtime.c
+    src/runtime/numbers.c > src/runtime/numbers.c.mut
+mv src/runtime/numbers.c.mut src/runtime/numbers.c
+grep -q "if (w) digits++; }" src/runtime/numbers.c
 # anchored to the fraction skip's own indent: an earlier `if (w == 0)` in the
 # eisel-lemire entry is a different line and stays.
-if grep -q "^            if (w == 0) {\$" src/runtime.c; then
+if grep -q "^            if (w == 0) {\$" src/runtime/numbers.c; then
   echo "the fraction skip survived the mutation" >&2
   exit 1
 fi

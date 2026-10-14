@@ -6,9 +6,9 @@
 # returning. The answers are the same; the work vein is the witness.
 set -e
 line='        if (__builtin_expect(k_arena == m->ptr, 1)) return;'
-[ "$(grep -cxF "$line" src/runtime.c)" -eq 1 ] || {
+[ "$(grep -cxF "$line" src/runtime/core.c)" -eq 1 ] || {
   echo "the unmoved arena's exit moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i 's/^        if (__builtin_expect(k_arena == m->ptr, 1)) return;$/        if (0 \&\& k_arena == m->ptr) return;/' src/runtime.c
-if grep -qxF "$line" src/runtime.c; then exit 1; fi
+sed -i 's/^        if (__builtin_expect(k_arena == m->ptr, 1)) return;$/        if (0 \&\& k_arena == m->ptr) return;/' src/runtime/core.c
+if grep -qxF "$line" src/runtime/core.c; then exit 1; fi

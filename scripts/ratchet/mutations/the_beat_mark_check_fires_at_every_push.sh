@@ -11,10 +11,10 @@
 # every program with a beat loop dies at the first one. A corpus that stays
 # green under this is a corpus in which the check is gone.
 set -e
-grep -qF "if (k_blocks && m->ptr + m->left != (char*)(k_blocks + 1) + k_blocks->cap) {" src/runtime.c || {
+grep -qF "if (k_blocks && m->ptr + m->left != (char*)(k_blocks + 1) + k_blocks->cap) {" src/runtime/core.c || {
   echo "the beat mark check moved; this mutation needs rewriting" >&2
   exit 1
 }
 sed -i 's|if (k_blocks \&\& m->ptr + m->left != (char\*)(k_blocks + 1) + k_blocks->cap) {|if (k_blocks \&\& m->ptr + m->left == (char*)(k_blocks + 1) + k_blocks->cap) {|' \
-  src/runtime.c
-grep -qF "if (k_blocks && m->ptr + m->left == (char*)(k_blocks + 1) + k_blocks->cap) {" src/runtime.c
+  src/runtime/core.c
+grep -qF "if (k_blocks && m->ptr + m->left == (char*)(k_blocks + 1) + k_blocks->cap) {" src/runtime/core.c

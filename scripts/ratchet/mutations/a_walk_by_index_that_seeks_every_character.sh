@@ -6,9 +6,9 @@
 # the run program's `seek_steps` falls from 689,999 to 0.
 set -e
 anchor='        if (s == k_seek_str \&\& want == k_seek_char + 1 \&\& s->cap != 0 \&\& k_seek_byte < s->len) {'
-grep -q '^        if (s == k_seek_str && want == k_seek_char + 1 && s->cap != 0 && k_seek_byte < s->len) {$' src/runtime.c || {
+grep -q '^        if (s == k_seek_str && want == k_seek_char + 1 && s->cap != 0 && k_seek_byte < s->len) {$' src/runtime/text.c || {
   echo "the index's cursor step changed shape; rewrite this" >&2
   exit 1
 }
-sed -i "s|^$anchor\$|        if (0) {|" src/runtime.c
-grep -q '^        if (0) {$' src/runtime.c
+sed -i "s|^$anchor\$|        if (0) {|" src/runtime/text.c
+grep -q '^        if (0) {$' src/runtime/text.c

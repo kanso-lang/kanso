@@ -7,8 +7,8 @@
 # short-token fixture reads 600 strings in the arena where it pinned five
 # permanent ones.
 set -e
-f=src/runtime.c
-grep -q 'k_token_miss' src/runtime.c
+f=src/runtime/text.c
+grep -q 'k_token_miss' src/runtime/text.c
 for slot in 'slot' 'slot ^ 1'; do
   line="    if (k_token_key[$slot] == key) return k_token_cache[$slot];"
   [ "$(grep -cxF "$line" "$f")" -eq 1 ] || {

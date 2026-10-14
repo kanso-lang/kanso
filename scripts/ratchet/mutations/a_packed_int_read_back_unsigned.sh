@@ -10,7 +10,7 @@ sed -i.bak 's#^    f.line_fmt(format_args!("{n} = ashr i64 {w0}, 8"));$#    f.li
 rm -f src/codegen.rs.bak
 ! grep -qxF "$old" src/codegen.rs
 box='    fields[0].tag = K_INT; fields[0].payload = w0 >> 8;'
-[ "$(grep -cxF "$box" src/runtime.c)" -eq 1 ]
-sed -i.bak 's#^    fields\[0\].tag = K_INT; fields\[0\].payload = w0 >> 8;$#    fields[0].tag = K_INT; fields[0].payload = (long long)((unsigned long long)w0 >> 8);#' src/runtime.c
-rm -f src/runtime.c.bak
-! grep -qxF "$box" src/runtime.c
+[ "$(grep -cxF "$box" src/runtime/values.c)" -eq 1 ]
+sed -i.bak 's#^    fields\[0\].tag = K_INT; fields\[0\].payload = w0 >> 8;$#    fields[0].tag = K_INT; fields[0].payload = (long long)((unsigned long long)w0 >> 8);#' src/runtime/values.c
+rm -f src/runtime/values.c.bak
+! grep -qxF "$box" src/runtime/values.c

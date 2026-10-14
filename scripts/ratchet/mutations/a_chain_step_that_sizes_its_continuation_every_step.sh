@@ -10,7 +10,7 @@
 # out are the same and the work vein moves.
 set -e
 anchor='                   once a drift instead of once a step. */'
-n=$(grep -cF "$anchor" src/runtime.c)
+n=$(grep -cF "$anchor" src/runtime/effects.c)
 [ "$n" -eq 1 ] || { echo "the chain step changed shape ($n); rewrite this" >&2; exit 1; }
-sed -i '/^                   once a drift instead of once a step\. \*\/$/{n;n;s|^                if (kc->at_blocks == (const void\*)k_blocks$|                if (0 \&\& kc->at_blocks == (const void*)k_blocks|}' src/runtime.c
-grep -qF '                if (0 && kc->at_blocks == (const void*)k_blocks' src/runtime.c
+sed -i '/^                   once a drift instead of once a step\. \*\/$/{n;n;s|^                if (kc->at_blocks == (const void\*)k_blocks$|                if (0 \&\& kc->at_blocks == (const void*)k_blocks|}' src/runtime/effects.c
+grep -qF '                if (0 && kc->at_blocks == (const void*)k_blocks' src/runtime/effects.c

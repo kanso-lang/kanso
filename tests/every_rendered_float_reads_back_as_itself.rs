@@ -31,12 +31,10 @@
 //! the place count the last float took: with the walk down from a passing
 //! guess removed, 975,871 of 5,809,326 were not shortest.
 
-use std::path::Path;
 use std::process::Command;
 
 fn runtime() -> String {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    std::fs::read_to_string(root.join("src/runtime.c")).expect("src/runtime.c reads")
+    kanso::RUNTIME_C.to_string()
 }
 
 /// The text between `open` and the line `shut`, with both kept.

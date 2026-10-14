@@ -6,8 +6,8 @@
 # that return out and the rewind hands back every block the arena holds, and
 # the strings the levels above are still reading are built over.
 set -e
-f=src/runtime.c
-grep -q 'void k_beat_rewind_slow(KMark\* m)' src/runtime.c
+f=src/runtime/core.c
+grep -q 'void k_beat_rewind_slow(KMark\* m)' src/runtime/core.c
 line='    if (m == &k_beat_none) return;'
 [ "$(grep -cxF "$line" "$f")" -eq 1 ] || {
   echo "the sentinel's return moved; this mutation needs rewriting" >&2

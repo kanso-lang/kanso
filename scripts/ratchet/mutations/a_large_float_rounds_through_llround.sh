@@ -6,6 +6,6 @@
 # prints -9223372036854775808 for round of 1e30 and of infinity where it should
 # refuse the first and agree with the interpreter on the second.
 set -e
-sed -i.bak 's|^        double x = k_as_f(v);$|&\n        return k_int((long long)llround(x));|' src/runtime.c
-rm -f src/runtime.c.bak
-grep -q '^        return k_int((long long)llround(x));$' src/runtime.c
+sed -i.bak 's|^        double x = k_as_f(v);$|&\n        return k_int((long long)llround(x));|' src/runtime/numbers.c
+rm -f src/runtime/numbers.c.bak
+grep -q '^        return k_int((long long)llround(x));$' src/runtime/numbers.c

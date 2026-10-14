@@ -5,7 +5,7 @@
 # red.
 set -e
 old='    if (callee.tag == K_FNREF) return k_call_ref_wide((KFnref*)(intptr_t)callee.payload, n, args);'
-[ "$(grep -cxF "$old" src/runtime.c)" -eq 1 ]
-sed -i.bak 's#^    if (callee.tag == K_FNREF) return k_call_ref_wide((KFnref\*)(intptr_t)callee.payload, n, args);$#    if (0) return k_none();#' src/runtime.c
-rm -f src/runtime.c.bak
-! grep -qxF "$old" src/runtime.c
+[ "$(grep -cxF "$old" src/runtime/collections.c)" -eq 1 ]
+sed -i.bak 's#^    if (callee.tag == K_FNREF) return k_call_ref_wide((KFnref\*)(intptr_t)callee.payload, n, args);$#    if (0) return k_none();#' src/runtime/collections.c
+rm -f src/runtime/collections.c.bak
+! grep -qxF "$old" src/runtime/collections.c
