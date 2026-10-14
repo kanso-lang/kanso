@@ -581,11 +581,30 @@ fn reads_locals(
             reads_locals(lhs, user, locals, later) && reads_locals(rhs, user, locals, later)
         }
         Expr::App { piped: false, head, args, .. } => {
-            is_user_call(head, args.len(), user)
+            (is_user_call(head, args.len(), user) || reads_a_value(head, args.len()))
                 && args.iter().all(|a| reads_locals(a, user, locals, later))
         }
         _ => false,
     }
+}
+
+/// Builtins that read a value and answer a new one, which a pooled call may
+/// apply to its arguments: `report (length line)` is pooled like `report n`.
+/// The words that extend a value (`push`, `put`, `concat` and the rest) are
+/// left out, since the beat pass may write their result into the storage of
+/// the value they were given, and a pooled cell runs before the program's
+/// own reads of it.
+const VALUE_READS: &[&str] = &[
+    "length", "keys", "values", "entries", "chars", "bytes", "char_code", "from_code", "to_int",
+    "to_float", "round", "sqrt", "sum", "bit_and", "bit_or", "bit_xor", "bit_not", "bit_shl",
+    "bit_shr",
+];
+
+fn reads_a_value(head: &Expr, arity: usize) -> bool {
+    let Expr::Ident(n, _, _) = head else { return false };
+    let word = n.as_str().strip_prefix("builtin_").unwrap_or(n.as_str());
+    VALUE_READS.contains(&word)
+        && crate::check::BUILTIN_ARITY.iter().any(|&(b, a)| b == word && a == arity)
 }
 
 fn names_read(e: &Expr, locals: &HashSet<String>, out: &mut HashSet<String>) {

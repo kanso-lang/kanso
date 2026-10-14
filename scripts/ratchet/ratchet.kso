@@ -5414,13 +5414,33 @@ cell_counted_as_a_thunk = row
   (breaking "a_pooled_cell_counted_as_a_thunk")
   no_setup
 
+value_read_never_pooled = row
+  "a call on a builtin's reading never pooled"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_builtin_read_never_pooled")
+  no_setup
+
+pushed_list_pooled = row
+  "a call on a pushed list pooled"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "an_extending_builtin_pooled")
+  no_setup
+
 pool_cells = [chain_never_pooled cell_handed_over_when_built]
 
 pool_counts = [cell_counted_as_a_thunk]
 
 pool_failures = [cell_forced_outside_the_try pooled_binding_left_strict]
 
-pool_rows = list/concat pool_cells (list/concat pool_counts pool_failures)
+pool_builtins = [value_read_never_pooled pushed_list_pooled]
+
+pool_more = list/concat pool_failures pool_builtins
+
+pool_rows = list/concat pool_cells (list/concat pool_counts pool_more)
 
 rows_cq14 = list/concat rows_cq13 pool_rows
 

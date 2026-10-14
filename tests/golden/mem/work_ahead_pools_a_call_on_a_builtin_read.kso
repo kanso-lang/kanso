@@ -1,0 +1,17 @@
+# `report` hands `spin` the length of its own parameter. `length` reads a
+# value and answers a new one, so the call is pooled as a cell like a call on
+# the parameter itself, and the pool forces it while the sleep is parked.
+import "std/time"
+
+fn spin 0 acc
+  acc
+
+fn spin n acc
+  spin (n - 1) (acc + n % 7)
+
+fn report xs
+  sleep 1
+    .> (_ -> print "made")
+    .> (_ -> print "report: {spin (1000 * length xs) 0}")
+
+report [1 2 3]
