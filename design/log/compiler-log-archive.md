@@ -102549,3 +102549,23 @@ worth more than the three rises cost, and welfare banks the difference at
 91.11. `compile_allocs` rose 68 to 14,598 and `interp_allocs` 68 to 587,351, and
 the floor drops by what they cost, since this builds a ruled part of the
 language.
+
+## 2026-10-12 — concat reads the bytes text/bytes answers, on every engine
+
+From #1891, the third item: the 2026-08-23 gavel says a list is never bytes,
+and what `concat` declares decides which engine is right. Appendix b declares
+`text/bytes string → int[]` and `text/concat` as appending two lists, so a
+value `text/bytes` answered is a list to `concat`. Native code already read a
+bytes value as its byte values on either side and answered a list. The
+interpreter matched only two `List`s and refused anything else with "concat
+takes two lists", which is what the httpd, mustache, chip8 and ugit ports hit.
+The interpreter now reads a `Bytes` operand as its byte values, and the answer
+is a list on both engines. The gavel's other direction is unchanged: a list is
+still never read as bytes.
+
+`tests/golden/micro/concat_reads_the_bytes_text_bytes_answers` puts bytes on
+the left, on the right, on both sides, and as a slice of `text/bytes`. Main's
+interpreter stopped at the first line.
+
+Appendix b also says `concat` takes strings, and neither engine does: both
+refuse two strings with the same message. #1906 asks which way that goes.

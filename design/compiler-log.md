@@ -76,26 +76,6 @@ Merged with main after #1904, the same rows land on `emitted_other_calls`
 17,676, `emitted_other_branches` 16,559, `emitted_other_lines` 148,263 and
 `browser_compile_instructions` 393,489,081.
 
-## 2026-10-12 — concat reads the bytes text/bytes answers, on every engine
-
-From #1891, the third item: the 2026-08-23 gavel says a list is never bytes,
-and what `concat` declares decides which engine is right. Appendix b declares
-`text/bytes string → int[]` and `text/concat` as appending two lists, so a
-value `text/bytes` answered is a list to `concat`. Native code already read a
-bytes value as its byte values on either side and answered a list. The
-interpreter matched only two `List`s and refused anything else with "concat
-takes two lists", which is what the httpd, mustache, chip8 and ugit ports hit.
-The interpreter now reads a `Bytes` operand as its byte values, and the answer
-is a list on both engines. The gavel's other direction is unchanged: a list is
-still never read as bytes.
-
-`tests/golden/micro/concat_reads_the_bytes_text_bytes_answers` puts bytes on
-the left, on the right, on both sides, and as a slice of `text/bytes`. Main's
-interpreter stopped at the first line.
-
-Appendix b also says `concat` takes strings, and neither engine does: both
-refuse two strings with the same message. #1906 asks which way that goes.
-
 ## 2026-10-13 — a list concatenated onto in a fold grows where it stands
 
 From #1892's kv port. A fold that grew its accumulator with `concat` rather
