@@ -1829,6 +1829,79 @@ mutation for a concat accumulator anchored on the line naming `text/concat`,
 so it now names `list/concat`, and the mem spec still goes red under it. The
 floor follows the score, since #1906 builds a ruled part of the language.
 
+## 2026-10-13 — six names for the library gaps, and `list/to_sorted`
+
+#1914 rules nine names. Six of them are built here, in kanso, in
+`lib/text/text.kso` and `lib/list/list.kso`, so every engine runs the same
+source and no engine needs a new builtin:
+
+- `text/uppercase` and `text/lowercase` map the twenty-six ASCII letters and
+  pass every other character through. The walk takes `chars` once, looks
+  each letter up by its offset in a 26-letter string, and joins the pieces.
+  Case outside ASCII would need the Unicode tables, which no engine carries.
+- `text/starts_with?` and `text/ends_with?` compare one slice against the
+  prefix or suffix after checking the length, so the slice never runs past
+  the end. Every string begins and ends with the empty one.
+- `text/pad_start` and `text/pad_end` repeat the fill and cut it at the
+  width. A string already that wide, or an empty fill, comes back unchanged.
+- `list/sort_by xs key` merges the way `sort` does and takes from the right
+  half only when its key is strictly smaller, so tied keys keep their order.
+  `key` runs at each comparison; caching it would cost a list of pairs.
+  `list/reverse` reads the list by index from the end.
+
+`recase` has a `none` arm it never takes. The walk stops before it indexes
+past the end, but the checker cannot see that bound and asks for the arm.
+
+Each name has a micro golden, which the interpreter, the native build and
+the page run alike. Appendix B gains entries for the six text names and a
+sentence for the two list verbs, and drops its counts of the list verbs,
+which a second count in the library would have had to track.
+
+#1903's ruling is built beside them. `list/to_sorted xs` answers
+`sorted (sort xs)`, so a caller can reach the arm of `find` that bisects, and
+the list is always in order because the same call sorts it. The bisect tests
+are back in `list_test.kso` through it, and a micro golden checks that `find`
+agrees on the plain list and on `to_sorted`. The mem golden
+`find_bisects_a_list_built_by_to_sorted` pins the bisect: a scan over its
+4,096 elements builds a `step` record per element, and `sh_rec` reads 208
+bytes with the bisect against 512,400 when `find` loses its `sorted` arm.
+
+The other three rulings need the runtime: `delete map key`, `io/read_line`
+and `os/modified`. They follow in their own change. `os/write_bytes` was
+ruled out, so there is nothing to build for it. The ports that worked around
+these gaps live on the unmerged `claude/ports-corpus` branch, and moving
+them onto the names belongs to that branch.
+
+CI's rows price the new library text. Every program that imports std/text or
+std/list compiles the whole module, so the 114 lines added there are paid for
+in lexing, parsing, inference and the check, split across those phases in
+proportion to the text rather than concentrated in one. compile_instructions
+rises from 28,002,980 to 31,634,022 (+13.0%), entry_instructions from
+92,393,206 to 100,520,915 (+8.8%), library_instructions from 91,989,327 to
+100,042,203 (+8.8%), emit_instructions from 7,241,390 to 7,617,766 (+5.2%),
+compile_allocs from 15,984 to 17,990, browser_compile_instructions from
+413,936,384 to 434,142,466 (+4.9%) and browser_compile_peak_bytes from 686,192
+to 726,939. The interpreter row reads 496,099,798 against 495,525,421, with
+interp_allocs 592,223 against 589,689 and interp_peak_bytes 794,345 against
+722,393. Welfare falls from 91.34 to 91.27. These names are ruled (#1914,
+#1903), so the floor drops by that cost. A compiler that left an unreached
+library function unparsed and unchecked would stop this cost from growing with
+each library addition; that is open as a lead.
+
+Two more rows move with the library's size. interp_instructions lands on
+496,099,798 from 495,525,421, and the module sample's module_visits, the
+inference fixpoint's declaration visits in bench/compile_golden_modules.txt,
+lands on 3,663 from 2,909: the fixpoint visits each new declaration on every
+round it is dirty.
+
+The compile-memory gate reads the same text. On `compile_corpus`,
+`front_end_visits` went from 8,133 to 9,326, `front_end_rounds` stayed at 19,
+and `compile_peak_bytes` went from 703,170 to 791,610, 12.6% more held while the
+corpus is checked, because the two modules it imports are 114 lines longer and
+their whole text is held through the check. It costs the welfare meta about
+0.02, and the floor drops by that under the language rule. Checking only what
+an import reaches would take this back, and #1952 tracks it.
+
 ## 2026-10-13 — hex and binary integers, and floats with an exponent
 
 #1889 builds the gavel "hex and binary integers and exponent floats". The

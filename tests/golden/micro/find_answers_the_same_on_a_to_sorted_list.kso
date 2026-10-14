@@ -1,0 +1,12 @@
+# `list/to_sorted` sorts as it wraps, so `find` on its answer bisects a list
+# in order and agrees with `find` on the plain list, misses and ends included.
+import "std/list"
+
+xs = [9 2 7 4 11 6]
+
+ys = list/to_sorted xs
+
+fn both p
+  [(list/find (list/sort xs) p) (list/find ys p)]
+
+pub play = print "{both (v -> v > 5)} {both (v -> v > 20)} {both (v -> v > 0)}"

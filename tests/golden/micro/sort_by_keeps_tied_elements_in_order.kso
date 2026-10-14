@@ -1,0 +1,8 @@
+# "pear" and "kiwi" have the same length and keep the order they came in.
+import "std/list"
+
+words = list/sort_by ["pear" "fig" "apple" "kiwi"] length
+
+down = list/sort_by [3 1 2] (x -> 0 - x)
+
+pub play = print "{words} {down} {list/sort_by [] (x -> x)}"
