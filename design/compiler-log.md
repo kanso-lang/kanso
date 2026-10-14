@@ -21,108 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-12 — a file names only what its module declares and its own imports bring
-
-The second rule of the 2026-10-12 gavel on #1894. A module's files share
-their declarations, and each file sees only the imports it writes. Before
-this, the check enforced that only for qualified spellings: a file writing
-`list/fold` without importing std/list was refused, and the same file writing
-`fold` checked clean because a sibling's import had enrolled the bare name for
-the whole module.
-
-`compile_module_loaded` now hands each file of a several-file module the
-build's names minus the ones it cannot see: a bare name surfaced only by
-imports this file does not write, which no file of the module declares, and
-a rename's spelling that only a sibling's import makes. The refusal names the
-import that would bring the name. A module of one file sees exactly its
-imports, so the work is skipped there.
-
-Two book samples leaned on the old reach. The ch09 simulator's
-`enumerable.kso`, in both `vse/` and `squeeze/`, called `fold` through
-`methods.kso`'s import of std/list. Each now imports it, the ch09 panel shows
-the line, and the paragraph before it says each file imports what it calls.
-The vse repository holds the same file and gets the same line in vse#87. kq
-and kanso-json have no file that leans on a sibling's import. ch07 states the
-rule where it describes a module's files.
-
-`tests/golden/errors_module/a_file_calls_a_name_only_its_sibling_imports`
-pins the refusal: a two-file module where one file imports std/list and the
-other calls `fold` on a list it built. Main checks it clean. The ratchet row
-"a sibling's import seen from every file" hides nothing and turns the corpus
-red.
-
-The rest of #1894 is still owed: arms that travel with a value into a file
-that never imported their owner, and the issue's reproduction, a test file's
-import reaching the module it tests, which #1907 closes by keeping test files
-out of the module.
-
-CI's rows: `compile_instructions` 25,761,215 -> 25,881,551,
-`entry_instructions` 85,207,562 -> 85,381,313 and `library_instructions`
-85,760,222 -> 85,935,582, the cost of handing each file
-of a module its own set of names. The browser compile fell 391,974,060 ->
-391,311,502, emitting 7,016,409 -> 7,013,477 and the interpreter 488,792,115
--> 488,739,816. This change does not touch the code those rows run, so their
-moves are put down to layout, though no run isolated it. The browser fall is
-worth more than the three rises cost, and welfare banks the difference at
-91.11. `compile_allocs` rose 68 to 14,598 and `interp_allocs` 68 to 587,351, and
-the floor drops by what they cost, since this builds a ruled part of the
-language.
-
-## 2026-10-13 — a loop entered from the callee it calls rewinds
-
-From #1892's bc port. A `for` loop in bc held every lap's allocation: 300,000
-laps of `s += i` took 548 MB, and the binary counted 8 beat iterations for
-20,000 laps. The port's interpreter has the shape every tree-walker has.
-`loop_for` and `for_next` are one tail cycle, each lap runs the body through
-`exec` with a plain call, and the `nested` arm of `exec` enters the cycle by a
-tail call, because a loop inside the body is the same cycle again.
-
-A cluster entered by a tail call gets its bracket by emitting the entering
-edge as a plain call. Since #920 that demotion is refused when the cluster can
-reach the caller again, because a caller the cycle re-enters with nothing held
-would stack one frame per lap. The reach counted every mention, so the plain
-call `r = exec body m` refused the entry. A plain call holds its own frame
-while the callee runs, so the stack already grows with each level of nesting,
-and demoting the entry adds one frame to each level and none to each lap. The
-reach now follows what can enter the caller with no frame held: the heads of
-tail calls, every name inside a lambda, and every name used as a value.
-
-`tests/golden/mem/a_loop_entered_from_the_callee_it_calls_rewinds` is the
-reduced program, 100,000 laps through a `nested` entry. Main counts no beat
-and holds eleven arena blocks; with the change it counts 200,000 beat
-iterations and holds one. No other mem golden moved. The bc port's 300,000
-laps take 9 MB, and its 33 fixtures and 47 unit tests agree on all three
-engines. The ratchet row "a cluster refused for a callee it reaches under a
-frame" counts every mention again and turns the mem corpus red.
-
-Two loops in the standard library gain a bracket the same way. std/json's
-blank skip before a value, `value_for` and `value_blank`, is entered by a
-tail call from `parse_value` and reaches it again only under the plain call
-an array or object makes for each element. std/regexp's matcher cycle is in
-the same position, and its groups lose the padding a wider tail group had
-given them. Of the fourteen benchmarks only runbench and scanbench emit
-different code. Measured here against main's compiler on the same host,
-runbench ran 829 fewer instructions and scanbench 6 more, and every
-allocation counter in the twelve cost veins is unchanged.
-`a_cluster_the_entering_caller_is_reached_from_stays_grow_only` now hands the
-re-entering function on as a value, which still refuses the entry, and
-`a_cluster_reaching_its_caller_under_a_plain_call_is_a_beat` pins the plain
-call.
-
-CI's rows. The two benchmarks whose IR changed gain their brackets:
-work_runbench lands on 1,170,034,251, 829 fewer, and work_scanbench on
-273,515, eight fewer. The brackets are code: text lands on 4,840,798, up
-5,952 (scanbench 3,888, runbench 2,064), emitted_other_calls on 17,531,
-emitted_other_branches on 16,476 and emitted_other_lines on 147,327.
-emit_instructions falls 522 to 7,012,955. The tab runs the same analysis,
-which now walks each body for its frameless names:
-browser_compile_instructions lands on 392,099,969, up 788,467, and
-browser_compile_peak_bytes on 676,511, up 786.
-
-Merged with main after #1904, the same rows land on `emitted_other_calls`
-17,676, `emitted_other_branches` 16,559, `emitted_other_lines` 148,263 and
-`browser_compile_instructions` 393,489,081.
-
 ## 2026-10-12 — concat reads the bytes text/bytes answers, on every engine
 
 From #1891, the third item: the 2026-08-23 gavel says a list is never bytes,
@@ -1868,3 +1766,68 @@ binary's layout: compile_instructions by 9,355 to 28,002,980,
 entry_instructions by 30,753 to 92,393,206, library_instructions by 30,149 to
 91,989,327 and interp_instructions by 3,960 to 495,525,421. The floor follows
 the score, since #1889 builds a ruled part of the language.
+
+## 2026-10-14 — kq's rise at the 2169a0ff pin is clang 18 linking without `deadargelim`
+
+When kq's pin moved to 2169a0ff (kq#190), its instruction rows rose: print_small
+by 5.7% and path_small by 13.5%. CI builds kq with the runner's clang, which
+is 18. Under clang 19 the same pin move is +1.5% on print_small and +0.07% on
+path_small.
+
+A bisect of #1938's carrier under clang 18 stops at its first step, #1898
+with #1896. That step lets clang 18 link through `LTO_O3_WITHOUT_DEADARGELIM`,
+which clang 19 already used. Clang 18's own `lto<O3>` aborted in `deadargelim`
+on kq once closure tail calls became `musttail`.
+
+To isolate the pipeline, I applied only the probe and pipeline change to
+38fd2e60, the tree before the carrier. Built that way, kq reads print_small
+27,704,820 and path_small 11,933,888, against 26,297,450 and 10,519,854
+without the change. The new pin reads 27,793,443 and 11,934,905, so the
+pipeline accounts for all of the rise except 88,623 on print_small and 1,017
+on path_small. All six readings were taken in this container under clang 18
+with `--counters`.
+
+So the cost is clang 18's `deadargelim`: the pass that dropped the dead
+arguments cannot run once tail calls are `musttail`. kanso's own cost goldens
+build with clang 19, and kq's rows were counted under 18.
+kq#191 records the attribution in kq's instructions golden and selects clang 19
+in kq's spec job, so its rows describe the build the rest of the project
+measures. CI read them there as print_small 25,716,192, print_big 245,768,599,
+path_small 10,603,649 and path_big 104,470,133, between 7.5% and 11.3% under
+the clang 18 rows at the same pin.
+
+## 2026-10-14 — an arm64 release build keeps every tail call a jump
+
+#1912. An arm64 release build took `tailcc` away from every arm wider than
+eight argument words (`narrow_tailcc`), so a loop through a wide arm spent a
+frame per hop. Dropping the narrowing had failed the macOS arm job:
+`a_match_holds_the_literal_its_pattern_spells` printed nothing.
+
+That failure reproduces off the arm job. The release IR, without the narrowing,
+built for `aarch64-linux-gnu` with clang 19 and run under `qemu-aarch64`, dies
+on SIGSEGV at -O1 and above and prints all eight lines at -O0. Running the
+middle end at -O1 and `llc` at -O0 prints them too, so the backend is at fault.
+`llc -opt-bisect-limit` puts the first bad step at CodeGenPrepare on
+`regexp/cutting_6`, an arm of six `%KValue`s, twelve words. Its last action on
+one path is an ordinary call to `k_b_push`. The middle end had marked that call
+`tail`, CodeGenPrepare duplicated the return to make it a sibling call, and the
+arm64 backend gets the stack wrong for a sibling call out of a `tailcc` function
+whose own arguments arrived on the stack.
+
+Marking every plain call in the wide arms `notail` after the middle end fixes the
+program. Before it does not, because the emitter's IR carries no `tail`
+markers: the middle end adds them, and inlining brings calls in with their own.
+The function attribute `"disable-tail-calls"="true"` is read at codegen, after
+both. On every `tailcc` function wider than eight words it turns those sibling
+calls back into calls and returns. It leaves `musttail` alone. With it, the
+fixture prints all eight lines at -O1 and -O3. In its assembly, 47 `musttail`
+edges in the marked functions are a `b` to their callee. The others I read had
+been inlined, and the jump that remained was a `b` or, through a closure, a
+`br`.
+
+`wide_tailcc_keeps_its_jumps` replaces `narrow_tailcc` on arm64 release builds.
+The three wide-arm tests in `tests/a_big_object_decodes_in_a_release_build.rs`
+lose their x86-64 gate, so the macOS arm job now runs them, and the micro corpus
+runs there without the narrowing for the first time. A wide arm on arm64 gives
+up only its sibling calls into helpers, which become a call and a return. x86-64
+builds are unchanged.
