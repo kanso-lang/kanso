@@ -1769,10 +1769,10 @@ main's golden back and scoring again.
   jsonbench reads 858,186,231 -> 830,048,931 because it now measures
   `std/json`; it is not a welfare term. encodebench rose 448,210 and
   widebench 176,756, the unfused `utf8` the frozen decoders now call.
-- compile_instructions 31,948,363 -> 32,415,383 (-0.0006) and
-  entry_instructions 101,372,705 -> 103,156,247 (-0.0025). The library grew:
+- compile_instructions 31,940,603 -> 32,407,659 (-0.0006) and
+  entry_instructions 101,349,935 -> 103,133,571 (-0.0025). The library grew:
   `none` arms in lib/text, lib/path and lib/regexp, and a second slice
-  builtin to type. library_instructions moved 100,887,003 -> 102,672,077 for
+  builtin to type. library_instructions moved 100,864,357 -> 102,649,522 for
   the same reason and is not a term.
 - compile_allocs 17,941 -> 17,980 (-0.0002), compile_peak_bytes 789,911 ->
   795,133 (-0.0012). front_end_visits went 9,326 -> 9,225 and rounds held at
