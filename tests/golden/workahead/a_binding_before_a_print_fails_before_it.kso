@@ -1,0 +1,18 @@
+# Two effect lines run as one group, and every binding runs before the group
+# starts, so the size runs out of stack before "start" prints. The runtime
+# pools only at a sleep outside a group, so nothing here moves into a park,
+# and the transcript is the one the program as written produces.
+import "std/time"
+
+fn deep 0
+  [0]
+
+fn deep n
+  [n (deep (n - 1))]
+
+fn size xs
+  length xs
+
+total = size (deep 1000000)
+print "start"
+sleep 10 .> (_ -> print "first") .> (_ -> print "then {total}")

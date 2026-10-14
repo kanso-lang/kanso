@@ -80,3 +80,12 @@ fn a_moved_binding_fails_at_the_park() {
     let program = corpus().join(format!("{name}.kso"));
     the_transcript_is_the_one_written("play", name, &program);
 }
+
+/// A binding ahead of an effect group fails before the group's first line
+/// prints. The sleep in a group does not pool, so nothing moves past "start".
+#[test]
+fn a_binding_before_a_print_fails_before_it() {
+    let name = "a_binding_before_a_print_fails_before_it";
+    let program = corpus().join(format!("{name}.kso"));
+    the_transcript_is_the_one_written("play", name, &program);
+}
