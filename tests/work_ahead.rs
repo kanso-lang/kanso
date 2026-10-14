@@ -89,3 +89,13 @@ fn a_binding_before_a_print_fails_before_it() {
     let program = corpus().join(format!("{name}.kso"));
     the_transcript_is_the_one_written("play", name, &program);
 }
+
+/// Two effect lines run as one group, and the pool runs when every side is
+/// waiting. The size it lifts runs out of stack there, is dropped, and fails
+/// again where "then" reads it, after "start" and "first".
+#[test]
+fn a_pooled_overflow_in_a_group_fails_where_it_is_read() {
+    let name = "a_pooled_overflow_in_a_group_fails_where_it_is_read";
+    let program = corpus().join(format!("{name}.kso"));
+    the_transcript_is_the_one_written("play", name, &program);
+}

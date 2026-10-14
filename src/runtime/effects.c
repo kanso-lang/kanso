@@ -1306,6 +1306,15 @@ static KValue k_schedule(KDesc* join) {
             }
             /* loop to the deadline: usleep may return early on a signal */
             k_out_settle();
+#ifndef __wasm__
+            /* Every side is waiting: the group's first idle point runs the
+               work-ahead pool (#1856), as a bare sleep does. The wall-credit
+               below counts the pool's time against the wait. */
+            if (!k_ahead_ran) {
+                k_ahead_ran = 1;
+                k_ahead_pool();
+            }
+#endif
             for (;;) {
                 long long elapsed = k_ms_since(&sched_t0);
                 if ((long long)wake[pick] <= elapsed) break;
