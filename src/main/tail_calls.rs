@@ -30,57 +30,18 @@ fn defined_symbol(line: &str) -> Option<(String, usize)> {
     Some((name, arg_registers(&line[open + 1..close])))
 }
 
-fn called_symbol(line: &str) -> Option<String> {
-    let at = line.find(" @")?;
-    let rest = &line[at + 2..];
-    let end = rest.find('(')?;
-    Some(rest[..end].trim().trim_matches('"').to_string())
-}
-
-/// tailcc kept on every arm no wider than `widest` argument words, on an
-/// Apple arm64 host.
-///
-/// `tailcc` is what the beat machinery's `musttail` needs. A wide arm here
-/// keeps the C convention instead and every call into it becomes ordinary, so
-/// it spends a frame per hop and a deep recursion through one overflows the
-/// stack, which is loud. Apple's clang still miscompiles a wide arm that
-/// `wide_tailcc_keeps_its_jumps` marks: on the macOS job,
-/// `a_spilling_tail_call_named_with_a_mark` printed nothing, though the same
-/// IR built with clang 18 and 19 for linux arm64 runs correctly under qemu.
-fn narrow_tailcc(ir: String, widest: usize) -> String {
-    let wide: std::collections::HashSet<String> = ir
-        .lines()
-        .filter(|l| l.starts_with("define tailcc ") || l.starts_with("declare tailcc "))
-        .filter_map(defined_symbol)
-        .filter(|(_, regs)| *regs > widest)
-        .map(|(name, _)| name)
-        .collect();
-    let mut here = String::new();
-    let mut out = String::new();
-    for line in ir.lines() {
-        let mut line = line.to_string();
-        if line.starts_with("define ") || line.starts_with("declare ") {
-            here = defined_symbol(&line).map(|(n, _)| n).unwrap_or_default();
-            if wide.contains(&here) {
-                line = line.replacen("tailcc ", "", 1);
-            }
-        } else if line.contains(" call ") {
-            let callee = called_symbol(&line).unwrap_or_default();
-            if wide.contains(&here) {
-                line = line.replace("musttail ", "");
-            }
-            if wide.contains(&callee) {
-                line = line.replace("musttail ", "").replace("tailcc ", "");
-            }
-        }
-        out.push_str(&line);
-        out.push('\n');
-    }
-    out
+/// An arm64 release build's tail calls: each arm wider than the register file
+/// makes no sibling call (`wide_tailcc_keeps_its_jumps`) and keeps its
+/// signature through the link (`wide_tailcc_stays_external`).
+fn arm64_tails(ir: String) -> String {
+    wide_tailcc_stays_external(
+        wide_tailcc_keeps_its_jumps(ir, ARM64_TAILCC_WIDEST),
+        ARM64_TAILCC_WIDEST,
+    )
 }
 
 /// Every `tailcc` function wider than `widest` argument words marked
-/// `"disable-tail-calls"`, on an arm64 host other than Apple's.
+/// `"disable-tail-calls"`, on an arm64 host.
 ///
 /// A `tailcc` function whose arguments spill past x7 receives some of them on
 /// the stack and pops that area itself. At -O1 and above the arm64 backend
@@ -112,6 +73,46 @@ fn wide_tailcc_keeps_its_jumps(ir: String, widest: usize) -> String {
         }
         out.push('\n');
     }
+    out
+}
+
+/// Every `tailcc` function wider than `widest` argument words named in
+/// `@llvm.used`, on an arm64 host, so the link keeps its signature.
+///
+/// A wide arm pops its stack arguments itself, and each caller, after the
+/// call returns, puts back what the callee popped. The LTO link internalizes
+/// the program's functions, and dead-argument elimination may then rewrite an
+/// internal function's signature. Apple's link runs that pass. On the macOS
+/// job it cut `reached?_5_w` in `a_spilling_tail_call_named_with_a_mark` to
+/// one argument and a plain `ret`, while its caller still ran
+/// `sub sp, sp, #0x10` after the call. The stack pointer came back sixteen
+/// bytes off, and the caller's return jumped into the stack. The same IR
+/// compiled without the link keeps every wide signature.
+///
+/// A function named in `@llvm.used` is never internalized, so the pass leaves
+/// it alone. The linux link drops the pass already
+/// (`LTO_O3_WITHOUT_DEADARGELIM`), but only when clang is 18 or 19 and lld
+/// takes the link, so every arm64 host names its wide arms.
+fn wide_tailcc_stays_external(ir: String, widest: usize) -> String {
+    let wide: Vec<String> = ir
+        .lines()
+        .filter(|l| l.starts_with("define tailcc "))
+        .filter_map(defined_symbol)
+        .filter(|(_, regs)| *regs > widest)
+        .map(|(name, _)| format!("ptr @\"{name}\""))
+        .collect();
+    if wide.is_empty() {
+        return ir;
+    }
+    let mut out = ir;
+    if !out.ends_with('\n') {
+        out.push('\n');
+    }
+    out.push_str(&format!(
+        "@llvm.used = appending global [{} x ptr] [{}], section \"llvm.metadata\"\n",
+        wide.len(),
+        wide.join(", ")
+    ));
     out
 }
 
@@ -558,7 +559,7 @@ fn preserve_none_calls(ir: String, runtime: &str) -> String {
 
 #[cfg(test)]
 mod wide_arms {
-    use super::wide_tailcc_keeps_its_jumps;
+    use super::{wide_tailcc_keeps_its_jumps, wide_tailcc_stays_external};
 
     /// A nine-word arm that calls a helper last and jumps to a two-word arm.
     const ARMS: &str = "define tailcc %KValue @\"d/wide_5\"(%KValue %x0, %KValue %x1, %KValue %x2, %KValue %x3, i64 %x4r) {\nentry:\n  %t1 = call %KValue @k_b_push(%KValue %x0, %KValue %x1)\n  %t2 = musttail call tailcc %KValue @\"d/narrow_1\"(%KValue %t1)\n  ret %KValue %t2\n}\ndefine tailcc %KValue @\"d/narrow_1\"(%KValue %x0) {\nentry:\n  ret %KValue %x0\n}\n";
@@ -581,6 +582,23 @@ mod wide_arms {
     #[test]
     fn an_arm_at_the_register_file_is_left_alone() {
         assert_eq!(wide_tailcc_keeps_its_jumps(ARMS.to_string(), 9), ARMS);
+    }
+
+    #[test]
+    fn only_an_arm_past_the_registers_is_kept_from_the_link() {
+        let out = wide_tailcc_stays_external(ARMS.to_string(), 8);
+        assert_eq!(
+            out.strip_prefix(ARMS),
+            Some(
+                "@llvm.used = appending global [1 x ptr] [ptr @\"d/wide_5\"], section \"llvm.metadata\"\n"
+            ),
+            "{out}"
+        );
+    }
+
+    #[test]
+    fn a_program_with_no_wide_arm_names_none() {
+        assert_eq!(wide_tailcc_stays_external(ARMS.to_string(), 9), ARMS);
     }
 }
 

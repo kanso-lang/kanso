@@ -50,8 +50,8 @@ fn root() -> &'static Path {
 /// only these paths build is never constructed while that command is counted.
 const OFF_THE_COUNTED_PATH: &[(&str, &str)] = &[(
     "src/main/tail_calls.rs",
-    "narrow_tailcc, which rewrites emitted LLVM IR. The compile rows stop \
-         before codegen; only `kanso build` reaches it.",
+    "the tail-call rewrites, which rewrite emitted LLVM IR. The compile rows \
+         stop before codegen; only `kanso build` reaches them.",
 )];
 
 #[test]
