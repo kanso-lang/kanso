@@ -103598,3 +103598,25 @@ On CI's rows for the tree merged with main after #1937: compile_instructions
 lands on 26,463,317, entry_instructions on 88,129,856, library_instructions on
 87,707,726, emit_instructions on 7,052,040 and interp_allocs on 588,491.
 interp_instructions falls to 486,939,316.
+
+## 2026-10-12 — a bare imported type with no fields is its module's value
+
+An importer may name a type with no fields bare: `import "std/json"` enrols
+`json_null` beside `json/json_null`. Native code resolved the bare name to the
+type it stands for. The interpreter built a record under the bare spelling, so
+it printed as the importer's own type and compared unequal to `json/json_null`.
+A constructor call already took the type's origin; the fieldless path in
+`resolve` now does the same.
+
+`tests/golden/micro/a_bare_imported_unit_is_its_module_s` prints the bare value
+and compares it with the qualified one, inside a list and out. Before the fix
+the interpreter printed `a_bare_imported_unit_is_its_module_s/json_null` and
+`false` twice where native printed `json/json_null` and `true`.
+
+json's own test suite found it. Under #1883 a test file imports its module,
+and `test_decode_nested` compares a decoded document against a map holding a
+bare `json_null`.
+
+From CI, the interpreter's run of the corpus reads 249 instructions fewer,
+interp_instructions 488,739,816 to 488,739,567 on the merged tree. No other
+row moved, and welfare banks the rise.

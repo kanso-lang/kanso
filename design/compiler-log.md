@@ -245,28 +245,6 @@ to 4,843,470 bytes, `emitted_other_defines` from 2,036 to 2,049 and
 instructions. The floor drops by the difference under the 2026-10-11 ruling
 (#1862).
 
-## 2026-10-12 — a bare imported type with no fields is its module's value
-
-An importer may name a type with no fields bare: `import "std/json"` enrols
-`json_null` beside `json/json_null`. Native code resolved the bare name to the
-type it stands for. The interpreter built a record under the bare spelling, so
-it printed as the importer's own type and compared unequal to `json/json_null`.
-A constructor call already took the type's origin; the fieldless path in
-`resolve` now does the same.
-
-`tests/golden/micro/a_bare_imported_unit_is_its_module_s` prints the bare value
-and compares it with the qualified one, inside a list and out. Before the fix
-the interpreter printed `a_bare_imported_unit_is_its_module_s/json_null` and
-`false` twice where native printed `json/json_null` and `true`.
-
-json's own test suite found it. Under #1883 a test file imports its module,
-and `test_decode_nested` compares a decoded document against a map holding a
-bare `json_null`.
-
-From CI, the interpreter's run of the corpus reads 249 instructions fewer,
-interp_instructions 488,739,816 to 488,739,567 on the merged tree. No other
-row moved, and welfare banks the rise.
-
 ## 2026-10-13 — three port shapes join the run program before their fixes
 
 Three of #1892's items are fixed on open branches, and the run program was
@@ -1681,6 +1659,48 @@ No benchmark sleeps, so no pooled work runs in them, and nothing here
 isolates where the difference comes from. Welfare fell 0.00009 to 91.52451,
 and the floor is lowered by exactly that, since this builds a ruled part of
 #1856.
+
+## 2026-10-14 — Neither verb sends a reader to the other
+
+The 2026-10-14 audit of #1893 found one file shape that both running verbs
+refuse while pointing at each other. A file that declares a function, runs a
+statement and imports a neighbour is a library to `kanso run`, which
+suggested `kanso play`; `kanso play` takes the stdlib and nothing else, and
+suggested `kanso run`. Both refusals now give the route that runs the file:
+move the statements into a main.kso beside it, mark the definitions they use
+`pub`, and run the directory. A play file of statements alone that imports a
+neighbour is still sent to `kanso run`, which takes it.
+
+`tests/golden/play/beside/sum.kso` is the reduction. Its `.stderr` and
+`.run.stderr` pin what each verb says, and
+`definitions_beside_a_local_import_are_sent_to_a_module` in
+`tests/play_verb.rs` builds the module the messages describe and runs it.
+
+No test read the `.stderr` files in `tests/golden/play`. The archive noted
+this for one of them on 2026-10-10. `every_play_golden_is_read` now reads
+every golden in that directory: each `.stdout` on both engines, each
+`.stderr` under `play`, and each `.run.stderr` under `run`. Two goldens
+were stale. `no_local_imports.stderr` spelled the import without its
+`./`. `decls_after_statements.stderr` held a refusal the play parser
+dropped when it began sorting a file's lines by kind; that fixture now
+prints `first`, so its golden is a `.stdout`.
+
+The audit's other findings on #1893 are open there. An insisting form's
+failure names the library line instead of the call, and neither a wrong
+kind reaching a builtin or operator nor a stack overflow has a location.
+
+CI's rows for this branch fall, and the change reaches no decision they
+count, so the move is the binary's layout: `compile_instructions`
+22,679,084 -> 22,664,963, `entry_instructions` 75,152,899 -> 75,111,766,
+`library_instructions` 74,839,906 -> 74,798,192, `emit_instructions`
+5,440,488 -> 5,439,036, and `interp_instructions` 492,635,997 ->
+492,629,961. The tab's compile rises: `browser_compile_instructions`
+382,155,032 -> 382,297,788, on rustc 1.98.1. The arms this change adds run
+only when a file is refused, and no file in the corpus is. Marking
+`local_import` cold moved the row by 1,529, so the rise is not that
+function. The browser rise outweighs the five falls by less than 0.0001 of
+welfare, and the floor moves to the score with the reason recorded, as it
+did for kanso#1959 and kanso#1963.
 
 ## 2026-10-14 — The work-ahead rig builds again
 

@@ -1,0 +1,6 @@
+import "./calc"
+
+fn three _
+  3
+
+print "{calc/twice (three 0)}"

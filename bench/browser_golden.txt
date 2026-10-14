@@ -34,8 +34,12 @@
 # 2026-10-14: the emitter moves to src/codegen/emit.rs (kanso#1954), a pure
 # move. browser_compile_instructions 437,381,890 -> 437,381,994, a RISE of
 # 104, which is layout. The run rows are unchanged.
+# 2026-10-14: the two running verbs' refusals name the route that runs a
+# file with a local import (kanso#1976). browser_compile_instructions
+# 382,155,032 -> 382,297,788, a RISE of 142,756 (+0.04%), on rustc 1.98.1.
+# The run rows are unchanged.
 # measured-on rustc=1.98.1
-browser_compile_instructions=382155032
+browser_compile_instructions=382297788
 browser_compile_peak_bytes=643478
 browser_run_instructions=34181240
 browser_run_peak_bytes=1441792
