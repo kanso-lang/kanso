@@ -34,8 +34,12 @@
 # 2026-10-14: the emitter moves to src/codegen/emit.rs (kanso#1954), a pure
 # move. browser_compile_instructions 437,381,890 -> 437,381,994, a RISE of
 # 104, which is layout. The run rows are unchanged.
+# 2026-10-14: a call on a function's locals is pooled as a cell (kanso#1978).
+# browser_compile_instructions 382,155,032 -> 381,258,771, a FALL of 896,261;
+# browser_compile_peak_bytes 643,478 -> 643,605; browser_run_instructions
+# 34,181,240 -> 34,181,355. On rustc 1.98.1.
 # measured-on rustc=1.98.1
-browser_compile_instructions=382155032
-browser_compile_peak_bytes=643478
-browser_run_instructions=34181240
+browser_compile_instructions=381258771
+browser_compile_peak_bytes=643605
+browser_run_instructions=34181355
 browser_run_peak_bytes=1441792
