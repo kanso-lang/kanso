@@ -245,85 +245,6 @@ to 4,843,470 bytes, `emitted_other_defines` from 2,036 to 2,049 and
 instructions. The floor drops by the difference under the 2026-10-11 ruling
 (#1862).
 
-## 2026-10-12 — a local arm shadows only its own shape
-
-The fourth rule of the 2026-10-12 gavel on #1894. Rule 1 left a gap: a module
-that wrote `area` for its own square resolved every `area` call to its own
-arms, so a circle it was handed found no arm and stopped at run time with "no
-overload of `report/area` matches these arguments".
-
-The resolver now also records an arrived call of a function the module itself
-declares. The call keeps its name and resolves where it stands; the declaration
-it sits in keeps a list of such calls, each by its span and the name it wrote.
-When the program is whole, enrollment looks at each listed call whose name some
-owner writes. If an owner's arm has a shape none of the module's arms has, the
-call goes to a group of its own, `~report~area`, holding the module's arms of
-that name and the owners' arms of other shapes. A shape is the type each
-parameter matches, read through a bare clone to the type it copies. Every other
-listed call stays on the module's own group, which is where most of them
-belong: in the entry corpus 716 calls are listed and 77 name a function an
-owner writes, all three of them (`fold`, `iter`, `next`) the library's own.
-The wrapper rewrite leaves a listed call alone until enrollment has decided,
-because the group it may join is not the wrapper's. A compile that never
-enrolls, the REPL's, a library's alone and a module's without an entry, drops
-the lists.
-
-A module the program imports is checked before the program fills the groups.
-Its listed calls are still on the module's own group when it is checked, so a
-function only those calls reach is called; `tests/golden/travel/told` is the
-postcard, a module whose `told?` only a call on a parameter reaches. The first
-build renamed every such call into a traveling group and back, which cost the
-entry check 7.8M instructions; leaving the names alone costs 1.74M there and
-0.37M on the compile corpus, measured here against rule 1's branch.
-
-Two fixes came with it. An owner reached only through another module read as
-private, because a dependency's `pub` is demoted at each module boundary, so
-its arms never traveled. A declaration now keeps `written_pub`, what its own
-source said, and owners are judged on that. And a dispatch diagnostic on a
-traveling group named `~combine`; `ast::spoken` now gives the name the call
-wrote.
-
-`tests/golden/travel/shade` hands a module that writes `area` for a square
-both a circle and a square, and both engines print `12` and `25`.
-`two_owners_tie_on_a_traveling_call` in the module error corpus is rule 4's
-refusal: two owners' arms each more specific in a different position, one of
-them reached through a module that imports it. The ratchet row "a local arm
-that shadows every shape" keeps such calls off the traveling path and turns
-the run test red. ch11 states the rule.
-
-CI's rows, against #1916's: entry_instructions lands on 87,981,735, up
-1,695,428, and library_instructions on 87,561,579, up 1,056,426, the listed
-calls the resolver records and enrollment reads; compile_instructions lands
-on 26,419,302, up 367,003. compile_allocs lands on 15,358, up 760, one list per
-declaration that shades a call, and front_end_visits on compile_corpus
-on 7,990, up eight. The interpreter's run of the corpus allocates more:
-interp_allocs lands on 588,363, up 1,012, and interp_peak_bytes on 692,375, up
-5,216, because a module's declarations carry their lists into the run.
-emit_instructions lands on 7,028,480, up 8,946. interp_instructions falls
-434,783 to 488,304,631. This builds rule 4 of the 2026-10-12 gavel, so the
-floor drops by what it costs.
-
-The front end holds 19,360 more bytes while it checks the compile corpus:
-compile_peak_bytes lands on 694,044, up from 674,684. CI's cost job and this
-container read the same number under rustc 1.98.1, the host the golden's
-measured-on line names.
-
-Merged with #1916's branch after #1904, the tab's compile lands on
-`browser_compile_instructions` 393,209,858 and `browser_compile_peak_bytes`
-677,261: 27,228 instructions and 1,536 bytes above #1916's reading on the same
-main, for the shape check a local arm now makes.
-
-On CI's rows for the tree merged with main after #1904: `compile_instructions`
-25,803,156 -> 26,057,907, `entry_instructions` 85,149,258 -> 86,302,801,
-`library_instructions` 85,703,128 -> 86,519,482, `emit_instructions` 7,035,926
--> 7,048,046 and `interp_allocs` 587,479 -> 587,485; `interp_instructions`
-falls 298,363 to 487,131,077.
-
-On CI's rows for the tree merged with main after #1937: compile_instructions
-lands on 26,463,317, entry_instructions on 88,129,856, library_instructions on
-87,707,726, emit_instructions on 7,052,040 and interp_allocs on 588,491.
-interp_instructions falls to 486,939,316.
-
 ## 2026-10-12 — a bare imported type with no fields is its module's value
 
 An importer may name a type with no fields bare: `import "std/json"` enrols
@@ -1760,3 +1681,53 @@ No benchmark sleeps, so no pooled work runs in them, and nothing here
 isolates where the difference comes from. Welfare fell 0.00009 to 91.52451,
 and the floor is lowered by exactly that, since this builds a ruled part of
 #1856.
+
+## 2026-10-14 — A call on a function's locals is pooled as a cell
+
+#1856's pool took only constants: calls whose arguments name nothing local,
+lifted out of the entry. A function that sleeps and then reports on its own
+parameter had no constant to offer, so its work ran after the wait:
+
+```
+fn report n
+  sleep 2000
+    .> (_ -> print "delivery: made")
+    .> (_ -> print "report: {spin (150000000 + n) 0}")
+```
+
+This is the "Discovery" piece of the ruling, the (site, args) pool. A
+function whose result is a chain beginning with a sleep, and which is the
+only arm of its name and count, has each certain call on its locals bound
+ahead of the chain as a cell. `emit_cell` already builds a cell from a site
+and the values it captures; `ahead::pool` names the binding, `demand` makes
+it a cell whatever its uses, and the chain's sleep carries the cells in its
+descriptor. The runtime queues them when that sleep parks and forces them, in
+order, under the same try as the constants. A chain that is never run parks
+nowhere, so its cells are made and never forced, and no work runs early that
+the program would not have run. The interpreter does not pool.
+
+A cell the pool forces is not a lazy binding the program has, and the thunk
+counters are what both engines must agree on, so `k_thunk_new_pooled` builds
+it with a flag those counters skip. `ahead_forced` counts it instead.
+
+The program above, run with `kanso play` on this container: 3.87 to 4.07 s on
+main, 2.01 s on this branch, with the same output. Built and run directly,
+the dev binary takes 3.95 s against 2.00 s, and the release binary 2.20 s
+against 2.00 s.
+
+Pinned by:
+- `tests/golden/mem/work_ahead_pools_a_call_on_a_local`: `ahead_forced=1`,
+  and the thunk counters at zero on both engines;
+- `tests/golden/mem/work_ahead_leaves_a_chain_never_run`: a chain built and
+  never run, `ahead_forced=0`;
+- `tests/golden/workahead/a_pooled_cell_fails_where_it_is_read`: the
+  overflow is raised after "first", on both engines;
+- five ratchet rows, each seen red.
+
+`a_group_that_never_pools.sh` anchored on a comment and a call this change
+rewrote, so it is rewritten to the new ones; every other mutation still
+applies.
+
+Still not built for #1856: a lambda's body, which has no statements to bind a
+cell in; a function with more than one arm of its name and count; and the cost
+gate's view of a pooled call, which admits any call of the program's own.
