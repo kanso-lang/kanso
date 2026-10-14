@@ -78,15 +78,22 @@ fn compile_play_inner(file: &str, source: &str) -> Result<ast::Program, String> 
     let program = parser::parse_play(&lexed).map_err(|d| diag::render(&d, file, source))?;
     for import in &program.imports {
         if !import.path.starts_with("std/") {
-            let d = diag::Diagnostic::new(
-                "import",
-                format!(
+            // `kanso run` takes bare statements beside a local import, and
+            // refuses a file that also declares something, so only a file of
+            // statements is sent there.
+            let message = match program.fns.iter().any(|f| f.name != ast::ENTRY) {
+                true => format!(
+                    "a play file imports the stdlib and nothing else — to \
+                     import `{}`, {TO_A_MODULE}",
+                    import.path
+                ),
+                false => format!(
                     "a play file imports the stdlib and nothing else — \
                      `{}` needs a real program (`kanso run`)",
                     import.path
                 ),
-                import.span,
-            );
+            };
+            let d = diag::Diagnostic::new("import", message, import.span);
             return Err(diag::render(&[d], file, source));
         }
     }
@@ -620,13 +627,6 @@ fn compile_library_beside(
     Ok(program)
 }
 
-/// Route a single source file to the right compile for a verb, by content:
-/// `pub play` is a play library, bare statements are an entry, definitions
-/// alone are a library (runnable only under a library verb like `test`).
-/// Does this file declare `pub play`? Answered off the parse, so comments and
-/// string literals cannot change how a file compiles. A file that does not
-/// parse declares nothing, and the compile it is routed to reports the syntax
-/// error properly.
 /// Whether the file holds tests, by the same rule `kanso test` collects them:
 /// a zero-argument constant named `test_*`. A file of those has an entry
 /// point already — it is just spelled for a different verb, and saying so
@@ -643,15 +643,34 @@ fn declares_tests(source: &str) -> bool {
 /// it is true for the first and a dead end for the second.
 ///
 /// Read from the parsed program rather than a line prefix, so `pub play`
-/// inside a string or a comment is not mistaken for the export.
+/// inside a string or a comment is not mistaken for the export. A file that
+/// does not parse exports nothing, and the compile it is routed to reports
+/// the syntax error.
 fn exports_play(source: &str) -> bool {
     let Ok(lexed) = lexer::lex(source) else { return false };
     let Ok(program) = parser::parse(&lexed) else { return false };
     program.fns.iter().any(|d| d.name == "play" && d.is_pub)
 }
 
-/// The CLI and the browser share this so the engines never diverge on which
-/// compile a file gets.
+/// What runs a file that declares something and imports a neighbour: neither
+/// verb takes it as it stands, so both refusals give this one route.
+const TO_A_MODULE: &str = "move the statements into a main.kso beside it, mark \
+     the definitions they use `pub`, and run the directory with `kanso run`";
+
+/// The first import that leaves the stdlib, as the file spells it. Read off
+/// the play parse, the one that accepts definitions beside statements; a file
+/// that does not parse that way names none.
+fn local_import(source: &str) -> Option<String> {
+    let lexed = lexer::lex(source).ok()?;
+    let program = parser::parse_play(&lexed).ok()?;
+    program.imports.into_iter().map(|i| i.path).find(|p| !p.starts_with("std/"))
+}
+
+/// Routes a single source file to the compile its verb and content call for:
+/// a file named main.kso, or one of bare statements, is an entry; a file of
+/// definitions is a library, which `check` and `test` compile and the running
+/// verbs refuse with the route that would run it. The CLI and the browser
+/// share this so the engines never diverge on which compile a file gets.
 pub fn compile_source(command: &str, file: &str, source: &str) -> Result<ast::Program, String> {
     // main.kso is an entry by NAME (the module-shape gavel): the filename
     // states the intent, so a definition inside one gets the entry
@@ -680,6 +699,13 @@ pub fn compile_source(command: &str, file: &str, source: &str) -> Result<ast::Pr
             "error: `{file}` is a library — nothing to run. it exports \
              `play`: import the module from an entry file, or give the \
              module a main.kso entry\n"
+        )),
+        // `kanso play` refuses a local import, so a file that declares and
+        // imports a neighbour is sent to the module that runs it.
+        (_, true) if !library_verb && local_import(source).is_some() => Err(format!(
+            "error: `{file}` is a library — nothing to run, and `kanso play` \
+             cannot run it either, because it imports `{}`. {TO_A_MODULE}\n",
+            local_import(source).unwrap_or_default()
         )),
         (_, true) if !library_verb => Err(format!(
             "error: `{file}` is a library — nothing to run. give the module a \
