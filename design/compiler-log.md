@@ -245,53 +245,6 @@ to 4,843,470 bytes, `emitted_other_defines` from 2,036 to 2,049 and
 instructions. The floor drops by the difference under the 2026-10-11 ruling
 (#1862).
 
-## 2026-10-12 — arms travel with the value
-
-The first rule of the 2026-10-12 gavel on #1894. A value carries the arms its
-type's owner wrote, so a module handed a `circle` may call `area c` without
-importing geo.
-
-The check decides which calls travel. The resolver marks a local as arrived
-when the function was handed it: a parameter, a name bound to a field or
-element of one, a lambda's parameter when the lambda goes to a call that also
-carries an arrived value, and the answer of a traveling call on one. A bare
-call that names nothing the file can see, with an arrived argument, is
-recorded instead of refused. The answer of a local function is not arrived,
-as the gavel lists it, so `area (twice c)` stays an unknown name.
-
-Each recorded call is renamed into a traveling group, `~area`, a spelling no
-program can write. A dependency compiles with the call left there. The root
-of the program, an entry file or a directory with `main.kso`, fills each group
-it calls with clones of every pub arm of that name whose module owns one of
-its parameter types, which is rule 4's ownership condition. When no owner
-wrote the name, the call is refused where it was written: "no module in this
-program writes `perimeter` for a type it owns, so no value carries it". Checked
-alone, a library takes the call on a parameter and refuses it on a value it
-made. Native code quotes a symbol with `~` in it, as it does one with `/`.
-
-`tests/arms_travel.rs` runs `tests/golden/travel/area` on both engines: a
-report module that never imports geo calls `area` on a circle it was handed
-and on each circle of a list. Main refused both calls, from `kanso run` and
-from `kanso check report`. Two error goldens pin the refusals:
-`an_arm_called_on_a_value_the_file_made` and
-`a_traveling_call_no_owner_answers`. The ratchet row "an arm left behind by
-its value" lets no call travel and turns the run test red. ch11 states the
-rule and ch07 points to it.
-
-Still open on #1894: a local arm of the same name shadows the traveling ones
-outright, where rule 4 asks for a local arm of the same shape to shadow and
-the rest to stay reachable. A module that declares its own `area` for a
-square and is handed a circle cannot reach geo's arm yet.
-
-CI's rows put `compile_instructions` at 26,052,299 (+170,748, +0.66%),
-`entry_instructions` at 86,286,307 (+904,994, +1.06%), `library_instructions`
-at 86,505,153 (+569,571, +0.66%) and `emit_instructions` at 7,019,534
-(+6,057). `compile_allocs` rose 75 to 14,605 and `interp_allocs` 74 to 587,357.
-`interp_instructions` fell 402 to 488,739,414. The tab runs the same front end,
-and `browser_compile_instructions` rose to 393,182,630 (+804,255, +0.20% on main after #1927).
-This builds a ruled part of the language, so the welfare floor drops by what
-it costs.
-
 ## 2026-10-12 — a local arm shadows only its own shape
 
 The fourth rule of the 2026-10-12 gavel on #1894. Rule 1 left a gap: a module
@@ -1756,3 +1709,54 @@ row moved. Welfare rose 0.00022 to 91.52460, and the floor is banked there.
 Still not built for #1856: pooling inside an effect group, and calls whose
 arguments name locals that cannot move, which need the (site, args) pool.
 
+## 2026-10-14 — A group of effect lines pools while it waits
+
+#1856's work-ahead pool ran only at a bare sleep, and a body with two or more
+effect lines has none: the parser joins the lines into one group, and the
+scheduler runs a sleep inside it by parking that side. So `print "start"`
+followed by a sleep with work behind it never pooled.
+
+The scheduler now runs the pool at the group's first idle point, the first
+time every side is waiting on a timer, and the wall-credit it already keeps
+counts the pool's time against that wait. Which work runs there is fixed at
+compile time and the idle point is a fact of the schedule, never of the
+clock, so the transcript and the counters are the same on every run. On the
+compiler side, `ahead` reads each side of the group that begins with a sleep
+the way it reads a lone statement. A failure in the pool is dropped and
+raised where the value is read, as before, so a program in a group prints
+the transcript it prints without the pool. Bindings still move only when the
+park is the body's single effect line.
+
+`print "start"` and a 2-second sleep followed by a report of `spin 150000000
+0`, run with `kanso play` on this container: 3.80 s and 3.96 s on main, 2.08 s
+and 2.01 s on this branch, with the same output.
+
+Pinned by:
+- `tests/golden/mem/work_ahead_forces_inside_a_group`: `ahead_forced=1`, where
+  main printed no work-ahead counters at all;
+- `tests/golden/workahead/a_pooled_overflow_in_a_group_fails_where_it_is_read`:
+  "start", "first", then the overflow, on both engines;
+- ratchet rows "a group that never pools" and "a group's side left unread",
+  each seen red on the new golden.
+
+`k_schedule` grew 16 bytes on CI, and every benchmark in
+`bench/text_golden.txt` grew by the same 16, so `text` went from 4,878,382 to
+4,878,606. `browser_compile_instructions`
+went from 382,154,970 to 382,155,032, though the tab compiles the pool out.
+The front end rose: `compile_instructions` 22,665,216 -> 22,679,084,
+`entry_instructions` 75,110,504 -> 75,152,899, `library_instructions`
+74,796,982 -> 74,839,906, `emit_instructions` 5,438,920 -> 5,440,488 and
+`interp_instructions` 492,625,557 -> 492,635,997. Codegen rose 967 at dev,
+`codegen_instructions_dev` 112,581,257 -> 112,582,224, and 1,390 at release,
+`codegen_instructions_release` 441,727,359 -> 441,728,749.
+
+Three of the four CI runs landed on Intel parts, and the fourth on the AMD
+part `bench/instructions_golden.txt` is recorded on. It moved four work rows:
+`work_encodebench` 2,387,084,547 -> 2,387,083,945, `work_oneshot` 13,207,833
+-> 13,207,567, `work_livebench` 1,474,835,144 -> 1,474,835,683 and
+`work_runbench` 1,177,696,572 -> 1,177,697,090. This container, an Intel part, read the same
+four differences between main and this branch built from the same inputs.
+No benchmark sleeps, so no pooled work runs in them, and nothing here
+isolates where the difference comes from. Welfare fell 0.00009 to 91.52451,
+and the floor is lowered by exactly that, since this builds a ruled part of
+#1856.
