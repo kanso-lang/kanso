@@ -1846,6 +1846,16 @@ them. Three runtime rows move with the smaller binaries: `work_deepbench`
 programs whose work did not change, so they are layout. Every allocation
 counter holds.
 
+The ratchet's row "a door matched by the prefix of its name" proved nothing
+on this branch, and it proves nothing on main either: with the mutation
+applied, `micro_corpus_agrees_across_engines` stays green at dfc9fe2f. The
+mutation hands the door's convention to `k_b_utf8_slice` and
+`k_b_utf8_slice_raw`, and since a slice past the end answers `none` a program
+reaches them only through the JSON decoder's `string_ok`, for a string with
+no escape in it. Every decoded string in the micro corpus had an escape.
+`a_plain_decoded_string_is_cut_in_place` decodes three plain strings; under
+the mutation the release build prints `["" "" ""]` and the row goes red.
+
 Lazy parsing by declaration, the larger fix #1952 names, has not been built. This
 change narrows what is read; it does not make one declaration cheaper to
 read.
