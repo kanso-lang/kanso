@@ -1,8 +1,7 @@
 import "std/list"
-import "std/text"
 
 fn kept acc more
-  text/concat acc more
+  list/concat acc more
 
 pub fn said flags
   each = list/to_list (list/fold flags [] kept)

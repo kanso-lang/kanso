@@ -596,7 +596,7 @@ fn a_merged_err_reports_no_birth_site() {
             "  v + 1\n",
             format!(
                 "error[endpoint]: unhandled err reached the entry: {reason}\n  \
-                 born in text/to_float at std/text/text.kso:89\n"
+                 born in text/to_float at std/text/text.kso:86\n"
             ),
         ),
     ] {

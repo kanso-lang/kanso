@@ -21,7 +21,7 @@ fn visiting todo found
   os/list_dir here .> (names -> divided here rest found names [] [])
 
 fn divided here rest found names dirs files
-  finished = gathered (text/concat rest dirs) (text/concat found files)
+  finished = gathered (list/concat rest dirs) (list/concat found files)
   more = weighed here rest found names dirs files
   if (length names == 0) finished more
 
@@ -31,7 +31,7 @@ fn divided here rest found names dirs files
 # empty arm answers instead. The retired `names[1]!` raised here and the `if`
 # threw the raise away, which is why the shape only appears now.
 fn emptied rest found dirs files
-  gathered (text/concat rest dirs) (text/concat found files)
+  gathered (list/concat rest dirs) (list/concat found files)
 
 fn weighed here rest found names dirs files
   return emptied rest found dirs files if length names < 1

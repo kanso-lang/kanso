@@ -28,7 +28,7 @@ front = ["style.css" "kanso.wasm" "kanso-runtime.wasm" "play.js"]
 
 back = ["landing-play.js" "kanso-engine.js"]
 
-assets = list/to_list (text/concat front back)
+assets = list/to_list (list/concat front back)
 
 fn with_args given
   usage (length given != 1) given
@@ -201,7 +201,7 @@ fn ends? s suffix
   text/slice s (length s - length suffix + 1) (length s) == suffix
 
 fn joined a b
-  list/to_list (text/concat a b)
+  list/to_list (list/concat a b)
 
 fn reported names at
   telling names at (at > length names)

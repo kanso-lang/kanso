@@ -1792,6 +1792,43 @@ validation result before passing it on.
 Owes, on #1928: the toml reduction kept as a micro golden pinning today's
 output on every engine; #1891's second item closed with a pointer here.
 
+## 2026-10-13 — `list/concat` joins two lists
+
+#1906 moves concat to the module of the type it works on. `list/concat a b`
+joins two lists, or the byte values `text/bytes` answers, and is the same
+builtin underneath that `text/concat` was, so every engine runs it as
+before. `text/concat` is gone from `lib/text/text.kso`, and every caller in
+the tree moved: the library, the scripts, the benchmarks, the examples, the
+book and the goldens. Files that imported std/text only for concat now
+import std/list instead.
+
+Two strings join by interpolation, `"{a}{b}"`, and a list of them by
+`text/join`. The checker refuses a string handed to `list/concat` when it
+can see one: a string literal, a template, or a call whose every answer is a
+string. A string it cannot see still reaches the runtime, which raises
+"concat takes two lists" on both engines. A call to `text/concat` is
+refused at check with the unknown-name diagnostic, which now names
+`list/concat` and interpolation. Each refusal has an error golden.
+
+Appendix B's entry is rewritten under std/list. std/text lost three lines
+above `to_float` and `to_int`, so the line numbers that goldens and the book
+quote from `std/text/text.kso` moved with it.
+
+kq's one caller moves on the kq branch of the same name.
+
+On CI's rows the front end pays for the new refusal and for the moved imports,
+and I have not split the cost between the two. compile_instructions went from
+28,002,980 to 28,257,376, entry_instructions from 92,393,206 to 93,065,372,
+library_instructions from 91,989,327 to 92,696,544, `compile_peak_bytes` from
+703,170 to 703,187 and browser_compile_instructions from 413,936,384 to
+416,674,694. The interpreted run's `interp_peak_bytes` went from 722,393 to
+725,610 while its instructions fell to 495,318,943 and its allocations to
+589,643. compile_allocs fell to 15,937 and emit_instructions to 7,239,817. On
+the module path `module_visits` went from 2,909 to 2,912. The ratchet's
+mutation for a concat accumulator anchored on the line naming `text/concat`,
+so it now names `list/concat`, and the mem spec still goes red under it. The
+floor follows the score, since #1906 builds a ruled part of the language.
+
 ## 2026-10-13 — hex and binary integers, and floats with an exponent
 
 #1889 builds the gavel "hex and binary integers and exponent floats". The

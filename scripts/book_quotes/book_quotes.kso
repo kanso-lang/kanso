@@ -200,7 +200,7 @@ literals = ["true" "false" "none"]
 
 fn reachable bodies
   code = code_only (joined bodies)
-  idents_in code .> (names -> list/to_list (text/concat literals names))
+  idents_in code .> (names -> list/to_list (list/concat literals names))
 
 fn shown e@(err _)
   e
@@ -539,4 +539,4 @@ fn walk_kid path names at acc after kid false
   walk_names path names (at + 1) (push acc kid) after
 
 fn merged a b
-  list/to_list (text/concat a b)
+  list/to_list (list/concat a b)

@@ -272,7 +272,7 @@ fn walking rules at acc false
 fn walked rules at acc one out
   seen = list/to_list (list/map (in_scope out one.scope) (p -> p.text))
   gaps = missing one seen 1 []
-  over_lines rules (at + 1) (list/to_list (text/concat acc gaps))
+  over_lines rules (at + 1) (list/to_list (list/concat acc gaps))
 
 fn in_scope out scope
   list/to_list (list/select out (p -> in? p.scope scope))

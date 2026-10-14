@@ -1,4 +1,4 @@
-import "std/text"
+import "std/list"
 
 # `rest` is deferred: `either?`'s first arm never asks for it. Its cell,
 # handed back through the pass-through arm, evaluates to the next call's
@@ -26,7 +26,7 @@ fn keep acc _ true
   acc
 
 fn keep acc x false
-  text/concat acc [x]
+  list/concat acc [x]
 
 pub play =
   print (keep [] "small" (any_over? [1 2 3] 1))

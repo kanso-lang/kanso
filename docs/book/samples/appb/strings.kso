@@ -7,4 +7,3 @@ print "chars {cs}"
   .> (_ -> print "from_code {text/from_code 233}")
   .> (_ -> print "join {text/join ["a" "b" "c"] "-"}")
   .> (_ -> print "slice {text/slice "kanso" 2 4}")
-  .> (_ -> print "concat {text/concat [1 2] [3 4]}")

@@ -6,7 +6,6 @@
 # interpreter answering 5 all along.
 import "std/io"
 import "std/list"
-import "std/text"
 
 fn outer dirs at acc
   outing dirs at acc (at > length dirs)
@@ -32,7 +31,7 @@ fn one dirs at acc kids k acc2
   inner dirs at acc kids (k + 1) (push acc2 kids[k])
 
 fn joined a b
-  list/to_list (text/concat a b)
+  list/to_list (list/concat a b)
 
 d1 = ["a1" "a2" "a3" "a4"]
 
