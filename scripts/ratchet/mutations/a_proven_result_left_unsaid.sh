@@ -6,7 +6,7 @@
 # make on the result. With the call site's assume gone those tests come back
 # and the run program's instruction row moves.
 set -e
-f=src/codegen.rs
+f=src/codegen/emit.rs
 grep -q 'fn assume_tag(&self' src/codegen.rs
 line='            if callee_ret == "%KValue" && self.sub_parents.is_empty() {'
 [ "$(grep -cxF "$line" "$f")" -eq 1 ] || {

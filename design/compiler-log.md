@@ -21,72 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-12 — stdout reaches its reader, and a closed pipe stops every engine quietly
-
-Two runtime items on #1892 were about stdout.
-
-A reader that stops early, as `head` does, closes the pipe the program is
-writing to. A built binary is ended by SIGPIPE and says nothing. The
-interpreter met the same write as an error and panicked with two Rust
-backtraces, because Rust sets SIGPIPE to ignored before `main`, and
-`kanso play` reported a native program's end as "the program was ended by
-signal 13". kanso now restores the default disposition at start-up, and when
-the program it ran was ended by SIGPIPE the driver ends the same way, silently.
-`tests/a_closed_pipe_stops_every_engine_quietly.rs` reads one line from each
-engine and drops the pipe.
-
-A native program writes stdout through stdio's buffer, and stderr goes out
-unbuffered. Text printed before a write to stderr reached a shared pipe after
-it, which the lox port saw on its error path, and a program killed while it
-waited lost everything it had printed, which is how the httpd port's access
-log disappeared. The interpreter does neither. The runtime now empties the
-buffer before anything goes to stderr, before it reads stdin or a connection,
-before it sleeps, and before it starts a child. Every runtime diagnostic opens
-with the error colour from `k_c_err`, so the flush there puts a program's
-output ahead of any error it ends with. `tests/stdout_reaches_its_reader.rs`
-pins the three cases.
-
-The rows moved by small amounts, read off CI. The signal call at start-up
-costs 123 instructions in every compile: compile_instructions lands on
-25,761,338, entry_instructions on 85,207,685, library_instructions on
-85,760,345 and startup_instructions on 52,519. The flushes are new runtime
-code. On the tree merged with #1899, codegen_instructions_dev lands on
-118,956,771, work_encodebench on 2,398,369,956, work_livebench on
-1,474,871,792, work_oneshot on 13,224,134 and work_runbench on 1,170,031,874,
-and browser_run_instructions was 34,125,823 before the merge. Release codegen
-falls to 454,318,432, and the other benches and the text sizes fall a little
-with the runtime's new layout.
-
-The macOS runner failed the interpreter's half of the closed-pipe spec. With
-SIGPIPE's default put back, the interpreter's thread there still met the
-write to a closed pipe as an error, and `println!` panicked on it. The
-executor's `print` and `write` now write to stdout themselves and turn a
-broken pipe into SIGPIPE. On Linux the signal arrives first and that path
-does not run; with the start-up reset removed, the interpreter still stops
-quietly through it, and the ratchet row goes red on the native run instead,
-whose driver cannot re-raise an ignored signal.
-Writing through a stdout lock with an error arm cost the interpreted corpus
-688 instructions on CI's row: `interp_instructions` went to 488,792,803.
-On the tree merged with #1900, CI's rows put codegen_instructions_dev at
-119,012,401, codegen_instructions_release at 454,260,490 and work_runbench at
-1,170,035,058, and every bench's text is 1,744 bytes smaller. The welfare
-floor drops to 91.10933 under the rule that a change making the engines agree
-is not priced.
-
-Each benchmark binary now empties stdout before it reads its input, and the
-benches that read or wait more than once pay it each time. On CI's rows
-`work_deepbench`, `work_escapebench`, `work_indexbench`, `work_scanbench` and
-`work_widebench` each rose 77 instructions, to 393,579,721, 39,049,235,
-2,462,563, 273,600 and 28,178,586. `work_jsonbench` and `work_digestbench`
-rose 100, to 860,563,084 and 5,603,218; `work_pendbench` and `work_readbench`
-123, to 190,054,473 and 4,581,089; `work_basket` 130, to 30,876,618;
-`work_livebench` 310, to 1,474,875,381; and `work_oneshot` 373, to 13,227,303.
-
-On the merged tree the ratchet called "a warm play that dies in silence"
-blind. Since #1900 the binary names its own stack overflow, so the warm play's
-wording of the signal never runs for one. The mutation now also stops the
-binary watching its stack, and the second play prints nothing.
-
 ## 2026-10-12 — a lambda called in tail position costs no stack
 
 The toml port kept `put` in place by passing a continuation: each insertion
@@ -1854,6 +1788,34 @@ release build, and an Apple host keeps the narrowing. There a wide arm still
 takes the C convention, and the three tests stay off Apple arm64. On linux a
 wide arm gives up only its sibling calls into helpers, which become a call and a
 return. x86-64 builds are unchanged. #1912 stays open for the Apple half.
+
+## 2026-10-14 — the body emitter moves to `src/codegen/emit.rs`
+
+#1947, the codegen half. The largest `impl Backend` block in `src/codegen.rs`,
+3,867 lines that turn one function's body into IR (patterns, binds, calls,
+conditions and the arithmetic paths), moves unchanged to
+`src/codegen/emit.rs`, which `codegen.rs` reads with `include!` as it already
+reads `declares.rs` and `dispatchers.rs`. `codegen.rs` goes from 9,796 lines to
+5,929.
+
+The move is pure. Built from main and from this tree, the release IR for
+runbench and encodebench is byte for byte the same. Thirty-one ratchet
+mutations edit lines that moved, so each now names `src/codegen/emit.rs`, and
+every one was run against a copy of the tree to see that it still applies. The
+test that every wasm32 rewrite matches a line the emitter writes reads the new
+file beside the other two. The compile rows can move with the binary's layout,
+and CI's rows will say whether they did.
+
+`runtime.c` is the other half of #1947 and stays for its own change. Its text
+is embedded with `include_str!` in five places and edited by 119 mutations, so
+a split has to be concatenated in Rust rather than joined with `#include`.
+
+On CI's rows the move is layout and nothing else. The emitted IR and every
+native and interpreter row are unchanged; the one row that moved is the tab's
+compile, browser_compile_instructions 437,381,994 from 437,381,890, 104
+instructions, because the wasm engine is built from the same source and its
+code moved with the files. The floor follows that score, as it has for earlier
+layout-only moves.
 
 ## 2026-10-14 — gavel: `text/slice!` takes a slice the caller knows is in range
 

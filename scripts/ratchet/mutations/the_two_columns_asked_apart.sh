@@ -7,6 +7,6 @@
 # column is its own call and its own allocation, and every map the encoder
 # writes allocates twice.
 set -e
-sed -i.bak 's/f.lookup(map).is_some() \&\& !declared("keys") \&\& !declared("values")/false \&\& f.lookup(map).is_some()/' src/codegen.rs
-rm -f src/codegen.rs.bak
-grep -q 'false && f.lookup(map).is_some()' src/codegen.rs
+sed -i.bak 's/f.lookup(map).is_some() \&\& !declared("keys") \&\& !declared("values")/false \&\& f.lookup(map).is_some()/' src/codegen/emit.rs
+rm -f src/codegen/emit.rs.bak
+grep -q 'false && f.lookup(map).is_some()' src/codegen/emit.rs
