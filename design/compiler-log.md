@@ -1857,6 +1857,18 @@ codegen's `pattern_names` and trmc's `bound_names`; both call
 `Pattern::each_name` now, and trmc's list gains the as-pattern's name it used
 to leave out.
 
+CI moved six rows. `browser_compile_instructions` went from 381,571,779 to
+382,410,206, up 838,427, the same reading this container gave. A bisect here
+put 305,579 of that on the shared walk, 32,693 on `each_name` and 500,155 on
+the move, of which the move's codegen change accounts for 3,436. The tab's
+corpus never sleeps, so most of the rest is how rustc divided the wasm build
+into codegen units. The native front end rose with it: `entry_instructions`
+74,989,410 -> 75,110,529, `library_instructions` 74,674,363 -> 74,797,007,
+`compile_instructions` 22,632,999 -> 22,665,231. `interp_instructions` fell
+756 to 492,625,557 and `emit_instructions` fell 9 to 5,438,848. No runtime row
+moved. Welfare fell 0.00094 to 91.52438, and the floor is lowered by exactly
+that, since this builds a ruled part of the language.
+
 Still not built for #1856: work bound after a statement with an effect, calls
 whose arguments name locals that cannot move (a lambda's parameter, a value
 read from io), which need the (site, args) pool, and the cost gate on
