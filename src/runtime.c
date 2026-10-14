@@ -9720,6 +9720,18 @@ static __attribute__((noinline, cold, preserve_most)) KValue k_token_miss(const 
     KValue v; v.tag = K_STR; v.payload = k_ptr(s); return v;
 }
 
+/* The cached string for a token of four to seven bytes. */
+static inline KValue k_token_of(const char* data, long long len, const char* origin) {
+    uint32_t a, b;
+    memcpy(&a, data, 4);
+    memcpy(&b, data + len - 4, 4);
+    uint64_t key = (uint64_t)a | ((uint64_t)b << (8 * (len - 4))) | ((uint64_t)len << 56);
+    unsigned slot = (unsigned)((key * 0x9E3779B97F4A7C15ull) >> (64 - K_TOKEN_BITS));
+    if (k_token_key[slot] == key) return k_token_cache[slot];
+    if (k_token_key[slot ^ 1] == key) return k_token_cache[slot ^ 1];
+    return k_token_miss(data, len, origin, key, slot);
+}
+
 KValue k_b_utf8_slice_raw(const unsigned char* bytes, long long blen,
                           long long from, long long to, const char* origin) {
     const char* data = (const char*)bytes;
@@ -9732,16 +9744,7 @@ KValue k_b_utf8_slice_raw(const unsigned char* bytes, long long blen,
        861,498 of them on runbench, and none of them is asked its length.
        Seeding each one cost 7,728,237 instructions there against 13,280,580
        the whole-string doors below save. */
-    if (len >= 4 && len <= 7) {
-        uint32_t a, b;
-        memcpy(&a, data, 4);
-        memcpy(&b, data + len - 4, 4);
-        uint64_t key = (uint64_t)a | ((uint64_t)b << (8 * (len - 4))) | ((uint64_t)len << 56);
-        unsigned slot = (unsigned)((key * 0x9E3779B97F4A7C15ull) >> (64 - K_TOKEN_BITS));
-        if (k_token_key[slot] == key) return k_token_cache[slot];
-        if (k_token_key[slot ^ 1] == key) return k_token_cache[slot ^ 1];
-        return k_token_miss(data, len, origin, key, slot);
-    }
+    if (len >= 4 && len <= 7) return k_token_of(data, len, origin);
     KValue bad = k_utf8_bad_rare(data, len, origin, NULL);
     if (bad.tag == K_ERR) return bad;
     return k_str_n(data, len);
@@ -10008,6 +10011,9 @@ static KValue k_utf8_take(KBytes* b, long long chars);
 
 static KValue k_utf8_finish(KValue bv, const char* origin) {
     KBytes* b = k_as_bytes(bv);
+    /* A short value shares its token with the fused door's, so a program that
+       decodes a slice after asking whether it is none gets the same string. */
+    if (b->len >= 4 && b->len <= 7) return k_token_of((const char*)b->data, b->len, origin);
     long long chars;
     KValue bad = k_utf8_bad((const char*)b->data, b->len, origin, &chars);
     if (bad.tag == K_ERR) return bad;

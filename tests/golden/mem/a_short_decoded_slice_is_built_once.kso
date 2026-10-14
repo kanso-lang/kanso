@@ -1,0 +1,29 @@
+# `utf8` of a byte slice the program has already asked about none is the
+# unfused door: the dispatch stands between the slice and the decode, so the
+# emitter cannot write the pair as one call. A value of four to seven bytes
+# is answered from the token cache the fused door uses, so a word decoded
+# fifty times is built once and kept in permanent storage. Without the cache
+# on this door the file reads allocs=103, sh_str=1632 and perm_peak_bytes=0.
+import "std/text"
+
+word = text/bytes "hello there"
+
+fn decoded none
+  0
+
+fn decoded piece
+  size (text/utf8 piece)
+
+fn size (err _)
+  0
+
+fn size s
+  length s
+
+fn counted 0 total
+  total
+
+fn counted n total
+  counted (n - 1) (total + decoded (text/slice word 1 5))
+
+pub play = print (counted 50 0)
