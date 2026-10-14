@@ -21,24 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-12 — gavel: a test file is an outside consumer of its module
-
-Clay ruled the other half of #1883: "kanso test certainly cannot see private
-definitions. that would hugely violate the point of privacy." On main a
-`*_test.kso` is a member of its module: it reads private names, its
-definitions join the module's namespace, and `kanso run` checks it, so a
-formatting slip in a test stopped the program it tests from running.
-
-**The ruling.** A test file is compiled as an outside consumer that imports
-the module it sits beside. It sees only pub names, adds nothing to the module,
-and only `kanso test` reads it; `kanso run`, `check` and `build` ignore it.
-
-Owes, on #1883: the loader keeps `*_test.kso` out of the module and compiles
-each as an importer; goldens for a test that reads a private name (refused), a
-test helper sharing a production name (no collision) and a malformed test
-beside a program that still runs; existing tests that read private names
-moved onto the pub surface.
-
 ## 2026-10-12 — stdout reaches its reader, and a closed pipe stops every engine quietly
 
 Two runtime items on #1892 were about stdout.
@@ -1872,3 +1854,26 @@ release build, and an Apple host keeps the narrowing. There a wide arm still
 takes the C convention, and the three tests stay off Apple arm64. On linux a
 wide arm gives up only its sibling calls into helpers, which become a call and a
 return. x86-64 builds are unchanged. #1912 stays open for the Apple half.
+
+## 2026-10-14 — gavel: `text/slice!` takes a slice the caller knows is in range
+
+Clay ruled #1943. Building #1890 (a `text/slice` past the end answers `none`)
+showed that the checker now refuses `text/utf8 (text/slice cs a b)` and
+`text/append acc (text/slice cs a b)` until the `none` is dispatched. Those
+are the two spellings the compiler fuses, and the JSON decoder reads every
+string through them. Its ranges come from a scan of the same bytes, so its
+`none` can never occur, and a two-arm helper that dispatches it loses both
+fusions. Measured in a container by callgrind on the #1890 branch: jsonbench
++33.0%, livebench +38.1%, runbench +28.0%, oneshot +149.7%.
+
+**The ruling.** `text/slice! s a b` answers the slice, or an err when the
+range leaves the string. A trailing `!` means the caller insists the call
+works and wants a loud failure if it does not, as in `read_file!`. A caller
+that has already bounded its range writes `slice!` and needs no `none` arm;
+one that has not writes `text/slice` and dispatches on `none`, as ruled
+on #1890.
+
+Owes, on #1943: `text/slice!` on every engine; the fusions of
+`utf8 (slice! ...)` and `append acc (slice! ...)`; the decoder's call sites
+moved onto `slice!`; a micro golden for an in-range `slice!` and an error
+golden for one out of range; appendix B.
