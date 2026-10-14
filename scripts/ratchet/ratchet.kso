@@ -5339,11 +5339,22 @@ moved_read_as_local = row
   (breaking "a_moved_binding_read_as_local")
   no_setup
 
+# The pool takes only constants that run the program's work (#1856's grain).
+literal_pooled = row
+  "a literal handed to the pool"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_literal_pooled")
+  no_setup
+
 ahead_rows = [binding_left_ahead moved_failure_read moved_read_as_local]
 
 rows_cq11 = list/concat rows_cq10 ahead_rows
 
-rows_c = list/concat rows_cq11 [itself]
+rows_cq12 = list/concat rows_cq11 [literal_pooled]
+
+rows_c = list/concat rows_cq12 [itself]
 
 rows = list/concat rows_a (list/concat rows_b rows_c)
 

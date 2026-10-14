@@ -142,166 +142,6 @@ On main after #1904 the tab's compile reads `browser_compile_instructions`
 With main merged after #1922, browser_compile_instructions lands on 398,041,240
 and browser_compile_peak_bytes on 675,735.
 
-## 2026-10-12 — a name bound to a raising call carries its err into the check
-
-#1884, under part 3 of the 2026-09-15 gavel. The checker refused
-`half 3 + 1` when `half` has an arm that answers an err, but accepted
-`h = half 3` followed by `h + 1`: it read calls and never the names they were
-bound to, so binding a value to a name switched the check off. Eighteen of the
-twenty ports in the committee report met it. A local or a constant bound to a
-call that can raise now carries that err to every operator, index and
-argument position that reads it, and an inlined binding and an extracted one
-compile alike.
-
-`raising_names` in `src/check/after_infer.rs` collects the names a
-declaration binds to such a call and the place each is bound; a name bound
-twice in one declaration is left out, since which binding a read sees is not
-settled by position alone. A constant is read through the arity-0 entries of
-the raisers table. Errs from builtins, such as `text/to_int` on text the
-program computes, are not raised errs, and they still ride to the endpoint.
-
-Five error goldens pin it: a name reaching an operator, a name reaching a
-group with no arm for it, a constant reaching an operator, a name bound in a
-branch of an `if`, and a name bound past a `return` inside a branch. The
-ratchet row "a name that forgets the err of its call" removes both halves and
-watches error_corpus go red.
-
-The first version collected bindings from a body's statements and from a
-guard's rest, and never from a branch. A branch of an `if` is a block with
-statements of its own, so `each = share cents people` followed by `each + 1`
-inside a branch compiled. The collector now walks a branch's block as it walks
-a body. Before collecting, the check asks whether any binding in the
-declaration is handed a raising call at all, and most declarations answer no;
-that look walks the same statements, branches and guards included. A look
-that stopped at the top level cost 136,432 fewer instructions on the compile
-corpus and let both branch fixtures through, which is how each fixture was
-seen red.
-
-The rule reached 26 programs in the tree, about 150 sites, and every one was
-already refused on main once its binding was inlined. Each was repaired with a
-pass-through `e@(err _)` arm, a `.>` step, or a helper with an err arm:
-
-- `lib/json/text.kso` combines the four `\u` digits through `hex_on`, which
-  hands the first bad digit on, nested two calls deep with nothing bound to
-  a name. A self-recursive version counted one loop beat per digit, and kq's
-  escapes run read 52,325 beats against 2; binding the first pair to a name
-  made each one a thunk, 17,441 of them. The nested form moves no counter in
-  kq. The decoder's emitted code grew 4 functions and 118 lines (10,070 to
-  10,188), and `bench/emitted_golden.txt` and its sibling are regenerated.
-- runbench routes the decoded document and its two raising totals through
-  `.>`. It allocates 4 more blocks, 160 bytes, and no peak moved. A version
-  with helper arms instead held the document as a thunk and raised the arena
-  peak by 1 MiB, so it was dropped.
-- oneshot takes the decoded document in a helper with an err arm, which
-  costs no closure.
-- interp_corpus binds the decoded document and sizes it through `.>`
-  before it recurses. The first repair passed the document to a helper with
-  an err arm, and that call was a tail call from `total`: the frame's region
-  rewinds before a tail call, so the document was deep-copied out of it on
-  every round. The native run of the corpus went from 16,005,829
-  instructions to 19,483,131, and the browser's run row from 34,124,990 to
-  46,702,454. Recursing from inside a `.>` step costs no copy, but the
-  interpreter holds every round's document until the recursion returns, and
-  its peak rose from 687,159 to 1,043,112 bytes on CI. The spelling kept
-  sizes the document before the tail call. On CI it reads 34,172,021
-  browser run instructions, 488,636,161 interpreted instructions and
-  701,975 interpreter bytes, at the price of one more 256 KiB block of
-  browser peak (1,179,648 to 1,441,792). The corpus's text is longer, so
-  compiling it in the browser costs 402,835,440 instructions where it cost
-  401,459,207, and its peak is 683,140 bytes where it was 681,745. Scored
-  against the other two it gives up the least welfare.
-- Thirteen scripts under `scripts/` were repaired and each was run against
-  the same input with the old and the new compiler; where nothing failed the
-  output was byte for byte the same.
-- In the book, ch04's railway is built on an err the checker cannot prove, a
-  `text/to_int` of text out of a list, and the rule paragraph says that a
-  name bound to a raising call is checked like the call. `unasked` and
-  `unhandled` take their err the same way, and teahouse (ch07) and the json
-  sample (ch08) reach their raising values through `.>`.
-
-On CI's rows for the tree merged with #1913, the check's new work lands
-compile_instructions on 26,400,119, entry_instructions on 86,385,190 and
-library_instructions on 86,983,929, rises of 518,568, 1,003,877 and 1,048,347.
-compile_allocs lands on 14,688, up 90, and interp_allocs on 587,652, up 301.
-browser_compile_instructions lands on 402,115,910, up 10,804,408, most of it
-the longer corpus text described above; its peak is 683,140 bytes. The
-interpreted corpus fell 156,512 instructions to 488,583,304. This builds the
-ruling on #1884, so the floor drops by what it costs.
-
-An explicit `e@(err _)` arm hands the err on without adding a frame to the
-"passed through" trace; only the implicit pass-through wrote those frames. The
-trace of an err the checker can prove is now shorter by every function that
-needed an arm. `examples/trace_demo`'s broken-input run, which no test pins,
-now reads `passed through text/to_int` where it read three functions.
-
-The three provenance fixtures behind `tests/a_hop_is_recorded_for_a_name.rs`
-handed `label` an err that `price` raised, and the rule now refuses that
-before it runs. They hand it the err `text/to_int` answers for a slice of
-text instead, which nothing raises, and the hops they record are unchanged.
-The playground's redux example bound an `update` that can overdraw to a name
-and passed it on; it now dispatches on the answer the way
-`examples/redux.kso` does. `json/unicode_at` joins the decoder's string
-scanners in `src/beat.rs`'s list of the library's beats.
-
-The rows below are CI's, on the tree merged with #1899, and each worsened.
-The front end does the new check and compiles the repaired library:
-compile_instructions lands on 26,280,991, entry_instructions on 86,208,525,
-library_instructions on 86,806,845, compile_allocs on 14,620,
-compile_peak_bytes on 681,983, front_end_rounds on 19 and front_end_visits on
-8,112. The interpreter and the browser run the corpus's new spelling:
-interp_allocs lands on 587,584, interp_peak_bytes on 701,975,
-browser_compile_instructions on 402,835,440, browser_compile_peak_bytes on
-683,140, browser_run_instructions on 34,172,021 and browser_run_peak_bytes on
-1,441,792. The native binaries' code, `text`, lands on 4,854,398.
-
-The counters this moves, on this container: in `bench/cost_golden_run.txt`,
-`run_allocs` to 1,771,566 and `run_alloc_bytes` to 330,057,564. In
-`bench/emitted_golden.txt`, `emitted_calls` to 1,023, `emitted_defines` to
-110 and `emitted_lines` to 10,188. In its sibling, `emitted_other_calls` to
-17,603, `emitted_other_defines` to 2,037 and `emitted_other_lines` to
-147,804. The instruction and browser rows come from CI.
-
-On the tree merged with #1900, CI's work rows fell: `work_runbench` to
-1,167,982,009, `work_jsonbench` to 858,183,234, `work_encodebench` to
-2,398,361,941, `work_livebench` to 1,474,853,886 and `work_oneshot` to
-13,206,113. `text` rose for runbench (626,473), jsonbench (335,721), oneshot
-(350,793) and livebench (353,657) and fell for encodebench (342,089) and
-widebench (350,249). The browser compile's rise outweighs the run's fall, and
-this builds a ruled part of the language, so the welfare floor drops by what
-it costs.
-
-On main after #1925 the emitted counts for the other programs land on
-emitted_other_calls 17,692, emitted_other_defines 2,049 and emitted_other_lines
-148,325, and the `text` total on 4,845,150.
-
-91.11.
-
-On main after #1916 the tab reads `browser_compile_instructions` 403,992,263,
-up 10,809,633 from main's 393,182,630, and `browser_run_instructions`
-34,172,363, up 47,031 from 34,125,332, on the same tree.
-
-On the tree merged with main, the tab's compile reads 404,068,547 instructions
-against main's 393,209,858, and its peak reads 684,676 bytes against 677,261.
-The floor drops by what that costs, under the #1884 ruling.
-
-CI's rows on the merged tree, against main: `compile_instructions` from
-26,463,317 to 26,988,479, `entry_instructions` from 88,129,856 to 89,160,295,
-`library_instructions` from 87,707,726 to 88,767,419, `compile_allocs` from
-15,358 to 15,454, `interp_instructions` from 486,939,316 to 488,604,425,
-`interp_allocs` from 588,491 to 588,801 and `interp_peak_bytes` from 692,375 to
-721,711. The emitted code for the other benchmarks grew: `emitted_other_calls`
-from 17,664 to 17,760, `emitted_other_defines` from 2,036 to 2,063 and
-`emitted_other_lines` from 148,239 to 148,764, and `text` from 4,838,990 to
-4,858,430 bytes. The native runs fell: runbench by 2,052,628 instructions and
-jsonbench by 2,379,750. The floor drops by the difference under the #1884
-ruling.
-
-Two goldens the merge with main left stale now read this tree:
-`front_end_visits` on compile_corpus from 7,990 to 8,120 and
-`compile_peak_bytes` from 694,044 to 701,567, and in the run program
-`run_allocs` from 1,812,274 to 1,812,278 and `run_alloc_bytes` from 303,607,404
-to 303,607,564.
-
 ## 2026-10-13 — work-ahead forces what follows a park, and holds a pooled failure
 
 Builds #1856's v1 under the 2026-07-22 ruling and the 2026-10-11 gavel. Native
@@ -1869,7 +1709,50 @@ into codegen units. The native front end rose with it: `entry_instructions`
 moved. Welfare fell 0.00094 to 91.52438, and the floor is lowered by exactly
 that, since this builds a ruled part of the language.
 
-Still not built for #1856: work bound after a statement with an effect, calls
-whose arguments name locals that cannot move (a lambda's parameter, a value
-read from io), which need the (site, args) pool, and the cost gate on
-admission.
+Still not built for #1856: an entry with more than one effect line, which
+never pools (the next entry corrects this line), calls whose arguments name
+locals that cannot move (a lambda's parameter, a value read from io), which
+need the (site, args) pool, and the cost gate on admission.
+
+## 2026-10-14 — The pool takes only work
+
+This is the grain piece of #1856. The pool reads each constant inside
+`k_ahead_try`, whose `sigsetjmp` saves the signal mask with a system call. A
+literal bound ahead of the first sleep moved into a constant like any closed
+binding, so the pool made that call to build a literal. `ahead::admits` now
+lets a constant into the pool only when its value calls one of the
+program's functions, directly or inside a string or list it builds. That is
+the test the lazy cost gate puts to a cell (`demand::expensive`). The literal
+still moves, because a call lifted after the sleep may name it, and it is
+built where it is first read.
+
+`tests/golden/mem/work_ahead_leaves_a_literal_where_it_is` binds a literal
+and a call ahead of the sleep, and `ahead_forced` reads 1 where main read 2.
+`work_ahead_reads_a_moved_binding` goes from 2 to 1 for the same reason. The
+ratchet row "a literal handed to the pool" admits every constant and turns
+the first golden red.
+
+The previous entry listed "work bound after a statement with an effect" as
+unbuilt. No program can be written that way. The parser refuses a binding
+after an effect line, joins a body's effect lines into one group, and runs
+every binding before the group starts. The runtime runs the pool only at a
+sleep outside a group, so an entry with two effect lines never pools at all.
+`tests/golden/workahead/a_binding_before_a_print_fails_before_it` pins the
+transcript of such an entry whose binding fails: nothing on stdout, the
+overflow on stderr. A ratchet mutation that let the park be any sleep was
+tried and left the fixture green, because the group hides the sleep from
+`ahead` before the search runs, so that row was dropped.
+
+CI moved five rows, all of them compile cost. `browser_compile_instructions`
+fell 255,236 to 382,154,970, the same reading this container gave. The tab's
+corpus never sleeps and the tab compiles the pool out, so the pool decides
+nothing there; nothing in this change isolates the drop further.
+`compile_instructions` fell 15 to 22,665,216, `entry_instructions` 25 to
+75,110,504 and `library_instructions` 25 to 74,796,982. `emit_instructions`
+rose 72 to 5,438,920; the emitter now passes the program's declarations
+through `admits`, the one change on that path. No runtime
+row moved. Welfare rose 0.00022 to 91.52460, and the floor is banked there.
+
+Still not built for #1856: pooling inside an effect group, and calls whose
+arguments name locals that cannot move, which need the (site, args) pool.
+

@@ -28,10 +28,15 @@
 //! effect, and the park is the first thing the program does that can be
 //! seen. A binding whose value is closed becomes a constant named
 //! `ahead~moved~N` and its reads read the constant, so a call after the park
-//! whose arguments name only moved bindings is closed as well. The pool forces these first, in the order they were
-//! written, and a failure among them is raised at the park: nothing has been
-//! printed between the binding and the park, so the transcript is the one the
-//! program as written produces (the 2026-10-11 gavel on #1862).
+//! whose arguments name only moved bindings is closed as well. The pool
+//! forces these first, in the order they were written, and a failure among
+//! them is raised at the park: nothing has been printed between the binding
+//! and the park, so the transcript is the one the program as written
+//! produces (the 2026-10-11 gavel on #1862).
+//!
+//! The pool takes only constants that run some of the program's work
+//! (`admits`). A literal moved so a lifted call can name it is built where it
+//! is first read.
 
 use crate::ast::{Expr, FnDecl, Pattern, Program, Resolution, Stmt, TemplatePart, ENTRY};
 use crate::hash::{Map as HashMap, Set as HashSet};
@@ -318,6 +323,29 @@ fn take(e: &mut Expr, user: &Arities, lifted: &mut Vec<Expr>) {
 
 fn is_user_call(head: &Expr, arity: usize, user: &Arities) -> bool {
     matches!(head, Expr::Ident(n, _, _) if user.get(n.as_str()).is_some_and(|a| a.contains(&arity)))
+}
+
+/// Whether the pool takes a constant this pass made (#1856's grain). The pool
+/// reads each constant inside a try whose `sigsetjmp` saves the signal mask,
+/// a system call, so a constant earns a place only when it runs some of the
+/// program's own work: a call, or a string or list built around one. The
+/// lazy cost gate prices a cell the same way (`demand::expensive`). A literal
+/// moves into a constant so the calls lifted after the park can name it, and
+/// it is built where it is first read. A read of a moved binding is no work
+/// either, since the pool forced that binding first.
+pub fn admits(decl: &FnDecl) -> bool {
+    fn works(e: &Expr) -> bool {
+        match e {
+            Expr::App { .. } => true,
+            Expr::Str(parts, _) => parts.iter().any(|p| match p {
+                TemplatePart::Lit(_) => false,
+                TemplatePart::Interp(inner) => works(inner),
+            }),
+            Expr::List(items, _) => items.iter().any(works),
+            _ => false,
+        }
+    }
+    matches!(decl.body.as_slice(), [Stmt::Expr(e)] if works(e))
 }
 
 /// Whether an expression names nothing local: literals, a binding already

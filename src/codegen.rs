@@ -4983,6 +4983,7 @@ impl<'a> Backend<'a> {
             .fns
             .iter()
             .filter(|d| d.params.is_empty() && d.name.starts_with(crate::ahead::PREFIX))
+            .filter(|d| crate::ahead::admits(d))
             .map(|d| (dsym(&d.name, 0), d.name.starts_with(crate::ahead::MOVED)))
             .collect();
         let forced: Vec<(&String, bool)> = lifted
