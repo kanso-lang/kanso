@@ -1814,9 +1814,10 @@ coverage descends into src/runtime/ and reads the same 310 diagnostics. Three
 comments said the runtime was 450,100 bytes; it is 608,301, and they no longer
 state a size.
 
-One row moved, by layout: `entry_instructions` 103,133,571 -> 103,133,577.
-compile_instructions and library_instructions held, and so did every runtime
-and machine-code row.
+One row moved, by layout: `entry_instructions` 103,133,571 -> 103,133,577
+against 01161dbc, and 104,020,985 -> 104,020,991 once main carried
+kanso#1962, six instructions both times. compile_instructions and
+library_instructions held, and so did every runtime and machine-code row.
 
 ## 2026-10-14 — `text/slice!` answers a box
 
