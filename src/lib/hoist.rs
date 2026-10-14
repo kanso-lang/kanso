@@ -87,66 +87,7 @@ fn replace_shape(e: &mut ast::Expr, shape: &str, name: &str) {
         *e = Expr::Ident(Name::new(name), span, crate::ast::Resolution::default());
         return;
     }
-    walk_children_mut(e, &mut |c| replace_shape(c, shape, name));
-}
-
-/// Every direct sub-expression, mutably, and the mirror of `for_each_child`:
-/// it has an arm for every form that holds an expression, the lambda, block,
-/// build and guard included. A comment here said it lacked those four after
-/// they had been added, and `substitute_ident` relies on the walk reaching a
-/// guard's statements.
-fn walk_children_mut(e: &mut ast::Expr, f: &mut dyn FnMut(&mut ast::Expr)) {
-    use ast::Expr;
-    match e {
-        Expr::App { head, args, .. } => {
-            f(head);
-            for a in args {
-                f(a);
-            }
-        }
-        Expr::List(items, _) => {
-            for i in items {
-                f(i);
-            }
-        }
-        Expr::MapLit(pairs, _) => {
-            for (k, v) in pairs {
-                f(k);
-                f(v);
-            }
-        }
-        Expr::Index { base, index, .. } => {
-            f(base);
-            f(index);
-        }
-        Expr::Field { base, .. } => f(base),
-        Expr::Upcast { expr, .. } => f(expr),
-        Expr::BinOp { lhs, rhs, .. } | Expr::Join { lhs, rhs, .. } => {
-            f(lhs);
-            f(rhs);
-        }
-        Expr::Str(parts, _) => {
-            for p in parts {
-                if let ast::TemplatePart::Interp(inner) = p {
-                    f(inner);
-                }
-            }
-        }
-        Expr::Lambda { body, .. } => f(body),
-        Expr::Guard { cond, early, rest, .. } => {
-            f(cond);
-            f(early);
-            for stmt in rest.iter_mut() {
-                f(stmt_expr_mut(stmt));
-            }
-        }
-        Expr::Block(stmts, _) => {
-            for stmt in stmts {
-                f(stmt_expr_mut(stmt));
-            }
-        }
-        _ => {}
-    }
+    for_each_child_mut(e, &mut |c| replace_shape(c, shape, name));
 }
 
 fn stmt_expr_mut(s: &mut ast::Stmt) -> &mut ast::Expr {

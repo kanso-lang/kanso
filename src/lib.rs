@@ -844,7 +844,7 @@ fn measured_slices_are_slices(program: &mut ast::Program) {
                 *n = "builtin_slice".into();
             }
         }
-        walk_children_mut(e, &mut renamed);
+        for_each_child_mut(e, &mut renamed);
     }
     for f in &mut program.fns {
         for stmt in &mut f.body {
@@ -1870,7 +1870,7 @@ fn merge_expr(
     made: &mut crate::hash::Set<String>,
     arms: &mut Vec<ast::FnDecl>,
 ) {
-    walk_children_mut(e, &mut |child| merge_expr(child, owner, records, made, arms));
+    for_each_child_mut(e, &mut |child| merge_expr(child, owner, records, made, arms));
     let ast::Expr::App { head, args, span, .. } = e else { return };
     let ast::Expr::Ident(name, _, _) = head.as_ref() else { return };
     if name.as_str() != MERGE || args.len() != 2 {
@@ -2028,7 +2028,7 @@ fn deny_stmt(stmt: &mut ast::Stmt) {
 }
 
 fn deny_expr(e: &mut ast::Expr) {
-    walk_children_mut(e, &mut deny_expr);
+    for_each_child_mut(e, &mut deny_expr);
     let ast::Expr::BinOp { op: "!=", lhs, rhs, span } = e else {
         return;
     };
@@ -2060,7 +2060,7 @@ fn desugar_expr(e: &mut ast::Expr) {
         *e = ast::Expr::App { head: Box::new(head), args: vec![base], span: *span, piped: false };
         return;
     }
-    walk_children_mut(e, &mut desugar_expr);
+    for_each_child_mut(e, &mut desugar_expr);
 }
 
 /// Every field declares a getter so that name resolves wherever it is read,
@@ -2483,6 +2483,64 @@ pub fn for_each_child<'a>(e: &'a ast::Expr, mut f: impl FnMut(&'a ast::Expr)) {
         f(c);
         true
     });
+}
+
+/// Every direct sub-expression, mutably, and the mirror of `for_each_child`:
+/// it has an arm for every form that holds an expression, the lambda, block
+/// and guard included. `substitute_ident` relies on the walk reaching a
+/// guard's statements.
+pub fn for_each_child_mut(e: &mut ast::Expr, f: &mut dyn FnMut(&mut ast::Expr)) {
+    use ast::Expr;
+    match e {
+        Expr::App { head, args, .. } => {
+            f(head);
+            for a in args {
+                f(a);
+            }
+        }
+        Expr::List(items, _) => {
+            for i in items {
+                f(i);
+            }
+        }
+        Expr::MapLit(pairs, _) => {
+            for (k, v) in pairs {
+                f(k);
+                f(v);
+            }
+        }
+        Expr::Index { base, index, .. } => {
+            f(base);
+            f(index);
+        }
+        Expr::Field { base, .. } => f(base),
+        Expr::Upcast { expr, .. } => f(expr),
+        Expr::BinOp { lhs, rhs, .. } | Expr::Join { lhs, rhs, .. } => {
+            f(lhs);
+            f(rhs);
+        }
+        Expr::Str(parts, _) => {
+            for p in parts {
+                if let ast::TemplatePart::Interp(inner) = p {
+                    f(inner);
+                }
+            }
+        }
+        Expr::Lambda { body, .. } => f(body),
+        Expr::Guard { cond, early, rest, .. } => {
+            f(cond);
+            f(early);
+            for stmt in rest.iter_mut() {
+                f(stmt_expr_mut(stmt));
+            }
+        }
+        Expr::Block(stmts, _) => {
+            for stmt in stmts {
+                f(stmt_expr_mut(stmt));
+            }
+        }
+        _ => {}
+    }
 }
 
 /// True when any direct sub-expression satisfies `p`, stopping at the first

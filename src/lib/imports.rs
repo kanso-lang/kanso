@@ -312,7 +312,7 @@ fn door_expr(e: &mut ast::Expr, doors: &crate::hash::Map<String, String>) {
     if let ast::Expr::Upcast { ty, .. } = e {
         door_type(ty, doors);
     }
-    walk_children_mut(e, &mut |child| door_expr(child, doors));
+    for_each_child_mut(e, &mut |child| door_expr(child, doors));
 }
 
 /// A type is named in patterns as well as in expressions, and the door has to
