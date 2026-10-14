@@ -56,7 +56,7 @@ pub fn compile_entry(file: &str, source: &str) -> Result<ast::Program, String> {
     let base = std::path::Path::new(file).parent().map(|p| p.to_path_buf()).unwrap_or_default();
     LOCK.with(|l| *l.borrow_mut() = hako::read_lock(&base));
     ENTRY_COMPILE.with(|c| c.set(true));
-    let built = compile_entry_inner(file, source);
+    let built = reaching(Some(source), || compile_entry_inner(file, source));
     ENTRY_COMPILE.with(|c| c.set(false));
     built
 }
@@ -66,6 +66,14 @@ pub fn compile_entry(file: &str, source: &str) -> Result<ast::Program, String> {
 /// form cannot leak into real programs; everything past the parse and the
 /// stdlib gate is the entry pipeline unchanged.
 pub fn compile_play_file(file: &str, source: &str) -> Result<ast::Program, String> {
+    ENTRY_COMPILE.with(|c| c.set(true));
+    LOADED_ELSEWHERE.with(|c| c.set(false));
+    let built = reaching(Some(source), || compile_play_inner(file, source));
+    ENTRY_COMPILE.with(|c| c.set(false));
+    built
+}
+
+fn compile_play_inner(file: &str, source: &str) -> Result<ast::Program, String> {
     let lexed = lexer::lex(source).map_err(|d| diag::render(&d, file, source))?;
     let program = parser::parse_play(&lexed).map_err(|d| diag::render(&d, file, source))?;
     for import in &program.imports {
@@ -82,11 +90,7 @@ pub fn compile_play_file(file: &str, source: &str) -> Result<ast::Program, Strin
             return Err(diag::render(&[d], file, source));
         }
     }
-    ENTRY_COMPILE.with(|c| c.set(true));
-    LOADED_ELSEWHERE.with(|c| c.set(false));
-    let built = compile_parsed_entry(program, file, source);
-    ENTRY_COMPILE.with(|c| c.set(false));
-    built
+    compile_parsed_entry(program, file, source)
 }
 
 /// Whether the play file compiled last loaded every module it uses from the
@@ -432,7 +436,7 @@ fn compile_one(file: &str, source: &str, drop_unused: bool) -> Result<ast::Progr
 /// as a library and loads its imports (plus the ambient module) like any
 /// other root compile.
 pub fn compile_library(file: &str, source: &str) -> Result<ast::Program, String> {
-    compile_library_beside(file, source, None)
+    reaching(Some(source), || compile_library_beside(file, source, None))
 }
 
 /// A test file, under the 2026-10-12 gavel (#1883): an outside consumer of
@@ -446,7 +450,7 @@ pub fn compile_test_file(file: &str, source: &str) -> Result<ast::Program, Strin
     // the module is the test file's own directory, which an import from
     // inside it would otherwise refuse as the module importing itself
     ENTRY_COMPILE.with(|c| c.set(true));
-    let built = compile_library_beside(file, source, beside);
+    let built = reaching(Some(source), || compile_library_beside(file, source, beside.clone()));
     ENTRY_COMPILE.with(|c| c.set(false));
     built
 }
