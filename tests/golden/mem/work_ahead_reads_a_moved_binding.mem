@@ -52,5 +52,5 @@ sh_buf=0
 sh_map=0
 sh_bytes=0
 spare_peak_bytes=0
-ahead_forced=2
+ahead_forced=1
 ahead_dropped=0

@@ -1,0 +1,15 @@
+# Both bindings come ahead of the sleep and both are closed, but only the
+# total runs any of the program's work. The greeting is a literal, cheaper to
+# build where it is written than to hand to the pool, so it stays, and
+# `ahead_forced` counts the total alone.
+import "std/time"
+
+fn spin 0 acc
+  acc
+
+fn spin n acc
+  spin (n - 1) (acc + n % 7)
+
+greeting = "report"
+total = spin 1000 0
+sleep 1 .> (_ -> print "made") .> (_ -> print "{greeting}: {total}")

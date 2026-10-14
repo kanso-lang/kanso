@@ -1,7 +1,8 @@
-# The count is bound before the sleep, so it moves into the park, and the call
-# after the sleep that reads it then names nothing local. The call is lifted
-# too, and the runtime forces both while the program is parked:
-# `ahead_forced` counts two.
+# The count is bound before the sleep, so it moves into a constant, and the
+# call after the sleep that reads it then names nothing local. The call is
+# lifted and forced while the program is parked. The count is a literal and
+# runs none of the program's work, so the pool leaves it to be built where the
+# call reads it: `ahead_forced` counts one.
 import "std/time"
 
 fn spin 0 acc
