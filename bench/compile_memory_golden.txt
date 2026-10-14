@@ -321,4 +321,4 @@ front_end_visits=8133
 # are kept at their length, and a guard's statements sit behind a box, which
 # makes every expression 48 bytes. Read by the gate on this host, whose rustc
 # is the golden's: 729,597 -> 674,684.
-compile_peak_bytes=703170
+compile_peak_bytes=703187

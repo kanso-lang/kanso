@@ -463,7 +463,7 @@ fn noted acc _ true
   acc
 
 fn noted acc why false
-  text/concat acc [why]
+  list/concat acc [why]
 
 fn noted _ _ e@(err _)
   e
@@ -662,7 +662,7 @@ fn read_back above
   above["length"]
 
 fn paint_faults none acc _
-  text/concat acc ["the paint page reported no painting at all"]
+  list/concat acc ["the paint page reported no painting at all"]
 
 fn paint_faults painted acc at
   paint_step painted acc at (at > length paint_wants)
@@ -773,7 +773,7 @@ fn gathered _ _ acc true
 
 fn gathered paths at acc false
   return with_all acc if at < 1 or length paths < at
-  on = (body -> read_each paths (at + 1) (text/concat acc [body]))
+  on = (body -> read_each paths (at + 1) (list/concat acc [body]))
   read_one paths[at] .> on
 
 # The engine is bytes and everything else is text; read_file refuses bytes

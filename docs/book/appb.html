@@ -50,7 +50,7 @@ extra_css: /book/book.css
 <a href="#b-bytes"><code>text/bytes</code></a>
 <a href="#b-char_code"><code>text/char_code</code></a>
 <a href="#b-chars"><code>text/chars</code></a>
-<a href="#b-concat"><code>text/concat</code></a>
+<a href="#b-concat"><code>list/concat</code></a>
 <a href="#b-entries"><code>entries</code></a>
 <a href="#b-effect"><code>effect</code></a>
 <a href="#b-find2"><code>text/find2</code></a>
@@ -145,7 +145,7 @@ word <span class="o">=</span> <span class="f">text/trim</span> <span class="s">"
   <div class="code-output">
     <div class="code-panel-title">kanso run parse_fail.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the entry: ""seven" is not an integer"
-  born in text/to_int at std/text/text.kso:92</code></pre>
+  born in text/to_int at std/text/text.kso:89</code></pre>
   </div>
 </div>
 
@@ -185,8 +185,7 @@ cs <span class="o">=</span> <span class="f">text/chars</span> <span class="s">"c
   <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"char_code <span class="i">{text/char_code </span>"</span>A<span class="s">"}"</span>)
   <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"from_code <span class="i">{text/from_code 233}</span>"</span>)
   <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"join <span class="i">{text/join [</span>"</span>a<span class="s">" "</span>b<span class="s">" "</span>c<span class="s">"] "</span><span class="o">-</span><span class="s">"}"</span>)
-  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"slice <span class="i">{text/slice </span>"</span>kanso<span class="s">" 2 4}"</span>)
-  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"concat <span class="i">{text/concat [1 2] [3 4]}</span>"</span>)</code></pre>
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"slice <span class="i">{text/slice </span>"</span>kanso<span class="s">" 2 4}"</span>)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run strings.kso</div>
     <pre><code>chars ["c" "a" "f" "é"]
@@ -194,8 +193,7 @@ length 4
 char_code 65
 from_code é
 join a-b-c
-slice ans
-concat [1 2 3 4]</code></pre>
+slice ans</code></pre>
   </div>
 </div>
 
@@ -207,9 +205,9 @@ concat [1 2 3 4]</code></pre>
 <p class="builtin-sig"><code>(list | string | map)[index] → value | none</code></p>
 <p>indexing. a list or string is indexed by a 1-based position; a map is indexed by its key. a missing position or absent key returns <code>none</code>—a dispatchable value, not an exception—so the caller decides what "not there" means. the strict form <code>xs[i]!</code> answers an effect, <code>&lt;t&gt;effect</code>, for the position that must be there: <code>.&gt;</code> opens it, and a miss is the failure inside it. there is no bare function spelling; the subscript is the surface.</p>
 
-<h3 id="b-concat"><code>text/concat</code></h3>
-<p class="builtin-sig"><code>text/concat (list | string) (list | string) → (list | string)</code></p>
-<p>appends two lists—or two strings—into one. it lives in <code>std/text</code> beside <code>slice</code> because the pair work the same way on both shapes; the result is new and neither input is disturbed.</p>
+<h3 id="b-concat"><code>list/concat</code></h3>
+<p class="builtin-sig"><code>list/concat list list → list</code></p>
+<p>appends two lists into a new one, and neither input changes. the bytes <code>text/bytes</code> answers count as a list of their byte values, so <code>list/concat (text/bytes "ab") [99]</code> is <code>[97 98 99]</code>. strings do not go through it: two strings join by interpolation, <code>"{a}{b}"</code>, and a list of them by <code>text/join</code>. a string the checker can see arriving is refused at the call.</p>
 
 <h3 id="b-push"><code>push</code></h3>
 <p class="builtin-sig"><code>push list value → list</code></p>
@@ -250,7 +248,7 @@ xs <span class="o">=</span> [<span class="n">3</span> <span class="n">1</span> <
   <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"at <span class="i">{xs[2]}</span>"</span>)
   <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"length <span class="i">{length xs}</span>"</span>)
   <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"slice <span class="i">{text/slice xs 1 2}</span>"</span>)
-  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"concat <span class="i">{text/concat xs [9]}</span>"</span>)</code></pre>
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"concat <span class="i">{list/concat xs [9]}</span>"</span>)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run lists.kso</div>
     <pre><code>map [30 10 20]
@@ -461,7 +459,7 @@ zero non-positive</code></pre>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the entry: wrap_err/config_bad "app.conf"
   born in relabel at wrap_err.kso:10
   caused by: "invalid utf-8"
-  born in text/utf8 at std/text/text.kso:95</code></pre>
+  born in text/utf8 at std/text/text.kso:92</code></pre>
   </div>
 </div>
 

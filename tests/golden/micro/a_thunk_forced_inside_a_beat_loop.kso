@@ -42,13 +42,13 @@ k9 = [1537002063 1747873779 1955562222 2024104815 2227730452 2361852424]
 
 k10 = [2428436474 2756734187 3204031479 3329325298]
 
-front = text/concat (text/concat k0 k1) (text/concat k2 k3)
+front = list/concat (list/concat k0 k1) (list/concat k2 k3)
 
-back = text/concat (text/concat k4 k5) (text/concat k6 k7)
+back = list/concat (list/concat k4 k5) (list/concat k6 k7)
 
-tail = text/concat (text/concat k8 k9) k10
+tail = list/concat (list/concat k8 k9) k10
 
-rounds = list/to_list (text/concat (text/concat front back) tail)
+rounds = list/to_list (list/concat (list/concat front back) tail)
 
 # One 512-bit block's sixty-four message words. The first sixteen are the
 # block's own big-endian words; each of the rest folds two earlier ones

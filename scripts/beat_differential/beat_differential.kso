@@ -1,7 +1,6 @@
 import "std/io"
 import "std/list"
 import "std/os"
-import "std/text"
 
 type probe_case
   a
@@ -75,7 +74,7 @@ fn shaped a b reader
   """
 
 fn asked argv
-  os/run "timeout" (text/concat [limit kanso] argv)
+  os/run "timeout" (list/concat [limit kanso] argv)
 
 fn hung? 124
   true
@@ -148,7 +147,7 @@ fn gathering _ _ _ acc true
   acc
 
 fn gathering ai bi ri acc false
-  over_readers ai bi (ri + 1) (text/concat acc [(cased ai bi ri)])
+  over_readers ai bi (ri + 1) (list/concat acc [(cased ai bi ri)])
 
 fn over_b ai bi acc
   spanning ai bi acc (bi > length layouts)

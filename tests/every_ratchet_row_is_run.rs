@@ -1,7 +1,7 @@
 //! A ratchet row is only a row if the harness reaches it.
 //!
 //! `scripts/ratchet/ratchet.kso` writes each row as a binding and then
-//! assembles them into `rows` through a chain of `text/concat`s. Writing the
+//! assembles them into `rows` through a chain of `list/concat`s. Writing the
 //! binding is the visible half and joining the chain is the half nobody looks
 //! at, so a row can be added, reviewed and merged while the harness never runs
 //! it. Two were found that way on 2026-09-05, while a third row was being
@@ -47,7 +47,7 @@ fn list_bindings(src: &str) -> BTreeMap<String, String> {
         if body == "row" {
             continue;
         }
-        if body.starts_with('[') || body.starts_with("text/concat") {
+        if body.starts_with('[') || body.starts_with("list/concat") {
             out.insert(name.to_string(), body.to_string());
         }
     }

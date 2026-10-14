@@ -386,6 +386,57 @@ fn lazy_where_a_list_goes(
     }
 }
 
+/// A string handed to `list/concat`. Two strings join by interpolation and a
+/// list of them by `text/join` (#1906), and concat stops at run time on every
+/// engine when either side is a string. The argument is known to be one when
+/// it is a string template, or a call of a group whose every arm answers a
+/// string. A string literal is refused already by the literal check; anything
+/// less certain is left to the run.
+fn string_where_a_list_goes(
+    e: &Expr,
+    aliases: &HashMap<(&str, usize), &str>,
+    returns: &HashMap<(&str, usize), crate::infer::Set>,
+    shadow: &dyn Fn(&str) -> bool,
+    diags: &mut Vec<Diagnostic>,
+) {
+    use crate::infer::{FAIL, STR};
+    let Expr::App { head, args, piped: false, .. } = e else { return };
+    let Expr::Ident(name, _, _) = head.as_ref() else { return };
+    if args.len() != 2 || shadow(name.as_str()) {
+        return;
+    }
+    let bare = match aliases.get(&(name.as_str(), args.len())) {
+        Some(builtin) => *builtin,
+        None if returns.contains_key(&(name.as_str(), args.len())) => return,
+        None => name.as_str(),
+    };
+    if bare.strip_prefix("builtin_").unwrap_or(bare) != "concat" {
+        return;
+    }
+    for arg in args {
+        let a_string = match arg {
+            // a plain literal is the literal check's
+            Expr::Str(parts, _) => parts.iter().any(|p| !matches!(p, TemplatePart::Lit(_))),
+            Expr::App { head: inner, args: inner_args, piped: false, .. } => match inner.as_ref() {
+                Expr::Ident(maker, _, _) if !shadow(maker.as_str()) => returns
+                    .get(&(maker.as_str(), inner_args.len()))
+                    .is_some_and(|answers| answers & !FAIL == STR),
+                _ => false,
+            },
+            _ => false,
+        };
+        if a_string {
+            diags.push(Diagnostic::new(
+                "type",
+                "`list/concat` joins two lists, and this is a string — two strings join by \
+                 interpolation, `\"{a}{b}\"`, and a list of them by `text/join`"
+                    .to_string(),
+                arg.span(),
+            ));
+        }
+    }
+}
+
 /// The gavel makes a receiver responsible for a none it can be handed, and
 /// lets the caller discharge that by resolving first. The report belongs at
 /// the argument, because that is the line an author edits.
@@ -1040,6 +1091,7 @@ fn check_after_infer<'p>(
                 none_exhaustive_at(cur, &tables, &decl.file, none_diags);
                 raised_err_at(cur, &raisers, &consts, &err_arms, &named, &decl.file, none_diags);
                 lazy_where_a_list_goes(cur, aliases, returns, &shadow, none_diags);
+                string_where_a_list_goes(cur, aliases, returns, &shadow, none_diags);
                 site(cur, &shadow, &[], &mut handed_here, box_diags);
                 crate::for_each_child(cur, |c| stack.push(c));
             }

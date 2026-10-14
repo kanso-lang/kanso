@@ -105,7 +105,7 @@ fn walk_kid path names at acc after kid false
   walk_names path names (at + 1) (push acc kid) after
 
 fn joined a b
-  list/to_list (text/concat a b)
+  list/to_list (list/concat a b)
 
 # Only the samples this chapter's panels name are read. A chapter's directory
 # also holds files no panel quotes, and one of them is large.

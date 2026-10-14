@@ -16,4 +16,4 @@ print "map {list/to_list (list/map xs (n -> n * 10))}"
   .> (_ -> print "at {xs[2]}")
   .> (_ -> print "length {length xs}")
   .> (_ -> print "slice {text/slice xs 1 2}")
-  .> (_ -> print "concat {text/concat xs [9]}")
+  .> (_ -> print "concat {list/concat xs [9]}")

@@ -21,61 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-13 — a loop entered from the callee it calls rewinds
-
-From #1892's bc port. A `for` loop in bc held every lap's allocation: 300,000
-laps of `s += i` took 548 MB, and the binary counted 8 beat iterations for
-20,000 laps. The port's interpreter has the shape every tree-walker has.
-`loop_for` and `for_next` are one tail cycle, each lap runs the body through
-`exec` with a plain call, and the `nested` arm of `exec` enters the cycle by a
-tail call, because a loop inside the body is the same cycle again.
-
-A cluster entered by a tail call gets its bracket by emitting the entering
-edge as a plain call. Since #920 that demotion is refused when the cluster can
-reach the caller again, because a caller the cycle re-enters with nothing held
-would stack one frame per lap. The reach counted every mention, so the plain
-call `r = exec body m` refused the entry. A plain call holds its own frame
-while the callee runs, so the stack already grows with each level of nesting,
-and demoting the entry adds one frame to each level and none to each lap. The
-reach now follows what can enter the caller with no frame held: the heads of
-tail calls, every name inside a lambda, and every name used as a value.
-
-`tests/golden/mem/a_loop_entered_from_the_callee_it_calls_rewinds` is the
-reduced program, 100,000 laps through a `nested` entry. Main counts no beat
-and holds eleven arena blocks; with the change it counts 200,000 beat
-iterations and holds one. No other mem golden moved. The bc port's 300,000
-laps take 9 MB, and its 33 fixtures and 47 unit tests agree on all three
-engines. The ratchet row "a cluster refused for a callee it reaches under a
-frame" counts every mention again and turns the mem corpus red.
-
-Two loops in the standard library gain a bracket the same way. std/json's
-blank skip before a value, `value_for` and `value_blank`, is entered by a
-tail call from `parse_value` and reaches it again only under the plain call
-an array or object makes for each element. std/regexp's matcher cycle is in
-the same position, and its groups lose the padding a wider tail group had
-given them. Of the fourteen benchmarks only runbench and scanbench emit
-different code. Measured here against main's compiler on the same host,
-runbench ran 829 fewer instructions and scanbench 6 more, and every
-allocation counter in the twelve cost veins is unchanged.
-`a_cluster_the_entering_caller_is_reached_from_stays_grow_only` now hands the
-re-entering function on as a value, which still refuses the entry, and
-`a_cluster_reaching_its_caller_under_a_plain_call_is_a_beat` pins the plain
-call.
-
-CI's rows. The two benchmarks whose IR changed gain their brackets:
-work_runbench lands on 1,170,034,251, 829 fewer, and work_scanbench on
-273,515, eight fewer. The brackets are code: text lands on 4,840,798, up
-5,952 (scanbench 3,888, runbench 2,064), emitted_other_calls on 17,531,
-emitted_other_branches on 16,476 and emitted_other_lines on 147,327.
-emit_instructions falls 522 to 7,012,955. The tab runs the same analysis,
-which now walks each body for its frameless names:
-browser_compile_instructions lands on 392,099,969, up 788,467, and
-browser_compile_peak_bytes on 676,511, up 786.
-
-Merged with main after #1904, the same rows land on `emitted_other_calls`
-17,676, `emitted_other_branches` 16,559, `emitted_other_lines` 148,263 and
-`browser_compile_instructions` 393,489,081.
-
 ## 2026-10-13 — a list concatenated onto in a fold grows where it stands
 
 From #1892's kv port. A fold that grew its accumulator with `concat` rather
@@ -1771,6 +1716,43 @@ validation result before passing it on.
 
 Owes, on #1928: the toml reduction kept as a micro golden pinning today's
 output on every engine; #1891's second item closed with a pointer here.
+
+## 2026-10-13 — `list/concat` joins two lists
+
+#1906 moves concat to the module of the type it works on. `list/concat a b`
+joins two lists, or the byte values `text/bytes` answers, and is the same
+builtin underneath that `text/concat` was, so every engine runs it as
+before. `text/concat` is gone from `lib/text/text.kso`, and every caller in
+the tree moved: the library, the scripts, the benchmarks, the examples, the
+book and the goldens. Files that imported std/text only for concat now
+import std/list instead.
+
+Two strings join by interpolation, `"{a}{b}"`, and a list of them by
+`text/join`. The checker refuses a string handed to `list/concat` when it
+can see one: a string literal, a template, or a call whose every answer is a
+string. A string it cannot see still reaches the runtime, which raises
+"concat takes two lists" on both engines. A call to `text/concat` is
+refused at check with the unknown-name diagnostic, which now names
+`list/concat` and interpolation. Each refusal has an error golden.
+
+Appendix B's entry is rewritten under std/list. std/text lost three lines
+above `to_float` and `to_int`, so the line numbers that goldens and the book
+quote from `std/text/text.kso` moved with it.
+
+kq's one caller moves on the kq branch of the same name.
+
+On CI's rows the front end pays for the new refusal and for the moved imports,
+and I have not split the cost between the two. compile_instructions went from
+28,002,980 to 28,257,376, entry_instructions from 92,393,206 to 93,065,372,
+library_instructions from 91,989,327 to 92,696,544, `compile_peak_bytes` from
+703,170 to 703,187 and browser_compile_instructions from 413,936,384 to
+416,674,694. The interpreted run's `interp_peak_bytes` went from 722,393 to
+725,610 while its instructions fell to 495,318,943 and its allocations to
+589,643. compile_allocs fell to 15,937 and emit_instructions to 7,239,817. On
+the module path `module_visits` went from 2,909 to 2,912. The ratchet's
+mutation for a concat accumulator anchored on the line naming `text/concat`,
+so it now names `list/concat`, and the mem spec still goes red under it. The
+floor follows the score, since #1906 builds a ruled part of the language.
 
 ## 2026-10-13 — hex and binary integers, and floats with an exponent
 

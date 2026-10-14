@@ -1,0 +1,6 @@
+import "std/text"
+
+# `text/concat` left the library (#1906). Two lists join with `list/concat`,
+# and two strings by interpolation, so a call to the old name says where it
+# went.
+pub play = print (text/join (text/concat ["a"] ["b"]) "")
