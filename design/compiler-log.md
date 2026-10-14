@@ -1774,5 +1774,9 @@ program's own functions is still followed into the body, as ruled on
 2026-09-30. `a_box_handed_to_a_library_wrapper` pins the refusal and was red
 with the change taken back out.
 
-The tab's compile row moved 437,381,994 -> 437,416,347 instructions for the
-extra walk over a std group's arms, under a ten-thousandth of a point.
+`browser_compile_instructions` moved 437,381,994 -> 437,416,347 for the
+extra walk over a std group's arms, under a ten-thousandth of a point. CI
+read `compile_instructions` 31,948,363 -> 31,940,603, `entry_instructions`
+101,372,705 -> 101,349,935 and `library_instructions` 100,887,003 ->
+100,864,357, a fall of a few hundredths of a percent that this change does not
+explain, so it is named as layout.
