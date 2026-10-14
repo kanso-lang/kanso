@@ -395,10 +395,15 @@ pub fn analyze<'a>(program: &'a Program) -> DemandInfo<'a> {
                 collect_uses(e, name, &discard, &mut uses);
             }
             let Stmt::Bind { expr, .. } = stmt else { unreachable!() };
-            let qualifies = !rebound
-                && uses.deferrable > 0
-                && uses.demanding == 0
-                && expensive(expr, &fn_names);
+            // A cell the work-ahead pool forces is a cell by construction:
+            // `ahead::pool` made the binding to hand the pool its work, and
+            // a strict one would run that work before the sleep it follows.
+            let pooled = name.as_str().starts_with(crate::ahead::POOLED);
+            let qualifies = pooled
+                || (!rebound
+                    && uses.deferrable > 0
+                    && uses.demanding == 0
+                    && expensive(expr, &fn_names));
             let key = (f.name.as_str(), f.params.len(), i);
             let seen = lazy_votes.entry(key).or_insert(true);
             *seen = *seen && qualifies;
@@ -420,6 +425,11 @@ pub fn analyze<'a>(program: &'a Program) -> DemandInfo<'a> {
                 *slot = false;
                 continue;
             };
+            // The pool holds a pooled cell past the frame that made it.
+            if name.as_str().starts_with(crate::ahead::POOLED) {
+                verdicts.insert(key, false);
+                continue;
+            }
             let mut targets = Vec::new();
             for later in &decl.body[i + 1..] {
                 let e = match later {

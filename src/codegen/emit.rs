@@ -456,6 +456,29 @@ impl<'a> Backend<'a> {
             .ok_or_else(|| format!("native backend: unknown type `{ty}`"))
     }
 
+    /// A sleep carrying the cells `ahead::pool` bound ahead of its chain.
+    /// Each cell is handed over as it is, unforced, since the runtime forces
+    /// it while the sleep parks.
+    fn emit_pooled_sleep(&mut self, f: &mut FnEmit, args: &[Expr]) -> Result<String, String> {
+        let ms = self.emit_expr(f, &args[0])?;
+        let mut cells = String::new();
+        for cell in &args[1..] {
+            let Expr::Ident(name, _, _) = cell else {
+                return Err("native backend: a pooled sleep carries its cells by name".into());
+            };
+            let held = f.lookup(name).ok_or_else(|| format!("native backend: `{name}` is not bound"))?;
+            let held = self.as_value(f, &held);
+            cells.push_str(&format!(", %KValue {held}"));
+        }
+        let t = f.tmp();
+        f.line_fmt(format_args!(
+            "{t} = call %KValue (%KValue, i32, ...) @k_desc_sleep_pooled(%KValue {ms}, i32 {}{cells})",
+            args.len() - 1
+        ));
+        f.record(&t, DESC | (f.set_of(&ms) & FAIL));
+        Ok(t.to_string())
+    }
+
     fn emit_fn_body(&mut self, f: &mut FnEmit, body: &[Stmt]) -> Result<(), String> {
         let last = body.len() - 1;
         let mut values_bound: Option<usize> = None;
@@ -484,7 +507,10 @@ impl<'a> Backend<'a> {
                     if self.demand.is_lazy_bind(&f.group.clone(), f.arity, i)
                         && self.thunkable(f, expr) =>
                 {
-                    let t = self.emit_cell(f, expr)?;
+                    let t = match name.as_str().starts_with(crate::ahead::POOLED) {
+                        true => self.emit_cell_by(f, expr, "k_thunk_new_pooled")?,
+                        false => self.emit_cell(f, expr)?,
+                    };
                     let in_beat = self.beat.ids.contains_key(&(f.group.clone(), f.arity));
                     if !in_beat && self.demand.is_releasable(&f.group, f.arity, i) {
                         f.lazy_cells.push(t.clone());
@@ -1114,6 +1140,9 @@ impl<'a> Backend<'a> {
                 }
             }
             Expr::App { head, args, piped, span } => {
+                if matches!(head.as_ref(), Expr::Ident(n, _, _) if n == crate::ahead::SLEEP_POOLED) {
+                    return self.emit_pooled_sleep(f, args);
+                }
                 // `&f a` supplies a and waits; the arity it waits for is the
                 // one the gavel names — supplied plus holes picks the group
                 // `(&roll 4) 5` is one application seen whole: the partial and

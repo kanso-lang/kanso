@@ -394,3 +394,204 @@ fn closed(e: &Expr, user: &Arities) -> bool {
         _ => false,
     }
 }
+
+/// The prefix of a binding `pool` makes in a function's body. Each holds a
+/// call the function's chain is certain to make after its sleep, as a cell.
+pub const POOLED: &str = "ahead~pool~";
+
+/// The sleep that carries a chain's pooled cells to the runtime, which forces
+/// them while the fiber is parked.
+pub const SLEEP_POOLED: &str = "ahead~sleep";
+
+/// How many locals a pooled call may name: a cell holds that many captures.
+const CAPTURES: usize = 8;
+
+/// Whether `pool` could change anything.
+pub fn pools(program: &Program) -> bool {
+    program.fns.iter().any(|f| poolable(program, f))
+}
+
+/// A function whose result is a chain that begins with a sleep, and the only
+/// arm of its name and count, since the emitter asks whether a binding is a
+/// cell by its position and a sibling arm's binding there is another one.
+fn poolable(program: &Program, f: &FnDecl) -> bool {
+    f.name != ENTRY
+        && !f.name.starts_with(PREFIX)
+        && matches!(f.body.last(), Some(Stmt::Expr(e)) if side_parks(e))
+        && program
+            .fns
+            .iter()
+            .filter(|g| g.name == f.name && g.params.len() == f.params.len())
+            .count()
+            == 1
+}
+
+/// The work a function's own chain is certain to do after its sleep, when it
+/// reads the function's locals. The value a call computes depends on those
+/// locals, so it cannot be a constant: it is bound ahead of the chain as a
+/// cell that captures them, and the chain's sleep hands the cell to the
+/// runtime. The cell is built when the function runs and forced when the
+/// sleep parks; a chain that is never run parks nowhere, so its work never
+/// runs early. Answers how many cells it made.
+pub fn pool(program: &mut Program) -> usize {
+    let mut user: Arities = HashMap::default();
+    for f in &program.fns {
+        if f.name != ENTRY {
+            user.entry(f.name.clone()).or_default().push(f.params.len());
+        }
+    }
+    let chosen: Vec<usize> =
+        (0..program.fns.len()).filter(|&i| poolable(program, &program.fns[i])).collect();
+    let mut made = 0;
+    for i in chosen {
+        let f = &mut program.fns[i];
+        let mut locals: HashSet<String> = HashSet::default();
+        for p in &f.params {
+            p.each_name(&mut |n| {
+                locals.insert(n.to_string());
+            });
+        }
+        let tail = f.body.len() - 1;
+        for s in &f.body[..tail] {
+            if let Stmt::Bind { pattern, .. } = s {
+                pattern.each_name(&mut |n| {
+                    locals.insert(n.to_string());
+                });
+            }
+        }
+        let mut binds: Vec<Stmt> = Vec::new();
+        let Some(Stmt::Expr(e)) = f.body.last_mut() else { continue };
+        each_side(e, &mut |side| {
+            if !parks_first(side) {
+                return;
+            }
+            // A continuation's parameter is bound after the park; a call that
+            // reads one, or a local it shadows, waits for the park.
+            let mut later: HashSet<String> = HashSet::default();
+            lambda_params(side, &mut later);
+            let mut cells: Vec<Name> = Vec::new();
+            let mut at = &mut *side;
+            while let Expr::App { piped: true, head, args, .. } = at {
+                if let Expr::Lambda { body, .. } = head.as_mut() {
+                    certain_local(body, &user, &locals, &later, &mut cells, &mut binds, &mut made);
+                }
+                at = &mut args[0];
+            }
+            if cells.is_empty() {
+                return;
+            }
+            let Expr::App { head, args, .. } = at else { unreachable!("the chain parks first") };
+            let span = head.span();
+            *head = Box::new(Expr::Ident(Name::new(SLEEP_POOLED), span, Resolution::default()));
+            args.extend(cells.into_iter().map(|c| Expr::Ident(c, span, Resolution::default())));
+        });
+        program.fns[i].body.splice(tail..tail, binds);
+    }
+    made
+}
+
+/// The parameters of every lambda in a chain.
+fn lambda_params(e: &Expr, out: &mut HashSet<String>) {
+    if let Expr::Lambda { params, .. } = e {
+        out.extend(params.iter().map(|(p, _)| p.clone()));
+    }
+    crate::for_each_child(e, |c| lambda_params(c, out));
+}
+
+/// `certain` for a function's chain: the effect arguments it is certain to
+/// evaluate, where a call of the program's own on arguments that read only
+/// the function's locals becomes a pooled cell.
+fn certain_local(
+    e: &mut Expr,
+    user: &Arities,
+    locals: &HashSet<String>,
+    later: &HashSet<String>,
+    cells: &mut Vec<Name>,
+    binds: &mut Vec<Stmt>,
+    made: &mut usize,
+) {
+    let Expr::App { piped: false, head, args, .. } = e else { return };
+    if !matches!(head.as_ref(), Expr::Ident(n, _, _) if EFFECT_WORDS.contains(&n.as_str())) {
+        return;
+    }
+    for a in args.iter_mut() {
+        take_local(a, user, locals, later, cells, binds, made);
+    }
+}
+
+fn take_local(
+    e: &mut Expr,
+    user: &Arities,
+    locals: &HashSet<String>,
+    later: &HashSet<String>,
+    cells: &mut Vec<Name>,
+    binds: &mut Vec<Stmt>,
+    made: &mut usize,
+) {
+    match e {
+        Expr::Str(parts, _) => {
+            for p in parts.iter_mut() {
+                if let TemplatePart::Interp(inner) = p {
+                    take_local(inner, user, locals, later, cells, binds, made);
+                }
+            }
+        }
+        Expr::App { piped: false, head, args, .. }
+            if is_user_call(head, args.len(), user)
+                && args.iter().all(|a| reads_locals(a, user, locals, later)) =>
+        {
+            let mut read: HashSet<String> = HashSet::default();
+            for a in args.iter() {
+                names_read(a, locals, &mut read);
+            }
+            if read.len() > CAPTURES {
+                return;
+            }
+            let span = e.span();
+            let name = Name::new(&format!("{POOLED}{made}"));
+            *made += 1;
+            let call = std::mem::replace(e, Expr::Ident(name.clone(), span, Resolution::default()));
+            binds.push(Stmt::Bind { pattern: Pattern::Var(name.clone(), span), expr: call });
+            cells.push(name);
+        }
+        _ => {}
+    }
+}
+
+/// Whether an expression reads nothing but literals, the function's locals
+/// and calls of the program's own functions on such arguments.
+fn reads_locals(
+    e: &Expr,
+    user: &Arities,
+    locals: &HashSet<String>,
+    later: &HashSet<String>,
+) -> bool {
+    match e {
+        Expr::Int(..) | Expr::Float(..) => true,
+        Expr::Ident(n, _, _) => {
+            n.as_str().starts_with(MOVED) || (locals.contains(n.as_str()) && !later.contains(n.as_str()))
+        }
+        Expr::Str(parts, _) => parts.iter().all(|p| match p {
+            TemplatePart::Lit(_) => true,
+            TemplatePart::Interp(inner) => reads_locals(inner, user, locals, later),
+        }),
+        Expr::List(items, _) => items.iter().all(|i| reads_locals(i, user, locals, later)),
+        Expr::BinOp { lhs, rhs, .. } => {
+            reads_locals(lhs, user, locals, later) && reads_locals(rhs, user, locals, later)
+        }
+        Expr::App { piped: false, head, args, .. } => {
+            is_user_call(head, args.len(), user)
+                && args.iter().all(|a| reads_locals(a, user, locals, later))
+        }
+        _ => false,
+    }
+}
+
+fn names_read(e: &Expr, locals: &HashSet<String>, out: &mut HashSet<String>) {
+    if let Expr::Ident(n, _, _) = e {
+        if locals.contains(n.as_str()) {
+            out.insert(n.to_string());
+        }
+    }
+    crate::for_each_child(e, |c| names_read(c, locals, out));
+}

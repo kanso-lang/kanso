@@ -1,0 +1,21 @@
+# `size n` reads `report`'s parameter, so it is pooled as a cell the sleep
+# carries rather than lifted as a constant. The pool forces it while the
+# program is parked, and the recursion runs out of stack there, before
+# "first" has printed. The pool drops the work and leaves the cell unforced,
+# so the program prints "first" and fails reading the size, where the program
+# as written fails (ruled 2026-10-11).
+import "std/time"
+
+fn deep 0
+  [0]
+
+fn deep n
+  [n (deep (n - 1))]
+
+fn size n
+  length (deep n)
+
+fn report n
+  sleep 10 .> (_ -> print "first") .> (_ -> print "then {size n}")
+
+report 1000000

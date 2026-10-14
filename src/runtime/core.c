@@ -143,6 +143,11 @@ typedef struct KThunk {
     KValue result;
     struct KThunk* next_free;
     KValue args[8];
+    /* A cell the work-ahead pool made (#1856). It is how the pool holds its
+       work, not a lazy binding the program has, so the thunk counters, which
+       both engines must agree on, leave it out. Last, so no field the
+       emitted code reads moves. */
+    int pooled;
 } KThunk;
 
 static KThunk* k_thunk_free = 0;
@@ -244,21 +249,20 @@ static long long k_stat_held_peak = 0;
 
 extern KValue d_thunk_eval(long long site, KValue* args);
 
-KValue k_thunk_new(long long site, int argc, ...) {
+static KValue k_thunk_vnew(long long site, int argc, int pooled, va_list ap) {
     KThunk* t = k_thunk_free;
     if (t) {
         k_thunk_free = t->next_free;
     } else {
         t = (KThunk*)malloc(sizeof(KThunk));
     }
-    if (K_COUNTING) k_stat_thunk_allocs++;
+    if (K_COUNTING && !pooled) k_stat_thunk_allocs++;
     t->rc = 1;
     t->site = site;
     t->forced = K_MEMO_NONE;
     t->argc = argc;
     t->next_free = 0;
-    va_list ap;
-    va_start(ap, argc);
+    t->pooled = pooled;
     for (int i = 0; i < argc; i++) {
 #ifdef __wasm__
         /* The emitted IR passes each argument as a first-class `%KValue`,
@@ -273,10 +277,26 @@ KValue k_thunk_new(long long site, int argc, ...) {
         /* a cell holding another cell keeps it alive */
         if (t->args[i].tag == K_THUNK) ((KThunk*)t->args[i].payload)->rc++;
     }
-    va_end(ap);
     KValue v;
     v.tag = K_THUNK;
     v.payload = (long long)t;
+    return v;
+}
+
+KValue k_thunk_new(long long site, int argc, ...) {
+    va_list ap;
+    va_start(ap, argc);
+    KValue v = k_thunk_vnew(site, argc, 0, ap);
+    va_end(ap);
+    return v;
+}
+
+/* A cell `ahead::pool` binds ahead of a chain, for the pool to force. */
+KValue k_thunk_new_pooled(long long site, int argc, ...) {
+    va_list ap;
+    va_start(ap, argc);
+    KValue v = k_thunk_vnew(site, argc, 1, ap);
+    va_end(ap);
     return v;
 }
 
@@ -303,6 +323,7 @@ KValue k_caf_blackhole(void) {
     t->forced = K_MEMO_NONE;
     t->argc = 0;
     t->next_free = 0;
+    t->pooled = 0;
     KValue v;
     v.tag = K_THUNK;
     v.payload = (long long)t;
@@ -316,7 +337,7 @@ static void k_thunk_release_cell(KThunk* t) {
     k_thunk_drop_args(t);
     t->next_free = k_thunk_free;
     k_thunk_free = t;
-    if (K_COUNTING) k_stat_thunk_frees++;
+    if (K_COUNTING && !t->pooled) k_stat_thunk_frees++;
 }
 
 static void k_thunk_drop_args(KThunk* t) {
@@ -415,7 +436,7 @@ static __attribute__((noinline)) KValue k_force_slow(KThunk* t) {
         t->forced = K_MEMO_NONE;
     }
     if (t->site == K_SITE_BLACKHOLE) k_die("a lazy binding demands its own value");
-    if (K_COUNTING) k_stat_thunk_evals++;
+    if (K_COUNTING && !t->pooled) k_stat_thunk_evals++;
     KValue answer = d_thunk_eval(t->site, t->args);
     /* The computation can answer with a cell of its own: a deferred binding
        handed back through a pass-through arm is the next call's deferred
@@ -436,7 +457,7 @@ static __attribute__((noinline)) KValue k_force_slow(KThunk* t) {
 KValue k_force(KValue v) {
     if (v.tag != K_THUNK) return v;
     KThunk* t = (KThunk*)v.payload;
-    if (K_COUNTING) k_stat_thunk_forces++;
+    if (K_COUNTING && !t->pooled) k_stat_thunk_forces++;
     if (t->forced == K_MEMO_KEPT) return t->result;
     return k_force_slow(t);
 }

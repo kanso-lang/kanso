@@ -1,0 +1,17 @@
+# `report` builds a chain whose sleep carries a cell for the pool, and the
+# program never runs that chain: it runs the list's first one. A cell reaches
+# the pool only when the sleep carrying it parks, so the sleep that does park
+# finds nothing to force, and `ahead_forced` reads zero.
+import "std/time"
+
+fn spin 0 acc
+  acc
+
+fn spin n acc
+  spin (n - 1) (acc + n % 7)
+
+fn report n
+  sleep 1 .> (_ -> print "report: {spin n 0}")
+
+chains = [(sleep 1 .> (_ -> print "made")) (report 1000)]
+chains[1]

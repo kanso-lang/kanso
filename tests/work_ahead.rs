@@ -99,3 +99,13 @@ fn a_pooled_overflow_in_a_group_fails_where_it_is_read() {
     let program = corpus().join(format!("{name}.kso"));
     the_transcript_is_the_one_written("play", name, &program);
 }
+
+/// A call that reads a function's parameter is pooled as a cell its chain's
+/// sleep carries. Its overflow in the pool is dropped, and it fails again where
+/// "then" reads it, after "first".
+#[test]
+fn a_pooled_cell_fails_where_it_is_read() {
+    let name = "a_pooled_cell_fails_where_it_is_read";
+    let program = corpus().join(format!("{name}.kso"));
+    the_transcript_is_the_one_written("play", name, &program);
+}

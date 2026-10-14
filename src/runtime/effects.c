@@ -393,19 +393,26 @@ KValue k_b_annotate(KValue subject, KValue callback, const char* origin) {
     return k_sited_word(subject, callback, origin, k_annotate_wrap);
 }
 
-/* The work-ahead pool (#1856): the compiler defines it, forcing each
-   constant it lifted out of the work that follows a park. It runs once, at the
-   first bare sleep. */
-void k_ahead_pool(void);
+/* The work-ahead pool (#1856): the compiler defines it. At the first park it
+   forces each constant it lifted out of the work that follows a park; at
+   every park it drains the cells the program's functions handed over. */
+void k_ahead_pool(int first);
 
-/* One pooled constant: `force` reads it, which builds its cell. A death on the
-   way jumps back here. The cells table pairs each constant's cell with its
-   ready flag; a cell still holding its builder's blackhole was being built
-   when the work died, and clearing its flag leaves it unbuilt. Answers
-   whether the pool may go on. */
-int k_ahead_try(void (*force)(void), void** cells, long long n) {
+/* Cells a parked sleep carried, waiting for the pool. Each holds a reference
+   until the drain lets go of it. */
+static KValue* k_ahead_queue = NULL;
+static long long k_ahead_queued = 0, k_ahead_room = 0;
+
+/* One piece of pooled work: `run` builds a cell. A death on the way jumps
+   back here. The cells table pairs each constant's cell with its ready flag;
+   a cell still holding its builder's blackhole was being built when the work
+   died, and clearing its flag leaves it unbuilt. A run-time cell the work
+   died in is left as it was, unforced, so the read that demands it runs the
+   work again and dies where the program as written dies. Answers whether the
+   pool may go on. */
+static int k_ahead_guard(void (*run)(void*), void* arg, void** cells, long long n) {
 #ifdef __wasm__
-    (void)force; (void)cells; (void)n;
+    (void)run; (void)arg; (void)cells; (void)n;
     return 0;
 #else
     int depth = k_beat_depth;
@@ -416,7 +423,7 @@ int k_ahead_try(void (*force)(void), void** cells, long long n) {
     int ok = 1;
     k_ahead_pooling = 1;
     if (sigsetjmp(k_ahead_out, 1) == 0) {
-        force();
+        run(arg);
         if (K_COUNTING) k_stat_ahead_forced++;
     } else {
         ok = 0;
@@ -439,6 +446,75 @@ int k_ahead_try(void (*force)(void), void** cells, long long n) {
     return ok;
 #endif
 }
+
+static void k_ahead_run_constant(void* force) {
+    ((void (*)(void))force)();
+}
+
+static void k_ahead_run_cell(void* cell) {
+    (void)k_force(*(KValue*)cell);
+}
+
+/* One pooled constant: `force` reads it, which builds its cell. */
+int k_ahead_try(void (*force)(void), void** cells, long long n) {
+    return k_ahead_guard(k_ahead_run_constant, (void*)force, cells, n);
+}
+
+/* A parked sleep's cells join the queue in the order the chain names them. */
+static __attribute__((unused)) void k_ahead_enqueue(KValue cells) {
+    if (cells.tag != K_LIST) return;
+    KList* l = (KList*)(intptr_t)cells.payload;
+    for (long long i = 0; i < l->len; i++) {
+        KValue c = l->items[i];
+        if (c.tag != K_THUNK) continue;
+        if (k_ahead_queued == k_ahead_room) {
+            k_ahead_room = k_ahead_room ? 2 * k_ahead_room : 8;
+            k_ahead_queue = (KValue*)realloc(k_ahead_queue, sizeof(KValue) * k_ahead_room);
+            if (!k_ahead_queue) { fputs("out of memory\n", stderr); exit(1); }
+        }
+        ((KThunk*)c.payload)->rc++;
+        k_ahead_queue[k_ahead_queued++] = c;
+    }
+}
+
+/* The compiled pool calls this at every park: each waiting cell is forced in
+   the order it joined, under the same try as a constant, and let go of. A
+   cell some earlier read already forced costs nothing here. */
+void k_ahead_drain(void** cells, long long n) {
+    for (long long i = 0; i < k_ahead_queued; i++) {
+        KValue c = k_ahead_queue[i];
+        KThunk* t = (KThunk*)c.payload;
+        if (t->forced != K_MEMO_KEPT) k_ahead_guard(k_ahead_run_cell, &c, cells, n);
+        k_thunk_release_cell(t);
+    }
+    k_ahead_queued = 0;
+}
+
+/* A sleep carrying the cells `ahead::pool` bound ahead of its chain. The
+   cells ride in the descriptor's second slot, where a plain sleep keeps
+   none, and reach the queue only when the sleep parks: a chain that is never
+   run hands its work to nobody. */
+KValue k_desc_sleep(KValue ms);
+
+KValue k_desc_sleep_pooled(KValue ms, int n, ...) {
+    KValue d = k_desc_sleep(ms);
+    if (d.tag != K_DESC) return d;
+    KValue held[8];
+    va_list ap;
+    va_start(ap, n);
+    for (int i = 0; i < n && i < 8; i++) {
+#ifdef __wasm__
+        held[i].tag = va_arg(ap, long long);
+        held[i].payload = va_arg(ap, long long);
+#else
+        held[i] = va_arg(ap, KValue);
+#endif
+    }
+    va_end(ap);
+    k_as_desc(d)->y = k_mklist(n < 8 ? n : 8, held);
+    return d;
+}
+
 static long long k_ahead_now_ms(void) {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
@@ -720,22 +796,23 @@ static KValue k_exec(KDesc* d) {
             return k_schedule(d);
         }
         case 8: {
-            /* a bare sleep executed outside a group: pause for real. The first
-               one runs the work-ahead pool first (#1856), and the time the pool
-               took comes off the wait, so the work hides inside it. Which work
-               runs is decided by the compiler and never by the clock; only
-               the length of the physical wait reads it. */
+            /* a bare sleep executed outside a group: pause for real. It runs
+               the work-ahead pool first (#1856): the constants at the first
+               park, and the cells this sleep and any before it carried. The
+               time the pool took comes off the wait, so the work hides inside
+               it. Which work runs is decided by the program and never by the
+               clock; only the length of the physical wait reads it. */
             long long ms = d->x.tag == K_INT ? d->x.payload : 0;
             k_out_settle();
 #ifndef __wasm__
             /* The tab's runtime is linked apart from the program and its
                sleep is the host's, so it has no pool to run. */
-            if (!k_ahead_ran) {
-                k_ahead_ran = 1;
-                long long before = k_ahead_now_ms();
-                k_ahead_pool();
-                ms -= k_ahead_now_ms() - before;
-            }
+            k_ahead_enqueue(d->y);
+            int first = !k_ahead_ran;
+            k_ahead_ran = 1;
+            long long before = k_ahead_now_ms();
+            k_ahead_pool(first);
+            ms -= k_ahead_now_ms() - before;
 #endif
             if (ms > 0) usleep((useconds_t)(ms * 1000));
             return k_done();
@@ -1228,6 +1305,9 @@ static KStep k_step(KDesc* d) {
         }
         case 8: {
             long long ms = d->x.tag == K_INT ? d->x.payload : 0;
+#ifndef __wasm__
+            k_ahead_enqueue(d->y);
+#endif
             KStep s = {1, (unsigned long long)(ms < 0 ? 0 : ms), k_desc_nil(), k_none()};
             return s;
         }
@@ -1307,13 +1387,12 @@ static KValue k_schedule(KDesc* join) {
             /* loop to the deadline: usleep may return early on a signal */
             k_out_settle();
 #ifndef __wasm__
-            /* Every side is waiting: the group's first idle point runs the
-               work-ahead pool (#1856), as a bare sleep does. The wall-credit
-               below counts the pool's time against the wait. */
-            if (!k_ahead_ran) {
-                k_ahead_ran = 1;
-                k_ahead_pool();
-            }
+            /* Every side is waiting: an idle point runs the work-ahead pool
+               (#1856), as a bare sleep does. The wall-credit below counts the
+               pool's time against the wait. */
+            int first = !k_ahead_ran;
+            k_ahead_ran = 1;
+            k_ahead_pool(first);
 #endif
             for (;;) {
                 long long elapsed = k_ms_since(&sched_t0);

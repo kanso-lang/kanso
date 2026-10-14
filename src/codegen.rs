@@ -705,7 +705,7 @@ fn emit_written(
     // went on to fail in `list/next`, two frames later and under other names.
     // Forcing where the program as written would have looked keeps the trace
     // the interpreter's.
-    let program = match crate::ahead::lifts(&program) {
+    let program = match crate::ahead::lifts(&program) || crate::ahead::pools(&program) {
         true => {
             let mut owned = match program {
                 Given::Owned(p) => p,
@@ -718,6 +718,7 @@ fn emit_written(
                 },
             };
             crate::ahead::lift(&mut owned);
+            crate::ahead::pool(&mut owned);
             Given::Owned(owned)
         }
         false => program,
@@ -4506,6 +4507,12 @@ impl<'a> Backend<'a> {
     /// reads, plus a `k_thunk_new` that captures their current values. The
     /// computation runs at first force.
     fn emit_cell(&mut self, f: &mut FnEmit, expr: &Expr) -> Result<String, String> {
+        self.emit_cell_by(f, expr, "k_thunk_new")
+    }
+
+    /// `emit_cell` with the runtime entry that builds the cell named: the
+    /// work-ahead pool's cells come from `k_thunk_new_pooled`.
+    fn emit_cell_by(&mut self, f: &mut FnEmit, expr: &Expr, maker: &str) -> Result<String, String> {
         let mut idents = Vec::new();
         collect_idents(expr, &mut idents);
         let mut captures: Vec<String> = Vec::new();
@@ -4528,7 +4535,7 @@ impl<'a> Backend<'a> {
         }
         let t = f.tmp();
         f.line_fmt(format_args!(
-            "{t} = call %KValue (i64, i32, ...) @k_thunk_new(i64 {site}, i32 {}{args})",
+            "{t} = call %KValue (i64, i32, ...) @{maker}(i64 {site}, i32 {}{args})",
             captures.len()
         ));
         f.record(&t, crate::infer::TOP);
@@ -4991,8 +4998,15 @@ impl<'a> Backend<'a> {
             .filter(|(sym, _)| self.ahead_cells.iter().any(|(s, _)| s == sym))
             .map(|(sym, moved)| (sym, *moved))
             .collect();
-        if !forced.is_empty() {
-            let n = self.caf_cells.len();
+        // A program whose functions pool cells at run time hands the runtime
+        // the same table at every park, where it drains them.
+        let pools = self
+            .program
+            .fns
+            .iter()
+            .any(|d| d.body.iter().any(|s| matches!(s, Stmt::Bind { pattern: Pattern::Var(n, _), .. } if n.as_str().starts_with(crate::ahead::POOLED))));
+        let n = self.caf_cells.len();
+        if !forced.is_empty() || pools {
             let pairs: Vec<String> =
                 self.caf_cells.iter().map(|c| format!("ptr @{c}, ptr @{c}_ready")).collect();
             let _ = writeln!(
@@ -5000,6 +5014,12 @@ impl<'a> Backend<'a> {
                 "@k_ahead_cells = internal constant [{} x ptr] [{}]",
                 2 * n,
                 pairs.join(", ")
+            );
+        }
+        if !forced.is_empty() {
+            let _ = writeln!(
+                pool,
+                "  %first_park = icmp ne i32 %first, 0\n  br i1 %first_park, label %constants, label %done\nconstants:"
             );
             for (i, (sym, moved)) in forced.iter().enumerate() {
                 let _ = writeln!(
@@ -5025,10 +5045,16 @@ impl<'a> Backend<'a> {
             let _ = writeln!(shims, "declare i32 @k_ahead_try(ptr, ptr, i64)");
             let _ = writeln!(pool, "  br label %done\ndone:");
         }
+        if pools {
+            let _ = writeln!(shims, "declare void @k_ahead_drain(ptr, i64)");
+            let _ = writeln!(pool, "  call void @k_ahead_drain(ptr @k_ahead_cells, i64 {n})");
+        }
         self.room(shims.len() + pool.len() + 128);
         self.body.push_str(&shims);
-        let _ =
-            writeln!(self.body, "define void @k_ahead_pool() {{\nentry:\n{pool}  ret void\n}}\n");
+        let _ = writeln!(
+            self.body,
+            "define void @k_ahead_pool(i32 %first) {{\nentry:\n{pool}  ret void\n}}\n"
+        );
         // A library has no entry to call, and a stub calling one that is not
         // there is a symbol the linker would ask about.
         if self.declares(crate::ast::ENTRY) {
