@@ -1,0 +1,14 @@
+# The count is bound before the sleep, so it moves into the park, and the call
+# after the sleep that reads it then names nothing local. The call is lifted
+# too, and the runtime forces both while the program is parked:
+# `ahead_forced` counts two.
+import "std/time"
+
+fn spin 0 acc
+  acc
+
+fn spin n acc
+  spin (n - 1) (acc + n % 7)
+
+n = 1000
+sleep 1 .> (_ -> print "made") .> (_ -> print "report: {spin n 0}")

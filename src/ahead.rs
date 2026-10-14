@@ -26,8 +26,9 @@
 //! the sleep starts and leaves nothing for the wait to hide. When every
 //! statement ahead of the first park is a binding, none of them performs an
 //! effect, and the park is the first thing the program does that can be
-//! seen. Such a binding becomes a constant named `ahead~moved~N` and its reads
-//! read the constant. The pool forces these first, in the order they were
+//! seen. A binding whose value is closed becomes a constant named
+//! `ahead~moved~N` and its reads read the constant, so a call after the park
+//! whose arguments name only moved bindings is closed as well. The pool forces these first, in the order they were
 //! written, and a failure among them is raised at the park: nothing has been
 //! printed between the binding and the park, so the transcript is the one the
 //! program as written produces (the 2026-10-11 gavel on #1862).
@@ -142,7 +143,7 @@ fn first_park(body: &[Stmt]) -> Option<usize> {
     }
 }
 
-/// Takes each binding ahead of the first park whose value is a closed call,
+/// Takes each binding ahead of the first park whose value is closed,
 /// and answers the calls in the order they were written. The reads of each
 /// name in the statements after it are pointed at the constant the call
 /// becomes. A name bound twice anywhere in the entry stays where it is, so a
@@ -155,10 +156,11 @@ fn move_into_park(entry: &mut Vec<Stmt>, user: &Arities) -> Vec<Expr> {
     let mut at = 0;
     while at < park {
         let name = match &entry[at] {
-            Stmt::Bind {
-                pattern: Pattern::Var(n, _),
-                expr: e @ Expr::App { piped: false, .. },
-            } if closed(e, user) && binders(entry, n.as_str()) == 1 => n.to_string(),
+            Stmt::Bind { pattern: Pattern::Var(n, _), expr }
+                if closed(expr, user) && binders(entry, n.as_str()) == 1 =>
+            {
+                n.to_string()
+            }
             _ => {
                 at += 1;
                 continue;
@@ -318,11 +320,13 @@ fn is_user_call(head: &Expr, arity: usize, user: &Arities) -> bool {
     matches!(head, Expr::Ident(n, _, _) if user.get(n.as_str()).is_some_and(|a| a.contains(&arity)))
 }
 
-/// Whether an expression names nothing local: literals, and calls of the
-/// program's own functions on closed arguments.
+/// Whether an expression names nothing local: literals, a binding already
+/// moved into the park, and calls of the program's own functions on closed
+/// arguments.
 fn closed(e: &Expr, user: &Arities) -> bool {
     match e {
         Expr::Int(..) | Expr::Float(..) => true,
+        Expr::Ident(n, _, _) => n.as_str().starts_with(MOVED),
         Expr::Str(parts, _) => parts.iter().all(|p| match p {
             TemplatePart::Lit(_) => true,
             TemplatePart::Interp(inner) => closed(inner, user),

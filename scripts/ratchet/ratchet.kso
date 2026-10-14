@@ -5331,7 +5331,15 @@ moved_failure_read = row
   (breaking "a_moved_binding_fails_where_it_is_read")
   no_setup
 
-rows_cq11 = list/concat rows_cq10 [binding_left_ahead moved_failure_read]
+moved_read_as_local = row
+  "a moved binding read as a local"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_moved_binding_read_as_local")
+  no_setup
+
+rows_cq11 = list/concat rows_cq10 [binding_left_ahead moved_failure_read moved_read_as_local]
 
 rows_c = list/concat rows_cq11 [itself]
 
