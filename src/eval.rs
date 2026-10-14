@@ -82,6 +82,20 @@ impl Entries {
         }
     }
 
+    /// Drops `key` and what it held; a key that is not there changes nothing.
+    pub fn remove(&mut self, key: &MapKey) {
+        match self {
+            Entries::Few(few) => {
+                if let Ok(at) = few.binary_search_by(|(k, _)| k.cmp(key)) {
+                    few.remove(at);
+                }
+            }
+            Entries::Many(many) => {
+                many.remove(key);
+            }
+        }
+    }
+
     pub fn iter(&self) -> impl Iterator<Item = (&MapKey, &Value)> {
         let (few, many) = match self {
             Entries::Few(few) => (Some(few.iter().map(|(k, v)| (k, v))), None),
@@ -516,6 +530,9 @@ pub enum Desc {
     Join(Rc<Desc>, Rc<Desc>),
     Args,
     Stdin,
+    /// The next line of standard input without its line ending, or `done`
+    /// at the end of it (ruled 2026-10-13, kanso#1914).
+    ReadLine,
     ReadFile(String),
     /// the same read with no test of what the bytes are (ruled 2026-08-29)
     ReadBytes(String),
@@ -524,6 +541,10 @@ pub enum Desc {
     Env(String),
     Exists(String),
     IsDir(String),
+    /// A file's last-modified time in milliseconds since the epoch, or `none`
+    /// for a file that is not there, which `os/modified` names
+    /// `file_not_found` (ruled 2026-10-13, kanso#1914).
+    Modified(String),
     ListDir(String),
     Now,
     MakeDir(String),
@@ -1060,7 +1081,7 @@ enum Callee<'a> {
 /// `EmptyRecord` for the same reason -- its fields are a fresh `RefCell` on
 /// every mention.
 ///
-/// Every arm is a name or a pointer, and the three descriptors and four
+/// Every arm is a name or a pointer, and the four descriptors and four
 /// literals are arms of their own rather than a `Desc` or a `Value`: this
 /// lives in a table with one row per name the run mentions, and inlining
 /// either enum would size every row by its largest variant.
@@ -1069,6 +1090,7 @@ enum Named<'a> {
     Constant(&'a FnDecl),
     Args,
     Stdin,
+    ReadLine,
     Now,
     EmptyRecord(Rc<str>),
     True,
@@ -2084,6 +2106,7 @@ impl<'a> Interp<'a> {
             Named::Constant(constant) => self.knotted(name, constant),
             Named::Args => Ok(Value::Desc(Rc::new(Desc::Args))),
             Named::Stdin => Ok(Value::Desc(Rc::new(Desc::Stdin))),
+            Named::ReadLine => Ok(Value::Desc(Rc::new(Desc::ReadLine))),
             Named::Now => Ok(Value::Desc(Rc::new(Desc::Now))),
             Named::EmptyRecord(ty) => {
                 Ok(Value::Record { ty, fields: Rc::new(RefCell::new(Vec::new())) })
@@ -2116,6 +2139,7 @@ impl<'a> Interp<'a> {
         match name.strip_prefix("builtin_").unwrap_or(name) {
             "args" => return Ok(Named::Args),
             "stdin" => return Ok(Named::Stdin),
+            "read_line" => return Ok(Named::ReadLine),
             "now" => return Ok(Named::Now),
             _ => {}
         }

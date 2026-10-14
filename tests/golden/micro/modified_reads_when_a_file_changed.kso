@@ -1,0 +1,14 @@
+# `os/modified` answers when a file last changed, in milliseconds since the
+# epoch: the unit `time/now` answers in (ruled 2026-10-13, kanso#1914). The
+# time itself depends on the checkout, so what is pinned is that it is a
+# positive integer and that two reads of an unchanged file agree. A path that
+# runs through a file is not there, the way `os/read_file` reads it.
+import "std/os"
+
+fn compared a b
+  print "{a > 0} {a == b}"
+
+pub play = os/modified "listing/alpha.txt"
+  .> (a -> os/modified "listing/alpha.txt" .> (b -> compared a b))
+  .> (_ -> os/modified "listing" .> (d -> print "{d > 0}"))
+  .> (_ -> os/modified "listing/alpha.txt/inside" .> (r -> print "{r}"))

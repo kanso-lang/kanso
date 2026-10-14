@@ -69,6 +69,10 @@ impl Executor for CollectExecutor {
         std::path::Path::new(path).is_dir()
     }
 
+    fn modified(&mut self, path: &str) -> Result<Option<i64>, String> {
+        kanso::eval::modified_millis(path)
+    }
+
     fn now(&mut self) -> i64 {
         kanso::eval::pinned_now().unwrap_or(0)
     }
@@ -93,6 +97,10 @@ impl Executor for CollectExecutor {
     }
 
     fn stdin(&mut self) -> Result<String, String> {
+        Err("the oracle supplies no stdin".to_string())
+    }
+
+    fn read_line(&mut self) -> Result<Option<String>, String> {
         Err("the oracle supplies no stdin".to_string())
     }
 

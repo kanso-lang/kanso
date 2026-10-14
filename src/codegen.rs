@@ -81,7 +81,7 @@ fn ties(program: &Program) -> bool {
     program.fns.iter().filter(|d| !d.name.starts_with("list/")).any(|d| d.body.iter().any(stmt))
 }
 
-pub(crate) const BUILTIN_CALLS: [&str; 62] = [
+pub(crate) const BUILTIN_CALLS: [&str; 64] = [
     "effect",
     "built_text",
     "net_port",
@@ -105,6 +105,7 @@ pub(crate) const BUILTIN_CALLS: [&str; 62] = [
     "env",
     "exists",
     "is_dir",
+    "modified",
     "list_dir",
     "make_dir",
     "write_file",
@@ -128,6 +129,7 @@ pub(crate) const BUILTIN_CALLS: [&str; 62] = [
     "map",
     "push",
     "put",
+    "delete",
     "slice",
     "sort",
     "render_value",
@@ -6272,6 +6274,12 @@ impl<'a> Backend<'a> {
                     "stdin" => {
                         let t = f.tmp();
                         f.line_fmt(format_args!("{t} = call %KValue @k_desc_stdin()"));
+                        f.record(&t, DESC);
+                        Ok(t.to_string())
+                    }
+                    "read_line" => {
+                        let t = f.tmp();
+                        f.line_fmt(format_args!("{t} = call %KValue @k_desc_read_line()"));
                         f.record(&t, DESC);
                         Ok(t.to_string())
                     }

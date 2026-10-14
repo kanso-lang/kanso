@@ -1,0 +1,11 @@
+# `os/modified` answers a file that is not there the way `os/read_file`
+# does: `file_not_found`, as data, so the chain goes on to the next read
+# rather than stopping at a failure (ruled 2026-10-13, kanso#1914).
+import "std/os"
+
+fn said r
+  print "{r}"
+
+pub play = os/modified "no_such_file.txt" .> said
+  .> (_ -> os/modified "no_such_dir/inside.txt" .> said)
+  .> (_ -> os/read_file "no_such_file.txt" .> said)

@@ -305,11 +305,13 @@ needs_a_machine = [
   "os/write_file"
   "os/args"
   "io/stdin"
+  "io/read_line"
   "os/list_dir"
   "os/run"
   "os/make_dir"
   "os/exists"
   "os/is_dir"
+  "os/modified"
   "os/read_bytes"
 ]
 
