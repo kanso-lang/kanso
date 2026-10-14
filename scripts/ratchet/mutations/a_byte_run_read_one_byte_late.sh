@@ -6,9 +6,9 @@
 # interpreter.
 set -e
 line='            f.line_fmt(format_args!("{off} = add i64 {idx}, {}", k - 1));'
-[ "$(grep -cxF "$line" src/codegen.rs)" -eq 1 ] || {
+[ "$(grep -cxF "$line" src/codegen/emit.rs)" -eq 1 ] || {
   echo "the byte run's read moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i 's/^            f.line_fmt(format_args!("{off} = add i64 {idx}, {}", k - 1));$/            f.line_fmt(format_args!("{off} = add i64 {idx}, {}", k));/' src/codegen.rs
-if grep -qxF "$line" src/codegen.rs; then exit 1; fi
+sed -i 's/^            f.line_fmt(format_args!("{off} = add i64 {idx}, {}", k - 1));$/            f.line_fmt(format_args!("{off} = add i64 {idx}, {}", k));/' src/codegen/emit.rs
+if grep -qxF "$line" src/codegen/emit.rs; then exit 1; fi

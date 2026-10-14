@@ -21,24 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-12 — gavel: a test file is an outside consumer of its module
-
-Clay ruled the other half of #1883: "kanso test certainly cannot see private
-definitions. that would hugely violate the point of privacy." On main a
-`*_test.kso` is a member of its module: it reads private names, its
-definitions join the module's namespace, and `kanso run` checks it, so a
-formatting slip in a test stopped the program it tests from running.
-
-**The ruling.** A test file is compiled as an outside consumer that imports
-the module it sits beside. It sees only pub names, adds nothing to the module,
-and only `kanso test` reads it; `kanso run`, `check` and `build` ignore it.
-
-Owes, on #1883: the loader keeps `*_test.kso` out of the module and compiles
-each as an importer; goldens for a test that reads a private name (refused), a
-test helper sharing a production name (no collision) and a malformed test
-beside a program that still runs; existing tests that read private names
-moved onto the pub surface.
-
 ## 2026-10-12 — stdout reaches its reader, and a closed pipe stops every engine quietly
 
 Two runtime items on #1892 were about stdout.
@@ -1872,3 +1854,31 @@ release build, and an Apple host keeps the narrowing. There a wide arm still
 takes the C convention, and the three tests stay off Apple arm64. On linux a
 wide arm gives up only its sibling calls into helpers, which become a call and a
 return. x86-64 builds are unchanged. #1912 stays open for the Apple half.
+
+## 2026-10-14 — the body emitter moves to `src/codegen/emit.rs`
+
+#1947, the codegen half. The largest `impl Backend` block in `src/codegen.rs`,
+3,867 lines that turn one function's body into IR (patterns, binds, calls,
+conditions and the arithmetic paths), moves unchanged to
+`src/codegen/emit.rs`, which `codegen.rs` reads with `include!` as it already
+reads `declares.rs` and `dispatchers.rs`. `codegen.rs` goes from 9,796 lines to
+5,929.
+
+The move is pure. Built from main and from this tree, the release IR for
+runbench and encodebench is byte for byte the same. Thirty-one ratchet
+mutations edit lines that moved, so each now names `src/codegen/emit.rs`, and
+every one was run against a copy of the tree to see that it still applies. The
+test that every wasm32 rewrite matches a line the emitter writes reads the new
+file beside the other two. The compile rows can move with the binary's layout,
+and CI's rows will say whether they did.
+
+`runtime.c` is the other half of #1947 and stays for its own change. Its text
+is embedded with `include_str!` in five places and edited by 119 mutations, so
+a split has to be concatenated in Rust rather than joined with `#include`.
+
+On CI's rows the move is layout and nothing else. The emitted IR and every
+native and interpreter row are unchanged; the one row that moved is the tab's
+compile, browser_compile_instructions 437,381,994 from 437,381,890, 104
+instructions, because the wasm engine is built from the same source and its
+code moved with the files. The floor follows that score, as it has for earlier
+layout-only moves.

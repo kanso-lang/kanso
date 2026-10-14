@@ -6,7 +6,7 @@
 # subtype, so an unwrap that runs first passes it through and the builtin
 # meets the subtype after its own force.
 set -e
-f=src/codegen.rs
+f=src/codegen/emit.rs
 grep -q "fn maybe_force" src/codegen.rs
 grep -qF '                let forced = self.maybe_force(f, e.clone());' "$f" || {
   echo "the force ahead of the subtype unwrap moved; this mutation needs rewriting" >&2

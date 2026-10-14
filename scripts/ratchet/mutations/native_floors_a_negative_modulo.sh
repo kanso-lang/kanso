@@ -19,10 +19,10 @@
 # on one operator, at the operands the numeric sweep exists to straddle.
 set -e
 target='let insn = if op == "%" { "srem" } else { "sdiv" };'
-grep -qF "$target" src/codegen.rs || {
+grep -qF "$target" src/codegen/emit.rs || {
   echo "the inline remainder moved; this mutation needs rewriting" >&2
   exit 1
 }
 sed -i 's|let insn = if op == "%" { "srem" } else { "sdiv" };|let insn = if op == "%" { "urem" } else { "sdiv" };|' \
-  src/codegen.rs
-grep -qF 'let insn = if op == "%" { "urem" } else { "sdiv" };' src/codegen.rs
+  src/codegen/emit.rs
+grep -qF 'let insn = if op == "%" { "urem" } else { "sdiv" };' src/codegen/emit.rs

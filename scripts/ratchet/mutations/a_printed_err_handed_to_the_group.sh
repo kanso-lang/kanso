@@ -6,7 +6,7 @@
 # does not print.
 set -e
 old='                    let may_be_err = f.set_of(&emitted[0]) & ERR != 0;'
-[ "$(grep -cxF "$old" src/codegen.rs)" -eq 1 ]
-sed -i.bak 's#^                    let may_be_err = f.set_of(&emitted\[0\]) & ERR != 0;$#                    let may_be_err = false;#' src/codegen.rs
-rm -f src/codegen.rs.bak
-! grep -qxF "$old" src/codegen.rs
+[ "$(grep -cxF "$old" src/codegen/emit.rs)" -eq 1 ]
+sed -i.bak 's#^                    let may_be_err = f.set_of(&emitted\[0\]) & ERR != 0;$#                    let may_be_err = false;#' src/codegen/emit.rs
+rm -f src/codegen/emit.rs.bak
+! grep -qxF "$old" src/codegen/emit.rs
