@@ -102553,26 +102553,6 @@ worth more than the three rises cost, and welfare banks the difference at
 the floor drops by what they cost, since this builds a ruled part of the
 language.
 
-## 2026-10-12 — concat reads the bytes text/bytes answers, on every engine
-
-From #1891, the third item: the 2026-08-23 gavel says a list is never bytes,
-and what `concat` declares decides which engine is right. Appendix b declares
-`text/bytes string → int[]` and `text/concat` as appending two lists, so a
-value `text/bytes` answered is a list to `concat`. Native code already read a
-bytes value as its byte values on either side and answered a list. The
-interpreter matched only two `List`s and refused anything else with "concat
-takes two lists", which is what the httpd, mustache, chip8 and ugit ports hit.
-The interpreter now reads a `Bytes` operand as its byte values, and the answer
-is a list on both engines. The gavel's other direction is unchanged: a list is
-still never read as bytes.
-
-`tests/golden/micro/concat_reads_the_bytes_text_bytes_answers` puts bytes on
-the left, on the right, on both sides, and as a slice of `text/bytes`. Main's
-interpreter stopped at the first line.
-
-Appendix b also says `concat` takes strings, and neither engine does: both
-refuse two strings with the same message. #1906 asks which way that goes.
-
 ## 2026-10-13 — a loop entered from the callee it calls rewinds
 
 From #1892's bc port. A `for` loop in bc held every lap's allocation: 300,000
@@ -102628,53 +102608,25 @@ Merged with main after #1904, the same rows land on `emitted_other_calls`
 17,676, `emitted_other_branches` 16,559, `emitted_other_lines` 148,263 and
 `browser_compile_instructions` 393,489,081.
 
-## 2026-10-12 — gavel: arms travel with the value, and a file names only what it can see
+## 2026-10-12 — concat reads the bytes text/bytes answers, on every engine
 
-Clay ruled the namespace half of #1883 in dialog, on 2026-10-11 and 2026-10-12.
-It restates the 2026-08-29 gavel "arms travel with the type, under the
-ownership rule" at full width: that gavel was built for `to_string` and
-operator arms, and ordinary functions were never brought under it.
-`enroll_bare` in src/lib.rs still gives every pub function of every import a
-bare twin whatever the call passes, which is how a test file's
-`import "std/list"` turned a module's own `step 3` into `list/step` on main.
+From #1891, the third item: the 2026-08-23 gavel says a list is never bytes,
+and what `concat` declares decides which engine is right. Appendix b declares
+`text/bytes string → int[]` and `text/concat` as appending two lists, so a
+value `text/bytes` answered is a list to `concat`. Native code already read a
+bytes value as its byte values on either side and answered a list. The
+interpreter matched only two `List`s and refused anything else with "concat
+takes two lists", which is what the httpd, mustache, chip8 and ugit ports hit.
+The interpreter now reads a `Bytes` operand as its byte values, and the answer
+is a list on both engines. The gavel's other direction is unchanged: a list is
+still never read as bytes.
 
-Clay: "it's fine to call that method on an argument that's passed to a
-function because its arms will travel with it. you just can't call it on your
-own internal things if you haven't imported anything that defines it." And on
-a name a file never imported: "you can't reference a type if you don't know
-what version of the library it even came from... there could be a million
-different libraries that all define that same thing."
+`tests/golden/micro/concat_reads_the_bytes_text_bytes_answers` puts bytes on
+the left, on the right, on both sides, and as a slice of `text/bytes`. Main's
+interpreter stopped at the first line.
 
-**The ruling.**
-
-1. A value carries the arms its type's owner wrote. Code holding the value
-   calls them bare, without importing the owner: a function handed a `circle`
-   may write `area x`. A value reached through one that arrived counts as
-   arriving with it: a field of a parameter, an element of a list passed in,
-   the result of a traveling arm called on it.
-2. On values a file made itself (literals, its own records, what it built from
-   them) a name resolves only if the file can see it, declared in its own
-   module or in a module it imports. Otherwise it is `error[name]`.
-3. A qualified call `geo/area x` needs the import, takes any arguments, and
-   reaches only `geo`'s own arms.
-4. An arm is legal only when one of its parameter types belongs to the module
-   that writes it, so a value's traveling arms come from exactly one place,
-   its type's owner. In a mixed call such as `combine x 3`, `x`'s owner's arms
-   answer. Two owners' arms equally specific for one call are refused, as the
-   2026-08-29 gavel on the ambiguous bare call already says, and a local arm
-   of the same shape shadows a traveling one.
-
-`kanso check` stays exact: a library is checked alone with `area x` on a
-parameter accepted and `area 3` refused, and the program that passes the value
-confirms an arm exists or is refused at its own call site.
-
-Owes, on #1894: bare enrollment replaced by the two rules above; the
-reproduction (a module's `step 3` hijacked by a test file's import) as an
-error golden, seen red on main; a golden for an arm traveling into a library
-that never imported its owner; an error golden for an internal value calling
-a name the file cannot see; the corpus, samples, lib and the sibling
-repositories moved to qualified spellings where they leaned on the old reach;
-ch07 and ch11 rewritten to state the rule.
+Appendix b also says `concat` takes strings, and neither engine does: both
+refuse two strings with the same message. #1906 asks which way that goes.
 
 ## 2026-10-13 — a list concatenated onto in a fold grows where it stands
 
@@ -102753,6 +102705,54 @@ On main after #1904 the tab's compile reads `browser_compile_instructions`
 
 With main merged after #1922, browser_compile_instructions lands on
 393,453,573.
+
+## 2026-10-12 — gavel: arms travel with the value, and a file names only what it can see
+
+Clay ruled the namespace half of #1883 in dialog, on 2026-10-11 and 2026-10-12.
+It restates the 2026-08-29 gavel "arms travel with the type, under the
+ownership rule" at full width: that gavel was built for `to_string` and
+operator arms, and ordinary functions were never brought under it.
+`enroll_bare` in src/lib.rs still gives every pub function of every import a
+bare twin whatever the call passes, which is how a test file's
+`import "std/list"` turned a module's own `step 3` into `list/step` on main.
+
+Clay: "it's fine to call that method on an argument that's passed to a
+function because its arms will travel with it. you just can't call it on your
+own internal things if you haven't imported anything that defines it." And on
+a name a file never imported: "you can't reference a type if you don't know
+what version of the library it even came from... there could be a million
+different libraries that all define that same thing."
+
+**The ruling.**
+
+1. A value carries the arms its type's owner wrote. Code holding the value
+   calls them bare, without importing the owner: a function handed a `circle`
+   may write `area x`. A value reached through one that arrived counts as
+   arriving with it: a field of a parameter, an element of a list passed in,
+   the result of a traveling arm called on it.
+2. On values a file made itself (literals, its own records, what it built from
+   them) a name resolves only if the file can see it, declared in its own
+   module or in a module it imports. Otherwise it is `error[name]`.
+3. A qualified call `geo/area x` needs the import, takes any arguments, and
+   reaches only `geo`'s own arms.
+4. An arm is legal only when one of its parameter types belongs to the module
+   that writes it, so a value's traveling arms come from exactly one place,
+   its type's owner. In a mixed call such as `combine x 3`, `x`'s owner's arms
+   answer. Two owners' arms equally specific for one call are refused, as the
+   2026-08-29 gavel on the ambiguous bare call already says, and a local arm
+   of the same shape shadows a traveling one.
+
+`kanso check` stays exact: a library is checked alone with `area x` on a
+parameter accepted and `area 3` refused, and the program that passes the value
+confirms an arm exists or is refused at its own call site.
+
+Owes, on #1894: bare enrollment replaced by the two rules above; the
+reproduction (a module's `step 3` hijacked by a test file's import) as an
+error golden, seen red on main; a golden for an arm traveling into a library
+that never imported its owner; an error golden for an internal value calling
+a name the file cannot see; the corpus, samples, lib and the sibling
+repositories moved to qualified spellings where they leaned on the old reach;
+ch07 and ch11 rewritten to state the rule.
 
 ## 2026-10-12 — gavel: a test file is an outside consumer of its module
 
