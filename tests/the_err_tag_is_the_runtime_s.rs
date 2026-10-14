@@ -9,7 +9,7 @@
 
 /// Where `K_ERR` stands in the runtime's tag enum.
 fn runtime_err_tag() -> i64 {
-    let runtime = include_str!("../src/runtime.c");
+    let runtime = kanso::RUNTIME_C;
     let line = runtime
         .lines()
         .find(|l| l.starts_with("enum { K_INT,"))

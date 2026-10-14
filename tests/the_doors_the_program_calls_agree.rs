@@ -16,7 +16,7 @@ use std::collections::BTreeSet;
 
 #[test]
 fn every_door_the_runtime_defines_is_one_the_emitter_calls() {
-    let runtime = include_str!("../src/runtime.c");
+    let runtime = kanso::RUNTIME_C;
     let defined: BTreeSet<&str> = runtime
         .lines()
         .filter_map(|l| l.strip_prefix("K_DOORCC KValue "))
