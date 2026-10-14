@@ -409,6 +409,12 @@ const CAPTURES: usize = 8;
 /// Whether `pool` could change anything.
 pub fn pools(program: &Program) -> bool {
     program.fns.iter().any(|f| poolable(program, f))
+        || program.fns.iter().any(|f| {
+            !f.name.starts_with(PREFIX)
+                && f.body.iter().any(|s| match s {
+                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) => holds_parking_lambda(expr),
+                })
+        })
 }
 
 /// A function whose result is a chain that begins with a sleep, and the only
@@ -426,13 +432,19 @@ fn poolable(program: &Program, f: &FnDecl) -> bool {
             == 1
 }
 
+/// The prefix of a function `pool` lifts out of a lambda whose body is a
+/// chain that parks first, so the lambda's work can be pooled the way a
+/// function's is.
+pub const LIFTED: &str = "ahead~lam~";
+
 /// The work a function's own chain is certain to do after its sleep, when it
 /// reads the function's locals. The value a call computes depends on those
 /// locals, so it cannot be a constant: it is bound ahead of the chain as a
 /// cell that captures them, and the chain's sleep hands the cell to the
 /// runtime. The cell is built when the function runs and forced when the
 /// sleep parks; a chain that is never run parks nowhere, so its work never
-/// runs early. Answers how many cells it made.
+/// runs early. A lambda whose body is such a chain is lifted into a function
+/// first, when that function pools something. Answers how many cells it made.
 pub fn pool(program: &mut Program) -> usize {
     let mut user: Arities = HashMap::default();
     for f in &program.fns {
@@ -444,50 +456,205 @@ pub fn pool(program: &mut Program) -> usize {
         (0..program.fns.len()).filter(|&i| poolable(program, &program.fns[i])).collect();
     let mut made = 0;
     for i in chosen {
-        let f = &mut program.fns[i];
-        let mut locals: HashSet<String> = HashSet::default();
-        for p in &f.params {
-            p.each_name(&mut |n| {
+        pool_fn(&mut program.fns[i], &user, &mut made);
+    }
+    lift_lambdas(program, &user, &mut made);
+    made
+}
+
+fn pool_fn(f: &mut FnDecl, user: &Arities, made: &mut usize) {
+    let mut locals: HashSet<String> = HashSet::default();
+    for p in &f.params {
+        p.each_name(&mut |n| {
+            locals.insert(n.to_string());
+        });
+    }
+    let tail = f.body.len() - 1;
+    for s in &f.body[..tail] {
+        if let Stmt::Bind { pattern, .. } = s {
+            pattern.each_name(&mut |n| {
                 locals.insert(n.to_string());
             });
         }
-        let tail = f.body.len() - 1;
-        for s in &f.body[..tail] {
-            if let Stmt::Bind { pattern, .. } = s {
-                pattern.each_name(&mut |n| {
-                    locals.insert(n.to_string());
-                });
+    }
+    let mut binds: Vec<Stmt> = Vec::new();
+    let Some(Stmt::Expr(e)) = f.body.last_mut() else { return };
+    each_side(e, &mut |side| {
+        if !parks_first(side) {
+            return;
+        }
+        // A continuation's parameter is bound after the park; a call that
+        // reads one, or a local it shadows, waits for the park.
+        let mut later: HashSet<String> = HashSet::default();
+        lambda_params(side, &mut later);
+        let mut cells: Vec<Name> = Vec::new();
+        let mut at = &mut *side;
+        while let Expr::App { piped: true, head, args, .. } = at {
+            if let Expr::Lambda { body, .. } = head.as_mut() {
+                certain_local(body, user, &locals, &later, &mut cells, &mut binds, made);
+            }
+            at = &mut args[0];
+        }
+        if cells.is_empty() {
+            return;
+        }
+        let Expr::App { head, args, .. } = at else { unreachable!("the chain parks first") };
+        let span = head.span();
+        **head = Expr::Ident(Name::new(SLEEP_POOLED), span, Resolution::default());
+        args.extend(cells.into_iter().map(|c| Expr::Ident(c, span, Resolution::default())));
+    });
+    f.body.splice(tail..tail, binds);
+}
+
+/// Whether an expression holds a lambda whose body is a chain that parks
+/// first.
+fn holds_parking_lambda(e: &Expr) -> bool {
+    if let Expr::Lambda { body, .. } = e {
+        if side_parks(body) {
+            return true;
+        }
+    }
+    let mut found = false;
+    crate::for_each_child(e, |c| found = found || holds_parking_lambda(c));
+    found
+}
+
+/// Lifts each lambda whose body is a chain that parks first into a function
+/// of its own, `ahead~lam~N`, whose parameters are the locals the body reads
+/// and then the lambda's own. The lambda keeps its place and calls the
+/// function, so the program computes what it did. A lifted function is kept
+/// only when `pool_fn` finds work in it, since a lambda with nothing to pool
+/// would pay a call for nothing.
+fn lift_lambdas(program: &mut Program, user: &Arities, made: &mut usize) {
+    let mut lifted: Vec<FnDecl> = Vec::new();
+    for i in 0..program.fns.len() {
+        if program.fns[i].name.starts_with(PREFIX) {
+            continue;
+        }
+        let file = program.fns[i].file.clone();
+        let mut scope: HashSet<String> = HashSet::default();
+        for p in &program.fns[i].params {
+            p.each_name(&mut |n| {
+                scope.insert(n.to_string());
+            });
+        }
+        let mut body = std::mem::take(&mut program.fns[i].body);
+        for s in body.iter_mut() {
+            match s {
+                Stmt::Bind { pattern, expr } => {
+                    lift_in(expr, &scope, user, &file, &mut lifted, made);
+                    pattern.each_name(&mut |n| {
+                        scope.insert(n.to_string());
+                    });
+                }
+                Stmt::Expr(e) => lift_in(e, &scope, user, &file, &mut lifted, made),
             }
         }
-        let mut binds: Vec<Stmt> = Vec::new();
-        let Some(Stmt::Expr(e)) = f.body.last_mut() else { continue };
-        each_side(e, &mut |side| {
-            if !parks_first(side) {
-                return;
-            }
-            // A continuation's parameter is bound after the park; a call that
-            // reads one, or a local it shadows, waits for the park.
-            let mut later: HashSet<String> = HashSet::default();
-            lambda_params(side, &mut later);
-            let mut cells: Vec<Name> = Vec::new();
-            let mut at = &mut *side;
-            while let Expr::App { piped: true, head, args, .. } = at {
-                if let Expr::Lambda { body, .. } = head.as_mut() {
-                    certain_local(body, &user, &locals, &later, &mut cells, &mut binds, &mut made);
-                }
-                at = &mut args[0];
-            }
-            if cells.is_empty() {
-                return;
-            }
-            let Expr::App { head, args, .. } = at else { unreachable!("the chain parks first") };
-            let span = head.span();
-            **head = Expr::Ident(Name::new(SLEEP_POOLED), span, Resolution::default());
-            args.extend(cells.into_iter().map(|c| Expr::Ident(c, span, Resolution::default())));
-        });
-        program.fns[i].body.splice(tail..tail, binds);
+        program.fns[i].body = body;
     }
-    made
+    program.fns.extend(lifted);
+}
+
+fn lift_in(
+    e: &mut Expr,
+    scope: &HashSet<String>,
+    user: &Arities,
+    file: &std::sync::Arc<str>,
+    lifted: &mut Vec<FnDecl>,
+    made: &mut usize,
+) {
+    match e {
+        // A block or a guard binds names this walk does not track.
+        Expr::Block(..) | Expr::Guard { .. } => {}
+        Expr::Lambda { params, body, .. } => {
+            let mut inner = scope.clone();
+            inner.extend(params.iter().map(|(p, _)| p.clone()));
+            lift_in(body, &inner, user, file, lifted, made);
+            if side_parks(body) {
+                lift_one(e, scope, user, file, lifted, made);
+            }
+        }
+        _ => crate::for_each_child_mut(e, &mut |c| lift_in(c, scope, user, file, lifted, made)),
+    }
+}
+
+fn lift_one(
+    e: &mut Expr,
+    scope: &HashSet<String>,
+    user: &Arities,
+    file: &std::sync::Arc<str>,
+    lifted: &mut Vec<FnDecl>,
+    made: &mut usize,
+) {
+    let Expr::Lambda { params, body, span } = e else { return };
+    let span = *span;
+    let own: HashSet<String> = params.iter().map(|(p, _)| p.clone()).collect();
+    let mut read: Vec<String> = Vec::new();
+    if !free_locals(body, &own, scope, &mut read) {
+        return;
+    }
+    let var = |n: &str| Pattern::Var(Name::new(n), span);
+    let mut fn_params: Vec<Pattern> = read.iter().map(|n| var(n)).collect();
+    fn_params.extend(params.iter().map(|(p, s)| match p.as_str() {
+        "_" => Pattern::Wildcard(*s),
+        _ => Pattern::Var(Name::new(p), *s),
+    }));
+    let name = format!("{LIFTED}{}", lifted.len());
+    let mut decl = FnDecl {
+        name: name.clone(),
+        is_pub: false,
+        written_pub: false,
+        span,
+        params: fn_params,
+        body: vec![Stmt::Expr((**body).clone())],
+        file: file.clone(),
+        synthetic: false,
+        shades: None,
+    };
+    let before = *made;
+    pool_fn(&mut decl, user, made);
+    if *made == before {
+        return;
+    }
+    let ident = |n: &str| Expr::Ident(Name::new(n), span, Resolution::default());
+    let mut args: Vec<Expr> = read.iter().map(|n| ident(n)).collect();
+    for (k, (p, _)) in params.iter_mut().enumerate() {
+        *p = format!("{PREFIX}arg~{k}");
+        args.push(ident(p));
+    }
+    **body = Expr::App { piped: false, head: Box::new(ident(&name)), args, span };
+    lifted.push(decl);
+}
+
+/// The names a lambda's body reads from the scope around it, in the order
+/// it first reads them, or false when the body binds names this walk does
+/// not track.
+fn free_locals(
+    e: &Expr,
+    bound: &HashSet<String>,
+    scope: &HashSet<String>,
+    out: &mut Vec<String>,
+) -> bool {
+    match e {
+        Expr::Block(..) | Expr::Guard { .. } => false,
+        Expr::Ident(n, _, _) => {
+            let n = n.as_str();
+            if !bound.contains(n) && scope.contains(n) && !out.iter().any(|o| o == n) {
+                out.push(n.to_string());
+            }
+            true
+        }
+        Expr::Lambda { params, body, .. } => {
+            let mut inner = bound.clone();
+            inner.extend(params.iter().map(|(p, _)| p.clone()));
+            free_locals(body, &inner, scope, out)
+        }
+        _ => {
+            let mut ok = true;
+            crate::for_each_child(e, |c| ok = ok && free_locals(c, bound, scope, out));
+            ok
+        }
+    }
 }
 
 /// The parameters of every lambda in a chain.
@@ -595,8 +762,24 @@ fn reads_locals(
 /// the value they were given, and a pooled cell runs before the program's
 /// own reads of it.
 const VALUE_READS: &[&str] = &[
-    "length", "keys", "values", "entries", "chars", "bytes", "char_code", "from_code", "to_int",
-    "to_float", "round", "sqrt", "sum", "bit_and", "bit_or", "bit_xor", "bit_not", "bit_shl",
+    "length",
+    "keys",
+    "values",
+    "entries",
+    "chars",
+    "bytes",
+    "char_code",
+    "from_code",
+    "to_int",
+    "to_float",
+    "round",
+    "sqrt",
+    "sum",
+    "bit_and",
+    "bit_or",
+    "bit_xor",
+    "bit_not",
+    "bit_shl",
     "bit_shr",
 ];
 

@@ -5436,9 +5436,21 @@ pool_counts = [cell_counted_as_a_thunk]
 
 pool_failures = [cell_forced_outside_the_try pooled_binding_left_strict]
 
+parking_lambda_never_lifted = row
+  "a parking lambda never lifted"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_parking_lambda_never_lifted")
+  no_setup
+
 pool_builtins = [value_read_never_pooled pushed_list_pooled]
 
-pool_more = list/concat pool_failures pool_builtins
+pool_lambdas = [parking_lambda_never_lifted]
+
+pool_reach = list/concat pool_builtins pool_lambdas
+
+pool_more = list/concat pool_failures pool_reach
 
 pool_rows = list/concat pool_cells (list/concat pool_counts pool_more)
 
