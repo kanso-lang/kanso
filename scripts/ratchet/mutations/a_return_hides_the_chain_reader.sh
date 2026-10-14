@@ -4,6 +4,6 @@
 # The count of a lazy binding's readers still descends into a `return ... if`,
 # so the binding is removed and its reader past the return names nothing.
 set -e
-sed -i.bak 's|^    walk_children_mut(e, \&mut \|child\| substitute_ident(child, name, replacement));$|    if let ast::Expr::Guard { .. } = e { return; }\n&|' src/lib/fuse.rs
+sed -i.bak 's|^    for_each_child_mut(e, \&mut \|child\| substitute_ident(child, name, replacement));$|    if let ast::Expr::Guard { .. } = e { return; }\n&|' src/lib/fuse.rs
 rm -f src/lib/fuse.rs.bak
 grep -q 'if let ast::Expr::Guard { .. } = e { return; }' src/lib/fuse.rs
