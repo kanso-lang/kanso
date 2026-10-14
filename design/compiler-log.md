@@ -69,55 +69,6 @@ merge.
 
 - **OPEN** #1887, until this lands.
 
-## 2026-10-12 — a wide tail call keeps its jump
-
-The book promises that a call in tail position takes no stack, in every
-engine. A release build broke that for wide arms. `narrow_tailcc` took
-`tailcc` and `musttail` away from every arm wider than a limit (twelve words on
-x86-64 under `preserve_nonecc`, nine without it, eight on arm64), and each
-call into such an arm became an ordinary call. LLVM turns some of those back
-into jumps, but not one whose arm builds a record on the stack and hands its
-address to the runtime. The regex port's Pike VM loop is thirteen words, and
-`regex --steps '(a*)*b'` on a 40,000-character line ran out of stack in a
-release build while the dev build and the interpreter printed
-`steps: 440010`.
-
-An x86-64 release build no longer narrows: every `musttail` the emitter wrote
-reaches clang, arms of twelve words or fewer take the flat `preserve_nonecc`
-signature, and wider ones keep `tailcc`, whose stack arguments x86-64 lowers
-correctly. arm64 keeps the narrowing at eight words, because with it gone the
-macOS job ran `a_match_holds_the_literal_its_pattern_spells` to an empty
-stdout; the arm64 backend still miscompiles a `tailcc` call that spills past
-x7. #1912 holds the arm64 gap.
-
-`tests/a_big_object_decodes_in_a_release_build.rs` gains a seven-parameter
-self call that builds a record each hop, a million deep. Main's release
-binary prints "the program ran out of stack". The ratchet row `nine_words` now
-strips `musttail` from calls into arms left on `tailcc`, and both wide-arm
-tests fail with the overflow. The older row "a release build that gives up the
-guaranteed tail call" lowered only the arm64 cap, which an x86-64 release no
-longer reads, so CI's ratchet called it blind. Its mutation now takes `tailcc`
-off every arm on both architectures, and `a_loop_carries_a_bignum_across_its_rewind`
-loses its last line in the release-built micro corpus.
-
-CI's rows: `work_runbench` 1,170,035,080 -> 1,170,626,374 and
-`work_digestbench` 5,603,118 -> 5,905,902 (+5.4%). sha256's block and round
-loops take ten and eleven parameters, and each hop now copies its stack
-arguments where LLVM had built a loop. `text` rose for scanbench (448,985 ->
-451,401), digestbench (319,241 -> 319,705) and runbench (619,081 ->
-619,849), so the `text` total went from 4,838,622 to 4,841,502 on main after #1925, and the emitted line count fell by 540 for both scanbench and
-runbench. The language fix lowers the welfare floor by exactly what it costs,
-to 91.11.
-
-Because this branch edits src/main.rs, the ratchet ran the rows that patch it,
-and "a warm play that dies in silence" stayed green under its mutation. The
-row went blind when a built binary began naming its own stack overflow: the
-warm play no longer sees a signal from that program, so its own wording never
-runs. `a_warm_play_ended_by_a_signal_names_it` reaches the wording another
-way. The program waits on stdin, the spec sends it SIGTERM, and both plays
-must print "ended by signal 15". Under the mutation the second play printed an
-empty line. Linux only, since it finds the program through /proc.
-
 ## 2026-10-13 — a list or map too long for its line spans lines
 
 Built under #1882 (gavel: a bracketed list or map may span lines). A literal
@@ -1820,6 +1771,53 @@ The counters below are not welfare terms, and each moved with the change:
 
 Welfare goes 91.2447 -> 91.2395, a fall of 0.0052. This builds a ruled part
 of the language, so the floor drops by exactly that.
+
+## 2026-10-14 — `text/slice!` answers a box
+
+This builds the program-facing half of #1943's gavel, as the 2026-09-16 ruling
+shapes it: `text/slice! s a b` answers a box holding the slice, or an err when
+the range leaves the value. The err bubbles: `.>` passes it by, `.?` and a
+foreign `rescue` reach it, and unhandled it stops the program at the endpoint.
+An inverted range stays inside the value and is the empty slice, as it is for
+`text/slice`.
+
+It is written in lib/text over `slice`, the way `math/round!` is written over
+`round`, so every engine runs the same definition and no builtin was added.
+The definition sits at the end of the file because the runtime corpus quotes
+lib/text's line numbers, and a definition near the top moved them.
+
+`a_bang_slice_fails_inside_its_box` pins seven ranges on strings and lists on
+the interpreter and both native tiers; with the range check taken out, the
+out-of-range cases printed `<none>` and the program exited 0.
+`a_slice_bang_past_the_end_reaches_the_endpoint` pins the unhandled failure.
+Appendix B lists `text/slice!` beside `text/slice`.
+
+A generator of forty random ranges per program, over strings with multi-byte
+characters, lists and bytes, ran 150 programs through `text/slice` and 150
+through `text/slice!`. The interpreter, a dev build and a release build printed
+the same bytes for all 300.
+
+The other owed item, moving the JSON decoder onto `slice! … .>` chains, is
+#1960: a chain answers a box, so the move would make `json/decode` answer one.
+Until it is answered the decoder keeps `builtin_slice_in`.
+
+The rows move because lib/text grew a definition, and lib/text is compiled
+into every program that imports it. CI on f50c9ec4 read:
+
+- `compile_instructions` 32,407,659 -> 32,770,085, `entry_instructions`
+  103,133,571 -> 104,020,985 and `library_instructions` 102,649,522 ->
+  103,487,067.
+- `compile_allocs` 17,980 -> 18,250, `compile_peak_bytes` 795,133 -> 804,635
+  and `front_end_visits` 9,225 -> 9,242.
+- `emit_instructions` 7,655,444 -> 7,704,002.
+- `interp_instructions` 495,119,692 -> 496,124,589, `interp_allocs` 592,317
+  -> 592,648 and `interp_peak_bytes` 797,868 -> 807,370.
+- `browser_compile_instructions` 439,552,195 -> 441,096,528 and
+  `browser_compile_peak_bytes` 728,883 -> 731,449. The browser's run rows did
+  not move.
+
+No runtime counter moved. Welfare goes 91.2395 -> 91.2300, a fall of 0.0095.
+This builds a ruled part of the language, so the floor drops by exactly that.
 
 ## 2026-10-14 — `kanso test .` finds the module it is run inside
 

@@ -1,0 +1,19 @@
+import "std/text"
+
+# `slice!` is for a range the caller insists is inside the value, so a range
+# that leaves it is a failure inside the box it answers: `.>` opens the box on
+# success and `.?` reaches the failure. An inverted range stays inside, and is
+# the empty slice.
+fn cut s from to
+  text/slice! s from to .> (piece -> "<{piece}>") .? (e -> e.reason)
+
+fn cut_list xs from to
+  text/slice! xs from to .> (piece -> "{piece}") .? (e -> e.reason)
+
+pub play = cut "kanso" 2 4 .> print
+  .> (_ -> cut "kanso" 1 5 .> print)
+  .> (_ -> cut "kanso" 4 3 .> print)
+  .> (_ -> cut "kanso" 2 9 .> print)
+  .> (_ -> cut "kanso" 7 7 .> print)
+  .> (_ -> cut_list [10 20 30] 2 3 .> print)
+  .> (_ -> cut_list [10 20 30] 3 4 .> print)
