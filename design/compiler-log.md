@@ -1743,6 +1743,16 @@ overflow on stderr. A ratchet mutation that let the park be any sleep was
 tried and left the fixture green, because the group hides the sleep from
 `ahead` before the search runs, so that row was dropped.
 
+CI moved five rows, all of them compile cost. `browser_compile_instructions`
+fell 255,236 to 382,154,970, the same reading this container gave. The tab's
+corpus never sleeps and the tab compiles the pool out, so the pool decides
+nothing there; nothing in this change isolates the drop further.
+`compile_instructions` fell 15 to 22,665,216, `entry_instructions` 25 to
+75,110,504 and `library_instructions` 25 to 74,796,982. `emit_instructions`
+rose 72 to 5,438,920; the emitter now passes the program's declarations
+through `admits`, the one change on that path. No runtime
+row moved. Welfare rose 0.00022 to 91.52460, and the floor is banked there.
+
 Still not built for #1856: pooling inside an effect group, and calls whose
 arguments name locals that cannot move, which need the (site, args) pool.
 
