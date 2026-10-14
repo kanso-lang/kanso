@@ -21,128 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-12 — a file names only what its module declares and its own imports bring
-
-The second rule of the 2026-10-12 gavel on #1894. A module's files share
-their declarations, and each file sees only the imports it writes. Before
-this, the check enforced that only for qualified spellings: a file writing
-`list/fold` without importing std/list was refused, and the same file writing
-`fold` checked clean because a sibling's import had enrolled the bare name for
-the whole module.
-
-`compile_module_loaded` now hands each file of a several-file module the
-build's names minus the ones it cannot see: a bare name surfaced only by
-imports this file does not write, which no file of the module declares, and
-a rename's spelling that only a sibling's import makes. The refusal names the
-import that would bring the name. A module of one file sees exactly its
-imports, so the work is skipped there.
-
-Two book samples leaned on the old reach. The ch09 simulator's
-`enumerable.kso`, in both `vse/` and `squeeze/`, called `fold` through
-`methods.kso`'s import of std/list. Each now imports it, the ch09 panel shows
-the line, and the paragraph before it says each file imports what it calls.
-The vse repository holds the same file and gets the same line in vse#87. kq
-and kanso-json have no file that leans on a sibling's import. ch07 states the
-rule where it describes a module's files.
-
-`tests/golden/errors_module/a_file_calls_a_name_only_its_sibling_imports`
-pins the refusal: a two-file module where one file imports std/list and the
-other calls `fold` on a list it built. Main checks it clean. The ratchet row
-"a sibling's import seen from every file" hides nothing and turns the corpus
-red.
-
-The rest of #1894 is still owed: arms that travel with a value into a file
-that never imported their owner, and the issue's reproduction, a test file's
-import reaching the module it tests, which #1907 closes by keeping test files
-out of the module.
-
-CI's rows: `compile_instructions` 25,761,215 -> 25,881,551,
-`entry_instructions` 85,207,562 -> 85,381,313 and `library_instructions`
-85,760,222 -> 85,935,582, the cost of handing each file
-of a module its own set of names. The browser compile fell 391,974,060 ->
-391,311,502, emitting 7,016,409 -> 7,013,477 and the interpreter 488,792,115
--> 488,739,816. This change does not touch the code those rows run, so their
-moves are put down to layout, though no run isolated it. The browser fall is
-worth more than the three rises cost, and welfare banks the difference at
-91.11. `compile_allocs` rose 68 to 14,598 and `interp_allocs` 68 to 587,351, and
-the floor drops by what they cost, since this builds a ruled part of the
-language.
-
-## 2026-10-13 — a loop entered from the callee it calls rewinds
-
-From #1892's bc port. A `for` loop in bc held every lap's allocation: 300,000
-laps of `s += i` took 548 MB, and the binary counted 8 beat iterations for
-20,000 laps. The port's interpreter has the shape every tree-walker has.
-`loop_for` and `for_next` are one tail cycle, each lap runs the body through
-`exec` with a plain call, and the `nested` arm of `exec` enters the cycle by a
-tail call, because a loop inside the body is the same cycle again.
-
-A cluster entered by a tail call gets its bracket by emitting the entering
-edge as a plain call. Since #920 that demotion is refused when the cluster can
-reach the caller again, because a caller the cycle re-enters with nothing held
-would stack one frame per lap. The reach counted every mention, so the plain
-call `r = exec body m` refused the entry. A plain call holds its own frame
-while the callee runs, so the stack already grows with each level of nesting,
-and demoting the entry adds one frame to each level and none to each lap. The
-reach now follows what can enter the caller with no frame held: the heads of
-tail calls, every name inside a lambda, and every name used as a value.
-
-`tests/golden/mem/a_loop_entered_from_the_callee_it_calls_rewinds` is the
-reduced program, 100,000 laps through a `nested` entry. Main counts no beat
-and holds eleven arena blocks; with the change it counts 200,000 beat
-iterations and holds one. No other mem golden moved. The bc port's 300,000
-laps take 9 MB, and its 33 fixtures and 47 unit tests agree on all three
-engines. The ratchet row "a cluster refused for a callee it reaches under a
-frame" counts every mention again and turns the mem corpus red.
-
-Two loops in the standard library gain a bracket the same way. std/json's
-blank skip before a value, `value_for` and `value_blank`, is entered by a
-tail call from `parse_value` and reaches it again only under the plain call
-an array or object makes for each element. std/regexp's matcher cycle is in
-the same position, and its groups lose the padding a wider tail group had
-given them. Of the fourteen benchmarks only runbench and scanbench emit
-different code. Measured here against main's compiler on the same host,
-runbench ran 829 fewer instructions and scanbench 6 more, and every
-allocation counter in the twelve cost veins is unchanged.
-`a_cluster_the_entering_caller_is_reached_from_stays_grow_only` now hands the
-re-entering function on as a value, which still refuses the entry, and
-`a_cluster_reaching_its_caller_under_a_plain_call_is_a_beat` pins the plain
-call.
-
-CI's rows. The two benchmarks whose IR changed gain their brackets:
-work_runbench lands on 1,170,034,251, 829 fewer, and work_scanbench on
-273,515, eight fewer. The brackets are code: text lands on 4,840,798, up
-5,952 (scanbench 3,888, runbench 2,064), emitted_other_calls on 17,531,
-emitted_other_branches on 16,476 and emitted_other_lines on 147,327.
-emit_instructions falls 522 to 7,012,955. The tab runs the same analysis,
-which now walks each body for its frameless names:
-browser_compile_instructions lands on 392,099,969, up 788,467, and
-browser_compile_peak_bytes on 676,511, up 786.
-
-Merged with main after #1904, the same rows land on `emitted_other_calls`
-17,676, `emitted_other_branches` 16,559, `emitted_other_lines` 148,263 and
-`browser_compile_instructions` 393,489,081.
-
-## 2026-10-12 — concat reads the bytes text/bytes answers, on every engine
-
-From #1891, the third item: the 2026-08-23 gavel says a list is never bytes,
-and what `concat` declares decides which engine is right. Appendix b declares
-`text/bytes string → int[]` and `text/concat` as appending two lists, so a
-value `text/bytes` answered is a list to `concat`. Native code already read a
-bytes value as its byte values on either side and answered a list. The
-interpreter matched only two `List`s and refused anything else with "concat
-takes two lists", which is what the httpd, mustache, chip8 and ugit ports hit.
-The interpreter now reads a `Bytes` operand as its byte values, and the answer
-is a list on both engines. The gavel's other direction is unchanged: a list is
-still never read as bytes.
-
-`tests/golden/micro/concat_reads_the_bytes_text_bytes_answers` puts bytes on
-the left, on the right, on both sides, and as a slice of `text/bytes`. Main's
-interpreter stopped at the first line.
-
-Appendix b also says `concat` takes strings, and neither engine does: both
-refuse two strings with the same message. #1906 asks which way that goes.
-
 ## 2026-10-13 — a list concatenated onto in a fold grows where it stands
 
 From #1892's kv port. A fold that grew its accumulator with `concat` rather
@@ -1839,6 +1717,116 @@ validation result before passing it on.
 Owes, on #1928: the toml reduction kept as a micro golden pinning today's
 output on every engine; #1891's second item closed with a pointer here.
 
+## 2026-10-13 — `list/concat` joins two lists
+
+#1906 moves concat to the module of the type it works on. `list/concat a b`
+joins two lists, or the byte values `text/bytes` answers, and is the same
+builtin underneath that `text/concat` was, so every engine runs it as
+before. `text/concat` is gone from `lib/text/text.kso`, and every caller in
+the tree moved: the library, the scripts, the benchmarks, the examples, the
+book and the goldens. Files that imported std/text only for concat now
+import std/list instead.
+
+Two strings join by interpolation, `"{a}{b}"`, and a list of them by
+`text/join`. The checker refuses a string handed to `list/concat` when it
+can see one: a string literal, a template, or a call whose every answer is a
+string. A string it cannot see still reaches the runtime, which raises
+"concat takes two lists" on both engines. A call to `text/concat` is
+refused at check with the unknown-name diagnostic, which now names
+`list/concat` and interpolation. Each refusal has an error golden.
+
+Appendix B's entry is rewritten under std/list. std/text lost three lines
+above `to_float` and `to_int`, so the line numbers that goldens and the book
+quote from `std/text/text.kso` moved with it.
+
+kq's one caller moves on the kq branch of the same name.
+
+On CI's rows the front end pays for the new refusal and for the moved imports,
+and I have not split the cost between the two. compile_instructions went from
+28,002,980 to 28,257,376, entry_instructions from 92,393,206 to 93,065,372,
+library_instructions from 91,989,327 to 92,696,544, `compile_peak_bytes` from
+703,170 to 703,187 and browser_compile_instructions from 413,936,384 to
+416,674,694. The interpreted run's `interp_peak_bytes` went from 722,393 to
+725,610 while its instructions fell to 495,318,943 and its allocations to
+589,643. compile_allocs fell to 15,937 and emit_instructions to 7,239,817. On
+the module path `module_visits` went from 2,909 to 2,912. The ratchet's
+mutation for a concat accumulator anchored on the line naming `text/concat`,
+so it now names `list/concat`, and the mem spec still goes red under it. The
+floor follows the score, since #1906 builds a ruled part of the language.
+
+## 2026-10-13 — six names for the library gaps, and `list/to_sorted`
+
+#1914 rules nine names. Six of them are built here, in kanso, in
+`lib/text/text.kso` and `lib/list/list.kso`, so every engine runs the same
+source and no engine needs a new builtin:
+
+- `text/uppercase` and `text/lowercase` map the twenty-six ASCII letters and
+  pass every other character through. The walk takes `chars` once, looks
+  each letter up by its offset in a 26-letter string, and joins the pieces.
+  Case outside ASCII would need the Unicode tables, which no engine carries.
+- `text/starts_with?` and `text/ends_with?` compare one slice against the
+  prefix or suffix after checking the length, so the slice never runs past
+  the end. Every string begins and ends with the empty one.
+- `text/pad_start` and `text/pad_end` repeat the fill and cut it at the
+  width. A string already that wide, or an empty fill, comes back unchanged.
+- `list/sort_by xs key` merges the way `sort` does and takes from the right
+  half only when its key is strictly smaller, so tied keys keep their order.
+  `key` runs at each comparison; caching it would cost a list of pairs.
+  `list/reverse` reads the list by index from the end.
+
+`recase` has a `none` arm it never takes. The walk stops before it indexes
+past the end, but the checker cannot see that bound and asks for the arm.
+
+Each name has a micro golden, which the interpreter, the native build and
+the page run alike. Appendix B gains entries for the six text names and a
+sentence for the two list verbs, and drops its counts of the list verbs,
+which a second count in the library would have had to track.
+
+#1903's ruling is built beside them. `list/to_sorted xs` answers
+`sorted (sort xs)`, so a caller can reach the arm of `find` that bisects, and
+the list is always in order because the same call sorts it. The bisect tests
+are back in `list_test.kso` through it, and a micro golden checks that `find`
+agrees on the plain list and on `to_sorted`. The mem golden
+`find_bisects_a_list_built_by_to_sorted` pins the bisect: a scan over its
+4,096 elements builds a `step` record per element, and `sh_rec` reads 208
+bytes with the bisect against 512,400 when `find` loses its `sorted` arm.
+
+The other three rulings need the runtime: `delete map key`, `io/read_line`
+and `os/modified`. They follow in their own change. `os/write_bytes` was
+ruled out, so there is nothing to build for it. The ports that worked around
+these gaps live on the unmerged `claude/ports-corpus` branch, and moving
+them onto the names belongs to that branch.
+
+CI's rows price the new library text. Every program that imports std/text or
+std/list compiles the whole module, so the 114 lines added there are paid for
+in lexing, parsing, inference and the check, split across those phases in
+proportion to the text rather than concentrated in one. compile_instructions
+rises from 28,002,980 to 31,634,022 (+13.0%), entry_instructions from
+92,393,206 to 100,520,915 (+8.8%), library_instructions from 91,989,327 to
+100,042,203 (+8.8%), emit_instructions from 7,241,390 to 7,617,766 (+5.2%),
+compile_allocs from 15,984 to 17,990, browser_compile_instructions from
+413,936,384 to 434,142,466 (+4.9%) and browser_compile_peak_bytes from 686,192
+to 726,939. The interpreter row reads 496,099,798 against 495,525,421, with
+interp_allocs 592,223 against 589,689 and interp_peak_bytes 794,345 against
+722,393. Welfare falls from 91.34 to 91.27. These names are ruled (#1914,
+#1903), so the floor drops by that cost. A compiler that left an unreached
+library function unparsed and unchecked would stop this cost from growing with
+each library addition; that is open as a lead.
+
+Two more rows move with the library's size. interp_instructions lands on
+496,099,798 from 495,525,421, and the module sample's module_visits, the
+inference fixpoint's declaration visits in bench/compile_golden_modules.txt,
+lands on 3,663 from 2,909: the fixpoint visits each new declaration on every
+round it is dirty.
+
+The compile-memory gate reads the same text. On `compile_corpus`,
+`front_end_visits` went from 8,133 to 9,326, `front_end_rounds` stayed at 19,
+and `compile_peak_bytes` went from 703,170 to 791,610, 12.6% more held while the
+corpus is checked, because the two modules it imports are 114 lines longer and
+their whole text is held through the check. It costs the welfare meta about
+0.02, and the floor drops by that under the language rule. Checking only what
+an import reaches would take this back, and #1952 tracks it.
+
 ## 2026-10-13 — hex and binary integers, and floats with an exponent
 
 #1889 builds the gavel "hex and binary integers and exponent floats". The
@@ -1868,3 +1856,72 @@ binary's layout: compile_instructions by 9,355 to 28,002,980,
 entry_instructions by 30,753 to 92,393,206, library_instructions by 30,149 to
 91,989,327 and interp_instructions by 3,960 to 495,525,421. The floor follows
 the score, since #1889 builds a ruled part of the language.
+
+## 2026-10-14 — `delete`, `io/read_line` and `os/modified`
+
+These are the three #1914 names that need the runtime. #1948 carries the six
+written in kanso. All three run on the interpreter, both native tiers and the
+page's translator.
+
+`delete map key` answers the map without the key. A key that is not there
+answers an equal map, and the map it was handed is not changed. It sits beside
+`put` as an ambient name, so a program that declares its own `delete` is now
+told the name is taken; kq, vse and kanso-json declare none. Natively the
+answer is built from the map's deduplicated sorted view, so a key written twice
+is gone after one `delete`. A first argument that is not a map is refused at
+check time, and a float key at run time.
+
+`io/read_line` is a description that yields the next line of standard input
+without its `\n` or `\r\n`, or `done` at the end. A lone `\r` is kept, since
+only those two endings were ruled. It flushes standard output before it waits,
+so a prompt written ahead of it reaches the terminal first. Bytes that are not
+text are refused the way `os/read_file` refuses them. A read error counts as
+the end of input, which is what `io/stdin` already did natively. The page has
+no standard input and refuses `read_line` as it refuses `stdin`.
+
+`os/modified path` yields when the file last changed, in milliseconds since
+the epoch, or `file_not_found`. A failure other than absence is reported in
+`os/read_file`'s words. In the page it yields `file_not_found`, matching
+`os/exists`.
+
+New goldens: four micro programs, one error and two runtime diagnostics, and a
+stdin corpus under `tests/golden/stdin/` that `tests/read_line.rs` feeds to
+native and the interpreter. One test there waits for each prompt before typing
+the answer, so an unflushed prompt fails it. Each was watched red: native and
+interpreter `delete` keeping the key, `\r` left on the line, and the flush
+removed.
+
+CI's rows price the three builtins. Every native binary carries their runtime
+code, 2,688 bytes more text per bench, so `text` went from 4,932,142 to
+4,969,774 across the fourteen. Each bench also runs about 234 more
+instructions, the same on every one, so the rise is outside any decode loop:
+work_basket 30,946,278, work_deepbench 403,499,544, work_digestbench 5,909,247,
+work_escapebench 39,058,340, work_indexbench 2,462,571, work_jsonbench
+858,186,231, work_livebench 1,474,854,142, work_oneshot 13,205,901,
+work_pendbench 191,674,024, work_readbench 4,580,963, work_runbench
+1,178,202,929, work_scanbench 273,675 and work_widebench 28,274,676, while
+work_encodebench fell to 2,386,636,337. The compiler checks and lowers three
+more names and carries the larger runtime text: compile_instructions
+28,044,444, entry_instructions 92,512,951, library_instructions 92,130,190,
+emit_instructions 7,245,801, codegen_instructions_dev 119,400,046 and
+codegen_instructions_release 477,099,466. The interpreter's run went to
+interp_instructions 495,589,622, and the tab to browser_compile_instructions
+414,205,634 and browser_run_instructions 34,183,945. The floor drops by the
+cost under the language rule, since #1914 rules these names.
+
+Carried together over main 859ad275 in #1953, the six names and the three
+builtins land on one set of CI rows, each read against main. The front end pays
+for both: compile_instructions 31,948,363 from 28,257,376, entry_instructions
+101,372,705 from 93,065,372, library_instructions 100,887,003 from 92,696,544,
+compile_allocs 17,941 from 15,937, emit_instructions 7,622,247 from 7,239,817
+and module_visits 3,666 from 2,912. The compile corpus holds more while it is
+checked, compile_peak_bytes 789,911 from 703,187, with front_end_visits at
+9,326. The interpreter's run reads interp_instructions 496,215,717,
+interp_allocs 592,174 and interp_peak_bytes 792,646, against 495,318,943,
+589,643 and 725,610. The tab's compile reads browser_compile_instructions
+437,381,890 and browser_compile_peak_bytes 726,939, against 416,674,694 and
+686,192, and its run browser_run_instructions 34,183,945. Most of the compile
+cost is the 114 lines the two library modules grew, which every program
+importing them reads whole; #1952 is the change that would take it back. Both
+halves build ruled names (#1914, #1903), so the floor drops by the combined
+cost under the language rule.

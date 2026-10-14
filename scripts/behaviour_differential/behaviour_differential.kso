@@ -1,7 +1,6 @@
 import "std/io"
 import "std/list"
 import "std/os"
-import "std/text"
 
 # `diagnostic_differential` asks std functions for the wrong thing and compares
 # the complaints. This asks them for the awkward thing and compares the
@@ -46,7 +45,7 @@ text_probes = [
   "text/join [\"\" \"\"] \"-\""
   "text/split \"\" \"\""
   "text/split \"aaa\" \"aa\""
-  "text/concat \"\" \"\""
+  "list/concat \"\" \"\""
   "text/chars \"\""
   "text/chars \"日本語\""
   "text/bytes \"é\""
@@ -116,7 +115,7 @@ fn shaped module expr
   """
 
 fn asked argv
-  os/run "timeout" (text/concat [limit kanso] argv)
+  os/run "timeout" (list/concat [limit kanso] argv)
 
 fn hung? 124
   true

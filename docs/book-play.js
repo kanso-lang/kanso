@@ -14,7 +14,7 @@
   const { ready, playSource, runLibrary, highlight } = engine;
 
   /* what the tab cannot give a program */
-  const NEEDS_A_MACHINE = /\bio\/(read_file|write_file|args|stdin|list_dir|run|make_dir|exists|is_dir)\b/;
+  const NEEDS_A_MACHINE = /\bio\/(read_file|write_file|args|stdin|read_line|list_dir|run|make_dir|exists|is_dir)\b/;
 
   const localImport = (src) =>
     src.split('\n').some((line) => {

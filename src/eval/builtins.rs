@@ -156,15 +156,17 @@ impl<'a> Interp<'a> {
             // same program run natively got a descriptor. `now` reaching the
             // executor on that engine was a coincidence of coverage, not a
             // design; these two arms make the coincidence a rule.
-            b"args" | b"stdin" | b"now" => {
+            // `read_line` is a fourth, named the same way (ruled 2026-10-13).
+            b"args" | b"stdin" | b"read_line" | b"now" => {
                 let [] = arity(args, name, span)?;
                 Ok(Value::Desc(Rc::new(match name {
                     "args" => Desc::Args,
                     "stdin" => Desc::Stdin,
+                    "read_line" => Desc::ReadLine,
                     _ => Desc::Now,
                 })))
             }
-            b"exists" | b"is_dir" | b"list_dir" => {
+            b"exists" | b"is_dir" | b"modified" | b"list_dir" => {
                 let [path] = arity(args, name, span)?;
                 let Value::Str(path) = path else {
                     return Err(RuntimeError { message: format!("{name} takes a string"), span });
@@ -172,6 +174,7 @@ impl<'a> Interp<'a> {
                 Ok(Value::Desc(Rc::new(match name {
                     "exists" => Desc::Exists(path.to_string()),
                     "is_dir" => Desc::IsDir(path.to_string()),
+                    "modified" => Desc::Modified(path.to_string()),
                     _ => Desc::ListDir(path.to_string()),
                 })))
             }
@@ -374,6 +377,22 @@ impl<'a> Interp<'a> {
                 }
                 let mut next = taken(entries);
                 next.insert(key, value);
+                Ok(Value::Map(Rc::new(next)))
+            }
+            // The map without the key, ruled 2026-10-13 (kanso#1914). A key
+            // that is not there answers an equal map. Always a fresh map, so
+            // nothing the caller still holds can see the key go.
+            b"delete" => {
+                let [map, key] = arity(args, name, span)?;
+                let Value::Map(entries) = map else {
+                    return Err(RuntimeError {
+                        message: "delete takes a map and a key".to_string(),
+                        span,
+                    });
+                };
+                let key = map_key(key, span)?;
+                let mut next = (*entries).clone();
+                next.remove(&key);
                 Ok(Value::Map(Rc::new(next)))
             }
             b"entries" => {

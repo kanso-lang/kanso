@@ -313,7 +313,7 @@ dev_terms = [
 browser_terms = [d_tab_compile d_tab_held d_tab_run d_tab_peak]
 
 # Every term, for the reporting that is keyed by counter rather than by side.
-terms = text/concat (text/concat prod_terms dev_terms) browser_terms
+terms = list/concat (list/concat prod_terms dev_terms) browser_terms
 
 # HOW MUCH EACH SIDE IS WORTH TO THE META. Clay's framing: "if we're optimizing
 # for production performance and not compile performance, then compile
@@ -363,24 +363,24 @@ formula = "2026-10-06"
 
 # The baseline and the per-counter breakdown are keyed by counter, because a
 # counter is what is measured; a dimension is what it is measured FOR.
-run_counters = text/concat run_speed_counters run_memory_counters
+run_counters = list/concat run_speed_counters run_memory_counters
 
-compile_counters = text/concat compile_speed_counters compile_memory_counters
+compile_counters = list/concat compile_speed_counters compile_memory_counters
 
-interp_counters = text/concat start_counters
-  (text/concat interp_speed_counters interp_memory_counters)
+interp_counters = list/concat start_counters
+  (list/concat interp_speed_counters interp_memory_counters)
 
-codegen_counters = text/concat (text/concat codegen_dev_counters emit_counters)
+codegen_counters = list/concat (list/concat codegen_dev_counters emit_counters)
   codegen_release_counters
 
-browser_counters = text/concat
-  (text/concat tab_compile_counters tab_held_counters)
-  (text/concat tab_run_counters tab_peak_counters)
+browser_counters = list/concat
+  (list/concat tab_compile_counters tab_held_counters)
+  (list/concat tab_run_counters tab_peak_counters)
 
-native_counters = text/concat (text/concat run_counters compile_counters)
-  (text/concat interp_counters codegen_counters)
+native_counters = list/concat (list/concat run_counters compile_counters)
+  (list/concat interp_counters codegen_counters)
 
-counter_names = text/concat native_counters browser_counters
+counter_names = list/concat native_counters browser_counters
 
 # A comment is not a counter, and one of them carries an `=`: the
 # compile-memory golden names its host as `# measured-on rustc=1.98.0`,
@@ -476,9 +476,9 @@ fn measured run work veins browser
   ci = [["compile_instructions" both]]
   ca = [["compile_allocs" traffic["compile_allocs"]]]
   cm = [["compile_peak_bytes" held["compile_peak_bytes"]]]
-  compile = text/concat ci (text/concat ca cm)
-  old = text/concat (text/concat rp (worked work)) compile
-  list/to_h (text/concat (text/concat old (added veins)) (in_tab browser))
+  compile = list/concat ci (list/concat ca cm)
+  old = list/concat (list/concat rp (worked work)) compile
+  list/to_h (list/concat (list/concat old (added veins)) (in_tab browser))
 
 # The browser side's four, read straight from bench/browser_golden.txt by the
 # names that golden gives them.
@@ -487,7 +487,7 @@ fn in_tab b
   cm = [["browser_compile_peak_bytes" b["browser_compile_peak_bytes"]]]
   rs = [["browser_run_instructions" b["browser_run_instructions"]]]
   rm = [["browser_run_peak_bytes" b["browser_run_peak_bytes"]]]
-  text/concat (text/concat cs cm) (text/concat rs rm)
+  list/concat (list/concat cs cm) (list/concat rs rm)
 
 # The five counters the 2026-09-16 gavel added, each read straight from its own
 # golden by the name that golden gives it. Nothing here sums or renames, which
@@ -505,8 +505,8 @@ fn added veins
   rel = [["codegen_instructions_release" cr["codegen_instructions_release"]]]
   em = veins[10]
   emit = [["emit_instructions" em["emit_instructions"]]]
-  built = text/concat (text/concat dev rel) emit
-  text/concat (text/concat start ispeed) (text/concat imem built)
+  built = list/concat (list/concat dev rel) emit
+  list/concat (list/concat start ispeed) (list/concat imem built)
 
 # ONE ROW OUT OF FOURTEEN. bench/instructions_golden.txt carries a row for
 # every benchmark the gate counts, and since the 2026-09-06 gavel the objective
@@ -727,7 +727,7 @@ fn asked path
   os/read_file! path
 
 # NINE VEINS IN ONE LIST LITERAL, and the literal is the point. `veins[5]` on a
-# list built by `text/concat` is a box, because a concatenated length is not
+# list built by `list/concat` is a box, because a concatenated length is not
 # known where the index is written; on a literal it is an index. Writing the
 # nine out is what lets `measured` read them by position without opening nine
 # boxes it has already had pinned for it.

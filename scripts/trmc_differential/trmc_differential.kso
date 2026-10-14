@@ -73,7 +73,7 @@ deep = 20000
 deep_answer = "200010000"
 
 fn joined acc more
-  list/to_list (text/concat acc more)
+  list/to_list (list/concat acc more)
 
 fn with_base op operand acc base
   push acc (shape 0 op operand base)

@@ -1,3 +1,4 @@
+import "std/list"
 import "std/text"
 
 type want
@@ -11,7 +12,7 @@ fn noted acc _ true
   acc
 
 fn noted acc why false
-  text/concat acc [why]
+  list/concat acc [why]
 
 fn gathered acc at
   one = wants[at]

@@ -1,4 +1,4 @@
-import "std/text"
+import "std/list"
 
 type want
   why
@@ -11,7 +11,7 @@ fn noted acc _ true
   acc
 
 fn noted acc one false
-  text/concat acc [one]
+  list/concat acc [one]
 
 fn gathered acc at
   seen = wants[at]

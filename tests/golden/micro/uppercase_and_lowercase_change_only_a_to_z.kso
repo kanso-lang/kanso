@@ -1,0 +1,9 @@
+# `text/uppercase` and `text/lowercase` map the twenty-six ASCII letters and
+# leave every other character as it was, accented letters among them.
+import "std/text"
+
+up = text/uppercase "Café au lait, 42!"
+
+down = text/lowercase "HÉLLO World"
+
+pub play = print "{up}|{down}|{text/uppercase ""}"
