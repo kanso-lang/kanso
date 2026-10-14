@@ -1,0 +1,17 @@
+# Two effect lines run as one group, and the pool runs when every side is
+# waiting. The lifted size runs out of stack in the pool, which drops it; the
+# continuation reads it again after "first" and the overflow is raised there,
+# as the program as written raises it.
+import "std/time"
+
+fn deep 0
+  [0]
+
+fn deep n
+  [n (deep (n - 1))]
+
+fn size xs
+  length xs
+
+print "start"
+sleep 10 .> (_ -> print "first") .> (_ -> print "then {size (deep 1000000)}")

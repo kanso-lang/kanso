@@ -14,6 +14,9 @@
 //! argument of an effect word, or a piece of a string such an argument
 //! interpolates. A continuation that names an entry binding is followed into
 //! it, so a chain kept under a name is read the same as one written inline.
+//! A body with several effect lines runs them as one group, and each side of
+//! the group that begins with a sleep is read the same way; the runtime runs
+//! the pool at the group's first idle point, when every side is waiting.
 //!
 //! Each lifted call becomes a constant named `ahead~N`, which no author can
 //! spell, and the call is replaced by a reference to it. A constant builds its
@@ -61,7 +64,7 @@ pub fn lifts(program: &Program) -> bool {
     let Some(entry) = program.fns.iter().find(|f| f.name == ENTRY) else {
         return false;
     };
-    entry.body.iter().any(|s| matches!(s, Stmt::Expr(e) if parks_first(e)))
+    entry.body.iter().any(|s| matches!(s, Stmt::Expr(e) if side_parks(e)))
         || first_park(&entry.body).is_some_and(|park| {
             entry.body[..park]
                 .iter()
@@ -94,12 +97,16 @@ pub fn lift(program: &mut Program) -> Vec<String> {
     let mut lifted: Vec<Expr> = Vec::new();
     let mut followed: HashSet<usize> = HashSet::default();
     for i in 0..entry.len() {
-        if !matches!(&entry[i], Stmt::Expr(e) if parks_first(e)) {
+        if !matches!(&entry[i], Stmt::Expr(e) if side_parks(e)) {
             continue;
         }
         let mut names: Vec<String> = Vec::new();
         if let Stmt::Expr(e) = &mut entry[i] {
-            after_park(e, &user, &mut lifted, &mut names);
+            each_side(e, &mut |side| {
+                if parks_first(side) {
+                    after_park(side, &user, &mut lifted, &mut names);
+                }
+            });
         }
         // A continuation that names an entry binding runs that binding's
         // chain, so the binding's certain calls follow the park as well.
@@ -227,6 +234,27 @@ fn reads_to(e: &mut Expr, name: &str, constant: &Name) {
             *e = Expr::Ident(constant.clone(), *span, Resolution::default());
         }
         _ => crate::for_each_child_mut(e, &mut |c| reads_to(c, name, constant)),
+    }
+}
+
+/// Whether a statement, or a side of the group its effect lines make, is a
+/// chain that begins with a sleep.
+fn side_parks(e: &Expr) -> bool {
+    match e {
+        Expr::Join { lhs, rhs, .. } => side_parks(lhs) || side_parks(rhs),
+        _ => parks_first(e),
+    }
+}
+
+/// Each side of the group a body's effect lines make, in the order written;
+/// a lone statement is its only side.
+fn each_side(e: &mut Expr, f: &mut impl FnMut(&mut Expr)) {
+    match e {
+        Expr::Join { lhs, rhs, .. } => {
+            each_side(lhs, f);
+            each_side(rhs, f);
+        }
+        _ => f(e),
     }
 }
 
