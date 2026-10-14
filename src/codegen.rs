@@ -4973,19 +4973,22 @@ impl<'a> Backend<'a> {
         // Each constant is read through `k_ahead_try`, which catches a death
         // and empties the cells it left half-built; the table it is handed
         // is every constant's cell beside its ready flag, since the work may
-        // have been building any of them.
+        // have been building any of them. A constant moved from a binding ahead
+        // of the park is read again outside the try when it dies, so its
+        // failure is raised here, where the program as written raised it.
         let mut pool = String::new();
         let mut shims = String::new();
-        let lifted: Vec<String> = self
+        let lifted: Vec<(String, bool)> = self
             .program
             .fns
             .iter()
             .filter(|d| d.params.is_empty() && d.name.starts_with(crate::ahead::PREFIX))
-            .map(|d| dsym(&d.name, 0))
+            .map(|d| (dsym(&d.name, 0), d.name.starts_with(crate::ahead::MOVED)))
             .collect();
-        let forced: Vec<&(String, String)> = lifted
+        let forced: Vec<(&String, bool)> = lifted
             .iter()
-            .filter_map(|sym| self.ahead_cells.iter().find(|(s, _)| s == sym))
+            .filter(|(sym, _)| self.ahead_cells.iter().any(|(s, _)| s == sym))
+            .map(|(sym, moved)| (sym, *moved))
             .collect();
         if !forced.is_empty() {
             let n = self.caf_cells.len();
@@ -4997,19 +5000,26 @@ impl<'a> Backend<'a> {
                 2 * n,
                 pairs.join(", ")
             );
-            for (i, (sym, _)) in forced.iter().enumerate() {
+            for (i, (sym, moved)) in forced.iter().enumerate() {
                 let _ = writeln!(
                     shims,
                     "define internal void @k_ahead_force_{i}() {{\nentry:\n  \
                      %v = call tailcc %KValue @{sym}()\n  ret void\n}}"
                 );
+                let died = if *moved { format!("again{i}") } else { "done".to_string() };
                 let _ = writeln!(
                     pool,
                     "  %go{i} = call i32 @k_ahead_try(ptr @k_ahead_force_{i}, ptr @k_ahead_cells, i64 {n})\n  \
                      %on{i} = icmp ne i32 %go{i}, 0\n  \
-                     br i1 %on{i}, label %next{i}, label %done\n\
-                     next{i}:"
+                     br i1 %on{i}, label %next{i}, label %{died}"
                 );
+                if *moved {
+                    let _ = writeln!(
+                        pool,
+                        "again{i}:\n  call void @k_ahead_force_{i}()\n  br label %done"
+                    );
+                }
+                let _ = writeln!(pool, "next{i}:");
             }
             let _ = writeln!(shims, "declare i32 @k_ahead_try(ptr, ptr, i64)");
             let _ = writeln!(pool, "  br label %done\ndone:");

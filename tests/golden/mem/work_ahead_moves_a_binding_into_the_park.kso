@@ -1,0 +1,15 @@
+# The total is bound before the sleep, and every statement ahead of the sleep
+# is a binding, so nothing the program shows comes before it. Its value is a
+# closed call, so the compiler moves the binding into a constant and the
+# runtime forces it while the program is parked, where the program as written
+# computed it before the sleep began. `ahead_forced` counts it.
+import "std/time"
+
+fn spin 0 acc
+  acc
+
+fn spin n acc
+  spin (n - 1) (acc + n % 7)
+
+total = spin 1000 0
+sleep 1 .> (_ -> print "made") .> (_ -> print "report: {total}")

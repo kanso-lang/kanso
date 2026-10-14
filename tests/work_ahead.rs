@@ -9,8 +9,12 @@
 //! holding its blackhole printed "a lazy binding demands its own value" where
 //! the recursion runs out of stack.
 //!
+//! A binding moved into the park fails at the park instead, before anything
+//! prints, because the program as written computed it before the sleep.
+//!
 //! The success path, and the counter that says the pool ran, is in the mem
-//! corpus: `tests/golden/mem/work_ahead_forces_what_follows_a_park`.
+//! corpus: `tests/golden/mem/work_ahead_forces_what_follows_a_park` and
+//! `tests/golden/mem/work_ahead_moves_a_binding_into_the_park`.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -39,7 +43,7 @@ fn transcript(verb: &str, program: &Path, engine: &[&str]) -> (String, String, O
     )
 }
 
-fn the_failure_is_raised_where_it_is_read(verb: &str, name: &str, program: &Path) {
+fn the_transcript_is_the_one_written(verb: &str, name: &str, program: &Path) {
     for engine in [&[][..], &["--interp"][..]] {
         let (out, err, code) = transcript(verb, program, engine);
 
@@ -55,7 +59,7 @@ fn the_failure_is_raised_where_it_is_read(verb: &str, name: &str, program: &Path
 fn a_pooled_overflow_fails_where_it_is_read() {
     let name = "a_pooled_overflow_fails_where_it_is_read";
     let program = corpus().join(format!("{name}.kso"));
-    the_failure_is_raised_where_it_is_read("play", name, &program);
+    the_transcript_is_the_one_written("play", name, &program);
 }
 
 /// A runtime error inside the pool arrives through `exit`, and the work had
@@ -64,5 +68,15 @@ fn a_pooled_overflow_fails_where_it_is_read() {
 fn a_pooled_death_fails_where_it_is_read() {
     let name = "a_pooled_death_fails_where_it_is_read";
     let program = corpus().join(name);
-    the_failure_is_raised_where_it_is_read("run", name, &program);
+    the_transcript_is_the_one_written("run", name, &program);
+}
+
+/// A binding ahead of the park is computed there, and its overflow is raised
+/// there too, so "first" never prints. Raised where its value is read, the
+/// overflow came after "first".
+#[test]
+fn a_moved_binding_fails_at_the_park() {
+    let name = "a_moved_binding_fails_at_the_park";
+    let program = corpus().join(format!("{name}.kso"));
+    the_transcript_is_the_one_written("play", name, &program);
 }
