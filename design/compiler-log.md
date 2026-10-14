@@ -1710,3 +1710,16 @@ prints `first`, so its golden is a `.stdout`.
 The audit's other findings on #1893 are open there. An insisting form's
 failure names the library line instead of the call, and neither a wrong
 kind reaching a builtin or operator nor a stack overflow has a location.
+
+CI's rows for this branch fall, and the change reaches no decision they
+count, so the move is the binary's layout: `compile_instructions`
+22,679,084 -> 22,664,963, `entry_instructions` 75,152,899 -> 75,111,766,
+`library_instructions` 74,839,906 -> 74,798,192, `emit_instructions`
+5,440,488 -> 5,439,036, and `interp_instructions` 492,635,997 ->
+492,629,961. The tab's compile rises: `browser_compile_instructions`
+382,155,032 -> 382,297,788, on rustc 1.98.1. The arms this change adds run
+only when a file is refused, and no file in the corpus is. Marking
+`local_import` cold moved the row by 1,529, so the rise is not that
+function. The browser rise outweighs the five falls by less than 0.0001 of
+welfare, and the floor moves to the score with the reason recorded, as it
+did for kanso#1959 and kanso#1963.
