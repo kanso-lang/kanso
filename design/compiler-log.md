@@ -21,40 +21,61 @@
 > before concluding an idea is new.
 
 
-## 2026-10-12 — `&`, `|` and `^` mixed without parentheses are refused
+## 2026-10-13 — a lazy sequence handed where a list goes is refused at check
 
-From #1893, four ports. The three bit operators share one precedence and
-read left to right, so `a & b | c` is `(a & b) | c` and `a | b & c` is
-`(a | b) & c`. C binds `&` tighter than `^` and `^` tighter than `|`, and
-code carried over from it computed a different number in the second shape
-with no complaint. A chain that mixes two of them is now a syntax error that
-asks for parentheses around the part that goes first. A chain of one
-operator, `1 | 2 | 4`, is unchanged.
+Five ports hit the same failure: `list/map` answers a lazy sequence, `text/join`
+takes a list, `kanso check` said ok, and every engine stopped at run time with
+`error[runtime]: join takes a list of strings and a separator` and no file or
+line (#1892). `length` and `push` had the same gap, with a run-time hint
+naming `list/to_list` and still no location.
 
-The rule that refuses parentheses which group nothing had to learn the case:
-`(a & b) | c` parses the same without them, and without them it is refused.
-Parentheses around a bit chain that meets a different bit operator are now
-kept. Around one that meets the same operator they still group nothing and
-are still refused.
+The check now refuses the call at the argument. After inference it reads each
+call of a builtin, or of a std wrapper that forwards to one, whose
+`builtin_demand` entry holds a list. When the argument is a call of a std/list
+group whose every arm answers a record and nothing else, the argument is a lazy
+sequence, and the diagnostic says so: "`text/join` takes a list here, and
+`list/map` answers a lazy sequence — make it a list with `list/to_list`". A
+sequence held by name, a field, or any answer inference cannot pin to a record
+is left to the run. `print` is not touched, because its demand holds no list
+and printing a sequence forces it (gaveled).
 
-std/sha256 relied on the old reading in three lines, `spun`, `choice` and
-`majority`, each of which meant the C grouping. They gain parentheses, as do
-the micro fixture that copies them and `bitwise_operators`'s chained line.
-Both engines print the same bytes for all three fixtures before and after.
-`tests/golden/errors/bit_operators_mixed_without_parentheses` pins the
-refusal, which main accepts and prints 10 for. The ratchet row "bit operators
-mixed freely" lets the chain through and turns the error corpus red.
+`join` had no `builtin_demand` entry, so `text/join 3 ""` checked clean while
+`length 3` was refused. It has one now: a list, then a string, which is what
+both engines refuse.
 
-On CI's rows for the tree merged with #1913, compile_instructions lands on
-25,908,556, entry_instructions on 85,478,744 and library_instructions on
-86,033,220, rises of 27,005, 97,431 and 97,638 for the parser's check and the
-parentheses std/sha256 now carries. browser_compile_instructions lands on
-391,456,491, up 144,989, because the tab runs the same parser.
-emit_instructions falls 2,649 to 7,010,828. The first CI run, before the
-merge, showed the browser compile falling 546,685; the merged tree does not
-repeat it, so that fall was layout and is withdrawn. The refusal is #1893's
-item, which the issue lists as needing no ruling; it stops C-shaped bit code
-computing a different number, so the floor drops by what it costs.
+`tests/golden/errors/a_lazy_sequence_where_a_list_goes` and
+`join_takes_a_list` pin the two refusals. Three run-time goldens wrote the
+failing call out and now hold the value by name, so they still reach the run
+and still pin its sentence: `join_takes_strings_and_a_separator`,
+`length_points_at_to_list` and `push_points_at_to_list`.
+
+The check found the same mistake in `bench/compile_corpus`: `workload` joins
+`list/take ["a" "b" "c"] 2`, which stops both engines when run. Nothing runs
+the corpus, so it went unseen. It now goes through `list/to_list`, so the
+corpus compiles a little more and the compile rows move with it.
+
+The ratchet row "a lazy sequence where a list goes checks clean" deletes the
+call that asks, and the error corpus goes red on the new fixture.
+
+Measured here, the tab's compile row went from 391,974,060 to 392,906,566.
+With the new call kept and the check returning at its first line it read
+392,914,374, and with the call removed 391,981,161. The rise is in how the
+wasm build lays out the walk the call sits in, not in work the check does:
+across `bench/interp_corpus` five calls get past its first test.
+
+On CI's rows for the tree merged with #1913, browser_compile_instructions
+lands on 392,430,393, up 1,118,891. compile_instructions lands on 26,006,341,
+entry_instructions on 85,527,812 and library_instructions on 86,082,490,
+rises of 124,790, 146,499 and 146,908 for the check's walk and the corpus's
+extra `list/to_list`. emit_instructions lands on 7,013,581, up 104, and
+compile_allocs on 14,637, up 39. front_end_visits lands on 7,995, up 13, the
+front end walking the corpus's new call, and compile_peak_bytes lands on
+676,277, up 1,593, for the same call's tree. The refusal is
+#1892's item, which makes `kanso check` say what every engine already
+refused, so the floor drops by what it costs.
+
+On main after #1904 the tab's compile reads `browser_compile_instructions`
+393,497,266, up 1,118,891 from main's 392,378,375 on the same tree.
 
 ## 2026-10-13 — `and` meets `or` in parentheses, and a file may open with a header comment
 
@@ -103,55 +124,6 @@ The compile rows move with the binary; CI's rows are priced here before
 merge.
 
 - **OPEN** #1887, until this lands.
-
-## 2026-10-12 — a wide tail call keeps its jump
-
-The book promises that a call in tail position takes no stack, in every
-engine. A release build broke that for wide arms. `narrow_tailcc` took
-`tailcc` and `musttail` away from every arm wider than a limit (twelve words on
-x86-64 under `preserve_nonecc`, nine without it, eight on arm64), and each
-call into such an arm became an ordinary call. LLVM turns some of those back
-into jumps, but not one whose arm builds a record on the stack and hands its
-address to the runtime. The regex port's Pike VM loop is thirteen words, and
-`regex --steps '(a*)*b'` on a 40,000-character line ran out of stack in a
-release build while the dev build and the interpreter printed
-`steps: 440010`.
-
-An x86-64 release build no longer narrows: every `musttail` the emitter wrote
-reaches clang, arms of twelve words or fewer take the flat `preserve_nonecc`
-signature, and wider ones keep `tailcc`, whose stack arguments x86-64 lowers
-correctly. arm64 keeps the narrowing at eight words, because with it gone the
-macOS job ran `a_match_holds_the_literal_its_pattern_spells` to an empty
-stdout; the arm64 backend still miscompiles a `tailcc` call that spills past
-x7. #1912 holds the arm64 gap.
-
-`tests/a_big_object_decodes_in_a_release_build.rs` gains a seven-parameter
-self call that builds a record each hop, a million deep. Main's release
-binary prints "the program ran out of stack". The ratchet row `nine_words` now
-strips `musttail` from calls into arms left on `tailcc`, and both wide-arm
-tests fail with the overflow. The older row "a release build that gives up the
-guaranteed tail call" lowered only the arm64 cap, which an x86-64 release no
-longer reads, so CI's ratchet called it blind. Its mutation now takes `tailcc`
-off every arm on both architectures, and `a_loop_carries_a_bignum_across_its_rewind`
-loses its last line in the release-built micro corpus.
-
-CI's rows: `work_runbench` 1,170,035,080 -> 1,170,626,374 and
-`work_digestbench` 5,603,118 -> 5,905,902 (+5.4%). sha256's block and round
-loops take ten and eleven parameters, and each hop now copies its stack
-arguments where LLVM had built a loop. `text` rose for scanbench (448,985 ->
-451,401), digestbench (319,241 -> 319,705) and runbench (619,081 ->
-619,849), so the `text` total went from 4,838,622 to 4,841,502 on main after #1925, and the emitted line count fell by 540 for both scanbench and
-runbench. The language fix lowers the welfare floor by exactly what it costs,
-to 91.11.
-
-Because this branch edits src/main.rs, the ratchet ran the rows that patch it,
-and "a warm play that dies in silence" stayed green under its mutation. The
-row went blind when a built binary began naming its own stack overflow: the
-warm play no longer sees a signal from that program, so its own wording never
-runs. `a_warm_play_ended_by_a_signal_names_it` reaches the wording another
-way. The program waits on stdin, the spec sends it SIGTERM, and both plays
-must print "ended by signal 15". Under the mutation the second play printed an
-empty line. Linux only, since it finds the program through /proc.
 
 ## 2026-10-13 — a list or map too long for its line spans lines
 
@@ -1657,6 +1629,32 @@ fusing `slice! ... .> utf8`, `.> append acc`, `.> to_int` and `.> to_float`;
 the decoder's call sites moved onto those chains; a micro golden for an
 in-range `slice!` and an error golden for one out of range; appendix B.
 
+## 2026-10-14 — a box handed to a library function that reads it is refused at the call
+
+#1957. The checker refuses a box handed to a builtin that takes a value, so
+`length (os/read_file! "x")` is refused where it is written. Handed to
+`text/utf8` instead, the same box checked clean, and both engines died with
+"utf8 takes a list of byte values". `text/utf8` is a library function whose
+body calls the builtin as `builtin_utf8`, and the table of builtins that read
+a value was asked under that spelling, which it does not hold.
+
+The table is now asked with the prefix taken off. That alone moved the
+refusal into std/text, naming `builtin_utf8` and a line the program's author
+cannot change. So when a box goes into a standard-library function whose body
+reads that parameter as a value, the refusal comes at the program's call and
+names the function called. An arm that takes an effect at that position is
+where a box belongs, and a group with one is left alone. A box handed to the
+program's own functions is still followed into the body, as ruled on
+2026-09-30. `a_box_handed_to_a_library_wrapper` pins the refusal and was red
+with the change taken back out.
+
+`browser_compile_instructions` moved 437,381,994 -> 437,416,347 for the
+extra walk over a std group's arms, under a ten-thousandth of a point. CI
+read `compile_instructions` 31,948,363 -> 31,940,603, `entry_instructions`
+101,372,705 -> 101,349,935 and `library_instructions` 100,887,003 ->
+100,864,357, a fall of a few hundredths of a percent that this change does not
+explain, so it is named as layout.
+
 ## 2026-10-14 — checking only what a module reaches, measured and set aside
 
 #1952 asked whether the merged check could skip the dependency functions a
@@ -1782,14 +1780,50 @@ main's golden back and scoring again.
 - interp_instructions 496,215,717 -> 495,119,692 (+0.0006) and
   interp_peak_bytes 792,646 -> 797,868 (-0.0010).
 - release codegen 477,099,466 -> 476,979,642 (+0.0001). Dev codegen moved
-  119,400,046 -> 119,402,816 and emitting 7,622,247 -> 7,655,444, both under
-  a ten-thousandth of a point.
-- the tab: browser compile 437,381,994 -> 439,517,722 and its peak 726,939 ->
-  728,883, the same larger library compiled in wasm, together -0.0020.
+  119,400,046 -> 119,402,816 and `emit_instructions` 7,622,247 -> 7,655,444,
+  both under a ten-thousandth of a point.
+- the tab: `browser_compile_instructions` 437,416,347 -> 439,552,195 and
+  `browser_compile_peak_bytes` 726,939 -> 728,883, the same larger library
+  compiled in wasm, together -0.0020.
 - the machine-code golden fell by 2,800 to 6,896 bytes on every benchmark,
   Encode allocations rose 5,323,947 -> 5,332,649 and its arena took a fourth
   block, which arrived with the frozen decoder's unfused `utf8`; no
   allocation counter is a welfare term.
+
+The counters below are not welfare terms, and each moved with the change:
+
+- The encode vein, with the frozen decoder's unfused `utf8`: `encode_allocs`
+  5,332,649, `encode_alloc_bytes` 665,662,512, `encode_sh_bytes` 101,072,232,
+  `encode_arena_blocks` 4, `encode_arena_peak_bytes` 4,194,304 and
+  `encode_spare_peak_bytes` 3,145,728.
+- Instructions on the other benchmarks: `work_encodebench` 2,387,084,547,
+  `work_widebench` 28,451,432, `work_basket` 30,958,481, `work_oneshot`
+  13,207,833, `work_digestbench` 5,911,344, `work_indexbench` 2,462,589 and
+  `work_scanbench` 273,717. The last five moved by under 0.05%.
+- Rows that moved with the token cache, which now keeps some values of four
+  to seven bytes that were viewed before: `wide_perm_live_bytes` and `wide_perm_peak_bytes`
+  175, `wide_utf8_zerocopy` 15,993; `fresh_builder_perm_live_bytes`,
+  `fresh_builder_perm_peak_bytes`, `fresh_cycle_perm_live_bytes`,
+  `fresh_cycle_perm_peak_bytes`, `three_storage_regimes_share_one_append_perm_live_bytes`
+  and `three_storage_regimes_share_one_append_perm_peak_bytes` 25 each;
+  `fresh_builder_utf8_zerocopy` and `fresh_cycle_utf8_zerocopy` 39,
+  `three_storage_regimes_share_one_append_utf8_zerocopy` 0, and
+  `a_scan_keeps_its_place_in_the_text_seek_resumes` 407.
+- The mem fixture that now reaches the fused append through `std/json`, which
+  also runs the decoder: `append_of_a_slice_boxes_nothing_allocs` 12,
+  `append_of_a_slice_boxes_nothing_alloc_bytes` 1,307,
+  `append_of_a_slice_boxes_nothing_sh_str` 272,
+  `append_of_a_slice_boxes_nothing_beat_iters` 40,
+  `append_of_a_slice_boxes_nothing_find2_calls` 42,
+  `append_of_a_slice_boxes_nothing_str_scans` 3,
+  `append_of_a_slice_boxes_nothing_str_scan_bytes` 165,
+  `append_of_a_slice_boxes_nothing_perm_allocs` 5,
+  `append_of_a_slice_boxes_nothing_bytes_malloc` 3 and
+  `append_of_a_slice_boxes_nothing_append_grow` 2.
+- The emitted code: `emitted_lines` 10,165, `emitted_other_defines` 2,089 and
+  `emitted_other_branches` 16,526.
+- `interp_allocs` 592,317 and `codegen_instructions_dev` 119,402,816. The
+  interpreter's peak and dev codegen are priced above.
 
 Welfare goes 91.2447 -> 91.2395, a fall of 0.0052. This builds a ruled part
 of the language, so the floor drops by exactly that.

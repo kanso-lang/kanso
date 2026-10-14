@@ -35,7 +35,7 @@
 # move. browser_compile_instructions 437,381,890 -> 437,381,994, a RISE of
 # 104, which is layout. The run rows are unchanged.
 # measured-on rustc=1.98.1
-browser_compile_instructions=439517722
+browser_compile_instructions=439552195
 browser_compile_peak_bytes=728883
 browser_run_instructions=34183924
 browser_run_peak_bytes=1441792
