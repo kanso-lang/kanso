@@ -1,0 +1,15 @@
+# A JSON string with no escape in it is cut from the document in one call:
+# the decoder's `text/utf8` of a slice, which the emitter fuses into the
+# runtime's utf8-slice functions. Those are ordinary C functions beside the
+# `k_b_utf8` door, and a door matched by its name's prefix would hand them the
+# door's convention, so each string here would arrive empty. The other decoded
+# strings in this corpus carry escapes and are built a piece at a time.
+import "std/json"
+
+fn shown (err _)
+  print "refused"
+
+fn shown v
+  print "{v}"
+
+pub play = shown (json/decode "[\"kanso\", \"tail\", \"door\"]")

@@ -40,4 +40,8 @@
 # `none` arm no longer inherits the none, so its parameter set settles sooner
 # and the fixpoint re-dirties fewer declarations. Six more lines to write and
 # less work to decide them.
-module lines=1288 calls=130 branches=105 defines=30 rounds=8 visits=3666
+# 2026-10-14 (an import reads what the program names, kanso#1952): lines 1,288
+# -> 1,106, calls 130 -> 110, branches 105 -> 83, defines 30 -> 29, rounds 8
+# -> 4, visits 3,666 -> 1,368. The shipped modules' declarations the sample
+# never names are no longer read, so they are neither decided nor written.
+module lines=1106 calls=110 branches=83 defines=29 rounds=4 visits=1368

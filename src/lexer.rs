@@ -71,6 +71,9 @@ pub struct Lexed {
     /// The last line of the comment block the file opens with, or 0 when its
     /// first line of content is not a comment.
     pub header: usize,
+    /// Declarations were blanked out of the source before it was lexed, so
+    /// the blank lines between what is left say nothing about its layout.
+    pub pruned: bool,
 }
 
 const OPS: [&str; 14] = [">=", "<=", "==", "!=", "+", "-", "*", "/", "%", "<", ">", "&", "|", "^"];
@@ -326,7 +329,7 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
         check_needless_continuation(line, &mut pieces, &mut diags);
     }
     if diags.is_empty() {
-        Ok(Lexed { lines, blank_lines, header })
+        Ok(Lexed { lines, blank_lines, header, pruned: false })
     } else {
         Err(diags)
     }
