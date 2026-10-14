@@ -861,7 +861,11 @@ fn build(program: ast::Program, file: &str, release: bool, built_as: Option<Stri
         (true, _) => preserve_none_calls(preserve_none_tails(ir), kanso::RUNTIME_C),
         (false, true) => match std::env::var("KANSO_PROBE_TAIL").as_deref() {
             Ok("none") => ir,
-            Ok("wide") => wide_tailcc_keeps_its_jumps(ir, ARM64_TAILCC_WIDEST),
+            Ok("wide") | Ok("export") => wide_tailcc_keeps_its_jumps(ir, ARM64_TAILCC_WIDEST),
+            Ok("used") => probe_kept_external(
+                wide_tailcc_keeps_its_jumps(ir, ARM64_TAILCC_WIDEST),
+                ARM64_TAILCC_WIDEST,
+            ),
             _ => narrow_tailcc(ir, ARM64_TAILCC_WIDEST),
         },
         (false, false) => ir,
@@ -1429,6 +1433,10 @@ fn release_clang(stem: &str, ll_path: &str) -> std::io::Result<std::process::Exi
             &["-O3"][..]
         })
         .arg("-flto")
+        .args(match std::env::var("KANSO_PROBE_TAIL").as_deref() {
+            Ok("export") => &["-Wl,-export_dynamic"][..],
+            _ => &[][..],
+        })
         // lld where it can take the LTO link: `lld_links_lto` says why.
         .args(lld_args())
         // and LLVM 19's own link pipeline without one pass: `lto_pipeline_args`.
@@ -2496,4 +2504,25 @@ mod the_hot_unit_is_taken_from_the_runtime {
             );
         }
     }
+}
+
+/// Probe only (kanso#1912): every tailcc function wider than `widest` listed in
+/// `@llvm.used`, so the link cannot internalize it and dead-argument
+/// elimination leaves its signature alone.
+fn probe_kept_external(ir: String, widest: usize) -> String {
+    let wide: Vec<String> = ir
+        .lines()
+        .filter(|l| l.starts_with("define tailcc "))
+        .filter_map(defined_symbol)
+        .filter(|(_, regs)| *regs > widest)
+        .map(|(name, _)| format!("ptr @\"{name}\""))
+        .collect();
+    if wide.is_empty() {
+        return ir;
+    }
+    format!(
+        "{ir}\n@llvm.used = appending global [{} x ptr] [{}], section \"llvm.metadata\"\n",
+        wide.len(),
+        wide.join(", ")
+    )
 }

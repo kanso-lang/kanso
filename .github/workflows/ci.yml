@@ -180,18 +180,18 @@ jobs:
           set +e
           cargo build --release
           K=$PWD/target/release/kanso
-          d=$(mktemp -d)
-          cp tests/golden/micro/a_spilling_tail_call_named_with_a_mark.kso $d/fx.kso
-          printf 'import "./fx"\n\nfx/play\n' > $d/main.kso
-          cd $d
-          KANSO_PROBE_TAIL=wide $K build main.kso --release
-          ./main; echo "exit $?"
-          echo "=== lldb"
-          lldb --batch -o run -o bt -o "register read" -o "disassemble --pc --count 30" -o "disassemble --frame" -o "frame select 1" -o "disassemble --frame" ./main 2>&1 | head -700
-          echo "=== symbols"
-          nm main | grep -E "d_fx|k_truthy|stepping|reached" | head -40
-          echo "=== whole program functions"
-          for f in $(nm main | grep -E " [Tt] .*d_fx" | awk '{print $3}'); do echo "--- $f"; otool -tV -p "$f" main | head -200; done
+          for mode in used export; do
+            echo "=== micro corpus, mode $mode"
+            KANSO_PROBE_TAIL=$mode cargo test --release --test golden micro_corpus_survives_a_release_build 2>&1 | grep -E "test micro|panicked|answers differently|left:|right:|does not|test result" | head -20
+            for fx in a_spilling_tail_call_named_with_a_mark a_split_ends_where_its_separator_does a_match_holds_the_literal_its_pattern_spells; do
+              d=$(mktemp -d)
+              cp tests/golden/micro/$fx.kso $d/fx.kso
+              printf 'import "./fx"\n\nfx/play\n' > $d/main.kso
+              ( cd $d; KANSO_PROBE_TAIL=$mode $K build main.kso --release >/dev/null; ./main > out.txt 2> err.txt; echo "--- $fx $mode exit $?"; head -c 300 out.txt; head -c 300 err.txt )
+            done
+          done
+          echo "=== the three wide-arm tests, mode used"
+          KANSO_PROBE_TAIL=used cargo test --release --test a_big_object_decodes_in_a_release_build 2>&1 | grep -E "^test |test result" | head -20
           exit 0
 
   playground:
