@@ -50,7 +50,15 @@ fn all_in? set s
   list/all? (text/chars s) (c -> in? set c)
 
 fn first_char s
-  text/slice s 1 1
+  or_empty (text/slice s 1 1)
+
+# The slices in this file stay inside their value, so they are never none; the
+# arm is there because the checker cannot see that.
+fn or_empty none
+  ""
+
+fn or_empty piece
+  piece
 
 fn without_leading ""
   ""
@@ -63,20 +71,20 @@ fn shed s false
   s
 
 fn shed s true
-  without_leading (text/slice s 2 (length s))
+  without_leading (or_empty (text/slice s 2 (length s)))
 
 fn without_trailing ""
   ""
 
 fn without_trailing s
-  trailing_blank = in? blank (text/slice s (length s) (length s))
+  trailing_blank = in? blank (or_empty (text/slice s (length s) (length s)))
   shed_end s trailing_blank
 
 fn shed_end s false
   s
 
 fn shed_end s true
-  without_trailing (text/slice s 1 (length s - 1))
+  without_trailing (or_empty (text/slice s 1 (length s - 1)))
 
 fn squeezed s
   without_trailing (without_leading s)
@@ -107,7 +115,7 @@ fn looked _ _ _ true
   ""
 
 fn looked s i n false
-  c = text/slice s i i
+  c = or_empty (text/slice s i i)
   blank_here = in? blank c
   stepped s i n c blank_here
 
@@ -481,7 +489,7 @@ fn shorter s _ false
   s
 
 fn shorter s n true
-  text/slice s 1 n
+  or_empty (text/slice s 1 n)
 
 # The walk descends, the way corpus_of does below. It once read src/ alone, and
 # when a seam moved a function into src/eval/ or src/check/ its refusals left

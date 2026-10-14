@@ -248,7 +248,12 @@
 # 2026-10-07: a word twin starts its general body over when a sum overflows
 # before it has written anything, so the bignum path leaves the twin: calls
 # 1,018 -> 1,003, branches 1,136 -> 1,094, lines 10,188 -> 10,111.
+#
+# 2026-10-14: a slice past the end answers none (#1890). std/json's slices
+# keep their fused doors under a library-only spelling, so defines, calls and
+# branches are unchanged; lines 10,161 -> 10,165, three of them the longer
+# comment on the fused append door in the prelude.
 defines=111
 calls=1023
 branches=1104
-lines=10161
+lines=10165

@@ -9,7 +9,14 @@ import "std/text"
 source = text/bytes "ab\"cd|ef\\gh|ij\tkl|mnop"
 
 fn token from to
-  text/utf8 (text/slice source from to)
+  decoded (text/slice source from to)
+
+# Every range below is inside `source`, so the slice is never none.
+fn decoded none
+  ""
+
+fn decoded piece
+  text/utf8 piece
 
 fn tokens _
   [(token 1 5) (token 7 11) (token 13 17) (token 19 22)]

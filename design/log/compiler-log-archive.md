@@ -102929,3 +102929,80 @@ work_jsonbench 860,566,126, work_livebench 1,474,875,027 and work_oneshot
 13,227,755 move by a few hundred instructions each. The emitted totals for the
 other programs: emitted_other_branches 16,563, emitted_other_calls 17,668 and
 emitted_other_defines 2,038.
+
+## 2026-10-12 — a name the author declared wins over a builtin and an import
+
+#1891's first item, from the ports. Three reductions broke the 2026-08-29
+ruling that an author's own name wins over an import's.
+
+- **A type named like a builtin.** mustache declared `type run` and built one
+  with `run 1 2 3`, importing nothing. The checker refused it twice over, with
+  the count of the builtin std/os wraps and with that builtin's demand for a
+  string. chip8's `type random` drew the same arity refusal. The checker let a
+  declared function shadow a builtin and forgot a declared type; it now asks
+  both. Native code had the same gap on the play route, where the name arrives
+  bare: the build stopped on the builtin's count. Through an import the name
+  arrives qualified and native already built the record.
+- **A function named like an imported type.** mustache imported std/list and
+  declared `fn counting a b`. std/list exports a record `counting`, which the
+  import enrols under its bare name, and the interpreter built that record
+  before looking for the file's group. It stopped on the field count where
+  native called the function. A declared group now wins over an imported
+  type of the same bare name.
+
+`tests/play_verb.rs` pins both on both engines:
+`a_type_named_like_a_builtin_is_the_files_own` and
+`a_function_named_like_an_imported_type_is_the_files_own`, with fixtures in
+`tests/golden/play`. The first also runs through an import as
+`tests/golden/micro/a_type_named_like_a_builtin_is_the_programs`, which adds
+`type random`. Main refuses both play fixtures. Four ratchet rows break one
+guard each, and each turns its spec red.
+
+The test-file half of the item (a test file's `import "std/list"` replacing a
+private constructor) is #1883's, in kanso#1907.
+
+CI's rows, on the tree merged with #1913: the shadow check costs each compile
+a little. compile_instructions lands on 25,888,376 (+6,825),
+entry_instructions on 85,392,486 (+11,173) and library_instructions on
+85,946,778 (+11,196); browser_compile_instructions on 391,315,220 (+3,718) and
+interp_instructions on 488,739,924 (+108). emit_instructions falls 1,084 to
+7,012,393. The welfare floor drops by what this costs, under the rule that
+building the language is priced at its cost.
+
+On main after #1904 the tab's compile reads `browser_compile_instructions`
+392,382,093, up 3,718 from main's 392,378,375 on the same tree.
+
+## 2026-10-12 — `&`, `|` and `^` mixed without parentheses are refused
+
+From #1893, four ports. The three bit operators share one precedence and
+read left to right, so `a & b | c` is `(a & b) | c` and `a | b & c` is
+`(a | b) & c`. C binds `&` tighter than `^` and `^` tighter than `|`, and
+code carried over from it computed a different number in the second shape
+with no complaint. A chain that mixes two of them is now a syntax error that
+asks for parentheses around the part that goes first. A chain of one
+operator, `1 | 2 | 4`, is unchanged.
+
+The rule that refuses parentheses which group nothing had to learn the case:
+`(a & b) | c` parses the same without them, and without them it is refused.
+Parentheses around a bit chain that meets a different bit operator are now
+kept. Around one that meets the same operator they still group nothing and
+are still refused.
+
+std/sha256 relied on the old reading in three lines, `spun`, `choice` and
+`majority`, each of which meant the C grouping. They gain parentheses, as do
+the micro fixture that copies them and `bitwise_operators`'s chained line.
+Both engines print the same bytes for all three fixtures before and after.
+`tests/golden/errors/bit_operators_mixed_without_parentheses` pins the
+refusal, which main accepts and prints 10 for. The ratchet row "bit operators
+mixed freely" lets the chain through and turns the error corpus red.
+
+On CI's rows for the tree merged with #1913, compile_instructions lands on
+25,908,556, entry_instructions on 85,478,744 and library_instructions on
+86,033,220, rises of 27,005, 97,431 and 97,638 for the parser's check and the
+parentheses std/sha256 now carries. browser_compile_instructions lands on
+391,456,491, up 144,989, because the tab runs the same parser.
+emit_instructions falls 2,649 to 7,010,828. The first CI run, before the
+merge, showed the browser compile falling 546,685; the merged tree does not
+repeat it, so that fall was layout and is withdrawn. The refusal is #1893's
+item, which the issue lists as needing no ruling; it stops C-shaped bit code
+computing a different number, so the floor drops by what it costs.

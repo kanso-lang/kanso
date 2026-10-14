@@ -152,7 +152,15 @@ fn marking _ _ acc true
   acc
 
 fn marking s at acc false
-  escaping s (at + 1) "{acc}{marked (text/slice s at at)}"
+  escaping s (at + 1) "{acc}{marked (or_empty (text/slice s at at))}"
+
+# The slices in this file stay inside their value, so they are never none; the
+# arm is there because the checker cannot see that.
+fn or_empty none
+  ""
+
+fn or_empty piece
+  piece
 
 fn marked c
   plain = regexp/match? "^[a-zA-Z0-9]$" c

@@ -1,9 +1,12 @@
 # `append acc (slice cs a b)` reaches a fused door that copies the range out
-# of `cs` without building the view. Every case the door has to answer the
-# same way the unfused pair did: a middle range, one byte, the whole source,
-# an inverted range, a start below one, an end past the length, a slice onto
-# an empty accumulator, a range that lands inside multibyte text, and two
-# appends threaded through one accumulator.
+# of `cs` without building the view. Since a range past the end answers none
+# (#1890), a program has to dispatch on the slice before it appends, and the
+# door is reached from the standard library's own measured ranges. These are
+# the cases the door answered, spelled the way a program spells them now: a
+# middle range, one byte, the whole source, an inverted range, a start below
+# one, an end past the length, a slice onto an empty accumulator, a range that
+# lands inside multibyte text, and two appends threaded through one
+# accumulator.
 import "std/text"
 
 src = text/bytes "0123456789"
@@ -11,12 +14,23 @@ src = text/bytes "0123456789"
 wide = text/bytes "héllo"
 
 fn onto cs a z
-  seed = text/bytes "abc"
-  text/utf8 (text/append seed (text/slice cs a z))
+  appended (text/bytes "abc") (text/slice cs a z)
+
+fn appended _ none
+  "none"
+
+fn appended seed piece
+  text/utf8 (text/append seed piece)
 
 fn twice cs a z
-  once = text/append (text/bytes "abc") (text/slice cs a z)
-  text/utf8 (text/append once (text/slice cs a z))
+  twice_onto (text/slice cs a z)
+
+fn twice_onto none
+  "none"
+
+fn twice_onto piece
+  once = text/append (text/bytes "abc") piece
+  text/utf8 (text/append once piece)
 
 pub play =
   print "middle: {onto src 3 5}"

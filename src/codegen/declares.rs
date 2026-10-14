@@ -409,12 +409,15 @@ qstat:
   %qso = load i32, ptr @k_stats_on
   %qcount = icmp ne i32 %qso, 0
   br i1 %qcount, label %qslow, label %qrange
-; An out-of-range or inverted range is the empty slice, which appends nothing —
-; k_b_slice_raw's rule, and the reason it is answered here rather than sent to
-; the C: a fifth of the runs between two escapes are empty, because two escapes
-; sitting next to each other leave no bytes between them. Such a run returns
-; the accumulator as it stands, from between the two bounds tests, rather than
-; carrying a zero length through the claim and the copy.
+; An inverted range is the empty slice, which appends nothing, and it is
+; answered here rather than sent to the C: a fifth of the runs between two
+; escapes are empty, because two escapes sitting next to each other leave no
+; bytes between them. Such a run returns the accumulator as it stands, from
+; between the two bounds tests, rather than carrying a zero length through the
+; claim and the copy. A range past the end is none since #1890, so a program
+; cannot hand one to `append`; this door is written only for the standard
+; library's own ranges, which come from a scan of the same bytes, and it
+; treats one past the end as empty without asking.
 qrange:
   %qfrom = extractvalue %KValue %fv, 1
   %qto = extractvalue %KValue %tv, 1

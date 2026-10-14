@@ -1,16 +1,18 @@
 # `append acc (slice cs a b)` is fused: the range is copied straight out of
-# `cs` and the view the slice would have been is never built. Forty rounds
-# against the same source, so a view per round would show as forty allocations
-# here. With the emitter's fusion removed this file reads allocs=85 and
-# sh_bytes=1944 against the 45 and 984 below.
-import "std/text"
+# `cs` and the view the slice would have been is never built. Since a range
+# past the end answers none (#1890), a program dispatches on a slice before it
+# appends it, and the fused pair is written only by the standard library,
+# whose ranges come from a scan of the same bytes. std/json is where it lives:
+# the run of plain bytes before each escape in a string is appended that way.
+# Forty escapes in one string, so a view per run would show here as forty
+# allocations. With the emitter's fusion removed this file reads allocs=54 and
+# sh_bytes=1056 against the 12 and 48 below.
+import "std/json"
 
-src = text/bytes "abcdefghij"
-
-fn take acc 0
+fn escaped acc 0
   acc
 
-fn take acc n
-  take (text/append acc (text/slice src 3 5)) (n - 1)
+fn escaped acc n
+  escaped "{acc}cde\\n" (n - 1)
 
-pub play = print "{text/utf8 (take (text/bytes "") 40)}"
+pub play = print (length (json/decode "\"{escaped "" 40}\""))

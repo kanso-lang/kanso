@@ -9720,6 +9720,18 @@ static __attribute__((noinline, cold, preserve_most)) KValue k_token_miss(const 
     KValue v; v.tag = K_STR; v.payload = k_ptr(s); return v;
 }
 
+/* The cached string for a token of four to seven bytes. */
+static inline KValue k_token_of(const char* data, long long len, const char* origin) {
+    uint32_t a, b;
+    memcpy(&a, data, 4);
+    memcpy(&b, data + len - 4, 4);
+    uint64_t key = (uint64_t)a | ((uint64_t)b << (8 * (len - 4))) | ((uint64_t)len << 56);
+    unsigned slot = (unsigned)((key * 0x9E3779B97F4A7C15ull) >> (64 - K_TOKEN_BITS));
+    if (k_token_key[slot] == key) return k_token_cache[slot];
+    if (k_token_key[slot ^ 1] == key) return k_token_cache[slot ^ 1];
+    return k_token_miss(data, len, origin, key, slot);
+}
+
 KValue k_b_utf8_slice_raw(const unsigned char* bytes, long long blen,
                           long long from, long long to, const char* origin) {
     const char* data = (const char*)bytes;
@@ -9732,16 +9744,7 @@ KValue k_b_utf8_slice_raw(const unsigned char* bytes, long long blen,
        861,498 of them on runbench, and none of them is asked its length.
        Seeding each one cost 7,728,237 instructions there against 13,280,580
        the whole-string doors below save. */
-    if (len >= 4 && len <= 7) {
-        uint32_t a, b;
-        memcpy(&a, data, 4);
-        memcpy(&b, data + len - 4, 4);
-        uint64_t key = (uint64_t)a | ((uint64_t)b << (8 * (len - 4))) | ((uint64_t)len << 56);
-        unsigned slot = (unsigned)((key * 0x9E3779B97F4A7C15ull) >> (64 - K_TOKEN_BITS));
-        if (k_token_key[slot] == key) return k_token_cache[slot];
-        if (k_token_key[slot ^ 1] == key) return k_token_cache[slot ^ 1];
-        return k_token_miss(data, len, origin, key, slot);
-    }
+    if (len >= 4 && len <= 7) return k_token_of(data, len, origin);
     KValue bad = k_utf8_bad_rare(data, len, origin, NULL);
     if (bad.tag == K_ERR) return bad;
     return k_str_n(data, len);
@@ -10008,6 +10011,9 @@ static KValue k_utf8_take(KBytes* b, long long chars);
 
 static KValue k_utf8_finish(KValue bv, const char* origin) {
     KBytes* b = k_as_bytes(bv);
+    /* A short value shares its token with the fused door's, so a program that
+       decodes a slice after asking whether it is none gets the same string. */
+    if (b->len >= 4 && b->len <= 7) return k_token_of((const char*)b->data, b->len, origin);
     long long chars;
     KValue bad = k_utf8_bad((const char*)b->data, b->len, origin, &chars);
     if (bad.tag == K_ERR) return bad;
@@ -11225,10 +11231,11 @@ __attribute__((noinline, cold)) KValue k_b_append_word_slow(KValue acc, const ch
    hand out; this reads the range straight out of `cs` and hands
    k_b_append_into a pointer and a length, so nothing is allocated for it.
 
-   The bounds rule is k_b_slice_raw's, to the character: an out-of-range or
-   inverted range is the empty slice, which appends nothing, and `acc` still
-   has to be bytes for that to be legal. Anything the tags turn away goes the
-   long way, so the two spellings cannot disagree. */
+   An out-of-range or inverted range is the empty slice, which appends
+   nothing, and `acc` still has to be bytes for that to be legal. Anything the
+   tags turn away goes the long way. A range past the end is none since #1890,
+   so a program cannot hand one to `append`: this door is written only for the
+   standard library's own ranges, which come from a scan of the same bytes. */
 KValue k_b_append_slice(KValue acc, KValue cs, KValue fromv, KValue tov,
                         long long mutate) {
     if (__builtin_expect(!k_not_failure(acc) || !k_not_failure(cs) || !k_not_failure(fromv)
@@ -11402,6 +11409,7 @@ KValue k_b_find2_below(KValue cs, KValue from, KValue a, KValue b, KValue lim) {
    away, and for the list and string containers, which do not come here. */
 KValue k_b_slice_raw(const unsigned char* data, long long len, long long from,
                      long long to) {
+    if (__builtin_expect(to > len || from > len + 1, 0)) return k_none();
     if (!k_span_in(from, to, len)) return k_bytes_view(data, 0);
     return k_bytes_view(data + (from - 1), to - from + 1);
 }
@@ -11447,15 +11455,21 @@ KValue k_b_slice(KValue container, KValue fromv, KValue tov) {
     }
     if (container.tag == K_LIST) {
         KList* l = k_as_list(container);
+        if (to > l->len || from > l->len + 1) return k_none();
         if (!k_span_in(from, to, l->len)) return k_mklist(0, NULL);
         return k_mklist(to - from + 1, l->items + (from - 1));
     }
     if (container.tag == K_STR) {
         KStr* s = k_as_str(container);
+        /* A range that runs past the end, or starts past it, answers none,
+           as an index past the end does (#1890). The count is the one the
+           ascii test below asks for, cached on the string. */
+        long long chars = k_str_chars(s);
+        if (to > chars || from > chars + 1) return k_none();
         /* Every character one byte, so a position is an offset and the walk
            that finds it is unnecessary. This is the case for html, source and
            anything else a gate reads. */
-        if (k_str_chars(s) == (long long)s->len) {
+        if (chars == (long long)s->len) {
             if (!k_span_in(from, to, (long long)s->len)) return k_str_n("", 0);
             /* One character first: a matcher slices one at a time, a million
                times a run on scanbench, and the ascii cache answers it. The

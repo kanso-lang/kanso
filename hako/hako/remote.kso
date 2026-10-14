@@ -70,7 +70,7 @@ fn ahead_rest? minor patch
   if (minor != 0) (minor > 0) (patch > 0)
 
 fn version tag
-  parts = text/split (text/slice tag 2 (length tag)) "."
+  parts = text/split (past_v tag) "."
   list/to_list (list/map parts text/to_int)
 
 # A branch's head. Interim by construction: a branch moves, so the sha beside

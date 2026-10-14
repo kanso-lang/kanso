@@ -1,0 +1,9 @@
+# A slice whose range leaves the value answers none (#1890), so the checker
+# sees none in what `text/slice` answers. Handing that straight to a function
+# with no `none` arm is refused here rather than failing at run time.
+import "std/text"
+
+fn shout s:string
+  "{s}!"
+
+pub play = print (shout (text/slice "kanso" 4 9))

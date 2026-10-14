@@ -35,8 +35,19 @@ fn dot_hunt cs i
 
 fn major_of text
   cs = text/chars text
-  digits = dot_hunt cs 1 .> (dot -> text/join (text/slice cs 1 (dot - 1)) "")
+  digits = dot_hunt cs 1 .> (dot -> text/join (leading cs (dot - 1)) "")
   text/to_int digits
+
+# The dot was found inside `cs`, so the slice before it is never none; the arm
+# is there because the checker cannot see that.
+fn leading cs n
+  or_empty (text/slice cs 1 n)
+
+fn or_empty none
+  []
+
+fn or_empty chars
+  chars
 
 pub fn announce argv
   os/read_file! (chosen argv) .> check

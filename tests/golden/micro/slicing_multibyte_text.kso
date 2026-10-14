@@ -1,5 +1,6 @@
 import "std/text"
 
+# The last line's range runs past the end, so it answers none (#1890).
 pub play =
   mixed = "aé漢z"
   one = text/slice mixed 1 1

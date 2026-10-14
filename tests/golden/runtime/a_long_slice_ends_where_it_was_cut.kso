@@ -5,6 +5,9 @@
 # sentence has to stop where the slice does.
 import "std/text"
 
+pub fn opaque none
+  ""
+
 pub fn opaque v
   v
 

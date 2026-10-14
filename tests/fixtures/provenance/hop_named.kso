@@ -6,5 +6,5 @@ fn label dish cents
 fn lab dish cents
   label dish cents
 
-seasonal = text/to_int (text/slice "flank" 1 4)
+seasonal = text/to_int (text/join ["fl" "an"] "")
 print (lab "flan" seasonal)

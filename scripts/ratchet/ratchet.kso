@@ -5359,7 +5359,7 @@ fn job_line? l
   text/slice l 1 10 == "    name: "
 
 fn job_name l
-  text/slice l 11 (length l)
+  or_empty (text/slice l 11 (length l))
 
 fn jobs_in text
   lines = list/select (text/split text "\n") job_line?
@@ -5540,7 +5540,15 @@ fn winnowed mode files list at acc false
 
 # A row's mutation is a shell command and its script is the word after `sh `.
 fn script_of r
-  text/slice r.mutation 4 (length r.mutation)
+  or_empty (text/slice r.mutation 4 (length r.mutation))
+
+# The slices in this file stay inside their value, so they are never none; the
+# arm is there because the checker cannot see that.
+fn or_empty none
+  ""
+
+fn or_empty piece
+  piece
 
 # WHAT A ROW DEPENDS ON is its guard, not every path its script mentions.
 #

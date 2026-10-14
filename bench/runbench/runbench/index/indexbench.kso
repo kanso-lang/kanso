@@ -27,5 +27,11 @@ fn walk s i n acc
   if (i > n) acc (walk s (i + 1) n (acc + length s[i]))
 
 pub fn total n
-  subject = text/slice (doubled alphabet n) 1 n
-  walk subject 1 n 0
+  walk (inside (text/slice (doubled alphabet n) 1 n)) 1 n 0
+
+# `doubled` grows the text to at least `n` characters, so the slice is inside
+fn inside none
+  ""
+
+fn inside s
+  s

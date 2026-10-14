@@ -20,7 +20,9 @@
 //! the module never calls: `text/to_float (text/slice ...)` is emitted as one
 //! fused runtime call, so std/text's `to_float` survives the walk and is
 //! called by nothing. Watched red with every definition marked live: the
-//! module defined `d_text/to_float_1`.
+//! module defined `d_text/to_float_1`. Since a slice past the end answers none
+//! (#1890) a program cannot write that pair itself, so the test reaches it
+//! through std/json, whose number reader writes it.
 
 use std::process::Command;
 
@@ -75,10 +77,8 @@ const TO_FLOAT: &str = "@\"d_text/to_float_1\"(";
 
 #[test]
 fn a_library_function_only_a_fused_call_names_is_not_emitted() {
-    let (module, native, oracle) = built(
-        "fused",
-        "import \"std/text\"\n\ncs = \"x1.5\"\nprint \"{text/to_float (text/slice cs 2 4)}\"\n",
-    );
+    let (module, native, oracle) =
+        built("fused", "import \"std/json\"\n\nprint \"{json/decode \"1.5\"}\"\n");
     assert_eq!(native, oracle, "the engines disagree");
     assert!(!module.contains(TO_FLOAT), "a fused call left the function it replaces in the module");
 }

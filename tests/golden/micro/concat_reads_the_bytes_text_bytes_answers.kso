@@ -9,4 +9,10 @@ pub play =
   print "{list/concat [1] (text/bytes "ab")}"
   print "{list/concat (text/bytes "ab") [1]}"
   print "{list/concat (text/bytes "a") (text/bytes "b")}"
-  print "{list/concat (text/slice (text/bytes "abc") 2 3) [9]}"
+  print "{joined (text/slice (text/bytes "abc") 2 3) [9]}"
+
+fn joined none _
+  []
+
+fn joined a b
+  list/concat a b

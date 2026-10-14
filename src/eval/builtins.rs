@@ -843,7 +843,10 @@ impl<'a> Interp<'a> {
                 }
                 Ok(Value::int(at))
             }
-            b"slice" => {
+            // `slice_in` is std's spelling for a range it measured (#1890). It
+            // is renamed to `slice` after the check, before any engine runs, so
+            // this arm only keeps the two names answering alike.
+            b"slice" | b"slice_in" => {
                 let [container, from, to] = arity(args, name, span)?;
                 let (Value::Int(from), Value::Int(to)) = (&from, &to) else {
                     return Err(RuntimeError {
@@ -853,6 +856,20 @@ impl<'a> Interp<'a> {
                 };
                 let from = usize::try_from(from).unwrap_or(0);
                 let to = usize::try_from(to).unwrap_or(0);
+                // A range that ends past the value, or starts past its end,
+                // answers none, as an index past the end does (#1890). The
+                // empty range just past the end is still the empty tail.
+                let len = match &container {
+                    Value::List(items) => Some(items.len()),
+                    Value::Bytes(items) => Some(items.len()),
+                    Value::Str(text) => Some(text.chars().count()),
+                    _ => None,
+                };
+                if let Some(len) = len {
+                    if to > len || from > len + 1 {
+                        return Ok(Value::NoneV);
+                    }
+                }
                 match &container {
                     Value::List(items) => {
                         let sliced = slice_range(items.len(), from, to)

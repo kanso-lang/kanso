@@ -3,7 +3,7 @@ one: abc0
 all: abc0123456789
 inverted: abc
 below one: abc
-past end: abc
+past end: none
 both zero: abc
 multibyte: abcé
 twice: abc345345

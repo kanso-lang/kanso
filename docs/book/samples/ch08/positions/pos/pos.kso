@@ -8,11 +8,18 @@ pub fn decode_int s
   cs = text/bytes s
   p = skip_ws cs 1
   q = digits_end cs p
-  v = text/to_int (text/slice cs p (q - 1))
+  v = digits_value (text/slice cs p (q - 1))
   trailing cs (skip_ws cs q) v
 
 fn digits_end cs p
   if (digit? cs[p]) (digits_end cs (p + 1)) p
+
+# the run stops where the digits do, inside `cs`, so it is never none
+fn digits_value none
+  0
+
+fn digits_value run
+  text/to_int run
 
 fn fail p reason
   err (parse_failure p reason)

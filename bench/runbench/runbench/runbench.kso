@@ -177,7 +177,14 @@ fn encoded doc n sofar
   encoded doc (n - 1) (sofar + length (json/encode doc))
 
 fn digested raw n
-  length (sha256/hex (text/bytes (text/slice raw 1 n)))
+  hashed (text/slice raw 1 n)
+
+# `n` is at most the length of `raw`, so the slice is never none
+fn hashed none
+  0
+
+fn hashed piece
+  length (sha256/hex (text/bytes piece))
 
 # `decoded` can answer the decode's err, and `+` wants a value, so the sum
 # dispatches on it first.

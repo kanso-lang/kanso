@@ -2,9 +2,17 @@
 # still calls, and an err records the frame it was born in — so a fusion that
 # forgot to carry the wrapper's file and line made the two engines name
 # different birthplaces for the same invalid byte. Nothing in the corpus read
-# an invalid byte through a slice, so it went unseen.
+# an invalid byte through a slice, so it went unseen. Since a range past the
+# end answers none (#1890), the slice is dispatched on before it is decoded,
+# and the err is still born in the wrapper.
 import "std/text"
 
 bad = [104 255 105]
 
-print "{text/utf8 (text/slice bad 1 3)}"
+fn decoded none
+  ""
+
+fn decoded piece
+  text/utf8 piece
+
+pub play = print "{decoded (text/slice bad 1 3)}"

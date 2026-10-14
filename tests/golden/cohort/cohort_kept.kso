@@ -6,6 +6,10 @@ fn grow acc 0
 fn grow acc n
   grow (text/append acc "0123456789abcdef") (n - 1)
 
+# the slice ends exactly at the end of `bulk`, so it is never none
+fn stamp none
+  0
+
 fn stamp bs
   length (text/utf8 bs)
 

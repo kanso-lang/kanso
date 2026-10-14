@@ -218,7 +218,7 @@ front_end_rounds=19
 # 2026-10-05 (list/tie, ruled 2026-10-04): std/list gains `tie`, `tie!` and
 # their helper, and lib/list is in the corpus's imports. front_end_visits
 # 7,526 -> 7,555, a RISE of 29 (+0.3853%).
-front_end_visits=9326
+front_end_visits=9225
 # 2026-08-31 (the AST's identifiers are inline names): 728,030 -> 713,606, a
 # fall of 14,424, or 1.98%. Banked. The peak falls with the traffic because a
 # short name's bytes now live inside the AST node the allocator already gave
@@ -321,4 +321,4 @@ front_end_visits=9326
 # are kept at their length, and a guard's statements sit behind a box, which
 # makes every expression 48 bytes. Read by the gate on this host, whose rustc
 # is the golden's: 729,597 -> 674,684.
-compile_peak_bytes=789911
+compile_peak_bytes=795133

@@ -20,6 +20,13 @@ fn wider s n true
   doubled (text/join [s s] "") n
 
 fn subject n
-  text/slice (doubled "aé😀b€z" n) 1 n
+  inside (text/slice (doubled "aé😀b€z" n) 1 n)
+
+# `doubled` grows the text to at least `n` characters, so the slice is inside
+fn inside none
+  ""
+
+fn inside s
+  s
 
 pub play = print "{walk (subject 4000) 1 4000 0}"

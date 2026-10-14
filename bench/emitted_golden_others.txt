@@ -234,16 +234,22 @@
 # of text/utf8. oneshot, livebench and runbench moved; runbench reads
 # calls 6,240 -> 6,238, branches 5,622 -> 5,614 and lines 48,976 -> 48,912;
 # livebench gains three calls and loses nine branches.
-encodebench defines=140 calls=1118 branches=993 lines=10253
-oneshot defines=143 calls=1204 branches=1219 lines=11598
-basket defines=126 calls=1105 branches=1026 lines=8859
-widebench defines=156 calls=1273 branches=1111 lines=11309
+#
+# 2026-10-14: a slice past the end answers none (#1890). Programs that slice
+# now dispatch on the none, and the frozen decoders in encodebench and
+# widebench read their tokens through an unfused utf8. runbench reads defines
+# 730 -> 734, calls 6,866 -> 6,824 and lines 51,668 -> 51,622; scanbench
+# loses 44 calls and 83 lines; the rest rise by a few lines each.
+encodebench defines=141 calls=1122 branches=992 lines=10265
+oneshot defines=143 calls=1204 branches=1219 lines=11601
+basket defines=127 calls=1107 branches=1030 lines=8889
+widebench defines=157 calls=1277 branches=1110 lines=11321
 deepbench defines=53 calls=272 branches=281 lines=2471
 escapebench defines=21 calls=91 branches=93 lines=972
 pendbench defines=71 calls=491 branches=414 lines=3511
-scanbench defines=320 calls=3063 branches=2956 lines=24375
-indexbench defines=20 calls=67 branches=47 lines=710
-digestbench defines=133 calls=936 branches=949 lines=7970
+scanbench defines=322 calls=3019 branches=2953 lines=24292
+indexbench defines=21 calls=70 branches=48 lines=726
+digestbench defines=134 calls=938 branches=952 lines=7992
 readbench defines=21 calls=69 branches=44 lines=700
-livebench defines=144 calls=1243 branches=1262 lines=11919
-runbench defines=730 calls=6866 branches=6129 lines=51668
+livebench defines=144 calls=1243 branches=1262 lines=11922
+runbench defines=734 calls=6824 branches=6128 lines=51622

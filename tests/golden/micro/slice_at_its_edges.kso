@@ -6,7 +6,8 @@
 # bytes arm a pointer, a length and two integers; a list, a string, or a
 # non-integer position falls through to the same C function it always
 # reached. Both arms are here, and the fallthrough is the reason the list
-# and string lines are.
+# and string lines are. Since #1890 a range that leaves the value answers
+# none on all three, and interpolation prints it as `<none>`.
 import "std/text"
 
 b = text/bytes "hi there"

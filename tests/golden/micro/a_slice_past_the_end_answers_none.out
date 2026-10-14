@@ -1,0 +1,10 @@
+text ends at the end: [bc]
+text runs past: none
+text starts past: none
+text empty past the end: []
+wide text ends at the end: [éllo]
+wide text runs past: none
+list ends at the end: [1 2 3]
+list runs past: none
+bytes end at the end: [abc]
+bytes run past: none
