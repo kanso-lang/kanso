@@ -8,7 +8,7 @@
 # permanent ones.
 set -e
 f=src/runtime.c
-grep -q 'k_token_miss' "$f"
+grep -q 'k_token_miss' src/runtime.c
 for slot in 'slot' 'slot ^ 1'; do
   line="    if (k_token_key[$slot] == key) return k_token_cache[$slot];"
   [ "$(grep -cxF "$line" "$f")" -eq 1 ] || {
