@@ -1908,3 +1908,20 @@ codegen_instructions_release 477,099,466. The interpreter's run went to
 interp_instructions 495,589,622, and the tab to browser_compile_instructions
 414,205,634 and browser_run_instructions 34,183,945. The floor drops by the
 cost under the language rule, since #1914 rules these names.
+
+Carried together over main 859ad275 in #1953, the six names and the three
+builtins land on one set of CI rows, each read against main. The front end pays
+for both: compile_instructions 31,948,363 from 28,257,376, entry_instructions
+101,372,705 from 93,065,372, library_instructions 100,887,003 from 92,696,544,
+compile_allocs 17,941 from 15,937, emit_instructions 7,622,247 from 7,239,817
+and module_visits 3,666 from 2,912. The compile corpus holds more while it is
+checked, compile_peak_bytes 789,911 from 703,187, with front_end_visits at
+9,326. The interpreter's run reads interp_instructions 496,215,717,
+interp_allocs 592,174 and interp_peak_bytes 792,646, against 495,318,943,
+589,643 and 725,610. The tab's compile reads browser_compile_instructions
+437,381,890 and browser_compile_peak_bytes 726,939, against 416,674,694 and
+686,192, and its run browser_run_instructions 34,183,945. Most of the compile
+cost is the 114 lines the two library modules grew, which every program
+importing them reads whole; #1952 is the change that would take it back. Both
+halves build ruled names (#1914, #1903), so the floor drops by the combined
+cost under the language rule.
