@@ -102753,3 +102753,21 @@ that never imported its owner; an error golden for an internal value calling
 a name the file cannot see; the corpus, samples, lib and the sibling
 repositories moved to qualified spellings where they leaned on the old reach;
 ch07 and ch11 rewritten to state the rule.
+
+## 2026-10-12 — gavel: a test file is an outside consumer of its module
+
+Clay ruled the other half of #1883: "kanso test certainly cannot see private
+definitions. that would hugely violate the point of privacy." On main a
+`*_test.kso` is a member of its module: it reads private names, its
+definitions join the module's namespace, and `kanso run` checks it, so a
+formatting slip in a test stopped the program it tests from running.
+
+**The ruling.** A test file is compiled as an outside consumer that imports
+the module it sits beside. It sees only pub names, adds nothing to the module,
+and only `kanso test` reads it; `kanso run`, `check` and `build` ignore it.
+
+Owes, on #1883: the loader keeps `*_test.kso` out of the module and compiles
+each as an importer; goldens for a test that reads a private name (refused), a
+test helper sharing a production name (no collision) and a malformed test
+beside a program that still runs; existing tests that read private names
+moved onto the pub surface.

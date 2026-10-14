@@ -21,24 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-12 — gavel: a test file is an outside consumer of its module
-
-Clay ruled the other half of #1883: "kanso test certainly cannot see private
-definitions. that would hugely violate the point of privacy." On main a
-`*_test.kso` is a member of its module: it reads private names, its
-definitions join the module's namespace, and `kanso run` checks it, so a
-formatting slip in a test stopped the program it tests from running.
-
-**The ruling.** A test file is compiled as an outside consumer that imports
-the module it sits beside. It sees only pub names, adds nothing to the module,
-and only `kanso test` reads it; `kanso run`, `check` and `build` ignore it.
-
-Owes, on #1883: the loader keeps `*_test.kso` out of the module and compiles
-each as an importer; goldens for a test that reads a private name (refused), a
-test helper sharing a production name (no collision) and a malformed test
-beside a program that still runs; existing tests that read private names
-moved onto the pub surface.
-
 ## 2026-10-12 — stdout reaches its reader, and a closed pipe stops every engine quietly
 
 Two runtime items on #1892 were about stdout.
@@ -1872,3 +1854,26 @@ release build, and an Apple host keeps the narrowing. There a wide arm still
 takes the C convention, and the three tests stay off Apple arm64. On linux a
 wide arm gives up only its sibling calls into helpers, which become a call and a
 return. x86-64 builds are unchanged. #1912 stays open for the Apple half.
+
+## 2026-10-14 — gavel: no `text/slice!`, and the decoder pays for `none`
+
+Clay ruled #1943. Building #1890 (a `text/slice` past the end answers `none`)
+showed that the checker now refuses `text/utf8 (text/slice cs a b)` and
+`text/append acc (text/slice cs a b)` until the `none` is dispatched. Those
+are the two spellings the compiler fuses, and the JSON decoder reads every
+string through them. Routing the slice through a two-arm helper loses both
+fusions. Measured in a container by callgrind on the #1890 branch: jsonbench
++33.0%, livebench +38.1%, runbench +28.0%, oneshot +149.7%, encodebench +4.2%,
+indexbench +4.9%.
+
+**The ruling.** No new surface. `text/slice` answers `none` past the end, and
+every caller dispatches on it, the decoder included. There is no `text/slice!`,
+and the compiler does not learn to recognise the one helper shape. The cost
+is taken under the language exception: the floor drops by what CI measures
+for it, recorded in the floor's history. Winning the time back with an
+optimization that adds no surface and holds for any caller is ordinary
+performance work.
+
+Owes, on #1943 and #1890: the decoder's call sites dispatch on `none`; CI's
+rows for the change; the floor lowered by exactly that cost with this entry
+as the reason.
