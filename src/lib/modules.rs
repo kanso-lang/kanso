@@ -48,8 +48,10 @@ pub fn check_shipped(path: &str) -> Result<(), String> {
 
 pub fn compile_module(dir: &std::path::Path, require_entry: bool) -> Result<ast::Program, String> {
     LOCK.with(|l| *l.borrow_mut() = hako::read_lock(dir));
-    let mut visited = crate::hash::Set::default();
-    let mut program = compile_module_root(dir, require_entry, &mut visited)?;
+    let mut program = reaching(None, || {
+        let mut visited = crate::hash::Set::default();
+        compile_module_root(dir, require_entry, &mut visited)
+    })?;
     if !require_entry {
         forget_shades(&mut program.fns);
     }
@@ -91,6 +93,179 @@ thread_local! {
     static HANDED_SOURCES: std::cell::RefCell<
         crate::hash::Map<String, Vec<(String, String)>>,
     > = std::cell::RefCell::new(crate::hash::Map::default());
+}
+
+thread_local! {
+    /// Every word the program's own files spell, and every word of each
+    /// shipped declaration kept so far. `None` outside a root compile that
+    /// asked for it, and then nothing is set aside.
+    static REACH: std::cell::RefCell<Option<crate::hash::Set<String>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Names the compiler calls into the shipped library without the program
+/// spelling them: fusion's reducers (`fold`, `bump`, `file_under`), an
+/// interpolation's `to_string`, and the arm a tie dispatches to.
+const COMPILER_ROOTS: [&str; 5] = ["fold", "bump", "file_under", "to_string", "tie"];
+
+/// Adds every word `text` spells to `into`: a run of letters, digits and
+/// underscores, with and without a trailing `!` or `?`. It reads more than
+/// names (keywords, words in strings and comments), which can only keep a
+/// declaration that is not needed.
+fn reach_words(text: &str, into: &mut crate::hash::Set<String>) {
+    let bytes = text.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        let b = bytes[i];
+        if !(b.is_ascii_alphabetic() || b == b'_') {
+            i += 1;
+            continue;
+        }
+        let start = i;
+        while i < bytes.len() && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') {
+            i += 1;
+        }
+        if !into.contains(&text[start..i]) {
+            into.insert(text[start..i].to_string());
+        }
+        if i < bytes.len() && (bytes[i] == b'!' || bytes[i] == b'?') {
+            if !into.contains(&text[start..=i]) {
+                into.insert(text[start..=i].to_string());
+            }
+            i += 1;
+        }
+    }
+}
+
+/// Blanks every `fn` declaration of a shipped module that no reached text
+/// names, so the lexer and parser never read it. A declaration is a line at
+/// column 0 that opens with `fn` or `pub fn`, and the lines under it up to
+/// the next line at column 0. Everything else (types, imports, comments) is
+/// kept. Reach is by name over the module's files together, closed over the
+/// words of each declaration kept; a name kept keeps every arm of it.
+/// Blanked lines stay as empty lines, so every span the module reports points
+/// where it did.
+fn prune_shipped(
+    sources: &mut [(String, String)],
+    roots: &mut crate::hash::Set<String>,
+) -> Vec<bool> {
+    struct Decl {
+        file: usize,
+        start: usize,
+        end: usize,
+        name: Option<(usize, usize)>,
+    }
+    let mut decls: Vec<Decl> = Vec::new();
+    for (f, (_, source)) in sources.iter().enumerate() {
+        let mut at = 0;
+        for line in source.split_inclusive('\n') {
+            let here = at;
+            at += line.len();
+            let first = line.as_bytes().first().copied().unwrap_or(b'\n');
+            if first == b' ' || first == b'\n' || first == b']' || first == b'}' || first == b')' {
+                if let Some(d) = decls.last_mut().filter(|d| d.file == f) {
+                    d.end = at;
+                }
+                continue;
+            }
+            if first == b'#' {
+                // a comment at column 0 closes the declaration above it and
+                // belongs to none
+                decls.push(Decl { file: f, start: here, end: here, name: None });
+                continue;
+            }
+            let head = line.strip_prefix("pub ").unwrap_or(line);
+            let name = head.strip_prefix("fn ").map(|rest| {
+                let from = here + (line.len() - rest.len());
+                let len = rest
+                    .bytes()
+                    .position(|b| !(b.is_ascii_alphanumeric() || b == b'_' || b == b'!' || b == b'?'))
+                    .unwrap_or(rest.len());
+                let qualified = rest.as_bytes().get(len) == Some(&b'/');
+                (from, if qualified { from } else { from + len })
+            });
+            // an operator arm's name is not a word, and an arm of another
+            // module's function is reached through that module: both stay
+            let name = name.filter(|(from, to)| from < to);
+            decls.push(Decl { file: f, start: here, end: at, name });
+        }
+    }
+    let mut kept = vec![false; decls.len()];
+    loop {
+        let mut moved = false;
+        for (i, d) in decls.iter().enumerate() {
+            if kept[i] {
+                continue;
+            }
+            let source = &sources[d.file].1;
+            let wanted = match d.name {
+                None => true,
+                Some((from, to)) => roots.contains(&source[from..to]),
+            };
+            if wanted {
+                kept[i] = true;
+                moved = true;
+                reach_words(&source[d.start..d.end], roots);
+            }
+        }
+        if !moved {
+            break;
+        }
+    }
+    let mut pruned = vec![false; sources.len()];
+    for (f, (_, source)) in sources.iter_mut().enumerate() {
+        if !decls.iter().zip(&kept).any(|(d, k)| d.file == f && !k) {
+            continue;
+        }
+        pruned[f] = true;
+        let mut out = String::with_capacity(source.len());
+        let mut copied = 0;
+        for (d, _) in decls.iter().zip(&kept).filter(|(d, k)| d.file == f && !**k) {
+            out.push_str(&source[copied..d.start]);
+            out.extend(std::iter::repeat_n('\n', source[d.start..d.end].matches('\n').count()));
+            copied = d.end;
+        }
+        out.push_str(&source[copied..]);
+        // nothing below the last line kept can be reported, and a file may
+        // not end with a blank line
+        while out.ends_with("\n\n") {
+            out.pop();
+        }
+        *source = out;
+    }
+    pruned
+}
+
+/// Runs a root compile with the shipped library read only as far as the
+/// program reaches, and runs it again whole if that fails. The second run is
+/// what reports, so every diagnostic is the one the whole library gives; a
+/// program the whole library accepts and the pruned one refused is a name
+/// this reach missed, which a debug build refuses to hide.
+fn reaching<T>(source: Option<&str>, compile: impl Fn() -> Result<T, String>) -> Result<T, String> {
+    let mut roots = crate::hash::Set::default();
+    for root in COMPILER_ROOTS {
+        roots.insert(root.to_string());
+    }
+    if let Some(source) = source {
+        reach_words(source, &mut roots);
+    }
+    let outer = REACH.with(|r| r.replace(Some(roots)));
+    let pruned = compile();
+    REACH.with(|r| *r.borrow_mut() = None);
+    let answer = match pruned {
+        Ok(program) => Ok(program),
+        Err(refused) => {
+            let whole = compile();
+            debug_assert!(
+                whole.is_err(),
+                "the shipped library read only as far as the program reaches refused \
+                 what the whole library accepts:\n{refused}"
+            );
+            whole
+        }
+    };
+    REACH.with(|r| *r.borrow_mut() = outer);
+    answer
 }
 
 /// Hands the compiler a module's files under the path an import will name.
@@ -372,10 +547,30 @@ fn compile_module_loaded(
     embedded: Option<&[(&str, &str)]>,
 ) -> Result<ast::Program, String> {
     let mut sources = module_sources(dir, embedded)?;
+    let pruned = REACH.with(|r| {
+        let mut r = r.borrow_mut();
+        let roots = r.as_mut()?;
+        let shipped = SHIPPED_STD.with(|c| c.get())
+            && embedded.is_some()
+            && !CHECK_SHIPPED.with(|c| c.get());
+        if shipped {
+            return Some(prune_shipped(&mut sources, roots));
+        }
+        sources.iter().for_each(|(_, s)| reach_words(s, roots));
+        None
+    });
+    // a file with declarations blanked out of it can leave an import that
+    // only they used, and the whole file's imports are checked where the
+    // shipped modules are
+    let mut pruned_files: crate::hash::Set<String> = crate::hash::Set::default();
     let mut parsed = Vec::new();
-    for (file, source) in sources.drain(..) {
-        let lexed = phase::watched("lex", || lexer::lex(&source))
+    for (at, (file, source)) in sources.drain(..).enumerate() {
+        let mut lexed = phase::watched("lex", || lexer::lex(&source))
             .map_err(|d| diag::render(&d, &file, &source))?;
+        lexed.pruned = pruned.as_ref().is_some_and(|p| p[at]);
+        if lexed.pruned {
+            pruned_files.insert(file.clone());
+        }
         let mut program = phase::watched("parse", || parser::parse(&lexed))
             .map_err(|d| diag::render(&d, &file, &source))?;
         phase::watched("finish_program", || finish_program(&mut program));
@@ -479,7 +674,10 @@ fn compile_module_loaded(
         borrowed.sort();
         mark_bare_quals(program, &surfaced, &mut quals);
         mark_reexport_quals(program, |name| was_pub.contains(name), &mut quals);
-        let mut diags = unused_imports(&program.imports, &quals);
+        let mut diags = match pruned_files.contains(file.as_str()) {
+            true => Vec::new(),
+            false => unused_imports(&program.imports, &quals),
+        };
         for qual in &borrowed {
             diags.push(diag::Diagnostic::new(
                 "import",
@@ -629,7 +827,9 @@ fn compile_module_loaded(
                 private_uses(stmt, &exports, &mut diags);
             }
         }
-        diags.extend(unused_imports(&program.imports, &quals));
+        if !pruned_files.contains(file.as_str()) {
+            diags.extend(unused_imports(&program.imports, &quals));
+        }
         foreign_destructures(program, &mut diags);
         if !diags.is_empty() {
             diags.sort_by_key(|d| (d.span.line, d.span.col));
