@@ -2906,6 +2906,19 @@ impl<'a> Backend<'a> {
         Some(format!("ptr @{interned}"))
     }
 
+    /// Where an err from the `text/slice!` inside a fused call is born: the
+    /// wrapper's own line, as the unfused call would have stamped it, or this
+    /// site when the spelling is already the builtin.
+    fn slice_origin(&mut self, f: &FnEmit, inner: &str, span: Span) -> String {
+        match inner {
+            "builtin_slice_in" => self.origin_arg(f, span),
+            _ => match self.forwarder_origin(inner, 3) {
+                Some(o) => o,
+                None => self.origin_arg(f, span),
+            },
+        }
+    }
+
     /// The builtin a name stands for at a call site: itself with the
     /// `builtin_` prefix off, or whatever the forwarder map says a plain
     /// wrapper of this arity forwards to.
@@ -3133,7 +3146,7 @@ impl<'a> Backend<'a> {
         if first.is_none() && args.len() == 1 && self.builtin_named(name, 1) == "utf8" {
             if let Expr::App { head: inner_head, args: inner_args, piped: false, .. } = &args[0] {
                 if let Expr::Ident(inner, _, _) = &**inner_head {
-                    if self.builtin_named(inner, inner_args.len()) == "slice"
+                    if self.builtin_named(inner, inner_args.len()) == "slice_in"
                         && inner_args.len() == 3
                     {
                         let mut parts = Vec::new();
@@ -3143,7 +3156,8 @@ impl<'a> Backend<'a> {
                             parts.push(self.unsub(f, v));
                         }
                         let sets: Vec<Set> = parts.iter().map(|e| f.set_of(e)).collect();
-                        let sliced = infer::builtin_set("slice", &sets);
+                        let sliced = infer::builtin_set("slice_in", &sets);
+                        let slice_origin = self.slice_origin(f, inner, span);
                         // the wrapper's own line, where the unfused call
                         // would have been emitted, or this site when the
                         // spelling is already the builtin
@@ -3160,7 +3174,7 @@ impl<'a> Backend<'a> {
                         // spills and the callee reloads it; the twin tests the
                         // three tags here and hands the raw door five scalars.
                         f.line_fmt(format_args!(
-                            "{t} = call %KValue @k_b_utf8_slice_fast(%KValue {}, %KValue {}, %KValue {}, {origin})",
+                            "{t} = call %KValue @k_b_utf8_slice_fast(%KValue {}, %KValue {}, %KValue {}, {origin}, {slice_origin})",
                             parts[0], parts[1], parts[2]
                         ));
                         f.record(&t, infer::builtin_set("utf8", &[sliced]));
@@ -3179,7 +3193,7 @@ impl<'a> Backend<'a> {
         if first.is_none() && args.len() == 2 && self.builtin_named(name, 2) == "append" {
             if let Expr::App { head: inner_head, args: inner_args, piped: false, .. } = &args[1] {
                 if let Expr::Ident(inner, _, _) = &**inner_head {
-                    if self.builtin_named(inner, inner_args.len()) == "slice"
+                    if self.builtin_named(inner, inner_args.len()) == "slice_in"
                         && inner_args.len() == 3
                     {
                         let acc = self.emit_expr(f, &args[0])?;
@@ -3191,7 +3205,8 @@ impl<'a> Backend<'a> {
                             parts.push(self.unsub(f, v));
                         }
                         let sets: Vec<Set> = parts.iter().map(|e| f.set_of(e)).collect();
-                        let sliced = infer::builtin_set("slice", &sets);
+                        let sliced = infer::builtin_set("slice_in", &sets);
+                        let slice_origin = self.slice_origin(f, inner, span);
                         // the same uniqueness the unfused site would have got
                         let mutate = self.in_place_pushes.contains(&(
                             f.file.clone(),
@@ -3200,7 +3215,7 @@ impl<'a> Backend<'a> {
                         ));
                         let t = f.tmp();
                         f.line_fmt(format_args!(
-                            "{t} = call %KValue @k_b_append_slice_fast(%KValue {acc}, %KValue {}, %KValue {}, %KValue {}, i64 {})",
+                            "{t} = call %KValue @k_b_append_slice_fast(%KValue {acc}, %KValue {}, %KValue {}, %KValue {}, i64 {}, {slice_origin})",
                             parts[0], parts[1], parts[2], i64::from(mutate)
                         ));
                         f.record(&t, infer::builtin_set("append", &[f.set_of(&acc), sliced]));
@@ -3227,7 +3242,7 @@ impl<'a> Backend<'a> {
             ) = (door, &args[0])
             {
                 if let Expr::Ident(inner, _, _) = &**inner_head {
-                    if self.builtin_named(inner, inner_args.len()) == "slice"
+                    if self.builtin_named(inner, inner_args.len()) == "slice_in"
                         && inner_args.len() == 3
                     {
                         let mut parts = Vec::new();
@@ -3237,11 +3252,12 @@ impl<'a> Backend<'a> {
                             parts.push(self.unsub(f, v));
                         }
                         let sets: Vec<Set> = parts.iter().map(|e| f.set_of(e)).collect();
-                        let sliced = infer::builtin_set("slice", &sets);
+                        let sliced = infer::builtin_set("slice_in", &sets);
+                        let slice_origin = self.slice_origin(f, inner, span);
                         let origin = self.origin_arg(f, span);
                         let t = f.tmp();
                         f.line_fmt(format_args!(
-                            "{t} = call %KValue @k_b_{door}_slice(%KValue {}, %KValue {}, %KValue {}, {origin})",
+                            "{t} = call %KValue @k_b_{door}_slice(%KValue {}, %KValue {}, %KValue {}, {origin}, {slice_origin})",
                             parts[0], parts[1], parts[2]
                         ));
                         f.record(&t, infer::builtin_set(door, &[sliced]));
@@ -3785,7 +3801,7 @@ impl<'a> Backend<'a> {
             }
             let mut args_ir: Vec<String> = emitted.iter().map(|e| format!("%KValue {e}")).collect();
             // builtins that can give birth to an err take the site's origin
-            if matches!(name, "to_int" | "to_float" | "utf8" | "from_code" | "to_bytes") {
+            if matches!(name, "to_int" | "to_float" | "utf8" | "from_code" | "to_bytes" | "slice_in") {
                 args_ir.push(self.origin_arg(f, span));
             }
             // A push the linearity analysis proved unique extends its list in

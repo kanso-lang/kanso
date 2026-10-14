@@ -843,9 +843,8 @@ impl<'a> Interp<'a> {
                 }
                 Ok(Value::int(at))
             }
-            // `slice_in` is std's spelling for a range it measured (#1890). It
-            // is renamed to `slice` after the check, before any engine runs, so
-            // this arm only keeps the two names answering alike.
+            // `slice_in` is `text/slice!` (#1943): the same slice, and an err
+            // where `slice` would answer none.
             b"slice" | b"slice_in" => {
                 let [container, from, to] = arity(args, name, span)?;
                 let (Value::Int(from), Value::Int(to)) = (&from, &to) else {
@@ -854,6 +853,7 @@ impl<'a> Interp<'a> {
                         span,
                     });
                 };
+                let (asked_from, asked_to) = (from, to);
                 let from = usize::try_from(from).unwrap_or(0);
                 let to = usize::try_from(to).unwrap_or(0);
                 // A range that ends past the value, or starts past its end,
@@ -867,6 +867,14 @@ impl<'a> Interp<'a> {
                 };
                 if let Some(len) = len {
                     if to > len || from > len + 1 {
+                        if name == "slice_in" {
+                            return Ok(err_value(
+                                Value::Str(Text::from(format!(
+                                    "slice! takes a range inside the value, got {asked_from} to {asked_to}"
+                                ))),
+                                origin_at(frame, span),
+                            ));
+                        }
                         return Ok(Value::NoneV);
                     }
                 }

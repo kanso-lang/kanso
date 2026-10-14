@@ -1,0 +1,37 @@
+# `text/slice!` is `text/slice` from a caller that knows its range is inside
+# the value (#1943). Inside, it answers what `slice` answers; where `slice`
+# would answer none, it answers an err. The emitter fuses `utf8`, `append`,
+# `to_int` and `to_float` of a `slice!` into calls that read the range in
+# place, so each of those is here on both sides of the edge, beside the
+# unfused call on a string, a list and bytes.
+import "std/text"
+
+b = text/bytes "hi 42 2.5"
+
+fn told (err reason)
+  "err: {reason}"
+
+fn told v
+  "{v}"
+
+fn appended range
+  told (text/utf8 (text/append (text/bytes "<") range))
+
+lines = [
+  "string: {told (text/slice! "hello" 2 4)}"
+  "string tail: {told (text/slice! "hello" 6 5)}"
+  "string past: {told (text/slice! "hello" 4 9)}"
+  "list: {told (text/slice! [1 2 3] 2 3)}"
+  "list past: {told (text/slice! [1 2 3] 5 6)}"
+  "bytes: {told (text/slice! b 1 2)}"
+  "decoded: {told (text/utf8 (text/slice! b 1 2))}"
+  "decoded past: {told (text/utf8 (text/slice! b 8 12))}"
+  "appended: {appended (text/slice! b 4 5)}"
+  "appended past: {appended (text/slice! b 4 20)}"
+  "int: {told (text/to_int (text/slice! b 4 5))}"
+  "int past: {told (text/to_int (text/slice! b 4 20))}"
+  "float: {told (text/to_float (text/slice! b 7 9))}"
+  "float past: {told (text/to_float (text/slice! b 7 10))}"
+]
+
+pub play = print (text/join lines "\n")

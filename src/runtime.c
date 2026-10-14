@@ -9646,6 +9646,8 @@ static inline void k_str_seed_count(KStr* s, long long chars) {
 }
 static KValue k_utf8_check(char* data, long long len, const char* origin);
 static KValue k_utf8_finish(KValue bv, const char* origin);
+static KValue k_slice_left(long long from, long long to, const char* origin);
+KValue k_b_slice_in(KValue container, KValue fromv, KValue tov, const char* origin);
 
 /* utf8 of a slice, without the slice. A byte view is twenty-four bytes built
    to be read for a pointer and a length and dropped: k_utf8_finish takes a
@@ -9733,12 +9735,15 @@ static inline KValue k_token_of(const char* data, long long len, const char* ori
 }
 
 KValue k_b_utf8_slice_raw(const unsigned char* bytes, long long blen,
-                          long long from, long long to, const char* origin) {
+                          long long from, long long to, const char* origin,
+                          const char* sorigin) {
     const char* data = (const char*)bytes;
     long long len = 0;
     if (k_span_in(from, to, blen)) {
         data += from - 1;
         len = to - from + 1;
+    } else if (__builtin_expect(to > blen || from > blen + 1, 0)) {
+        return k_slice_left(from, to, sorigin);
     }
     /* The count is not asked for here: these are the decoder's tokens,
        861,498 of them on runbench, and none of them is asked its length.
@@ -9750,13 +9755,14 @@ KValue k_b_utf8_slice_raw(const unsigned char* bytes, long long blen,
     return k_str_n(data, len);
 }
 
-KValue k_b_utf8_slice(KValue container, KValue fromv, KValue tov, const char* origin) {
+KValue k_b_utf8_slice(KValue container, KValue fromv, KValue tov, const char* origin,
+                      const char* sorigin) {
     if (container.tag == K_BYTES && fromv.tag == K_INT && tov.tag == K_INT) {
         KBytes* b = k_as_bytes(container);
         return k_b_utf8_slice_raw(b->data, b->len, fromv.payload, tov.payload,
-                                  origin);
+                                  origin, sorigin);
     }
-    KValue sliced = k_b_slice(container, fromv, tov);
+    KValue sliced = k_b_slice_in(container, fromv, tov, sorigin);
     return k_b_utf8(sliced, origin);
 }
 
@@ -11231,20 +11237,19 @@ __attribute__((noinline, cold)) KValue k_b_append_word_slow(KValue acc, const ch
    hand out; this reads the range straight out of `cs` and hands
    k_b_append_into a pointer and a length, so nothing is allocated for it.
 
-   An out-of-range or inverted range is the empty slice, which appends
-   nothing, and `acc` still has to be bytes for that to be legal. Anything the
-   tags turn away goes the long way. A range past the end is none since #1890,
-   so a program cannot hand one to `append`: this door is written only for the
-   standard library's own ranges, which come from a scan of the same bytes. */
+   The slice is `text/slice!` (#1943), so a range that leaves `cs` is an err
+   born at the slice, and an inverted range is the empty slice, which appends
+   nothing; `acc` still has to be bytes for that to be legal. Anything the
+   tags turn away goes the long way. */
 KValue k_b_append_slice(KValue acc, KValue cs, KValue fromv, KValue tov,
-                        long long mutate) {
+                        long long mutate, const char* sorigin) {
     if (__builtin_expect(!k_not_failure(acc) || !k_not_failure(cs) || !k_not_failure(fromv)
                          || !k_not_failure(tov), 0)) {
         KValue xs[4] = {acc, cs, fromv, tov};
         return k_failed_of(4, xs);
     }
     if (cs.tag != K_BYTES || fromv.tag != K_INT || tov.tag != K_INT) {
-        return k_b_append_into(acc, k_b_slice(cs, fromv, tov), (int)mutate);
+        return k_b_append_into(acc, k_b_slice_in(cs, fromv, tov, sorigin), (int)mutate);
     }
     if (acc.tag != K_BYTES) k_die("append takes bytes and a string, bytes, or byte");
     KBytes* a = k_as_bytes(acc);
@@ -11254,6 +11259,7 @@ KValue k_b_append_slice(KValue acc, KValue cs, KValue fromv, KValue tov,
        built: a fifth of the runs between two escapes are empty, and a header
        allocated to carry zero bytes is 204,450 allocations a decode. */
     if (!k_span_in(from, to, src->len)) {
+        if (to > src->len || from > src->len + 1) return k_slice_left(from, to, sorigin);
         return k_b_append_range(acc, a, src->data, 0, (int)mutate);
     }
     return k_b_append_range(acc, a, src->data + (from - 1), to - from + 1,
@@ -11484,6 +11490,24 @@ KValue k_b_slice(KValue container, KValue fromv, KValue tov) {
     }
     k_die("slice takes a list or string");
     return k_none();
+}
+
+/* `text/slice!` (#1943): the caller insists its range is inside the value.
+   It answers what `slice` answers, and where `slice` would answer none it
+   answers an err born at the call. */
+static __attribute__((noinline, cold)) KValue k_slice_left(long long from, long long to,
+                                                           const char* origin) {
+    char said[96];
+    snprintf(said, sizeof said, "slice! takes a range inside the value, got %lld to %lld",
+             from, to);
+    return k_err(k_str(said), origin);
+}
+
+KValue k_b_slice_in(KValue container, KValue fromv, KValue tov, const char* origin) {
+    KValue r = k_b_slice(container, fromv, tov);
+    if (__builtin_expect(r.tag == K_NONE, 0))
+        return k_slice_left(fromv.payload, tov.payload, origin);
+    return r;
 }
 
 /* The walk keeps a dozen values live and paid seven pushes at k_b_slice's
@@ -11906,7 +11930,8 @@ static KValue k_to_int_text(const char* data, long long len, long long room,
    bytes and two positions inside them takes the long way, slice then parse,
    so the two spellings cannot disagree on a value or on the err a bad range
    gives. */
-KValue k_b_to_int_slice(KValue cs, KValue fromv, KValue tov, const char* origin) {
+KValue k_b_to_int_slice(KValue cs, KValue fromv, KValue tov, const char* origin,
+                        const char* sorigin) {
     if (cs.tag == K_BYTES && fromv.tag == K_INT && tov.tag == K_INT) {
         KBytes* b = k_as_bytes(cs);
         long long from = fromv.payload, to = tov.payload;
@@ -11915,10 +11940,11 @@ KValue k_b_to_int_slice(KValue cs, KValue fromv, KValue tov, const char* origin)
                                  origin);
         }
     }
-    return k_b_to_int(k_b_slice(cs, fromv, tov), origin);
+    return k_b_to_int(k_b_slice_in(cs, fromv, tov, sorigin), origin);
 }
 
-K_DOORCC KValue k_b_to_float_slice(KValue cs, KValue fromv, KValue tov, const char* origin) {
+K_DOORCC KValue k_b_to_float_slice(KValue cs, KValue fromv, KValue tov, const char* origin,
+                                    const char* sorigin) {
     if (cs.tag == K_BYTES && fromv.tag == K_INT && tov.tag == K_INT) {
         KBytes* b = k_as_bytes(cs);
         long long from = fromv.payload, to = tov.payload;
@@ -11927,7 +11953,7 @@ K_DOORCC KValue k_b_to_float_slice(KValue cs, KValue fromv, KValue tov, const ch
                                    origin);
         }
     }
-    return k_b_to_float(k_b_slice(cs, fromv, tov), origin);
+    return k_b_to_float(k_b_slice_in(cs, fromv, tov, sorigin), origin);
 }
 
 /* Ruled 2026-10-04: `list/tie ids maker` calls the maker once per id with

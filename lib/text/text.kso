@@ -164,3 +164,10 @@ fn kept none
 
 fn kept piece
   piece
+
+# `slice!` is `slice` from a caller that knows its range is inside the value:
+# it answers what `slice` answers, and an err where `slice` would answer none
+# (#1943). The JSON decoder reads every token this way, from ranges it took
+# from a scan of the same bytes.
+pub fn slice! s from to
+  effect (builtin_slice_in s from to)

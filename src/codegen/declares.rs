@@ -389,7 +389,7 @@ slow:
 ; Anything else — a growth, a counted run, an empty or out-of-range slice, a
 ; non-unique accumulator — falls to the C, which is the only spelling of the
 ; rule.
-define internal %KValue @k_b_append_slice_fast(%KValue %acc, %KValue %cs, %KValue %fv, %KValue %tv, i64 %mut) alwaysinline {
+define internal %KValue @k_b_append_slice_fast(%KValue %acc, %KValue %cs, %KValue %fv, %KValue %tv, i64 %mut, ptr %so) alwaysinline {
   %ismut = icmp eq i64 %mut, 1
   br i1 %ismut, label %qtags, label %qslow
 qtags:
@@ -414,10 +414,9 @@ qstat:
 ; escapes are empty, because two escapes sitting next to each other leave no
 ; bytes between them. Such a run returns the accumulator as it stands, from
 ; between the two bounds tests, rather than carrying a zero length through the
-; claim and the copy. A range past the end is none since #1890, so a program
-; cannot hand one to `append`; this door is written only for the standard
-; library's own ranges, which come from a scan of the same bytes, and it
-; treats one past the end as empty without asking.
+; claim and the copy. The slice is `text/slice!` (#1943), so an inverted range
+; that starts more than one past the end, or a range that ends past it, is an
+; err the C gives birth to.
 qrange:
   %qfrom = extractvalue %KValue %fv, 1
   %qto = extractvalue %KValue %tv, 1
@@ -425,13 +424,17 @@ qrange:
   %qc = inttoptr i64 %qcp to ptr
   %qoff = add i64 %qfrom, -1
   %qorder = icmp ult i64 %qoff, %qto
-  br i1 %qorder, label %qspanhi, label %qempty
+  br i1 %qorder, label %qspanhi, label %qinv
+qinv:
+  %qilen = load i64, ptr %qc
+  %qiin = icmp ule i64 %qoff, %qilen
+  br i1 %qiin, label %qempty, label %qslow
 qempty:
   ret %KValue %acc
 qspanhi:
   %qclen = load i64, ptr %qc
   %qhi = icmp ule i64 %qto, %qclen
-  br i1 %qhi, label %qspan, label %qempty
+  br i1 %qhi, label %qspan, label %qslow
 qspan:
   %qcdp = getelementptr i8, ptr %qc, i64 8
   %qcdata = load ptr, ptr %qcdp
@@ -514,10 +517,10 @@ qwdone:
   store i64 %qlenn, ptr %qb
   ret %KValue %acc
 qslow:
-  %qf = call %KValue @k_b_append_slice(%KValue %acc, %KValue %cs, %KValue %fv, %KValue %tv, i64 %mut)
+  %qf = call %KValue @k_b_append_slice(%KValue %acc, %KValue %cs, %KValue %fv, %KValue %tv, i64 %mut, ptr %so)
   ret %KValue %qf
 }
-define internal %KValue @k_b_utf8_slice_fast(%KValue %c, %KValue %f, %KValue %t, ptr %o) alwaysinline {
+define internal %KValue @k_b_utf8_slice_fast(%KValue %c, %KValue %f, %KValue %t, ptr %o, ptr %so) alwaysinline {
   %ct = extractvalue %KValue %c, 0
   %ft = extractvalue %KValue %f, 0
   %tt = extractvalue %KValue %t, 0
@@ -535,10 +538,10 @@ raw:
   %d = load ptr, ptr %dp
   %fv = extractvalue %KValue %f, 1
   %tv = extractvalue %KValue %t, 1
-  %r = call %KValue @k_b_utf8_slice_raw(ptr %d, i64 %blen, i64 %fv, i64 %tv, ptr %o)
+  %r = call %KValue @k_b_utf8_slice_raw(ptr %d, i64 %blen, i64 %fv, i64 %tv, ptr %o, ptr %so)
   ret %KValue %r
 slow:
-  %s = call %KValue @k_b_utf8_slice(%KValue %c, %KValue %f, %KValue %t, ptr %o)
+  %s = call %KValue @k_b_utf8_slice(%KValue %c, %KValue %f, %KValue %t, ptr %o, ptr %so)
   ret %KValue %s
 }
 define internal %KValue @k_b_slice_fast(%KValue %c, %KValue %f, %KValue %t) alwaysinline {
@@ -1363,17 +1366,18 @@ declare %KValue @k_b_delete(%KValue, %KValue)
 declare %KValue @k_b_put_mut(%KValue, %KValue, %KValue)
 declare %KValue @k_b_slice(%KValue, %KValue, %KValue)
 declare %KValue @k_b_slice_raw(ptr, i64, i64, i64)
-declare %KValue @k_b_utf8_slice(%KValue, %KValue, %KValue, ptr)
-declare %KValue @k_b_utf8_slice_raw(ptr, i64, i64, i64, ptr)
+declare %KValue @k_b_utf8_slice(%KValue, %KValue, %KValue, ptr, ptr)
+declare %KValue @k_b_utf8_slice_raw(ptr, i64, i64, i64, ptr, ptr)
 declare %KValue @k_b_find2(%KValue, %KValue, %KValue, %KValue)
 declare i64 @k_b_find2_raw(ptr, i64, i64, i64, i64)
 declare %KValue @k_b_find2_below(%KValue, %KValue, %KValue, %KValue, %KValue)
 declare i64 @k_b_find2_below_raw(ptr, i64, i64, i64, i64, i64)
 declare %KValue @k_b_number_span(%KValue, %KValue)
 declare %KValue @k_b_append(%KValue, %KValue)
-declare %KValue @k_b_append_slice(%KValue, %KValue, %KValue, %KValue, i64)
-declare %KValue @k_b_to_int_slice(%KValue, %KValue, %KValue, ptr)
-declare %KValue @k_b_to_float_slice(%KValue, %KValue, %KValue, ptr)
+declare %KValue @k_b_append_slice(%KValue, %KValue, %KValue, %KValue, i64, ptr)
+declare %KValue @k_b_to_int_slice(%KValue, %KValue, %KValue, ptr, ptr)
+declare %KValue @k_b_to_float_slice(%KValue, %KValue, %KValue, ptr, ptr)
+declare %KValue @k_b_slice_in(%KValue, %KValue, %KValue, ptr)
 declare %KValue @k_b_append_rendered(%KValue, %KValue, i64)
 declare %KValue @k_b_sort(%KValue)
 declare %KValue @k_b_sum(%KValue)

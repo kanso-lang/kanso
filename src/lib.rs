@@ -824,30 +824,6 @@ fn install_prelude(program: &mut ast::Program) {
 fn finish_program(program: &mut ast::Program) {
     install_prelude(program);
     synthesize_getters(program);
-    measured_slices_are_slices(program);
-}
-
-/// `builtin_slice_in` is std's spelling for a slice whose range the library
-/// measured from the value it slices (#1890). The check reads it as a slice
-/// that answers no none; every engine after the check runs it as `slice`, so
-/// the fused shapes the emitter knows (an append, a decode or a number read
-/// of a slice) are the shapes it sees.
-fn measured_slices_are_slices(program: &mut ast::Program) {
-    fn renamed(e: &mut ast::Expr) {
-        if let ast::Expr::Ident(n, _, _) = e {
-            if n.as_str() == "builtin_slice_in" {
-                *n = "builtin_slice".into();
-            }
-        }
-        walk_children_mut(e, &mut renamed);
-    }
-    for f in &mut program.fns {
-        for stmt in &mut f.body {
-            match stmt {
-                ast::Stmt::Bind { expr, .. } | ast::Stmt::Expr(expr) => renamed(expr),
-            }
-        }
-    }
 }
 
 fn synthesize_getters(program: &mut ast::Program) {

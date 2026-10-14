@@ -1710,6 +1710,8 @@ fn expr_allocates(
         "push",
         "put",
         "slice",
+        "slice!",
+        "slice_in",
         "sort",
         "utf8",
         "built_text",
@@ -1761,7 +1763,7 @@ fn expr_allocates(
                 // unique; a slice under the append is the emitter's fused
                 // copy, so only what the slice itself reads is asked about
                 let arg = match &args[1] {
-                    Expr::App { head: h, args: inner, .. } if matches!(h.as_ref(), Expr::Ident(n, _, _) if bare_builtin(n) == "slice") => {
+                    Expr::App { head: h, args: inner, .. } if matches!(h.as_ref(), Expr::Ident(n, _, _) if matches!(bare_builtin(n), "slice" | "slice!" | "slice_in")) => {
                         inner
                             .iter()
                             .any(|a| expr_allocates(a, fn_names, allocating, seed_pass, site))

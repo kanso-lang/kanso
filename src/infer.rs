@@ -1966,9 +1966,9 @@ pub fn builtin_set(name: &str, args: &[Set]) -> Set {
         "find2_below" => INT | fails,
         "number_span" => INT | fails,
         "slice" => (args[0] & (BYTES | LIST | STR)) | NONE | fails,
-        // std's own measured ranges (#1890): a range the library took from a
-        // scan of the same value never leaves it, so it answers no none.
-        "slice_in" => (args[0] & (BYTES | LIST | STR)) | fails,
+        // `text/slice!` (#1943): the caller insists the range is inside, so
+        // a range that leaves the value is an err rather than a none.
+        "slice_in" => (args[0] & (BYTES | LIST | STR)) | ERR | fails,
         "utf8" => STR | ERR | fails,
         "built_text" => STR | fails,
         "render_value" => STR | fails,
