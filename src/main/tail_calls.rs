@@ -5,11 +5,9 @@
 // (kanso#1848). cargo fmt does not reach an included file, so CI's format
 // job checks the files under src/'s subdirectories itself.
 
-/// The widest arm, in argument words, that keeps `tailcc` in an arm64 release
-/// build: the register file, x0 through x7. Past it the convention is
-/// miscompiled at -O1 and above (see `narrow_tailcc`). x86-64 lowers a `tailcc`
-/// call whose arguments spill onto the stack correctly, so there every
-/// `musttail` the emitter wrote reaches clang as written.
+/// The widest arm, in argument words, whose arguments all travel in registers
+/// on arm64: x0 through x7. Past it some arrive on the stack, which is where
+/// that backend goes wrong (see `wide_tailcc_keeps_its_jumps`).
 const ARM64_TAILCC_WIDEST: usize = 8;
 
 /// How many argument registers a parameter list wants: a %KValue and a %parsed
@@ -39,18 +37,16 @@ fn called_symbol(line: &str) -> Option<String> {
     Some(rest[..end].trim().trim_matches('"').to_string())
 }
 
-/// tailcc kept on every arm no wider than `widest` argument words, on arm64.
+/// tailcc kept on every arm no wider than `widest` argument words, on an
+/// Apple arm64 host.
 ///
-/// `tailcc` is what the beat machinery's `musttail` needs, and at -O1 and above
-/// on arm64 the convention is miscompiled for an arm whose arguments spill past
-/// x7 — the binary jumps to an address that was a value. The boundary is exactly
-/// the register file: the micro corpus is clean at eight and one sample
-/// segfaults at nine, growing to ten samples by twelve. So a wide arm keeps the
-/// C convention and every call into it becomes ordinary, and everything narrow
-/// enough keeps the guarantee the optimized build used to give up.
-///
-/// What a wide arm gives up is the jump: it spends a frame per hop, and a deep
-/// recursion through one overflows the stack, which is loud.
+/// `tailcc` is what the beat machinery's `musttail` needs. A wide arm here
+/// keeps the C convention instead and every call into it becomes ordinary, so
+/// it spends a frame per hop and a deep recursion through one overflows the
+/// stack, which is loud. Apple's clang still miscompiles a wide arm that
+/// `wide_tailcc_keeps_its_jumps` marks: on the macOS job,
+/// `a_spilling_tail_call_named_with_a_mark` printed nothing, though the same
+/// IR built with clang 18 and 19 for linux arm64 runs correctly under qemu.
 fn narrow_tailcc(ir: String, widest: usize) -> String {
     let wide: std::collections::HashSet<String> = ir
         .lines()
@@ -78,6 +74,42 @@ fn narrow_tailcc(ir: String, widest: usize) -> String {
             }
         }
         out.push_str(&line);
+        out.push('\n');
+    }
+    out
+}
+
+/// Every `tailcc` function wider than `widest` argument words marked
+/// `"disable-tail-calls"`, on an arm64 host other than Apple's.
+///
+/// A `tailcc` function whose arguments spill past x7 receives some of them on
+/// the stack and pops that area itself. At -O1 and above the arm64 backend
+/// turns an ordinary call in such a function into a sibling call when the call
+/// is last, and that sibling call leaves the stack wrong: a release build of
+/// `a_match_holds_the_literal_its_pattern_spells` died on SIGSEGV under qemu,
+/// and `-opt-bisect-limit` put the first bad step at CodeGenPrepare on
+/// `regexp/cutting_6`, twelve words wide, as it readied the call to
+/// `k_b_push` for one. The middle end marks those calls `tail` after inlining,
+/// so no marker the emitter writes survives to codegen. The attribute is read
+/// there, so it turns the sibling calls back into calls and returns. It does not
+/// reach a `musttail` call, so every jump the emitter wrote stays a jump.
+///
+/// What a wide arm gives up is a sibling call into a helper: a call and a
+/// return where there was one branch. The jumps between arms, which are what
+/// keeps a loop in constant stack, are kept.
+fn wide_tailcc_keeps_its_jumps(ir: String, widest: usize) -> String {
+    let mut out = String::with_capacity(ir.len() + 1024);
+    for line in ir.lines() {
+        let wide = line.starts_with("define tailcc ")
+            && line.ends_with('{')
+            && defined_symbol(line).is_some_and(|(_, regs)| regs > widest);
+        match wide {
+            true => {
+                out.push_str(line[..line.len() - 1].trim_end());
+                out.push_str(" \"disable-tail-calls\"=\"true\" {");
+            }
+            false => out.push_str(line),
+        }
         out.push('\n');
     }
     out
@@ -522,6 +554,34 @@ fn preserve_none_calls(ir: String, runtime: &str) -> String {
         out.push('\n');
     }
     out
+}
+
+#[cfg(test)]
+mod wide_arms {
+    use super::wide_tailcc_keeps_its_jumps;
+
+    /// A nine-word arm that calls a helper last and jumps to a two-word arm.
+    const ARMS: &str = "define tailcc %KValue @\"d/wide_5\"(%KValue %x0, %KValue %x1, %KValue %x2, %KValue %x3, i64 %x4r) {\nentry:\n  %t1 = call %KValue @k_b_push(%KValue %x0, %KValue %x1)\n  %t2 = musttail call tailcc %KValue @\"d/narrow_1\"(%KValue %t1)\n  ret %KValue %t2\n}\ndefine tailcc %KValue @\"d/narrow_1\"(%KValue %x0) {\nentry:\n  ret %KValue %x0\n}\n";
+
+    #[test]
+    fn only_an_arm_past_the_registers_gives_up_its_sibling_calls() {
+        let out = wide_tailcc_keeps_its_jumps(ARMS.to_string(), 8);
+        let headers: Vec<&str> = out.lines().filter(|l| l.starts_with("define ")).collect();
+        assert_eq!(
+            headers,
+            [
+                "define tailcc %KValue @\"d/wide_5\"(%KValue %x0, %KValue %x1, %KValue %x2, %KValue %x3, i64 %x4r) \"disable-tail-calls\"=\"true\" {",
+                "define tailcc %KValue @\"d/narrow_1\"(%KValue %x0) {",
+            ]
+        );
+        // the jump between the arms is written as it was
+        assert!(out.contains("musttail call tailcc %KValue @\"d/narrow_1\"(%KValue %t1)"), "{out}");
+    }
+
+    #[test]
+    fn an_arm_at_the_register_file_is_left_alone() {
+        assert_eq!(wide_tailcc_keeps_its_jumps(ARMS.to_string(), 9), ARMS);
+    }
 }
 
 #[cfg(test)]
