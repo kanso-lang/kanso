@@ -180,26 +180,18 @@ jobs:
           set +e
           cargo build --release
           K=$PWD/target/release/kanso
-          clang --version
-          for mode in wide none; do
-            echo "=== micro corpus, mode $mode"
-            KANSO_PROBE_TAIL=$mode cargo test --release --test golden micro_corpus_survives_a_release_build 2>&1 | grep -v -E "^\s*$|Compiling|Finished|Running" | tail -40
-          done
-          for fx in a_spilling_tail_call_named_with_a_mark a_match_holds_the_literal_its_pattern_spells; do
-            for mode in narrow wide none; do
-              d=$(mktemp -d)
-              cp tests/golden/micro/$fx.kso $d/fx.kso
-              printf 'import "./fx"\n\nfx/play\n' > $d/main.kso
-              ( cd $d; KANSO_PROBE_TAIL=$mode $K build main.kso --release >/dev/null; ./main > out.txt 2> err.txt; echo "=== $fx $mode exit $?"; head -c 400 out.txt; head -c 400 err.txt )
-              if [ "$fx" = a_spilling_tail_call_named_with_a_mark ] && [ "$mode" != none ]; then
-                echo "--- ll $mode"
-                awk '/^define .*(reached|stepping)/{p=1} p{print} /^}/{p=0}' $d/main.ll | head -260
-                echo "--- asm $mode (clang -O3 -S of the program's ir)"
-                ( cd $d; clang -O3 -S -o main.s main.ll )
-                awk '/^"?_d_fx\//{p=1} /^"?_[A-Za-z]/ && !/_d_fx\//{p=0} /^Lfunc_end|^\t\.cfi_endproc/{if(p)print; next} p' $d/main.s | head -500
-              fi
-            done
-          done
+          d=$(mktemp -d)
+          cp tests/golden/micro/a_spilling_tail_call_named_with_a_mark.kso $d/fx.kso
+          printf 'import "./fx"\n\nfx/play\n' > $d/main.kso
+          cd $d
+          KANSO_PROBE_TAIL=wide $K build main.kso --release
+          ./main; echo "exit $?"
+          echo "=== lldb"
+          lldb --batch -o run -o bt -o "register read" -o "disassemble --pc --count 30" -o "disassemble --frame" -o "frame select 1" -o "disassemble --frame" ./main 2>&1 | head -700
+          echo "=== symbols"
+          nm main | grep -E "d_fx|k_truthy|stepping|reached" | head -40
+          echo "=== whole program functions"
+          for f in $(nm main | grep -E " [Tt] .*d_fx" | awk '{print $3}'); do echo "--- $f"; otool -tV -p "$f" main | head -200; done
           exit 0
 
   playground:
