@@ -1631,16 +1631,26 @@ Pinned by `tests/golden/mem/work_ahead_lifts_a_parking_lambda`
 (`ahead_forced=1`) and the ratchet row "a parking lambda never lifted",
 seen red on that golden.
 
-CI's rows for the two pieces together, against kanso#1978:
-`emit_instructions` 5,449,223 -> 5,478,826, because every program the
-emitter sees is now walked for a lambda that parks. The front end's rows
-rose with the binary's layout, since `kanso check` never reaches the pass:
-`compile_instructions` 22,595,494 -> 22,699,939, `entry_instructions`
-74,872,489 -> 75,214,687, `library_instructions` 74,559,617 -> 74,901,268
-and `interp_instructions` 492,636,904 -> 492,637,347. The runtime, machine
-code, codegen and browser rows did not move. Welfare falls, and the floor
-moves by that amount under #1856's ruling, as it did for the group pool in
-kanso#1972.
+The walk for a parking lambda runs only when the program reaches
+`time/sleep`, the one function that parks; a program that never calls it
+has had it pruned. Without that guard the walk cost the tab 366,863
+instructions on a corpus with no sleep in it.
+
+Rows against kanso#1978, the browser row read here on rustc 1.98.1 and the
+rest by the compile sweep on this container, where `compile_instructions`
+read what CI read for the unguarded branch: `emit_instructions` 5,449,223 ->
+5,452,431 for the guard and its check. `browser_compile_instructions`
+381,261,098 -> 382,590,239. Of that rise, 1,320,831 stays with the walk
+switched off entirely, and the builtin-read commit alone leaves the row
+where kanso#1978 put it, so it arrives with the commit that adds the lift
+while none of its code runs; marking `pool` and `lift` never-inline did not
+move it. The front end's rows rose with the binary, since `kanso check`
+never reaches the pass: `compile_instructions` 22,595,494 -> 22,699,901,
+`entry_instructions` 74,872,489 -> 75,214,425, `library_instructions`
+74,559,617 -> 74,901,006 and `interp_instructions` 492,636,904 ->
+492,637,347. The runtime and machine-code rows did not move. Welfare falls,
+and the floor moves by that amount under #1856's ruling, as it did for the
+group pool in kanso#1972.
 
 A pool-shaped differential ran 400 generated programs, each with a sleep
 whose continuations read locals, lambda parameters and builtins of them,
