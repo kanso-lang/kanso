@@ -1814,6 +1814,11 @@ out-of-range cases printed `<none>` and the program exited 0.
 `a_slice_bang_past_the_end_reaches_the_endpoint` pins the unhandled failure.
 Appendix B lists `text/slice!` beside `text/slice`.
 
+A generator of forty random ranges per program, over strings with multi-byte
+characters, lists and bytes, ran 150 programs through `text/slice` and 150
+through `text/slice!`. The interpreter, a dev build and a release build printed
+the same bytes for all 300.
+
 The other owed item, moving the JSON decoder onto `slice! … .>` chains, is
 #1960: a chain answers a box, so the move would make `json/decode` answer one.
 Until it is answered the decoder keeps `builtin_slice_in`.
