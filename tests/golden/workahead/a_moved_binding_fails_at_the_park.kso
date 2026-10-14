@@ -1,0 +1,18 @@
+# The size is bound before the sleep, so the program as written computes it
+# first, runs out of stack, and prints nothing. The binding is moved into the
+# park and forced there, where the recursion runs out of stack again. Ruled on
+# 2026-10-11: a pooled failure is raised where the program as written raises
+# it, which for a moved binding is the park, before "first" prints.
+import "std/time"
+
+fn deep 0
+  [0]
+
+fn deep n
+  [n (deep (n - 1))]
+
+fn size xs
+  length xs
+
+total = size (deep 1000000)
+sleep 10 .> (_ -> print "first") .> (_ -> print "then {total}")

@@ -155,7 +155,7 @@ fn coll_arg_use(e: &ast::Expr, name: &str, shorts: &crate::hash::Map<Name, Name>
 }
 
 /// Every read of `name` becomes `replacement`, wherever it sits. The walk is
-/// `walk_children_mut` rather than a list of forms written out here, because
+/// `for_each_child_mut` rather than a list of forms written out here, because
 /// the list this used to be had no arm for a guard: `inline_single_use_chains`
 /// counts uses with `for_each_child`, which does descend into one, so a chain
 /// whose only reader sat after a `return ... if ...` was removed and the reader
@@ -168,7 +168,7 @@ fn substitute_ident(e: &mut ast::Expr, name: &str, replacement: &ast::Expr) {
             return;
         }
     }
-    walk_children_mut(e, &mut |child| substitute_ident(child, name, replacement));
+    for_each_child_mut(e, &mut |child| substitute_ident(child, name, replacement));
 }
 
 fn fuse_expr(

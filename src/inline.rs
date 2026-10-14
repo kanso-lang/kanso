@@ -194,7 +194,7 @@ fn rewrite(expr: &mut Expr, alias: &HashMap<String, HashMap<usize, String>>) {
             }
         }
     }
-    for_each_child_mut(expr, &mut |child| rewrite(child, alias));
+    crate::for_each_child_mut(expr, &mut |child| rewrite(child, alias));
 }
 
 /// `rewrite` for a body that holds shaded calls, which it leaves alone.
@@ -215,67 +215,5 @@ fn rewrite_around(
             }
         }
     }
-    for_each_child_mut(expr, &mut |child| rewrite_around(child, alias, shades));
-}
-
-/// Every direct sub-expression, mutably. This was written when
-/// `lib::walk_children_mut` had no arm for a lambda, a block, a build or a
-/// guard; it has all four now, so the two walks cover the same forms. Handing
-/// the children to a callback is what removes the vector this used to return
-/// per node.
-fn for_each_child_mut(expr: &mut Expr, f: &mut dyn FnMut(&mut Expr)) {
-    fn stmt_expr(s: &mut Stmt) -> &mut Expr {
-        match s {
-            Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
-        }
-    }
-    match expr {
-        Expr::App { head, args, .. } => {
-            f(head.as_mut());
-            for a in args {
-                f(a);
-            }
-        }
-        Expr::BinOp { lhs, rhs, .. } | Expr::Join { lhs, rhs, .. } => {
-            f(lhs.as_mut());
-            f(rhs.as_mut());
-        }
-        Expr::Field { base, .. } | Expr::Upcast { expr: base, .. } => f(base.as_mut()),
-        Expr::Index { base, index, .. } => {
-            f(base.as_mut());
-            f(index.as_mut());
-        }
-        Expr::Lambda { body, .. } => f(body.as_mut()),
-        Expr::List(items, _) => {
-            for i in items {
-                f(i);
-            }
-        }
-        Expr::Guard { cond, early, rest, .. } => {
-            f(cond.as_mut());
-            f(early.as_mut());
-            for stmt in rest.iter_mut() {
-                f(stmt_expr(stmt));
-            }
-        }
-        Expr::Block(stmts, _) => {
-            for stmt in stmts.iter_mut() {
-                f(stmt_expr(stmt));
-            }
-        }
-        Expr::Str(parts, _) => {
-            for p in parts {
-                if let TemplatePart::Interp(e) = p {
-                    f(e);
-                }
-            }
-        }
-        Expr::MapLit(pairs, _) => {
-            for (k, v) in pairs {
-                f(k);
-                f(v);
-            }
-        }
-        _ => {}
-    }
+    crate::for_each_child_mut(expr, &mut |child| rewrite_around(child, alias, shades));
 }

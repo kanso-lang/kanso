@@ -142,38 +142,6 @@ On main after #1904 the tab's compile reads `browser_compile_instructions`
 With main merged after #1922, browser_compile_instructions lands on 398,041,240
 and browser_compile_peak_bytes on 675,735.
 
-## 2026-10-12 — a number edit is not a page edit
-
-`page_drift` counts log entries since docs/compiler.html last moved, and took
-the page's newest commit as the move. `golden_prose --write` commits the page
-whenever a golden it quotes moves, rewriting a span's number and no sentence,
-so a row change paid the page's debt. On main the operator arms' compile and
-browser rows (470ae17f) did that, and the gate read 3/3 where the page was
-four entries behind its last prose edit (2cac608c). #1913's span rewrite
-would have reset it to zero while #1905 still owed sections.
-
-The gate now walks the page's commits from the newest and stops at the first
-whose removed and added lines differ once digits, commas and points are taken
-out. Diffs are read against the first parent, so a merge counts only for what
-it brought. `tests/a_number_edit_is_not_a_page_edit.rs` commits a span-only
-rewrite after four entries and expects the four to stand, and a prose edit
-after them to clear the count. With the comparison forced false the first
-reads 0/3 and fails.
-
-Main reads 4/3 under the fixed gate, so every pull request is red on
-`page_drift` until the page carries the sections #1905 asks for.
-
-91.11.
-
-The first version walked every commit that touched the page in date order.
-Merged with main after #1922, it reached the commit on the page branch where
-the sections were written, which is older than eight entries main logged while
-that branch waited, and read the page eight entries behind. The walk now
-follows first parents, so the merge that brought the sections in is where the
-page moved. A third spec builds that history: sections on a side branch, four
-entries on the trunk, then the merge, and expects 0/3. It read 4 entries ahead
-before the change.
-
 ## 2026-10-12 — a name bound to a raising call carries its err into the check
 
 #1884, under part 3 of the 2026-09-15 gavel. The checker refused
@@ -1830,3 +1798,78 @@ pass.
 tail-call-given-up mutation now strips both host arms. No row moved. The
 change is confined to the arm64 host arm, and every Linux row the branch's CI
 read matched main's goldens, `compile_instructions` included.
+
+## 2026-10-14 — Work bound ahead of the first sleep moves into it
+
+The 05:25 comment on #1856 measured a gap in the first cut of work-ahead. A
+program that binds its work as a plain value before the sleep,
+
+```
+total = spin 150000000 0
+sleep 2000 .> (_ -> print "delivery: made") .> (_ -> print "report: {total}")
+```
+
+took 3.01 s against 2.01 s for the rig, which binds the same work as a chain.
+An entry binding is computed at its own statement, so the work ran before the
+sleep began and the pool had nothing left to force.
+
+`src/ahead.rs` now moves such a binding into the park. The move applies when
+every statement ahead of the first sleep is a binding, since a binding performs
+no effect and the sleep is then the first thing the program does that can be
+seen. A binding qualifies when its value is closed (a literal, or a call of the
+program's own functions on closed arguments) and no other binder in the entry
+uses its name. It becomes a constant named `ahead~moved~N`, its reads in the
+statements after it read the constant, and the pool forces these constants
+first, in the order they were written. A read of a moved binding counts as
+closed, so a later binding built from one moves too, and so does a call after
+the sleep whose arguments name only moved bindings: `spin n 0`, with
+`n = 150000000` bound ahead of the sleep, is lifted like `spin 150000000 0`.
+
+The 2026-10-11 gavel on #1862 says a pooled failure is raised where the
+program as written raises it. For a moved binding that place is the park,
+because nothing printed between the binding and the sleep. The pool reads a
+moved constant through `k_ahead_try` like any other; when the try reports a
+death, the pool reads it once more outside the try, so the failure is raised
+there with its message on stderr. The work is pure, so the second read meets
+the same failure. A constant lifted from a continuation keeps its old
+treatment: the pool stops and the failure comes where the value is read.
+
+On this container the program above went from 3.80 s to 2.08 s under
+`kanso play`, compile included, with the same two lines printed; the `spin n 0`
+form went from 4.04 s to 2.09 s.
+`tests/golden/mem/work_ahead_moves_a_binding_into_the_park` pins
+`ahead_forced=1`, `tests/golden/mem/work_ahead_reads_a_moved_binding` pins
+`ahead_forced=2` for the moved count and the call that reads it, and `a_moved_binding_fails_at_the_park` in
+`tests/work_ahead.rs` pins a moved binding that overflows the stack: nothing on
+stdout and the overflow on stderr, the interpreter's transcript. Without the
+second read the native build printed `first` before the overflow. Three ratchet
+rows cover the move, the second read, and a moved binding read as closed.
+
+Two cleanups ride along. The mutable child walk was written twice, in
+`src/inline.rs` and `src/lib/hoist.rs`; it is now `for_each_child_mut` in
+lib.rs beside `for_each_child`. Taking its callback as `&mut dyn FnMut`, as
+hoist's copy did, cost the tab's compile of its corpus 2,229,038 more wasm
+instructions on this container than the two private copies, because the copy
+in inline.rs had been inlined into its two callers and devirtualized there.
+The shared walk takes its callback as a type parameter instead, as
+`for_each_child` does. A pattern's binders were listed twice, by
+codegen's `pattern_names` and trmc's `bound_names`; both call
+`Pattern::each_name` now, and trmc's list gains the as-pattern's name it used
+to leave out.
+
+CI moved six rows. `browser_compile_instructions` went from 381,571,779 to
+382,410,206, up 838,427, the same reading this container gave. A bisect here
+put 305,579 of that on the shared walk, 32,693 on `each_name` and 500,155 on
+the move, of which the move's codegen change accounts for 3,436. The tab's
+corpus never sleeps, so most of the rest is how rustc divided the wasm build
+into codegen units. The native front end rose with it: `entry_instructions`
+74,989,410 -> 75,110,529, `library_instructions` 74,674,363 -> 74,797,007,
+`compile_instructions` 22,632,999 -> 22,665,231. `interp_instructions` fell
+756 to 492,625,557 and `emit_instructions` fell 9 to 5,438,848. No runtime row
+moved. Welfare fell 0.00094 to 91.52438, and the floor is lowered by exactly
+that, since this builds a ruled part of the language.
+
+Still not built for #1856: work bound after a statement with an effect, calls
+whose arguments name locals that cannot move (a lambda's parameter, a value
+read from io), which need the (site, args) pool, and the cost gate on
+admission.
