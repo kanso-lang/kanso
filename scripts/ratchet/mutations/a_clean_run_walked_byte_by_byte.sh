@@ -11,11 +11,11 @@
 # the plain read is proven in range and `text/append` takes the element
 # (ruled 2026-09-16); a bang there would answer a box the append refuses.
 set -e
-grep -q '^  if (p < n) (text/append acc (text/slice bs p (n - 1))) acc$' \
+grep -q '^  if (p < n) (text/append acc (builtin_slice_in bs p (n - 1))) acc$' \
   lib/json/text.kso || {
   echo "lib/json's escape run changed shape; this needs rewriting" >&2
   exit 1
 }
-sed -i 's|^  if (p < n) (text/append acc (text/slice bs p (n - 1))) acc$|  return acc if p < 1 or length bs < p or n <= p\n  escape_run (text/append acc bs[p]) bs (p + 1) n|' \
+sed -i 's|^  if (p < n) (text/append acc (builtin_slice_in bs p (n - 1))) acc$|  return acc if p < 1 or length bs < p or n <= p\n  escape_run (text/append acc bs[p]) bs (p + 1) n|' \
   lib/json/text.kso
 grep -q '^  escape_run (text/append acc bs\[p\]) bs (p + 1) n$' lib/json/text.kso
