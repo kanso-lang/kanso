@@ -1,0 +1,8 @@
+# A value the check cannot see the kind of reaches `os/modified` at run time,
+# and every engine refuses it.
+import "std/os"
+
+fn same x
+  x
+
+pub play = os/modified (same 1) .> (t -> print "{t}")
