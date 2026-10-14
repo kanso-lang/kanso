@@ -5,9 +5,9 @@
 # a_proven_list_is_read_in_place then answers differently from the interpreter.
 set -e
 line='            f.line_fmt(format_args!("{slot} = getelementptr %KValue, ptr {items}, i64 {off}"));'
-[ "$(grep -cxF "$line" src/codegen.rs)" -eq 1 ] || {
+[ "$(grep -cxF "$line" src/codegen/emit.rs)" -eq 1 ] || {
   echo "the proven list's read moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i 's/^            f.line_fmt(format_args!("{slot} = getelementptr %KValue, ptr {items}, i64 {off}"));$/            f.line_fmt(format_args!("{slot} = getelementptr %KValue, ptr {items}, i64 {idx}"));/' src/codegen.rs
-if grep -qxF "$line" src/codegen.rs; then exit 1; fi
+sed -i 's/^            f.line_fmt(format_args!("{slot} = getelementptr %KValue, ptr {items}, i64 {off}"));$/            f.line_fmt(format_args!("{slot} = getelementptr %KValue, ptr {items}, i64 {idx}"));/' src/codegen/emit.rs
+if grep -qxF "$line" src/codegen/emit.rs; then exit 1; fi

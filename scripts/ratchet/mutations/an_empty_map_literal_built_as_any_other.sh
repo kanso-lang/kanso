@@ -7,9 +7,9 @@
 # bytes out are the same either way, so the work vein is the witness.
 set -e
 line='            Expr::MapLit(pairs, _) if pairs.is_empty() => {'
-[ "$(grep -cxF "$line" src/codegen.rs)" -eq 1 ] || {
+[ "$(grep -cxF "$line" src/codegen/emit.rs)" -eq 1 ] || {
   echo "the empty map literal's arm moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i 's/^            Expr::MapLit(pairs, _) if pairs.is_empty() => {$/            Expr::MapLit(pairs, _) if false \&\& pairs.is_empty() => {/' src/codegen.rs
-if grep -qxF "$line" src/codegen.rs; then exit 1; fi
+sed -i 's/^            Expr::MapLit(pairs, _) if pairs.is_empty() => {$/            Expr::MapLit(pairs, _) if false \&\& pairs.is_empty() => {/' src/codegen/emit.rs
+if grep -qxF "$line" src/codegen/emit.rs; then exit 1; fi

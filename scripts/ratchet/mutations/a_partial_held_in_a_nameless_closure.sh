@@ -6,7 +6,7 @@
 # value.
 set -e
 old='        self.emit_partial_value(f, &Name::new(name), supplied, span)'
-[ "$(grep -cxF "$old" src/codegen.rs)" -eq 1 ]
-sed -i.bak 's#^        self.emit_partial_value(f, \&Name::new(name), supplied, span)$#        let lambda = self.partial_lambda(name, supplied, span)?;\n        self.emit_expr(f, \&lambda)#' src/codegen.rs
-rm -f src/codegen.rs.bak
-! grep -qxF "$old" src/codegen.rs
+[ "$(grep -cxF "$old" src/codegen/emit.rs)" -eq 1 ]
+sed -i.bak 's#^        self.emit_partial_value(f, \&Name::new(name), supplied, span)$#        let lambda = self.partial_lambda(name, supplied, span)?;\n        self.emit_expr(f, \&lambda)#' src/codegen/emit.rs
+rm -f src/codegen/emit.rs.bak
+! grep -qxF "$old" src/codegen/emit.rs

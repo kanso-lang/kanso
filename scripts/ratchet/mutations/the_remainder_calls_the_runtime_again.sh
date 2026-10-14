@@ -6,10 +6,10 @@
 # again; the emitted code gains a call line for each site and loses its
 # `srem` and `sdiv`, and the emitted goldens read it.
 set -e
-grep -qF '        if (op == "%" || op == "/") && (pure_int || guarded) {' src/codegen.rs || {
+grep -qF '        if (op == "%" || op == "/") && (pure_int || guarded) {' src/codegen/emit.rs || {
   echo "the remainder fast path changed shape; this mutation needs rewriting" >&2
   exit 1
 }
 sed -i 's|        if (op == "%" \|\| op == "/") \&\& (pure_int \|\| guarded) {|        if (op == "%" \|\| op == "/") \&\& (pure_int \|\| guarded) \&\& f.set_of(a) != INT {|' \
-  src/codegen.rs
-grep -qF '(pure_int || guarded) && f.set_of(a) != INT {' src/codegen.rs
+  src/codegen/emit.rs
+grep -qF '(pure_int || guarded) && f.set_of(a) != INT {' src/codegen/emit.rs
