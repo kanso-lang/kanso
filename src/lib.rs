@@ -2492,8 +2492,9 @@ pub fn for_each_child<'a>(e: &'a ast::Expr, mut f: impl FnMut(&'a ast::Expr)) {
 /// Every direct sub-expression, mutably, and the mirror of `for_each_child`:
 /// it has an arm for every form that holds an expression, the lambda, block
 /// and guard included. `substitute_ident` relies on the walk reaching a
-/// guard's statements.
-pub fn for_each_child_mut(e: &mut ast::Expr, f: &mut dyn FnMut(&mut ast::Expr)) {
+/// guard's statements. The callback is a type parameter: called through
+/// `dyn`, the tab's compile of its corpus ran 2.2M more wasm instructions.
+pub fn for_each_child_mut<F: FnMut(&mut ast::Expr)>(e: &mut ast::Expr, f: &mut F) {
     use ast::Expr;
     match e {
         Expr::App { head, args, .. } => {
