@@ -1857,6 +1857,14 @@ inference fixpoint's declaration visits in bench/compile_golden_modules.txt,
 lands on 3,663 from 2,909: the fixpoint visits each new declaration on every
 round it is dirty.
 
+The compile-memory gate reads the same text. On `compile_corpus`,
+`front_end_visits` went from 8,133 to 9,326, `front_end_rounds` stayed at 19,
+and `compile_peak_bytes` went from 703,170 to 791,610, 12.6% more held while the
+corpus is checked, because the two modules it imports are 114 lines longer and
+their whole text is held through the check. It costs the welfare meta about
+0.02, and the floor drops by that under the language rule. Checking only what
+an import reaches would take this back, and #1952 tracks it.
+
 ## 2026-10-13 — hex and binary integers, and floats with an exponent
 
 #1889 builds the gavel "hex and binary integers and exponent floats". The
