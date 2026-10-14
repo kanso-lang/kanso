@@ -851,12 +851,15 @@ fn build(program: ast::Program, file: &str, release: bool, built_as: Option<Stri
     // every `musttail` the emitter wrote reaches clang as written, so a tail
     // call consumes no stack. An arm64 release build also marks each arm wider
     // than the register file so that its backend makes no sibling call there,
-    // which it miscompiles (`wide_tailcc_keeps_its_jumps`).
+    // which it miscompiles (`wide_tailcc_keeps_its_jumps`). On an Apple host
+    // that is not enough, and a wide arm still gives up its jump
+    // (`narrow_tailcc`).
     let flatten = release
         && cfg!(target_arch = "x86_64")
         && closure_convention() == kanso::codegen::ClosureConvention::PreserveNone;
     let ir = match (flatten, release && cfg!(target_arch = "aarch64")) {
         (true, _) => preserve_none_calls(preserve_none_tails(ir), include_str!("runtime.c")),
+        (false, true) if cfg!(target_vendor = "apple") => narrow_tailcc(ir, ARM64_TAILCC_WIDEST),
         (false, true) => wide_tailcc_keeps_its_jumps(ir, ARM64_TAILCC_WIDEST),
         (false, false) => ir,
     };

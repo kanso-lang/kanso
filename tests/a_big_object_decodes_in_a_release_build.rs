@@ -9,13 +9,16 @@
 //! keys overflowed it at eight. On x86-64 the release build now passes every
 //! `musttail` the emitter wrote to clang as written.
 //!
-//! arm64 keeps every `musttail` too. An arm wider than its eight argument
-//! registers is marked so that its backend makes no sibling call in it, which
-//! it miscompiles (see `wide_tailcc_keeps_its_jumps` in src/main/tail_calls.rs).
+//! arm64 keeps every `musttail` too, except on an Apple host. An arm wider than
+//! its eight argument registers is marked so that its backend makes no sibling
+//! call in it, which it miscompiles (see `wide_tailcc_keeps_its_jumps` in
+//! src/main/tail_calls.rs). Apple's clang needs more than that, so a wide arm
+//! there still takes the C convention (`narrow_tailcc`) and these do not run.
 //!
 //! Watched red with the limit at 8 on x86-64: the binary died on SIGSEGV and
 //! printed nothing.
 
+#[cfg(not(all(target_arch = "aarch64", target_vendor = "apple")))]
 #[test]
 fn an_object_of_300_000_keys_decodes() {
     use std::fmt::Write as _;
@@ -59,6 +62,7 @@ fn an_object_of_300_000_keys_decodes() {
 /// four-parameter function and a seven-parameter one call each other three
 /// million times. Both take the cycle's flat twelve-word signature, so narrowing
 /// at eight takes the tail call away from both, and the binary dies on SIGSEGV.
+#[cfg(not(all(target_arch = "aarch64", target_vendor = "apple")))]
 #[test]
 fn a_cycle_through_a_twelve_word_arm_runs_in_one_frame() {
     use std::process::Command;
@@ -102,6 +106,7 @@ fn a_cycle_through_a_twelve_word_arm_runs_in_one_frame() {
 /// binary ran out of stack. The regex port's Pike VM, whose position loop had
 /// seven parameters, did the same on a 40,000-character line. The interpreter
 /// and the dev build ran both.
+#[cfg(not(all(target_arch = "aarch64", target_vendor = "apple")))]
 #[test]
 fn a_self_call_through_a_thirteen_word_arm_runs_in_one_frame() {
     use std::process::Command;

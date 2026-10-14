@@ -30,8 +30,57 @@ fn defined_symbol(line: &str) -> Option<(String, usize)> {
     Some((name, arg_registers(&line[open + 1..close])))
 }
 
+fn called_symbol(line: &str) -> Option<String> {
+    let at = line.find(" @")?;
+    let rest = &line[at + 2..];
+    let end = rest.find('(')?;
+    Some(rest[..end].trim().trim_matches('"').to_string())
+}
+
+/// tailcc kept on every arm no wider than `widest` argument words, on an
+/// Apple arm64 host.
+///
+/// `tailcc` is what the beat machinery's `musttail` needs. A wide arm here
+/// keeps the C convention instead and every call into it becomes ordinary, so
+/// it spends a frame per hop and a deep recursion through one overflows the
+/// stack, which is loud. Apple's clang still miscompiles a wide arm that
+/// `wide_tailcc_keeps_its_jumps` marks: on the macOS job,
+/// `a_spilling_tail_call_named_with_a_mark` printed nothing, though the same
+/// IR built with clang 18 and 19 for linux arm64 runs correctly under qemu.
+fn narrow_tailcc(ir: String, widest: usize) -> String {
+    let wide: std::collections::HashSet<String> = ir
+        .lines()
+        .filter(|l| l.starts_with("define tailcc ") || l.starts_with("declare tailcc "))
+        .filter_map(defined_symbol)
+        .filter(|(_, regs)| *regs > widest)
+        .map(|(name, _)| name)
+        .collect();
+    let mut here = String::new();
+    let mut out = String::new();
+    for line in ir.lines() {
+        let mut line = line.to_string();
+        if line.starts_with("define ") || line.starts_with("declare ") {
+            here = defined_symbol(&line).map(|(n, _)| n).unwrap_or_default();
+            if wide.contains(&here) {
+                line = line.replacen("tailcc ", "", 1);
+            }
+        } else if line.contains(" call ") {
+            let callee = called_symbol(&line).unwrap_or_default();
+            if wide.contains(&here) {
+                line = line.replace("musttail ", "");
+            }
+            if wide.contains(&callee) {
+                line = line.replace("musttail ", "").replace("tailcc ", "");
+            }
+        }
+        out.push_str(&line);
+        out.push('\n');
+    }
+    out
+}
+
 /// Every `tailcc` function wider than `widest` argument words marked
-/// `"disable-tail-calls"`, on arm64.
+/// `"disable-tail-calls"`, on an arm64 host other than Apple's.
 ///
 /// A `tailcc` function whose arguments spill past x7 receives some of them on
 /// the stack and pops that area itself. At -O1 and above the arm64 backend
