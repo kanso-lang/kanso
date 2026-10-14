@@ -21,54 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-13 — `and` meets `or` in parentheses, and a file may open with a header comment
-
-Built under #1887 (ruled 2026-10-13), the two parts that change the grammar.
-The third part, types before functions, stands as ruled on 2026-07-25 and
-needs nothing.
-
-**`and` and `or`.** `parse_and` now reports where the first `and` of its chain
-stands, and `parse_or` refuses an `or` that meets one, on either side, at the
-second of the two operators: `a and b or c` at the `or`, `a or b and c` at the
-`and`. The diagnostic shows `(a and b) or c`. Those parentheses used to be
-refused as grouping nothing, since `and` binds tighter. The check that refuses
-a pair now keeps one whose contents are an `and` chain with an `or` beside it,
-the same exception #1915 made for `&`, `|` and `^`, and `(a and b) and c` is
-still refused. The refusal is in the parser, which every engine and the tab
-share.
-
-**The header comment.** The lexer drops comment lines, so the blank line under
-a header looked like a blank line at the head of the file, and the refusal
-named line 2 as where the file began. The lexer now records the last line of
-the comment block a file opens with, when only blank lines stand above it.
-One blank line directly under that block is allowed. A second is refused as
-"one blank line separates the header comment from the code", and a blank line
-above the header keeps "the file may not begin with a blank line". This holds
-where the blank-line policy holds, in libraries and modules. A play file has
-no blank-line policy, and it accepted all three shapes before this change too.
-
-**Goldens.** Five error fixtures: `and_meets_or_without_parentheses`,
-`an_and_on_the_right_of_an_or`, `parentheses_around_an_and_beside_an_and`,
-`a_header_comment_with_two_blank_lines_under_it` and
-`a_blank_line_above_the_header_comment`. The micro fixture
-`and_meets_or_in_parentheses` opens with a header and prints three conditions
-on both engines. On the base, the two `and`/`or` fixtures printed `true`, the
-micro stopped at the blank under its header, and the blank-above fixture
-reported lines 1 and 3 instead of line 1. The redundant-pair fixture reads the
-same on the base, since it pins that the exception stops at `or`. Two ratchet
-rows, "and meets or freely" and "header comment refused", were each watched
-turning their test red.
-
-**The corpus.** `kanso check` over every `.kso` file here and in kq, vse and
-kanso-json finds no `and` meeting an `or` without parentheses; the sweep was
-checked against a planted mix first. Nothing needed respelling. Appendix C
-states both rules with a panel each.
-
-The compile rows move with the binary; CI's rows are priced here before
-merge.
-
-- **OPEN** #1887, until this lands.
-
 ## 2026-10-13 — a list or map too long for its line spans lines
 
 Built under #1882 (gavel: a bracketed list or map may span lines). A literal
