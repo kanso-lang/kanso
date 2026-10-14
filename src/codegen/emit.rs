@@ -466,7 +466,8 @@ impl<'a> Backend<'a> {
             let Expr::Ident(name, _, _) = cell else {
                 return Err("native backend: a pooled sleep carries its cells by name".into());
             };
-            let held = f.lookup(name).ok_or_else(|| format!("native backend: `{name}` is not bound"))?;
+            let held =
+                f.lookup(name).ok_or_else(|| format!("native backend: `{name}` is not bound"))?;
             let held = self.as_value(f, &held);
             cells.push_str(&format!(", %KValue {held}"));
         }
@@ -1140,7 +1141,8 @@ impl<'a> Backend<'a> {
                 }
             }
             Expr::App { head, args, piped, span } => {
-                if matches!(head.as_ref(), Expr::Ident(n, _, _) if n == crate::ahead::SLEEP_POOLED) {
+                if matches!(head.as_ref(), Expr::Ident(n, _, _) if n == crate::ahead::SLEEP_POOLED)
+                {
                     return self.emit_pooled_sleep(f, args);
                 }
                 // `&f a` supplies a and waits; the arity it waits for is the
