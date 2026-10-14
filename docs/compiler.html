@@ -758,21 +758,21 @@ no helper, guarded run       -3.0842%     -1.4555%      +213,359    -0.01
 
 <div class="code-panel">
   <div class="code-panel-title">the fedex rig — a 2000 ms stall beside ~900 ms of pure work (bench/workahead/)</div>
-  <pre><code><span class="c"># as-written    sleep >> report        min 2913 ms   (stall, then work)</span>
-<span class="c"># overlapped    report beside sleep    min 2008 ms   (work inside the stall)</span>
+  <pre><code><span class="c"># as-written    sleep >> report        min 2004 ms   (the pool works inside the stall)</span>
+<span class="c"># overlapped    report beside sleep    min 2004 ms   (arranged by hand)</span>
 
-<span class="c"># the sleep is 2000 ms. overlapped lands at 2008: the entire grind</span>
-<span class="c"># disappeared into the wait. min of 15 interleaved heats; the floor is</span>
-<span class="c"># physics — a run can never beat its own sleep, and none did.</span>
+<span class="c"># the sleep is 2000 ms. min of 15 interleaved heats on the build container,</span>
+<span class="c"># 2026-10-14. a run can never beat its own sleep, and none did. before the</span>
+<span class="c"># pool, as-written took 2913 ms: the stall, then the work.</span>
 
 cargo build --release
-./target/release/kanso build bench/workahead/aswritten.kso --release
-./target/release/kanso build bench/workahead/overlapped.kso --release
+./target/release/kanso build bench/workahead/aswritten --release
+./target/release/kanso build bench/workahead/overlapped --release
 time ./aswritten; time ./overlapped
 KANSO_SCHED_DEBUG=1 ./overlapped     <span class="c"># watch elapsed + wait = deadline</span></code></pre>
 </div>
 
-<p>the two variants above are the same program arranged two ways by hand. the first rung of the ladder now does the arranging for one class of work. at compile time, <code>src/ahead.rs</code> lifts a call that comes after a sleep, and whose arguments are all known before the program runs, into a named constant. the first time the program has nothing to do but wait, the runtime builds those constants. three shapes reach that point: a bare sleep in the entry; a binding written ahead of the first sleep, which moves into the wait when everything before the sleep is a binding; and a group of effect lines, where the pool runs the first time every side is waiting on a timer. a constant joins the pool only when building it calls one of the program's functions, so a literal is built where it is first read. programs shaped like the as-written rig, with the work bound ahead of the sleep or the sleep placed behind a <code>print</code>, ran in 2.01 to 2.09 s on the build container where main took 3.80 to 4.04 s, with the same output. the mem goldens pin how many constants the pool built as <code>ahead_forced</code>.</p>
+<p>the overlapped variant is the as-written program rearranged by hand, and the rearranging moves the report ahead of the delivery in its output. the first rung of the ladder now does that work for one class of program and keeps the order the program wrote. at compile time, <code>src/ahead.rs</code> lifts a call that comes after a sleep, and whose arguments are all known before the program runs, into a named constant. the first time the program has nothing to do but wait, the runtime builds those constants. three shapes reach that point: a bare sleep in the entry; a binding written ahead of the first sleep, which moves into the wait when everything before the sleep is a binding; and a group of effect lines, where the pool runs the first time every side is waiting on a timer. a constant joins the pool only when building it calls one of the program's functions, so a literal is built where it is first read. programs shaped like the as-written rig, with the work bound ahead of the sleep or the sleep placed behind a <code>print</code>, ran in 2.01 to 2.09 s on the build container where main took 3.80 to 4.04 s, with the same output. the mem goldens pin how many constants the pool built as <code>ahead_forced</code>.</p>
 
 <p>a failure in pooled work is raised where the program as written raises it (the 2026-10-11 ruling on #1862). for a moved binding that place is the wait, since nothing has printed yet. anywhere else the pool drops the failure and the value fails when it is read, so the transcript is the one the program prints without the pool. work that never returns is the exception. the pool runs inside the wait, so a computation that loops forever stops the program there, before it prints anything that comes between the sleep and the first read of the value. the ruling keeps that case open: running pooled work on a second thread would preserve the output, and it is not built. a call whose arguments read a function's own parameters or bindings is reached at run time instead. the function binds the call as a cell, which holds the call's site and the values it reads, and the sleep that starts the function's chain hands the cell to the pool when it parks. a chain that never runs never parks, so its cell is never forced. a function that sleeps and then reports on its parameter ran in 2.01 s where main took 3.87 to 4.07 s, and the mem goldens count the cell in <code>ahead_forced</code>. a lambda's parameter, such as a line read from io inside a continuation, is not reached yet. rungs 2 and 3 are not built.</p>
 
@@ -3960,6 +3960,12 @@ welfare                      77.37         82.09</code></pre>
 <p>Matching words is cruder than resolving names, and the mistakes it makes keep too much: a local called <code>reverse</code> keeps <code>list/reverse</code>. When a pruned compile fails, the compile runs again on the whole library and that run's diagnostics are the ones reported, so no message changes. A debug build panics if the whole library accepts a program the pruned one refused, and the suite runs clean under it. A spec still checks every shipped module whole.</p>
 
 <p>A program that calls <code>text/uppercase</code> used to compile 48 declarations and now compiles 12. On CI the front end's instructions fell 28% for an entry file and for a library and 31% for a module, its peak memory fell 31%, the interpreter's peak on its corpus fell 27%, and compiling in the browser fell 13.5%. That repays what the six kanso-written names cost in section 210. Reading each declaration lazily, so that one kept costs less to read, has not been built.</p>
+
+<h2 id="verbs"><span class="sec-num">213</span>a refusal that names the route</h2>
+
+<p>A file that declares a function, runs a statement and imports a file beside it fits neither running verb. <code>kanso run</code> reads it as a library, since a file with definitions in it is one, and <code>kanso play</code> takes imports from the standard library only. Each refusal used to suggest the other verb, so a reader who followed both went round in a circle. Both now say what runs the file: move the statements into a <code>main.kso</code> beside it, mark the definitions they use <code>pub</code>, and run the directory with <code>kanso run</code>. A play file of statements alone that imports a neighbour is still sent to <code>kanso run</code>, which takes it.</p>
+
+<p>The fixture is <code>tests/golden/play/beside/sum.kso</code>, with a golden for what each verb says, and a spec builds the module the messages describe and runs it. Writing that spec showed that no test read the play corpus's refusal goldens, and two of them were stale. A test now reads every golden in the directory: output on both engines, and each refusal under the verb it belongs to.</p>
 
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 

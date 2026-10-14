@@ -21,69 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-13 — a list or map too long for its line spans lines
-
-Built under #1882 (gavel: a bracketed list or map may span lines). A literal
-whose opening bracket ends its line continues one element to a line, each two
-spaces deeper, and closes with its bracket alone at the indent of the line that
-opened it. The lexer gathers the lines into the one statement they spell, so the
-parser and every engine see the literal they saw before. A list element is
-grouped the way a parenthesised one is, so `double 21` on its own line is one
-element; a map element is one `key:value` entry. A list inside a list spans on
-its own terms, and a comment line may sit between elements.
-
-Canonical form decides which form is written. The lexer measures the literal
-joined back onto one line, and a literal that fits in 80 columns is refused in
-the spanning form with the width it would take. A line too wide that holds a
-literal gets a second clause on the width error saying the literal can span.
-The other refusals each name the rule: a closing bracket that shares its line
-with an element, a map entry sharing a line, an element at the wrong indent, a
-blank line inside the literal, and a literal the file ends inside.
-
-Five error goldens pin those diagnostics and
-`tests/golden/micro/lists_and_maps_span_lines` pins a list, a map, a nested
-list and a list in a function body on both engines. On main's lexer every one
-of them is refused with a different message, and the micro sample stops at an
-indent error.
-
-Chapter 02 shows the form beside lists and maps, and appendix C states the
-rule beside the continuation line. trend_gate's `higher` table and
-perf_record's two watched lists, which were assembled from halves joined by
-`text/concat` to stay under the width, are now single spanning lists with
-their comments inside.
-
-CI's rows, on main after #1925: compile_instructions lands on 26,216,275
-(+334,724), entry_instructions on 86,540,771 (+1,159,458), library_instructions
-on 87,096,300 (+1,160,718) and browser_compile_instructions on 392,203,148
-(+891,646). interp_instructions falls to 488,437,711 (-302,105) and
-emit_instructions to 7,012,968 (-509).
-
-Moving `higher` onto the spanning form blinded
-tests/a_mutation_keeps_its_unclassified_counter.rs, which read the direction
-tables one line at a time. With `thunk_forces` added to `higher` it stayed
-green. It now reads the spanning table and asserts that both tables parsed, and
-the same edit turns it red.
-
-- **OPEN** #1882, until this lands.
-
-91.11.
-
-With main merged after #1937, browser_compile_instructions lands on
-394,301,683.
-
-On CI's rows for the tree merged with main after #1937: compile_instructions
-lands on 26,183,028, entry_instructions on 86,449,300, library_instructions on
-86,666,390, emit_instructions on 7,048,150 and compile_allocs on 14,644.
-
-393,186,348.
-
-On CI's rows for the tree merged with main after #1937: compile_instructions
-lands on 26,064,732, entry_instructions on 86,313,974, library_instructions on
-86,530,678 and interp_instructions on 487,131,185. emit_instructions falls to
-7,046,962.
-
-393,279,063.
-
 ## 2026-10-13 — `merge` copies a record with named fields replaced
 
 Built under #1886 (gavel: `merge` copies a record with named fields replaced).
@@ -244,28 +181,6 @@ to 4,843,470 bytes, `emitted_other_defines` from 2,036 to 2,049 and
 2,398,406,493, up 559, and most other benchmarks fell by a few hundred
 instructions. The floor drops by the difference under the 2026-10-11 ruling
 (#1862).
-
-## 2026-10-12 — a bare imported type with no fields is its module's value
-
-An importer may name a type with no fields bare: `import "std/json"` enrols
-`json_null` beside `json/json_null`. Native code resolved the bare name to the
-type it stands for. The interpreter built a record under the bare spelling, so
-it printed as the importer's own type and compared unequal to `json/json_null`.
-A constructor call already took the type's origin; the fieldless path in
-`resolve` now does the same.
-
-`tests/golden/micro/a_bare_imported_unit_is_its_module_s` prints the bare value
-and compares it with the qualified one, inside a list and out. Before the fix
-the interpreter printed `a_bare_imported_unit_is_its_module_s/json_null` and
-`false` twice where native printed `json/json_null` and `true`.
-
-json's own test suite found it. Under #1883 a test file imports its module,
-and `test_decode_nested` compares a decoded document against a map holding a
-bare `json_null`.
-
-From CI, the interpreter's run of the corpus reads 249 instructions fewer,
-interp_instructions 488,739,816 to 488,739,567 on the merged tree. No other
-row moved, and welfare banks the rise.
 
 ## 2026-10-13 — three port shapes join the run program before their fixes
 
@@ -1744,13 +1659,71 @@ the `text` total 4,878,606 -> 4,909,294. Work moved on five:
 -> 13,207,693, `work_pendbench` 191,674,024 -> 191,674,224, `work_livebench`
 1,474,835,683 -> 1,474,835,606 and `work_runbench` 1,177,697,090 ->
 1,177,696,062.
-The compiler's own rows: `compile_instructions` 22,679,084 -> 22,615,793,
-`entry_instructions` 75,152,899 -> 74,936,335, `library_instructions`
-74,839,906 -> 74,622,621, `emit_instructions` 5,440,488 -> 5,451,587,
-`interp_instructions` 492,635,997 -> 492,637,348,
+The compiler's own rows: `compile_instructions` 22,664,963 -> 22,615,793,
+`entry_instructions` 75,111,766 -> 74,936,335, `library_instructions`
+74,798,192 -> 74,622,621, `emit_instructions` 5,439,036 -> 5,451,587,
+`interp_instructions` 492,629,961 -> 492,637,348,
 `codegen_instructions_dev` 112,582,224 -> 112,677,448 and
 `codegen_instructions_release` 441,728,749 -> 441,885,670. The tab, read
 here on rustc 1.98.1 after the merge: `browser_compile_instructions`
-382,155,032 -> 381,258,771, `browser_compile_peak_bytes` 643,478 -> 643,605
+382,297,788 -> 381,261,098, `browser_compile_peak_bytes` 643,478 -> 643,605
 and `browser_run_instructions` 34,181,240 -> 34,181,355. Welfare rises, and
 the rise is banked here.
+
+## 2026-10-14 — Neither verb sends a reader to the other
+
+The 2026-10-14 audit of #1893 found one file shape that both running verbs
+refuse while pointing at each other. A file that declares a function, runs a
+statement and imports a neighbour is a library to `kanso run`, which
+suggested `kanso play`; `kanso play` takes the stdlib and nothing else, and
+suggested `kanso run`. Both refusals now give the route that runs the file:
+move the statements into a main.kso beside it, mark the definitions they use
+`pub`, and run the directory. A play file of statements alone that imports a
+neighbour is still sent to `kanso run`, which takes it.
+
+`tests/golden/play/beside/sum.kso` is the reduction. Its `.stderr` and
+`.run.stderr` pin what each verb says, and
+`definitions_beside_a_local_import_are_sent_to_a_module` in
+`tests/play_verb.rs` builds the module the messages describe and runs it.
+
+No test read the `.stderr` files in `tests/golden/play`. The archive noted
+this for one of them on 2026-10-10. `every_play_golden_is_read` now reads
+every golden in that directory: each `.stdout` on both engines, each
+`.stderr` under `play`, and each `.run.stderr` under `run`. Two goldens
+were stale. `no_local_imports.stderr` spelled the import without its
+`./`. `decls_after_statements.stderr` held a refusal the play parser
+dropped when it began sorting a file's lines by kind; that fixture now
+prints `first`, so its golden is a `.stdout`.
+
+The audit's other findings on #1893 are open there. An insisting form's
+failure names the library line instead of the call, and neither a wrong
+kind reaching a builtin or operator nor a stack overflow has a location.
+
+CI's rows for this branch fall, and the change reaches no decision they
+count, so the move is the binary's layout: `compile_instructions`
+22,679,084 -> 22,664,963, `entry_instructions` 75,152,899 -> 75,111,766,
+`library_instructions` 74,839,906 -> 74,798,192, `emit_instructions`
+5,440,488 -> 5,439,036, and `interp_instructions` 492,635,997 ->
+492,629,961. The tab's compile rises: `browser_compile_instructions`
+382,155,032 -> 382,297,788, on rustc 1.98.1. The arms this change adds run
+only when a file is refused, and no file in the corpus is. Marking
+`local_import` cold moved the row by 1,529, so the rise is not that
+function. The browser rise outweighs the five falls by less than 0.0001 of
+welfare, and the floor moves to the score with the reason recorded, as it
+did for kanso#1959 and kanso#1963.
+
+## 2026-10-14 — The work-ahead rig builds again
+
+The compiler page tells a reader to build `bench/workahead/aswritten.kso` and
+`overlapped.kso`. Each file declares `grind` and `spin` beside its statements,
+and since files of that shape became libraries, `kanso build` refuses both.
+Nothing else reads the rig, so nothing went red. The two programs are now
+modules, `bench/workahead/aswritten` and `bench/workahead/overlapped`, and
+both import the functions from `bench/workahead/rig`.
+
+The panel's rows are re-sat: 15 interleaved heats each on the build
+container. As-written reads a minimum of 2,004 ms where the panel said
+2,913, because the pool now builds `grind 150000000` during the sleep.
+Overlapped reads 2,004 ms where the panel said 2,008. The two differ in their
+output: overlapped prints the report before the delivery, and as-written
+keeps the order it was written in.
