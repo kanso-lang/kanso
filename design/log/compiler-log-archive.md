@@ -103160,65 +103160,55 @@ merge.
 
 - **OPEN** #1887, until this lands.
 
-## 2026-10-13 — a list or map too long for its line spans lines
+## 2026-10-12 — a field holds a list of `tie` references read from data
 
-Built under #1882 (gavel: a bracketed list or map may span lines). A literal
-whose opening bracket ends its line continues one element to a line, each two
-spaces deeper, and closes with its bracket alone at the indent of the line that
-opened it. The lexer gathers the lines into the one statement they spell, so the
-parser and every engine see the literal they saw before. A list element is
-grouped the way a parenthesised one is, so `double 21` on its own line is one
-element; a map element is one `key:value` entry. A list inside a list spans on
-its own terms, and a comment line may sit between elements.
+#1842, under the 2026-10-11 gavel. A constructor field written inside a
+`list/tie` maker may now hold `list/to_list (list/map xs ref)`, or the same
+with a one-parameter lambda in place of `ref`. `list/to_list` calls `ref` for
+every element while the maker runs, so the field holds the cells `list/tie`
+resolves. A bare `list/map` of references in that position is refused with a
+diagnostic that names `list/to_list`.
 
-Canonical form decides which form is written. The lexer measures the literal
-joined back onto one line, and a literal that fits in 80 columns is refused in
-the spanning form with the width it would take. A line too wide that holds a
-literal gets a second clause on the width error saying the literal can span.
-The other refusals each name the rule: a closing bracket that shares its line
-with an element, a map entry sharing a line, an element at the wrong indent, a
-blank line inside the literal, and a literal the file ends inside.
+The check sees the form in two shapes. In the program's own code it is the
+call as written. In a module's code it has been through fusion by the time an
+importer's merged check reads it, and `list/to_list (list/map xs f)` reads as
+`fold xs [] (acc x -> (a y -> push a y) acc (f x))`. `src/check/ties.rs`
+admits both, and a lambda applied where a field is written, which is how
+fusion leaves `(k -> ref k) x`.
 
-Five error goldens pin those diagnostics and
-`tests/golden/micro/lists_and_maps_span_lines` pins a list, a map, a nested
-list and a list in a function body on both engines. On main's lexer every one
-of them is refused with a different message, and the micro sample stops at an
-indent error.
+The fused shape found a second gap. `push` forced the item it was handed, and
+a `list/tie` cell still being made is a blackhole, so the push demanded the
+value it was in the middle of making and stopped with "a lazy binding demands
+its own value". A list literal already kept such a cell unforced. `push` now
+does the same with its item, in the interpreter (`src/eval.rs`) and in native
+code when the program ties (`force_unless_knot` in `src/codegen.rs`).
 
-Chapter 02 shows the form beside lists and maps, and appendix C states the
-rule beside the continuation line. trend_gate's `higher` table and
-perf_record's two watched lists, which were assembled from halves joined by
-`text/concat` to stay under the width, are now single spanning lists with
-their comments inside.
+`a_graph_tied_from_a_map_of_edges` reads each town's roads from a map of edges
+and drops its chain of `road` records, with the same output on both engines.
+`a_tie_field_holds_a_lazy_map_of_references` is the refusal. The comment
+where `lib/list/list.kso` teaches `tie` shows the data-sized form. Three
+ratchet rows take away the check's admission, the interpreter's keep and the
+native keep, and each turns the micro corpus red.
 
-CI's rows, on main after #1925: compile_instructions lands on 26,216,275
-(+334,724), entry_instructions on 86,540,771 (+1,159,458), library_instructions
-on 87,096,300 (+1,160,718) and browser_compile_instructions on 392,203,148
-(+891,646). interp_instructions falls to 488,437,711 (-302,105) and
-emit_instructions to 7,012,968 (-509).
+The rows that moved are CI's, on the tree merged with #1899. The check reads
+every field written inside a maker, and the library comment and the new
+fixtures are more text to compile: compile_instructions lands on 25,764,487,
+entry_instructions on 85,217,023, library_instructions on 85,769,178,
+emit_instructions on 7,016,791 and browser_compile_instructions on
+392,024,143. The interpreter asks whether each item `push` is handed is a cell
+still being made, and interp_instructions lands on 489,120,716. This builds a
+ruled part of the language, so the welfare floor drops by what it costs.
 
-Moving `higher` onto the spanning form blinded
-tests/a_mutation_keeps_its_unclassified_counter.rs, which read the direction
-tables one line at a time. With `thunk_forces` added to `higher` it stayed
-green. It now reads the spanning table and asserts that both tables parsed, and
-the same edit turns it red.
+On the tree merged with #1913 the same costs sit on main's new rows:
+compile_instructions lands on 25,884,823, entry_instructions on 85,390,774,
+library_instructions on 85,944,538, emit_instructions on 7,013,859,
+browser_compile_instructions on 391,328,276 and interp_instructions on
+489,068,417.
 
-- **OPEN** #1882, until this lands.
+On main after #1904 the tab's compile reads `browser_compile_instructions`
+392,396,387, up 18,012 from main's 392,378,375 on the same tree.
 
 91.11.
 
-With main merged after #1937, browser_compile_instructions lands on
-394,301,683.
-
-On CI's rows for the tree merged with main after #1937: compile_instructions
-lands on 26,183,028, entry_instructions on 86,449,300, library_instructions on
-86,666,390, emit_instructions on 7,048,150 and compile_allocs on 14,644.
-
-393,186,348.
-
-On CI's rows for the tree merged with main after #1937: compile_instructions
-lands on 26,064,732, entry_instructions on 86,313,974, library_instructions on
-86,530,678 and interp_instructions on 487,131,185. emit_instructions falls to
-7,046,962.
-
-393,279,063.
+With main merged after #1922, browser_compile_instructions lands on
+393,286,002.
