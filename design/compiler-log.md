@@ -84,59 +84,6 @@ lands on 26,064,732, entry_instructions on 86,313,974, library_instructions on
 
 393,279,063.
 
-## 2026-10-12 — a field holds a list of `tie` references read from data
-
-#1842, under the 2026-10-11 gavel. A constructor field written inside a
-`list/tie` maker may now hold `list/to_list (list/map xs ref)`, or the same
-with a one-parameter lambda in place of `ref`. `list/to_list` calls `ref` for
-every element while the maker runs, so the field holds the cells `list/tie`
-resolves. A bare `list/map` of references in that position is refused with a
-diagnostic that names `list/to_list`.
-
-The check sees the form in two shapes. In the program's own code it is the
-call as written. In a module's code it has been through fusion by the time an
-importer's merged check reads it, and `list/to_list (list/map xs f)` reads as
-`fold xs [] (acc x -> (a y -> push a y) acc (f x))`. `src/check/ties.rs`
-admits both, and a lambda applied where a field is written, which is how
-fusion leaves `(k -> ref k) x`.
-
-The fused shape found a second gap. `push` forced the item it was handed, and
-a `list/tie` cell still being made is a blackhole, so the push demanded the
-value it was in the middle of making and stopped with "a lazy binding demands
-its own value". A list literal already kept such a cell unforced. `push` now
-does the same with its item, in the interpreter (`src/eval.rs`) and in native
-code when the program ties (`force_unless_knot` in `src/codegen.rs`).
-
-`a_graph_tied_from_a_map_of_edges` reads each town's roads from a map of edges
-and drops its chain of `road` records, with the same output on both engines.
-`a_tie_field_holds_a_lazy_map_of_references` is the refusal. The comment
-where `lib/list/list.kso` teaches `tie` shows the data-sized form. Three
-ratchet rows take away the check's admission, the interpreter's keep and the
-native keep, and each turns the micro corpus red.
-
-The rows that moved are CI's, on the tree merged with #1899. The check reads
-every field written inside a maker, and the library comment and the new
-fixtures are more text to compile: compile_instructions lands on 25,764,487,
-entry_instructions on 85,217,023, library_instructions on 85,769,178,
-emit_instructions on 7,016,791 and browser_compile_instructions on
-392,024,143. The interpreter asks whether each item `push` is handed is a cell
-still being made, and interp_instructions lands on 489,120,716. This builds a
-ruled part of the language, so the welfare floor drops by what it costs.
-
-On the tree merged with #1913 the same costs sit on main's new rows:
-compile_instructions lands on 25,884,823, entry_instructions on 85,390,774,
-library_instructions on 85,944,538, emit_instructions on 7,013,859,
-browser_compile_instructions on 391,328,276 and interp_instructions on
-489,068,417.
-
-On main after #1904 the tab's compile reads `browser_compile_instructions`
-392,396,387, up 18,012 from main's 392,378,375 on the same tree.
-
-91.11.
-
-With main merged after #1922, browser_compile_instructions lands on
-393,286,002.
-
 ## 2026-10-13 — `merge` copies a record with named fields replaced
 
 Built under #1886 (gavel: `merge` copies a record with named fields replaced).
@@ -1846,3 +1793,69 @@ up 1,447, the same rise it read before main carried kanso#1962. The resolver
 is compiled into the tab's engine, and the walk changed its code, so this is
 layout in the wasm build. No other row moved. Welfare falls under a ten-
 thousandth of a point and the floor is set to it.
+
+## 2026-10-14 — An import reads only what the program names
+
+A program that imported a std module lexed, parsed, inferred and checked all
+of it (#1952). The first attempt, recorded on the issue, set unreached
+functions aside for the merged check only, and its reach walk cost more than
+the check it saved. This one works before the lexer: a shipped module's `fn`
+declarations whose names no reached text spells are blanked out of the
+source.
+
+Reach is by word. The roots are every word in the program's own files and
+five names the compiler calls without the program spelling them: `fold`,
+`bump`, `file_under`, `to_string` and `tie`. Each declaration kept adds its
+own words, over a module's files together, and a name kept keeps every arm
+of it. A blanked line stays an empty line, so every span points where it
+did. Blank-line policy and the unused-import check are skipped on a pruned
+file; `tests/every_shipped_module_checks_clean.rs` still checks each module
+whole.
+
+When the pruned compile fails, the compile runs again on the whole library
+and that run reports, so no diagnostic changes. A debug build panics when the
+whole library accepts a program the pruned one refused, and the suite ran
+clean under it. The one fixture that needed an unreached function,
+`list/spread` in a codegen unit test, now names it in a comment.
+
+`tests/an_import_reads_what_the_program_names.rs` compiles
+`print (text/uppercase "kanso")`. On main the program held 48 declarations,
+`text/pad_start` among them, and inference visited 627 expressions. It now
+holds 12 and visits 224.
+
+Rows, from CI: `compile_instructions` 32,770,085 -> 22,632,999,
+`entry_instructions` 104,020,991 -> 74,989,410, `library_instructions`
+103,487,067 -> 74,674,363, `emit_instructions` 7,704,002 -> 5,438,857,
+`compile_allocs` 18,250 -> 12,160, `compile_peak_bytes` 804,635 -> 552,167,
+`front_end_visits` 9,242 -> 6,363, `codegen_instructions_dev` 119,402,816 ->
+112,581,257, `codegen_instructions_release` 476,979,642 -> 441,727,359,
+`interp_instructions` 496,124,589 -> 492,626,313, `interp_allocs` 592,648 ->
+584,659, `interp_peak_bytes` 807,370 -> 590,970,
+`browser_compile_instructions` 441,097,975 -> 381,571,779,
+`browser_compile_peak_bytes` 731,449 -> 643,478 and
+`browser_run_instructions` 34,183,924 -> 34,181,240. The module sample in
+`bench/compile_golden_modules.txt` reads visits 3,666 -> 1,368, rounds 8 ->
+4 and lines 1,288 -> 1,106.
+
+Six benchmarks emit less code, because the emitter still wrote some std code
+nothing called: encodebench, widebench, deepbench and digestbench lose 157
+lines each, scanbench 30 and runbench 32, and their machine code shrinks with
+them. Three runtime rows move with the smaller binaries: `work_deepbench`
+403,499,516 -> 403,115,516, `work_scanbench` 273,717 -> 273,812 and
+`work_runbench` 1,177,696,285 -> 1,177,696,572. The two rises are 95 and 287 instructions on
+programs whose work did not change, so they are layout. Every allocation
+counter holds.
+
+The ratchet's row "a door matched by the prefix of its name" proved nothing
+on this branch, and it proves nothing on main either: with the mutation
+applied, `micro_corpus_agrees_across_engines` stays green at dfc9fe2f. The
+mutation hands the door's convention to `k_b_utf8_slice` and
+`k_b_utf8_slice_raw`, and since a slice past the end answers `none` a program
+reaches them only through the JSON decoder's `string_ok`, for a string with
+no escape in it. Every decoded string in the micro corpus had an escape.
+`a_plain_decoded_string_is_cut_in_place` decodes three plain strings; under
+the mutation the release build prints `["" "" ""]` and the row goes red.
+
+Lazy parsing by declaration, the larger fix #1952 names, has not been built. This
+change narrows what is read; it does not make one declaration cheaper to
+read.

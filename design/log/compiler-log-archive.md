@@ -103159,3 +103159,56 @@ The compile rows move with the binary; CI's rows are priced here before
 merge.
 
 - **OPEN** #1887, until this lands.
+
+## 2026-10-12 — a field holds a list of `tie` references read from data
+
+#1842, under the 2026-10-11 gavel. A constructor field written inside a
+`list/tie` maker may now hold `list/to_list (list/map xs ref)`, or the same
+with a one-parameter lambda in place of `ref`. `list/to_list` calls `ref` for
+every element while the maker runs, so the field holds the cells `list/tie`
+resolves. A bare `list/map` of references in that position is refused with a
+diagnostic that names `list/to_list`.
+
+The check sees the form in two shapes. In the program's own code it is the
+call as written. In a module's code it has been through fusion by the time an
+importer's merged check reads it, and `list/to_list (list/map xs f)` reads as
+`fold xs [] (acc x -> (a y -> push a y) acc (f x))`. `src/check/ties.rs`
+admits both, and a lambda applied where a field is written, which is how
+fusion leaves `(k -> ref k) x`.
+
+The fused shape found a second gap. `push` forced the item it was handed, and
+a `list/tie` cell still being made is a blackhole, so the push demanded the
+value it was in the middle of making and stopped with "a lazy binding demands
+its own value". A list literal already kept such a cell unforced. `push` now
+does the same with its item, in the interpreter (`src/eval.rs`) and in native
+code when the program ties (`force_unless_knot` in `src/codegen.rs`).
+
+`a_graph_tied_from_a_map_of_edges` reads each town's roads from a map of edges
+and drops its chain of `road` records, with the same output on both engines.
+`a_tie_field_holds_a_lazy_map_of_references` is the refusal. The comment
+where `lib/list/list.kso` teaches `tie` shows the data-sized form. Three
+ratchet rows take away the check's admission, the interpreter's keep and the
+native keep, and each turns the micro corpus red.
+
+The rows that moved are CI's, on the tree merged with #1899. The check reads
+every field written inside a maker, and the library comment and the new
+fixtures are more text to compile: compile_instructions lands on 25,764,487,
+entry_instructions on 85,217,023, library_instructions on 85,769,178,
+emit_instructions on 7,016,791 and browser_compile_instructions on
+392,024,143. The interpreter asks whether each item `push` is handed is a cell
+still being made, and interp_instructions lands on 489,120,716. This builds a
+ruled part of the language, so the welfare floor drops by what it costs.
+
+On the tree merged with #1913 the same costs sit on main's new rows:
+compile_instructions lands on 25,884,823, entry_instructions on 85,390,774,
+library_instructions on 85,944,538, emit_instructions on 7,013,859,
+browser_compile_instructions on 391,328,276 and interp_instructions on
+489,068,417.
+
+On main after #1904 the tab's compile reads `browser_compile_instructions`
+392,396,387, up 18,012 from main's 392,378,375 on the same tree.
+
+91.11.
+
+With main merged after #1922, browser_compile_instructions lands on
+393,286,002.

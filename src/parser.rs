@@ -94,7 +94,7 @@ pub fn parse_play(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
         let found = (a + 1..b).find(|n| blanks.contains(n));
         decl_blanks.push(found.unwrap_or(a + 1));
     }
-    let decl_half = Lexed { lines: decl_lines, blank_lines: decl_blanks, header: 0 };
+    let decl_half = Lexed { lines: decl_lines, blank_lines: decl_blanks, header: 0, pruned: false };
     let mut program = match parse(&decl_half) {
         Ok(program) => program,
         Err(more) => {
@@ -222,7 +222,9 @@ pub fn parse(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
     let mut imports: Vec<Import> = Vec::new();
     let mut reexports: Vec<crate::ast::Reexport> = Vec::new();
     let mut past_imports = false;
-    check_blank_policy(lexed, &mut diags);
+    if !lexed.pruned {
+        check_blank_policy(lexed, &mut diags);
+    }
     let mut i = 0;
     while i < lexed.lines.len() {
         let line = &lexed.lines[i];
