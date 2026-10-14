@@ -35,7 +35,7 @@ fn on_line prefix line
   list/to_list (list/map fields (f -> pair_of prefix f))
 
 fn joined acc more
-  text/concat acc more
+  list/concat acc more
 
 fn counted text prefix
   lines = list/select (text/split text "\n") body?
@@ -91,11 +91,11 @@ fn against golden base_text found
 fn weighed golden prefix base_text ours found
   mine = counted ours prefix
   theirs = counted base_text prefix
-  names = names_of (text/concat mine theirs)
+  names = names_of (list/concat mine theirs)
   mine_t = totals mine
   theirs_t = totals theirs
   moves = list/map names (n -> judged golden n mine_t theirs_t)
-  text/concat found (list/to_list (list/select moves real?))
+  list/concat found (list/to_list (list/select moves real?))
 
 fn real? m
   m.key != ""

@@ -1775,75 +1775,75 @@ digest_counters = row
 
 rows_a0 = [formatting linting python_free goldens scan_leak]
 
-rows_a = text/concat rows_a0 [mem_shapes release_profile]
+rows_a = list/concat rows_a0 [mem_shapes release_profile]
 
 rows_b1a = [decode_counters escape_counters pend_counters digest_counters]
 
 rows_b1y = [thunk_walk scan_counters read_counters compile_libraries]
 
-rows_b1z = text/concat rows_b1y [oneshot_counters]
+rows_b1z = list/concat rows_b1y [oneshot_counters]
 
-rows_b1 = text/concat rows_b1a (text/concat rows_b1z [live_counters clean_run])
+rows_b1 = list/concat rows_b1a (list/concat rows_b1z [live_counters clean_run])
 
-rows_b1r0 = text/concat rows_b1 [emitted_code emitted_others remainder]
+rows_b1r0 = list/concat rows_b1 [emitted_code emitted_others remainder]
 
-rows_b1r1 = text/concat rows_b1r0 [short_float leading_zeros int_cold_tail]
+rows_b1r1 = list/concat rows_b1r0 [short_float leading_zeros int_cold_tail]
 
-rows_b1r2 = text/concat rows_b1r1 [cold_registers index_cold_arms]
+rows_b1r2 = list/concat rows_b1r1 [cold_registers index_cold_arms]
 
-rows_b1r3 = text/concat rows_b1r2 [cold_copy rare_door]
+rows_b1r3 = list/concat rows_b1r2 [cold_copy rare_door]
 
-rows_b1r4 = text/concat rows_b1r3 [sweep_helpers slice_walk closure_caps]
+rows_b1r4 = list/concat rows_b1r3 [sweep_helpers slice_walk closure_caps]
 
-rows_b1r5 = text/concat rows_b1r4 [empty_room scan_inline scan_tail]
+rows_b1r5 = list/concat rows_b1r4 [empty_room scan_inline scan_tail]
 
-rows_b1r = text/concat rows_b1r5 [counters_out capture_load]
+rows_b1r = list/concat rows_b1r5 [counters_out capture_load]
 
-rows_b1b = text/concat rows_b1r [machine_code]
+rows_b1b = list/concat rows_b1r [machine_code]
 
-rows_b1c = text/concat rows_b1b [instructions_host text_host]
+rows_b1c = list/concat rows_b1b [instructions_host text_host]
 
-rows_b1d = text/concat rows_b1c [compile_allocs compile_allocs_host]
+rows_b1d = list/concat rows_b1c [compile_allocs compile_allocs_host]
 
-rows_b1d2 = text/concat rows_b1d [compile_ir compile_ir_host entry_ir]
+rows_b1d2 = list/concat rows_b1d [compile_ir compile_ir_host entry_ir]
 
-rows_b1d3 = text/concat rows_b1d2 [library_ir]
+rows_b1d3 = list/concat rows_b1d2 [library_ir]
 
-rows_b1e0a = text/concat rows_b1d3 [compile_ir_one_value box_check_hoist]
+rows_b1e0a = list/concat rows_b1d3 [compile_ir_one_value box_check_hoist]
 
-rows_b1e0m = text/concat rows_b1e0a [compile_ir_from_main]
+rows_b1e0m = list/concat rows_b1e0a [compile_ir_from_main]
 
-rows_b1e0 = text/concat rows_b1e0m [qualified_name_join]
+rows_b1e0 = list/concat rows_b1e0m [qualified_name_join]
 
-rows_b1e1 = text/concat rows_b1e0 [host_measures]
+rows_b1e1 = list/concat rows_b1e0 [host_measures]
 
-rows_b1e2 = text/concat rows_b1e1 [inline_pin chart_replay objective_row]
+rows_b1e2 = list/concat rows_b1e1 [inline_pin chart_replay objective_row]
 
-rows_b1e3 = text/concat rows_b1e2 [one_char_memo length_memo chain_index]
+rows_b1e3 = list/concat rows_b1e2 [one_char_memo length_memo chain_index]
 
-rows_b1e4 = text/concat rows_b1e3 [length_fold ten_open ten_where seek_kept]
+rows_b1e4 = list/concat rows_b1e3 [length_fold ten_open ten_where seek_kept]
 
-rows_b1e = text/concat rows_b1e4 [pop_fast push_walk]
+rows_b1e = list/concat rows_b1e4 [pop_fast push_walk]
 
-rows_b1f = text/concat rows_b1e [scalar_words render_words]
+rows_b1f = list/concat rows_b1e [scalar_words render_words]
 
-rows_b1f2 = text/concat rows_b1f [render_trip int_bound]
+rows_b1f2 = list/concat rows_b1f [render_trip int_bound]
 
-rows_b1g = text/concat rows_b1f2 [map_lit_copy buf_class_loop]
+rows_b1g = list/concat rows_b1f2 [map_lit_copy buf_class_loop]
 
-rows_b1h = text/concat rows_b1g [walk_once data_beside]
+rows_b1h = list/concat rows_b1g [walk_once data_beside]
 
-rows_b1i = text/concat rows_b1h [freeze_all mark_block_first]
+rows_b1i = list/concat rows_b1h [freeze_all mark_block_first]
 
-rows_b1j = text/concat rows_b1i [wide_char_cache ascii_four_blocks]
+rows_b1j = list/concat rows_b1i [wide_char_cache ascii_four_blocks]
 
-rows_b1k = text/concat rows_b1j [slice_count_words]
+rows_b1k = list/concat rows_b1j [slice_count_words]
 
-rows_b1l = text/concat rows_b1k [size_walk chain_drift thunk_set failure_set]
+rows_b1l = list/concat rows_b1k [size_walk chain_drift thunk_set failure_set]
 
-rows_b1m = text/concat rows_b1l [pop_deep str_words ryu_words rewritten_twice]
+rows_b1m = list/concat rows_b1l [pop_deep str_words ryu_words rewritten_twice]
 
-rows_b1n = text/concat rows_b1m [shared_path entry_rewritten_twice]
+rows_b1n = list/concat rows_b1m [shared_path entry_rewritten_twice]
 
 # The one-module collapse's dedup keys. compile_ir's own mutation stops the
 # vein being read; this one leaves the vein alone and asks whether it can see a
@@ -1884,9 +1884,9 @@ framed_view = row
   (breaking "a_view_read_in_its_frame_given_an_arena_header")
   release
 
-rows_b1oa = text/concat rows_b1n [append_rendered arm_narrowed arms_apart]
+rows_b1oa = list/concat rows_b1n [append_rendered arm_narrowed arms_apart]
 
-rows_b1o = text/concat rows_b1oa [dedup_key_owned fused_names_owned]
+rows_b1o = list/concat rows_b1oa [dedup_key_owned fused_names_owned]
 
 # A map whose pairs are already in order is its own sorted view. The mutation
 # copies them into a view again, and the fixture
@@ -1924,9 +1924,9 @@ counted_run = row
   (breaking "a_counted_run_that_ignores_its_ceiling")
   release
 
-rows_b1q = text/concat rows_b1o [list_test_first framed_view]
+rows_b1q = list/concat rows_b1o [list_test_first framed_view]
 
-rows_b1p = text/concat rows_b1q [ordered_view regrow counted_run]
+rows_b1p = list/concat rows_b1q [ordered_view regrow counted_run]
 
 # A slice of a long string shares the string's bytes. The mutation makes every
 # slice a copy again, and the fixture a_long_slice_shares_its_text reads
@@ -1961,7 +1961,7 @@ oversize_tail = row
   (breaking "an_oversize_block_that_strands_its_neighbour")
   release
 
-rows_b1v = text/concat rows_b1p [slice_view view_cstr oversize_tail]
+rows_b1v = list/concat rows_b1p [slice_view view_cstr oversize_tail]
 
 # An arm no value can reach is not emitted. The mutation keeps every arm, and
 # the spec's mapping program defines next_skipped again.
@@ -1973,7 +1973,7 @@ unbuilt_arm = row
   (breaking "an_arm_no_value_reaches_emitted")
   release
 
-rows_b1u = text/concat rows_b1v [unbuilt_arm]
+rows_b1u = list/concat rows_b1v [unbuilt_arm]
 
 # A cycle nothing reaches is not emitted. The mutation starts every definition
 # marked, and the spec's fused-call program defines std/text's to_float again.
@@ -1985,7 +1985,7 @@ dead_cycle = row
   (breaking "a_cycle_nothing_reaches_emitted")
   release
 
-rows_b1cy = text/concat rows_b1u [dead_cycle]
+rows_b1cy = list/concat rows_b1u [dead_cycle]
 
 # A string nothing names is not emitted. The mutation wants every interned
 # string, and the spec's module carries strings nothing names again.
@@ -1997,7 +1997,7 @@ dead_string = row
   (breaking "a_string_nothing_names_emitted")
   release
 
-rows_b1st = text/concat rows_b1cy [dead_string]
+rows_b1st = list/concat rows_b1cy [dead_string]
 
 # A block nothing branches to is not emitted. The mutation keeps every block,
 # and the spec's module carries failure paths nothing reaches again.
@@ -2009,7 +2009,7 @@ dead_block = row
   (breaking "a_block_nothing_branches_to_emitted")
   release
 
-rows_b1bk = text/concat rows_b1st [dead_block]
+rows_b1bk = list/concat rows_b1st [dead_block]
 
 # An unboxed parameter is read as its word. The mutation records nothing, and
 # the spec's module takes its parameters back apart again.
@@ -2021,7 +2021,7 @@ unboxed_word = row
   (breaking "an_unboxed_parameter_taken_apart")
   release
 
-rows_b1uw = text/concat rows_b1bk [unboxed_word]
+rows_b1uw = list/concat rows_b1bk [unboxed_word]
 
 # A switch writes `nomatch` only when a case falls to it. The mutation always
 # writes it, and the spec's JSON decode carries failure paths nothing reaches.
@@ -2033,7 +2033,7 @@ dead_nomatch = row
   (breaking "a_nomatch_nothing_falls_to_emitted")
   release
 
-rows_b1nm = text/concat rows_b1uw [dead_nomatch]
+rows_b1nm = list/concat rows_b1uw [dead_nomatch]
 
 # A tag known to be the int tag is not compared. The mutation compares every
 # tag, and the spec's module compares 0 with 0 again.
@@ -2045,7 +2045,7 @@ known_tag = row
   (breaking "a_known_int_tag_compared")
   release
 
-rows_b1kt = text/concat rows_b1nm [known_tag]
+rows_b1kt = list/concat rows_b1nm [known_tag]
 
 # A release build hands clang every `musttail` the emitter wrote, however
 # wide the arm. The mutation takes it off every call into an arm that stays
@@ -2058,7 +2058,7 @@ nine_words = row
   (breaking "a_wide_arm_called_without_musttail")
   release
 
-rows_b1nw = text/concat rows_b1kt [nine_words]
+rows_b1nw = list/concat rows_b1kt [nine_words]
 
 # A tail cycle takes one flat signature under preserve_nonecc in a release
 # build on x86-64. The first mutation skips the rewrite, which only the work
@@ -2100,7 +2100,7 @@ doors = row
   (breaking "a_door_called_on_the_other_convention")
   release
 
-rows_b1ft = text/concat rows_b1nw [flat_tails flat_order plain_calls doors]
+rows_b1ft = list/concat rows_b1nw [flat_tails flat_order plain_calls doors]
 
 # An append onto a bufferless bytes value tests for the grow inline, before
 # the fitting path's frame. The mutation drops the test.
@@ -2112,7 +2112,7 @@ grow_first = row
   (breaking "a_growing_append_pays_the_fit_s_frame")
   benchmarks
 
-rows_b1gf = text/concat rows_b1ft [grow_first]
+rows_b1gf = list/concat rows_b1ft [grow_first]
 
 # A parameter that is a name binds its argument by moving it once an arm has
 # won. The mutation clones it at every candidate again.
@@ -2124,7 +2124,7 @@ moved_binds = row
   (breaking "a_bound_name_cloned_for_every_candidate")
   release
 
-rows_b1mb = text/concat rows_b1gf [moved_binds]
+rows_b1mb = list/concat rows_b1gf [moved_binds]
 
 # A list growing out of four slots takes eight before sixteen. The mutation
 # doubles every time again, and the fixture's buffers double with it.
@@ -2136,7 +2136,7 @@ fifth_push = row
   (breaking "a_fifth_push_takes_sixteen")
   release
 
-rows_b1fp = text/concat rows_b1mb [fifth_push]
+rows_b1fp = list/concat rows_b1mb [fifth_push]
 
 # An accumulator out of the arena grows by realloc. The mutation mallocs,
 # copies and frees again, and the fixture's permanent peak holds two buffers.
@@ -2148,7 +2148,7 @@ perm_regrow = row
   (breaking "an_accumulator_grown_by_malloc_and_free")
   release
 
-rows_b1rg = text/concat rows_b1fp [perm_regrow]
+rows_b1rg = list/concat rows_b1fp [perm_regrow]
 
 # A call through a function reference finds its callee by the reference's
 # address. The mutation hashes the name again.
@@ -2160,7 +2160,7 @@ callee_by_ref = row
   (breaking "a_call_hashes_its_callee_s_name")
   release
 
-rows_b1cr = text/concat rows_b1rg [callee_by_ref]
+rows_b1cr = list/concat rows_b1rg [callee_by_ref]
 
 # A conjunction of byte compares is one range test and plain reads. One
 # mutation reads each byte one late and the micro fixture disagrees with the
@@ -2181,7 +2181,7 @@ byte_run_apart = row
   (breaking "a_byte_run_read_one_byte_at_a_time")
   benchmarks
 
-rows_b1br = text/concat rows_b1cr [byte_run_late byte_run_apart]
+rows_b1br = list/concat rows_b1cr [byte_run_late byte_run_apart]
 
 # A rewind whose arena pointer stands at the mark returns before asking for
 # the block. The mutation asks for the block first again.
@@ -2193,7 +2193,7 @@ unmoved_arena = row
   (breaking "an_unmoved_arena_asked_for_its_block")
   benchmarks
 
-rows_b1ua = text/concat rows_b1br [unmoved_arena]
+rows_b1ua = list/concat rows_b1br [unmoved_arena]
 
 # Two byte appends in a row are one call that asks for room once. One
 # mutation stores the bytes back to front and the micro fixture disagrees with
@@ -2214,7 +2214,7 @@ byte_pair_apart = row
   (breaking "a_byte_pair_appended_one_at_a_time")
   benchmarks
 
-rows_b1bp = text/concat rows_b1ua [byte_pair_swapped byte_pair_apart]
+rows_b1bp = list/concat rows_b1ua [byte_pair_swapped byte_pair_apart]
 
 # A proven list is measured and indexed in place. One mutation reads each
 # slot one late and the micro fixture disagrees with the interpreter; the
@@ -2244,9 +2244,9 @@ list_length_twin = row
   (breaking "a_proven_list_measured_through_the_twin")
   benchmarks
 
-rows_b1pr = text/concat rows_b1bp [list_read_late list_index_twin]
+rows_b1pr = list/concat rows_b1bp [list_read_late list_index_twin]
 
-rows_b1pl = text/concat rows_b1pr [list_length_twin]
+rows_b1pl = list/concat rows_b1pr [list_length_twin]
 
 # The interpreter asks whether a push writes in place against its frame's
 # own sites. The mutation hashes the file's path on every call again.
@@ -2288,7 +2288,7 @@ inline_force = row
   (breaking "a_plain_value_forced_through_a_call")
   release
 
-rows_b1is = text/concat rows_b1pl [in_place_site recent_callee recent_frame]
+rows_b1is = list/concat rows_b1pl [in_place_site recent_callee recent_frame]
 
 # A hit in the recent-frame table is answered at the caller. The mutation
 # keeps the lookup out of line.
@@ -2300,7 +2300,7 @@ frame_hit_inline = row
   (breaking "a_recent_frame_hit_paying_the_miss_s_frame")
   release
 
-rows_b1if = text/concat rows_b1is [inline_force frame_hit_inline]
+rows_b1if = list/concat rows_b1is [inline_force frame_hit_inline]
 
 # A regexp scan first asks the subject for the literal every match must hold.
 # Carrying the literal run across a class asks for a literal the subject does
@@ -2322,7 +2322,7 @@ literal_asked = row
   (breaking "a_scan_made_without_asking_for_the_literal")
   benches
 
-rows_b1rl = text/concat rows_b1if [literal_run literal_asked]
+rows_b1rl = list/concat rows_b1if [literal_run literal_asked]
 
 # A split whose scan finds nothing ends, rather than scanning again from the
 # next position; the mem fixture's scan count goes quadratic without it.
@@ -2334,7 +2334,7 @@ split_stops = row
   (breaking "a_split_that_rescans_after_finding_nothing")
   release
 
-rows_b1ss = text/concat rows_b1rl [split_stops]
+rows_b1ss = list/concat rows_b1rl [split_stops]
 
 # A map of up to eight entries is a sorted vector and a larger one a B-tree.
 # Growing into the tree without the key that made it grow loses that key on
@@ -2347,7 +2347,7 @@ map_grow = row
   (breaking "a_ninth_key_lost_when_a_map_grows")
   release
 
-rows_b1mg = text/concat rows_b1ss [map_grow]
+rows_b1mg = list/concat rows_b1ss [map_grow]
 
 # An interpreted int that overflows a machine word takes a BigInt, and one that
 # comes back into range must come back into the word: equality compares the
@@ -2360,7 +2360,7 @@ int_word = row
   (breaking "a_number_that_stays_big_when_it_fits")
   release
 
-rows_b1iw = text/concat rows_b1mg [int_word]
+rows_b1iw = list/concat rows_b1mg [int_word]
 
 # A walk by index steps its cursor one character on, and a join of counted
 # pieces writes the sum. Closing the step leaves every character right and
@@ -2391,7 +2391,7 @@ join_sep = row
   (breaking "a_join_count_that_drops_its_separator")
   release
 
-rows_b1ix = text/concat rows_b1iw [seek_step join_seed join_sep]
+rows_b1ix = list/concat rows_b1iw [seek_step join_seed join_sep]
 
 # Under clang 19 the emitter writes the preserve_none convention in front of
 # every declare of and call to a door, in one pass over the module. Matching a
@@ -2405,7 +2405,7 @@ door_prefix = row
   (breaking "a_door_found_by_its_prefix")
   release
 
-rows_b1dp = text/concat rows_b1ix [door_prefix]
+rows_b1dp = list/concat rows_b1ix [door_prefix]
 
 # A literal of one to eight bytes appended in place is stored as one word.
 # A length moved by the word's eight bytes prints the bytes past the literal;
@@ -2436,7 +2436,7 @@ word_used = row
   (breaking "a_literal_appended_through_its_cell")
   benches
 
-rows_b1lw = text/concat rows_b1dp [word_length word_slow word_used]
+rows_b1lw = list/concat rows_b1dp [word_length word_slow word_used]
 
 # A second `kanso play` of a file finds its binary by the file's text and does
 # not emit. Leaving the text out of that key runs an edited file's old binary;
@@ -2467,7 +2467,7 @@ play_signal = row
   (breaking "a_warm_play_that_dies_in_silence")
   release
 
-rows_b1pk = text/concat rows_b1lw [play_text play_disk play_signal]
+rows_b1pk = list/concat rows_b1lw [play_text play_disk play_signal]
 
 # An application's arguments leave the shared stack as a vector of exactly
 # their number. Four slots apiece, which is what growing one from nothing
@@ -2480,7 +2480,7 @@ args_exact = row
   (breaking "an_application_that_grows_its_own_arguments")
   release
 
-rows_b1ae = text/concat rows_b1pk [args_exact]
+rows_b1ae = list/concat rows_b1pk [args_exact]
 
 # A dev link goes to gold, without a build ID, wherever gold links. Handing it
 # back to lld raises the dev codegen row by what the dynamic loader spends on
@@ -2493,7 +2493,7 @@ dev_gold = row
   (breaking "a_dev_link_left_to_lld")
   no_setup
 
-rows_b1dg = text/concat rows_b1ae [dev_gold]
+rows_b1dg = list/concat rows_b1ae [dev_gold]
 
 # A key named through `{:016x}` costs more when its value has a leading zero
 # nibble, and the values hash tools' modification times.
@@ -2505,7 +2505,7 @@ key_hex = row
   (breaking "a_key_named_through_padding")
   release
 
-rows_b1hx = text/concat rows_b1dg [key_hex]
+rows_b1hx = list/concat rows_b1dg [key_hex]
 
 # The short-decimal search starts where the last float's ended. Starting it at
 # zero again renders the same digits and costs runbench the tries the guess
@@ -2518,7 +2518,7 @@ ryu_guess = row
   (breaking "a_float_search_that_starts_at_zero")
   benches
 
-rows_b1fs = text/concat rows_b1hx [ryu_guess]
+rows_b1fs = list/concat rows_b1hx [ryu_guess]
 
 # A list that leaves the arena takes 256 slots, so a thousand-element
 # accumulator grows by realloc twice rather than four times.
@@ -2530,7 +2530,7 @@ perm_wide = row
   (breaking "a_permanent_list_that_starts_narrow")
   release
 
-rows_b1pw = text/concat rows_b1fs [perm_wide]
+rows_b1pw = list/concat rows_b1fs [perm_wide]
 
 # `{}` opens with room for five pairs, so a five-key object is built without
 # a grow.
@@ -2542,7 +2542,7 @@ map_seed = row
   (breaking "an_empty_map_seeded_with_four_pairs")
   release
 
-rows_b1ms = text/concat rows_b1pw [map_seed]
+rows_b1ms = list/concat rows_b1pw [map_seed]
 
 # `[]` opens with room for six, so an array of five or six is built without
 # a grow.
@@ -2554,7 +2554,7 @@ list_seed = row
   (breaking "an_empty_list_seeded_with_four")
   release
 
-rows_b1ls = text/concat rows_b1ms [list_seed]
+rows_b1ls = list/concat rows_b1ms [list_seed]
 
 # `bytes ""` is a builder with 64 bytes of room, so the append after it lands
 # in place instead of growing from nothing.
@@ -2566,7 +2566,7 @@ bytes_seed = row
   (breaking "an_empty_builder_with_no_room")
   release
 
-rows_b1bs = text/concat rows_b1ls [bytes_seed]
+rows_b1bs = list/concat rows_b1ls [bytes_seed]
 
 # A malloc'd builder past 16 kb grows by half, so it finishes with less
 # empty room than a doubled one.
@@ -2578,7 +2578,7 @@ half_grow = row
   (breaking "a_large_builder_that_doubles")
   release
 
-rows_b1hg = text/concat rows_b1bs [half_grow]
+rows_b1hg = list/concat rows_b1bs [half_grow]
 
 # A token of four to seven bytes comes back from a cache of permanent strings
 # instead of being built on every read.
@@ -2590,7 +2590,7 @@ token_cache = row
   (breaking "a_short_token_built_every_time")
   release
 
-rows_b1tc = text/concat rows_b1hg [token_cache]
+rows_b1tc = list/concat rows_b1hg [token_cache]
 
 # A map key reaches escape_onto through a parameter typed as a string.
 key_typed = row
@@ -2601,7 +2601,7 @@ key_typed = row
   (breaking "a_key_written_as_any_value")
   benches
 
-rows_b1ky = text/concat rows_b1tc [key_typed]
+rows_b1ky = list/concat rows_b1tc [key_typed]
 
 # A tail call carries its callee's group to the dispatcher, which no longer
 # hashes the name to find it.
@@ -2613,7 +2613,7 @@ tail_group = row
   (breaking "a_tail_that_hashes_its_group")
   release
 
-rows_b1tg = text/concat rows_b1ky [tail_group]
+rows_b1tg = list/concat rows_b1ky [tail_group]
 
 # A literal is read out of its BigInt by a direct digit read, inlined.
 word_read = row
@@ -2624,7 +2624,7 @@ word_read = row
   (breaking "a_literal_read_through_the_digit_walk")
   release
 
-rows_b1wr = text/concat rows_b1tg [word_read]
+rows_b1wr = list/concat rows_b1tg [word_read]
 
 # A division by a nonzero literal adds no err to what inference knows.
 literal_divisor = row
@@ -2635,7 +2635,7 @@ literal_divisor = row
   (breaking "a_literal_divisor_that_might_fail")
   benchmarks
 
-rows_b1ld = text/concat rows_b1wr [literal_divisor]
+rows_b1ld = list/concat rows_b1wr [literal_divisor]
 
 # A lambda applied to a box may not read the box as a value.
 box_param = row
@@ -2648,7 +2648,7 @@ box_param = row
 
 box_error_golden = "error_corpus_reports_each_golden_diagnostic"
 
-rows_b1bx = text/concat rows_b1ld [box_param]
+rows_b1bx = list/concat rows_b1ld [box_param]
 
 # A boxed parameter proven to be one kind of heap value carries an assume.
 tag_assumed = row
@@ -2659,7 +2659,7 @@ tag_assumed = row
   (breaking "a_proven_tag_left_unsaid")
   benches
 
-rows_b1ta = text/concat rows_b1bx [tag_assumed]
+rows_b1ta = list/concat rows_b1bx [tag_assumed]
 
 # `>>` is refused where it is written, with the spelling that replaced it.
 wall_refused = row
@@ -2683,7 +2683,7 @@ plan_golden = "plan_prints_the_description_without_executing_it"
 
 error_golden = "error_corpus_reports_each_golden_diagnostic"
 
-rows_b1wg = text/concat rows_b1ta [wall_refused plan_ignoring]
+rows_b1wg = list/concat rows_b1ta [wall_refused plan_ignoring]
 
 # A builtin sees a subtype's value as its parent's on every engine.
 subtype_unwrapped = row
@@ -2694,7 +2694,7 @@ subtype_unwrapped = row
   (breaking "a_subtype_handed_to_a_builtin_whole")
   release
 
-rows_b1su = text/concat rows_b1wg [subtype_unwrapped]
+rows_b1su = list/concat rows_b1wg [subtype_unwrapped]
 
 # A call whose result is proven one kind of value carries an assume.
 result_assumed = row
@@ -2705,7 +2705,7 @@ result_assumed = row
   (breaking "a_proven_result_left_unsaid")
   benches
 
-rows_b1ra = text/concat rows_b1su [result_assumed]
+rows_b1ra = list/concat rows_b1su [result_assumed]
 
 # A region gives back what it allocated when the call's result lies outside it.
 region_given_back = row
@@ -2716,7 +2716,7 @@ region_given_back = row
   (breaking "a_region_that_keeps_what_it_made")
   release
 
-rows_b1gb = text/concat rows_b1ra [region_given_back]
+rows_b1gb = list/concat rows_b1ra [region_given_back]
 
 # A guard's condition branches on its comparisons instead of being asked.
 guard_asked = row
@@ -2729,7 +2729,7 @@ guard_asked = row
 
 guard_spec = "an_or_under_a_guard_is_asked_in_pieces"
 
-rows_b1ga = text/concat rows_b1gb [guard_asked]
+rows_b1ga = list/concat rows_b1gb [guard_asked]
 
 # A list buffer's capacity is doubled with its regime in bit 0.
 capacity_doubled = row
@@ -2742,7 +2742,7 @@ capacity_doubled = row
 
 capacity_spec = "a_buffer_capacity_reads_back_whole_in_either_regime"
 
-rows_b1cd = text/concat rows_b1ga [capacity_doubled]
+rows_b1cd = list/concat rows_b1ga [capacity_doubled]
 
 # Past the beat stack the cached top is a mark that stands in for none.
 beat_none = row
@@ -2753,7 +2753,7 @@ beat_none = row
   (breaking "a_beat_past_the_stack_rewound_to_nothing")
   release
 
-rows_b1bn = text/concat rows_b1cd [beat_none]
+rows_b1bn = list/concat rows_b1cd [beat_none]
 
 # A carried record is asked about failure once, on its value field.
 carried_once = row
@@ -2766,7 +2766,7 @@ carried_once = row
 
 carried_spec = "a_carried_record_is_asked_about_failure_once"
 
-rows_b1co = text/concat rows_b1bn [carried_once]
+rows_b1co = list/concat rows_b1bn [carried_once]
 
 # An index read tells LLVM its container's length is not negative.
 length_assumed = row
@@ -2779,7 +2779,7 @@ length_assumed = row
 
 length_spec = "an_index_assumes_its_length_is_not_negative"
 
-rows_b1la = text/concat rows_b1co [length_assumed]
+rows_b1la = list/concat rows_b1co [length_assumed]
 
 # A span is asked in two unsigned compares.
 span_unsigned = row
@@ -2792,7 +2792,7 @@ span_unsigned = row
 
 span_spec = "a_span_is_asked_in_two_unsigned_compares"
 
-rows_b1sp = text/concat rows_b1la [span_unsigned]
+rows_b1sp = list/concat rows_b1la [span_unsigned]
 
 # A room test asks its two questions with two branches.
 room_split = row
@@ -2805,7 +2805,7 @@ room_split = row
 
 room_spec = "a_room_test_branches_on_each_question"
 
-rows_b1rs = text/concat rows_b1sp [room_split]
+rows_b1rs = list/concat rows_b1sp [room_split]
 
 # An index loads its length between its two bounds.
 index_split = row
@@ -2818,7 +2818,7 @@ index_split = row
 
 index_split_spec = "an_index_loads_its_length_after_its_lower_bound"
 
-rows_b1ib = text/concat rows_b1rs [index_split]
+rows_b1ib = list/concat rows_b1rs [index_split]
 
 # An empty run returns the builder between its two bounds tests.
 empty_run = row
@@ -2831,19 +2831,19 @@ empty_run = row
 
 empty_run_spec = "an_empty_run_appends_nothing"
 
-rows_b1er = text/concat rows_b1ib [empty_run]
+rows_b1er = list/concat rows_b1ib [empty_run]
 
-rows_b = text/concat rows_b1er [compile_mem compile_mem_host]
+rows_b = list/concat rows_b1er [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 
-rows_c1a = text/concat rows_c1 [perf_row trend_runtime trend_joined]
+rows_c1a = list/concat rows_c1 [perf_row trend_runtime trend_joined]
 
-rows_c1t = text/concat rows_c1a [trend_adrift trend_rebased trend_read]
+rows_c1t = list/concat rows_c1a [trend_adrift trend_rebased trend_read]
 
-rows_c1p = text/concat rows_c1t [published_numbers]
+rows_c1p = list/concat rows_c1t [published_numbers]
 
-rows_c1b = text/concat rows_c1p [diagnostics accumulator]
+rows_c1b = list/concat rows_c1p [diagnostics accumulator]
 
 # The `goldens` row above covers the micro differential generically, through a
 # golden that drifts. This one covers the direction the corpus could not see
@@ -2860,23 +2860,23 @@ truncated_significand = row
   (breaking "a_truncated_significand_taken_as_certain")
   release
 
-rows_c1c0a = text/concat rows_c1b [rendering negative_sign small_record]
+rows_c1c0a = list/concat rows_c1b [rendering negative_sign small_record]
 
-rows_c1c0 = text/concat rows_c1c0a [truncated_significand]
+rows_c1c0 = list/concat rows_c1c0a [truncated_significand]
 
-rows_c1c1 = text/concat rows_c1c0 [short_append beat_mark every_edge pure_cycle]
+rows_c1c1 = list/concat rows_c1c0 [short_append beat_mark every_edge pure_cycle]
 
-rows_c1c = text/concat rows_c1c1 [behaviour]
+rows_c1c = list/concat rows_c1c1 [behaviour]
 
-rows_c1d = text/concat rows_c1c [numeric effects]
+rows_c1d = list/concat rows_c1c [numeric effects]
 
-rows_c1e = text/concat rows_c1d [modules coverage]
+rows_c1e = list/concat rows_c1d [modules coverage]
 
-rows_c1f0 = text/concat rows_c1e [coverage_floor decoder]
+rows_c1f0 = list/concat rows_c1e [coverage_floor decoder]
 
-rows_c1f = text/concat rows_c1f0 [validator validator_tail]
+rows_c1f = list/concat rows_c1f0 [validator validator_tail]
 
-rows_c1g = text/concat rows_c1f [landing in_the_page page_route shop_window]
+rows_c1g = list/concat rows_c1f [landing in_the_page page_route shop_window]
 
 # kq is a real program with its own JSON, and its own text goes through
 # `text/append` seventy times, so a runtime that corrupts an in-place append
@@ -2911,7 +2911,7 @@ coverage_printed = row
   (breaking "a_printed_error_kind_arrives_without_a_golden")
   release
 
-rows_c1h = text/concat rows_c1g [dispatch coverage_driver]
+rows_c1h = list/concat rows_c1g [dispatch coverage_driver]
 
 # A FOURTH opener, and the file the scan could not see. `source?` took `.rs`
 # only, so src/runtime.c — where a compiled binary gets its runtime messages —
@@ -2949,31 +2949,31 @@ coverage_oracle_format = row
   (breaking "an_oracle_format_refusal_arrives_without_a_golden")
   release
 
-rows_c1i = text/concat rows_c1h [coverage_printed kq_specs asset_digests]
+rows_c1i = list/concat rows_c1h [coverage_printed kq_specs asset_digests]
 
-rows_c1j = text/concat rows_c1i [coverage_native]
+rows_c1j = list/concat rows_c1i [coverage_native]
 
-rows_c1k = text/concat rows_c1j [coverage_oracle coverage_oracle_format]
+rows_c1k = list/concat rows_c1j [coverage_oracle coverage_oracle_format]
 
-rows_c1l = text/concat rows_c1k [named_err]
+rows_c1l = list/concat rows_c1k [named_err]
 
-rows_c1m0 = text/concat rows_c1l [beat_cursor rescue_licence raised_err]
+rows_c1m0 = list/concat rows_c1l [beat_cursor rescue_licence raised_err]
 
-rows_c1m = text/concat rows_c1m0 [clay_send_filed]
+rows_c1m = list/concat rows_c1m0 [clay_send_filed]
 
-rows_c1m2 = text/concat rows_c1m [carry_failure repaired_mark]
+rows_c1m2 = list/concat rows_c1m [carry_failure repaired_mark]
 
-rows_c1n = text/concat rows_c1m2 [err_as_pattern force_chain]
+rows_c1n = list/concat rows_c1m2 [err_as_pattern force_chain]
 
-rows_c1o = text/concat rows_c1n [hand_box callback_err]
+rows_c1o = list/concat rows_c1n [hand_box callback_err]
 
-rows_c1w = text/concat rows_c1o [bang_box guard_bound literal_bound]
+rows_c1w = list/concat rows_c1o [bang_box guard_bound literal_bound]
 
-rows_c1x = text/concat rows_c1w [guard_bind_linear guard_bind_chain]
+rows_c1x = list/concat rows_c1w [guard_bind_linear guard_bind_chain]
 
-rows_c1y = text/concat rows_c1x [bytes_acc_position guard_tail_oracle]
+rows_c1y = list/concat rows_c1x [bytes_acc_position guard_tail_oracle]
 
-rows_c1ya = text/concat rows_c1y [qualified_yield]
+rows_c1ya = list/concat rows_c1y [qualified_yield]
 
 # THE COMPILER'S ALLOCATOR. glibc's malloc and free were 12.7% of
 # `kanso check compile_corpus` — 5.27 million of 41.5 million instructions,
@@ -3005,9 +3005,9 @@ allocator_option = row
   (breaking "an_allocator_option_off_by_one")
   no_setup
 
-rows_c1za = text/concat rows_c1ya [compiler_allocator]
+rows_c1za = list/concat rows_c1ya [compiler_allocator]
 
-rows_c1zb = text/concat rows_c1za [allocator_option]
+rows_c1zb = list/concat rows_c1za [allocator_option]
 
 # And the second option the same constructor sets, for the same reason. This
 # one stops mimalloc reading the clock: its purge timer calls clock_gettime,
@@ -3022,9 +3022,9 @@ purge_delay_option = row
   (breaking "a_purge_delay_that_is_not_the_purge_delay")
   no_setup
 
-rows_c1zc = text/concat rows_c1zb [purge_delay_option]
+rows_c1zc = list/concat rows_c1zb [purge_delay_option]
 
-rows_c1zd = text/concat rows_c1zc [codegen_one_process]
+rows_c1zd = list/concat rows_c1zc [codegen_one_process]
 
 # The nightly proves the table in eight shards, and its matrix has to run every
 # shard its run line divides by.
@@ -3036,7 +3036,7 @@ nightly_shards = row
   (breaking "a_nightly_that_drops_its_last_shard")
   no_setup
 
-rows_c1ze = text/concat rows_c1zd [nightly_shards]
+rows_c1ze = list/concat rows_c1zd [nightly_shards]
 
 # The per-PR ratchet proves a branch's handful in shards, and the spec asks
 # each shard what it would prove. It lists rather than proves, so it runs in
@@ -3049,7 +3049,7 @@ branch_shards = row
   (breaking "a_branch_shard_that_skips_rows")
   no_setup
 
-rows_c1zf = text/concat rows_c1ze [branch_shards]
+rows_c1zf = list/concat rows_c1ze [branch_shards]
 
 # The utf-8 wide pass counts continuation bytes in a register, and the count is
 # the string's length. One row for the count, one for what it costs.
@@ -3069,7 +3069,7 @@ lane_count_cost = row
   (breaking "a_continuation_count_that_pays_a_popcount")
   benches
 
-rows_c1zl = text/concat rows_c1zf [lane_count lane_count_cost]
+rows_c1zl = list/concat rows_c1zf [lane_count lane_count_cost]
 
 # The slice walk counts a word's character starts by multiply rather than by a
 # popcount the ssse3 build writes out longhand.
@@ -3081,7 +3081,7 @@ skip_by_multiply = row
   (breaking "a_slice_skip_that_pays_a_popcount")
   benches
 
-rows_c1zh = text/concat rows_c1zl [skip_by_multiply]
+rows_c1zh = list/concat rows_c1zl [skip_by_multiply]
 
 # A run of up to eight digits is read as one word, and a short decimal as two,
 # each loaded from the eight bytes that end at its last digit. Both specs lift
@@ -3102,7 +3102,7 @@ float_word = row
   (breaking "a_float_word_that_never_looks_for_its_dot")
   release
 
-rows_c1zg = text/concat rows_c1zh [digit_word float_word]
+rows_c1zg = list/concat rows_c1zh [digit_word float_word]
 
 # A loop that only grows the list it was handed keeps its bracket and drops the
 # rewind, which found the arena where the mark left it on every lap.
@@ -3114,7 +3114,7 @@ grows_itself = row
   (breaking "a_pushing_loop_that_rewinds_every_lap")
   benches
 
-rows_c1zm = text/concat rows_c1zg [grows_itself]
+rows_c1zm = list/concat rows_c1zg [grows_itself]
 
 # `keys` and `values` are the two columns of `entries`, in its order; the JSON
 # encoder indexes both, so a column read in another order writes a wrong
@@ -3127,7 +3127,7 @@ columns_line_up = row
   (breaking "a_values_column_read_in_insertion_order")
   release
 
-rows_c1zn = text/concat rows_c1zm [columns_line_up]
+rows_c1zn = list/concat rows_c1zm [columns_line_up]
 
 # A map handed back to its loop unchanged threads the way a list does, so the
 # carry no longer walks its keys and values on every lap.
@@ -3139,7 +3139,7 @@ map_threaded = row
   (breaking "a_map_carried_that_could_have_threaded")
   release
 
-rows_c1zo = text/concat rows_c1zn [map_threaded]
+rows_c1zo = list/concat rows_c1zn [map_threaded]
 
 # The ratchet naming each row as it starts has no row here. The spec that
 # watches it, a_clean_head_still_proves_its_row, runs `prove` itself, and
@@ -3169,7 +3169,7 @@ numa_option = row
   (breaking "a_numa_option_off_by_one")
   no_setup
 
-rows_c1zp = text/concat rows_c1zo [numa_count numa_option]
+rows_c1zp = list/concat rows_c1zo [numa_count numa_option]
 
 # A call whose arguments are `keys m` and `values m` of one map builds both
 # lists in one runtime call and one allocation.
@@ -3181,7 +3181,7 @@ columns_together = row
   (breaking "the_two_columns_asked_apart")
   release
 
-rows_c1zq = text/concat rows_c1zp [columns_together]
+rows_c1zq = list/concat rows_c1zp [columns_together]
 
 # The cost-goldens job copies the profile of every gate that reads itself
 # twice, so a row that reads apart between runs can be diffed afterwards.
@@ -3193,7 +3193,7 @@ interp_profile = row
   (breaking "the_interp_profile_left_behind")
   no_setup
 
-rows_c1zr = text/concat rows_c1zq [interp_profile]
+rows_c1zr = list/concat rows_c1zq [interp_profile]
 
 # A shared token's escape scan is decided once, when its slot fills. Marking
 # every token clean writes a quote raw into the micro fixture; scanning a
@@ -3214,7 +3214,7 @@ token_skip = row
   (breaking "a_clean_token_scanned_anyway")
   benchmarks
 
-rows_c1zs = text/concat rows_c1zr [token_clean token_skip]
+rows_c1zs = list/concat rows_c1zr [token_clean token_skip]
 
 # The token's clean flag is three bit tests on one padded word; the spec lifts
 # them and sweeps every byte at every position against a byte walk.
@@ -3226,7 +3226,7 @@ token_word = row
   (breaking "a_token_flag_one_byte_short")
   no_setup
 
-rows_c1zt = text/concat rows_c1zs [token_word]
+rows_c1zt = list/concat rows_c1zs [token_word]
 
 # A lazy binding read once, past a `return ... if`, inlines into its reader.
 # Stopping the rewrite at the guard leaves the reader naming nothing, and the
@@ -3239,7 +3239,7 @@ chain_guard = row
   (breaking "a_return_hides_the_chain_reader")
   release
 
-rows_c1zu = text/concat rows_c1zt [chain_guard]
+rows_c1zu = list/concat rows_c1zt [chain_guard]
 
 # An accumulator whose seed the caller still reads is copied on the first lap
 # and extended in place after it. Asking the holder count nothing leaves every
@@ -3252,7 +3252,7 @@ seed_once = row
   (breaking "a_shared_seed_copied_every_lap")
   no_setup
 
-rows_c1zv = text/concat rows_c1zu [seed_once]
+rows_c1zv = list/concat rows_c1zu [seed_once]
 
 # Builds that compile the runtime at once each write its source under their own
 # name and rename it onto the shared one. Writing the shared path in place
@@ -3266,7 +3266,7 @@ runtime_source = row
   (breaking "the_runtime_source_written_in_place")
   no_setup
 
-rows_c1zw = text/concat rows_c1zv [runtime_source]
+rows_c1zw = list/concat rows_c1zv [runtime_source]
 
 # A finite float rounds to the integer it is, however large, on the
 # interpreter; a compiled build refuses one past int64. Restoring the
@@ -3288,7 +3288,7 @@ round_native = row
   (breaking "a_large_float_rounds_through_llround")
   no_setup
 
-rows_c1zx = text/concat rows_c1zw [round_exact round_native]
+rows_c1zx = list/concat rows_c1zw [round_exact round_native]
 
 # Pushing an err answers the err on every engine. Without the C push's item
 # test, a push the analysis does not own stores it, and the micro fixture
@@ -3311,7 +3311,7 @@ two_errs = row
   (breaking "two_failures_answer_the_first")
   release
 
-rows_c1zy = text/concat rows_c1zx [push_err two_errs]
+rows_c1zy = list/concat rows_c1zx [push_err two_errs]
 
 # A list renders in one pass into one buffer. Copying its text so far after
 # each element, as joining each element onto the rest did, turns the mem
@@ -3324,7 +3324,7 @@ render_pass = row
   (breaking "a_list_rendered_by_joining_each_element")
   release
 
-rows_c1zz = text/concat rows_c1zy [render_pass]
+rows_c1zz = list/concat rows_c1zy [render_pass]
 
 # A lazy cell's site that tail-calls a group returning its record in two
 # registers boxes the pair. Forgetting the pair came back as two words
@@ -3337,7 +3337,7 @@ thunk_box = row
   (breaking "a_thunk_site_returns_a_record_unboxed")
   release
 
-rows_c1zza = text/concat rows_c1zz [thunk_box]
+rows_c1zza = list/concat rows_c1zz [thunk_box]
 
 # A double halfway between two shortest decimals prints the even last digit on
 # every engine. Keeping Rust's upper candidate in the interpreter makes the
@@ -3350,7 +3350,7 @@ float_tie = row
   (breaking "a_float_tie_rounded_up")
   release
 
-rows_c1zzb = text/concat rows_c1zza [float_tie]
+rows_c1zzb = list/concat rows_c1zza [float_tie]
 
 # The render group is called by every interpolation, so its parameter holds
 # any value. Typed from the explicit calls alone, an int-only program passes
@@ -3363,7 +3363,7 @@ render_group = row
   (breaking "the_render_group_typed_from_its_calls")
   release
 
-rows_c1zzc = text/concat rows_c1zzb [render_group]
+rows_c1zzc = list/concat rows_c1zzb [render_group]
 
 # An integer written as text past int64 is read whole by a compiled build.
 # Answering an err value again lets a program catch it, and std/json turns it
@@ -3378,7 +3378,7 @@ int_refused = row
   (breaking "an_overflowing_integer_answered_as_an_err")
   no_setup
 
-rows_c1zzd = text/concat rows_c1zzc [int_refused]
+rows_c1zzd = list/concat rows_c1zzc [int_refused]
 
 # A cycle of an empty list ends at once. Without its guard the cycle wraps
 # and asks again forever, and the spec finds no answer inside its deadline.
@@ -3390,7 +3390,7 @@ empty_cycle = row
   (breaking "an_empty_cycle_that_wraps_forever")
   release
 
-rows_c1zze = text/concat rows_c1zzd [empty_cycle]
+rows_c1zze = list/concat rows_c1zzd [empty_cycle]
 
 # An unhandled err's reason is written by its length. Printed as a C string,
 # a reason holding a NUL stops there, and the runtime corpus reads it cut.
@@ -3402,7 +3402,7 @@ nul_reason = row
   (breaking "an_err_reason_printed_as_a_c_string")
   release
 
-rows_c1zzf = text/concat rows_c1zze [nul_reason]
+rows_c1zzf = list/concat rows_c1zze [nul_reason]
 
 # A list literal keeps a failing item, so an element read can answer an err.
 # Typed as never failing, the read lets a compiled build call on with no test
@@ -3415,7 +3415,7 @@ element_err = row
   (breaking "an_element_read_that_never_fails")
   release
 
-rows_c1zzg = text/concat rows_c1zzf [element_err]
+rows_c1zzg = list/concat rows_c1zzf [element_err]
 
 # A zero divisor answers a value. Typed as an err, it lets a compiled build
 # compute on the string as though it were a number, and the runtime corpus
@@ -3430,7 +3430,7 @@ zero_divisor = row
   (breaking "a_zero_divisor_answered_as_an_err")
   release
 
-rows_c1zzh = text/concat rows_c1zzg [zero_divisor]
+rows_c1zzh = list/concat rows_c1zzg [zero_divisor]
 
 # A release link runs LLVM 19's pipeline without dead-argument elimination.
 # With the pass back, a program declaring a subtype beside std/regexp fails to
@@ -3443,7 +3443,7 @@ link_dae = row
   (breaking "a_release_link_that_runs_deadargelim")
   release
 
-rows_c1zzi = text/concat rows_c1zzh [link_dae]
+rows_c1zzi = list/concat rows_c1zzh [link_dae]
 
 # A none is a value. Hopped out of a dispatcher that matched no arm, as though
 # it were an err, it becomes the call's answer, and the runtime corpus reads
@@ -3456,7 +3456,7 @@ none_hop = row
   (breaking "a_none_hopped_as_a_failure")
   release
 
-rows_c1zzj = text/concat rows_c1zzi [none_hop]
+rows_c1zzj = list/concat rows_c1zzi [none_hop]
 
 # A curried application hands a group on to be called from somewhere no call
 # site describes. Unseen as a value, it lets a parameter qualify as a string
@@ -3469,7 +3469,7 @@ curried_unseen = row
   (breaking "a_curried_group_unseen_as_a_value")
   release
 
-rows_c1zzk = text/concat rows_c1zzj [curried_unseen]
+rows_c1zzk = list/concat rows_c1zzj [curried_unseen]
 
 # An err interpolated into a string is handed on as it is. Handed to a program's
 # own `render/to_string` group instead, it comes back with a hop the program
@@ -3483,7 +3483,7 @@ interp_err_hop = row
   (breaking "an_interpolated_err_handed_to_the_group")
   release
 
-rows_c1zzl = text/concat rows_c1zzk [interp_err_hop]
+rows_c1zzl = list/concat rows_c1zzk [interp_err_hop]
 
 # The same at `print`: told its argument cannot be an err, the site hands one to
 # the group, and the printed fixture gains the same trace line.
@@ -3495,7 +3495,7 @@ print_err_hop = row
   (breaking "a_printed_err_handed_to_the_group")
   release
 
-rows_c1zzm = text/concat rows_c1zzl [print_err_hop]
+rows_c1zzm = list/concat rows_c1zzl [print_err_hop]
 
 # `text/join` answers the first item that fails, and a list literal can keep
 # one. Typed as text in the emitter, a guard reads `length` of the err as a
@@ -3508,7 +3508,7 @@ join_read_as_text = row
   (breaking "a_joined_list_read_as_text")
   release
 
-rows_c1zzn = text/concat rows_c1zzm [join_read_as_text]
+rows_c1zzn = list/concat rows_c1zzm [join_read_as_text]
 
 # The same answer inferred as text: a release build calls a `string` arm with
 # the err, and the micro corpus prints a number where the interpreter prints
@@ -3521,7 +3521,7 @@ join_inferred_as_text = row
   (breaking "a_joined_list_inferred_as_text")
   release
 
-rows_c1zzo = text/concat rows_c1zzn [join_inferred_as_text]
+rows_c1zzo = list/concat rows_c1zzn [join_inferred_as_text]
 
 # A map is indexed by an int or a string. Indexed by any key, a none answers a
 # miss natively, and the runtime corpus prints where the interpreter refuses.
@@ -3533,7 +3533,7 @@ map_any_key = row
   (breaking "a_map_indexed_by_any_key")
   release
 
-rows_c1zzp = text/concat rows_c1zzo [map_any_key]
+rows_c1zzp = list/concat rows_c1zzo [map_any_key]
 
 # An index reads through a subtype to its base value, as `at` does. Blind to
 # subtypes, a compiled build refuses a subtype of int as a position, and the
@@ -3546,7 +3546,7 @@ native_index_sub = row
   (breaking "a_native_index_blind_to_subtypes")
   release
 
-rows_c1zzq = text/concat rows_c1zzp [native_index_sub]
+rows_c1zzq = list/concat rows_c1zzp [native_index_sub]
 
 # The same in the interpreter, which the micro corpus reads beside a compiled
 # build.
@@ -3558,7 +3558,7 @@ interp_index_sub = row
   (breaking "an_interpreted_index_blind_to_subtypes")
   release
 
-rows_c1zzr = text/concat rows_c1zzq [interp_index_sub]
+rows_c1zzr = list/concat rows_c1zzq [interp_index_sub]
 
 # A builtin the compiler writes out ahead of the generic call reads through a
 # subtype. Blind to them, a slice refuses a subtype as a position and the
@@ -3571,7 +3571,7 @@ fused_sub = row
   (breaking "a_fused_builtin_blind_to_subtypes")
   release
 
-rows_c1zzs = text/concat rows_c1zzr [fused_sub]
+rows_c1zzs = list/concat rows_c1zzr [fused_sub]
 
 # A subtype's parent names a type. Left unchecked, `type blob bytes` passes
 # `kanso check` and the error corpus holds a diagnostic nobody raised.
@@ -3583,7 +3583,7 @@ parent_unchecked = row
   (breaking "a_subtype_parent_left_unchecked")
   no_setup
 
-rows_c1zzt = text/concat rows_c1zzs [parent_unchecked]
+rows_c1zzt = list/concat rows_c1zzs [parent_unchecked]
 
 # A native build builds a subtype of bool. Without the parent's code it is an
 # unknown type, and the micro corpus does not build.
@@ -3595,7 +3595,7 @@ native_bool_sub = row
   (breaking "a_native_subtype_of_bool_unbuilt")
   release
 
-rows_c1zzu = text/concat rows_c1zzt [native_bool_sub]
+rows_c1zzu = list/concat rows_c1zzt [native_bool_sub]
 
 # A condition reads through a subtype of bool on every engine. Each of the
 # three refusing it on its own turns the fixture red where it runs.
@@ -3607,7 +3607,7 @@ native_wrapped_cond = row
   (breaking "a_native_wrapped_condition_refused")
   release
 
-rows_c1zzv = text/concat rows_c1zzu [native_wrapped_cond]
+rows_c1zzv = list/concat rows_c1zzu [native_wrapped_cond]
 
 interp_wrapped_cond = row
   "an interpreted wrapped condition refused"
@@ -3617,7 +3617,7 @@ interp_wrapped_cond = row
   (breaking "an_interpreted_wrapped_condition_refused")
   release
 
-rows_c1zzw = text/concat rows_c1zzv [interp_wrapped_cond]
+rows_c1zzw = list/concat rows_c1zzv [interp_wrapped_cond]
 
 # A `_:done` arm asks through the chain in a program that declares a subtype.
 # Asking the tag alone, a subtype of done falls past it.
@@ -3629,7 +3629,7 @@ native_done_sub = row
   (breaking "a_native_done_arm_blind_to_subtypes")
   release
 
-rows_c1zzy = text/concat rows_c1zzw [native_done_sub]
+rows_c1zzy = list/concat rows_c1zzw [native_done_sub]
 
 # An element reads through a subtype where `join` and `to_bytes` would refuse
 # it. Blind to them, each engine refuses a list of subtypes.
@@ -3641,7 +3641,7 @@ interp_element_sub = row
   (breaking "an_interpreted_element_blind_to_subtypes")
   release
 
-rows_c1zzz = text/concat rows_c1zzy [interp_element_sub]
+rows_c1zzz = list/concat rows_c1zzy [interp_element_sub]
 
 native_element_sub = row
   "a native element blind to subtypes"
@@ -3651,7 +3651,7 @@ native_element_sub = row
   (breaking "a_native_element_blind_to_subtypes")
   release
 
-rows_c1zzza = text/concat rows_c1zzz [native_element_sub]
+rows_c1zzza = list/concat rows_c1zzz [native_element_sub]
 
 # A typeset's members name types. Left unchecked, `type either id word` with
 # neither declared passes `kanso check` and the error corpus holds a
@@ -3664,7 +3664,7 @@ member_unchecked = row
   (breaking "a_typeset_member_left_unchecked")
   no_setup
 
-rows_c1zzzb = text/concat rows_c1zzza [member_unchecked]
+rows_c1zzzb = list/concat rows_c1zzza [member_unchecked]
 
 # A typeset inside a typeset is read through. With the declared member lists
 # a native build has no test for the inner typeset, and the micro corpus
@@ -3677,7 +3677,7 @@ native_nested_set = row
   (breaking "a_native_typeset_read_member_by_member")
   release
 
-rows_c1zzzc = text/concat rows_c1zzzb [native_nested_set]
+rows_c1zzzc = list/concat rows_c1zzzb [native_nested_set]
 
 # A typeset that reaches itself names no set. Left unchecked, the error
 # corpus holds a diagnostic nobody raised.
@@ -3689,7 +3689,7 @@ cycle_unchecked = row
   (breaking "a_typeset_cycle_left_unchecked")
   no_setup
 
-rows_c1zzze = text/concat rows_c1zzzc [cycle_unchecked]
+rows_c1zzze = list/concat rows_c1zzzc [cycle_unchecked]
 
 # A wrapper has no fields of its own. Left unchecked, a pattern that takes one
 # apart passes `kanso check` and the error corpus holds a diagnostic nobody
@@ -3702,7 +3702,7 @@ wrapper_pattern = row
   (breaking "a_wrapper_pattern_left_unchecked")
   no_setup
 
-rows_c1zzzf = text/concat rows_c1zzze [wrapper_pattern]
+rows_c1zzzf = list/concat rows_c1zzze [wrapper_pattern]
 
 # A module's files share their types. Counting only the annotating file's
 # own, an annotation naming the next file's type is refused as naming none.
@@ -3714,7 +3714,7 @@ sibling_types = row
   (breaking "a_sibling_type_left_undeclared")
   no_setup
 
-rows_c1zzzg = text/concat rows_c1zzzf [sibling_types]
+rows_c1zzzg = list/concat rows_c1zzzf [sibling_types]
 
 # `_:pt` and `(pt a b)` take the same values. Read as two shapes, a group
 # holding both passes `kanso check` and one of its arms never runs.
@@ -3726,7 +3726,7 @@ constructor_overlap = row
   (breaking "an_annotation_and_its_constructor_read_apart")
   no_setup
 
-rows_c1zzzh = text/concat rows_c1zzzg [constructor_overlap]
+rows_c1zzzh = list/concat rows_c1zzzg [constructor_overlap]
 
 # Typeset arms rank alike, so the first written wins. Left unchecked, one whose
 # members all sit in an earlier arm's typeset passes `kanso check` and never
@@ -3739,7 +3739,7 @@ typeset_behind = row
   (breaking "a_typeset_arm_left_behind_a_wider_one")
   no_setup
 
-rows_c1zzzi = text/concat rows_c1zzzh [typeset_behind]
+rows_c1zzzi = list/concat rows_c1zzzh [typeset_behind]
 
 # `none` is the one value of its type. Read apart from `_:none`, a group
 # holding both passes `kanso check` and the annotated arm never runs.
@@ -3751,7 +3751,7 @@ literal_overlap = row
   (breaking "a_literal_and_its_annotation_read_apart")
   no_setup
 
-rows_c1zzzj = text/concat rows_c1zzzi [literal_overlap]
+rows_c1zzzj = list/concat rows_c1zzzi [literal_overlap]
 
 # Literals and member types rank above `bool` and a typeset. Left unchecked,
 # an arm whose every value another arm takes first passes `kanso check`.
@@ -3763,7 +3763,7 @@ answered_first = row
   (breaking "an_arm_other_arms_answer_left_unchecked")
   no_setup
 
-rows_c1zzzk = text/concat rows_c1zzzj [answered_first]
+rows_c1zzzk = list/concat rows_c1zzzj [answered_first]
 
 # A list arm asks only whether its argument is a list. Compared by element
 # type, `_:[]int` beside `_:[]string` passes `kanso check` and one never runs.
@@ -3775,7 +3775,7 @@ list_kind = row
   (breaking "a_list_arm_read_by_its_element_type")
   no_setup
 
-rows_c1zzzl = text/concat rows_c1zzzk [list_kind]
+rows_c1zzzl = list/concat rows_c1zzzk [list_kind]
 
 # Constructor patterns of one type rank alike and the first written wins. Left
 # unchecked, `(pt 1 _)` below `(pt n _)` passes `kanso check` and never runs.
@@ -3787,7 +3787,7 @@ below_wider = row
   (breaking "an_arm_below_one_that_takes_it_left_unchecked")
   no_setup
 
-rows_c1zzzm = text/concat rows_c1zzzl [below_wider]
+rows_c1zzzm = list/concat rows_c1zzzl [below_wider]
 
 # A record naming a field twice. Unchecked, the only report left is about the
 # field's internal reader, and the overlap check keeps quiet about readers.
@@ -3799,7 +3799,7 @@ field_twice = row
   (breaking "a_field_declared_twice_left_to_its_reader")
   no_setup
 
-rows_c1zzzn = text/concat rows_c1zzzm [field_twice]
+rows_c1zzzn = list/concat rows_c1zzzm [field_twice]
 
 # A typeset naming a member twice passes `kanso check` when nothing asks.
 member_twice = row
@@ -3810,7 +3810,7 @@ member_twice = row
   (breaking "a_typeset_member_named_twice_left_unchecked")
   no_setup
 
-rows_c1zzzo = text/concat rows_c1zzzn [member_twice]
+rows_c1zzzo = list/concat rows_c1zzzn [member_twice]
 
 # A field's reader is the compiler's own arm. Checked like a written one, it is
 # reported as dead when a second type takes the record's name.
@@ -3822,7 +3822,7 @@ reader_checked = row
   (breaking "a_field_reader_checked_as_a_written_arm")
   no_setup
 
-rows_c1zzzp = text/concat rows_c1zzzo [reader_checked]
+rows_c1zzzp = list/concat rows_c1zzzo [reader_checked]
 
 # A literal handed to a field read, refused in the name of the field's reader
 # and placed in whatever file was being rendered.
@@ -3834,7 +3834,7 @@ read_named = row
   (breaking "a_field_read_named_by_its_reader")
   no_setup
 
-rows_c1zzzq = text/concat rows_c1zzzp [read_named]
+rows_c1zzzq = list/concat rows_c1zzzp [read_named]
 
 # A record the next file declares constructs as well as one declared here.
 # Counting only the file's own types, a knot through it is refused as defined
@@ -3847,7 +3847,7 @@ sibling_knot = row
   (breaking "a_knot_of_a_sibling_type_refused")
   no_setup
 
-rows_c1zzzr = text/concat rows_c1zzzq [sibling_knot]
+rows_c1zzzr = list/concat rows_c1zzzq [sibling_knot]
 
 # The walk reads the merged module. A diagnostic it raises without the file of
 # the declaration it is about prints the module's name and no location.
@@ -3859,7 +3859,7 @@ module_file = row
   (breaking "a_module_diagnostic_left_without_its_file")
   no_setup
 
-rows_c1zzzs = text/concat rows_c1zzzr [module_file]
+rows_c1zzzs = list/concat rows_c1zzzr [module_file]
 
 # A constructor pattern over a record the next file declares is checked
 # against the module's types. Given only the file's own, a wrapper arm that
@@ -3872,7 +3872,7 @@ sibling_wrapper = row
   (breaking "a_wrapper_over_a_sibling_record_left_unchecked")
   no_setup
 
-rows_c1zzzt = text/concat rows_c1zzzs [sibling_wrapper]
+rows_c1zzzt = list/concat rows_c1zzzs [sibling_wrapper]
 
 # A constructor pattern answers with its first field's place. Answering 0:0,
 # a refusal of a constructor nested first in another points at nothing.
@@ -3884,7 +3884,7 @@ nested_place = row
   (breaking "a_nested_constructor_placed_at_the_top")
   no_setup
 
-rows_c1zzzu = text/concat rows_c1zzzt [nested_place]
+rows_c1zzzu = list/concat rows_c1zzzt [nested_place]
 
 # A subtype is built from the one value it wraps. Built from any count,
 # `tall 1 2` passes `kanso check` and each engine refuses it its own way.
@@ -3896,7 +3896,7 @@ subtype_count = row
   (breaking "a_subtype_built_from_any_count")
   no_setup
 
-rows_c1zzzv = text/concat rows_c1zzzu [subtype_count]
+rows_c1zzzv = list/concat rows_c1zzzu [subtype_count]
 
 typeset_parent = row
   "a typeset taken as a parent"
@@ -3914,7 +3914,7 @@ type_file = row
   (breaking "a_type_refusal_left_without_its_file")
   no_setup
 
-rows_c1zzzw = text/concat rows_c1zzzv [typeset_parent type_file]
+rows_c1zzzw = list/concat rows_c1zzzv [typeset_parent type_file]
 
 # `&g p v` holds p and v, and the interpreter answers a held err at the `&`.
 # Until 2026-09-29 native built a closure over the held expressions and
@@ -3935,7 +3935,7 @@ part_entered = row
   (breaking "a_finished_partial_entering_with_its_err")
   release
 
-rows_c1zzzx = text/concat rows_c1zzzw [part_closure part_entered]
+rows_c1zzzx = list/concat rows_c1zzzw [part_closure part_entered]
 
 # A record of an int and a value crosses a call in two words, the int above
 # the value's tag. Until 2026-09-29 the int came back through a logical shift
@@ -3957,7 +3957,7 @@ packed_wide = row
   (breaking "a_wide_int_packed_anyway")
   release
 
-rows_c1zzzy = text/concat rows_c1zzzx [packed_sign packed_wide]
+rows_c1zzzy = list/concat rows_c1zzzx [packed_sign packed_wide]
 
 # A partial over a group hands the group out as a value, so its parameters
 # go TOP as they do for a bare mention. Left narrow, a held subtype of int
@@ -3970,7 +3970,7 @@ partial_widens = row
   (breaking "a_partial_leaving_its_group_narrow")
   release
 
-rows_c1zzzze = text/concat rows_c1zzzy [partial_widens]
+rows_c1zzzze = list/concat rows_c1zzzy [partial_widens]
 
 # A partial answers its callee's arities less what it holds. Answering none,
 # the interpreter wrapped `(&h 3) 1` in a third partial where native ran g.
@@ -3992,7 +3992,7 @@ partial_nest_native = row
   (breaking "a_native_partial_answering_nothing")
   release
 
-rows_c1zzzz = text/concat rows_c1zzzze [partial_nest partial_nest_native]
+rows_c1zzzz = list/concat rows_c1zzzze [partial_nest partial_nest_native]
 
 # Equality refuses a function wherever the walk meets one, a partial among
 # them. The interpreter answered false for a partial and for a function in a
@@ -4013,7 +4013,7 @@ eq_nested = row
   (breaking "a_function_in_a_list_compared")
   no_setup
 
-rows_c1zzzzf = text/concat rows_c1zzzz [eq_partial eq_nested]
+rows_c1zzzzf = list/concat rows_c1zzzz [eq_partial eq_nested]
 
 # A builtin or a record's constructor handed to `&` answers the interpreter's
 # question of how many arguments it takes. Each row puts one of the two
@@ -4034,7 +4034,7 @@ ctor_partial = row
   (breaking "a_constructor_partial_answering_nothing")
   no_setup
 
-rows_c1zzzzj = text/concat rows_c1zzzzf [partial_of_builtin ctor_partial]
+rows_c1zzzzj = list/concat rows_c1zzzzf [partial_of_builtin ctor_partial]
 
 # `math/round` answers `none` for NaN and the infinities on every engine,
 # `math/round!` answers a failure in its box, and a call passing an int is
@@ -4083,7 +4083,7 @@ rounds_a = [nonfinite_native nonfinite_oracle nonfinite_typed]
 
 rounds_b = [nonfinite_per_call nonfinite_insisted]
 
-rows_c1zzzzm = text/concat rows_c1zzzzj (text/concat rounds_a rounds_b)
+rows_c1zzzzm = list/concat rows_c1zzzzj (list/concat rounds_a rounds_b)
 
 # A sigil with no name after it is left to the parser, whose refusal says
 # what `&` wants. The spacing check asked for a space, which then failed to
@@ -4096,7 +4096,7 @@ sigil_paren = row
   (breaking "a_nameless_sigil_asked_for_a_space")
   no_setup
 
-rows_c1zzzzc = text/concat rows_c1zzzzm [sigil_paren]
+rows_c1zzzzc = list/concat rows_c1zzzzm [sigil_paren]
 
 # The runtime calls a closure of three or four arguments in words, so a
 # partial over such a lambda hands it the arguments it was given.
@@ -4108,7 +4108,7 @@ closure_words = row
   (breaking "a_closure_called_with_its_arguments_as_structs")
   release
 
-rows_c1zzzzi = text/concat rows_c1zzzzc [closure_words]
+rows_c1zzzzi = list/concat rows_c1zzzzc [closure_words]
 
 # A call through a group value, or a partial over a group, that turns down a
 # failing argument names the group in the trace, as a direct call does.
@@ -4130,7 +4130,7 @@ hop_partial = row
   (breaking "a_partial_held_in_a_nameless_closure")
   release
 
-rows_c1zzzzd = text/concat rows_c1zzzzi [hop_value hop_partial]
+rows_c1zzzzd = list/concat rows_c1zzzzi [hop_value hop_partial]
 
 # text/to_bytes keeps its frame like the other wrappers whose builtin can
 # birth an err, so a rescue in the caller's module reaches its callback.
@@ -4142,7 +4142,7 @@ bytes_frame = row
   (breaking "a_to_bytes_wrapper_inlined")
   release
 
-rows_c1zzzzh = text/concat rows_c1zzzzd [bytes_frame]
+rows_c1zzzzh = list/concat rows_c1zzzzd [bytes_frame]
 
 # A partial over a group of more than four parameters is held over the group's
 # value on both native and the browser, native's dispatcher calls a group value
@@ -4183,7 +4183,7 @@ nine_value = row
 
 wides = [hop_wide wide_call wide_held nine_value]
 
-rows_c1zzzzg = text/concat rows_c1zzzzh wides
+rows_c1zzzzg = list/concat rows_c1zzzzh wides
 
 # The playground builds its views on the engine's memory from pointers the
 # engine answers as wasm i32s. Past two gibibytes those read negative unless the
@@ -4196,7 +4196,7 @@ high_pointers = row
   (breaking "a_playground_reading_high_pointers_as_negative")
   with_blob
 
-rows_c1zzzzn = text/concat rows_c1zzzzg [high_pointers]
+rows_c1zzzzn = list/concat rows_c1zzzzg [high_pointers]
 
 # A string builder may be seeded with any value, since a join renders what it
 # joins onto. Native used to refuse the seed, and the first join adopts it.
@@ -4219,7 +4219,7 @@ seed_unbuilt = row
   (breaking "a_first_join_that_never_makes_its_builder")
   release
 
-rows_c1zzzzs = text/concat rows_c1zzzzn [seed_refused seed_unbuilt]
+rows_c1zzzzs = list/concat rows_c1zzzzn [seed_refused seed_unbuilt]
 
 # A builtin in a program that declares a subtype unwraps its arguments, and
 # a lazy one is forced before the unwrap looks at it.
@@ -4231,7 +4231,7 @@ lazy_sub = row
   (breaking "a_lazy_subtype_unwrapped_before_it_is_forced")
   release
 
-rows_c1zzzzv = text/concat rows_c1zzzzs [lazy_sub]
+rows_c1zzzzv = list/concat rows_c1zzzzs [lazy_sub]
 
 # A group handed out as a function value keeps its record boxed, because the
 # wrapper a function value is called through answers one boxed word.
@@ -4243,7 +4243,7 @@ fn_value_boxed = row
   (breaking "a_function_value_returned_in_registers")
   release
 
-rows_c1zzzzy = text/concat rows_c1zzzzv [fn_value_boxed]
+rows_c1zzzzy = list/concat rows_c1zzzzv [fn_value_boxed]
 
 # An operator arm a module declares may build that module's records once the
 # module is imported, as any of its named functions may.
@@ -4255,7 +4255,7 @@ arm_builds_own = row
   (breaking "an_imported_operator_arm_read_as_the_importers")
   release
 
-rows_c1zzzzz = text/concat rows_c1zzzzy [arm_builds_own]
+rows_c1zzzzz = list/concat rows_c1zzzzy [arm_builds_own]
 
 # A subtype of int meets `&`, `|` and `^` as the int it wraps, on native as on
 # the interpreter and the page.
@@ -4267,7 +4267,7 @@ bits_unwrap = row
   (breaking "a_subtype_refused_at_a_bitwise_operator")
   release
 
-rows_c1zzzzzz = text/concat rows_c1zzzzz [bits_unwrap]
+rows_c1zzzzzz = list/concat rows_c1zzzzz [bits_unwrap]
 
 # A held `if` takes the condition and both branches, so three arguments call
 # it on the interpreter instead of growing the partial.
@@ -4279,7 +4279,7 @@ held_if = row
   (breaking "a_held_if_counted_as_nothing")
   release
 
-rows_c1zzzzzzz = text/concat rows_c1zzzzzz [held_if]
+rows_c1zzzzzzz = list/concat rows_c1zzzzzz [held_if]
 
 # An operator's arms take records boxed, because the operator hands them the
 # boxed values it holds.
@@ -4291,7 +4291,7 @@ arm_boxed = row
   (breaking "an_operator_arm_handed_words")
   release
 
-rows_c1zzzzzzzz = text/concat rows_c1zzzzzzz [arm_boxed]
+rows_c1zzzzzzzz = list/concat rows_c1zzzzzzz [arm_boxed]
 
 # A sibling argument that stores the container still holds it, so the write
 # copies instead of extending the list the sibling just stored.
@@ -4303,7 +4303,7 @@ push_keeps = row
   (breaking "a_stored_sibling_read_as_finished")
   release
 
-rows_c1zzzzzzzza = text/concat rows_c1zzzzzzzz [push_keeps]
+rows_c1zzzzzzzza = list/concat rows_c1zzzzzzzz [push_keeps]
 
 # An import's type twin keeps the declaration it came from when the module
 # holding it is imported in turn, so an ascription two imports away matches.
@@ -4317,7 +4317,7 @@ origin_once = row
   (breaking "an_imported_origin_prefixed_twice")
   release
 
-rows_c1zzzzzzzv = text/concat rows_c1zzzzzzzza [origin_once]
+rows_c1zzzzzzzv = list/concat rows_c1zzzzzzzza [origin_once]
 
 # A function a module declares keeps its name beside an import's type of the
 # same name, and a call reaches the function.
@@ -4329,7 +4329,7 @@ fn_beats_twin = row
   (breaking "an_imported_type_twin_beside_a_function")
   release
 
-rows_c1zzzzzzzx = text/concat rows_c1zzzzzzzv [fn_beats_twin]
+rows_c1zzzzzzzx = list/concat rows_c1zzzzzzzv [fn_beats_twin]
 
 # A zero divisor's answer reaches an operator's arms exactly where the
 # program declared the type that wraps it, on both engines.
@@ -4349,7 +4349,7 @@ math_named = row
   (breaking "a_named_math_failure_kept_from_the_arms")
   release
 
-rows_c1zzzzzzzw = text/concat rows_c1zzzzzzzx [math_bare math_named]
+rows_c1zzzzzzzw = list/concat rows_c1zzzzzzzx [math_bare math_named]
 
 # A group that writes `int` at its counter enters the accumulator loop, as a
 # group that writes a bare name does.
@@ -4380,9 +4380,9 @@ lambda_third = row
   (breaking "a_lambda_dropping_its_third_err")
   release
 
-rows_c1zzzzzzzs = text/concat rows_c1zzzzzzzw [int_counter value_err_arm]
+rows_c1zzzzzzzs = list/concat rows_c1zzzzzzzw [int_counter value_err_arm]
 
-rows_c1zzzzzzzt = text/concat rows_c1zzzzzzzs [lambda_third]
+rows_c1zzzzzzzt = list/concat rows_c1zzzzzzzs [lambda_third]
 
 # A pattern the parse did not read to its end answers an err, so an open
 # group or a stray `)` is refused rather than matched as a shorter pattern.
@@ -4394,7 +4394,7 @@ unclosed_pattern = row
   (breaking "an_unclosed_pattern_matching_what_it_read")
   release
 
-rows_c1zzzzzzzr = text/concat rows_c1zzzzzzzt [unclosed_pattern]
+rows_c1zzzzzzzr = list/concat rows_c1zzzzzzzt [unclosed_pattern]
 
 # A cell an arm binds keeps its failures in inference, so the group it
 # reaches next keeps the guard that answers its err.
@@ -4416,7 +4416,7 @@ pruned_read = row
   (breaking "a_pruned_arm_leaving_its_cell_unforced")
   release
 
-rows_c1zzzzzzzq = text/concat rows_c1zzzzzzzr [bound_cell pruned_read]
+rows_c1zzzzzzzq = list/concat rows_c1zzzzzzzr [bound_cell pruned_read]
 
 # The prune names the positions a dropped arm read and no kept arm reads, from
 # the same walk that counts each group's live arms.
@@ -4428,7 +4428,7 @@ pruned_mask = row
   (breaking "a_prune_forgetting_what_it_dropped")
   release
 
-rows_c1zzzzzzzp = text/concat rows_c1zzzzzzzq [pruned_mask]
+rows_c1zzzzzzzp = list/concat rows_c1zzzzzzzq [pruned_mask]
 
 # Every NaN equals every NaN and ranks last, and -0.0 ranks with 0.0, on every
 # engine (ruled 2026-09-30). One row per engine, since each could slip alone.
@@ -4448,7 +4448,7 @@ float_bits = row
   (breaking "a_float_ranked_by_its_bits")
   release
 
-rows_c1zzzzzzzo = text/concat rows_c1zzzzzzzp [nan_level float_bits]
+rows_c1zzzzzzzo = list/concat rows_c1zzzzzzzp [nan_level float_bits]
 
 # The interpreter promotes an int past int64 rather than wrapping it, and
 # every engine answers the same since the 2026-10-07 gavel, so the micro
@@ -4461,7 +4461,7 @@ int_widens = row
   (breaking "an_int_that_wraps_where_it_should_widen")
   release
 
-rows_c1zzzzzzzn = text/concat rows_c1zzzzzzzo [int_widens]
+rows_c1zzzzzzzn = list/concat rows_c1zzzzzzzo [int_widens]
 
 # A box handed to a parameter is a box inside the body, and the refusal fires
 # at the call there that takes a value.
@@ -4473,7 +4473,7 @@ held_box = row
   (breaking "a_box_lost_at_the_parameter")
   release
 
-rows_c1zzzzzzzm = text/concat rows_c1zzzzzzzn [held_box]
+rows_c1zzzzzzzm = list/concat rows_c1zzzzzzzn [held_box]
 
 # The interpreter's caches take their slots from an object's place inside its
 # allocator slice. Taking the frame slot from the whole address again makes
@@ -4487,7 +4487,7 @@ slice_slot = row
   (breaking "a_frame_slot_read_off_its_address")
   release
 
-rows_c1zzzzzzzk = text/concat rows_c1zzzzzzzm [slice_slot]
+rows_c1zzzzzzzk = list/concat rows_c1zzzzzzzm [slice_slot]
 
 # `print` answers a box the same as `effect`, and the check counts it before
 # the short circuit that skips a program where no group answers one.
@@ -4499,7 +4499,7 @@ printed_box = row
   (breaking "print_answers_no_box")
   release
 
-rows_c1zzzzzzzj = text/concat rows_c1zzzzzzzk [printed_box]
+rows_c1zzzzzzzj = list/concat rows_c1zzzzzzzk [printed_box]
 
 # Spacing decides a minus sign: a `-` touching a digit with a space before it
 # is part of the number, so a negative literal is an argument or an element.
@@ -4520,7 +4520,7 @@ number_heads_minus = row
   (breaking "a_number_applied_to_a_negative_number_passes")
   release
 
-rows_c1zzzzzzzi = text/concat rows_c1zzzzzzzj [spaced_minus number_heads_minus]
+rows_c1zzzzzzzi = list/concat rows_c1zzzzzzzj [spaced_minus number_heads_minus]
 
 # An arm whose answer can be any value is counted as raising, so a raise handed
 # on through a field of an entry is refused where it arrives (ruled 2026-09-30).
@@ -4532,7 +4532,7 @@ any_value_raises = row
   (breaking "a_raise_hidden_behind_any_value")
   release
 
-rows_c1zzzzzzzh = text/concat rows_c1zzzzzzzi [any_value_raises]
+rows_c1zzzzzzzh = list/concat rows_c1zzzzzzzi [any_value_raises]
 
 # An import's record built by its short name is refused like the qualified
 # spelling, and a local binding of that name is still the binding (ruled
@@ -4553,7 +4553,7 @@ short_record_local = row
   (breaking "a_local_named_for_an_imported_record_is_refused")
   release
 
-rows_c1zzzzzzzg = text/concat rows_c1zzzzzzzh [short_record short_record_local]
+rows_c1zzzzzzzg = list/concat rows_c1zzzzzzzh [short_record short_record_local]
 
 # Every workflow installs the rustc its goldens were measured under, named
 # once at the top of the file, rather than whatever is stable that day.
@@ -4578,7 +4578,7 @@ checkout_pinned = row
   (breaking "the_checkout_builds_with_its_own_rustc")
   no_setup
 
-rows_c1zzzzzzzf = text/concat rows_c1zzzzzzzg [toolchain_pinned checkout_pinned]
+rows_c1zzzzzzzf = list/concat rows_c1zzzzzzzg [toolchain_pinned checkout_pinned]
 
 # `list/tie` fills each key's cell with its node once every node is made,
 # which is what turns the references the maker stored into a cycle
@@ -4591,7 +4591,7 @@ tie_fills = row
   (breaking "a_tie_that_never_fills_its_cells")
   release
 
-rows_c1zzzzzzze = text/concat rows_c1zzzzzzzf [tie_fills]
+rows_c1zzzzzzze = list/concat rows_c1zzzzzzzf [tie_fills]
 
 # A tie's reference goes into a constructor's field and nowhere else, and a
 # literal link to an id the list does not hold is refused (2026-10-04).
@@ -4642,7 +4642,7 @@ tie_push_native = row
 
 tie_rows = [tie_check tie_list tie_mapped tie_push_interp tie_push_native]
 
-rows_c1zzzzzzzd = text/concat rows_c1zzzzzzze tie_rows
+rows_c1zzzzzzzd = list/concat rows_c1zzzzzzze tie_rows
 
 # A record constructor handed over as a function lowers to the lambda that
 # calls it on native, as the interpreter treats it (2026-10-10, lox F20).
@@ -4664,7 +4664,7 @@ tie_resolves = row
   (breaking "a_native_tie_that_frees_cells_still_in_its_graph")
   release
 
-rows_c1zzzzzzzc = text/concat rows_c1zzzzzzzd [tie_resolves ctor_value]
+rows_c1zzzzzzzc = list/concat rows_c1zzzzzzzd [tie_resolves ctor_value]
 
 # The interpreter rewrites the fields holding a tie's cells to hold the nodes,
 # as native does; a `ref` names its tie by serial, so one called after its tie
@@ -4704,7 +4704,7 @@ tie_native_depth = row
 
 tie_fixes = [tie_interp_resolves tie_serial tie_native_serial tie_native_depth]
 
-rows_c1zzzzzzza = text/concat rows_c1zzzzzzzc tie_fixes
+rows_c1zzzzzzza = list/concat rows_c1zzzzzzzc tie_fixes
 
 # The release link unswitches a loop on a test of a value the loop does not
 # change, such as the overflow flag of `k * 31` in the escape loop
@@ -4717,7 +4717,7 @@ loop_unswitch = row
   (breaking "a_release_link_that_tests_an_invariant_inside_its_loop")
   benchmarks
 
-rows_c1zzzzzzz9 = text/concat rows_c1zzzzzzza [loop_unswitch]
+rows_c1zzzzzzz9 = list/concat rows_c1zzzzzzza [loop_unswitch]
 
 # The release link runs correlated propagation after each jump-threading and
 # early-cse<memssa> before the first (2026-10-07). Each mutation takes its pass
@@ -4738,7 +4738,7 @@ link_early_cse = row
   (breaking "a_release_link_without_early_cse")
   benchmarks
 
-rows_c1zzzzzzz8 = text/concat rows_c1zzzzzzz9 [link_correlated link_early_cse]
+rows_c1zzzzzzz8 = list/concat rows_c1zzzzzzz9 [link_correlated link_early_cse]
 
 # A local reference keeps the frame and slot its binding sat in, and reads
 # that place on every later run (2026-10-07). The mutation keeps plain local,
@@ -4751,7 +4751,7 @@ local_place = row
   (breaking "a_local_found_by_walking")
   release
 
-rows_c1zzzzzzz7 = text/concat rows_c1zzzzzzz8 [local_place]
+rows_c1zzzzzzz7 = list/concat rows_c1zzzzzzz8 [local_place]
 
 # The tab's compiler keeps a free list for each size of small block and hands
 # blocks out again before dlmalloc is asked (2026-10-08). The mutation sends
@@ -4764,7 +4764,7 @@ small_blocks = row
   (breaking "small_blocks_left_to_dlmalloc")
   release
 
-rows_c1zzzzzzz6 = text/concat rows_c1zzzzzzz7 [small_blocks]
+rows_c1zzzzzzz6 = list/concat rows_c1zzzzzzz7 [small_blocks]
 
 # The emitter writes each body line with three pushes rather than through
 # `writeln!` (2026-10-08). The mutation sends the line through the formatter
@@ -4777,7 +4777,7 @@ emitted_lines = row
   (breaking "emitted_lines_through_fmt")
   release
 
-rows_c1zzzzzzz5 = text/concat rows_c1zzzzzzz6 [emitted_lines]
+rows_c1zzzzzzz5 = list/concat rows_c1zzzzzzz6 [emitted_lines]
 
 # A dispatch lets go of what is left in its argument vector through
 # `release`, which skips `Value`'s drop for the variants that own nothing
@@ -4791,7 +4791,7 @@ arguments_released = row
   (breaking "arguments_dropped_one_by_one")
   release
 
-rows_c1zzzzzzz4 = text/concat rows_c1zzzzzzz5 [arguments_released]
+rows_c1zzzzzzz4 = list/concat rows_c1zzzzzzz5 [arguments_released]
 
 # The tab emits only the groups its entry reaches, by the names the bodies
 # mention, and emits again with nothing skipped when the module names a group
@@ -4818,7 +4818,7 @@ left_out_asked = row
   (breaking "a_question_about_a_left_out_group_goes_unseen")
   no_setup
 
-rows_c1zzzzzzz2 = text/concat rows_c1zzzzzzz3 [left_out_asked]
+rows_c1zzzzzzz2 = list/concat rows_c1zzzzzzz3 [left_out_asked]
 
 # A dispatch ranks its candidates into two `Score`s held on the stack, twelve
 # ranks inline each (2026-10-08). The mutation gives each a heap buffer at the
@@ -4831,7 +4831,7 @@ scores_inline = row
   (breaking "a_dispatch_allocates_its_score")
   release
 
-rows_c1zzzzzzz1 = text/concat rows_c1zzzzzzz2 [scores_inline]
+rows_c1zzzzzzz1 = list/concat rows_c1zzzzzzz2 [scores_inline]
 
 # A dispatch that tries a second candidate keeps the losers' bindings buffer
 # for the next dispatch instead of freeing it. The mutation frees it again, and
@@ -4844,7 +4844,7 @@ spare_binds = row
   (breaking "a_dispatch_frees_its_spare_binds")
   release
 
-rows_c1zzzzzzz0 = text/concat rows_c1zzzzzzz1 [spare_binds]
+rows_c1zzzzzzz0 = list/concat rows_c1zzzzzzz1 [spare_binds]
 
 # A string value of up to fifteen bytes is held inside the value, which stays
 # 32 bytes. The mutation sends every string to the heap again, and the
@@ -4857,7 +4857,7 @@ short_strings = row
   (breaking "a_short_string_allocates")
   release
 
-rows_c1zzzzzzy9 = text/concat rows_c1zzzzzzz0 [short_strings]
+rows_c1zzzzzzy9 = list/concat rows_c1zzzzzzz0 [short_strings]
 
 # A local whose place is kept is answered before the interpreter builds the
 # frame every other expression needs (2026-10-08). The mutation sends every
@@ -4870,7 +4870,7 @@ front_door = row
   (breaking "a_name_read_through_the_whole_node")
   release
 
-rows_c1zzzzzzy8 = text/concat rows_c1zzzzzzy9 [front_door]
+rows_c1zzzzzzy8 = list/concat rows_c1zzzzzzy9 [front_door]
 
 # A global name whose slot holds a function reference is answered from a table
 # of fixed values before `eval_node` builds its frame (2026-10-08). The
@@ -4884,9 +4884,9 @@ fixed_globals = row
   (breaking "a_fixed_global_read_through_the_whole_node")
   release
 
-rows_c1zzzzzzy7 = text/concat rows_c1zzzzzzy8 [fixed_globals]
+rows_c1zzzzzzy7 = list/concat rows_c1zzzzzzy8 [fixed_globals]
 
-rows_c1zzzzzzz3 = text/concat rows_c1zzzzzzz4 [reached_groups]
+rows_c1zzzzzzz3 = list/concat rows_c1zzzzzzz4 [reached_groups]
 
 # A line's tokens are moved into a vector of their exact length, from a
 # buffer kept between lines (2026-10-08). The mutation hands the buffer itself
@@ -4925,7 +4925,7 @@ guard_rest = row
   (breaking "a_guards_statements_held_in_every_expression")
   release
 
-rows_c1zzzzzzy5 = text/concat rows_c1zzzzzzy7 [line_exact alias_sites]
+rows_c1zzzzzzy5 = list/concat rows_c1zzzzzzy7 [line_exact alias_sites]
 
 # On a 64-bit target `Expr` keeps its tag in a byte of its own (2026-10-08).
 # The mutation leaves the tag to the compiler, which hides it in a field of a
@@ -4939,7 +4939,7 @@ expr_tag = row
   (breaking "an_expressions_tag_hidden_in_its_fields")
   release
 
-rows_c1zzzzzzy6 = text/concat rows_c1zzzzzzy5 [guard_rest expr_tag]
+rows_c1zzzzzzy6 = list/concat rows_c1zzzzzzy5 [guard_rest expr_tag]
 
 # The interpreter's callee and frame tables hold 256 slots each, sized by the
 # run's peak as well as its speed (2026-10-08). The mutation gives the callees
@@ -4952,7 +4952,7 @@ callee_slots = row
   (breaking "the_callee_cache_sized_for_speed")
   release
 
-rows_c1zzzzzzy4 = text/concat rows_c1zzzzzzy6 [callee_slots]
+rows_c1zzzzzzy4 = list/concat rows_c1zzzzzzy6 [callee_slots]
 
 # A group of one arm whose parameters are bare names is bound without a
 # candidate loop: it wins whenever no argument is a failure, and nothing reads
@@ -4978,7 +4978,7 @@ leader_slots = row
   (breaking "a_leaders_slot_chosen_at_run_time")
   release
 
-rows_c1zzzzzzy3 = text/concat rows_c1zzzzzzye [lone_arm leader_slots]
+rows_c1zzzzzzy3 = list/concat rows_c1zzzzzzye [lone_arm leader_slots]
 
 # A built binary run directly reports a recursion deeper than its stack the
 # way the interpreter does (2026-10-12). The mutation leaves the stack
@@ -4991,7 +4991,7 @@ stack_watch = row
   (breaking "a_binary_that_does_not_watch_its_stack")
   release
 
-rows_c1zzzzzzye = text/concat rows_c1zzzzzzy4 [stack_watch]
+rows_c1zzzzzzye = list/concat rows_c1zzzzzzy4 [stack_watch]
 
 # A push, put or append the analysis proved in place writes through the
 # container's pointer and hands back the `Rc` it was given, where it used to
@@ -5006,7 +5006,7 @@ kept_box = row
   (breaking "a_write_in_place_boxes_afresh")
   no_setup
 
-rows_c1zzzzzzy2 = text/concat rows_c1zzzzzzy3 [kept_box]
+rows_c1zzzzzzy2 = list/concat rows_c1zzzzzzy3 [kept_box]
 
 # A runtime diagnostic names an err it was handed (2026-10-12). The mutation
 # renders it the way a program does, which hands the err back unrendered,
@@ -5019,7 +5019,7 @@ err_shown = row
   (breaking "a_diagnostic_handed_an_unrendered_err")
   release
 
-rows_c1zzzzzzyd = text/concat rows_c1zzzzzzy2 [err_shown]
+rows_c1zzzzzzyd = list/concat rows_c1zzzzzzy2 [err_shown]
 
 # A native build emits only the groups its entry reaches, the walk the tab
 # has made since 2026-10-08 (2026-10-09). The mutation empties the walk's
@@ -5033,7 +5033,7 @@ native_reached = row
   (breaking "a_native_build_emits_every_group")
   release
 
-rows_c1zzzzzzy1 = text/concat rows_c1zzzzzzyd [native_reached]
+rows_c1zzzzzzy1 = list/concat rows_c1zzzzzzyd [native_reached]
 
 # kanso test runs its tests on the deep thread `run --interp` uses, so a test
 # that recurses too far fails with the depth diagnostic and the rest still
@@ -5047,7 +5047,7 @@ test_stack = row
   (breaking "a_test_run_on_the_main_stack")
   no_setup
 
-rows_c1zzzzzzy0 = text/concat rows_c1zzzzzzy1 [test_stack]
+rows_c1zzzzzzy0 = list/concat rows_c1zzzzzzy1 [test_stack]
 
 # A record goes back to its caller in two words only when every arm of its
 # group answers that record or a failure (2026-10-09). The mutation skips the
@@ -5061,7 +5061,7 @@ parsed_arms = row
   (breaking "a_group_answering_other_values_goes_by_value")
   no_setup
 
-rows_c1zzzzzzx9 = text/concat rows_c1zzzzzzy0 [parsed_arms]
+rows_c1zzzzzzx9 = list/concat rows_c1zzzzzzy0 [parsed_arms]
 
 # A record on either side of an operator goes to the program's own arms, so
 # inference adds what they answer (2026-10-12). The mutation reads the
@@ -5075,7 +5075,7 @@ op_arms_answer = row
   (breaking "an_operator_answering_arithmetic_alone")
   release
 
-rows_c1zzzzzzx8 = text/concat rows_c1zzzzzzx9 [op_arms_answer]
+rows_c1zzzzzzx8 = list/concat rows_c1zzzzzzx9 [op_arms_answer]
 
 # An operator's arms stay boxed now that inference widens their parameters
 # (2026-10-12). The mutation lets a proven-int parameter go unboxed, and the
@@ -5088,7 +5088,7 @@ op_arms_boxed = row
   (breaking "an_operator_arm_given_an_unboxed_int")
   release
 
-rows_c1zzzzzzx7 = text/concat rows_c1zzzzzzx8 [op_arms_boxed]
+rows_c1zzzzzzx7 = list/concat rows_c1zzzzzzx8 [op_arms_boxed]
 
 # A file of a several-file module names only what the module declares and
 # what its own imports bring. The mutation lets every file see every
@@ -5102,7 +5102,7 @@ sibling_import = row
   (breaking "a_sibling_import_seen_from_every_file")
   no_setup
 
-rows_c1zzzzzzw9 = text/concat rows_c1zzzzzzx7 [sibling_import]
+rows_c1zzzzzzw9 = list/concat rows_c1zzzzzzx7 [sibling_import]
 
 # A reader that stops early ends every engine by SIGPIPE, quietly
 # (2026-10-12). The mutation leaves the signal ignored, and the interpreter
@@ -5115,7 +5115,7 @@ pipe_quiet = row
   (breaking "a_closed_pipe_met_as_an_error")
   release
 
-rows_c1zzzzzzx6 = text/concat rows_c1zzzzzzw9 [pipe_quiet]
+rows_c1zzzzzzx6 = list/concat rows_c1zzzzzzw9 [pipe_quiet]
 
 # A native program's stdout reaches its reader before it writes to stderr,
 # waits or stops (2026-10-12). The mutation leaves stdout in its buffer.
@@ -5127,7 +5127,7 @@ stdout_settled = row
   (breaking "stdout_left_in_its_buffer")
   release
 
-rows_c1zzzzzzx5 = text/concat rows_c1zzzzzzx6 [stdout_settled]
+rows_c1zzzzzzx5 = list/concat rows_c1zzzzzzx6 [stdout_settled]
 
 # A lambda called in tail position costs no stack on any engine
 # (2026-10-12). The first mutation has the interpreter call it as a nested
@@ -5141,7 +5141,7 @@ lambda_nested = row
   (breaking "a_lambda_called_as_a_nested_call")
   no_setup
 
-rows_c1zzzzzzx4 = text/concat rows_c1zzzzzzx5 [lambda_nested]
+rows_c1zzzzzzx4 = list/concat rows_c1zzzzzzx5 [lambda_nested]
 
 lambda_jump = row
   "a lambda called without a jump"
@@ -5151,7 +5151,7 @@ lambda_jump = row
   (breaking "a_lambda_called_without_a_jump")
   no_setup
 
-rows_c1zzzzzzx3 = text/concat rows_c1zzzzzzx4 [lambda_jump]
+rows_c1zzzzzzx3 = list/concat rows_c1zzzzzzx4 [lambda_jump]
 
 # A value carries the arms its owner wrote into a library that never imported
 # the owner. The mutation lets no call travel, and the library's `area c` is
@@ -5164,7 +5164,7 @@ arm_travels = row
   (breaking "an_arm_left_behind_by_its_value")
   no_setup
 
-rows_c1zzzzzzw8 = text/concat rows_c1zzzzzzx3 [arm_travels]
+rows_c1zzzzzzw8 = list/concat rows_c1zzzzzzx3 [arm_travels]
 
 # A module that writes a name for its own type keeps that arm and takes the
 # owners' arms of every other shape. The mutation keeps its calls off the
@@ -5177,7 +5177,7 @@ local_shade = row
   (breaking "a_local_arm_shadows_every_shape")
   no_setup
 
-rows_c1zzzzzzw7 = text/concat rows_c1zzzzzzw8 [local_shade]
+rows_c1zzzzzzw7 = list/concat rows_c1zzzzzzw8 [local_shade]
 
 # A list held in a record and pushed onto through the record is written in
 # place once the record is handed over whole and the field is alone. The
@@ -5191,7 +5191,7 @@ field_in_place = row
   (breaking "a_record_field_copied_every_push")
   no_setup
 
-rows_c1zzzzzzv3bb = text/concat rows_c1zzzzzzw7 [field_in_place]
+rows_c1zzzzzzv3bb = list/concat rows_c1zzzzzzw7 [field_in_place]
 
 # A lazy sequence handed where a builtin takes a list is refused at check
 # (2026-10-13). The mutation deletes the one call that asks, and the error
@@ -5204,7 +5204,7 @@ lazy_as_list = row
   (breaking "a_lazy_sequence_where_a_list_goes_checks_clean")
   no_setup
 
-rows_cq1 = text/concat rows_c1zzzzzzv3bb [lazy_as_list]
+rows_cq1 = list/concat rows_c1zzzzzzv3bb [lazy_as_list]
 
 # A type the program declares shadows a builtin of that name (2026-10-12).
 # The mutation drops the checker's arity guard, and `type run` built with
@@ -5217,7 +5217,7 @@ own_type_count = row
   (breaking "a_builtin_count_over_a_declared_type")
   no_setup
 
-rows_cq2 = text/concat rows_cq1 [own_type_count]
+rows_cq2 = list/concat rows_cq1 [own_type_count]
 
 # The checker's literal check lets a declared type shadow a builtin too. The
 # mutation drops it, and `run 1 2 3` is refused for not starting with a string.
@@ -5229,7 +5229,7 @@ own_type_demand = row
   (breaking "a_builtin_demand_over_a_declared_type")
   no_setup
 
-rows_cq3 = text/concat rows_cq2 [own_type_demand]
+rows_cq3 = list/concat rows_cq2 [own_type_demand]
 
 # Native code lets a declared type shadow a builtin. The mutation drops it,
 # and the play file's build stops on the builtin's count.
@@ -5241,7 +5241,7 @@ own_type_native = row
   (breaking "a_native_builtin_over_a_declared_type")
   no_setup
 
-rows_cq4 = text/concat rows_cq3 [own_type_native]
+rows_cq4 = list/concat rows_cq3 [own_type_native]
 
 # The interpreter calls a declared group before an imported type of the same
 # bare name. The mutation builds the type, and std/list's `counting` stops on
@@ -5254,7 +5254,7 @@ own_group_interp = row
   (breaking "an_imported_type_over_a_declared_group")
   no_setup
 
-rows_cq5 = text/concat rows_cq4 [own_group_interp]
+rows_cq5 = list/concat rows_cq4 [own_group_interp]
 
 # `&`, `|` and `^` mixed without parentheses are refused. The mutation lets the
 # chain through, and the error corpus's fixture reads left to right instead.
@@ -5266,7 +5266,7 @@ bits_mixed = row
   (breaking "bit_operators_mixed_freely")
   no_setup
 
-rows_cq6 = text/concat rows_cq5 [bits_mixed]
+rows_cq6 = list/concat rows_cq5 [bits_mixed]
 
 # `and` and `or` meeting without parentheses are refused. The mutation lets the
 # condition through, and the error corpus's fixture prints instead.
@@ -5278,7 +5278,7 @@ and_or_mixed = row
   (breaking "and_meets_or_freely")
   no_setup
 
-rows_cq7 = text/concat rows_cq6 [and_or_mixed]
+rows_cq7 = list/concat rows_cq6 [and_or_mixed]
 
 # A file may open with a header comment and one blank line. The mutation
 # refuses that blank, and the micro corpus's fixture that opens with a header
@@ -5291,7 +5291,7 @@ header_blank = row
   (breaking "header_comment_refused")
   no_setup
 
-rows_cq8 = text/concat rows_cq7 [header_blank]
+rows_cq8 = list/concat rows_cq7 [header_blank]
 
 callee_under_a_frame = row
   "a cluster refused for a callee it reaches under a frame"
@@ -5301,7 +5301,7 @@ callee_under_a_frame = row
   (breaking "a_cluster_refused_for_a_callee_under_a_frame")
   no_setup
 
-rows_cq9 = text/concat rows_cq8 [callee_under_a_frame]
+rows_cq9 = list/concat rows_cq8 [callee_under_a_frame]
 
 concat_in_place = row
   "a concat accumulator copied every lap"
@@ -5311,11 +5311,11 @@ concat_in_place = row
   (breaking "a_concat_accumulator_copied_every_lap")
   no_setup
 
-rows_cq10 = text/concat rows_cq9 [concat_in_place]
+rows_cq10 = list/concat rows_cq9 [concat_in_place]
 
-rows_c = text/concat rows_cq10 [itself]
+rows_c = list/concat rows_cq10 [itself]
 
-rows = text/concat rows_a (text/concat rows_b rows_c)
+rows = list/concat rows_a (list/concat rows_b rows_c)
 
 # A job with no row and no reason is the thing this refuses. A reason is a
 # sentence, not a flag: it has to say what would prove the job, so the debt is
@@ -5385,7 +5385,7 @@ fn missing declared
 fn stale declared
   claimed = list/to_list (list/map rows job_of)
   excused = list/to_list (list/map unproven_jobs job_of)
-  both = text/concat claimed excused
+  both = list/concat claimed excused
   list/to_list (list/select both (n -> not known? declared n))
 
 cover = os/read_file! workflow .> (text -> against (jobs_in text))
@@ -5402,7 +5402,7 @@ fn verdict _ _ true
 fn verdict gaps ghosts false
   said = list/to_list (list/map gaps (n -> "  no row and no reason: {n}\n"))
   gone = list/to_list (list/map ghosts (n -> "  no such ci job: {n}\n"))
-  body = text/join (text/concat said gone) ""
+  body = text/join (list/concat said gone) ""
   saying = "ratchet: the table and ci.yml disagree\n{body}"
   io/write_err saying .> (_ -> os/exit 1)
 

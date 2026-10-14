@@ -146,7 +146,7 @@ fn typed expr
 limit = "20"
 
 fn asked argv
-  os/run "timeout" (text/concat [limit kanso] argv)
+  os/run "timeout" (list/concat [limit kanso] argv)
 
 fn hung? 124
   true

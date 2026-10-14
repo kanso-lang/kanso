@@ -1,0 +1,4 @@
+error[name]: unknown name `text/concat` — two lists join with `list/concat`, and two strings by interpolation, `"{a}{b}"`
+  --> text_concat_became_list_concat.kso:6:30
+   6 | pub play = print (text/join (text/concat ["a"] ["b"]) "")
+                                    ^

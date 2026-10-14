@@ -401,7 +401,7 @@ c23 = kase c23l [c23a c23m] "" "check refuses" c23said
 
 cases_a = [c1 c2 c3 c4 c5 c6 c7 c8 c9 c10 c11 c12 c13 c14 c15 c16]
 
-cases_b = text/concat cases_a [c17 c18]
+cases_b = list/concat cases_a [c17 c18]
 
 # Both arms of the self-import guard. The message was on the excused list as
 # unreachable, written from three tries that each landed somewhere else: a
@@ -439,9 +439,9 @@ c25said = "error: a module cannot import itself — `../mine` resolves to this"
 
 c25 = kase c25l [c25a] "mine" "check refuses" c25said
 
-cases_c = text/concat cases_b [c19 c20 c21 c22]
+cases_c = list/concat cases_b [c19 c20 c21 c22]
 
-cases_d = text/concat cases_c [c23]
+cases_d = list/concat cases_c [c23]
 
 # The module-path twins of c7 and c11. Both readers under the whole-program
 # check ask what a call's head is spelled, and `canonicalize_bare_aliases`
@@ -651,9 +651,9 @@ c36l = "a counted recursion inside a module still loops"
 
 c36 = kase c36l [c36d c36a] "app" "prints" "1000000\n"
 
-cases_e = text/concat cases_d [c24 c25 c26 c27 c28 c29 c30 c31 c32 c33]
+cases_e = list/concat cases_d [c24 c25 c26 c27 c28 c29 c30 c31 c32 c33]
 
-cases = text/concat cases_e [c34 c35 c36]
+cases = list/concat cases_e [c34 c35 c36]
 
 # Behaviour that is wrong, and known to be wrong. Recorded the way
 # tests/golden/native_route_gaps.txt records the page's gaps: a defect written

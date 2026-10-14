@@ -21,53 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-12 — a file names only what its module declares and its own imports bring
-
-The second rule of the 2026-10-12 gavel on #1894. A module's files share
-their declarations, and each file sees only the imports it writes. Before
-this, the check enforced that only for qualified spellings: a file writing
-`list/fold` without importing std/list was refused, and the same file writing
-`fold` checked clean because a sibling's import had enrolled the bare name for
-the whole module.
-
-`compile_module_loaded` now hands each file of a several-file module the
-build's names minus the ones it cannot see: a bare name surfaced only by
-imports this file does not write, which no file of the module declares, and
-a rename's spelling that only a sibling's import makes. The refusal names the
-import that would bring the name. A module of one file sees exactly its
-imports, so the work is skipped there.
-
-Two book samples leaned on the old reach. The ch09 simulator's
-`enumerable.kso`, in both `vse/` and `squeeze/`, called `fold` through
-`methods.kso`'s import of std/list. Each now imports it, the ch09 panel shows
-the line, and the paragraph before it says each file imports what it calls.
-The vse repository holds the same file and gets the same line in vse#87. kq
-and kanso-json have no file that leans on a sibling's import. ch07 states the
-rule where it describes a module's files.
-
-`tests/golden/errors_module/a_file_calls_a_name_only_its_sibling_imports`
-pins the refusal: a two-file module where one file imports std/list and the
-other calls `fold` on a list it built. Main checks it clean. The ratchet row
-"a sibling's import seen from every file" hides nothing and turns the corpus
-red.
-
-The rest of #1894 is still owed: arms that travel with a value into a file
-that never imported their owner, and the issue's reproduction, a test file's
-import reaching the module it tests, which #1907 closes by keeping test files
-out of the module.
-
-CI's rows: `compile_instructions` 25,761,215 -> 25,881,551,
-`entry_instructions` 85,207,562 -> 85,381,313 and `library_instructions`
-85,760,222 -> 85,935,582, the cost of handing each file
-of a module its own set of names. The browser compile fell 391,974,060 ->
-391,311,502, emitting 7,016,409 -> 7,013,477 and the interpreter 488,792,115
--> 488,739,816. This change does not touch the code those rows run, so their
-moves are put down to layout, though no run isolated it. The browser fall is
-worth more than the three rises cost, and welfare banks the difference at
-91.11. `compile_allocs` rose 68 to 14,598 and `interp_allocs` 68 to 587,351, and
-the floor drops by what they cost, since this builds a ruled part of the
-language.
-
 ## 2026-10-13 — a loop entered from the callee it calls rewinds
 
 From #1892's bc port. A `for` loop in bc held every lap's allocation: 300,000
@@ -1838,6 +1791,43 @@ validation result before passing it on.
 
 Owes, on #1928: the toml reduction kept as a micro golden pinning today's
 output on every engine; #1891's second item closed with a pointer here.
+
+## 2026-10-13 — `list/concat` joins two lists
+
+#1906 moves concat to the module of the type it works on. `list/concat a b`
+joins two lists, or the byte values `text/bytes` answers, and is the same
+builtin underneath that `text/concat` was, so every engine runs it as
+before. `text/concat` is gone from `lib/text/text.kso`, and every caller in
+the tree moved: the library, the scripts, the benchmarks, the examples, the
+book and the goldens. Files that imported std/text only for concat now
+import std/list instead.
+
+Two strings join by interpolation, `"{a}{b}"`, and a list of them by
+`text/join`. The checker refuses a string handed to `list/concat` when it
+can see one: a string literal, a template, or a call whose every answer is a
+string. A string it cannot see still reaches the runtime, which raises
+"concat takes two lists" on both engines. A call to `text/concat` is
+refused at check with the unknown-name diagnostic, which now names
+`list/concat` and interpolation. Each refusal has an error golden.
+
+Appendix B's entry is rewritten under std/list. std/text lost three lines
+above `to_float` and `to_int`, so the line numbers that goldens and the book
+quote from `std/text/text.kso` moved with it.
+
+kq's one caller moves on the kq branch of the same name.
+
+On CI's rows the front end pays for the new refusal and for the moved imports,
+and I have not split the cost between the two. compile_instructions went from
+28,002,980 to 28,257,376, entry_instructions from 92,393,206 to 93,065,372,
+library_instructions from 91,989,327 to 92,696,544, `compile_peak_bytes` from
+703,170 to 703,187 and browser_compile_instructions from 413,936,384 to
+416,674,694. The interpreted run's `interp_peak_bytes` went from 722,393 to
+725,610 while its instructions fell to 495,318,943 and its allocations to
+589,643. compile_allocs fell to 15,937 and emit_instructions to 7,239,817. On
+the module path `module_visits` went from 2,909 to 2,912. The ratchet's
+mutation for a concat accumulator anchored on the line naming `text/concat`,
+so it now names `list/concat`, and the mem spec still goes red under it. The
+floor follows the score, since #1906 builds a ruled part of the language.
 
 ## 2026-10-13 — hex and binary integers, and floats with an exponent
 

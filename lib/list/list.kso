@@ -107,6 +107,12 @@ fn bump none
 fn bump n
   n + 1
 
+# Joins two lists, or the byte values of `text/bytes`, into one list.
+# Strings join by interpolation, `"{a}{b}"`, and a list of them by
+# `text/join`.
+pub fn concat a b
+  builtin_concat a b
+
 pub fn count coll pred
   fold coll 0 (c x -> if (pred x) (c + 1) c)
 
