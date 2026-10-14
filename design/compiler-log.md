@@ -245,28 +245,6 @@ to 4,843,470 bytes, `emitted_other_defines` from 2,036 to 2,049 and
 instructions. The floor drops by the difference under the 2026-10-11 ruling
 (#1862).
 
-## 2026-10-12 — a bare imported type with no fields is its module's value
-
-An importer may name a type with no fields bare: `import "std/json"` enrols
-`json_null` beside `json/json_null`. Native code resolved the bare name to the
-type it stands for. The interpreter built a record under the bare spelling, so
-it printed as the importer's own type and compared unequal to `json/json_null`.
-A constructor call already took the type's origin; the fieldless path in
-`resolve` now does the same.
-
-`tests/golden/micro/a_bare_imported_unit_is_its_module_s` prints the bare value
-and compares it with the qualified one, inside a list and out. Before the fix
-the interpreter printed `a_bare_imported_unit_is_its_module_s/json_null` and
-`false` twice where native printed `json/json_null` and `true`.
-
-json's own test suite found it. Under #1883 a test file imports its module,
-and `test_decode_nested` compares a decoded document against a map holding a
-bare `json_null`.
-
-From CI, the interpreter's run of the corpus reads 249 instructions fewer,
-interp_instructions 488,739,816 to 488,739,567 on the merged tree. No other
-row moved, and welfare banks the rise.
-
 ## 2026-10-13 — three port shapes join the run program before their fixes
 
 Three of #1892's items are fixed on open branches, and the run program was
@@ -1723,3 +1701,19 @@ only when a file is refused, and no file in the corpus is. Marking
 function. The browser rise outweighs the five falls by less than 0.0001 of
 welfare, and the floor moves to the score with the reason recorded, as it
 did for kanso#1959 and kanso#1963.
+
+## 2026-10-14 — The work-ahead rig builds again
+
+The compiler page tells a reader to build `bench/workahead/aswritten.kso` and
+`overlapped.kso`. Each file declares `grind` and `spin` beside its statements,
+and since files of that shape became libraries, `kanso build` refuses both.
+Nothing else reads the rig, so nothing went red. The two programs are now
+modules, `bench/workahead/aswritten` and `bench/workahead/overlapped`, and
+both import the functions from `bench/workahead/rig`.
+
+The panel's rows are re-sat: 15 interleaved heats each on the build
+container. As-written reads a minimum of 2,004 ms where the panel said
+2,913, because the pool now builds `grind 150000000` during the sleep.
+Overlapped reads 2,004 ms where the panel said 2,008. The two differ in their
+output: overlapped prints the report before the delivery, and as-written
+keeps the order it was written in.

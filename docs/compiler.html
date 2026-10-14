@@ -758,21 +758,21 @@ no helper, guarded run       -3.0842%     -1.4555%      +213,359    -0.01
 
 <div class="code-panel">
   <div class="code-panel-title">the fedex rig — a 2000 ms stall beside ~900 ms of pure work (bench/workahead/)</div>
-  <pre><code><span class="c"># as-written    sleep >> report        min 2913 ms   (stall, then work)</span>
-<span class="c"># overlapped    report beside sleep    min 2008 ms   (work inside the stall)</span>
+  <pre><code><span class="c"># as-written    sleep >> report        min 2004 ms   (the pool works inside the stall)</span>
+<span class="c"># overlapped    report beside sleep    min 2004 ms   (arranged by hand)</span>
 
-<span class="c"># the sleep is 2000 ms. overlapped lands at 2008: the entire grind</span>
-<span class="c"># disappeared into the wait. min of 15 interleaved heats; the floor is</span>
-<span class="c"># physics — a run can never beat its own sleep, and none did.</span>
+<span class="c"># the sleep is 2000 ms. min of 15 interleaved heats on the build container,</span>
+<span class="c"># 2026-10-14. a run can never beat its own sleep, and none did. before the</span>
+<span class="c"># pool, as-written took 2913 ms: the stall, then the work.</span>
 
 cargo build --release
-./target/release/kanso build bench/workahead/aswritten.kso --release
-./target/release/kanso build bench/workahead/overlapped.kso --release
+./target/release/kanso build bench/workahead/aswritten --release
+./target/release/kanso build bench/workahead/overlapped --release
 time ./aswritten; time ./overlapped
 KANSO_SCHED_DEBUG=1 ./overlapped     <span class="c"># watch elapsed + wait = deadline</span></code></pre>
 </div>
 
-<p>the two variants above are the same program arranged two ways by hand. the first rung of the ladder now does the arranging for one class of work. at compile time, <code>src/ahead.rs</code> lifts a call that comes after a sleep, and whose arguments are all known before the program runs, into a named constant. the first time the program has nothing to do but wait, the runtime builds those constants. three shapes reach that point: a bare sleep in the entry; a binding written ahead of the first sleep, which moves into the wait when everything before the sleep is a binding; and a group of effect lines, where the pool runs the first time every side is waiting on a timer. a constant joins the pool only when building it calls one of the program's functions, so a literal is built where it is first read. programs shaped like the as-written rig, with the work bound ahead of the sleep or the sleep placed behind a <code>print</code>, ran in 2.01 to 2.09 s on the build container where main took 3.80 to 4.04 s, with the same output. the mem goldens pin how many constants the pool built as <code>ahead_forced</code>.</p>
+<p>the overlapped variant is the as-written program rearranged by hand, and the rearranging moves the report ahead of the delivery in its output. the first rung of the ladder now does that work for one class of program and keeps the order the program wrote. at compile time, <code>src/ahead.rs</code> lifts a call that comes after a sleep, and whose arguments are all known before the program runs, into a named constant. the first time the program has nothing to do but wait, the runtime builds those constants. three shapes reach that point: a bare sleep in the entry; a binding written ahead of the first sleep, which moves into the wait when everything before the sleep is a binding; and a group of effect lines, where the pool runs the first time every side is waiting on a timer. a constant joins the pool only when building it calls one of the program's functions, so a literal is built where it is first read. programs shaped like the as-written rig, with the work bound ahead of the sleep or the sleep placed behind a <code>print</code>, ran in 2.01 to 2.09 s on the build container where main took 3.80 to 4.04 s, with the same output. the mem goldens pin how many constants the pool built as <code>ahead_forced</code>.</p>
 
 <p>a failure in pooled work is raised where the program as written raises it (the 2026-10-11 ruling on #1862). for a moved binding that place is the wait, since nothing has printed yet. anywhere else the pool drops the failure and the value fails when it is read, so the transcript is the one the program prints without the pool. work that never returns is the exception. the pool runs inside the wait, so a computation that loops forever stops the program there, before it prints anything that comes between the sleep and the first read of the value. the ruling keeps that case open: running pooled work on a second thread would preserve the output, and it is not built. the pool cannot yet reach a call whose arguments name something known only at run time, such as a lambda's parameter or a line read from io; that needs a pool keyed by call site and arguments. rungs 2 and 3 are not built.</p>
 
