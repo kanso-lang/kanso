@@ -285,7 +285,7 @@
 # through the container's pointer and hands back the `Rc` it was given,
 # instead of taking the contents out and boxing them afresh. Read by the gate
 # on this host: 626,007 -> 587,281, a FALL of 38,726 (-6.19%).
-interp_allocs=589689
+interp_allocs=589643
 #
 # 2026-09-18, kanso#1518 against main at kanso#1517, CI's sitting.
 # 951,438 -> 961,165, a RISE of
@@ -381,5 +381,5 @@ interp_allocs=589689
 # the run holds throughout: 709,847 -> 687,319.
 # 2026-10-09: an in-place write keeps its container in the allocation it was
 # born in. Read by the gate on this host: 687,319 -> 687,159, a FALL of 160.
-interp_peak_bytes=722393
+interp_peak_bytes=725610
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
