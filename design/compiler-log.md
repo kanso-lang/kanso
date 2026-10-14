@@ -1865,3 +1865,32 @@ into every program that imports it. CI on f50c9ec4 read:
 
 No runtime counter moved. Welfare goes 91.2395 -> 91.2300, a fall of 0.0095.
 This builds a ruled part of the language, so the floor drops by exactly that.
+
+## 2026-10-14 — `kanso test .` finds the module it is run inside
+
+A test file imports the module beside it as `../<name>` (the 2026-10-12
+gavel on #1883). Run as `kanso test .` from inside the module, that import
+failed with "cannot resolve import \"../kanso-json\"", and kanso-json's CI
+runs its tests that way. kanso-json main went red against kanso main from
+the carrier that landed the gavel, #1938.
+
+The resolver takes each leading `../` as a step up from the importing
+file's directory, lexically. From `.` the step went to `Path::parent(".")`,
+which is the empty path, so the import looked for `./kanso-json` inside the
+module. A base with no name left to drop now gains a `..`. Nothing in the
+corpus ran the test verb on `.`, and the one fixture that would have was
+saved by a file named after its directory: `shared_name/shared_name.kso`
+answers to the wrong path too.
+
+`a_module_tested_from_inside_as_dot_imports_itself` in `tests/test_verb.rs`
+runs `kanso test .` inside `tests/golden/test_verb/tested_as_dot`, where no
+file shares the directory's name. It failed with the same error before the
+fix. kanso-json's nineteen tests pass under the fixed compiler. The change is
+in the resolver's path walk, so it moves no runtime row; the compile rows
+are CI's to read.
+
+CI moved one row: `browser_compile_instructions` 441,096,528 -> 441,097,975,
+up 1,447, the same rise it read before main carried kanso#1962. The resolver
+is compiled into the tab's engine, and the walk changed its code, so this is
+layout in the wasm build. No other row moved. Welfare falls under a ten-
+thousandth of a point and the floor is set to it.

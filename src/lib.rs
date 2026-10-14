@@ -957,17 +957,26 @@ fn resolve_import(base: &std::path::Path, path: &str) -> Result<std::path::PathB
         // reached as `../deep` from `mid/` named itself `mid/../deep` in every
         // diagnostic it raised and in the hako its errs recorded.
         // Each leading `../` is a step up taken here rather than left in the
-        // path: `base` loses a component and the name loses the prefix. A
-        // `..` with nothing above it stays, because there is nothing to fold
-        // it into. The walk is lexical on purpose — the directory a module is
+        // path: `base` loses a component and the name loses the prefix. A base
+        // with no name left to drop (empty, `.`, or already `..`) gains a `..`
+        // instead, since `.` is the directory being run from and its parent is
+        // `..`. Dropping the `.` would leave the step inside it. A `..` above
+        // the root stays in the name, because there is nothing to fold it
+        // into. The walk is lexical on purpose — the directory a module is
         // reached THROUGH need not be one it lives under, and asking the
         // filesystem would also make every path absolute, into every
         // diagnostic, which is the thing being fixed.
         let mut here = base.to_path_buf();
         let mut bare = path.strip_prefix("./").unwrap_or(path);
         while let Some(above) = bare.strip_prefix("../") {
-            let Some(parent) = here.parent() else { break };
-            here = parent.to_path_buf();
+            here = match here.components().next_back() {
+                Some(std::path::Component::Normal(_)) => {
+                    here.parent().map(|p| p.to_path_buf()).unwrap_or_default()
+                }
+                None | Some(std::path::Component::CurDir) => std::path::PathBuf::from(".."),
+                Some(std::path::Component::ParentDir) => here.join(".."),
+                Some(std::path::Component::RootDir | std::path::Component::Prefix(_)) => break,
+            };
             bare = above;
         }
         let relative = here.join(bare);

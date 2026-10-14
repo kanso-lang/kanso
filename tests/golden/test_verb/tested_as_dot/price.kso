@@ -1,0 +1,4 @@
+# No file here shares the directory's name, so the module is the directory
+# and nothing else answers to it.
+pub fn price n
+  "{n} yen"
