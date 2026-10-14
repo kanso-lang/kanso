@@ -103280,3 +103280,35 @@ On main after #1904 the tab's compile reads `browser_compile_instructions`
 
 With main merged after #1922, browser_compile_instructions lands on
 393,361,582.
+
+## 2026-10-12 — a number edit is not a page edit
+
+`page_drift` counts log entries since docs/compiler.html last moved, and took
+the page's newest commit as the move. `golden_prose --write` commits the page
+whenever a golden it quotes moves, rewriting a span's number and no sentence,
+so a row change paid the page's debt. On main the operator arms' compile and
+browser rows (470ae17f) did that, and the gate read 3/3 where the page was
+four entries behind its last prose edit (2cac608c). #1913's span rewrite
+would have reset it to zero while #1905 still owed sections.
+
+The gate now walks the page's commits from the newest and stops at the first
+whose removed and added lines differ once digits, commas and points are taken
+out. Diffs are read against the first parent, so a merge counts only for what
+it brought. `tests/a_number_edit_is_not_a_page_edit.rs` commits a span-only
+rewrite after four entries and expects the four to stand, and a prose edit
+after them to clear the count. With the comparison forced false the first
+reads 0/3 and fails.
+
+Main reads 4/3 under the fixed gate, so every pull request is red on
+`page_drift` until the page carries the sections #1905 asks for.
+
+91.11.
+
+The first version walked every commit that touched the page in date order.
+Merged with main after #1922, it reached the commit on the page branch where
+the sections were written, which is older than eight entries main logged while
+that branch waited, and read the page eight entries behind. The walk now
+follows first parents, so the merge that brought the sections in is where the
+page moved. A third spec builds that history: sections on a side branch, four
+entries on the trunk, then the merge, and expects 0/3. It read 4 entries ahead
+before the change.
