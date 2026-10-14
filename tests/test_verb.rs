@@ -81,6 +81,32 @@ fn a_test_helper_sharing_a_private_name_does_not_collide() {
     assert_eq!(output.status.code(), Some(0));
 }
 
+/// `kanso test .` from inside the module tests the same module as naming it
+/// from the directory above. The test file reaches its module as `../<name>`,
+/// and stepping up from `.` must leave the module's directory rather than
+/// look for `./<name>` inside it. No file in the fixture shares the
+/// directory's name, so nothing inside can answer by accident. Watched red as
+/// "cannot resolve import \"../tested_as_dot\"", the error kanso-json's CI
+/// hit running its tests this way.
+#[test]
+fn a_module_tested_from_inside_as_dot_imports_itself() {
+    let output = Command::new(env!("CARGO_BIN_EXE_kanso"))
+        .args(["test", "."])
+        .current_dir(fixture_dir().join("tested_as_dot"))
+        .output()
+        .expect("kanso binary runs");
+    let expected =
+        std::fs::read_to_string(fixture_dir().join("tested_as_dot.out")).expect("golden");
+
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        expected,
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(output.status.code(), Some(0));
+}
+
 /// Only `kanso test` reads a test file, so one that does not parse leaves the
 /// program beside it running on both engines. Watched red as a syntax error
 /// from `run`.

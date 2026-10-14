@@ -1,0 +1,1 @@
+test_price = price 400 == "400 yen"

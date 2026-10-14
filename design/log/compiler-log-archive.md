@@ -103055,3 +103055,59 @@ runs. `a_warm_play_ended_by_a_signal_names_it` reaches the wording another
 way. The program waits on stdin, the spec sends it SIGTERM, and both plays
 must print "ended by signal 15". Under the mutation the second play printed an
 empty line. Linux only, since it finds the program through /proc.
+
+## 2026-10-13 — a lazy sequence handed where a list goes is refused at check
+
+Five ports hit the same failure: `list/map` answers a lazy sequence, `text/join`
+takes a list, `kanso check` said ok, and every engine stopped at run time with
+`error[runtime]: join takes a list of strings and a separator` and no file or
+line (#1892). `length` and `push` had the same gap, with a run-time hint
+naming `list/to_list` and still no location.
+
+The check now refuses the call at the argument. After inference it reads each
+call of a builtin, or of a std wrapper that forwards to one, whose
+`builtin_demand` entry holds a list. When the argument is a call of a std/list
+group whose every arm answers a record and nothing else, the argument is a lazy
+sequence, and the diagnostic says so: "`text/join` takes a list here, and
+`list/map` answers a lazy sequence — make it a list with `list/to_list`". A
+sequence held by name, a field, or any answer inference cannot pin to a record
+is left to the run. `print` is not touched, because its demand holds no list
+and printing a sequence forces it (gaveled).
+
+`join` had no `builtin_demand` entry, so `text/join 3 ""` checked clean while
+`length 3` was refused. It has one now: a list, then a string, which is what
+both engines refuse.
+
+`tests/golden/errors/a_lazy_sequence_where_a_list_goes` and
+`join_takes_a_list` pin the two refusals. Three run-time goldens wrote the
+failing call out and now hold the value by name, so they still reach the run
+and still pin its sentence: `join_takes_strings_and_a_separator`,
+`length_points_at_to_list` and `push_points_at_to_list`.
+
+The check found the same mistake in `bench/compile_corpus`: `workload` joins
+`list/take ["a" "b" "c"] 2`, which stops both engines when run. Nothing runs
+the corpus, so it went unseen. It now goes through `list/to_list`, so the
+corpus compiles a little more and the compile rows move with it.
+
+The ratchet row "a lazy sequence where a list goes checks clean" deletes the
+call that asks, and the error corpus goes red on the new fixture.
+
+Measured here, the tab's compile row went from 391,974,060 to 392,906,566.
+With the new call kept and the check returning at its first line it read
+392,914,374, and with the call removed 391,981,161. The rise is in how the
+wasm build lays out the walk the call sits in, not in work the check does:
+across `bench/interp_corpus` five calls get past its first test.
+
+On CI's rows for the tree merged with #1913, browser_compile_instructions
+lands on 392,430,393, up 1,118,891. compile_instructions lands on 26,006,341,
+entry_instructions on 85,527,812 and library_instructions on 86,082,490,
+rises of 124,790, 146,499 and 146,908 for the check's walk and the corpus's
+extra `list/to_list`. emit_instructions lands on 7,013,581, up 104, and
+compile_allocs on 14,637, up 39. front_end_visits lands on 7,995, up 13, the
+front end walking the corpus's new call, and compile_peak_bytes lands on
+676,277, up 1,593, for the same call's tree. The refusal is
+#1892's item, which makes `kanso check` say what every engine already
+refused, so the floor drops by what it costs.
+
+On main after #1904 the tab's compile reads `browser_compile_instructions`
+393,497,266, up 1,118,891 from main's 392,378,375 on the same tree.
