@@ -78,6 +78,7 @@ extra_css: /book/book.css
 <a href="#b-round"><code>math/round</code></a>
 <a href="#b-round-bang"><code>math/round!</code></a>
 <a href="#b-slice"><code>text/slice</code></a>
+<a href="#b-slice-bang"><code>text/slice!</code></a>
 <a href="#b-sleep"><code>time/sleep</code></a>
 <a href="#b-sqrt"><code>math/sqrt</code></a>
 <a href="#b-starts_with"><code>text/starts_with?</code></a>
@@ -221,6 +222,10 @@ join a-b-c
 slice ans</code></pre>
   </div>
 </div>
+
+<h3 id="b-slice-bang"><code>text/slice!</code></h3>
+<p class="builtin-sig"><code>text/slice! (string | list) int int → (string | list) effect</code></p>
+<p>the caller insisting the range is inside the value. the same slice, answered in a box: <code>.&gt;</code> opens it, and a range that runs past the end is a failure inside it, <code>slice! takes a range inside the value</code>, rather than a <code>none</code>. an inverted range is still the empty result. it is the choice <code>math/round!</code> makes over a float with no integer.</p>
 
 <h3 id="b-starts_with"><code>text/starts_with?</code></h3>
 <p class="builtin-sig"><code>text/starts_with? string string → bool</code></p>

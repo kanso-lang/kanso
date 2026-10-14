@@ -1,0 +1,5 @@
+import "std/text"
+
+# A `slice!` whose range leaves the value answers a box holding the failure,
+# and nothing here rescues it, so it reaches the endpoint.
+pub play = text/slice! "kanso" 2 9 .> print
