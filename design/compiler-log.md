@@ -245,53 +245,6 @@ to 4,843,470 bytes, `emitted_other_defines` from 2,036 to 2,049 and
 instructions. The floor drops by the difference under the 2026-10-11 ruling
 (#1862).
 
-## 2026-10-12 — arms travel with the value
-
-The first rule of the 2026-10-12 gavel on #1894. A value carries the arms its
-type's owner wrote, so a module handed a `circle` may call `area c` without
-importing geo.
-
-The check decides which calls travel. The resolver marks a local as arrived
-when the function was handed it: a parameter, a name bound to a field or
-element of one, a lambda's parameter when the lambda goes to a call that also
-carries an arrived value, and the answer of a traveling call on one. A bare
-call that names nothing the file can see, with an arrived argument, is
-recorded instead of refused. The answer of a local function is not arrived,
-as the gavel lists it, so `area (twice c)` stays an unknown name.
-
-Each recorded call is renamed into a traveling group, `~area`, a spelling no
-program can write. A dependency compiles with the call left there. The root
-of the program, an entry file or a directory with `main.kso`, fills each group
-it calls with clones of every pub arm of that name whose module owns one of
-its parameter types, which is rule 4's ownership condition. When no owner
-wrote the name, the call is refused where it was written: "no module in this
-program writes `perimeter` for a type it owns, so no value carries it". Checked
-alone, a library takes the call on a parameter and refuses it on a value it
-made. Native code quotes a symbol with `~` in it, as it does one with `/`.
-
-`tests/arms_travel.rs` runs `tests/golden/travel/area` on both engines: a
-report module that never imports geo calls `area` on a circle it was handed
-and on each circle of a list. Main refused both calls, from `kanso run` and
-from `kanso check report`. Two error goldens pin the refusals:
-`an_arm_called_on_a_value_the_file_made` and
-`a_traveling_call_no_owner_answers`. The ratchet row "an arm left behind by
-its value" lets no call travel and turns the run test red. ch11 states the
-rule and ch07 points to it.
-
-Still open on #1894: a local arm of the same name shadows the traveling ones
-outright, where rule 4 asks for a local arm of the same shape to shadow and
-the rest to stay reachable. A module that declares its own `area` for a
-square and is handed a circle cannot reach geo's arm yet.
-
-CI's rows put `compile_instructions` at 26,052,299 (+170,748, +0.66%),
-`entry_instructions` at 86,286,307 (+904,994, +1.06%), `library_instructions`
-at 86,505,153 (+569,571, +0.66%) and `emit_instructions` at 7,019,534
-(+6,057). `compile_allocs` rose 75 to 14,605 and `interp_allocs` 74 to 587,357.
-`interp_instructions` fell 402 to 488,739,414. The tab runs the same front end,
-and `browser_compile_instructions` rose to 393,182,630 (+804,255, +0.20% on main after #1927).
-This builds a ruled part of the language, so the welfare floor drops by what
-it costs.
-
 ## 2026-10-12 — a local arm shadows only its own shape
 
 The fourth rule of the 2026-10-12 gavel on #1894. Rule 1 left a gap: a module
@@ -1756,3 +1709,32 @@ row moved. Welfare rose 0.00022 to 91.52460, and the floor is banked there.
 Still not built for #1856: pooling inside an effect group, and calls whose
 arguments name locals that cannot move, which need the (site, args) pool.
 
+
+## 2026-10-14 — Neither verb sends a reader to the other
+
+The 2026-10-14 audit of #1893 found one file shape that both running verbs
+refuse while pointing at each other. A file that declares a function, runs a
+statement and imports a neighbour is a library to `kanso run`, which
+suggested `kanso play`; `kanso play` takes the stdlib and nothing else, and
+suggested `kanso run`. Both refusals now give the route that runs the file:
+move the statements into a main.kso beside it, mark the definitions they use
+`pub`, and run the directory. A play file of statements alone that imports a
+neighbour is still sent to `kanso run`, which takes it.
+
+`tests/golden/play/beside/sum.kso` is the reduction. Its `.stderr` and
+`.run.stderr` pin what each verb says, and
+`definitions_beside_a_local_import_are_sent_to_a_module` in
+`tests/play_verb.rs` builds the module the messages describe and runs it.
+
+No test read the `.stderr` files in `tests/golden/play`. The archive noted
+this for one of them on 2026-10-10. `every_play_golden_is_read` now reads
+every golden in that directory: each `.stdout` on both engines, each
+`.stderr` under `play`, and each `.run.stderr` under `run`. Two goldens
+were stale. `no_local_imports.stderr` spelled the import without its
+`./`. `decls_after_statements.stderr` held a refusal the play parser
+dropped when it began sorting a file's lines by kind; that fixture now
+prints `first`, so its golden is a `.stdout`.
+
+The audit's other findings on #1893 are open there. An insisting form's
+failure names the library line instead of the call, and neither a wrong
+kind reaching a builtin or operator nor a stack overflow has a location.
