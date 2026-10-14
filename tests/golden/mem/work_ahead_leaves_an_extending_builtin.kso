@@ -1,0 +1,16 @@
+# `push` may write into the list it was given, so a call whose argument
+# pushes is not pooled: it runs after the sleep, where the program wrote it.
+import "std/time"
+
+fn spin 0 acc
+  acc
+
+fn spin n acc
+  spin (n - 1) (acc + n % 7)
+
+fn report xs
+  sleep 1
+    .> (_ -> print "made")
+    .> (_ -> print "report: {spin (1000 * length (push xs 4)) 0}")
+
+report [1 2 3]

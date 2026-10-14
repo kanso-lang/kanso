@@ -103620,3 +103620,227 @@ bare `json_null`.
 From CI, the interpreter's run of the corpus reads 249 instructions fewer,
 interp_instructions 488,739,816 to 488,739,567 on the merged tree. No other
 row moved, and welfare banks the rise.
+
+## 2026-10-13 — a list or map too long for its line spans lines
+
+Built under #1882 (gavel: a bracketed list or map may span lines). A literal
+whose opening bracket ends its line continues one element to a line, each two
+spaces deeper, and closes with its bracket alone at the indent of the line that
+opened it. The lexer gathers the lines into the one statement they spell, so the
+parser and every engine see the literal they saw before. A list element is
+grouped the way a parenthesised one is, so `double 21` on its own line is one
+element; a map element is one `key:value` entry. A list inside a list spans on
+its own terms, and a comment line may sit between elements.
+
+Canonical form decides which form is written. The lexer measures the literal
+joined back onto one line, and a literal that fits in 80 columns is refused in
+the spanning form with the width it would take. A line too wide that holds a
+literal gets a second clause on the width error saying the literal can span.
+The other refusals each name the rule: a closing bracket that shares its line
+with an element, a map entry sharing a line, an element at the wrong indent, a
+blank line inside the literal, and a literal the file ends inside.
+
+Five error goldens pin those diagnostics and
+`tests/golden/micro/lists_and_maps_span_lines` pins a list, a map, a nested
+list and a list in a function body on both engines. On main's lexer every one
+of them is refused with a different message, and the micro sample stops at an
+indent error.
+
+Chapter 02 shows the form beside lists and maps, and appendix C states the
+rule beside the continuation line. trend_gate's `higher` table and
+perf_record's two watched lists, which were assembled from halves joined by
+`text/concat` to stay under the width, are now single spanning lists with
+their comments inside.
+
+CI's rows, on main after #1925: compile_instructions lands on 26,216,275
+(+334,724), entry_instructions on 86,540,771 (+1,159,458), library_instructions
+on 87,096,300 (+1,160,718) and browser_compile_instructions on 392,203,148
+(+891,646). interp_instructions falls to 488,437,711 (-302,105) and
+emit_instructions to 7,012,968 (-509).
+
+Moving `higher` onto the spanning form blinded
+tests/a_mutation_keeps_its_unclassified_counter.rs, which read the direction
+tables one line at a time. With `thunk_forces` added to `higher` it stayed
+green. It now reads the spanning table and asserts that both tables parsed, and
+the same edit turns it red.
+
+- **OPEN** #1882, until this lands.
+
+91.11.
+
+With main merged after #1937, browser_compile_instructions lands on
+394,301,683.
+
+On CI's rows for the tree merged with main after #1937: compile_instructions
+lands on 26,183,028, entry_instructions on 86,449,300, library_instructions on
+86,666,390, emit_instructions on 7,048,150 and compile_allocs on 14,644.
+
+393,186,348.
+
+On CI's rows for the tree merged with main after #1937: compile_instructions
+lands on 26,064,732, entry_instructions on 86,313,974, library_instructions on
+86,530,678 and interp_instructions on 487,131,185. emit_instructions falls to
+7,046,962.
+
+393,279,063.
+
+## 2026-10-13 — `merge` copies a record with named fields replaced
+
+Built under #1886 (gavel: `merge` copies a record with named fields replaced).
+`merge u { "role":"chef" }` answers a copy of `u` with the named fields
+replaced and every other field carried over.
+
+**How it runs.** After the checks, each `merge` becomes a call to a group the
+compiler writes for the set of names it replaces, with one arm per record the
+calling module declares that has every one of those fields:
+`Merge_4role (user Kept0 Kept1 _) Given0 = user Kept0 Kept1 Given0`. Every
+engine already runs a dispatch and a construction, so none of them learned
+anything new, and the tab compiles the same group. A field read is built the
+same way, through the getter groups. Two things surfaced on the way. A group
+written for a library carried only its first arm into the program that
+imports it, because its arms shared the call site's span; each arm now
+carries its own type's span. And a value whose type has no arm misses the
+group at run time, so the miss is reported as a miss of `merge` rather than
+of the group's internal name.
+
+**What the checker refuses.** The fields are named by plain string literals
+in a map literal; a computed map is refused, since the copy is built from the
+names. Where the value's type is known at the merge (a construction written
+there, or a local bound to one), a name that type does not declare is refused
+as `` `user` has no field `rank` ``, the field read's wording. Otherwise a name
+no record declares is refused, and so is a set of names no record of this
+module has all of. A set that only an imported record has is refused as an
+opacity error, the construction rule's (2026-08-20). Five goldens pin these:
+four error fixtures, one of them a module tree, and a runtime fixture for the
+miss on both engines. `a_merge_carries_the_fields_it_does_not_name` pins the
+copy as a library on both engines. On main every one of them stops at
+`` unknown name `merge` ``.
+
+**What the ruling named that cannot be built yet.** The owed list asks for
+an error golden for "a value that a declared field typeset does not admit".
+A field carries no declared type: `check_field_annotations` refuses every
+field annotation ("a record field carries no type"), so there is no typeset
+for a `merge` to check against. The item waits on fields carrying types.
+
+`merge` is ambient now, which takes the name from every program;
+`lib/list`'s private sort helper was `merge` and is `merge_runs`. kq, vse and
+kanso-json declare no `merge`; two ports on `claude/ports-corpus` do and will
+rename when they are next built. Chapter 02 shows `merge` beside
+destructuring, and appendix B gives it an entry under records.
+
+The compile rows move with the binary and the renamed helper; CI's rows are
+priced here before merge.
+
+- **OPEN** #1886, until this lands.
+
+On main after #1904 the tab's compile reads `browser_compile_instructions`
+396,842,603, up 4,464,228 from main's 392,378,375, and
+`browser_compile_peak_bytes` 675,735, up 10, on the same tree.
+
+91.11.
+
+With main merged after #1922, browser_compile_instructions lands on 398,041,240
+and browser_compile_peak_bytes on 675,735.
+
+## 2026-10-13 — work-ahead forces what follows a park, and holds a pooled failure
+
+Builds #1856's v1 under the 2026-07-22 ruling and the 2026-10-11 gavel. Native
+only; the interpreter is the oracle and does not pool.
+
+**What is lifted.** `src/ahead.rs` reads the entry's statements. One whose
+chain starts with a `sleep` has continuations that run, in order, once the
+sleep ends. In each continuation, a call to one of the program's own functions
+whose arguments name nothing local is certain to be evaluated when it is an
+argument of `print` or `write`, or a piece of a string such an argument
+interpolates. A continuation that names an entry binding is followed into that
+binding's chain. Each such call becomes a constant named `ahead~N`, which no
+author can spell, and the call is replaced by a read of it.
+
+**What runs it.** A constant builds its own cell on first read, so forcing one
+early fills the cell the continuation reads later. The compiler emits
+`k_ahead_pool`, which forces the lifted constants in the order they were made;
+the runtime runs it once, at the first bare sleep, and takes the time the pool
+spent off the wait. Which work runs is fixed by the compiler, and the clock
+decides only how long the process then sleeps. `bench/workahead/aswritten.kso`
+sleeps 2,000 ms and then grinds for about 830 ms; it took 2.83 s on main and
+2.01 s here, three runs each in this container, with the same output.
+
+**A pooled failure.** An err the work answers is a value, held in the cell and
+answered at the read like any other. A death is not a value: on main the
+runtime prints and exits, and a pooled death would end the process before
+output the program prints first. While the pool runs, every exit in the runtime
+and the stack-overflow handler jump back to `k_ahead_try` instead, with stderr
+pointed at `/dev/null`. The try clears the ready flag of every constant cell
+still holding its builder's blackhole, restores the beat depth, and stops the
+pool. The program then builds those cells again where it reads them and fails
+there, which for every program that terminates is the transcript it produces
+without the pool.
+
+`tests/work_ahead.rs` pins two transcripts against the interpreter's. In one,
+the pooled call recurses a million frames deep and runs out of stack; in the
+other, a module's pooled call demands a constant that names itself, which
+leaves two cells half-built. With the catch removed, neither prints `first`.
+With the catch kept and the cells left as they were, the overflow fixture
+reports "a lazy binding demands its own value" where the program ran out of
+stack.
+
+**The counter.** `tests/golden/mem/work_ahead_forces_what_follows_a_park` pins
+`ahead_forced=1` and `ahead_dropped=0`. Both lines print only once the pool has
+run, so no vein whose program never sleeps moved. That fixture's
+`beat_iters` reads 2 where main's compiler reads 1,002: inside the constant's
+builder the beat pass gives the integer loop no bracket, since it allocates
+nothing to rewind. A loop that allocates keeps its bracket; with a string built
+per lap, 100,000 laps read the same counters on both compilers, one arena block
+included.
+
+**The tab** runs no pool. Its runtime is linked apart from the program and its
+sleep is the host's, so the pool call is compiled out of the wasm runtime.
+
+Divergence is the case the gavel accepted: a pooled call that never returns
+stalls before output the program prints first. The page's work-ahead section
+owes a sentence on each case, under the gavel.
+
+**What it costs**, from CI's rows. Every program now defines `k_ahead_pool`,
+empty when nothing was lifted, because the runtime calls it at a sleep: one
+define and five lines per benchmark (`emitted_defines` 106 -> 107,
+`emitted_lines` 10,070 -> 10,075; over the thirteen others
+`emitted_other_defines` 2,010 -> 2,023 and `emitted_other_lines` 147,279 ->
+147,344), and the module compile row's `module_defines` 29 -> 30 and
+`module_lines` 1,284 -> 1,288. `k_ahead_try` and its jump buffer put 320 bytes in
+each binary (`text` 4,834,846 -> 4,839,326 summed). The compiler's rows rose:
+`emit_instructions` 7,013,477 -> 7,137,222 (+1.76%), `codegen_instructions_dev`
+119,002,829 -> 119,332,985 (+0.28%), `codegen_instructions_release`
+454,179,413 -> 455,947,986 (+0.39%), `browser_compile_instructions`
+391,311,502 -> 393,313,454 (+0.51%), `compile_instructions` 25,881,551 ->
+25,887,870, `entry_instructions` 85,381,313 -> 85,406,213 and
+`library_instructions` 85,935,582 -> 85,959,939. The run rows fell by 50 to
+1,178 instructions each (`runbench` 1,170,035,080 -> 1,170,033,902) and
+`interp_instructions` by 13,571 to 488,726,245; no benchmark sleeps, so these
+are the binary's layout. Work-ahead is a ruled part of the language, so the
+floor moves by what it costs.
+
+- **OPEN** #1856, until this lands.
+
+Each of the four compile-cost programs gains the pool's define and its four
+lines, so `bench/compile_golden.txt` moves from 38 defines to 42 and from 1,340
+lines to 1,356.
+
+On main after #1904 the tab's compile reads `browser_compile_instructions`
+393,668,581, up 1,290,206 from main's 392,378,375 on the same tree.
+
+91.11.
+
+With main merged after #1918, browser_compile_instructions lands on
+393,374,069.
+
+CI's rows against main: `compile_instructions` from 26,463,317 to 26,477,664,
+`entry_instructions` from 88,129,856 to 88,171,192, `library_instructions` from
+87,707,726 to 87,748,995, `emit_instructions` from 7,052,040 to 7,168,640,
+`codegen_instructions_dev` from 119,002,656 to 119,334,030 and
+`codegen_instructions_release` from 454,179,390 to 455,948,524. Every native
+binary carries the pool's start and its forcing, so `text` grew from 4,838,990
+to 4,843,470 bytes, `emitted_other_defines` from 2,036 to 2,049 and
+`emitted_other_lines` from 148,239 to 148,304. `work_encodebench` landed at
+2,398,406,493, up 559, and most other benchmarks fell by a few hundred
+instructions. The floor drops by the difference under the 2026-10-11 ruling
+(#1862).
