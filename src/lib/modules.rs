@@ -179,7 +179,9 @@ fn prune_shipped(
                 let from = here + (line.len() - rest.len());
                 let len = rest
                     .bytes()
-                    .position(|b| !(b.is_ascii_alphanumeric() || b == b'_' || b == b'!' || b == b'?'))
+                    .position(|b| {
+                        !(b.is_ascii_alphanumeric() || b == b'_' || b == b'!' || b == b'?')
+                    })
                     .unwrap_or(rest.len());
                 let qualified = rest.as_bytes().get(len) == Some(&b'/');
                 (from, if qualified { from } else { from + len })
@@ -550,9 +552,8 @@ fn compile_module_loaded(
     let pruned = REACH.with(|r| {
         let mut r = r.borrow_mut();
         let roots = r.as_mut()?;
-        let shipped = SHIPPED_STD.with(|c| c.get())
-            && embedded.is_some()
-            && !CHECK_SHIPPED.with(|c| c.get());
+        let shipped =
+            SHIPPED_STD.with(|c| c.get()) && embedded.is_some() && !CHECK_SHIPPED.with(|c| c.get());
         if shipped {
             return Some(prune_shipped(&mut sources, roots));
         }
