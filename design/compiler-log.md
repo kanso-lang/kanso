@@ -1847,5 +1847,40 @@ main's golden back and scoring again.
   block, which arrived with the frozen decoder's unfused `utf8`; no
   allocation counter is a welfare term.
 
+The counters below are not welfare terms, and each moved with the change:
+
+- The encode vein, with the frozen decoder's unfused `utf8`: `encode_allocs`
+  5,332,649, `encode_alloc_bytes` 665,662,512, `encode_sh_bytes` 101,072,232,
+  `encode_arena_blocks` 4, `encode_arena_peak_bytes` 4,194,304 and
+  `encode_spare_peak_bytes` 3,145,728.
+- Instructions on the other benchmarks: `work_encodebench` 2,387,084,547,
+  `work_widebench` 28,451,432, `work_basket` 30,958,481, `work_oneshot`
+  13,207,833, `work_digestbench` 5,911,344, `work_indexbench` 2,462,589 and
+  `work_scanbench` 273,717. The last five moved by under 0.05%.
+- Rows that moved with the token cache, which now keeps some values of four
+  to seven bytes that were viewed before: `wide_perm_live_bytes` and `wide_perm_peak_bytes`
+  175, `wide_utf8_zerocopy` 15,993; `fresh_builder_perm_live_bytes`,
+  `fresh_builder_perm_peak_bytes`, `fresh_cycle_perm_live_bytes`,
+  `fresh_cycle_perm_peak_bytes`, `three_storage_regimes_share_one_append_perm_live_bytes`
+  and `three_storage_regimes_share_one_append_perm_peak_bytes` 25 each;
+  `fresh_builder_utf8_zerocopy` and `fresh_cycle_utf8_zerocopy` 39,
+  `three_storage_regimes_share_one_append_utf8_zerocopy` 0, and
+  `a_scan_keeps_its_place_in_the_text_seek_resumes` 407.
+- The mem fixture that now reaches the fused append through `std/json`, which
+  also runs the decoder: `append_of_a_slice_boxes_nothing_allocs` 12,
+  `append_of_a_slice_boxes_nothing_alloc_bytes` 1,307,
+  `append_of_a_slice_boxes_nothing_sh_str` 272,
+  `append_of_a_slice_boxes_nothing_beat_iters` 40,
+  `append_of_a_slice_boxes_nothing_find2_calls` 42,
+  `append_of_a_slice_boxes_nothing_str_scans` 3,
+  `append_of_a_slice_boxes_nothing_str_scan_bytes` 165,
+  `append_of_a_slice_boxes_nothing_perm_allocs` 5,
+  `append_of_a_slice_boxes_nothing_bytes_malloc` 3 and
+  `append_of_a_slice_boxes_nothing_append_grow` 2.
+- The emitted code: `emitted_lines` 10,165, `emitted_other_defines` 2,089 and
+  `emitted_other_branches` 16,526.
+- `interp_allocs` 592,317 and `codegen_instructions_dev` 119,402,816. The
+  interpreter's peak and dev codegen are priced above.
+
 Welfare goes 91.2447 -> 91.2395, a fall of 0.0052. This builds a ruled part
 of the language, so the floor drops by exactly that.
