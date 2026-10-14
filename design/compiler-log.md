@@ -21,62 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-13 — a lazy sequence handed where a list goes is refused at check
-
-Five ports hit the same failure: `list/map` answers a lazy sequence, `text/join`
-takes a list, `kanso check` said ok, and every engine stopped at run time with
-`error[runtime]: join takes a list of strings and a separator` and no file or
-line (#1892). `length` and `push` had the same gap, with a run-time hint
-naming `list/to_list` and still no location.
-
-The check now refuses the call at the argument. After inference it reads each
-call of a builtin, or of a std wrapper that forwards to one, whose
-`builtin_demand` entry holds a list. When the argument is a call of a std/list
-group whose every arm answers a record and nothing else, the argument is a lazy
-sequence, and the diagnostic says so: "`text/join` takes a list here, and
-`list/map` answers a lazy sequence — make it a list with `list/to_list`". A
-sequence held by name, a field, or any answer inference cannot pin to a record
-is left to the run. `print` is not touched, because its demand holds no list
-and printing a sequence forces it (gaveled).
-
-`join` had no `builtin_demand` entry, so `text/join 3 ""` checked clean while
-`length 3` was refused. It has one now: a list, then a string, which is what
-both engines refuse.
-
-`tests/golden/errors/a_lazy_sequence_where_a_list_goes` and
-`join_takes_a_list` pin the two refusals. Three run-time goldens wrote the
-failing call out and now hold the value by name, so they still reach the run
-and still pin its sentence: `join_takes_strings_and_a_separator`,
-`length_points_at_to_list` and `push_points_at_to_list`.
-
-The check found the same mistake in `bench/compile_corpus`: `workload` joins
-`list/take ["a" "b" "c"] 2`, which stops both engines when run. Nothing runs
-the corpus, so it went unseen. It now goes through `list/to_list`, so the
-corpus compiles a little more and the compile rows move with it.
-
-The ratchet row "a lazy sequence where a list goes checks clean" deletes the
-call that asks, and the error corpus goes red on the new fixture.
-
-Measured here, the tab's compile row went from 391,974,060 to 392,906,566.
-With the new call kept and the check returning at its first line it read
-392,914,374, and with the call removed 391,981,161. The rise is in how the
-wasm build lays out the walk the call sits in, not in work the check does:
-across `bench/interp_corpus` five calls get past its first test.
-
-On CI's rows for the tree merged with #1913, browser_compile_instructions
-lands on 392,430,393, up 1,118,891. compile_instructions lands on 26,006,341,
-entry_instructions on 85,527,812 and library_instructions on 86,082,490,
-rises of 124,790, 146,499 and 146,908 for the check's walk and the corpus's
-extra `list/to_list`. emit_instructions lands on 7,013,581, up 104, and
-compile_allocs on 14,637, up 39. front_end_visits lands on 7,995, up 13, the
-front end walking the corpus's new call, and compile_peak_bytes lands on
-676,277, up 1,593, for the same call's tree. The refusal is
-#1892's item, which makes `kanso check` say what every engine already
-refused, so the floor drops by what it costs.
-
-On main after #1904 the tab's compile reads `browser_compile_instructions`
-393,497,266, up 1,118,891 from main's 392,378,375 on the same tree.
-
 ## 2026-10-12 — a name the author declared wins over a builtin and an import
 
 #1891's first item, from the ports. Three reductions broke the 2026-08-29
@@ -1725,6 +1669,36 @@ instructions, because the wasm engine is built from the same source and its
 code moved with the files. The floor follows that score, as it has for earlier
 layout-only moves.
 
+## 2026-10-14 — gavel: `text/slice!` takes a slice the caller knows is in range
+
+Clay ruled #1943. Building #1890 (a `text/slice` past the end answers `none`)
+showed that the checker now refuses `text/utf8 (text/slice cs a b)` and
+`text/append acc (text/slice cs a b)` until the `none` is dispatched. Those
+are the two spellings the compiler fuses, and the JSON decoder reads every
+string through them. Its ranges come from a scan of the same bytes, so its
+`none` can never occur, and a two-arm helper that dispatches it loses both
+fusions. Measured in a container by callgrind on the #1890 branch: jsonbench
++33.0%, livebench +38.1%, runbench +28.0%, oneshot +149.7%.
+
+**The ruling.** `text/slice! s a b` takes a slice the caller insists is in
+range. Like every `!` name it answers a box (archive, 2026-09-16, "gavel,
+reversed the same day: `!` answers a box, at the index and at the name"):
+the slice, or the out-of-range failure, which bubbles. The caller opens it
+with `.>`, so the decoder writes `text/slice! cs a b .> text/utf8` and
+`.> text/append acc`. A caller that has not bounded its range writes
+`text/slice` and dispatches on `none`, as ruled on #1890.
+
+The decoder's speed comes from fusing those chains as the nested calls are
+fused today. That is emitter work with no surface, and it is cloud's, as the
+09-16 entry assigned the inlining of a bind whose callback is applied at once.
+#1956 asked whether `slice!` was the one bang that answers a bare value; the
+09-16 ruling already answers that it is not.
+
+Owes, on #1943: `text/slice!` answering a box on every engine; the emitter
+fusing `slice! ... .> utf8`, `.> append acc`, `.> to_int` and `.> to_float`;
+the decoder's call sites moved onto those chains; a micro golden for an
+in-range `slice!` and an error golden for one out of range; appendix B.
+
 ## 2026-10-14 — checking only what a module reaches, measured and set aside
 
 #1952 asked whether the merged check could skip the dependency functions a
@@ -1826,9 +1800,9 @@ door, and 103 and 1632 without. The cache had no counter of its own, but
 every fill shows in perm_peak_bytes, which each cost golden carries.
 
 #1943 then ruled an insisting `text/slice!` for callers that know their range
-is inside. Building it showed that a `!` name answers a box under the
-2026-09-03 gavel, which the fused spellings cannot take, so #1956 asks which
-way that goes. Until it is answered the decoder keeps `builtin_slice_in`,
+is inside, and the 2026-09-16 ruling makes it answer a box like every `!`
+name. The decoder moves onto `text/slice! … .> text/utf8` and its siblings
+once the emitter fuses those chains. Until then it keeps `builtin_slice_in`,
 which no user program can name.
 
 The rows below are CI's, except compile_peak_bytes and the browser rows,
