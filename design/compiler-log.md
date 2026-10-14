@@ -1646,9 +1646,9 @@ where kanso#1978 put it, so it arrives with the commit that adds the lift
 while none of its code runs; marking `pool` and `lift` never-inline did not
 move it. The front end's rows rose with the binary, since `kanso check`
 never reaches the pass: `compile_instructions` 22,595,494 -> 22,699,901,
-`entry_instructions` 74,872,489 -> 75,214,425, `library_instructions`
-74,559,617 -> 74,901,006 and `interp_instructions` 492,636,904 ->
-492,637,347. The runtime and machine-code rows did not move. Welfare falls,
+`entry_instructions` 74,872,489 -> 75,214,425 and `library_instructions`
+74,559,617 -> 74,901,006; `interp_instructions` fell with it, 492,636,904 ->
+492,620,187. The runtime and machine-code rows did not move. Welfare falls,
 and the floor moves by that amount under #1856's ruling, as it did for the
 group pool in kanso#1972.
 
