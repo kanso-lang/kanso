@@ -21,164 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-12 — stdout reaches its reader, and a closed pipe stops every engine quietly
-
-Two runtime items on #1892 were about stdout.
-
-A reader that stops early, as `head` does, closes the pipe the program is
-writing to. A built binary is ended by SIGPIPE and says nothing. The
-interpreter met the same write as an error and panicked with two Rust
-backtraces, because Rust sets SIGPIPE to ignored before `main`, and
-`kanso play` reported a native program's end as "the program was ended by
-signal 13". kanso now restores the default disposition at start-up, and when
-the program it ran was ended by SIGPIPE the driver ends the same way, silently.
-`tests/a_closed_pipe_stops_every_engine_quietly.rs` reads one line from each
-engine and drops the pipe.
-
-A native program writes stdout through stdio's buffer, and stderr goes out
-unbuffered. Text printed before a write to stderr reached a shared pipe after
-it, which the lox port saw on its error path, and a program killed while it
-waited lost everything it had printed, which is how the httpd port's access
-log disappeared. The interpreter does neither. The runtime now empties the
-buffer before anything goes to stderr, before it reads stdin or a connection,
-before it sleeps, and before it starts a child. Every runtime diagnostic opens
-with the error colour from `k_c_err`, so the flush there puts a program's
-output ahead of any error it ends with. `tests/stdout_reaches_its_reader.rs`
-pins the three cases.
-
-The rows moved by small amounts, read off CI. The signal call at start-up
-costs 123 instructions in every compile: compile_instructions lands on
-25,761,338, entry_instructions on 85,207,685, library_instructions on
-85,760,345 and startup_instructions on 52,519. The flushes are new runtime
-code. On the tree merged with #1899, codegen_instructions_dev lands on
-118,956,771, work_encodebench on 2,398,369,956, work_livebench on
-1,474,871,792, work_oneshot on 13,224,134 and work_runbench on 1,170,031,874,
-and browser_run_instructions was 34,125,823 before the merge. Release codegen
-falls to 454,318,432, and the other benches and the text sizes fall a little
-with the runtime's new layout.
-
-The macOS runner failed the interpreter's half of the closed-pipe spec. With
-SIGPIPE's default put back, the interpreter's thread there still met the
-write to a closed pipe as an error, and `println!` panicked on it. The
-executor's `print` and `write` now write to stdout themselves and turn a
-broken pipe into SIGPIPE. On Linux the signal arrives first and that path
-does not run; with the start-up reset removed, the interpreter still stops
-quietly through it, and the ratchet row goes red on the native run instead,
-whose driver cannot re-raise an ignored signal.
-Writing through a stdout lock with an error arm cost the interpreted corpus
-688 instructions on CI's row: `interp_instructions` went to 488,792,803.
-On the tree merged with #1900, CI's rows put codegen_instructions_dev at
-119,012,401, codegen_instructions_release at 454,260,490 and work_runbench at
-1,170,035,058, and every bench's text is 1,744 bytes smaller. The welfare
-floor drops to 91.10933 under the rule that a change making the engines agree
-is not priced.
-
-Each benchmark binary now empties stdout before it reads its input, and the
-benches that read or wait more than once pay it each time. On CI's rows
-`work_deepbench`, `work_escapebench`, `work_indexbench`, `work_scanbench` and
-`work_widebench` each rose 77 instructions, to 393,579,721, 39,049,235,
-2,462,563, 273,600 and 28,178,586. `work_jsonbench` and `work_digestbench`
-rose 100, to 860,563,084 and 5,603,218; `work_pendbench` and `work_readbench`
-123, to 190,054,473 and 4,581,089; `work_basket` 130, to 30,876,618;
-`work_livebench` 310, to 1,474,875,381; and `work_oneshot` 373, to 13,227,303.
-
-On the merged tree the ratchet called "a warm play that dies in silence"
-blind. Since #1900 the binary names its own stack overflow, so the warm play's
-wording of the signal never runs for one. The mutation now also stops the
-binary watching its stack, and the second play prints nothing.
-
-## 2026-10-12 — a lambda called in tail position costs no stack
-
-The toml port kept `put` in place by passing a continuation: each insertion
-step took a `then` and called it last. A 300 KB document then ran the
-interpreter out of stack, and the dev build died with a segmentation fault.
-Appendix A says a tail call costs no stack at all; it held for calls to named
-functions and arms and failed for a call to a function value.
-
-The interpreter's tail position already handed a named group's call back to
-the dispatcher's loop. A call to a closure now comes back the same way, as
-`Flow::Closure`, and runs in whichever loop called the body: the dispatcher's,
-or a loop in `call_closure` for a lambda called from outside a tail.
-
-Native code calls a closure through `k_call{n}`, which calls the lambda's
-wrapper, so every step held two frames. A closure now also carries a pointer to
-the lambda's own body, which is on the tailcc convention. A call to a local
-function value in tail position becomes a musttail jump to `k_tcall{n}`, which
-checks that it holds a closure of the right arity with no failing argument
-and a body, then jumps to that body. Anything else (a closure the runtime
-built, a partial, a reference to a group) goes to `k_call{n}` as before. The
-arity and capture count became 32-bit fields so the pointer fits in the 32
-bytes the closure already took.
-
-Release narrows the convention to functions on a musttail edge, and the jump
-through a pointer names no symbol, so the narrowing would have stripped it and
-LLVM refused the module. Every lambda keeps the convention in a module that
-has the jump, and the jump keeps it too.
-
-`tests/golden/micro/a_lambda_called_in_tail_position_costs_no_stack` runs
-100,000 steps of the port's loop on every engine. Before the fix the
-interpreter reported running out of stack and the dev build exited 139. The
-ratchet rows "a lambda called as a nested call" and "a lambda called without
-a jump" remove each half and expect the micro corpus to fail.
-
-The clang-to-wasm32 layout harness leaves the fixture out: by its own header
-it compiles a call returning a `KValue` as an ordinary call, and a loop that
-goes through a pointer cannot be inlined into one. The page's translator makes
-the jump a tail call, and `ir_to_wasm` runs the fixture.
-
-CI's rows, on the tree carrying #1896: codegen_instructions_release rises
-4.7% to 475,481,653, because every lambda in a module with the jump keeps the
-tail convention. interp_instructions rises 1.4% to 495,424,970,
-work_runbench 0.17% to 1,171,985,904 and work_deepbench 2.5% to 403,499,508;
-work_encodebench falls 0.49% to 2,386,714,424. The emitter writes fewer lines
-(runbench's IR 51,577 to 50,505) and spends 1.1% more doing it,
-emit_instructions 7,090,315. The three compile rows fall about 0.13%. The
-welfare floor drops to 91.08971 under the rule that building the language is
-priced at what it costs.
-
-With #1896 underneath, the rest of CI's rows on this tree:
-`codegen_instructions_dev` 119,060,047, `browser_run_instructions` 34,125,731
-and `text` 4,845,118. Among the benches, `work_pendbench` lands on 191,667,218
-(+0.85%) and `work_widebench` on 28,274,761 (+0.34%); `work_basket`
-30,876,728, `work_digestbench` 5,603,270, `work_jsonbench` 860,563,126,
-`work_oneshot` 13,227,357, `work_readbench` 4,581,129 and `work_scanbench`
-273,675 move by a few hundred instructions each.
-The emitted totals: `emitted_other_branches` 16,476, `emitted_other_calls`
-17,511 and `emitted_other_defines` 2,012.
-
-This is the toml item on #1892.
-
-On CI's rows for the tree merged with #1913: interp_instructions lands on
-495,372,671, emit_instructions on 7,089,710, compile_instructions on
-25,881,675, entry_instructions on 85,381,437 and library_instructions on
-85,935,705. browser_compile_instructions lands on 393,094,499, up 1,782,997
-or 0.46%, since the page's translator turns each new jump into a tail call.
-
-On CI's rows for the tree merged with #1923: compile_instructions lands on
-25,882,102, entry_instructions on 85,381,864, library_instructions on
-85,936,071 and interp_instructions on 495,372,854, each a few hundred
-instructions up. The merge brought twelve changed lines in the interpreter's
-builtins and nothing else in `src/`; nothing here isolates which of the two
-moved these rows.
-
-On main after #1925 the emitted counts for the other programs land on
-emitted_other_branches 16,559, emitted_other_calls 17,666 and
-emitted_other_defines 2,037.
-
-With main merged after #1937, browser_compile_instructions lands on 394,156,258
-and browser_run_instructions on 34,126,073.
-
-On CI's rows for the tree merged with main after #1937: interp_instructions
-lands on 494,060,975, codegen_instructions_dev on 119,058,990,
-codegen_instructions_release on 475,482,049, emit_instructions on 7,120,495 and
-text on 4,850,094. Among the benches, work_pendbench lands on 191,674,062,
-work_runbench on 1,179,917,338 and work_widebench on 28,274,796; work_basket
-30,946,295, work_digestbench 5,604,610, work_escapebench 39,058,332,
-work_jsonbench 860,566,126, work_livebench 1,474,875,027 and work_oneshot
-13,227,755 move by a few hundred instructions each. The emitted totals for the
-other programs: emitted_other_branches 16,563, emitted_other_calls 17,668 and
-emitted_other_defines 2,038.
-
 ## 2026-10-13 — a lazy sequence handed where a list goes is refused at check
 
 Five ports hit the same failure: `list/map` answers a lazy sequence, `text/join`
@@ -1882,3 +1724,111 @@ compile, browser_compile_instructions 437,381,994 from 437,381,890, 104
 instructions, because the wasm engine is built from the same source and its
 code moved with the files. The floor follows that score, as it has for earlier
 layout-only moves.
+
+## 2026-10-14 — checking only what a module reaches, measured and set aside
+
+#1952 asked whether the merged check could skip the dependency functions a
+module never reaches, since every program that imports std/text or std/list
+now checks 114 more lines of them. The branch
+`claude/check-only-what-an-import-reaches` sets those functions aside while the
+merged check runs and puts them back afterwards. They have to go back because
+the merged program is also what an importer of the module receives, and an arm
+the module never calls can still travel to one that does.
+`two_owners_tie_on_a_traveling_call` in the module error corpus caught the
+first version, which dropped them for good.
+
+Measured in this container on the tree that carries #1948 and #1950:
+compile_instructions fell from 31,948,363 to 30,683,796, but
+entry_instructions rose from 101,372,705 to 108,124,116 and
+library_instructions from 100,887,003 to 105,435,412, with compile_allocs at
+18,650 against 17,941. The walk that finds what is reached took 1.5 to 1.9 ms
+of a 19 ms entry compile, and inference fell only from 3.02 to 2.79 ms. Lexing
+and parsing the larger libraries are where most of their cost lands, and a
+smaller check does not reach either. Not reading an unreached function at all
+would mean parsing a library a declaration at a time, which is a larger change;
+#1952 stays open with these numbers on it.
+
+## 2026-10-14 — `text/slice` past the end answers `none` on every engine
+
+This builds the gavel "`text/slice` past the end answers `none`" (#1890). A
+range that ends past the value, or starts more than one past its end, answers
+`none` in the interpreter, the native runtime and the tab. A range that ends
+exactly at the end is the tail, and an inverted range is still the empty
+result. The checker puts `none` in what `slice` answers, so handing a slice to
+a function with no `none` arm is refused where it is written.
+`tests/golden/errors/a_slice_handed_on_without_its_none` pins that refusal,
+and it checks clean with the `none` taken back out of the type.
+`tests/golden/micro/a_slice_past_the_end_answers_none` pins the three ranges
+the ruling names, on strings, bytes and lists.
+
+The fused doors were the hard part. The emitter writes `append acc (slice …)`,
+`utf8 (slice …)`, `to_int (slice …)` and `to_float (slice …)` as single calls
+that read the range in place. A program can no longer write any of them: the
+outer call has no `none` arm, so the checker refuses the pair. The JSON
+decoder writes all four, and its ranges come from a scan of the same bytes,
+so they never leave the value. The library now names those slices `builtin_slice_in`, a
+standard-library-only spelling typed without `none`.
+After the check it is renamed to `builtin_slice`, so every engine and every
+fused door sees the same call it saw before. The doors keep their old
+handling of a range past the end, because nothing outside the library can
+reach them.
+
+The first version wrapped each library slice in a helper with a `none` arm.
+That defeated every door and cost jsonbench 860,566,126 -> 1,141,613,753
+instructions here. With the measured spelling the decoder's own rows come
+back. Checking the doors for a range past the end anyway cost runbench about
+6 million instructions in `k_b_utf8_slice_raw`. It also moved register
+allocation in the encoder's inlined `escape_onto`, so the checks went.
+
+`bench/jsonbench` used to copy lib/json into a user module, and a user module
+cannot name `builtin_slice_in`. `bench/make_jsonbench` now writes a program
+that imports `std/json`. The two declines of 2026-09-27 and 2026-09-28 named
+that as the change this shape of library needs. The row falls because the benchmark
+now measures the decoder as `std/json` compiles it.
+
+The standard library is not put through the exhaustiveness check that
+refuses a program's unhandled `none`, so its slices were read by hand rather
+than by the checker. Three in lib/regexp could leave the text: the body after a
+pattern's flags, the flag letters themselves, and the one character a
+`replace_all` steps over after an empty match at the end. The first raised
+"chars takes a string" on `(?i`, which
+`an_unclosed_pattern_answers_an_err` caught. The third printed the word `none`
+into the replaced text, and nothing in the corpus reached it.
+`an_empty_match_at_the_end_replaces_nothing_past_it` pins it now, red before
+the fix. Each of the three reads "" where the range leaves the text, which is
+what the clamp gave.
+
+The library functions that arrived from main while this was built slice
+only ranges they have measured: `starts_with?`, `ends_with?`, the two
+recasing walks and the padding. They use `builtin_slice_in` too, so none of
+them gains a `none` in what it answers.
+
+Code that leaned on clamping now dispatches on `none`: lib/text's `trim`,
+lib/path's `basename`, lib/regexp's character reads, the scripts, hako, the
+book's ch08 positions sample and its panel, and the frozen decoders in
+encodebench and widebench. Golden programs that sliced inside their range gained a `none` arm, and the
+two that printed a range past the end now print `<none>`. The older
+`slice_past_the_end` fixture, which pinned the clamp, is gone, since the
+new one covers each of its ranges. The mem fixture `append_of_a_slice_boxes_nothing`
+now reaches the fused append through `std/json`, since a program cannot spell
+it. Its forty escape runs read allocs=12 and sh_bytes=48, and 54 and 1056 with
+the fusion switched off. `a_cycle_that_allocates_nothing_needs_no_bracket`
+copied its runs the same way; it now copies them a byte at a time and still
+reads allocs=32 with no beat.
+
+encodebench and widebench lost most of their cost back to one more change.
+Their frozen decoders now ask whether a slice is none before they decode it,
+so the decode is the unfused `utf8`, and only the fused door consulted the
+token cache. A value of four to seven bytes now takes its string from the
+cache on both doors. `a_short_decoded_slice_is_built_once` pins it: a word
+decoded fifty times reads allocs=53 and sh_str=32 with the cache on this
+door, and 103 and 1632 without. The cache had no counter of its own, but
+every fill shows in perm_peak_bytes, which each cost golden carries.
+
+#1943 then ruled an insisting `text/slice!` for callers that know their range
+is inside. Building it showed that a `!` name answers a box under the
+2026-09-03 gavel, which the fused spellings cannot take, so #1956 asks which
+way that goes. Until it is answered the decoder keeps `builtin_slice_in`,
+which no user program can name.
+
+The rows this moves are CI's, below.

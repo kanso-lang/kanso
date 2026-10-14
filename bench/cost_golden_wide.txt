@@ -16,8 +16,8 @@
 # where the items buffer's capacity doubles and the survivor-ratio guard starts
 # refusing the dance and keeping the region instead — so a fixture above that
 # line exercises none of it. This one sits below.
-allocs=128024
-alloc_bytes=5590992
+allocs=128017
+alloc_bytes=5590880
 arena_blocks=1
 arena_peak_bytes=1048576
 cohort_frees=1
@@ -46,12 +46,12 @@ number_spans=0
 append_fast=16000
 append_grow=16000
 append_rendered=16000
-utf8_zerocopy=16000
+utf8_zerocopy=15993
 carry_dedup=0
 bytes_malloc=0
 bytes_freed=0
-perm_live_bytes=0
-perm_peak_bytes=0
+perm_live_bytes=175
+perm_peak_bytes=175
 str_scans=0
 str_scan_bytes=0
 seek_resumes=0
