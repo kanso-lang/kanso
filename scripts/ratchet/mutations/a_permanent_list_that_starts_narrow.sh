@@ -7,8 +7,8 @@
 # thousand; it leaves at two hundred and fifty-six now. Without the floor the
 # mem vein's bytes_malloc counters read the old number of grows.
 set -e
-f=src/runtime.c
-grep -q 'if (perm && cap < 256) cap = 256;' src/runtime.c
+f=src/runtime/text.c
+grep -q 'if (perm && cap < 256) cap = 256;' src/runtime/text.c
 grep -qxF '    if (perm && cap < 256) cap = 256;' "$f" || {
   echo "the permanent floor moved; this mutation needs rewriting" >&2
   exit 1

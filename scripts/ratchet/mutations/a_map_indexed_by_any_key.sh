@@ -5,7 +5,7 @@
 # interpreter refuses.
 set -e
 old='        if (!K_IS_INT(index) && index.tag != K_STR) {'
-[ "$(grep -cxF "$old" src/runtime.c)" -eq 1 ]
-sed -i.bak 's#^        if (!K_IS_INT(index) \&\& index.tag != K_STR) {$#        if (0) {#' src/runtime.c
-rm -f src/runtime.c.bak
-! grep -qxF "$old" src/runtime.c
+[ "$(grep -cxF "$old" src/runtime/text.c)" -eq 1 ]
+sed -i.bak 's#^        if (!K_IS_INT(index) \&\& index.tag != K_STR) {$#        if (0) {#' src/runtime/text.c
+rm -f src/runtime/text.c.bak
+! grep -qxF "$old" src/runtime/text.c

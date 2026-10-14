@@ -20,7 +20,6 @@
 //! returning 4 instead of 3, the sweep reports the first disagreement at 100
 //! ("0100" against "100") and the count in the thousands.
 
-use std::path::Path;
 use std::process::Command;
 
 fn runtime() -> String {

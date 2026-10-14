@@ -6,13 +6,13 @@
 # forty-byte reservation return to every call. The value out is identical
 # either way, so nothing but the work vein can see it.
 set -e
-grep -q "static __attribute__((noinline, cold, preserve_most)) KValue k_b_at_wide_miss(" src/runtime.c || {
+grep -q "static __attribute__((noinline, cold, preserve_most)) KValue k_b_at_wide_miss(" src/runtime/text.c || {
   echo "the index's cold arms changed shape; this mutation needs rewriting" >&2
   exit 1
 }
 sed -e "s/static __attribute__((noinline, cold, preserve_most)) KValue k_b_at_wide_miss(/static inline __attribute__((always_inline)) KValue k_b_at_wide_miss(/" \
     -e "s/static __attribute__((noinline, cold, preserve_most)) KValue k_b_at_rest(/static inline __attribute__((always_inline)) KValue k_b_at_rest(/" \
-    src/runtime.c > src/runtime.c.mut
-mv src/runtime.c.mut src/runtime.c
-grep -q "always_inline)) KValue k_b_at_wide_miss(" src/runtime.c
-grep -q "always_inline)) KValue k_b_at_rest(" src/runtime.c
+    src/runtime/text.c > src/runtime/text.c.mut
+mv src/runtime/text.c.mut src/runtime/text.c
+grep -q "always_inline)) KValue k_b_at_wide_miss(" src/runtime/text.c
+grep -q "always_inline)) KValue k_b_at_rest(" src/runtime/text.c

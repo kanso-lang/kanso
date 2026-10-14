@@ -10,9 +10,9 @@
 set -e
 a='            if (s->data == (char*)(s + 1) || !k_survives_x(s->data, m))'
 b='            if (b->data == (const unsigned char*)(b + 1) || !k_survives_x(b->data, m))'
-[ "$(grep -cF "$a" src/runtime.c)" -eq 1 ] || { echo "the string arm changed shape; rewrite this" >&2; exit 1; }
-[ "$(grep -cF "$b" src/runtime.c)" -eq 1 ] || { echo "the bytes arm changed shape; rewrite this" >&2; exit 1; }
-sed -i 's|^            if (s->data == (char\*)(s + 1) \|\| !k_survives_x(s->data, m))$|            if (!k_survives_x(s->data, m))|' src/runtime.c
-sed -i 's|^            if (b->data == (const unsigned char\*)(b + 1) \|\| !k_survives_x(b->data, m))$|            if (!k_survives_x(b->data, m))|' src/runtime.c
-grep -qF '            if (!k_survives_x(s->data, m))' src/runtime.c
-grep -qF '            if (!k_survives_x(b->data, m))' src/runtime.c
+[ "$(grep -cF "$a" src/runtime/core.c)" -eq 1 ] || { echo "the string arm changed shape; rewrite this" >&2; exit 1; }
+[ "$(grep -cF "$b" src/runtime/core.c)" -eq 1 ] || { echo "the bytes arm changed shape; rewrite this" >&2; exit 1; }
+sed -i 's|^            if (s->data == (char\*)(s + 1) \|\| !k_survives_x(s->data, m))$|            if (!k_survives_x(s->data, m))|' src/runtime/core.c
+sed -i 's|^            if (b->data == (const unsigned char\*)(b + 1) \|\| !k_survives_x(b->data, m))$|            if (!k_survives_x(b->data, m))|' src/runtime/core.c
+grep -qF '            if (!k_survives_x(s->data, m))' src/runtime/core.c
+grep -qF '            if (!k_survives_x(b->data, m))' src/runtime/core.c

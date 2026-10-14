@@ -5,7 +5,7 @@
 # being refused, and the runtime corpus goes red on native.
 set -e
 old='        if (k_ties[i].serial == serial) t = &k_ties[i];'
-[ "$(grep -cxF "$old" src/runtime.c)" -eq 1 ]
-sed -i.bak 's#^        if (k_ties\[i\].serial == serial) t = &k_ties\[i\];$#        if (k_ties[i].serial == serial || serial > 0) t = \&k_ties[i];#' src/runtime.c
-rm -f src/runtime.c.bak
-! grep -qxF "$old" src/runtime.c
+[ "$(grep -cxF "$old" src/runtime/numbers.c)" -eq 1 ]
+sed -i.bak 's#^        if (k_ties\[i\].serial == serial) t = &k_ties\[i\];$#        if (k_ties[i].serial == serial || serial > 0) t = \&k_ties[i];#' src/runtime/numbers.c
+rm -f src/runtime/numbers.c.bak
+! grep -qxF "$old" src/runtime/numbers.c

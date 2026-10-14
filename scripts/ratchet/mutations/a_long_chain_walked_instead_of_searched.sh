@@ -6,9 +6,9 @@
 # the counter that goes to nought, and
 # a_long_chain_answers_survival_from_its_index reads 0 against 477,919.
 set -e
-grep -q '^#define K_BIDX_WALK 8$' src/runtime.c || {
+grep -q '^#define K_BIDX_WALK 8$' src/runtime/core.c || {
   echo "the block index threshold changed shape; rewrite this" >&2
   exit 1
 }
-sed -i 's|^#define K_BIDX_WALK 8$|#define K_BIDX_WALK 1000000|' src/runtime.c
-grep -q '^#define K_BIDX_WALK 1000000$' src/runtime.c
+sed -i 's|^#define K_BIDX_WALK 8$|#define K_BIDX_WALK 1000000|' src/runtime/core.c
+grep -q '^#define K_BIDX_WALK 1000000$' src/runtime/core.c

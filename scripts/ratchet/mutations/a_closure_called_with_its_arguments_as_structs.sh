@@ -7,10 +7,10 @@
 set -e
 old1='        return ((KValue(K_CLOSCC *)(void*, W, W, W, W, W, W))cl->fn)('
 old2='            cl->env, a.tag, a.payload, b.tag, b.payload, c.tag, c.payload);'
-[ "$(grep -cxF "$old1" src/runtime.c)" -eq 1 ]
-[ "$(grep -cxF "$old2" src/runtime.c)" -eq 1 ]
-sed -i.bak 's#^        return ((KValue(K_CLOSCC \*)(void\*, W, W, W, W, W, W))cl->fn)($#        return ((KValue(K_CLOSCC *)(void*, KValue, KValue, KValue))cl->fn)(#' src/runtime.c
-sed -i.bak 's#^            cl->env, a.tag, a.payload, b.tag, b.payload, c.tag, c.payload);$#            cl->env, a, b, c);#' src/runtime.c
-rm -f src/runtime.c.bak
-! grep -qxF "$old1" src/runtime.c
-! grep -qxF "$old2" src/runtime.c
+[ "$(grep -cxF "$old1" src/runtime/collections.c)" -eq 1 ]
+[ "$(grep -cxF "$old2" src/runtime/collections.c)" -eq 1 ]
+sed -i.bak 's#^        return ((KValue(K_CLOSCC \*)(void\*, W, W, W, W, W, W))cl->fn)($#        return ((KValue(K_CLOSCC *)(void*, KValue, KValue, KValue))cl->fn)(#' src/runtime/collections.c
+sed -i.bak 's#^            cl->env, a.tag, a.payload, b.tag, b.payload, c.tag, c.payload);$#            cl->env, a, b, c);#' src/runtime/collections.c
+rm -f src/runtime/collections.c.bak
+! grep -qxF "$old1" src/runtime/collections.c
+! grep -qxF "$old2" src/runtime/collections.c

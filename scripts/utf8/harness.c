@@ -1,5 +1,5 @@
 /* Differential harness for the utf-8 validator's short-string fast path.
-   The validator text is extracted from src/runtime.c at build time, never
+   The validator text is extracted from src/runtime/text.c at build time, never
    copied, so the harness cannot drift from the function it checks. */
 #include <stdio.h>
 #include <stdint.h>

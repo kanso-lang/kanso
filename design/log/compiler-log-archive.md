@@ -103006,3 +103006,52 @@ merge, showed the browser compile falling 546,685; the merged tree does not
 repeat it, so that fall was layout and is withdrawn. The refusal is #1893's
 item, which the issue lists as needing no ruling; it stops C-shaped bit code
 computing a different number, so the floor drops by what it costs.
+
+## 2026-10-12 — a wide tail call keeps its jump
+
+The book promises that a call in tail position takes no stack, in every
+engine. A release build broke that for wide arms. `narrow_tailcc` took
+`tailcc` and `musttail` away from every arm wider than a limit (twelve words on
+x86-64 under `preserve_nonecc`, nine without it, eight on arm64), and each
+call into such an arm became an ordinary call. LLVM turns some of those back
+into jumps, but not one whose arm builds a record on the stack and hands its
+address to the runtime. The regex port's Pike VM loop is thirteen words, and
+`regex --steps '(a*)*b'` on a 40,000-character line ran out of stack in a
+release build while the dev build and the interpreter printed
+`steps: 440010`.
+
+An x86-64 release build no longer narrows: every `musttail` the emitter wrote
+reaches clang, arms of twelve words or fewer take the flat `preserve_nonecc`
+signature, and wider ones keep `tailcc`, whose stack arguments x86-64 lowers
+correctly. arm64 keeps the narrowing at eight words, because with it gone the
+macOS job ran `a_match_holds_the_literal_its_pattern_spells` to an empty
+stdout; the arm64 backend still miscompiles a `tailcc` call that spills past
+x7. #1912 holds the arm64 gap.
+
+`tests/a_big_object_decodes_in_a_release_build.rs` gains a seven-parameter
+self call that builds a record each hop, a million deep. Main's release
+binary prints "the program ran out of stack". The ratchet row `nine_words` now
+strips `musttail` from calls into arms left on `tailcc`, and both wide-arm
+tests fail with the overflow. The older row "a release build that gives up the
+guaranteed tail call" lowered only the arm64 cap, which an x86-64 release no
+longer reads, so CI's ratchet called it blind. Its mutation now takes `tailcc`
+off every arm on both architectures, and `a_loop_carries_a_bignum_across_its_rewind`
+loses its last line in the release-built micro corpus.
+
+CI's rows: `work_runbench` 1,170,035,080 -> 1,170,626,374 and
+`work_digestbench` 5,603,118 -> 5,905,902 (+5.4%). sha256's block and round
+loops take ten and eleven parameters, and each hop now copies its stack
+arguments where LLVM had built a loop. `text` rose for scanbench (448,985 ->
+451,401), digestbench (319,241 -> 319,705) and runbench (619,081 ->
+619,849), so the `text` total went from 4,838,622 to 4,841,502 on main after #1925, and the emitted line count fell by 540 for both scanbench and
+runbench. The language fix lowers the welfare floor by exactly what it costs,
+to 91.11.
+
+Because this branch edits src/main.rs, the ratchet ran the rows that patch it,
+and "a warm play that dies in silence" stayed green under its mutation. The
+row went blind when a built binary began naming its own stack overflow: the
+warm play no longer sees a signal from that program, so its own wording never
+runs. `a_warm_play_ended_by_a_signal_names_it` reaches the wording another
+way. The program waits on stdin, the spec sends it SIGTERM, and both plays
+must print "ended by signal 15". Under the mutation the second play printed an
+empty line. Linux only, since it finds the program through /proc.

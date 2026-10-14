@@ -34,11 +34,11 @@
 # and is not this one; the historical bug took an incident to find.
 set -e
 anchor='else memcpy((unsigned char*)a->data + a->len, src, (size_t)n);'
-grep -qF "$anchor" src/runtime.c || {
+grep -qF "$anchor" src/runtime/text.c || {
   echo "the in-place append's copy moved; this mutation needs rewriting" >&2
   exit 1
 }
 sed -i 's|else memcpy((unsigned char\*)a->data + a->len, src, (size_t)n);|else { memcpy((unsigned char*)a->data + a->len, src, (size_t)n); ((unsigned char*)a->data)[a->len] = 0; }|' \
-  src/runtime.c
+  src/runtime/text.c
 grep -qF 'memcpy((unsigned char*)a->data + a->len, src, (size_t)n); ((unsigned char*)a->data)[a->len] = 0;' \
-  src/runtime.c
+  src/runtime/text.c

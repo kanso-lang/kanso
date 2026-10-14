@@ -9,7 +9,7 @@
 //! Applying is not proving, and only proving costs a build.
 //!
 //! What both had in common is that the change which killed them touched the
-//! very file their own mutation patches — #1171 src/runtime.c, #1157 and
+//! very file their own mutation patches — #1171 src/runtime/text.c, #1157 and
 //! #1188 src/lib.rs. So `touched` intersects the files a mutation names with
 //! the files a branch changes and proves that handful.
 //!
@@ -108,12 +108,12 @@ fn selected(key: &str, paths: &[&str]) -> String {
 
 #[test]
 fn a_branch_touching_the_runtime_pays_for_the_runtime_rows() {
-    let said = selected("runtime", &["src/runtime.c"]);
+    let said = selected("runtime", &["src/runtime/text.c"]);
     // The row #1171 made blind: its mutation is the only one that patches the
-    // in-place byte append, and it patches src/runtime.c to do it.
+    // in-place byte append, and it patches src/runtime/text.c to do it.
     assert!(
         said.contains("a byte builder that writes the right length and the wrong bytes"),
-        "the row a src/runtime.c change made blind must be selected by one:\n{said}"
+        "the row a src/runtime/text.c change made blind must be selected by one:\n{said}"
     );
     assert!(
         !said.contains("a python call creeping back into a harness"),

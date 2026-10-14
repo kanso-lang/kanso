@@ -9,11 +9,11 @@
 # the same position either way, so nothing but the work vein can see it,
 # which is what the row asserts.
 set -e
-grep -q "    return ((uintptr_t)p & 4095) <= 4096 - 16;" src/runtime.c || {
+grep -q "    return ((uintptr_t)p & 4095) <= 4096 - 16;" src/runtime/text.c || {
   echo "the tail window test changed shape; this mutation needs rewriting" >&2
   exit 1
 }
 sed -e "s/    return ((uintptr_t)p & 4095) <= 4096 - 16;/    return 0;/" \
-    src/runtime.c > src/runtime.c.mut
-mv src/runtime.c.mut src/runtime.c
-grep -q "^static inline int k_tail_window(const unsigned char\* p) {" src/runtime.c
+    src/runtime/text.c > src/runtime/text.c.mut
+mv src/runtime/text.c.mut src/runtime/text.c
+grep -q "^static inline int k_tail_window(const unsigned char\* p) {" src/runtime/text.c

@@ -63,14 +63,17 @@ fn a_diff_of_goldens_alone_selects_nothing() {
 /// cannot satisfy — under it the goldens each drag their own rows in.
 #[test]
 fn adding_goldens_to_a_source_diff_selects_no_extra_row() {
-    let alone = selected(&["src/runtime.c"]);
+    let alone = selected(&["src/runtime/text.c"]);
     let with_goldens = selected(&[
-        "src/runtime.c",
+        "src/runtime/text.c",
         "bench/instructions_golden.txt",
         "bench/text_golden.txt",
         "bench/emitted_golden_others.txt",
     ]);
-    assert!(!alone.is_empty(), "src/runtime.c selected nothing, so this spec is reading nothing");
+    assert!(
+        !alone.is_empty(),
+        "src/runtime/text.c selected nothing, so this spec is reading nothing"
+    );
     assert_eq!(alone, with_goldens, "the goldens pulled in rows the source file did not");
 }
 
@@ -81,22 +84,23 @@ fn adding_goldens_to_a_source_diff_selects_no_extra_row() {
 #[test]
 fn every_selected_row_guards_on_the_file_that_selected_it() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let rows = selected(&["src/runtime.c"]);
-    assert!(!rows.is_empty(), "src/runtime.c selected no rows, so this is reading nothing");
+    let rows = selected(&["src/runtime/text.c"]);
+    assert!(!rows.is_empty(), "src/runtime/text.c selected no rows, so this is reading nothing");
     let dir = root.join("scripts/ratchet/mutations");
     let guarding: Vec<String> = std::fs::read_dir(&dir)
         .expect("the mutations read")
         .filter_map(|e| {
             let path = e.ok()?.path();
             let body = std::fs::read_to_string(&path).ok()?;
-            let guards = body.lines().any(|l| l.contains("grep -q") && l.contains("src/runtime.c"));
+            let guards =
+                body.lines().any(|l| l.contains("grep -q") && l.contains("src/runtime/text.c"));
             guards.then(|| path.file_name()?.to_str().map(str::to_string))?
         })
         .collect();
     assert_eq!(
         rows.len(),
         guarding.len(),
-        "{} rows were selected and {} mutations guard on src/runtime.c",
+        "{} rows were selected and {} mutations guard on src/runtime/text.c",
         rows.len(),
         guarding.len()
     );

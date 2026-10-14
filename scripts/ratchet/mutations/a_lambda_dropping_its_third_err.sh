@@ -5,7 +5,7 @@
 # red.
 set -e
 old='        if (k_any_failure(3, xs)) return k_failed_of(3, xs);'
-[ "$(grep -cxF "$old" src/runtime.c)" -eq 1 ]
-sed -i.bak 's#^        if (k_any_failure(3, xs)) return k_failed_of(3, xs);$#        if (k_any_failure(3, xs)) return k_failed_of(2, xs);#' src/runtime.c
-rm -f src/runtime.c.bak
-! grep -qxF "$old" src/runtime.c
+[ "$(grep -cxF "$old" src/runtime/collections.c)" -eq 1 ]
+sed -i.bak 's#^        if (k_any_failure(3, xs)) return k_failed_of(3, xs);$#        if (k_any_failure(3, xs)) return k_failed_of(2, xs);#' src/runtime/collections.c
+rm -f src/runtime/collections.c.bak
+! grep -qxF "$old" src/runtime/collections.c

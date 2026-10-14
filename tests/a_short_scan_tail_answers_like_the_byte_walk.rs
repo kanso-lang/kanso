@@ -21,7 +21,6 @@
 //! the bit past the end) disagreed on 259,631 of 836,400 cases; `k_tail_window`
 //! answering 1 unconditionally died on the guard page with signal 11.
 
-use std::path::Path;
 use std::process::Command;
 
 fn runtime() -> String {

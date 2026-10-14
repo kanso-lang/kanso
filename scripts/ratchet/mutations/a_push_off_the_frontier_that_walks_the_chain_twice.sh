@@ -14,11 +14,11 @@
 # runbench 2,692,921,601 -> 2,674,319,744 on the container when the change
 # landed, together with the small-copy loops that landed beside it.
 set -e
-grep -q '^    if (k_blocks) {$' src/runtime.c || {
+grep -q '^    if (k_blocks) {$' src/runtime/collections.c || {
   echo "k_outlives_beat's head-block test changed shape; rewrite this" >&2
   exit 1
 }
-n=$(grep -c '^    if (k_blocks) {$' src/runtime.c)
+n=$(grep -c '^    if (k_blocks) {$' src/runtime/collections.c)
 [ "$n" -eq 1 ] || { echo "expected one head-block test, found $n" >&2; exit 1; }
-sed -i 's|^    if (k_blocks) {$|    if (0 \&\& k_blocks) {|' src/runtime.c
-grep -q '^    if (0 && k_blocks) {$' src/runtime.c
+sed -i 's|^    if (k_blocks) {$|    if (0 \&\& k_blocks) {|' src/runtime/collections.c
+grep -q '^    if (0 && k_blocks) {$' src/runtime/collections.c

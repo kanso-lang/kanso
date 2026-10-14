@@ -125,55 +125,6 @@ merge.
 
 - **OPEN** #1887, until this lands.
 
-## 2026-10-12 — a wide tail call keeps its jump
-
-The book promises that a call in tail position takes no stack, in every
-engine. A release build broke that for wide arms. `narrow_tailcc` took
-`tailcc` and `musttail` away from every arm wider than a limit (twelve words on
-x86-64 under `preserve_nonecc`, nine without it, eight on arm64), and each
-call into such an arm became an ordinary call. LLVM turns some of those back
-into jumps, but not one whose arm builds a record on the stack and hands its
-address to the runtime. The regex port's Pike VM loop is thirteen words, and
-`regex --steps '(a*)*b'` on a 40,000-character line ran out of stack in a
-release build while the dev build and the interpreter printed
-`steps: 440010`.
-
-An x86-64 release build no longer narrows: every `musttail` the emitter wrote
-reaches clang, arms of twelve words or fewer take the flat `preserve_nonecc`
-signature, and wider ones keep `tailcc`, whose stack arguments x86-64 lowers
-correctly. arm64 keeps the narrowing at eight words, because with it gone the
-macOS job ran `a_match_holds_the_literal_its_pattern_spells` to an empty
-stdout; the arm64 backend still miscompiles a `tailcc` call that spills past
-x7. #1912 holds the arm64 gap.
-
-`tests/a_big_object_decodes_in_a_release_build.rs` gains a seven-parameter
-self call that builds a record each hop, a million deep. Main's release
-binary prints "the program ran out of stack". The ratchet row `nine_words` now
-strips `musttail` from calls into arms left on `tailcc`, and both wide-arm
-tests fail with the overflow. The older row "a release build that gives up the
-guaranteed tail call" lowered only the arm64 cap, which an x86-64 release no
-longer reads, so CI's ratchet called it blind. Its mutation now takes `tailcc`
-off every arm on both architectures, and `a_loop_carries_a_bignum_across_its_rewind`
-loses its last line in the release-built micro corpus.
-
-CI's rows: `work_runbench` 1,170,035,080 -> 1,170,626,374 and
-`work_digestbench` 5,603,118 -> 5,905,902 (+5.4%). sha256's block and round
-loops take ten and eleven parameters, and each hop now copies its stack
-arguments where LLVM had built a loop. `text` rose for scanbench (448,985 ->
-451,401), digestbench (319,241 -> 319,705) and runbench (619,081 ->
-619,849), so the `text` total went from 4,838,622 to 4,841,502 on main after #1925, and the emitted line count fell by 540 for both scanbench and
-runbench. The language fix lowers the welfare floor by exactly what it costs,
-to 91.11.
-
-Because this branch edits src/main.rs, the ratchet ran the rows that patch it,
-and "a warm play that dies in silence" stayed green under its mutation. The
-row went blind when a built binary began naming its own stack overflow: the
-warm play no longer sees a signal from that program, so its own wording never
-runs. `a_warm_play_ended_by_a_signal_names_it` reaches the wording another
-way. The program waits on stdin, the spec sends it SIGTERM, and both plays
-must print "ended by signal 15". Under the mutation the second play printed an
-empty line. Linux only, since it finds the program through /proc.
-
 ## 2026-10-13 — a list or map too long for its line spans lines
 
 Built under #1882 (gavel: a bracketed list or map may span lines). A literal
@@ -1876,3 +1827,45 @@ The counters below are not welfare terms, and each moved with the change:
 
 Welfare goes 91.2447 -> 91.2395, a fall of 0.0052. This builds a ruled part
 of the language, so the floor drops by exactly that.
+
+## 2026-10-14 — src/runtime.c in seven parts
+
+#1947. src/runtime.c had grown to 13,235 lines. It is now a list of seven
+`#include` lines, and the parts live in src/runtime/: core.c (values, thunks,
+regions, beats, carry), values.c (wide integers, failures, rendering,
+equality), effects.c (boxes, io, processes, work-ahead), collections.c (lists,
+maps, closures), text.c (utf-8, strings, bytes), numbers.c (number parsing,
+bit operators, float tables) and main.c. Each part is a contiguous range of
+the old file, cut at a seam the file already had, and the parts joined in
+order are the old file byte for byte.
+
+clang compiles src/runtime.c by path as before, and the includes resolve
+beside it. The compiler embeds the runtime instead and writes it out when a
+build needs it, so build.rs reads the include lines and joins the parts into
+`kanso::RUNTIME_C`, which every Rust reader takes in place of
+`include_str!("runtime.c")`. The digest, the cached object and the hot unit
+see the bytes they saw before. build.rs refuses any line in the list that is
+not a comment, a blank or a part, so clang and the compiler cannot be handed
+different runtimes. `the_constant_is_the_digest_of_the_bytes_it_names` now
+reads the parts from disk, joins them in the listed order and compares both
+the text and the digest, which catches a part build.rs failed to watch.
+
+121 mutations named src/runtime.c. Each was run on the old file, its
+rewritten form was run on the parts, and the joined results were compared;
+every one matched byte for byte. The two preserve_most sweeps patch several
+parts, and each part they patch is spelled on a guard line. Three patch a line
+of src/main.rs that read `include_str!("runtime.c")` and now reads
+`kanso::RUNTIME_C`. The branch ratchet selects per part from here on: a branch
+that touches text.c proves the rows whose mutations guard on text.c, where it
+used to prove every row that guarded on the one file.
+
+The other readers moved in the same change. Nine specs that cut function text
+out of the runtime read `kanso::RUNTIME_C`. The utf-8 differential reads
+src/runtime/text.c, which holds all five pieces it extracts, and passes with
+45,589,025 checked. The asan sweep's `--prove` patches the joined parts; this
+container has no sanitizer runtime, so the patch and its compile were checked
+here and the sanitized run was not. build_runtime_wasm.sh compiles by path and
+its output is byte-identical before and after, 84,137 bytes. Diagnostic
+coverage descends into src/runtime/ and reads the same 310 diagnostics. Three
+comments said the runtime was 450,100 bytes; it is 608,301, and they no longer
+state a size.

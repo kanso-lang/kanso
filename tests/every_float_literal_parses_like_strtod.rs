@@ -39,7 +39,6 @@
 //! and asked about every string twice, at the end of a buffer whose sixteen
 //! bytes in front are random, so what precedes the number has to be ignored.
 
-use std::path::Path;
 use std::process::Command;
 
 fn runtime() -> String {

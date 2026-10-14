@@ -7,14 +7,14 @@
 # The answer is identical either way, so nothing but the work vein can see
 # this, which is exactly what the row asserts.
 set -e
-grep -q "KValue bad = k_utf8_bad_rare(data, len, origin, NULL);" src/runtime.c || {
+grep -q "KValue bad = k_utf8_bad_rare(data, len, origin, NULL);" src/runtime/text.c || {
   echo "the slice door changed shape; this mutation needs rewriting" >&2
   exit 1
 }
 sed -e "s/KValue bad = k_utf8_bad_rare(data, len, origin, NULL);/KValue bad = k_utf8_bad(data, len, origin, NULL);/" \
-    src/runtime.c > src/runtime.c.mut
-mv src/runtime.c.mut src/runtime.c
-if grep -q "k_utf8_bad_rare(data, len, origin, NULL)" src/runtime.c; then
+    src/runtime/text.c > src/runtime/text.c.mut
+mv src/runtime/text.c.mut src/runtime/text.c
+if grep -q "k_utf8_bad_rare(data, len, origin, NULL)" src/runtime/text.c; then
   echo "the rare door survived the mutation" >&2
   exit 1
 fi

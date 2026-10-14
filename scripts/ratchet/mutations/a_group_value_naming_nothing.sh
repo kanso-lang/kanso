@@ -5,7 +5,7 @@
 # two errs a direct call reports one of, and the runtime corpus goes red.
 set -e
 old='        if (r->builtin && (!k_not_failure(a) || !k_not_failure(b))) return k_both_or_either(a, b);'
-[ "$(grep -cxF "$old" src/runtime.c)" -eq 1 ]
-sed -i.bak 's#^        if (r->builtin \&\& (!k_not_failure(a) || !k_not_failure(b))) return k_both_or_either(a, b);$#        if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);#' src/runtime.c
-rm -f src/runtime.c.bak
-! grep -qxF "$old" src/runtime.c
+[ "$(grep -cxF "$old" src/runtime/collections.c)" -eq 1 ]
+sed -i.bak 's#^        if (r->builtin \&\& (!k_not_failure(a) || !k_not_failure(b))) return k_both_or_either(a, b);$#        if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);#' src/runtime/collections.c
+rm -f src/runtime/collections.c.bak
+! grep -qxF "$old" src/runtime/collections.c

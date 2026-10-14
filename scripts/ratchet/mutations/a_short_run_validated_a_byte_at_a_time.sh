@@ -13,13 +13,13 @@
 # scripts/utf8_differential checks the arm's text against an independent
 # reference, and it passed 45,189,025 cases with 0 mismatches either way.
 set -e
-n=$(grep -c '^            if (i + 8 <= len) {$' src/runtime.c)
-m=$(grep -c '^            if (len >= 8) {$' src/runtime.c)
+n=$(grep -c '^            if (i + 8 <= len) {$' src/runtime/text.c)
+m=$(grep -c '^            if (len >= 8) {$' src/runtime/text.c)
 [ "$n" -eq 1 ] && [ "$m" -eq 1 ] || {
   echo "the scalar arm's word reads changed shape ($n, $m); rewrite this" >&2
   exit 1
 }
-sed -i 's|^            if (i + 8 <= len) {$|            if (0 \&\& i + 8 <= len) {|' src/runtime.c
-sed -i 's|^            if (len >= 8) {$|            if (0 \&\& len >= 8) {|' src/runtime.c
-grep -q '^            if (0 && i + 8 <= len) {$' src/runtime.c
-grep -q '^            if (0 && len >= 8) {$' src/runtime.c
+sed -i 's|^            if (i + 8 <= len) {$|            if (0 \&\& i + 8 <= len) {|' src/runtime/text.c
+sed -i 's|^            if (len >= 8) {$|            if (0 \&\& len >= 8) {|' src/runtime/text.c
+grep -q '^            if (0 && i + 8 <= len) {$' src/runtime/text.c
+grep -q '^            if (0 && len >= 8) {$' src/runtime/text.c

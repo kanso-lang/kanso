@@ -7,7 +7,7 @@
 # work vein is the witness.
 set -e
 target='        while (i + 64 <= len && !_mm_movemask_epi8(prev)) {'
-n=$(grep -cF "$target" src/runtime.c)
+n=$(grep -cF "$target" src/runtime/text.c)
 [ "$n" -eq 1 ] || { echo "k_utf8_bad_wide changed shape ($n); rewrite this" >&2; exit 1; }
-sed -i 's|^        while (i + 64 <= len \&\& !_mm_movemask_epi8(prev)) {$|        while (0) {|' src/runtime.c
-! grep -qF "$target" src/runtime.c
+sed -i 's|^        while (i + 64 <= len \&\& !_mm_movemask_epi8(prev)) {$|        while (0) {|' src/runtime/text.c
+! grep -qF "$target" src/runtime/text.c

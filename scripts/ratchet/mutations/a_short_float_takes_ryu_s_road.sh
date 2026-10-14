@@ -10,7 +10,7 @@
 # `ryu_short` presence counter going to nought is what the row asserts.
 set -e
 t='    if ((uint32_t)(ieee_e - 1003) >= 70) return 0;'
-n=$(grep -cF "$t" src/runtime.c)
+n=$(grep -cF "$t" src/runtime/values.c)
 [ "$n" -eq 1 ] || { echo "the short float path changed shape ($n); rewrite this" >&2; exit 1; }
-sed -i 's#^    if ((uint32_t)(ieee_e - 1003) >= 70) return 0;$#    return 0;#' src/runtime.c
-! grep -qF "$t" src/runtime.c
+sed -i 's#^    if ((uint32_t)(ieee_e - 1003) >= 70) return 0;$#    return 0;#' src/runtime/values.c
+! grep -qF "$t" src/runtime/values.c

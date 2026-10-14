@@ -5,8 +5,8 @@
 # pairs every fifth key grew the map. Put back, the empty literal's
 # allocation shrinks by two slots and the mem vein reads the old bytes.
 set -e
-f=src/runtime.c
-grep -q 'define K_MAP_SEED 10' src/runtime.c
+f=src/runtime/collections.c
+grep -q 'define K_MAP_SEED 10' src/runtime/collections.c
 grep -qxF '#define K_MAP_SEED 10' "$f" || {
   echo "the map seed moved; this mutation needs rewriting" >&2
   exit 1

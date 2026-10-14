@@ -10,6 +10,6 @@
 # mismatch. tests/carry_repair.rs was the guard until 2026-10-11, and its
 # program had stopped reaching the repair, so it passed with this line gone.
 set -e
-grep -qF 'static void k_repaired_settle(KMark* m) {' src/runtime.c
-sed -i '/^static void k_repaired_settle(KMark\* m) {$/,/^}$/ s/^    m->left = k_arena_left;$/    (void)0;/' src/runtime.c
-! awk '/^static void k_repaired_settle\(KMark\* m\) \{$/,/^}$/' src/runtime.c | grep -qF 'm->left = k_arena_left;'
+grep -qF 'static void k_repaired_settle(KMark* m) {' src/runtime/core.c
+sed -i '/^static void k_repaired_settle(KMark\* m) {$/,/^}$/ s/^    m->left = k_arena_left;$/    (void)0;/' src/runtime/core.c
+! awk '/^static void k_repaired_settle\(KMark\* m\) \{$/,/^}$/' src/runtime/core.c | grep -qF 'm->left = k_arena_left;'

@@ -33,7 +33,6 @@
 //! reports the first odd capacity at len 0, n 0; with `k_b_append_into`'s room
 //! read restored to `acap0 < 0 ? -acap0 : acap0` the scan names the line.
 
-use std::path::Path;
 use std::process::Command;
 
 fn runtime() -> String {

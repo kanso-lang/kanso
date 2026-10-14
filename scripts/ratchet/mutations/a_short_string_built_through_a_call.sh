@@ -9,7 +9,7 @@
 # moves, so the work vein is the witness.
 set -e
 target='    k_copy_short(s->data, data, len);'
-n=$(grep -cF "$target" src/runtime.c)
+n=$(grep -cF "$target" src/runtime/values.c)
 [ "$n" -eq 1 ] || { echo "k_str_n's copy changed shape ($n); rewrite this" >&2; exit 1; }
-sed -i 's|^    k_copy_short(s->data, data, len);$|    memcpy(s->data, data, len);|' src/runtime.c
-grep -qF '    memcpy(s->data, data, len);' src/runtime.c
+sed -i 's|^    k_copy_short(s->data, data, len);$|    memcpy(s->data, data, len);|' src/runtime/values.c
+grep -qF '    memcpy(s->data, data, len);' src/runtime/values.c

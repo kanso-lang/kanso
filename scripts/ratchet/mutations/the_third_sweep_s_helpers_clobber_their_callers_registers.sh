@@ -13,18 +13,22 @@
 # kanso#1429 marked keep theirs. Every value out is identical, so nothing
 # but the work vein can see it, which is exactly what the row asserts.
 set -e
-for n in k_str_chars_scan k_map_sort_build k_rec_cold k_buf_perm k_permreg_add \
-         k_buf_release k_bytes_buf_malloc k_bytes_buf_release k_ten_block_open; do
-  grep -q "preserve_most)) [^(]* $n(" src/runtime.c || {
+# Each helper is named with the part that holds it, and each part is spelled
+# on a guard so a change to any of them selects this row.
+grep -q "preserve_most)) [^(]* k_str_chars_scan(" src/runtime/text.c
+grep -q "preserve_most)) [^(]* k_map_sort_build(" src/runtime/collections.c
+grep -q "preserve_most)) [^(]* k_ten_block_open(" src/runtime/core.c
+for at in text:k_str_chars_scan collections:k_map_sort_build collections:k_rec_cold \
+          collections:k_buf_perm collections:k_permreg_add text:k_buf_release \
+          text:k_bytes_buf_malloc text:k_bytes_buf_release core:k_ten_block_open; do
+  f=src/runtime/${at%%:*}.c n=${at#*:}
+  grep -q "preserve_most)) [^(]* $n(" "$f" || {
     echo "$n's attributes changed shape; this mutation needs rewriting" >&2
     exit 1
   }
-  sed -e "/preserve_most)) [^(]* $n(/s/, preserve_most))/))/" src/runtime.c > src/runtime.c.mut
-  mv src/runtime.c.mut src/runtime.c
-done
-for n in k_str_chars_scan k_map_sort_build k_rec_cold k_buf_perm k_permreg_add \
-         k_buf_release k_bytes_buf_malloc k_bytes_buf_release k_ten_block_open; do
-  if grep -q "preserve_most)) [^(]* $n(" src/runtime.c; then
+  sed -e "/preserve_most)) [^(]* $n(/s/, preserve_most))/))/" "$f" > "$f.mut"
+  mv "$f.mut" "$f"
+  if grep -q "preserve_most)) [^(]* $n(" "$f"; then
     echo "$n kept preserve_most through the mutation" >&2
     exit 1
   fi

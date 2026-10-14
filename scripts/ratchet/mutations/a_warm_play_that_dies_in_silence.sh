@@ -15,11 +15,11 @@ grep -qxF "$line" src/main.rs || {
   echo "the warm play's explanation changed shape; rewrite this" >&2
   exit 1
 }
-[ "$(grep -cxF "$watch" src/runtime.c)" -eq 1 ] || {
+[ "$(grep -cxF "$watch" src/runtime/main.c)" -eq 1 ] || {
   echo "the runtime's stack watch changed shape; rewrite this" >&2
   exit 1
 }
 sed -i 's|^                return execute(&played, ended_by_signal);$|                return execute(\&played, \|_\| String::new());|' src/main.rs
-sed -i 's|^static void k_watch_the_stack(void) {$|static void k_watch_the_stack(void) { return;|' src/runtime.c
+sed -i 's|^static void k_watch_the_stack(void) {$|static void k_watch_the_stack(void) { return;|' src/runtime/main.c
 grep -qxF '                return execute(&played, |_| String::new());' src/main.rs
-grep -qxF 'static void k_watch_the_stack(void) { return;' src/runtime.c
+grep -qxF 'static void k_watch_the_stack(void) { return;' src/runtime/main.c

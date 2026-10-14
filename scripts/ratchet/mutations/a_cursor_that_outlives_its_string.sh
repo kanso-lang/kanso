@@ -26,14 +26,14 @@
 # means the path that runs still resets the cursor and the defect never
 # appears.
 set -e
-before=$(grep -cE '^ +k_seek_str = NULL;$' src/runtime.c)
+before=$(grep -cE '^ +k_seek_str = NULL;$' src/runtime/core.c)
 if [ "$before" -lt 2 ]; then
   echo "expected two cursor resets in the rewind, found $before;" >&2
   echo "the reset moved again and this mutation needs rewriting" >&2
   exit 1
 fi
-sed -i '/^ *k_seek_str = NULL;$/d' src/runtime.c
-if grep -qE '^ +k_seek_str = NULL;$' src/runtime.c; then
+sed -i '/^ *k_seek_str = NULL;$/d' src/runtime/core.c
+if grep -qE '^ +k_seek_str = NULL;$' src/runtime/core.c; then
   echo "a cursor reset is still there; the mutation did nothing" >&2
   exit 1
 fi

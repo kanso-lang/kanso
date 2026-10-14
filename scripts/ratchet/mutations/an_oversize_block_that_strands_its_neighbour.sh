@@ -6,9 +6,9 @@
 # witness is the fixture an_oversize_string_leaves_its_neighbour_open, whose
 # arena_peak_bytes counts a second 1 MiB block.
 set -e
-grep -qF '#define K_TAIL_MIN 4096' src/runtime.c || {
+grep -qF '#define K_TAIL_MIN 4096' src/runtime/core.c || {
   echo "the tail threshold moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i 's|^#define K_TAIL_MIN 4096$|#define K_TAIL_MIN (1LL << 40)|' src/runtime.c
-[ "$(grep -cF '#define K_TAIL_MIN (1LL << 40)' src/runtime.c)" -eq 1 ]
+sed -i 's|^#define K_TAIL_MIN 4096$|#define K_TAIL_MIN (1LL << 40)|' src/runtime/core.c
+[ "$(grep -cF '#define K_TAIL_MIN (1LL << 40)' src/runtime/core.c)" -eq 1 ]

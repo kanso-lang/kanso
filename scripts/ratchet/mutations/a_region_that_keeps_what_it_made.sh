@@ -7,8 +7,8 @@
 # entries stay in the arena until the next rewind outside the encode, and the
 # mem fixture a_nested_map_gives_back_its_entries reads a higher arena peak.
 set -e
-f=src/runtime.c
-grep -q 'KValue k_region_pop(KValue r)' src/runtime.c
+f=src/runtime/core.c
+grep -q 'KValue k_region_pop(KValue r)' src/runtime/core.c
 line='KValue k_region_pop(KValue r) {'
 [ "$(grep -cxF "$line" "$f")" -eq 1 ] || {
   echo "the region pop moved; this mutation needs rewriting" >&2

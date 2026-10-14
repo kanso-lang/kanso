@@ -25,7 +25,6 @@
 //! asked twice: once with junk in front of it, so the word is read and what
 //! precedes the number has to be ignored, and once alone, so it is not.
 
-use std::path::Path;
 use std::process::Command;
 
 fn runtime() -> String {
