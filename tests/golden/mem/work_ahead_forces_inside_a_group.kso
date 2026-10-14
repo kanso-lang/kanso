@@ -1,0 +1,14 @@
+# Two effect lines run as one group. The print finishes at once and the sleep
+# parks its side, so every side is waiting: the first idle point, where the
+# pool runs. The report's call is certain to follow the sleep and names
+# nothing local, so it is lifted and forced there. `ahead_forced` counts it.
+import "std/time"
+
+fn spin 0 acc
+  acc
+
+fn spin n acc
+  spin (n - 1) (acc + n % 7)
+
+print "start"
+sleep 1 .> (_ -> print "made") .> (_ -> print "report: {spin 1000 0}")
