@@ -1,0 +1,24 @@
+# `delete map key` answers the map without the key, beside `put` and as
+# bare (ruled 2026-10-13, kanso#1914). A key that is not there answers an
+# equal map, and the map it was handed is never changed.
+fn filled m 0
+  m
+
+fn filled m n
+  filled (put m n "v{n}") (n - 1)
+
+pub play =
+  m = { "a":1 "b":2 "c":3 }
+  twice = put (put m "b" 20) "b" 200
+  wide = filled {} 12
+  print "{delete m "b"}"
+  print "{delete m "z"}"
+  print "{delete m "z" == m}"
+  print "{delete {} "a"}"
+  print "{delete (delete m "a") "c"}"
+  print "{m}"
+  print "{delete twice "b"}"
+  print "{twice}"
+  print "{length wide} {length (delete wide 7)} {keys (delete wide 7)}"
+  print "{put (delete wide 7) 7 "back" == put wide 7 "back"}"
+  print "{delete { 1:"one" "1":"text" } 1}"

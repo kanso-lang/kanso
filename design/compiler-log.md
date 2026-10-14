@@ -1931,3 +1931,55 @@ binary's layout: compile_instructions by 9,355 to 28,002,980,
 entry_instructions by 30,753 to 92,393,206, library_instructions by 30,149 to
 91,989,327 and interp_instructions by 3,960 to 495,525,421. The floor follows
 the score, since #1889 builds a ruled part of the language.
+
+## 2026-10-14 — `delete`, `io/read_line` and `os/modified`
+
+These are the three #1914 names that need the runtime. #1948 carries the six
+written in kanso. All three run on the interpreter, both native tiers and the
+page's translator.
+
+`delete map key` answers the map without the key. A key that is not there
+answers an equal map, and the map it was handed is not changed. It sits beside
+`put` as an ambient name, so a program that declares its own `delete` is now
+told the name is taken; kq, vse and kanso-json declare none. Natively the
+answer is built from the map's deduplicated sorted view, so a key written twice
+is gone after one `delete`. A first argument that is not a map is refused at
+check time, and a float key at run time.
+
+`io/read_line` is a description that yields the next line of standard input
+without its `\n` or `\r\n`, or `done` at the end. A lone `\r` is kept, since
+only those two endings were ruled. It flushes standard output before it waits,
+so a prompt written ahead of it reaches the terminal first. Bytes that are not
+text are refused the way `os/read_file` refuses them. A read error counts as
+the end of input, which is what `io/stdin` already did natively. The page has
+no standard input and refuses `read_line` as it refuses `stdin`.
+
+`os/modified path` yields when the file last changed, in milliseconds since
+the epoch, or `file_not_found`. A failure other than absence is reported in
+`os/read_file`'s words. In the page it yields `file_not_found`, matching
+`os/exists`.
+
+New goldens: four micro programs, one error and two runtime diagnostics, and a
+stdin corpus under `tests/golden/stdin/` that `tests/read_line.rs` feeds to
+native and the interpreter. One test there waits for each prompt before typing
+the answer, so an unflushed prompt fails it. Each was watched red: native and
+interpreter `delete` keeping the key, `\r` left on the line, and the flush
+removed.
+
+CI's rows price the three builtins. Every native binary carries their runtime
+code, 2,688 bytes more text per bench, so `text` went from 4,932,142 to
+4,969,774 across the fourteen. Each bench also runs about 234 more
+instructions, the same on every one, so the rise is outside any decode loop:
+work_basket 30,946,278, work_deepbench 403,499,544, work_digestbench 5,909,247,
+work_escapebench 39,058,340, work_indexbench 2,462,571, work_jsonbench
+858,186,231, work_livebench 1,474,854,142, work_oneshot 13,205,901,
+work_pendbench 191,674,024, work_readbench 4,580,963, work_runbench
+1,178,202,929, work_scanbench 273,675 and work_widebench 28,274,676, while
+work_encodebench fell to 2,386,636,337. The compiler checks and lowers three
+more names and carries the larger runtime text: compile_instructions
+28,044,444, entry_instructions 92,512,951, library_instructions 92,130,190,
+emit_instructions 7,245,801, codegen_instructions_dev 119,400,046 and
+codegen_instructions_release 477,099,466. The interpreter's run went to
+interp_instructions 495,589,622, and the tab to browser_compile_instructions
+414,205,634 and browser_run_instructions 34,183,945. The floor drops by the
+cost under the language rule, since #1914 rules these names.

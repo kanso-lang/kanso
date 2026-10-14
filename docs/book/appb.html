@@ -40,7 +40,7 @@ extra_css: /book/book.css
 <span class="eyebrow">appendix b</span>
 <h1>builtin reference</h1>
 
-<p>kanso keeps its standard library small enough to hold in your head, and it draws one line through it. nine names are <em>ambient</em>—<code>if</code>, <code>print</code>, <code>push</code>, <code>put</code>, <code>merge</code>, <code>length</code>, <code>entries</code>, <code>keys</code>, and <code>values</code> resolve in any file with no import, because nearly every program touches them. everything else arrives through a std module: <code>import "std/math"</code> gives you <code>math/sqrt</code>, <code>import "std/list"</code> gives you <code>list/map</code>, and the qualified spelling in your source is the same spelling you will find in the entry headers below. the functions come in two shapes. most are ordinary pure functions—<code>list/sort</code> takes a list and returns a sorted one, <code>math/sqrt</code> takes a number and returns its root, with no trace left behind. eight are <em>descriptions</em>: <code>print</code>, <code>os/read_file</code>, <code>io/write</code>, <code>os/write_file</code>, <code>os/args</code>, <code>io/stdin</code>, <code>time/sleep</code>, and <code>math/random</code> don't perform i/o when evaluated—they return a value describing i/o that the runtime performs later (chapter 05). this appendix marks those <span class="desc-tag">description</span> and treats the rest as plain functions.</p>
+<p>kanso keeps its standard library small enough to hold in your head, and it draws one line through it. a few names are <em>ambient</em>—<code>if</code>, <code>print</code>, <code>push</code>, <code>put</code>, <code>delete</code>, <code>merge</code>, <code>length</code>, <code>entries</code>, <code>keys</code>, and <code>values</code> resolve in any file with no import, because nearly every program touches them. everything else arrives through a std module: <code>import "std/math"</code> gives you <code>math/sqrt</code>, <code>import "std/list"</code> gives you <code>list/map</code>, and the qualified spelling in your source is the same spelling you will find in the entry headers below. the functions come in two shapes. most are ordinary pure functions—<code>list/sort</code> takes a list and returns a sorted one, <code>math/sqrt</code> takes a number and returns its root, with no trace left behind. the rest are <em>descriptions</em>: <code>print</code>, <code>os/read_file</code>, <code>os/modified</code>, <code>io/write</code>, <code>os/write_file</code>, <code>os/args</code>, <code>io/stdin</code>, <code>io/read_line</code>, <code>time/sleep</code>, and <code>math/random</code> don't perform i/o when evaluated—they return a value describing i/o that the runtime performs later (chapter 05). this appendix marks those <span class="desc-tag">description</span> and treats the rest as plain functions.</p>
 
 <p>every function here follows the same failure convention. an <code>err</code> or <code>none</code> the checker can see arriving is refused at the call, the way chapter 04 describes; one it cannot see passes straight through, unlooked-at, so a failure still rides out to whoever asks for it. a genuine type mismatch—<code>list/sum</code> on a list containing a string, <code>math/sqrt</code> on a record—is a program bug, not a value, and raises a runtime error at the point of the call. each entry below states both: what the function does, and what it does when the input is wrong. every example was run through the interpreter; every output block is copied from the machine, and the sources live under <code>samples/appb/</code>.</p>
 
@@ -51,6 +51,7 @@ extra_css: /book/book.css
 <a href="#b-char_code"><code>text/char_code</code></a>
 <a href="#b-chars"><code>text/chars</code></a>
 <a href="#b-concat"><code>list/concat</code></a>
+<a href="#b-delete"><code>delete</code></a>
 <a href="#b-ends_with"><code>text/ends_with?</code></a>
 <a href="#b-entries"><code>entries</code></a>
 <a href="#b-effect"><code>effect</code></a>
@@ -62,6 +63,7 @@ extra_css: /book/book.css
 <a href="#b-length"><code>length</code></a>
 <a href="#b-lowercase"><code>text/lowercase</code></a>
 <a href="#b-merge"><code>merge</code></a>
+<a href="#b-modified"><code>os/modified</code></a>
 <a href="#b-vocabulary"><code>list/…</code></a>
 <a href="#b-pad_end"><code>text/pad_end</code></a>
 <a href="#b-pad_start"><code>text/pad_start</code></a>
@@ -72,6 +74,7 @@ extra_css: /book/book.css
 <a href="#b-random"><code>math/random</code></a>
 <a href="#b-read_file"><code>os/read_file</code></a>
 <a href="#b-read_file-bang"><code>os/read_file!</code></a>
+<a href="#b-read_line"><code>io/read_line</code></a>
 <a href="#b-round"><code>math/round</code></a>
 <a href="#b-round-bang"><code>math/round!</code></a>
 <a href="#b-slice"><code>text/slice</code></a>
@@ -335,6 +338,10 @@ missing: index out of range</code></pre>
 <p class="builtin-sig"><code>values map → value[]</code></p>
 <p>the values of a map as a list, in the same order. position <code>i</code> of <code>keys m</code>, of <code>values m</code> and of <code>entries m</code> all describe the same pair, so a walk that wants both sides can index the two lists and never build a record.</p>
 
+<h3 id="b-delete"><code>delete</code></h3>
+<p class="builtin-sig"><code>delete map key → map</code></p>
+<p>a new map without <code>key</code>. a key that is not there answers a map equal to the one given, and the map you handed in is never changed. like <code>put</code> it needs no import, and the keys it accepts are the ones <code>put</code> accepts: ints and strings.</p>
+
 <h3 id="b-put"><code>put</code></h3>
 <p class="builtin-sig"><code>put map key value → map</code></p>
 <p>a new map with <code>key</code> set to <code>value</code>, replacing any previous binding. keys are ints or strings. like <code>push</code> it is functional and made in-place by the runtime when the map is uniquely owned. building a map from nothing starts at the empty-map literal <code>{}</code>; a literal with known keys is written <code>{ "a":1 "b":2 }</code>.</p>
@@ -562,6 +569,10 @@ third</code></pre>
 
 <p>the plan names <code>sleep</code> and <code>random</code> up front, then stops at <code>. &lt;continuation&gt;</code>—honest notation for "what <code>show</code> does depends on a value the roll hasn't produced yet." a step written <code>_ -&gt; next</code> ignores the value it is handed, so the plan can list it; <code>show</code> reads its value, so the plan stops there. the plan renders that step with a bare dot, which is the notation of the printed plan rather than the operator you write.</p>
 
+<h3 id="b-modified"><code>os/modified</code> <span class="desc-tag">description</span></h3>
+<p class="builtin-sig"><code>os/modified string → io (yields int | file_not_found)</code></p>
+<p>a description that yields when a file last changed, in milliseconds since the epoch, the unit <code>time/now</code> answers in. a path that is not there yields <code>file_not_found</code>, as it does for <code>os/read_file</code>. comparing two readings is how a program notices that a file changed under it.</p>
+
 <h3 id="b-read_file"><code>os/read_file</code> <span class="desc-tag">description</span></h3>
 <p class="builtin-sig"><code>os/read_file string → io (yields string | file_not_found)</code></p>
 <p>a description that yields the contents of a file. a path that is not there yields <code>file_not_found</code>, which carries the path and dispatches like any other value — an absent file is an outcome a program can anticipate, so it is data. anything else that stops the read — a permission, a device, bytes that are not text — fails at execution time, at the executor, when the read is actually attempted rather than when the description is built. pipe the contents into a function with <code>.&gt;</code>.</p>
@@ -603,6 +614,10 @@ third</code></pre>
     <pre><code>one taiyaki</code></pre>
   </div>
 </div>
+
+<h3 id="b-read_line"><code>io/read_line</code> <span class="desc-tag">description</span></h3>
+<p class="builtin-sig"><code>io/read_line → io (yields string | done)</code></p>
+<p>a description that yields the next line of standard input without its ending, which may be <code>\n</code> or <code>\r\n</code>. once the input has ended it yields <code>done</code>. each read happens at its place in the chain, and anything written before it has reached the terminal before the read waits, so a loop that prints a prompt and then reads behaves the way it reads. <code>io/stdin</code> takes whatever input is left in one piece.</p>
 
 <h3 id="b-stdin"><code>io/stdin</code> <span class="desc-tag">description</span></h3>
 <p class="builtin-sig"><code>io/stdin → io (yields string)</code></p>

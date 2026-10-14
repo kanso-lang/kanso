@@ -17,6 +17,11 @@ pub trait Executor {
     fn print(&mut self, text: &str);
     fn args(&mut self) -> Vec<String>;
     fn stdin(&mut self) -> Result<String, String>;
+    /// The next line of standard input without its `\n` or `\r\n`, or `None`
+    /// once the input has ended. A last line with no ending is still a line.
+    /// Output written before the read is on its way before the read waits,
+    /// so a prompt reaches a person before the program waits on them.
+    fn read_line(&mut self) -> Result<Option<String>, String>;
     /// Three answers, because absence is not a failure. `Ok(Some(text))` read
     /// it; `Ok(None)` is the file not being there, which the gavel of
     /// 2026-09-03 rules is an anticipated outcome and therefore data; `Err` is
@@ -57,6 +62,11 @@ pub trait Executor {
     fn exists(&mut self, path: &str) -> bool;
 
     fn is_dir(&mut self, path: &str) -> bool;
+    /// When a file last changed, in milliseconds since the epoch: the unit
+    /// `now` answers in. `Ok(None)` is the file not being there, which is
+    /// data the way it is for `read_file`; `Err` is any other reason the
+    /// question could not be answered.
+    fn modified(&mut self, path: &str) -> Result<Option<i64>, String>;
     /// Milliseconds since the epoch. KANSO_NOW pins it, the way KANSO_SEED
     /// pins the dice — a program that timestamps is otherwise unrepeatable,
     /// and this project reproduces its runs.
@@ -401,6 +411,23 @@ impl Executor for RealExecutor {
         Ok(buffer)
     }
 
+    fn read_line(&mut self) -> Result<Option<String>, String> {
+        use std::io::{BufRead, Write};
+        let _ = std::io::stdout().flush();
+        let mut raw = Vec::new();
+        // A stream that fails is a stream that has ended, as it is for the
+        // native runtime's stdio: a closed descriptor reads as the end of
+        // the input on both.
+        match std::io::stdin().lock().read_until(b'\n', &mut raw) {
+            Ok(0) | Err(_) => Ok(None),
+            Ok(_) => line_text(raw).map(Some),
+        }
+    }
+
+    fn modified(&mut self, path: &str) -> Result<Option<i64>, String> {
+        modified_millis(path)
+    }
+
     fn read_file(&mut self, path: &str) -> Result<Option<String>, String> {
         read_file_text(path)
     }
@@ -459,6 +486,37 @@ fn send_raw(conn: i64, raw: &[u8]) -> Result<(), String> {
     };
     stream.write_all(raw).map_err(|e| format!("cannot write: {e}"))?;
     stream.flush().map_err(|e| format!("cannot write: {e}"))
+}
+
+/// One line as `read_line` hands it over: the `\n` and a `\r` before it go,
+/// and the rest must be text, worded as the native runtime words it.
+pub fn line_text(mut raw: Vec<u8>) -> Result<String, String> {
+    if raw.last() == Some(&b'\n') {
+        raw.pop();
+        if raw.last() == Some(&b'\r') {
+            raw.pop();
+        }
+    }
+    String::from_utf8(raw)
+        .map_err(|_| "cannot read standard input: the bytes are not text".to_string())
+}
+
+/// A file's last-modified time in milliseconds since the epoch, rounded down
+/// as the native runtime's integer division rounds a time after the epoch.
+/// A path that is not there, or that runs through a file, answers `None`:
+/// the two errnos native reads as absence.
+pub fn modified_millis(path: &str) -> Result<Option<i64>, String> {
+    use std::io::ErrorKind::{NotADirectory, NotFound};
+    let meta = match std::fs::metadata(path) {
+        Ok(meta) => meta,
+        Err(why) if matches!(why.kind(), NotFound | NotADirectory) => return Ok(None),
+        Err(_) => return Err(format!("cannot read {path}: unreadable")),
+    };
+    let at = meta.modified().map_err(|_| format!("cannot read {path}: unreadable"))?;
+    Ok(Some(match at.duration_since(std::time::UNIX_EPOCH) {
+        Ok(after) => after.as_millis() as i64,
+        Err(before) => -(before.duration().as_nanos().div_ceil(1_000_000) as i64),
+    }))
 }
 
 /// The other reader (ruled 2026-08-29): the same three answers as
@@ -563,6 +621,20 @@ impl Executor for ScriptedExecutor {
 
     fn stdin(&mut self) -> Result<String, String> {
         Ok(self.script_stdin.clone())
+    }
+
+    fn read_line(&mut self) -> Result<Option<String>, String> {
+        if self.script_stdin.is_empty() {
+            return Ok(None);
+        }
+        let end = self.script_stdin.find('\n').map_or(self.script_stdin.len(), |at| at + 1);
+        let line: String = self.script_stdin.drain(..end).collect();
+        line_text(line.into_bytes()).map(Some)
+    }
+
+    fn modified(&mut self, path: &str) -> Result<Option<i64>, String> {
+        self.transcript.push(format!("modified {path:?}"));
+        Ok(self.files.contains_key(path).then_some(0))
     }
 
     fn read_file(&mut self, path: &str) -> Result<Option<String>, String> {

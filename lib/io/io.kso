@@ -3,8 +3,8 @@
 # The filesystem, the environment, the arguments and the processes moved to
 # `std/os` when the library took Go's split. What is left is what Go leaves in
 # `io`: the surface a program reads through and writes through. kanso has no
-# reader or writer type to abstract over yet, so the surface is three names —
-# the two ends of the standard streams, and the input the process was handed.
+# reader or writer type to abstract over yet, so the surface is the two ends
+# of the standard streams, and the input the process was handed.
 pub stdin = builtin_stdin
 
 pub fn write content
@@ -13,3 +13,9 @@ pub fn write content
 # Diagnostics, so a tool's chatter stays out of what it is piped into.
 pub fn write_err content
   builtin_write_err content
+
+# The next line of standard input without its line ending, or `done` once the
+# input has ended. An interactive loop writes a prompt between reads, and each
+# read happens where the program says it does: what was written before it has
+# gone out before the read waits.
+pub read_line = builtin_read_line

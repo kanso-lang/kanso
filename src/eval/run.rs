@@ -36,6 +36,12 @@ impl<'a> Interp<'a> {
                 Ok(text) => Value::Str(Text::from(text)),
                 Err(reason) => err_value(Value::Str(Text::from(reason)), Raised::default()),
             }),
+            // the line without its ending, or `done` when the input has ended
+            Desc::ReadLine => Ok(match executor.read_line() {
+                Ok(Some(line)) => Value::Str(Text::from(line)),
+                Ok(None) => Value::Done,
+                Err(reason) => err_value(Value::Str(Text::from(reason)), Raised::default()),
+            }),
             // The text, or `none` for a file that is not there — the std
             // wrapper names the second `file_not_found`, because a builtin
             // cannot name a type declared in kanso.
@@ -83,6 +89,13 @@ impl<'a> Interp<'a> {
             Desc::IsDir(path) => Ok(match executor.is_dir(path) {
                 true => Value::True,
                 false => Value::False,
+            }),
+            // milliseconds since the epoch, or `none` for a file that is not
+            // there, which os/modified names `file_not_found`
+            Desc::Modified(path) => Ok(match executor.modified(path) {
+                Ok(Some(ms)) => Value::int(ms),
+                Ok(None) => Value::NoneV,
+                Err(reason) => err_value(Value::Str(Text::from(reason)), Raised::default()),
             }),
             Desc::ListDir(path) => Ok(match executor.list_dir(path) {
                 Ok(names) => Value::List(Rc::new(
@@ -346,6 +359,7 @@ pub fn render_plan(desc: &Desc, out: &mut String, step: &dyn Fn(&Value) -> Optio
         }
         Desc::Args => out.push_str("  args\n"),
         Desc::Stdin => out.push_str("  stdin\n"),
+        Desc::ReadLine => out.push_str("  read_line\n"),
         Desc::ReadFile(path) => out.push_str(&format!("  read_file {path:?}\n")),
         Desc::ReadBytes(path) => out.push_str(&format!("  read_bytes {path:?}\n")),
         Desc::Run(cmd, argv) => out.push_str(&format!("  run {cmd:?} {argv:?}\n")),
@@ -357,6 +371,7 @@ pub fn render_plan(desc: &Desc, out: &mut String, step: &dyn Fn(&Value) -> Optio
         Desc::Env(name) => out.push_str(&format!("  env {name:?}\n")),
         Desc::Exists(path) => out.push_str(&format!("  exists {path:?}\n")),
         Desc::IsDir(path) => out.push_str(&format!("  is_dir {path:?}\n")),
+        Desc::Modified(path) => out.push_str(&format!("  modified {path:?}\n")),
         Desc::Now => out.push_str("  now\n"),
         Desc::ListDir(path) => out.push_str(&format!("  list_dir {path:?}\n")),
         Desc::MakeDir(path) => out.push_str(&format!("  make_dir {path:?}\n")),

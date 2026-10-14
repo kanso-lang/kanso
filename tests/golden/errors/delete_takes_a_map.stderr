@@ -1,0 +1,4 @@
+error[type]: `delete` takes a map here, not a list
+  --> delete_takes_a_map.kso:3:16
+   3 | print "{delete [1 2] 1}"
+                      ^

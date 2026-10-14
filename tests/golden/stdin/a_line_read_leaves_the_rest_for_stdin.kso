@@ -1,0 +1,8 @@
+# `io/read_line` takes one line and `io/stdin` takes what is left, so a
+# program can read a header a line at a time and the body whole.
+import "std/io"
+
+fn rest header
+  io/stdin .> (body -> print "header [{header}] body [{body}]")
+
+pub play = io/read_line .> rest
