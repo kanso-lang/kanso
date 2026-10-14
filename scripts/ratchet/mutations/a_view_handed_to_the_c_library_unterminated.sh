@@ -5,9 +5,9 @@
 # runtime fixture a_long_slice_ends_where_it_was_cut, whose sentence then runs
 # on past the slice into the rest of the line.
 set -e
-grep -qF '    if (s->data[s->len] == 0) return s->data;' src/runtime.c || {
+grep -qF '    if (s->data[s->len] == 0) return s->data;' src/runtime/values.c || {
   echo "k_cstr moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i 's|^    if (s->data\[s->len\] == 0) return s->data;$|    return s->data;|' src/runtime.c
-[ "$(grep -cF '    return s->data;' src/runtime.c)" -eq 1 ]
+sed -i 's|^    if (s->data\[s->len\] == 0) return s->data;$|    return s->data;|' src/runtime/values.c
+[ "$(grep -cF '    return s->data;' src/runtime/values.c)" -eq 1 ]

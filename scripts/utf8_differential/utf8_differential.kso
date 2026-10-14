@@ -5,10 +5,11 @@ import "std/text"
 
 # Differential check of the utf-8 validator against an independent reference.
 #
-# The validator's text is extracted from src/runtime.c at run time rather than
-# copied, so this cannot drift from the function it checks. The reference in
-# scripts/utf8/harness.c is a plain scalar decoder written straight from the
-# grammar, so agreement between them is evidence rather than a tautology.
+# The validator's text is extracted from src/runtime/text.c at run time
+# rather than copied, so this cannot drift from the function it checks. The
+# reference in scripts/utf8/harness.c is a plain scalar decoder written
+# straight from the grammar, so agreement between them is evidence rather than
+# a tautology.
 #
 # Exhaustive over every string of three bytes or fewer, then sampled over the
 # lengths that straddle the sixteen-byte vector boundary.
@@ -257,7 +258,7 @@ fn verdict _
   io/write_err "FAIL  a function and its reference disagree\n"
     .> (_ -> os/exit 1)
 
-pub play = os/read_file! "src/runtime.c" .> written_from
+pub play = os/read_file! "src/runtime/text.c" .> written_from
 
 fn written_from src
   harness = as_harness src

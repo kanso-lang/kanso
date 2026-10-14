@@ -6,8 +6,8 @@
 # malloc'd buffer reads back a slot smaller than it holds, and an empty one
 # reads back as a negative capacity.
 set -e
-f=src/runtime.c
-grep -q 'static inline void k_buf_set_cap(KBuf\* b' src/runtime.c
+f=src/runtime/core.c
+grep -q 'static inline void k_buf_set_cap(KBuf\* b' src/runtime/core.c
 line='    b->capw = 2 * cap + (malloced ? 1 : 0);'
 [ "$(grep -cxF "$line" "$f")" -eq 1 ] || {
   echo "the capacity setter moved; this mutation needs rewriting" >&2

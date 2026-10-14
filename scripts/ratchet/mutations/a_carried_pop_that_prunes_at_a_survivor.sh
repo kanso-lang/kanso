@@ -20,7 +20,7 @@
 # applied and none faulted. The hazard is a mechanism, not a program that
 # faults on demand, which is why this row is gated on counters.
 set -e
-n=$(grep -cF 'KCopy cp = { NULL, NULL, 1, 0, k_carry_written || c->skipped };' src/runtime.c)
+n=$(grep -cF 'KCopy cp = { NULL, NULL, 1, 0, k_carry_written || c->skipped };' src/runtime/core.c)
 [ "$n" -eq 1 ] || { echo "the pop's copy-out changed shape ($n); rewrite this" >&2; exit 1; }
-sed -i 's/KCopy cp = { NULL, NULL, 1, 0, k_carry_written || c->skipped };/KCopy cp = { NULL, NULL, 1, 0, c->skipped };/' src/runtime.c
-grep -qF 'KCopy cp = { NULL, NULL, 1, 0, c->skipped };' src/runtime.c
+sed -i 's/KCopy cp = { NULL, NULL, 1, 0, k_carry_written || c->skipped };/KCopy cp = { NULL, NULL, 1, 0, c->skipped };/' src/runtime/core.c
+grep -qF 'KCopy cp = { NULL, NULL, 1, 0, c->skipped };' src/runtime/core.c

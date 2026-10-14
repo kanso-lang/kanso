@@ -6,16 +6,16 @@
 # memcpy above that. Every environment holds the same values, so nothing but
 # the work vein can see it, which is exactly what the row asserts.
 set -e
-grep -q "    if (ncaps <= 8) {" src/runtime.c || {
+grep -q "    if (ncaps <= 8) {" src/runtime/collections.c || {
   echo "the closure's capture ladder changed shape; this mutation needs rewriting" >&2
   exit 1
 }
-grep -q "        k_copy_cold(env, caps, sizeof(KValue) \* ncaps);" src/runtime.c || {
+grep -q "        k_copy_cold(env, caps, sizeof(KValue) \* ncaps);" src/runtime/collections.c || {
   echo "the closure's long copy changed shape; this mutation needs rewriting" >&2
   exit 1
 }
 sed -e "s/    if (ncaps <= 8) {/    if (ncaps <= 4) {/" \
     -e "s/        k_copy_cold(env, caps, sizeof(KValue) \* ncaps);/        memcpy(env, caps, sizeof(KValue) * ncaps);/" \
-    src/runtime.c > src/runtime.c.mut
-mv src/runtime.c.mut src/runtime.c
-grep -q "        memcpy(env, caps, sizeof(KValue) \* ncaps);" src/runtime.c
+    src/runtime/collections.c > src/runtime/collections.c.mut
+mv src/runtime/collections.c.mut src/runtime/collections.c
+grep -q "        memcpy(env, caps, sizeof(KValue) \* ncaps);" src/runtime/collections.c

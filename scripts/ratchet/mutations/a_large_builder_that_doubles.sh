@@ -5,9 +5,9 @@
 # large.json ended in a 277,522-byte buffer. The mem vein pins the smaller
 # peaks the half-step leaves, so doubling turns it red.
 set -e
-f=src/runtime.c
+f=src/runtime/text.c
 line='    if (!dies && a->len + n > 16384) cap = ((a->len + n) * 3 / 2) & ~1LL;'
-grep -q 'a->len + n > 16384' src/runtime.c
+grep -q 'a->len + n > 16384' src/runtime/text.c
 [ "$(grep -cxF "$line" "$f")" -eq 1 ] || {
   echo "the half-step grow moved; this mutation needs rewriting" >&2
   exit 1

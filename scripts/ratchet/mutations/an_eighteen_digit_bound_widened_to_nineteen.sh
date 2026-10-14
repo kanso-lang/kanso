@@ -9,7 +9,7 @@
 # integers it happens to parse and none of them is nineteen digits.
 set -e
 t='    if (start < len && len - start <= 18) {'
-n=$(grep -cF "$t" src/runtime.c)
+n=$(grep -cF "$t" src/runtime/numbers.c)
 [ "$n" -eq 1 ] || { echo "to_int's fast-path bound changed shape ($n); rewrite this" >&2; exit 1; }
-sed -i 's#^    if (start < len \&\& len - start <= 18) {$#    if (start < len \&\& len - start <= 19) {#' src/runtime.c
-grep -qF '    if (start < len && len - start <= 19) {' src/runtime.c
+sed -i 's#^    if (start < len \&\& len - start <= 18) {$#    if (start < len \&\& len - start <= 19) {#' src/runtime/numbers.c
+grep -qF '    if (start < len && len - start <= 19) {' src/runtime/numbers.c

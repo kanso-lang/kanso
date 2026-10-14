@@ -10,11 +10,11 @@
 # same either way; only the frame comes back, so nothing but the work vein
 # can see this, which is exactly what the row asserts.
 set -e
-grep -q "static __attribute__((noinline, cold, preserve_most)) KValue k_b_to_int_slow(" src/runtime.c || {
+grep -q "static __attribute__((noinline, cold, preserve_most)) KValue k_b_to_int_slow(" src/runtime/numbers.c || {
   echo "the int parser's cold tail changed shape; this mutation needs rewriting" >&2
   exit 1
 }
 sed -e "s/static __attribute__((noinline, cold, preserve_most)) KValue k_b_to_int_slow(/static inline __attribute__((always_inline)) KValue k_b_to_int_slow(/" \
-    src/runtime.c > src/runtime.c.mut
-mv src/runtime.c.mut src/runtime.c
-grep -q "static inline __attribute__((always_inline)) KValue k_b_to_int_slow(" src/runtime.c
+    src/runtime/numbers.c > src/runtime/numbers.c.mut
+mv src/runtime/numbers.c.mut src/runtime/numbers.c
+grep -q "static inline __attribute__((always_inline)) KValue k_b_to_int_slow(" src/runtime/numbers.c

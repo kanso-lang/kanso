@@ -80,14 +80,16 @@ if [ "${1:-}" = "--prove" ]; then
   broken_c="$work/runtime_broken.c"
   mkdir -p "$work"
   # A read of one byte from a block this function has just freed. It sits in
-  # `k_ten_release`, so any program that frees a tenure block trips it.
+  # `k_ten_release`, so any program that frees a tenure block trips it. The
+  # patch is made on the runtime's parts joined in the order src/runtime.c
+  # lists them, so the copy compiles on its own.
   awk '
     { print }
     /^        free\(b->data\);$/ && !done {
       print "        { volatile char probe = ((const char*)b->data)[0]; (void)probe; }"
       done = 1
     }
-  ' "$root/src/runtime.c" > "$broken_c"
+  ' $(sed -n 's|^#include "\(runtime/.*\)"$|'"$root"'/src/\1|p' "$root/src/runtime.c") > "$broken_c"
   if ! grep -q 'volatile char probe' "$broken_c"; then
     die "--prove could not find the free in k_ten_release to patch"
   fi

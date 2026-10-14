@@ -5,10 +5,10 @@
 # The output is the same; the work vein is what sees it.
 set -e
 line='    if (!(a->cap & ~1LL)) return k_b_append_grow(acc, a, src, n, mutate);'
-[ "$(grep -cxF "$line" src/runtime.c)" -eq 1 ] || {
+[ "$(grep -cxF "$line" src/runtime/text.c)" -eq 1 ] || {
   echo "the grow test moved; this mutation needs rewriting" >&2
   exit 1
 }
-grep -vxF "$line" src/runtime.c > src/runtime.c.new
-mv src/runtime.c.new src/runtime.c
-if grep -qxF "$line" src/runtime.c; then exit 1; fi
+grep -vxF "$line" src/runtime/text.c > src/runtime/text.c.new
+mv src/runtime/text.c.new src/runtime/text.c
+if grep -qxF "$line" src/runtime/text.c; then exit 1; fi

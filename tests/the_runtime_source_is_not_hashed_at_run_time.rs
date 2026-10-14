@@ -1,5 +1,4 @@
-//! The 450,100 bytes of `src/runtime.c` are digested at build time, not on
-//! every start-up.
+//! The runtime's text is digested at build time, not on every start-up.
 //!
 //! Two cache keys decide whether a staged object or a linked binary may be
 //! reused: `cached_runtime_object` and `cached_program_binary`. Both must
@@ -31,7 +30,10 @@ fn neither_cache_key_feeds_the_runtime_source_to_a_hasher() {
         if !code.contains(".hash(&mut hasher)") {
             continue;
         }
-        if code.contains("include_str!") || code.contains("source.hash") {
+        if code.contains("include_str!")
+            || code.contains("RUNTIME_C")
+            || code.contains("source.hash")
+        {
             offenders.push(format!("  src/main.rs:{}: {}", n + 1, line.trim()));
         }
     }
@@ -42,21 +44,35 @@ fn neither_cache_key_feeds_the_runtime_source_to_a_hasher() {
          start-up a walk over {} bytes. Hash `kanso::hash::RUNTIME_DIGEST` \
          instead -- it is the same function of the same bytes, taken at build \
          time:\n{}",
-        include_str!("../src/runtime.c").len(),
+        kanso::RUNTIME_C.len(),
         offenders.join("\n"),
     );
 }
 
-/// The correctness half. A constant that has drifted from the file it digests
+/// The correctness half. A constant that has drifted from the files it digests
 /// would let a changed runtime reuse an object built from the old one, which
-/// is a miscompile rather than a slow build.
+/// is a miscompile rather than a slow build. The runtime is the parts
+/// `src/runtime.c` lists, joined by build.rs, so this reads them from disk the
+/// way clang does and joins them again: a part build.rs failed to notice
+/// changing, or joined out of order, leaves the embedded text behind.
 #[test]
 fn the_constant_is_the_digest_of_the_bytes_it_names() {
-    let source = include_str!("../src/runtime.c");
+    let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let list = std::fs::read_to_string(src.join("runtime.c")).expect("src/runtime.c reads");
+    let parts: Vec<&str> = list
+        .lines()
+        .filter_map(|l| l.strip_prefix("#include \"").and_then(|r| r.strip_suffix('"')))
+        .collect();
+    assert!(parts.len() > 1, "src/runtime.c lists no parts, so this compares nothing");
+    let on_disk: String = parts
+        .iter()
+        .map(|p| std::fs::read_to_string(src.join(p)).unwrap_or_else(|e| panic!("{p}: {e}")))
+        .collect();
+    assert!(on_disk == kanso::RUNTIME_C, "kanso::RUNTIME_C is not the parts src/runtime.c lists");
     assert_eq!(
         kanso::hash::RUNTIME_DIGEST,
-        kanso::hash::digest_of(source.as_bytes()),
-        "hash::RUNTIME_DIGEST is not the digest of src/runtime.c",
+        kanso::hash::digest_of(on_disk.as_bytes()),
+        "hash::RUNTIME_DIGEST is not the digest of the runtime's parts",
     );
 }
 
@@ -64,7 +80,7 @@ fn the_constant_is_the_digest_of_the_bytes_it_names() {
 /// byte changed anywhere must move it, or the key it feeds cannot do its job.
 #[test]
 fn one_changed_byte_moves_the_digest() {
-    let source = include_str!("../src/runtime.c").as_bytes();
+    let source = kanso::RUNTIME_C.as_bytes();
     let mut seen = std::collections::HashSet::new();
     seen.insert(kanso::hash::digest_of(source));
 

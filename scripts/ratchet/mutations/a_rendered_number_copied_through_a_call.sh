@@ -12,7 +12,7 @@
 # the words landed.
 set -e
 target='    memcpy(s->data, buf, 16);'
-n=$(grep -cF "$target" src/runtime.c)
+n=$(grep -cF "$target" src/runtime/values.c)
 [ "$n" -eq 1 ] || { echo "the render's word copy changed shape ($n); rewrite this" >&2; exit 1; }
-sed -i 's|^    memcpy(s->data, buf, 16);$|    memcpy(s->data, buf, (size_t)nlen);|' src/runtime.c
-grep -qF '    memcpy(s->data, buf, (size_t)nlen);' src/runtime.c
+sed -i 's|^    memcpy(s->data, buf, 16);$|    memcpy(s->data, buf, (size_t)nlen);|' src/runtime/values.c
+grep -qF '    memcpy(s->data, buf, (size_t)nlen);' src/runtime/values.c

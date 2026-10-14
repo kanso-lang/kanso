@@ -11,7 +11,7 @@
 # 815,943 of 2,809,326 values stop reading back as themselves.
 set -e
 t='        output = vr + (vr == vm || round_up);'
-n=$(grep -cF "$t" src/runtime.c)
+n=$(grep -cF "$t" src/runtime/values.c)
 [ "$n" -eq 1 ] || { echo "ryu_d2d's rounding changed shape ($n); rewrite this" >&2; exit 1; }
-sed -i 's#^        output = vr + (vr == vm || round_up);$#        output = vr;#' src/runtime.c
-grep -qF '        output = vr;' src/runtime.c
+sed -i 's#^        output = vr + (vr == vm || round_up);$#        output = vr;#' src/runtime/values.c
+grep -qF '        output = vr;' src/runtime/values.c

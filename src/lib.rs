@@ -26,6 +26,11 @@ pub mod trmc;
 pub mod wasm;
 pub mod wasm_encode;
 
+/// The runtime's C, its parts joined in the order `src/runtime.c` lists them.
+/// build.rs does the joining; every reader of the runtime's text in Rust reads
+/// it here.
+pub const RUNTIME_C: &str = include_str!(concat!(env!("OUT_DIR"), "/runtime.c"));
+
 pub fn compile(file: &str, source: &str, require_entry: bool) -> Result<ast::Program, String> {
     let lexed =
         phase::watched("lex", || lexer::lex(source)).map_err(|d| diag::render(&d, file, source))?;

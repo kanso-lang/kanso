@@ -10,9 +10,9 @@
 # than five minutes where it had taken fifteen seconds.
 # a_scan_keeps_its_place_in_the_text reads seek_resumes=276 against 408.
 set -e
-grep -q '^        if (m < k_seek_under)$' src/runtime.c || {
+grep -q '^        if (m < k_seek_under)$' src/runtime/core.c || {
   echo "the rewind's cursor test changed shape; rewrite this" >&2
   exit 1
 }
-sed -i 's|^        if (m < k_seek_under)$|        if (1)|' src/runtime.c
-grep -q '^        if (1)$' src/runtime.c
+sed -i 's|^        if (m < k_seek_under)$|        if (1)|' src/runtime/core.c
+grep -q '^        if (1)$' src/runtime/core.c

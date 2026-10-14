@@ -7,8 +7,8 @@
 # engines with "and takes whole numbers, got 1" while the interpreter answers
 # 1, and the micro corpus reads the engines apart.
 set -e
-f=src/runtime.c
-grep -q "static long long k_bits_of" src/runtime.c
+f=src/runtime/numbers.c
+grep -q "static long long k_bits_of" src/runtime/numbers.c
 line='    if (v.tag == K_SUB) v = k_sub_base(v);'
 grep -A1 "static long long k_bits_of" "$f" | grep -qxF "$line" || {
   echo "the subtype unwrap in k_bits_of moved; this mutation needs rewriting" >&2

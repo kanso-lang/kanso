@@ -11,6 +11,6 @@
 # a_deferred_answer_that_defers_again_forces_to_a_value prints its two lists
 # on native with the walk and dies at `keep` without it.
 set -e
-grep -qF '    answer = k_force(answer);' src/runtime.c
-sed -i 's/^    answer = k_force(answer);$/    (void)0;/' src/runtime.c
-! grep -qF '    answer = k_force(answer);' src/runtime.c
+grep -qF '    answer = k_force(answer);' src/runtime/core.c
+sed -i 's/^    answer = k_force(answer);$/    (void)0;/' src/runtime/core.c
+! grep -qF '    answer = k_force(answer);' src/runtime/core.c

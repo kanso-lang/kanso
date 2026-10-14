@@ -17,9 +17,9 @@
 # against 0 -- the last one also moving ten_blocks 5 -> 3, which is the only
 # part of this any counter could see before.
 set -e
-grep -q '^    else k_ten_hand_up(d);$' src/runtime.c || {
+grep -q '^    else k_ten_hand_up(d);$' src/runtime/core.c || {
   echo "the beat pop's hand-up call changed shape; rewrite this" >&2
   exit 1
 }
-sed -i 's|^    else k_ten_hand_up(d);$|    else k_ten_release(d);|' src/runtime.c
-grep -q '^    else k_ten_release(d);$' src/runtime.c
+sed -i 's|^    else k_ten_hand_up(d);$|    else k_ten_release(d);|' src/runtime/core.c
+grep -q '^    else k_ten_release(d);$' src/runtime/core.c

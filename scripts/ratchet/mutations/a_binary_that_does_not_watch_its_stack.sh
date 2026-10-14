@@ -5,8 +5,8 @@
 # directly in a bare segmentation fault with nothing on stderr.
 # a_built_binary_names_its_stack_overflow reads the binary's stderr.
 set -e
-f=src/runtime.c
-grep -q "static void k_watch_the_stack" src/runtime.c
+f=src/runtime/main.c
+grep -q "static void k_watch_the_stack" src/runtime/main.c
 line='    k_watch_the_stack();'
 [ "$(grep -cxF "$line" "$f")" -eq 1 ] || {
   echo "the stack watch moved; this mutation needs rewriting" >&2

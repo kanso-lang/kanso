@@ -11,15 +11,23 @@
 # This strips the attribute from all six. Every value out is identical, so
 # nothing but the work vein can see it, which is exactly what the row asserts.
 set -e
-grep -q "static __attribute__((noinline, preserve_most)) void\* k_alloc_refill(" src/runtime.c || {
+grep -q "static __attribute__((noinline, preserve_most)) void\* k_alloc_refill(" src/runtime/core.c || {
   echo "the arena refill's attributes changed shape; this mutation needs rewriting" >&2
   exit 1
 }
-sed -e "s/, preserve_most))/))/" src/runtime.c > src/runtime.c.mut
-mv src/runtime.c.mut src/runtime.c
+# The attribute sits in five of the runtime's parts, and each is named on a
+# guard so a change to any of them selects this row.
+grep -q "preserve_most))" src/runtime/values.c
+grep -q "preserve_most))" src/runtime/collections.c
+grep -q "preserve_most))" src/runtime/text.c
+grep -q "preserve_most))" src/runtime/numbers.c
+for f in src/runtime/*.c; do
+  sed -e "s/, preserve_most))/))/" "$f" > "$f.mut"
+  mv "$f.mut" "$f"
+done
 # anchored to the attribute's closing parens: the comments name the
 # attribute too, and those stay.
-if grep -q "preserve_most))" src/runtime.c; then
+if cat src/runtime/*.c | grep -q "preserve_most))"; then
   echo "a preserve_most survived the mutation" >&2
   exit 1
 fi

@@ -10,7 +10,7 @@
 # 608,937,982 -> 604,694,569 and runbench 2,487,359,798 -> 2,483,621,153 on
 # the container when the mark's block came first.
 set -e
-n=$(grep -cF '    KBlock* mb = m->block;' src/runtime.c)
+n=$(grep -cF '    KBlock* mb = m->block;' src/runtime/core.c)
 [ "$n" -eq 1 ] || { echo "k_where changed shape ($n); rewrite this" >&2; exit 1; }
 sed -i '/^    KBlock\* mb = m->block;$/,/^    return K_WHERE_OUTSIDE;$/c\
     int below = 0;\
@@ -25,6 +25,6 @@ sed -i '/^    KBlock\* mb = m->block;$/,/^    return K_WHERE_OUTSIDE;$/c\
         }\
         if (q >= start && q < end) return below ? K_WHERE_BELOW : K_WHERE_ABOVE;\
     }\
-    return K_WHERE_OUTSIDE;' src/runtime.c
-grep -qF 'if (q >= start && q < end) return below ? K_WHERE_BELOW : K_WHERE_ABOVE;' src/runtime.c
-! grep -qF '    KBlock* mb = m->block;' src/runtime.c
+    return K_WHERE_OUTSIDE;' src/runtime/core.c
+grep -qF 'if (q >= start && q < end) return below ? K_WHERE_BELOW : K_WHERE_ABOVE;' src/runtime/core.c
+! grep -qF '    KBlock* mb = m->block;' src/runtime/core.c

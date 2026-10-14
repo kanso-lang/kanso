@@ -10,7 +10,7 @@
 # see it.
 set -e
 t='        if (m < 1000000000000000ULL && m * 10000 >= pw) {'
-n=$(grep -cF "$t" src/runtime.c)
+n=$(grep -cF "$t" src/runtime/values.c)
 [ "$n" -eq 1 ] || { echo "render_ryu's direct writer changed shape ($n); rewrite this" >&2; exit 1; }
-sed -i 's#^        if (m < 1000000000000000ULL \&\& m \* 10000 >= pw) {$#        if (0) {#' src/runtime.c
-grep -qF '        if (0) {' src/runtime.c
+sed -i 's#^        if (m < 1000000000000000ULL \&\& m \* 10000 >= pw) {$#        if (0) {#' src/runtime/values.c
+grep -qF '        if (0) {' src/runtime/values.c

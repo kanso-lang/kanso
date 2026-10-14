@@ -11,9 +11,9 @@
 # at five laps and goes red. The run program pinned it too until the lap
 # carry, under which runbench's tenure fits one block either way.
 set -e
-grep -q '^    if (!b && d > 0) {$' src/runtime.c || {
+grep -q '^    if (!b && d > 0) {$' src/runtime/core.c || {
   echo "k_ten_alloc's parent-block opening changed shape; rewrite this" >&2
   exit 1
 }
-sed -i 's|^    if (!b && d > 0) {$|    if (0 \&\& !b \&\& d > 0) {|' src/runtime.c
-grep -q '^    if (0 && !b && d > 0) {$' src/runtime.c
+sed -i 's|^    if (!b && d > 0) {$|    if (0 \&\& !b \&\& d > 0) {|' src/runtime/core.c
+grep -q '^    if (0 && !b && d > 0) {$' src/runtime/core.c

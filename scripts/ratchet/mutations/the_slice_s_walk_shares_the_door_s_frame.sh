@@ -5,11 +5,11 @@
 # run program. This inlines the walk back. Every slice is the same bytes, so
 # nothing but the work vein can see it, which is exactly what the row asserts.
 set -e
-grep -q "^static __attribute__((noinline)) KValue k_b_slice_walk(" src/runtime.c || {
+grep -q "^static __attribute__((noinline)) KValue k_b_slice_walk(" src/runtime/text.c || {
   echo "the slice walk changed shape; this mutation needs rewriting" >&2
   exit 1
 }
 sed -e "s/^static __attribute__((noinline)) KValue k_b_slice_walk(/static inline __attribute__((always_inline)) KValue k_b_slice_walk(/" \
-    src/runtime.c > src/runtime.c.mut
-mv src/runtime.c.mut src/runtime.c
-grep -q "^static inline __attribute__((always_inline)) KValue k_b_slice_walk(" src/runtime.c
+    src/runtime/text.c > src/runtime/text.c.mut
+mv src/runtime/text.c.mut src/runtime/text.c
+grep -q "^static inline __attribute__((always_inline)) KValue k_b_slice_walk(" src/runtime/text.c

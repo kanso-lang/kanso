@@ -5,7 +5,7 @@
 # number with a colon in it is taken rather than refused.
 set -e
 t='    return (((t & 0x7F7F7F7F7F7F7F7FULL) + 0x7676767676767676ULL) | t) & 0x8080808080808080ULL;'
-n=$(grep -cF "$t" src/runtime.c)
+n=$(grep -cF "$t" src/runtime/numbers.c)
 [ "$n" -eq 1 ] || { echo "the digit word's test changed shape ($n); rewrite this" >&2; exit 1; }
-sed -i 's/+ 0x7676767676767676ULL) | t)/+ 0x7575757575757575ULL) | t)/' src/runtime.c
-grep -qF '+ 0x7575757575757575ULL) | t)' src/runtime.c
+sed -i 's/+ 0x7676767676767676ULL) | t)/+ 0x7575757575757575ULL) | t)/' src/runtime/numbers.c
+grep -qF '+ 0x7575757575757575ULL) | t)' src/runtime/numbers.c

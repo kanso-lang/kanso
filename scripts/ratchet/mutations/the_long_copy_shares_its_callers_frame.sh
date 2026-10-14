@@ -7,11 +7,11 @@
 # with it. Every byte copied is the same, so nothing but the work vein can
 # see this, which is exactly what the row asserts.
 set -e
-grep -q "static __attribute__((noinline, cold, preserve_most)) void k_copy_cold(" src/runtime.c || {
+grep -q "static __attribute__((noinline, cold, preserve_most)) void k_copy_cold(" src/runtime/core.c || {
   echo "the long copy's wrapper changed shape; this mutation needs rewriting" >&2
   exit 1
 }
 sed -e "s/static __attribute__((noinline, cold, preserve_most)) void k_copy_cold(/static inline __attribute__((always_inline)) void k_copy_cold(/" \
-    src/runtime.c > src/runtime.c.mut
-mv src/runtime.c.mut src/runtime.c
-grep -q "static inline __attribute__((always_inline)) void k_copy_cold(" src/runtime.c
+    src/runtime/core.c > src/runtime/core.c.mut
+mv src/runtime/core.c.mut src/runtime/core.c
+grep -q "static inline __attribute__((always_inline)) void k_copy_cold(" src/runtime/core.c

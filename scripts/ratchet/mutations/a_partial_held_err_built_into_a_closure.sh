@@ -6,7 +6,7 @@
 # in k_partial1 to k_partial4, and this takes it out of all four.
 set -e
 first='KValue k_partial1(KValue f, KValue a) {'
-[ "$(grep -cxF "$first" src/runtime.c)" -eq 1 ]
-sed -i.bak '/^KValue k_partial1(KValue f, KValue a) {$/,/^    return k_partial_build(f, 4, args);$/ { /^    if (!k_not_failure([abcd])) return [abcd];$/d; }' src/runtime.c
-rm -f src/runtime.c.bak
-! sed -n '/^KValue k_partial1(KValue f, KValue a) {$/,/^    return k_partial_build(f, 4, args);$/p' src/runtime.c | grep -qE '^    if \(!k_not_failure\([abcd]\)\) return [abcd];$'
+[ "$(grep -cxF "$first" src/runtime/collections.c)" -eq 1 ]
+sed -i.bak '/^KValue k_partial1(KValue f, KValue a) {$/,/^    return k_partial_build(f, 4, args);$/ { /^    if (!k_not_failure([abcd])) return [abcd];$/d; }' src/runtime/collections.c
+rm -f src/runtime/collections.c.bak
+! sed -n '/^KValue k_partial1(KValue f, KValue a) {$/,/^    return k_partial_build(f, 4, args);$/p' src/runtime/collections.c | grep -qE '^    if \(!k_not_failure\([abcd]\)\) return [abcd];$'

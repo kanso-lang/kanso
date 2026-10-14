@@ -4,7 +4,7 @@
 # fixture a_subtype_of_bool_is_a_condition dies where the interpreter prints.
 set -e
 old='    if (v.tag == K_SUB) {'
-[ "$(grep -cxF "$old" src/runtime.c)" -eq 1 ]
-sed -i.bak 's#^    if (v.tag == K_SUB) {$#    if (0) {#' src/runtime.c
-rm -f src/runtime.c.bak
-! grep -qxF "$old" src/runtime.c
+[ "$(grep -cxF "$old" src/runtime/effects.c)" -eq 1 ]
+sed -i.bak 's#^    if (v.tag == K_SUB) {$#    if (0) {#' src/runtime/effects.c
+rm -f src/runtime/effects.c.bak
+! grep -qxF "$old" src/runtime/effects.c

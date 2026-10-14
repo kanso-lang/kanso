@@ -20,12 +20,10 @@
 //! returning 4 instead of 3, the sweep reports the first disagreement at 100
 //! ("0100" against "100") and the count in the thousands.
 
-use std::path::Path;
 use std::process::Command;
 
 fn runtime() -> String {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    std::fs::read_to_string(root.join("src/runtime.c")).expect("src/runtime.c reads")
+    kanso::RUNTIME_C.to_string()
 }
 
 /// The text between `open` and the line `shut`, with `open` kept.

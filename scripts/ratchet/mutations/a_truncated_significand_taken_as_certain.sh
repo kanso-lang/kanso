@@ -15,9 +15,9 @@
 # tests/golden/micro/a_long_significand_rounds_like_the_oracle.kso, which runs
 # every micro program on native AND `--interp` and compares them.
 set -e
-grep -qF 'if (ok && any && !cut && p == stop) {' src/runtime.c || {
+grep -qF 'if (ok && any && !cut && p == stop) {' src/runtime/numbers.c || {
   echo "the truncation guard moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i 's|if (ok \&\& any \&\& !cut \&\& p == stop) {|if (ok \&\& any \&\& p == stop) {|' src/runtime.c
-grep -qF 'if (ok && any && p == stop) {' src/runtime.c
+sed -i 's|if (ok \&\& any \&\& !cut \&\& p == stop) {|if (ok \&\& any \&\& p == stop) {|' src/runtime/numbers.c
+grep -qF 'if (ok && any && p == stop) {' src/runtime/numbers.c

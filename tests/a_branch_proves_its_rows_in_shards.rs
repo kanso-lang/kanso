@@ -78,7 +78,7 @@ impl Branch {
         )
         .trim()
         .to_string();
-        let held = tree.join("src/runtime.c");
+        let held = tree.join("src/runtime/text.c");
         let mut text = std::fs::read_to_string(&held).expect("the runtime reads");
         text.push_str("\n/* a line this branch added */\n");
         std::fs::write(&held, text).expect("the runtime writes");

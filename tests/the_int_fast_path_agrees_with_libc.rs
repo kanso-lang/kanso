@@ -25,12 +25,10 @@
 //! asked twice: once with junk in front of it, so the word is read and what
 //! precedes the number has to be ignored, and once alone, so it is not.
 
-use std::path::Path;
 use std::process::Command;
 
 fn runtime() -> String {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    std::fs::read_to_string(root.join("src/runtime.c")).expect("src/runtime.c reads")
+    kanso::RUNTIME_C.to_string()
 }
 
 fn cut<'a>(src: &'a str, open: &str, shut: &str) -> &'a str {

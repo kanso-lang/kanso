@@ -5,8 +5,8 @@
 # five or six grew on its fifth push. Put back, the empty literal's
 # allocation shrinks by two slots and the mem vein reads the old bytes.
 set -e
-f=src/runtime.c
-grep -q 'define K_LIST_SEED 6' src/runtime.c
+f=src/runtime/collections.c
+grep -q 'define K_LIST_SEED 6' src/runtime/collections.c
 grep -qxF '#define K_LIST_SEED 6' "$f" || {
   echo "the list seed moved; this mutation needs rewriting" >&2
   exit 1

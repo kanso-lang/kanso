@@ -14,13 +14,11 @@
 //! length from four to seven, every position, every byte value there with
 //! every other byte clean, and a million random tokens.
 
-use std::path::Path;
 use std::process::Command;
 
 #[test]
 fn a_token_flag_agrees_with_the_byte_walk() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let src = std::fs::read_to_string(root.join("src/runtime.c")).expect("src/runtime.c reads");
+    let src = kanso::RUNTIME_C;
     let open = "uint64_t w = 0x4141414141414141ull;";
     let shut = "unsigned char clean = (hits & highs) == 0;";
     let from = src.find(open).expect("src/runtime.c no longer pads the token's word");

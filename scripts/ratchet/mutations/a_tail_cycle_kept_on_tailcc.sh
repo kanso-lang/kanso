@@ -5,10 +5,10 @@
 # tailcc, and the run program pays the pushes and pops again; the work vein
 # is the only thing that can see it, since the output is the same.
 set -e
-line='        (true, _) => preserve_none_calls(preserve_none_tails(ir), include_str!("runtime.c")),'
+line='        (true, _) => preserve_none_calls(preserve_none_tails(ir), kanso::RUNTIME_C),'
 [ "$(grep -cxF "$line" src/main.rs)" -eq 1 ] || {
   echo "the rewrite's call site moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i 's/^        (true, _) => preserve_none_calls(preserve_none_tails(ir), include_str!("runtime.c")),$/        (true, _) => preserve_none_calls(ir, include_str!("runtime.c")),/' src/main.rs
-[ "$(grep -cxF '        (true, _) => preserve_none_calls(ir, include_str!("runtime.c")),' src/main.rs)" -eq 1 ]
+sed -i 's/^        (true, _) => preserve_none_calls(preserve_none_tails(ir), kanso::RUNTIME_C),$/        (true, _) => preserve_none_calls(ir, kanso::RUNTIME_C),/' src/main.rs
+[ "$(grep -cxF '        (true, _) => preserve_none_calls(ir, kanso::RUNTIME_C),' src/main.rs)" -eq 1 ]

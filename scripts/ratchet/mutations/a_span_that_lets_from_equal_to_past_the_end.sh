@@ -6,8 +6,8 @@
 # starting at zero is let through, and the slice reads the byte before its
 # container.
 set -e
-f=src/runtime.c
-grep -q 'k_span_in(long long from' src/runtime.c
+f=src/runtime/core.c
+grep -q 'k_span_in(long long from' src/runtime/core.c
 line='    return (unsigned long long)from - 1 < (unsigned long long)to &&'
 [ "$(grep -cxF "$line" "$f")" -eq 1 ] || {
   echo "the span test moved; this mutation needs rewriting" >&2

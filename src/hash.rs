@@ -111,9 +111,9 @@ impl Hasher for Fx {
 
 /// The digest of a byte string, taken at BUILD time.
 ///
-/// `src/runtime.c` is 450,100 bytes and two cache keys must both change when
-/// it does: the staged `kanso_runtime_*.o` and the linked `kanso_run_*`. Both
-/// used to get that by handing the whole file to a `DefaultHasher`, so every
+/// The runtime's text is `crate::RUNTIME_C`, and two cache keys must both
+/// change when it does: the staged `kanso_runtime_*.o` and the linked
+/// `kanso_run_*`. Both used to get that by handing the whole file to a `DefaultHasher`, so every
 /// `kanso play`, `kanso run` and `kanso build` walked it twice before doing
 /// any work of its own. Callgrind on `kanso play` over a one-line program put
 /// `sip::Hasher::write` at 1,226,463 instructions of self time -- 25.35% of
@@ -137,7 +137,7 @@ pub const fn digest_of(bytes: &[u8]) -> (u64, u64) {
     let mut i = 0;
     // EIGHT BYTES A STEP, because this loop is interpreted. `const` evaluation
     // runs one step at a time under a budget rustc denies by default, and a
-    // byte-at-a-time walk over 450,100 bytes exceeds it. A word at a time is
+    // byte-at-a-time walk over the runtime exceeds it. A word at a time is
     // the same function of the same bytes at an eighth of the steps.
     while i + 8 <= bytes.len() {
         let word = u64::from_le_bytes([
@@ -168,12 +168,12 @@ pub const fn digest_of(bytes: &[u8]) -> (u64, u64) {
     (a, b)
 }
 
-/// `src/runtime.c`, digested by the compiler that built this one.
+/// The runtime's text, digested by the compiler that built this one.
 ///
 /// `tests/the_runtime_source_is_not_hashed_at_run_time.rs` holds both halves
 /// of what this is for: that nothing walks the source at run time, and that
 /// this constant is the digest of the bytes it names.
-pub const RUNTIME_DIGEST: (u64, u64) = digest_of(include_str!("runtime.c").as_bytes());
+pub const RUNTIME_DIGEST: (u64, u64) = digest_of(crate::RUNTIME_C.as_bytes());
 
 /// A 128-bit key for bytes read at RUN time, where `digest_of` is for bytes
 /// known when the compiler is built.

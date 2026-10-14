@@ -5,9 +5,9 @@
 # subject by joining it to itself and asks its length each time;
 # `str_scan_bytes` rises from 945,324 to 4,092,666.
 set -e
-grep -q '^    k_join_seed_count(os, l, ss);$' src/runtime.c || {
+grep -q '^    k_join_seed_count(os, l, ss);$' src/runtime/text.c || {
   echo "the join's count seed changed shape; rewrite this" >&2
   exit 1
 }
-sed -i 's|^    k_join_seed_count(os, l, ss);$||' src/runtime.c
-! grep -q '^    k_join_seed_count(os, l, ss);$' src/runtime.c
+sed -i 's|^    k_join_seed_count(os, l, ss);$||' src/runtime/text.c
+! grep -q '^    k_join_seed_count(os, l, ss);$' src/runtime/text.c

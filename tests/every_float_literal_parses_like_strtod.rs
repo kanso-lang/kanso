@@ -39,12 +39,10 @@
 //! and asked about every string twice, at the end of a buffer whose sixteen
 //! bytes in front are random, so what precedes the number has to be ignored.
 
-use std::path::Path;
 use std::process::Command;
 
 fn runtime() -> String {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    std::fs::read_to_string(root.join("src/runtime.c")).expect("src/runtime.c reads")
+    kanso::RUNTIME_C.to_string()
 }
 
 fn cut<'a>(src: &'a str, open: &str, shut: &str) -> &'a str {

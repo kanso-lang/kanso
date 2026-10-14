@@ -21,12 +21,10 @@
 //! the bit past the end) disagreed on 259,631 of 836,400 cases; `k_tail_window`
 //! answering 1 unconditionally died on the guard page with signal 11.
 
-use std::path::Path;
 use std::process::Command;
 
 fn runtime() -> String {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    std::fs::read_to_string(root.join("src/runtime.c")).expect("src/runtime.c reads")
+    kanso::RUNTIME_C.to_string()
 }
 
 /// The text between `open` and the line `shut`, with both kept.

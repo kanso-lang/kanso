@@ -4,7 +4,7 @@
 # where the interpreter runs g, and the micro corpus goes red.
 set -e
 old='        if (c->arity >= 0 || c->fn) return c->arity;'
-[ "$(grep -cxF "$old" src/runtime.c)" -eq 1 ]
-sed -i.bak 's#^        if (c->arity >= 0 || c->fn) return c->arity;$#        return c->arity;#' src/runtime.c
-rm -f src/runtime.c.bak
-! grep -qxF "$old" src/runtime.c
+[ "$(grep -cxF "$old" src/runtime/collections.c)" -eq 1 ]
+sed -i.bak 's#^        if (c->arity >= 0 || c->fn) return c->arity;$#        return c->arity;#' src/runtime/collections.c
+rm -f src/runtime/collections.c.bak
+! grep -qxF "$old" src/runtime/collections.c

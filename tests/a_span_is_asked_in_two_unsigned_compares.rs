@@ -42,7 +42,7 @@ fn the_emitted_span_test_is_the_unsigned_one() {
 
 #[test]
 fn every_span_is_judged_the_way_the_signed_test_judges_it() {
-    let src = read("src/runtime.c");
+    let src = kanso::RUNTIME_C.to_string();
     let open = "static inline __attribute__((always_inline)) int k_span_in(";
     let from = src.find(open).expect("src/runtime.c no longer defines k_span_in");
     let rest = &src[from..];
