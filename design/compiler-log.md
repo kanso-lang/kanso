@@ -1843,3 +1843,8 @@ file shares the directory's name. It failed with the same error before the
 fix. kanso-json's nineteen tests pass under the fixed compiler. The change is
 in the resolver's path walk, so it moves no runtime row; the compile rows
 are CI's to read.
+
+CI moved one row: `browser_compile_instructions` 439,552,195 -> 439,553,642,
+up 1,447. The resolver is compiled into the tab's engine, and the walk changed
+its code, so this is layout in the wasm build. No other row moved. Welfare
+falls under a ten-thousandth of a point and the floor is set to it.
