@@ -1739,20 +1739,22 @@ Pinned by:
 - ratchet rows "a group that never pools" and "a group's side left unread",
   each seen red on the new golden.
 
-
-CI moved nine rows. `k_schedule` grew 16 bytes, and every benchmark in
+`k_schedule` grew 16 bytes on CI, and every benchmark in
 `bench/text_golden.txt` grew by the same 16. `browser_compile_instructions`
 went from 382,154,970 to 382,155,032, though the tab compiles the pool out.
-The front end rose with the lifter's walk into each side of a group:
-`compile_instructions` 22,665,216 -> 22,679,084, `entry_instructions`
-75,110,504 -> 75,152,899, `library_instructions` 74,796,982 -> 74,839,906,
-`emit_instructions` 5,438,920 -> 5,440,488 and `interp_instructions`
-492,625,557 -> 492,635,997. Codegen rose 967 at dev, to 112,582,224, and
-1,390 at release, to 441,728,749. Welfare fell 0.00009 to 91.52451, and the
-floor is lowered by exactly that, since this builds a ruled part of #1856.
+The front end rose: `compile_instructions` 22,665,216 -> 22,679,084,
+`entry_instructions` 75,110,504 -> 75,152,899, `library_instructions`
+74,796,982 -> 74,839,906, `emit_instructions` 5,438,920 -> 5,440,488 and
+`interp_instructions` 492,625,557 -> 492,635,997. Codegen rose 967 at dev,
+to 112,582,224, and 1,390 at release, to 441,728,749.
 
-The runtime rows were not read on the silicon `bench/instructions_golden.txt`
-was recorded on in either of the first two CI runs. On this container,
-main and this branch built from the same inputs differ on four benchmarks:
-encodebench -602, oneshot -266, livebench +539 and runbench +518. No
-benchmark sleeps, so none of the pool's work runs in them.
+Three of the four CI runs landed on Intel parts, and the fourth on the AMD
+part `bench/instructions_golden.txt` is recorded on. It moved four work rows:
+encodebench 2,387,084,547 -> 2,387,083,945, oneshot 13,207,833 ->
+13,207,567, livebench 1,474,835,144 -> 1,474,835,683 and runbench
+1,177,696,572 -> 1,177,697,090. This container, an Intel part, read the same
+four differences between main and this branch built from the same inputs.
+No benchmark sleeps, so no pooled work runs in them, and nothing here
+isolates where the difference comes from. Welfare fell 0.00009 to 91.52451,
+and the floor is lowered by exactly that, since this builds a ruled part of
+#1856.
