@@ -620,13 +620,6 @@ fn compile_library_beside(
     Ok(program)
 }
 
-/// Route a single source file to the right compile for a verb, by content:
-/// `pub play` is a play library, bare statements are an entry, definitions
-/// alone are a library (runnable only under a library verb like `test`).
-/// Does this file declare `pub play`? Answered off the parse, so comments and
-/// string literals cannot change how a file compiles. A file that does not
-/// parse declares nothing, and the compile it is routed to reports the syntax
-/// error properly.
 /// Whether the file holds tests, by the same rule `kanso test` collects them:
 /// a zero-argument constant named `test_*`. A file of those has an entry
 /// point already — it is just spelled for a different verb, and saying so
@@ -643,15 +636,20 @@ fn declares_tests(source: &str) -> bool {
 /// it is true for the first and a dead end for the second.
 ///
 /// Read from the parsed program rather than a line prefix, so `pub play`
-/// inside a string or a comment is not mistaken for the export.
+/// inside a string or a comment is not mistaken for the export. A file that
+/// does not parse exports nothing, and the compile it is routed to reports
+/// the syntax error.
 fn exports_play(source: &str) -> bool {
     let Ok(lexed) = lexer::lex(source) else { return false };
     let Ok(program) = parser::parse(&lexed) else { return false };
     program.fns.iter().any(|d| d.name == "play" && d.is_pub)
 }
 
-/// The CLI and the browser share this so the engines never diverge on which
-/// compile a file gets.
+/// Routes a single source file to the compile its verb and content call for:
+/// a file named main.kso, or one of bare statements, is an entry; a file of
+/// definitions is a library, which `check` and `test` compile and the running
+/// verbs refuse with the route that would run it. The CLI and the browser
+/// share this so the engines never diverge on which compile a file gets.
 pub fn compile_source(command: &str, file: &str, source: &str) -> Result<ast::Program, String> {
     // main.kso is an entry by NAME (the module-shape gavel): the filename
     // states the intent, so a definition inside one gets the entry
