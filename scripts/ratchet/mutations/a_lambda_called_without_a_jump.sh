@@ -6,8 +6,8 @@
 # continuation-passing style takes a native frame every step and
 # a_lambda_called_in_tail_position_costs_no_stack ends in a segmentation fault.
 set -e
-f=src/codegen.rs
-grep -q "fn emit_value_tail_call" src/codegen.rs
+f=src/codegen/emit.rs
+grep -q "fn emit_value_tail_call" src/codegen/emit.rs
 line='        if self.emit_value_tail_call(f, expr)? {'
 [ "$(grep -cxF "$line" "$f")" -eq 1 ] || {
   echo "the value tail call moved; this mutation needs rewriting" >&2

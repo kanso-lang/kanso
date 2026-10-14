@@ -6,8 +6,8 @@
 # arm the literal takes the ordinary view and its first append grows from
 # nothing, and the mem vein reads the malloc'd buffers again.
 set -e
-f=src/codegen.rs
-grep -q 'k_b_bytes_seed' src/codegen.rs
+f=src/codegen/emit.rs
+grep -q 'k_b_bytes_seed' src/codegen/emit.rs
 line='        if first.is_none() && args.len() == 1 && self.builtin_named(name, 1) == "bytes" {'
 [ "$(grep -cxF "$line" "$f")" -eq 1 ] || {
   echo "the seeded builder's arm moved; this mutation needs rewriting" >&2
