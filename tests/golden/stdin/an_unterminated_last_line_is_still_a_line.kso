@@ -1,0 +1,14 @@
+# A last line with no newline after it is still a line, and the read after
+# it is at the end of the input.
+import "std/io"
+
+fn lines acc
+  io/read_line .> (line -> more acc line)
+
+fn more acc done
+  print "{acc} then done"
+
+fn more acc line
+  lines (push acc line)
+
+pub play = lines []

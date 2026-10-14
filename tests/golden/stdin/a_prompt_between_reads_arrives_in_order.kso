@@ -1,0 +1,15 @@
+# An interactive loop: a prompt, a read, an answer, and round again until
+# the input ends. Every engine writes the prompt before the read waits, so
+# the captured stream holds each prompt ahead of the answer to it.
+import "std/io"
+
+fn asked _
+  io/write "> " .> (_ -> io/read_line) .> answered
+
+fn answered done
+  print "bye"
+
+fn answered line
+  print "echo: {line}" .> asked
+
+pub play = asked 0

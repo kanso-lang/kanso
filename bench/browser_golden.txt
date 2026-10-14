@@ -32,7 +32,7 @@
 # 413,936,384, a RISE of 10,978, on rustc 1.98.1 as CI builds it. The run
 # rows are unchanged.
 # measured-on rustc=1.98.1
-browser_compile_instructions=416674798
-browser_compile_peak_bytes=686192
-browser_run_instructions=34173068
+browser_compile_instructions=437381890
+browser_compile_peak_bytes=726939
+browser_run_instructions=34183945
 browser_run_peak_bytes=1441792

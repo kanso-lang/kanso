@@ -3,7 +3,7 @@ use crate::diag::{article, Diagnostic, Span};
 use crate::hash::{Map as HashMap, Set as HashSet};
 use num_traits::Zero;
 
-pub const BUILTINS: [&str; 66] = [
+pub const BUILTINS: [&str; 69] = [
     "annotate",
     "built_text",
     "append",
@@ -30,9 +30,11 @@ pub const BUILTINS: [&str; 66] = [
     "print",
     "push",
     "put",
+    "delete",
     "random",
     "read_bytes",
     "read_file",
+    "read_line",
     "render_value",
     "rescue",
     "run",
@@ -53,6 +55,7 @@ pub const BUILTINS: [&str; 66] = [
     "env",
     "exists",
     "is_dir",
+    "modified",
     "stdin",
     "to_float",
     "to_int",
@@ -77,9 +80,9 @@ pub const BUILTINS: [&str; 66] = [
 /// three chain words are here because a chain step is written wherever an
 /// effect is, and importing a module to spell one would be a tax on the
 /// failure channel.
-pub const AMBIENT: [&str; 13] = [
-    "annotate", "bind", "effect", "entries", "if", "keys", "length", "merge", "print", "push",
-    "put", "rescue", "values",
+pub const AMBIENT: [&str; 14] = [
+    "annotate", "bind", "delete", "effect", "entries", "if", "keys", "length", "merge", "print",
+    "push", "put", "rescue", "values",
 ];
 
 /// What each builtin takes. `if` is absent: its count is checked where its
@@ -94,7 +97,7 @@ pub const AMBIENT: [&str; 13] = [
 /// `native backend: `length` takes 1 argument(s)` and no span, the page
 /// died at the call, and `kanso check` said ok. So the counts live here,
 /// beside the names, and every reader takes them from one place.
-pub const BUILTIN_ARITY: [(&str, usize); 71] = [
+pub const BUILTIN_ARITY: [(&str, usize); 74] = [
     ("accept", 1),
     ("annotate", 2),
     ("append", 2),
@@ -112,6 +115,7 @@ pub const BUILTIN_ARITY: [(&str, usize); 71] = [
     ("char_code", 1),
     ("chars", 1),
     ("concat", 2),
+    ("delete", 2),
     ("effect", 1),
     ("entries", 1),
     ("env", 1),
@@ -131,6 +135,7 @@ pub const BUILTIN_ARITY: [(&str, usize); 71] = [
     ("make_dir", 1),
     ("map", 2),
     ("merge", 2),
+    ("modified", 1),
     ("net_close", 1),
     ("net_port", 1),
     ("net_read", 1),
@@ -143,6 +148,7 @@ pub const BUILTIN_ARITY: [(&str, usize); 71] = [
     ("random", 1),
     ("read_bytes", 1),
     ("read_file", 1),
+    ("read_line", 0),
     ("render_value", 1),
     ("rescue", 2),
     ("round", 1),
@@ -2456,6 +2462,7 @@ fn builtin_demand(name: &str, index: usize) -> Option<&'static [LitKind]> {
         ("env", &[&[Str]]),
         ("exists", &[&[Str]]),
         ("is_dir", &[&[Str]]),
+        ("modified", &[&[Str]]),
         ("list_dir", &[&[Str]]),
         ("read_bytes", &[&[Str]]),
         ("read_file", &[&[Str]]),
@@ -2473,6 +2480,7 @@ fn builtin_demand(name: &str, index: usize) -> Option<&'static [LitKind]> {
         ("concat", &[&[List], &[List]]),
         ("push", &[&[List]]),
         ("put", &[&[Map]]),
+        ("delete", &[&[Map]]),
         ("sleep", &[&[Int]]),
         ("random", &[&[Int]]),
         ("from_code", &[&[Int]]),

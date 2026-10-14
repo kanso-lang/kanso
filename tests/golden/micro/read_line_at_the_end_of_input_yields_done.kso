@@ -1,0 +1,11 @@
+# `io/read_line` yields the next line of standard input, or `done` once the
+# input has ended (ruled 2026-10-13, kanso#1914). The corpus runs with no
+# input at all, so the first read is already at the end, and so is the
+# second. The lines themselves are pinned in tests/golden/stdin, which feeds
+# each program what it reads.
+import "std/io"
+
+fn said line
+  print "read {line}"
+
+pub play = io/read_line .> said .> (_ -> io/read_line .> said)

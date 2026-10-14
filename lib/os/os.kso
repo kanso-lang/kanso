@@ -150,3 +150,9 @@ fn answered r
 
 pub fn write_file path content
   builtin_write_file path content
+
+# When a file last changed, in milliseconds since the epoch, the unit
+# `time/now` answers in. A file that is not there is `file_not_found`, as it
+# is for `read_file`.
+pub fn modified path
+  builtin_modified path .> (r -> found path r)

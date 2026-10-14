@@ -21,102 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-13 — a list concatenated onto in a fold grows where it stands
-
-From #1892's kv port. A fold that grew its accumulator with `concat` rather
-than `push`, `list/fold ns [] (acc _ -> text/concat acc chunk)`, built a fresh
-list every lap and kept them all until the fold returned: 4,000 laps of 25
-ints, 100,000 elements, peaked at 3,061 MB and took 4.6 seconds natively. The
-same fold written with `push` already ran in place.
-
-`concat` now joins the accumulator writes the linearity analysis knows. A call
-whose first argument nobody else holds is marked like an in-place push, and a
-folder whose body is `concat acc xs` is a folder like one whose body is
-`push acc x`. Native emits `k_b_concat_mut`, which puts each element of the
-second list on the first one's frontier through the in-place push, so growth,
-permanent storage and kept bignums follow the rules push already has. The
-interpreter extends its list in place at the same sites. `concat acc acc`
-names the accumulator twice and is never marked. kv's reduction now peaks at
-10 MB and finishes in under a tenth of a second.
-
-`tests/golden/mem/a_list_concatenated_onto_in_a_fold_grows_where_it_stands`
-folds 2,000 laps of 25 ints. Main allocates 800,467,632 bytes and holds 1,070
-arena blocks; with the change it allocates 1,401,904 and holds two. The same
-fixture folds onto a seed its caller reads afterwards, and both engines print
-the seed's length unchanged. The ratchet row "a concat accumulator copied
-every lap" stops marking the sites and turns the mem corpus red.
-
-`a_digest_holds_every_block_it_walked` moved too. std/sha256 builds its table
-of round constants from nested `concat` calls, and the outer call's first
-argument is the inner call's fresh list, so those calls now extend in place.
-A push onto a full buffer grows it by doubling where the copying concat
-allocated the exact length, so it allocates less often and more each time. Its
-arena peak is unchanged.
-
-The cost veins move the same way. On digestbench, which hashes with
-std/sha256, the copied lists become pushes onto a growing buffer:
-digest_alloc_bytes lands on 697,025, 2,240 higher; digest_sh_buf on 579,648,
-2,304 higher; digest_push_mut_slow on 337, six more growths. Its allocs fall
-four. The fixture's own rows move the
-same amounts: a_digest_holds_every_block_it_walked_alloc_bytes lands on
-18,657, a_digest_holds_every_block_it_walked_sh_buf on 12,288 and
-a_digest_holds_every_block_it_walked_push_mut_slow on 33. encodebench grows
-output lists with `concat`, so it gains more: encode_allocs 5,327,424 to
-5,323,947 and encode_alloc_bytes 665,563,968 to 665,384,048, with
-encode_push_mut_fast up to 34,874. encode_buf_reuse lands on 2,386, down 726,
-because lists that were copied and freed each lap, leaving a buffer for the
-next to reuse, now stay where they are. The instruction rows come from CI.
-
-CI's rows, on the tree before kanso#1925. The runtime gains `k_b_concat_mut`, 3,104 bytes of text in every
-benchmark. `work_runbench` lands on 1,170,036,819 (+1,739) and
-`work_digestbench` on 5,605,158 (+2,040), the doubling growth's copies;
-`work_encodebench` falls 99,808 to 2,398,273,418 and `work_livebench` 399 to
-1,474,874,672, `work_oneshot` rises 161 to 13,227,091. The compiler carries
-the new site: `compile_instructions` 25,846,237 (-35,314), `entry_instructions`
-85,273,377 (-107,936), `library_instructions` 85,828,356 (-107,226),
-`emit_instructions` 7,011,826 (-1,651), `codegen_instructions_dev` 119,010,910
-(+8,081), `codegen_instructions_release` 454,481,233 (+301,820), and
-`browser_compile_instructions` 391,400,519 (+89,017). The interpreter's
-in-place extend reads `interp_instructions` 488,691,869 (-47,947),
-`interp_allocs` 587,352 (+1) and `interp_peak_bytes` 689,271 (+2,112).
-digestbench and runbench each emit one more line, and emitted_other_lines lands
-on 148,240.
-
-kanso#1925 joined the fold to the run program as its `stack` phase, measured
-before this fix. On main after it, the run vein's allocation rows fall:
-run_alloc_bytes lands on 386,136,876 (-2,581,984), run_sh_buf on 172,766,944,
-run_sh_rec on 3,791,872 and run_allocs on 1,816,757. run_arena_blocks goes 9 ->
-6, run_arena_peak_bytes 9,961,488 -> 6,815,760 and run_spare_peak_bytes
-7,864,336 -> 4,718,608. run_push_mut_fast rises to 1,189,304, run_buf_reuse to
-134 and run_push_mut_slow by twelve to 1,550,128. run_chain_finds goes back to
-0, the value it had before kanso#1925 added the phases; the index's own counter
-stays pinned by `a_long_chain_answers_survival_from_its_index` at 95,601. The
-run program's instruction rows come from CI.
-
-On main after #1904 the tab's compile reads `browser_compile_instructions`
-392,470,701, up 92,326 from main's 392,378,375 on the same tree.
-
-With main merged after #1922, browser_compile_instructions lands on
-393,453,573.
-
-## 2026-10-12 — gavel: a test file is an outside consumer of its module
-
-Clay ruled the other half of #1883: "kanso test certainly cannot see private
-definitions. that would hugely violate the point of privacy." On main a
-`*_test.kso` is a member of its module: it reads private names, its
-definitions join the module's namespace, and `kanso run` checks it, so a
-formatting slip in a test stopped the program it tests from running.
-
-**The ruling.** A test file is compiled as an outside consumer that imports
-the module it sits beside. It sees only pub names, adds nothing to the module,
-and only `kanso test` reads it; `kanso run`, `check` and `build` ignore it.
-
-Owes, on #1883: the loader keeps `*_test.kso` out of the module and compiles
-each as an importer; goldens for a test that reads a private name (refused), a
-test helper sharing a production name (no collision) and a malformed test
-beside a program that still runs; existing tests that read private names
-moved onto the pub surface.
-
 ## 2026-10-12 — stdout reaches its reader, and a closed pipe stops every engine quietly
 
 Two runtime items on #1892 were about stdout.
@@ -1836,3 +1740,145 @@ release build, and an Apple host keeps the narrowing. There a wide arm still
 takes the C convention, and the three tests stay off Apple arm64. On linux a
 wide arm gives up only its sibling calls into helpers, which become a call and a
 return. x86-64 builds are unchanged. #1912 stays open for the Apple half.
+
+## 2026-10-13 — six names for the library gaps, and `list/to_sorted`
+
+#1914 rules nine names. Six of them are built here, in kanso, in
+`lib/text/text.kso` and `lib/list/list.kso`, so every engine runs the same
+source and no engine needs a new builtin:
+
+- `text/uppercase` and `text/lowercase` map the twenty-six ASCII letters and
+  pass every other character through. The walk takes `chars` once, looks
+  each letter up by its offset in a 26-letter string, and joins the pieces.
+  Case outside ASCII would need the Unicode tables, which no engine carries.
+- `text/starts_with?` and `text/ends_with?` compare one slice against the
+  prefix or suffix after checking the length, so the slice never runs past
+  the end. Every string begins and ends with the empty one.
+- `text/pad_start` and `text/pad_end` repeat the fill and cut it at the
+  width. A string already that wide, or an empty fill, comes back unchanged.
+- `list/sort_by xs key` merges the way `sort` does and takes from the right
+  half only when its key is strictly smaller, so tied keys keep their order.
+  `key` runs at each comparison; caching it would cost a list of pairs.
+  `list/reverse` reads the list by index from the end.
+
+`recase` has a `none` arm it never takes. The walk stops before it indexes
+past the end, but the checker cannot see that bound and asks for the arm.
+
+Each name has a micro golden, which the interpreter, the native build and
+the page run alike. Appendix B gains entries for the six text names and a
+sentence for the two list verbs, and drops its counts of the list verbs,
+which a second count in the library would have had to track.
+
+#1903's ruling is built beside them. `list/to_sorted xs` answers
+`sorted (sort xs)`, so a caller can reach the arm of `find` that bisects, and
+the list is always in order because the same call sorts it. The bisect tests
+are back in `list_test.kso` through it, and a micro golden checks that `find`
+agrees on the plain list and on `to_sorted`. The mem golden
+`find_bisects_a_list_built_by_to_sorted` pins the bisect: a scan over its
+4,096 elements builds a `step` record per element, and `sh_rec` reads 208
+bytes with the bisect against 512,400 when `find` loses its `sorted` arm.
+
+The other three rulings need the runtime: `delete map key`, `io/read_line`
+and `os/modified`. They follow in their own change. `os/write_bytes` was
+ruled out, so there is nothing to build for it. The ports that worked around
+these gaps live on the unmerged `claude/ports-corpus` branch, and moving
+them onto the names belongs to that branch.
+
+CI's rows price the new library text. Every program that imports std/text or
+std/list compiles the whole module, so the 114 lines added there are paid for
+in lexing, parsing, inference and the check, split across those phases in
+proportion to the text rather than concentrated in one. compile_instructions
+rises from 28,002,980 to 31,634,022 (+13.0%), entry_instructions from
+92,393,206 to 100,520,915 (+8.8%), library_instructions from 91,989,327 to
+100,042,203 (+8.8%), emit_instructions from 7,241,390 to 7,617,766 (+5.2%),
+compile_allocs from 15,984 to 17,990, browser_compile_instructions from
+413,936,384 to 434,142,466 (+4.9%) and browser_compile_peak_bytes from 686,192
+to 726,939. The interpreter row reads 496,099,798 against 495,525,421, with
+interp_allocs 592,223 against 589,689 and interp_peak_bytes 794,345 against
+722,393. Welfare falls from 91.34 to 91.27. These names are ruled (#1914,
+#1903), so the floor drops by that cost. A compiler that left an unreached
+library function unparsed and unchecked would stop this cost from growing with
+each library addition; that is open as a lead.
+
+Two more rows move with the library's size. interp_instructions lands on
+496,099,798 from 495,525,421, and the module sample's module_visits, the
+inference fixpoint's declaration visits in bench/compile_golden_modules.txt,
+lands on 3,663 from 2,909: the fixpoint visits each new declaration on every
+round it is dirty.
+
+The compile-memory gate reads the same text. On `compile_corpus`,
+`front_end_visits` went from 8,133 to 9,326, `front_end_rounds` stayed at 19,
+and `compile_peak_bytes` went from 703,170 to 791,610, 12.6% more held while the
+corpus is checked, because the two modules it imports are 114 lines longer and
+their whole text is held through the check. It costs the welfare meta about
+0.02, and the floor drops by that under the language rule. Checking only what
+an import reaches would take this back, and #1952 tracks it.
+
+## 2026-10-14 — `delete`, `io/read_line` and `os/modified`
+
+These are the three #1914 names that need the runtime. #1948 carries the six
+written in kanso. All three run on the interpreter, both native tiers and the
+page's translator.
+
+`delete map key` answers the map without the key. A key that is not there
+answers an equal map, and the map it was handed is not changed. It sits beside
+`put` as an ambient name, so a program that declares its own `delete` is now
+told the name is taken; kq, vse and kanso-json declare none. Natively the
+answer is built from the map's deduplicated sorted view, so a key written twice
+is gone after one `delete`. A first argument that is not a map is refused at
+check time, and a float key at run time.
+
+`io/read_line` is a description that yields the next line of standard input
+without its `\n` or `\r\n`, or `done` at the end. A lone `\r` is kept, since
+only those two endings were ruled. It flushes standard output before it waits,
+so a prompt written ahead of it reaches the terminal first. Bytes that are not
+text are refused the way `os/read_file` refuses them. A read error counts as
+the end of input, which is what `io/stdin` already did natively. The page has
+no standard input and refuses `read_line` as it refuses `stdin`.
+
+`os/modified path` yields when the file last changed, in milliseconds since
+the epoch, or `file_not_found`. A failure other than absence is reported in
+`os/read_file`'s words. In the page it yields `file_not_found`, matching
+`os/exists`.
+
+New goldens: four micro programs, one error and two runtime diagnostics, and a
+stdin corpus under `tests/golden/stdin/` that `tests/read_line.rs` feeds to
+native and the interpreter. One test there waits for each prompt before typing
+the answer, so an unflushed prompt fails it. Each was watched red: native and
+interpreter `delete` keeping the key, `\r` left on the line, and the flush
+removed.
+
+CI's rows price the three builtins. Every native binary carries their runtime
+code, 2,688 bytes more text per bench, so `text` went from 4,932,142 to
+4,969,774 across the fourteen. Each bench also runs about 234 more
+instructions, the same on every one, so the rise is outside any decode loop:
+work_basket 30,946,278, work_deepbench 403,499,544, work_digestbench 5,909,247,
+work_escapebench 39,058,340, work_indexbench 2,462,571, work_jsonbench
+858,186,231, work_livebench 1,474,854,142, work_oneshot 13,205,901,
+work_pendbench 191,674,024, work_readbench 4,580,963, work_runbench
+1,178,202,929, work_scanbench 273,675 and work_widebench 28,274,676, while
+work_encodebench fell to 2,386,636,337. The compiler checks and lowers three
+more names and carries the larger runtime text: compile_instructions
+28,044,444, entry_instructions 92,512,951, library_instructions 92,130,190,
+emit_instructions 7,245,801, codegen_instructions_dev 119,400,046 and
+codegen_instructions_release 477,099,466. The interpreter's run went to
+interp_instructions 495,589,622, and the tab to browser_compile_instructions
+414,205,634 and browser_run_instructions 34,183,945. The floor drops by the
+cost under the language rule, since #1914 rules these names.
+
+Carried together over main 859ad275 in #1953, the six names and the three
+builtins land on one set of CI rows, each read against main. The front end pays
+for both: compile_instructions 31,948,363 from 28,257,376, entry_instructions
+101,372,705 from 93,065,372, library_instructions 100,887,003 from 92,696,544,
+compile_allocs 17,941 from 15,937, emit_instructions 7,622,247 from 7,239,817
+and module_visits 3,666 from 2,912. The compile corpus holds more while it is
+checked, compile_peak_bytes 789,911 from 703,187, with front_end_visits at
+9,326. The interpreter's run reads interp_instructions 496,215,717,
+interp_allocs 592,174 and interp_peak_bytes 792,646, against 495,318,943,
+589,643 and 725,610. The tab's compile reads browser_compile_instructions
+437,381,890 and browser_compile_peak_bytes 726,939, against 416,674,694 and
+686,192, and its run browser_run_instructions 34,183,945. Most of the compile
+cost is the 114 lines the two library modules grew, which every program
+importing them reads whole; #1952 is the change that would take it back. Both
+halves build ruled names (#1914, #1903), so the floor drops by the combined
+cost under the language rule.

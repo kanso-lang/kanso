@@ -102675,3 +102675,99 @@ that never imported its owner; an error golden for an internal value calling
 a name the file cannot see; the corpus, samples, lib and the sibling
 repositories moved to qualified spellings where they leaned on the old reach;
 ch07 and ch11 rewritten to state the rule.
+
+## 2026-10-13 — a list concatenated onto in a fold grows where it stands
+
+From #1892's kv port. A fold that grew its accumulator with `concat` rather
+than `push`, `list/fold ns [] (acc _ -> text/concat acc chunk)`, built a fresh
+list every lap and kept them all until the fold returned: 4,000 laps of 25
+ints, 100,000 elements, peaked at 3,061 MB and took 4.6 seconds natively. The
+same fold written with `push` already ran in place.
+
+`concat` now joins the accumulator writes the linearity analysis knows. A call
+whose first argument nobody else holds is marked like an in-place push, and a
+folder whose body is `concat acc xs` is a folder like one whose body is
+`push acc x`. Native emits `k_b_concat_mut`, which puts each element of the
+second list on the first one's frontier through the in-place push, so growth,
+permanent storage and kept bignums follow the rules push already has. The
+interpreter extends its list in place at the same sites. `concat acc acc`
+names the accumulator twice and is never marked. kv's reduction now peaks at
+10 MB and finishes in under a tenth of a second.
+
+`tests/golden/mem/a_list_concatenated_onto_in_a_fold_grows_where_it_stands`
+folds 2,000 laps of 25 ints. Main allocates 800,467,632 bytes and holds 1,070
+arena blocks; with the change it allocates 1,401,904 and holds two. The same
+fixture folds onto a seed its caller reads afterwards, and both engines print
+the seed's length unchanged. The ratchet row "a concat accumulator copied
+every lap" stops marking the sites and turns the mem corpus red.
+
+`a_digest_holds_every_block_it_walked` moved too. std/sha256 builds its table
+of round constants from nested `concat` calls, and the outer call's first
+argument is the inner call's fresh list, so those calls now extend in place.
+A push onto a full buffer grows it by doubling where the copying concat
+allocated the exact length, so it allocates less often and more each time. Its
+arena peak is unchanged.
+
+The cost veins move the same way. On digestbench, which hashes with
+std/sha256, the copied lists become pushes onto a growing buffer:
+digest_alloc_bytes lands on 697,025, 2,240 higher; digest_sh_buf on 579,648,
+2,304 higher; digest_push_mut_slow on 337, six more growths. Its allocs fall
+four. The fixture's own rows move the
+same amounts: a_digest_holds_every_block_it_walked_alloc_bytes lands on
+18,657, a_digest_holds_every_block_it_walked_sh_buf on 12,288 and
+a_digest_holds_every_block_it_walked_push_mut_slow on 33. encodebench grows
+output lists with `concat`, so it gains more: encode_allocs 5,327,424 to
+5,323,947 and encode_alloc_bytes 665,563,968 to 665,384,048, with
+encode_push_mut_fast up to 34,874. encode_buf_reuse lands on 2,386, down 726,
+because lists that were copied and freed each lap, leaving a buffer for the
+next to reuse, now stay where they are. The instruction rows come from CI.
+
+CI's rows, on the tree before kanso#1925. The runtime gains `k_b_concat_mut`, 3,104 bytes of text in every
+benchmark. `work_runbench` lands on 1,170,036,819 (+1,739) and
+`work_digestbench` on 5,605,158 (+2,040), the doubling growth's copies;
+`work_encodebench` falls 99,808 to 2,398,273,418 and `work_livebench` 399 to
+1,474,874,672, `work_oneshot` rises 161 to 13,227,091. The compiler carries
+the new site: `compile_instructions` 25,846,237 (-35,314), `entry_instructions`
+85,273,377 (-107,936), `library_instructions` 85,828,356 (-107,226),
+`emit_instructions` 7,011,826 (-1,651), `codegen_instructions_dev` 119,010,910
+(+8,081), `codegen_instructions_release` 454,481,233 (+301,820), and
+`browser_compile_instructions` 391,400,519 (+89,017). The interpreter's
+in-place extend reads `interp_instructions` 488,691,869 (-47,947),
+`interp_allocs` 587,352 (+1) and `interp_peak_bytes` 689,271 (+2,112).
+digestbench and runbench each emit one more line, and emitted_other_lines lands
+on 148,240.
+
+kanso#1925 joined the fold to the run program as its `stack` phase, measured
+before this fix. On main after it, the run vein's allocation rows fall:
+run_alloc_bytes lands on 386,136,876 (-2,581,984), run_sh_buf on 172,766,944,
+run_sh_rec on 3,791,872 and run_allocs on 1,816,757. run_arena_blocks goes 9 ->
+6, run_arena_peak_bytes 9,961,488 -> 6,815,760 and run_spare_peak_bytes
+7,864,336 -> 4,718,608. run_push_mut_fast rises to 1,189,304, run_buf_reuse to
+134 and run_push_mut_slow by twelve to 1,550,128. run_chain_finds goes back to
+0, the value it had before kanso#1925 added the phases; the index's own counter
+stays pinned by `a_long_chain_answers_survival_from_its_index` at 95,601. The
+run program's instruction rows come from CI.
+
+On main after #1904 the tab's compile reads `browser_compile_instructions`
+392,470,701, up 92,326 from main's 392,378,375 on the same tree.
+
+With main merged after #1922, browser_compile_instructions lands on
+393,453,573.
+
+## 2026-10-12 — gavel: a test file is an outside consumer of its module
+
+Clay ruled the other half of #1883: "kanso test certainly cannot see private
+definitions. that would hugely violate the point of privacy." On main a
+`*_test.kso` is a member of its module: it reads private names, its
+definitions join the module's namespace, and `kanso run` checks it, so a
+formatting slip in a test stopped the program it tests from running.
+
+**The ruling.** A test file is compiled as an outside consumer that imports
+the module it sits beside. It sees only pub names, adds nothing to the module,
+and only `kanso test` reads it; `kanso run`, `check` and `build` ignore it.
+
+Owes, on #1883: the loader keeps `*_test.kso` out of the module and compiles
+each as an importer; goldens for a test that reads a private name (refused), a
+test helper sharing a production name (no collision) and a malformed test
+beside a program that still runs; existing tests that read private names
+moved onto the pub surface.

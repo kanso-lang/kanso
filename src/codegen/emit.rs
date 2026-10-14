@@ -1057,6 +1057,12 @@ impl<'a> Backend<'a> {
                         f.record(&t, DESC);
                         Ok(t.to_string())
                     }
+                    "read_line" => {
+                        let t = f.tmp();
+                        f.line_fmt(format_args!("{t} = call %KValue @k_desc_read_line()"));
+                        f.record(&t, DESC);
+                        Ok(t.to_string())
+                    }
                     "now" => {
                         let t = f.tmp();
                         f.line_fmt(format_args!("{t} = call %KValue @k_desc_now()"));
