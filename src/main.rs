@@ -847,16 +847,20 @@ fn build(program: ast::Program, file: &str, release: bool, built_as: Option<Stri
         return ExitCode::from(2);
     }
     let ll_path = format!("{stem}.ll");
-    // x86-64 alone: this convention has not been measured on arm64. On x86-64
+    // x86-64 alone: this convention has not been measured on arm64. On both
     // every `musttail` the emitter wrote reaches clang as written, so a tail
-    // call consumes no stack. An arm64 release build still takes the jump
-    // from an arm wider than the register file, which that backend miscompiles.
+    // call consumes no stack. An arm64 release build also marks each arm wider
+    // than the register file so that its backend makes no sibling call there,
+    // which it miscompiles (`wide_tailcc_keeps_its_jumps`). On an Apple host
+    // that is not enough, and a wide arm still gives up its jump
+    // (`narrow_tailcc`).
     let flatten = release
         && cfg!(target_arch = "x86_64")
         && closure_convention() == kanso::codegen::ClosureConvention::PreserveNone;
     let ir = match (flatten, release && cfg!(target_arch = "aarch64")) {
         (true, _) => preserve_none_calls(preserve_none_tails(ir), include_str!("runtime.c")),
-        (false, true) => narrow_tailcc(ir, ARM64_TAILCC_WIDEST),
+        (false, true) if cfg!(target_vendor = "apple") => narrow_tailcc(ir, ARM64_TAILCC_WIDEST),
+        (false, true) => wide_tailcc_keeps_its_jumps(ir, ARM64_TAILCC_WIDEST),
         (false, false) => ir,
     };
     if let Err(io) = std::fs::write(&ll_path, ir) {
