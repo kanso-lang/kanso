@@ -1836,6 +1836,6 @@ them. Three runtime rows move with the smaller binaries: `work_deepbench`
 programs whose work did not change, so they are layout. Every allocation
 counter holds.
 
-Lazy parsing by declaration, the larger fix #1952 names, is still open. This
+Lazy parsing by declaration, the larger fix #1952 names, has not been built. This
 change narrows what is read; it does not make one declaration cheaper to
 read.
