@@ -21,171 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-13 — three port shapes join the run program before their fixes
-
-Three of #1892's items are fixed on open branches, and the run program was
-blind to all three, so under the 2026-09-05 corpus-first gavel each shape goes
-in first, measured on main, and the fix scores as a rise when it lands.
-
-- `rewind`, 20,000 laps: bc's `for` statement, a tail cycle entered by a tail
-  call from `exec`, which each lap calls. Main gives the cycle no beat, so the
-  laps' records stay. kanso#1920 fixes it.
-- `stack`, 115 chunks of 25 ints concatenated onto one list in a fold: the kv
-  port's accumulator. Main keeps every earlier list until the fold returns.
-  kanso#1924 fixes it.
-- `bag`, 4,300 pushes onto a list held in a record field: the accumulator the
-  lox, markdown, datalog and sat ports wrote. Main copies the list on every
-  push. The record-field branch fixes it.
-
-Built alone on main, each less the empty program's 6,766,088, `rewind` costs
-4,020,895 instructions (0.33% of the whole), `stack` 2,621,918 (0.21%) and
-`bag` 58,073,973 (4.70%). `rewind` and `stack` are sized by memory like
-`machine` and `fold`: each adds 2 MiB to the peak alone. `bag` is quadratic and
-sized near five per cent like `scatter` and `bump`; it adds nothing to the peak.
-The run program's header carries the table.
-
-Together they take `work_runbench` 1,170,035,080 -> 1,234,827,314 on CI (the
-container projected 1,234,663,911) and the run peak
-4,948,512 -> 10,191,392 bytes. `run_instructions` and `run_peak_bytes` are
-re-based by the same ratios, so welfare scores what it scored, and the floor's
-history says so; `run_arena_peak_bytes` is the part of the peak that moved,
-4,718,608 -> 9,961,488.
-
-The rest of the run vein moves with the work the three phases add, and each
-phase built alone says which: `run_allocs` rises to 1,816,986, 40,000 of it
-`rewind`'s records. `run_alloc_bytes` rises to 388,718,860, `run_evac_allocs`
-to 50,009, `run_evac_bytes` to 28,709,472, `run_sh_buf` to 175,346,960 and
-`run_sh_rec` to 3,791,936, nearly all of it `bag`'s copies. `run_beat_iters`
-rises by `bag`'s 4,300 laps to 52,008. `run_arena_blocks` goes 4 -> 9 and
-`run_spare_peak_bytes` to 7,864,336, which `rewind` and `stack` each raise
-alone. `run_perm_allocs` rises by one to 99. `run_chain_finds` goes 0 ->
-12,762 although no phase alone finds a chain; only the whole program does, and
-nothing here isolated why.
-The program's code grows with it: across the other benchmarks' emitted rows,
-`emitted_other_defines` lands on 2,036, `emitted_other_calls` on 17,664,
-`emitted_other_branches` on 16,555 and `emitted_other_lines` on 148,239, all
-of it runbench's (51,577 -> 52,537 lines), and `text` on 4,838,622, runbench
-619,081 -> 622,857 bytes.
-
-## 2026-10-13 — a list held in a record grows where it stands
-
-From #1892, the eleventh item: the lox, markdown, datalog and sat ports each
-kept an accumulator in a record field and pushed onto it through the record,
-`bag (b.count + 1) (push b.items i)`. The linearity analysis proved a list
-unique only when a variable held it, so `push b.items i` copied the list while
-the record still held it, and n pushes cost the square of n: 40,000 of them
-allocated 37 GB, and the native run took 4.4 seconds where it now takes 0.06.
-
-`src/linear.rs` now proves a field unique as well. A greatest fixpoint runs
-over (function, arity, parameter, field), seeded with the fields some push,
-append, put or concat writes into. A field stays in the set while every caller
-hands that parameter over with the field alone: a constructor argument that is
-itself unique, an `if` or guard whose arms all are, a parameter already in the
-set, or a call to a function that returns the field alone. A field read moves
-the list out of the record only when the record is handed over, every mention
-of the parameter is a field read, the field is read exactly once, and no
-mention sits under a lambda. Anything else keeps the copy.
-
-`tests/golden/mem/a_list_held_in_a_record_grows_where_it_stands` runs 20,000
-pushes through a record and four cases the analysis must refuse: a list two
-records share, a field read twice, a record filled twice from one start, and a
-record a later line reads again. It counts 73 allocations and 1,994,928 bytes
-where main counts 53,881 and 9,160,278,336. The ratchet row "a record field
-copied on every push" turns it red when the move is refused.
-
-On the run program's `bag` phase, which #1925 added on main: `work_runbench`
-1,234,827,314 -> 1,177,927,314 on CI, 56,900,000 fewer, the phase alone
-58,073,973 -> 911,987 instructions in this container. The run vein
-lands on `run_allocs` 1,812,272, `run_alloc_bytes` 335,416,908,
-`run_evac_allocs` 49,188, `run_evac_bytes` 14,985,856, `run_sh_rec`
-3,778,880, `run_sh_buf` 121,778,720, `run_survive_slots` 4,856,
-`run_chain_finds` 11,948, `run_bytes_malloc` 9,138 and `run_bytes_freed`
-9,007. Each push now writes in place onto a header born in an earlier lap, so
-`run_push_mut_slow` counts it: 1,554,416, `bag`'s 4,300 more.
-
-The list now outlives each lap's rewind, so it lives outside the arena:
-`run_perm_peak_bytes` and `run_perm_live_bytes` land on 277,960, and the run
-peak rises 10,191,392 -> 10,437,152 bytes. Most of that is the growth policy
-rather than the list: 4,300 values fill 68,800 bytes, and a buffer that
-doubles once more past sixteen slots holds 16,384 of them. A buffer outside
-the arena already grows by `realloc`, so that second doubling buys it
-nothing; dropping it there is a lead, not built here. `text` lands on
-4,838,766, runbench 622,857 -> 623,001 bytes.
-
-CI's compile rows. The analysis asks one more question of each field write,
-and the interpreter skips the copy at the same sites:
-`compile_instructions` 25,881,551 -> 25,803,156, `entry_instructions`
-85,381,313 -> 85,149,258, `library_instructions` 85,935,582 -> 85,703,128,
-`emit_instructions` 7,013,477 -> 7,035,926 (+22,449),
-`interp_instructions` 488,739,816 -> 487,429,689, `interp_allocs` 587,351 ->
-587,479 (+128), and `browser_compile_instructions` 391,311,502 ->
-392,378,375 (+1,066,873, +0.27%).
-
-## 2026-10-13 — a buffer outside the arena grows by one doubling
-
-`k_b_push_grow` picks a list's next capacity as the smallest power of two that
-holds it, doubled once more past sixteen slots. In the arena that second
-doubling saves grows, because each grow there is a fresh buffer and a copy. An
-accumulator's buffer outside the arena already grows by `realloc`, so the
-second doubling only held memory: #1926's 4,300-element list sat in 16,384
-slots. A buffer outside the arena now takes the smallest power of two.
-
-On the run program `run_perm_peak_bytes` lands on 146,888 and
-`run_perm_live_bytes` on 146,888 (277,960 before), and the run peak falls
-10,437,152 -> 10,306,080 bytes. The extra regrows cost `work_runbench`
-1,177,927,314 -> 1,177,965,832 on CI, 38,518 more, and `run_alloc_bytes` falls to 303,607,404 because the counter adds
-each buffer's full size and the buffers are smaller. `run_allocs` lands on
-1,812,274, `run_bytes_malloc` on 9,140 and `run_bytes_freed` on 9,009.
-basket's permanent peak halves to 2,162,720 (`basket_perm_peak_bytes`, with
-`basket_perm_live_bytes` the same), `basket_alloc_bytes` falls to 6,162,481,
-and `basket_allocs` lands on 27,271, `basket_bytes_malloc` on 32 and
-`basket_bytes_freed` on 13. escape regrows more often: `escape_allocs` 38 ->
-63, `escape_alloc_bytes` 41,924,192, `escape_bytes_malloc` and
-`escape_bytes_freed` 55. In the mem vein, five shapes' permanent peaks halve
-and the record-field golden's falls 1,179,840 -> 655,552. Every benchmark's
-machine code grows sixteen bytes, and `text` lands on 4,838,990.
-
-The same regrows cost the mem vein's other accumulators more allocations (one
-to sixteen), and of these only `early_exit` holds less for it:
-`a_long_list_renders_in_one_pass_allocs` 2,018,
-`a_long_list_renders_in_one_pass_alloc_bytes` 248,272,
-`a_long_list_renders_in_one_pass_bytes_malloc` 5;
-`a_loop_that_only_grows_its_list_takes_no_rewind_allocs` 42,
-`a_loop_that_only_grows_its_list_takes_no_rewind_alloc_bytes` 8,373,392,
-`a_loop_that_only_grows_its_list_takes_no_rewind_bytes_malloc` 36;
-`an_accumulator_regrows_where_it_is_allocs` 83,
-`an_accumulator_regrows_where_it_is_alloc_bytes` 577,072,
-`an_accumulator_regrows_where_it_is_bytes_malloc` 60; `early_exit_allocs` 17,
-`early_exit_bytes_malloc` 4; `fold_push_shape_allocs` 17,
-`fold_push_shape_alloc_bytes` 214,992, `fold_push_shape_bytes_malloc` 5;
-`fused_map_shape_allocs` 17, `fused_map_shape_alloc_bytes` 214,992,
-`fused_map_shape_bytes_malloc` 5; `fused_reducer_allocs` 7,
-`fused_reducer_alloc_bytes` 28,960, `fused_reducer_bytes_malloc` 3;
-`fused_select_shape_allocs` 18, `fused_select_shape_alloc_bytes` 215,024,
-`fused_select_shape_bytes_malloc` 5; `piped_reducer_allocs` 7,
-`piped_reducer_alloc_bytes` 28,960, `piped_reducer_bytes_malloc` 3;
-`skip_shape_allocs` 37, `skip_shape_alloc_bytes` 129,456,
-`skip_shape_bytes_malloc` 5; `take_shape_allocs` 20, `take_shape_alloc_bytes`
-215,152, `take_shape_bytes_malloc` 5; `tally_shape_allocs` 19,
-`tally_shape_alloc_bytes` 133,280, `tally_shape_bytes_malloc` 5.
-
-CI's instruction rows. The other benchmarks pay for the extra regrows too:
-`work_basket` 30,876,488 -> 30,946,055 (+69,567), `work_encodebench`
-2,398,373,226 -> 2,398,405,934 (+32,708), `work_escapebench` 39,049,158 ->
-39,058,255 (+9,097), `work_pendbench` 190,054,350 -> 190,061,194 (+6,844),
-`work_jsonbench` 860,562,984 -> 860,565,984 (+3,000), `work_digestbench`
-5,603,118 -> 5,604,458 (+1,340), `work_oneshot` 13,226,930 -> 13,227,314
-(+384) and `work_widebench` 28,178,509 -> 28,178,544 (+35); `work_livebench`
-falls 477 to 1,474,874,594. In the tab, where the same runtime runs the
-interpreted corpus, `browser_run_instructions` 34,124,990 -> 34,125,332
-(+342). `codegen_instructions_dev` reads 119,002,829 -> 119,002,656 and
-`codegen_instructions_release` 454,179,413 -> 454,179,390.
-
-The record-field fixture #1926 added takes the same regrows:
-`a_list_held_in_a_record_grows_where_it_stands_allocs` lands on 76 and
-`a_list_held_in_a_record_grows_where_it_stands_bytes_malloc` on 19, three each
-above #1926's reading, while its peak falls as above.
-
 ## 2026-10-13 — the ratchet's own checkout reads its library again
 
 Two faults on main kept the ratchet from reading what it was built to read.
@@ -1657,3 +1492,73 @@ whose continuations read locals, lambda parameters and builtins of them,
 some inside a function and some in nested lambdas. The interpreter and the
 native build agreed on all 399 the front end accepted; 85 of the first 100
 forced at least one pooled call.
+
+## 2026-10-15 — gavel: a record field carries no type, and kanso has no type parameters
+
+Clay ruled #1946. Two July rulings could not both stand. On 2026-07-25 a type
+could declare a parameter (`type <k>pair` with fields `first:k` and
+`second:k`), and on 2026-07-26 a written field type became an error. The
+parameter means nothing unless a field can write `:k`.
+
+**The ruling.** No field carries a written type of any kind, and kanso has no
+type parameters. The archive's "GAVEL (amendment): the binder stays" and the
+"CORRECTION" after it are reversed. The reason is the one the 07-26 ruling
+gave for concrete types. kanso compiles the whole program, so the compiler
+sees every place two fields' values meet. If something needs them to agree,
+a disagreement is refused at that use. If nothing needs them to agree, no
+program depends on it. Declaring the agreement only moves where the error is
+reported. Relating types was already gone from function signatures for the
+same reason, and now it is gone from type declarations too.
+
+Owes: #1941 closed with a pointer here; `sorted` stays a plain type, and the
+#1903 entry's mention of `<k>sorted` no longer describes anything to build.
+
+## 2026-10-15 — gavel: a span is a range a check has proven inside its string, and slicing one cannot miss
+
+Clay ruled #1960. `text/slice!` answers a box (2026-09-16), and a box spreads
+to every caller, so the JSON decoder written with it would make `json/decode`
+answer a box. The insisting form could not give a caller that knows its
+bounds a plain string. Proving ranges by inference was weighed and set aside:
+a reader cannot see whether a slice is proven, and an edit to the scan
+breaks the proof far from where the error lands.
+
+**The ruling.** A span is a range of positions inside one particular string,
+and only a function that has checked the bounds makes one, the way only
+`list/to_sorted` makes a `sorted`. `text/slice` on a span answers the string,
+with no `none`, because the range cannot leave it. A slice from bare numbers
+answers `none` past the end, as ruled on #1890, and `text/slice!` insists
+with a box, as ruled on #1943. The word is span, after C++'s `std::span` and
+the source ranges compilers carry: a value holding two positions into a
+string that already exists, holding none of its characters.
+
+Owes, on #1960: the span value in std/text, built only by bounds-checked
+functions; the scanning functions the decoder uses (`find2` and its
+siblings) answering spans or `none`; `text/slice` arms for a span; the
+fused doors (`utf8`, `append`, `to_int`, `to_float`) on a sliced span; the
+decoder moved off `builtin_slice_in` onto spans; micro goldens on every
+engine. The name of each new public function goes to Clay as one question
+before it ships.
+
+## 2026-10-15 — gavel: a run-time failure names the line it happened on
+
+Clay ruled #1975. All twenty ports met failures that named no file or line:
+a wrong kind reaching an operator or builtin (`` `*` is not defined for these
+values ``, `write takes a string`) and a stack overflow. The interpreter has
+the span and drops it, because native has nothing to print beside it and the
+engines must agree byte for byte.
+
+**The ruling.** Every run-time failure names the file and line it happened
+on, on every engine. Compiled code records a constant `file:line` before each
+runtime call that can stop the program, and the runtime prints it when it
+dies; the interpreter prints the span it already holds, and the tab shares
+the C runtime. An insisting form names its caller's line rather than the
+library's. The cost is one store per such call, measured at no more than
+0.42% of runbench before the build; Clay accepted it, and the floor drops by
+what CI measures, recorded with this entry as the reason. A refusal at check
+where the wrong kind is certain costs nothing at run time and goes in beside
+it.
+
+Owes, on #1975: the stamp in codegen and the runtime's print; the
+interpreter printing its span; insisting forms stamping the caller; error
+goldens on every engine for an operator, a builtin and a stack overflow;
+CI's rows and the floor moved by them.
