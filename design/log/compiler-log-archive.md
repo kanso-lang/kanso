@@ -103890,3 +103890,57 @@ The program's code grows with it: across the other benchmarks' emitted rows,
 `emitted_other_branches` on 16,555 and `emitted_other_lines` on 148,239, all
 of it runbench's (51,577 -> 52,537 lines), and `text` on 4,838,622, runbench
 619,081 -> 622,857 bytes.
+
+## 2026-10-13 — a list held in a record grows where it stands
+
+From #1892, the eleventh item: the lox, markdown, datalog and sat ports each
+kept an accumulator in a record field and pushed onto it through the record,
+`bag (b.count + 1) (push b.items i)`. The linearity analysis proved a list
+unique only when a variable held it, so `push b.items i` copied the list while
+the record still held it, and n pushes cost the square of n: 40,000 of them
+allocated 37 GB, and the native run took 4.4 seconds where it now takes 0.06.
+
+`src/linear.rs` now proves a field unique as well. A greatest fixpoint runs
+over (function, arity, parameter, field), seeded with the fields some push,
+append, put or concat writes into. A field stays in the set while every caller
+hands that parameter over with the field alone: a constructor argument that is
+itself unique, an `if` or guard whose arms all are, a parameter already in the
+set, or a call to a function that returns the field alone. A field read moves
+the list out of the record only when the record is handed over, every mention
+of the parameter is a field read, the field is read exactly once, and no
+mention sits under a lambda. Anything else keeps the copy.
+
+`tests/golden/mem/a_list_held_in_a_record_grows_where_it_stands` runs 20,000
+pushes through a record and four cases the analysis must refuse: a list two
+records share, a field read twice, a record filled twice from one start, and a
+record a later line reads again. It counts 73 allocations and 1,994,928 bytes
+where main counts 53,881 and 9,160,278,336. The ratchet row "a record field
+copied on every push" turns it red when the move is refused.
+
+On the run program's `bag` phase, which #1925 added on main: `work_runbench`
+1,234,827,314 -> 1,177,927,314 on CI, 56,900,000 fewer, the phase alone
+58,073,973 -> 911,987 instructions in this container. The run vein
+lands on `run_allocs` 1,812,272, `run_alloc_bytes` 335,416,908,
+`run_evac_allocs` 49,188, `run_evac_bytes` 14,985,856, `run_sh_rec`
+3,778,880, `run_sh_buf` 121,778,720, `run_survive_slots` 4,856,
+`run_chain_finds` 11,948, `run_bytes_malloc` 9,138 and `run_bytes_freed`
+9,007. Each push now writes in place onto a header born in an earlier lap, so
+`run_push_mut_slow` counts it: 1,554,416, `bag`'s 4,300 more.
+
+The list now outlives each lap's rewind, so it lives outside the arena:
+`run_perm_peak_bytes` and `run_perm_live_bytes` land on 277,960, and the run
+peak rises 10,191,392 -> 10,437,152 bytes. Most of that is the growth policy
+rather than the list: 4,300 values fill 68,800 bytes, and a buffer that
+doubles once more past sixteen slots holds 16,384 of them. A buffer outside
+the arena already grows by `realloc`, so that second doubling buys it
+nothing; dropping it there is a lead, not built here. `text` lands on
+4,838,766, runbench 622,857 -> 623,001 bytes.
+
+CI's compile rows. The analysis asks one more question of each field write,
+and the interpreter skips the copy at the same sites:
+`compile_instructions` 25,881,551 -> 25,803,156, `entry_instructions`
+85,381,313 -> 85,149,258, `library_instructions` 85,935,582 -> 85,703,128,
+`emit_instructions` 7,013,477 -> 7,035,926 (+22,449),
+`interp_instructions` 488,739,816 -> 487,429,689, `interp_allocs` 587,351 ->
+587,479 (+128), and `browser_compile_instructions` 391,311,502 ->
+392,378,375 (+1,066,873, +0.27%).
