@@ -21,71 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-13 — a buffer outside the arena grows by one doubling
-
-`k_b_push_grow` picks a list's next capacity as the smallest power of two that
-holds it, doubled once more past sixteen slots. In the arena that second
-doubling saves grows, because each grow there is a fresh buffer and a copy. An
-accumulator's buffer outside the arena already grows by `realloc`, so the
-second doubling only held memory: #1926's 4,300-element list sat in 16,384
-slots. A buffer outside the arena now takes the smallest power of two.
-
-On the run program `run_perm_peak_bytes` lands on 146,888 and
-`run_perm_live_bytes` on 146,888 (277,960 before), and the run peak falls
-10,437,152 -> 10,306,080 bytes. The extra regrows cost `work_runbench`
-1,177,927,314 -> 1,177,965,832 on CI, 38,518 more, and `run_alloc_bytes` falls to 303,607,404 because the counter adds
-each buffer's full size and the buffers are smaller. `run_allocs` lands on
-1,812,274, `run_bytes_malloc` on 9,140 and `run_bytes_freed` on 9,009.
-basket's permanent peak halves to 2,162,720 (`basket_perm_peak_bytes`, with
-`basket_perm_live_bytes` the same), `basket_alloc_bytes` falls to 6,162,481,
-and `basket_allocs` lands on 27,271, `basket_bytes_malloc` on 32 and
-`basket_bytes_freed` on 13. escape regrows more often: `escape_allocs` 38 ->
-63, `escape_alloc_bytes` 41,924,192, `escape_bytes_malloc` and
-`escape_bytes_freed` 55. In the mem vein, five shapes' permanent peaks halve
-and the record-field golden's falls 1,179,840 -> 655,552. Every benchmark's
-machine code grows sixteen bytes, and `text` lands on 4,838,990.
-
-The same regrows cost the mem vein's other accumulators more allocations (one
-to sixteen), and of these only `early_exit` holds less for it:
-`a_long_list_renders_in_one_pass_allocs` 2,018,
-`a_long_list_renders_in_one_pass_alloc_bytes` 248,272,
-`a_long_list_renders_in_one_pass_bytes_malloc` 5;
-`a_loop_that_only_grows_its_list_takes_no_rewind_allocs` 42,
-`a_loop_that_only_grows_its_list_takes_no_rewind_alloc_bytes` 8,373,392,
-`a_loop_that_only_grows_its_list_takes_no_rewind_bytes_malloc` 36;
-`an_accumulator_regrows_where_it_is_allocs` 83,
-`an_accumulator_regrows_where_it_is_alloc_bytes` 577,072,
-`an_accumulator_regrows_where_it_is_bytes_malloc` 60; `early_exit_allocs` 17,
-`early_exit_bytes_malloc` 4; `fold_push_shape_allocs` 17,
-`fold_push_shape_alloc_bytes` 214,992, `fold_push_shape_bytes_malloc` 5;
-`fused_map_shape_allocs` 17, `fused_map_shape_alloc_bytes` 214,992,
-`fused_map_shape_bytes_malloc` 5; `fused_reducer_allocs` 7,
-`fused_reducer_alloc_bytes` 28,960, `fused_reducer_bytes_malloc` 3;
-`fused_select_shape_allocs` 18, `fused_select_shape_alloc_bytes` 215,024,
-`fused_select_shape_bytes_malloc` 5; `piped_reducer_allocs` 7,
-`piped_reducer_alloc_bytes` 28,960, `piped_reducer_bytes_malloc` 3;
-`skip_shape_allocs` 37, `skip_shape_alloc_bytes` 129,456,
-`skip_shape_bytes_malloc` 5; `take_shape_allocs` 20, `take_shape_alloc_bytes`
-215,152, `take_shape_bytes_malloc` 5; `tally_shape_allocs` 19,
-`tally_shape_alloc_bytes` 133,280, `tally_shape_bytes_malloc` 5.
-
-CI's instruction rows. The other benchmarks pay for the extra regrows too:
-`work_basket` 30,876,488 -> 30,946,055 (+69,567), `work_encodebench`
-2,398,373,226 -> 2,398,405,934 (+32,708), `work_escapebench` 39,049,158 ->
-39,058,255 (+9,097), `work_pendbench` 190,054,350 -> 190,061,194 (+6,844),
-`work_jsonbench` 860,562,984 -> 860,565,984 (+3,000), `work_digestbench`
-5,603,118 -> 5,604,458 (+1,340), `work_oneshot` 13,226,930 -> 13,227,314
-(+384) and `work_widebench` 28,178,509 -> 28,178,544 (+35); `work_livebench`
-falls 477 to 1,474,874,594. In the tab, where the same runtime runs the
-interpreted corpus, `browser_run_instructions` 34,124,990 -> 34,125,332
-(+342). `codegen_instructions_dev` reads 119,002,829 -> 119,002,656 and
-`codegen_instructions_release` 454,179,413 -> 454,179,390.
-
-The record-field fixture #1926 added takes the same regrows:
-`a_list_held_in_a_record_grows_where_it_stands_allocs` lands on 76 and
-`a_list_held_in_a_record_grows_where_it_stands_bytes_malloc` on 19, three each
-above #1926's reading, while its peak falls as above.
-
 ## 2026-10-13 — the ratchet's own checkout reads its library again
 
 Two faults on main kept the ratchet from reading what it was built to read.
@@ -1603,3 +1538,27 @@ fused doors (`utf8`, `append`, `to_int`, `to_float`) on a sliced span; the
 decoder moved off `builtin_slice_in` onto spans; micro goldens on every
 engine. The name of each new public function goes to Clay as one question
 before it ships.
+
+## 2026-10-15 — gavel: a run-time failure names the line it happened on
+
+Clay ruled #1975. All twenty ports met failures that named no file or line:
+a wrong kind reaching an operator or builtin (`` `*` is not defined for these
+values ``, `write takes a string`) and a stack overflow. The interpreter has
+the span and drops it, because native has nothing to print beside it and the
+engines must agree byte for byte.
+
+**The ruling.** Every run-time failure names the file and line it happened
+on, on every engine. Compiled code records a constant `file:line` before each
+runtime call that can stop the program, and the runtime prints it when it
+dies; the interpreter prints the span it already holds, and the tab shares
+the C runtime. An insisting form names its caller's line rather than the
+library's. The cost is one store per such call, measured at no more than
+0.42% of runbench before the build; Clay accepted it, and the floor drops by
+what CI measures, recorded with this entry as the reason. A refusal at check
+where the wrong kind is certain costs nothing at run time and goes in beside
+it.
+
+Owes, on #1975: the stamp in codegen and the runtime's print; the
+interpreter printing its span; insisting forms stamping the caller; error
+goldens on every engine for an operator, a builtin and a stack overflow;
+CI's rows and the floor moved by them.
