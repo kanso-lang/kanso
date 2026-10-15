@@ -1,0 +1,10 @@
+# The arithmetic operators take numbers, and an operator arm routes only a
+# record, so a string, a list or a map stops every run. An operand that cannot
+# hold an err is refused where it is written (#1975): a literal with nothing
+# interpolated, or a call of literals whose every arm answers one and none
+# fails. An err is handed on by an operator, so anything that could carry one
+# is left to the run.
+fn greeting _
+  "hello"
+
+pub play = print "{"x" * 2} {2 - [1]} {greeting "ann" + 1} {3 % {"a":1}}"

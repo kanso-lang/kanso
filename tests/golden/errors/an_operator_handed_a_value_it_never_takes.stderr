@@ -1,0 +1,16 @@
+error[type]: `%` takes numbers, and this is a map (module an_operator_handed_a_value_it_never_takes)
+  --> an_operator_handed_a_value_it_never_takes.kso:10:65
+  10 | pub play = print "{"x" * 2} {2 - [1]} {greeting "ann" + 1} {3 % {"a":1}}"
+                                                                       ^
+error[type]: `+` takes numbers, and this is a string (module an_operator_handed_a_value_it_never_takes)
+  --> an_operator_handed_a_value_it_never_takes.kso:10:40
+  10 | pub play = print "{"x" * 2} {2 - [1]} {greeting "ann" + 1} {3 % {"a":1}}"
+                                              ^
+error[type]: `-` takes numbers, and this is a list (module an_operator_handed_a_value_it_never_takes)
+  --> an_operator_handed_a_value_it_never_takes.kso:10:34
+  10 | pub play = print "{"x" * 2} {2 - [1]} {greeting "ann" + 1} {3 % {"a":1}}"
+                                        ^
+error[type]: `*` takes numbers, and this is a string (module an_operator_handed_a_value_it_never_takes)
+  --> an_operator_handed_a_value_it_never_takes.kso:10:20
+  10 | pub play = print "{"x" * 2} {2 - [1]} {greeting "ann" + 1} {3 % {"a":1}}"
+                          ^

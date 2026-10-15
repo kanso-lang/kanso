@@ -104009,3 +104009,37 @@ The record-field fixture #1926 added takes the same regrows:
 `a_list_held_in_a_record_grows_where_it_stands_allocs` lands on 76 and
 `a_list_held_in_a_record_grows_where_it_stands_bytes_malloc` on 19, three each
 above #1926's reading, while its peak falls as above.
+
+## 2026-10-13 — the ratchet's own checkout reads its library again
+
+Two faults on main kept the ratchet from reading what it was built to read.
+Neither came from the branches that showed them.
+
+The first came with #1927. Its mutation `a_fifth_push_takes_sixteen` anchors
+on the grow's extra doubling, and #1927 rewrote that line as
+`if (cap > 16 && !perm) cap <<= 1;`. The mutation stopped applying, so the
+whole-tree ratchet job reported it stale on every branch merged with main;
+#1904 was the first to show it. The mutation now anchors on the new line and
+doubles every time again, and the mem corpus goes red under it
+(`a_cap_around_a_count_is_a_range` reads `allocs=14` against 13).
+
+The second is older and shows only on a branch that edits
+`scripts/perf_record`, because only then does a shard pick the perf-history
+row. The ratchet links each scratch worktree's `target` to
+`/tmp/kanso-ratchet-target`, so the compiler it builds lives outside the
+checkout. `in_shipped_library` looked for the library beside the binary
+(`current_exe()/../../lib`, here `/tmp/lib`) and nowhere else, so
+`kanso check lib/json` refused `builtin_built_text` as internal to a library
+it was not in. With no compile counters on stderr, perf_record's row lost
+`compile_alloc_bytes` and `compile_passes`, and the gate was red before any
+mutation. #1931 showed it, since it rewrites perf_record's lists in the
+spanning form. The import loader already had the right fallback:
+`resolve_import` tries `lib/` beside the working directory when the
+toolchain's copy is absent. The check now tries the same root.
+`a_checkout_library_checks_from_any_binary` copies the compiler to a
+directory of its own and checks `lib/json` from the checkout; it read the
+refusal before the fix and reads nothing after.
+
+The tab's build leaves the new root out, since it has no checkout to stand
+in. With the root compiled in, `browser_compile_instructions` read 392,449,729
+against 392,378,375; without it the browser row does not move.
