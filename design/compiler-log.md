@@ -1502,8 +1502,9 @@ moved down by exactly that cost, to 91.52, with this entry as the reason.
 
 ## 2026-10-16 — A run-time failure names the line it happened on
 
-The rest of #1975. Every run-time failure now prints its place under
-its message, on every engine, in the form an err's `born in` line uses:
+The rest of #1975. Every run-time failure but a stack overflow now prints
+its place under its message, on every engine, in the form an err's `born in`
+line uses:
 
     error[runtime]: `*` is not defined for these values
       failed in calc/twice at calc.kso:2
@@ -1538,19 +1539,16 @@ might fail every arm: the arms are read together, so `f x true` and
 alone takes that kind, and a by-value record is taken by the arm that
 destructures its type.
 
-**A stack overflow** names its cycle rather than its frame. The two engines
-run out of stack at different depths, so the frame that was entering is an
-accident, and in a cycle of two groups they would name different ones.
-`src/deep.rs` gives each cycle that grows the stack one place: the first
-call into it written inside it, outside tail position. A group on such a
-cycle records that place on entry, native in its function and the
-interpreter when an arm's body starts, and the overflow prints the last one
-recorded. A recursion that is all tail calls records nothing and costs
-nothing. Tail position is read the way `emit_tail` reads it: a guard's early
-answer and the body after it, and the body of a piped one-name lambda, keep
-it, and a call of an insisting form does not. The first version missed the
-guard, so json's escape loop counted as a cycle that grows the stack and
-recorded its place on every byte.
+**A stack overflow** names no place. The engines run out of stack at
+different depths, so no frame is the one the overflow happened in. The first
+version named the cycle the program last entered, which was wrong in a way
+no fixture showed: a recursion that enters a second recursion at every level
+ran out inside `small` on native and on a call to `big` in the interpreter,
+and the two printed different places. A rule that holds still (the outermost
+active cycle names it) needs the record cleared when the entering call
+returns, and a library wrapper that tail-calls into a recursion has nowhere
+to clear it. Clay chose to leave the overflow without a place (kanso#1987).
+`a_recursion_inside_a_recursion_overflows_alike` pins the case.
 
 **An insisting form** names the line that called it. A form whose name
 ends in `!` turns an err into a failure, and the err was born inside the
@@ -1562,11 +1560,6 @@ anywhere else passes through unchanged. Native does it in
 around it so the err it later yields is pointed too. The interpreter does
 the same with `restamped`, and with a `Desc::Insisted` node for an effect.
 
-In the tab the program runs on its own instance of the runtime, so the
-page reads the place after the stack trap from that instance's memory:
-`k_deep_site` is exported as the address of the pointer, and the page
-follows it to the second string. The test harness reads it the same way.
-
 A lazy binding that demands its own value still names no place. The
 interpreter has no source position for it, and native clears `k_site`
 before saying so, so the two agree on saying nothing.
@@ -1574,8 +1567,7 @@ before saying so, so the two agree on saying nothing.
 Pinned by the runtime corpus, which native, the interpreter and the tab
 now print byte for byte, and two new fixtures:
 `an_operator_through_a_parameter_names_its_line` (the ports' case) and
-`a_cycle_too_deep_names_its_place`. `read_missing_file` and
+`a_recursion_inside_a_recursion_overflows_alike`. `read_missing_file` and
 `a_slice_bang_past_the_end_reaches_the_endpoint` moved to name the caller.
-The ratchet rows `death_unplaced`, `oracle_unplaced`, `cycle_unplaced`,
-`insisted_native` and `insisted_oracle` each take one piece away and watch
-the corpus go red.
+The ratchet rows `death_unplaced`, `oracle_unplaced`, `insisted_native`
+and `insisted_oracle` each take one piece away and watch the corpus go red.

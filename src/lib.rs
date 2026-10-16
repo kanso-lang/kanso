@@ -5,7 +5,6 @@ pub mod ast;
 pub mod beat;
 pub mod check;
 pub mod codegen;
-pub mod deep;
 pub mod demand;
 pub mod diag;
 pub mod dispatch;

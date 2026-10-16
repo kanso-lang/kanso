@@ -963,12 +963,6 @@ fn emit_with(
         escape,
         byte_disc,
         in_place_pushes,
-        deep_sites: program
-            .fns
-            .iter()
-            .zip(crate::deep::deep_sites(program))
-            .filter_map(|(d, site)| Some(((d.name.clone(), d.params.len()), site?)))
-            .collect(),
         reusable_records,
         builder_joins,
         builder_params,
@@ -1251,9 +1245,6 @@ struct Backend<'a> {
     escape: crate::escape::EscapeInfo,
     byte_disc: ByteDiscs,
     in_place_pushes: crate::hash::Set<(std::sync::Arc<str>, usize, usize)>,
-    /// Each group on a cycle that grows the stack, with the place an overflow
-    /// in that cycle names (see `crate::deep`).
-    deep_sites: crate::hash::Map<(String, usize), (usize, Span)>,
     reusable_records: crate::hash::Map<(std::sync::Arc<str>, usize, usize), String>,
     builder_joins: crate::hash::Set<(std::sync::Arc<str>, usize, usize)>,
     builder_params: crate::linear::Slots,
@@ -4609,19 +4600,6 @@ impl<'a> Backend<'a> {
         let hako = crate::provenance::package_of(&file);
         let (lit, _) = self.intern(&format!("{hako}\0{}:{}\0", f.origin_prefix, span.line));
         format!("ptr @{lit}")
-    }
-
-    /// On entering a group whose cycle grows the stack, records the place an
-    /// overflow in that cycle names, where the stack watcher reads it.
-    fn enter_deep(&mut self, f: &mut FnEmit, name: &str, arity: usize) {
-        let Some(&(decl, span)) = self.deep_sites.get(&(name.to_string(), arity)) else {
-            return;
-        };
-        let d = &self.program.fns[decl];
-        let hako = crate::provenance::package_of(&d.file);
-        let spelled = crate::deep::spelled(self.program, (decl, span));
-        let (lit, _) = self.intern(&format!("{hako}\0{spelled}\0"));
-        f.line_fmt(format_args!("store ptr @{lit}, ptr @k_deep_site"));
     }
 
     /// Records this site as the place a runtime death names: the same

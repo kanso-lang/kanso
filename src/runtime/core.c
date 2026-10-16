@@ -314,11 +314,6 @@ KValue k_thunk_new_pooled(long long site, int argc, ...) {
 __attribute__((noreturn, noinline)) void k_die(const char* msg);
 __attribute__((noreturn, noinline)) void k_died(void);
 extern const char* k_site;
-extern const char* k_deep_site;
-/* The place a stack overflow names: the cycle the recursion ran through, which
-   a group on such a cycle records on entry (see src/deep.rs). The frame that
-   was entering when the stack ran out is an accident of the stack's size. */
-const char* k_deep_site;
 
 enum { K_SITE_BLACKHOLE = -1 };
 

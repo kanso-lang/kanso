@@ -235,7 +235,6 @@ impl<'a> Backend<'a> {
         let header = format!("define tailcc {ret} @{sym_hdr}({}){apart} {{", params.join(", "));
         let (hop_name, _) = self.intern(&format!("{name}\0"));
         f.start_block("entry");
-        self.enter_deep(&mut f, name, arity);
         self.rebox_params(&mut f, name, arity);
         self.emit_reader_hole(&mut f, name, arity)?;
         self.record_param_sets(&mut f, name, arity);
@@ -727,7 +726,6 @@ impl<'a> Backend<'a> {
         let header = format!("define tailcc {ret} @{sym_hdr}({}){apart} {{", params.join(", "));
         let (hop_name, _) = self.intern(&format!("{name}\0"));
         f.start_block("entry");
-        self.enter_deep(&mut f, name, arity);
         self.rebox_params(&mut f, name, arity);
         self.emit_reader_hole(&mut f, name, arity)?;
         self.record_param_sets(&mut f, name, arity);

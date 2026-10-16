@@ -1262,12 +1262,6 @@ pub struct Interp<'a> {
     /// front of `frames`; see `frame_for`.
     recent_frames: RefCell<Vec<(usize, Frame)>>,
     program: &'a Program,
-    /// For each declaration in `program.fns`, one past the index in `deep`
-    /// of the place an overflow in its group's cycle names, or 0; see
-    /// `crate::deep`. `deep_now` is the last one a body started under.
-    deep_of: Vec<u32>,
-    deep: Vec<Rc<str>>,
-    deep_now: Cell<u32>,
 }
 
 /// Engine-shared semantic counters: evaluation counts are semantics, so
@@ -1328,24 +1322,7 @@ impl<'a> Interp<'a> {
             file: crate::ast::unstamped(),
         };
         let demand = crate::demand::analyze(program);
-        let mut deep: Vec<Rc<str>> = Vec::new();
-        let mut deep_at: Map<(usize, u32, u32), u32> = Map::default();
-        let deep_of = crate::deep::deep_sites(program)
-            .into_iter()
-            .map(|site| match site {
-                None => 0,
-                Some(place) => {
-                    *deep_at.entry((place.0, place.1.line, place.1.col)).or_insert_with(|| {
-                        deep.push(Rc::from(crate::deep::spelled(program, place)));
-                        deep.len() as u32
-                    })
-                }
-            })
-            .collect();
         Interp {
-            deep_of,
-            deep,
-            deep_now: Cell::new(0),
             fns,
             types,
             entry_decl,
@@ -1410,7 +1387,6 @@ impl<'a> Interp<'a> {
 
     /// Evaluate a declaration's body with its lazy bind sites in view.
     fn eval_body_of(&self, decl: &'a FnDecl, env: Option<Rc<Env>>) -> EvalResult {
-        self.enter_deep(decl);
         self.eval_body_in(decl, &decl.body, env, &self.frame_for(decl))
     }
 
@@ -1444,20 +1420,6 @@ impl<'a> Interp<'a> {
         }
     }
 
-    /// A group on a cycle that grows the stack records its cycle's place as
-    /// a body starts, which is what an overflow names (see `crate::deep`).
-    #[inline(always)]
-    fn enter_deep(&self, decl: &'a FnDecl) {
-        let base = self.program.fns.as_ptr() as usize;
-        let at = decl as *const FnDecl as usize;
-        let i = at.wrapping_sub(base) / std::mem::size_of::<FnDecl>();
-        if let Some(&d) = self.deep_of.get(i) {
-            if d != 0 && at >= base {
-                self.deep_now.set(d);
-            }
-        }
-    }
-
     /// A body run whose final expression may hand back a tail call for the
     /// dispatcher's loop instead of recursing. Everything before the last
     /// statement evaluates exactly as eval_body_in does.
@@ -1477,7 +1439,6 @@ impl<'a> Interp<'a> {
         decl: &'a FnDecl,
         env: Option<Rc<Env>>,
     ) -> Result<Flow<'a>, RuntimeError> {
-        self.enter_deep(decl);
         let frame = self.frame_for(decl);
         let body = &decl.body;
         let Some((Stmt::Expr(last), lead)) = body.split_last() else {
@@ -2820,21 +2781,14 @@ impl<'a> Interp<'a> {
         self.depth.set(self.depth.get() + 1);
         if self.depth.get() > 10_000 {
             self.depth.set(self.depth.get() - 1);
-            // the cycle the recursion ran through names the place, not the
-            // frame that happened to be entering (see `crate::deep`); a
-            // recursion through no recorded cycle names none
-            let at = match self.deep_now.get() {
-                0 => None,
-                d => Some(self.deep[d as usize - 1].clone()),
-            };
+            // the engines run out of stack at different depths, so no frame
+            // is the one an overflow happened in, and it names no place
+            // (kanso#1987); line 0 keeps it from being placed on the way out
             return Err(RuntimeError {
-                at: at.clone(),
+                at: None,
                 message: "the program ran out of stack: recursion went deeper than the stack holds"
                     .to_string(),
-                span: match at {
-                    Some(_) => span,
-                    None => Span::at(0, 0),
-                },
+                span: Span::at(0, 0),
             });
         }
         let result = self.dispatch_loop_inner(name, overloads, args, span);

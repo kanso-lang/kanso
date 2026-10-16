@@ -239,8 +239,7 @@ impl Toolchain {
             // Native catches a stack overflow and says so; wasm's call stack
             // ends in a trap, and the page answers it with the same sentence.
             Err(e) if e.contains("call stack exhausted") => {
-                let place = e.split_once('\n').map(|(_, p)| format!("{p}\n")).unwrap_or_default();
-                Answer::Ran(1, format!("{}\n{place}", kanso::stack_exhausted()))
+                Answer::Ran(1, format!("{}\n", kanso::stack_exhausted()))
             }
             Err(e) => Answer::Ran(-1, format!("the host stopped it: {e}")),
         }

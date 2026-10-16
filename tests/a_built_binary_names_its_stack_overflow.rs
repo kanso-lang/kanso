@@ -2,9 +2,7 @@
 //! `kanso run` explains its child's segmentation fault as running out of
 //! stack, but a binary run directly died with the bare signal and printed
 //! nothing, and the lox port is run that way. The runtime now answers a fault
-//! inside the main stack's reach with the interpreter's diagnostic, and names
-//! the cycle the recursion ran through (src/deep.rs): `chain`'s call to itself
-//! is the first call into its cycle outside tail position.
+//! inside the main stack's reach with the interpreter's diagnostic.
 #![cfg(unix)]
 
 use std::process::Command;
@@ -50,10 +48,7 @@ fn a_built_binary_run_directly_says_it_ran_out_of_stack() {
 
     assert_eq!(
         String::from_utf8_lossy(&output.stderr),
-        concat!(
-            "error[runtime]: the program ran out of stack: recursion went deeper than the stack ",
-            "holds\n  failed in deep/chain at deep.kso:9\n"
-        )
+        "error[runtime]: the program ran out of stack: recursion went deeper than the stack holds\n"
     );
     assert_eq!(output.status.code(), Some(1), "{:?}", output.status);
 }

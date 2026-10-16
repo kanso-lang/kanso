@@ -5486,14 +5486,6 @@ oracle_unplaced = row
   (breaking "an_interpreted_failure_left_unplaced")
   release
 
-cycle_unplaced = row
-  "a stack overflow that names no cycle"
-  true
-  "cargo test --release --test golden runtime_corpus"
-  "specs (unit, golden, differential)"
-  (breaking "a_cycle_that_records_no_place")
-  release
-
 insisted_native = row
   "an insisting form that names the library's line"
   true
@@ -5510,7 +5502,7 @@ insisted_oracle = row
   (breaking "an_interpreted_insisting_form_that_names_the_library")
   release
 
-failure_places = [death_unplaced oracle_unplaced cycle_unplaced]
+failure_places = [death_unplaced oracle_unplaced]
 
 insisted_places = [insisted_native insisted_oracle]
 
