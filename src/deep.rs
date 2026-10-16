@@ -35,18 +35,11 @@ pub fn deep_sites(program: &Program) -> Vec<Option<(usize, Span)>> {
     // span, whether it is in tail position), in program order
     let mut calls: Vec<(usize, usize, Span, bool)> = Vec::new();
     for (i, d) in program.fns.iter().enumerate() {
-        let last = d.body.len().saturating_sub(1);
-        for (k, stmt) in d.body.iter().enumerate() {
-            let e = match stmt {
-                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
-            };
-            let tail = k == last && matches!(stmt, Stmt::Expr(_));
-            walk(e, tail, &mut |callee, arity, span, tail| {
-                if let Some(&g) = groups.get(&(callee, arity)) {
-                    calls.push((i, g, span, tail));
-                }
-            });
-        }
+        walk_body(&d.body, true, &mut |callee, arity, span, tail| {
+            if let Some(&g) = groups.get(&(callee, arity)) {
+                calls.push((i, g, span, tail));
+            }
+        });
     }
     let mut adj = vec![Vec::new(); groups.len()];
     for &(from, to, _, _) in &calls {
@@ -87,24 +80,53 @@ pub fn spelled(program: &Program, (decl, span): (usize, Span)) -> String {
     format!("{} at {}:{}", crate::ast::frame_name(&d.name), d.file, span.line)
 }
 
-/// Every call by name under `e`, with whether it is in tail position. A
-/// branch of an `if` in tail position is in tail position; a lambda's body
-/// runs somewhere else, so nothing in it is.
+/// Every call by name in a body, with whether it is in tail position: the
+/// body's last statement is, when the body is.
+fn walk_body<'a>(body: &'a [Stmt], tail: bool, found: &mut impl FnMut(&'a str, usize, Span, bool)) {
+    let last = body.len().saturating_sub(1);
+    for (k, stmt) in body.iter().enumerate() {
+        let e = match stmt {
+            Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
+        };
+        walk(e, tail && k == last && matches!(stmt, Stmt::Expr(_)), found);
+    }
+}
+
+/// Every call by name under `e`, with whether it is in tail position, read
+/// the way the emitter's `emit_tail` reads it: a branch of an `if`, a
+/// guard's early answer and the body after it, and the body of a one-name
+/// lambda a value is piped into all keep tail position. A call of an
+/// insisting form never does, since it is called so that its answer can be
+/// pointed at the line. A lambda's body anywhere else runs somewhere else,
+/// so nothing in it is.
 fn walk<'a>(e: &'a Expr, tail: bool, found: &mut impl FnMut(&'a str, usize, Span, bool)) {
-    if let Expr::App { head, args, piped: false, span } = e {
-        if let Expr::Ident(name, _, _) = head.as_ref() {
-            if name.as_str() == "if" && args.len() == 3 {
+    match e {
+        Expr::Guard { cond, early, rest, .. } => {
+            walk(cond, false, found);
+            walk(early, tail, found);
+            walk_body(rest, tail, found);
+        }
+        Expr::App { head, args, piped: true, .. } if args.len() == 1 => match head.as_ref() {
+            Expr::Lambda { params, body, .. } if params.len() == 1 => {
+                walk(&args[0], false, found);
+                walk(body, tail, found);
+            }
+            _ => crate::for_each_child(e, |c| walk(c, false, found)),
+        },
+        Expr::App { head, args, piped: false, span } => match head.as_ref() {
+            Expr::Ident(name, _, _) if name.as_str() == "if" && args.len() == 3 => {
                 walk(&args[0], false, found);
                 walk(&args[1], tail, found);
                 walk(&args[2], tail, found);
-                return;
             }
-            found(name.as_str(), args.len(), *span, tail);
-            for a in args {
-                walk(a, false, found);
+            Expr::Ident(name, _, _) => {
+                found(name.as_str(), args.len(), *span, tail && !name.ends_with('!'));
+                for a in args {
+                    walk(a, false, found);
+                }
             }
-            return;
-        }
+            _ => crate::for_each_child(e, |c| walk(c, false, found)),
+        },
+        _ => crate::for_each_child(e, |c| walk(c, false, found)),
     }
-    crate::for_each_child(e, |c| walk(c, false, found));
 }
