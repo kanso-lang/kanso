@@ -1,2 +1,2 @@
 error[endpoint]: unhandled err reached the executor: "cannot read no-such-file.txt: no such file"
-  born in os/insisted at std/os/os.kso:113
+  born in a_bind_never_sees_a_failure/play at a_bind_never_sees_a_failure.kso:9

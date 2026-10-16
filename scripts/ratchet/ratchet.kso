@@ -5510,17 +5510,15 @@ insisted_oracle = row
   (breaking "an_interpreted_insisting_form_that_names_the_library")
   release
 
-failure_places = [
-  death_unplaced
-  oracle_unplaced
-  cycle_unplaced
-  insisted_native
-  insisted_oracle
-]
+failure_places = [death_unplaced oracle_unplaced cycle_unplaced]
+
+insisted_places = [insisted_native insisted_oracle]
 
 rows_cq16 = list/concat rows_cq15 failure_places
 
-rows_c = list/concat rows_cq16 [itself]
+rows_cq17 = list/concat rows_cq16 insisted_places
+
+rows_c = list/concat rows_cq17 [itself]
 
 rows = list/concat rows_a (list/concat rows_b rows_c)
 
