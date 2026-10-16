@@ -1,12 +1,13 @@
 #!/bin/sh
-# The interpreter places a failure in the frame of the expression it leaves.
-# This mutation stops placing it there, so the oracle's runtime goldens lose
-# their `failed in` line.
+# The interpreter places a failure as it leaves the body that raised it, since
+# every expression in a body shares the body's frame. This mutation stops
+# placing it there, so the oracle's runtime goldens lose their `failed in`
+# line.
 set -e
-line='        self.eval_node_inner(expr, env, frame).map_err(|e| placed(e, frame))'
+line='        self.eval_body_flow_unplaced(decl, env).map_err(|e| placed(e, &self.frame_for(decl)))'
 [ "$(grep -cxF "$line" src/eval.rs)" -eq 1 ] || {
-  echo "eval_node's placing moved; this mutation needs rewriting" >&2
+  echo "the body's placing moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i 's/^        self.eval_node_inner(expr, env, frame).map_err(|e| placed(e, frame))$/        self.eval_node_inner(expr, env, frame)/' src/eval.rs
+sed -i 's/^        self.eval_body_flow_unplaced(decl, env).map_err(|e| placed(e, \&self.frame_for(decl)))$/        self.eval_body_flow_unplaced(decl, env)/' src/eval.rs
 if grep -qxF "$line" src/eval.rs; then exit 1; fi

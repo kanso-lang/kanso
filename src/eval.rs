@@ -1461,7 +1461,18 @@ impl<'a> Interp<'a> {
     /// A body run whose final expression may hand back a tail call for the
     /// dispatcher's loop instead of recursing. Everything before the last
     /// statement evaluates exactly as eval_body_in does.
+    /// A body run to its tail. A failure is placed as it leaves the body:
+    /// every expression in it shares the body's frame, so the body is the one
+    /// place the frame changes on the way out (ruled on #1975).
     fn eval_body_flow(
+        &self,
+        decl: &'a FnDecl,
+        env: Option<Rc<Env>>,
+    ) -> Result<Flow<'a>, RuntimeError> {
+        self.eval_body_flow_unplaced(decl, env).map_err(|e| placed(e, &self.frame_for(decl)))
+    }
+
+    fn eval_body_flow_unplaced(
         &self,
         decl: &'a FnDecl,
         env: Option<Rc<Env>>,
@@ -1514,9 +1525,7 @@ impl<'a> Interp<'a> {
         env: &Option<Rc<Env>>,
         frame: &Frame,
     ) -> Result<Flow<'a>, RuntimeError> {
-        // a failure in tail position is placed here, as `eval_node` places
-        // one anywhere else
-        self.eval_tail_inner(expr, env, frame).map_err(|e| placed(e, frame))
+        self.eval_tail_inner(expr, env, frame)
     }
 
     #[inline(always)]
@@ -1707,6 +1716,16 @@ impl<'a> Interp<'a> {
         &self,
         decl: &FnDecl,
         body: &[Stmt],
+        env: Option<Rc<Env>>,
+        frame: &Frame,
+    ) -> EvalResult {
+        self.eval_body_in_unplaced(decl, body, env, frame).map_err(|e| placed(e, frame))
+    }
+
+    fn eval_body_in_unplaced(
+        &self,
+        decl: &FnDecl,
+        body: &[Stmt],
         mut env: Option<Rc<Env>>,
         frame: &Frame,
     ) -> EvalResult {
@@ -1863,7 +1882,7 @@ impl<'a> Interp<'a> {
     /// left alone on the way up (ruled on #1975).
     #[inline(never)]
     fn eval_node(&self, expr: &Expr, env: &Option<Rc<Env>>, frame: &Frame) -> EvalResult {
-        self.eval_node_inner(expr, env, frame).map_err(|e| placed(e, frame))
+        self.eval_node_inner(expr, env, frame)
     }
 
     #[inline(always)]
@@ -2527,6 +2546,7 @@ impl<'a> Interp<'a> {
             env = bind(env, name.clone(), value);
         }
         self.eval_tail(&closure.body, &env, &closure.frame)
+            .map_err(|e| placed(e, &closure.frame))
     }
 
     /// Dispatch fires the moment the supplied count matches an arity the
@@ -3224,7 +3244,7 @@ impl<'a> Interp<'a> {
         match callee {
             Value::Closure(c) if c.params.len() == 1 => {
                 let env = bind(c.env.clone(), c.params[0].clone(), arg);
-                self.eval(&c.body, &env, &c.frame)
+                self.eval(&c.body, &env, &c.frame).map_err(|e| placed(e, &c.frame))
             }
             // a callback compiled into another engine's table. Without this
             // arm the argument goes through that engine's guarded call and a
@@ -3397,7 +3417,8 @@ impl<'a> Interp<'a> {
             // A nullary closure's body can answer with a thunk, and scrutiny
             // wants a value rather than the next cell.
             Value::Closure(c) if c.params.is_empty() => {
-                let answered = self.eval(&c.body, &c.env, &c.frame)?;
+                let answered =
+                    self.eval(&c.body, &c.env, &c.frame).map_err(|e| placed(e, &c.frame))?;
                 self.force_thunk(answered)
             }
             other => self.force_thunk(other),
@@ -3572,7 +3593,7 @@ impl<'a> Interp<'a> {
                 }
                 ThunkState::Pending { expr, env, frame } => {
                     self.thunk_stats.evals.set(self.thunk_stats.evals.get() + 1);
-                    let v = self.eval(&expr, &env, &frame)?;
+                    let v = self.eval(&expr, &env, &frame).map_err(|e| placed(e, &frame))?;
                     *cell.borrow_mut() = ThunkState::Forced(v.clone());
                     value = v;
                 }
