@@ -1,4 +1,1 @@
-error[syntax]: a file with declarations is a library, and a library has no statements to run — `kanso play` runs declarations beside statements in one file
-  --> endpoint_none.kso:2:1
-   2 | xs[9]
-       ^
+error[endpoint]: unhandled none reached the entry

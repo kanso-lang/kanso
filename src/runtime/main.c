@@ -106,6 +106,10 @@ static void k_watch_the_stack(void) {
 #endif
 
 int main(int argc, char** argv) {
+    /* the tab runs one program after another in one engine, and a place a
+       previous one stamped is not this one's to name */
+    k_site = 0;
+    k_deep_site = 0;
     k_argc_global = argc;
 #ifndef __wasm__
     k_watch_the_stack();

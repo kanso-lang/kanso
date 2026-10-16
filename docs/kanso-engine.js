@@ -281,6 +281,23 @@ function joined(chunks) {
   return new TextDecoder().decode(all);
 }
 
+/* The place the runtime recorded for a cycle too deep for the stack: its
+   k_deep_site points at "hako\0fn at file:line\0", and the line names the
+   second string. Empty when no cycle recorded one. */
+function deepPlace(rt) {
+  if (!rt.k_deep_site) return '';
+  const view = new DataView(rt.memory.buffer);
+  const at = view.getUint32(rt.k_deep_site.value, true);
+  if (at === 0) return '';
+  const bytes = new Uint8Array(rt.memory.buffer);
+  let start = at;
+  while (bytes[start] !== 0) start++;
+  start++;
+  let end = start;
+  while (bytes[end] !== 0) end++;
+  return `  failed in ${new TextDecoder().decode(bytes.subarray(start, end))}\n`;
+}
+
 /* compile the editor's program through the native emitter and run it on the
    runtime; returns null when the route is unavailable or declines the
    program, and the interpreter picks it up. The runtime is built with tail
@@ -325,7 +342,7 @@ async function runNative(src, compileFn) {
     } else if (e instanceof RangeError) {
       /* the wasm call stack ran out: the sentence every engine prints */
       wasm.kanso_stack_exhausted();
-      host.err.push(new TextEncoder().encode(readOut()));
+      host.err.push(new TextEncoder().encode(readOut() + deepPlace(rt)));
       code = 1;
     } else {
       host.err.push(new TextEncoder().encode(`${e}\n`));

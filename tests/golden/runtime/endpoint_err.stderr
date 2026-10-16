@@ -1,4 +1,2 @@
-error[syntax]: a file with declarations is a library, and a library has no statements to run — `kanso play` runs declarations beside statements in one file
-  --> endpoint_err.kso:1:1
-   1 | err "nothing to divide by"
-       ^
+error[endpoint]: unhandled err reached the entry: "nothing to divide by"
+  born in the entry at endpoint_err.kso:1
