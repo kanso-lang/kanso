@@ -302,10 +302,9 @@ impl<'a> Interp<'a> {
                 }
             },
             Desc::Insisted(inner, at, hako) => match self.step(inner, executor)? {
-                Step::Blocked(ms, cont) => Ok(Step::Blocked(
-                    ms,
-                    Rc::new(Desc::Insisted(cont, at.clone(), hako.clone())),
-                )),
+                Step::Blocked(ms, cont) => {
+                    Ok(Step::Blocked(ms, Rc::new(Desc::Insisted(cont, at.clone(), hako.clone()))))
+                }
                 Step::Done(v) => Ok(Step::Done(restamped(v, at, hako))),
             },
             Desc::Rescue(inner, callee, raised) => match self.step(inner, executor)? {

@@ -103,7 +103,11 @@ pub fn join_values(left: Value, right: Value, span: Span) -> EvalResult {
             (Value::Desc(a), Value::Desc(b)) => {
                 Ok(Value::Desc(Rc::new(Desc::Join(a.clone(), b.clone()))))
             }
-            _ => Err(RuntimeError { at: None, message: "a group joins descriptions".to_string(), span }),
+            _ => Err(RuntimeError {
+                at: None,
+                message: "a group joins descriptions".to_string(),
+                span,
+            }),
         },
     }
 }
@@ -165,7 +169,8 @@ fn spelled_op(op: &str) -> &str {
 /// word the compiled engines use, and the answer is an int.
 fn bitwise(op: &str, a: &Int, b: &Int, span: Span) -> EvalResult {
     let (Some(x), Some(y)) = (a.to_i64(), b.to_i64()) else {
-        return Err(RuntimeError { at: None,
+        return Err(RuntimeError {
+            at: None,
             message: format!("{} takes whole numbers that fit 64 bits", spelled_op(op)),
             span,
         });
@@ -237,7 +242,8 @@ pub fn eval_binop(
         // Anything else meeting a bitwise operator is the type complaint the
         // compiled engines print, in their words: the operator and the named
         // function in std/bits are one operation, so they answer alike.
-        ("&" | "|" | "^", other, _) if !matches!(other, Value::Int(_)) => Err(RuntimeError { at: None,
+        ("&" | "|" | "^", other, _) if !matches!(other, Value::Int(_)) => Err(RuntimeError {
+            at: None,
             message: format!(
                 "{} takes whole numbers, got {}",
                 spelled_op(op),
@@ -245,7 +251,8 @@ pub fn eval_binop(
             ),
             span,
         }),
-        ("&" | "|" | "^", _, other) => Err(RuntimeError { at: None,
+        ("&" | "|" | "^", _, other) => Err(RuntimeError {
+            at: None,
             message: format!(
                 "{} takes whole numbers, got {}",
                 spelled_op(op),
@@ -280,12 +287,17 @@ pub fn eval_binop(
                 ">" => ord.is_gt(),
                 _ => ord.is_ge(),
             })),
-            None => Err(RuntimeError { at: None,
+            None => Err(RuntimeError {
+                at: None,
                 message: "comparison requires two values of one comparable type".to_string(),
                 span,
             }),
         },
-        _ => Err(RuntimeError { at: None, message: format!("`{op}` is not defined for these values"), span }),
+        _ => Err(RuntimeError {
+            at: None,
+            message: format!("`{op}` is not defined for these values"),
+            span,
+        }),
     }
 }
 
