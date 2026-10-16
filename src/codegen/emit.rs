@@ -3966,7 +3966,6 @@ impl<'a> Backend<'a> {
             let t = f.tmp();
             // a twin stores the site on the branch that reaches the C entry,
             // so the call that takes the fast path pays nothing for it
-            let mut args_ir = args_ir;
             match takes_site(sym) {
                 true => args_ir.push(self.origin_arg(f, span)),
                 false => self.stamp_site(f, span),
