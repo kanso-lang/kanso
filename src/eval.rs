@@ -1417,7 +1417,19 @@ impl<'a> Interp<'a> {
     /// What a direct call of an insisting form answered, pointed at the
     /// caller's line: a failure now, or a box whose failure will be when it
     /// runs. Every other call answers as it did.
+    #[inline(always)]
     fn insisted(&self, head: &Expr, answer: Value, span: Span, frame: &Frame) -> Value {
+        // only an err or an effect that may yield one is pointed anywhere,
+        // and nearly every answer is a plain value
+        match matches!(answer, Value::ErrV(_) | Value::Desc(_)) {
+            true => self.insisted_failing(head, answer, span, frame),
+            false => answer,
+        }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn insisted_failing(&self, head: &Expr, answer: Value, span: Span, frame: &Frame) -> Value {
         let Expr::Ident(name, _, _) = head else { return answer };
         if !name.as_str().ends_with('!') {
             return answer;
