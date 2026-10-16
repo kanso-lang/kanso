@@ -400,6 +400,31 @@ fn placed(mut e: RuntimeError, frame: &Frame) -> RuntimeError {
     e
 }
 
+/// Whether a call's head names an insisting form, a function spelled with
+/// `!` (ruled on #1975: such a form names its caller's line).
+fn insists(head: &Expr) -> bool {
+    matches!(head, Expr::Ident(name, _, _) if name.as_str().ends_with('!'))
+}
+
+/// A failure the package `hako` raised, pointed at `at` instead of the line
+/// inside that package that raised it. Who raised it does not change, so an
+/// arm asking that question hears the same answer.
+pub fn restamped(v: Value, at: &Rc<str>, hako: &Rc<str>) -> Value {
+    match v {
+        Value::ErrV(info) if info.hako.as_deref() == Some(&**hako) => {
+            Value::ErrV(Rc::new(ErrInfo {
+                reason: info.reason.clone(),
+                origin: Some(at.clone()),
+                hako: info.hako.clone(),
+                hops: info.hops.clone(),
+                cause: info.cause.clone(),
+                merged: info.merged,
+            }))
+        }
+        other => other,
+    }
+}
+
 pub fn err_value(reason: Value, raised: Raised) -> Value {
     Value::ErrV(Rc::new(ErrInfo {
         reason,
@@ -594,6 +619,11 @@ pub enum Desc {
     /// deferred, so it holds its answer from the moment it is built and
     /// running it hands the answer over.
     Settled(Value),
+    /// What an insisting form handed back, run where it was called: a
+    /// failure the form's own package raised is re-pointed at the caller's
+    /// line, the place an `!` names (ruled on #1975). The second field is
+    /// that line, the third the form's package.
+    Insisted(Rc<Desc>, Rc<str>, Rc<str>),
 }
 
 /// A read that found nothing answers `none`, the shape `env` already uses for
@@ -1381,6 +1411,24 @@ impl<'a> Interp<'a> {
         self.eval_body_in(decl, &decl.body, env, &self.frame_for(decl))
     }
 
+    /// What a direct call of an insisting form answered, pointed at the
+    /// caller's line: a failure now, or a box whose failure will be when it
+    /// runs. Every other call answers as it did.
+    fn insisted(&self, head: &Expr, answer: Value, span: Span, frame: &Frame) -> Value {
+        let Expr::Ident(name, _, _) = head else { return answer };
+        if !name.as_str().ends_with('!') {
+            return answer;
+        }
+        let Some(group) = self.fns.get(name.as_str()) else { return answer };
+        let Some(first) = group.first() else { return answer };
+        let Some(at) = origin_at(frame, span).at else { return answer };
+        let hako: Rc<str> = Rc::from(crate::provenance::package_of(&first.file));
+        match answer {
+            Value::Desc(d) => Value::Desc(Rc::new(Desc::Insisted(d, at, hako))),
+            other => restamped(other, &at, &hako),
+        }
+    }
+
     /// A group on a cycle that grows the stack records its cycle's place as
     /// a body starts, which is what an overflow names (see `crate::deep`).
     #[inline(always)]
@@ -1530,6 +1578,10 @@ impl<'a> Interp<'a> {
             for arg in &args[1..] {
                 values.push(self.eval(arg, env, frame)?);
             }
+            if insists(head) {
+                let answer = self.call(callee, values, *span, frame)?;
+                return Ok(Flow::Done(self.insisted(head, answer, *span, frame)));
+            }
             return match (group_of(&callee), callee) {
                 (Some((name, group)), _) => Ok(Flow::Tail(name, group, values, *span)),
                 (None, Value::Closure(c)) => Ok(Flow::Closure(c, values, *span)),
@@ -1552,6 +1604,12 @@ impl<'a> Interp<'a> {
         let mut values = Vec::with_capacity(args.len());
         for arg in args {
             values.push(self.eval(arg, env, frame)?);
+        }
+        // an insisting form is called rather than looped on, so what it
+        // answers can be pointed at this line on the way back
+        if insists(head) {
+            let answer = self.call(callee, values, *span, frame)?;
+            return Ok(Flow::Done(self.insisted(head, answer, *span, frame)));
         }
         match (group_of(&callee), callee) {
             (Some((name, group)), _) => Ok(Flow::Tail(name, group, values, *span)),
@@ -1936,7 +1994,8 @@ impl<'a> Interp<'a> {
                     for arg in &args[1..] {
                         values.push(self.eval(arg, env, frame)?);
                     }
-                    return self.call(callee, values, *span, frame);
+                    let answer = self.call(callee, values, *span, frame)?;
+                    return Ok(self.insisted(head, answer, *span, frame));
                 }
                 let callee = self.eval(head, env, frame)?;
                 // `if` in VALUE position, the way `eval_tail` has always done it
@@ -1984,7 +2043,8 @@ impl<'a> Interp<'a> {
                         false => values.push(self.eval(arg, env, frame)?),
                     }
                 }
-                self.call(callee, values, *span, frame)
+                let answer = self.call(callee, values, *span, frame)?;
+                Ok(self.insisted(head, answer, *span, frame))
             }
             Expr::Lambda { params, body, .. } => Ok(Value::Closure(Rc::new(ClosureData {
                 params: params.iter().map(|(n, _)| Name::new(n)).collect(),

@@ -393,6 +393,33 @@ KValue k_b_annotate(KValue subject, KValue callback, const char* origin) {
     return k_sited_word(subject, callback, origin, k_annotate_wrap);
 }
 
+/* An insisting form names its caller's line (ruled on #1975). A failure the
+   form's own package raised is pointed at the call that insisted: the trace
+   line moves and the package stays, so an arm asking who raised it hears the
+   same answer. `site` is the literal "<form's package>\0<caller> at
+   <file>:<line>\0". A box carries the wrapper as a rescue step, which hands it
+   the failure once the box has run. */
+static KValue k_insisted_err(KValue failure, const char* site) {
+    if (failure.tag != K_ERR) return failure;
+    KErrBox* old = k_err_box(failure);
+    if (!old->hako || strcmp(old->hako, site) != 0) return failure;
+    KErrBox* box = k_err_box_new(old->reason, site + strlen(site) + 1, old->hako, old->hops,
+                                 old->cause, old->merged);
+    KValue v; v.tag = K_ERR; v.payload = k_ptr(box); return v;
+}
+
+static K_CLOSCC KValue k_insisted_wrap(void* env, KValue failure) {
+    KValue site = k_env_get(env, 0);
+    return k_insisted_err(failure, (const char*)(intptr_t)site.payload);
+}
+
+KValue k_b_insisted(KValue answer, const char* site) {
+    if (answer.tag != K_DESC) return k_insisted_err(answer, site);
+    KValue s; s.tag = K_INT; s.payload = (long long)(intptr_t)site;
+    KValue caps[1]; caps[0] = s;
+    return k_mkdesc(29, answer, k_closure(k_insisted_wrap, 1, 1, caps, 0));
+}
+
 /* The work-ahead pool (#1856): the compiler defines it. At the first park it
    forces each constant it lifted out of the work that follows a park; at
    every park it drains the cells the program's functions handed over. */

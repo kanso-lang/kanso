@@ -1270,6 +1270,7 @@ declare %KValue @k_desc_print(%KValue)
 declare void @k_die(ptr) noreturn
 declare void @k_die_arity(i64, i64) noreturn
 declare void @k_die_overload(ptr) noreturn
+declare %KValue @k_b_insisted(%KValue, ptr)
 declare void @k_die_destructure(%KValue, ptr) noreturn
 declare { i64, i1 } @llvm.sadd.with.overflow.i64(i64, i64)
 declare { i64, i1 } @llvm.ssub.with.overflow.i64(i64, i64)

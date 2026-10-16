@@ -4499,6 +4499,20 @@ impl<'a> Backend<'a> {
         })
     }
 
+    /// The literal an insisting form's answer is pointed at: the form's own
+    /// package, which a failure it raised names, and then this call's line
+    /// in the frame of the caller.
+    fn insisted_site(&mut self, f: &FnEmit, name: &str, arity: usize, span: Span) -> String {
+        let file = self
+            .decls_named(name)
+            .find(|d| d.params.len() == arity)
+            .map(|d| d.file.clone())
+            .unwrap_or_default();
+        let hako = crate::provenance::package_of(&file);
+        let (lit, _) = self.intern(&format!("{hako}\0{}:{}\0", f.origin_prefix, span.line));
+        format!("ptr @{lit}")
+    }
+
     /// On entering a group whose cycle grows the stack, records the place an
     /// overflow in that cycle names, where the stack watcher reads it.
     fn enter_deep(&mut self, f: &mut FnEmit, name: &str, arity: usize) {

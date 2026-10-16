@@ -1369,8 +1369,11 @@ impl<'a> Backend<'a> {
         if let Expr::App { head, args, piped: false, .. } = expr {
             if let Expr::Ident(name, _, _) = head.as_ref() {
                 let bare = name.strip_prefix("builtin_").unwrap_or(name);
+                // an insisting form is called rather than jumped to, so its
+                // answer can be pointed at this line on the way back
                 if self.forwarders.contains(bare, args.len())
                     || self.forwarders.contains(name, args.len())
+                    || name.ends_with('!')
                 {
                     let value = self.emit_expr(f, expr)?;
                     self.emit_ret(f, &value);
@@ -3771,6 +3774,18 @@ impl<'a> Backend<'a> {
                 p
             } else {
                 t
+            };
+            // an insisting form names its caller's line (ruled on #1975)
+            let result = match name.ends_with('!') && callee_ret == "%KValue" {
+                true => {
+                    let site = self.insisted_site(f, name, n, span);
+                    let w = f.tmp();
+                    f.line_fmt(format_args!(
+                        "{w} = call %KValue @k_b_insisted(%KValue {result}, {site})"
+                    ));
+                    w
+                }
+                false => result,
             };
             if let Some(ty) = self.escape.returns_ty(name, n) {
                 if callee_ret == "%parsed" {
