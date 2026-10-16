@@ -437,6 +437,64 @@ fn string_where_a_list_goes(
     }
 }
 
+/// An arithmetic operator handed a value it is never defined for. `+`, `-`,
+/// `*`, `/` and `%` take numbers, and an operator arm routes only a record, so
+/// a string, a list or a map stops the run on every engine (ruled on #1975,
+/// "a run-time failure names the line it happened on"). The operand is known
+/// to be one only when it cannot hold an err, since an operator hands an err
+/// on rather than refusing it: a literal with nothing interpolated, or a call
+/// of such literals into a group whose every arm answers one and none fails.
+/// A group with no err arm hands an err argument on, so a call over a name is
+/// left to the run, which names the line.
+fn wrong_kind_at_an_operator(
+    e: &Expr,
+    returns: &HashMap<(&str, usize), crate::infer::Set>,
+    shadow: &dyn Fn(&str) -> bool,
+    diags: &mut Vec<Diagnostic>,
+) {
+    use crate::infer::{LIST, MAP, STR};
+    // written whole, with no part that could be an err
+    fn plain(e: &Expr) -> bool {
+        match e {
+            Expr::Int(..) | Expr::Float(..) => true,
+            Expr::Str(parts, _) => parts.iter().all(|p| matches!(p, TemplatePart::Lit(_))),
+            Expr::List(items, _) => items.iter().all(plain),
+            Expr::MapLit(pairs, _) => pairs.iter().all(|(k, v)| plain(k) && plain(v)),
+            _ => false,
+        }
+    }
+    let Expr::BinOp { op, lhs, rhs, .. } = e else { return };
+    if !matches!(*op, "+" | "-" | "*" | "/" | "%") {
+        return;
+    }
+    for side in [lhs.as_ref(), rhs.as_ref()] {
+        let kind = match side {
+            Expr::Str(..) if plain(side) => "a string",
+            Expr::List(..) if plain(side) => "a list",
+            Expr::MapLit(..) if plain(side) => "a map",
+            Expr::App { head, args, piped: false, .. } if args.iter().all(plain) => {
+                match head.as_ref() {
+                    Expr::Ident(maker, _, _) if !shadow(maker.as_str()) => {
+                        match returns.get(&(maker.as_str(), args.len())) {
+                            Some(&STR) => "a string",
+                            Some(&LIST) => "a list",
+                            Some(&MAP) => "a map",
+                            _ => continue,
+                        }
+                    }
+                    _ => continue,
+                }
+            }
+            _ => continue,
+        };
+        diags.push(Diagnostic::new(
+            "type",
+            format!("`{op}` takes numbers, and this is {kind}"),
+            side.span(),
+        ));
+    }
+}
+
 /// The gavel makes a receiver responsible for a none it can be handed, and
 /// lets the caller discharge that by resolving first. The report belongs at
 /// the argument, because that is the line an author edits.
@@ -1127,6 +1185,7 @@ fn check_after_infer<'p>(
                 raised_err_at(cur, &raisers, &consts, &err_arms, &named, &decl.file, none_diags);
                 lazy_where_a_list_goes(cur, aliases, returns, &shadow, none_diags);
                 string_where_a_list_goes(cur, aliases, returns, &shadow, none_diags);
+                wrong_kind_at_an_operator(cur, returns, &shadow, none_diags);
                 site(cur, &shadow, &[], &mut handed_here, box_diags);
                 crate::for_each_child(cur, |c| stack.push(c));
             }
