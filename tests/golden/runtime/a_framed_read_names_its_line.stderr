@@ -1,0 +1,2 @@
+error[runtime]: bytes takes a string
+  failed in a_framed_read_names_its_line/scan at a_framed_read_names_its_line.kso:9

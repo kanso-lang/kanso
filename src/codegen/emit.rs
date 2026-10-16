@@ -541,6 +541,7 @@ impl<'a> Backend<'a> {
                         ));
                         f.frame_held = true;
                     } else {
+                        self.stamp_site(f, *span);
                         f.line_fmt(format_args!("{t} = call %KValue @k_b_bytes_fast(%KValue {v})"));
                     }
                     f.record(&t, infer::builtin_set("bytes", &arg_sets));
