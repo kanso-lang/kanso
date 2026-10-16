@@ -541,8 +541,10 @@ impl<'a> Backend<'a> {
                         ));
                         f.frame_held = true;
                     } else {
-                        self.stamp_site(f, *span);
-                        f.line_fmt(format_args!("{t} = call %KValue @k_b_bytes_fast(%KValue {v})"));
+                        let site = self.origin_arg(f, *span);
+                        f.line_fmt(format_args!(
+                            "{t} = call %KValue @k_b_bytes_fast(%KValue {v}, {site})"
+                        ));
                     }
                     f.record(&t, infer::builtin_set("bytes", &arg_sets));
                     f.bind(name, &t);
@@ -1751,7 +1753,7 @@ impl<'a> Backend<'a> {
                         })
                         .collect();
                     let t = f.tmp();
-                    if self.can_miss(name, n) {
+                    if self.can_miss_with(f, name, n, &emitted) {
                         self.stamp_site(f, expr.span());
                     }
                     if same_ret {
@@ -2324,9 +2326,18 @@ impl<'a> Backend<'a> {
             "<=" => format!("call %KValue @k_cmp(%KValue {a}, %KValue {b}, i64 3)"),
             ">" => format!("call %KValue @k_cmp(%KValue {a}, %KValue {b}, i64 4)"),
             ">=" => format!("call %KValue @k_cmp(%KValue {a}, %KValue {b}, i64 5)"),
-            "&" => format!("call %KValue @k_b_bit_and_fast(%KValue {a}, %KValue {b})"),
-            "|" => format!("call %KValue @k_b_bit_or_fast(%KValue {a}, %KValue {b})"),
-            "^" => format!("call %KValue @k_b_bit_xor_fast(%KValue {a}, %KValue {b})"),
+            "&" => {
+                let site = self.origin_arg(f, span);
+                format!("call %KValue @k_b_bit_and_fast(%KValue {a}, %KValue {b}, {site})")
+            }
+            "|" => {
+                let site = self.origin_arg(f, span);
+                format!("call %KValue @k_b_bit_or_fast(%KValue {a}, %KValue {b}, {site})")
+            }
+            "^" => {
+                let site = self.origin_arg(f, span);
+                format!("call %KValue @k_b_bit_xor_fast(%KValue {a}, %KValue {b}, {site})")
+            }
             // An operator the parser accepts and this does not know used to
             // land on the last arm and compare, which is a wrong answer with
             // nothing said. Naming every operator means a new one refuses to
@@ -2335,7 +2346,6 @@ impl<'a> Backend<'a> {
         };
         if matches!(op, "&" | "|" | "^") {
             let t = f.tmp();
-            self.stamp_site(f, span);
             f.line_fmt(format_args!("{t} = {slow_call}"));
             f.record(&t, (f.set_of(a) & FAIL) | (f.set_of(b) & FAIL) | INT);
             return Ok(t.to_string());
@@ -3416,12 +3426,9 @@ impl<'a> Backend<'a> {
                                 true => "k_b_append_mut_byte",
                                 false => "k_b_append_byte",
                             };
-                            // only an accumulator that is not bytes stops the program
-                            if f.set_of(&acc) != BYTES {
-                                self.stamp_site(f, span);
-                            }
+                            let site = self.origin_arg(f, span);
                             f.line_fmt(format_args!(
-                                "{t} = call %KValue @{sym}(%KValue {acc}, %KValue {rendered})"
+                                "{t} = call %KValue @{sym}(%KValue {acc}, %KValue {rendered}, {site})"
                             ));
                             STR | fails
                         }
@@ -3705,7 +3712,7 @@ impl<'a> Backend<'a> {
                 // are already evaluated, so they live below the mark
                 f.line("call void @k_beat_push()");
             }
-            if self.can_miss(name, n) {
+            if self.can_miss_with(f, name, n, &emitted) {
                 self.stamp_site(f, span);
             }
             let t = match twin {
@@ -3957,7 +3964,13 @@ impl<'a> Backend<'a> {
                 name
             };
             let t = f.tmp();
-            self.stamp_site(f, span);
+            // a twin stores the site on the branch that reaches the C entry,
+            // so the call that takes the fast path pays nothing for it
+            let mut args_ir = args_ir;
+            match takes_site(sym) {
+                true => args_ir.push(self.origin_arg(f, span)),
+                false => self.stamp_site(f, span),
+            }
             f.line_fmt(format_args!("{t} = call %KValue @k_b_{sym}({})", args_ir.join(", ")));
             let arg_sets: Vec<Set> = emitted.iter().map(|e| f.set_of(e)).collect();
             // `join` answers the first item that fails, and a list literal is

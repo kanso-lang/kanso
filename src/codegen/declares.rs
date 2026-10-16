@@ -31,7 +31,7 @@ done:
 @k_arena_left = external global i64
 @k_stats_on = external global i32
 
-define internal %KValue @k_b_append_byte(%KValue %acc, %KValue %x) alwaysinline {
+define internal %KValue @k_b_append_byte(%KValue %acc, %KValue %x, ptr %site) alwaysinline {
   %atag = extractvalue %KValue %acc, 0
   %isb = icmp eq i64 %atag, 13
   br i1 %isb, label %chkx, label %slow
@@ -87,6 +87,7 @@ alloc:
   %r0 = insertvalue %KValue { i64 13, i64 undef }, i64 %pi, 1
   ret %KValue %r0
 slow:
+  store ptr %site, ptr @k_site
   %f = call %KValue @k_b_append(%KValue %acc, %KValue %x)
   ret %KValue %f
 }
@@ -95,7 +96,7 @@ slow:
 ; length is written where it already sits, and the argument comes back. That
 ; header claim is all the twin above does after the store, so the mutating
 ; append had the smaller body and was the only one still paying a call.
-define internal %KValue @k_b_append_mut_byte(%KValue %acc, %KValue %x) alwaysinline {
+define internal %KValue @k_b_append_mut_byte(%KValue %acc, %KValue %x, ptr %site) alwaysinline {
   %atag = extractvalue %KValue %acc, 0
   %isb = icmp eq i64 %atag, 13
   br i1 %isb, label %chkx, label %slow
@@ -239,6 +240,7 @@ swdone:
   ret %KValue %acc
 
 slow:
+  store ptr %site, ptr @k_site
   %f = call %KValue @k_b_append_mut(%KValue %acc, %KValue %x)
   ret %KValue %f
 }
@@ -251,7 +253,7 @@ slow:
 ; iterations. Everything past the tags is the byte arm above, unchanged: the
 ; stats flag, the ownership test and the frontier test still decide, and
 ; anything they refuse still falls to the C.
-define internal %KValue @k_b_append_mut_int(%KValue %acc, %KValue %x) alwaysinline {
+define internal %KValue @k_b_append_mut_int(%KValue %acc, %KValue %x, ptr %site) alwaysinline {
   %bso = load i32, ptr @k_stats_on
   %bcount = icmp ne i32 %bso, 0
   br i1 %bcount, label %slow, label %bfast
@@ -284,6 +286,7 @@ bwrite:
   store i64 %len1, ptr %b
   ret %KValue %acc
 slow:
+  store ptr %site, ptr @k_site
   %f = call %KValue @k_b_append_mut(%KValue %acc, %KValue %x)
   ret %KValue %f
 }
@@ -292,7 +295,7 @@ slow:
 ; them: `text/append (text/append acc 92) b`, which is every escape the json
 ; encoder writes. The pair asks for room once and writes both bytes. Anything
 ; the fast path refuses runs the two single appends in order, as written.
-define internal %KValue @k_b_append_mut_int2(%KValue %acc, %KValue %x, %KValue %y) alwaysinline {
+define internal %KValue @k_b_append_mut_int2(%KValue %acc, %KValue %x, %KValue %y, ptr %site, ptr %site2) alwaysinline {
   %so = load i32, ptr @k_stats_on
   %counting = icmp ne i32 %so, 0
   br i1 %counting, label %slow, label %fast
@@ -329,8 +332,8 @@ write:
   store i64 %len2, ptr %b
   ret %KValue %acc
 slow:
-  %t = call %KValue @k_b_append_mut_int(%KValue %acc, %KValue %x)
-  %r = call %KValue @k_b_append_mut_int(%KValue %t, %KValue %y)
+  %t = call %KValue @k_b_append_mut_int(%KValue %acc, %KValue %x, ptr %site)
+  %r = call %KValue @k_b_append_mut_int(%KValue %t, %KValue %y, ptr %site2)
   ret %KValue %r
 }
 ; A string literal of one to eight bytes appended to a builder this function
@@ -543,7 +546,7 @@ slow:
   %s = call %KValue @k_b_utf8_slice(%KValue %c, %KValue %f, %KValue %t, ptr %o)
   ret %KValue %s
 }
-define internal %KValue @k_b_slice_fast(%KValue %c, %KValue %f, %KValue %t) alwaysinline {
+define internal %KValue @k_b_slice_fast(%KValue %c, %KValue %f, %KValue %t, ptr %site) alwaysinline {
   %ct = extractvalue %KValue %c, 0
   %ft = extractvalue %KValue %f, 0
   %tt = extractvalue %KValue %t, 0
@@ -564,10 +567,11 @@ view:
   %r = call %KValue @k_b_slice_raw(ptr %d, i64 %len, i64 %fv, i64 %tv)
   ret %KValue %r
 slow:
+  store ptr %site, ptr @k_site
   %s = call %KValue @k_b_slice(%KValue %c, %KValue %f, %KValue %t)
   ret %KValue %s
 }
-define internal %KValue @k_b_find2_below_fast(%KValue %cs, %KValue %from, %KValue %a, %KValue %b, %KValue %lim) alwaysinline {
+define internal %KValue @k_b_find2_below_fast(%KValue %cs, %KValue %from, %KValue %a, %KValue %b, %KValue %lim, ptr %site) alwaysinline {
   %cst = extractvalue %KValue %cs, 0
   %ft = extractvalue %KValue %from, 0
   %at = extractvalue %KValue %a, 0
@@ -597,10 +601,11 @@ scan:
   %r = insertvalue %KValue { i64 0, i64 undef }, i64 %at1, 1
   ret %KValue %r
 slow:
+  store ptr %site, ptr @k_site
   %f = call %KValue @k_b_find2_below(%KValue %cs, %KValue %from, %KValue %a, %KValue %b, %KValue %lim)
   ret %KValue %f
 }
-define internal %KValue @k_b_find2_fast(%KValue %cs, %KValue %from, %KValue %a, %KValue %b) alwaysinline {
+define internal %KValue @k_b_find2_fast(%KValue %cs, %KValue %from, %KValue %a, %KValue %b, ptr %site) alwaysinline {
   %cst = extractvalue %KValue %cs, 0
   %ft = extractvalue %KValue %from, 0
   %at = extractvalue %KValue %a, 0
@@ -626,6 +631,7 @@ scan:
   %r = insertvalue %KValue { i64 0, i64 undef }, i64 %at1, 1
   ret %KValue %r
 slow:
+  store ptr %site, ptr @k_site
   %f = call %KValue @k_b_find2(%KValue %cs, %KValue %from, %KValue %a, %KValue %b)
   ret %KValue %f
 }
@@ -640,7 +646,7 @@ miss:
   %f = call %KValue @k_str_lit(ptr %data, i64 %len, ptr %slot)
   ret %KValue %f
 }
-define internal %KValue @k_b_length_fast(%KValue %v) alwaysinline {
+define internal %KValue @k_b_length_fast(%KValue %v, ptr %site) alwaysinline {
   %tag = extractvalue %KValue %v, 0
   ; list (9) or bytes (13) in one compare; three compares on %tag lower as a chain
   %t4 = or i64 %tag, 4
@@ -668,6 +674,7 @@ count:
   %rs = insertvalue %KValue { i64 0, i64 undef }, i64 %n, 1
   ret %KValue %rs
 slow:
+  store ptr %site, ptr @k_site
   %f = call %KValue @k_b_length(%KValue %v)
   ret %KValue %f
 }
@@ -681,7 +688,7 @@ slow:
 ; dropped -- the same arrangement k_b_append_byte uses, for the same reason.
 ; KStr keeps its length in an i32, so the load is sign-extended; a view's cap
 ; is zero, which is what marks the data as borrowed rather than owned.
-define internal %KValue @k_b_bytes_fast(%KValue %sv) alwaysinline {
+define internal %KValue @k_b_bytes_fast(%KValue %sv, ptr %site) alwaysinline {
   %tag = extractvalue %KValue %sv, 0
   %isstr = icmp eq i64 %tag, 6
   br i1 %isstr, label %chks, label %slow
@@ -714,6 +721,7 @@ alloc:
   %r0 = insertvalue %KValue { i64 13, i64 undef }, i64 %pi, 1
   ret %KValue %r0
 slow:
+  store ptr %site, ptr @k_site
   %f = call %KValue @k_b_bytes(%KValue %sv)
   ret %KValue %f
 }
@@ -838,7 +846,7 @@ slow:
 ; call the digest makes; anything else — a failure, a float, a shift outside
 ; nought to sixty-three — falls to the C entry, which answers as it always did
 ; and owns every diagnostic.
-define internal %KValue @k_b_bit_and_fast(%KValue %a, %KValue %b) alwaysinline {
+define internal %KValue @k_b_bit_and_fast(%KValue %a, %KValue %b, ptr %site) alwaysinline {
   %ta = extractvalue %KValue %a, 0
   %tb = extractvalue %KValue %b, 0
   %oa = icmp eq i64 %ta, 0
@@ -852,10 +860,11 @@ ints:
   %v = insertvalue %KValue { i64 0, i64 undef }, i64 %r, 1
   ret %KValue %v
 slow:
+  store ptr %site, ptr @k_site
   %s = call %KValue @k_b_bit_and(%KValue %a, %KValue %b)
   ret %KValue %s
 }
-define internal %KValue @k_b_bit_or_fast(%KValue %a, %KValue %b) alwaysinline {
+define internal %KValue @k_b_bit_or_fast(%KValue %a, %KValue %b, ptr %site) alwaysinline {
   %ta = extractvalue %KValue %a, 0
   %tb = extractvalue %KValue %b, 0
   %oa = icmp eq i64 %ta, 0
@@ -869,10 +878,11 @@ ints:
   %v = insertvalue %KValue { i64 0, i64 undef }, i64 %r, 1
   ret %KValue %v
 slow:
+  store ptr %site, ptr @k_site
   %s = call %KValue @k_b_bit_or(%KValue %a, %KValue %b)
   ret %KValue %s
 }
-define internal %KValue @k_b_bit_xor_fast(%KValue %a, %KValue %b) alwaysinline {
+define internal %KValue @k_b_bit_xor_fast(%KValue %a, %KValue %b, ptr %site) alwaysinline {
   %ta = extractvalue %KValue %a, 0
   %tb = extractvalue %KValue %b, 0
   %oa = icmp eq i64 %ta, 0
@@ -886,10 +896,11 @@ ints:
   %v = insertvalue %KValue { i64 0, i64 undef }, i64 %r, 1
   ret %KValue %v
 slow:
+  store ptr %site, ptr @k_site
   %s = call %KValue @k_b_bit_xor(%KValue %a, %KValue %b)
   ret %KValue %s
 }
-define internal %KValue @k_b_bit_shl_fast(%KValue %a, %KValue %b) alwaysinline {
+define internal %KValue @k_b_bit_shl_fast(%KValue %a, %KValue %b, ptr %site) alwaysinline {
   %ta = extractvalue %KValue %a, 0
   %tb = extractvalue %KValue %b, 0
   %oa = icmp eq i64 %ta, 0
@@ -906,10 +917,11 @@ go:
   %v = insertvalue %KValue { i64 0, i64 undef }, i64 %r, 1
   ret %KValue %v
 slow:
+  store ptr %site, ptr @k_site
   %s = call %KValue @k_b_bit_shl(%KValue %a, %KValue %b)
   ret %KValue %s
 }
-define internal %KValue @k_b_bit_shr_fast(%KValue %a, %KValue %b) alwaysinline {
+define internal %KValue @k_b_bit_shr_fast(%KValue %a, %KValue %b, ptr %site) alwaysinline {
   %ta = extractvalue %KValue %a, 0
   %tb = extractvalue %KValue %b, 0
   %oa = icmp eq i64 %ta, 0
@@ -926,10 +938,11 @@ go:
   %v = insertvalue %KValue { i64 0, i64 undef }, i64 %r, 1
   ret %KValue %v
 slow:
+  store ptr %site, ptr @k_site
   %s = call %KValue @k_b_bit_shr(%KValue %a, %KValue %b)
   ret %KValue %s
 }
-define internal %KValue @k_b_bit_not_fast(%KValue %a) alwaysinline {
+define internal %KValue @k_b_bit_not_fast(%KValue %a, ptr %site) alwaysinline {
   %ta = extractvalue %KValue %a, 0
   %oa = icmp eq i64 %ta, 0
   br i1 %oa, label %int, label %slow
@@ -939,6 +952,7 @@ int:
   %v = insertvalue %KValue { i64 0, i64 undef }, i64 %r, 1
   ret %KValue %v
 slow:
+  store ptr %site, ptr @k_site
   %s = call %KValue @k_b_bit_not(%KValue %a)
   ret %KValue %s
 }
@@ -996,20 +1010,21 @@ slow:
 ; prove the item is neither -- a field a pattern bound, a literal, arithmetic
 ; that cannot fail or widen -- it calls `k_b_push_mut_known` directly and the
 ; item test is not written at all.
-define internal %KValue @k_b_push_mut_fast(%KValue %lv, %KValue %item) alwaysinline {
+define internal %KValue @k_b_push_mut_fast(%KValue %lv, %KValue %item, ptr %site) alwaysinline {
   %itag = extractvalue %KValue %item, 0
   %ierr = icmp eq i64 %itag, 5
   %ibig = icmp eq i64 %itag, 17
   %islow = or i1 %ierr, %ibig
   br i1 %islow, label %eslow, label %eknown
 eknown:
-  %kr = call %KValue @k_b_push_mut_known(%KValue %lv, %KValue %item)
+  %kr = call %KValue @k_b_push_mut_known(%KValue %lv, %KValue %item, ptr %site)
   ret %KValue %kr
 eslow:
+  store ptr %site, ptr @k_site
   %er = call %KValue @k_b_push_mut(%KValue %lv, %KValue %item)
   ret %KValue %er
 }
-define internal %KValue @k_b_push_mut_known(%KValue %lv, %KValue %item) alwaysinline {
+define internal %KValue @k_b_push_mut_known(%KValue %lv, %KValue %item, ptr %site) alwaysinline {
   %ltag = extractvalue %KValue %lv, 0
   %islist = icmp eq i64 %ltag, 9
   br i1 %islist, label %lstat, label %lslow
@@ -1042,6 +1057,7 @@ lwrite:
   store i64 %llen1, ptr %l
   ret %KValue %lv
 lslow:
+  store ptr %site, ptr @k_site
   %lr = call %KValue @k_b_push_mut(%KValue %lv, %KValue %item)
   ret %KValue %lr
 }
@@ -1055,7 +1071,7 @@ lslow:
 ; is a no-op, and the write is two slots at the frontier. Anything else -- a
 ; built view, a full buffer, a key that is not an int or a string, a failure
 ; in any of the three, a bignum value -- takes the call.
-define internal %KValue @k_b_put_mut_fast(%KValue %mv, %KValue %k, %KValue %v) alwaysinline {
+define internal %KValue @k_b_put_mut_fast(%KValue %mv, %KValue %k, %KValue %v, ptr %site) alwaysinline {
   %tm = extractvalue %KValue %mv, 0
   %ismap = icmp eq i64 %tm, 10
   br i1 %ismap, label %pkey, label %pslow
@@ -1109,6 +1125,7 @@ pwrite:
   store i64 %mlen1, ptr %m
   ret %KValue %mv
 pslow:
+  store ptr %site, ptr @k_site
   %pr = call %KValue @k_b_put_mut(%KValue %mv, %KValue %k, %KValue %v)
   ret %KValue %pr
 }
@@ -2036,4 +2053,26 @@ mod the_declares_table_is_the_scan_it_replaced {
         let shipped = declares_for(|_| true, false, true).lines().count();
         assert_eq!(counted - shipped, 2 * STATS_GATE_SITES);
     }
+}
+
+/// Whether DECLARES defines `k_b_{sym}` as an inline twin that takes the
+/// call's site last. Such a twin stores the site only on the branch that
+/// reaches the C entry, which is the only branch that can stop the program,
+/// so its caller passes the site instead of stamping it first (ruled on
+/// #1975). The definition is the one place this is written down.
+fn takes_site(sym: &str) -> bool {
+    static SITED: std::sync::OnceLock<Vec<&'static str>> = std::sync::OnceLock::new();
+    SITED
+        .get_or_init(|| {
+            DECLARES
+                .lines()
+                .filter(|l| {
+                    l.ends_with(", ptr %site) alwaysinline {")
+                        || l.ends_with(", ptr %site, ptr %site2) alwaysinline {")
+                })
+                .filter_map(|l| l.strip_prefix("define internal %KValue @k_b_"))
+                .filter_map(|l| l.split_once('(').map(|(name, _)| name))
+                .collect()
+        })
+        .contains(&sym)
 }
