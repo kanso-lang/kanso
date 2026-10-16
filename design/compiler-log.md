@@ -1551,3 +1551,10 @@ run, which is what the rest of #1975 locates. Pinned by
 `tests/golden/errors/an_operator_handed_a_value_it_never_takes`, seen red with
 the call removed; the ratchet row `operator_kind_unchecked` runs the same
 mutation.
+
+The walk costs compile time, which CI measured: `compile_instructions`
+22,699,901 -> 22,715,476, `entry_instructions` 75,214,425 -> 75,262,121,
+`library_instructions` 74,901,006 -> 74,948,228 and
+`browser_compile_instructions` 382,590,239 -> 382,741,447. The run rows did
+not move. This builds a ruled part of the language, so the welfare floor
+moved down by exactly that cost, to 91.52, with this entry as the reason.
