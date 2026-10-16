@@ -258,7 +258,9 @@ impl Session {
         let result = interp.run_named(&name).expect("just-committed constant resolves");
         let value = match result {
             Ok(value) => value,
-            Err(runtime) => return Err(format!("error[runtime]: {}\n{}", runtime.message, runtime.place())),
+            Err(runtime) => {
+                return Err(format!("error[runtime]: {}\n{}", runtime.message, runtime.place()))
+            }
         };
         self.units = candidate;
         self.counter += 1;

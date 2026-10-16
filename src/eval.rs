@@ -1046,7 +1046,8 @@ fn deferral_key(handle: u32) -> usize {
 fn foreign_call(handle: u32, args: Vec<Value>, span: Span, decided: bool) -> EvalResult {
     match FOREIGN_CALL.with(|slot| *slot.borrow()) {
         Some(call) => call(handle, args, decided),
-        None => Err(RuntimeError { at: None,
+        None => Err(RuntimeError {
+            at: None,
             message: "a compiled closure escaped the engine that owns it".to_string(),
             span,
         }),
@@ -1333,10 +1334,12 @@ impl<'a> Interp<'a> {
             .into_iter()
             .map(|site| match site {
                 None => 0,
-                Some(place) => *deep_at.entry((place.0, place.1.line, place.1.col)).or_insert_with(|| {
-                    deep.push(Rc::from(crate::deep::spelled(program, place)));
-                    deep.len() as u32
-                }),
+                Some(place) => {
+                    *deep_at.entry((place.0, place.1.line, place.1.col)).or_insert_with(|| {
+                        deep.push(Rc::from(crate::deep::spelled(program, place)));
+                        deep.len() as u32
+                    })
+                }
             })
             .collect();
         Interp {
@@ -1743,7 +1746,8 @@ impl<'a> Interp<'a> {
                         }
                         Ok(env)
                     }
-                    None => Err(RuntimeError { at: None,
+                    None => Err(RuntimeError {
+                        at: None,
                         message: format!(
                             "cannot destructure {} as `{ty}`; bindings are irrefutable, so \
                              handle other types by dispatch first",
@@ -1755,7 +1759,8 @@ impl<'a> Interp<'a> {
             }
             Pattern::Keyed { entries, .. } => {
                 let Value::Record { ty, fields } = &value else {
-                    return Err(RuntimeError { at: None,
+                    return Err(RuntimeError {
+                        at: None,
                         message: format!(
                             "cannot read fields of {}; keyed reads take a record",
                             render(self, &value, true)
@@ -1765,7 +1770,8 @@ impl<'a> Interp<'a> {
                 };
                 let decl = self.type_decl(ty).expect("constructed types are declared");
                 if entries.len() >= decl.fields.len() {
-                    return Err(RuntimeError { at: None,
+                    return Err(RuntimeError {
+                        at: None,
                         message: "a keyed read omits at least one field; reading every \
                                   field is the positional form"
                             .to_string(),
@@ -1776,7 +1782,8 @@ impl<'a> Interp<'a> {
                 for entry in entries {
                     let position = decl.fields.iter().position(|(name, _, _)| *name == entry.field);
                     let Some(position) = position else {
-                        return Err(RuntimeError { at: None,
+                        return Err(RuntimeError {
+                            at: None,
                             message: format!("`{ty}` has no field `{}`", entry.field),
                             span,
                         });
@@ -1785,7 +1792,8 @@ impl<'a> Interp<'a> {
                 }
                 Ok(env)
             }
-            _ => Err(RuntimeError { at: None,
+            _ => Err(RuntimeError {
+                at: None,
                 message: "binding patterns are irrefutable: names and constructor \
                           patterns only"
                     .to_string(),
@@ -1863,7 +1871,8 @@ impl<'a> Interp<'a> {
                     match cur {
                         Value::Sub { inner, .. } => cur = (*inner).clone(),
                         _ => {
-                            return Err(RuntimeError { at: None,
+                            return Err(RuntimeError {
+                                at: None,
                                 message: format!(
                                     "`:{ty}` widens; this value is not {}",
                                     article(ty)
@@ -1914,7 +1923,8 @@ impl<'a> Interp<'a> {
                     other => other,
                 };
                 let Value::Record { ty, fields } = &value else {
-                    return Err(RuntimeError { at: None,
+                    return Err(RuntimeError {
+                        at: None,
                         message: format!(
                             "`.` reads a field of a record, not {}",
                             render(self, &value, true)
@@ -1926,7 +1936,8 @@ impl<'a> Interp<'a> {
                 let position = decl.fields.iter().position(|(f, _, _)| f == name);
                 match position {
                     Some(position) => Ok(fields.borrow()[position].clone()),
-                    None => Err(RuntimeError { at: None,
+                    None => Err(RuntimeError {
+                        at: None,
                         message: format!("`{ty}` has no field `{name}`"),
                         span: *span,
                     }),
@@ -2376,7 +2387,8 @@ impl<'a> Interp<'a> {
                 }
             }
             bad if is_failure(&bad) => Ok(bad),
-            other => Err(RuntimeError { at: None,
+            other => Err(RuntimeError {
+                at: None,
                 message: format!("`{}` is not callable", render(self, &other, false)),
                 span,
             }),
@@ -2441,7 +2453,8 @@ impl<'a> Interp<'a> {
         }
         let waiting = arities.iter().filter(|a| **a > supplied.len()).min().copied();
         let short = waiting.map(|a| a - supplied.len()).unwrap_or(0);
-        Err(RuntimeError { at: None,
+        Err(RuntimeError {
+            at: None,
             message: format!("this function takes {short} argument(s), got 0"),
             span,
         })
@@ -2484,7 +2497,8 @@ impl<'a> Interp<'a> {
         span: Span,
     ) -> Result<Flow<'a>, RuntimeError> {
         if closure.params.len() != args.len() {
-            return Err(RuntimeError { at: None,
+            return Err(RuntimeError {
+                at: None,
                 message: format!(
                     "this function takes {} argument(s), got {}",
                     closure.params.len(),
@@ -2519,7 +2533,8 @@ impl<'a> Interp<'a> {
         }
         if arities.iter().all(|a| *a < args.len()) && !arities.is_empty() {
             let names: Vec<String> = arities.iter().map(usize::to_string).collect();
-            return Err(RuntimeError { at: None,
+            return Err(RuntimeError {
+                at: None,
                 message: format!(
                     "no {}-argument arm of `{}` (arms take {})",
                     args.len(),
@@ -2685,14 +2700,16 @@ impl<'a> Interp<'a> {
 
     fn construct(&self, ty: &TypeDecl, args: Vec<Value>, span: Span) -> EvalResult {
         if !ty.members.is_empty() {
-            return Err(RuntimeError { at: None,
+            return Err(RuntimeError {
+                at: None,
                 message: format!("`{}` is a typeset — it only annotates", ty.name),
                 span,
             });
         }
         if let Some(parent) = &ty.parent {
             if args.len() != 1 {
-                return Err(RuntimeError { at: None,
+                return Err(RuntimeError {
+                    at: None,
                     message: format!("`{}` wraps one {} value", ty.name, parent),
                     span,
                 });
@@ -2702,7 +2719,8 @@ impl<'a> Interp<'a> {
                 return Ok(inner);
             }
             if !type_matches(parent, &inner) {
-                return Err(RuntimeError { at: None,
+                return Err(RuntimeError {
+                    at: None,
                     message: format!("`{}` wraps {}", ty.name, article(parent)),
                     span,
                 });
@@ -2711,7 +2729,8 @@ impl<'a> Interp<'a> {
             return Ok(Value::Sub { ty: Rc::from(canonical), inner: Rc::new(inner) });
         }
         if args.len() != ty.fields.len() {
-            return Err(RuntimeError { at: None,
+            return Err(RuntimeError {
+                at: None,
                 message: format!(
                     "`{}` has {} field(s), got {} (construction is positional, fields \
                      alphabetical)",
@@ -2727,7 +2746,8 @@ impl<'a> Interp<'a> {
         }
         for ((field, tys, _), arg) in ty.fields.iter().zip(&args) {
             if tys.len() >= 2 && !tys.iter().any(|t| type_matches(t, arg)) {
-                return Err(RuntimeError { at: None,
+                return Err(RuntimeError {
+                    at: None,
                     message: format!("field `{field}` of `{}` takes {}", ty.name, tys.join(" ")),
                     span,
                 });
@@ -3301,7 +3321,8 @@ impl<'a> Interp<'a> {
         match sub_base(other.clone()) {
             Value::True => Ok(true),
             Value::False => Ok(false),
-            _ => Err(RuntimeError { at: None,
+            _ => Err(RuntimeError {
+                at: None,
                 message: format!(
                     "an if condition is true or false, got {}",
                     render(self, &other, false)
@@ -3466,7 +3487,8 @@ impl<'a> Interp<'a> {
         // the loop instead of finding a value. The blackhole is the answer,
         // and it is the one a guarded slot never reaches.
         if matches!(&value, Value::Thunk(answered) if Rc::ptr_eq(answered, &cell)) {
-            return Err(RuntimeError { at: None,
+            return Err(RuntimeError {
+                at: None,
                 message: "a lazy binding demands its own value".to_string(),
                 span: Span::at(0, 0),
             });
@@ -3543,7 +3565,8 @@ impl<'a> Interp<'a> {
                     value = v;
                 }
                 ThunkState::Blackhole => {
-                    return Err(RuntimeError { at: None,
+                    return Err(RuntimeError {
+                        at: None,
                         message: "a lazy binding demands its own value".to_string(),
                         span: Span::at(0, 0),
                     })
@@ -3573,12 +3596,14 @@ fn whole(v: Value, name: &str, span: Span) -> Result<Result<i64, Value>, Runtime
     match &v {
         Value::Int(n) => match n.to_i64() {
             Some(w) => Ok(Ok(w)),
-            None => Err(RuntimeError { at: None,
+            None => Err(RuntimeError {
+                at: None,
                 message: format!("{said} takes whole numbers that fit 64 bits"),
                 span,
             }),
         },
-        other => Err(RuntimeError { at: None,
+        other => Err(RuntimeError {
+            at: None,
             message: format!("{said} takes whole numbers, got {}", render_demanded(other, false)),
             span,
         }),
@@ -3608,7 +3633,8 @@ fn arity<const N: usize>(
 ) -> Result<[Value; N], RuntimeError> {
     match <[Value; N]>::try_from(args) {
         Ok(array) => Ok(array),
-        Err(actual) => Err(RuntimeError { at: None,
+        Err(actual) => Err(RuntimeError {
+            at: None,
             message: format!("`{name}` takes {N} argument(s), got {}", actual.len()),
             span,
         }),
@@ -3978,7 +4004,8 @@ pub fn index_value(container: Value, index: Value, span: Span) -> EvalResult {
             };
             index_value(base_of(container), base_of(index), span)
         }
-        (base, _) => Err(RuntimeError { at: None,
+        (base, _) => Err(RuntimeError {
+            at: None,
             message: format!(
                 "indexing takes a list or string with a 1-based position, or a map with a key{}",
                 lazy_hint(base)
@@ -3999,7 +4026,8 @@ fn map_key(value: Value, span: Span) -> Result<MapKey, RuntimeError> {
     match value {
         Value::Int(n) => Ok(MapKey::Int(n)),
         Value::Str(s) => Ok(MapKey::Str(s)),
-        other => Err(RuntimeError { at: None,
+        other => Err(RuntimeError {
+            at: None,
             message: format!("{} is not usable as a map key", render_demanded(&other, true)),
             span,
         }),
