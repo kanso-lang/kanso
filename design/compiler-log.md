@@ -1508,24 +1508,35 @@ its message, on every engine, in the form an err's `born in` line uses:
     error[runtime]: `*` is not defined for these values
       failed in calc/twice at calc.kso:2
 
-**The interpreter** fills the place in as a failure leaves the expression
-that raised it: `eval_node` and `eval_tail` take that expression's frame, and
-a failure already placed is left alone on the way up. Three paths raise a
-failure outside any expression, and each now places it itself: a statement's
-destructure, a tail call whose dispatch matches no arm, and a tail call
-through a function value that takes the wrong count. Before the tail cases
-were placed, a failing builtin under a one-line std wrapper named the
-caller's frame with the wrapper's line number.
+**The interpreter** fills the place in as a failure leaves the body that
+raised it. Every expression in a body shares the body's frame, so the frame
+changes on the way out only where a declaration's body, a lambda's body or a
+lazy binding is run, and each of those places a failure that has no place
+yet. Three paths raise a failure outside any expression, and each places it
+itself: a statement's destructure, a tail call whose dispatch matches no arm,
+and a tail call through a function value that takes the wrong count. The
+first version placed at every expression, which cost the interpreter row
+about 3.7M of the 15M it rose.
 
 **Compiled code** stores the same literal an err born at the site would
 carry into `k_site` before each call that can stop the program, and
 `k_died` prints it. The stamped calls are the operators' slow paths, builtin
 calls, condition tests whose value is not provably a boolean, field and index
 reads, destructures, keyed reads, joins, calls through a function value, and
-calls of a group no arm of which takes anything. Fused appends are stamped
-only where the accumulator is not proved to be bytes. A store to `k_site`
-is exempt from `writes_state`, since running a body over repeats it
-harmlessly.
+calls of a group that can match no arm. A store to `k_site` is exempt from
+`writes_state`, since running a body over repeats it harmlessly.
+
+Two things keep the store off the hot path. An inline twin (`length`, `at`,
+`append`, the bit operations, `push`, `put`, `slice`, the scans) takes the
+site as its last argument and stores it only on the branch that reaches the
+C entry, which is the only branch that can stop the program; `takes_site`
+reads which twins do from their definitions in `declares.rs`. With the store
+in front of every inlined twin, CI read runbench +6.4% and digestbench +18%.
+And a call into a group is stamped only when the arguments' proven kinds
+might fail every arm: the arms are read together, so `f x true` and
+`f x false` take a proven boolean, an annotation the dispatcher tests by kind
+alone takes that kind, and a by-value record is taken by the arm that
+destructures its type.
 
 **A stack overflow** names its cycle rather than its frame. The two engines
 run out of stack at different depths, so the frame that was entering is an
@@ -1535,7 +1546,11 @@ call into it written inside it, outside tail position. A group on such a
 cycle records that place on entry, native in its function and the
 interpreter when an arm's body starts, and the overflow prints the last one
 recorded. A recursion that is all tail calls records nothing and costs
-nothing.
+nothing. Tail position is read the way `emit_tail` reads it: a guard's early
+answer and the body after it, and the body of a piped one-name lambda, keep
+it, and a call of an insisting form does not. The first version missed the
+guard, so json's escape loop counted as a cycle that grows the stack and
+recorded its place on every byte.
 
 **An insisting form** names the line that called it. A form whose name
 ends in `!` turns an err into a failure, and the err was born inside the
