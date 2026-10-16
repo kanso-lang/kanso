@@ -1,2 +1,4 @@
-error[endpoint]: unhandled err reached the executor: "missing index 2"
-  born in the entry at index_holds_a_none.kso:7
+error[syntax]: a file with declarations is a library, and a library has no statements to run — `kanso play` runs declarations beside statements in one file
+  --> index_holds_a_none.kso:7:1
+   7 | xs[2]! .> (v -> print "second: {v}")
+       ^

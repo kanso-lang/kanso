@@ -37,7 +37,7 @@ impl<'a> Interp<'a> {
                 return Ok(reason);
             }
             let Value::ErrV(cause) = original else {
-                return Err(RuntimeError {
+                return Err(RuntimeError { at: None,
                     message: "wrap_err takes a reason and the err it wraps".to_string(),
                     span,
                 });
@@ -83,7 +83,7 @@ impl<'a> Interp<'a> {
             b"kill" => {
                 let [handle] = arity(args, name, span)?;
                 let Value::Int(handle) = &handle else {
-                    return Err(RuntimeError {
+                    return Err(RuntimeError { at: None,
                         message: "kill takes a started process".to_string(),
                         span,
                     });
@@ -93,13 +93,13 @@ impl<'a> Interp<'a> {
             b"run" | b"start" => {
                 let [cmd, args_list] = arity(args, name, span)?;
                 let Value::Str(cmd) = cmd else {
-                    return Err(RuntimeError {
+                    return Err(RuntimeError { at: None,
                         message: format!("{name} takes a command string"),
                         span,
                     });
                 };
                 let Value::List(items) = args_list else {
-                    return Err(RuntimeError {
+                    return Err(RuntimeError { at: None,
                         message: format!("{name} takes a list of argument strings"),
                         span,
                     });
@@ -107,7 +107,7 @@ impl<'a> Interp<'a> {
                 let mut argv = Vec::new();
                 for item in items.iter() {
                     let Value::Str(text) = item else {
-                        return Err(RuntimeError {
+                        return Err(RuntimeError { at: None,
                             message: format!("{name} takes a list of argument strings"),
                             span,
                         });
@@ -122,7 +122,7 @@ impl<'a> Interp<'a> {
             b"read_file" => {
                 let [path] = arity(args, name, span)?;
                 let Value::Str(path) = path else {
-                    return Err(RuntimeError {
+                    return Err(RuntimeError { at: None,
                         message: "read_file takes a path string".to_string(),
                         span,
                     });
@@ -132,7 +132,7 @@ impl<'a> Interp<'a> {
             b"read_bytes" => {
                 let [path] = arity(args, name, span)?;
                 let Value::Str(path) = path else {
-                    return Err(RuntimeError {
+                    return Err(RuntimeError { at: None,
                         message: "read_bytes takes a path string".to_string(),
                         span,
                     });
@@ -142,7 +142,7 @@ impl<'a> Interp<'a> {
             b"write" => {
                 let [content] = arity(args, name, span)?;
                 let Value::Str(content) = content else {
-                    return Err(RuntimeError { message: "write takes a string".to_string(), span });
+                    return Err(RuntimeError { at: None, message: "write takes a string".to_string(), span });
                 };
                 Ok(Value::Desc(Rc::new(Desc::Write(content.to_string()))))
             }
@@ -169,7 +169,7 @@ impl<'a> Interp<'a> {
             b"exists" | b"is_dir" | b"modified" | b"list_dir" => {
                 let [path] = arity(args, name, span)?;
                 let Value::Str(path) = path else {
-                    return Err(RuntimeError { message: format!("{name} takes a string"), span });
+                    return Err(RuntimeError { at: None, message: format!("{name} takes a string"), span });
                 };
                 Ok(Value::Desc(Rc::new(match name {
                     "exists" => Desc::Exists(path.to_string()),
@@ -181,14 +181,14 @@ impl<'a> Interp<'a> {
             b"env" => {
                 let [name] = arity(args, name, span)?;
                 let Value::Str(name) = name else {
-                    return Err(RuntimeError { message: "env takes a string".to_string(), span });
+                    return Err(RuntimeError { at: None, message: "env takes a string".to_string(), span });
                 };
                 Ok(Value::Desc(Rc::new(Desc::Env(name.to_string()))))
             }
             b"write_err" => {
                 let [content] = arity(args, name, span)?;
                 let Value::Str(content) = content else {
-                    return Err(RuntimeError {
+                    return Err(RuntimeError { at: None,
                         message: "write_err takes a string".to_string(),
                         span,
                     });
@@ -198,7 +198,7 @@ impl<'a> Interp<'a> {
             b"make_dir" => {
                 let [path] = arity(args, name, span)?;
                 let Value::Str(path) = &path else {
-                    return Err(RuntimeError {
+                    return Err(RuntimeError { at: None,
                         message: "make_dir takes a path string".to_string(),
                         span,
                     });
@@ -208,7 +208,7 @@ impl<'a> Interp<'a> {
             b"listen" => {
                 let [port] = arity(args, name, span)?;
                 let Value::Int(port) = &port else {
-                    return Err(RuntimeError {
+                    return Err(RuntimeError { at: None,
                         message: "listen takes a port number".to_string(),
                         span,
                     });
@@ -218,7 +218,7 @@ impl<'a> Interp<'a> {
             b"net_port" => {
                 let [listener] = arity(args, name, span)?;
                 let Value::Int(listener) = &listener else {
-                    return Err(RuntimeError {
+                    return Err(RuntimeError { at: None,
                         message: "port takes a listener".to_string(),
                         span,
                     });
@@ -228,7 +228,7 @@ impl<'a> Interp<'a> {
             b"accept" => {
                 let [listener] = arity(args, name, span)?;
                 let Value::Int(listener) = &listener else {
-                    return Err(RuntimeError {
+                    return Err(RuntimeError { at: None,
                         message: "accept takes a listener".to_string(),
                         span,
                     });
@@ -238,7 +238,7 @@ impl<'a> Interp<'a> {
             b"net_read" => {
                 let [conn] = arity(args, name, span)?;
                 let Value::Int(conn) = &conn else {
-                    return Err(RuntimeError {
+                    return Err(RuntimeError { at: None,
                         message: "net_read takes a connection".to_string(),
                         span,
                     });
@@ -255,7 +255,7 @@ impl<'a> Interp<'a> {
                     (Value::Int(conn), Value::Bytes(raw)) => Ok(Value::Desc(Rc::new(
                         Desc::SendBytes(conn.to_i64().unwrap_or(-1), raw.clone()),
                     ))),
-                    _ => Err(RuntimeError {
+                    _ => Err(RuntimeError { at: None,
                         message: "net_write takes a connection and a string".to_string(),
                         span,
                     }),
@@ -264,7 +264,7 @@ impl<'a> Interp<'a> {
             b"net_close" => {
                 let [handle] = arity(args, name, span)?;
                 let Value::Int(handle) = &handle else {
-                    return Err(RuntimeError {
+                    return Err(RuntimeError { at: None,
                         message: "net_close takes a listener or a connection".to_string(),
                         span,
                     });
@@ -282,7 +282,7 @@ impl<'a> Interp<'a> {
                     (Value::Str(path), Value::Bytes(raw)) => {
                         Ok(Value::Desc(Rc::new(Desc::WriteBytes(path.to_string(), raw.clone()))))
                     }
-                    _ => Err(RuntimeError {
+                    _ => Err(RuntimeError { at: None,
                         message: "write_file takes a path and content strings".to_string(),
                         span,
                     }),
@@ -296,7 +296,7 @@ impl<'a> Interp<'a> {
                         Ok(Value::Desc(Rc::new(Desc::Sleep(ms))))
                     }
                     other if is_failure(&other) => Ok(other),
-                    other => Err(RuntimeError {
+                    other => Err(RuntimeError { at: None,
                         message: format!(
                             "sleep takes milliseconds (an int), got {}",
                             render(self, &other, false)
@@ -313,7 +313,7 @@ impl<'a> Interp<'a> {
                         Ok(Value::Desc(Rc::new(Desc::Random(bound))))
                     }
                     other if is_failure(&other) => Ok(other),
-                    other => Err(RuntimeError {
+                    other => Err(RuntimeError { at: None,
                         message: format!(
                             "random takes a bound (an int), got {}",
                             render(self, &other, false)
@@ -346,7 +346,7 @@ impl<'a> Interp<'a> {
             b"push" => {
                 let [list, item] = arity(args, name, span)?;
                 if !matches!(list, Value::List(_)) {
-                    return Err(RuntimeError {
+                    return Err(RuntimeError { at: None,
                         message: format!("push takes a list and a value{}", lazy_hint(&list)),
                         span,
                     });
@@ -364,7 +364,7 @@ impl<'a> Interp<'a> {
             b"put" => {
                 let [map, key, value] = arity(args, name, span)?;
                 let Value::Map(entries) = map else {
-                    return Err(RuntimeError {
+                    return Err(RuntimeError { at: None,
                         message: "put takes a map, a key, and a value".to_string(),
                         span,
                     });
@@ -385,7 +385,7 @@ impl<'a> Interp<'a> {
             b"delete" => {
                 let [map, key] = arity(args, name, span)?;
                 let Value::Map(entries) = map else {
-                    return Err(RuntimeError {
+                    return Err(RuntimeError { at: None,
                         message: "delete takes a map and a key".to_string(),
                         span,
                     });
@@ -398,7 +398,7 @@ impl<'a> Interp<'a> {
             b"entries" => {
                 let [map] = arity(args, name, span)?;
                 let Value::Map(map_entries) = &map else {
-                    return Err(RuntimeError { message: "entries takes a map".to_string(), span });
+                    return Err(RuntimeError { at: None, message: "entries takes a map".to_string(), span });
                 };
                 let list = map_entries
                     .iter()
@@ -420,7 +420,7 @@ impl<'a> Interp<'a> {
             b"keys" => {
                 let [map] = arity(args, name, span)?;
                 let Value::Map(map_entries) = &map else {
-                    return Err(RuntimeError { message: "keys takes a map".to_string(), span });
+                    return Err(RuntimeError { at: None, message: "keys takes a map".to_string(), span });
                 };
                 let list = map_entries
                     .iter()
@@ -434,14 +434,14 @@ impl<'a> Interp<'a> {
             b"values" => {
                 let [map] = arity(args, name, span)?;
                 let Value::Map(map_entries) = &map else {
-                    return Err(RuntimeError { message: "values takes a map".to_string(), span });
+                    return Err(RuntimeError { at: None, message: "values takes a map".to_string(), span });
                 };
                 Ok(Value::List(Rc::new(map_entries.iter().map(|(_, v)| v.clone()).collect())))
             }
             b"bytes" => {
                 let [text] = arity(args, name, span)?;
                 let Value::Str(text) = &text else {
-                    return Err(RuntimeError { message: "bytes takes a string".to_string(), span });
+                    return Err(RuntimeError { at: None, message: "bytes takes a string".to_string(), span });
                 };
                 Ok(Value::Bytes(Rc::new(text.as_bytes().to_vec())))
             }
@@ -455,7 +455,7 @@ impl<'a> Interp<'a> {
                     return Ok(list);
                 }
                 let Value::List(items) = &list else {
-                    return Err(RuntimeError {
+                    return Err(RuntimeError { at: None,
                         message: "to_bytes takes a list of byte values".to_string(),
                         span,
                     });
@@ -517,7 +517,7 @@ impl<'a> Interp<'a> {
                     }
                 }
                 let (Some(mut joined), Some(tail)) = (as_items(&a), as_items(&b)) else {
-                    return Err(RuntimeError {
+                    return Err(RuntimeError { at: None,
                         message: "concat takes two lists".to_string(),
                         span,
                     });
@@ -566,7 +566,7 @@ impl<'a> Interp<'a> {
                         raw
                     }
                     _ => {
-                        return Err(RuntimeError {
+                        return Err(RuntimeError { at: None,
                             message: "utf8 takes a list of byte values".to_string(),
                             span,
                         })
@@ -591,14 +591,14 @@ impl<'a> Interp<'a> {
                     return Ok(bytes);
                 }
                 let Value::Bytes(raw) = &bytes else {
-                    return Err(RuntimeError {
+                    return Err(RuntimeError { at: None,
                         message: "built_text takes bytes".to_string(),
                         span,
                     });
                 };
                 match String::from_utf8((**raw).clone()) {
                     Ok(text) => Ok(Value::Str(Text::from(text))),
-                    Err(_) => Err(RuntimeError {
+                    Err(_) => Err(RuntimeError { at: None,
                         message: "built_text was handed bytes that are not text".to_string(),
                         span,
                     }),
@@ -607,13 +607,13 @@ impl<'a> Interp<'a> {
             b"split" => {
                 let [text, sep] = arity(args, name, span)?;
                 let (Value::Str(text), Value::Str(sep)) = (&text, &sep) else {
-                    return Err(RuntimeError {
+                    return Err(RuntimeError { at: None,
                         message: "split takes two strings".to_string(),
                         span,
                     });
                 };
                 if sep.is_empty() {
-                    return Err(RuntimeError {
+                    return Err(RuntimeError { at: None,
                         message: "split needs a separator".to_string(),
                         span,
                     });
@@ -627,7 +627,7 @@ impl<'a> Interp<'a> {
             b"chars" => {
                 let [text] = arity(args, name, span)?;
                 let Value::Str(text) = &text else {
-                    return Err(RuntimeError { message: "chars takes a string".to_string(), span });
+                    return Err(RuntimeError { at: None, message: "chars takes a string".to_string(), span });
                 };
                 let list = text.chars().map(|c| Value::Str(Text::from(c.to_string()))).collect();
                 Ok(Value::List(Rc::new(list)))
@@ -639,7 +639,7 @@ impl<'a> Interp<'a> {
                         s.chars().next().expect("length checked") as u32
                     }
                     _ => {
-                        return Err(RuntimeError {
+                        return Err(RuntimeError { at: None,
                             message: "char_code takes a one-character string".to_string(),
                             span,
                         })
@@ -650,7 +650,7 @@ impl<'a> Interp<'a> {
             b"from_code" => {
                 let [code] = arity(args, name, span)?;
                 let Value::Int(n) = &code else {
-                    return Err(RuntimeError {
+                    return Err(RuntimeError { at: None,
                         message: "from_code takes an int".to_string(),
                         span,
                     });
@@ -667,7 +667,7 @@ impl<'a> Interp<'a> {
             b"join" => {
                 let [list, sep] = arity(args, name, span)?;
                 let (Value::List(items), Value::Str(sep)) = (&list, &sep) else {
-                    return Err(RuntimeError {
+                    return Err(RuntimeError { at: None,
                         message: "join takes a list of strings and a separator".to_string(),
                         span,
                     });
@@ -686,7 +686,7 @@ impl<'a> Interp<'a> {
                         _ => match sub_base(item) {
                             Value::Str(s) => parts.push(s),
                             _ => {
-                                return Err(RuntimeError {
+                                return Err(RuntimeError { at: None,
                                     message: "join takes a list of strings".to_string(),
                                     span,
                                 })
@@ -706,7 +706,7 @@ impl<'a> Interp<'a> {
                     }
                 }
                 let Value::Bytes(items) = acc else {
-                    return Err(RuntimeError {
+                    return Err(RuntimeError { at: None,
                         message: "append takes bytes and a string, bytes, or byte".to_string(),
                         span,
                     });
@@ -734,7 +734,7 @@ impl<'a> Interp<'a> {
                         out.push(low_byte(n));
                         Ok(())
                     }
-                    _ => Err(RuntimeError {
+                    _ => Err(RuntimeError { at: None,
                         message: "append takes bytes and a string, bytes, or byte".to_string(),
                         span,
                     }),
@@ -770,7 +770,7 @@ impl<'a> Interp<'a> {
                     Value::Int(lim),
                 ) = (&cs, &from, &a, &b, &lim)
                 else {
-                    return Err(RuntimeError {
+                    return Err(RuntimeError { at: None,
                         message: "find2_below takes bytes".to_string(),
                         span,
                     });
@@ -795,7 +795,7 @@ impl<'a> Interp<'a> {
                     }
                 }
                 let (Value::Bytes(items), Value::Int(from)) = (&cs, &from) else {
-                    return Err(RuntimeError {
+                    return Err(RuntimeError { at: None,
                         message: "number_span takes bytes and a position".to_string(),
                         span,
                     });
@@ -829,7 +829,7 @@ impl<'a> Interp<'a> {
                 let (Value::Bytes(items), Value::Int(from), Value::Int(a), Value::Int(b)) =
                     (&cs, &from, &a, &b)
                 else {
-                    return Err(RuntimeError { message: "find2 takes bytes".to_string(), span });
+                    return Err(RuntimeError { at: None, message: "find2 takes bytes".to_string(), span });
                 };
                 let (a, b) = (low_byte(a), low_byte(b));
                 let len = items.len();
@@ -849,7 +849,7 @@ impl<'a> Interp<'a> {
             b"slice" | b"slice_in" => {
                 let [container, from, to] = arity(args, name, span)?;
                 let (Value::Int(from), Value::Int(to)) = (&from, &to) else {
-                    return Err(RuntimeError {
+                    return Err(RuntimeError { at: None,
                         message: "slice takes 1-based inclusive positions".to_string(),
                         span,
                     });
@@ -890,7 +890,7 @@ impl<'a> Interp<'a> {
                             .unwrap_or_default();
                         Ok(Value::Str(Text::from(sliced)))
                     }
-                    _ => Err(RuntimeError {
+                    _ => Err(RuntimeError { at: None,
                         message: "slice takes a list or string".to_string(),
                         span,
                     }),
@@ -923,7 +923,7 @@ impl<'a> Interp<'a> {
                     (Err(bad), _) | (_, Err(bad)) => return Ok(bad),
                 };
                 if !(0..=63).contains(&by) {
-                    return Err(RuntimeError {
+                    return Err(RuntimeError { at: None,
                         message: format!("{} shifts by 0 to 63 places, got {by}", spelled(name)),
                         span,
                     });
@@ -943,7 +943,7 @@ impl<'a> Interp<'a> {
             b"tie" => {
                 let [keys, maker, broken] = arity(args, name, span)?;
                 let Value::List(keys) = keys else {
-                    return Err(RuntimeError {
+                    return Err(RuntimeError { at: None,
                         message: "tie takes a list of ids and a maker".to_string(),
                         span,
                     });
@@ -984,7 +984,7 @@ impl<'a> Interp<'a> {
                 let serial = serial.to_i64().expect("a tie's serial is small");
                 let mut ties = self.ties.borrow_mut();
                 let Some(tie) = ties.iter_mut().rev().find(|t| t.serial == serial) else {
-                    return Err(RuntimeError {
+                    return Err(RuntimeError { at: None,
                         message: "a reference from list/tie was asked for after its tie returned"
                             .to_string(),
                         span,
@@ -1006,7 +1006,7 @@ impl<'a> Interp<'a> {
                     Value::Float(v) => Ok(Value::Float(v.sqrt())),
                     Value::Int(n) => Ok(Value::Float(int_f(&n).sqrt())),
                     other if is_failure(&other) => Ok(other),
-                    other => Err(RuntimeError {
+                    other => Err(RuntimeError { at: None,
                         message: format!(
                             "sqrt takes a number, got {}",
                             render(self, &other, false)
@@ -1033,7 +1033,7 @@ impl<'a> Interp<'a> {
                     // is the caller insisting the float is finite.
                     Value::Float(_) => Ok(Value::NoneV),
                     other if is_failure(&other) => Ok(other),
-                    other => Err(RuntimeError {
+                    other => Err(RuntimeError { at: None,
                         message: format!(
                             "round takes a number, got {}",
                             render(self, &other, false)
@@ -1057,7 +1057,7 @@ impl<'a> Interp<'a> {
                     }),
                     Value::Int(_) => return Ok(value),
                     _ => {
-                        return Err(RuntimeError {
+                        return Err(RuntimeError { at: None,
                             message: format!(
                                 "to_int takes a string, bytes, or int, not {}",
                                 render(self, &value, true)
@@ -1100,7 +1100,7 @@ impl<'a> Interp<'a> {
                     }
                     Value::Float(_) => return Ok(value),
                     _ => {
-                        return Err(RuntimeError {
+                        return Err(RuntimeError { at: None,
                             message: format!(
                                 "to_float takes a string, bytes, or number, not {}",
                                 render(self, &value, true)
@@ -1135,7 +1135,7 @@ impl<'a> Interp<'a> {
                     Value::Bytes(items) => Ok(Value::int(items.len())),
                     Value::Str(s) => Ok(Value::int(s.chars().count())),
                     Value::Map(entries) => Ok(Value::int(entries.len())),
-                    other => Err(RuntimeError {
+                    other => Err(RuntimeError { at: None,
                         message: format!(
                             "length takes a list, string, or map, not {}{}",
                             render(self, &other, true),
@@ -1148,7 +1148,7 @@ impl<'a> Interp<'a> {
             b"map" => {
                 let [list, f] = arity(args, name, span)?;
                 let Value::List(items) = list else {
-                    return Err(RuntimeError { message: "map takes a list".to_string(), span });
+                    return Err(RuntimeError { at: None, message: "map takes a list".to_string(), span });
                 };
                 let mapped = items
                     .iter()
@@ -1159,7 +1159,7 @@ impl<'a> Interp<'a> {
             b"filter" => {
                 let [list, f] = arity(args, name, span)?;
                 let Value::List(items) = list else {
-                    return Err(RuntimeError { message: "filter takes a list".to_string(), span });
+                    return Err(RuntimeError { at: None, message: "filter takes a list".to_string(), span });
                 };
                 let mut kept = Vec::new();
                 for item in items.iter() {
@@ -1167,7 +1167,7 @@ impl<'a> Interp<'a> {
                         Value::True => kept.push(item.clone()),
                         Value::False => {}
                         other => {
-                            return Err(RuntimeError {
+                            return Err(RuntimeError { at: None,
                                 message: format!(
                                     "a filter predicate returns true or false, got {}",
                                     render(self, &other, false)
@@ -1182,7 +1182,7 @@ impl<'a> Interp<'a> {
             b"sort" => {
                 let [list] = arity(args, name, span)?;
                 let Value::List(items) = list else {
-                    return Err(RuntimeError { message: "sort takes a list".to_string(), span });
+                    return Err(RuntimeError { at: None, message: "sort takes a list".to_string(), span });
                 };
                 let mut sorted = (*items).clone();
                 let mut failed = false;
@@ -1194,7 +1194,7 @@ impl<'a> Interp<'a> {
                     }
                 });
                 match failed {
-                    true => Err(RuntimeError {
+                    true => Err(RuntimeError { at: None,
                         message: "sort requires comparable elements of one type".to_string(),
                         span,
                     }),
@@ -1204,7 +1204,7 @@ impl<'a> Interp<'a> {
             b"sum" => {
                 let [list] = arity(args, name, span)?;
                 let Value::List(items) = list else {
-                    return Err(RuntimeError { message: "sum takes a list".to_string(), span });
+                    return Err(RuntimeError { at: None, message: "sum takes a list".to_string(), span });
                 };
                 let mut total = Int::Small(0);
                 for item in items.iter() {
@@ -1212,7 +1212,7 @@ impl<'a> Interp<'a> {
                         Value::Int(n) => total = total.add(n),
                         bad if is_failure(bad) => return Ok(bad.clone()),
                         _ => {
-                            return Err(RuntimeError {
+                            return Err(RuntimeError { at: None,
                                 message: "sum takes a list of int".to_string(),
                                 span,
                             })
@@ -1221,7 +1221,7 @@ impl<'a> Interp<'a> {
                 }
                 Ok(Value::int(total))
             }
-            _ => Err(RuntimeError { message: format!("unknown builtin `{name}`"), span }),
+            _ => Err(RuntimeError { at: None, message: format!("unknown builtin `{name}`"), span }),
         }
     }
 }

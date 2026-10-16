@@ -898,6 +898,12 @@ fn emit_with(
         escape,
         byte_disc,
         in_place_pushes,
+        deep_sites: program
+            .fns
+            .iter()
+            .zip(crate::deep::deep_sites(program))
+            .filter_map(|(d, site)| Some(((d.name.clone(), d.params.len()), site?)))
+            .collect(),
         reusable_records,
         builder_joins,
         builder_params,
@@ -1180,6 +1186,9 @@ struct Backend<'a> {
     escape: crate::escape::EscapeInfo,
     byte_disc: ByteDiscs,
     in_place_pushes: crate::hash::Set<(std::sync::Arc<str>, usize, usize)>,
+    /// Each group on a cycle that grows the stack, with the place an overflow
+    /// in that cycle names (see `crate::deep`).
+    deep_sites: crate::hash::Map<(String, usize), (usize, Span)>,
     reusable_records: crate::hash::Map<(std::sync::Arc<str>, usize, usize), String>,
     builder_joins: crate::hash::Set<(std::sync::Arc<str>, usize, usize)>,
     builder_params: crate::linear::Slots,
@@ -1345,7 +1354,9 @@ fn writes_state(line: &str) -> bool {
         "@k_check_rec_fast(",
         "@k_check_rec_fast_w(",
     ];
-    line.trim_start().starts_with("store ")
+    // a site stamp is the one store a second run repeats harmlessly: it
+    // names a place, and the rerun names the same one
+    (line.trim_start().starts_with("store ") && !line.contains(", ptr @k_site"))
         || (line.contains("call ")
             && !line.contains("@llvm.")
             && !READS.iter().any(|r| line.contains(r)))
@@ -4475,6 +4486,38 @@ impl<'a> Backend<'a> {
     fn origin_arg(&mut self, f: &FnEmit, span: Span) -> String {
         let (name, _) = self.intern(&format!("{}\0{}:{}\0", f.hako, f.origin_prefix, span.line));
         format!("ptr @{name}")
+    }
+
+    /// Whether a call of this group can match no arm and stop the program.
+    /// An arm whose every parameter is a plain name or `_` takes anything,
+    /// and a group with one never falls through, so its calls need no stamp.
+    /// Erring the other way costs a store, never a wrong place.
+    fn can_miss(&self, name: &str, arity: usize) -> bool {
+        !self.decls_named(name).any(|d| {
+            d.params.len() == arity
+                && d.params.iter().all(|p| matches!(p, Pattern::Var(..) | Pattern::Wildcard(_)))
+        })
+    }
+
+    /// On entering a group whose cycle grows the stack, records the place an
+    /// overflow in that cycle names, where the stack watcher reads it.
+    fn enter_deep(&mut self, f: &mut FnEmit, name: &str, arity: usize) {
+        let Some(&(decl, span)) = self.deep_sites.get(&(name.to_string(), arity)) else {
+            return;
+        };
+        let d = &self.program.fns[decl];
+        let hako = crate::provenance::package_of(&d.file);
+        let spelled = crate::deep::spelled(self.program, (decl, span));
+        let (lit, _) = self.intern(&format!("{hako}\0{spelled}\0"));
+        f.line_fmt(format_args!("store ptr @{lit}, ptr @k_deep_site"));
+    }
+
+    /// Records this site as the place a runtime death names: the same
+    /// literal an err born here would carry, stored where `k_died` reads it
+    /// (ruled on #1975). One store, before a call that can stop the program.
+    fn stamp_site(&mut self, f: &mut FnEmit, span: Span) {
+        let site = self.origin_arg(f, span);
+        f.line_fmt(format_args!("store {site}, ptr @k_site"));
     }
 
     fn emit_type_names(&mut self) {

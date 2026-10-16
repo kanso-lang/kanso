@@ -597,6 +597,7 @@ impl<'a> Backend<'a> {
                             // and only the runtime knows it. Its keyed sibling
                             // `k_keyed_check` has always worked this way.
                             let (m, _) = self.intern(&format!("{ty}\0"));
+                            self.stamp_site(f, expr.span());
                             f.line_fmt(format_args!(
                                 "call void @k_die_destructure(%KValue {value}, ptr @{m})"
                             ));
@@ -614,6 +615,7 @@ impl<'a> Backend<'a> {
                         }
                         Pattern::Keyed { entries, .. } => {
                             let checked = f.tmp();
+                            self.stamp_site(f, expr.span());
                             f.line_fmt(format_args!(
                                 "{checked} = call %KValue @k_keyed_check(%KValue {value}, i64 {})",
                                 entries.len()
@@ -844,12 +846,13 @@ impl<'a> Backend<'a> {
                 }
                 self.emit_declared_partial(f, name, &[], *span)
             }
-            Expr::Upcast { expr: inner, ty, .. } => {
+            Expr::Upcast { expr: inner, ty, span } => {
                 let v = self.emit_expr(f, inner)?;
                 let v = self.maybe_force(f, v);
                 let want = self.sub_want(ty)?;
                 let (tyn, _) = self.intern(&format!("{ty}\0"));
                 let t = f.tmp();
+                self.stamp_site(f, *span);
                 f.line_fmt(format_args!(
                     "{t} = call %KValue @k_upcast(%KValue {v}, i64 {want}, ptr @{tyn})"
                 ));
@@ -1172,10 +1175,11 @@ impl<'a> Backend<'a> {
                 }
                 self.emit_call_full(f, head, args, *piped, *span)
             }
-            Expr::Field { base, name, .. } => {
+            Expr::Field { base, name, span } => {
                 let b = self.emit_expr(f, base)?;
                 let (label, _) = self.intern(&format!("{name}\0"));
                 let t = f.tmp();
+                self.stamp_site(f, *span);
                 f.line_fmt(format_args!(
                     "{t} = call %KValue @k_b_field(%KValue {b}, ptr @{label})"
                 ));
@@ -1198,12 +1202,13 @@ impl<'a> Backend<'a> {
                 f.record(&boxed, DESC);
                 Ok(boxed.to_string())
             }
-            Expr::Join { lhs, rhs, .. } => {
+            Expr::Join { lhs, rhs, span } => {
                 let a = self.emit_expr(f, lhs)?;
                 let a = self.maybe_force(f, a);
                 let b = self.emit_expr(f, rhs)?;
                 let b = self.maybe_force(f, b);
                 let t = f.tmp();
+                self.stamp_site(f, *span);
                 f.line_fmt(format_args!(
                     "{t} = call %KValue @k_desc_join(%KValue {a}, %KValue {b})"
                 ));
@@ -1742,6 +1747,9 @@ impl<'a> Backend<'a> {
                         })
                         .collect();
                     let t = f.tmp();
+                    if self.can_miss(name, n) {
+                        self.stamp_site(f, expr.span());
+                    }
                     if same_ret {
                         self.settle_cells(f, &args_ir);
                         let sym = match on_twin {
@@ -1814,6 +1822,7 @@ impl<'a> Backend<'a> {
         let callee = self.as_value(f, &callee);
         let n = args.len();
         let t = f.tmp();
+        self.stamp_site(f, expr.span());
         f.line_fmt(format_args!(
             "{t} = musttail call tailcc %KValue @k_tcall{n}(%KValue {callee}{})",
             args_ir.concat()
@@ -2039,7 +2048,7 @@ impl<'a> Backend<'a> {
                     );
                 }
                 let v = self.emit_binop(f, op, &a, &b, *span)?;
-                return Ok(self.test_cond_value(f, v, then_label, else_label, merge));
+                return Ok(self.test_cond_value(f, v, then_label, else_label, merge, *span));
             }
         }
         // A condition the demand analysis deferred arrives as a thunk, and
@@ -2048,7 +2057,7 @@ impl<'a> Backend<'a> {
         // set proves there is no thunk, so a strict condition is unchanged.
         let v = self.emit_expr(f, cond)?;
         let v = self.maybe_force(f, v);
-        Ok(self.test_cond_value(f, v, then_label, else_label, merge))
+        Ok(self.test_cond_value(f, v, then_label, else_label, merge, cond.span()))
     }
 
     /// The value form: is it a failure, is it true, branch. The failure leaves
@@ -2061,6 +2070,7 @@ impl<'a> Backend<'a> {
         then_label: &str,
         else_label: &str,
         merge: Option<&str>,
+        span: Span,
     ) -> Cond {
         let ok = inline_not_failure(f, &v);
         let check = f.label();
@@ -2079,6 +2089,10 @@ impl<'a> Backend<'a> {
             }
         };
         f.start_block(&check);
+        // only a value that is not a boolean stops the program here
+        if f.set_of(&v) & !(infer::BOOL | FAIL) != 0 {
+            self.stamp_site(f, span);
+        }
         let tv = f.tmp();
         f.predicate(&tv, format!("call i64 @k_truthy(%KValue {v})"));
         let tb = f.tmp();
@@ -2126,7 +2140,6 @@ impl<'a> Backend<'a> {
             ">" => 4,
             _ => 5,
         };
-        let _ = span;
         let ta = inline_tag(f, a);
         let tb = inline_tag(f, b);
         let both = both_ints(f, &ta, &tb);
@@ -2141,11 +2154,12 @@ impl<'a> Backend<'a> {
         f.line_fmt(format_args!("br i1 {c}, label %{then_label}, label %{else_label}"));
         f.start_block(&slow);
         let sv = f.tmp();
+        self.stamp_site(f, span);
         f.line_fmt(format_args!(
             "{sv} = call %KValue @k_cmp(%KValue {a}, %KValue {b}, i64 {code})"
         ));
         f.record(&sv, infer::BOOL | FAIL);
-        self.test_cond_value(f, sv.to_string(), then_label, else_label, merge)
+        self.test_cond_value(f, sv.to_string(), then_label, else_label, merge, span)
     }
 
     /// An expression of two or more `+ - * / %` over words, such as
@@ -2317,6 +2331,7 @@ impl<'a> Backend<'a> {
         };
         if matches!(op, "&" | "|" | "^") {
             let t = f.tmp();
+            self.stamp_site(f, span);
             f.line_fmt(format_args!("{t} = {slow_call}"));
             f.record(&t, (f.set_of(a) & FAIL) | (f.set_of(b) & FAIL) | INT);
             return Ok(t.to_string());
@@ -2368,6 +2383,7 @@ impl<'a> Backend<'a> {
             f.line_fmt(format_args!("br label %{merge}"));
             f.start_block(&slow);
             let sv = f.tmp();
+            self.stamp_site(f, span);
             f.line_fmt(format_args!("{sv} = {slow_call}"));
             f.line_fmt(format_args!("br label %{merge}"));
             f.start_block(&merge);
@@ -2391,6 +2407,7 @@ impl<'a> Backend<'a> {
         }
         if op == "/" || op == "%" {
             let t = f.tmp();
+            self.stamp_site(f, span);
             f.line_fmt(format_args!("{t} = {slow_call}"));
             f.record(
                 &t,
@@ -2538,6 +2555,7 @@ impl<'a> Backend<'a> {
         f.line_fmt(format_args!("br label %{merge}"));
         f.start_block(&slow);
         let sv = f.tmp();
+        self.stamp_site(f, span);
         f.line_fmt(format_args!("{sv} = {slow_call}"));
         let slow_from = f.cur_label.clone();
         f.line_fmt(format_args!("br label %{merge}"));
@@ -2633,6 +2651,7 @@ impl<'a> Backend<'a> {
             f.start_block(&miss);
             let miss_value = if strict {
                 let mv = f.tmp();
+                self.stamp_site(f, span);
                 f.line_fmt(format_args!(
                     "{mv} = call %KValue @{slow_fn}(%KValue {container}, %KValue {key}{slow_extra})"
                 ));
@@ -2748,6 +2767,7 @@ impl<'a> Backend<'a> {
         f.line_fmt(format_args!("br label %{merge}"));
         f.start_block(&slow);
         let slow_value = f.tmp();
+        self.stamp_site(f, span);
         f.line_fmt(format_args!(
             "{slow_value} = call %KValue @{slow_fn}(%KValue {container}, %KValue {key}{slow_extra})"
         ));
@@ -3135,6 +3155,7 @@ impl<'a> Backend<'a> {
             }
             let arg_ir: String = arg_vals.iter().map(|v| format!(", %KValue {v}")).collect();
             let t = f.tmp();
+            self.stamp_site(f, span);
             f.line_fmt(format_args!(
                 "{t} = call %KValue @k_call{n}_fast(%KValue {callee}{arg_ir})"
             ));
@@ -3230,6 +3251,10 @@ impl<'a> Backend<'a> {
                             span.col as usize,
                         ));
                         let t = f.tmp();
+                        // only an accumulator that is not bytes stops the program
+                        if f.set_of(&acc) != BYTES {
+                            self.stamp_site(f, span);
+                        }
                         f.line_fmt(format_args!(
                             "{t} = call %KValue @k_b_append_slice_fast(%KValue {acc}, %KValue {}, %KValue {}, %KValue {}, i64 {})",
                             parts[0], parts[1], parts[2], i64::from(mutate)
@@ -3335,6 +3360,10 @@ impl<'a> Backend<'a> {
                     let word = i64::from_le_bytes(bytes);
                     let (lit, n) = self.intern(&text);
                     let t = f.tmp();
+                    // only an accumulator that is not bytes stops the program
+                    if f.set_of(&acc) != BYTES {
+                        self.stamp_site(f, span);
+                    }
                     f.line_fmt(format_args!(
                         "{t} = call %KValue @k_b_append_mut_word(%KValue {acc}, i64 {word}, i64 {n}, ptr @{lit}, ptr @{lit}_lit)"
                     ));
@@ -3362,6 +3391,10 @@ impl<'a> Backend<'a> {
                         true => {
                             let fails = f.set_of(&value) & ERR;
                             let value = self.as_value(f, &value);
+                            // only an accumulator that is not bytes stops the program
+                            if f.set_of(&acc) != BYTES {
+                                self.stamp_site(f, span);
+                            }
                             f.line_fmt(format_args!(
                                 "{t} = call %KValue @k_b_append_rendered(%KValue {acc}, %KValue {value}, i64 {})",
                                 i64::from(mutate)
@@ -3379,6 +3412,10 @@ impl<'a> Backend<'a> {
                                 true => "k_b_append_mut_byte",
                                 false => "k_b_append_byte",
                             };
+                            // only an accumulator that is not bytes stops the program
+                            if f.set_of(&acc) != BYTES {
+                                self.stamp_site(f, span);
+                            }
                             f.line_fmt(format_args!(
                                 "{t} = call %KValue @{sym}(%KValue {acc}, %KValue {rendered})"
                             ));
@@ -3497,6 +3534,7 @@ impl<'a> Backend<'a> {
         if name == "wrap_err" {
             let origin = self.origin_arg(f, span);
             let t = f.tmp();
+            self.stamp_site(f, span);
             f.line_fmt(format_args!(
                 "{t} = call %KValue @k_b_wrap_err(%KValue {}, %KValue {}, {origin})",
                 emitted[0], emitted[1]
@@ -3524,6 +3562,7 @@ impl<'a> Backend<'a> {
         }
         if name == "sleep" || name == "random" {
             let t = f.tmp();
+            self.stamp_site(f, span);
             f.line_fmt(format_args!("{t} = call %KValue @k_desc_{name}(%KValue {})", emitted[0]));
             f.record(&t, DESC | (f.set_of(&emitted[0]) & FAIL));
             return Ok(t.to_string());
@@ -3538,6 +3577,7 @@ impl<'a> Backend<'a> {
                 let (tyn, _) = self.intern(&format!("{name}\0"));
                 let (par, _) = self.intern(&format!("{parent}\0"));
                 let t = f.tmp();
+                self.stamp_site(f, span);
                 f.line_fmt(format_args!(
                     "{t} = call %KValue @k_sub_ctor(i64 {id}, i64 {want}, %KValue {inner}, ptr @{tyn}, ptr @{par})"
                 ));
@@ -3660,6 +3700,9 @@ impl<'a> Backend<'a> {
                 // entering a beat loop or a cohort: mark the frontier; args
                 // are already evaluated, so they live below the mark
                 f.line("call void @k_beat_push()");
+            }
+            if self.can_miss(name, n) {
+                self.stamp_site(f, span);
             }
             let t = match twin {
                 None => {
@@ -3897,6 +3940,7 @@ impl<'a> Backend<'a> {
                 name
             };
             let t = f.tmp();
+            self.stamp_site(f, span);
             f.line_fmt(format_args!("{t} = call %KValue @k_b_{sym}({})", args_ir.join(", ")));
             let arg_sets: Vec<Set> = emitted.iter().map(|e| f.set_of(e)).collect();
             // `join` answers the first item that fails, and a list literal is

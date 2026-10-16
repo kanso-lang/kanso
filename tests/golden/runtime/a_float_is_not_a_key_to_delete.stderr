@@ -1,1 +1,2 @@
 error[runtime]: 2.5 is not usable as a map key
+  failed in a_float_is_not_a_key_to_delete/play at a_float_is_not_a_key_to_delete.kso:3

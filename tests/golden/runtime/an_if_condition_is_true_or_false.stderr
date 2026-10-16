@@ -1,1 +1,2 @@
 error[runtime]: an if condition is true or false, got x
+  failed in an_if_condition_is_true_or_false/play at an_if_condition_is_true_or_false.kso:11

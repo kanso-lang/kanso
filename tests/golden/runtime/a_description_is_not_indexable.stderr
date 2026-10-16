@@ -1,1 +1,2 @@
 error[runtime]: indexing takes a list or string with a 1-based position, or a map with a key
+  failed in a_description_is_not_indexable/play at a_description_is_not_indexable.kso:13

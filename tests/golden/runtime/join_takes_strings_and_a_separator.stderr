@@ -1,1 +1,2 @@
 error[runtime]: join takes a list of strings and a separator
+  failed in join_takes_strings_and_a_separator/play at join_takes_strings_and_a_separator.kso:7

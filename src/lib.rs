@@ -7,6 +7,7 @@ pub mod check;
 pub mod codegen;
 pub mod demand;
 pub mod diag;
+pub mod deep;
 pub mod dispatch;
 pub mod escape;
 pub mod eval;

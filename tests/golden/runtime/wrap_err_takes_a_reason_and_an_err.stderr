@@ -1,1 +1,2 @@
 error[runtime]: wrap_err takes a reason and the err it wraps
+  failed in wrap_err_takes_a_reason_and_an_err/play at wrap_err_takes_a_reason_and_an_err.kso:1

@@ -103,7 +103,7 @@ pub fn join_values(left: Value, right: Value, span: Span) -> EvalResult {
             (Value::Desc(a), Value::Desc(b)) => {
                 Ok(Value::Desc(Rc::new(Desc::Join(a.clone(), b.clone()))))
             }
-            _ => Err(RuntimeError { message: "a group joins descriptions".to_string(), span }),
+            _ => Err(RuntimeError { at: None, message: "a group joins descriptions".to_string(), span }),
         },
     }
 }
@@ -165,7 +165,7 @@ fn spelled_op(op: &str) -> &str {
 /// word the compiled engines use, and the answer is an int.
 fn bitwise(op: &str, a: &Int, b: &Int, span: Span) -> EvalResult {
     let (Some(x), Some(y)) = (a.to_i64(), b.to_i64()) else {
-        return Err(RuntimeError {
+        return Err(RuntimeError { at: None,
             message: format!("{} takes whole numbers that fit 64 bits", spelled_op(op)),
             span,
         });
@@ -208,7 +208,7 @@ pub fn eval_binop(
         // an arm names it. So the question is refused rather than answered
         // falsely — the way `<` already refuses it on the same values.
         if opaque_to_equality(&left) || opaque_to_equality(&right) {
-            return Err(RuntimeError { message: EQUALITY_REFUSED.to_string(), span });
+            return Err(RuntimeError { at: None, message: EQUALITY_REFUSED.to_string(), span });
         }
         let equal = values_equal(&left, &right, cells, span)?;
         return Ok(bool_value(match op {
@@ -237,7 +237,7 @@ pub fn eval_binop(
         // Anything else meeting a bitwise operator is the type complaint the
         // compiled engines print, in their words: the operator and the named
         // function in std/bits are one operation, so they answer alike.
-        ("&" | "|" | "^", other, _) if !matches!(other, Value::Int(_)) => Err(RuntimeError {
+        ("&" | "|" | "^", other, _) if !matches!(other, Value::Int(_)) => Err(RuntimeError { at: None,
             message: format!(
                 "{} takes whole numbers, got {}",
                 spelled_op(op),
@@ -245,7 +245,7 @@ pub fn eval_binop(
             ),
             span,
         }),
-        ("&" | "|" | "^", _, other) => Err(RuntimeError {
+        ("&" | "|" | "^", _, other) => Err(RuntimeError { at: None,
             message: format!(
                 "{} takes whole numbers, got {}",
                 spelled_op(op),
@@ -280,12 +280,12 @@ pub fn eval_binop(
                 ">" => ord.is_gt(),
                 _ => ord.is_ge(),
             })),
-            None => Err(RuntimeError {
+            None => Err(RuntimeError { at: None,
                 message: "comparison requires two values of one comparable type".to_string(),
                 span,
             }),
         },
-        _ => Err(RuntimeError { message: format!("`{op}` is not defined for these values"), span }),
+        _ => Err(RuntimeError { at: None, message: format!("`{op}` is not defined for these values"), span }),
     }
 }
 
@@ -390,7 +390,7 @@ fn values_equal_seen(
     // cell, and the cell was forced above.
     let host_fn = |v: &Value| matches!(v, Value::TableFn(_));
     if opaque_to_equality(a) || opaque_to_equality(b) || host_fn(a) || host_fn(b) {
-        return Err(RuntimeError { message: EQUALITY_REFUSED.to_string(), span });
+        return Err(RuntimeError { at: None, message: EQUALITY_REFUSED.to_string(), span });
     }
     let answer = match (a, b) {
         (Value::Int(x), Value::Int(y)) => x == y,

@@ -1,1 +1,2 @@
 error[runtime]: slice takes 1-based inclusive positions
+  failed in slice_takes_1_based_inclusive_positions/play at slice_takes_1_based_inclusive_positions.kso:7

@@ -650,7 +650,7 @@ fn run_interpreted_on_stack(program: &ast::Program, args: Vec<String>) -> ExitCo
     let value = match interp.run_main() {
         Ok(value) => value,
         Err(e) => {
-            eprintln!("error[runtime]: {}", e.message);
+            eprint!("error[runtime]: {}\n{}", e.message, e.place());
             return ExitCode::FAILURE;
         }
     };
@@ -671,7 +671,7 @@ fn run_interpreted_on_stack(program: &ast::Program, args: Vec<String>) -> ExitCo
                 }
                 Ok(_) => ExitCode::SUCCESS,
                 Err(e) => {
-                    eprintln!("error[runtime]: {}", e.message);
+                    eprint!("error[runtime]: {}\n{}", e.message, e.place());
                     ExitCode::FAILURE
                 }
             }

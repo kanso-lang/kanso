@@ -1,2 +1,4 @@
-error[endpoint]: unhandled err reached the executor: "missing index 0"
-  born in the entry at index_zero.kso:7
+error[syntax]: a file with declarations is a library, and a library has no statements to run — `kanso play` runs declarations beside statements in one file
+  --> index_zero.kso:7:1
+   7 | prices[0]! .> (v -> print "zeroth: {v}")
+       ^

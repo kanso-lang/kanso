@@ -5456,7 +5456,37 @@ pool_rows = list/concat pool_cells (list/concat pool_counts pool_more)
 
 rows_cq14 = list/concat rows_cq13 pool_rows
 
-rows_c = list/concat rows_cq14 [itself]
+# A run-time failure names the line it happened on, on every engine (#1975).
+# Each half dropped turns the runtime corpus red where the engines disagree.
+death_unplaced = row
+  "a native death that names no place"
+  true
+  "cargo test --release --test golden runtime_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_runtime_death_with_no_place")
+  release
+
+oracle_unplaced = row
+  "an interpreted failure left unplaced"
+  true
+  "cargo test --release --test golden runtime_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "an_interpreted_failure_left_unplaced")
+  release
+
+cycle_unplaced = row
+  "a stack overflow that names no cycle"
+  true
+  "cargo test --release --test golden runtime_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_cycle_that_records_no_place")
+  release
+
+failure_places = [death_unplaced oracle_unplaced cycle_unplaced]
+
+rows_cq16 = list/concat rows_cq14 failure_places
+
+rows_c = list/concat rows_cq16 [itself]
 
 rows = list/concat rows_a (list/concat rows_b rows_c)
 

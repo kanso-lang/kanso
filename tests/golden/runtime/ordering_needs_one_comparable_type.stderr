@@ -1,1 +1,2 @@
 error[runtime]: comparison requires two values of one comparable type
+  failed in ordering_needs_one_comparable_type/play at ordering_needs_one_comparable_type.kso:4

@@ -26,6 +26,8 @@ done:
   ret %KValue %v
 }
 @k_arena = external global ptr
+@k_site = external global ptr
+@k_deep_site = external global ptr
 @k_arena_left = external global i64
 @k_stats_on = external global i32
 

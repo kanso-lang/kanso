@@ -1,0 +1,2 @@
+error[runtime]: the program ran out of stack: recursion went deeper than the stack holds
+  failed in a_cycle_too_deep_names_its_place/ping at a_cycle_too_deep_names_its_place.kso:10

@@ -1,1 +1,2 @@
 error[runtime]: and takes whole numbers, got <io>
+  failed in bitwise_meets_an_effect/play at bitwise_meets_an_effect.kso:8
