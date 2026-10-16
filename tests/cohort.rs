@@ -23,7 +23,10 @@ use std::process::Command;
 /// constants over the 400,496 the two cohorts copy, watched red at the old
 /// value the day the widening landed. Since 2026-10-10 a string literal is
 /// allocated in constant storage the carry knows is permanent, so 96 of those
-/// bytes are no longer copied and the pin reads 800,672.
+/// bytes are no longer copied and the pin reads 800,672. Since 2026-10-16
+/// `os/read_file!` hands its effect back inside a second description that
+/// holds the caller's line (#1975), and the cohort copies that description
+/// and its closure too: 800,768.
 ///
 /// The input doubled to 400,000 escapes on 2026-09-24. An oversize allocation
 /// stopped stranding the block before it that day, so the read's 1.2 MB left
@@ -60,7 +63,7 @@ fn a_bound_branch_chosen_pipe_still_fires_the_cohort() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert_eq!(stdout, "held 400000\n", "stdout mismatch: {stderr}");
     assert!(stderr.contains("cohort_frees=2"), "a cohort never fired: {stderr}");
-    assert!(stderr.contains("evac_bytes=800672"), "the decode's cohort kept its region: {stderr}");
+    assert!(stderr.contains("evac_bytes=800768"), "the decode's cohort kept its region: {stderr}");
     assert!(output.status.success());
 }
 

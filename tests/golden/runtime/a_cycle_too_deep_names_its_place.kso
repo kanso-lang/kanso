@@ -1,0 +1,18 @@
+# A recursion through two groups runs out of stack at a depth that differs
+# between engines, so which group was entering when it did is an accident.
+# The report names the cycle by one place: the first call into it written
+# inside it, outside tail position (src/deep.rs, ruled on #1975). The float
+# keeps the accumulator rewrite from turning either call into a loop.
+fn ping 0
+  0.0
+
+fn ping n
+  0.5 + pong (n - 1)
+
+fn pong 0
+  0.0
+
+fn pong n
+  1.5 + ping (n - 1)
+
+pub play = print "{ping 1000000}"

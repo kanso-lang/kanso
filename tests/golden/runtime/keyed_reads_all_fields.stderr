@@ -1,1 +1,2 @@
 error[runtime]: a keyed read omits at least one field; reading every field is the positional form
+  failed in keyed_reads_all_fields/play at keyed_reads_all_fields.kso:6

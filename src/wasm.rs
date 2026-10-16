@@ -349,7 +349,7 @@ fn finish_run(program: &crate::ast::Program) -> i32 {
     let value = match interp.run_main() {
         Ok(value) => value,
         Err(runtime) => {
-            set_out(&format!("error[runtime]: {}\n", runtime.message));
+            set_out(&format!("error[runtime]: {}\n{}", runtime.message, runtime.place()));
             return 1;
         }
     };
@@ -384,7 +384,7 @@ fn finish_run(program: &crate::ast::Program) -> i32 {
         Err(runtime) => {
             let mut text = executor.stdout;
             text.push_str(&executor.stderr);
-            text.push_str(&format!("error[runtime]: {}\n", runtime.message));
+            text.push_str(&format!("error[runtime]: {}\n{}", runtime.message, runtime.place()));
             set_out(&text);
             1
         }

@@ -1,1 +1,2 @@
 error[runtime]: join takes a list of strings
+  failed in join_wants_strings_to_join/play at join_wants_strings_to_join.kso:6

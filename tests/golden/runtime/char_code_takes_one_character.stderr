@@ -1,1 +1,2 @@
 error[runtime]: char_code takes a one-character string
+  failed in char_code_takes_one_character/play at char_code_takes_one_character.kso:3

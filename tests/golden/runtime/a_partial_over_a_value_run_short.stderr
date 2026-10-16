@@ -1,1 +1,2 @@
 error[runtime]: this function takes 1 argument(s), got 0
+  failed in a_partial_over_a_value_run_short/play at a_partial_over_a_value_run_short.kso:12

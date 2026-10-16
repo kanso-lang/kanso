@@ -1,1 +1,2 @@
 error[runtime]: sleep takes milliseconds (an int), got x
+  failed in sleep_takes_milliseconds/play at sleep_takes_milliseconds.kso:8

@@ -29,9 +29,12 @@ fn golden(name: &str, extension: &str) -> String {
 }
 
 fn transcript(verb: &str, program: &Path, engine: &[&str]) -> (String, String, Option<i32>) {
+    // run where the program lives, so the place a failure names is a path a
+    // golden can hold on any machine
     let done = Command::new(env!("CARGO_BIN_EXE_kanso"))
         .arg(verb)
-        .arg(program)
+        .arg(program.file_name().expect("programs have names"))
+        .current_dir(program.parent().expect("programs live in a directory"))
         .args(engine)
         .env("KANSO_SEED", "2685821657736338717")
         .output()

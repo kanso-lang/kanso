@@ -390,6 +390,41 @@ pub fn origin_at(frame: &Frame, span: Span) -> Raised {
     }
 }
 
+/// A failure raised outside any expression's evaluation, at a statement of
+/// the body `frame` runs, takes that frame as its place unless it has one.
+fn placed(mut e: RuntimeError, frame: &Frame) -> RuntimeError {
+    // a span at line 0 was made where no source position was known
+    if e.at.is_none() && e.span.line > 0 {
+        e.at = origin_at(frame, e.span).at;
+    }
+    e
+}
+
+/// Whether a call's head names an insisting form, a function spelled with
+/// `!` (ruled on #1975: such a form names its caller's line).
+fn insists(head: &Expr) -> bool {
+    matches!(head, Expr::Ident(name, _, _) if name.as_str().ends_with('!'))
+}
+
+/// A failure the package `hako` raised, pointed at `at` instead of the line
+/// inside that package that raised it. Who raised it does not change, so an
+/// arm asking that question hears the same answer.
+pub fn restamped(v: Value, at: &Rc<str>, hako: &Rc<str>) -> Value {
+    match v {
+        Value::ErrV(info) if info.hako.as_deref() == Some(&**hako) => {
+            Value::ErrV(Rc::new(ErrInfo {
+                reason: info.reason.clone(),
+                origin: Some(at.clone()),
+                hako: info.hako.clone(),
+                hops: info.hops.clone(),
+                cause: info.cause.clone(),
+                merged: info.merged,
+            }))
+        }
+        other => other,
+    }
+}
+
 pub fn err_value(reason: Value, raised: Raised) -> Value {
     Value::ErrV(Rc::new(ErrInfo {
         reason,
@@ -584,6 +619,11 @@ pub enum Desc {
     /// deferred, so it holds its answer from the moment it is built and
     /// running it hands the answer over.
     Settled(Value),
+    /// What an insisting form handed back, run where it was called: a
+    /// failure the form's own package raised is re-pointed at the caller's
+    /// line, the place an `!` names (ruled on #1975). The second field is
+    /// that line, the third the form's package.
+    Insisted(Rc<Desc>, Rc<str>, Rc<str>),
 }
 
 /// A read that found nothing answers `none`, the shape `env` already uses for
@@ -846,6 +886,22 @@ fn lookup(env: &Option<Rc<Env>>, name: &Name) -> Option<Value> {
 pub struct RuntimeError {
     pub message: String,
     pub span: Span,
+    /// Where it happened, as "{fn} at {file}:{line}", the trace line an err
+    /// born there would carry. The innermost expression the failure passes
+    /// out of fills it in, since that expression's frame is the one whose
+    /// file the span is in (ruled on #1975).
+    pub at: Option<Rc<str>>,
+}
+
+impl RuntimeError {
+    /// The line a report prints under the message, when the failure has a
+    /// place: `  failed in {fn} at {file}:{line}`.
+    pub fn place(&self) -> String {
+        match &self.at {
+            Some(at) => format!("  failed in {at}\n"),
+            None => String::new(),
+        }
+    }
 }
 
 type Bindings = Vec<(Name, Value)>;
@@ -917,6 +973,14 @@ thread_local! {
 /// value is one too: a loop written in continuation-passing style hands
 /// itself back through a lambda every step, and calling that lambda as a
 /// nested call ran the toml port out of stack at 10,000 steps.
+/// Where the call a dispatch is working on was written, for a failure to
+/// name (ruled on #1975).
+enum Caller<'a> {
+    Outside,
+    Decl(&'a FnDecl),
+    Lambda(Rc<ClosureData>),
+}
+
 enum Flow<'a> {
     Done(Value),
     Tail(Rc<str>, Rc<Vec<&'a FnDecl>>, Vec<Value>, Span),
@@ -983,6 +1047,7 @@ fn foreign_call(handle: u32, args: Vec<Value>, span: Span, decided: bool) -> Eva
     match FOREIGN_CALL.with(|slot| *slot.borrow()) {
         Some(call) => call(handle, args, decided),
         None => Err(RuntimeError {
+            at: None,
             message: "a compiled closure escaped the engine that owns it".to_string(),
             span,
         }),
@@ -1197,6 +1262,12 @@ pub struct Interp<'a> {
     /// front of `frames`; see `frame_for`.
     recent_frames: RefCell<Vec<(usize, Frame)>>,
     program: &'a Program,
+    /// For each declaration in `program.fns`, one past the index in `deep`
+    /// of the place an overflow in its group's cycle names, or 0; see
+    /// `crate::deep`. `deep_now` is the last one a body started under.
+    deep_of: Vec<u32>,
+    deep: Vec<Rc<str>>,
+    deep_now: Cell<u32>,
 }
 
 /// Engine-shared semantic counters: evaluation counts are semantics, so
@@ -1257,7 +1328,24 @@ impl<'a> Interp<'a> {
             file: crate::ast::unstamped(),
         };
         let demand = crate::demand::analyze(program);
+        let mut deep: Vec<Rc<str>> = Vec::new();
+        let mut deep_at: Map<(usize, u32, u32), u32> = Map::default();
+        let deep_of = crate::deep::deep_sites(program)
+            .into_iter()
+            .map(|site| match site {
+                None => 0,
+                Some(place) => {
+                    *deep_at.entry((place.0, place.1.line, place.1.col)).or_insert_with(|| {
+                        deep.push(Rc::from(crate::deep::spelled(program, place)));
+                        deep.len() as u32
+                    })
+                }
+            })
+            .collect();
         Interp {
+            deep_of,
+            deep,
+            deep_now: Cell::new(0),
             fns,
             types,
             entry_decl,
@@ -1322,17 +1410,74 @@ impl<'a> Interp<'a> {
 
     /// Evaluate a declaration's body with its lazy bind sites in view.
     fn eval_body_of(&self, decl: &'a FnDecl, env: Option<Rc<Env>>) -> EvalResult {
+        self.enter_deep(decl);
         self.eval_body_in(decl, &decl.body, env, &self.frame_for(decl))
+    }
+
+    /// What a direct call of an insisting form answered, pointed at the
+    /// caller's line: a failure now, or a box whose failure will be when it
+    /// runs. Every other call answers as it did.
+    #[inline(always)]
+    fn insisted(&self, head: &Expr, answer: Value, span: Span, frame: &Frame) -> Value {
+        // only an err or an effect that may yield one is pointed anywhere,
+        // and nearly every answer is a plain value
+        match matches!(answer, Value::ErrV(_) | Value::Desc(_)) {
+            true => self.insisted_failing(head, answer, span, frame),
+            false => answer,
+        }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn insisted_failing(&self, head: &Expr, answer: Value, span: Span, frame: &Frame) -> Value {
+        let Expr::Ident(name, _, _) = head else { return answer };
+        if !name.as_str().ends_with('!') {
+            return answer;
+        }
+        let Some(group) = self.fns.get(name.as_str()) else { return answer };
+        let Some(first) = group.first() else { return answer };
+        let Some(at) = origin_at(frame, span).at else { return answer };
+        let hako: Rc<str> = Rc::from(crate::provenance::package_of(&first.file));
+        match answer {
+            Value::Desc(d) => Value::Desc(Rc::new(Desc::Insisted(d, at, hako))),
+            other => restamped(other, &at, &hako),
+        }
+    }
+
+    /// A group on a cycle that grows the stack records its cycle's place as
+    /// a body starts, which is what an overflow names (see `crate::deep`).
+    #[inline(always)]
+    fn enter_deep(&self, decl: &'a FnDecl) {
+        let base = self.program.fns.as_ptr() as usize;
+        let at = decl as *const FnDecl as usize;
+        let i = at.wrapping_sub(base) / std::mem::size_of::<FnDecl>();
+        if let Some(&d) = self.deep_of.get(i) {
+            if d != 0 && at >= base {
+                self.deep_now.set(d);
+            }
+        }
     }
 
     /// A body run whose final expression may hand back a tail call for the
     /// dispatcher's loop instead of recursing. Everything before the last
     /// statement evaluates exactly as eval_body_in does.
+    /// A body run to its tail. A failure is placed as it leaves the body:
+    /// every expression in it shares the body's frame, so the body is the one
+    /// place the frame changes on the way out (ruled on #1975).
     fn eval_body_flow(
         &self,
         decl: &'a FnDecl,
         env: Option<Rc<Env>>,
     ) -> Result<Flow<'a>, RuntimeError> {
+        self.eval_body_flow_unplaced(decl, env).map_err(|e| placed(e, &self.frame_for(decl)))
+    }
+
+    fn eval_body_flow_unplaced(
+        &self,
+        decl: &'a FnDecl,
+        env: Option<Rc<Env>>,
+    ) -> Result<Flow<'a>, RuntimeError> {
+        self.enter_deep(decl);
         let frame = self.frame_for(decl);
         let body = &decl.body;
         let Some((Stmt::Expr(last), lead)) = body.split_last() else {
@@ -1357,7 +1502,9 @@ impl<'a> Interp<'a> {
                     if !matches!(pattern, Pattern::Var(..)) {
                         value = self.force_thunk(value)?;
                     }
-                    env = self.destructure(pattern, value, env, expr.span())?;
+                    env = self
+                        .destructure(pattern, value, env, expr.span())
+                        .map_err(|e| placed(e, &frame))?;
                 }
                 Stmt::Expr(expr) => {
                     let _ = self.eval(expr, &env, &frame)?;
@@ -1373,6 +1520,16 @@ impl<'a> Interp<'a> {
     /// would, callee and arguments included, so resolution order and
     /// failure behavior stay identical.
     fn eval_tail(
+        &self,
+        expr: &Expr,
+        env: &Option<Rc<Env>>,
+        frame: &Frame,
+    ) -> Result<Flow<'a>, RuntimeError> {
+        self.eval_tail_inner(expr, env, frame)
+    }
+
+    #[inline(always)]
+    fn eval_tail_inner(
         &self,
         expr: &Expr,
         env: &Option<Rc<Env>>,
@@ -1445,6 +1602,10 @@ impl<'a> Interp<'a> {
             for arg in &args[1..] {
                 values.push(self.eval(arg, env, frame)?);
             }
+            if insists(head) {
+                let answer = self.call(callee, values, *span, frame)?;
+                return Ok(Flow::Done(self.insisted(head, answer, *span, frame)));
+            }
             return match (group_of(&callee), callee) {
                 (Some((name, group)), _) => Ok(Flow::Tail(name, group, values, *span)),
                 (None, Value::Closure(c)) => Ok(Flow::Closure(c, values, *span)),
@@ -1467,6 +1628,12 @@ impl<'a> Interp<'a> {
         let mut values = Vec::with_capacity(args.len());
         for arg in args {
             values.push(self.eval(arg, env, frame)?);
+        }
+        // an insisting form is called rather than looped on, so what it
+        // answers can be pointed at this line on the way back
+        if insists(head) {
+            let answer = self.call(callee, values, *span, frame)?;
+            return Ok(Flow::Done(self.insisted(head, answer, *span, frame)));
         }
         match (group_of(&callee), callee) {
             (Some((name, group)), _) => Ok(Flow::Tail(name, group, values, *span)),
@@ -1535,7 +1702,9 @@ impl<'a> Interp<'a> {
                     if !matches!(pattern, Pattern::Var(..)) {
                         value = self.force_thunk(value)?;
                     }
-                    *env = self.destructure(pattern, value, env.clone(), expr.span())?;
+                    *env = self
+                        .destructure(pattern, value, env.clone(), expr.span())
+                        .map_err(|e| placed(e, frame))?;
                 }
                 Stmt::Expr(expr) => result = self.eval(expr, env, frame)?,
             }
@@ -1544,6 +1713,16 @@ impl<'a> Interp<'a> {
     }
 
     fn eval_body_in(
+        &self,
+        decl: &FnDecl,
+        body: &[Stmt],
+        env: Option<Rc<Env>>,
+        frame: &Frame,
+    ) -> EvalResult {
+        self.eval_body_in_unplaced(decl, body, env, frame).map_err(|e| placed(e, frame))
+    }
+
+    fn eval_body_in_unplaced(
         &self,
         decl: &FnDecl,
         body: &[Stmt],
@@ -1569,7 +1748,9 @@ impl<'a> Interp<'a> {
                     if !matches!(pattern, Pattern::Var(..)) {
                         value = self.force_thunk(value)?;
                     }
-                    env = self.destructure(pattern, value, env, expr.span())?;
+                    env = self
+                        .destructure(pattern, value, env, expr.span())
+                        .map_err(|e| placed(e, frame))?;
                 }
                 Stmt::Expr(expr) => result = self.eval(expr, &env, frame)?,
             }
@@ -1597,6 +1778,7 @@ impl<'a> Interp<'a> {
                         Ok(env)
                     }
                     None => Err(RuntimeError {
+                        at: None,
                         message: format!(
                             "cannot destructure {} as `{ty}`; bindings are irrefutable, so \
                              handle other types by dispatch first",
@@ -1609,6 +1791,7 @@ impl<'a> Interp<'a> {
             Pattern::Keyed { entries, .. } => {
                 let Value::Record { ty, fields } = &value else {
                     return Err(RuntimeError {
+                        at: None,
                         message: format!(
                             "cannot read fields of {}; keyed reads take a record",
                             render(self, &value, true)
@@ -1619,6 +1802,7 @@ impl<'a> Interp<'a> {
                 let decl = self.type_decl(ty).expect("constructed types are declared");
                 if entries.len() >= decl.fields.len() {
                     return Err(RuntimeError {
+                        at: None,
                         message: "a keyed read omits at least one field; reading every \
                                   field is the positional form"
                             .to_string(),
@@ -1630,6 +1814,7 @@ impl<'a> Interp<'a> {
                     let position = decl.fields.iter().position(|(name, _, _)| *name == entry.field);
                     let Some(position) = position else {
                         return Err(RuntimeError {
+                            at: None,
                             message: format!("`{ty}` has no field `{}`", entry.field),
                             span,
                         });
@@ -1639,6 +1824,7 @@ impl<'a> Interp<'a> {
                 Ok(env)
             }
             _ => Err(RuntimeError {
+                at: None,
                 message: "binding patterns are irrefutable: names and constructor \
                           patterns only"
                     .to_string(),
@@ -1690,8 +1876,17 @@ impl<'a> Interp<'a> {
         self.fixed.borrow().get(slot)?.clone()
     }
 
+    /// A failure leaving the expression that raised it takes that
+    /// expression's frame as its place. The innermost node it passes out of
+    /// is the one whose file the span is in, so a failure already placed is
+    /// left alone on the way up (ruled on #1975).
     #[inline(never)]
     fn eval_node(&self, expr: &Expr, env: &Option<Rc<Env>>, frame: &Frame) -> EvalResult {
+        self.eval_node_inner(expr, env, frame)
+    }
+
+    #[inline(always)]
+    fn eval_node_inner(&self, expr: &Expr, env: &Option<Rc<Env>>, frame: &Frame) -> EvalResult {
         match expr {
             Expr::Int(n, _) => Ok(Value::int(n)),
             Expr::Upcast { expr: inner, ty, span } => {
@@ -1708,6 +1903,7 @@ impl<'a> Interp<'a> {
                         Value::Sub { inner, .. } => cur = (*inner).clone(),
                         _ => {
                             return Err(RuntimeError {
+                                at: None,
                                 message: format!(
                                     "`:{ty}` widens; this value is not {}",
                                     article(ty)
@@ -1759,6 +1955,7 @@ impl<'a> Interp<'a> {
                 };
                 let Value::Record { ty, fields } = &value else {
                     return Err(RuntimeError {
+                        at: None,
                         message: format!(
                             "`.` reads a field of a record, not {}",
                             render(self, &value, true)
@@ -1771,6 +1968,7 @@ impl<'a> Interp<'a> {
                 match position {
                     Some(position) => Ok(fields.borrow()[position].clone()),
                     None => Err(RuntimeError {
+                        at: None,
                         message: format!("`{ty}` has no field `{name}`"),
                         span: *span,
                     }),
@@ -1838,7 +2036,8 @@ impl<'a> Interp<'a> {
                     for arg in &args[1..] {
                         values.push(self.eval(arg, env, frame)?);
                     }
-                    return self.call(callee, values, *span, frame);
+                    let answer = self.call(callee, values, *span, frame)?;
+                    return Ok(self.insisted(head, answer, *span, frame));
                 }
                 let callee = self.eval(head, env, frame)?;
                 // `if` in VALUE position, the way `eval_tail` has always done it
@@ -1886,7 +2085,8 @@ impl<'a> Interp<'a> {
                         false => values.push(self.eval(arg, env, frame)?),
                     }
                 }
-                self.call(callee, values, *span, frame)
+                let answer = self.call(callee, values, *span, frame)?;
+                Ok(self.insisted(head, answer, *span, frame))
             }
             Expr::Lambda { params, body, .. } => Ok(Value::Closure(Rc::new(ClosureData {
                 params: params.iter().map(|(n, _)| Name::new(n)).collect(),
@@ -2165,7 +2365,7 @@ impl<'a> Interp<'a> {
             {
                 Ok(Named::FnRef(Rc::from(name)))
             }
-            _ => Err(RuntimeError { message: format!("unknown name `{name}`"), span }),
+            _ => Err(RuntimeError { at: None, message: format!("unknown name `{name}`"), span }),
         }
     }
 
@@ -2219,6 +2419,7 @@ impl<'a> Interp<'a> {
             }
             bad if is_failure(&bad) => Ok(bad),
             other => Err(RuntimeError {
+                at: None,
                 message: format!("`{}` is not callable", render(self, &other, false)),
                 span,
             }),
@@ -2284,6 +2485,7 @@ impl<'a> Interp<'a> {
         let waiting = arities.iter().filter(|a| **a > supplied.len()).min().copied();
         let short = waiting.map(|a| a - supplied.len()).unwrap_or(0);
         Err(RuntimeError {
+            at: None,
             message: format!("this function takes {short} argument(s), got 0"),
             span,
         })
@@ -2291,13 +2493,27 @@ impl<'a> Interp<'a> {
 
     fn call_closure(&self, closure: &ClosureData, args: Vec<Value>, span: Span) -> EvalResult {
         let mut flow = self.closure_flow(closure, args, span)?;
+        // the lambda whose body wrote the call being made, which places a
+        // call that fails before anything it calls has run
+        let mut writer: Option<Rc<ClosureData>> = None;
+        let frame_of = |w: &Option<Rc<ClosureData>>| match w {
+            Some(c) => c.frame.clone(),
+            None => closure.frame.clone(),
+        };
         loop {
             match flow {
                 Flow::Done(value) => return Ok(value),
                 Flow::Tail(name, group, args, span) => {
-                    return self.dispatch_loop(name, group, args, span)
+                    return self
+                        .dispatch_loop(name, group, args, span)
+                        .map_err(|e| placed(e, &frame_of(&writer)))
                 }
-                Flow::Closure(next, args, span) => flow = self.closure_flow(&next, args, span)?,
+                Flow::Closure(next, args, span) => {
+                    flow = self
+                        .closure_flow(&next, args, span)
+                        .map_err(|e| placed(e, &frame_of(&writer)))?;
+                    writer = Some(next);
+                }
             }
         }
     }
@@ -2313,6 +2529,7 @@ impl<'a> Interp<'a> {
     ) -> Result<Flow<'a>, RuntimeError> {
         if closure.params.len() != args.len() {
             return Err(RuntimeError {
+                at: None,
                 message: format!(
                     "this function takes {} argument(s), got {}",
                     closure.params.len(),
@@ -2328,7 +2545,7 @@ impl<'a> Interp<'a> {
         for (name, value) in closure.params.iter().zip(args) {
             env = bind(env, name.clone(), value);
         }
-        self.eval_tail(&closure.body, &env, &closure.frame)
+        self.eval_tail(&closure.body, &env, &closure.frame).map_err(|e| placed(e, &closure.frame))
     }
 
     /// Dispatch fires the moment the supplied count matches an arity the
@@ -2348,6 +2565,7 @@ impl<'a> Interp<'a> {
         if arities.iter().all(|a| *a < args.len()) && !arities.is_empty() {
             let names: Vec<String> = arities.iter().map(usize::to_string).collect();
             return Err(RuntimeError {
+                at: None,
                 message: format!(
                     "no {}-argument arm of `{}` (arms take {})",
                     args.len(),
@@ -2514,6 +2732,7 @@ impl<'a> Interp<'a> {
     fn construct(&self, ty: &TypeDecl, args: Vec<Value>, span: Span) -> EvalResult {
         if !ty.members.is_empty() {
             return Err(RuntimeError {
+                at: None,
                 message: format!("`{}` is a typeset — it only annotates", ty.name),
                 span,
             });
@@ -2521,6 +2740,7 @@ impl<'a> Interp<'a> {
         if let Some(parent) = &ty.parent {
             if args.len() != 1 {
                 return Err(RuntimeError {
+                    at: None,
                     message: format!("`{}` wraps one {} value", ty.name, parent),
                     span,
                 });
@@ -2531,6 +2751,7 @@ impl<'a> Interp<'a> {
             }
             if !type_matches(parent, &inner) {
                 return Err(RuntimeError {
+                    at: None,
                     message: format!("`{}` wraps {}", ty.name, article(parent)),
                     span,
                 });
@@ -2540,6 +2761,7 @@ impl<'a> Interp<'a> {
         }
         if args.len() != ty.fields.len() {
             return Err(RuntimeError {
+                at: None,
                 message: format!(
                     "`{}` has {} field(s), got {} (construction is positional, fields \
                      alphabetical)",
@@ -2556,6 +2778,7 @@ impl<'a> Interp<'a> {
         for ((field, tys, _), arg) in ty.fields.iter().zip(&args) {
             if tys.len() >= 2 && !tys.iter().any(|t| type_matches(t, arg)) {
                 return Err(RuntimeError {
+                    at: None,
                     message: format!("field `{field}` of `{}` takes {}", ty.name, tys.join(" ")),
                     span,
                 });
@@ -2597,10 +2820,21 @@ impl<'a> Interp<'a> {
         self.depth.set(self.depth.get() + 1);
         if self.depth.get() > 10_000 {
             self.depth.set(self.depth.get() - 1);
+            // the cycle the recursion ran through names the place, not the
+            // frame that happened to be entering (see `crate::deep`); a
+            // recursion through no recorded cycle names none
+            let at = match self.deep_now.get() {
+                0 => None,
+                d => Some(self.deep[d as usize - 1].clone()),
+            };
             return Err(RuntimeError {
+                at: at.clone(),
                 message: "the program ran out of stack: recursion went deeper than the stack holds"
                     .to_string(),
-                span,
+                span: match at {
+                    Some(_) => span,
+                    None => Span::at(0, 0),
+                },
             });
         }
         let result = self.dispatch_loop_inner(name, overloads, args, span);
@@ -2654,6 +2888,10 @@ impl<'a> Interp<'a> {
         // instrumented build above was reverted -- so today they agree, and
         // the difference is written here rather than assumed away.
         let mut pool: Option<Rc<Env>> = None;
+        // Who wrote the call being dispatched: the first is the caller's own
+        // expression, which places a failure on the way out; each tail call
+        // after it was written in the body that handed it here.
+        let mut caller = Caller::Outside;
         loop {
             // The second hole in an err's infectiousness: a reader's getter
             // answers the piece before any arm is tried, so an own-hako err
@@ -2875,13 +3113,29 @@ impl<'a> Interp<'a> {
                     // A closure the tail called runs here, in this loop, so a
                     // group and a lambda that hand each other on cost no stack.
                     let mut flowed = flowed?;
+                    let mut lambda: Option<Rc<ClosureData>> = None;
                     while let Flow::Closure(next, next_args, next_span) = flowed {
-                        flowed = self.closure_flow(&next, next_args, next_span)?;
+                        // a call that fails before the lambda runs was written
+                        // in this body, or in the lambda that handed it on
+                        flowed = self.closure_flow(&next, next_args, next_span).map_err(|e| {
+                            match &lambda {
+                                Some(c) => placed(e, &c.frame),
+                                None => placed(e, &self.frame_for(decl)),
+                            }
+                        })?;
+                        lambda = Some(next);
                     }
                     match flowed {
                         Flow::Closure(..) => unreachable!("closures run in the loop above"),
                         Flow::Done(value) => return Ok(value),
                         Flow::Tail(next, group, next_args, next_span) => {
+                            // the call was written in this body, or in the
+                            // lambda its tail handed on to, so a dispatch of
+                            // it that fails is placed there
+                            caller = match lambda {
+                                Some(c) => Caller::Lambda(c),
+                                None => Caller::Decl(decl),
+                            };
                             overloads = group;
                             // `Flow::Tail` already carries the name as an
                             // `Rc<str>`, and every use of it below this loop
@@ -2900,6 +3154,11 @@ impl<'a> Interp<'a> {
                     return match args.into_iter().find(is_failure) {
                         Some(bad) => Ok(hop(bad, &name)),
                         None => Err(RuntimeError {
+                            at: match &caller {
+                                Caller::Outside => None,
+                                Caller::Decl(d) => origin_at(&self.frame_for(d), span).at,
+                                Caller::Lambda(c) => origin_at(&c.frame, span).at,
+                            },
                             message: match (crate::ast::getter_field(&name), subject) {
                                 (Some(field), Some(Value::Record { ty, .. })) => {
                                     format!("`{ty}` has no field `{field}`")
@@ -2984,7 +3243,7 @@ impl<'a> Interp<'a> {
         match callee {
             Value::Closure(c) if c.params.len() == 1 => {
                 let env = bind(c.env.clone(), c.params[0].clone(), arg);
-                self.eval(&c.body, &env, &c.frame)
+                self.eval(&c.body, &env, &c.frame).map_err(|e| placed(e, &c.frame))
             }
             // a callback compiled into another engine's table. Without this
             // arm the argument goes through that engine's guarded call and a
@@ -3094,6 +3353,7 @@ impl<'a> Interp<'a> {
             Value::True => Ok(true),
             Value::False => Ok(false),
             _ => Err(RuntimeError {
+                at: None,
                 message: format!(
                     "an if condition is true or false, got {}",
                     render(self, &other, false)
@@ -3156,7 +3416,8 @@ impl<'a> Interp<'a> {
             // A nullary closure's body can answer with a thunk, and scrutiny
             // wants a value rather than the next cell.
             Value::Closure(c) if c.params.is_empty() => {
-                let answered = self.eval(&c.body, &c.env, &c.frame)?;
+                let answered =
+                    self.eval(&c.body, &c.env, &c.frame).map_err(|e| placed(e, &c.frame))?;
                 self.force_thunk(answered)
             }
             other => self.force_thunk(other),
@@ -3259,6 +3520,7 @@ impl<'a> Interp<'a> {
         // and it is the one a guarded slot never reaches.
         if matches!(&value, Value::Thunk(answered) if Rc::ptr_eq(answered, &cell)) {
             return Err(RuntimeError {
+                at: None,
                 message: "a lazy binding demands its own value".to_string(),
                 span: Span::at(0, 0),
             });
@@ -3330,12 +3592,13 @@ impl<'a> Interp<'a> {
                 }
                 ThunkState::Pending { expr, env, frame } => {
                     self.thunk_stats.evals.set(self.thunk_stats.evals.get() + 1);
-                    let v = self.eval(&expr, &env, &frame)?;
+                    let v = self.eval(&expr, &env, &frame).map_err(|e| placed(e, &frame))?;
                     *cell.borrow_mut() = ThunkState::Forced(v.clone());
                     value = v;
                 }
                 ThunkState::Blackhole => {
                     return Err(RuntimeError {
+                        at: None,
                         message: "a lazy binding demands its own value".to_string(),
                         span: Span::at(0, 0),
                     })
@@ -3366,11 +3629,13 @@ fn whole(v: Value, name: &str, span: Span) -> Result<Result<i64, Value>, Runtime
         Value::Int(n) => match n.to_i64() {
             Some(w) => Ok(Ok(w)),
             None => Err(RuntimeError {
+                at: None,
                 message: format!("{said} takes whole numbers that fit 64 bits"),
                 span,
             }),
         },
         other => Err(RuntimeError {
+            at: None,
             message: format!("{said} takes whole numbers, got {}", render_demanded(other, false)),
             span,
         }),
@@ -3401,6 +3666,7 @@ fn arity<const N: usize>(
     match <[Value; N]>::try_from(args) {
         Ok(array) => Ok(array),
         Err(actual) => Err(RuntimeError {
+            at: None,
             message: format!("`{name}` takes {N} argument(s), got {}", actual.len()),
             span,
         }),
@@ -3771,6 +4037,7 @@ pub fn index_value(container: Value, index: Value, span: Span) -> EvalResult {
             index_value(base_of(container), base_of(index), span)
         }
         (base, _) => Err(RuntimeError {
+            at: None,
             message: format!(
                 "indexing takes a list or string with a 1-based position, or a map with a key{}",
                 lazy_hint(base)
@@ -3792,6 +4059,7 @@ fn map_key(value: Value, span: Span) -> Result<MapKey, RuntimeError> {
         Value::Int(n) => Ok(MapKey::Int(n)),
         Value::Str(s) => Ok(MapKey::Str(s)),
         other => Err(RuntimeError {
+            at: None,
             message: format!("{} is not usable as a map key", render_demanded(&other, true)),
             span,
         }),

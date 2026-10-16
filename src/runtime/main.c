@@ -76,6 +76,9 @@ static void k_on_segv(int sig, siginfo_t* info, void* context) {
                 "%serror[runtime]:%s the program ran out of stack: recursion went "
                 "deeper than the stack holds\n",
                 k_c_err(), k_c_off());
+        if (k_deep_site)
+            fprintf(stderr, "%s  failed in %s%s\n", k_c_dim(),
+                    k_deep_site + strlen(k_deep_site) + 1, k_c_off());
         _exit(1);
     }
     signal(sig, SIG_DFL);
@@ -103,6 +106,10 @@ static void k_watch_the_stack(void) {
 #endif
 
 int main(int argc, char** argv) {
+    /* the tab runs one program after another in one engine, and a place a
+       previous one stamped is not this one's to name */
+    k_site = 0;
+    k_deep_site = 0;
     k_argc_global = argc;
 #ifndef __wasm__
     k_watch_the_stack();

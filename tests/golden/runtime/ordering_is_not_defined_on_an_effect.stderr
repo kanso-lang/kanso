@@ -1,1 +1,2 @@
 error[runtime]: comparison requires two values of one comparable type
+  failed in ordering_is_not_defined_on_an_effect/play at ordering_is_not_defined_on_an_effect.kso:11

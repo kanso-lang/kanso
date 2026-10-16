@@ -1,1 +1,2 @@
 error[runtime]: no overload of `a_none_with_no_arm_is_refused/kind` matches these arguments
+  failed in a_none_with_no_arm_is_refused/shown at a_none_with_no_arm_is_refused.kso:18

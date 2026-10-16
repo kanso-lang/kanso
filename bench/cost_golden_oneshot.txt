@@ -1,13 +1,13 @@
-allocs=12064
-alloc_bytes=2375978
+allocs=12067
+alloc_bytes=2376074
 arena_blocks=2
 arena_peak_bytes=2097152
 cohort_frees=1
 cohort_kept=1
 perm_allocs=9
 beat_iters=1
-evac_allocs=18
-evac_bytes=624
+evac_allocs=21
+evac_bytes=720
 survive_slots=0
 put_mut_fast=8361
 put_mut_grow=0

@@ -976,18 +976,7 @@ fn bind_pattern<'a>(
         Pattern::Wildcard(_) | Pattern::IntLit(..) | Pattern::StrLit(..) | Pattern::Nullary(..) => {
         }
         Pattern::Annotated { name, ty, .. } => {
-            let set = match ty.as_str() {
-                "int" => ANY_INT,
-                "float64" => FLOAT,
-                "string" => STR,
-                "bool" => BOOL,
-                "err" => ERR | RAISED,
-                t if is_effect_type(t) => DESC,
-                t if t.ends_with("[]") => LIST,
-                t if t.contains('[') => MAP,
-                _ => REC,
-            };
-            env.insert(name, set);
+            env.insert(name, annotated_set(ty));
         }
         // destructuring a declared type refines each field to the join of what
         // construction sites stored there — so `_parsed p v` gives p its real
@@ -1935,6 +1924,21 @@ fn nonzero_literal(e: &Expr) -> bool {
         Expr::Int(n, _) => !num_traits::Zero::is_zero(n),
         Expr::Float(x, _) => *x != 0.0,
         _ => false,
+    }
+}
+
+/// What a parameter annotated `ty` holds once its arm is chosen.
+pub fn annotated_set(ty: &str) -> Set {
+    match ty {
+        "int" => ANY_INT,
+        "float64" => FLOAT,
+        "string" => STR,
+        "bool" => BOOL,
+        "err" => ERR | RAISED,
+        t if is_effect_type(t) => DESC,
+        t if t.ends_with("[]") => LIST,
+        t if t.contains('[') => MAP,
+        _ => REC,
     }
 }
 

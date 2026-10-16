@@ -239,7 +239,8 @@ impl Toolchain {
             // Native catches a stack overflow and says so; wasm's call stack
             // ends in a trap, and the page answers it with the same sentence.
             Err(e) if e.contains("call stack exhausted") => {
-                Answer::Ran(1, format!("{}\n", kanso::stack_exhausted()))
+                let place = e.split_once('\n').map(|(_, p)| format!("{p}\n")).unwrap_or_default();
+                Answer::Ran(1, format!("{}\n{place}", kanso::stack_exhausted()))
             }
             Err(e) => Answer::Ran(-1, format!("the host stopped it: {e}")),
         }
@@ -567,7 +568,9 @@ fn a_lazy_binding_nobody_reads_never_runs() {
             "print (shown 0)\n",
             Answer::Ran(
                 1,
-                "error[runtime]: no overload of `nope` matches these arguments\n".to_string(),
+                "error[runtime]: no overload of `nope` matches these arguments\n  \
+                 failed in shown at read.kso:11\n"
+                    .to_string(),
             ),
         ),
     ] {

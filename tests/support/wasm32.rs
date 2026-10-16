@@ -242,7 +242,12 @@ pub fn execute(
     let exit = match (finished, host.exit) {
         (_, Some(code)) => code,
         (Ok(()), None) => 0,
-        (Err(e), None) => return Err(format!("trapped: {e}")),
+        (Err(e), None) => {
+            let place = deep_place(&store, &rti, memory)
+                .map(|p| format!("\n  failed in {p}"))
+                .unwrap_or_default();
+            return Err(format!("trapped: {e}{place}"));
+        }
     };
     Ok(Ran {
         out: String::from_utf8_lossy(&host.out).into_owned(),
@@ -251,4 +256,21 @@ pub fn execute(
         fuel,
         grown,
     })
+}
+
+/// The place the runtime recorded for a cycle too deep for the stack
+/// (`k_deep_site`, "hako\0fn at file:line\0"), read out of its memory after
+/// the trap the way the page reads it, or `None` when no cycle recorded one.
+fn deep_place(store: &Store<Host>, rti: &wasmi::Instance, memory: wasmi::Memory) -> Option<String> {
+    let Val::I32(cell) = rti.get_global(store, "k_deep_site")?.get(store) else { return None };
+    let bytes = memory.data(store);
+    let word = bytes.get(cell as usize..cell as usize + 4)?;
+    let at = u32::from_le_bytes(word.try_into().ok()?) as usize;
+    if at == 0 {
+        return None;
+    }
+    let mut parts = bytes[at..].split(|&b| b == 0);
+    parts.next()?;
+    let place = parts.next()?;
+    Some(String::from_utf8_lossy(place).into_owned())
 }

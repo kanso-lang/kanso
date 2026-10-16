@@ -1,1 +1,2 @@
 error[runtime]: entries takes a map
+  failed in entries_takes_a_map/play at entries_takes_a_map.kso:5

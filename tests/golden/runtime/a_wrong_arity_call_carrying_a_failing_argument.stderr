@@ -1,1 +1,2 @@
 error[runtime]: this function takes 1 argument(s), got 2
+  failed in a_wrong_arity_call_carrying_a_failing_argument/two_b at a_wrong_arity_call_carrying_a_failing_argument.kso:20
