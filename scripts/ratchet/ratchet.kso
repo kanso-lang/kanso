@@ -5494,7 +5494,29 @@ cycle_unplaced = row
   (breaking "a_cycle_that_records_no_place")
   release
 
-failure_places = [death_unplaced oracle_unplaced cycle_unplaced]
+insisted_native = row
+  "an insisting form that names the library's line"
+  true
+  "cargo test --release --test golden runtime_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "an_insisting_form_that_names_the_library")
+  release
+
+insisted_oracle = row
+  "an interpreted insisting form that names the library's line"
+  true
+  "cargo test --release --test golden runtime_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "an_interpreted_insisting_form_that_names_the_library")
+  release
+
+failure_places = [
+  death_unplaced
+  oracle_unplaced
+  cycle_unplaced
+  insisted_native
+  insisted_oracle
+]
 
 rows_cq16 = list/concat rows_cq15 failure_places
 
