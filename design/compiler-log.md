@@ -21,66 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-13 — the ruled queue lands in one carrier
-
-Sixteen pull requests were open at once, most of them building rulings: #1842,
-#1856, #1882, #1883, #1884, #1886, #1887, #1891, #1892 and #1893. Branch
-protection is strict and CI runs one job at a time, so each merge sent the
-rest back through CI for twenty minutes apiece. kanso#1938 merges all of them
-onto main in one tree. Each change's own entry above says what it did and what
-it cost alone; this entry prices the combined tree as CI measured it on
-ce1297c0, against main at 8710ac11.
-
-Compile work rose with the new checks and lowering:
-
-- `compile_instructions` from 26,463,317 to 28,012,335
-- `entry_instructions` from 88,129,856 to 92,423,959
-- `library_instructions` from 87,707,726 to 92,019,476
-- `compile_allocs` from 15,358 to 15,984
-- `front_end_visits` from 7,990 to 8,133, and `compile_peak_bytes` from
-  694,044 to 703,170
-- `startup_instructions` from 52,396 to 52,528
-- `emit_instructions` from 7,052,040 to 7,240,982
-- `codegen_instructions_dev` from 119,002,656 to 119,351,105
-- `codegen_instructions_release` from 454,179,390 to 477,040,687
-- `browser_compile_instructions` from 393,209,858 to 413,925,406
-- `browser_compile_peak_bytes` from 677,261 to 686,192
-
-The interpreter, the browser's run and the native runs:
-
-- `interp_instructions` from 486,939,316 to 495,529,381
-- `interp_allocs` from 588,491 to 589,689
-- `interp_peak_bytes` from 692,375 to 722,393
-- `browser_run_instructions` from 34,125,332 to 34,173,068
-- `work_deepbench` from 393,579,644 to 403,499,282
-- `work_digestbench` from 5,604,458 to 5,909,013
-- `work_pendbench` from 190,061,194 to 191,673,790
-- `work_runbench` from 1,177,965,832 to 1,178,202,157
-- `work_widebench` from 28,178,544 to 28,274,435
-
-`work_encodebench` fell from 2,398,405,934 to 2,386,636,505 and
-`work_jsonbench` from 860,565,984 to 858,185,997; the other benchmarks moved by
-less than 22,000 instructions each.
-
-The decoder's emitted code has `emitted_defines` 111 where it had 106 and
-`emitted_lines` 10,161 where it had 10,070. Across the other benchmarks
-`emitted_other_defines` lands on 2,078 from 2,036 and `emitted_other_calls` on
-17,798 from 17,664, while branches and lines fell. The binaries' `text` grew
-from 4,838,990 to 4,932,142 bytes.
-
-The largest single moves are release codegen, up 5.0%, and the browser's
-compile, up 5.3%. Which carried change produced each is not isolated here; the
-branches' own readings are in their entries.
-
-The run program prints the same `runbench 46132896` on main and on this tree.
-Its counters read `run_arena_peak_bytes` 4,718,608 against main's 9,961,488 and
-`run_allocs` 1,812,043 against 1,812,274. Three run counters rose:
-`run_beat_iters` from 52,008 to 92,008, `run_evac_allocs` from 49,188 to 49,221
-and `run_push_mut_slow` from 1,554,416 to 1,554,428.
-
-Welfare reads 91.3353 on CI's rows against main's floor of 91.2916, so the
-combined tree is a rise, and the floor is banked there.
-
 ## 2026-10-13 — gavel: `merge` copies a record with named fields replaced
 
 Clay ruled #1886. Sixteen of the twenty ports complained that changing one
@@ -1558,3 +1498,69 @@ The walk costs compile time, which CI measured: `compile_instructions`
 `browser_compile_instructions` 382,590,239 -> 382,741,447. The run rows did
 not move. This builds a ruled part of the language, so the welfare floor
 moved down by exactly that cost, to 91.52, with this entry as the reason.
+
+
+## 2026-10-16 — A run-time failure names the line it happened on
+
+The rest of #1975. Every run-time failure now prints its place under
+its message, on every engine, in the form an err's `born in` line uses:
+
+    error[runtime]: `*` is not defined for these values
+      failed in calc/twice at calc.kso:2
+
+**The interpreter** fills the place in as a failure leaves the expression
+that raised it: `eval_node` and `eval_tail` take that expression's frame, and
+a failure already placed is left alone on the way up. Three paths raise a
+failure outside any expression, and each now places it itself: a statement's
+destructure, a tail call whose dispatch matches no arm, and a tail call
+through a function value that takes the wrong count. Before the tail cases
+were placed, a failing builtin under a one-line std wrapper named the
+caller's frame with the wrapper's line number.
+
+**Compiled code** stores the same literal an err born at the site would
+carry into `k_site` before each call that can stop the program, and
+`k_died` prints it. The stamped calls are the operators' slow paths, builtin
+calls, condition tests whose value is not provably a boolean, field and index
+reads, destructures, keyed reads, joins, calls through a function value, and
+calls of a group no arm of which takes anything. Fused appends are stamped
+only where the accumulator is not proved to be bytes. A store to `k_site`
+is exempt from `writes_state`, since running a body over repeats it
+harmlessly.
+
+**A stack overflow** names its cycle rather than its frame. The two engines
+run out of stack at different depths, so the frame that was entering is an
+accident, and in a cycle of two groups they would name different ones.
+`src/deep.rs` gives each cycle that grows the stack one place: the first
+call into it written inside it, outside tail position. A group on such a
+cycle records that place on entry, native in its function and the
+interpreter when an arm's body starts, and the overflow prints the last one
+recorded. A recursion that is all tail calls records nothing and costs
+nothing.
+
+**An insisting form** names the line that called it. A form whose name
+ends in `!` turns an err into a failure, and the err was born inside the
+library, so `os/read_file!` named `os/insisted at std/os/os.kso:113`. Each
+call of such a form now hands its answer back through one step that points
+an err born in the form's own package at the caller's line; an err born
+anywhere else passes through unchanged. Native does it in
+`k_b_insisted`, and an answer that is still an effect gets the step wrapped
+around it so the err it later yields is pointed too. The interpreter does
+the same with `restamped`, and with a `Desc::Insisted` node for an effect.
+
+In the tab the program runs on its own instance of the runtime, so the
+page reads the place after the stack trap from that instance's memory:
+`k_deep_site` is exported as the address of the pointer, and the page
+follows it to the second string. The test harness reads it the same way.
+
+A lazy binding that demands its own value still names no place. The
+interpreter has no source position for it, and native clears `k_site`
+before saying so, so the two agree on saying nothing.
+
+Pinned by the runtime corpus, which native, the interpreter and the tab
+now print byte for byte, and two new fixtures:
+`an_operator_through_a_parameter_names_its_line` (the ports' case) and
+`a_cycle_too_deep_names_its_place`. `read_missing_file` and
+`a_slice_bang_past_the_end_reaches_the_endpoint` moved to name the caller.
+The ratchet rows `death_unplaced`, `oracle_unplaced`, `cycle_unplaced`,
+`insisted_native` and `insisted_oracle` each take one piece away and watch
+the corpus go red.
