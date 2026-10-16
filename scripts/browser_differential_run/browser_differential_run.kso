@@ -581,6 +581,23 @@ page_template = """
     return new TextDecoder().decode(all);
   }
 
+  // the place a cycle too deep for the stack recorded, as the page reads it
+  // (docs/kanso-engine.js): k_deep_site holds the address of a pointer to
+  // "hako, NUL, fn at file:line, NUL", and the line names the second string
+  function deepPlace(rt) \{
+    if (!rt.k_deep_site) return '';
+    const at = new DataView(rt.memory.buffer).getUint32(rt.k_deep_site.value, true);
+    if (at === 0) return '';
+    const bytes = new Uint8Array(rt.memory.buffer);
+    let start = at;
+    while (bytes[start] !== 0) start++;
+    start++;
+    let end = start;
+    while (bytes[end] !== 0) end++;
+    const place = new TextDecoder().decode(bytes.subarray(start, end));
+    return '  failed in ' + place + String.fromCharCode(10);
+  }
+
   let runtimeModule = null;
 
   async function runCase(c) \{
@@ -642,7 +659,7 @@ page_template = """
         code = e.code;
       } else if (e instanceof RangeError) \{
         wasm.kanso_stack_exhausted();
-        host.err.push(new TextEncoder().encode(readOut()));
+        host.err.push(new TextEncoder().encode(readOut() + deepPlace(rt)));
         code = 1;
       } else \{
         return \{ kind: 'crash', reason: String((e && e.stack) || e) };
