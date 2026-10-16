@@ -21,40 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-13 — the ratchet's own checkout reads its library again
-
-Two faults on main kept the ratchet from reading what it was built to read.
-Neither came from the branches that showed them.
-
-The first came with #1927. Its mutation `a_fifth_push_takes_sixteen` anchors
-on the grow's extra doubling, and #1927 rewrote that line as
-`if (cap > 16 && !perm) cap <<= 1;`. The mutation stopped applying, so the
-whole-tree ratchet job reported it stale on every branch merged with main;
-#1904 was the first to show it. The mutation now anchors on the new line and
-doubles every time again, and the mem corpus goes red under it
-(`a_cap_around_a_count_is_a_range` reads `allocs=14` against 13).
-
-The second is older and shows only on a branch that edits
-`scripts/perf_record`, because only then does a shard pick the perf-history
-row. The ratchet links each scratch worktree's `target` to
-`/tmp/kanso-ratchet-target`, so the compiler it builds lives outside the
-checkout. `in_shipped_library` looked for the library beside the binary
-(`current_exe()/../../lib`, here `/tmp/lib`) and nowhere else, so
-`kanso check lib/json` refused `builtin_built_text` as internal to a library
-it was not in. With no compile counters on stderr, perf_record's row lost
-`compile_alloc_bytes` and `compile_passes`, and the gate was red before any
-mutation. #1931 showed it, since it rewrites perf_record's lists in the
-spanning form. The import loader already had the right fallback:
-`resolve_import` tries `lib/` beside the working directory when the
-toolchain's copy is absent. The check now tries the same root.
-`a_checkout_library_checks_from_any_binary` copies the compiler to a
-directory of its own and checks `lib/json` from the checkout; it read the
-refusal before the fix and reads nothing after.
-
-The tab's build leaves the new root out, since it has no checkout to stand
-in. With the root compiled in, `browser_compile_instructions` read 392,449,729
-against 392,378,375; without it the browser row does not move.
-
 ## 2026-10-13 — the ruled queue lands in one carrier
 
 Sixteen pull requests were open at once, most of them building rulings: #1842,
@@ -1562,3 +1528,33 @@ Owes, on #1975: the stamp in codegen and the runtime's print; the
 interpreter printing its span; insisting forms stamping the caller; error
 goldens on every engine for an operator, a builtin and a stack overflow;
 CI's rows and the floor moved by them.
+
+## 2026-10-15 — An operator handed a literal string, list or map is refused at check
+
+The first piece of #1975, and the one that costs nothing at run time. `+`,
+`-`, `*`, `/` and `%` take numbers, and an operator arm routes only a record,
+so a string, a list or a map stops the run on every engine. The check now
+refuses one at the operand, in `wrong_kind_at_an_operator` in
+`src/check/after_infer.rs`, beside the `list/concat` refusal.
+
+It refuses only an operand that cannot hold an err: a literal with nothing
+interpolated, or a call of such literals into a group whose every arm answers
+a string, a list or a map and none fails. The first draft read the callee's
+answer set alone, and `tests/golden/micro/a_merged_err_stays_flat_across_a_hop`
+caught it: `through merged + e3` calls a group whose arms all answer strings,
+but `through` has no err arm, so the err it is handed hops through it and the
+two errs merge at `+`. An operator hands an err on, so anything that might
+carry one is left to the run.
+
+That leaves the ports' case, `twice "x"` where `twice n` is `n * 2`, to the
+run, which is what the rest of #1975 locates. Pinned by
+`tests/golden/errors/an_operator_handed_a_value_it_never_takes`, seen red with
+the call removed; the ratchet row `operator_kind_unchecked` runs the same
+mutation.
+
+The walk costs compile time, which CI measured: `compile_instructions`
+22,699,901 -> 22,715,476, `entry_instructions` 75,214,425 -> 75,262,121,
+`library_instructions` 74,901,006 -> 74,948,228 and
+`browser_compile_instructions` 382,590,239 -> 382,741,447. The run rows did
+not move. This builds a ruled part of the language, so the welfare floor
+moved down by exactly that cost, to 91.52, with this entry as the reason.
