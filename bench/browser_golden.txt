@@ -46,8 +46,12 @@
 # browser_compile_instructions 381,261,098 -> 382,590,239, a RISE of
 # 1,329,141, from the commit that adds the lambda lift with its walk unreached;
 # the run rows are unchanged. On rustc 1.98.1.
+# 2026-10-16: an operator handed a literal string, list or map is refused at
+# check (kanso#1984). browser_compile_instructions 382,590,239 -> 382,741,447,
+# a RISE of 151,208 for the walk the check adds; the run rows are unchanged.
+# On rustc 1.98.1.
 # measured-on rustc=1.98.1
-browser_compile_instructions=382590239
-browser_compile_peak_bytes=643605
-browser_run_instructions=34181355
+browser_compile_instructions=389258726
+browser_compile_peak_bytes=676919
+browser_run_instructions=35688086
 browser_run_peak_bytes=1441792

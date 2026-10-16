@@ -3807,6 +3807,7 @@ impl<'a> Backend<'a> {
             let msg =
                 format!("no overload of `{}` matches these arguments", crate::ast::spoken(name));
             let (m, _) = self.intern(&format!("{msg}\0"));
+            self.stamp_site(f, span);
             f.line_fmt(format_args!("call void @k_die(ptr @{m})"));
             f.line("unreachable");
             let after = f.label();

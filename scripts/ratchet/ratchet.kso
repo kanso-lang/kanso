@@ -5456,6 +5456,18 @@ pool_rows = list/concat pool_cells (list/concat pool_counts pool_more)
 
 rows_cq14 = list/concat rows_cq13 pool_rows
 
+# An arithmetic operator handed a literal string, list or map is refused at
+# check (#1975). Left to the run, the error corpus holds a refusal nobody made.
+operator_kind_unchecked = row
+  "an operator's certain wrong kind left to the run"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "an_operator_kind_left_to_the_run")
+  no_setup
+
+rows_cq15 = list/concat rows_cq14 [operator_kind_unchecked]
+
 # A run-time failure names the line it happened on, on every engine (#1975).
 # Each half dropped turns the runtime corpus red where the engines disagree.
 death_unplaced = row
@@ -5484,7 +5496,7 @@ cycle_unplaced = row
 
 failure_places = [death_unplaced oracle_unplaced cycle_unplaced]
 
-rows_cq16 = list/concat rows_cq14 failure_places
+rows_cq16 = list/concat rows_cq15 failure_places
 
 rows_c = list/concat rows_cq16 [itself]
 
