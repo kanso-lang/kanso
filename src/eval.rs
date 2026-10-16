@@ -2545,8 +2545,7 @@ impl<'a> Interp<'a> {
         for (name, value) in closure.params.iter().zip(args) {
             env = bind(env, name.clone(), value);
         }
-        self.eval_tail(&closure.body, &env, &closure.frame)
-            .map_err(|e| placed(e, &closure.frame))
+        self.eval_tail(&closure.body, &env, &closure.frame).map_err(|e| placed(e, &closure.frame))
     }
 
     /// Dispatch fires the moment the supplied count matches an arity the
