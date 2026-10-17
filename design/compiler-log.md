@@ -21,90 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-13 — the ruled queue lands in one carrier
-
-Sixteen pull requests were open at once, most of them building rulings: #1842,
-#1856, #1882, #1883, #1884, #1886, #1887, #1891, #1892 and #1893. Branch
-protection is strict and CI runs one job at a time, so each merge sent the
-rest back through CI for twenty minutes apiece. kanso#1938 merges all of them
-onto main in one tree. Each change's own entry above says what it did and what
-it cost alone; this entry prices the combined tree as CI measured it on
-ce1297c0, against main at 8710ac11.
-
-Compile work rose with the new checks and lowering:
-
-- `compile_instructions` from 26,463,317 to 28,012,335
-- `entry_instructions` from 88,129,856 to 92,423,959
-- `library_instructions` from 87,707,726 to 92,019,476
-- `compile_allocs` from 15,358 to 15,984
-- `front_end_visits` from 7,990 to 8,133, and `compile_peak_bytes` from
-  694,044 to 703,170
-- `startup_instructions` from 52,396 to 52,528
-- `emit_instructions` from 7,052,040 to 7,240,982
-- `codegen_instructions_dev` from 119,002,656 to 119,351,105
-- `codegen_instructions_release` from 454,179,390 to 477,040,687
-- `browser_compile_instructions` from 393,209,858 to 413,925,406
-- `browser_compile_peak_bytes` from 677,261 to 686,192
-
-The interpreter, the browser's run and the native runs:
-
-- `interp_instructions` from 486,939,316 to 495,529,381
-- `interp_allocs` from 588,491 to 589,689
-- `interp_peak_bytes` from 692,375 to 722,393
-- `browser_run_instructions` from 34,125,332 to 34,173,068
-- `work_deepbench` from 393,579,644 to 403,499,282
-- `work_digestbench` from 5,604,458 to 5,909,013
-- `work_pendbench` from 190,061,194 to 191,673,790
-- `work_runbench` from 1,177,965,832 to 1,178,202,157
-- `work_widebench` from 28,178,544 to 28,274,435
-
-`work_encodebench` fell from 2,398,405,934 to 2,386,636,505 and
-`work_jsonbench` from 860,565,984 to 858,185,997; the other benchmarks moved by
-less than 22,000 instructions each.
-
-The decoder's emitted code has `emitted_defines` 111 where it had 106 and
-`emitted_lines` 10,161 where it had 10,070. Across the other benchmarks
-`emitted_other_defines` lands on 2,078 from 2,036 and `emitted_other_calls` on
-17,798 from 17,664, while branches and lines fell. The binaries' `text` grew
-from 4,838,990 to 4,932,142 bytes.
-
-The largest single moves are release codegen, up 5.0%, and the browser's
-compile, up 5.3%. Which carried change produced each is not isolated here; the
-branches' own readings are in their entries.
-
-The run program prints the same `runbench 46132896` on main and on this tree.
-Its counters read `run_arena_peak_bytes` 4,718,608 against main's 9,961,488 and
-`run_allocs` 1,812,043 against 1,812,274. Three run counters rose:
-`run_beat_iters` from 52,008 to 92,008, `run_evac_allocs` from 49,188 to 49,221
-and `run_push_mut_slow` from 1,554,416 to 1,554,428.
-
-Welfare reads 91.3353 on CI's rows against main's floor of 91.2916, so the
-combined tree is a rise, and the floor is banked there.
-
-## 2026-10-13 — gavel: `merge` copies a record with named fields replaced
-
-Clay ruled #1886. Sixteen of the twenty ports complained that changing one
-field of a record meant rebuilding it by position, and three of their bugs
-were fields passed in the wrong order at such a site. Construction by field
-name stays declined (2026-07-29, named arguments); this is an update form
-only.
-
-**The ruling.** `merge u {"role": "chef"}` answers a copy of the record `u`
-with the named fields replaced and every other field carried over. The map is
-a literal whose keys name fields of `u`'s type. The checker refuses a key that
-is not a field of that type. It also refuses a value that the field's
-declared typeset does not admit, where the field declares one. `merge` builds a
-record, so it is allowed only where construction is, in the module that owns
-the type (2026-08-20, "only a type's owner constructs one").
-
-Clay chose this spelling over a keyword form (`u with role "chef"`), which
-meant the same thing.
-
-Owes, on #1886: the builtin on every engine; error goldens for an unknown
-field, a value the field does not admit, and a merge outside the owning
-module; a micro golden showing unnamed fields carried over; appendix B and
-the chapter that teaches records.
-
 ## 2026-10-13 — gavel: a bracketed list or map may span lines
 
 Clay ruled #1882. All twenty ports wrote a list or map too long for 80
@@ -1558,3 +1474,52 @@ The walk costs compile time, which CI measured: `compile_instructions`
 `browser_compile_instructions` 382,590,239 -> 382,741,447. The run rows did
 not move. This builds a ruled part of the language, so the welfare floor
 moved down by exactly that cost, to 91.52, with this entry as the reason.
+
+## 2026-10-17 — gavel: every run-time failure names its line except a stack overflow
+
+Clay ruled #1987. The #1975 ruling accepted naming every run-time failure's
+line at a bound of 0.42% of runbench. Built in kanso#1985, CI measured
++1.70% on runbench, +3.01% on livebench and +4.36% on encodebench. The
+bound had counted only calls into the C runtime. It missed the stores on
+inlined fast paths, which moved onto the slow branch, the stamp before a call
+that can match no arm, and the store on entry to every function of a
+recursion cycle that records an overflow's place. The overflow's place also
+broke the differential law: an engine names the cycle it entered last, and
+the engines run out of stack at different depths, so a program that keeps
+entering a second cycle gets two different answers.
+
+**The ruling.** Every run-time failure names its file and line on every
+engine, except a stack overflow, which keeps its sentence with no line, as
+main prints it today. A call that matches no arm names the caller's line.
+Dropping the overflow's entry stores saves about 0.8% of runbench and 1.5%
+of livebench and encodebench, and the divergence goes with them. Naming an
+overflow's place by the outermost active cycle is possible and is its own
+issue, measured from scratch; nothing in this ruling waits on it. The floor
+drops by what CI measures for the rest, under the #1975 gavel.
+
+Owes, on #1987: kanso#1985 without the overflow's entry stores; CI's rows
+and the floor moved by them; a follow-up issue for the outermost-cycle rule.
+
+## 2026-10-17 — gavel: the names for spans
+
+Clay ruled #1983, the names the #1960 gavel said would come to him before
+any shipped.
+
+**The ruling.** In std/text:
+
+- `span` is the type, with readable fields `whole` (the string), `from` and
+  `to` (inclusive, the way `text/slice` counts). An empty run has `to` one
+  less than `from`. Only std/text builds one.
+- `text/span s from to` answers a span when the range lies inside `s`, and
+  `none` otherwise.
+- `text/span_to cs p a b` answers the span from `p` up to the byte before the
+  first `a` or `b`, or to the end of `cs`, and `none` only when `p` lies
+  outside `cs`. `text/span_to_below cs p a b lim` also stops at any byte
+  below `lim`. The names say what they answer. `find2` and `find2_below`
+  keep answering a position.
+- `text/slice run`, an arm of `slice` that takes a span, answers the string
+  with no `none`.
+
+Owes, on #1983 and #1960: the five names on every engine; the fused doors
+reading a sliced span; the decoder's four `builtin_slice_in` sites moved
+onto spans; micro goldens; appendix B; kq's decoder following.
