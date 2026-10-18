@@ -21,24 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-13 — gavel: a file may open with a header comment and one blank line
-
-Clay ruled the second part of #1887. A comment directly above a file's first
-declaration is accepted today and reads as that declaration's comment. A
-comment at the top of a file followed by a blank line is refused, and the
-refusal is wrong about why: "the file may not begin with a blank line", at
-line 2, because the check skips the comment when it finds the file's start.
-
-**The ruling.** A file may begin with a block of comment lines followed by
-exactly one blank line, and that block is the file's header, separate from any
-declaration. Without the blank line the block is the first declaration's
-comment, as today. Nothing else about comment placement changes.
-
-Owes, on #1887: the formatting check accepts the header shape; error goldens
-for a header followed by two blank lines and for a blank line before the
-header; a golden that the header-plus-blank-line file checks clean on every
-engine.
-
 ## 2026-10-13 — gavel: overload arms stay in specificity order
 
 Clay ruled #1888, which asked whether the order rule for overload arms could go
@@ -1535,3 +1517,32 @@ Rows, from CI: `compile_instructions` 22,716,927 -> 22,721,761,
 382,767,025: each compile asks every type whether it is a beaten twin. The
 floor drops by the cost to 91.52 under the rule for a change that makes the
 language work as specified.
+
+## 2026-10-18 — A local binding hides an alias only where it is bound
+
+`canonicalize_bare_aliases` rewrites a bare call to an import's export into
+the qualified name, and keeps a name bare wherever a local of that spelling
+might mean the local. It kept the name bare in every declaration of the
+program when any one of them bound it. A parameter called `run` in one
+module therefore sent every other module's `run` through the loader's
+short-named clone. An err born in that `run` said `born in run` where the
+same program without the other module says `born in refusals/run`, and
+basket, once std/text's `slice run:span` bound the name, read 6,113M
+instructions against 31M, with 4,010 view allocations and 256MB held against
+17 and 71KB. Both reproduce on main with no spans in them.
+
+A declaration that binds an alias's name now keeps the bare spelling and the
+clone it dispatches through, and every other declaration is rewritten.
+`tests/bound_elsewhere.rs` runs `tests/golden/bound_elsewhere` on both
+engines and fails on main with `born in run`. The first build walked each
+declaration's bindings into a set of its own and cost entry and library
+about 2.5%; the binding walker hands each name to a callback now, so one
+walk asks the aliases about every bound name and builds no set.
+
+Rows, from CI: `compile_instructions` 22,721,761 -> 22,742,849,
+`entry_instructions` 75,287,373 -> 75,386,738, `library_instructions`
+74,973,469 -> 75,073,592, `emit_instructions` 5,452,431 -> 5,452,790,
+`compile_allocs` 12,160 -> 12,151, `interp_allocs` 584,659 -> 584,645, and
+`browser_compile_instructions` 382,767,025 -> 382,760,768. The floor drops by
+the cost to 91.52 under the rule for a change that makes the language work
+as specified.
