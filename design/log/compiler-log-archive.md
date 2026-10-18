@@ -104127,3 +104127,22 @@ Owes, on #1886: the builtin on every engine; error goldens for an unknown
 field, a value the field does not admit, and a merge outside the owning
 module; a micro golden showing unnamed fields carried over; appendix B and
 the chapter that teaches records.
+
+## 2026-10-13 — gavel: a bracketed list or map may span lines
+
+Clay ruled #1882. All twenty ports wrote a list or map too long for 80
+columns, and nothing let one break. Text blocks (`"""`) already cover long
+strings.
+
+**The ruling.** A list or map literal may span lines. The opening bracket ends
+its line, each element (or key and value) sits on a line of its own indented
+one level, and the closing bracket stands alone at the opening line's indent.
+Canonical form keeps one way to write each literal: one that fits in 80 columns
+on one line is written on one line, and one that does not is written in the
+spanning form. Operator chains, `if` and guards are not covered, and they are
+still broken by naming their parts.
+
+Owes, on #1882: the lexer and parser accept the spanning form on every
+engine; error goldens for a short literal spanned, a long literal on one line
+and a misplaced closing bracket; the samples that build long literals by hand
+moved onto it; the chapter that teaches lists.
