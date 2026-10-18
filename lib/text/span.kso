@@ -13,7 +13,7 @@ pub fn slice run:span
 # The span of s from `from` to `to`, when that range lies inside s, and
 # none otherwise. An empty run (`to` one less than `from`) may sit anywhere
 # from the start of s to one past its end.
-pub fn span_of s from to
+pub fn to_span s from to
   return none if from < 1 or to < from - 1 or length s < to
   span s from to
 

@@ -11,10 +11,10 @@ fn spanned cs start e
 
 # The number's bytes are a span the scan proved inside cs.
 fn number_done cs start p true
-  parsed p (number_ok start (float_of (text/span_of cs start (p - 1))))
+  parsed p (number_ok start (float_of (text/to_span cs start (p - 1))))
 
 fn number_done cs start p false
-  parsed p (number_ok start (int_of (text/span_of cs start (p - 1))))
+  parsed p (number_ok start (int_of (text/to_span cs start (p - 1))))
 
 fn float_of none
   err "invalid number"

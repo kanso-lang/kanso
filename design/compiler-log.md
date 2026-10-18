@@ -1520,10 +1520,10 @@ language work as specified.
 
 ## 2026-10-18 — std/text answers spans, and the decoder takes them
 
-#1960, under the gavel on #1983 and Clay's answer on #1992, which named the
-maker `text/span_of` because a function cannot share the type's name. std/text
+#1960, under the gavels on #1983 and #1992; the second named the maker
+`text/to_span`, because a function cannot share the type's name. std/text
 declares `span`, with readable fields `whole`, `from` and `to`, and answers
-one from `text/span_of s from to`, `text/span_to cs p a b` and
+one from `text/to_span s from to`, `text/span_to cs p a b` and
 `text/span_to_below cs p a b lim`. `text/slice run` is an arm of `slice` that
 takes a span and answers its bytes with no `none`. The type and its functions
 live in `lib/text/span.kso`, so the line numbers err goldens quote from
@@ -1564,7 +1564,7 @@ The twins' positions were boxed at first, because a group takes words only
 when it is a member of a cycle, and jsonbench read 938M. A group the pass
 made now takes its int fields as words too: 864M with the string sites moved
 and 868M with the number sites, on this container. What is left is the range
-check in `span_to` and `span_of` and the `- 1` and `+ 1` around an inclusive
+check in `span_to` and `to_span` and the `- 1` and `+ 1` around an inclusive
 `to`. The mem corpus reads the same counters as before the move, and
 `a_span_handed_on_is_never_built` pins that a span handed from `span_to` to a
 carrier builds no record: `sh_rec` 0 and 12 allocations, against 720 bytes

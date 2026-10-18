@@ -337,10 +337,10 @@ err at 1: unexpected character `?`</code></pre>
   <span class="f">if</span> (e <span class="o">&lt;</span> <span class="n">0</span>) (<span class="f">number_done</span> cs start (<span class="n">0</span> <span class="o">-</span> e) <span class="t">true</span>) (<span class="f">number_done</span> cs start e <span class="t">false</span>)
 
 <span class="k">fn</span> <span class="f">number_done</span> cs start p <span class="t">true</span>
-  <span class="f">parsed</span> p (<span class="f">number_ok</span> start (<span class="f">float_of</span> (<span class="f">text/span_of</span> cs start (p <span class="o">-</span> <span class="n">1</span>))))
+  <span class="f">parsed</span> p (<span class="f">number_ok</span> start (<span class="f">float_of</span> (<span class="f">text/to_span</span> cs start (p <span class="o">-</span> <span class="n">1</span>))))
 
 <span class="k">fn</span> <span class="f">number_done</span> cs start p <span class="t">false</span>
-  <span class="f">parsed</span> p (<span class="f">number_ok</span> start (<span class="f">int_of</span> (<span class="f">text/span_of</span> cs start (p <span class="o">-</span> <span class="n">1</span>))))
+  <span class="f">parsed</span> p (<span class="f">number_ok</span> start (<span class="f">int_of</span> (<span class="f">text/to_span</span> cs start (p <span class="o">-</span> <span class="n">1</span>))))
 
 <span class="k">fn</span> <span class="f">float_of</span> run
   <span class="f">text/to_float</span> (<span class="f">text/slice</span> run)</code></pre>
