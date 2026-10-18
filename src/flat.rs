@@ -69,15 +69,23 @@ struct Carrier {
 
 type Group = (String, usize);
 
+/// Rows keyed by a group's name and arity, asked with a borrowed name. The
+/// pass runs on every program it is handed and finds a producer in few, so
+/// asking about a call builds no key.
+struct Table<T>(Vec<(String, usize, T)>);
+
+impl<T> Table<T> {
+    fn get(&self, name: &str, arity: usize) -> Option<&T> {
+        self.0.iter().find(|(n, a, _)| n == name && *a == arity).map(|(_, _, t)| t)
+    }
+}
+
 pub fn flatten(program: &mut Program) {
-    let records = records(program);
-    if records.is_empty() {
+    let producers = producers(program);
+    if producers.0.is_empty() {
         return;
     }
-    let producers = producers(program, &records);
-    if producers.is_empty() {
-        return;
-    }
+    let records = records(program, &producers);
     let carriers = carriers(program, &records, &producers);
     if carriers.is_empty() {
         return;
@@ -134,19 +142,19 @@ fn twin_name(name: &str, n: usize) -> String {
     }
 }
 
-/// Every record type with fields, keyed by each of its spellings: an
-/// enrollment clone constructs and matches as its origin, so both name the
-/// one record and both resolve to the origin's name.
-fn records(program: &Program) -> HashMap<String, Record> {
+/// The fields of each record a producer builds, by the origin's name.
+fn records(program: &Program, producers: &Table<Producer>) -> HashMap<String, Record> {
     let mut out = HashMap::default();
-    for t in &program.types {
-        if t.fields.is_empty() || t.origin.is_some() {
+    for (_, _, p) in &producers.0 {
+        if out.contains_key(&p.ty) {
             continue;
         }
-        out.insert(
-            t.name.clone(),
-            Record { fields: t.fields.iter().map(|f| f.0.clone()).collect() },
-        );
+        if let Some(t) = program.types.iter().find(|t| t.name == p.ty) {
+            out.insert(
+                p.ty.clone(),
+                Record { fields: t.fields.iter().map(|f| f.0.clone()).collect() },
+            );
+        }
     }
     out
 }
@@ -158,15 +166,10 @@ fn canonical<'a>(program: &'a Program, ty: &'a str) -> &'a str {
 
 /// One-arm groups of plain names whose body is one or more guards answering
 /// `none` and then one construction of a record, every field given.
-fn producers(program: &Program, records: &HashMap<String, Record>) -> HashMap<Group, Producer> {
-    let mut arms: HashMap<Group, usize> = HashMap::default();
-    for f in &program.fns {
-        *arms.entry((f.name.clone(), f.params.len())).or_default() += 1;
-    }
-    let mut out = HashMap::default();
+fn producers(program: &Program) -> Table<Producer> {
+    let mut out = Vec::new();
     for (at, f) in program.fns.iter().enumerate() {
-        let key = (f.name.clone(), f.params.len());
-        if arms[&key] != 1 || f.synthetic || f.shades.is_some() || f.is_getter() {
+        if f.synthetic || f.shades.is_some() || f.is_getter() {
             continue;
         }
         if !f.params.iter().all(|p| matches!(p, Pattern::Var(..))) {
@@ -179,31 +182,32 @@ fn producers(program: &Program, records: &HashMap<String, Record>) -> HashMap<Gr
         if !matches!(body, Expr::Guard { .. }) {
             continue;
         }
-        let Some(ty) = built_after_guards(program, body, records) else { continue };
-        out.insert(key, Producer { ty, at });
+        let Some(ty) = built_after_guards(program, body) else { continue };
+        let arity = f.params.len();
+        let arms = program.fns.iter().filter(|g| g.name == f.name && g.params.len() == arity);
+        if arms.count() != 1 {
+            continue;
+        }
+        out.push((f.name.clone(), arity, Producer { ty: ty.to_string(), at }));
     }
-    out
+    Table(out)
 }
 
 /// The record a producer's body builds, when the body has that shape.
-fn built_after_guards(
-    program: &Program,
-    e: &Expr,
-    records: &HashMap<String, Record>,
-) -> Option<String> {
+fn built_after_guards<'a>(program: &'a Program, e: &'a Expr) -> Option<&'a str> {
     match e {
         Expr::Guard { early, rest, .. } => {
             if !is_none(early) {
                 return None;
             }
             let [Stmt::Expr(next)] = rest.as_slice() else { return None };
-            built_after_guards(program, next, records)
+            built_after_guards(program, next)
         }
         Expr::App { head, args, piped: false, .. } => {
             let Expr::Ident(ty, _, _) = head.as_ref() else { return None };
             let ty = canonical(program, ty.as_str());
-            let record = records.get(ty)?;
-            (record.fields.len() == args.len()).then(|| ty.to_string())
+            let decl = program.types.iter().find(|t| t.name == ty && t.origin.is_none())?;
+            (!decl.fields.is_empty() && decl.fields.len() == args.len()).then_some(ty)
         }
         _ => None,
     }
@@ -213,16 +217,14 @@ fn is_none(e: &Expr) -> bool {
     matches!(e, Expr::Ident(n, _, _) if n.as_str() == "none")
 }
 
-/// A call to a producer: its name and arity.
-fn producer_call<'a>(
+/// A call to a producer: its arguments and the producer.
+fn producer_call<'a, 'p>(
     e: &'a Expr,
-    producers: &HashMap<Group, Producer>,
-) -> Option<(&'a str, &'a [Expr])> {
+    producers: &'p Table<Producer>,
+) -> Option<(&'a [Expr], &'p Producer)> {
     let Expr::App { head, args, piped: false, .. } = e else { return None };
     let Expr::Ident(name, _, _) = head.as_ref() else { return None };
-    producers
-        .contains_key(&(name.to_string(), args.len()))
-        .then_some((name.as_str(), args.as_slice()))
+    producers.get(name.as_str(), args.len()).map(|p| (args.as_slice(), p))
 }
 
 /// The groups a call can name: declared, and not one the compiler treats
@@ -245,7 +247,7 @@ fn eligible(program: &Program, name: &str, arity: usize) -> bool {
 fn carriers(
     program: &Program,
     records: &HashMap<String, Record>,
-    producers: &HashMap<Group, Producer>,
+    producers: &Table<Producer>,
 ) -> HashMap<Group, Carrier> {
     // A group with two positions found, or one found under two records, is
     // left alone: a twin flattens one position.
@@ -257,8 +259,8 @@ fn carriers(
                 let Expr::App { head, args, piped: false, .. } = e else { return };
                 let Expr::Ident(name, _, _) = head.as_ref() else { return };
                 for (at, a) in args.iter().enumerate() {
-                    if let Some((p, pargs)) = producer_call(a, producers) {
-                        let ty = producers[&(p.to_string(), pargs.len())].ty.clone();
+                    if let Some((_, producer)) = producer_call(a, producers) {
+                        let ty = producer.ty.clone();
                         if eligible(program, name, args.len()) {
                             note(
                                 (name.to_string(), args.len()),
@@ -570,7 +572,7 @@ fn head_span(head: &Expr) -> crate::diag::Span {
 fn entered(
     e: &mut Expr,
     program: &Program,
-    producers: &HashMap<Group, Producer>,
+    producers: &Table<Producer>,
     carriers: &HashMap<Group, Carrier>,
     twins: &HashMap<Group, String>,
     records: &HashMap<String, Record>,
@@ -583,14 +585,19 @@ fn entered(
     });
     let Expr::App { head, args, piped: false, .. } = e else { return };
     let Expr::Ident(name, head_at, _) = head.as_ref() else { return };
+    // Most calls hand no producer's answer to anything, so that is asked
+    // before a key is built.
+    if !args.iter().any(|a| producer_call(a, producers).is_some()) {
+        return;
+    }
     let key = (name.to_string(), args.len());
     let (Some(carrier), Some(twin)) = (carriers.get(&key), twins.get(&key)) else { return };
-    let Some((p, pargs)) = producer_call(&args[carrier.at], producers) else { return };
-    let producer = &producers[&(p.to_string(), pargs.len())];
+    let Some((pargs, producer)) = producer_call(&args[carrier.at], producers) else { return };
     if producer.ty != carrier.ty || !total(program, &key, carrier.at) {
         return;
     }
-    let pkey = (p.to_string(), pargs.len(), twin.clone());
+    let p = program.fns[producer.at].name.clone();
+    let pkey = (p, pargs.len(), twin.clone());
     let entry = match built.iter().find(|(k, _)| *k == pkey) {
         Some((_, n)) => n.clone(),
         None => {
