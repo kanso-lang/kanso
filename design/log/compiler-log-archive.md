@@ -104185,3 +104185,14 @@ Owes, on #1887: the formatting check accepts the header shape; error goldens
 for a header followed by two blank lines and for a blank line before the
 header; a golden that the header-plus-blank-line file checks clean on every
 engine.
+
+## 2026-10-13 — gavel: overload arms stay in specificity order
+
+Clay ruled #1888, which asked whether the order rule for overload arms could go
+now that the checker detects disjoint arms. Clay: "if you're talking about
+ordering by the hierarchy of subtypes then yes you absolutely preserve
+specificity order." The rule stands as built: an overload's arms are written
+most specific first, a literal before a concrete type and a concrete type
+before the catch-all, and the formatting check refuses any other order. The
+2026-07-25 gavel that freed top-level declaration order does not reach arms.
+Nothing is owed.

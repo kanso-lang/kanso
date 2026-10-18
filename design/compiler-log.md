@@ -21,17 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-13 — gavel: overload arms stay in specificity order
-
-Clay ruled #1888, which asked whether the order rule for overload arms could go
-now that the checker detects disjoint arms. Clay: "if you're talking about
-ordering by the hierarchy of subtypes then yes you absolutely preserve
-specificity order." The rule stands as built: an overload's arms are written
-most specific first, a literal before a concrete type and a concrete type
-before the catch-all, and the formatting check refuses any other order. The
-2026-07-25 gavel that freed top-level declaration order does not reach arms.
-Nothing is owed.
-
 ## 2026-10-13 — gavel: hex and binary integers and exponent floats
 
 Clay ruled #1889. Seven ports needed numbers that kanso refuses as spacing
