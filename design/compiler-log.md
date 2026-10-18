@@ -21,24 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-13 — gavel: a file may open with a header comment and one blank line
-
-Clay ruled the second part of #1887. A comment directly above a file's first
-declaration is accepted today and reads as that declaration's comment. A
-comment at the top of a file followed by a blank line is refused, and the
-refusal is wrong about why: "the file may not begin with a blank line", at
-line 2, because the check skips the comment when it finds the file's start.
-
-**The ruling.** A file may begin with a block of comment lines followed by
-exactly one blank line, and that block is the file's header, separate from any
-declaration. Without the blank line the block is the first declaration's
-comment, as today. Nothing else about comment placement changes.
-
-Owes, on #1887: the formatting check accepts the header shape; error goldens
-for a header followed by two blank lines and for a blank line before the
-header; a golden that the header-plus-blank-line file checks clean on every
-engine.
-
 ## 2026-10-13 — gavel: overload arms stay in specificity order
 
 Clay ruled #1888, which asked whether the order rule for overload arms could go
