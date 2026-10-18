@@ -1639,3 +1639,20 @@ Rows, from CI: `compile_instructions` 22,716,927 -> 22,721,761,
 382,767,025: each compile asks every type whether it is a beaten twin. The
 floor drops by the cost to 91.52 under the rule for a change that makes the
 language work as specified.
+
+## 2026-10-18 — gavel: the span maker is `text/to_span`
+
+Clay ruled #1992. The 2026-10-17 gavel on #1983 named a type `span` and a
+function `text/span s from to`. A type's name is its constructor, so the
+constructor `span whole from to` and the function share a name and an arity,
+and the checker refuses the pair.
+
+**The ruling.** The function is `text/to_span s from to`, answering a span
+when the range lies inside `s` and `none` otherwise. A `to_` name means the
+answer is a different kind of thing (2026-10-13, #1914), and `list/to_sorted`
+builds a checked `sorted` from a list the same way. The type stays `span`,
+and `span_to`, `span_to_below` and the span arm of `text/slice` keep the
+names ruled on #1983.
+
+Owes, on #1992: `text/to_span` in place of `text/span` wherever #1983's build
+uses it; appendix B.
