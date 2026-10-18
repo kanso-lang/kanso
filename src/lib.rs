@@ -1455,18 +1455,19 @@ fn alias_expr(e: &mut ast::Expr, aliases: &crate::hash::Map<String, String>, wro
 /// module's constructions as foreign. The qualified spelling still reaches
 /// the import's type.
 pub fn own_types_beat_twins(program: &mut ast::Program) {
-    let own: crate::hash::Set<String> = program
-        .types
-        .iter()
-        .filter(|t| !t.synthetic && !ast::has_slash(&t.name))
-        .map(|t| t.name.clone())
-        .collect();
-    if own.is_empty() {
+    // A collision is rare, so finding none allocates nothing.
+    let beaten = |t: &ast::TypeDecl, types: &[ast::TypeDecl]| {
+        t.synthetic
+            && t.origin.is_some()
+            && !ast::has_slash(&t.name)
+            && types.iter().any(|own| !own.synthetic && own.name == t.name)
+    };
+    if !program.types.iter().any(|t| beaten(t, &program.types)) {
         return;
     }
-    program.types.retain(|t| {
-        !(t.synthetic && t.origin.is_some() && !ast::has_slash(&t.name) && own.contains(&t.name))
-    });
+    let keep: Vec<bool> = program.types.iter().map(|t| !beaten(t, &program.types)).collect();
+    let mut keep = keep.into_iter();
+    program.types.retain(|_| keep.next().unwrap_or(true));
 }
 
 /// Rewrite every type reference that resolves to an enrollment clone to
