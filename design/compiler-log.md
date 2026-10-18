@@ -21,25 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-13 — gavel: a bracketed list or map may span lines
-
-Clay ruled #1882. All twenty ports wrote a list or map too long for 80
-columns, and nothing let one break. Text blocks (`"""`) already cover long
-strings.
-
-**The ruling.** A list or map literal may span lines. The opening bracket ends
-its line, each element (or key and value) sits on a line of its own indented
-one level, and the closing bracket stands alone at the opening line's indent.
-Canonical form keeps one way to write each literal: one that fits in 80 columns
-on one line is written on one line, and one that does not is written in the
-spanning form. Operator chains, `if` and guards are not covered, and they are
-still broken by naming their parts.
-
-Owes, on #1882: the lexer and parser accept the spanning form on every
-engine; error goldens for a short literal spanned, a long literal on one line
-and a misplaced closing bracket; the samples that build long literals by hand
-moved onto it; the chapter that teaches lists.
-
 ## 2026-10-13 — gavel: parentheses are required where `and` meets `or`, and refused wherever else they group nothing
 
 Clay ruled the first part of #1887. The ports asked for parentheses to be
@@ -1523,3 +1504,27 @@ any shipped.
 Owes, on #1983 and #1960: the five names on every engine; the fused doors
 reading a sliced span; the decoder's four `builtin_slice_in` sites moved
 onto spans; micro goldens; appendix B; kq's decoder following.
+
+## 2026-10-18 — A module's own function beats a type an import declares
+
+Building std/text's `span` turned up a check that read the wrong name. In a
+merged module check, the bare name of a type another module declares reached
+the construction check before a function of the same name in the program's
+own module. `fn sorted a b` beside `import "std/list"` was refused as a
+construction of std/list's `sorted` with too many fields, and any program
+with a helper named `span` would have been refused the same way once std/text
+declares the type. A type and a function cannot share a name inside one
+module, so a bare name that is both is the module's function. `arity_at` now
+skips the construction check for a name that is a known function group.
+
+The fixture is `a_function_named_like_an_imported_type_is_the_function` in
+the micro corpus. Without the change, `kanso check` refuses it with the arity
+error. With the change, it prints `3` on every engine.
+
+Rows, from CI: `compile_instructions` 22,715,476 -> 22,716,927,
+`entry_instructions` 75,262,121 -> 75,265,987, `library_instructions`
+74,948,228 -> 74,952,083 and `browser_compile_instructions` 382,741,447 ->
+382,750,920. The check does no new work on these programs, so most of the
+movement is the binary's layout. The floor drops by the cost to 91.52, under
+the rule that a change making the language work as specified lowers it by
+exactly what it costs.
