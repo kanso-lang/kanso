@@ -1,0 +1,4 @@
+import "./doubles"
+import "./refusals"
+
+print (run (doubles/twice 2))

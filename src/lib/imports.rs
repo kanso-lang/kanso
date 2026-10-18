@@ -290,7 +290,7 @@ fn open_qualified_doors(
                 door_pattern(pattern, &doors);
             }
             door_stmt(stmt, &doors);
-            alias_stmt(stmt, &doors, &mut Rewrites::default());
+            alias_stmt(stmt, &Aliasing { to: &doors, except: &[] }, &mut Rewrites::default());
         }
     }
 }

@@ -1,0 +1,2 @@
+pub fn run n
+  err "refused {n}"

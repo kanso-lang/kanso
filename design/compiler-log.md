@@ -21,23 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-13 — gavel: hex and binary integers and exponent floats
-
-Clay ruled #1889. Seven ports needed numbers that kanso refuses as spacing
-errors: an emulator wrote its opcodes and a TOML parser its constants in
-hand-converted decimal.
-
-**The ruling.** An integer literal may be written in hexadecimal (`0xff`) or
-binary (`0b1010`) as well as decimal, and a float literal may carry an exponent
-(`1e-8`, `6.02e23`). The value is the same whatever the spelling, so the author
-picks the spelling that shows what the number means. The renderer is unchanged:
-it already prints exponents where it needs to. A byte literal, also in the
-issue, was not ruled.
-
-Owes, on #1889: the lexer on every engine; micro goldens for each form,
-including negative and upper-case-digit cases; error goldens for a malformed
-literal (`0x`, `0b2`, `1e`); the chapter that teaches numbers.
-
 ## 2026-10-13 — gavel: `text/slice` past the end answers `none`
 
 Clay ruled #1890. `text/slice "abc" 1 10` returned `"bc"`, quietly shorter than
@@ -1645,3 +1628,32 @@ names ruled on #1983.
 
 Owes, on #1992: `text/to_span` in place of `text/span` wherever #1983's build
 uses it; appendix B.
+
+## 2026-10-18 — A local binding hides an alias only where it is bound
+
+`canonicalize_bare_aliases` rewrites a bare call to an import's export into
+the qualified name, and keeps a name bare wherever a local of that spelling
+might mean the local. It kept the name bare in every declaration of the
+program when any one of them bound it. A parameter called `run` in one
+module therefore sent every other module's `run` through the loader's
+short-named clone. An err born in that `run` said `born in run` where the
+same program without the other module says `born in refusals/run`, and
+basket, once std/text's `slice run:span` bound the name, read 6,113M
+instructions against 31M, with 4,010 view allocations and 256MB held against
+17 and 71KB. Both reproduce on main with no spans in them.
+
+A declaration that binds an alias's name now keeps the bare spelling and the
+clone it dispatches through, and every other declaration is rewritten.
+`tests/bound_elsewhere.rs` runs `tests/golden/bound_elsewhere` on both
+engines and fails on main with `born in run`. The first build walked each
+declaration's bindings into a set of its own and cost entry and library
+about 2.5%; the binding walker hands each name to a callback now, so one
+walk asks the aliases about every bound name and builds no set.
+
+Rows, against main with #1985 in it: `compile_instructions` 22,693,337 ->
+22,742,937, `entry_instructions` 75,197,395 -> 75,386,824,
+`library_instructions` 74,884,283 -> 75,073,678, `emit_instructions`
+6,061,105 -> 6,063,934, `compile_allocs` 12,160 -> 12,151, `interp_allocs`
+584,659 -> 584,645, and `browser_compile_instructions` 389,899,281 ->
+390,131,214. The floor drops by the cost under the rule for a change that
+makes the language work as specified.
