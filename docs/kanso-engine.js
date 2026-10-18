@@ -281,21 +281,19 @@ function joined(chunks) {
   return new TextDecoder().decode(all);
 }
 
-/* compile the editor's program through the native emitter and run it on the
-   runtime; returns null when the route is unavailable or declines the
-   program, and the interpreter picks it up. The runtime is built with tail
-   calls, so a browser without them cannot compile it and runs every program
-   in the interpreter. */
-async function runNative(src, compileFn) {
-  if (!runtimeModule) return null;
-  const { ptr, len } = writeInput(src);
-  const status = compileFn(ptr, len);
-  if (status === 2) return { code: 1, text: readOut(), engine: 'error' };
-  if (status === 1) return null;
+/* Link the side module the last compile wrote against a fresh instance of
+   the runtime and run it, with the dice seeded from `seed`. Answers `wasm`
+   with the exit code and both streams, `reject` when the engine refuses the
+   module, or `crash` when the run throws something no program can. The page
+   and the browser differential both run programs through this, so the two
+   cannot drift: the differential once carried its own copy, and a change to
+   how the page read an overflow reached the copy only when it was written
+   a second time. */
+async function linkAndRun(seed) {
   const side = new Uint8Array(wasm.memory.buffer, wasm.kanso_wasm_ptr() >>> 0, wasm.kanso_wasm_len() >>> 0).slice();
   const data = wasm.kanso_side_data() >>> 0;
   const slots = wasm.kanso_side_table() >>> 0;
-  const host = wasiHost({ KANSO_SEED: String(Date.now() >>> 0) });
+  const host = wasiHost({ KANSO_SEED: String(seed) });
   const runtime = await WebAssembly.instantiate(runtimeModule, { wasi_snapshot_preview1: host.imports });
   const rt = runtime.exports;
   host.memory = rt.memory;
@@ -309,8 +307,7 @@ async function runNative(src, compileFn) {
   try {
     module = await WebAssembly.compile(side);
   } catch (e) {
-    console.warn('kanso: the translator wrote a module the engine rejected', e);
-    return null;
+    return { kind: 'reject', reason: String(e) };
   }
   for (const imp of WebAssembly.Module.imports(module)) {
     if (!(imp.name in env)) env[imp.name] = rt[imp.name];
@@ -328,11 +325,30 @@ async function runNative(src, compileFn) {
       host.err.push(new TextEncoder().encode(readOut()));
       code = 1;
     } else {
-      host.err.push(new TextEncoder().encode(`${e}\n`));
-      code = 1;
+      const text = joined(host.out) + joined(host.err) + `${e}\n`;
+      return { kind: 'crash', code: 1, text, reason: String((e && e.stack) || e) };
     }
   }
-  return { code, text: joined(host.out) + joined(host.err), engine: 'native' };
+  return { kind: 'wasm', code, text: joined(host.out) + joined(host.err) };
+}
+
+/* compile the editor's program through the native emitter and run it on the
+   runtime; returns null when the route is unavailable or declines the
+   program, and the interpreter picks it up. The runtime is built with tail
+   calls, so a browser without them cannot compile it and runs every program
+   in the interpreter. */
+async function runNative(src, compileFn) {
+  if (!runtimeModule) return null;
+  const { ptr, len } = writeInput(src);
+  const status = compileFn(ptr, len);
+  if (status === 2) return { code: 1, text: readOut(), engine: 'error' };
+  if (status === 1) return null;
+  const ran = await linkAndRun(Date.now() >>> 0);
+  if (ran.kind === 'reject') {
+    console.warn('kanso: the translator wrote a module the engine rejected', ran.reason);
+    return null;
+  }
+  return { code: ran.code, text: ran.text, engine: 'native' };
 }
 
 
@@ -383,6 +399,8 @@ async function runLibrary(stem, src) {
 
 window.KansoEngine = {
   ready, runSource, playSource, runLibrary, highlight, callKanso,
+  writeInput, readOut, linkAndRun,
   get wasm() { return wasm; },
+  get native() { return runtimeModule !== null; },
 };
 })();

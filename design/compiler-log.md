@@ -1719,10 +1719,10 @@ declaration's bindings into a set of its own and cost entry and library
 about 2.5%; the binding walker hands each name to a callback now, so one
 walk asks the aliases about every bound name and builds no set.
 
-Rows, from CI: `compile_instructions` 22,721,761 -> 22,742,849,
-`entry_instructions` 75,287,373 -> 75,386,738, `library_instructions`
-74,973,469 -> 75,073,592, `emit_instructions` 5,452,431 -> 5,452,790,
-`compile_allocs` 12,160 -> 12,151, `interp_allocs` 584,659 -> 584,645, and
-`browser_compile_instructions` 382,767,025 -> 382,760,768. The floor drops by
-the cost to 91.52 under the rule for a change that makes the language work
-as specified.
+Rows, against main with #1985 in it: `compile_instructions` 22,693,337 ->
+22,742,937, `entry_instructions` 75,197,395 -> 75,386,824,
+`library_instructions` 74,884,283 -> 75,073,678, `emit_instructions`
+6,061,105 -> 6,063,934, `compile_allocs` 12,160 -> 12,151, `interp_allocs`
+584,659 -> 584,645, and `browser_compile_instructions` 389,899,281 ->
+390,131,214. The floor drops by the cost under the rule for a change that
+makes the language work as specified.
