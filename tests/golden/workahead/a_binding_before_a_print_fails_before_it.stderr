@@ -1,2 +1,1 @@
 error[runtime]: the program ran out of stack: recursion went deeper than the stack holds
-  failed in deep at a_binding_before_a_print_fails_before_it.kso:11

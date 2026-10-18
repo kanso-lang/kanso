@@ -1,2 +1,1 @@
 error[runtime]: the program ran out of stack: recursion went deeper than the stack holds
-  failed in deep at a_moved_binding_fails_at_the_park.kso:12
