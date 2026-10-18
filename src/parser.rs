@@ -1363,7 +1363,10 @@ fn tolerated_before(tok: Option<&Tok>) -> u8 {
     match tok {
         Some(Tok::Op(op)) => level(op) + 1,
         Some(tok) if ends_an_atom(tok) => ATOM,
-        Some(Tok::Pipe | Tok::Fused(_)) => OR,
+        // A chain step takes one atom, so `.> (&f x)` is the only way to
+        // hand it a partial with held arguments (#1364).
+        Some(Tok::Fused(_)) => ATOM,
+        Some(Tok::Pipe) => OR,
         // A container element and a map's value are each exactly one atom —
         // `[one 1]` is two elements and `{ "k":one 1 }` does not parse — so
         // parentheses there are the only way to write anything else, and
