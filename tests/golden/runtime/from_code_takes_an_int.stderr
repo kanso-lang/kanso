@@ -1,1 +1,2 @@
 error[runtime]: from_code takes an int
+  failed in text/from_code at std/text/text.kso:20

@@ -1,1 +1,2 @@
 error[runtime]: equality is not defined on a function or an effect — write an arm for the case you mean
+  failed in equality_is_not_defined_on_a_function/play at equality_is_not_defined_on_a_function.kso:11

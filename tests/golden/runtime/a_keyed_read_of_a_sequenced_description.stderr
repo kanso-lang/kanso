@@ -1,1 +1,2 @@
 error[runtime]: cannot read fields of <io>; keyed reads take a record
+  failed in a_keyed_read_of_a_sequenced_description/play at a_keyed_read_of_a_sequenced_description.kso:20

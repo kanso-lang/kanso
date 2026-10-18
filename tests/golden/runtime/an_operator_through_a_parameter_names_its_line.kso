@@ -1,0 +1,7 @@
+# The ports' case from #1893: a string reaches `*` through a parameter, which
+# the check cannot see, so the run stops. It names the line the operator is
+# written on, inside `twice`, on every engine (ruled on #1975).
+fn twice n
+  n * 2
+
+pub play = print "{twice "x"}"

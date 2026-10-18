@@ -1,1 +1,2 @@
 error[runtime]: sqrt takes a number, got std_type_errors/wrong 1 2
+  failed in std_type_errors/play at std_type_errors.kso:13

@@ -1,1 +1,2 @@
 error[runtime]: number_span takes bytes and a position
+  failed in a_list_is_not_bytes_for_number_span/play at a_list_is_not_bytes_for_number_span.kso:3

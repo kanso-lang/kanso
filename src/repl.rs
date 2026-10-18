@@ -258,7 +258,9 @@ impl Session {
         let result = interp.run_named(&name).expect("just-committed constant resolves");
         let value = match result {
             Ok(value) => value,
-            Err(runtime) => return Err(format!("error[runtime]: {}\n", runtime.message)),
+            Err(runtime) => {
+                return Err(format!("error[runtime]: {}\n{}", runtime.message, runtime.place()))
+            }
         };
         self.units = candidate;
         self.counter += 1;
@@ -278,7 +280,7 @@ fn execute(interp: &Interp, desc: &Desc, executor: &mut dyn Executor) -> Result<
         )),
         Ok(Value::NoneV) => Ok(Outcome::Executed(String::new())),
         Ok(other) => Ok(Outcome::Executed(render(interp, &other, true))),
-        Err(runtime) => Err(format!("error[runtime]: {}\n", runtime.message)),
+        Err(runtime) => Err(format!("error[runtime]: {}\n{}", runtime.message, runtime.place())),
     }
 }
 

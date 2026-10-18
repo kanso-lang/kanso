@@ -1,1 +1,2 @@
 error[runtime]: `.` reads a field of a record, not 5
+  failed in field_non_record/play at field_non_record.kso:6

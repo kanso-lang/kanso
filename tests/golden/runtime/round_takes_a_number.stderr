@@ -1,1 +1,2 @@
 error[runtime]: round takes a number, got x
+  failed in round_takes_a_number/play at round_takes_a_number.kso:9

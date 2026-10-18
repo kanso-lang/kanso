@@ -1,1 +1,2 @@
 error[runtime]: `:int` widens; this value is not an int
+  failed in a_widening_to_a_vowel_initial_type/play at a_widening_to_a_vowel_initial_type.kso:8

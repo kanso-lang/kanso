@@ -104185,3 +104185,31 @@ Owes, on #1887: the formatting check accepts the header shape; error goldens
 for a header followed by two blank lines and for a blank line before the
 header; a golden that the header-plus-blank-line file checks clean on every
 engine.
+
+## 2026-10-13 — gavel: overload arms stay in specificity order
+
+Clay ruled #1888, which asked whether the order rule for overload arms could go
+now that the checker detects disjoint arms. Clay: "if you're talking about
+ordering by the hierarchy of subtypes then yes you absolutely preserve
+specificity order." The rule stands as built: an overload's arms are written
+most specific first, a literal before a concrete type and a concrete type
+before the catch-all, and the formatting check refuses any other order. The
+2026-07-25 gavel that freed top-level declaration order does not reach arms.
+Nothing is owed.
+
+## 2026-10-13 — gavel: hex and binary integers and exponent floats
+
+Clay ruled #1889. Seven ports needed numbers that kanso refuses as spacing
+errors: an emulator wrote its opcodes and a TOML parser its constants in
+hand-converted decimal.
+
+**The ruling.** An integer literal may be written in hexadecimal (`0xff`) or
+binary (`0b1010`) as well as decimal, and a float literal may carry an exponent
+(`1e-8`, `6.02e23`). The value is the same whatever the spelling, so the author
+picks the spelling that shows what the number means. The renderer is unchanged:
+it already prints exponents where it needs to. A byte literal, also in the
+issue, was not ruled.
+
+Owes, on #1889: the lexer on every engine; micro goldens for each form,
+including negative and upper-case-digit cases; error goldens for a malformed
+literal (`0x`, `0b2`, `1e`); the chapter that teaches numbers.

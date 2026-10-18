@@ -1,1 +1,2 @@
 error[runtime]: comparison requires two values of one comparable type
+  failed in a_description_is_not_ordered/play at a_description_is_not_ordered.kso:12

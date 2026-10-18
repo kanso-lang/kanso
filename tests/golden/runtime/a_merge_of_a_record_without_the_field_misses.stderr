@@ -1,1 +1,2 @@
 error[runtime]: no overload of `merge` matches these arguments
+  failed in a_merge_of_a_record_without_the_field_misses/rename at a_merge_of_a_record_without_the_field_misses.kso:13
