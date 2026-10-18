@@ -1329,20 +1329,7 @@ pub fn canonicalize_bare_aliases(program: &mut ast::Program) -> Rewrites {
     let env_skip: Vec<String> = std::env::var("KANSO_ALIAS_SKIP")
         .map(|v| v.split(',').map(str::to_string).collect())
         .unwrap_or_default();
-    let mut skip: HashSet<&str> = env_skip.iter().map(String::as_str).collect();
-    // a name that is ever locally bound — a parameter, a `x = ...` binding, a
-    // lambda parameter, a destructured field — must not be rewritten, because
-    // an occurrence may mean the local rather than the function. Excluding
-    // the name entirely keeps its clones and the old dispatch, which is
-    // correct and merely unoptimised.
-    for d in &program.fns {
-        for p in &d.params {
-            bound_in_pattern(p, &mut skip);
-        }
-        for stmt in &d.body {
-            bound_in_stmt(stmt, &mut skip);
-        }
-    }
+    let skip: HashSet<&str> = env_skip.iter().map(String::as_str).collect();
     let aliases: HashMap<String, String> = by_name
         .into_iter()
         .filter_map(|(bare, (all_synthetic, targets))| match targets {
@@ -1364,13 +1351,62 @@ pub fn canonicalize_bare_aliases(program: &mut ast::Program) -> Rewrites {
             eprintln!("alias: {b} -> {q}");
         }
     }
-    program.fns.retain(|d| !(d.synthetic && aliases.contains_key(&d.name)));
-    let mut wrote = Rewrites::default();
-    for d in &mut program.fns {
-        for stmt in &mut d.body {
-            alias_stmt(stmt, &aliases, &mut wrote);
+    // A declaration that binds an alias's name locally -- a parameter, a
+    // `x = ...` binding, a lambda parameter, a destructured field -- may mean
+    // the local wherever it writes the name, so that declaration keeps the
+    // bare spelling and the clone it dispatches through. Every other
+    // declaration is rewritten. Until 2026-10-18 one binding anywhere in the
+    // program kept the name bare everywhere, so a parameter called `run` in
+    // one module left every other module's `run` on its clone, and basket
+    // read 6,113M instructions against 31M. One set is reused across the
+    // declarations, and a declaration that binds no alias's name, nearly all
+    // of them, records nothing.
+    let mut bound: HashSet<&str> = HashSet::default();
+    let mut held: Vec<(usize, Vec<String>)> = Vec::new();
+    for (i, d) in program.fns.iter().enumerate() {
+        bound.clear();
+        for p in &d.params {
+            bound_in_pattern(p, &mut bound);
+        }
+        for stmt in &d.body {
+            bound_in_stmt(stmt, &mut bound);
+        }
+        let mine: Vec<String> =
+            bound.iter().filter(|n| aliases.contains_key(**n)).map(|n| n.to_string()).collect();
+        if !mine.is_empty() {
+            held.push((i, mine));
         }
     }
+    drop(bound);
+    let kept: HashSet<String> = held.iter().flat_map(|(_, names)| names.iter().cloned()).collect();
+    let mut wrote = Rewrites::default();
+    let mut next = held.into_iter().peekable();
+    for (i, d) in program.fns.iter_mut().enumerate() {
+        let own = match next.peek() {
+            Some((at, _)) if *at == i => next.next().map(|(_, names)| names),
+            _ => None,
+        };
+        match own {
+            None => {
+                for stmt in &mut d.body {
+                    alias_stmt(stmt, &aliases, &mut wrote);
+                }
+            }
+            Some(names) => {
+                let narrowed: HashMap<String, String> = aliases
+                    .iter()
+                    .filter(|(bare, _)| !names.contains(bare))
+                    .map(|(b, q)| (b.clone(), q.clone()))
+                    .collect();
+                for stmt in &mut d.body {
+                    alias_stmt(stmt, &narrowed, &mut wrote);
+                }
+            }
+        }
+    }
+    program
+        .fns
+        .retain(|d| !(d.synthetic && aliases.contains_key(&d.name) && !kept.contains(&d.name)));
     wrote
 }
 

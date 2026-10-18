@@ -1,0 +1,4 @@
+# A parameter named `run`, in a module that has nothing to do with the
+# other one's function of that name.
+pub fn twice run
+  run * 2
