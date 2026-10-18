@@ -1,1 +1,2 @@
 error[runtime]: shl shifts by 0 to 63 places, got 64
+  failed in a_shift_past_the_word/play at a_shift_past_the_word.kso:3

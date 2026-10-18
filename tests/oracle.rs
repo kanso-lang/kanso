@@ -167,7 +167,7 @@ fn evaluate_on_stack(program: &kanso::ast::Program, program_args: Vec<String>) -
         Err(runtime) => {
             return Evaluation {
                 status: 1,
-                stderr: format!("error[runtime]: {}\n", runtime.message),
+                stderr: format!("error[runtime]: {}\n{}", runtime.message, runtime.place()),
                 stdout: String::new(),
                 thunk_stats: interp.thunk_stats.render(),
             }
@@ -208,7 +208,7 @@ fn evaluate_on_stack(program: &kanso::ast::Program, program_args: Vec<String>) -
         Ok(_) => Evaluation { status: 0, stderr: wrote, stdout: executor.stdout, thunk_stats },
         Err(runtime) => Evaluation {
             status: 1,
-            stderr: format!("error[runtime]: {}\n", runtime.message),
+            stderr: format!("error[runtime]: {}\n{}", runtime.message, runtime.place()),
             stdout: executor.stdout,
             thunk_stats,
         },

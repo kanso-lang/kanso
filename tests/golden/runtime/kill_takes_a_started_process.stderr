@@ -1,1 +1,2 @@
 error[runtime]: kill takes a started process
+  failed in kill_takes_a_started_process/play at kill_takes_a_started_process.kso:6

@@ -1,1 +1,2 @@
 error[runtime]: `+` is not defined for these values
+  failed in a_description_is_not_an_operand/play at a_description_is_not_an_operand.kso:15

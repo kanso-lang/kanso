@@ -1,1 +1,2 @@
 error[runtime]: `5` is not callable
+  failed in calling_a_number_names_it/play at calling_a_number_names_it.kso:12

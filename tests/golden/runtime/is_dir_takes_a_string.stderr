@@ -1,1 +1,2 @@
 error[runtime]: is_dir takes a string
+  failed in is_dir_takes_a_string/play at is_dir_takes_a_string.kso:10

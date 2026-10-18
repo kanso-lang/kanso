@@ -1,1 +1,2 @@
 error[runtime]: `push` takes 2 argument(s), got 1
+  failed in an_under_applied_builtin_value/apply at an_under_applied_builtin_value.kso:2

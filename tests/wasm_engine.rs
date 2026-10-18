@@ -567,7 +567,9 @@ fn a_lazy_binding_nobody_reads_never_runs() {
             "print (shown 0)\n",
             Answer::Ran(
                 1,
-                "error[runtime]: no overload of `nope` matches these arguments\n".to_string(),
+                "error[runtime]: no overload of `nope` matches these arguments\n  \
+                 failed in shown at read.kso:11\n"
+                    .to_string(),
             ),
         ),
     ] {

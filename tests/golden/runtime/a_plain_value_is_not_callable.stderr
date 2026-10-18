@@ -1,1 +1,2 @@
 error[runtime]: `5` is not callable
+  failed in a_plain_value_is_not_callable/play at a_plain_value_is_not_callable.kso:3

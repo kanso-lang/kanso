@@ -1,1 +1,2 @@
 error[runtime]: equality is not defined on a function or an effect — write an arm for the case you mean
+  failed in a_description_is_not_comparable/play at a_description_is_not_comparable.kso:15

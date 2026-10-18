@@ -1,0 +1,2 @@
+error[runtime]: `*` is not defined for these values
+  failed in an_operator_through_a_parameter_names_its_line/twice at an_operator_through_a_parameter_names_its_line.kso:5

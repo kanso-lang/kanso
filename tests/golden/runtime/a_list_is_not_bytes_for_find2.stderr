@@ -1,1 +1,2 @@
 error[runtime]: find2 takes bytes
+  failed in a_list_is_not_bytes_for_find2/play at a_list_is_not_bytes_for_find2.kso:3

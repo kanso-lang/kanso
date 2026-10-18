@@ -1,2 +1,2 @@
 error[endpoint]: unhandled err reached the executor: "cannot read /no/such/file: no such file"
-  born in os/insisted at std/os/os.kso:113
+  born in read_missing_file/play at read_missing_file.kso:4

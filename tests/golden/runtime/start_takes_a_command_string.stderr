@@ -1,1 +1,2 @@
 error[runtime]: start takes a command string
+  failed in start_takes_a_command_string/play at start_takes_a_command_string.kso:6

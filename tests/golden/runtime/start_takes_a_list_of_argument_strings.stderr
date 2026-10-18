@@ -1,1 +1,2 @@
 error[runtime]: start takes a list of argument strings
+  failed in start_takes_a_list_of_argument_strings/play at start_takes_a_list_of_argument_strings.kso:6

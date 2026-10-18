@@ -1,0 +1,15 @@
+# A string read as bytes for a scan that follows is bound to a view, and
+# where the value is not proven a string the bind calls the general read,
+# which can stop the program. That call carried no place on native, so the
+# interpreter named the line and native did not. Found by the diagnostics
+# differential on json/escape_onto.
+import "std/text"
+
+fn scan s
+  bs = text/bytes s
+  text/find2_below bs 1 34 92 32
+
+fn hand x
+  scan x
+
+pub play = print (hand 5)

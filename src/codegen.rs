@@ -154,6 +154,71 @@ pub(crate) const BUILTIN_CALLS: [&str; 64] = [
 pub(crate) const BIT_TWINS: [&str; 6] =
     ["bit_and", "bit_or", "bit_xor", "bit_not", "bit_shl", "bit_shr"];
 
+/// Whether `arms` together take every combination of the kinds in `sets`,
+/// one position at a time: the kinds an argument may hold are grouped by the
+/// arms that take them, and each group must be covered by those arms on the
+/// positions after. An argument carried as a by-value record is that record
+/// type and nothing else, so an arm that destructures that type into plain
+/// names takes it. `budget` bounds the walk; running out answers no.
+fn covered(arms: &[&[Pattern]], sets: &[Set], records: &[Option<&str>], budget: &mut u32) -> bool {
+    if *budget == 0 {
+        return false;
+    }
+    *budget -= 1;
+    let Some((&set, rest)) = sets.split_first() else { return !arms.is_empty() };
+    let (record, records) = (records[0], &records[1..]);
+    let kinds = set & !FAIL;
+    if let Some(record) = record {
+        let simple = |p: &Pattern| matches!(p, Pattern::Var(..) | Pattern::Wildcard(_));
+        let after: Vec<&[Pattern]> = arms
+            .iter()
+            .filter(|a| match &a[0] {
+                Pattern::Var(..) | Pattern::Wildcard(_) => true,
+                Pattern::Ctor { ty, fields, .. } => ty == record && fields.iter().all(simple),
+                Pattern::Annotated { ty, .. } => ty == record,
+                _ => false,
+            })
+            .map(|a| &a[1..])
+            .collect();
+        return !after.is_empty() && covered(&after, rest, records, budget);
+    }
+    let takes = |p: &Pattern, kind: Set| match p {
+        Pattern::Var(..) | Pattern::Wildcard(_) => true,
+        Pattern::Annotated { ty, .. } => match ty.as_str() {
+            "int" | "float64" | "string" | "bool" => kind & !infer::annotated_set(ty) == 0,
+            "none" => kind == NONE,
+            "done" => kind == infer::DONE,
+            "some" => kind != NONE,
+            // a list or a map is tested by its tag, whatever it holds
+            t if t.ends_with("[]") => kind == LIST,
+            t if t.contains('[') => kind == MAP,
+            _ => false,
+        },
+        Pattern::Nullary(nm, _) => match nm.as_str() {
+            "true" => kind == infer::TRUE,
+            "false" => kind == infer::FALSE,
+            "none" => kind == NONE,
+            "done" => kind == infer::DONE,
+            _ => false,
+        },
+        _ => false,
+    };
+    let mut groups: Vec<Vec<usize>> = Vec::new();
+    for bit in (0..Set::BITS).map(|i| 1 << i).filter(|b| kinds & b != 0) {
+        let taking: Vec<usize> = (0..arms.len()).filter(|&i| takes(&arms[i][0], bit)).collect();
+        if taking.is_empty() {
+            return false;
+        }
+        if !groups.contains(&taking) {
+            groups.push(taking);
+        }
+    }
+    groups.iter().all(|g| {
+        let after: Vec<&[Pattern]> = g.iter().map(|&i| &arms[i][1..]).collect();
+        covered(&after, rest, records, budget)
+    })
+}
+
 /// The twin's name for one of them. Separate from the table so a name added
 /// to one without the other does not compile.
 fn bit_twin(name: &str) -> &'static str {
@@ -1345,7 +1410,9 @@ fn writes_state(line: &str) -> bool {
         "@k_check_rec_fast(",
         "@k_check_rec_fast_w(",
     ];
-    line.trim_start().starts_with("store ")
+    // a site stamp is the one store a second run repeats harmlessly: it
+    // names a place, and the rerun names the same one
+    (line.trim_start().starts_with("store ") && !line.contains(", ptr @k_site"))
         || (line.contains("call ")
             && !line.contains("@llvm.")
             && !READS.iter().any(|r| line.contains(r)))
@@ -2851,12 +2918,14 @@ fn both_ints(f: &mut FnEmit, ta: &str, tb: &str) -> String {
 /// and most programs have none.
 fn paired_appends(body: String) -> String {
     const CALL: &str = " = call %KValue @k_b_append_mut_int(%KValue ";
-    fn parse(line: &str) -> Option<(&str, &str, &str)> {
+    // the last argument is the site a failure in that append names
+    fn parse(line: &str) -> Option<(&str, &str, &str, &str)> {
         let rest = line.strip_prefix("  ")?;
         let (name, rest) = rest.split_once(CALL)?;
         let args = rest.strip_suffix(')')?;
-        let (acc, x) = args.split_once(", %KValue ")?;
-        Some((name, acc, x))
+        let (acc, rest) = args.split_once(", %KValue ")?;
+        let (x, site) = rest.split_once(", ptr ")?;
+        Some((name, acc, x, site))
     }
     let line_end = |from: usize| body[from..].find('\n').map_or(body.len(), |n| from + n);
     let mut edits: Vec<(usize, usize, String)> = Vec::new();
@@ -2870,7 +2939,7 @@ fn paired_appends(body: String) -> String {
             break;
         }
         let next = line_end(end + 1);
-        let (Some((a, acc, x)), Some((b, acc2, y))) =
+        let (Some((a, acc, x, s1)), Some((b, acc2, y, s2))) =
             (parse(&body[start..end]), parse(&body[end + 1..next]))
         else {
             continue;
@@ -2886,7 +2955,9 @@ fn paired_appends(body: String) -> String {
             edits.push((
                 start,
                 next,
-                format!("  {b} = call %KValue @k_b_append_mut_int2(%KValue {acc}, %KValue {x}, %KValue {y})"),
+                format!(
+                    "  {b} = call %KValue @k_b_append_mut_int2(%KValue {acc}, %KValue {x}, %KValue {y}, ptr {s1}, ptr {s2})"
+                ),
             ));
             from = next;
         }
@@ -4475,6 +4546,68 @@ impl<'a> Backend<'a> {
     fn origin_arg(&mut self, f: &FnEmit, span: Span) -> String {
         let (name, _) = self.intern(&format!("{}\0{}:{}\0", f.hako, f.origin_prefix, span.line));
         format!("ptr @{name}")
+    }
+
+    /// Whether a call of this group can match no arm and stop the program.
+    /// An arm whose every parameter is a plain name or `_` takes anything,
+    /// and a group with one never falls through, so its calls need no stamp.
+    /// Erring the other way costs a store, never a wrong place.
+    fn can_miss(&self, name: &str, arity: usize) -> bool {
+        !self.decls_named(name).any(|d| {
+            d.params.len() == arity
+                && d.params.iter().all(|p| matches!(p, Pattern::Var(..) | Pattern::Wildcard(_)))
+        })
+    }
+
+    /// `can_miss`, narrowed by what the call's arguments are proven to be.
+    /// The call always reaches an arm when every kind each argument may hold
+    /// is taken, position by position, by arms that also take the rest: a
+    /// plain name takes every kind, an annotation the dispatcher tests by kind
+    /// alone (`int`, `float64`, `string`, `bool`, `none`, `done`, `some`, a
+    /// list or a map) takes those kinds, and `true`, `false`, `none` and
+    /// `done` take themselves. So `f x true` and
+    /// `f x false` together take a proven boolean. A failure is handed on
+    /// rather than matched, so it never misses.
+    fn can_miss_with(&self, f: &FnEmit, name: &str, arity: usize, emitted: &[String]) -> bool {
+        if !self.can_miss(name, arity) {
+            return false;
+        }
+        // a declared subtype is tested by its chain, not by its kind alone
+        if !self.sub_parents.is_empty() {
+            return true;
+        }
+        let arms: Vec<&[Pattern]> = self
+            .decls_named(name)
+            .filter(|d| d.params.len() == arity)
+            .map(|d| &d.params[..])
+            .collect();
+        let sets: Vec<Set> = emitted.iter().map(|e| f.set_of(e)).collect();
+        let records: Vec<Option<&str>> =
+            emitted.iter().map(|e| f.parsed.get(e).map(|(ty, _)| ty.as_str())).collect();
+        let mut budget = 256;
+        !covered(&arms, &sets, &records, &mut budget)
+    }
+
+    /// The literal an insisting form's answer is pointed at: the form's own
+    /// package, which a failure it raised names, and then this call's line
+    /// in the frame of the caller.
+    fn insisted_site(&mut self, f: &FnEmit, name: &str, arity: usize, span: Span) -> String {
+        let file = self
+            .decls_named(name)
+            .find(|d| d.params.len() == arity)
+            .map(|d| d.file.clone())
+            .unwrap_or_default();
+        let hako = crate::provenance::package_of(&file);
+        let (lit, _) = self.intern(&format!("{hako}\0{}:{}\0", f.origin_prefix, span.line));
+        format!("ptr @{lit}")
+    }
+
+    /// Records this site as the place a runtime death names: the same
+    /// literal an err born here would carry, stored where `k_died` reads it
+    /// (ruled on #1975). One store, before a call that can stop the program.
+    fn stamp_site(&mut self, f: &mut FnEmit, span: Span) {
+        let site = self.origin_arg(f, span);
+        f.line_fmt(format_args!("store {site}, ptr @k_site"));
     }
 
     fn emit_type_names(&mut self) {

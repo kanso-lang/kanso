@@ -1,1 +1,2 @@
 error[runtime]: cannot destructure "hello" as `a_destructure_of_the_wrong_shape/point`; bindings are irrefutable, so handle other types by dispatch first
+  failed in a_destructure_of_the_wrong_shape/play at a_destructure_of_the_wrong_shape.kso:12

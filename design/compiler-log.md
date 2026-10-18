@@ -21,17 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-13 — gavel: overload arms stay in specificity order
-
-Clay ruled #1888, which asked whether the order rule for overload arms could go
-now that the checker detects disjoint arms. Clay: "if you're talking about
-ordering by the hierarchy of subtypes then yes you absolutely preserve
-specificity order." The rule stands as built: an overload's arms are written
-most specific first, a literal before a concrete type and a concrete type
-before the catch-all, and the formatting check refuses any other order. The
-2026-07-25 gavel that freed top-level declaration order does not reach arms.
-Nothing is owed.
-
 ## 2026-10-13 — gavel: hex and binary integers and exponent floats
 
 Clay ruled #1889. Seven ports needed numbers that kanso refuses as spacing
@@ -1465,6 +1454,128 @@ any shipped.
 Owes, on #1983 and #1960: the five names on every engine; the fused doors
 reading a sliced span; the decoder's four `builtin_slice_in` sites moved
 onto spans; micro goldens; appendix B; kq's decoder following.
+
+## 2026-10-18 — A run-time failure names the line it happened on
+
+The rest of #1975. Every run-time failure but a stack overflow now prints
+its place under its message, on every engine, in the form an err's `born in`
+line uses:
+
+    error[runtime]: `*` is not defined for these values
+      failed in calc/twice at calc.kso:2
+
+**The interpreter** fills the place in as a failure leaves the body that
+raised it. Every expression in a body shares the body's frame, so the frame
+changes on the way out only where a declaration's body, a lambda's body or a
+lazy binding is run, and each of those places a failure that has no place
+yet. Three paths raise a failure outside any expression, and each places it
+itself: a statement's destructure, a tail call whose dispatch matches no arm,
+and a tail call through a function value that takes the wrong count. The
+first version placed at every expression, which cost the interpreter row
+about 3.7M of the 15M it rose.
+
+**Compiled code** stores the same literal an err born at the site would
+carry into `k_site` before each call that can stop the program, and
+`k_died` prints it. The stamped calls are the operators' slow paths, builtin
+calls, condition tests whose value is not provably a boolean, field and index
+reads, destructures, keyed reads, joins, calls through a function value, and
+calls of a group that can match no arm. A store to `k_site` is exempt from
+`writes_state`, since running a body over repeats it harmlessly.
+
+Two things keep the store off the hot path. An inline twin (`length`, `at`,
+`append`, the bit operations, `push`, `put`, `slice`, the scans) takes the
+site as its last argument and stores it only on the branch that reaches the
+C entry, which is the only branch that can stop the program; `takes_site`
+reads which twins do from their definitions in `declares.rs`. With the store
+in front of every inlined twin, CI read runbench +6.4% and digestbench +18%.
+And a call into a group is stamped only when the arguments' proven kinds
+might fail every arm: the arms are read together, so `f x true` and
+`f x false` take a proven boolean, an annotation the dispatcher tests by kind
+alone takes that kind, and a by-value record is taken by the arm that
+destructures its type.
+
+**A stack overflow** names no place. The engines run out of stack at
+different depths, so no frame is the one the overflow happened in. The first
+version named the cycle the program last entered, which was wrong in a way
+no fixture showed: a recursion that enters a second recursion at every level
+ran out inside `small` on native and on a call to `big` in the interpreter,
+and the two printed different places. A rule that holds still (the outermost
+active cycle names it) needs the record cleared when the entering call
+returns, and a library wrapper that tail-calls into a recursion has nowhere
+to clear it. The overflow keeps its sentence alone, under "2026-10-17 —
+gavel: every run-time failure names its line except a stack overflow".
+`a_recursion_inside_a_recursion_overflows_alike` pins the case.
+
+**An insisting form** names the line that called it. A form whose name
+ends in `!` turns an err into a failure, and the err was born inside the
+library, so `os/read_file!` named `os/insisted at std/os/os.kso:113`. Each
+call of such a form now hands its answer back through one step that points
+an err born in the form's own package at the caller's line; an err born
+anywhere else passes through unchanged. Native does it in
+`k_b_insisted`, and an answer that is still an effect gets the step wrapped
+around it so the err it later yields is pointed too. The interpreter does
+the same with `restamped`, and with a `Desc::Insisted` node for an effect.
+
+A lazy binding that demands its own value still names no place. The
+interpreter has no source position for it, and native clears `k_site`
+before saying so, so the two agree on saying nothing.
+
+Pinned by the runtime corpus, which native, the interpreter and the tab
+now print byte for byte, and two new fixtures:
+`an_operator_through_a_parameter_names_its_line` (the ports' case) and
+`a_recursion_inside_a_recursion_overflows_alike`. `read_missing_file` and
+`a_slice_bang_past_the_end_reaches_the_endpoint` moved to name the caller.
+The ratchet rows `death_unplaced`, `oracle_unplaced`, `insisted_native`
+and `insisted_oracle` each take one piece away and watch the corpus go red.
+
+**Rows**, CI's against main. The run time, from the stamps that remain and
+the slow-branch site arguments: `work_basket` 30,958,481 -> 31,158,162,
+`work_deepbench` 403,115,516 -> 407,387,521, `work_digestbench` 5,911,344 ->
+5,992,785, `work_encodebench` 2,387,084,099 -> 2,464,675,698,
+`work_escapebench` 39,058,340 -> 39,058,403, `work_indexbench` 2,462,589 ->
+2,482,608, `work_jsonbench` 830,048,931 -> 832,975,500, `work_livebench`
+1,474,835,606 -> 1,498,216,646, `work_oneshot` 13,207,693 -> 13,286,600,
+`work_pendbench` 191,674,224 -> 194,087,911, `work_readbench` 4,580,963 ->
+4,582,588, `work_runbench` 1,177,696,062 -> 1,189,193,317, `work_scanbench`
+273,812 -> 274,086, `work_widebench` 28,451,432 -> 28,628,235.
+
+The interpreter, placing at the body: `interp_instructions` 492,620,187 ->
+500,108,350. The emitter and the code it writes: `emit_instructions`
+5,452,431 -> 6,061,105, `codegen_instructions_dev` 112,677,448 ->
+115,010,801, `codegen_instructions_release` 441,885,670 -> 449,091,786,
+`emitted_calls` 1,023 -> 1,024, `emitted_lines` 10,165 -> 10,362,
+`emitted_other_calls` 17,641 -> 17,648, `emitted_other_lines` 145,594 ->
+149,547, `text` 4,909,294 -> 5,011,246, `lines` 1,356 -> 1,368,
+`module_lines` 1,106 -> 1,130. The front end fell with the binary's layout:
+`compile_instructions` 22,721,761 -> 22,693,337, `entry_instructions`
+75,287,373 -> 75,197,395, `library_instructions` 74,973,469 -> 74,884,283.
+The tab: `browser_compile_instructions` 382,767,025 -> 389,899,281,
+`browser_compile_peak_bytes` 643,605 -> 675,444, `browser_run_instructions`
+34,181,355 -> 35,216,926.
+
+Every benchmark reads its input through `os/read_file!`, whose effect now
+comes back inside a description holding the caller's line, so each allocates
+3 more and 96 bytes more and evacuates the same: `run_alloc_bytes`
+300,934,796 -> 300,934,892, `run_allocs` 1,812,043 -> 1,812,046,
+`run_evac_allocs` 49,221 -> 49,224, `run_evac_bytes` 14,917,984 ->
+14,918,080, `alloc_bytes` 175,182,800 -> 175,182,896, `allocs` 1,390,963 ->
+1,390,966, `evac_allocs` 18 -> 21, `evac_bytes` 640 -> 736,
+`encode_alloc_bytes` 665,662,512 -> 665,662,608, `encode_allocs` 5,332,649
+-> 5,332,652, `encode_evac_allocs` 24 -> 27, `encode_evac_bytes` 912 ->
+1,008, `oneshot_alloc_bytes` 2,375,978 -> 2,376,074, `oneshot_allocs` 12,064
+-> 12,067, `oneshot_evac_allocs` 18 -> 21, `oneshot_evac_bytes` 624 -> 720,
+`wide_alloc_bytes` 5,590,880 -> 5,590,976, `wide_allocs` 128,017 -> 128,020,
+`wide_evac_allocs` 125 -> 128, `wide_evac_bytes` 516,000 -> 516,096,
+`digest_alloc_bytes` 697,025 -> 697,121, `digest_allocs` 7,193 -> 7,196,
+`digest_evac_allocs` 48 -> 51, `digest_evac_bytes` 4,176 -> 4,272,
+`read_alloc_bytes` 198,768 -> 198,864, `read_allocs` 413 -> 416,
+`read_evac_allocs` 18 -> 21, `read_evac_bytes` 608 -> 704,
+`live_alloc_bytes` 409,410,992 -> 409,411,088, `live_allocs` 1,120,086 ->
+1,120,089, `live_evac_allocs` 18 -> 21, `live_evac_bytes` 608 -> 704.
+
+This builds a ruled part of the language, so the welfare floor moves down by
+exactly what the rows cost, under the #1975 gavel as narrowed by the
+2026-10-17 gavel: 91.5235 -> 91.4587.
 
 ## 2026-10-18 — A module's own function beats a type an import declares
 
