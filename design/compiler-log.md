@@ -1577,3 +1577,52 @@ now print byte for byte, and two new fixtures:
 `a_slice_bang_past_the_end_reaches_the_endpoint` moved to name the caller.
 The ratchet rows `death_unplaced`, `oracle_unplaced`, `insisted_native`
 and `insisted_oracle` each take one piece away and watch the corpus go red.
+
+**Rows**, CI's against main. The run time, from the stamps that remain and
+the slow-branch site arguments: `work_basket` 30,958,481 -> 31,158,162,
+`work_deepbench` 403,115,516 -> 407,387,521, `work_digestbench` 5,911,344 ->
+5,992,785, `work_encodebench` 2,387,084,099 -> 2,464,675,698,
+`work_escapebench` 39,058,340 -> 39,058,403, `work_indexbench` 2,462,589 ->
+2,482,608, `work_jsonbench` 830,048,931 -> 832,975,500, `work_livebench`
+1,474,835,606 -> 1,498,216,646, `work_oneshot` 13,207,693 -> 13,286,600,
+`work_pendbench` 191,674,224 -> 194,087,911, `work_readbench` 4,580,963 ->
+4,582,588, `work_runbench` 1,177,696,062 -> 1,189,193,317, `work_scanbench`
+273,812 -> 274,086, `work_widebench` 28,451,432 -> 28,628,235.
+
+The interpreter, placing at the body: `interp_instructions` 492,620,187 ->
+500,108,350. The emitter and the code it writes: `emit_instructions`
+5,452,431 -> 6,061,105, `codegen_instructions_dev` 112,677,448 ->
+115,010,801, `codegen_instructions_release` 441,885,670 -> 449,091,786,
+`emitted_calls` 1,023 -> 1,024, `emitted_lines` 10,165 -> 10,362,
+`emitted_other_calls` 17,641 -> 17,648, `emitted_other_lines` 145,594 ->
+149,547, `text` 4,909,294 -> 5,011,246, `lines` 1,356 -> 1,368,
+`module_lines` 1,106 -> 1,130. The front end fell with the binary's layout:
+`compile_instructions` 22,715,476 -> 22,687,052, `entry_instructions`
+75,262,121 -> 75,172,143, `library_instructions` 74,948,228 -> 74,859,042.
+The tab: `browser_compile_instructions` 382,741,447 -> 389,873,703,
+`browser_compile_peak_bytes` 643,605 -> 675,444, `browser_run_instructions`
+34,181,355 -> 35,216,926.
+
+Every benchmark reads its input through `os/read_file!`, whose effect now
+comes back inside a description holding the caller's line, so each allocates
+3 more and 96 bytes more and evacuates the same: `run_alloc_bytes`
+300,934,796 -> 300,934,892, `run_allocs` 1,812,043 -> 1,812,046,
+`run_evac_allocs` 49,221 -> 49,224, `run_evac_bytes` 14,917,984 ->
+14,918,080, `alloc_bytes` 175,182,800 -> 175,182,896, `allocs` 1,390,963 ->
+1,390,966, `evac_allocs` 18 -> 21, `evac_bytes` 640 -> 736,
+`encode_alloc_bytes` 665,662,512 -> 665,662,608, `encode_allocs` 5,332,649
+-> 5,332,652, `encode_evac_allocs` 24 -> 27, `encode_evac_bytes` 912 ->
+1,008, `oneshot_alloc_bytes` 2,375,978 -> 2,376,074, `oneshot_allocs` 12,064
+-> 12,067, `oneshot_evac_allocs` 18 -> 21, `oneshot_evac_bytes` 624 -> 720,
+`wide_alloc_bytes` 5,590,880 -> 5,590,976, `wide_allocs` 128,017 -> 128,020,
+`wide_evac_allocs` 125 -> 128, `wide_evac_bytes` 516,000 -> 516,096,
+`digest_alloc_bytes` 697,025 -> 697,121, `digest_allocs` 7,193 -> 7,196,
+`digest_evac_allocs` 48 -> 51, `digest_evac_bytes` 4,176 -> 4,272,
+`read_alloc_bytes` 198,768 -> 198,864, `read_allocs` 413 -> 416,
+`read_evac_allocs` 18 -> 21, `read_evac_bytes` 608 -> 704,
+`live_alloc_bytes` 409,410,992 -> 409,411,088, `live_allocs` 1,120,086 ->
+1,120,089, `live_evac_allocs` 18 -> 21, `live_evac_bytes` 608 -> 704.
+
+This builds a ruled part of the language, so the welfare floor moves down by
+exactly what the rows cost, under the #1975 gavel as narrowed by the
+2026-10-17 gavel: 91.5235 -> 91.4587.

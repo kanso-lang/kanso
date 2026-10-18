@@ -256,4 +256,4 @@
 defines=111
 calls=1024
 branches=1104
-lines=10368
+lines=10362
