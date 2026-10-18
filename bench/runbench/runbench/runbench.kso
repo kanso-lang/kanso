@@ -114,12 +114,25 @@
 # list the record still holds, so it is quadratic in its count, and the count
 # lands it near five per cent like `scatter` and `bump`. It adds nothing to
 # the peak, because each copy is dropped on the next push.
+#
+# A ninth joined on 2026-10-18, before its fix (#1943), measured on main at
+# kanso#1994 the same way: built alone, less the empty program's 7,482,604,
+# and shared of the whole program on that compiler, 1,227,450,174.
+#
+#   insist   5,000 laps reading three slice! ranges   11,955,088  0.97%
+#
+# `insist` reads a year, a month and a word out of one line, each with
+# `slice!` handed straight to `to_int` or `utf8`, the spelling a program uses
+# for a range it has already bounded. Before the fix every read built the
+# slice and the box between the two steps. It adds 25 bytes to the peak, the
+# line it reads.
 import "./bag"
 import "./bump"
 import "./deep"
 import "./escape"
 import "./fold"
 import "./index"
+import "./insist"
 import "./machine"
 import "./pend"
 import "./restate"
@@ -163,6 +176,8 @@ rewind_laps = 20000
 stack_laps = 115
 
 bag_items = 4300
+
+insist_laps = 5000
 
 fn decoded _ 0 sofar
   sofar
@@ -208,7 +223,11 @@ fn tally raw doc a b
   bulk .> on
 
 fn shaped raw doc a
-  pend/total pend_cards .> (b -> io/write "runbench {tally raw doc a b}\n")
+  pend/total pend_cards .> (b -> insisted raw doc a b)
+
+fn insisted raw doc a b
+  told = (c -> io/write "runbench {tally raw doc a (b + c)}\n")
+  insist/total insist_laps .> told
 
 pub fn run raw
   on = (doc -> deep/total deep_trials .> (a -> shaped raw doc a))
