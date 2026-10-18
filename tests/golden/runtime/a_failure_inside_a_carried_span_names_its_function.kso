@@ -1,0 +1,13 @@
+import "std/text"
+
+# `text/span_to` hands its span straight to `measured`, which only reads the
+# span's fields, so the span is carried as its fields through a copy of
+# `measured` the compiler makes. A failure inside that copy names the
+# function and the line the author wrote, here the `*` a string cannot take.
+fn measured _ none
+  0
+
+fn measured label run
+  label * run.to
+
+pub play = print (measured "width" (text/span_to (text/bytes "ab,c") 1 44 59))
