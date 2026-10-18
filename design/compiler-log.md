@@ -21,21 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-13 — gavel: `text/slice` past the end answers `none`
-
-Clay ruled #1890. `text/slice "abc" 1 10` returned `"bc"`, quietly shorter than
-the range asked for, and three ports called that silent data loss. An index
-past the end already answers `none`.
-
-**The ruling.** A `text/slice` whose range runs past the end of the value, or
-starts past it, answers `none`, as an index past the end does, and the caller
-dispatches on it. A range wholly inside the value is unchanged.
-
-Owes, on #1890: the change on every engine; micro goldens for a range past the
-end, a start past the end and a range that ends exactly at the end; the
-exhaustiveness check sees `none` in `text/slice`'s answer; lib, samples and
-sibling repositories that leaned on clamping moved to dispatch on `none`.
-
 ## 2026-10-13 — gavel: `list/concat` joins two lists, and strings join by interpolation
 
 Clay ruled #1906 on the committee's view, on the condition that it rest on
@@ -1685,3 +1670,32 @@ Two leaks of an imported type's short name surfaced on the way and landed
 first, as #1993 and #1995. kq's copy of the decoder follows once kq repins.
 
 Rows, from CI: to come.
+
+## 2026-10-18 — A local binding hides an alias only where it is bound
+
+`canonicalize_bare_aliases` rewrites a bare call to an import's export into
+the qualified name, and keeps a name bare wherever a local of that spelling
+might mean the local. It kept the name bare in every declaration of the
+program when any one of them bound it. A parameter called `run` in one
+module therefore sent every other module's `run` through the loader's
+short-named clone. An err born in that `run` said `born in run` where the
+same program without the other module says `born in refusals/run`, and
+basket, once std/text's `slice run:span` bound the name, read 6,113M
+instructions against 31M, with 4,010 view allocations and 256MB held against
+17 and 71KB. Both reproduce on main with no spans in them.
+
+A declaration that binds an alias's name now keeps the bare spelling and the
+clone it dispatches through, and every other declaration is rewritten.
+`tests/bound_elsewhere.rs` runs `tests/golden/bound_elsewhere` on both
+engines and fails on main with `born in run`. The first build walked each
+declaration's bindings into a set of its own and cost entry and library
+about 2.5%; the binding walker hands each name to a callback now, so one
+walk asks the aliases about every bound name and builds no set.
+
+Rows, from CI: `compile_instructions` 22,721,761 -> 22,742,849,
+`entry_instructions` 75,287,373 -> 75,386,738, `library_instructions`
+74,973,469 -> 75,073,592, `emit_instructions` 5,452,431 -> 5,452,790,
+`compile_allocs` 12,160 -> 12,151, `interp_allocs` 584,659 -> 584,645, and
+`browser_compile_instructions` 382,767,025 -> 382,760,768. The floor drops by
+the cost to 91.52 under the rule for a change that makes the language work
+as specified.

@@ -1114,24 +1114,24 @@ fn root_name(path: &std::path::Path) -> String {
     path.file_stem().and_then(|s| s.to_str()).unwrap_or("").to_string()
 }
 
-/// Names a pattern binds, borrowed from the program.
+/// Names a pattern binds, borrowed from the program, each handed to `out`.
 ///
 /// `check.rs` has carried a borrowed twin of this walk for as long as this
 /// one has owned its names; this was the outlier. Owning them cost a `String`
 /// per bound name — every parameter, every binding, every lambda parameter,
 /// every destructured field, across every declaration — for names the
 /// program was already holding.
-fn bound_in_pattern<'a>(p: &'a ast::Pattern, out: &mut crate::hash::Set<&'a str>) {
+fn bound_in_pattern<'a>(p: &'a ast::Pattern, out: &mut impl FnMut(&'a str)) {
     match p {
         ast::Pattern::Var(n, _) => {
-            out.insert(n.as_str());
+            out(n.as_str());
         }
         ast::Pattern::Annotated { name, .. } => {
-            out.insert(name.as_str());
+            out(name.as_str());
         }
         ast::Pattern::Ctor { fields, whole, .. } => {
             if let Some(named) = whole {
-                out.insert(named.0.as_str());
+                out(named.0.as_str());
             }
             for f in fields {
                 bound_in_pattern(f, out);
@@ -1139,7 +1139,7 @@ fn bound_in_pattern<'a>(p: &'a ast::Pattern, out: &mut crate::hash::Set<&'a str>
         }
         ast::Pattern::Keyed { entries, .. } => {
             for e in entries {
-                out.insert(e.bind_name.as_str());
+                out(e.bind_name.as_str());
             }
         }
         ast::Pattern::IntLit(..)
@@ -1149,7 +1149,7 @@ fn bound_in_pattern<'a>(p: &'a ast::Pattern, out: &mut crate::hash::Set<&'a str>
     }
 }
 
-fn bound_in_stmt<'a>(stmt: &'a ast::Stmt, out: &mut crate::hash::Set<&'a str>) {
+fn bound_in_stmt<'a>(stmt: &'a ast::Stmt, out: &mut impl FnMut(&'a str)) {
     match stmt {
         ast::Stmt::Bind { pattern, expr } => {
             bound_in_pattern(pattern, out);
@@ -1159,11 +1159,11 @@ fn bound_in_stmt<'a>(stmt: &'a ast::Stmt, out: &mut crate::hash::Set<&'a str>) {
     }
 }
 
-fn bound_in_expr<'a>(e: &'a ast::Expr, out: &mut crate::hash::Set<&'a str>) {
+fn bound_in_expr<'a>(e: &'a ast::Expr, out: &mut impl FnMut(&'a str)) {
     match e {
         ast::Expr::Lambda { params, body, .. } => {
             for (n, _) in params {
-                out.insert(n.as_str());
+                out(n.as_str());
             }
             bound_in_expr(body, out);
         }
@@ -1369,69 +1369,58 @@ pub fn canonicalize_bare_aliases(program: &mut ast::Program) -> Rewrites {
     // declaration is rewritten. Until 2026-10-18 one binding anywhere in the
     // program kept the name bare everywhere, so a parameter called `run` in
     // one module left every other module's `run` on its clone, and basket
-    // read 6,113M instructions against 31M. One set is reused across the
-    // declarations, and a declaration that binds no alias's name, nearly all
-    // of them, records nothing.
-    let mut bound: HashSet<&str> = HashSet::default();
-    let mut held: Vec<(usize, Vec<String>)> = Vec::new();
-    for (i, d) in program.fns.iter().enumerate() {
-        bound.clear();
+    // read 6,113M instructions against 31M. One walk asks the aliases about
+    // each name a declaration binds, where the old walk put it in a set.
+    let mut held: Vec<Vec<String>> = Vec::with_capacity(program.fns.len());
+    for d in &program.fns {
+        let mut mine: Vec<String> = Vec::new();
+        let mut note = |n: &str| {
+            if aliases.contains_key(n) && !mine.iter().any(|m| m == n) {
+                mine.push(n.to_string());
+            }
+        };
         for p in &d.params {
-            bound_in_pattern(p, &mut bound);
+            bound_in_pattern(p, &mut note);
         }
         for stmt in &d.body {
-            bound_in_stmt(stmt, &mut bound);
+            bound_in_stmt(stmt, &mut note);
         }
-        let mine: Vec<String> =
-            bound.iter().filter(|n| aliases.contains_key(**n)).map(|n| n.to_string()).collect();
-        if !mine.is_empty() {
-            held.push((i, mine));
-        }
+        held.push(mine);
     }
-    drop(bound);
-    let kept: HashSet<String> = held.iter().flat_map(|(_, names)| names.iter().cloned()).collect();
     let mut wrote = Rewrites::default();
-    let mut next = held.into_iter().peekable();
-    for (i, d) in program.fns.iter_mut().enumerate() {
-        let own = match next.peek() {
-            Some((at, _)) if *at == i => next.next().map(|(_, names)| names),
-            _ => None,
-        };
-        match own {
-            None => {
-                for stmt in &mut d.body {
-                    alias_stmt(stmt, &aliases, &mut wrote);
-                }
-            }
-            Some(names) => {
-                let narrowed: HashMap<String, String> = aliases
-                    .iter()
-                    .filter(|(bare, _)| !names.contains(bare))
-                    .map(|(b, q)| (b.clone(), q.clone()))
-                    .collect();
-                for stmt in &mut d.body {
-                    alias_stmt(stmt, &narrowed, &mut wrote);
-                }
-            }
+    for (d, names) in program.fns.iter_mut().zip(&held) {
+        let aliasing = Aliasing { to: &aliases, except: names };
+        for stmt in &mut d.body {
+            alias_stmt(stmt, &aliasing, &mut wrote);
         }
     }
-    program
-        .fns
-        .retain(|d| !(d.synthetic && aliases.contains_key(&d.name) && !kept.contains(&d.name)));
+    let kept: HashSet<&str> = held.iter().flatten().map(String::as_str).collect();
+    program.fns.retain(|d| {
+        !(d.synthetic && aliases.contains_key(&d.name) && !kept.contains(d.name.as_str()))
+    });
     wrote
 }
 
-fn alias_stmt(
-    stmt: &mut ast::Stmt,
-    aliases: &crate::hash::Map<String, String>,
-    wrote: &mut Rewrites,
-) {
+/// The aliases a declaration's body is rewritten with: every one but the
+/// names the declaration binds itself.
+struct Aliasing<'a> {
+    to: &'a crate::hash::Map<String, String>,
+    except: &'a [String],
+}
+
+impl Aliasing<'_> {
+    fn get(&self, name: &str) -> Option<&String> {
+        self.to.get(name).filter(|_| !self.except.iter().any(|e| e == name))
+    }
+}
+
+fn alias_stmt(stmt: &mut ast::Stmt, aliases: &Aliasing<'_>, wrote: &mut Rewrites) {
     match stmt {
         ast::Stmt::Bind { expr, .. } | ast::Stmt::Expr(expr) => alias_expr(expr, aliases, wrote),
     }
 }
 
-fn alias_expr(e: &mut ast::Expr, aliases: &crate::hash::Map<String, String>, wrote: &mut Rewrites) {
+fn alias_expr(e: &mut ast::Expr, aliases: &Aliasing<'_>, wrote: &mut Rewrites) {
     match e {
         ast::Expr::Ident(name, sp, _) | ast::Expr::Partial(name, sp) => {
             if let Some(q) = aliases.get(name.as_str()) {

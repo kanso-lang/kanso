@@ -104213,3 +104213,18 @@ issue, was not ruled.
 Owes, on #1889: the lexer on every engine; micro goldens for each form,
 including negative and upper-case-digit cases; error goldens for a malformed
 literal (`0x`, `0b2`, `1e`); the chapter that teaches numbers.
+
+## 2026-10-13 — gavel: `text/slice` past the end answers `none`
+
+Clay ruled #1890. `text/slice "abc" 1 10` returned `"bc"`, quietly shorter than
+the range asked for, and three ports called that silent data loss. An index
+past the end already answers `none`.
+
+**The ruling.** A `text/slice` whose range runs past the end of the value, or
+starts past it, answers `none`, as an index past the end does, and the caller
+dispatches on it. A range wholly inside the value is unchanged.
+
+Owes, on #1890: the change on every engine; micro goldens for a range past the
+end, a start past the end and a range that ends exactly at the end; the
+exhaustiveness check sees `none` in `text/slice`'s answer; lib, samples and
+sibling repositories that leaned on clamping moved to dispatch on `none`.
