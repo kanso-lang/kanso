@@ -2341,7 +2341,10 @@ fn arity_at(name: &str, span: Span, argc: usize, named: &Named<'_>, diags: &mut 
     // pass sees only one file of a module, which leaves every call
     // to a sibling file unchecked.
     let known = named.arities.get(name);
-    if let Some(&(count, wraps)) = named.fields.get(name) {
+    // A type and a function cannot share a name in one module, so a bare
+    // name that is both is a function here and a type another module
+    // declared: `fn sorted` beside `import "std/list"` is the function.
+    if let (None, Some(&(count, wraps))) = (known, named.fields.get(name)) {
         if let Some(message) = construction_arity(name, count, wraps, argc) {
             diags.push(Diagnostic::new("arity", message, span));
         }
