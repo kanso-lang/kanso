@@ -81,6 +81,7 @@ impl<T> Table<T> {
 }
 
 pub fn flatten(program: &mut Program) {
+    insisted_chains(program);
     let producers = producers(program);
     if producers.0.is_empty() {
         return;
@@ -132,6 +133,99 @@ pub fn flatten(program: &mut Program) {
         program.fns[i].body = body;
     }
     program.fns.extend(extra);
+}
+
+/// The doors a `slice!` handed straight to one reads in place, with the
+/// arguments each holds before the slice.
+const INSISTED_DOORS: [(&str, usize); 4] = [("utf8", 0), ("append", 1), ("to_int", 0), ("to_float", 0)];
+
+/// `text/slice! s from to .> text/utf8` builds the slice and reads it once.
+/// Written instead as
+///
+///     if (text/past? s from to) (text/slice! s from to)
+///       (effect (text/utf8 (builtin_slice s from to)))
+///
+/// the emitter fuses the door, and a range that leaves the value is still
+/// the `slice!` the author wrote, failing on their line. The same holds for
+/// `append`, `to_int` and `to_float` (#1943). `s`, `from` and `to` are read
+/// twice, so the rewrite takes only names, integers and arithmetic on them.
+fn insisted_chains(program: &mut Program) {
+    let in_text = |bare: &str, arity: usize| {
+        program
+            .fns
+            .iter()
+            .find(|d| {
+                d.file.starts_with("std/text")
+                    && d.params.len() == arity
+                    && crate::ast::split_qual(&d.name).is_some_and(|(_, b)| b == bare)
+            })
+            .map(|d| d.name.to_string())
+    };
+    let (Some(slice), Some(past)) = (in_text("slice!", 3), in_text("past?", 3)) else {
+        return;
+    };
+    let doors: Vec<(String, usize)> = INSISTED_DOORS
+        .iter()
+        .filter_map(|&(door, held)| in_text(door, held + 1).map(|d| (d, held)))
+        .collect();
+    for f in &mut program.fns {
+        for stmt in &mut f.body {
+            match stmt {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => {
+                    opened(expr, &slice, &past, &doors)
+                }
+            }
+        }
+    }
+}
+
+/// One chain step `x .> door`, rewritten where `x` is a call of `slice!`.
+fn opened(e: &mut Expr, slice: &str, past: &str, doors: &[(String, usize)]) {
+    crate::for_each_child_mut(e, &mut |c| opened(c, slice, past, doors));
+    let Expr::App { head, args, piped: true, .. } = e else { return };
+    let [Expr::App { head: inner, args: range, span, piped: false }] = args.as_slice() else {
+        return;
+    };
+    if range.len() != 3
+        || !matches!(inner.as_ref(), Expr::Ident(n, _, _) if n.as_str() == slice)
+        || !range.iter().all(reread)
+    {
+        return;
+    }
+    let (door, held) = match head.as_ref() {
+        Expr::Ident(n, _, _) => (n, &[][..]),
+        Expr::App { head: door, args: held, piped: false, .. } => match door.as_ref() {
+            Expr::Ident(n, _, _) | Expr::Partial(n, _) => (n, held.as_slice()),
+            _ => return,
+        },
+        _ => return,
+    };
+    if !doors.iter().any(|(d, n)| d == door.as_str() && *n == held.len()) {
+        return;
+    }
+    let span = *span;
+    let call = |name: &str, args: Vec<Expr>| Expr::App {
+        head: Box::new(ident(name, span)),
+        args,
+        span,
+        piped: false,
+    };
+    let mut door_args = held.to_vec();
+    door_args.push(call("builtin_slice", range.clone()));
+    let read = call("effect", vec![call(door.as_str(), door_args)]);
+    let failed = Expr::App { head: inner.clone(), args: range.clone(), span, piped: false };
+    *e = call("if", vec![call(past, range.clone()), failed, read]);
+}
+
+/// Whether reading `e` a second time costs no more than arithmetic.
+fn reread(e: &Expr) -> bool {
+    match e {
+        Expr::Ident(..) | Expr::Int(..) => true,
+        Expr::BinOp { op, lhs, rhs, .. } => {
+            matches!(*op, "+" | "-" | "*") && reread(lhs) && reread(rhs)
+        }
+        _ => false,
+    }
 }
 
 /// `{owner}/Flat{n}_{bare}`.

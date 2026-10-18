@@ -176,3 +176,9 @@ fn inside none from to
 
 fn inside piece _ _
   piece
+
+# Where `slice` answers none: the range runs past the end, or starts past
+# it, as k_b_slice decides. The compiler asks it before reading a range that
+# `slice!` hands straight to a door (#1943).
+fn past? s from to
+  length s < to or length s + 1 < from

@@ -1,0 +1,31 @@
+import "std/text"
+
+# `slice!` handed straight to `utf8`, `append`, `to_int` or `to_float` reads
+# the range where it lies, and answers what the two steps would: the door's
+# answer, the empty slice's for a range that stays inside, and the failure
+# for one that leaves the value.
+bs = text/bytes "kanso 42 2.5"
+
+fn word from to
+  text/slice! bs from to .> text/utf8 .> (w -> "<{w}>") .? (e -> e.reason)
+
+fn joined from to
+  text/slice! bs from to .> (&text/append (text/bytes "k:"))
+    .> text/utf8 .? (e -> e.reason)
+
+fn whole from to
+  text/slice! bs from to .> text/to_int .> (n -> n + 1) .? (e -> e.reason)
+
+fn real from to
+  text/slice! bs from to .> text/to_float .> (x -> x * 2.0) .? (e -> e.reason)
+
+pub play = word 1 5 .> print
+  .> (_ -> word 4 3 .> print)
+  .> (_ -> word 0 5 .> print)
+  .> (_ -> word 10 13 .> print)
+  .> (_ -> joined 7 8 .> print)
+  .> (_ -> joined 7 20 .> print)
+  .> (_ -> whole 7 8 .> print)
+  .> (_ -> whole 1 2 .> print)
+  .> (_ -> real 10 12 .> print)
+  .> (_ -> real 13 12 .> print)
