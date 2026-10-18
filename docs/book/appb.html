@@ -80,6 +80,9 @@ extra_css: /book/book.css
 <a href="#b-slice"><code>text/slice</code></a>
 <a href="#b-slice-bang"><code>text/slice!</code></a>
 <a href="#b-sleep"><code>time/sleep</code></a>
+<a href="#b-span"><code>text/span</code></a>
+<a href="#b-span_to"><code>text/span_to</code></a>
+<a href="#b-span_to_below"><code>text/span_to_below</code></a>
 <a href="#b-sqrt"><code>math/sqrt</code></a>
 <a href="#b-starts_with"><code>text/starts_with?</code></a>
 <a href="#b-stdin"><code>io/stdin</code></a>
@@ -199,7 +202,8 @@ word <span class="o">=</span> <span class="f">text/trim</span> <span class="s">"
 
 <h3 id="b-slice"><code>text/slice</code></h3>
 <p class="builtin-sig"><code>text/slice (string | list) int int → string | list | none</code></p>
-<p>a sub-range by 1-based inclusive positions—<code>slice "kanso" 2 4</code> is <code>"ans"</code>, and the same call shape works on lists. a range that runs past the end, or starts past it, answers <code>none</code>, as an index past the end does, so <code>slice "kanso" 4 9</code> is <code>none</code> rather than a shorter string. a range that ends exactly at the end is the tail, and an inverted range is the empty result.</p>
+<p class="builtin-sig"><code>text/slice text/span → string | list</code></p>
+<p>a sub-range by 1-based inclusive positions—<code>slice "kanso" 2 4</code> is <code>"ans"</code>, and the same call shape works on lists. a range that runs past the end, or starts past it, answers <code>none</code>, as an index past the end does, so <code>slice "kanso" 4 9</code> is <code>none</code> rather than a shorter string. a range that ends exactly at the end is the tail, and an inverted range is the empty result. given a <a href="#b-span">span</a> alone, it answers the range the span holds, with no <code>none</code>, because a span is only ever made for a range inside its value.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">strings.kso</div>
@@ -410,6 +414,47 @@ shipping/order "tea" 2 "placed"</code></pre>
 <h3 id="b-find2"><code>text/find2</code></h3>
 <p class="builtin-sig"><code>text/find2 int[] int int int → int</code></p>
 <p>scans a byte list from a 1-based start index for the first byte equal to <em>either</em> of two targets—hence the <code>2</code>—and returns its 1-based position. when neither target is found it returns <code>length + 1</code>, one past the end, a sentinel you can compare against without a branch. it is the hot primitive behind tokenizers that stop at "the next comma or brace".</p>
+
+<h3 id="b-span"><code>text/span</code></h3>
+<p class="builtin-sig"><code>type text/span — whole, from, to</code></p>
+<p>a range of positions inside one string or byte list. <code>whole</code> is the value, and <code>from</code> and <code>to</code> are 1-based and inclusive, counted the way <code>text/slice</code> counts; an empty range has <code>to</code> one less than <code>from</code>. the fields read like any record's, as <code>run.from</code>. only <code>std/text</code> builds a span, and only after checking that the range lies inside <code>whole</code>, so <code>text/slice</code> on a span cannot miss and answers no <code>none</code>.</p>
+
+<h3 id="b-span_to"><code>text/span_to</code></h3>
+<p class="builtin-sig"><code>text/span_to int[] int int int → text/span | none</code></p>
+<p>the span from a 1-based start up to the byte before the first byte equal to either of two targets, or to the end of the bytes when neither comes. it is <code>text/find2</code> answering the range it scanned instead of the position where it stopped. a start one past the end answers the empty span there; a start anywhere else outside the bytes answers <code>none</code>.</p>
+
+<h3 id="b-span_to_below"><code>text/span_to_below</code></h3>
+<p class="builtin-sig"><code>text/span_to_below int[] int int int int → text/span | none</code></p>
+<p><code>text/span_to</code> with one more place to stop: any byte below the limit in the last argument. a json string ends at a quote or a backslash, and a control character below <code>32</code> inside one is an error, so a decoder scans with all three.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">spans.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/text"</span>
+
+<span class="k">fn</span> <span class="f">shown</span> none
+  <span class="s">"none"</span>
+
+<span class="k">fn</span> <span class="f">shown</span> run
+  <span class="s">"<span class="i">{run.from}</span>..<span class="i">{run.to}</span> <span class="i">{text/utf8 (text/slice run)}</span>"</span>
+
+bs <span class="o">=</span> <span class="f">text/bytes</span> <span class="s">"key=value;next"</span>
+tab <span class="o">=</span> <span class="f">text/bytes</span> <span class="s">"ab\tc"</span>
+<span class="f">print</span> <span class="s">"key <span class="i">{shown (text/span_to bs 1 61 59)}</span>"</span>
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"value <span class="i">{shown (text/span_to bs 5 61 59)}</span>"</span>)
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"end <span class="i">{shown (text/span_to bs 15 61 59)}</span>"</span>)
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"outside <span class="i">{shown (text/span_to bs 0 61 59)}</span>"</span>)
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"below <span class="i">{shown (text/span_to_below tab 1 44 59 32)}</span>"</span>)</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso play spans.kso</div>
+    <pre><code>key 1..3 key
+value 5..9 value
+end 15..14 
+outside none
+below 1..2 ab</code></pre>
+  </div>
+</div>
+
+<p>the first span runs from position 1 to the byte before the <code>=</code> (<code>61</code>). the third starts one past the fourteen bytes, so it is empty, and the fourth starts outside them and is <code>none</code>. the last stops at the tab, byte <code>9</code>, which is below the limit of <code>32</code>.</p>
 
 <h3 id="b-utf8"><code>text/utf8</code></h3>
 <p class="builtin-sig"><code>text/utf8 int[] → string | err</code></p>

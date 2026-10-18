@@ -1,0 +1,23 @@
+# A range inside one string or run of bytes, counted the way `slice` counts:
+# `from` and `to` are both inside it, and an empty run has `to` one less than
+# `from`. Only this module builds one, and only after checking the range lies
+# inside `whole`, so slicing a span cannot miss (ruled on #1960).
+pub type span
+  whole
+  from
+  to
+
+pub fn slice run:span
+  builtin_slice_in run.whole run.from run.to
+
+# The span from p up to the byte before the first a or b, or to the end of
+# cs when neither comes. p may be one past the end, which answers the empty
+# span there; anywhere else outside cs answers none.
+pub fn span_to cs p a b
+  return none if p < 1 or length cs + 1 < p
+  span cs p (find2 cs p a b - 1)
+
+# span_to, stopping also at any byte below lim.
+pub fn span_to_below cs p a b lim
+  return none if p < 1 or length cs + 1 < p
+  span cs p (find2_below cs p a b lim - 1)

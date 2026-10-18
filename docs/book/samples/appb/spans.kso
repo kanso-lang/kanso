@@ -1,0 +1,15 @@
+import "std/text"
+
+fn shown none
+  "none"
+
+fn shown run
+  "{run.from}..{run.to} {text/utf8 (text/slice run)}"
+
+bs = text/bytes "key=value;next"
+tab = text/bytes "ab\tc"
+print "key {shown (text/span_to bs 1 61 59)}"
+  .> (_ -> print "value {shown (text/span_to bs 5 61 59)}")
+  .> (_ -> print "end {shown (text/span_to bs 15 61 59)}")
+  .> (_ -> print "outside {shown (text/span_to bs 0 61 59)}")
+  .> (_ -> print "below {shown (text/span_to_below tab 1 44 59 32)}")
