@@ -21,46 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-13 — gavel: a bracketed list or map may span lines
-
-Clay ruled #1882. All twenty ports wrote a list or map too long for 80
-columns, and nothing let one break. Text blocks (`"""`) already cover long
-strings.
-
-**The ruling.** A list or map literal may span lines. The opening bracket ends
-its line, each element (or key and value) sits on a line of its own indented
-one level, and the closing bracket stands alone at the opening line's indent.
-Canonical form keeps one way to write each literal: one that fits in 80 columns
-on one line is written on one line, and one that does not is written in the
-spanning form. Operator chains, `if` and guards are not covered, and they are
-still broken by naming their parts.
-
-Owes, on #1882: the lexer and parser accept the spanning form on every
-engine; error goldens for a short literal spanned, a long literal on one line
-and a misplaced closing bracket; the samples that build long literals by hand
-moved onto it; the chapter that teaches lists.
-
-## 2026-10-13 — gavel: parentheses are required where `and` meets `or`, and refused wherever else they group nothing
-
-Clay ruled the first part of #1887. The ports asked for parentheses to be
-optional where two operators meet, for clarity. Clay: "not just no but hell no.
-we are all about one right way and avoiding redundancy. you either require the
-parentheses or they're not allowed." And on the rule below: "I'm fine doing
-that as long as it's 100% consistent and not optional."
-
-**The ruling.** Wherever `and` and `or` appear in one expression without
-parentheses between them, the expression is refused, and the diagnostic shows
-the parenthesized spelling: `(a and b) or c`. This is the same rule #1915
-builds for `&`, `|` and `^`. Every other pair of parentheses that groups
-nothing stays refused, as today: `not (f x)` because application always binds
-tightest, `(a * b) + c` because that precedence is not misread. There is no
-optional form: each expression has exactly one accepted spelling.
-
-Owes, on #1887: the refusal and its diagnostic on every engine; error goldens
-for `a and b or c`, for `(a and b) or c` accepted and for a redundant pair
-still refused; the corpus, samples, lib and sibling repositories moved onto
-the required spelling.
-
 ## 2026-10-13 — gavel: a file may open with a header comment and one blank line
 
 Clay ruled the second part of #1887. A comment directly above a file's first
@@ -1523,3 +1483,55 @@ any shipped.
 Owes, on #1983 and #1960: the five names on every engine; the fused doors
 reading a sliced span; the decoder's four `builtin_slice_in` sites moved
 onto spans; micro goldens; appendix B; kq's decoder following.
+
+## 2026-10-18 — A module's own function beats a type an import declares
+
+Building std/text's `span` turned up a check that read the wrong name. In a
+merged module check, the bare name of a type another module declares reached
+the construction check before a function of the same name in the program's
+own module. `fn sorted a b` beside `import "std/list"` was refused as a
+construction of std/list's `sorted` with too many fields, and any program
+with a helper named `span` would have been refused the same way once std/text
+declares the type. A type and a function cannot share a name inside one
+module, so a bare name that is both is the module's function. `arity_at` now
+skips the construction check for a name that is a known function group.
+
+The fixture is `a_function_named_like_an_imported_type_is_the_function` in
+the micro corpus. Without the change, `kanso check` refuses it with the arity
+error. With the change, it prints `3` on every engine.
+
+Rows, from CI: `compile_instructions` 22,715,476 -> 22,716,927,
+`entry_instructions` 75,262,121 -> 75,265,987, `library_instructions`
+74,948,228 -> 74,952,083 and `browser_compile_instructions` 382,741,447 ->
+382,750,920. The check does no new work on these programs, so most of the
+movement is the binary's layout. The floor drops by the cost to 91.52, under
+the rule that a change making the language work as specified lowers it by
+exactly what it costs.
+
+## 2026-10-18 — A module's own type beats an imported type's twin
+
+The type-side partner of the entry above. The loader clones each exported
+type under its short name, so a program may write `sorted` for
+`list/sorted`. A module that declared its own `type sorted` kept the twin
+beside its declaration, and the twin answered: the module's constructions
+were refused as foreign, with the import's field count held against them.
+Once a module's types join the merged program, `own_types_beat_twins` drops
+a synthetic short-named twin that shares a name with one of them, and the
+import's type is still reachable by its qualified name. std/text's `span`
+met this in `tests/golden/entryfile`'s diff module, which declares its own
+six-field `span`.
+
+The fixture is `a_type_named_like_an_imported_type_is_the_modules` in the
+micro corpus, refused by both `kanso check` and a run before the change and
+printing `2` on both engines after it. The first build kept a set of the
+module's type names on every compile, 23 allocations in `compile_allocs` and
+`interp_allocs` for a collision almost no program has; the filter now
+allocates only when it finds a twin to drop, and both rows are where they
+were.
+
+Rows, from CI: `compile_instructions` 22,716,927 -> 22,721,761,
+`entry_instructions` 75,265,987 -> 75,287,373, `library_instructions`
+74,952,083 -> 74,973,469, and `browser_compile_instructions` 382,750,920 ->
+382,767,025: each compile asks every type whether it is a beaten twin. The
+floor drops by the cost to 91.52 under the rule for a change that makes the
+language work as specified.

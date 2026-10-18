@@ -104127,3 +104127,43 @@ Owes, on #1886: the builtin on every engine; error goldens for an unknown
 field, a value the field does not admit, and a merge outside the owning
 module; a micro golden showing unnamed fields carried over; appendix B and
 the chapter that teaches records.
+
+## 2026-10-13 — gavel: a bracketed list or map may span lines
+
+Clay ruled #1882. All twenty ports wrote a list or map too long for 80
+columns, and nothing let one break. Text blocks (`"""`) already cover long
+strings.
+
+**The ruling.** A list or map literal may span lines. The opening bracket ends
+its line, each element (or key and value) sits on a line of its own indented
+one level, and the closing bracket stands alone at the opening line's indent.
+Canonical form keeps one way to write each literal: one that fits in 80 columns
+on one line is written on one line, and one that does not is written in the
+spanning form. Operator chains, `if` and guards are not covered, and they are
+still broken by naming their parts.
+
+Owes, on #1882: the lexer and parser accept the spanning form on every
+engine; error goldens for a short literal spanned, a long literal on one line
+and a misplaced closing bracket; the samples that build long literals by hand
+moved onto it; the chapter that teaches lists.
+
+## 2026-10-13 — gavel: parentheses are required where `and` meets `or`, and refused wherever else they group nothing
+
+Clay ruled the first part of #1887. The ports asked for parentheses to be
+optional where two operators meet, for clarity. Clay: "not just no but hell no.
+we are all about one right way and avoiding redundancy. you either require the
+parentheses or they're not allowed." And on the rule below: "I'm fine doing
+that as long as it's 100% consistent and not optional."
+
+**The ruling.** Wherever `and` and `or` appear in one expression without
+parentheses between them, the expression is refused, and the diagnostic shows
+the parenthesized spelling: `(a and b) or c`. This is the same rule #1915
+builds for `&`, `|` and `^`. Every other pair of parentheses that groups
+nothing stays refused, as today: `not (f x)` because application always binds
+tightest, `(a * b) + c` because that precedence is not misread. There is no
+optional form: each expression has exactly one accepted spelling.
+
+Owes, on #1887: the refusal and its diagnostic on every engine; error goldens
+for `a and b or c`, for `(a and b) or c` accepted and for a redundant pair
+still refused; the corpus, samples, lib and sibling repositories moved onto
+the required spelling.

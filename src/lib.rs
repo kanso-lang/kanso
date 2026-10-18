@@ -194,6 +194,7 @@ fn compile_parsed_entry(
     merged.types.extend(dep_program.types);
     merged.fns.extend(dep_program.fns);
     merged.types.extend(program.types);
+    own_types_beat_twins(&mut merged);
     merged.fns.extend(program.fns);
     enroll_travelers(&mut merged)?;
     // AHEAD OF THE CHECK, so the whole-program check does not walk the synthetic
@@ -409,6 +410,7 @@ fn compile_one(file: &str, source: &str, drop_unused: bool) -> Result<ast::Progr
     }
     rename_travels(&mut program, &travels);
     program.types.extend(dep_program.types);
+    own_types_beat_twins(&mut program);
     program.fns.extend(dep_program.fns);
     forget_shades(&mut program.fns);
     // AHEAD OF THE CHECK, the third and last of the three paths to take this
@@ -599,6 +601,7 @@ fn compile_library_beside(
     }
     rename_travels(&mut program, &travels);
     program.types.extend(dep_program.types);
+    own_types_beat_twins(&mut program);
     program.fns.extend(dep_program.fns);
     forget_shades(&mut program.fns);
     // AHEAD OF THE CHECK, the third and last of the three paths to take this
@@ -1454,6 +1457,28 @@ fn alias_expr(e: &mut ast::Expr, aliases: &crate::hash::Map<String, String>, wro
             }
         }
     }
+}
+
+/// A type a module declares beats the bare twin of an imported type with the
+/// same name. The loader clones each exported type under its short name so a
+/// program may write `sorted` for `list/sorted`; a module that declares its
+/// own `sorted` means its own, and the twin answered instead, refusing the
+/// module's constructions as foreign. The qualified spelling still reaches
+/// the import's type.
+pub fn own_types_beat_twins(program: &mut ast::Program) {
+    // A collision is rare, so finding none allocates nothing.
+    let beaten = |t: &ast::TypeDecl, types: &[ast::TypeDecl]| {
+        t.synthetic
+            && t.origin.is_some()
+            && !ast::has_slash(&t.name)
+            && types.iter().any(|own| !own.synthetic && own.name == t.name)
+    };
+    if !program.types.iter().any(|t| beaten(t, &program.types)) {
+        return;
+    }
+    let keep: Vec<bool> = program.types.iter().map(|t| !beaten(t, &program.types)).collect();
+    let mut keep = keep.into_iter();
+    program.types.retain(|_| keep.next().unwrap_or(true));
 }
 
 /// Rewrite every type reference that resolves to an enrollment clone to
