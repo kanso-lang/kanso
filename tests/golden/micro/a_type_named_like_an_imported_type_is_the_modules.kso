@@ -1,0 +1,11 @@
+# A module's own type beats the short-named twin of an imported one. The
+# loader lets a program write `sorted` for std/list's `list/sorted`, and a
+# module declaring its own `sorted` had its constructions refused as
+# foreign, with the import's one field counted against them.
+import "std/list"
+
+type sorted
+  low
+  high
+
+pub play = print (sorted 1 2).high

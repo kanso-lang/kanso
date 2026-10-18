@@ -104146,3 +104146,24 @@ Owes, on #1882: the lexer and parser accept the spanning form on every
 engine; error goldens for a short literal spanned, a long literal on one line
 and a misplaced closing bracket; the samples that build long literals by hand
 moved onto it; the chapter that teaches lists.
+
+## 2026-10-13 — gavel: parentheses are required where `and` meets `or`, and refused wherever else they group nothing
+
+Clay ruled the first part of #1887. The ports asked for parentheses to be
+optional where two operators meet, for clarity. Clay: "not just no but hell no.
+we are all about one right way and avoiding redundancy. you either require the
+parentheses or they're not allowed." And on the rule below: "I'm fine doing
+that as long as it's 100% consistent and not optional."
+
+**The ruling.** Wherever `and` and `or` appear in one expression without
+parentheses between them, the expression is refused, and the diagnostic shows
+the parenthesized spelling: `(a and b) or c`. This is the same rule #1915
+builds for `&`, `|` and `^`. Every other pair of parentheses that groups
+nothing stays refused, as today: `not (f x)` because application always binds
+tightest, `(a * b) + c` because that precedence is not misread. There is no
+optional form: each expression has exactly one accepted spelling.
+
+Owes, on #1887: the refusal and its diagnostic on every engine; error goldens
+for `a and b or c`, for `(a and b) or c` accepted and for a redundant pair
+still refused; the corpus, samples, lib and sibling repositories moved onto
+the required spelling.
