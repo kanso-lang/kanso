@@ -21,24 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-13 — gavel: a file may open with a header comment and one blank line
-
-Clay ruled the second part of #1887. A comment directly above a file's first
-declaration is accepted today and reads as that declaration's comment. A
-comment at the top of a file followed by a blank line is refused, and the
-refusal is wrong about why: "the file may not begin with a blank line", at
-line 2, because the check skips the comment when it finds the file's start.
-
-**The ruling.** A file may begin with a block of comment lines followed by
-exactly one blank line, and that block is the file's header, separate from any
-declaration. Without the blank line the block is the first declaration's
-comment, as today. Nothing else about comment placement changes.
-
-Owes, on #1887: the formatting check accepts the header shape; error goldens
-for a header followed by two blank lines and for a blank line before the
-header; a golden that the header-plus-blank-line file checks clean on every
-engine.
-
 ## 2026-10-13 — gavel: overload arms stay in specificity order
 
 Clay ruled #1888, which asked whether the order rule for overload arms could go
@@ -1535,3 +1517,60 @@ Rows, from CI: `compile_instructions` 22,716,927 -> 22,721,761,
 382,767,025: each compile asks every type whether it is a beaten twin. The
 floor drops by the cost to 91.52 under the rule for a change that makes the
 language work as specified.
+
+## 2026-10-18 — std/text answers spans, and the decoder takes them
+
+#1960, under the gavel on #1983 and Clay's answer on #1992, which named the
+maker `text/span_of` because a function cannot share the type's name. std/text
+declares `span`, with readable fields `whole`, `from` and `to`, and answers
+one from `text/span_of s from to`, `text/span_to cs p a b` and
+`text/span_to_below cs p a b lim`. `text/slice run` is an arm of `slice` that
+takes a span and answers its bytes with no `none`. The type and its functions
+live in `lib/text/span.kso`, so the line numbers err goldens quote from
+text.kso stay where they are. Appendix B has an entry for each, and ch08
+quotes the decoder's new shape.
+
+The slice arm turned up a pass in the wrong place. `builtin_slice_in` was
+renamed to `slice` while the parse was finished, before the check read it, so
+a function answering a measured slice was typed as answering `none`. The
+rename now runs where a checked program is handed to the engines.
+`a_span_runs_to_the_byte_before_a_stop` in the micro corpus is refused
+without the move.
+
+The decoder's five `builtin_slice_in` sites read spans now, and
+`string_scan` is gone. Moved as written, the decoder read 1,645M
+instructions on jsonbench against 833M: every string built a span record,
+195M of it in `k_rec`, and `text/slice run` reached none of the fused doors.
+A new pass, `src/flat.rs`, runs beside the rename. A group whose arms take a
+record at one position, or `none`, and only read its fields or hand it on to
+another such group, gets a twin that takes the fields there. A call handing
+a producer's answer straight to such a group (a producer is a one-arm group
+of guards answering `none` and then a construction, the shape of
+`text/span_to`) becomes a call to a copy of the producer that calls the
+twin. `text/slice run` inside a twin becomes `builtin_slice` on the fields,
+so the fused doors fire again. The twins keep their file and spans, and
+`ast::spoken` takes the `Flat{n}_` mark off their names, so a failure inside
+one names the function the author wrote. The producer's copy enters a twin
+only when the twin's arms cannot miss, so a miss never names the producer's
+line.
+
+A bare construction is not a producer. The first build counted `keep` in
+`a_long_chain_answers_survival_from_its_index` as one, and the loop ran half
+on fields and half on records: 9,993 more allocations and 10,000 more beat
+iterations. That shape is the escape analysis's, which hands a record back by
+value where it can.
+
+The twins' positions were boxed at first, because a group takes words only
+when it is a member of a cycle, and jsonbench read 938M. A group the pass
+made now takes its int fields as words too: 864M with the string sites moved
+and 868M with the number sites, on this container. What is left is the range
+check in `span_to` and `span_of` and the `- 1` and `+ 1` around an inclusive
+`to`. The mem corpus reads the same counters as before the move, and
+`a_span_handed_on_is_never_built` pins that a span handed from `span_to` to a
+carrier builds no record: `sh_rec` 0 and 12 allocations, against 720 bytes
+and 21 without the pass.
+
+Two leaks of an imported type's short name surfaced on the way and landed
+first, as #1993 and #1995. kq's copy of the decoder follows once kq repins.
+
+Rows, from CI: to come.
