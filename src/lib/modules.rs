@@ -851,6 +851,7 @@ fn compile_module_loaded(
         merged.types.extend(program.types);
         merged.fns.extend(program.fns);
     }
+    own_types_beat_twins(&mut merged);
     if require_entry {
         enroll_travelers(&mut merged)?;
     }
