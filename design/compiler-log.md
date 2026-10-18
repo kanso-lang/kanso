@@ -1576,9 +1576,9 @@ The interpreter, placing at the body: `interp_instructions` 492,620,187 ->
 `emitted_other_calls` 17,641 -> 17,648, `emitted_other_lines` 145,594 ->
 149,547, `text` 4,909,294 -> 5,011,246, `lines` 1,356 -> 1,368,
 `module_lines` 1,106 -> 1,130. The front end fell with the binary's layout:
-`compile_instructions` 22,715,476 -> 22,687,052, `entry_instructions`
-75,262,121 -> 75,172,143, `library_instructions` 74,948,228 -> 74,859,042.
-The tab: `browser_compile_instructions` 382,741,447 -> 389,873,703,
+`compile_instructions` 22,716,927 -> 22,688,503, `entry_instructions`
+75,265,987 -> 75,176,009, `library_instructions` 74,952,083 -> 74,862,897.
+The tab: `browser_compile_instructions` 382,750,920 -> 389,883,176,
 `browser_compile_peak_bytes` 643,605 -> 675,444, `browser_run_instructions`
 34,181,355 -> 35,216,926.
 
