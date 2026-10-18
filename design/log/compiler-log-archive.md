@@ -104103,3 +104103,46 @@ and `run_push_mut_slow` from 1,554,416 to 1,554,428.
 
 Welfare reads 91.3353 on CI's rows against main's floor of 91.2916, so the
 combined tree is a rise, and the floor is banked there.
+
+## 2026-10-13 — gavel: `merge` copies a record with named fields replaced
+
+Clay ruled #1886. Sixteen of the twenty ports complained that changing one
+field of a record meant rebuilding it by position, and three of their bugs
+were fields passed in the wrong order at such a site. Construction by field
+name stays declined (2026-07-29, named arguments); this is an update form
+only.
+
+**The ruling.** `merge u {"role": "chef"}` answers a copy of the record `u`
+with the named fields replaced and every other field carried over. The map is
+a literal whose keys name fields of `u`'s type. The checker refuses a key that
+is not a field of that type. It also refuses a value that the field's
+declared typeset does not admit, where the field declares one. `merge` builds a
+record, so it is allowed only where construction is, in the module that owns
+the type (2026-08-20, "only a type's owner constructs one").
+
+Clay chose this spelling over a keyword form (`u with role "chef"`), which
+meant the same thing.
+
+Owes, on #1886: the builtin on every engine; error goldens for an unknown
+field, a value the field does not admit, and a merge outside the owning
+module; a micro golden showing unnamed fields carried over; appendix B and
+the chapter that teaches records.
+
+## 2026-10-13 — gavel: a bracketed list or map may span lines
+
+Clay ruled #1882. All twenty ports wrote a list or map too long for 80
+columns, and nothing let one break. Text blocks (`"""`) already cover long
+strings.
+
+**The ruling.** A list or map literal may span lines. The opening bracket ends
+its line, each element (or key and value) sits on a line of its own indented
+one level, and the closing bracket stands alone at the opening line's indent.
+Canonical form keeps one way to write each literal: one that fits in 80 columns
+on one line is written on one line, and one that does not is written in the
+spanning form. Operator chains, `if` and guards are not covered, and they are
+still broken by naming their parts.
+
+Owes, on #1882: the lexer and parser accept the spanning form on every
+engine; error goldens for a short literal spanned, a long literal on one line
+and a misplaced closing bracket; the samples that build long literals by hand
+moved onto it; the chapter that teaches lists.

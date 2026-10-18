@@ -21,49 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-13 — gavel: `merge` copies a record with named fields replaced
-
-Clay ruled #1886. Sixteen of the twenty ports complained that changing one
-field of a record meant rebuilding it by position, and three of their bugs
-were fields passed in the wrong order at such a site. Construction by field
-name stays declined (2026-07-29, named arguments); this is an update form
-only.
-
-**The ruling.** `merge u {"role": "chef"}` answers a copy of the record `u`
-with the named fields replaced and every other field carried over. The map is
-a literal whose keys name fields of `u`'s type. The checker refuses a key that
-is not a field of that type. It also refuses a value that the field's
-declared typeset does not admit, where the field declares one. `merge` builds a
-record, so it is allowed only where construction is, in the module that owns
-the type (2026-08-20, "only a type's owner constructs one").
-
-Clay chose this spelling over a keyword form (`u with role "chef"`), which
-meant the same thing.
-
-Owes, on #1886: the builtin on every engine; error goldens for an unknown
-field, a value the field does not admit, and a merge outside the owning
-module; a micro golden showing unnamed fields carried over; appendix B and
-the chapter that teaches records.
-
-## 2026-10-13 — gavel: a bracketed list or map may span lines
-
-Clay ruled #1882. All twenty ports wrote a list or map too long for 80
-columns, and nothing let one break. Text blocks (`"""`) already cover long
-strings.
-
-**The ruling.** A list or map literal may span lines. The opening bracket ends
-its line, each element (or key and value) sits on a line of its own indented
-one level, and the closing bracket stands alone at the opening line's indent.
-Canonical form keeps one way to write each literal: one that fits in 80 columns
-on one line is written on one line, and one that does not is written in the
-spanning form. Operator chains, `if` and guards are not covered, and they are
-still broken by naming their parts.
-
-Owes, on #1882: the lexer and parser accept the spanning form on every
-engine; error goldens for a short literal spanned, a long literal on one line
-and a misplaced closing bracket; the samples that build long literals by hand
-moved onto it; the chapter that teaches lists.
-
 ## 2026-10-13 — gavel: parentheses are required where `and` meets `or`, and refused wherever else they group nothing
 
 Clay ruled the first part of #1887. The ports asked for parentheses to be
@@ -1499,8 +1456,56 @@ The walk costs compile time, which CI measured: `compile_instructions`
 not move. This builds a ruled part of the language, so the welfare floor
 moved down by exactly that cost, to 91.52, with this entry as the reason.
 
+## 2026-10-17 — gavel: every run-time failure names its line except a stack overflow
 
-## 2026-10-16 — A run-time failure names the line it happened on
+Clay ruled #1987. The #1975 ruling accepted naming every run-time failure's
+line at a bound of 0.42% of runbench. Built in kanso#1985, CI measured
++1.70% on runbench, +3.01% on livebench and +4.36% on encodebench. The
+bound had counted only calls into the C runtime. It missed the stores on
+inlined fast paths, which moved onto the slow branch, the stamp before a call
+that can match no arm, and the store on entry to every function of a
+recursion cycle that records an overflow's place. The overflow's place also
+broke the differential law: an engine names the cycle it entered last, and
+the engines run out of stack at different depths, so a program that keeps
+entering a second cycle gets two different answers.
+
+**The ruling.** Every run-time failure names its file and line on every
+engine, except a stack overflow, which keeps its sentence with no line, as
+main prints it today. A call that matches no arm names the caller's line.
+Dropping the overflow's entry stores saves about 0.8% of runbench and 1.5%
+of livebench and encodebench, and the divergence goes with them. Naming an
+overflow's place by the outermost active cycle is possible and is its own
+issue, measured from scratch; nothing in this ruling waits on it. The floor
+drops by what CI measures for the rest, under the #1975 gavel.
+
+Owes, on #1987: kanso#1985 without the overflow's entry stores; CI's rows
+and the floor moved by them; a follow-up issue for the outermost-cycle rule.
+
+## 2026-10-17 — gavel: the names for spans
+
+Clay ruled #1983, the names the #1960 gavel said would come to him before
+any shipped.
+
+**The ruling.** In std/text:
+
+- `span` is the type, with readable fields `whole` (the string), `from` and
+  `to` (inclusive, the way `text/slice` counts). An empty run has `to` one
+  less than `from`. Only std/text builds one.
+- `text/span s from to` answers a span when the range lies inside `s`, and
+  `none` otherwise.
+- `text/span_to cs p a b` answers the span from `p` up to the byte before the
+  first `a` or `b`, or to the end of `cs`, and `none` only when `p` lies
+  outside `cs`. `text/span_to_below cs p a b lim` also stops at any byte
+  below `lim`. The names say what they answer. `find2` and `find2_below`
+  keep answering a position.
+- `text/slice run`, an arm of `slice` that takes a span, answers the string
+  with no `none`.
+
+Owes, on #1983 and #1960: the five names on every engine; the fused doors
+reading a sliced span; the decoder's four `builtin_slice_in` sites moved
+onto spans; micro goldens; appendix B; kq's decoder following.
+
+## 2026-10-18 — A run-time failure names the line it happened on
 
 The rest of #1975. Every run-time failure but a stack overflow now prints
 its place under its message, on every engine, in the form an err's `born in`
@@ -1547,7 +1552,8 @@ ran out inside `small` on native and on a call to `big` in the interpreter,
 and the two printed different places. A rule that holds still (the outermost
 active cycle names it) needs the record cleared when the entering call
 returns, and a library wrapper that tail-calls into a recursion has nowhere
-to clear it. Clay chose to leave the overflow without a place (kanso#1987).
+to clear it. The overflow keeps its sentence alone, under "2026-10-17 —
+gavel: every run-time failure names its line except a stack overflow".
 `a_recursion_inside_a_recursion_overflows_alike` pins the case.
 
 **An insisting form** names the line that called it. A form whose name
