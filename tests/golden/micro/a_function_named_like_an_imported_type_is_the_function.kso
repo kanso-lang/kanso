@@ -1,0 +1,10 @@
+# A type and a function cannot share a name in one module, so a bare name
+# that is both is the module's own function and a type some import declares.
+# std/list declares `sorted`, and the check read `sorted 1 2` here as a
+# construction with too many fields and refused the program.
+import "std/list"
+
+fn sorted a b
+  a + b
+
+pub play = print (sorted 1 2)
