@@ -1,1 +1,2 @@
 error[runtime]: no 3-argument arm of `<fn>` (arms take 2)
+  failed in a_partial_over_a_value_past_every_arm/play at a_partial_over_a_value_past_every_arm.kso:11

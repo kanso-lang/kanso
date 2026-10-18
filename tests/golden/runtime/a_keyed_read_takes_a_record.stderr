@@ -1,1 +1,2 @@
 error[runtime]: cannot read fields of "hello"; keyed reads take a record
+  failed in a_keyed_read_takes_a_record/play at a_keyed_read_takes_a_record.kso:13

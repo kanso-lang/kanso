@@ -254,6 +254,6 @@
 # branches are unchanged; lines 10,161 -> 10,165, three of them the longer
 # comment on the fused append door in the prelude.
 defines=111
-calls=1023
+calls=1024
 branches=1104
-lines=10165
+lines=10362

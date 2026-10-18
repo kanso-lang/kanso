@@ -1,1 +1,2 @@
 error[runtime]: `*` is not defined for these values
+  failed in arithmetic_on_a_division_by_zero_is_refused/scaled at arithmetic_on_a_division_by_zero_is_refused.kso:9

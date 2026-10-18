@@ -1,1 +1,2 @@
 error[runtime]: net_write takes a connection and a string
+  failed in net/write at std/net/net.kso:33

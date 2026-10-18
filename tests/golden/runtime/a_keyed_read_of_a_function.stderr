@@ -1,1 +1,2 @@
 error[runtime]: cannot read fields of <fn>; keyed reads take a record
+  failed in a_keyed_read_of_a_function/play at a_keyed_read_of_a_function.kso:19

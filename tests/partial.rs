@@ -100,7 +100,9 @@ fn native_and_the_oracle_settle_a_partial_over_a_value_the_same_way() {
     let over = "fn add a b\n  a + b\n\nfn foo f\n  &f 1\n\nprint \"{(foo add) 2 3}\"\n";
     let said = stderr(&native("value_over_native", over));
     assert!(said.contains("no 3-argument arm of `<fn>` (arms take 2)"), "native said: {said}");
-    assert_eq!(said, stderr(&interp("value_over_oracle", over)));
+    // the two runs are two files, and the place a failure names is its file
+    let oracle = stderr(&interp("value_over_oracle", over));
+    assert_eq!(said, oracle.replace("value_over_oracle", "value_over_native"));
 }
 
 /// Short of every arity it stays a partial rather than dispatching early, so

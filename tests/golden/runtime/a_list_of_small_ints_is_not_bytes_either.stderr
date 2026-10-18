@@ -1,1 +1,2 @@
 error[runtime]: append takes bytes and a string, bytes, or byte
+  failed in a_list_of_small_ints_is_not_bytes_either/play at a_list_of_small_ints_is_not_bytes_either.kso:5

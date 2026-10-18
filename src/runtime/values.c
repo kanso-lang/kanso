@@ -1064,7 +1064,7 @@ KValue k_keyed_check(KValue v, long long entries) {
         KValue r = k_shown(v, 1);
         fprintf(stderr, "%serror[runtime]:%s cannot read fields of %s; keyed reads take a record\n",
                 k_c_err(), k_c_off(), k_cstr(k_as_str(r)));
-        exit(1);
+        k_died();
     }
     if (entries >= k_as_rec(v)->nfields)
         k_die("a keyed read omits at least one field; reading every field is the positional form");
@@ -1091,7 +1091,7 @@ __attribute__((noreturn, noinline)) void k_die_destructure(KValue v, const char*
             "%serror[runtime]:%s cannot destructure %s as `%s`; bindings are irrefutable, "
             "so handle other types by dispatch first\n",
             k_c_err(), k_c_off(), k_cstr(k_as_str(shown)), ty);
-    exit(1);
+    k_died();
 }
 
 /* `.` field access: failures ride through; a non-record dies loudly. */
@@ -1102,26 +1102,26 @@ void k_no_field(KValue v, const char* name) {
         KValue shown = k_shown(v, 1);
         fprintf(stderr, "%serror[runtime]:%s `.` reads a field of a record, not %s\n",
                 k_c_err(), k_c_off(), k_cstr(k_as_str(shown)));
-        exit(1);
+        k_died();
     }
     KRec* r = k_as_rec(v);
     fprintf(stderr, "%serror[runtime]:%s `%s` has no field `%s`\n", k_c_err(), k_c_off(),
             k_type_name(r->type_id), name);
-    exit(1);
+    k_died();
 }
 
 __attribute__((noreturn, noinline)) static void k_die_got(const char* msg, KValue v) {
     KValue shown = k_shown(v, 0);
     fprintf(stderr, "%serror[runtime]:%s %s, got %s\n", k_c_err(), k_c_off(), msg,
             k_cstr(k_as_str(shown)));
-    exit(1);
+    k_died();
 }
 
 __attribute__((noreturn, noinline)) static void k_die_value(const char* msg, KValue v) {
     KValue shown = k_shown(v, 1);
     fprintf(stderr, "%serror[runtime]:%s %s, not %s\n", k_c_err(), k_c_off(), msg,
             k_cstr(k_as_str(shown)));
-    exit(1);
+    k_died();
 }
 
 KValue k_b_field(KValue v, const char* name) {
@@ -1133,7 +1133,7 @@ KValue k_b_field(KValue v, const char* name) {
         KValue shown = k_shown(v, 1);
         fprintf(stderr, "%serror[runtime]:%s `.` reads a field of a record, not %s\n",
                 k_c_err(), k_c_off(), k_cstr(k_as_str(shown)));
-        exit(1);
+        k_died();
     }
     KRec* r = k_as_rec(v);
     for (long long i = 0; i < r->nfields; i++) {
@@ -1141,7 +1141,7 @@ KValue k_b_field(KValue v, const char* name) {
     }
     fprintf(stderr, "%serror[runtime]:%s `%s` has no field `%s`\n", k_c_err(), k_c_off(),
             k_type_name(r->type_id), name);
-    exit(1);
+    k_died();
     KValue none; none.tag = K_NONE; none.payload = 0; return none;
 }
 
@@ -1168,7 +1168,7 @@ KValue k_keyed_field(KValue v, const char* name) {
         if (!strcmp(k_type_field_name(r->type_id, i), name)) return r->fields[i];
     fprintf(stderr, "%serror[runtime]:%s `%s` has no field `%s`\n", k_c_err(), k_c_off(),
             k_type_name(r->type_id), name);
-    exit(1);
+    k_died();
 }
 
 /* ryu d2s tables (adams, PLDI 2018): 125-bit multipliers, generated exactly */
@@ -2322,7 +2322,7 @@ KValue k_sub_ctor(long long type_id, long long want, KValue inner, const char* t
     if (k_sub_depth(inner, want) < 0) {
         fprintf(stderr, "%serror[runtime]:%s `%s` wraps %s %s\n", k_c_err(), k_c_off(), tyname,
                 k_article(parent), parent);
-        exit(1);
+        k_died();
     }
     return k_sub_wrap(type_id, inner);
 }
@@ -2343,7 +2343,7 @@ KValue k_upcast(KValue v, long long want, const char* tyname) {
             && ((KRec*)(intptr_t)cur.payload)->type_id == want) return cur;
         fprintf(stderr, "%serror[runtime]:%s `:%s` widens; this value is not %s %s\n",
                 k_c_err(), k_c_off(), tyname, k_article(tyname), tyname);
-        exit(1);
+        k_died();
     }
 }
 

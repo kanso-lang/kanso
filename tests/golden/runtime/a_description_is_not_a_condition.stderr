@@ -1,1 +1,2 @@
 error[runtime]: an if condition is true or false, got <io>
+  failed in a_description_is_not_a_condition/play at a_description_is_not_a_condition.kso:14

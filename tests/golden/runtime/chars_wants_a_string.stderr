@@ -1,1 +1,2 @@
 error[runtime]: chars takes a string
+  failed in chars_wants_a_string/play at chars_wants_a_string.kso:10

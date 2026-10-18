@@ -312,6 +312,8 @@ KValue k_thunk_new_pooled(long long site, int argc, ...) {
    registers that error path needs before it can test anything, and pays for
    them on the path that never dies. */
 __attribute__((noreturn, noinline)) void k_die(const char* msg);
+__attribute__((noreturn, noinline)) void k_died(void);
+extern const char* k_site;
 
 enum { K_SITE_BLACKHOLE = -1 };
 
@@ -435,7 +437,7 @@ static __attribute__((noinline)) KValue k_force_slow(KThunk* t) {
         if (k_memo_still_there(t)) return t->result;
         t->forced = K_MEMO_NONE;
     }
-    if (t->site == K_SITE_BLACKHOLE) k_die("a lazy binding demands its own value");
+    if (t->site == K_SITE_BLACKHOLE) { k_site = 0; k_die("a lazy binding demands its own value"); }
     if (K_COUNTING && !t->pooled) k_stat_thunk_evals++;
     KValue answer = d_thunk_eval(t->site, t->args);
     /* The computation can answer with a cell of its own: a deferred binding
@@ -3426,7 +3428,7 @@ KValue k_caf_freeze(KValue v) {
    that one answers the record it helped build. */
 KValue k_caf_complete(KValue built, KValue seeded) {
     if (built.tag == K_THUNK && seeded.tag == K_THUNK && built.payload == seeded.payload) {
-        k_die("a lazy binding demands its own value");
+        { k_site = 0; k_die("a lazy binding demands its own value"); }
     }
     KValue frozen = k_caf_freeze(built);
     /* A field that stored this cell mid-flight holds the SEED, and the frozen
@@ -3518,24 +3520,37 @@ __attribute__((noreturn, noinline)) static void k_die_got(const char* msg, KValu
 
 static long long k_itoa(char* buf, long long v);
 
+/* The site compiled code stamped before its last call that can stop the
+   program: the "<hako>\0<fn> at <file>:<line>" literal an err's origin uses,
+   so the place prints the way `born in` does (ruled on #1975). A death prints
+   the second half under its message; NULL is a death nothing stamped. */
+const char* k_site;
+
+__attribute__((noreturn, noinline)) void k_died(void) {
+    if (k_site)
+        fprintf(stderr, "%s  failed in %s%s\n", k_c_dim(), k_site + strlen(k_site) + 1,
+                k_c_off());
+    exit(1);
+}
+
 __attribute__((noreturn, noinline)) void k_die_arity(long long want, long long got) {
     char w[24], g[24];
     k_itoa(w, want);
     k_itoa(g, got);
     fprintf(stderr, "%serror[runtime]:%s this function takes %s argument(s), got %s\n",
             k_c_err(), k_c_off(), w, g);
-    exit(1);
+    k_died();
 }
 
 __attribute__((noreturn, noinline)) void k_die_overload(const char* name) {
     fprintf(stderr, "%serror[runtime]:%s no overload of `%s` matches these arguments\n",
             k_c_err(), k_c_off(), name);
-    exit(1);
+    k_died();
 }
 
 __attribute__((noreturn, noinline)) void k_die(const char* msg) {
     fprintf(stderr, "%serror[runtime]:%s %s\n", k_c_err(), k_c_off(), msg);
-    exit(1);
+    k_died();
 }
 
 /* A function value called with a count it does not take. A group names the

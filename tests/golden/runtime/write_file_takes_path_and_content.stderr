@@ -1,1 +1,2 @@
 error[runtime]: write_file takes a path and content strings
+  failed in write_file_takes_path_and_content/play at write_file_takes_path_and_content.kso:10

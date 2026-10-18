@@ -1,1 +1,2 @@
 error[runtime]: concat takes two lists
+  failed in concat_takes_two_lists/play at concat_takes_two_lists.kso:7

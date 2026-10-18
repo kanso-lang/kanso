@@ -1,1 +1,2 @@
 error[runtime]: `.` reads a field of a record, not <io>
+  failed in a_description_has_no_fields/play at a_description_has_no_fields.kso:19

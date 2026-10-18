@@ -1,1 +1,2 @@
 error[runtime]: this function takes 1 argument(s), got 2
+  failed in over_applied_lambda/play at over_applied_lambda.kso:3

@@ -16,6 +16,9 @@ impl<'a> Interp<'a> {
             Desc::Bind(..) | Desc::Rescue(..) | Desc::Annotate(..) => {
                 self.execute_chain(Rc::new(desc.clone()), executor)
             }
+            Desc::Insisted(inner, at, hako) => {
+                Ok(restamped(self.execute(inner, executor)?, at, hako))
+            }
             Desc::Join(_, _) => self.schedule(desc, executor),
             Desc::Sleep(ms) => {
                 executor.sleep(*ms);
@@ -298,6 +301,12 @@ impl<'a> Interp<'a> {
                     }
                 }
             },
+            Desc::Insisted(inner, at, hako) => match self.step(inner, executor)? {
+                Step::Blocked(ms, cont) => {
+                    Ok(Step::Blocked(ms, Rc::new(Desc::Insisted(cont, at.clone(), hako.clone()))))
+                }
+                Step::Done(v) => Ok(Step::Done(restamped(v, at, hako))),
+            },
             Desc::Rescue(inner, callee, raised) => match self.step(inner, executor)? {
                 Step::Blocked(ms, cont) => Ok(Step::Blocked(
                     ms,
@@ -395,6 +404,7 @@ pub fn render_plan(desc: &Desc, out: &mut String, step: &dyn Fn(&Value) -> Optio
             render_plan(inner, out, step);
             out.push_str("  rescue <continuation>\n");
         }
+        Desc::Insisted(inner, ..) => render_plan(inner, out, step),
         Desc::Annotate(inner, ..) => {
             render_plan(inner, out, step);
             out.push_str("  annotate <continuation>\n");

@@ -1,1 +1,2 @@
 error[runtime]: random takes a bound (an int), got x
+  failed in random_takes_a_bound/play at random_takes_a_bound.kso:8

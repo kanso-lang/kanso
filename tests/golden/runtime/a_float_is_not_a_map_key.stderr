@@ -1,1 +1,2 @@
 error[runtime]: 2.5 is not usable as a map key
+  failed in a_float_is_not_a_map_key/play at a_float_is_not_a_map_key.kso:5

@@ -13,5 +13,5 @@ line='            self.emit_cond(f, cond, &early_label, &rest_label, None)?;'
   echo "the guard's condition moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i 's/^            self.emit_cond(f, cond, &early_label, &rest_label, None)?;$/            let v = self.emit_expr(f, cond)?;\n            let v = self.maybe_force(f, v);\n            self.test_cond_value(f, v, \&early_label, \&rest_label, None);/' "$f"
+sed -i 's/^            self.emit_cond(f, cond, &early_label, &rest_label, None)?;$/            let v = self.emit_expr(f, cond)?;\n            let v = self.maybe_force(f, v);\n            self.test_cond_value(f, v, \&early_label, \&rest_label, None, cond.span());/' "$f"
 if grep -qxF "$line" "$f"; then exit 1; fi
