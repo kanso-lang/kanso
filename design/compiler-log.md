@@ -1669,7 +1669,34 @@ and 21 without the pass.
 Two leaks of an imported type's short name surfaced on the way and landed
 first, as #1993 and #1995. kq's copy of the decoder follows once kq repins.
 
-Rows, from CI: to come.
+Rows, from CI, against the tree with #1985 and #1996 in it. The decoder:
+`work_jsonbench` 832,975,500 -> 871,576,578, `work_runbench` 1,189,193,317 ->
+1,215,497,872, `work_oneshot` 13,286,600 -> 13,544,585, `work_livebench`
+1,498,216,646 -> 1,498,473,868, and `work_encodebench` 2,464,675,698 ->
+2,464,674,663. The others move by the size of a std/text with more in it:
+`work_basket` 31,158,162 -> 31,158,240, `work_digestbench` 5,992,785 ->
+5,992,876, `work_indexbench` 2,482,608 -> 2,482,712, `work_pendbench`
+194,087,911 -> 194,087,989, `work_readbench` 4,582,588 -> 4,582,666,
+`work_scanbench` 274,086 -> 274,177 and `work_widebench` 28,628,235 ->
+28,628,313. The twins are more code: `emitted_defines` 111 -> 127,
+`emitted_calls` 1,024 -> 1,216, `emitted_branches` 1,104 -> 1,300,
+`emitted_lines` 10,362 -> 12,289, `emitted_other_defines` 2,089 -> 2,137,
+`emitted_other_calls` 17,648 -> 18,224, `emitted_other_branches` 16,418 ->
+17,006, `emitted_other_lines` 149,547 -> 155,354, `text` 5,011,246 ->
+5,111,966, `emit_instructions` 6,061,105 -> 6,100,683,
+`codegen_instructions_dev` 115,010,801 -> 115,149,899 and
+`codegen_instructions_release` 449,091,786 -> 449,262,284. The front end
+reads 51 more library lines: `compile_instructions` 22,693,337 -> 24,958,388,
+`compile_allocs` 12,151 -> 13,741, `compile_peak_bytes` 552,167 -> 591,860,
+`front_end_visits` 6,363 -> 7,309, `front_end_rounds` 19 -> 17,
+`entry_instructions` 75,197,395 -> 75,588,739 and `library_instructions`
+74,884,283 -> 75,259,150. The interpreter makes one more call per string:
+`interp_instructions` 500,108,350 -> 571,513,912, `interp_allocs` 584,645 ->
+651,909 and `interp_peak_bytes` 590,970 -> 632,433. The tab:
+`browser_compile_instructions` 389,899,281 -> 420,614,367,
+`browser_compile_peak_bytes` 675,444 -> 752,488 and `browser_run_instructions`
+35,216,926 -> 37,494,108. Welfare falls 0.20, to 91.26, and the floor drops by
+exactly that under the rule for building a ruled part of the language.
 
 ## 2026-10-18 — A local binding hides an alias only where it is bound
 
