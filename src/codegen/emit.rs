@@ -3220,6 +3220,11 @@ impl<'a> Backend<'a> {
                                 None => self.origin_arg(f, span),
                             },
                         };
+                        // only a value that is not bytes stops the program,
+                        // and the oracle stops it inside the wrapper
+                        if sets[0] != BYTES {
+                            f.line_fmt(format_args!("store {origin}, ptr @k_site"));
+                        }
                         let t = f.tmp();
                         // three KValues and the origin pointer want seven of
                         // the six integer registers the abi has, so the last
@@ -3308,7 +3313,15 @@ impl<'a> Backend<'a> {
                         }
                         let sets: Vec<Set> = parts.iter().map(|e| f.set_of(e)).collect();
                         let sliced = infer::builtin_set("slice", &sets);
-                        let origin = self.origin_arg(f, span);
+                        // the wrapper's own line, as for `utf8` above: the
+                        // oracle calls the wrapper, and the err is born there
+                        let origin = match name.starts_with("builtin_") {
+                            true => self.origin_arg(f, span),
+                            false => match self.forwarder_origin(name, 1) {
+                                Some(o) => o,
+                                None => self.origin_arg(f, span),
+                            },
+                        };
                         let t = f.tmp();
                         f.line_fmt(format_args!(
                             "{t} = call %KValue @k_b_{door}_slice(%KValue {}, %KValue {}, %KValue {}, {origin})",
