@@ -86,8 +86,11 @@ fn hex_digit c
 fn hex_upper c
   if (64 < c and c < 71) (c - 55) (err "invalid hex digit")
 
+# The run up to the first quote or backslash is a span the scan proved
+# inside cs, so slicing it cannot miss. A string ending in its last byte
+# reaches one past the end, where span_to answers the empty run.
 fn parse_string cs p
-  string_scan cs p p
+  string_at cs (text/span_to cs p 34 92)
 
 # string bytes: 34 quote, 92 backslash; escapes name their targets
 fn str_char _ 34 p acc
@@ -109,10 +112,15 @@ fn str_char cs c p acc
 # the call the escape-free path makes — and the emitter fuses the append of a
 # slice into one copy, so the run costs no view header.
 fn str_chars cs p acc
-  str_run cs p (text/find2 cs p 34 92) acc
+  str_run cs (text/span_to cs p 34 92) acc
 
-fn str_run cs p n acc
-  str_char cs cs[n] n (text/append acc (builtin_slice_in cs p (n - 1)))
+# a backslash in the last byte leaves the next run starting past the end
+fn str_run cs none _
+  fail (length cs + 1) "unterminated string"
+
+fn str_run cs run acc
+  n = run.to + 1
+  str_char cs cs[n] n (text/append acc (text/slice run))
 
 fn str_escape cs 34 p acc
   str_chars cs (p + 2) (text/append acc 34)
@@ -201,28 +209,28 @@ fn unicode_at cs p acc code
     str_chars cs (p + 6) (text/append acc (text/from_code code))
     str_surrogate cs p acc code
 
-fn string_at cs 34 start p
-  parsed (p + 1) (string_ok p (text/utf8 (builtin_slice_in cs start (p - 1))))
+fn string_at cs none
+  fail (length cs + 1) "unterminated string"
 
-fn string_at cs 92 start p
+fn string_at cs run
+  string_end cs cs[run.to + 1] run
+
+fn string_end _ 34 run
+  p = run.to + 1
+  parsed (p + 1) (string_ok p (text/utf8 (text/slice run)))
+
+fn string_end cs 92 run
   fresh = text/bytes ""
-  str_chars cs p (text/append fresh (builtin_slice_in cs start (p - 1)))
+  str_chars cs (run.to + 1) (text/append fresh (text/slice run))
 
-fn string_at _ none _ p
-  fail p "unterminated string"
-
-fn string_at cs _ start p
-  string_scan cs start (p + 1)
+fn string_end _ none run
+  fail (run.to + 1) "unterminated string"
 
 fn string_ok p (err _)
   err (parse_failure p "invalid utf-8 in string")
 
 fn string_ok _ v
   v
-
-fn string_scan cs start p
-  n = text/find2 cs p 34 92
-  string_at cs cs[n] start n
 
 fn u_bytes acc b
   lo = hex_code (b % 16)

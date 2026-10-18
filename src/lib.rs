@@ -10,6 +10,7 @@ pub mod diag;
 pub mod dispatch;
 pub mod escape;
 pub mod eval;
+pub mod flat;
 pub mod hako;
 pub mod hash;
 pub mod infer;
@@ -41,6 +42,7 @@ pub fn compile(file: &str, source: &str, require_entry: bool) -> Result<ast::Pro
     let diags = check::check(&mut program, require_entry);
     desugar_field_reads(&mut program);
     measured_slices_are_slices(&mut program);
+    flat::flatten(&mut program);
     prune_unused_getters(&mut program);
     trmc::rewrite(&mut program);
     inline::inline_builtin_wrappers(&mut program);
@@ -227,6 +229,7 @@ fn compile_parsed_entry(
             rewrite::pass();
             phase::watched("desugar_field_reads", || desugar_field_reads(&mut merged));
             measured_slices_are_slices(&mut merged);
+            flat::flatten(&mut merged);
             rewrite::pass();
             phase::watched("prune_unused_getters", || prune_unused_getters(&mut merged));
             rewrite::pass();
@@ -435,6 +438,7 @@ fn compile_one(file: &str, source: &str, drop_unused: bool) -> Result<ast::Progr
     finish_program(&mut program);
     desugar_field_reads(&mut program);
     measured_slices_are_slices(&mut program);
+    flat::flatten(&mut program);
     prune_unused_getters(&mut program);
     trmc::rewrite(&mut program);
     inline::inline_builtin_wrappers(&mut program);
@@ -624,6 +628,7 @@ fn compile_library_beside(
     finish_program(&mut program);
     desugar_field_reads(&mut program);
     measured_slices_are_slices(&mut program);
+    flat::flatten(&mut program);
     prune_unused_getters(&mut program);
     trmc::rewrite(&mut program);
     inline::inline_builtin_wrappers(&mut program);

@@ -1,0 +1,19 @@
+import "std/text"
+
+# A span `text/span_to` answers straight into a group that only reads its
+# fields, slices it, or hands it on is carried as its three fields, so no
+# record is built for any of the nine words: sh_rec is 0. Built as a record,
+# each word cost one.
+fn letters bs p total
+  counted bs (text/span_to bs p 32 32) total
+
+fn counted _ none total
+  total
+
+fn counted bs run total
+  more = total + length (text/slice run)
+  if (length bs <= run.to) more (letters bs (run.to + 2) more)
+
+pub play =
+  words = text/bytes "the quick brown fox jumps over the lazy dog"
+  print (letters words 1 0)

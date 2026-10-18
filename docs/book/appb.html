@@ -81,6 +81,7 @@ extra_css: /book/book.css
 <a href="#b-slice-bang"><code>text/slice!</code></a>
 <a href="#b-sleep"><code>time/sleep</code></a>
 <a href="#b-span"><code>text/span</code></a>
+<a href="#b-span_of"><code>text/span_of</code></a>
 <a href="#b-span_to"><code>text/span_to</code></a>
 <a href="#b-span_to_below"><code>text/span_to_below</code></a>
 <a href="#b-sqrt"><code>math/sqrt</code></a>
@@ -418,6 +419,10 @@ shipping/order "tea" 2 "placed"</code></pre>
 <h3 id="b-span"><code>text/span</code></h3>
 <p class="builtin-sig"><code>type text/span — whole, from, to</code></p>
 <p>a range of positions inside one string or byte list. <code>whole</code> is the value, and <code>from</code> and <code>to</code> are 1-based and inclusive, counted the way <code>text/slice</code> counts; an empty range has <code>to</code> one less than <code>from</code>. the fields read like any record's, as <code>run.from</code>. only <code>std/text</code> builds a span, and only after checking that the range lies inside <code>whole</code>, so <code>text/slice</code> on a span cannot miss and answers no <code>none</code>.</p>
+
+<h3 id="b-span_of"><code>text/span_of</code></h3>
+<p class="builtin-sig"><code>text/span_of (string | int[]) int int → text/span | none</code></p>
+<p>the span of a value from one position to another, counted the way <code>text/slice</code> counts, when that range lies inside the value, and <code>none</code> when it does not. <code>span_of bs 2 4</code> covers the second through fourth bytes. an empty range, with <code>to</code> one less than <code>from</code>, may sit anywhere from the start to one past the end, and anything wider or further out is <code>none</code>. it is the bounds check the other functions here make, written out for a range you already hold.</p>
 
 <h3 id="b-span_to"><code>text/span_to</code></h3>
 <p class="builtin-sig"><code>text/span_to int[] int int int → text/span | none</code></p>

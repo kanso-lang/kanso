@@ -10,6 +10,13 @@ pub type span
 pub fn slice run:span
   builtin_slice_in run.whole run.from run.to
 
+# The span of s from `from` to `to`, when that range lies inside s, and
+# none otherwise. An empty run (`to` one less than `from`) may sit anywhere
+# from the start of s to one past its end.
+pub fn span_of s from to
+  return none if from < 1 or to < from - 1 or length s < to
+  span s from to
+
 # The span from p up to the byte before the first a or b, or to the end of
 # cs when neither comes. p may be one past the end, which answers the empty
 # span there; anywhere else outside cs answers none.

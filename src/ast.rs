@@ -449,6 +449,15 @@ pub fn spoken(text: &str) -> std::borrow::Cow<'_, str> {
     if split_qual(text).map_or(text, |(_, bare)| bare).starts_with("Merge_") {
         return std::borrow::Cow::Borrowed(crate::MERGE);
     }
+    // a group the compiler copied to carry a span's fields is the group the
+    // author wrote
+    let (owner, bare) = split_qual(text).unwrap_or(("", text));
+    if let Some(original) = crate::flat::twin_of(bare) {
+        return match owner.is_empty() {
+            true => std::borrow::Cow::Borrowed(original),
+            false => std::borrow::Cow::Owned(format!("{owner}/{original}")),
+        };
+    }
     if let Some(group) = text.strip_prefix(BARE_MARK) {
         let short = group.rsplit(BARE_MARK).next().unwrap_or(group);
         return std::borrow::Cow::Borrowed(short);
