@@ -104228,3 +104228,21 @@ Owes, on #1890: the change on every engine; micro goldens for a range past the
 end, a start past the end and a range that ends exactly at the end; the
 exhaustiveness check sees `none` in `text/slice`'s answer; lib, samples and
 sibling repositories that leaned on clamping moved to dispatch on `none`.
+
+## 2026-10-13 — gavel: `list/concat` joins two lists, and strings join by interpolation
+
+Clay ruled #1906 on the committee's view, on the condition that it rest on
+first principles rather than on what the language already had. Appendix B
+described `text/concat` as joining two lists or two strings; every engine
+joined only lists, and a string argument stopped at run time.
+
+**The ruling, and its reasons.** Joining two lists is `list/concat a b`, in
+std/list, and `text/concat` goes. A function lives with the type it works on,
+so a list operation belongs in `list`. There is one way to combine strings:
+interpolation (`"{a}{b}"`), with `text/join` for a list of pieces. A `concat`
+for strings would be a second way, so none is added.
+
+Owes, on #1906: `list/concat` on every engine with `text/concat` removed and
+its callers moved; the checker refuses a string argument to `list/concat`; an
+error golden for a call to the removed name that points at `list/concat`;
+appendix B's entry rewritten under std/list.

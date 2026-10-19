@@ -1,0 +1,8 @@
+import "std/text"
+
+# `slice!` handed straight to `utf8` is read in place, and a value `utf8`
+# cannot take still stops the program inside `text/utf8`, where the two steps
+# would have stopped it.
+word = "kanso"
+
+pub play = text/slice! word 1 2 .> text/utf8 .> print
