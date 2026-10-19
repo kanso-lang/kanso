@@ -2556,10 +2556,16 @@ fn collapse_diamonds(program: &mut ast::Program) {
 
 include!("lib/imports.rs");
 
-/// The stack-exhaustion message, one sentence on every engine.
-pub fn stack_exhausted() -> String {
-    "error[runtime]: the program ran out of stack: recursion went deeper than the stack holds"
-        .to_string()
+/// The stack-exhaustion message, one sentence on every engine, followed by
+/// the place the outermost growing cycle was entered when one was recorded
+/// (src/deep.rs).
+pub fn stack_exhausted(place: Option<&str>) -> String {
+    let said =
+        "error[runtime]: the program ran out of stack: recursion went deeper than the stack holds";
+    match place {
+        Some(place) => format!("{said}\n  failed in {place}"),
+        None => said.to_string(),
+    }
 }
 
 /// Every direct sub-expression, handed to `f` as it is found.

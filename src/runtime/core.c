@@ -318,6 +318,13 @@ extern const char* k_site;
    and is still active (src/deep.rs). */
 extern const char* k_deep_site;
 
+/* The place spelled for a reader, or NULL when no growing cycle was entered.
+   The page's host calls it after the wasm call stack traps. */
+const char* k_deep_place(void) {
+    return k_deep_site ? k_deep_site + strlen(k_deep_site) + 1 : NULL;
+}
+const char* k_deep_place(void);
+
 enum { K_SITE_BLACKHOLE = -1 };
 
 KValue k_caf_blackhole(void) {

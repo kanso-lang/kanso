@@ -2483,7 +2483,12 @@ impl<'a> Interp<'a> {
         answer
     }
 
-    fn call_closure_inner(&self, closure: &ClosureData, args: Vec<Value>, span: Span) -> EvalResult {
+    fn call_closure_inner(
+        &self,
+        closure: &ClosureData,
+        args: Vec<Value>,
+        span: Span,
+    ) -> EvalResult {
         let mut flow = self.closure_flow(closure, args, span)?;
         // the lambda whose body wrote the call being made, which places a
         // call that fails before anything it calls has run

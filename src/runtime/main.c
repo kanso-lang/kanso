@@ -76,9 +76,8 @@ static void k_on_segv(int sig, siginfo_t* info, void* context) {
                 "%serror[runtime]:%s the program ran out of stack: recursion went "
                 "deeper than the stack holds\n",
                 k_c_err(), k_c_off());
-        if (k_deep_site)
-            fprintf(stderr, "%s  failed in %s%s\n", k_c_dim(), k_deep_site + strlen(k_deep_site) + 1,
-                    k_c_off());
+        if (k_deep_place())
+            fprintf(stderr, "%s  failed in %s%s\n", k_c_dim(), k_deep_place(), k_c_off());
         _exit(1);
     }
     signal(sig, SIG_DFL);

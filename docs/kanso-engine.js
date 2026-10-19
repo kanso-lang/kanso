@@ -320,8 +320,13 @@ async function linkAndRun(seed) {
     if (e instanceof ProcExit) {
       code = e.code;
     } else if (e instanceof RangeError) {
-      /* the wasm call stack ran out: the sentence every engine prints */
-      wasm.kanso_stack_exhausted();
+      /* the wasm call stack ran out: the sentence every engine prints, and
+         the place the runtime recorded for the outermost growing cycle */
+      const at = rt.k_deep_place() >>> 0;
+      const bytes = new Uint8Array(rt.memory.buffer);
+      const place = at ? new TextDecoder().decode(bytes.subarray(at, bytes.indexOf(0, at))) : '';
+      const { ptr, len } = writeInput(place);
+      wasm.kanso_stack_exhausted(ptr, len);
       host.err.push(new TextEncoder().encode(readOut()));
       code = 1;
     } else {

@@ -4302,7 +4302,8 @@ impl<'a> Backend<'a> {
             if let Some(lit) = &deep {
                 let _ = writeln!(conv, "  %deep = load ptr, ptr @k_deep_site");
                 let _ = writeln!(conv, "  %deep_empty = icmp eq ptr %deep, null");
-                let _ = writeln!(conv, "  %deep_set = select i1 %deep_empty, ptr @{lit}, ptr %deep");
+                let _ =
+                    writeln!(conv, "  %deep_set = select i1 %deep_empty, ptr @{lit}, ptr %deep");
                 let _ = writeln!(conv, "  store ptr %deep_set, ptr @k_deep_site");
             }
             let _ = writeln!(conv, "  %r = call tailcc %KValue @{sym}({})", call_args.join(", "));

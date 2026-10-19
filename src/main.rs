@@ -2300,7 +2300,7 @@ fn ended_by_signal(status: &std::process::ExitStatus) -> String {
     use std::os::unix::process::ExitStatusExt;
     const SIGSEGV: i32 = 11;
     match status.signal() {
-        Some(SIGSEGV) => kanso::stack_exhausted(),
+        Some(SIGSEGV) => kanso::stack_exhausted(None),
         Some(other) => format!("error[runtime]: the program was ended by signal {other}"),
         None => "error[runtime]: the program ended without an exit code".to_string(),
     }

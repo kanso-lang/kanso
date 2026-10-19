@@ -236,11 +236,6 @@ impl Toolchain {
         let rt = runtime().expect("a spec that runs a program asks for the page first");
         match wasm32::execute(rt, &side, data, table, &[("KANSO_SEED", SEED_TEXT)]) {
             Ok(ran) => Answer::Ran(ran.exit, ran.out + &ran.err),
-            // Native catches a stack overflow and says so; wasm's call stack
-            // ends in a trap, and the page answers it with the same sentence.
-            Err(e) if e.contains("call stack exhausted") => {
-                Answer::Ran(1, format!("{}\n", kanso::stack_exhausted()))
-            }
             Err(e) => Answer::Ran(-1, format!("the host stopped it: {e}")),
         }
     }

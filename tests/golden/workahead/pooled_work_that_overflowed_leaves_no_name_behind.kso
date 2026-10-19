@@ -1,0 +1,26 @@
+# The pool forces `size n` while the program is parked, and that recursion
+# runs out of stack there. The pool drops the work, and it puts back the
+# record an overflow names, which the jump out skipped. The program as
+# written then runs out of stack in `depth`, and that is the name it gives,
+# not `deep`'s, which nothing is running any more (kanso#1991).
+import "std/time"
+
+fn deep 0
+  [0]
+
+fn deep n
+  [n (deep (n - 1))]
+
+fn size n
+  length (deep n)
+
+fn depth 0
+  0.0
+
+fn depth k
+  0.5 + depth (k - 1)
+
+fn report n
+  sleep 10 .> (_ -> print "first {depth n}") .> (_ -> print "then {size n}")
+
+report 1000000

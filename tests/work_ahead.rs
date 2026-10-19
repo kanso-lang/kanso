@@ -113,6 +113,15 @@ fn a_pooled_cell_fails_where_it_is_read() {
     the_transcript_is_the_one_written("play", name, &program);
 }
 
+/// Pooled work that ran out of stack put the overflow record back as it
+/// dropped the work, so a later overflow elsewhere names its own cycle.
+#[test]
+fn pooled_work_that_overflowed_leaves_no_name_behind() {
+    let name = "pooled_work_that_overflowed_leaves_no_name_behind";
+    let program = corpus().join(format!("{name}.kso"));
+    the_transcript_is_the_one_written("play", name, &program);
+}
+
 /// The rig the compiler page tells a reader to build. Nothing else reads
 /// `bench/workahead`, and when files that declare beside their statements
 /// became libraries, both programs stopped building without a test noticing.
