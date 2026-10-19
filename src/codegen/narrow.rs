@@ -3,36 +3,6 @@
 // text that applies both. codegen.rs reads this file with include!, so these
 // items stay in the codegen module, as ir_scan.rs and the others do.
 
-/// `tailcc` where it is needed, the C convention everywhere else.
-///
-/// A `musttail` call may cross an arity or a type only under `tailcc`, so the
-/// beat machinery's guaranteed tail calls need it. Every other call does not,
-/// and paying for it is not free: a non-tail `call tailcc` whose arguments do
-/// not all fit in registers is miscompiled on arm64 — five KValues want ten
-/// argument registers and there are eight, and the two that spill come back
-/// holding each other's values (task #70). So the convention is kept for the
-/// functions a musttail reaches, on both ends of every such edge, and dropped
-/// from the rest.
-///
-/// A function that needs the convention AND spills is reached through a
-/// trampoline: one `tailcc` call per frame is lowered correctly, and it is
-/// only the second one in a frame that comes back wrong.
-///
-/// The set is read out of the emitted text rather than recomputed, because a
-/// second copy of "when do we musttail" would drift from the first and the
-/// symptom of drift is silent corruption.
-///
-/// Only code is read. A line opening with `@` defines a global, a string
-/// constant among them, and a constant's bytes are the program's: a program
-/// printing `call tailcc` once lost the words from its constant, kept the
-/// declared length, and clang refused the module.
-/// Whether `line` holds `needle`, found from the byte `at` places into it.
-/// `str::contains` builds a substring searcher for every call, about a
-/// hundred instructions before it reads a byte, and `narrow_tailcc` asks two
-/// or three of these of every line it walks: 178 calls on a one-line
-/// program's start-up. The anchor byte is found by memchr, and the needle is
-/// compared where one lands. Pick `at` so the anchor is rare in the emitter's
-/// lines.
 /// The lines of `text` that hold `needle`, each once and in order, as byte
 /// ranges without the newline. The same lines `text.lines()` filtered by
 /// `contains(needle)` would give, for text with no carriage returns, which
@@ -69,12 +39,42 @@ fn merged_lines(
     })
 }
 
+/// Whether `line` holds `needle`, found from the byte `at` places into it.
+/// `str::contains` builds a substring searcher for every call, about a
+/// hundred instructions before it reads a byte, and `narrow_tailcc` asks two
+/// or three of these of every line it walks: 178 calls on a one-line
+/// program's start-up. The anchor byte is found by memchr, and the needle is
+/// compared where one lands. Pick `at` so the anchor is rare in the emitter's
+/// lines.
 fn holds(line: &str, needle: &str, at: usize) -> bool {
     let anchor = needle.as_bytes()[at] as char;
     line.match_indices(anchor)
         .any(|(i, _)| i >= at && line.as_bytes()[i - at..].starts_with(needle.as_bytes()))
 }
 
+/// `tailcc` where it is needed, the C convention everywhere else.
+///
+/// A `musttail` call may cross an arity or a type only under `tailcc`, so the
+/// beat machinery's guaranteed tail calls need it. Every other call does not,
+/// and paying for it is not free: a non-tail `call tailcc` whose arguments do
+/// not all fit in registers is miscompiled on arm64 — five KValues want ten
+/// argument registers and there are eight, and the two that spill come back
+/// holding each other's values (task #70). So the convention is kept for the
+/// functions a musttail reaches, on both ends of every such edge, and dropped
+/// from the rest.
+///
+/// A function that needs the convention AND spills is reached through a
+/// trampoline: one `tailcc` call per frame is lowered correctly, and it is
+/// only the second one in a frame that comes back wrong.
+///
+/// The set is read out of the emitted text rather than recomputed, because a
+/// second copy of "when do we musttail" would drift from the first and the
+/// symptom of drift is silent corruption.
+///
+/// Only code is read. A line opening with `@` defines a global, a string
+/// constant among them, and a constant's bytes are the program's: a program
+/// printing `call tailcc` once lost the words from its constant, kept the
+/// declared length, and clang refused the module.
 #[cfg(test)]
 fn narrow_tailcc(ir: String) -> String {
     narrowed_in_place(ir, 0)
