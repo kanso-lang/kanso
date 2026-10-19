@@ -1784,4 +1784,17 @@ allocations against 164. The runtime corpus's two insisting goldens,
 `read_missing_file` (one that has not run), name the same lines as before on
 both engines.
 
-Rows, from CI: ROWS
+The first build of this change read deepbench 2% higher with every counter
+unchanged. `k_exec` and `k_step` had each shrunk by about the size of
+`k_worded_step`: the insisting branch made the step big enough that the C
+compiler stopped inlining it into the two chain walks. It is static and
+always inlined now, and the insisting branch is a cold call out of line.
+
+Rows, from CI. Every binary's `.text` is 1,824 bytes smaller. deepbench
+falls 663,690 to 406,723,831, runbench 150,682 to 1,221,426,280 and
+widebench 32,285 to 28,596,028; the run vein falls by two allocations,
+run_allocs 1,872,051. work_livebench rises 36,885 to 1,498,510,746,
+work_readbench 1,264 to 4,583,930, work_oneshot 297 to 13,543,783 and
+browser_run_instructions 133 to 37,494,262, by mechanisms not isolated. The
+cohort spec's `evac_bytes` pin reads 800,720, the closure's 48 bytes fewer.
+Welfare rises, and the floor is banked.
