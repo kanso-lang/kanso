@@ -1,0 +1,15 @@
+import "std/text"
+
+# An insisting form whose box has already settled hands its value on with
+# nothing built around it, so the twenty slices below cost what they would
+# through `slice` inside `effect`: 104 allocations. Each used to cost three
+# more, a step and the closure that held the caller's line.
+word = "kanso spans"
+
+fn cut 0 total
+  effect total
+
+fn cut n total
+  text/slice! word 1 5 .> (piece -> cut (n - 1) (total + length piece))
+
+pub play = cut 20 0 .> print

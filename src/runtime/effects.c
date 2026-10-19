@@ -322,9 +322,17 @@ KValue k_call_decided(KValue f, KValue a) {
    the value channel and lets a failure past untouched; `rescue` (dtag 29)
    reads the failure channel and lets a value past. The interpreter's
    `worded_step` is the oracle for both. */
+static KValue k_insisted_err(KValue failure, const char* site);
+
 KValue k_worded_step(long long dtag, KValue yielded, KValue callee) {
     int failed = !k_not_failure(yielded);
-    if (dtag == 29) return failed ? k_call_decided(callee, yielded) : yielded;
+    if (dtag == 29) {
+        if (!failed) return yielded;
+        /* an insisting form's step holds its site where a rescue holds its
+           function, so it builds no closure (k_b_insisted) */
+        if (callee.tag == K_INT) return k_insisted_err(yielded, (const char*)(intptr_t)callee.payload);
+        return k_call_decided(callee, yielded);
+    }
     return failed ? yielded : k_call_decided(callee, yielded);
 }
 
@@ -397,8 +405,8 @@ KValue k_b_annotate(KValue subject, KValue callback, const char* origin) {
    form's own package raised is pointed at the call that insisted: the trace
    line moves and the package stays, so an arm asking who raised it hears the
    same answer. `site` is the literal "<form's package>\0<caller> at
-   <file>:<line>\0". A box carries the wrapper as a rescue step, which hands it
-   the failure once the box has run. */
+   <file>:<line>\0". A box carries the site as a rescue step's callee, and
+   k_worded_step hands it the failure once the box has run. */
 static KValue k_insisted_err(KValue failure, const char* site) {
     if (failure.tag != K_ERR) return failure;
     KErrBox* old = k_err_box(failure);
@@ -408,16 +416,17 @@ static KValue k_insisted_err(KValue failure, const char* site) {
     KValue v; v.tag = K_ERR; v.payload = k_ptr(box); return v;
 }
 
-static K_CLOSCC KValue k_insisted_wrap(void* env, KValue failure) {
-    KValue site = k_env_get(env, 0);
-    return k_insisted_err(failure, (const char*)(intptr_t)site.payload);
-}
-
 KValue k_b_insisted(KValue answer, const char* site) {
     if (answer.tag != K_DESC) return k_insisted_err(answer, site);
+    /* a box that has already settled, as `effect` builds one, is decided
+       here: its value passes, and its failure is pointed now */
+    KDesc* d = k_as_desc(answer);
+    if (d->dtag == 31) {
+        if (k_not_failure(d->x)) return answer;
+        return k_settled(k_insisted_err(d->x, site));
+    }
     KValue s; s.tag = K_INT; s.payload = (long long)(intptr_t)site;
-    KValue caps[1]; caps[0] = s;
-    return k_mkdesc(29, answer, k_closure(k_insisted_wrap, 1, 1, caps, 0));
+    return k_mkdesc(29, answer, s);
 }
 
 /* The work-ahead pool (#1856): the compiler defines it. At the first park it
