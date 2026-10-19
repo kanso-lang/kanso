@@ -97,7 +97,11 @@ impl Deep {
     /// when `callee` is on a cycle that grows the stack and `caller` is not on
     /// that cycle. `caller` is `None` for a call through a value, which
     /// records wherever it comes from.
-    pub fn entering(&self, caller: Option<(&str, usize)>, callee: (&str, usize)) -> Option<(usize, Span)> {
+    pub fn entering(
+        &self,
+        caller: Option<(&str, usize)>,
+        callee: (&str, usize),
+    ) -> Option<(usize, Span)> {
         let to = self.cycle(callee)?;
         let from = caller.and_then(|c| self.cycle(c));
         match from == Some(to) {
