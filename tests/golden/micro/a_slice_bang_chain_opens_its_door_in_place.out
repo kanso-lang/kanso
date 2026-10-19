@@ -1,0 +1,10 @@
+<kanso>
+<>
+<>
+slice! takes a range inside the value, got 10 to 13
+k:42
+slice! takes a range inside the value, got 7 to 20
+43
+"ka" is not an integer
+5.0
+"" is not a number

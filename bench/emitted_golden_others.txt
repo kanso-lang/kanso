@@ -252,4 +252,4 @@ indexbench defines=21 calls=70 branches=48 lines=747
 digestbench defines=134 calls=920 branches=928 lines=8060
 readbench defines=21 calls=70 branches=44 lines=720
 livebench defines=160 calls=1436 branches=1458 lines=14090
-runbench defines=750 calls=7011 branches=6318 lines=55010
+runbench defines=782 calls=7211 branches=6470 lines=56265

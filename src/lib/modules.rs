@@ -108,6 +108,11 @@ thread_local! {
 /// interpolation's `to_string`, and the arm a tie dispatches to.
 const COMPILER_ROOTS: [&str; 5] = ["fold", "bump", "file_under", "to_string", "tie"];
 
+/// Groups the compiler calls beside a shipped one the program does spell,
+/// so they are reached with it: `slice! s from to .> utf8` asks std/text's
+/// `past?` (src/flat.rs).
+const IMPLIED_ROOTS: [(&str, &[&str]); 1] = [("slice!", &["past?"])];
+
 /// Adds every word `text` spells to `into`: a run of letters, digits and
 /// underscores, with and without a trailing `!` or `?`. It reads more than
 /// names (keywords, words in strings and comments), which can only keep a
@@ -208,6 +213,13 @@ fn prune_shipped(
                 kept[i] = true;
                 moved = true;
                 reach_words(&source[d.start..d.end], roots);
+                if let Some((from, to)) = d.name {
+                    for (name, implied) in IMPLIED_ROOTS {
+                        if &source[from..to] == name {
+                            roots.extend(implied.iter().map(|n| n.to_string()));
+                        }
+                    }
+                }
             }
         }
         if !moved {

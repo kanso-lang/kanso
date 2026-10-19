@@ -1,0 +1,20 @@
+import "std/text"
+
+# A range the caller has already bounded, read with `slice!` and handed
+# straight to a door (#1943): a year, a month and a word out of one line.
+line = text/bytes "2026 10 18 23:59 kanso spans"
+
+fn lap 0 sum
+  effect sum
+
+fn lap n sum
+  text/slice! line 1 4 .> text/to_int .> (y -> month n (sum + y))
+
+fn month n sum
+  text/slice! line 6 7 .> text/to_int .> (m -> word n (sum + m))
+
+fn word n sum
+  text/slice! line 18 22 .> text/utf8 .> (w -> lap (n - 1) (sum + length w))
+
+pub fn total n
+  lap n 0

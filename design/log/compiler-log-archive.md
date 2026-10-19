@@ -104246,3 +104246,22 @@ Owes, on #1906: `list/concat` on every engine with `text/concat` removed and
 its callers moved; the checker refuses a string argument to `list/concat`; an
 error golden for a call to the removed name that points at `list/concat`;
 appendix B's entry rewritten under std/list.
+
+## 2026-10-13 — gavel: `list/to_sorted` builds the `sorted` that `find` bisects
+
+Clay ruled #1903. std/list declares `pub type sorted`, and `find` has an arm
+for it that bisects instead of scanning (archive, 2026-07-24, "find gets its
+fast arm"). Only std/list may build a `sorted`, and it exposed no function that
+does, so no caller could reach the fast arm.
+
+**The ruling.** `list/to_sorted xs` sorts `xs` by the order `list/sort` uses and
+answers it as a `sorted`. It takes any list `list/sort` takes. Because it sorts
+as it wraps, a `sorted` is always in order and the bisect cannot answer wrong.
+No function wraps a list unchecked. When type parameters are built (#1941),
+`sorted` becomes `<k>sorted` and this function's signature follows without a
+change in meaning.
+
+Owes, on #1903: `list/to_sorted` in std/list; the bisect tests back in
+`list_test.kso` through it; a micro golden in which `find` on a `to_sorted`
+answers the same as on the plain list; the counter that shows the bisect ran;
+appendix B.

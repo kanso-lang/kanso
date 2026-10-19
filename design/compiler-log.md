@@ -21,25 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-13 — gavel: `list/to_sorted` builds the `sorted` that `find` bisects
-
-Clay ruled #1903. std/list declares `pub type sorted`, and `find` has an arm
-for it that bisects instead of scanning (archive, 2026-07-24, "find gets its
-fast arm"). Only std/list may build a `sorted`, and it exposed no function that
-does, so no caller could reach the fast arm.
-
-**The ruling.** `list/to_sorted xs` sorts `xs` by the order `list/sort` uses and
-answers it as a `sorted`. It takes any list `list/sort` takes. Because it sorts
-as it wraps, a `sorted` is always in order and the bisect cannot answer wrong.
-No function wraps a list unchecked. When type parameters are built (#1941),
-`sorted` becomes `<k>sorted` and this function's signature follows without a
-change in meaning.
-
-Owes, on #1903: `list/to_sorted` in std/list; the bisect tests back in
-`list_test.kso` through it; a micro golden in which `find` on a `to_sorted`
-answers the same as on the plain list; the counter that shows the bisect ran;
-appendix B.
-
 ## 2026-10-13 — gavel: names for the library gaps the ports hit
 
 Clay ruled #1914 one name at a time. Each name was decided from what it should
@@ -1708,6 +1689,76 @@ Rows, against main with #1985 in it: `compile_instructions` 22,693,337 ->
 584,659 -> 584,645, and `browser_compile_instructions` 389,899,281 ->
 390,131,214. The floor drops by the cost under the rule for a change that
 makes the language work as specified.
+
+## 2026-10-19 — a `slice!` handed straight to a door reads the range in place
+
+#1943's last owed item: the emitter fusing `slice! … .> utf8`, `.> append
+acc`, `.> to_int` and `.> to_float` as it fuses the nested spellings (the
+2026-10-14 gavel, corrected the same day to the chain spellings). The decoder
+moved onto spans in #1994 and no longer needs it, so what is left is the
+spelling a program uses for a range it has already bounded.
+
+Under the corpus-first gavel the shape went into the run program first, as a
+phase called `insist`: 5,000 laps reading a year, a month and a word out of one
+line. Measured on main at kanso#1994, it costs 11,955,088 instructions built
+alone, 0.97% of the program, and adds 25 bytes to the peak. Welfare's run
+baselines were re-based by the readings with the phase over without it on that
+compiler, 1,227,450,174 over 1,215,496,727 and 5,063,225 over 5,063,200, so
+adding the phase cost that compiler nothing.
+
+The rewrite runs at the start of the flatten pass. `text/slice! s from to .>
+text/utf8` becomes `if (text/past? s from to) (text/slice! s from to) (effect
+(text/utf8 (builtin_slice s from to)))`, and the emitter fuses the door in the
+third argument. `past?` is std/text's statement of where `slice` answers none,
+and the prune that drops a shipped function nobody names keeps it whenever
+`slice!` is kept. A range that leaves the value is still the `slice!` the
+author wrote, failing on their line. The arguments are read twice, so the
+rewrite takes only names, integers and `+`, `-` and `*` on them.
+
+The first version was a `!` helper in std/text per door. It saved the slice
+but was itself an insisting form, so an err the door raised, `"ka" is not an
+integer`, was pointed at the caller's line where the two steps leave it in
+`text/to_int`. An optimisation should not change what a program reports, so
+the helper went.
+
+Three faults turned up on the way, each with a golden that goes red without
+its fix:
+
+- The `to_int` and `to_float` doors gave an err the call site's origin. The
+  oracle runs the wrapper, so the err is born in `text/to_int`. A rescue on
+  the caller's own line lets through a failure born on that line, so on native
+  alone the err escaped `.?`. The doors now take the wrapper's line, as the
+  `utf8` door did. `a_slice_bang_chain_opens_its_door_in_place` reaches the
+  endpoint on native without it.
+- The `utf8` door stamped no site, so a value it cannot take stopped the
+  program naming whatever line had stamped last (`text/past?`). It stamps the
+  wrapper's line unless the value is known to be bytes.
+  `a_door_a_slice_bang_opens_fails_inside_the_door` pins it.
+- `.> (&text/append acc)` was refused: the formatter called the parentheses
+  redundant, and without them the chain step refuses held arguments. After a
+  chain operator the step is one atom, and the formatter now says so.
+
+The new mem fixture `a_slice_bang_chain_builds_no_slice` reads 45 allocations
+against 95 for the two steps. Built alone, the phase reads 6,081,704 against
+11,955,088. Each step still builds an `effect` box and the closure for the
+next step, which is what a chain costs.
+
+Rows, from CI. The phase's own work moves the run program: work_runbench
+lands on 1,221,576,962 against 1,215,497,872 without it, and its `.text` row,
+text, on 5,132,910 in total. The run vein lands on run_allocs 1,872,053,
+twelve a lap, run_alloc_bytes 303,335,164, run_beat_iters 92,018,
+run_evac_allocs 49,265, run_evac_bytes 14,919,712, run_perm_allocs 101,
+run_perm_live_bytes 15,825, run_perm_peak_bytes 146,913 (the line, 25 bytes),
+run_sh_bytes 4,217,520 and run_utf8_bytes 424,489. The emitted code for the
+other benchmarks, runbench's among them, lands on emitted_other_lines 156,609,
+emitted_other_calls 18,424, emitted_other_branches 17,158 and
+emitted_other_defines 2,169. compile_instructions 25,083,410,
+entry_instructions 76,579,726 and library_instructions 76,283,760 rise for the
+rewrite and `past?`, and browser_run_instructions lands on 37,494,129, 21
+more. emit_instructions 6,095,522, interp_instructions 570,698,408 and the
+tab's compile, 419,334,691, fall, and oneshot and livebench fall by 1,099 and
+7, by mechanisms not isolated. Welfare rises 0.02 and the floor is banked at
+91.28.
 
 ## 2026-10-19 — an insisting form builds no closure, and no step once its box has settled
 
