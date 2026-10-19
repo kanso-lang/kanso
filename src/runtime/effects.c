@@ -322,15 +322,20 @@ KValue k_call_decided(KValue f, KValue a) {
    the value channel and lets a failure past untouched; `rescue` (dtag 29)
    reads the failure channel and lets a value past. The interpreter's
    `worded_step` is the oracle for both. */
-static KValue k_insisted_err(KValue failure, const char* site);
+static __attribute__((noinline, cold)) KValue k_insisted_step(KValue failure, KValue site);
 
-KValue k_worded_step(long long dtag, KValue yielded, KValue callee) {
+/* Inlined into the two chain walks (k_exec, k_step), as it was before the
+   insisting branch made it big enough for the inliner to decline: out of
+   line it cost deepbench 2%. */
+static inline __attribute__((always_inline)) KValue k_worded_step(long long dtag, KValue yielded,
+                                                                 KValue callee) {
     int failed = !k_not_failure(yielded);
     if (dtag == 29) {
         if (!failed) return yielded;
         /* an insisting form's step holds its site where a rescue holds its
-           function, so it builds no closure (k_b_insisted) */
-        if (callee.tag == K_INT) return k_insisted_err(yielded, (const char*)(intptr_t)callee.payload);
+           function, so it builds no closure (k_b_insisted). The branch is
+           kept out of line: every chain step passes through here. */
+        if (__builtin_expect(callee.tag == K_INT, 0)) return k_insisted_step(yielded, callee);
         return k_call_decided(callee, yielded);
     }
     return failed ? yielded : k_call_decided(callee, yielded);
@@ -414,6 +419,10 @@ static KValue k_insisted_err(KValue failure, const char* site) {
     KErrBox* box = k_err_box_new(old->reason, site + strlen(site) + 1, old->hako, old->hops,
                                  old->cause, old->merged);
     KValue v; v.tag = K_ERR; v.payload = k_ptr(box); return v;
+}
+
+static __attribute__((noinline, cold)) KValue k_insisted_step(KValue failure, KValue site) {
+    return k_insisted_err(failure, (const char*)(intptr_t)site.payload);
 }
 
 KValue k_b_insisted(KValue answer, const char* site) {
