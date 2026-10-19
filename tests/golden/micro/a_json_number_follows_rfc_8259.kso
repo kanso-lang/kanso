@@ -1,0 +1,27 @@
+import "std/json"
+
+# RFC 8259 §6 writes a number as an optional minus, then 0 or a digit run not
+# starting with 0, then optionally a point and at least one digit, then
+# optionally an exponent. Each line decodes one document and prints the
+# value, or the reason the decoder gave (#1999).
+fn read doc
+  rescue (json/decode doc) (e -> e.reason.reason)
+
+pub play = print (read "0")
+  .> (_ -> print (read "-0"))
+  .> (_ -> print (read "10"))
+  .> (_ -> print (read "0.5"))
+  .> (_ -> print (read "-1.25e2"))
+  .> (_ -> print (read "1E-2"))
+  .> (_ -> print (read "[1.5, 20]"))
+  .> (_ -> print (read "01"))
+  .> (_ -> print (read "-01"))
+  .> (_ -> print (read "00"))
+  .> (_ -> print (read "0.05e01"))
+  .> (_ -> print (read "1."))
+  .> (_ -> print (read "2.e5"))
+  .> (_ -> print (read "-.5"))
+  .> (_ -> print (read "-e5"))
+  .> (_ -> print (read "[1., 2]"))
+  .> (_ -> print (read "1e"))
+  .> (_ -> print (read "1.5."))
