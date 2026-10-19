@@ -1762,4 +1762,13 @@ against 95 for the two steps. Built alone, the phase reads 6,081,704 against
 11,955,088. Each step still builds an `effect` box and the closure for the
 next step, which is what a chain costs.
 
-Rows, from CI: ROWS
+Rows, from CI. runbench lands on 1,221,576,962 against 1,215,497,872 without
+the phase, and its `.text` on 727,161 against 706,217 and its emitted lines on
+56,265 against 55,010, all the phase's own. The run vein's allocations land on
+1,872,053 against 1,812,046, twelve a lap. oneshot falls 1,099 and livebench
+7. compile_instructions 24,958,388 -> 25,083,410, entry_instructions
+75,588,739 -> 76,579,726 and library_instructions 75,259,150 -> 76,283,760
+rise for the rewrite and `past?`. emit_instructions 6,100,683 -> 6,095,522,
+interp_instructions 571,513,912 -> 570,698,408 and the tab's compile
+420,614,367 -> 419,334,691 fall, by mechanisms not isolated. Welfare rises
+0.02 and the floor is banked at 91.28.

@@ -143,8 +143,10 @@ const INSISTED_DOORS: [(&str, usize); 4] =
 /// `text/slice! s from to .> text/utf8` builds the slice and reads it once.
 /// Written instead as
 ///
-///     if (text/past? s from to) (text/slice! s from to)
-///       (effect (text/utf8 (builtin_slice s from to)))
+/// ```text
+/// if (text/past? s from to) (text/slice! s from to)
+///   (effect (text/utf8 (builtin_slice s from to)))
+/// ```
 ///
 /// the emitter fuses the door, and a range that leaves the value is still
 /// the `slice!` the author wrote, failing on their line. The same holds for
