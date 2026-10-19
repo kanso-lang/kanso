@@ -1446,6 +1446,11 @@ impl<'a> Interp<'a> {
     /// A body run to its tail. A failure is placed as it leaves the body:
     /// every expression in it shares the body's frame, so the body is the one
     /// place the frame changes on the way out (ruled on #1975).
+    ///
+    /// Inlined into its one caller, the dispatch loop, with the function
+    /// below: kanso#2004's additions to the loop left them out of line, and
+    /// the interpreted run read 16M instructions more for it.
+    #[inline(always)]
     fn eval_body_flow(
         &self,
         decl: &'a FnDecl,
@@ -1454,6 +1459,7 @@ impl<'a> Interp<'a> {
         self.eval_body_flow_unplaced(decl, env).map_err(|e| placed(e, &self.frame_for(decl)))
     }
 
+    #[inline(always)]
     fn eval_body_flow_unplaced(
         &self,
         decl: &'a FnDecl,
@@ -2834,10 +2840,13 @@ impl<'a> Interp<'a> {
         // on return (see `crate::deep`)
         let running = self.running.get();
         let saved = self.deep_now.get();
+        // every overload of a group is on the group's cycle, so the body
+        // that runs is on `to` until a tail call hops to another group
         let to = overloads.first().map_or(0, |d| self.deep_cycle(d));
         if to != 0 && to != running && saved == 0 {
             self.deep_now.set(to);
         }
+        self.running.set(to);
         self.depth.set(self.depth.get() + 1);
         if self.depth.get() > 10_000 {
             self.depth.set(self.depth.get() - 1);
@@ -3122,7 +3131,6 @@ impl<'a> Interp<'a> {
                     while let Some(arg) = args.pop() {
                         release(arg);
                     }
-                    self.running.set(self.deep_cycle(decl));
                     let flowed = self.eval_body_flow(decl, env);
                     // The body has finished with the frame. If nothing it made
                     // kept a handle -- a lazy thunk is the only thing that
@@ -3155,22 +3163,19 @@ impl<'a> Interp<'a> {
                             // a tail call that enters a cycle growing the
                             // stack from outside it is made as a call, which
                             // keeps a frame to put the record back in
-                            let from = match &lambda {
-                                Some(c) => c.deep,
-                                None => self.deep_cycle(decl),
-                            };
+                            let from = self.running.get();
                             let to = group.first().map_or(0, |d| self.deep_cycle(d));
                             if to != 0 && to != from {
                                 // a lambda keeps its jump, as its compiled
                                 // body does: it records and puts nothing back
                                 if lambda.is_none() {
-                                    self.running.set(from);
                                     return self.dispatch_loop(next, group, next_args, next_span);
                                 }
                                 if self.deep_now.get() == 0 {
                                     self.deep_now.set(to);
                                 }
                             }
+                            self.running.set(to);
                             // the call was written in this body, or in the
                             // lambda its tail handed on to, so a dispatch of
                             // it that fails is placed there
