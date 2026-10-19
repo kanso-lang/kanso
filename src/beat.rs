@@ -3076,14 +3076,18 @@ mod tests {
         // and `value_blank` are one cycle, entered by a tail call from
         // `parse_value`, and the cycle reaches `parse_value` again only under
         // the plain calls an array or object makes for each element.
+        //
+        // `string_scan` and the four-argument `str_run` left on 2026-10-18,
+        // when the decoder took spans: the scan is `text/span_to` now, and
+        // the run it answers reaches `str_run` as the three fields the flatten
+        // pass carries, in a group the pass made. The mem corpus reads the
+        // same counters as before the move.
         let scanners: Vec<(String, usize)> = [
             ("json/str_chars", 3),
             ("json/str_low", 5),
             ("json/str_pair", 4),
-            ("json/str_run", 4),
             ("json/str_surrogate", 4),
             ("json/str_unicode", 3),
-            ("json/string_scan", 3),
             ("json/unicode_at", 4),
             ("json/value_blank", 3),
         ]

@@ -10,6 +10,7 @@ pub mod diag;
 pub mod dispatch;
 pub mod escape;
 pub mod eval;
+pub mod flat;
 pub mod hako;
 pub mod hash;
 pub mod infer;
@@ -40,6 +41,8 @@ pub fn compile(file: &str, source: &str, require_entry: bool) -> Result<ast::Pro
     stamp_file(&mut program, file);
     let diags = check::check(&mut program, require_entry);
     desugar_field_reads(&mut program);
+    measured_slices_are_slices(&mut program);
+    flat::flatten(&mut program);
     prune_unused_getters(&mut program);
     trmc::rewrite(&mut program);
     inline::inline_builtin_wrappers(&mut program);
@@ -226,6 +229,8 @@ fn compile_parsed_entry(
             finish_program(&mut merged);
             rewrite::pass();
             phase::watched("desugar_field_reads", || desugar_field_reads(&mut merged));
+            measured_slices_are_slices(&mut merged);
+            flat::flatten(&mut merged);
             rewrite::pass();
             phase::watched("prune_unused_getters", || prune_unused_getters(&mut merged));
             rewrite::pass();
@@ -434,6 +439,8 @@ fn compile_one(file: &str, source: &str, drop_unused: bool) -> Result<ast::Progr
     fuse_enumerable(&mut program);
     finish_program(&mut program);
     desugar_field_reads(&mut program);
+    measured_slices_are_slices(&mut program);
+    flat::flatten(&mut program);
     prune_unused_getters(&mut program);
     trmc::rewrite(&mut program);
     inline::inline_builtin_wrappers(&mut program);
@@ -623,6 +630,8 @@ fn compile_library_beside(
     fuse_enumerable(&mut program);
     finish_program(&mut program);
     desugar_field_reads(&mut program);
+    measured_slices_are_slices(&mut program);
+    flat::flatten(&mut program);
     prune_unused_getters(&mut program);
     trmc::rewrite(&mut program);
     inline::inline_builtin_wrappers(&mut program);
@@ -862,14 +871,16 @@ fn install_prelude(program: &mut ast::Program) {
 fn finish_program(program: &mut ast::Program) {
     install_prelude(program);
     synthesize_getters(program);
-    measured_slices_are_slices(program);
 }
 
 /// `builtin_slice_in` is std's spelling for a slice whose range the library
 /// measured from the value it slices (#1890). The check reads it as a slice
 /// that answers no none; every engine after the check runs it as `slice`, so
 /// the fused shapes the emitter knows (an append, a decode or a number read
-/// of a slice) are the shapes it sees.
+/// of a slice) are the shapes it sees. It runs where a checked program is
+/// handed to the engines, beside `desugar_field_reads`: run with the passes
+/// that finish a parse, it renamed the spelling before any check read it, and
+/// a function answering a measured slice was typed as answering `none`.
 fn measured_slices_are_slices(program: &mut ast::Program) {
     fn renamed(e: &mut ast::Expr) {
         if let ast::Expr::Ident(n, _, _) = e {

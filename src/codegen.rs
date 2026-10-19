@@ -3428,7 +3428,11 @@ impl<'a> Backend<'a> {
 
     /// A group calls for a twin when it is a loop -- a member of a cycle --
     /// with a parameter the twin can take as a word. A group run once a call
-    /// would pay the code twice for one test saved.
+    /// would pay the code twice for one test saved. A group the flatten pass
+    /// made is the exception: it carries a record's fields in place of the
+    /// record, positions among them, and is entered as often as the record
+    /// was built. Boxed, those positions held jsonbench at 938M instructions;
+    /// as words it read 864M, against 833M before the decoder took spans.
     fn has_twin(&self, name: &str, arity: usize) -> bool {
         // A twin buys run speed with a second copy of the group, which a dev
         // build and the tab pay for in compile time and memory and have no
@@ -3437,7 +3441,7 @@ impl<'a> Backend<'a> {
         self.inline_helpers
             && arity > 0
             && !self.knotted.contains(name)
-            && self.cycle_members.contains(name)
+            && (self.cycle_members.contains(name) || crate::flat::made(name))
             && (0..arity).any(|i| self.twin_param(name, arity, i))
     }
 

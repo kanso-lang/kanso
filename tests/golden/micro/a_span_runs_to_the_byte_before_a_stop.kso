@@ -1,0 +1,30 @@
+import "std/text"
+
+# `span_to` answers the span from a position up to the byte before the first
+# of two stops, or to the end when neither comes; `span_to_below` also stops
+# at any byte below a limit. A span one past the end is the empty run there,
+# and a start anywhere else outside the bytes answers none. Slicing a span
+# answers the bytes with no none to handle.
+fn shown none
+  "none"
+
+fn shown run
+  "{run.from}..{run.to} {text/utf8 (text/slice run)}"
+
+fn sliced none
+  "none"
+
+fn sliced run
+  text/slice run
+
+bs = text/bytes "ab,cd;e\tf"
+
+pub play = print (shown (text/span_to bs 1 44 59))
+  .> (_ -> print (shown (text/span_to bs 4 44 59)))
+  .> (_ -> print (shown (text/span_to bs 7 44 59)))
+  .> (_ -> print (shown (text/span_to bs 3 44 59)))
+  .> (_ -> print (shown (text/span_to bs 10 44 59)))
+  .> (_ -> print (shown (text/span_to bs 0 44 59)))
+  .> (_ -> print (shown (text/span_to bs 11 44 59)))
+  .> (_ -> print (shown (text/span_to_below bs 7 44 59 32)))
+  .> (_ -> print (sliced (text/span_to (text/bytes "kanso") 2 115 99)))

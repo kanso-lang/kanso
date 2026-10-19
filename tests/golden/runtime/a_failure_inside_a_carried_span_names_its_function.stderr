@@ -1,0 +1,2 @@
+error[runtime]: `*` is not defined for these values
+  failed in a_failure_inside_a_carried_span_names_its_function/measured at a_failure_inside_a_carried_span_names_its_function.kso:11

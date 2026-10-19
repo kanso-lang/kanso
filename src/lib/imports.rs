@@ -47,7 +47,13 @@ fn load_dependencies(
             "std/time" => Some(("time", &[("time.kso", include_str!("../../lib/time/time.kso"))])),
             "std/io" => Some(("io", &[("io.kso", include_str!("../../lib/io/io.kso"))])),
             "std/os" => Some(("os", &[("os.kso", include_str!("../../lib/os/os.kso"))])),
-            "std/text" => Some(("text", &[("text.kso", include_str!("../../lib/text/text.kso"))])),
+            "std/text" => Some((
+                "text",
+                &[
+                    ("span.kso", include_str!("../../lib/text/span.kso")),
+                    ("text.kso", include_str!("../../lib/text/text.kso")),
+                ],
+            )),
             "std/math" => Some(("math", &[("math.kso", include_str!("../../lib/math/math.kso"))])),
             "std/bits" => Some(("bits", &[("bits.kso", include_str!("../../lib/bits/bits.kso"))])),
             "std/testing" => {

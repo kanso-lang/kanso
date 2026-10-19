@@ -9,11 +9,24 @@ fn scan cs start p
 fn spanned cs start e
   if (e < 0) (number_done cs start (0 - e) true) (number_done cs start e false)
 
+# The number's bytes are a span the scan proved inside cs.
 fn number_done cs start p true
-  parsed p (number_ok start (text/to_float (builtin_slice_in cs start (p - 1))))
+  parsed p (number_ok start (float_of (text/to_span cs start (p - 1))))
 
 fn number_done cs start p false
-  parsed p (number_ok start (text/to_int (builtin_slice_in cs start (p - 1))))
+  parsed p (number_ok start (int_of (text/to_span cs start (p - 1))))
+
+fn float_of none
+  err "invalid number"
+
+fn float_of run
+  text/to_float (text/slice run)
+
+fn int_of none
+  err "invalid number"
+
+fn int_of run
+  text/to_int (text/slice run)
 
 fn number_ok p (err _)
   fail p "invalid number"
