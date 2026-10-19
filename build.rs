@@ -31,4 +31,17 @@ fn main() {
     }
     let out = std::env::var("OUT_DIR").expect("cargo sets OUT_DIR for a build script");
     std::fs::write(Path::new(&out).join("runtime.c"), joined).expect("the joined runtime writes");
+
+    // The compiler links with one writable segment. With RELRO, lld writes
+    // two, and when the first ends on a page boundary the two are contiguous
+    // in the file and in memory; valgrind 3.22 then reads no symbols from the
+    // executable, and every gate that reads a frame of the compiler
+    // (`kanso::main`, `run_interpreted_on_stack`, `emit_ir_for`) has nothing
+    // to read. Where that boundary falls depends on the binary's size, so any
+    // change can land on it; kanso#2004 did.
+    // tests/the_compiler_links_one_writable_segment.rs holds this.
+    let target = std::env::var("TARGET").unwrap_or_default();
+    if target.contains("linux") {
+        println!("cargo:rustc-link-arg-bin=kanso=-Wl,-z,norelro");
+    }
 }
