@@ -1,1 +1,2 @@
 error[runtime]: the program ran out of stack: recursion went deeper than the stack holds
+  failed in a_recursion_inside_a_recursion_overflows_alike/big at a_recursion_inside_a_recursion_overflows_alike.kso:12

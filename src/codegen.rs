@@ -956,6 +956,7 @@ fn emit_with(
         group_by_name: group_indices_by_name(program),
         cycle_reached: cycle_reached(program),
         cycle_members: cycle_members(program),
+        deep: crate::deep::Deep::of(program),
         twin_of: None,
         kept_out: kept_out(program),
         framed_views: framed,
@@ -1231,6 +1232,9 @@ struct Backend<'a> {
     cycle_reached: crate::hash::Set<&'a str>,
     /// Names on a cycle, the groups that get a word twin. See `has_twin`.
     cycle_members: crate::hash::Set<&'a str>,
+    /// The cycles that grow the stack, and the place an overflow in each
+    /// names (see `crate::deep`).
+    deep: crate::deep::Deep,
     /// See `kept_out`.
     kept_out: crate::hash::Set<&'a str>,
     /// See `framed_views`: (group, arity, span of the `bytes` call).
@@ -1343,6 +1347,11 @@ struct FnEmit {
     /// Dispatcher group being emitted, for recognizing self-tail-calls.
     group: String,
     arity: usize,
+    /// The group whose cycle this code is on for `crate::deep`: its own for a
+    /// group's body, and for a lambda or a thunk the one whose body made it.
+    deep_from: (String, usize),
+    /// A lambda's or a thunk's body, which runs where it is called.
+    lifted: bool,
     /// Whether the current arm is a bare enrollment clone: library plumbing
     /// wearing an unqualified name, which the cohort license must not read
     /// as user code.
@@ -1461,6 +1470,8 @@ impl FnEmit {
             group: String::new(),
             synthetic: false,
             arity: 0,
+            deep_from: (String::new(), 0),
+            lifted: false,
             lazy_cells: Vec::new(),
             entry_allocas: Vec::new(),
             frame_held: false,
@@ -4123,6 +4134,8 @@ impl<'a> Backend<'a> {
         f.hako = outer.hako.clone();
         f.hako = outer.hako.clone();
         f.file = outer.file.clone();
+        f.deep_from = outer.deep_from.clone();
+        f.lifted = true;
         f.start_block("entry");
         for (i, cap) in captures.iter().enumerate() {
             f.bind(cap, &format!("%a{i}"));
@@ -4277,7 +4290,25 @@ impl<'a> Backend<'a> {
                 })
                 .collect();
             let sym = dsym(name, arity);
+            // a group called as a value enters its cycle from wherever the
+            // value was called, so the wrapper records as a call from outside
+            // does (see `crate::deep`)
+            let deep = self.deep.entering(None, (name, arity)).map(|(decl, span)| {
+                let d = &self.program.fns[decl];
+                let hako = crate::provenance::package_of(&d.file);
+                let spelled = crate::deep::spelled(self.program, (decl, span));
+                self.intern(&format!("{hako}\0{spelled}\0")).0
+            });
+            if let Some(lit) = &deep {
+                let _ = writeln!(conv, "  %deep = load ptr, ptr @k_deep_site");
+                let _ = writeln!(conv, "  %deep_empty = icmp eq ptr %deep, null");
+                let _ = writeln!(conv, "  %deep_set = select i1 %deep_empty, ptr @{lit}, ptr %deep");
+                let _ = writeln!(conv, "  store ptr %deep_set, ptr @k_deep_site");
+            }
             let _ = writeln!(conv, "  %r = call tailcc %KValue @{sym}({})", call_args.join(", "));
+            if deep.is_some() {
+                let _ = writeln!(conv, "  store ptr %deep, ptr @k_deep_site");
+            }
             self.room(conv.len() + 3 * sym.len() + 32 * arity + 256);
             let _ = writeln!(
                 self.body,
@@ -4728,6 +4759,8 @@ impl<'a> Backend<'a> {
         let mut f = FnEmit::new(!self.inline_helpers);
         f.origin_prefix = outer.origin_prefix.clone();
         f.hako = outer.hako.clone();
+        f.deep_from = outer.deep_from.clone();
+        f.lifted = true;
         // A lifted lambda is still code from the file it was written in, and
         // in-place sites are keyed by source position — without this the key
         // is ("", line, col) and every mark inside a lambda body is missed.

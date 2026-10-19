@@ -557,6 +557,9 @@ pub struct ClosureData {
     pub body: Expr,
     pub env: Option<Rc<Env>>,
     pub frame: Frame,
+    /// The cycle of the body that made it, for `crate::deep`: a lambda's calls
+    /// are its maker's, as its compiled body is.
+    pub deep: u32,
 }
 
 #[derive(Clone, Debug)]
@@ -1186,6 +1189,14 @@ pub struct Interp<'a> {
     demand: crate::demand::DemandInfo<'a>,
     pub thunk_stats: ThunkStats,
     depth: Cell<usize>,
+    /// For each declaration, one more than the number of the cycle that grows
+    /// the stack it is on, or 0; and each cycle's place (see `crate::deep`).
+    deep_of: Vec<u32>,
+    deep_places: Vec<Rc<str>>,
+    /// The record an overflow names, one more than a cycle's number or 0, and
+    /// the cycle of the body running now, 0 in a lambda's body or outside.
+    deep_now: Cell<u32>,
+    running: Cell<u32>,
     /// One cell per self-referential constant. A mention that arrives while
     /// the constant is still being computed gets the unforced cell, which is
     /// how a value that names itself gets a value at all.
@@ -1322,6 +1333,7 @@ impl<'a> Interp<'a> {
             file: crate::ast::unstamped(),
         };
         let demand = crate::demand::analyze(program);
+        let deep = crate::deep::Deep::of(program);
         Interp {
             fns,
             types,
@@ -1329,6 +1341,14 @@ impl<'a> Interp<'a> {
             demand,
             thunk_stats: ThunkStats::default(),
             depth: Cell::new(0),
+            deep_of: deep.by_decl(program),
+            deep_places: deep
+                .places()
+                .iter()
+                .map(|&place| Rc::from(crate::deep::spelled(program, place)))
+                .collect(),
+            deep_now: Cell::new(0),
+            running: Cell::new(0),
             knots: RefCell::new(Map::default()),
             ties: RefCell::new(Vec::new()),
             tie_serial: Cell::new(0),
@@ -1555,6 +1575,7 @@ impl<'a> Interp<'a> {
                     },
                     env: env.clone(),
                     frame: frame.clone(),
+                    deep: self.running.get(),
                 }));
                 return Ok(Flow::Done(Value::Desc(Rc::new(Desc::Bind(inner, closure)))));
             }
@@ -1989,6 +2010,7 @@ impl<'a> Interp<'a> {
                             },
                             env: env.clone(),
                             frame: frame.clone(),
+                            deep: self.running.get(),
                         }));
                         return Ok(Value::Desc(Rc::new(Desc::Bind(inner, closure))));
                     }
@@ -2042,6 +2064,7 @@ impl<'a> Interp<'a> {
                             body: arg.clone(),
                             env: env.clone(),
                             frame: frame.clone(),
+                            deep: self.running.get(),
                         }))),
                         false => values.push(self.eval(arg, env, frame)?),
                     }
@@ -2054,6 +2077,7 @@ impl<'a> Interp<'a> {
                 body: (**body).clone(),
                 env: env.clone(),
                 frame: frame.clone(),
+                deep: self.running.get(),
             }))),
             Expr::BinOp { op, lhs, rhs, span } => {
                 let mut left = self.force_thunk(self.eval(lhs, env, frame)?)?;
@@ -2453,6 +2477,13 @@ impl<'a> Interp<'a> {
     }
 
     fn call_closure(&self, closure: &ClosureData, args: Vec<Value>, span: Span) -> EvalResult {
+        let running = self.running.get();
+        let answer = self.call_closure_inner(closure, args, span);
+        self.running.set(running);
+        answer
+    }
+
+    fn call_closure_inner(&self, closure: &ClosureData, args: Vec<Value>, span: Span) -> EvalResult {
         let mut flow = self.closure_flow(closure, args, span)?;
         // the lambda whose body wrote the call being made, which places a
         // call that fails before anything it calls has run
@@ -2488,6 +2519,9 @@ impl<'a> Interp<'a> {
         args: Vec<Value>,
         span: Span,
     ) -> Result<Flow<'a>, RuntimeError> {
+        // a lambda's body is on the cycle of the body that made it, as its
+        // compiled function is
+        self.running.set(closure.deep);
         if closure.params.len() != args.len() {
             return Err(RuntimeError {
                 at: None,
@@ -2749,6 +2783,18 @@ impl<'a> Interp<'a> {
         Ok(Value::Record { ty: Rc::from(canonical), fields: Rc::new(RefCell::new(args)) })
     }
 
+    /// The cycle `decl` is on, one more than its number, or 0.
+    #[inline(always)]
+    fn deep_cycle(&self, decl: &FnDecl) -> u32 {
+        let base = self.program.fns.as_ptr() as usize;
+        let at = decl as *const FnDecl as usize;
+        let i = at.wrapping_sub(base) / std::mem::size_of::<FnDecl>();
+        match at >= base {
+            true => self.deep_of.get(i).copied().unwrap_or(0),
+            false => 0,
+        }
+    }
+
     fn dispatch(
         &self,
         name: &str,
@@ -2778,14 +2824,29 @@ impl<'a> Interp<'a> {
         // 10k holds under debug's fat frames and release alike on the
         // 256 MB interpreter thread; recursion past it is non-portable
         // anyway (native's own ceiling is finite and smaller in wasm).
+        // a call that enters a cycle growing the stack from outside it sets
+        // the record an overflow names, when it is empty, and puts it back
+        // on return (see `crate::deep`)
+        let running = self.running.get();
+        let saved = self.deep_now.get();
+        let to = overloads.first().map_or(0, |d| self.deep_cycle(d));
+        if to != 0 && to != running && saved == 0 {
+            self.deep_now.set(to);
+        }
         self.depth.set(self.depth.get() + 1);
         if self.depth.get() > 10_000 {
             self.depth.set(self.depth.get() - 1);
-            // the engines run out of stack at different depths, so no frame
-            // is the one an overflow happened in, and it names no place
-            // (kanso#1987); line 0 keeps it from being placed on the way out
+            // the engines run out of stack at different depths, so the place
+            // is the outermost cycle still running, which they share; line 0
+            // keeps it from being placed on the way out
+            let at = match self.deep_now.get() {
+                0 => None,
+                d => Some(self.deep_places[d as usize - 1].clone()),
+            };
+            self.running.set(running);
+            self.deep_now.set(saved);
             return Err(RuntimeError {
-                at: None,
+                at,
                 message: "the program ran out of stack: recursion went deeper than the stack holds"
                     .to_string(),
                 span: Span::at(0, 0),
@@ -2793,6 +2854,8 @@ impl<'a> Interp<'a> {
         }
         let result = self.dispatch_loop_inner(name, overloads, args, span);
         self.depth.set(self.depth.get() - 1);
+        self.running.set(running);
+        self.deep_now.set(saved);
         result
     }
 
@@ -3054,6 +3117,7 @@ impl<'a> Interp<'a> {
                     while let Some(arg) = args.pop() {
                         release(arg);
                     }
+                    self.running.set(self.deep_cycle(decl));
                     let flowed = self.eval_body_flow(decl, env);
                     // The body has finished with the frame. If nothing it made
                     // kept a handle -- a lazy thunk is the only thing that
@@ -3083,6 +3147,25 @@ impl<'a> Interp<'a> {
                         Flow::Closure(..) => unreachable!("closures run in the loop above"),
                         Flow::Done(value) => return Ok(value),
                         Flow::Tail(next, group, next_args, next_span) => {
+                            // a tail call that enters a cycle growing the
+                            // stack from outside it is made as a call, which
+                            // keeps a frame to put the record back in
+                            let from = match &lambda {
+                                Some(c) => c.deep,
+                                None => self.deep_cycle(decl),
+                            };
+                            let to = group.first().map_or(0, |d| self.deep_cycle(d));
+                            if to != 0 && to != from {
+                                // a lambda keeps its jump, as its compiled
+                                // body does: it records and puts nothing back
+                                if lambda.is_none() {
+                                    self.running.set(from);
+                                    return self.dispatch_loop(next, group, next_args, next_span);
+                                }
+                                if self.deep_now.get() == 0 {
+                                    self.deep_now.set(to);
+                                }
+                            }
                             // the call was written in this body, or in the
                             // lambda its tail handed on to, so a dispatch of
                             // it that fails is placed there

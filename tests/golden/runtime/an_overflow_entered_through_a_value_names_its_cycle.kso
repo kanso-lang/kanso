@@ -1,0 +1,13 @@
+# A recursion entered through a function value names its cycle when it runs
+# out of stack: the group's wrapper records as a call from outside its cycle
+# does (kanso#1991).
+fn depth 0
+  0.0
+
+fn depth k
+  0.5 + depth (k - 1)
+
+fn applied f n
+  f n
+
+pub play = print "{applied depth 100000000}"

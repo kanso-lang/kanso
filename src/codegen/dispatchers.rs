@@ -226,6 +226,7 @@ impl<'a> Backend<'a> {
         let mut f = FnEmit::new(!self.inline_helpers);
         f.ret_ty = ret.to_string();
         f.group = name.to_string();
+        f.deep_from = (name.to_string(), arity);
         f.arity = arity;
         let sym_hdr = match self.emitting_twin(name, arity) {
             true => tsym(name, arity),
@@ -721,6 +722,7 @@ impl<'a> Backend<'a> {
         let mut f = FnEmit::new(!self.inline_helpers);
         f.ret_ty = ret.to_string();
         f.group = name.to_string();
+        f.deep_from = (name.to_string(), arity);
         f.arity = arity;
         let apart = if self.kept_out.contains(name) { " noinline" } else { "" };
         let header = format!("define tailcc {ret} @{sym_hdr}({}){apart} {{", params.join(", "));

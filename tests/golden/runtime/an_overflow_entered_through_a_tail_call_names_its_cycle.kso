@@ -1,0 +1,15 @@
+# A recursion entered by a tail call from a function outside it, the shape of
+# a one-line library wrapper, names its cycle when it runs out of stack. The
+# call is made as an ordinary one, so the record can be put back when the
+# recursion returns (kanso#1991). The float keeps the accumulator rewrite
+# from turning the recursion into a loop.
+fn depth 0
+  0.0
+
+fn depth k
+  0.5 + depth (k - 1)
+
+fn deep_from n
+  depth n
+
+pub play = print "{deep_from 100000000}"
