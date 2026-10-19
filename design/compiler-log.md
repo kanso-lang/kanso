@@ -21,25 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-13 — gavel: `list/to_sorted` builds the `sorted` that `find` bisects
-
-Clay ruled #1903. std/list declares `pub type sorted`, and `find` has an arm
-for it that bisects instead of scanning (archive, 2026-07-24, "find gets its
-fast arm"). Only std/list may build a `sorted`, and it exposed no function that
-does, so no caller could reach the fast arm.
-
-**The ruling.** `list/to_sorted xs` sorts `xs` by the order `list/sort` uses and
-answers it as a `sorted`. It takes any list `list/sort` takes. Because it sorts
-as it wraps, a `sorted` is always in order and the bisect cannot answer wrong.
-No function wraps a list unchecked. When type parameters are built (#1941),
-`sorted` becomes `<k>sorted` and this function's signature follows without a
-change in meaning.
-
-Owes, on #1903: `list/to_sorted` in std/list; the bisect tests back in
-`list_test.kso` through it; a micro golden in which `find` on a `to_sorted`
-answers the same as on the plain list; the counter that shows the bisect ran;
-appendix B.
-
 ## 2026-10-13 — gavel: names for the library gaps the ports hit
 
 Clay ruled #1914 one name at a time. Each name was decided from what it should
@@ -1778,3 +1759,41 @@ more. emit_instructions 6,095,522, interp_instructions 570,698,408 and the
 tab's compile, 419,334,691, fall, and oneshot and livebench fall by 1,099 and
 7, by mechanisms not isolated. Welfare rises 0.02 and the floor is banked at
 91.28.
+
+## 2026-10-19 — json/decode refuses a number RFC 8259 refuses
+
+#1999. `json/decode` took `1.`, `2.e5`, `01`, `-01`, `00` and `-.5`, and
+`[1., 2]` decoded as `[1.0 2]`. RFC 8259 §6 refuses all of them. The decoder
+finds a number's bytes with `text/number_span` and hands them to `to_int` or
+`to_float`, and the converters are more lenient than JSON. They already refuse
+`1e`, `1..2`, `1+2` and `--1`, so what they take that JSON does not comes down
+to three rules: a leading 0 has no digit after it, a minus has one, and so
+does a point.
+
+`number_span` answers zero when a number breaks one of them. The first two are
+reads at the number's start. The third uses the masks the sixteen-byte walk
+already builds: a point whose next bit is not a digit, with the block's last
+byte checked against the next block. The interpreter keeps the same three
+rules, so `number_span` answers the same on every engine for every input.
+lib/json needs no new arm: a zero sends the integer path to ask `to_span` for
+a range that ends before it starts, which answers none, and the decoder fails
+as `invalid number`.
+
+The first version checked the rules in lib/json with a `find2_below` for the
+point, and jsonbench read 948M against 872M, about 240 instructions a float.
+A full grammar walk inside `number_span` read 942M, since jsonbench's numbers
+are long. The three rules on the masks read 885.5M, 22 instructions a number.
+
+A differential fuzzer against the RFC's grammar written as a regular
+expression decoded 200,000 random strings over the number alphabet, each bare
+and again padded past a block, on both engines, with 0 mismatches. Main read
+1,317 mismatches on the first 20,000. `number_span` agrees across engines at
+every position of 3,000 random strings. `a_json_number_follows_rfc_8259` pins
+the cases, and `a_number_span_ends_where_the_byte_walk_ends` gains the zero
+answers, with a bare point at a block's last byte and in the walk.
+
+kq carries its own decoder and keeps a number as the decimal its author
+wrote, with jq as its oracle, so what it accepts is jq's question and this
+change leaves it alone.
+
+Rows, from CI: ROWS
