@@ -1504,7 +1504,8 @@ KValue k_b_find2(KValue cs, KValue from, KValue a, KValue b) {
    after `from` whose byte cannot be part of a number -- anything but a digit,
    `+`, `-`, `.`, `e` or `E` -- and it comes back negated when a `.`, `e` or
    `E` went past, which is what makes the number a float. A position outside
-   the bytes is its own answer, as the byte walk it replaces would stop there.
+   the bytes is its own answer, as the byte walk it replaces would stop there,
+   and so is `from` when no byte there can be part of a number.
    lib/json walked a number one byte a step, a dispatch on every byte, and it
    cost the run program 23 instructions a character; sixteen bytes are
    classified here at once. */
@@ -1523,7 +1524,19 @@ KValue k_b_number_span(KValue cs, KValue fromv) {
     long long from = fromv.payload;
     if (from < 1 || from > len) return fromv;
     long long i = from - 1;
+    /* RFC 8259 §6 asks three things of a number that the converters do not
+       (#1999): a digit first, after any minus; no digit after a leading 0;
+       and a digit after a point. A number that breaks one answers zero. The
+       first two are read here and the third in the walk. */
+    long long lead = i + (d[i] == '-');
+    if (__builtin_expect(lead >= len || (unsigned)(d[lead] - '0') > 9, 0)) {
+        /* no byte that can be part of a number is the empty run, below */
+        if (k_number_byte(d[i])) return k_int(0);
+    } else if (d[lead] == '0' && lead + 1 < len && (unsigned)(d[lead + 1] - '0') < 10) {
+        return k_int(0);
+    }
     int mark = 0;
+    int bare = 0;
 #if defined(__x86_64__)
     const __m128i zero = _mm_set1_epi8('0');
     const __m128i nine = _mm_set1_epi8(9);
@@ -1531,29 +1544,42 @@ KValue k_b_number_span(KValue cs, KValue fromv) {
         __m128i v = _mm_loadu_si128((const __m128i*)(d + i));
         __m128i off = _mm_sub_epi8(v, zero);
         __m128i digit = _mm_cmpeq_epi8(_mm_min_epu8(off, nine), off);
+        __m128i dot = _mm_cmpeq_epi8(v, _mm_set1_epi8('.'));
         __m128i point = _mm_or_si128(
-            _mm_cmpeq_epi8(v, _mm_set1_epi8('.')),
-            _mm_or_si128(_mm_cmpeq_epi8(v, _mm_set1_epi8('e')),
-                         _mm_cmpeq_epi8(v, _mm_set1_epi8('E'))));
+            dot, _mm_or_si128(_mm_cmpeq_epi8(v, _mm_set1_epi8('e')),
+                              _mm_cmpeq_epi8(v, _mm_set1_epi8('E'))));
         __m128i sign = _mm_or_si128(_mm_cmpeq_epi8(v, _mm_set1_epi8('+')),
                                     _mm_cmpeq_epi8(v, _mm_set1_epi8('-')));
         unsigned in = (unsigned)_mm_movemask_epi8(_mm_or_si128(digit, _mm_or_si128(point, sign)));
         unsigned marks = (unsigned)_mm_movemask_epi8(point);
+        /* a point whose next byte is not a digit; the block's last byte has
+           its next byte in the next block */
+        unsigned digits = (unsigned)_mm_movemask_epi8(digit);
+        unsigned bares = (unsigned)_mm_movemask_epi8(dot) & ~(digits >> 1);
         unsigned out = ~in & 0xffffu;
         if (out) {
             unsigned k = (unsigned)__builtin_ctz(out);
             if (marks & ((1u << k) - 1)) mark = 1;
+            if (bare || (bares & ((1u << k) - 1))) return k_int(0);
             i += k;
             return k_int(mark ? -(i + 1) : i + 1);
         }
         if (marks) mark = 1;
+        if (bares & 0x7fffu) bare = 1;
+        if ((bares & 0x8000u) && !(i + 16 < len && (unsigned)(d[i + 16] - '0') < 10)) bare = 1;
         i += 16;
     }
 #endif
     while (i < len && k_number_byte(d[i])) {
-        if (d[i] == '.' || d[i] == 'e' || d[i] == 'E') mark = 1;
+        if (d[i] == '.') {
+            mark = 1;
+            if (!(i + 1 < len && (unsigned)(d[i + 1] - '0') < 10)) bare = 1;
+        } else if (d[i] == 'e' || d[i] == 'E') {
+            mark = 1;
+        }
         i++;
     }
+    if (bare) return k_int(0);
     return k_int(mark ? -(i + 1) : i + 1);
 }
 
