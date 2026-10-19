@@ -1811,4 +1811,52 @@ engine. `an_overflow_entered_through_a_tail_call_names_its_cycle`,
 was watched red without its part. Their recursions add floats, because an
 integer `1 + f (k - 1)` is rewritten to a loop and never overflows.
 
-Rows, from CI: owed.
+The first CI run read 0 for compile, entry and library instructions and could
+not read start-up, emit or the interpreted run. valgrind had read no symbols
+from the compiler, so no gate found the frame it reads. It is the layout the
+2026-09-13 entry met on this container: with RELRO, lld writes two writable
+segments, and when the first ends on a page boundary they are contiguous in
+the file and in memory, and valgrind 3.22 reads nothing from the executable.
+This branch's binary landed there on CI; #2002's job, re-run on the same
+runners, read every row. Building here at CI's checkout path with CI's
+`CARGO_HOME` reproduced it, and linking with `-z norelro` removed it. build.rs
+now links the compiler that way on Linux, which leaves one writable segment
+whatever the binary's size, and `the_compiler_links_one_writable_segment`
+goes red without the flag. The compiler gives up RELRO's write protection on
+its relocated pointers. The rows that read the compiler move by layout with
+it: on this container `kanso::main` on the compile corpus read 24,962,673 with
+RELRO and 24,961,819 without.
+
+With the symbols back, CI read the interpreted run 16.06M instructions higher,
+570,698,408 to 586,760,939. A profile diff against main put 17.1M of it in
+`eval_body_flow`: the additions to the dispatch loop had pushed it out of line,
+and it and `eval_body_flow_unplaced` are now inlined into their one caller. The
+body also stopped looking up its own cycle. Every overload of a group is on
+the group's cycle, so the loop sets the running cycle on entry and on each tail
+hop from the lookup it already makes. On this container that took the run from
+585,706,096 to 577,416,551, against main's 569,645,202.
+
+Rows, from CI. Every emitted module declares `@k_deep_site`, one line more:
+the compile corpus lands on lines 1,372 and module_lines 1,131, the decoder on
+emitted_lines 12,296, and the other benchmarks on emitted_other_lines 157,010
+and emitted_other_branches 17,160, the rest being the saves and puts-back
+around the calls that enter a cycle. Machine code grows to text 5,141,230 in
+total. Those calls cost the benchmarks a few instructions each:
+work_jsonbench lands on 871,578,113, work_encodebench 2,464,677,577,
+work_oneshot 13,543,963, work_basket 31,162,889, work_deepbench 407,387,556,
+work_escapebench 39,058,438, work_pendbench 194,088,824, work_indexbench
+2,482,747, work_scanbench 274,237, work_digestbench 5,992,911, work_readbench
+4,582,701 and work_livebench 1,498,477,002. work_widebench rises most, to
+28,772,355 (+144,042, 0.5%), and work_runbench falls to 1,221,517,879, by
+mechanisms not isolated. Clang reads the longer modules: codegen_instructions_dev
+115,648,711 and codegen_instructions_release 453,350,722. The emitter finds the
+cycles, emit_instructions 6,178,365, and the tab's compile does the same, which
+is browser_compile_instructions 422,957,114 (+3,622,423, 0.9%) and
+browser_compile_peak_bytes 753,316; browser_run_instructions lands on
+37,495,195. The interpreter keeps the places and a cycle on every closure:
+interp_instructions 578,456,118 (+7,757,710, 1.4%), interp_allocs 652,272 and
+interp_peak_bytes 633,881. The compile rows fall with the relink:
+compile_instructions 25,063,619, entry_instructions 76,556,989 and
+library_instructions 76,261,940. Welfare scores 91.27 against a floor of 91.28;
+this builds a ruled part of the language, so the floor moves down by that
+cost, to 91.268.
