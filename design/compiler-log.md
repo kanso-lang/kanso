@@ -21,24 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-13 — gavel: `list/concat` joins two lists, and strings join by interpolation
-
-Clay ruled #1906 on the committee's view, on the condition that it rest on
-first principles rather than on what the language already had. Appendix B
-described `text/concat` as joining two lists or two strings; every engine
-joined only lists, and a string argument stopped at run time.
-
-**The ruling, and its reasons.** Joining two lists is `list/concat a b`, in
-std/list, and `text/concat` goes. A function lives with the type it works on,
-so a list operation belongs in `list`. There is one way to combine strings:
-interpolation (`"{a}{b}"`), with `text/join` for a list of pieces. A `concat`
-for strings would be a second way, so none is added.
-
-Owes, on #1906: `list/concat` on every engine with `text/concat` removed and
-its callers moved; the checker refuses a string argument to `list/concat`; an
-error golden for a call to the removed name that points at `list/concat`;
-appendix B's entry rewritten under std/list.
-
 ## 2026-10-13 — gavel: `list/to_sorted` builds the `sorted` that `find` bisects
 
 Clay ruled #1903. std/list declares `pub type sorted`, and `find` has an arm
@@ -1726,3 +1708,29 @@ Rows, against main with #1985 in it: `compile_instructions` 22,693,337 ->
 584,659 -> 584,645, and `browser_compile_instructions` 389,899,281 ->
 390,131,214. The floor drops by the cost under the rule for a change that
 makes the language work as specified.
+
+## 2026-10-19 — an insisting form builds no closure, and no step once its box has settled
+
+Since #1975 an insisting form names its caller's line. On native,
+`k_b_insisted` did that by wrapping every box a `!` function answered in a
+rescue step whose callee was a closure holding the caller's site: three
+allocations on every call, whether or not anything failed. Measuring #1943's
+first version found it, where a `!` helper cost 7 allocations a step against
+4 for the same helper without the `!`.
+
+The step now holds the site where a rescue holds its function, and
+`k_worded_step` reads it on the failure path, so no closure is built. A box that
+has already settled, which is what `effect` answers, is decided at once: its
+value passes untouched and its failure is pointed at the caller then. That
+covers `text/slice!` and every `!` function written as `effect` over a value.
+`os/read_file!` answers a box that has not run, and keeps the step without
+the closure, so each benchmark that reads its input with it allocates two
+fewer: eight cost goldens move by that and nothing else.
+
+The new mem fixture `an_insisting_form_that_settled_builds_no_step` reads 104
+allocations against 164. The runtime corpus's two insisting goldens,
+`a_slice_bang_past_the_end_reaches_the_endpoint` (a settled box) and
+`read_missing_file` (one that has not run), name the same lines as before on
+both engines.
+
+Rows, from CI: ROWS
