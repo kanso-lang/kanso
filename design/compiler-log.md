@@ -1796,4 +1796,16 @@ kq carries its own decoder and keeps a number as the decimal its author
 wrote, with jq as its oracle, so what it accepts is jq's question and this
 change leaves it alone.
 
-Rows, from CI: ROWS
+Rows, from CI. work_jsonbench rises 13,919,550 to 885,496,128, work_runbench
+9,186,504 to 1,230,763,466, work_oneshot 93,714 to 13,637,200,
+work_livebench 93,070 to 1,498,566,931 and work_encodebench 693 to
+2,464,675,356, all in `number_span`. The tab's run, browser_run_instructions,
+rises to 37,652,074, and its compile to browser_compile_instructions
+419,365,540 with browser_compile_peak_bytes 752,376. text lands on
+5,136,942, 288 bytes a binary for the check. compile_instructions
+25,085,857, entry_instructions 76,583,774, library_instructions 76,287,809,
+interp_instructions 570,745,964 and codegen_instructions_release 449,265,297
+rise for the edit to the compiler's Rust. Every allocation counter agrees with
+main. The floor drops by the cost under the rule for a change that makes the
+language work as specified, a JSON decoder that refuses what RFC 8259 refuses:
+welfare falls 0.03, to 91.25.
