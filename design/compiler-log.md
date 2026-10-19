@@ -21,25 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-13 — gavel: `list/to_sorted` builds the `sorted` that `find` bisects
-
-Clay ruled #1903. std/list declares `pub type sorted`, and `find` has an arm
-for it that bisects instead of scanning (archive, 2026-07-24, "find gets its
-fast arm"). Only std/list may build a `sorted`, and it exposed no function that
-does, so no caller could reach the fast arm.
-
-**The ruling.** `list/to_sorted xs` sorts `xs` by the order `list/sort` uses and
-answers it as a `sorted`. It takes any list `list/sort` takes. Because it sorts
-as it wraps, a `sorted` is always in order and the bisect cannot answer wrong.
-No function wraps a list unchecked. When type parameters are built (#1941),
-`sorted` becomes `<k>sorted` and this function's signature follows without a
-change in meaning.
-
-Owes, on #1903: `list/to_sorted` in std/list; the bisect tests back in
-`list_test.kso` through it; a micro golden in which `find` on a `to_sorted`
-answers the same as on the plain list; the counter that shows the bisect ran;
-appendix B.
-
 ## 2026-10-13 — gavel: names for the library gaps the ports hit
 
 Clay ruled #1914 one name at a time. Each name was decided from what it should
@@ -1778,3 +1759,56 @@ more. emit_instructions 6,095,522, interp_instructions 570,698,408 and the
 tab's compile, 419,334,691, fall, and oneshot and livebench fall by 1,099 and
 7, by mechanisms not isolated. Welfare rises 0.02 and the floor is banked at
 91.28.
+
+## 2026-10-19 — a stack overflow names the outermost cycle still running
+
+#1991, owed by the 2026-10-17 gavel (#1987): every run-time failure names its
+line, and a stack overflow was the one that named none. kanso#1985 tried the
+cycle the program entered last and was taken out, because the engines run out
+of stack at different depths and a recursion that enters a second recursion at
+each level named a different cycle on each engine.
+
+The place is now the outermost cycle that grows the stack and is still
+running. No depth decides it, so the engines agree. `src/deep.rs` finds the
+cycles from the call graph, and a cycle's place is the first call written
+inside it to a member outside tail position. An overflow prints the sentence
+and then `failed in <function> at <file>:<line>`, as every other run-time
+failure does.
+
+Each engine keeps one record: `k_deep_site` in the runtime, `deep_now` in the
+interpreter. A call that enters a growing cycle from outside it saves the
+record, sets it when it is empty, and puts it back when the call returns. The
+put-back is what keeps a returned cycle from naming a later overflow
+elsewhere. Three entries needed more than that:
+
+- A tail call into a cycle has nowhere to put the record back, and a one-line
+  library wrapper that tail-calls its worker is the common case. The caller is
+  not on the cycle, so the call is made as an ordinary one. It costs one frame
+  per entry, not one per step.
+- A lambda or a thunk is on its maker's cycle, since it can be a step of a
+  loop the cycle runs through it. It keeps its tail calls, and a call it makes
+  into another cycle only sets an empty record. Making those calls ordinary
+  broke `a_lambda_called_in_tail_position_costs_no_stack` in the CPS
+  translator, which is how this came to light.
+- A group called as a value enters through its `w_` wrapper, which records as
+  a call from outside does.
+
+The pool of work-ahead puts the record back when pooled work overflows, so an
+overflow it rescued names nothing later.
+`pooled_work_that_overflowed_leaves_no_name_behind` goes red without it.
+
+The tab traps when the wasm call stack runs out, so the runtime exports
+`k_deep_place` and the page's host reads it after the trap.
+`kanso::stack_exhausted` takes the place and prints the same two lines on
+native's `kanso run`, the tab and the test host.
+
+Goldens: `a_recursion_inside_a_recursion_overflows_alike` names `big` on every
+engine. `an_overflow_entered_through_a_tail_call_names_its_cycle`,
+`an_overflow_entered_through_a_value_names_its_cycle` and
+`an_overflow_names_the_cycle_still_running` cover the three entries, and
+`deep_recursion`, the five work-ahead overflows and
+`a_built_binary_names_its_stack_overflow` now carry the place. Each fixture
+was watched red without its part. Their recursions add floats, because an
+integer `1 + f (k - 1)` is rewritten to a loop and never overflows.
+
+Rows, from CI: owed.
