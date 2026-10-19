@@ -137,7 +137,8 @@ pub fn flatten(program: &mut Program) {
 
 /// The doors a `slice!` handed straight to one reads in place, with the
 /// arguments each holds before the slice.
-const INSISTED_DOORS: [(&str, usize); 4] = [("utf8", 0), ("append", 1), ("to_int", 0), ("to_float", 0)];
+const INSISTED_DOORS: [(&str, usize); 4] =
+    [("utf8", 0), ("append", 1), ("to_int", 0), ("to_float", 0)];
 
 /// `text/slice! s from to .> text/utf8` builds the slice and reads it once.
 /// Written instead as
@@ -171,9 +172,7 @@ fn insisted_chains(program: &mut Program) {
     for f in &mut program.fns {
         for stmt in &mut f.body {
             match stmt {
-                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => {
-                    opened(expr, &slice, &past, &doors)
-                }
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => opened(expr, &slice, &past, &doors),
             }
         }
     }
