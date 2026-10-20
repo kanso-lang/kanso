@@ -1877,3 +1877,11 @@ each program that decodes JSON and 416 on runbench. In the tab the run falls
 and the compile rises with the library: browser_run_instructions 35,361,799
 -> 34,316,072, browser_compile_instructions 408,301,693 -> 413,585,272 and
 browser_compile_peak_bytes 749,207 -> 757,553.
+
+On one branch with #2014 and #2018, and on main with #2016's fixed link order,
+CI reads work_runbench 1,104,507,218, work_jsonbench 763,196,627,
+work_oneshot 12,450,839, work_livebench 1,370,616,792 and work_encodebench
+2,464,678,011; the corpus's machine code is text 5,287,022, the two runtime
+changes' 32 bytes a program on top of the key's; and
+codegen_instructions_dev reads 116,001,189 under the fixed order, the three
+changes' cost over main's 115,822,620.
