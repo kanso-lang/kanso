@@ -104,6 +104,7 @@ static inline int k_buf_malloced(const KBuf* b) { return (int)(b->capw & 1); }
 static inline void k_buf_set_cap(KBuf* b, long long cap, int malloced) {
     b->capw = 2 * cap + (malloced ? 1 : 0);
 }
+static KBuf* k_buf_of(KValue* items);
 /* cap == 0 is a borrowed view; cap != 0 marks data as the body of a
    KBuf-headed buffer this value may extend at its frontier. */
 typedef struct { long long len; const unsigned char* data; long long cap; } KBytes;
@@ -2782,9 +2783,12 @@ static void k_repair_interior(KValue v, void* p, KCopy* cp) {
             b->cap = 0;
             break;
         }
+        /* Copying a list's malloc'd buffer into the arena would drop the
+           only pointer to it, and the registration that frees it would find
+           an arena buffer in the field. Only its slots need the walk. */
         case K_LIST: {
             KList* l = (KList*)p;
-            if (!k_survives_x(l->items, cp->mark)) {
+            if (!k_survives_x(l->items, cp->mark) && !k_buf_malloced(k_buf_of(l->items))) {
                 long long cap = l->len ? l->len : 1;
                 KBuf* nb = k_copy_alloc(cp, sizeof(KBuf) + sizeof(KValue) * (size_t)cap);
                 k_buf_set_cap(nb, cap, 0);
@@ -2909,13 +2913,6 @@ static int k_memo_outlives(KValue result) {
     return k_survives((const void*)(intptr_t)result.payload, inner);
 }
 
-/* The pop's work, for a pop that has some. Kept out of line so the pop that
-   has none -- a heap result with nothing carried, nothing registered and no
-   tenure block at its depth, which is 507,678 of runbench's 507,685 -- pays
-   its four tests and returns without the six callee-saved pushes the copy
-   and the migrates below need. The same split the rewind made. */
-static KBuf* k_buf_of(KValue* items);
-
 /* Whether `p` lies in depth d's carry pair. */
 static int k_carry_at_holds(long long d, const void* p) {
     const char* q = (const char*)p;
@@ -2974,6 +2971,11 @@ static void k_permreg_migrate_carried(int d) {
     k_permreg_n[d] = 0;
 }
 
+/* The pop's work, for a pop that has some. Kept out of line so the pop that
+   has none -- a heap result with nothing carried, nothing registered and no
+   tenure block at its depth, which is 507,678 of runbench's 507,685 -- pays
+   its four tests and returns without the six callee-saved pushes the copy
+   and the migrates below need. The same split the rewind made. */
 static __attribute__((noinline)) KValue k_beat_pop_slow(KValue r, long long d,
                                                         int rewound) {
     KCarry* c = &k_carries[d];

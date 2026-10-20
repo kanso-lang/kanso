@@ -21,50 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-14 — a linux arm64 release build keeps every tail call a jump
-
-#1912. An arm64 release build took `tailcc` away from every arm wider than
-eight argument words (`narrow_tailcc`), so a loop through a wide arm spent a
-frame per hop. Dropping the narrowing had failed the macOS arm job:
-`a_match_holds_the_literal_its_pattern_spells` printed nothing.
-
-That failure reproduces off the arm job. The release IR, without the narrowing,
-built for `aarch64-linux-gnu` with clang 19 and run under `qemu-aarch64`, dies
-on SIGSEGV at -O1 and above and prints all eight lines at -O0. Running the
-middle end at -O1 and `llc` at -O0 prints them too, so the backend is at fault.
-`llc -opt-bisect-limit` puts the first bad step at CodeGenPrepare on
-`regexp/cutting_6`, an arm of six `%KValue`s, twelve words. Its last action on
-one path is an ordinary call to `k_b_push`. The middle end had marked that call
-`tail`, CodeGenPrepare duplicated the return to make it a sibling call, and the
-arm64 backend gets the stack wrong for a sibling call out of a `tailcc` function
-whose own arguments arrived on the stack.
-
-Marking every plain call in the wide arms `notail` after the middle end fixes the
-program. Before it does not, because the emitter's IR carries no `tail`
-markers: the middle end adds them, and inlining brings calls in with their own.
-The function attribute `"disable-tail-calls"="true"` is read at codegen, after
-both. On every `tailcc` function wider than eight words it turns those sibling
-calls back into calls and returns. It leaves `musttail` alone. With it, the
-fixture prints all eight lines at -O1 and -O3. In its assembly, 47 `musttail`
-edges in the marked functions are a `b` to their callee. The others I read had
-been inlined, and the jump that remained was a `b` or, through a closure, a
-`br`.
-
-On the macOS arm job the attribute fixed that fixture and the three wide-arm
-tests in `tests/a_big_object_decodes_in_a_release_build.rs`, and broke another:
-a release build of `a_spilling_tail_call_named_with_a_mark` printed nothing,
-where the interpreter prints `false`. That job builds with Apple's clang. The
-same program's IR, marked the same way, runs correctly under qemu built for
-`aarch64-linux-gnu` by clang 19 and by clang 18, and clang 19's assembly for
-`arm64-apple-macos` matches its linux assembly in the marked functions, so I
-have no reproduction of the Apple failure here.
-
-So `wide_tailcc_keeps_its_jumps` replaces `narrow_tailcc` on a linux arm64
-release build, and an Apple host keeps the narrowing. There a wide arm still
-takes the C convention, and the three tests stay off Apple arm64. On linux a
-wide arm gives up only its sibling calls into helpers, which become a call and a
-return. x86-64 builds are unchanged. #1912 stays open for the Apple half.
-
 ## 2026-10-14 — the body emitter moves to `src/codegen/emit.rs`
 
 #1947, the codegen half. The largest `impl Backend` block in `src/codegen.rs`,
@@ -1868,3 +1824,59 @@ and closes issues and writes rulings onto them; cloud writes the `— gavel:`
 entry for a ruling in its next pull request. CLAUDE.md's "Two sessions"
 section states the split. The first page section written under it is §218,
 which covers the four entries from the prune's move to the string builtins.
+
+## 2026-10-20 — a carried list keeps its buffer outside the arena
+
+#2014 left the run program holding one list buffer of 8,192 slots at exit,
+the bag phase's: run_perm_live_bytes 15,825 -> 146,913 (#2015). The buffer is
+registered with beat 0, whose rewind would free it, and that rewind reaches
+the registration. By then, though, the list's items field points at an arena
+copy of exactly 4,300 slots. A watchpoint on the field under gdb caught the
+write: the pop of the bag's own beat deep-copies its carried record, and
+`k_repair_interior` copied the list's items into the arena because they were
+not under the beat's mark. A malloc'd buffer never is. The copy dropped the
+only pointer to the buffer, and the registration found an arena buffer in the
+field and passed over it. The string and bytes arms of the same function
+already leave malloc'd storage where it is. The list arm now does the same
+and walks only the slots.
+
+`k_interior_survives` has the same blind spot: it reports a list with
+malloc'd items as not surviving, which is what sends the list to the repair.
+Changing it as well moved no fixture and no benchmark counter, so it stays as
+it is.
+
+The mem fixture `a_carried_list_frees_its_buffer` fills a bag record inside
+a loop's beat four times. Without the fix it reads perm_live_bytes 8,208 and
+perm_peak_bytes 16,416, one lap's buffer kept to exit and held beside the
+next; with it 0 and 8,208. `a_list_held_in_a_record_grows_where_it_stands` no
+longer copies its 20,000-element list: evac_bytes 384,848 -> 560 and
+alloc_bytes 1,642,720 -> 1,258,448, with perm_live_bytes 655,552 -> 655,408;
+with nothing copied there is no outgrown buffer to reuse or shelve,
+so a_list_held_in_a_record_grows_where_it_stands_buf_reuse reads 1 -> 0 and
+a_list_held_in_a_record_grows_where_it_stands_sh_buf 624 -> 704.
+On the run program run_perm_live_bytes 146,913 -> 15,825, run_bytes_freed
+9,009 -> 9,010, run_evac_bytes 9,340,096 -> 9,271,280 and run_alloc_bytes
+289,288,212 -> 289,219,396. Why #2014's unescape changed whether that pop
+copies is not traced; the copy was wrong whichever change exposed it.
+
+The test costs a list the repair is about to copy two loads and a branch.
+Asked before the survival test it ran on every list the repair visited, and
+deepbench, which repairs a captured list of lists on every bind, read 192,014
+instructions more; asked after it, only a list that does not survive pays.
+CI's rows: work_runbench 1,137,672,504 -> 1,137,617,275 and
+work_deepbench 406,723,866 -> 406,819,866, with work_pendbench 194,088,527 ->
+194,089,023, work_widebench 28,740,070 -> 28,740,098, work_oneshot 12,776,869
+-> 12,776,876, work_encodebench 2,464,678,221 -> 2,464,678,011 and
+work_livebench 1,370,942,122 -> 1,370,942,108. Every program's machine code
+grows 16 bytes (runbench text=741,081 -> 741,097), and the corpus's text
+5,283,518 -> 5,283,966.
+codegen_instructions_release 453,685,379 -> 453,686,073 counts the larger
+runtime object; codegen_instructions_dev 116,000,233 -> 116,000,561 is that
+and the link directory's order, which #2016 fixes.
+
+A rewrite of the unescape loop was measured and dropped on the way. Reading
+a string's last few bytes as a masked word, and looking escapes up in a table
+instead of a switch, saved the run program 394,787 instructions (0.035%).
+About 65 of the 217 instructions an escaped string costs are the call's fixed
+work, and with a backslash every four or five bytes the loop does about the
+same work per run whatever its width.
