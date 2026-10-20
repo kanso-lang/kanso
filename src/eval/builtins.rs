@@ -954,6 +954,45 @@ impl<'a> Interp<'a> {
                     Err(_) => Ok(Value::NoneV),
                 }
             }
+            b"append_escaped" => {
+                let [acc, s] = arity(args, name, span)?;
+                for v in [&acc, &s] {
+                    if is_failure(v) {
+                        return Ok(v.clone());
+                    }
+                }
+                let (Value::Bytes(items), Value::Str(text)) = (acc, &s) else {
+                    return Err(RuntimeError {
+                        at: None,
+                        message: "append_escaped takes bytes and a string".to_string(),
+                        span,
+                    });
+                };
+                // `s` as a JSON string holds it, in lib/json's forms, as
+                // k_b_append_escaped writes it; in place where `append` would be
+                let mut escaped = Vec::with_capacity(text.len() + 8);
+                for &c in text.as_bytes() {
+                    match c {
+                        b'"' => escaped.extend_from_slice(b"\\\""),
+                        b'\\' => escaped.extend_from_slice(b"\\\\"),
+                        8 => escaped.extend_from_slice(b"\\b"),
+                        9 => escaped.extend_from_slice(b"\\t"),
+                        10 => escaped.extend_from_slice(b"\\n"),
+                        12 => escaped.extend_from_slice(b"\\f"),
+                        13 => escaped.extend_from_slice(b"\\r"),
+                        c if c < 32 => escaped.extend_from_slice(format!("\\u{c:04x}").as_bytes()),
+                        c => escaped.push(c),
+                    }
+                }
+                let alone = Rc::strong_count(&items) == 2;
+                if self.writes_in_place(span, frame) || (alone && self.moved_here(span, frame)) {
+                    Self::written_in_place(&items).extend_from_slice(&escaped);
+                    return Ok(Value::Bytes(items));
+                }
+                let mut out = taken_to_grow(items, escaped.len());
+                out.extend_from_slice(&escaped);
+                Ok(Value::Bytes(Rc::new(out)))
+            }
             b"unescape" => {
                 let [cs, from, end] = arity(args, name, span)?;
                 for v in [&cs, &from, &end] {

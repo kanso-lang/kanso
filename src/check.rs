@@ -3,7 +3,7 @@ use crate::diag::{article, Diagnostic, Span};
 use crate::hash::{Map as HashMap, Set as HashSet};
 use num_traits::Zero;
 
-pub const BUILTINS: [&str; 72] = [
+pub const BUILTINS: [&str; 73] = [
     "annotate",
     "built_text",
     "append",
@@ -21,6 +21,7 @@ pub const BUILTINS: [&str; 72] = [
     "number_span",
     "plain_string",
     "unescape",
+    "append_escaped",
     "from_code",
     "list_dir",
     "now",
@@ -100,10 +101,11 @@ pub const AMBIENT: [&str; 14] = [
 /// `native backend: `length` takes 1 argument(s)` and no span, the page
 /// died at the call, and `kanso check` said ok. So the counts live here,
 /// beside the names, and every reader takes them from one place.
-pub const BUILTIN_ARITY: [(&str, usize); 77] = [
+pub const BUILTIN_ARITY: [(&str, usize); 78] = [
     ("accept", 1),
     ("annotate", 2),
     ("append", 2),
+    ("append_escaped", 2),
     ("args", 0),
     ("at", 2),
     ("bind", 2),

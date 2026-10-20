@@ -4012,6 +4012,10 @@ impl<'a> Backend<'a> {
                 // the twin writes the frontier pair itself where the map has
                 // no sorted view; everything else falls to the C by call
                 "put_mut_fast"
+            } else if name == "append_escaped" && in_place {
+                // a site linearity proved unique writes into the builder it
+                // was handed, as an in-place `append` does
+                "append_escaped_mut"
             } else if name == "append" && in_place {
                 // the in-place byte claim inlines whole; a byte that does not
                 // fit falls through to the C path inside the twin. Where the

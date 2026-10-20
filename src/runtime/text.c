@@ -2172,6 +2172,104 @@ KValue k_b_find2_below(KValue cs, KValue from, KValue a, KValue b, KValue lim) {
                                      b.payload, lim.payload));
 }
 
+/* The bytes of a word that a JSON string cannot hold as they stand -- a
+   quote, a backslash, or a byte below a space -- as the high bit of each.
+   The lowest bit set is exact; a borrow can only set one above it. */
+static inline uint64_t k_json_specials(uint64_t w) {
+    const uint64_t ones = 0x0101010101010101ULL;
+    uint64_t q = w ^ (ones * '"'), b = w ^ (ones * '\\');
+    return (((q - ones) & ~q) | ((b - ones) & ~b) | ((w - ones * 32) & ~w)) & (ones << 7);
+}
+
+/* Writes `len` bytes of `d` escaped for a JSON string into `o` and answers
+   how many it wrote: at most six for each byte in, plus eight of slack,
+   because a run is moved eight bytes at a time, the whole word stored and
+   the cursor moved past the run alone. The escapes are lib/json's: `\"` and
+   `\\`, the one-letter forms for 8, 9, 10, 12 and 13, and a `u` escape with
+   lowercase hex digits for the other bytes below a space. */
+static const char k_json_short[256] = {
+    [8] = 'b', [9] = 't', [10] = 'n', [12] = 'f', [13] = 'r', ['"'] = '"', ['\\'] = '\\',
+};
+static long long k_json_escape_into(char* o, const unsigned char* d, long long len) {
+    static const char hex[] = "0123456789abcdef";
+    char* start = o;
+    long long i = 0;
+    while (i < len) {
+        while (i + 8 <= len) {
+            uint64_t w;
+            memcpy(&w, d + i, 8);
+            uint64_t hit = k_json_specials(w);
+            memcpy(o, &w, 8);
+            if (hit) {
+                int k = __builtin_ctzll(hit) >> 3;
+                o += k;
+                i += k;
+                goto special;
+            }
+            o += 8;
+            i += 8;
+        }
+        while (i < len && d[i] != 34 && d[i] != 92 && d[i] >= 32) *o++ = (char)d[i++];
+        if (i == len) break;
+    special: {
+        unsigned char c = d[i++];
+        char one = k_json_short[c];
+        *o++ = '\\';
+        if (one) {
+            *o++ = one;
+        } else {
+            memcpy(o, "u00", 3);
+            o[3] = hex[c >> 4];
+            o[4] = hex[c & 15];
+            o += 5;
+        }
+    }
+    }
+    return o - start;
+}
+
+/* `append_escaped acc s`: `acc` with `s` appended as a JSON string holds it.
+   The writer calls it for a string its scan found something to escape in;
+   one with nothing is appended as it stands. Linearity treats it as it
+   treats `append`, and a site it proves unique takes the `_mut` entry, which
+   writes into the builder it was handed. The escaped bytes go through a
+   buffer on the stack, 128 bytes of input at a time, so neither entry puts
+   anything in the arena that `append` itself would not. A builder that ends
+   at its buffer's frontier with room for the worst case is written into
+   directly, as `k_b_append_rendered` writes its digits. */
+static KValue k_append_escaped(KValue acc, KValue sv, int mutate) {
+    if (!k_not_failure(acc) || !k_not_failure(sv)) return k_failed2(acc, sv);
+    if (acc.tag != K_BYTES || sv.tag != K_STR) k_die("append_escaped takes bytes and a string");
+    KStr* s = k_as_str(sv);
+    const unsigned char* d = (const unsigned char*)s->data;
+    long long len = s->len;
+    KBytes* a = k_as_bytes(acc);
+    long long acap = a->cap & ~1LL;
+    if (acap) {
+        KBuf* kb = ((KBuf*)a->data) - 1;
+        if (kb->used == a->len && a->len + 6 * len + 8 <= acap) {
+            long long n = k_json_escape_into((char*)a->data + a->len, d, len);
+            kb->used = a->len + n;
+            if (mutate) {
+                a->len += n;
+                return acc;
+            }
+            return k_bytes_owned(a->len + n, a->data, a->cap);
+        }
+    }
+    char room[6 * 128 + 8];
+    for (long long at = 0; at < len; at += 128) {
+        long long piece = len - at < 128 ? len - at : 128;
+        long long n = k_json_escape_into(room, d + at, piece);
+        acc = k_b_append_range(acc, k_as_bytes(acc), (const unsigned char*)room, n, mutate);
+    }
+    return acc;
+}
+
+KValue k_b_append_escaped(KValue acc, KValue sv) { return k_append_escaped(acc, sv, 0); }
+
+KValue k_b_append_escaped_mut(KValue acc, KValue sv) { return k_append_escaped(acc, sv, 1); }
+
 /* The bytes arm of `slice`, with the KValue convention taken off its inputs.
    A view is a header and two words, so the arithmetic here is four compares
    and an add; everything before it in `k_b_slice` is the boxing. The emitter

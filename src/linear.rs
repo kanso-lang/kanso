@@ -123,7 +123,7 @@ fn walk_for_moved(decl: &FnDecl, e: &Expr, out: &mut HashSet<(std::sync::Arc<str
     if let Expr::App { head, args, span, .. } = e {
         let writes = match head.as_ref() {
             Expr::Ident(n, _, _) => match n.as_str() {
-                "push" | "append" | "builtin_append" => args.len() == 2,
+                "push" | "append" | "builtin_append" | "builtin_append_escaped" => args.len() == 2,
                 "put" => args.len() == 3,
                 _ => false,
             },
@@ -841,6 +841,7 @@ impl<'a> Analysis<'a> {
                         "push"
                             | "append"
                             | "builtin_append"
+                            | "builtin_append_escaped"
                             | "concat"
                             | "list/concat"
                             | "builtin_concat"
@@ -934,8 +935,10 @@ impl<'a> Analysis<'a> {
             }
             Expr::App { head, args, .. } => match head.as_ref() {
                 Expr::Ident(n, _, _)
-                    if matches!(n.as_str(), "push" | "append" | "builtin_append")
-                        && args.len() == 2 =>
+                    if matches!(
+                        n.as_str(),
+                        "push" | "append" | "builtin_append" | "builtin_append_escaped"
+                    ) && args.len() == 2 =>
                 {
                     self.unique_in(&args[0], ctx, scoped)
                 }
@@ -1031,7 +1034,7 @@ fn written_fields(program: &Program) -> HashSet<String> {
     fn walk(e: &Expr, out: &mut HashSet<String>) {
         if let Expr::App { head, args, .. } = e {
             if matches!(head.as_ref(), Expr::Ident(n, _, _) if matches!(n.as_str(),
-                "push" | "append" | "builtin_append" | "put"
+                "push" | "append" | "builtin_append" | "builtin_append_escaped" | "put"
                     | "concat" | "list/concat" | "builtin_concat"))
             {
                 if let Some((_, f)) = args.first().and_then(field_read) {
@@ -1209,7 +1212,7 @@ fn walk_for_push_in(
     if let Expr::App { head, args, span, .. } = e {
         // push extends a list, append extends a byte builder, and each writes
         // into its own frontier when nobody else holds the value
-        if matches!(head.as_ref(), Expr::Ident(n, _, _) if matches!(n.as_str(), "push" | "append" | "builtin_append"))
+        if matches!(head.as_ref(), Expr::Ident(n, _, _) if matches!(n.as_str(), "push" | "append" | "builtin_append" | "builtin_append_escaped"))
             && args.len() == 2
             && a.unique_in(&args[0], decl, scoped)
         {
@@ -1354,7 +1357,7 @@ fn fed_to_consumer(var: &str, v: &str, e: &Expr) -> Option<usize> {
     let mut n = 0;
     if let Expr::App { head, args, .. } = e {
         let consuming = matches!(head.as_ref(), Expr::Ident(h, _, _)
-            if matches!(h.as_str(), "put" | "push" | "append" | "builtin_append"));
+            if matches!(h.as_str(), "put" | "push" | "append" | "builtin_append" | "builtin_append_escaped"));
         if consuming && matches!(args.first(), Some(Expr::Ident(first, _, _)) if first == var) {
             for sibling in &args[1..] {
                 n += forced_operand(v, sibling)?;
@@ -1388,7 +1391,7 @@ fn consumed_sibling_uses(var: &str, e: &Expr) -> usize {
     let mut n = 0;
     if let Expr::App { head, args, .. } = e {
         let consuming = matches!(head.as_ref(), Expr::Ident(h, _, _)
-            if matches!(h.as_str(), "put" | "push" | "append" | "builtin_append"));
+            if matches!(h.as_str(), "put" | "push" | "append" | "builtin_append" | "builtin_append_escaped"));
         if consuming && matches!(args.first(), Some(Expr::Ident(first, _, _)) if first == var) {
             for sibling in args[1..].iter().filter(|s| !holds(var, s)) {
                 n += count_in_expr(var, sibling);
