@@ -21,36 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-14 — gavel: `text/slice!` takes a slice the caller knows is in range
-
-Clay ruled #1943. Building #1890 (a `text/slice` past the end answers `none`)
-showed that the checker now refuses `text/utf8 (text/slice cs a b)` and
-`text/append acc (text/slice cs a b)` until the `none` is dispatched. Those
-are the two spellings the compiler fuses, and the JSON decoder reads every
-string through them. Its ranges come from a scan of the same bytes, so its
-`none` can never occur, and a two-arm helper that dispatches it loses both
-fusions. Measured in a container by callgrind on the #1890 branch: jsonbench
-+33.0%, livebench +38.1%, runbench +28.0%, oneshot +149.7%.
-
-**The ruling.** `text/slice! s a b` takes a slice the caller insists is in
-range. Like every `!` name it answers a box (archive, 2026-09-16, "gavel,
-reversed the same day: `!` answers a box, at the index and at the name"):
-the slice, or the out-of-range failure, which bubbles. The caller opens it
-with `.>`, so the decoder writes `text/slice! cs a b .> text/utf8` and
-`.> text/append acc`. A caller that has not bounded its range writes
-`text/slice` and dispatches on `none`, as ruled on #1890.
-
-The decoder's speed comes from fusing those chains as the nested calls are
-fused today. That is emitter work with no surface, and it is cloud's, as the
-09-16 entry assigned the inlining of a bind whose callback is applied at once.
-#1956 asked whether `slice!` was the one bang that answers a bare value; the
-09-16 ruling already answers that it is not.
-
-Owes, on #1943: `text/slice!` answering a box on every engine; the emitter
-fusing `slice! ... .> utf8`, `.> append acc`, `.> to_int` and `.> to_float`;
-the decoder's call sites moved onto those chains; a micro golden for an
-in-range `slice!` and an error golden for one out of range; appendix B.
-
 ## 2026-10-14 — a box handed to a library function that reads it is refused at the call
 
 #1957. The checker refuses a box handed to a builtin that takes a value, so
@@ -1828,3 +1798,59 @@ that a cost above the estimate changes nothing: the floor moves by what CI
 measures, and only a choice about the language itself, such as narrowing the
 ruling when the full build is impossible or contradicts another ruling, goes
 to Clay.
+
+## 2026-10-20 — a carried list keeps its buffer outside the arena
+
+#2014 left the run program holding one list buffer of 8,192 slots at exit,
+the bag phase's: run_perm_live_bytes 15,825 -> 146,913 (#2015). The buffer is
+registered with beat 0, whose rewind would free it, and that rewind reaches
+the registration. By then, though, the list's items field points at an arena
+copy of exactly 4,300 slots. A watchpoint on the field under gdb caught the
+write: the pop of the bag's own beat deep-copies its carried record, and
+`k_repair_interior` copied the list's items into the arena because they were
+not under the beat's mark. A malloc'd buffer never is. The copy dropped the
+only pointer to the buffer, and the registration found an arena buffer in the
+field and passed over it. The string and bytes arms of the same function
+already leave malloc'd storage where it is. The list arm now does the same
+and walks only the slots.
+
+`k_interior_survives` has the same blind spot: it reports a list with
+malloc'd items as not surviving, which is what sends the list to the repair.
+Changing it as well moved no fixture and no benchmark counter, so it stays as
+it is.
+
+The mem fixture `a_carried_list_frees_its_buffer` fills a bag record inside
+a loop's beat four times. Without the fix it reads perm_live_bytes 8,208 and
+perm_peak_bytes 16,416, one lap's buffer kept to exit and held beside the
+next; with it 0 and 8,208. `a_list_held_in_a_record_grows_where_it_stands` no
+longer copies its 20,000-element list: evac_bytes 384,848 -> 560 and
+alloc_bytes 1,642,720 -> 1,258,448, with perm_live_bytes 655,552 -> 655,408;
+with nothing copied there is no outgrown buffer to reuse or shelve,
+so a_list_held_in_a_record_grows_where_it_stands_buf_reuse reads 1 -> 0 and
+a_list_held_in_a_record_grows_where_it_stands_sh_buf 624 -> 704.
+On the run program run_perm_live_bytes 146,913 -> 15,825, run_bytes_freed
+9,009 -> 9,010, run_evac_bytes 9,340,096 -> 9,271,280 and run_alloc_bytes
+289,288,212 -> 289,219,396. Why #2014's unescape changed whether that pop
+copies is not traced; the copy was wrong whichever change exposed it.
+
+The test costs a list the repair is about to copy two loads and a branch.
+Asked before the survival test it ran on every list the repair visited, and
+deepbench, which repairs a captured list of lists on every bind, read 192,014
+instructions more; asked after it, only a list that does not survive pays.
+CI's rows: work_runbench 1,137,672,504 -> 1,137,617,275 and
+work_deepbench 406,723,866 -> 406,819,866, with work_pendbench 194,088,527 ->
+194,089,023, work_widebench 28,740,070 -> 28,740,098, work_oneshot 12,776,869
+-> 12,776,876, work_encodebench 2,464,678,221 -> 2,464,678,011 and
+work_livebench 1,370,942,122 -> 1,370,942,108. Every program's machine code
+grows 16 bytes (runbench text=741,081 -> 741,097), and the corpus's text
+5,283,518 -> 5,283,966.
+codegen_instructions_release 453,685,379 -> 453,686,073 counts the larger
+runtime object; codegen_instructions_dev 116,000,233 -> 116,000,561 is that
+and the link directory's order, which #2016 fixes.
+
+A rewrite of the unescape loop was measured and dropped on the way. Reading
+a string's last few bytes as a masked word, and looking escapes up in a table
+instead of a switch, saved the run program 394,787 instructions (0.035%).
+About 65 of the 217 instructions an escaped string costs are the call's fixed
+work, and with a backslash every four or five bytes the loop does about the
+same work per run whatever its width.

@@ -104633,3 +104633,33 @@ compile, browser_compile_instructions 437,381,994 from 437,381,890, 104
 instructions, because the wasm engine is built from the same source and its
 code moved with the files. The floor follows that score, as it has for earlier
 layout-only moves.
+
+## 2026-10-14 — gavel: `text/slice!` takes a slice the caller knows is in range
+
+Clay ruled #1943. Building #1890 (a `text/slice` past the end answers `none`)
+showed that the checker now refuses `text/utf8 (text/slice cs a b)` and
+`text/append acc (text/slice cs a b)` until the `none` is dispatched. Those
+are the two spellings the compiler fuses, and the JSON decoder reads every
+string through them. Its ranges come from a scan of the same bytes, so its
+`none` can never occur, and a two-arm helper that dispatches it loses both
+fusions. Measured in a container by callgrind on the #1890 branch: jsonbench
++33.0%, livebench +38.1%, runbench +28.0%, oneshot +149.7%.
+
+**The ruling.** `text/slice! s a b` takes a slice the caller insists is in
+range. Like every `!` name it answers a box (archive, 2026-09-16, "gavel,
+reversed the same day: `!` answers a box, at the index and at the name"):
+the slice, or the out-of-range failure, which bubbles. The caller opens it
+with `.>`, so the decoder writes `text/slice! cs a b .> text/utf8` and
+`.> text/append acc`. A caller that has not bounded its range writes
+`text/slice` and dispatches on `none`, as ruled on #1890.
+
+The decoder's speed comes from fusing those chains as the nested calls are
+fused today. That is emitter work with no surface, and it is cloud's, as the
+09-16 entry assigned the inlining of a bind whose callback is applied at once.
+#1956 asked whether `slice!` was the one bang that answers a bare value; the
+09-16 ruling already answers that it is not.
+
+Owes, on #1943: `text/slice!` answering a box on every engine; the emitter
+fusing `slice! ... .> utf8`, `.> append acc`, `.> to_int` and `.> to_float`;
+the decoder's call sites moved onto those chains; a micro golden for an
+in-range `slice!` and an error golden for one out of range; appendix B.
