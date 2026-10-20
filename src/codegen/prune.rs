@@ -257,16 +257,20 @@ fn cycle_members(program: &Program) -> crate::hash::Set<&str> {
     out
 }
 
+/// The functions `expr` names, as their places in `index`: a call's head, a
+/// name passed as a value and a partial alike. `call_graph` and `kept_out`
+/// both build their edges from it.
+fn name_mentions(expr: &Expr, index: &HashMap<&str, usize>, out: &mut Vec<usize>) {
+    if let Expr::Ident(n, _, _) | Expr::Partial(n, _) = expr {
+        if let Some(&at) = index.get(&**n) {
+            out.push(at);
+        }
+    }
+    crate::for_each_child(expr, |child| name_mentions(child, index, out));
+}
+
 /// Each declared name, and the names its bodies mention, by index.
 fn call_graph(program: &Program) -> (Vec<&str>, Vec<Vec<usize>>) {
-    fn mentions(expr: &Expr, index: &HashMap<&str, usize>, out: &mut Vec<usize>) {
-        if let Expr::Ident(n, _, _) | Expr::Partial(n, _) = expr {
-            if let Some(&at) = index.get(&**n) {
-                out.push(at);
-            }
-        }
-        crate::for_each_child(expr, |child| mentions(child, index, out));
-    }
     let mut index: HashMap<&str, usize> = HashMap::default();
     let mut names: Vec<&str> = Vec::new();
     for decl in &program.fns {
@@ -281,7 +285,7 @@ fn call_graph(program: &Program) -> (Vec<&str>, Vec<Vec<usize>>) {
         for stmt in &decl.body {
             match stmt {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) => {
-                    mentions(expr, &index, &mut adj[from])
+                    name_mentions(expr, &index, &mut adj[from])
                 }
             }
         }
@@ -301,19 +305,11 @@ fn call_graph(program: &Program) -> (Vec<&str>, Vec<Vec<usize>>) {
 /// in an arm of a group that also has an arm reaching none, stays a call, and
 /// the dispatcher's cheap arms keep a frame of their own size.
 fn kept_out(program: &Program) -> crate::hash::Set<&str> {
-    fn mentions(expr: &Expr, index: &HashMap<&str, usize>, out: &mut Vec<usize>) {
-        if let Expr::Ident(n, _, _) | Expr::Partial(n, _) = expr {
-            if let Some(&at) = index.get(&**n) {
-                out.push(at);
-            }
-        }
-        crate::for_each_child(expr, |child| mentions(child, index, out));
-    }
     fn decl_mentions(decl: &FnDecl, index: &HashMap<&str, usize>) -> Vec<usize> {
         let mut out = Vec::new();
         for stmt in &decl.body {
             match stmt {
-                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => mentions(expr, index, &mut out),
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => name_mentions(expr, index, &mut out),
             }
         }
         out
