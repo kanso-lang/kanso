@@ -21,29 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-14 — checking only what a module reaches, measured and set aside
-
-#1952 asked whether the merged check could skip the dependency functions a
-module never reaches, since every program that imports std/text or std/list
-now checks 114 more lines of them. The branch
-`claude/check-only-what-an-import-reaches` sets those functions aside while the
-merged check runs and puts them back afterwards. They have to go back because
-the merged program is also what an importer of the module receives, and an arm
-the module never calls can still travel to one that does.
-`two_owners_tie_on_a_traveling_call` in the module error corpus caught the
-first version, which dropped them for good.
-
-Measured in this container on the tree that carries #1948 and #1950:
-compile_instructions fell from 31,948,363 to 30,683,796, but
-entry_instructions rose from 101,372,705 to 108,124,116 and
-library_instructions from 100,887,003 to 105,435,412, with compile_allocs at
-18,650 against 17,941. The walk that finds what is reached took 1.5 to 1.9 ms
-of a 19 ms entry compile, and inference fell only from 3.02 to 2.79 ms. Lexing
-and parsing the larger libraries are where most of their cost lands, and a
-smaller check does not reach either. Not reading an unreached function at all
-would mean parsing a library a declaration at a time, which is a larger change;
-#1952 stays open with these numbers on it.
-
 ## 2026-10-14 — `text/slice` past the end answers `none` on every engine
 
 This builds the gavel "`text/slice` past the end answers `none`" (#1890). A
@@ -1858,3 +1835,44 @@ instead of a switch, saved the run program 394,787 instructions (0.035%).
 About 65 of the 217 instructions an escaped string costs are the call's fixed
 work, and with a backslash every four or five bytes the loop does about the
 same work per run whatever its width.
+## 2026-10-20 — a plain JSON key goes straight to its colon
+
+An object key used to go through `parse_string`: `builtin_plain_string`, a
+dispatch on what it answered, a `parsed` record holding the position after the
+key and the key itself, and then `obj_key` taking that record apart to look
+for the colon. A key almost never has an escape in it, so `obj_key_start` now
+calls `builtin_plain_string` itself, and `key_at`'s string arm works out the
+position after the closing quote and goes straight to `obj_key_end`. Anything
+else goes through `plain_at` and `obj_key` as before, so an escaped key, a
+`\u` escape, an unterminated key and bad utf-8 are read and reported by the
+code that read them before.
+
+The same shape for a string value after a colon read the run program 14.8M
+instructions higher than keys alone, because the extra byte dispatch in front
+of every value cost the numbers more than it saved the strings, and was
+dropped.
+
+Over 100,000 fuzzed documents decoded byte for byte alike on native, the
+interpreter and #2014's build, and the harness went red when the key's end
+was put one byte early.
+
+CI's rows. The work vein: work_runbench 1,137,672,504 -> 1,104,562,811
+(-2.91%), work_jsonbench 812,108,477 -> 763,196,627 (-6.02%), work_oneshot
+12,776,869 -> 12,450,454 and work_livebench 1,370,942,122 -> 1,370,617,065.
+The interpreter reads its corpus's keys the same way: interp_instructions
+484,702,222 -> 463,217,423 and interp_allocs 539,460 -> 502,624, with
+interp_peak_bytes 614,115 -> 617,367. The library grows by the two arms of
+`key_at`, and every program that imports std/json compiles them: compile_instructions
+24,089,825 -> 24,321,293, entry_instructions 75,139,973 -> 75,148,170,
+library_instructions 74,835,835 -> 74,843,912, compile_allocs 13,382 ->
+13,465, compile_peak_bytes 572,289 -> 575,715 and front_end_visits 6,938 ->
+7,063. The decoder's emitted code reads
+emitted_defines 134 -> 136, emitted_calls 1,249 -> 1,282, emitted_branches
+1,336 -> 1,374 and emitted_lines 12,690 -> 13,010, and the other programs
+that decode emitted_other_defines 2,148 -> 2,154, emitted_other_calls 18,298
+-> 18,397, emitted_other_branches 17,145 -> 17,259 and emitted_other_lines
+156,673 -> 157,633. Machine code: text 5,283,518 -> 5,286,574, 880 bytes on
+each program that decodes JSON and 416 on runbench. In the tab the run falls
+and the compile rises with the library: browser_run_instructions 35,361,799
+-> 34,316,072, browser_compile_instructions 408,301,693 -> 413,585,272 and
+browser_compile_peak_bytes 749,207 -> 757,553.

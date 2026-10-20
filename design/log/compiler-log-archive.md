@@ -104689,3 +104689,26 @@ read `compile_instructions` 31,948,363 -> 31,940,603, `entry_instructions`
 101,372,705 -> 101,349,935 and `library_instructions` 100,887,003 ->
 100,864,357, a fall of a few hundredths of a percent that this change does not
 explain, so it is named as layout.
+
+## 2026-10-14 — checking only what a module reaches, measured and set aside
+
+#1952 asked whether the merged check could skip the dependency functions a
+module never reaches, since every program that imports std/text or std/list
+now checks 114 more lines of them. The branch
+`claude/check-only-what-an-import-reaches` sets those functions aside while the
+merged check runs and puts them back afterwards. They have to go back because
+the merged program is also what an importer of the module receives, and an arm
+the module never calls can still travel to one that does.
+`two_owners_tie_on_a_traveling_call` in the module error corpus caught the
+first version, which dropped them for good.
+
+Measured in this container on the tree that carries #1948 and #1950:
+compile_instructions fell from 31,948,363 to 30,683,796, but
+entry_instructions rose from 101,372,705 to 108,124,116 and
+library_instructions from 100,887,003 to 105,435,412, with compile_allocs at
+18,650 against 17,941. The walk that finds what is reached took 1.5 to 1.9 ms
+of a 19 ms entry compile, and inference fell only from 3.02 to 2.79 ms. Lexing
+and parsing the larger libraries are where most of their cost lands, and a
+smaller check does not reach either. Not reading an unreached function at all
+would mean parsing a library a declaration at a time, which is a larger change;
+#1952 stays open with these numbers on it.

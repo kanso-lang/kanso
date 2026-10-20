@@ -88,7 +88,7 @@ fn obj_key_end cs c p k acc
   if blank (obj_key_end cs cs[p + 1] (p + 1) k acc) (fail p "expected `:`")
 
 fn obj_key_start cs 34 p acc
-  obj_key cs (parse_string cs (p + 1)) acc
+  key_at cs (p + 1) (builtin_plain_string cs (p + 1)) acc
 
 fn obj_key_start _ none p _
   fail p "unexpected end of input"
@@ -96,6 +96,15 @@ fn obj_key_start _ none p _
 fn obj_key_start cs c p acc
   blank = ws? c
   if blank (obj_key_start cs cs[p + 1] (p + 1) acc) (key_bad p)
+
+# A key with nothing to undo goes straight on to the colon, without the
+# `parsed` record `parse_string` would build for `obj_key` to take apart.
+fn key_at cs p s:string acc
+  q = p + 1 + length (text/bytes s)
+  obj_key_end cs cs[q] q s acc
+
+fn key_at cs p found acc
+  obj_key cs (plain_at cs p found) acc
 
 fn key_bad p
   fail p "expected a string key"

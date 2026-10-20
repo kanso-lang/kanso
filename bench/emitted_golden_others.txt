@@ -241,7 +241,7 @@
 # 730 -> 734, calls 6,866 -> 6,824 and lines 51,668 -> 51,622; scanbench
 # loses 44 calls and 83 lines; the rest rise by a few lines each.
 encodebench defines=141 calls=1104 branches=968 lines=10358
-oneshot defines=152 calls=1355 branches=1410 lines=13632
+oneshot defines=154 calls=1388 branches=1448 lines=13952
 basket defines=127 calls=1107 branches=1032 lines=9186
 widebench defines=157 calls=1259 branches=1086 lines=11455
 deepbench defines=53 calls=253 branches=257 lines=2385
@@ -251,5 +251,5 @@ scanbench defines=322 calls=3015 branches=2947 lines=25195
 indexbench defines=21 calls=70 branches=48 lines=758
 digestbench defines=134 calls=920 branches=928 lines=8071
 readbench defines=21 calls=70 branches=44 lines=731
-livebench defines=153 calls=1394 branches=1453 lines=13955
-runbench defines=775 calls=7169 branches=6465 lines=56287
+livebench defines=155 calls=1427 branches=1491 lines=14275
+runbench defines=777 calls=7202 branches=6503 lines=56607
