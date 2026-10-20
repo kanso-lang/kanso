@@ -21,75 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-14 — `delete`, `io/read_line` and `os/modified`
-
-These are the three #1914 names that need the runtime. #1948 carries the six
-written in kanso. All three run on the interpreter, both native tiers and the
-page's translator.
-
-`delete map key` answers the map without the key. A key that is not there
-answers an equal map, and the map it was handed is not changed. It sits beside
-`put` as an ambient name, so a program that declares its own `delete` is now
-told the name is taken; kq, vse and kanso-json declare none. Natively the
-answer is built from the map's deduplicated sorted view, so a key written twice
-is gone after one `delete`. A first argument that is not a map is refused at
-check time, and a float key at run time.
-
-`io/read_line` is a description that yields the next line of standard input
-without its `\n` or `\r\n`, or `done` at the end. A lone `\r` is kept, since
-only those two endings were ruled. It flushes standard output before it waits,
-so a prompt written ahead of it reaches the terminal first. Bytes that are not
-text are refused the way `os/read_file` refuses them. A read error counts as
-the end of input, which is what `io/stdin` already did natively. The page has
-no standard input and refuses `read_line` as it refuses `stdin`.
-
-`os/modified path` yields when the file last changed, in milliseconds since
-the epoch, or `file_not_found`. A failure other than absence is reported in
-`os/read_file`'s words. In the page it yields `file_not_found`, matching
-`os/exists`.
-
-New goldens: four micro programs, one error and two runtime diagnostics, and a
-stdin corpus under `tests/golden/stdin/` that `tests/read_line.rs` feeds to
-native and the interpreter. One test there waits for each prompt before typing
-the answer, so an unflushed prompt fails it. Each was watched red: native and
-interpreter `delete` keeping the key, `\r` left on the line, and the flush
-removed.
-
-CI's rows price the three builtins. Every native binary carries their runtime
-code, 2,688 bytes more text per bench, so `text` went from 4,932,142 to
-4,969,774 across the fourteen. Each bench also runs about 234 more
-instructions, the same on every one, so the rise is outside any decode loop:
-work_basket 30,946,278, work_deepbench 403,499,544, work_digestbench 5,909,247,
-work_escapebench 39,058,340, work_indexbench 2,462,571, work_jsonbench
-858,186,231, work_livebench 1,474,854,142, work_oneshot 13,205,901,
-work_pendbench 191,674,024, work_readbench 4,580,963, work_runbench
-1,178,202,929, work_scanbench 273,675 and work_widebench 28,274,676, while
-work_encodebench fell to 2,386,636,337. The compiler checks and lowers three
-more names and carries the larger runtime text: compile_instructions
-28,044,444, entry_instructions 92,512,951, library_instructions 92,130,190,
-emit_instructions 7,245,801, codegen_instructions_dev 119,400,046 and
-codegen_instructions_release 477,099,466. The interpreter's run went to
-interp_instructions 495,589,622, and the tab to browser_compile_instructions
-414,205,634 and browser_run_instructions 34,183,945. The floor drops by the
-cost under the language rule, since #1914 rules these names.
-
-Carried together over main 859ad275 in #1953, the six names and the three
-builtins land on one set of CI rows, each read against main. The front end pays
-for both: compile_instructions 31,948,363 from 28,257,376, entry_instructions
-101,372,705 from 93,065,372, library_instructions 100,887,003 from 92,696,544,
-compile_allocs 17,941 from 15,937, emit_instructions 7,622,247 from 7,239,817
-and module_visits 3,666 from 2,912. The compile corpus holds more while it is
-checked, compile_peak_bytes 789,911 from 703,187, with front_end_visits at
-9,326. The interpreter's run reads interp_instructions 496,215,717,
-interp_allocs 592,174 and interp_peak_bytes 792,646, against 495,318,943,
-589,643 and 725,610. The tab's compile reads browser_compile_instructions
-437,381,890 and browser_compile_peak_bytes 726,939, against 416,674,694 and
-686,192, and its run browser_run_instructions 34,183,945. Most of the compile
-cost is the 114 lines the two library modules grew, which every program
-importing them reads whole; #1952 is the change that would take it back. Both
-halves build ruled names (#1914, #1903), so the floor drops by the combined
-cost under the language rule.
-
 ## 2026-10-14 — kq's rise at the 2169a0ff pin is clang 18 linking without `deadargelim`
 
 When kq's pin moved to 2169a0ff (kq#190), its instruction rows rose: print_small
@@ -1770,10 +1701,11 @@ position and the place of each. They stay two. What was doubled was inside
 this file: `call_graph` and `kept_out` each defined the same walker over a
 body's names, and it is `name_mentions` now, once.
 
-The move alone shifted codegen_instructions_dev by 15 instructions, since that
-row counts the whole `kanso build` tree and kanso's own emitting moves with
-the binary's layout; with the walker defined once it reads main's
-115,648,918 again. The tab's compile, which runs the prune in the wasm build,
+The move alone shifted codegen_instructions_dev by 15 instructions, and with
+the walker defined once it read main's 115,648,918 again. (Corrected: this
+entry first put the 15 down to kanso's layout, but the row leaves out kanso's
+own process. The order the link directory lists in moves gold by that much
+from one runner to the next; see "the link directory lists in one order".) The tab's compile, which runs the prune in the wasm build,
 reads browser_compile_instructions 422,962,643, 9,485 fewer, and welfare's
 rise is banked.
 
@@ -1855,3 +1787,30 @@ browser_compile_instructions 422,962,643 -> 424,273,317,
 browser_compile_peak_bytes 753,318 -> 758,624 and browser_run_instructions
 37,653,273 -> 37,747,192 rise with the larger declarations. Welfare rises and
 is banked.
+
+## 2026-10-20 — the link directory lists in one order
+
+The dev codegen row read 116,000,241, then 116,000,233, then 116,000,241 on
+three commits of #2014 that changed no code. The profiles put all 8
+instructions in `ld.gold`; kanso and clang read the same each time. A second
+reading in the same job always agreed with the first, so whatever moved was
+fixed for a job and differed between jobs.
+
+It is the order gold reads the link directory in. gold reads every `-L`
+directory whole, and the codegen box stages one holding the five libraries the
+link resolves. ext4 lists a directory by a hash of each name, seeded per
+filesystem, so each fresh runner can list those five its own way. Linking the
+same inputs on this container with the five listed three ways read
+22,443,938, 22,443,953 and 22,443,989.
+
+`scripts/gates/codegen_box.sh` now keeps the entries on tmpfs, which lists
+them in the order they were made, and makes them in a fixed order; on Linux
+`$box/link` is a link to `/dev/shm/kanso-codegen-link`, so the path the build
+is given does not change. Two readings here agree, and making the entries in
+the reverse order moves gold by 17, so the order is now the script's. The
+staging refuses to run when `/dev/shm` is not a tmpfs. The row takes CI's
+reading under the new order.
+
+The prune's entry put an earlier move of this row down to kanso's layout. The
+row leaves out kanso's process, so that cannot be the reason, and the entry
+says so now.
