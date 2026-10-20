@@ -57,7 +57,7 @@ which it is before it edits anything.
   and merges them. Clay: "all development is for you. the chat session is only
   for me to talk with and make decisions with."
 - **The chat is where Clay talks and decides.** It files, labels and closes
-  issues and writes rulings onto them. It opens no pull requests.
+  issues and writes rulings onto them.
 - **Cloud keeps the page level with the log.** `page_drift` fails a tree more
   than three log entries ahead of docs/compiler.html, so a pull request that
   adds the fourth entry writes the page's section for them. A `data-golden`
@@ -80,8 +80,8 @@ says what happened. Read the queue with
   question already ruled is never re-asked: cite the ruling and close the issue.
 - **When Clay rules, the chat records it on the issue**: it closes the issue
   (nothing to build) or relabels it `ruled` and `lane:cloud` with what is owed
-  as a checklist. Cloud writes the `— gavel:` log entry in its next pull
-  request. Cite a ruling by
+  as a checklist. When the chat has not written the `— gavel:` log entry,
+  cloud writes it in its next pull request. Cite a ruling by
   its log heading or issue number, never by a session task id.
 - **Cloud chooses the build order, from the whole list.** It reads every open
   `ruled` issue at each check-in and before opening a pull request, and a pull
@@ -352,8 +352,19 @@ resembles it. Before an argument rests on one:
   permission to lower the welfare floor if it is in service of making the
   language actually work for the specification. this is an ironclad rule." A
   change that builds a ruled part of the language lowers the floor by exactly
-  what it costs, records why in the floor's history, and carries on. A floor
-  drop bought by anything else needs Clay.
+  what it costs, records why in the floor's history, and carries on. That holds
+  when the measured cost exceeds the estimate the ruling was given: the cost of
+  a required feature is never a question for Clay. What goes to him is a choice
+  about the language, such as narrowing what the ruling asked for, and only
+  when the full build is impossible or contradicts another ruling. Clay: "it
+  should never need to ask to lower the welfare for a feature implementation
+  that's required."
+- **So is a measurement that stops reading outside state.** A change that only
+  normalizes what a row reads (an order, a cache, a layout the code under test
+  did not produce) re-bases the floor by exactly what CI measures after it,
+  records why, and carries on. The old reading was a draw, and choosing among
+  fixed states by which reads lowest is choosing the measurement by its result.
+  Ruled on #2017. A floor drop bought by anything else needs Clay.
 - **Under the 2026-09-05 corpus-first gavel, a blind corpus is repaired
   first**: add the benchmark, baseline it before the fix, and the fix scores as
   a rise.
