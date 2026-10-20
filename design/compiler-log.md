@@ -1808,8 +1808,10 @@ them in the order they were made, and makes them in a fixed order; on Linux
 `$box/link` is a link to `/dev/shm/kanso-codegen-link`, so the path the build
 is given does not change. Two readings here agree, and making the entries in
 the reverse order moves gold by 17, so the order is now the script's. The
-staging refuses to run when `/dev/shm` is not a tmpfs. The row takes CI's
-reading under the new order.
+staging refuses to run when `/dev/shm` is not a tmpfs. Under the new order CI
+reads codegen_instructions_dev 115,822,000 -> 115,822,620 on main's tree, and
+the floor is re-based by that cost under kanso#2017's gavel: a fix that
+normalizes a measurement re-bases the floor without a ruling.
 
 The prune's entry put an earlier move of this row down to kanso's layout. The
 row leaves out kanso's process, so that cannot be the reason, and the entry
