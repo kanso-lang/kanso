@@ -2788,7 +2788,7 @@ static void k_repair_interior(KValue v, void* p, KCopy* cp) {
            an arena buffer in the field. Only its slots need the walk. */
         case K_LIST: {
             KList* l = (KList*)p;
-            if (!k_buf_malloced(k_buf_of(l->items)) && !k_survives_x(l->items, cp->mark)) {
+            if (!k_survives_x(l->items, cp->mark) && !k_buf_malloced(k_buf_of(l->items))) {
                 long long cap = l->len ? l->len : 1;
                 KBuf* nb = k_copy_alloc(cp, sizeof(KBuf) + sizeof(KValue) * (size_t)cap);
                 k_buf_set_cap(nb, cap, 0);
