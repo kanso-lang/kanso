@@ -904,6 +904,43 @@ impl<'a> Interp<'a> {
                 let end = (at + 1) as i64;
                 Ok(Value::int(if float { -end } else { end }))
             }
+            b"plain_string" => {
+                let [cs, from] = arity(args, name, span)?;
+                for v in [&cs, &from] {
+                    if is_failure(v) {
+                        return Ok(v.clone());
+                    }
+                }
+                let (Value::Bytes(items), Value::Int(from)) = (&cs, &from) else {
+                    return Err(RuntimeError {
+                        at: None,
+                        message: "plain_string takes bytes and a position".to_string(),
+                        span,
+                    });
+                };
+                // The first quote or backslash at or after `from`. A quote
+                // answers the text in front of it, when that is utf-8; a
+                // backslash answers its own position; anything else is none,
+                // as k_b_plain_string answers.
+                let start = match usize::try_from(from) {
+                    Ok(p) if p >= 1 => p,
+                    _ => return Ok(Value::NoneV),
+                };
+                let found = items
+                    .get(start - 1..)
+                    .and_then(|rest| rest.iter().position(|&b| b == b'"' || b == b'\\'));
+                let Some(off) = found else {
+                    return Ok(Value::NoneV);
+                };
+                let at = start - 1 + off;
+                if items[at] == b'\\' {
+                    return Ok(Value::int(at + 1));
+                }
+                match std::str::from_utf8(&items[start - 1..at]) {
+                    Ok(s) => Ok(Value::Str(Text::from(s.to_string()))),
+                    Err(_) => Ok(Value::NoneV),
+                }
+            }
             b"find2" => {
                 let [cs, from, a, b] = arity(args, name, span)?;
                 for v in [&cs, &from, &a, &b] {

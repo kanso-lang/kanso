@@ -1500,6 +1500,26 @@ KValue k_b_find2(KValue cs, KValue from, KValue a, KValue b) {
                                b.payload));
 }
 
+/* `plain_string cs p`: the text of a JSON string whose body starts at `p`,
+   when the first quote or backslash at or after `p` is a quote and the bytes
+   before it are utf-8. Anything else is none, and the caller reads the string
+   the long way, which is where an escape is undone and a bad byte is named.
+   The emitter reaches this through `k_b_plain_string_fast`, which tests the
+   tags and runs the scan and the utf8 inline. */
+KValue k_b_plain_string(KValue cs, KValue fromv) {
+    if (__builtin_expect(!k_not_failure(cs) || !k_not_failure(fromv), 0))
+        return k_failed2(cs, fromv);
+    if (cs.tag != K_BYTES || fromv.tag != K_INT) k_die("plain_string takes bytes and a position");
+    KBytes* b = k_as_bytes(cs);
+    long long from = fromv.payload;
+    if (from < 1) return k_none();
+    long long q = k_b_find2_raw(b->data, b->len, from, 34, 92);
+    if (q > b->len) return k_none();
+    if (b->data[q - 1] == 92) return k_int(q);
+    KValue s = k_b_utf8_slice_raw(b->data, b->len, from, q - 1, k_site);
+    return s.tag == K_ERR ? k_none() : s;
+}
+
 /* Where a JSON number's bytes end. The answer is the first position at or
    after `from` whose byte cannot be part of a number -- anything but a digit,
    `+`, `-`, `.`, `e` or `E` -- and it comes back negated when a `.`, `e` or

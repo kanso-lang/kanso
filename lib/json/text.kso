@@ -89,8 +89,22 @@ fn hex_upper c
 # The run up to the first quote or backslash is a span the scan proved
 # inside cs, so slicing it cannot miss. A string ending in its last byte
 # reaches one past the end, where span_to answers the empty run.
+# A string with no escape in it is read by one call, which finds the closing
+# quote and answers the text before it. One with an escape, or with bytes that
+# are not utf-8, answers none there and is read the long way, which is where an
+# escape is undone and a bad byte is named.
 fn parse_string cs p
+  plain_at cs p (builtin_plain_string cs p)
+
+fn plain_at cs p none
   string_at cs (text/span_to cs p 34 92)
+
+fn plain_at cs p q:int
+  fresh = text/bytes ""
+  str_chars cs q (text/append fresh (builtin_slice_in cs p (q - 1)))
+
+fn plain_at _ p s
+  parsed (p + 1 + length (text/bytes s)) s
 
 # string bytes: 34 quote, 92 backslash; escapes name their targets
 fn str_char _ 34 p acc
