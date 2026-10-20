@@ -1176,7 +1176,15 @@ impl<'a> Backend<'a> {
                     }
                     return self.emit_declared_partial(f, name, args, *span);
                 }
-                self.emit_call_full(f, head, args, *piped, *span)
+                let saved = match (head.as_ref(), piped) {
+                    (Expr::Ident(name, _, _), false) => {
+                        self.entering_deep(f, name.as_str(), args.len())
+                    }
+                    _ => None,
+                };
+                let called = self.emit_call_full(f, head, args, *piped, *span)?;
+                self.left_deep(f, saved);
+                Ok(called)
             }
             Expr::Field { base, name, span } => {
                 let b = self.emit_expr(f, base)?;
@@ -1351,6 +1359,44 @@ impl<'a> Backend<'a> {
 
     /// Emit an expression in tail position: direct calls to kanso functions
     /// become guaranteed tail calls, and an if's branches stay tails.
+    /// Before a call that enters a cycle growing the stack from outside it:
+    /// the record an overflow prints is saved, and set to the cycle's place
+    /// when it is empty (see `crate::deep`). Answers the saved record, which
+    /// `left_deep` puts back once the call returns.
+    fn entering_deep(&mut self, f: &mut FnEmit, name: &str, arity: usize) -> Option<String> {
+        let caller = (f.deep_from.0.as_str(), f.deep_from.1);
+        let (decl, span) = self.deep.entering(Some(caller), (name, arity))?;
+        let d = &self.program.fns[decl];
+        let hako = crate::provenance::package_of(&d.file);
+        let spelled = crate::deep::spelled(self.program, (decl, span));
+        let (lit, _) = self.intern(&format!("{hako}\0{spelled}\0"));
+        let saved = f.tmp();
+        f.line_fmt(format_args!("{saved} = load ptr, ptr @k_deep_site"));
+        let empty = f.tmp();
+        f.line_fmt(format_args!("{empty} = icmp eq ptr {saved}, null"));
+        let set = f.tmp();
+        f.line_fmt(format_args!("{set} = select i1 {empty}, ptr @{lit}, ptr {saved}"));
+        f.line_fmt(format_args!("store ptr {set}, ptr @k_deep_site"));
+        Some(saved.to_string())
+    }
+
+    fn left_deep(&mut self, f: &mut FnEmit, saved: Option<String>) {
+        if let Some(saved) = saved {
+            f.line_fmt(format_args!("store ptr {saved}, ptr @k_deep_site"));
+        }
+    }
+
+    /// The group a call names, when it names one by name with its arity.
+    fn named_call(expr: &Expr) -> Option<(&str, usize)> {
+        match expr {
+            Expr::App { head, args, piped: false, .. } => match head.as_ref() {
+                Expr::Ident(name, _, _) => Some((name.as_str(), args.len())),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
     fn emit_tail(&mut self, f: &mut FnEmit, expr: &Expr) -> Result<(), String> {
         if let Expr::Guard { cond, early, rest, .. } = expr {
             // A guard is a tail `if` whose else is the rest of the body, so
@@ -1368,6 +1414,20 @@ impl<'a> Backend<'a> {
             f.start_block(&rest_label);
             self.emit_fn_body(f, rest)?;
             return Ok(());
+        }
+        if let Some((name, n)) = Self::named_call(expr) {
+            let caller = (f.deep_from.0.as_str(), f.deep_from.1);
+            if self.deep.entering(Some(caller), (name, n)).is_some() {
+                // a lambda keeps its jump: it can be a step of a loop the
+                // cycle runs through it, so it records and puts nothing back
+                if f.lifted {
+                    let _ = self.entering_deep(f, name, n);
+                } else {
+                    let value = self.emit_expr(f, expr)?;
+                    self.emit_ret(f, &value);
+                    return Ok(());
+                }
+            }
         }
         if let Expr::App { head, args, piped: false, .. } = expr {
             if let Expr::Ident(name, _, _) = head.as_ref() {

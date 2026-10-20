@@ -1,8 +1,7 @@
 # A deep recursion that enters a second recursion at every level runs out of
 # stack inside whichever one is on top when the stack ends, and the engines
-# end at different depths. When the report named the cycle last entered,
-# native named `small` and the interpreter `big`. An overflow names no place
-# (kanso#1987), so both print the sentence alone.
+# end at different depths. The outermost cycle still running is the same on
+# both, so the report names it: `big`, by its call to itself (kanso#1991).
 fn small 0
   0
 

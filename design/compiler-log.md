@@ -21,24 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-13 — gavel: an argument nobody reads is never computed, err or not
-
-Clay ruled #1928. In the toml port's reduction, `e = boom 1` binds an err
-lazily and `ignores 5 e` passes it to a parameter the body never reads.
-Every engine prints the body's answer and the err never occurs. Chapter 04
-says a catch-all arm declines an err, which read as if `ignores` should not
-run; making it decline would mean computing every argument at every call to
-learn whether it is an err, ending call-by-need at every call.
-
-**The ruling.** A value nobody asks for is never computed, so an err nobody
-asks for never occurs. A catch-all declines an err it is handed. Every
-engine already does this, and nothing changes in the compiler. Chapter 04
-gains the sentence, in this change. The port's fix is to dispatch on the
-validation result before passing it on.
-
-Owes, on #1928: the toml reduction kept as a micro golden pinning today's
-output on every engine; #1891's second item closed with a pointer here.
-
 ## 2026-10-13 — `list/concat` joins two lists
 
 #1906 moves concat to the module of the type it works on. `list/concat a b`
@@ -1809,3 +1791,106 @@ codegen_instructions_release 449,248,021 rise for the edit to the compiler's
 Rust. Every allocation counter agrees with main. The floor drops by the cost
 under the rule for a change that makes the language work as specified, a JSON
 decoder that refuses what RFC 8259 refuses: welfare falls 0.03, to 91.25.
+
+## 2026-10-19 — a stack overflow names the outermost cycle still running
+
+#1991, owed by the 2026-10-17 gavel (#1987): every run-time failure names its
+line, and a stack overflow was the one that named none. kanso#1985 tried the
+cycle the program entered last and was taken out, because the engines run out
+of stack at different depths and a recursion that enters a second recursion at
+each level named a different cycle on each engine.
+
+The place is now the outermost cycle that grows the stack and is still
+running. No depth decides it, so the engines agree. `src/deep.rs` finds the
+cycles from the call graph, and a cycle's place is the first call written
+inside it to a member outside tail position. An overflow prints the sentence
+and then `failed in <function> at <file>:<line>`, as every other run-time
+failure does.
+
+Each engine keeps one record: `k_deep_site` in the runtime, `deep_now` in the
+interpreter. A call that enters a growing cycle from outside it saves the
+record, sets it when it is empty, and puts it back when the call returns. The
+put-back is what keeps a returned cycle from naming a later overflow
+elsewhere. Three entries needed more than that:
+
+- A tail call into a cycle has nowhere to put the record back, and a one-line
+  library wrapper that tail-calls its worker is the common case. The caller is
+  not on the cycle, so the call is made as an ordinary one. It costs one frame
+  per entry, not one per step.
+- A lambda or a thunk is on its maker's cycle, since it can be a step of a
+  loop the cycle runs through it. It keeps its tail calls, and a call it makes
+  into another cycle only sets an empty record. Making those calls ordinary
+  broke `a_lambda_called_in_tail_position_costs_no_stack` in the CPS
+  translator, which is how this came to light.
+- A group called as a value enters through its `w_` wrapper, which records as
+  a call from outside does.
+
+The pool of work-ahead puts the record back when pooled work overflows, so an
+overflow it rescued names nothing later.
+`pooled_work_that_overflowed_leaves_no_name_behind` goes red without it.
+
+The tab traps when the wasm call stack runs out, so the runtime exports
+`k_deep_place` and the page's host reads it after the trap.
+`kanso::stack_exhausted` takes the place and prints the same two lines on
+native's `kanso run`, the tab and the test host.
+
+Goldens: `a_recursion_inside_a_recursion_overflows_alike` names `big` on every
+engine. `an_overflow_entered_through_a_tail_call_names_its_cycle`,
+`an_overflow_entered_through_a_value_names_its_cycle` and
+`an_overflow_names_the_cycle_still_running` cover the three entries, and
+`deep_recursion`, the five work-ahead overflows and
+`a_built_binary_names_its_stack_overflow` now carry the place. Each fixture
+was watched red without its part. Their recursions add floats, because an
+integer `1 + f (k - 1)` is rewritten to a loop and never overflows.
+
+The first CI run read 0 for compile, entry and library instructions and could
+not read start-up, emit or the interpreted run. valgrind had read no symbols
+from the compiler, so no gate found the frame it reads. It is the layout the
+2026-09-13 entry met on this container: with RELRO, lld writes two writable
+segments, and when the first ends on a page boundary they are contiguous in
+the file and in memory, and valgrind 3.22 reads nothing from the executable.
+This branch's binary landed there on CI; #2002's job, re-run on the same
+runners, read every row. Building here at CI's checkout path with CI's
+`CARGO_HOME` reproduced it, and linking with `-z norelro` removed it. build.rs
+now links the compiler that way on Linux, which leaves one writable segment
+whatever the binary's size, and `the_compiler_links_one_writable_segment`
+goes red without the flag. The compiler gives up RELRO's write protection on
+its relocated pointers. The rows that read the compiler move by layout with
+it: on this container `kanso::main` on the compile corpus read 24,962,673 with
+RELRO and 24,961,819 without.
+
+With the symbols back, CI read the interpreted run 16.06M instructions higher,
+570,698,408 to 586,760,939. A profile diff against main put 17.1M of it in
+`eval_body_flow`: the additions to the dispatch loop had pushed it out of line,
+and it and `eval_body_flow_unplaced` are now inlined into their one caller. The
+body also stopped looking up its own cycle. Every overload of a group is on
+the group's cycle, so the loop sets the running cycle on entry and on each tail
+hop from the lookup it already makes. On this container that took the run from
+585,706,096 to 577,416,551, against main's 569,645,202.
+
+Rows, from CI, read again after main took #2001 and #2002. Every emitted
+module declares `@k_deep_site`, one line more: the compile corpus lands on
+lines 1,372 and module_lines 1,131, the decoder on emitted_lines 12,296, and
+the other benchmarks on emitted_other_lines 157,010 and emitted_other_branches
+17,160, the rest being the saves and puts-back around the calls that enter a
+cycle. Machine code grows to text 5,119,726 in total. Those calls cost the
+benchmarks a few instructions each: work_jsonbench lands on 885,497,327,
+work_encodebench 2,464,678,788, work_oneshot 13,636,623, work_basket
+31,162,888, work_deepbench 406,723,866, work_escapebench 39,058,437,
+work_pendbench 194,088,527, work_indexbench 2,482,746, work_scanbench 274,236,
+work_digestbench 5,992,543, work_readbench 4,583,965 and work_livebench
+1,498,605,914. work_widebench rises most, to 28,740,070 (+144,042, 0.5%), and
+work_runbench falls to 1,230,554,702, by mechanisms not isolated. Clang reads
+the longer modules: codegen_instructions_dev 115,648,918 and
+codegen_instructions_release 453,327,164. The emitter finds the cycles,
+emit_instructions 6,178,365, and the tab's compile does the same,
+browser_compile_instructions 422,972,128 (+3,606,588, 0.9%) and
+browser_compile_peak_bytes 753,318; browser_run_instructions lands on
+37,653,273.
+The interpreter keeps the places and a cycle on every closure:
+interp_instructions 578,503,674 (+7,757,710, 1.4%), interp_allocs 652,272 and
+interp_peak_bytes 633,881. The compile rows fall with the relink:
+compile_instructions 25,066,066, entry_instructions 76,561,037 and
+library_instructions 76,265,989. Welfare scores 91.24 against a floor of
+91.25; this builds a ruled part of the language, so the floor moves down by
+that cost.

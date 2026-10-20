@@ -1,0 +1,2 @@
+error[runtime]: the program ran out of stack: recursion went deeper than the stack holds
+  failed in depth at pooled_work_that_overflowed_leaves_no_name_behind.kso:21

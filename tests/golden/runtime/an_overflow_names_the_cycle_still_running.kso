@@ -1,0 +1,16 @@
+# The first recursion returns before the second one runs out of stack, so
+# the second is the outermost cycle still running and the one named: a cycle
+# that has returned puts the record back as it found it (kanso#1991).
+fn count 0
+  0.0
+
+fn count k
+  0.5 + count (k - 1)
+
+fn depth 0
+  0.0
+
+fn depth k
+  0.5 + depth (k - 1)
+
+pub play = print "{count 10 + depth 100000000}"

@@ -104305,3 +104305,21 @@ Owes, on #1914: each name on every engine with a micro golden; `read_line`
 reaching `done` on an empty and an unterminated last line; `modified` on a
 missing file; appendix B's entries; the ports that worked around a gap moved
 onto the name.
+
+## 2026-10-13 — gavel: an argument nobody reads is never computed, err or not
+
+Clay ruled #1928. In the toml port's reduction, `e = boom 1` binds an err
+lazily and `ignores 5 e` passes it to a parameter the body never reads.
+Every engine prints the body's answer and the err never occurs. Chapter 04
+says a catch-all arm declines an err, which read as if `ignores` should not
+run; making it decline would mean computing every argument at every call to
+learn whether it is an err, ending call-by-need at every call.
+
+**The ruling.** A value nobody asks for is never computed, so an err nobody
+asks for never occurs. A catch-all declines an err it is handed. Every
+engine already does this, and nothing changes in the compiler. Chapter 04
+gains the sentence, in this change. The port's fix is to dispatch on the
+validation result before passing it on.
+
+Owes, on #1928: the toml reduction kept as a micro golden pinning today's
+output on every engine; #1891's second item closed with a pointer here.

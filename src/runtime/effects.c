@@ -461,6 +461,9 @@ static int k_ahead_guard(void (*run)(void*), void* arg, void** cells, long long 
     return 0;
 #else
     int depth = k_beat_depth;
+    /* a jump out of pooled work skips the put-backs of the calls it unwinds,
+       so the overflow record is put back here (src/deep.rs) */
+    const char* deep_site = k_deep_site;
     fflush(stderr);
     int err = dup(2);
     int quiet = open("/dev/null", O_WRONLY);
@@ -483,6 +486,7 @@ static int k_ahead_guard(void (*run)(void*), void* arg, void** cells, long long 
             }
         }
         k_beat_set_depth(depth);
+        k_deep_site = deep_site;
     }
     k_ahead_pooling = 0;
     fflush(stderr);

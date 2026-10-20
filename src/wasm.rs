@@ -248,11 +248,14 @@ fn lower_native(program: crate::ast::Program) -> i32 {
 }
 
 /// The page's answer when a natively compiled program exhausts the wasm call
-/// stack: the sentence every other engine prints, in the output buffer.
+/// stack: the sentence every other engine prints, in the output buffer. The
+/// input is the place the runtime's `k_deep_place` answered, empty for none.
 #[cfg(target_arch = "wasm32")]
 #[no_mangle]
-pub extern "C" fn kanso_stack_exhausted() {
-    set_out(&format!("{}\n", crate::stack_exhausted()));
+pub extern "C" fn kanso_stack_exhausted(ptr: *const u8, len: usize) {
+    let place = take_input(ptr, len);
+    let place = Some(place.as_str()).filter(|p| !p.is_empty());
+    set_out(&format!("{}\n", crate::stack_exhausted(place)));
 }
 
 #[cfg(target_arch = "wasm32")]

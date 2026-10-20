@@ -314,6 +314,16 @@ KValue k_thunk_new_pooled(long long site, int argc, ...) {
 __attribute__((noreturn, noinline)) void k_die(const char* msg);
 __attribute__((noreturn, noinline)) void k_died(void);
 extern const char* k_site;
+/* The place a stack overflow names: the outermost cycle that grows the stack
+   and is still active (src/deep.rs). */
+extern const char* k_deep_site;
+
+/* The place spelled for a reader, or NULL when no growing cycle was entered.
+   The page's host calls it after the wasm call stack traps. */
+const char* k_deep_place(void) {
+    return k_deep_site ? k_deep_site + strlen(k_deep_site) + 1 : NULL;
+}
+const char* k_deep_place(void);
 
 enum { K_SITE_BLACKHOLE = -1 };
 
@@ -3525,6 +3535,7 @@ static long long k_itoa(char* buf, long long v);
    so the place prints the way `born in` does (ruled on #1975). A death prints
    the second half under its message; NULL is a death nothing stamped. */
 const char* k_site;
+const char* k_deep_site;
 
 __attribute__((noreturn, noinline)) void k_died(void) {
     if (k_site)

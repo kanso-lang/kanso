@@ -236,19 +236,31 @@ pub fn execute(
     let before = store.get_fuel().expect("fuel is on");
     let size = memory.size(&store);
     let finished = start.call(&mut store, &[], &mut []);
+    // A trap leaves the instance usable, so the page's host asks the runtime
+    // where the overflow began, as docs/kanso-engine.js does.
+    let place = rti.get_typed_func::<(), i32>(&store, "k_deep_place").expect("k_deep_place");
+    let place = match place.call(&mut store, ()).expect("k_deep_place answers") as u32 as usize {
+        0 => None,
+        at => {
+            let bytes = &memory.data(&store)[at..];
+            let end = bytes.iter().position(|&b| b == 0).expect("the place ends");
+            Some(String::from_utf8_lossy(&bytes[..end]).into_owned())
+        }
+    };
     let fuel = before - store.get_fuel().expect("fuel is on");
     let grown = (memory.size(&store) - size) * 65536;
     let host = store.data();
+    let mut err = String::from_utf8_lossy(&host.err).into_owned();
     let exit = match (finished, host.exit) {
         (_, Some(code)) => code,
         (Ok(()), None) => 0,
+        // Native catches a stack overflow and says so; wasm's call stack
+        // ends in a trap, and the page answers it with the same lines.
+        (Err(e), None) if e.to_string().contains("call stack exhausted") => {
+            err += &format!("{}\n", kanso::stack_exhausted(place.as_deref()));
+            1
+        }
         (Err(e), None) => return Err(format!("trapped: {e}")),
     };
-    Ok(Ran {
-        out: String::from_utf8_lossy(&host.out).into_owned(),
-        err: String::from_utf8_lossy(&host.err).into_owned(),
-        exit,
-        fuel,
-        grown,
-    })
+    Ok(Ran { out: String::from_utf8_lossy(&host.out).into_owned(), err, exit, fuel, grown })
 }
