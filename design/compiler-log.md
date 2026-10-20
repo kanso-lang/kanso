@@ -1850,11 +1850,29 @@ a loop's beat four times. Without the fix it reads perm_live_bytes 8,208 and
 perm_peak_bytes 16,416, one lap's buffer kept to exit and held beside the
 next; with it 0 and 8,208. `a_list_held_in_a_record_grows_where_it_stands` no
 longer copies its 20,000-element list: evac_bytes 384,848 -> 560 and
-alloc_bytes 1,642,720 -> 1,258,448, with perm_live_bytes 655,552 -> 655,408.
+alloc_bytes 1,642,720 -> 1,258,448, with perm_live_bytes 655,552 -> 655,408;
+with nothing copied there is no outgrown buffer to reuse or shelve,
+so a_list_held_in_a_record_grows_where_it_stands_buf_reuse reads 1 -> 0 and
+a_list_held_in_a_record_grows_where_it_stands_sh_buf 624 -> 704.
 On the run program run_perm_live_bytes 146,913 -> 15,825, run_bytes_freed
 9,009 -> 9,010, run_evac_bytes 9,340,096 -> 9,271,280 and run_alloc_bytes
 289,288,212 -> 289,219,396. Why #2014's unescape changed whether that pop
 copies is not traced; the copy was wrong whichever change exposed it.
+
+The test costs a list the repair is about to copy two loads and a branch.
+Asked before the survival test it ran on every list the repair visited, and
+deepbench, which repairs a captured list of lists on every bind, read 192,014
+instructions more; asked after it, only a list that does not survive pays.
+CI's rows: work_runbench 1,137,672,504 -> 1,137,617,275 and
+work_deepbench 406,723,866 -> 406,819,866, with work_pendbench 194,088,527 ->
+194,089,023, work_widebench 28,740,070 -> 28,740,098, work_oneshot 12,776,869
+-> 12,776,876, work_encodebench 2,464,678,221 -> 2,464,678,011 and
+work_livebench 1,370,942,122 -> 1,370,942,108. Every program's machine code
+grows 16 bytes (runbench text=741,081 -> 741,097), and the corpus's text
+5,283,518 -> 5,283,966.
+codegen_instructions_release 453,685,379 -> 453,686,073 counts the larger
+runtime object; codegen_instructions_dev 116,000,233 -> 116,000,561 is that
+and the link directory's order, which #2016 fixes.
 
 A rewrite of the unescape loop was measured and dropped on the way. Reading
 a string's last few bytes as a masked word, and looking escapes up in a table
