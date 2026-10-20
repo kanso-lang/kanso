@@ -442,8 +442,14 @@ static inline __attribute__((always_inline)) KStr* k_str_alloc(long long len) {
    digits are written into it where they will stay. */
 KValue k_str_n(const char* data, long long len);
 static KValue k_big_render(KValue x);
-KValue k_b_render_value(KValue v) {
+/* Everything but an int, kept out of line: with it inline the int path paid
+   six register saves on every call for paths it never takes. */
+static __attribute__((noinline)) KValue k_render_value_rest(KValue v) {
     if (v.tag == K_BIG) return k_big_render(v);
+    return k_render(v, 0);
+}
+
+KValue k_b_render_value(KValue v) {
     if (v.tag == K_INT) {
         long long x = v.payload;
         /* One digit is a one-byte string, which k_str_n answers from the
@@ -453,11 +459,14 @@ KValue k_b_render_value(KValue v) {
             return k_str_n(&c, 1);
         }
         uint64_t u = x < 0 ? (uint64_t)(-(x + 1)) + 1 : (uint64_t)x;
-        KStr* s = k_str_alloc((long long)ryu_declen(u) + (x < 0));
-        k_itoa(s->data, x);
+        long long n = (long long)ryu_declen(u) + (x < 0);
+        KStr* s = k_str_alloc(n);
+        if (x < 0) s->data[0] = '-';
+        k_digits_into(s->data + n, u);
+        s->data[n] = 0;
         KValue out; out.tag = K_STR; out.payload = k_ptr(s); return out;
     }
-    return k_render(v, 0);
+    return k_render_value_rest(v);
 }
 
 /* A slice of a long string shares the string's bytes: a header whose `data`

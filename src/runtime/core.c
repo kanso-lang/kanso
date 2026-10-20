@@ -3622,19 +3622,10 @@ static inline int ryu_declen(uint64_t v) {
     return 20;
 }
 
-/* Returns the number of digits written, not counting the terminator, so a
-   caller that turns the buffer into a string does not walk it again to find
-   out how long it is. `k_render_at` did exactly that on every number it
-   rendered: k_str is k_str_n behind a strlen, and the length was already here.
-
-   Digits come out in pairs, straight into place. This used to fill a scratch
-   buffer least-significant digit first, one division apiece, and then copy it
-   back reversed — two passes over the digits and twice the divisions. */
-static long long k_itoa(char* buf, long long v) {
-    char* w = buf;
-    if (v < 0) *w++ = '-';
-    uint64_t u = v < 0 ? (uint64_t)(-(v + 1)) + 1 : (uint64_t)v;
-    char* end = w + ryu_declen(u);
+/* The magnitude's digits, the last of them just before `end`: a caller that
+   has already counted them, to size what it writes into, does not count them
+   again. */
+static inline __attribute__((always_inline)) void k_digits_into(char* end, uint64_t u) {
     char* o = end;
     while (u >= 100) {
         uint32_t c = (uint32_t)(u % 100);
@@ -3650,6 +3641,22 @@ static long long k_itoa(char* buf, long long v) {
     } else {
         *--o = (char)('0' + (uint32_t)u);
     }
+}
+
+/* Returns the number of digits written, not counting the terminator, so a
+   caller that turns the buffer into a string does not walk it again to find
+   out how long it is. `k_render_at` did exactly that on every number it
+   rendered: k_str is k_str_n behind a strlen, and the length was already here.
+
+   Digits come out in pairs, straight into place. This used to fill a scratch
+   buffer least-significant digit first, one division apiece, and then copy it
+   back reversed — two passes over the digits and twice the divisions. */
+static long long k_itoa(char* buf, long long v) {
+    char* w = buf;
+    if (v < 0) *w++ = '-';
+    uint64_t u = v < 0 ? (uint64_t)(-(v + 1)) + 1 : (uint64_t)v;
+    char* end = w + ryu_declen(u);
+    k_digits_into(end, u);
     *end = 0;
     return (long long)(end - buf);
 }

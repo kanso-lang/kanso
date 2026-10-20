@@ -21,53 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-14 — src/runtime.c in seven parts
-
-#1947. src/runtime.c had grown to 13,235 lines. It is now a list of seven
-`#include` lines, and the parts live in src/runtime/: core.c (values, thunks,
-regions, beats, carry), values.c (wide integers, failures, rendering,
-equality), effects.c (boxes, io, processes, work-ahead), collections.c (lists,
-maps, closures), text.c (utf-8, strings, bytes), numbers.c (number parsing,
-bit operators, float tables) and main.c. Each part is a contiguous range of
-the old file, cut at a seam the file already had, and the parts joined in
-order are the old file byte for byte.
-
-clang compiles src/runtime.c by path as before, and the includes resolve
-beside it. The compiler embeds the runtime instead and writes it out when a
-build needs it, so build.rs reads the include lines and joins the parts into
-`kanso::RUNTIME_C`, which every Rust reader takes in place of
-`include_str!("runtime.c")`. The digest, the cached object and the hot unit
-see the bytes they saw before. build.rs refuses any line in the list that is
-not a comment, a blank or a part, so clang and the compiler cannot be handed
-different runtimes. `the_constant_is_the_digest_of_the_bytes_it_names` now
-reads the parts from disk, joins them in the listed order and compares both
-the text and the digest, which catches a part build.rs failed to watch.
-
-121 mutations named src/runtime.c. Each was run on the old file, its
-rewritten form was run on the parts, and the joined results were compared;
-every one matched byte for byte. The two preserve_most sweeps patch several
-parts, and each part they patch is spelled on a guard line. Three patch a line
-of src/main.rs that read `include_str!("runtime.c")` and now reads
-`kanso::RUNTIME_C`. The branch ratchet selects per part from here on: a branch
-that touches text.c proves the rows whose mutations guard on text.c, where it
-used to prove every row that guarded on the one file.
-
-The other readers moved in the same change. Nine specs that cut function text
-out of the runtime read `kanso::RUNTIME_C`. The utf-8 differential reads
-src/runtime/text.c, which holds all five pieces it extracts, and passes with
-45,589,025 checked. The asan sweep's `--prove` patches the joined parts; this
-container has no sanitizer runtime, so the patch and its compile were checked
-here and the sanitized run was not. build_runtime_wasm.sh compiles by path and
-its output is byte-identical before and after, 84,137 bytes. Diagnostic
-coverage descends into src/runtime/ and reads the same 310 diagnostics. Three
-comments said the runtime was 450,100 bytes; it is 608,301, and they no longer
-state a size.
-
-One row moved, by layout: `entry_instructions` 103,133,571 -> 103,133,577
-against 01161dbc, and 104,020,985 -> 104,020,991 once main carried
-kanso#1962, six instructions both times. compile_instructions and
-library_instructions held, and so did every runtime and machine-code row.
-
 ## 2026-10-14 — `text/slice!` answers a box
 
 This builds the program-facing half of #1943's gavel, as the 2026-09-16 ruling
@@ -1747,3 +1700,41 @@ The tests that read the rows now read every file of the module through
 `tests/support/ratchet.rs`, and the one that stages the ratchet copies the
 whole directory. `every_ratchet_row_is_run` went red when `rows_c` stopped
 joining its last row, so it reads the new files.
+
+## 2026-10-20 — an interpolated int counts its digits once
+
+`"{i}"` on an int goes through `k_b_render_value`, which sized the string
+with `ryu_declen` and then called `k_itoa`, which ran the same ladder of
+comparisons again before writing the digits. The run program's pend phase
+renders 200,000 ints this way. The digit writer is now `k_digits_into`,
+which takes the end its caller worked out, and `k_itoa` is a short wrapper
+over it. The other kinds of value move to an out-of-line function, so the
+int path no longer saves six registers for paths it never takes. Here the
+run program read 1,104,506,031 -> 1,100,103,349 instructions (-0.40%), and
+`k_b_render_value` 18,309,116 -> 13,884,015. CI's rows: work_runbench
+1,104,507,218 -> 1,100,104,536 (-0.40%) and work_pendbench 194,089,023 ->
+176,534,752 (-9.04%), the benchmark the run program's pend phase is drawn
+from; the rest move by layout alone, work_oneshot 12,450,839 -> 12,451,007,
+work_livebench 1,370,616,792 -> 1,370,617,002, work_encodebench
+2,464,678,011 -> 2,464,677,731, work_basket 31,162,888 -> 31,162,668,
+work_widebench 28,740,098 -> 28,740,070 and work_deepbench 406,819,866 ->
+406,819,829. Machine code shrinks: text 5,287,022 -> 5,281,870.
+codegen_instructions_dev 116,001,189 -> 116,002,877 and
+codegen_instructions_release 453,686,073 -> 453,797,745 count the runtime
+object's new shape. In the tab browser_run_instructions reads 34,316,072 ->
+34,136,382.
+
+The micro golden `an_interpolated_int_renders_at_every_width` renders each
+width where the digit count changes, signs, and both ends of the word, and
+reads `+1` where it wants `-1` when the sign is written wrong.
+
+Replacing the `floor()` in the float renderer's integral test with a round
+trip through int64 was measured and dropped: glibc picks its SSE4.1 `floor`
+at load time, which costs about three instructions, and the round trip made
+`k_b_append_rendered` 755,725 instructions dearer.
+
+Writing an int straight into the builder in `k_b_append_rendered`, with the
+float path moved out of line the same way, was measured and dropped too: it
+read the run program 1,100,103,349 -> 1,104,459,315 and encodebench
+2,464,678,011 -> 2,484,039,482, because every float paid the extra call
+level and floats are half of what the encoder renders.
