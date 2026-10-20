@@ -1835,6 +1835,7 @@ instead of a switch, saved the run program 394,787 instructions (0.035%).
 About 65 of the 217 instructions an escaped string costs are the call's fixed
 work, and with a backslash every four or five bytes the loop does about the
 same work per run whatever its width.
+
 ## 2026-10-20 — a plain JSON key goes straight to its colon
 
 An object key used to go through `parse_string`: `builtin_plain_string`, a
