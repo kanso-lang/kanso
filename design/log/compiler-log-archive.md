@@ -104862,3 +104862,50 @@ The counters below are not welfare terms, and each moved with the change:
 
 Welfare goes 91.2447 -> 91.2395, a fall of 0.0052. This builds a ruled part
 of the language, so the floor drops by exactly that.
+
+## 2026-10-14 — src/runtime.c in seven parts
+
+#1947. src/runtime.c had grown to 13,235 lines. It is now a list of seven
+`#include` lines, and the parts live in src/runtime/: core.c (values, thunks,
+regions, beats, carry), values.c (wide integers, failures, rendering,
+equality), effects.c (boxes, io, processes, work-ahead), collections.c (lists,
+maps, closures), text.c (utf-8, strings, bytes), numbers.c (number parsing,
+bit operators, float tables) and main.c. Each part is a contiguous range of
+the old file, cut at a seam the file already had, and the parts joined in
+order are the old file byte for byte.
+
+clang compiles src/runtime.c by path as before, and the includes resolve
+beside it. The compiler embeds the runtime instead and writes it out when a
+build needs it, so build.rs reads the include lines and joins the parts into
+`kanso::RUNTIME_C`, which every Rust reader takes in place of
+`include_str!("runtime.c")`. The digest, the cached object and the hot unit
+see the bytes they saw before. build.rs refuses any line in the list that is
+not a comment, a blank or a part, so clang and the compiler cannot be handed
+different runtimes. `the_constant_is_the_digest_of_the_bytes_it_names` now
+reads the parts from disk, joins them in the listed order and compares both
+the text and the digest, which catches a part build.rs failed to watch.
+
+121 mutations named src/runtime.c. Each was run on the old file, its
+rewritten form was run on the parts, and the joined results were compared;
+every one matched byte for byte. The two preserve_most sweeps patch several
+parts, and each part they patch is spelled on a guard line. Three patch a line
+of src/main.rs that read `include_str!("runtime.c")` and now reads
+`kanso::RUNTIME_C`. The branch ratchet selects per part from here on: a branch
+that touches text.c proves the rows whose mutations guard on text.c, where it
+used to prove every row that guarded on the one file.
+
+The other readers moved in the same change. Nine specs that cut function text
+out of the runtime read `kanso::RUNTIME_C`. The utf-8 differential reads
+src/runtime/text.c, which holds all five pieces it extracts, and passes with
+45,589,025 checked. The asan sweep's `--prove` patches the joined parts; this
+container has no sanitizer runtime, so the patch and its compile were checked
+here and the sanitized run was not. build_runtime_wasm.sh compiles by path and
+its output is byte-identical before and after, 84,137 bytes. Diagnostic
+coverage descends into src/runtime/ and reads the same 310 diagnostics. Three
+comments said the runtime was 450,100 bytes; it is 608,301, and they no longer
+state a size.
+
+One row moved, by layout: `entry_instructions` 103,133,571 -> 103,133,577
+against 01161dbc, and 104,020,985 -> 104,020,991 once main carried
+kanso#1962, six instructions both times. compile_instructions and
+library_instructions held, and so did every runtime and machine-code row.
