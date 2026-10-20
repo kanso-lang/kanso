@@ -104712,3 +104712,153 @@ and parsing the larger libraries are where most of their cost lands, and a
 smaller check does not reach either. Not reading an unreached function at all
 would mean parsing a library a declaration at a time, which is a larger change;
 #1952 stays open with these numbers on it.
+
+## 2026-10-14 — `text/slice` past the end answers `none` on every engine
+
+This builds the gavel "`text/slice` past the end answers `none`" (#1890). A
+range that ends past the value, or starts more than one past its end, answers
+`none` in the interpreter, the native runtime and the tab. A range that ends
+exactly at the end is the tail, and an inverted range is still the empty
+result. The checker puts `none` in what `slice` answers, so handing a slice to
+a function with no `none` arm is refused where it is written.
+`tests/golden/errors/a_slice_handed_on_without_its_none` pins that refusal,
+and it checks clean with the `none` taken back out of the type.
+`tests/golden/micro/a_slice_past_the_end_answers_none` pins the three ranges
+the ruling names, on strings, bytes and lists.
+
+The fused doors were the hard part. The emitter writes `append acc (slice …)`,
+`utf8 (slice …)`, `to_int (slice …)` and `to_float (slice …)` as single calls
+that read the range in place. A program can no longer write any of them: the
+outer call has no `none` arm, so the checker refuses the pair. The JSON
+decoder writes all four, and its ranges come from a scan of the same bytes,
+so they never leave the value. The library now names those slices `builtin_slice_in`, a
+standard-library-only spelling typed without `none`.
+After the check it is renamed to `builtin_slice`, so every engine and every
+fused door sees the same call it saw before. The doors keep their old
+handling of a range past the end, because nothing outside the library can
+reach them.
+
+The first version wrapped each library slice in a helper with a `none` arm.
+That defeated every door and cost jsonbench 860,566,126 -> 1,141,613,753
+instructions here. With the measured spelling the decoder's own rows come
+back. Checking the doors for a range past the end anyway cost runbench about
+6 million instructions in `k_b_utf8_slice_raw`. It also moved register
+allocation in the encoder's inlined `escape_onto`, so the checks went.
+
+`bench/jsonbench` used to copy lib/json into a user module, and a user module
+cannot name `builtin_slice_in`. `bench/make_jsonbench` now writes a program
+that imports `std/json`. The two declines of 2026-09-27 and 2026-09-28 named
+that as the change this shape of library needs. The row falls because the benchmark
+now measures the decoder as `std/json` compiles it.
+
+The standard library is not put through the exhaustiveness check that
+refuses a program's unhandled `none`, so its slices were read by hand rather
+than by the checker. Three in lib/regexp could leave the text: the body after a
+pattern's flags, the flag letters themselves, and the one character a
+`replace_all` steps over after an empty match at the end. The first raised
+"chars takes a string" on `(?i`, which
+`an_unclosed_pattern_answers_an_err` caught. The third printed the word `none`
+into the replaced text, and nothing in the corpus reached it.
+`an_empty_match_at_the_end_replaces_nothing_past_it` pins it now, red before
+the fix. Each of the three reads "" where the range leaves the text, which is
+what the clamp gave.
+
+The library functions that arrived from main while this was built slice
+only ranges they have measured: `starts_with?`, `ends_with?`, the two
+recasing walks and the padding. They use `builtin_slice_in` too, so none of
+them gains a `none` in what it answers.
+
+Code that leaned on clamping now dispatches on `none`: lib/text's `trim`,
+lib/path's `basename`, lib/regexp's character reads, the scripts, hako, the
+book's ch08 positions sample and its panel, and the frozen decoders in
+encodebench and widebench. Golden programs that sliced inside their range gained a `none` arm, and the
+two that printed a range past the end now print `<none>`. The older
+`slice_past_the_end` fixture, which pinned the clamp, is gone, since the
+new one covers each of its ranges. The mem fixture `append_of_a_slice_boxes_nothing`
+now reaches the fused append through `std/json`, since a program cannot spell
+it. Its forty escape runs read allocs=12 and sh_bytes=48, and 54 and 1056 with
+the fusion switched off. `a_cycle_that_allocates_nothing_needs_no_bracket`
+copied its runs the same way; it now copies them a byte at a time and still
+reads allocs=32 with no beat.
+
+encodebench and widebench lost most of their cost back to one more change.
+Their frozen decoders now ask whether a slice is none before they decode it,
+so the decode is the unfused `utf8`, and only the fused door consulted the
+token cache. A value of four to seven bytes now takes its string from the
+cache on both doors. `a_short_decoded_slice_is_built_once` pins it: a word
+decoded fifty times reads allocs=53 and sh_str=32 with the cache on this
+door, and 103 and 1632 without. The cache had no counter of its own, but
+every fill shows in perm_peak_bytes, which each cost golden carries.
+
+#1943 then ruled an insisting `text/slice!` for callers that know their range
+is inside, and the 2026-09-16 ruling makes it answer a box like every `!`
+name. The decoder moves onto `text/slice! … .> text/utf8` and its siblings
+once the emitter fuses those chains. Until then it keeps `builtin_slice_in`,
+which no user program can name.
+
+The rows below are CI's, except compile_peak_bytes and the browser rows,
+which were read here on the rustc each golden names. Each is priced by putting
+main's golden back and scoring again.
+
+- runbench 1,178,202,929 -> 1,177,696,285 instructions, worth +0.0018.
+  jsonbench reads 858,186,231 -> 830,048,931 because it now measures
+  `std/json`; it is not a welfare term. encodebench rose 448,210 and
+  widebench 176,756, the unfused `utf8` the frozen decoders now call.
+- compile_instructions 31,940,603 -> 32,407,659 (-0.0006) and
+  entry_instructions 101,349,935 -> 103,133,571 (-0.0025). The library grew:
+  `none` arms in lib/text, lib/path and lib/regexp, and a second slice
+  builtin to type. library_instructions moved 100,864,357 -> 102,649,522 for
+  the same reason and is not a term.
+- compile_allocs 17,941 -> 17,980 (-0.0002), compile_peak_bytes 789,911 ->
+  795,133 (-0.0012). front_end_visits went 9,326 -> 9,225 and rounds held at
+  19.
+- interp_instructions 496,215,717 -> 495,119,692 (+0.0006) and
+  interp_peak_bytes 792,646 -> 797,868 (-0.0010).
+- release codegen 477,099,466 -> 476,979,642 (+0.0001). Dev codegen moved
+  119,400,046 -> 119,402,816 and `emit_instructions` 7,622,247 -> 7,655,444,
+  both under a ten-thousandth of a point.
+- the tab: `browser_compile_instructions` 437,416,347 -> 439,552,195 and
+  `browser_compile_peak_bytes` 726,939 -> 728,883, the same larger library
+  compiled in wasm, together -0.0020.
+- the machine-code golden fell by 2,800 to 6,896 bytes on every benchmark,
+  Encode allocations rose 5,323,947 -> 5,332,649 and its arena took a fourth
+  block, which arrived with the frozen decoder's unfused `utf8`; no
+  allocation counter is a welfare term.
+
+The counters below are not welfare terms, and each moved with the change:
+
+- The encode vein, with the frozen decoder's unfused `utf8`: `encode_allocs`
+  5,332,649, `encode_alloc_bytes` 665,662,512, `encode_sh_bytes` 101,072,232,
+  `encode_arena_blocks` 4, `encode_arena_peak_bytes` 4,194,304 and
+  `encode_spare_peak_bytes` 3,145,728.
+- Instructions on the other benchmarks: `work_encodebench` 2,387,084,547,
+  `work_widebench` 28,451,432, `work_basket` 30,958,481, `work_oneshot`
+  13,207,833, `work_digestbench` 5,911,344, `work_indexbench` 2,462,589 and
+  `work_scanbench` 273,717. The last five moved by under 0.05%.
+- Rows that moved with the token cache, which now keeps some values of four
+  to seven bytes that were viewed before: `wide_perm_live_bytes` and `wide_perm_peak_bytes`
+  175, `wide_utf8_zerocopy` 15,993; `fresh_builder_perm_live_bytes`,
+  `fresh_builder_perm_peak_bytes`, `fresh_cycle_perm_live_bytes`,
+  `fresh_cycle_perm_peak_bytes`, `three_storage_regimes_share_one_append_perm_live_bytes`
+  and `three_storage_regimes_share_one_append_perm_peak_bytes` 25 each;
+  `fresh_builder_utf8_zerocopy` and `fresh_cycle_utf8_zerocopy` 39,
+  `three_storage_regimes_share_one_append_utf8_zerocopy` 0, and
+  `a_scan_keeps_its_place_in_the_text_seek_resumes` 407.
+- The mem fixture that now reaches the fused append through `std/json`, which
+  also runs the decoder: `append_of_a_slice_boxes_nothing_allocs` 12,
+  `append_of_a_slice_boxes_nothing_alloc_bytes` 1,307,
+  `append_of_a_slice_boxes_nothing_sh_str` 272,
+  `append_of_a_slice_boxes_nothing_beat_iters` 40,
+  `append_of_a_slice_boxes_nothing_find2_calls` 42,
+  `append_of_a_slice_boxes_nothing_str_scans` 3,
+  `append_of_a_slice_boxes_nothing_str_scan_bytes` 165,
+  `append_of_a_slice_boxes_nothing_perm_allocs` 5,
+  `append_of_a_slice_boxes_nothing_bytes_malloc` 3 and
+  `append_of_a_slice_boxes_nothing_append_grow` 2.
+- The emitted code: `emitted_lines` 10,165, `emitted_other_defines` 2,089 and
+  `emitted_other_branches` 16,526.
+- `interp_allocs` 592,317 and `codegen_instructions_dev` 119,402,816. The
+  interpreter's peak and dev codegen are priced above.
+
+Welfare goes 91.2447 -> 91.2395, a fall of 0.0052. This builds a ruled part
+of the language, so the floor drops by exactly that.
