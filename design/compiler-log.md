@@ -1849,7 +1849,7 @@ emitted_defines 127 -> 130, emitted_calls 1,216 -> 1,222, emitted_branches
 1,300 -> 1,303 and emitted_lines 12,296 -> 12,368; across the other programs,
 emitted_other_defines 2,169 -> 2,178, emitted_other_calls 18,424 -> 18,442,
 emitted_other_branches 17,160 -> 17,169 and emitted_other_lines 157,010 ->
-157,286. codegen_instructions_dev 115,648,918 -> 115,821,985, codegen_instructions_release 453,327,164 ->
+157,286. codegen_instructions_dev 115,648,918 -> 115,822,000, codegen_instructions_release 453,327,164 ->
 453,660,707, emit_instructions 6,178,365 -> 6,202,944,
 browser_compile_instructions 422,962,643 -> 424,273,317,
 browser_compile_peak_bytes 753,318 -> 758,624 and browser_run_instructions
