@@ -2077,13 +2077,36 @@ KValue k_b_slice_raw(const unsigned char* data, long long len, long long from,
     return k_bytes_view(data + (from - 1), to - from + 1);
 }
 
-/* Count characters a word at a time from `*at`, which is on a character
-   boundary with `*seen` characters before it, and stop short of the
-   character numbered `next`, so the caller's character loop still lands on
-   it. A word's characters are its bytes less its continuation bytes; a
+/* Count characters in blocks and then words from `*at`, which is on a
+   character boundary with `*seen` characters before it, and stop short of
+   the character numbered `next`, so the caller's character loop still lands
+   on it. A word's characters are its bytes less its continuation bytes; a
    character cut by the word's end is given back, and `*at` stays on a
    boundary. */
 static void k_slice_skip(KStr* s, long* at, long long* seen, long long next) {
+    /* Sixty-four bytes hold at most sixty-four characters, so while the
+       target is further off than that, whole blocks are counted by
+       k_utf8_chars without asking where in them it falls. The last block can
+       end inside a character whose lead it counted; stepping back to that
+       lead gives the character back. The bound assumes one byte a character,
+       so on wider text a pass falls short and the next one counts on from
+       there. The index phase slices 690,000 characters out of 1.4 MB, and
+       the word loop below took 5,933,416 instructions to cross it. */
+    for (;;) {
+        long long blocks = (next - 1 - *seen) / 64;
+        long long whole = (s->len - *at) / 64;
+        if (whole < blocks) blocks = whole;
+        if (blocks <= 0) break;
+        long n = (long)(blocks * 64);
+        *seen += k_utf8_chars((const unsigned char*)s->data + *at, n);
+        long nat = *at + n;
+        *at = nat;
+        while (((unsigned char)s->data[nat] & 0xC0) == 0x80) nat--;
+        if (nat < *at) {
+            (*seen)--;
+            *at = nat;
+        }
+    }
     while (*at + 8 <= s->len) {
         unsigned long long w;
         memcpy(&w, s->data + *at, sizeof w);
@@ -2190,7 +2213,7 @@ static __attribute__((noinline)) KValue k_b_slice_walk(KStr* s, long long from, 
         }
         /* Between the two positions the walk is looking for, the bytes are
            only counted, and a distance of ten characters or more is counted
-           a word at a time: the index phase's subject is 1.4 MB of two- and
+           by k_slice_skip: the index phase's subject is 1.4 MB of two- and
            four-byte characters, sliced once from the front, and the
            character loop below took fourteen instructions a character over
            it. A short slice -- the matcher's, a few characters at a time --
