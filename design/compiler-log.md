@@ -21,35 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-14 — kq's rise at the 2169a0ff pin is clang 18 linking without `deadargelim`
-
-When kq's pin moved to 2169a0ff (kq#190), its instruction rows rose: print_small
-by 5.7% and path_small by 13.5%. CI builds kq with the runner's clang, which
-is 18. Under clang 19 the same pin move is +1.5% on print_small and +0.07% on
-path_small.
-
-A bisect of #1938's carrier under clang 18 stops at its first step, #1898
-with #1896. That step lets clang 18 link through `LTO_O3_WITHOUT_DEADARGELIM`,
-which clang 19 already used. Clang 18's own `lto<O3>` aborted in `deadargelim`
-on kq once closure tail calls became `musttail`.
-
-To isolate the pipeline, I applied only the probe and pipeline change to
-38fd2e60, the tree before the carrier. Built that way, kq reads print_small
-27,704,820 and path_small 11,933,888, against 26,297,450 and 10,519,854
-without the change. The new pin reads 27,793,443 and 11,934,905, so the
-pipeline accounts for all of the rise except 88,623 on print_small and 1,017
-on path_small. All six readings were taken in this container under clang 18
-with `--counters`.
-
-So the cost is clang 18's `deadargelim`: the pass that dropped the dead
-arguments cannot run once tail calls are `musttail`. kanso's own cost goldens
-build with clang 19, and kq's rows were counted under 18.
-kq#191 records the attribution in kq's instructions golden and selects clang 19
-in kq's spec job, so its rows describe the build the rest of the project
-measures. CI read them there as print_small 25,716,192, print_big 245,768,599,
-path_small 10,603,649 and path_big 104,470,133, between 7.5% and 11.3% under
-the clang 18 rows at the same pin.
-
 ## 2026-10-14 — a linux arm64 release build keeps every tail call a jump
 
 #1912. An arm64 release build took `tailcc` away from every arm wider than
@@ -1884,3 +1855,14 @@ the escaper's loop gone the encoder's map call lost its region and its fused
 `keys` and `values`. The append-like builtin read 1,416,821,993 before the
 analyses knew its name, because every append in the encoder stopped writing in
 place.
+
+## 2026-10-20 — directive: all development is cloud's
+
+Clay: "all development is for you. the chat session is only for me to talk
+with and make decisions with." Cloud now writes the log, the design notes,
+the page's prose and CLAUDE.md as well as the compiler, and keeps the page
+within `page_drift`'s three entries of the log itself. The chat files, labels
+and closes issues and writes rulings onto them; cloud writes the `— gavel:`
+entry for a ruling in its next pull request. CLAUDE.md's "Two sessions"
+section states the split. The first page section written under it is §218,
+which covers the four entries from the prune's move to the string builtins.

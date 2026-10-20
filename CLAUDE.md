@@ -46,28 +46,22 @@ repo; do not attach or search for one, and do not report its absence as a gap.
 The history behind these rules is in the log and in this file's own git
 history; the file states the rules.
 
-## Two sessions, two lanes
+## Two sessions
 
 Clay runs a compiler worker ("kanso cloud") and a design chat. A session knows
 which it is before it edits anything.
 
-- **Cloud owns the compiler**: `src/`, `lib/`, the goldens, `bench/`, `tests/`,
-  and `scripts/`. It measures, builds, opens pull requests and merges
-  them.
-- **The chat owns the interaction machinery**: design/compiler-log.md, the
-  design notes, this file and the prose of docs/compiler.html. It files,
-  labels and closes issues. It does not write code; a change to the compiler,
-  its goldens or its benchmarks is cloud's however small it looks. Clay: "your
-  PRs should only write to gavels and such, and cloud should do the coding
-  work."
-- **The page is the chat's for prose, never for numbers.** A `data-golden` span
-  quotes a golden, `golden_prose` checks the quote, and moving one means the
-  golden moved, which is cloud's. The chat writes the page's sections because
-  `page_drift` fails a tree more than three log entries ahead of the page, and
-  the chat writes most of the log.
-- **Each session merges its own pull requests on green.** The sweep under
-  "Merge and conflict discipline" still covers every open pull request, so one
-  that ages is landed by whichever session reaches it first.
+- **Cloud does all the development**: the compiler, its library, goldens and
+  benchmarks, the tests and scripts, the log, the design notes, the prose of
+  the docs and this file. It measures, builds, writes up, opens pull requests
+  and merges them. Clay: "all development is for you. the chat session is only
+  for me to talk with and make decisions with."
+- **The chat is where Clay talks and decides.** It files, labels and closes
+  issues and writes rulings onto them. It opens no pull requests.
+- **Cloud keeps the page level with the log.** `page_drift` fails a tree more
+  than three log entries ahead of docs/compiler.html, so a pull request that
+  adds the fourth entry writes the page's section for them. A `data-golden`
+  span quotes a golden and `golden_prose` checks the quote.
 
 ### The tracker
 
@@ -84,9 +78,10 @@ says what happened. Read the queue with
   pull request body or a log paragraph is one nobody sees. A performance
   question with no surface area is the implementer's and never goes to Clay. A
   question already ruled is never re-asked: cite the ruling and close the issue.
-- **When Clay rules, the chat records it**: a `— gavel:` entry in the log, and
-  in the same change the issue is closed (nothing to build) or relabelled
-  `ruled` and `lane:cloud` with what is owed as a checklist. Cite a ruling by
+- **When Clay rules, the chat records it on the issue**: it closes the issue
+  (nothing to build) or relabels it `ruled` and `lane:cloud` with what is owed
+  as a checklist. Cloud writes the `— gavel:` log entry in its next pull
+  request. Cite a ruling by
   its log heading or issue number, never by a session task id.
 - **Cloud chooses the build order, from the whole list.** It reads every open
   `ruled` issue at each check-in and before opening a pull request, and a pull
@@ -466,15 +461,14 @@ in one.
   means one copy should not exist.
 - **The cleanup queue is worked as it is filled.** Cloud lands at least one
   `cleanup` pull request for every five other pull requests it merges, from the
-  open `cleanup` issues in its lane by priority. The chat works its
-  `lane:chat` cleanup issues whenever it has a pull request open anyway.
+  open `cleanup` issues by priority, in either lane.
 - **Cloud sweeps the repository once a week** and files a `cleanup` issue in
   the right lane for each finding, with the evidence and what done looks like:
   a rule or fact stated twice; a count in prose a script could print; a design
   note whose work shipped; a source file past a few thousand lines with seams
   in it; tracked files nothing reads; a test that only keeps two copies in
-  step; docs describing something that no longer exists. A finding in this
-  file, the log or the docs is `lane:chat`.
+  step; docs describing something that no longer exists. A finding that needs
+  Clay to talk it through is `lane:chat`.
 - **A refactor is a pure move.** No golden changes. A compile or machine-code
   row that moves by layout is named as layout in the log, and welfare moves are
   reported and banked like any other.
