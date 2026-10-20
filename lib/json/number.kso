@@ -2,7 +2,10 @@ import "std/text"
 
 # Where the number's bytes end, and whether a `.`, `e` or `E` went past, in
 # one call: the runtime classifies sixteen bytes a step where a walk here
-# dispatched on every byte. A negative answer is the end of a float.
+# dispatched on every byte. A negative answer is the end of a float, and zero
+# is bytes that are not a number as RFC 8259 writes one (#1999): the integer
+# path then asks for a span that ends before it starts, gets none, and fails
+# as `invalid number`.
 fn scan cs start p
   spanned cs start (text/number_span cs p)
 

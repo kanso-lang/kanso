@@ -4,7 +4,10 @@
 # at a time, so these runs sit either side of sixteen and thirty-two, put the
 # mark just before and just after a block edge, and end both at a delimiter
 # and at the end of the bytes, where only the byte walk can answer. A mark
-# past the end in the same block is not the number's.
+# past the end in the same block is not the number's. Bytes that break the
+# three rules RFC 8259 adds to the converters' answer zero (#1999): a leading
+# 0 before a digit, a minus before anything but a digit, and a point before
+# anything but a digit, here at the last byte of a block and in the walk.
 import "std/list"
 import "std/text"
 
@@ -26,6 +29,8 @@ pub play = print "{span "12,3" 1} {span "12,3" 4} {signed} {span "x" 1}"
   .> (_ -> print "{ran 15 ".5,"} {ran 16 "e9,"} {ran 17 "E-2 "} {ran 31 ".0"}")
   .> (_ -> print "{span "{digits 14}.{digits 20}:" 1} {span "1+-+-eEe..," 1}")
   .> (_ -> print "{ran 3 ",1.5e5 past the end"} {scanned}")
+  .> (_ -> print "{span "01" 1} {span "-.5" 1} {ran 15 ".,"} {ran 31 ".e5 "}")
+  .> (_ -> print "{ran 15 ".5,"} {span "0.5" 1} {span "-0" 1} {ran 3 "."}")
 
 signed = span "-1.5e+3]" 1
 

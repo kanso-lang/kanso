@@ -326,7 +326,7 @@ err at 1: unexpected character `?`</code></pre>
 
 <h2>numbers without a lexer</h2>
 
-<p>numbers get the same treatment, and one call answers both questions. <code>text/number_span</code> starts at the number's first byte and returns the position of the first byte that cannot belong to it, negated when a <code>.</code>, an <code>e</code> or an <code>E</code> went past. the runtime classifies sixteen bytes at a time, where a walk written in kanso dispatched on every byte. by the time the answer comes back, the library knows where the number ends and which converter to call:</p>
+<p>numbers get the same treatment, and one call answers both questions. <code>text/number_span</code> starts at the number's first byte and returns the position of the first byte that cannot belong to it, negated when a <code>.</code>, an <code>e</code> or an <code>E</code> went past. it answers zero when a leading 0 has another digit after it, or a minus or a point has none: RFC 8259 refuses those numbers, and the converters would take them. the runtime classifies sixteen bytes at a time, where a walk written in kanso dispatched on every byte. by the time the answer comes back, the library knows where the number ends and which converter to call:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">lib/json/number.kso</div>
