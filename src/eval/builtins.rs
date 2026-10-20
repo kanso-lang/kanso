@@ -870,19 +870,36 @@ impl<'a> Interp<'a> {
                 };
                 // The first position at or after `from` whose byte cannot be
                 // part of a number, negated when a `.`, `e` or `E` went past.
-                // A position outside the bytes is its own answer.
+                // A position outside the bytes is its own answer, and so is
+                // `from` when no byte there can be part of a number. RFC 8259
+                // asks three things the converters do not (#1999): a digit
+                // first, after any minus; no digit after a leading 0; and a
+                // digit after a point. A number that breaks one answers zero,
+                // as k_b_number_span does.
                 let len = items.len();
                 let start = match usize::try_from(from) {
                     Ok(p) if p >= 1 && p <= len => p,
                     _ => return Ok(Value::Int(from.clone())),
                 };
+                let number_byte =
+                    |c: u8| matches!(c, b'0'..=b'9' | b'+' | b'-' | b'.' | b'e' | b'E');
+                let digit_at = |i: usize| items.get(i).is_some_and(u8::is_ascii_digit);
+                if number_byte(items[start - 1]) {
+                    let lead = start - 1 + usize::from(items[start - 1] == b'-');
+                    if !digit_at(lead) || (items[lead] == b'0' && digit_at(lead + 1)) {
+                        return Ok(Value::int(0));
+                    }
+                }
                 let mut at = start - 1;
                 let mut float = false;
-                while at < len
-                    && matches!(items[at], b'0'..=b'9' | b'+' | b'-' | b'.' | b'e' | b'E')
-                {
+                let mut bare = false;
+                while at < len && number_byte(items[at]) {
                     float |= matches!(items[at], b'.' | b'e' | b'E');
+                    bare |= items[at] == b'.' && !digit_at(at + 1);
                     at += 1;
+                }
+                if bare {
+                    return Ok(Value::int(0));
                 }
                 let end = (at + 1) as i64;
                 Ok(Value::int(if float { -end } else { end }))

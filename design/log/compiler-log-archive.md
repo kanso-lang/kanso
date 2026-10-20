@@ -104265,3 +104265,61 @@ Owes, on #1903: `list/to_sorted` in std/list; the bisect tests back in
 `list_test.kso` through it; a micro golden in which `find` on a `to_sorted`
 answers the same as on the plain list; the counter that shows the bisect ran;
 appendix B.
+
+## 2026-10-13 — gavel: names for the library gaps the ports hit
+
+Clay ruled #1914 one name at a time. Each name was decided from what it should
+mean. Three of the answers overturn the issue's recommendations, which had
+argued from resemblance to existing names.
+
+**The rulings.**
+
+- `io/read_line` is a description that yields the next line of standard
+  input without its newline, or `done` at the end of input. An interactive
+  program prompts between reads, and one call per line puts each read where
+  the program says it happens.
+- `delete map key` answers the map without that key. It is a bare builtin
+  beside `put`, and the two names say the opposite things.
+- `list/sort_by xs key` sorts by what `key` answers for each element, and
+  `list/reverse xs` reverses. The key gets its own name because a second
+  argument to `sort` would read as a comparator.
+- `text/uppercase s` and `text/lowercase s`. A `to_` name means the answer is
+  a different kind of thing (`to_int "42"` is a number). Changing case leaves
+  a string, so the name is a verb for what happens to it, as `trim` and
+  `sort` are.
+- `text/starts_with? s prefix` and `text/ends_with? s suffix`. A trailing `?`
+  means the function answers true or false.
+- `text/pad_start s width fill` and `text/pad_end s width fill`. Left and
+  right name where text lands on a screen, which depends on the script; start
+  and end name the end of the string that grows, in the same words
+  `starts_with?` uses.
+- No `os/write_bytes`. The content passed to `os/write_file` is already a
+  string or bytes, so the argument says which kind is written, and
+  `write_file` has accepted both since 2026-09-09. Reading needs two names
+  because a path cannot say which kind the caller wants back.
+- `os/modified path` answers the file's last-modified time in milliseconds
+  since the epoch, the unit `time/now` uses, and `file_not_found` as data
+  for a missing file. There is no `os/stat`: one name answers one fact.
+
+Owes, on #1914: each name on every engine with a micro golden; `read_line`
+reaching `done` on an empty and an unterminated last line; `modified` on a
+missing file; appendix B's entries; the ports that worked around a gap moved
+onto the name.
+
+## 2026-10-13 — gavel: an argument nobody reads is never computed, err or not
+
+Clay ruled #1928. In the toml port's reduction, `e = boom 1` binds an err
+lazily and `ignores 5 e` passes it to a parameter the body never reads.
+Every engine prints the body's answer and the err never occurs. Chapter 04
+says a catch-all arm declines an err, which read as if `ignores` should not
+run; making it decline would mean computing every argument at every call to
+learn whether it is an err, ending call-by-need at every call.
+
+**The ruling.** A value nobody asks for is never computed, so an err nobody
+asks for never occurs. A catch-all declines an err it is handed. Every
+engine already does this, and nothing changes in the compiler. Chapter 04
+gains the sentence, in this change. The port's fix is to dispatch on the
+validation result before passing it on.
+
+Owes, on #1928: the toml reduction kept as a micro golden pinning today's
+output on every engine; #1891's second item closed with a pointer here.

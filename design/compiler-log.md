@@ -21,64 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-13 — gavel: names for the library gaps the ports hit
-
-Clay ruled #1914 one name at a time. Each name was decided from what it should
-mean. Three of the answers overturn the issue's recommendations, which had
-argued from resemblance to existing names.
-
-**The rulings.**
-
-- `io/read_line` is a description that yields the next line of standard
-  input without its newline, or `done` at the end of input. An interactive
-  program prompts between reads, and one call per line puts each read where
-  the program says it happens.
-- `delete map key` answers the map without that key. It is a bare builtin
-  beside `put`, and the two names say the opposite things.
-- `list/sort_by xs key` sorts by what `key` answers for each element, and
-  `list/reverse xs` reverses. The key gets its own name because a second
-  argument to `sort` would read as a comparator.
-- `text/uppercase s` and `text/lowercase s`. A `to_` name means the answer is
-  a different kind of thing (`to_int "42"` is a number). Changing case leaves
-  a string, so the name is a verb for what happens to it, as `trim` and
-  `sort` are.
-- `text/starts_with? s prefix` and `text/ends_with? s suffix`. A trailing `?`
-  means the function answers true or false.
-- `text/pad_start s width fill` and `text/pad_end s width fill`. Left and
-  right name where text lands on a screen, which depends on the script; start
-  and end name the end of the string that grows, in the same words
-  `starts_with?` uses.
-- No `os/write_bytes`. The content passed to `os/write_file` is already a
-  string or bytes, so the argument says which kind is written, and
-  `write_file` has accepted both since 2026-09-09. Reading needs two names
-  because a path cannot say which kind the caller wants back.
-- `os/modified path` answers the file's last-modified time in milliseconds
-  since the epoch, the unit `time/now` uses, and `file_not_found` as data
-  for a missing file. There is no `os/stat`: one name answers one fact.
-
-Owes, on #1914: each name on every engine with a micro golden; `read_line`
-reaching `done` on an empty and an unterminated last line; `modified` on a
-missing file; appendix B's entries; the ports that worked around a gap moved
-onto the name.
-
-## 2026-10-13 — gavel: an argument nobody reads is never computed, err or not
-
-Clay ruled #1928. In the toml port's reduction, `e = boom 1` binds an err
-lazily and `ignores 5 e` passes it to a parameter the body never reads.
-Every engine prints the body's answer and the err never occurs. Chapter 04
-says a catch-all arm declines an err, which read as if `ignores` should not
-run; making it decline would mean computing every argument at every call to
-learn whether it is an err, ending call-by-need at every call.
-
-**The ruling.** A value nobody asks for is never computed, so an err nobody
-asks for never occurs. A catch-all declines an err it is handed. Every
-engine already does this, and nothing changes in the compiler. Chapter 04
-gains the sentence, in this change. The port's fix is to dispatch on the
-validation result before passing it on.
-
-Owes, on #1928: the toml reduction kept as a micro golden pinning today's
-output on every engine; #1891's second item closed with a pointer here.
-
 ## 2026-10-13 — `list/concat` joins two lists
 
 #1906 moves concat to the module of the type it works on. `list/concat a b`
@@ -1759,6 +1701,96 @@ more. emit_instructions 6,095,522, interp_instructions 570,698,408 and the
 tab's compile, 419,334,691, fall, and oneshot and livebench fall by 1,099 and
 7, by mechanisms not isolated. Welfare rises 0.02 and the floor is banked at
 91.28.
+
+## 2026-10-19 — an insisting form builds no closure, and no step once its box has settled
+
+Since #1975 an insisting form names its caller's line. On native,
+`k_b_insisted` did that by wrapping every box a `!` function answered in a
+rescue step whose callee was a closure holding the caller's site: three
+allocations on every call, whether or not anything failed. Measuring #1943's
+first version found it, where a `!` helper cost 7 allocations a step against
+4 for the same helper without the `!`.
+
+The step now holds the site where a rescue holds its function, and
+`k_worded_step` reads it on the failure path, so no closure is built. A box that
+has already settled, which is what `effect` answers, is decided at once: its
+value passes untouched and its failure is pointed at the caller then. That
+covers `text/slice!` and every `!` function written as `effect` over a value.
+`os/read_file!` answers a box that has not run, and keeps the step without
+the closure, so each benchmark that reads its input with it allocates two
+fewer: eight cost goldens move by that and nothing else.
+
+The new mem fixture `an_insisting_form_that_settled_builds_no_step` reads 104
+allocations against 164. The runtime corpus's two insisting goldens,
+`a_slice_bang_past_the_end_reaches_the_endpoint` (a settled box) and
+`read_missing_file` (one that has not run), name the same lines as before on
+both engines.
+
+The first build of this change read deepbench 2% higher with every counter
+unchanged. `k_exec` and `k_step` had each shrunk by about the size of
+`k_worded_step`: the insisting branch made the step big enough that the C
+compiler stopped inlining it into the two chain walks. It is static and
+always inlined now, and the insisting branch is a cold call out of line.
+
+Rows, from CI. Every binary's `.text` is 1,824 bytes smaller. deepbench
+falls 663,690 to 406,723,831, runbench 150,682 to 1,221,426,280 and
+widebench 32,285 to 28,596,028; the run vein falls by two allocations,
+run_allocs 1,872,051. work_livebench rises 36,885 to 1,498,510,746,
+work_readbench 1,264 to 4,583,930, work_oneshot 297 to 13,543,783 and
+browser_run_instructions 133 to 37,494,262, by mechanisms not isolated. The
+cohort spec's `evac_bytes` pin reads 800,720, the closure's 48 bytes fewer.
+Welfare rises, and the floor is banked.
+
+## 2026-10-19 — json/decode refuses a number RFC 8259 refuses
+
+#1999. `json/decode` took `1.`, `2.e5`, `01`, `-01`, `00` and `-.5`, and
+`[1., 2]` decoded as `[1.0 2]`. RFC 8259 §6 refuses all of them. The decoder
+finds a number's bytes with `text/number_span` and hands them to `to_int` or
+`to_float`, and the converters are more lenient than JSON. They already refuse
+`1e`, `1..2`, `1+2` and `--1`, so what they take that JSON does not comes down
+to three rules: a leading 0 has no digit after it, a minus has one, and so
+does a point.
+
+`number_span` answers zero when a number breaks one of them. The first two are
+reads at the number's start. The third uses the masks the sixteen-byte walk
+already builds: a point whose next bit is not a digit, with the block's last
+byte checked against the next block. The interpreter keeps the same three
+rules, so `number_span` answers the same on every engine for every input.
+lib/json needs no new arm: a zero sends the integer path to ask `to_span` for
+a range that ends before it starts, which answers none, and the decoder fails
+as `invalid number`.
+
+The first version checked the rules in lib/json with a `find2_below` for the
+point, and jsonbench read 948M against 872M, about 240 instructions a float.
+A full grammar walk inside `number_span` read 942M, since jsonbench's numbers
+are long. The three rules on the masks read 885.5M, 22 instructions a number.
+
+A differential fuzzer against the RFC's grammar written as a regular
+expression decoded 200,000 random strings over the number alphabet, each bare
+and again padded past a block, on both engines, with 0 mismatches. Main read
+1,317 mismatches on the first 20,000. `number_span` agrees across engines at
+every position of 3,000 random strings. `a_json_number_follows_rfc_8259` pins
+the cases, and `a_number_span_ends_where_the_byte_walk_ends` gains the zero
+answers, with a bare point at a block's last byte and in the walk.
+
+kq carries its own decoder and keeps a number as the decimal its author
+wrote, with jq as its oracle, so what it accepts is jq's question and this
+change leaves it alone.
+
+Rows, from CI, read again after main took #2001's insisting forms. All of
+the run rows' movement is in `number_span`: work_jsonbench lands on
+885,495,792 (+13,919,550), work_runbench on 1,230,612,980 (+9,186,700),
+work_oneshot on 13,636,587, work_livebench on 1,498,602,745 and
+work_encodebench on 2,464,674,586. The tab's run, browser_run_instructions,
+rises to 37,652,207, and its compile to browser_compile_instructions
+419,365,540 with browser_compile_peak_bytes 752,376. text lands on 5,111,406,
+288 bytes a binary for the check. compile_instructions 25,085,857,
+entry_instructions 76,583,774, library_instructions 76,287,809,
+interp_instructions 570,745,964, codegen_instructions_dev 115,143,517 and
+codegen_instructions_release 449,248,021 rise for the edit to the compiler's
+Rust. Every allocation counter agrees with main. The floor drops by the cost
+under the rule for a change that makes the language work as specified, a JSON
+decoder that refuses what RFC 8259 refuses: welfare falls 0.03, to 91.25.
 
 ## 2026-10-19 — a stack overflow names the outermost cycle still running
 
