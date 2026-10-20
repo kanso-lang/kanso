@@ -104265,3 +104265,43 @@ Owes, on #1903: `list/to_sorted` in std/list; the bisect tests back in
 `list_test.kso` through it; a micro golden in which `find` on a `to_sorted`
 answers the same as on the plain list; the counter that shows the bisect ran;
 appendix B.
+
+## 2026-10-13 — gavel: names for the library gaps the ports hit
+
+Clay ruled #1914 one name at a time. Each name was decided from what it should
+mean. Three of the answers overturn the issue's recommendations, which had
+argued from resemblance to existing names.
+
+**The rulings.**
+
+- `io/read_line` is a description that yields the next line of standard
+  input without its newline, or `done` at the end of input. An interactive
+  program prompts between reads, and one call per line puts each read where
+  the program says it happens.
+- `delete map key` answers the map without that key. It is a bare builtin
+  beside `put`, and the two names say the opposite things.
+- `list/sort_by xs key` sorts by what `key` answers for each element, and
+  `list/reverse xs` reverses. The key gets its own name because a second
+  argument to `sort` would read as a comparator.
+- `text/uppercase s` and `text/lowercase s`. A `to_` name means the answer is
+  a different kind of thing (`to_int "42"` is a number). Changing case leaves
+  a string, so the name is a verb for what happens to it, as `trim` and
+  `sort` are.
+- `text/starts_with? s prefix` and `text/ends_with? s suffix`. A trailing `?`
+  means the function answers true or false.
+- `text/pad_start s width fill` and `text/pad_end s width fill`. Left and
+  right name where text lands on a screen, which depends on the script; start
+  and end name the end of the string that grows, in the same words
+  `starts_with?` uses.
+- No `os/write_bytes`. The content passed to `os/write_file` is already a
+  string or bytes, so the argument says which kind is written, and
+  `write_file` has accepted both since 2026-09-09. Reading needs two names
+  because a path cannot say which kind the caller wants back.
+- `os/modified path` answers the file's last-modified time in milliseconds
+  since the epoch, the unit `time/now` uses, and `file_not_found` as data
+  for a missing file. There is no `os/stat`: one name answers one fact.
+
+Owes, on #1914: each name on every engine with a micro golden; `read_line`
+reaching `done` on an empty and an unterminated last line; `modified` on a
+missing file; appendix B's entries; the ports that worked around a gap moved
+onto the name.
