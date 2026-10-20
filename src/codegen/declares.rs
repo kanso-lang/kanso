@@ -675,6 +675,86 @@ slow:
   %n = call %KValue @k_b_number_span(%KValue %cs, %KValue %from)
   ret %KValue %n
 }
+; A string's byte length, read from its header. The length field's line is
+; spelled as `k_b_bytes_fast` spells it, so the wasm32 retarget finds it in
+; WASM32_LINES and moves it to where a 32-bit pointer leaves it.
+define internal %KValue @k_b_byte_length_fast(%KValue %v, ptr %site) alwaysinline {
+  %vt = extractvalue %KValue %v, 0
+  %iss = icmp eq i64 %vt, 6
+  br i1 %iss, label %str, label %slow
+str:
+  %p = extractvalue %KValue %v, 1
+  %s = inttoptr i64 %p to ptr
+  %lenp = getelementptr i8, ptr %s, i64 8
+  %l32 = load i32, ptr %lenp
+  %l = sext i32 %l32 to i64
+  %r = insertvalue %KValue { i64 0, i64 undef }, i64 %l, 1
+  ret %KValue %r
+slow:
+  store ptr %site, ptr @k_site
+  %b = call %KValue @k_b_bytes(%KValue %v)
+  %n = call %KValue @k_b_length(%KValue %b)
+  ret %KValue %n
+}
+define internal %KValue @k_b_plain_string_fast(%KValue %cs, %KValue %from, ptr %site) alwaysinline {
+  %cst = extractvalue %KValue %cs, 0
+  %ft = extractvalue %KValue %from, 0
+  %isb = icmp eq i64 %cst, 13
+  %isf = icmp eq i64 %ft, 0
+  %plain = and i1 %isb, %isf
+  br i1 %plain, label %scan, label %slow
+scan:
+  %bp = extractvalue %KValue %cs, 1
+  %by = inttoptr i64 %bp to ptr
+  %len = load i64, ptr %by
+  %dp = getelementptr i8, ptr %by, i64 8
+  %d = load ptr, ptr %dp
+  %fv = extractvalue %KValue %from, 1
+  %pos = icmp sgt i64 %fv, 0
+  br i1 %pos, label %find, label %none
+find:
+  %q = call i64 @k_b_find2_raw(ptr %d, i64 %len, i64 %fv, i64 34, i64 92)
+  %inb = icmp sle i64 %q, %len
+  br i1 %inb, label %look, label %none
+look:
+  %qi = sub i64 %q, 1
+  %qp = getelementptr i8, ptr %d, i64 %qi
+  %qc = load i8, ptr %qp
+  %isq = icmp eq i8 %qc, 34
+  br i1 %isq, label %text, label %escaped
+escaped:
+  %at = phi i64 [ %q, %look ], [ %q2, %look2 ]
+  %after = add i64 %at, 1
+  %room = icmp sle i64 %after, %len
+  br i1 %room, label %rescan, label %none
+rescan:
+  %past = add i64 %at, 2
+  %q2 = call i64 @k_b_find2_raw(ptr %d, i64 %len, i64 %past, i64 34, i64 92)
+  %in2 = icmp sle i64 %q2, %len
+  br i1 %in2, label %look2, label %none
+look2:
+  %qi2 = sub i64 %q2, 1
+  %qp2 = getelementptr i8, ptr %d, i64 %qi2
+  %qc2 = load i8, ptr %qp2
+  %isq2 = icmp eq i8 %qc2, 34
+  br i1 %isq2, label %closed, label %escaped
+closed:
+  %e = insertvalue %KValue { i64 0, i64 undef }, i64 %q2, 1
+  ret %KValue %e
+text:
+  %s = call %KValue @k_b_utf8_slice_raw(ptr %d, i64 %len, i64 %fv, i64 %qi, ptr %site)
+  %st = extractvalue %KValue %s, 0
+  %bad = icmp eq i64 %st, 5
+  br i1 %bad, label %none, label %done
+done:
+  ret %KValue %s
+none:
+  ret %KValue { i64 4, i64 0 }
+slow:
+  store ptr %site, ptr @k_site
+  %n = call %KValue @k_b_plain_string(%KValue %cs, %KValue %from)
+  ret %KValue %n
+}
 define internal %KValue @k_b_find2_fast(%KValue %cs, %KValue %from, %KValue %a, %KValue %b, ptr %site) alwaysinline {
   %cst = extractvalue %KValue %cs, 0
   %ft = extractvalue %KValue %from, 0
@@ -1461,6 +1541,10 @@ declare i64 @k_b_find2_raw(ptr, i64, i64, i64, i64)
 declare %KValue @k_b_find2_below(%KValue, %KValue, %KValue, %KValue, %KValue)
 declare i64 @k_b_find2_below_raw(ptr, i64, i64, i64, i64, i64)
 declare %KValue @k_b_number_span(%KValue, %KValue)
+declare %KValue @k_b_plain_string(%KValue, %KValue)
+declare %KValue @k_b_unescape(%KValue, %KValue, %KValue)
+declare %KValue @k_b_append_escaped(%KValue, %KValue)
+declare %KValue @k_b_append_escaped_mut(%KValue, %KValue)
 declare i64 @k_b_number_span_raw(ptr, i64, i64)
 declare %KValue @k_b_append(%KValue, %KValue)
 declare %KValue @k_b_append_slice(%KValue, %KValue, %KValue, %KValue, i64)

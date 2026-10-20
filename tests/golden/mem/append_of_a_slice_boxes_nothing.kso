@@ -3,16 +3,17 @@
 # past the end answers none (#1890), a program dispatches on a slice before it
 # appends it, and the fused pair is written only by the standard library,
 # whose ranges come from a scan of the same bytes. std/json is where it lives:
-# the run of plain bytes before each escape in a string is appended that way.
-# Forty escapes in one string, so a view per run would show here as forty
-# allocations. With the emitter's fusion removed this file reads allocs=54 and
-# sh_bytes=1056 against the 12 and 48 below.
+# a string with a `\u` escape is read the long way, and the run of plain bytes
+# before each escape is appended that way. Forty escapes in one string, so a
+# view per run would show here as forty allocations. A string whose escapes
+# are all one-letter ones is undone in one call and never reaches the pair,
+# which is why these are `\u0041`.
 import "std/json"
 
 fn escaped acc 0
   acc
 
 fn escaped acc n
-  escaped "{acc}cde\\n" (n - 1)
+  escaped "{acc}cde\\u0041" (n - 1)
 
 pub play = print (length (json/decode "\"{escaped "" 40}\""))

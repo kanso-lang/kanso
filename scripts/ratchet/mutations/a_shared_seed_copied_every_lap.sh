@@ -7,4 +7,4 @@
 set -e
 sed -i.bak 's/|| (alone \&\& self.moved_here(span, frame))/|| (alone \&\& false \&\& self.moved_here(span, frame))/' src/eval/builtins.rs
 rm -f src/eval/builtins.rs.bak
-test "$(grep -c '(alone && false && self.moved_here(span, frame))' src/eval/builtins.rs)" = 3
+test "$(grep -c '(alone && false && self.moved_here(span, frame))' src/eval/builtins.rs)" = 4

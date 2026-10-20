@@ -1,63 +1,13 @@
 import "std/text"
 
-# escape appends onto the byte builder: int arms compile to a jump
-# table and each byte lands in the accumulator once
-# the seven escapes share one body, so the lambda that folds `esc_byte` over a
-# string carries one expansion of it rather than seven. Seven copies is what put
-# six callee-saved registers in the wrapper's prologue, and the hot arm -- a
-# plain byte, appended in place -- paid for all of them on every byte.
-fn esc_pair acc b
-  text/append (text/append acc 92) b
-
-fn esc_byte acc 8
-  esc_pair acc 98
-
-fn esc_byte acc 9
-  esc_pair acc 116
-
-fn esc_byte acc 10
-  esc_pair acc 110
-
-fn esc_byte acc 12
-  esc_pair acc 102
-
-fn esc_byte acc 13
-  esc_pair acc 114
-
-fn esc_byte acc 34
-  esc_pair acc 34
-
-fn esc_byte acc 92
-  esc_pair acc 92
-
-fn esc_byte acc b
-  if (b < 32) (u_bytes acc b) (text/append acc b)
-
-# when the scan did find something, every byte in front of it is proved clean
-# too: that run leaves in one copy, the found byte escapes, and the scan
-# resumes behind it. no byte is ever walked one at a time
-fn escape_rest acc bs n len
-  escape_at (escape_run acc bs 1 n) bs n len
-
-# the clean run from p up to the found position, appended in one copy
-fn escape_run acc bs p n
-  if (p < n) (text/append acc (builtin_slice_in bs p (n - 1))) acc
-
-fn escape_at acc bs n len
-  return acc if n < 1 or length bs < n
-  escape_next (esc_byte acc bs[n]) bs (n + 1) len
-
-fn escape_next acc bs p len
-  escape_found acc bs p len (text/find2_below bs p 34 92 32)
-
-fn escape_found acc bs p len m
-  escape_more (escape_run acc bs p m) bs m len
-
-fn escape_more acc bs m len
-  if (len < m) acc (escape_at acc bs m len)
-
-fn escape_split acc s bs n len
-  if (len < n) (text/append acc s) (escape_rest acc bs n len)
+# A string goes out with what JSON's string syntax cannot hold escaped: a
+# quote, a backslash, and every byte below a space. The scan finds the first;
+# a string with none is appended as it stands, and one with any goes through
+# `append_escaped`, which writes it in the forms this writer has always used:
+# the five one-letter escapes for 8, 9, 10, 12 and 13, and `\u00` with two
+# lowercase hex digits for the other bytes below a space.
+fn escape_split acc s _ n len
+  if (len < n) (text/append acc s) (builtin_append_escaped acc s)
 
 fn escape_clean acc s bs n
   escape_split acc s bs n (length bs)
@@ -66,16 +16,8 @@ pub fn escape_onto acc s
   bs = text/bytes s
   escape_clean acc s bs (text/find2_below bs 1 34 92 32)
 
-fn escape_str s
-  text/utf8 (escape_onto (text/bytes "") s)
-
 fn hex_alpha c
   if (96 < c and c < 103) (c - 87) (hex_upper c)
-
-hex_byte_table = text/bytes "0123456789abcdef"
-
-fn hex_code n
-  hex_byte_table[n + 1]
 
 fn hex_digit none
   err "unexpected end of input"
@@ -86,11 +28,29 @@ fn hex_digit c
 fn hex_upper c
   if (64 < c and c < 71) (c - 55) (err "invalid hex digit")
 
-# The run up to the first quote or backslash is a span the scan proved
-# inside cs, so slicing it cannot miss. A string ending in its last byte
-# reaches one past the end, where span_to answers the empty run.
+# A string is read in one call where it can be. With no escape in it, the call
+# answers the text in front of the closing quote. With escapes, it answers the
+# closing quote's position, and `unescape` undoes the eight one-letter escapes
+# over that range. A `\u` escape, any other escape, a string that runs out, or
+# bytes that are not utf-8 answer none at either step, and the string is read
+# the long way below, which is where each of those is undone or named.
 fn parse_string cs p
+  plain_at cs p (builtin_plain_string cs p)
+
+fn plain_at cs p none
   string_at cs (text/span_to cs p 34 92)
+
+fn plain_at cs p e:int
+  undone cs p e (builtin_unescape cs p e)
+
+fn plain_at _ p s
+  parsed (p + 1 + length (text/bytes s)) s
+
+fn undone cs p _ none
+  string_at cs (text/span_to cs p 34 92)
+
+fn undone _ _ e s
+  parsed (e + 1) s
 
 # string bytes: 34 quote, 92 backslash; escapes name their targets
 fn str_char _ 34 p acc
@@ -209,6 +169,9 @@ fn unicode_at cs p acc code
     str_chars cs (p + 6) (text/append acc (text/from_code code))
     str_surrogate cs p acc code
 
+# The run up to the first quote or backslash is a span the scan proved
+# inside cs, so slicing it cannot miss. A string ending in its last byte
+# reaches one past the end, where span_to answers the empty run.
 fn string_at cs none
   fail (length cs + 1) "unterminated string"
 
@@ -231,8 +194,3 @@ fn string_ok p (err _)
 
 fn string_ok _ v
   v
-
-fn u_bytes acc b
-  lo = hex_code (b % 16)
-  hi = hex_code (b / 16)
-  text/append (text/append (text/append acc "\\u00") hi) lo

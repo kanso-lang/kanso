@@ -3300,6 +3300,30 @@ impl<'a> Backend<'a> {
                 }
             }
         }
+        // `length (bytes s)` builds a view header in the arena for the only
+        // purpose of reading its length, and a string's header already holds
+        // that length. The twin reads it there when the tag says string and
+        // takes both builtins otherwise, so a value that is not a string
+        // fails or dies as it did.
+        if first.is_none() && args.len() == 1 && self.builtin_named(name, 1) == "length" {
+            if let Expr::App { head: inner_head, args: inner_args, piped: false, .. } = &args[0] {
+                if let Expr::Ident(inner, _, _) = &**inner_head {
+                    if inner_args.len() == 1 && self.builtin_named(inner, 1) == "bytes" {
+                        let v = self.emit_expr(f, &inner_args[0])?;
+                        let v = self.maybe_force(f, v);
+                        let v = self.unsub(f, v);
+                        let viewed = infer::builtin_set("bytes", &[f.set_of(&v)]);
+                        let site = self.origin_arg(f, span);
+                        let t = f.tmp();
+                        f.line_fmt(format_args!(
+                            "{t} = call %KValue @k_b_byte_length_fast(%KValue {v}, {site})"
+                        ));
+                        f.record(&t, infer::builtin_set("length", &[viewed]));
+                        return Ok(t.to_string());
+                    }
+                }
+            }
+        }
         // `append acc (slice cs a b)` builds a view header for the only
         // purpose of copying its bytes out and dropping it. The slice's whole
         // content is a pointer and a length the accumulator's copy needs
@@ -3988,6 +4012,10 @@ impl<'a> Backend<'a> {
                 // the twin writes the frontier pair itself where the map has
                 // no sorted view; everything else falls to the C by call
                 "put_mut_fast"
+            } else if name == "append_escaped" && in_place {
+                // a site linearity proved unique writes into the builder it
+                // was handed, as an in-place `append` does
+                "append_escaped_mut"
             } else if name == "append" && in_place {
                 // the in-place byte claim inlines whole; a byte that does not
                 // fit falls through to the C path inside the twin. Where the
@@ -4033,6 +4061,12 @@ impl<'a> Backend<'a> {
                 // the tags and hands the scan a pointer, a length and a
                 // position.
                 "number_span_fast"
+            } else if name == "plain_string" {
+                // the scan and the utf8 of what it found, in one call: the
+                // decoder's string tokens went through a span, a dispatch on
+                // the byte the span stopped at, and a second door for the
+                // utf8. The twin tests the tags and runs both.
+                "plain_string_fast"
             } else if name == "bytes" {
                 // two field reads and a three-field header into the arena, and
                 // the arena bump is already inline in the append twin. The

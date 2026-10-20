@@ -104605,3 +104605,110 @@ release build, and an Apple host keeps the narrowing. There a wide arm still
 takes the C convention, and the three tests stay off Apple arm64. On linux a
 wide arm gives up only its sibling calls into helpers, which become a call and a
 return. x86-64 builds are unchanged. #1912 stays open for the Apple half.
+
+## 2026-10-14 — the body emitter moves to `src/codegen/emit.rs`
+
+#1947, the codegen half. The largest `impl Backend` block in `src/codegen.rs`,
+3,867 lines that turn one function's body into IR (patterns, binds, calls,
+conditions and the arithmetic paths), moves unchanged to
+`src/codegen/emit.rs`, which `codegen.rs` reads with `include!` as it already
+reads `declares.rs` and `dispatchers.rs`. `codegen.rs` goes from 9,796 lines to
+5,929.
+
+The move is pure. Built from main and from this tree, the release IR for
+runbench and encodebench is byte for byte the same. Thirty-one ratchet
+mutations edit lines that moved, so each now names `src/codegen/emit.rs`, and
+every one was run against a copy of the tree to see that it still applies. The
+test that every wasm32 rewrite matches a line the emitter writes reads the new
+file beside the other two. The compile rows can move with the binary's layout,
+and CI's rows will say whether they did.
+
+`runtime.c` is the other half of #1947 and stays for its own change. Its text
+is embedded with `include_str!` in five places and edited by 119 mutations, so
+a split has to be concatenated in Rust rather than joined with `#include`.
+
+On CI's rows the move is layout and nothing else. The emitted IR and every
+native and interpreter row are unchanged; the one row that moved is the tab's
+compile, browser_compile_instructions 437,381,994 from 437,381,890, 104
+instructions, because the wasm engine is built from the same source and its
+code moved with the files. The floor follows that score, as it has for earlier
+layout-only moves.
+
+## 2026-10-14 — gavel: `text/slice!` takes a slice the caller knows is in range
+
+Clay ruled #1943. Building #1890 (a `text/slice` past the end answers `none`)
+showed that the checker now refuses `text/utf8 (text/slice cs a b)` and
+`text/append acc (text/slice cs a b)` until the `none` is dispatched. Those
+are the two spellings the compiler fuses, and the JSON decoder reads every
+string through them. Its ranges come from a scan of the same bytes, so its
+`none` can never occur, and a two-arm helper that dispatches it loses both
+fusions. Measured in a container by callgrind on the #1890 branch: jsonbench
++33.0%, livebench +38.1%, runbench +28.0%, oneshot +149.7%.
+
+**The ruling.** `text/slice! s a b` takes a slice the caller insists is in
+range. Like every `!` name it answers a box (archive, 2026-09-16, "gavel,
+reversed the same day: `!` answers a box, at the index and at the name"):
+the slice, or the out-of-range failure, which bubbles. The caller opens it
+with `.>`, so the decoder writes `text/slice! cs a b .> text/utf8` and
+`.> text/append acc`. A caller that has not bounded its range writes
+`text/slice` and dispatches on `none`, as ruled on #1890.
+
+The decoder's speed comes from fusing those chains as the nested calls are
+fused today. That is emitter work with no surface, and it is cloud's, as the
+09-16 entry assigned the inlining of a bind whose callback is applied at once.
+#1956 asked whether `slice!` was the one bang that answers a bare value; the
+09-16 ruling already answers that it is not.
+
+Owes, on #1943: `text/slice!` answering a box on every engine; the emitter
+fusing `slice! ... .> utf8`, `.> append acc`, `.> to_int` and `.> to_float`;
+the decoder's call sites moved onto those chains; a micro golden for an
+in-range `slice!` and an error golden for one out of range; appendix B.
+
+## 2026-10-14 — a box handed to a library function that reads it is refused at the call
+
+#1957. The checker refuses a box handed to a builtin that takes a value, so
+`length (os/read_file! "x")` is refused where it is written. Handed to
+`text/utf8` instead, the same box checked clean, and both engines died with
+"utf8 takes a list of byte values". `text/utf8` is a library function whose
+body calls the builtin as `builtin_utf8`, and the table of builtins that read
+a value was asked under that spelling, which it does not hold.
+
+The table is now asked with the prefix taken off. That alone moved the
+refusal into std/text, naming `builtin_utf8` and a line the program's author
+cannot change. So when a box goes into a standard-library function whose body
+reads that parameter as a value, the refusal comes at the program's call and
+names the function called. An arm that takes an effect at that position is
+where a box belongs, and a group with one is left alone. A box handed to the
+program's own functions is still followed into the body, as ruled on
+2026-09-30. `a_box_handed_to_a_library_wrapper` pins the refusal and was red
+with the change taken back out.
+
+`browser_compile_instructions` moved 437,381,994 -> 437,416,347 for the
+extra walk over a std group's arms, under a ten-thousandth of a point. CI
+read `compile_instructions` 31,948,363 -> 31,940,603, `entry_instructions`
+101,372,705 -> 101,349,935 and `library_instructions` 100,887,003 ->
+100,864,357, a fall of a few hundredths of a percent that this change does not
+explain, so it is named as layout.
+
+## 2026-10-14 — checking only what a module reaches, measured and set aside
+
+#1952 asked whether the merged check could skip the dependency functions a
+module never reaches, since every program that imports std/text or std/list
+now checks 114 more lines of them. The branch
+`claude/check-only-what-an-import-reaches` sets those functions aside while the
+merged check runs and puts them back afterwards. They have to go back because
+the merged program is also what an importer of the module receives, and an arm
+the module never calls can still travel to one that does.
+`two_owners_tie_on_a_traveling_call` in the module error corpus caught the
+first version, which dropped them for good.
+
+Measured in this container on the tree that carries #1948 and #1950:
+compile_instructions fell from 31,948,363 to 30,683,796, but
+entry_instructions rose from 101,372,705 to 108,124,116 and
+library_instructions from 100,887,003 to 105,435,412, with compile_allocs at
+18,650 against 17,941. The walk that finds what is reached took 1.5 to 1.9 ms
+of a 19 ms entry compile, and inference fell only from 3.02 to 2.79 ms. Lexing
+and parsing the larger libraries are where most of their cost lands, and a
+smaller check does not reach either. Not reading an unreached function at all
+would mean parsing a library a declaration at a time, which is a larger change;
+#1952 stays open with these numbers on it.

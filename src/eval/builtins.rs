@@ -904,6 +904,147 @@ impl<'a> Interp<'a> {
                 let end = (at + 1) as i64;
                 Ok(Value::int(if float { -end } else { end }))
             }
+            b"plain_string" => {
+                let [cs, from] = arity(args, name, span)?;
+                for v in [&cs, &from] {
+                    if is_failure(v) {
+                        return Ok(v.clone());
+                    }
+                }
+                let (Value::Bytes(items), Value::Int(from)) = (&cs, &from) else {
+                    return Err(RuntimeError {
+                        at: None,
+                        message: "plain_string takes bytes and a position".to_string(),
+                        span,
+                    });
+                };
+                // The first quote or backslash at or after `from`. A quote
+                // answers the text in front of it, when that is utf-8; a
+                // backslash answers its own position; anything else is none,
+                // as k_b_plain_string answers.
+                let start = match usize::try_from(from) {
+                    Ok(p) if p >= 1 => p,
+                    _ => return Ok(Value::NoneV),
+                };
+                let found = items
+                    .get(start - 1..)
+                    .and_then(|rest| rest.iter().position(|&b| b == b'"' || b == b'\\'));
+                let Some(off) = found else {
+                    return Ok(Value::NoneV);
+                };
+                let mut at = start - 1 + off;
+                if items[at] == b'\\' {
+                    // the closing quote, each backslash taking the byte
+                    // after it along, as k_json_quote_after finds it
+                    loop {
+                        let next = items
+                            .get(at + 2..)
+                            .and_then(|rest| rest.iter().position(|&b| b == b'"' || b == b'\\'));
+                        let Some(off) = next else {
+                            return Ok(Value::NoneV);
+                        };
+                        at += 2 + off;
+                        if items[at] == b'"' {
+                            return Ok(Value::int(at + 1));
+                        }
+                    }
+                }
+                match std::str::from_utf8(&items[start - 1..at]) {
+                    Ok(s) => Ok(Value::Str(Text::from(s.to_string()))),
+                    Err(_) => Ok(Value::NoneV),
+                }
+            }
+            b"append_escaped" => {
+                let [acc, s] = arity(args, name, span)?;
+                for v in [&acc, &s] {
+                    if is_failure(v) {
+                        return Ok(v.clone());
+                    }
+                }
+                let (Value::Bytes(items), Value::Str(text)) = (acc, &s) else {
+                    return Err(RuntimeError {
+                        at: None,
+                        message: "append_escaped takes bytes and a string".to_string(),
+                        span,
+                    });
+                };
+                // `s` as a JSON string holds it, in lib/json's forms, as
+                // k_b_append_escaped writes it; in place where `append` would be
+                let mut escaped = Vec::with_capacity(text.len() + 8);
+                for &c in text.as_bytes() {
+                    match c {
+                        b'"' => escaped.extend_from_slice(b"\\\""),
+                        b'\\' => escaped.extend_from_slice(b"\\\\"),
+                        8 => escaped.extend_from_slice(b"\\b"),
+                        9 => escaped.extend_from_slice(b"\\t"),
+                        10 => escaped.extend_from_slice(b"\\n"),
+                        12 => escaped.extend_from_slice(b"\\f"),
+                        13 => escaped.extend_from_slice(b"\\r"),
+                        c if c < 32 => escaped.extend_from_slice(format!("\\u{c:04x}").as_bytes()),
+                        c => escaped.push(c),
+                    }
+                }
+                let alone = Rc::strong_count(&items) == 2;
+                if self.writes_in_place(span, frame) || (alone && self.moved_here(span, frame)) {
+                    Self::written_in_place(&items).extend_from_slice(&escaped);
+                    return Ok(Value::Bytes(items));
+                }
+                let mut out = taken_to_grow(items, escaped.len());
+                out.extend_from_slice(&escaped);
+                Ok(Value::Bytes(Rc::new(out)))
+            }
+            b"unescape" => {
+                let [cs, from, end] = arity(args, name, span)?;
+                for v in [&cs, &from, &end] {
+                    if is_failure(v) {
+                        return Ok(v.clone());
+                    }
+                }
+                let (Value::Bytes(items), Value::Int(from), Value::Int(end)) = (&cs, &from, &end)
+                else {
+                    return Err(RuntimeError {
+                        at: None,
+                        message: "unescape takes bytes and two positions".to_string(),
+                        span,
+                    });
+                };
+                // The bytes from `from` up to the closing quote at `end`, with
+                // the eight one-letter escapes undone; anything else is none,
+                // as k_b_unescape answers.
+                let (Ok(from), Ok(end)) = (usize::try_from(from), usize::try_from(end)) else {
+                    return Ok(Value::NoneV);
+                };
+                if from < 1 || end < from || end > items.len() + 1 {
+                    return Ok(Value::NoneV);
+                }
+                let range = &items[from - 1..end - 1];
+                let mut out = Vec::with_capacity(range.len());
+                let mut i = 0;
+                while i < range.len() {
+                    if range[i] != b'\\' {
+                        out.push(range[i]);
+                        i += 1;
+                        continue;
+                    }
+                    let undone = match range.get(i + 1) {
+                        Some(b'"') => b'"',
+                        Some(b'\\') => b'\\',
+                        Some(b'/') => b'/',
+                        Some(b'b') => 8,
+                        Some(b'f') => 12,
+                        Some(b'n') => 10,
+                        Some(b'r') => 13,
+                        Some(b't') => 9,
+                        _ => return Ok(Value::NoneV),
+                    };
+                    out.push(undone);
+                    i += 2;
+                }
+                match String::from_utf8(out) {
+                    Ok(s) => Ok(Value::Str(Text::from(s))),
+                    Err(_) => Ok(Value::NoneV),
+                }
+            }
             b"find2" => {
                 let [cs, from, a, b] = arity(args, name, span)?;
                 for v in [&cs, &from, &a, &b] {
