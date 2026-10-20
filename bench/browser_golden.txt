@@ -51,7 +51,7 @@
 # a RISE of 151,208 for the walk the check adds; the run rows are unchanged.
 # On rustc 1.98.1.
 # measured-on rustc=1.98.1
-browser_compile_instructions=419365540
-browser_compile_peak_bytes=752376
-browser_run_instructions=37652207
+browser_compile_instructions=422972128
+browser_compile_peak_bytes=753318
+browser_run_instructions=37653273
 browser_run_peak_bytes=1441792

@@ -1868,27 +1868,29 @@ the group's cycle, so the loop sets the running cycle on entry and on each tail
 hop from the lookup it already makes. On this container that took the run from
 585,706,096 to 577,416,551, against main's 569,645,202.
 
-Rows, from CI. Every emitted module declares `@k_deep_site`, one line more:
-the compile corpus lands on lines 1,372 and module_lines 1,131, the decoder on
-emitted_lines 12,296, and the other benchmarks on emitted_other_lines 157,010
-and emitted_other_branches 17,160, the rest being the saves and puts-back
-around the calls that enter a cycle. Machine code grows to text 5,141,230 in
-total. Those calls cost the benchmarks a few instructions each:
-work_jsonbench lands on 871,578,113, work_encodebench 2,464,677,577,
-work_oneshot 13,543,963, work_basket 31,162,889, work_deepbench 407,387,556,
-work_escapebench 39,058,438, work_pendbench 194,088,824, work_indexbench
-2,482,747, work_scanbench 274,237, work_digestbench 5,992,911, work_readbench
-4,582,701 and work_livebench 1,498,477,002. work_widebench rises most, to
-28,772,355 (+144,042, 0.5%), and work_runbench falls to 1,221,517,879, by
-mechanisms not isolated. Clang reads the longer modules: codegen_instructions_dev
-115,648,711 and codegen_instructions_release 453,350,722. The emitter finds the
-cycles, emit_instructions 6,178,365, and the tab's compile does the same, which
-is browser_compile_instructions 422,957,114 (+3,622,423, 0.9%) and
-browser_compile_peak_bytes 753,316; browser_run_instructions lands on
-37,495,195. The interpreter keeps the places and a cycle on every closure:
-interp_instructions 578,456,118 (+7,757,710, 1.4%), interp_allocs 652,272 and
+Rows, from CI, read again after main took #2001 and #2002. Every emitted
+module declares `@k_deep_site`, one line more: the compile corpus lands on
+lines 1,372 and module_lines 1,131, the decoder on emitted_lines 12,296, and
+the other benchmarks on emitted_other_lines 157,010 and emitted_other_branches
+17,160, the rest being the saves and puts-back around the calls that enter a
+cycle. Machine code grows to text 5,119,726 in total. Those calls cost the
+benchmarks a few instructions each: work_jsonbench lands on 885,497,327,
+work_encodebench 2,464,678,788, work_oneshot 13,636,623, work_basket
+31,162,888, work_deepbench 406,723,866, work_escapebench 39,058,437,
+work_pendbench 194,088,527, work_indexbench 2,482,746, work_scanbench 274,236,
+work_digestbench 5,992,543, work_readbench 4,583,965 and work_livebench
+1,498,605,914. work_widebench rises most, to 28,740,070 (+144,042, 0.5%), and
+work_runbench falls to 1,230,554,702, by mechanisms not isolated. Clang reads
+the longer modules: codegen_instructions_dev 115,648,918 and
+codegen_instructions_release 453,327,164. The emitter finds the cycles,
+emit_instructions 6,178,365, and the tab's compile does the same,
+browser_compile_instructions 422,972,128 (+3,606,588, 0.9%) and
+browser_compile_peak_bytes 753,318; browser_run_instructions lands on
+37,653,273.
+The interpreter keeps the places and a cycle on every closure:
+interp_instructions 578,503,674 (+7,757,710, 1.4%), interp_allocs 652,272 and
 interp_peak_bytes 633,881. The compile rows fall with the relink:
-compile_instructions 25,063,619, entry_instructions 76,556,989 and
-library_instructions 76,261,940. Welfare scores 91.27 against a floor of 91.28;
-this builds a ruled part of the language, so the floor moves down by that
-cost, to 91.268.
+compile_instructions 25,066,066, entry_instructions 76,561,037 and
+library_instructions 76,265,989. Welfare scores 91.24 against a floor of
+91.25; this builds a ruled part of the language, so the floor moves down by
+that cost.
