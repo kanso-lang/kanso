@@ -104433,3 +104433,33 @@ corpus is checked, because the two modules it imports are 114 lines longer and
 their whole text is held through the check. It costs the welfare meta about
 0.02, and the floor drops by that under the language rule. Checking only what
 an import reaches would take this back, and #1952 tracks it.
+
+## 2026-10-13 — hex and binary integers, and floats with an exponent
+
+#1889 builds the gavel "hex and binary integers and exponent floats". The
+lexer reads `0x` followed by hex digits, in either case, and `0b` followed by
+binary digits as integers: `0xff` is 255 and `0b1010` is 10. A literal past
+64 bits becomes a big integer, as a long decimal does. A decimal followed by
+`e`, an optional sign and digits is a float: `1e-8`, `6.02e23`, `2.5e3`. A
+minus in front reads as it does for a decimal, so `-0x10` is -16. The
+prefixes and the `e` are lower case only, as every other word in the
+language is.
+
+Three malformed spellings stop at lexing, each with an error golden: `0x`
+with no digits after it, a digit other than 0 or 1 in a binary literal
+(`0b2`), and an `e` with no exponent digits (`1e`). Each message names the
+literal and says how to write it.
+
+Every engine reads the same tokens because they share the lexer. The micro
+golden `hex_binary_and_exponent_literals` runs on the interpreter, the
+native build and the page. The editor grammar and the playground's
+highlighter colour the new forms, and chapter 02 says what each spelling
+means. The byte literal in #1889's title was not ruled and is not built.
+
+On CI's rows the lexer's new arms cost the emitter 408 instructions,
+emit_instructions 7,240,982 -> 7,241,390, and the tab's compile 10,978,
+browser_compile_instructions 413,925,406 -> 413,936,384. The rest fell with the
+binary's layout: compile_instructions by 9,355 to 28,002,980,
+entry_instructions by 30,753 to 92,393,206, library_instructions by 30,149 to
+91,989,327 and interp_instructions by 3,960 to 495,525,421. The floor follows
+the score, since #1889 builds a ruled part of the language.
