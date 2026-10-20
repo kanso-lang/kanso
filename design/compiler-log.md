@@ -21,25 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-13 — gavel: `list/to_sorted` builds the `sorted` that `find` bisects
-
-Clay ruled #1903. std/list declares `pub type sorted`, and `find` has an arm
-for it that bisects instead of scanning (archive, 2026-07-24, "find gets its
-fast arm"). Only std/list may build a `sorted`, and it exposed no function that
-does, so no caller could reach the fast arm.
-
-**The ruling.** `list/to_sorted xs` sorts `xs` by the order `list/sort` uses and
-answers it as a `sorted`. It takes any list `list/sort` takes. Because it sorts
-as it wraps, a `sorted` is always in order and the bisect cannot answer wrong.
-No function wraps a list unchecked. When type parameters are built (#1941),
-`sorted` becomes `<k>sorted` and this function's signature follows without a
-change in meaning.
-
-Owes, on #1903: `list/to_sorted` in std/list; the bisect tests back in
-`list_test.kso` through it; a micro golden in which `find` on a `to_sorted`
-answers the same as on the plain list; the counter that shows the bisect ran;
-appendix B.
-
 ## 2026-10-13 — gavel: names for the library gaps the ports hit
 
 Clay ruled #1914 one name at a time. Each name was decided from what it should
@@ -1778,3 +1759,42 @@ more. emit_instructions 6,095,522, interp_instructions 570,698,408 and the
 tab's compile, 419,334,691, fall, and oneshot and livebench fall by 1,099 and
 7, by mechanisms not isolated. Welfare rises 0.02 and the floor is banked at
 91.28.
+
+## 2026-10-19 — an insisting form builds no closure, and no step once its box has settled
+
+Since #1975 an insisting form names its caller's line. On native,
+`k_b_insisted` did that by wrapping every box a `!` function answered in a
+rescue step whose callee was a closure holding the caller's site: three
+allocations on every call, whether or not anything failed. Measuring #1943's
+first version found it, where a `!` helper cost 7 allocations a step against
+4 for the same helper without the `!`.
+
+The step now holds the site where a rescue holds its function, and
+`k_worded_step` reads it on the failure path, so no closure is built. A box that
+has already settled, which is what `effect` answers, is decided at once: its
+value passes untouched and its failure is pointed at the caller then. That
+covers `text/slice!` and every `!` function written as `effect` over a value.
+`os/read_file!` answers a box that has not run, and keeps the step without
+the closure, so each benchmark that reads its input with it allocates two
+fewer: eight cost goldens move by that and nothing else.
+
+The new mem fixture `an_insisting_form_that_settled_builds_no_step` reads 104
+allocations against 164. The runtime corpus's two insisting goldens,
+`a_slice_bang_past_the_end_reaches_the_endpoint` (a settled box) and
+`read_missing_file` (one that has not run), name the same lines as before on
+both engines.
+
+The first build of this change read deepbench 2% higher with every counter
+unchanged. `k_exec` and `k_step` had each shrunk by about the size of
+`k_worded_step`: the insisting branch made the step big enough that the C
+compiler stopped inlining it into the two chain walks. It is static and
+always inlined now, and the insisting branch is a cold call out of line.
+
+Rows, from CI. Every binary's `.text` is 1,824 bytes smaller. deepbench
+falls 663,690 to 406,723,831, runbench 150,682 to 1,221,426,280 and
+widebench 32,285 to 28,596,028; the run vein falls by two allocations,
+run_allocs 1,872,051. work_livebench rises 36,885 to 1,498,510,746,
+work_readbench 1,264 to 4,583,930, work_oneshot 297 to 13,543,783 and
+browser_run_instructions 133 to 37,494,262, by mechanisms not isolated. The
+cohort spec's `evac_bytes` pin reads 800,720, the closure's 48 bytes fewer.
+Welfare rises, and the floor is banked.
