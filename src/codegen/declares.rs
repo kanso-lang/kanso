@@ -675,15 +675,18 @@ slow:
   %n = call %KValue @k_b_number_span(%KValue %cs, %KValue %from)
   ret %KValue %n
 }
+; A string's byte length, read from its header. The length field's line is
+; spelled as `k_b_bytes_fast` spells it, so the wasm32 retarget finds it in
+; WASM32_LINES and moves it to where a 32-bit pointer leaves it.
 define internal %KValue @k_b_byte_length_fast(%KValue %v, ptr %site) alwaysinline {
   %vt = extractvalue %KValue %v, 0
   %iss = icmp eq i64 %vt, 6
   br i1 %iss, label %str, label %slow
 str:
   %p = extractvalue %KValue %v, 1
-  %sp = inttoptr i64 %p to ptr
-  %lp = getelementptr i8, ptr %sp, i64 8
-  %l32 = load i32, ptr %lp
+  %s = inttoptr i64 %p to ptr
+  %lenp = getelementptr i8, ptr %s, i64 8
+  %l32 = load i32, ptr %lenp
   %l = sext i32 %l32 to i64
   %r = insertvalue %KValue { i64 0, i64 undef }, i64 %l, 1
   ret %KValue %r
