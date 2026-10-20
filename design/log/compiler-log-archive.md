@@ -104561,3 +104561,47 @@ in kq's spec job, so its rows describe the build the rest of the project
 measures. CI read them there as print_small 25,716,192, print_big 245,768,599,
 path_small 10,603,649 and path_big 104,470,133, between 7.5% and 11.3% under
 the clang 18 rows at the same pin.
+
+## 2026-10-14 — a linux arm64 release build keeps every tail call a jump
+
+#1912. An arm64 release build took `tailcc` away from every arm wider than
+eight argument words (`narrow_tailcc`), so a loop through a wide arm spent a
+frame per hop. Dropping the narrowing had failed the macOS arm job:
+`a_match_holds_the_literal_its_pattern_spells` printed nothing.
+
+That failure reproduces off the arm job. The release IR, without the narrowing,
+built for `aarch64-linux-gnu` with clang 19 and run under `qemu-aarch64`, dies
+on SIGSEGV at -O1 and above and prints all eight lines at -O0. Running the
+middle end at -O1 and `llc` at -O0 prints them too, so the backend is at fault.
+`llc -opt-bisect-limit` puts the first bad step at CodeGenPrepare on
+`regexp/cutting_6`, an arm of six `%KValue`s, twelve words. Its last action on
+one path is an ordinary call to `k_b_push`. The middle end had marked that call
+`tail`, CodeGenPrepare duplicated the return to make it a sibling call, and the
+arm64 backend gets the stack wrong for a sibling call out of a `tailcc` function
+whose own arguments arrived on the stack.
+
+Marking every plain call in the wide arms `notail` after the middle end fixes the
+program. Before it does not, because the emitter's IR carries no `tail`
+markers: the middle end adds them, and inlining brings calls in with their own.
+The function attribute `"disable-tail-calls"="true"` is read at codegen, after
+both. On every `tailcc` function wider than eight words it turns those sibling
+calls back into calls and returns. It leaves `musttail` alone. With it, the
+fixture prints all eight lines at -O1 and -O3. In its assembly, 47 `musttail`
+edges in the marked functions are a `b` to their callee. The others I read had
+been inlined, and the jump that remained was a `b` or, through a closure, a
+`br`.
+
+On the macOS arm job the attribute fixed that fixture and the three wide-arm
+tests in `tests/a_big_object_decodes_in_a_release_build.rs`, and broke another:
+a release build of `a_spilling_tail_call_named_with_a_mark` printed nothing,
+where the interpreter prints `false`. That job builds with Apple's clang. The
+same program's IR, marked the same way, runs correctly under qemu built for
+`aarch64-linux-gnu` by clang 19 and by clang 18, and clang 19's assembly for
+`arm64-apple-macos` matches its linux assembly in the marked functions, so I
+have no reproduction of the Apple failure here.
+
+So `wide_tailcc_keeps_its_jumps` replaces `narrow_tailcc` on a linux arm64
+release build, and an Apple host keeps the narrowing. There a wide arm still
+takes the C convention, and the three tests stay off Apple arm64. On linux a
+wide arm gives up only its sibling calls into helpers, which become a call and a
+return. x86-64 builds are unchanged. #1912 stays open for the Apple half.

@@ -21,50 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-14 — a linux arm64 release build keeps every tail call a jump
-
-#1912. An arm64 release build took `tailcc` away from every arm wider than
-eight argument words (`narrow_tailcc`), so a loop through a wide arm spent a
-frame per hop. Dropping the narrowing had failed the macOS arm job:
-`a_match_holds_the_literal_its_pattern_spells` printed nothing.
-
-That failure reproduces off the arm job. The release IR, without the narrowing,
-built for `aarch64-linux-gnu` with clang 19 and run under `qemu-aarch64`, dies
-on SIGSEGV at -O1 and above and prints all eight lines at -O0. Running the
-middle end at -O1 and `llc` at -O0 prints them too, so the backend is at fault.
-`llc -opt-bisect-limit` puts the first bad step at CodeGenPrepare on
-`regexp/cutting_6`, an arm of six `%KValue`s, twelve words. Its last action on
-one path is an ordinary call to `k_b_push`. The middle end had marked that call
-`tail`, CodeGenPrepare duplicated the return to make it a sibling call, and the
-arm64 backend gets the stack wrong for a sibling call out of a `tailcc` function
-whose own arguments arrived on the stack.
-
-Marking every plain call in the wide arms `notail` after the middle end fixes the
-program. Before it does not, because the emitter's IR carries no `tail`
-markers: the middle end adds them, and inlining brings calls in with their own.
-The function attribute `"disable-tail-calls"="true"` is read at codegen, after
-both. On every `tailcc` function wider than eight words it turns those sibling
-calls back into calls and returns. It leaves `musttail` alone. With it, the
-fixture prints all eight lines at -O1 and -O3. In its assembly, 47 `musttail`
-edges in the marked functions are a `b` to their callee. The others I read had
-been inlined, and the jump that remained was a `b` or, through a closure, a
-`br`.
-
-On the macOS arm job the attribute fixed that fixture and the three wide-arm
-tests in `tests/a_big_object_decodes_in_a_release_build.rs`, and broke another:
-a release build of `a_spilling_tail_call_named_with_a_mark` printed nothing,
-where the interpreter prints `false`. That job builds with Apple's clang. The
-same program's IR, marked the same way, runs correctly under qemu built for
-`aarch64-linux-gnu` by clang 19 and by clang 18, and clang 19's assembly for
-`arm64-apple-macos` matches its linux assembly in the marked functions, so I
-have no reproduction of the Apple failure here.
-
-So `wide_tailcc_keeps_its_jumps` replaces `narrow_tailcc` on a linux arm64
-release build, and an Apple host keeps the narrowing. There a wide arm still
-takes the C convention, and the three tests stay off Apple arm64. On linux a
-wide arm gives up only its sibling calls into helpers, which become a call and a
-return. x86-64 builds are unchanged. #1912 stays open for the Apple half.
-
 ## 2026-10-14 — the body emitter moves to `src/codegen/emit.rs`
 
 #1947, the codegen half. The largest `impl Backend` block in `src/codegen.rs`,
@@ -1672,10 +1628,11 @@ position and the place of each. They stay two. What was doubled was inside
 this file: `call_graph` and `kept_out` each defined the same walker over a
 body's names, and it is `name_mentions` now, once.
 
-The move alone shifted codegen_instructions_dev by 15 instructions, since that
-row counts the whole `kanso build` tree and kanso's own emitting moves with
-the binary's layout; with the walker defined once it reads main's
-115,648,918 again. The tab's compile, which runs the prune in the wasm build,
+The move alone shifted codegen_instructions_dev by 15 instructions, and with
+the walker defined once it read main's 115,648,918 again. (Corrected: this
+entry first put the 15 down to kanso's layout, but the row leaves out kanso's
+own process. The order the link directory lists in moves gold by that much
+from one runner to the next; see "the link directory lists in one order".) The tab's compile, which runs the prune in the wasm build,
 reads browser_compile_instructions 422,962,643, 9,485 fewer, and welfare's
 rise is banked.
 
@@ -1757,6 +1714,35 @@ browser_compile_instructions 422,962,643 -> 424,273,317,
 browser_compile_peak_bytes 753,318 -> 758,624 and browser_run_instructions
 37,653,273 -> 37,747,192 rise with the larger declarations. Welfare rises and
 is banked.
+
+## 2026-10-20 — the link directory lists in one order
+
+The dev codegen row read 116,000,241, then 116,000,233, then 116,000,241 on
+three commits of #2014 that changed no code. The profiles put all 8
+instructions in `ld.gold`; kanso and clang read the same each time. A second
+reading in the same job always agreed with the first, so whatever moved was
+fixed for a job and differed between jobs.
+
+It is the order gold reads the link directory in. gold reads every `-L`
+directory whole, and the codegen box stages one holding the five libraries the
+link resolves. ext4 lists a directory by a hash of each name, seeded per
+filesystem, so each fresh runner can list those five its own way. Linking the
+same inputs on this container with the five listed three ways read
+22,443,938, 22,443,953 and 22,443,989.
+
+`scripts/gates/codegen_box.sh` now keeps the entries on tmpfs, which lists
+them in the order they were made, and makes them in a fixed order; on Linux
+`$box/link` is a link to `/dev/shm/kanso-codegen-link`, so the path the build
+is given does not change. Two readings here agree, and making the entries in
+the reverse order moves gold by 17, so the order is now the script's. The
+staging refuses to run when `/dev/shm` is not a tmpfs. Under the new order CI
+reads codegen_instructions_dev 115,822,000 -> 115,822,620 on main's tree, and
+the floor is re-based by that cost under kanso#2017's gavel: a fix that
+normalizes a measurement re-bases the floor without a ruling.
+
+The prune's entry put an earlier move of this row down to kanso's layout. The
+row leaves out kanso's process, so that cannot be the reason, and the entry
+says so now.
 
 ## 2026-10-20 — gavel: a fix that normalizes a measurement re-bases the floor without a ruling
 
