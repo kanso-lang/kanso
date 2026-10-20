@@ -21,79 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-14 — kq's rise at the 2169a0ff pin is clang 18 linking without `deadargelim`
-
-When kq's pin moved to 2169a0ff (kq#190), its instruction rows rose: print_small
-by 5.7% and path_small by 13.5%. CI builds kq with the runner's clang, which
-is 18. Under clang 19 the same pin move is +1.5% on print_small and +0.07% on
-path_small.
-
-A bisect of #1938's carrier under clang 18 stops at its first step, #1898
-with #1896. That step lets clang 18 link through `LTO_O3_WITHOUT_DEADARGELIM`,
-which clang 19 already used. Clang 18's own `lto<O3>` aborted in `deadargelim`
-on kq once closure tail calls became `musttail`.
-
-To isolate the pipeline, I applied only the probe and pipeline change to
-38fd2e60, the tree before the carrier. Built that way, kq reads print_small
-27,704,820 and path_small 11,933,888, against 26,297,450 and 10,519,854
-without the change. The new pin reads 27,793,443 and 11,934,905, so the
-pipeline accounts for all of the rise except 88,623 on print_small and 1,017
-on path_small. All six readings were taken in this container under clang 18
-with `--counters`.
-
-So the cost is clang 18's `deadargelim`: the pass that dropped the dead
-arguments cannot run once tail calls are `musttail`. kanso's own cost goldens
-build with clang 19, and kq's rows were counted under 18.
-kq#191 records the attribution in kq's instructions golden and selects clang 19
-in kq's spec job, so its rows describe the build the rest of the project
-measures. CI read them there as print_small 25,716,192, print_big 245,768,599,
-path_small 10,603,649 and path_big 104,470,133, between 7.5% and 11.3% under
-the clang 18 rows at the same pin.
-
-## 2026-10-14 — a linux arm64 release build keeps every tail call a jump
-
-#1912. An arm64 release build took `tailcc` away from every arm wider than
-eight argument words (`narrow_tailcc`), so a loop through a wide arm spent a
-frame per hop. Dropping the narrowing had failed the macOS arm job:
-`a_match_holds_the_literal_its_pattern_spells` printed nothing.
-
-That failure reproduces off the arm job. The release IR, without the narrowing,
-built for `aarch64-linux-gnu` with clang 19 and run under `qemu-aarch64`, dies
-on SIGSEGV at -O1 and above and prints all eight lines at -O0. Running the
-middle end at -O1 and `llc` at -O0 prints them too, so the backend is at fault.
-`llc -opt-bisect-limit` puts the first bad step at CodeGenPrepare on
-`regexp/cutting_6`, an arm of six `%KValue`s, twelve words. Its last action on
-one path is an ordinary call to `k_b_push`. The middle end had marked that call
-`tail`, CodeGenPrepare duplicated the return to make it a sibling call, and the
-arm64 backend gets the stack wrong for a sibling call out of a `tailcc` function
-whose own arguments arrived on the stack.
-
-Marking every plain call in the wide arms `notail` after the middle end fixes the
-program. Before it does not, because the emitter's IR carries no `tail`
-markers: the middle end adds them, and inlining brings calls in with their own.
-The function attribute `"disable-tail-calls"="true"` is read at codegen, after
-both. On every `tailcc` function wider than eight words it turns those sibling
-calls back into calls and returns. It leaves `musttail` alone. With it, the
-fixture prints all eight lines at -O1 and -O3. In its assembly, 47 `musttail`
-edges in the marked functions are a `b` to their callee. The others I read had
-been inlined, and the jump that remained was a `b` or, through a closure, a
-`br`.
-
-On the macOS arm job the attribute fixed that fixture and the three wide-arm
-tests in `tests/a_big_object_decodes_in_a_release_build.rs`, and broke another:
-a release build of `a_spilling_tail_call_named_with_a_mark` printed nothing,
-where the interpreter prints `false`. That job builds with Apple's clang. The
-same program's IR, marked the same way, runs correctly under qemu built for
-`aarch64-linux-gnu` by clang 19 and by clang 18, and clang 19's assembly for
-`arm64-apple-macos` matches its linux assembly in the marked functions, so I
-have no reproduction of the Apple failure here.
-
-So `wide_tailcc_keeps_its_jumps` replaces `narrow_tailcc` on a linux arm64
-release build, and an Apple host keeps the narrowing. There a wide arm still
-takes the C convention, and the three tests stay off Apple arm64. On linux a
-wide arm gives up only its sibling calls into helpers, which become a call and a
-return. x86-64 builds are unchanged. #1912 stays open for the Apple half.
-
 ## 2026-10-14 — the body emitter moves to `src/codegen/emit.rs`
 
 #1947, the codegen half. The largest `impl Backend` block in `src/codegen.rs`,
@@ -1816,3 +1743,35 @@ normalizes a measurement re-bases the floor without a ruling.
 The prune's entry put an earlier move of this row down to kanso's layout. The
 row leaves out kanso's process, so that cannot be the reason, and the entry
 says so now.
+
+## 2026-10-20 — gavel: a fix that normalizes a measurement re-bases the floor without a ruling
+
+Clay ruled #2017. The dev codegen row counts `ld.gold`, which reads its `-L`
+directory in readdir order. On ext4 that order is a hash seeded per
+filesystem, so each CI runner drew its own, and the row moved by a few
+instructions between commits that changed no code. #2016 puts the directory
+on tmpfs, which lists in creation order, and the row now reads the same on
+every run: 620 instructions above main's golden. Welfare reads 91.29 either
+way, but the floor is compared exactly.
+
+**The ruling.** The floor comes down by exactly what CI measures under the
+fixed order, with the reason in its history. It is also the standing rule: a
+change that only normalizes what a row reads re-bases the floor by what CI
+measures after it, with no ruling. The banked value was a draw. Picking among
+fixed orders by which reads lowest would choose the measurement by its
+result, so the order is fixed by what is natural (creation order) and the
+floor follows. CLAUDE.md's welfare section carries the rule.
+
+Owes, on #2017: the floor re-based in #2016 by CI's measured cost, recorded
+with this entry as the reason; #2014 and #2018 merging main after it.
+
+## 2026-10-20 — directive: a required feature's cost is never asked about
+
+Clay, after #2017: "it should never need to ask to lower the welfare for a
+feature implementation that's required." The language exception already let
+a ruled feature lower the floor by what it costs. #1987 still came to him
+because the build measured several times its estimate. CLAUDE.md now says
+that a cost above the estimate changes nothing: the floor moves by what CI
+measures, and only a choice about the language itself, such as narrowing the
+ruling when the full build is impossible or contradicts another ruling, goes
+to Clay.
