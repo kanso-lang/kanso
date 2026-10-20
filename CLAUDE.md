@@ -357,8 +357,19 @@ resembles it. Before an argument rests on one:
   permission to lower the welfare floor if it is in service of making the
   language actually work for the specification. this is an ironclad rule." A
   change that builds a ruled part of the language lowers the floor by exactly
-  what it costs, records why in the floor's history, and carries on. A floor
-  drop bought by anything else needs Clay.
+  what it costs, records why in the floor's history, and carries on. That holds
+  when the measured cost exceeds the estimate the ruling was given: the cost of
+  a required feature is never a question for Clay. What goes to him is a choice
+  about the language, such as narrowing what the ruling asked for, and only
+  when the full build is impossible or contradicts another ruling. Clay: "it
+  should never need to ask to lower the welfare for a feature implementation
+  that's required."
+- **So is a measurement that stops reading outside state.** A change that only
+  normalizes what a row reads (an order, a cache, a layout the code under test
+  did not produce) re-bases the floor by exactly what CI measures after it,
+  records why, and carries on. The old reading was a draw, and choosing among
+  fixed states by which reads lowest is choosing the measurement by its result.
+  Ruled on #2017. A floor drop bought by anything else needs Clay.
 - **Under the 2026-09-05 corpus-first gavel, a blind corpus is repaired
   first**: add the benchmark, baseline it before the fix, and the fix scores as
   a rise.

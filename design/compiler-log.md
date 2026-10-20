@@ -21,104 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-14 — `delete`, `io/read_line` and `os/modified`
-
-These are the three #1914 names that need the runtime. #1948 carries the six
-written in kanso. All three run on the interpreter, both native tiers and the
-page's translator.
-
-`delete map key` answers the map without the key. A key that is not there
-answers an equal map, and the map it was handed is not changed. It sits beside
-`put` as an ambient name, so a program that declares its own `delete` is now
-told the name is taken; kq, vse and kanso-json declare none. Natively the
-answer is built from the map's deduplicated sorted view, so a key written twice
-is gone after one `delete`. A first argument that is not a map is refused at
-check time, and a float key at run time.
-
-`io/read_line` is a description that yields the next line of standard input
-without its `\n` or `\r\n`, or `done` at the end. A lone `\r` is kept, since
-only those two endings were ruled. It flushes standard output before it waits,
-so a prompt written ahead of it reaches the terminal first. Bytes that are not
-text are refused the way `os/read_file` refuses them. A read error counts as
-the end of input, which is what `io/stdin` already did natively. The page has
-no standard input and refuses `read_line` as it refuses `stdin`.
-
-`os/modified path` yields when the file last changed, in milliseconds since
-the epoch, or `file_not_found`. A failure other than absence is reported in
-`os/read_file`'s words. In the page it yields `file_not_found`, matching
-`os/exists`.
-
-New goldens: four micro programs, one error and two runtime diagnostics, and a
-stdin corpus under `tests/golden/stdin/` that `tests/read_line.rs` feeds to
-native and the interpreter. One test there waits for each prompt before typing
-the answer, so an unflushed prompt fails it. Each was watched red: native and
-interpreter `delete` keeping the key, `\r` left on the line, and the flush
-removed.
-
-CI's rows price the three builtins. Every native binary carries their runtime
-code, 2,688 bytes more text per bench, so `text` went from 4,932,142 to
-4,969,774 across the fourteen. Each bench also runs about 234 more
-instructions, the same on every one, so the rise is outside any decode loop:
-work_basket 30,946,278, work_deepbench 403,499,544, work_digestbench 5,909,247,
-work_escapebench 39,058,340, work_indexbench 2,462,571, work_jsonbench
-858,186,231, work_livebench 1,474,854,142, work_oneshot 13,205,901,
-work_pendbench 191,674,024, work_readbench 4,580,963, work_runbench
-1,178,202,929, work_scanbench 273,675 and work_widebench 28,274,676, while
-work_encodebench fell to 2,386,636,337. The compiler checks and lowers three
-more names and carries the larger runtime text: compile_instructions
-28,044,444, entry_instructions 92,512,951, library_instructions 92,130,190,
-emit_instructions 7,245,801, codegen_instructions_dev 119,400,046 and
-codegen_instructions_release 477,099,466. The interpreter's run went to
-interp_instructions 495,589,622, and the tab to browser_compile_instructions
-414,205,634 and browser_run_instructions 34,183,945. The floor drops by the
-cost under the language rule, since #1914 rules these names.
-
-Carried together over main 859ad275 in #1953, the six names and the three
-builtins land on one set of CI rows, each read against main. The front end pays
-for both: compile_instructions 31,948,363 from 28,257,376, entry_instructions
-101,372,705 from 93,065,372, library_instructions 100,887,003 from 92,696,544,
-compile_allocs 17,941 from 15,937, emit_instructions 7,622,247 from 7,239,817
-and module_visits 3,666 from 2,912. The compile corpus holds more while it is
-checked, compile_peak_bytes 789,911 from 703,187, with front_end_visits at
-9,326. The interpreter's run reads interp_instructions 496,215,717,
-interp_allocs 592,174 and interp_peak_bytes 792,646, against 495,318,943,
-589,643 and 725,610. The tab's compile reads browser_compile_instructions
-437,381,890 and browser_compile_peak_bytes 726,939, against 416,674,694 and
-686,192, and its run browser_run_instructions 34,183,945. Most of the compile
-cost is the 114 lines the two library modules grew, which every program
-importing them reads whole; #1952 is the change that would take it back. Both
-halves build ruled names (#1914, #1903), so the floor drops by the combined
-cost under the language rule.
-
-## 2026-10-14 — kq's rise at the 2169a0ff pin is clang 18 linking without `deadargelim`
-
-When kq's pin moved to 2169a0ff (kq#190), its instruction rows rose: print_small
-by 5.7% and path_small by 13.5%. CI builds kq with the runner's clang, which
-is 18. Under clang 19 the same pin move is +1.5% on print_small and +0.07% on
-path_small.
-
-A bisect of #1938's carrier under clang 18 stops at its first step, #1898
-with #1896. That step lets clang 18 link through `LTO_O3_WITHOUT_DEADARGELIM`,
-which clang 19 already used. Clang 18's own `lto<O3>` aborted in `deadargelim`
-on kq once closure tail calls became `musttail`.
-
-To isolate the pipeline, I applied only the probe and pipeline change to
-38fd2e60, the tree before the carrier. Built that way, kq reads print_small
-27,704,820 and path_small 11,933,888, against 26,297,450 and 10,519,854
-without the change. The new pin reads 27,793,443 and 11,934,905, so the
-pipeline accounts for all of the rise except 88,623 on print_small and 1,017
-on path_small. All six readings were taken in this container under clang 18
-with `--counters`.
-
-So the cost is clang 18's `deadargelim`: the pass that dropped the dead
-arguments cannot run once tail calls are `musttail`. kanso's own cost goldens
-build with clang 19, and kq's rows were counted under 18.
-kq#191 records the attribution in kq's instructions golden and selects clang 19
-in kq's spec job, so its rows describe the build the rest of the project
-measures. CI read them there as print_small 25,716,192, print_big 245,768,599,
-path_small 10,603,649 and path_big 104,470,133, between 7.5% and 11.3% under
-the clang 18 rows at the same pin.
-
 ## 2026-10-14 — a linux arm64 release build keeps every tail call a jump
 
 #1912. An arm64 release build took `tailcc` away from every arm wider than
@@ -1855,3 +1757,35 @@ browser_compile_instructions 422,962,643 -> 424,273,317,
 browser_compile_peak_bytes 753,318 -> 758,624 and browser_run_instructions
 37,653,273 -> 37,747,192 rise with the larger declarations. Welfare rises and
 is banked.
+
+## 2026-10-20 — gavel: a fix that normalizes a measurement re-bases the floor without a ruling
+
+Clay ruled #2017. The dev codegen row counts `ld.gold`, which reads its `-L`
+directory in readdir order. On ext4 that order is a hash seeded per
+filesystem, so each CI runner drew its own, and the row moved by a few
+instructions between commits that changed no code. #2016 puts the directory
+on tmpfs, which lists in creation order, and the row now reads the same on
+every run: 620 instructions above main's golden. Welfare reads 91.29 either
+way, but the floor is compared exactly.
+
+**The ruling.** The floor comes down by exactly what CI measures under the
+fixed order, with the reason in its history. It is also the standing rule: a
+change that only normalizes what a row reads re-bases the floor by what CI
+measures after it, with no ruling. The banked value was a draw. Picking among
+fixed orders by which reads lowest would choose the measurement by its
+result, so the order is fixed by what is natural (creation order) and the
+floor follows. CLAUDE.md's welfare section carries the rule.
+
+Owes, on #2017: the floor re-based in #2016 by CI's measured cost, recorded
+with this entry as the reason; #2014 and #2018 merging main after it.
+
+## 2026-10-20 — directive: a required feature's cost is never asked about
+
+Clay, after #2017: "it should never need to ask to lower the welfare for a
+feature implementation that's required." The language exception already let
+a ruled feature lower the floor by what it costs. #1987 still came to him
+because the build measured several times its estimate. CLAUDE.md now says
+that a cost above the estimate changes nothing: the floor moves by what CI
+measures, and only a choice about the language itself, such as narrowing the
+ruling when the full build is impossible or contradicts another ruling, goes
+to Clay.
