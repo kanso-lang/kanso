@@ -932,12 +932,77 @@ impl<'a> Interp<'a> {
                 let Some(off) = found else {
                     return Ok(Value::NoneV);
                 };
-                let at = start - 1 + off;
+                let mut at = start - 1 + off;
                 if items[at] == b'\\' {
-                    return Ok(Value::int(at + 1));
+                    // the closing quote, each backslash taking the byte
+                    // after it along, as k_json_quote_after finds it
+                    loop {
+                        let next = items
+                            .get(at + 2..)
+                            .and_then(|rest| rest.iter().position(|&b| b == b'"' || b == b'\\'));
+                        let Some(off) = next else {
+                            return Ok(Value::NoneV);
+                        };
+                        at += 2 + off;
+                        if items[at] == b'"' {
+                            return Ok(Value::int(at + 1));
+                        }
+                    }
                 }
                 match std::str::from_utf8(&items[start - 1..at]) {
                     Ok(s) => Ok(Value::Str(Text::from(s.to_string()))),
+                    Err(_) => Ok(Value::NoneV),
+                }
+            }
+            b"unescape" => {
+                let [cs, from, end] = arity(args, name, span)?;
+                for v in [&cs, &from, &end] {
+                    if is_failure(v) {
+                        return Ok(v.clone());
+                    }
+                }
+                let (Value::Bytes(items), Value::Int(from), Value::Int(end)) = (&cs, &from, &end)
+                else {
+                    return Err(RuntimeError {
+                        at: None,
+                        message: "unescape takes bytes and two positions".to_string(),
+                        span,
+                    });
+                };
+                // The bytes from `from` up to the closing quote at `end`, with
+                // the eight one-letter escapes undone; anything else is none,
+                // as k_b_unescape answers.
+                let (Ok(from), Ok(end)) = (usize::try_from(from), usize::try_from(end)) else {
+                    return Ok(Value::NoneV);
+                };
+                if from < 1 || end < from || end > items.len() + 1 {
+                    return Ok(Value::NoneV);
+                }
+                let range = &items[from - 1..end - 1];
+                let mut out = Vec::with_capacity(range.len());
+                let mut i = 0;
+                while i < range.len() {
+                    if range[i] != b'\\' {
+                        out.push(range[i]);
+                        i += 1;
+                        continue;
+                    }
+                    let undone = match range.get(i + 1) {
+                        Some(b'"') => b'"',
+                        Some(b'\\') => b'\\',
+                        Some(b'/') => b'/',
+                        Some(b'b') => 8,
+                        Some(b'f') => 12,
+                        Some(b'n') => 10,
+                        Some(b'r') => 13,
+                        Some(b't') => 9,
+                        _ => return Ok(Value::NoneV),
+                    };
+                    out.push(undone);
+                    i += 2;
+                }
+                match String::from_utf8(out) {
+                    Ok(s) => Ok(Value::Str(Text::from(s))),
                     Err(_) => Ok(Value::NoneV),
                 }
             }

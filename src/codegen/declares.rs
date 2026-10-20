@@ -720,7 +720,23 @@ look:
   %isq = icmp eq i8 %qc, 34
   br i1 %isq, label %text, label %escaped
 escaped:
-  %e = insertvalue %KValue { i64 0, i64 undef }, i64 %q, 1
+  %at = phi i64 [ %q, %look ], [ %q2, %look2 ]
+  %after = add i64 %at, 1
+  %room = icmp sle i64 %after, %len
+  br i1 %room, label %rescan, label %none
+rescan:
+  %past = add i64 %at, 2
+  %q2 = call i64 @k_b_find2_raw(ptr %d, i64 %len, i64 %past, i64 34, i64 92)
+  %in2 = icmp sle i64 %q2, %len
+  br i1 %in2, label %look2, label %none
+look2:
+  %qi2 = sub i64 %q2, 1
+  %qp2 = getelementptr i8, ptr %d, i64 %qi2
+  %qc2 = load i8, ptr %qp2
+  %isq2 = icmp eq i8 %qc2, 34
+  br i1 %isq2, label %closed, label %escaped
+closed:
+  %e = insertvalue %KValue { i64 0, i64 undef }, i64 %q2, 1
   ret %KValue %e
 text:
   %s = call %KValue @k_b_utf8_slice_raw(ptr %d, i64 %len, i64 %fv, i64 %qi, ptr %site)
@@ -1523,6 +1539,7 @@ declare %KValue @k_b_find2_below(%KValue, %KValue, %KValue, %KValue, %KValue)
 declare i64 @k_b_find2_below_raw(ptr, i64, i64, i64, i64, i64)
 declare %KValue @k_b_number_span(%KValue, %KValue)
 declare %KValue @k_b_plain_string(%KValue, %KValue)
+declare %KValue @k_b_unescape(%KValue, %KValue, %KValue)
 declare i64 @k_b_number_span_raw(ptr, i64, i64)
 declare %KValue @k_b_append(%KValue, %KValue)
 declare %KValue @k_b_append_slice(%KValue, %KValue, %KValue, %KValue, i64)

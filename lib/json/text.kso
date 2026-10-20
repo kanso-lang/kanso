@@ -86,25 +86,29 @@ fn hex_digit c
 fn hex_upper c
   if (64 < c and c < 71) (c - 55) (err "invalid hex digit")
 
-# The run up to the first quote or backslash is a span the scan proved
-# inside cs, so slicing it cannot miss. A string ending in its last byte
-# reaches one past the end, where span_to answers the empty run.
-# A string with no escape in it is read by one call, which finds the closing
-# quote and answers the text before it. One with an escape, or with bytes that
-# are not utf-8, answers none there and is read the long way, which is where an
-# escape is undone and a bad byte is named.
+# A string is read in one call where it can be. With no escape in it, the call
+# answers the text in front of the closing quote. With escapes, it answers the
+# closing quote's position, and `unescape` undoes the eight one-letter escapes
+# over that range. A `\u` escape, any other escape, a string that runs out, or
+# bytes that are not utf-8 answer none at either step, and the string is read
+# the long way below, which is where each of those is undone or named.
 fn parse_string cs p
   plain_at cs p (builtin_plain_string cs p)
 
 fn plain_at cs p none
   string_at cs (text/span_to cs p 34 92)
 
-fn plain_at cs p q:int
-  fresh = text/bytes ""
-  str_chars cs q (text/append fresh (builtin_slice_in cs p (q - 1)))
+fn plain_at cs p e:int
+  undone cs p e (builtin_unescape cs p e)
 
 fn plain_at _ p s
   parsed (p + 1 + length (text/bytes s)) s
+
+fn undone cs p _ none
+  string_at cs (text/span_to cs p 34 92)
+
+fn undone _ _ e s
+  parsed (e + 1) s
 
 # string bytes: 34 quote, 92 backslash; escapes name their targets
 fn str_char _ 34 p acc
@@ -223,6 +227,9 @@ fn unicode_at cs p acc code
     str_chars cs (p + 6) (text/append acc (text/from_code code))
     str_surrogate cs p acc code
 
+# The run up to the first quote or backslash is a span the scan proved
+# inside cs, so slicing it cannot miss. A string ending in its last byte
+# reaches one past the end, where span_to answers the empty run.
 fn string_at cs none
   fail (length cs + 1) "unterminated string"
 

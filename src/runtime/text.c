@@ -1500,12 +1500,27 @@ KValue k_b_find2(KValue cs, KValue from, KValue a, KValue b) {
                                b.payload));
 }
 
-/* `plain_string cs p`: the text of a JSON string whose body starts at `p`,
-   when the first quote or backslash at or after `p` is a quote and the bytes
-   before it are utf-8. Anything else is none, and the caller reads the string
-   the long way, which is where an escape is undone and a bad byte is named.
-   The emitter reaches this through `k_b_plain_string_fast`, which tests the
-   tags and runs the scan and the utf8 inline. */
+/* The closing quote of a JSON string whose first backslash is at `q`. Each
+   backslash takes the byte after it along, so an escaped quote is passed
+   over. Zero when the string runs out first. The twin runs the same loop
+   around the inlined scan. */
+static long long k_json_quote_after(const unsigned char* d, long long len, long long q) {
+    for (;;) {
+        if (q + 1 > len) return 0;
+        q = k_b_find2_raw(d, len, q + 2, 34, 92);
+        if (q > len) return 0;
+        if (d[q - 1] == 34) return q;
+    }
+}
+
+/* `plain_string cs p`, for a JSON string whose body starts at `p`. With no
+   backslash before the closing quote it answers the text in front of the
+   quote, when that is utf-8. With one, it answers the closing quote's
+   position, for `unescape` to read the range. Anything else is none: the
+   string runs out, or its bytes are not utf-8, and the caller reads it the
+   long way, which is where the failure is named. The emitter reaches this
+   through `k_b_plain_string_fast`, which tests the tags and runs the common
+   case inline. */
 KValue k_b_plain_string(KValue cs, KValue fromv) {
     if (__builtin_expect(!k_not_failure(cs) || !k_not_failure(fromv), 0))
         return k_failed2(cs, fromv);
@@ -1515,9 +1530,82 @@ KValue k_b_plain_string(KValue cs, KValue fromv) {
     if (from < 1) return k_none();
     long long q = k_b_find2_raw(b->data, b->len, from, 34, 92);
     if (q > b->len) return k_none();
-    if (b->data[q - 1] == 92) return k_int(q);
+    if (b->data[q - 1] == 92) {
+        long long e = k_json_quote_after(b->data, b->len, q);
+        return e ? k_int(e) : k_none();
+    }
     KValue s = k_b_utf8_slice_raw(b->data, b->len, from, q - 1, k_site);
     return s.tag == K_ERR ? k_none() : s;
+}
+
+/* `unescape cs p e`: the bytes from `p` up to the closing quote at `e`, with
+   JSON's eight one-letter escapes undone. A `u` escape, any other escape, or
+   a range that is not one answers none, and the decoder reads the string the
+   long way. The bytes are the decoder's, which are a string's, so what is
+   between two escapes is whole characters and the answer is not validated
+   again, as `built_text` does not validate what the decoder appends.
+
+   The output is never longer than the input, so it is allocated at the
+   input's length and the header takes what was written. Runs are copied
+   eight bytes at a time and a backslash is found in a word by the zero-byte
+   test on the word xor backslashes; the eight bytes are stored whole and the
+   cursor moves only past the run, which stays inside the buffer because the
+   output never gets ahead of the input. */
+KValue k_b_unescape_raw(const unsigned char* d, long long len, long long from, long long e) {
+    if (from < 1 || e < from || e > len + 1) return k_none();
+    KStr* s = k_str_alloc(e - from);
+    char* o = s->data;
+    const unsigned char* p = d + (from - 1);
+    const unsigned char* end = d + (e - 1);
+    const uint64_t ones = 0x0101010101010101ULL, slashes = 0x5C5C5C5C5C5C5C5CULL;
+    while (p < end) {
+        while (p + 8 <= end) {
+            uint64_t w;
+            memcpy(&w, p, 8);
+            uint64_t x = w ^ slashes;
+            uint64_t hit = (x - ones) & ~x & (ones << 7);
+            memcpy(o, &w, 8);
+            if (hit) {
+                int k = __builtin_ctzll(hit) >> 3;
+                o += k;
+                p += k;
+                goto escape;
+            }
+            o += 8;
+            p += 8;
+        }
+        while (p < end && *p != 92) *o++ = (char)*p++;
+        if (p == end) break;
+    escape:
+        if (p + 1 == end) return k_none();
+        char r;
+        switch (p[1]) {
+            case '"': r = '"'; break;
+            case '\\': r = '\\'; break;
+            case '/': r = '/'; break;
+            case 'b': r = 8; break;
+            case 'f': r = 12; break;
+            case 'n': r = 10; break;
+            case 'r': r = 13; break;
+            case 't': r = 9; break;
+            default: return k_none();
+        }
+        *o++ = r;
+        p += 2;
+    }
+    long long n = o - s->data;
+    s->len = (int)n;
+    s->data[n] = 0;
+    KValue v; v.tag = K_STR; v.payload = k_ptr(s); return v;
+}
+
+KValue k_b_unescape(KValue cs, KValue fromv, KValue ev) {
+    if (__builtin_expect(!k_not_failure(cs) || !k_not_failure(fromv) || !k_not_failure(ev), 0))
+        return k_failed3(cs, fromv, ev);
+    if (cs.tag != K_BYTES || fromv.tag != K_INT || ev.tag != K_INT)
+        k_die("unescape takes bytes and two positions");
+    KBytes* b = k_as_bytes(cs);
+    return k_b_unescape_raw(b->data, b->len, fromv.payload, ev.payload);
 }
 
 /* Where a JSON number's bytes end. The answer is the first position at or
