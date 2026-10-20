@@ -2909,11 +2909,6 @@ static int k_memo_outlives(KValue result) {
     return k_survives((const void*)(intptr_t)result.payload, inner);
 }
 
-/* The pop's work, for a pop that has some. Kept out of line so the pop that
-   has none -- a heap result with nothing carried, nothing registered and no
-   tenure block at its depth, which is 507,678 of runbench's 507,685 -- pays
-   its four tests and returns without the six callee-saved pushes the copy
-   and the migrates below need. The same split the rewind made. */
 static KBuf* k_buf_of(KValue* items);
 
 /* Whether `p` lies in depth d's carry pair. */
@@ -2974,6 +2969,11 @@ static void k_permreg_migrate_carried(int d) {
     k_permreg_n[d] = 0;
 }
 
+/* The pop's work, for a pop that has some. Kept out of line so the pop that
+   has none -- a heap result with nothing carried, nothing registered and no
+   tenure block at its depth, which is 507,678 of runbench's 507,685 -- pays
+   its four tests and returns without the six callee-saved pushes the copy
+   and the migrates below need. The same split the rewind made. */
 static __attribute__((noinline)) KValue k_beat_pop_slow(KValue r, long long d,
                                                         int rewound) {
     KCarry* c = &k_carries[d];
