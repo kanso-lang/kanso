@@ -590,16 +590,16 @@ live_counters = row
   benchmarks
 
 # The skip in front of a string's first escape landed on 2026-09-07 as a
-# library change, and this row is what keeps it: the same vein reads the run
-# being walked again, because the fold's own counter moves by exactly the
-# bytes it walks.
+# library change, and this row is what keeps it. Since 2026-10-20 the run is
+# copied by the runtime eight bytes a step, which no allocation counter sees,
+# so the work vein reads it being copied a byte at a time again.
 clean_run = row
-  "the proved-clean run walked byte by byte again"
-  true
-  (gating "live_counters")
+  "a clean run between two escapes copied a byte at a time again"
+  false
+  "sh scripts/gates/instructions.sh"
   "cost goldens (deterministic ratchet, no clocks)"
   (breaking "a_clean_run_walked_byte_by_byte")
-  benchmarks
+  benches
 
 # The compile row stopped counting process startup on 2026-09-04, because that
 # half moves with binary layout and not with the compiler. What it can still
