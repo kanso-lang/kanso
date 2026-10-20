@@ -21,75 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-14 — `delete`, `io/read_line` and `os/modified`
-
-These are the three #1914 names that need the runtime. #1948 carries the six
-written in kanso. All three run on the interpreter, both native tiers and the
-page's translator.
-
-`delete map key` answers the map without the key. A key that is not there
-answers an equal map, and the map it was handed is not changed. It sits beside
-`put` as an ambient name, so a program that declares its own `delete` is now
-told the name is taken; kq, vse and kanso-json declare none. Natively the
-answer is built from the map's deduplicated sorted view, so a key written twice
-is gone after one `delete`. A first argument that is not a map is refused at
-check time, and a float key at run time.
-
-`io/read_line` is a description that yields the next line of standard input
-without its `\n` or `\r\n`, or `done` at the end. A lone `\r` is kept, since
-only those two endings were ruled. It flushes standard output before it waits,
-so a prompt written ahead of it reaches the terminal first. Bytes that are not
-text are refused the way `os/read_file` refuses them. A read error counts as
-the end of input, which is what `io/stdin` already did natively. The page has
-no standard input and refuses `read_line` as it refuses `stdin`.
-
-`os/modified path` yields when the file last changed, in milliseconds since
-the epoch, or `file_not_found`. A failure other than absence is reported in
-`os/read_file`'s words. In the page it yields `file_not_found`, matching
-`os/exists`.
-
-New goldens: four micro programs, one error and two runtime diagnostics, and a
-stdin corpus under `tests/golden/stdin/` that `tests/read_line.rs` feeds to
-native and the interpreter. One test there waits for each prompt before typing
-the answer, so an unflushed prompt fails it. Each was watched red: native and
-interpreter `delete` keeping the key, `\r` left on the line, and the flush
-removed.
-
-CI's rows price the three builtins. Every native binary carries their runtime
-code, 2,688 bytes more text per bench, so `text` went from 4,932,142 to
-4,969,774 across the fourteen. Each bench also runs about 234 more
-instructions, the same on every one, so the rise is outside any decode loop:
-work_basket 30,946,278, work_deepbench 403,499,544, work_digestbench 5,909,247,
-work_escapebench 39,058,340, work_indexbench 2,462,571, work_jsonbench
-858,186,231, work_livebench 1,474,854,142, work_oneshot 13,205,901,
-work_pendbench 191,674,024, work_readbench 4,580,963, work_runbench
-1,178,202,929, work_scanbench 273,675 and work_widebench 28,274,676, while
-work_encodebench fell to 2,386,636,337. The compiler checks and lowers three
-more names and carries the larger runtime text: compile_instructions
-28,044,444, entry_instructions 92,512,951, library_instructions 92,130,190,
-emit_instructions 7,245,801, codegen_instructions_dev 119,400,046 and
-codegen_instructions_release 477,099,466. The interpreter's run went to
-interp_instructions 495,589,622, and the tab to browser_compile_instructions
-414,205,634 and browser_run_instructions 34,183,945. The floor drops by the
-cost under the language rule, since #1914 rules these names.
-
-Carried together over main 859ad275 in #1953, the six names and the three
-builtins land on one set of CI rows, each read against main. The front end pays
-for both: compile_instructions 31,948,363 from 28,257,376, entry_instructions
-101,372,705 from 93,065,372, library_instructions 100,887,003 from 92,696,544,
-compile_allocs 17,941 from 15,937, emit_instructions 7,622,247 from 7,239,817
-and module_visits 3,666 from 2,912. The compile corpus holds more while it is
-checked, compile_peak_bytes 789,911 from 703,187, with front_end_visits at
-9,326. The interpreter's run reads interp_instructions 496,215,717,
-interp_allocs 592,174 and interp_peak_bytes 792,646, against 495,318,943,
-589,643 and 725,610. The tab's compile reads browser_compile_instructions
-437,381,890 and browser_compile_peak_bytes 726,939, against 416,674,694 and
-686,192, and its run browser_run_instructions 34,183,945. Most of the compile
-cost is the 114 lines the two library modules grew, which every program
-importing them reads whole; #1952 is the change that would take it back. Both
-halves build ruled names (#1914, #1903), so the floor drops by the combined
-cost under the language rule.
-
 ## 2026-10-14 — kq's rise at the 2169a0ff pin is clang 18 linking without `deadargelim`
 
 When kq's pin moved to 2169a0ff (kq#190), its instruction rows rose: print_small
@@ -1855,3 +1786,101 @@ browser_compile_instructions 422,962,643 -> 424,273,317,
 browser_compile_peak_bytes 753,318 -> 758,624 and browser_run_instructions
 37,653,273 -> 37,747,192 rise with the larger declarations. Welfare rises and
 is banked.
+
+## 2026-10-20 — a JSON string is read and written in one call
+
+The decoder read a string through a span to the first quote or backslash, a
+dispatch on the byte the span stopped at, and a second door for the utf8, and
+a string with escapes then went a run and an escape at a time through kanso.
+The writer escaped a string the same way. Three internal builtins replace
+that for every string that needs nothing unusual (#2014).
+
+`builtin_plain_string cs p` scans from the body's first byte. With no
+backslash before the closing quote it answers the text in front of the quote;
+with escapes it carries on to the closing quote and answers its position; a
+string that runs out, or bytes that are not utf-8, answer none.
+`builtin_unescape cs p e` undoes the eight one-letter escapes over that range
+and answers none for a `\u` escape or any other. On none the decoder reads the
+string the long way from its start, so `\u` escapes, surrogates, bad escapes
+and unterminated strings are undone or named by the code that did it before.
+The native twin loops around the inlined scan, and the unescape copies runs
+eight bytes at a time and, like `built_text`, does not validate again what
+came from a string. `length (bytes s)` now reads a string's byte length from
+its header instead of building a view in the arena to measure.
+
+`builtin_append_escaped acc s` appends a string the writer's scan found
+something to escape in, in the forms lib/json has always written. Linearity
+and the beat analysis knew `append` by name, and they now know this builtin by
+the same rules, so a site proved unique writes into the builder in place. The
+escape is written straight into the builder when it has room, and through a
+stack buffer otherwise, so nothing lands in the arena that `append` would not
+put there.
+
+Over 100,000 fuzzed documents decoded and re-encoded byte for byte alike
+natively, interpreted, and on #2012's build, and the harness went red when the
+escaped path was handed a closing position one byte early, when the unescape's
+word offset was halved, and when the writer's table mapped a tab to `n`.
+
+CI's rows. The work vein: runbench 1,215,752,133 -> 1,137,672,504,
+jsonbench 871,505,027 -> 812,108,477, livebench 1,498,512,457 ->
+1,370,942,122, oneshot 13,543,502 -> 12,776,869, encodebench 2,464,678,410
+-> 2,464,678,221. The interpreter reads its corpus's JSON through the same
+builtins: interp_instructions 578,503,674 -> 484,702,222, interp_allocs
+652,272 -> 539,460, interp_peak_bytes 633,881 -> 614,115; in the tab,
+browser_run_instructions 37,747,192 -> 35,361,799. The compile corpus imports
+std/json, so the front end's rows fall with the escaper's functions gone:
+compile_instructions 25,066,066 -> 24,089,825, entry_instructions 76,561,037
+-> 75,139,973, library_instructions 76,265,989 -> 74,835,835, compile_allocs
+13,741 -> 13,382, compile_peak_bytes 591,860 -> 572,289,
+browser_compile_instructions 424,273,317 -> 408,301,693,
+browser_compile_peak_bytes 758,624 -> 749,207, front_end_visits 7,309 ->
+6,938, and front_end_rounds 17 -> 19.
+
+The counters show the paths that left. A decoded string with escapes was a
+builder handed to `built_text` without a copy; it is now a string `unescape`
+allocated, so the zero-copy count falls (run_utf8_zerocopy 175,617 -> 90,
+utf8_zerocopy 265,950 -> 0 on decode, oneshot_utf8_zerocopy 1,774 -> 1,
+live_utf8_zerocopy 2,173 -> 400), and the appends with it (run_append_fast
+8,256,960 -> 5,735,070, append_fast 1,900,500 -> 0 on decode,
+oneshot_append_fast 90,477 -> 63,723, live_append_fast 31,135,470 ->
+25,489,200), and the string headers counted rise where the byte ones fall
+(run_sh_str 17,048,976 -> 24,593,568 against run_sh_bytes 4,217,520 ->
+4,872; decode sh_str 1,319,216 -> 12,750,416; oneshot_sh_str 196,368 ->
+272,576; live_sh_str 196,320 -> 272,528). The writer's stack buffer and its
+straight writes leave run_held_peak_bytes, oneshot_held_peak_bytes and
+live_held_peak_bytes at 197,704 -> 200,978, and live_alloc_bytes 409,411,040 -> 413,053,904.
+On the run program run_sh_buf reads 119,176,736 -> 119,198,704, run_buf_reuse
+139 -> 134 and run_survive_slots 4,854 -> 4,856. run_perm_live_bytes 15,825 ->
+146,913 and run_bytes_freed 9,010 -> 9,009 are one list buffer of 8,192 slots,
+the bag phase's, grown outside the arena as it was before and now still held
+at exit; the peak does not move, and why it is no longer handed back is not
+isolated (#2015).
+
+The compile goldens read lines 1,396 -> 1,412 and module_lines 1,137 ->
+1,141 for the twins defined in every module, and the decoder's own code
+emitted_defines 130 -> 134, emitted_calls 1,222 -> 1,249, emitted_branches
+1,303 -> 1,336 and emitted_lines 12,368 -> 12,690, while the other programs
+lose the escaper (emitted_other_lines 157,286 -> 156,673). Machine code: text
+5,201,182 -> 5,283,518. codegen_instructions_dev 115,822,000 -> 116,000,241,
+codegen_instructions_release 453,660,707 -> 453,685,379 and
+emit_instructions 6,202,944 -> 6,233,826 rise with the declarations.
+
+The mem fixture `append_of_a_slice_boxes_nothing` pins the fused append of a
+slice, which std/json made for the run before each escape. Its `\n` escapes
+are now undone in one call, so it uses `\u0041` to keep reaching the pair, and
+reads append_of_a_slice_boxes_nothing_allocs 12 -> 14,
+append_of_a_slice_boxes_nothing_alloc_bytes 1,307 -> 2,396,
+append_of_a_slice_boxes_nothing_bytes_malloc 3 -> 4,
+append_of_a_slice_boxes_nothing_perm_allocs 5 -> 6,
+append_of_a_slice_boxes_nothing_find2_calls 42 -> 83,
+append_of_a_slice_boxes_nothing_str_scan_bytes 165 -> 169 and
+append_of_a_slice_boxes_nothing_sh_str 272 -> 816 for the `\u` path's own
+work; its append_fast stays at 80.
+
+Two shapes of the writer were measured worse first and declined. A builtin
+answering an escaped copy read the run program at 1,221,510,922 against
+1,166,052,728 without it: the copy cost 415 instructions a string, and with
+the escaper's loop gone the encoder's map call lost its region and its fused
+`keys` and `values`. The append-like builtin read 1,416,821,993 before the
+analyses knew its name, because every append in the encoder stopped writing in
+place.
