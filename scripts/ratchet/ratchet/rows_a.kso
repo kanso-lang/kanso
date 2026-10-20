@@ -1,0 +1,1557 @@
+import "std/list"
+
+formatting = row
+  "a file rustfmt would rewrite"
+  false
+  "cargo fmt --check"
+  "format (rustfmt, checked not applied)"
+  (breaking "misformatted_source")
+  no_setup
+
+linting = row
+  "a borrow clippy refuses"
+  true
+  "cargo clippy --all-targets -- -D warnings"
+  "lint (clippy, all targets)"
+  (breaking "clippy_bait")
+  no_setup
+
+python_free = row
+  "a python call creeping back into a harness"
+  false
+  (gating "python_free")
+  "python-free (the harnesses stay kanso)"
+  (breaking "python_creeps_back")
+  no_setup
+
+goldens = row
+  "a micro sample answering something else"
+  true
+  "cargo test --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "drifted_micro_golden")
+  no_setup
+
+# The foreign-only rescue licence, at the word: a `.?` written in the package
+# that raised the failure hands it on without entering its callback. The
+# mutation deletes the interpreter's licence arm, and the micro fixture that
+# pins the licence prints the callback's answer where the golden says the
+# failure went by.
+rescue_licence = row
+  "a rescue that enters the callback on its own package's failure"
+  true
+  "cargo test --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_rescue_that_enters_its_own_packages_callback")
+  no_setup
+
+# A measured decision that goes to Clay must name where it went: the ledger
+# before 2026-10-10, a `needs-clay` issue since. Two sends were found sitting
+# in the log with neither, two days apart, so the spec reads the log for the
+# family. The mutation takes the ledger's name out of the paragraph that files
+# the `.rodata` page pin, and the spec names that send as unanswered.
+clay_send_filed = row
+  "a measured decision sent to Clay with nowhere to go"
+  true
+  "cargo test --release --test a_question_sent_to_clay_has_somewhere_to_go"
+  "specs (unit, golden, differential)"
+  (breaking "a_send_to_clay_with_no_ledger_entry")
+  no_setup
+
+# The 2026-09-15 ruling's third part: a raised err arriving where a value is
+# wanted does not compile. The mutation deletes the one call that asks, and
+# the three error fixtures that pin the refusal then compile clean, which the
+# error corpus reports as a golden holding a diagnostic nobody raised.
+raised_err = row
+  "a raised err reaching a value site that compiles"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_raised_err_reaching_a_value_site_compiles")
+  no_setup
+
+# A name bound to a call that can raise carries the call's err into the
+# check (#1884). The mutation forgets it for locals and constants alike, and
+# the three error fixtures that bind the err first then compile clean.
+named_err = row
+  "a name that forgets the err of its call"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_name_forgets_the_err_of_its_call")
+  no_setup
+
+# A failure crossing a beat carry in the two-word record convention was boxed
+# as a record and read back out of one; the mutation puts the read back and
+# the mem fixture a_failure_crosses_a_beat_carry_in_two_words dies on native
+# where the interpreter answers.
+carry_failure = row
+  "a failure read as a record on the far side of a carry"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_failure_read_as_a_record_at_a_carry_take")
+  release
+
+# A repair raises the mark over what it copied below it, and the mark's room
+# has to move with its pointer. The mutation leaves the room behind, and
+# a_node_repaired_by_an_inner_pop_outlives_the_outer_stage exits non-zero.
+repaired_mark = row
+  "a repaired mark raised without its room"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_repaired_mark_left_without_its_room")
+  release
+
+# An `e@(err _)` arm at a carried slot needs no record, and the mutation makes
+# it ask for one: the fixture an_err_as_pattern_keeps_a_carried_slot_unboxed
+# reads sh_rec=64000 against its 0.
+err_as_pattern = row
+  "an err as-pattern that boxes a carried slot"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "an_err_as_pattern_boxes_a_carried_slot")
+  release
+
+# A cell can evaluate to a cell: `rest = names_any? ...` deferred in every
+# arm of a recursion and handed back through `either? _ answer`. The runtime
+# forced one level and the dispatcher tested a cell's tag against `true`;
+# the browser differential harness died in `put_unless` on every corpus
+# directory. The force walks the chain now, on native and on the page.
+force_chain = row
+  "a cell whose answer is a cell, forced one level"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_deferred_answer_is_forced_one_level")
+  release
+
+# `effect v` is the box built by hand, ruled 2026-09-15. The interpreter is
+# the oracle for what it settles to, and native is compared with it on the
+# fixture that starts every chain shape from one. The mutation makes the
+# interpreter hand the value over unboxed.
+hand_box = row
+  "the box built by hand answering its value bare on one engine"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "the_hand_built_box_answers_its_value_bare")
+  release
+
+# A rescue or annotate callback is entered with the failure itself. The
+# emitter trusts inference for a group's entry guard, so a callback lambda
+# whose parameter is seeded as never failing costs native the guard on the
+# group it hands the err to, and the interpreter is the oracle that refuses.
+callback_err = row
+  "a chain callback's parameter seeded as never failing"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_chain_callbacks_parameter_never_fails")
+  release
+
+# `xs[i]!` answers a box, the element or the missing-index err bubbling
+# through it, and the words are what open it (ruled 2026-09-16, reversing
+# the same morning's reading). The site walk refuses the box at an operator,
+# a field read and a builtin the way it refuses any other effect there; this
+# row is the arm of `yields_box` that says a strict index is one.
+bang_box = row
+  "a strict index the words cannot open"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_strict_index_the_words_cannot_open")
+  release
+
+# The plain read is the element or a none, and the bound written where the
+# read is discharges the none: a guard returning before an out-of-range read
+# leaves the element as the only answer. Two rows because the prover has two
+# doors, the facts an `if` pushes and the length a literal list spells out.
+guard_bound = row
+  "a bound the guard never discharges"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_bound_the_guard_never_discharges")
+  release
+
+literal_bound = row
+  "a literal list of unknown length"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_literal_list_of_unknown_length")
+  release
+
+# A type name inside a shell is several names: `<g/cell>effect` holds one
+# qualified name and one bare one, and the import check has to see the
+# qualified one. Splitting the whole spelling at its first slash answered
+# `<g`, which no import matches, so a file was refused for borrowing an
+# import it wrote and that import read as unused in the same run.
+qualified_yield = row
+  "a type name split at its first slash"
+  true
+  "cargo test --release --test a_qualified_yield_inside_an_effect_type"
+  "specs (unit, golden, differential)"
+  (breaking "a_type_name_split_at_its_first_slash")
+  release
+
+# The lines below a `return x if c` guard are the guard's untaken arm, and a
+# name bound there is a binding of the same body. Two analyses follow an
+# accumulator through the names it is bound to, and until 2026-09-16 both
+# read the top level only; the mem fixture pins the beat and the flat
+# allocation count a loop keeps when its accumulator passes through such a
+# name. One row per reader: the linearity analysis, whose lookup decides the
+# in-place appends, and the beat's chain test, whose decides the bracket.
+guard_bind_linear = row
+  "a binding under a guard the linearity analysis cannot see"
+  true
+  "cargo test --release --test golden mem_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_binding_under_a_guard_the_linearity_analysis_cannot_see")
+  release
+
+guard_bind_chain = row
+  "a binding under a guard the chain cannot pass through"
+  true
+  "cargo test --release --test golden mem_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_binding_under_a_guard_the_chain_cannot_pass_through")
+  release
+
+# The boundary rule lets a byte builder cross a rewind when the self-call's
+# argument chains from the builder that arrived, and it reads the builder at
+# the position under test as well as the first parameter; builder_transient
+# carries its builder third and pins the beat (beat_iters 1,360).
+bytes_acc_position = row
+  "a byte builder carried anywhere but first"
+  true
+  "cargo test --release --test golden mem_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_byte_builder_carried_anywhere_but_first")
+  release
+
+# A tail call under `return x if c` is the shape the library's folds took on
+# 2026-09-16, and the oracle nested a frame for every turn of it: a fold over
+# ten thousand elements ran out of stack on the interpreter where native
+# looped. The mutation evaluates a guard's rest as a nested block again.
+guard_tail_oracle = row
+  "a guard's rest evaluated as a nested block on the oracle"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_guard_that_nests_a_frame_on_the_oracle")
+  release
+
+# The four `cargo test --test golden` rows above and below all point at the
+# micro corpus or the mem corpus. The error corpus — 161 fixtures pinning
+# every diagnostic the language emits — had no row at all, so nothing had
+# ever watched it fail, which is the exact shape this file exists to refuse.
+error_corpus = row
+  "a check that quietly stops firing"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_diagnostic_stops_being_raised")
+  release
+
+# The mutation takes tailcc off every arm on both architectures. It used to
+# lower only the arm64 cap, which an x86-64 release build no longer reads, and
+# the row went blind there.
+release_profile = row
+  "a release build that gives up the guaranteed tail call"
+  true
+  "cargo test --test golden micro_corpus_survives_a_release_build"
+  "specs (unit, golden, differential)"
+  (breaking "tail_call_given_up")
+  no_setup
+
+decode_counters = row
+  "a decode allocation the golden does not know about"
+  true
+  (gating "decode_counters")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "decode_allocation")
+  benchmarks
+
+escape_counters = row
+  "escaped accumulator storage that nobody frees"
+  true
+  (gating "escape_counters")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "escaped_storage_kept")
+  benchmarks
+
+thunk_walk = row
+  "a thunk's captures unsized by the walk that evacuates survivors"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "thunk_capture_shared")
+  release
+
+pend_counters = row
+  "the pending-cell shape erased from the corpus by a strictness change"
+  true
+  (gating "pend_counters")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "pending_cells_proven_strict")
+  benchmarks
+
+# The leak is caught by the micro corpus, not by a counter, and the row said
+# otherwise for months. A lazy verdict is per (group, arity, index) and codegen
+# consults it with no arm to disambiguate, so a leaked verdict makes the
+# emitter build a thunk in one arm and release it at the group's merged tail,
+# which the other arm reaches -- IR whose release does not dominate its thunk.
+# clang runs with -disable-llvm-verifier and so takes the broken module and
+# SIGSEGVs in the Register Coalescer rather than rejecting it, which read here
+# as UNBUILT: the tree would not compile, the counter gate never ran, and the
+# row proved nothing on main from whenever the library grew the shape until
+# 2026-09-16. `no_setup` and a gate that builds is what the header above
+# prescribes for a defect that IS a build failure.
+scan_leak = row
+  "a lazy verdict leaking from one arm of a group to another"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "lazy_verdict_leaks_between_arms")
+  no_setup
+
+# And scan_counters, left with no row when the one above moved off it, gets
+# one aimed at what it is for.
+scan_counters = row
+  "a library loop admitted to the carry tier"
+  true
+  (gating "scan_counters")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_carry_tier_admits_library_loops")
+  benchmarks
+
+# readbench joined on 2026-09-04 and this row with it, in the same pull request,
+# because a gate CI runs and the ratchet cannot break is a gate nobody has
+# proved can fail. scan_counters above is the other half of the same lesson from
+# the same day: it had this row from the first and no CI step ran the gate at
+# all, so the ratchet could break something the normal path never checked.
+#
+# The chain-head mutation it was written with stopped moving readbench, whose
+# loop now carries nothing across its rewind, and the row ran blind
+# (2026-10-12). readbench is now broken where its loop gets its beat, and the
+# chain-head mutation moved to oneshot, which reads the same chain and still
+# sees it.
+read_counters = row
+  "an allocating loop read as pure"
+  true
+  (gating "read_counters")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "an_allocating_loop_read_as_pure")
+  benchmarks
+
+oneshot_counters = row
+  "a chain head that names a declaration, answered by the top set"
+  true
+  (gating "oneshot_counters")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_bang_read_loses_its_beat")
+  benchmarks
+
+# livebench joined on 2026-09-05 and this row with it, for the reason the
+# paragraph above gives. Its defect is a library one on purpose: the frozen
+# copy in bench/encodebench would not move by an instruction, which is both why
+# that control is worth keeping and why this vein had to exist beside it.
+live_counters = row
+  "an encoder that hands a clean string to the escape path anyway"
+  true
+  (gating "live_counters")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "an_encoder_that_walks_a_clean_string")
+  benchmarks
+
+# The skip in front of a string's first escape landed on 2026-09-07 as a
+# library change, and this row is what keeps it. Since 2026-10-20 the run is
+# copied by the runtime eight bytes a step, which no allocation counter sees,
+# so the work vein reads it being copied a byte at a time again.
+clean_run = row
+  "a clean run between two escapes copied a byte at a time again"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_clean_run_walked_byte_by_byte")
+  benches
+
+# The compile row stopped counting process startup on 2026-09-04, because that
+# half moves with binary layout and not with the compiler. What it can still
+# hide is a new dependency, whose startup cost was measured at 32,090, so this
+# row watches the list that would catch one.
+compile_libraries = row
+  "a shared object the compiler grew and the instruction row cannot see"
+  true
+  (gating "compile_libraries")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_library_the_row_cannot_see")
+  no_setup
+
+mem_shapes = row
+  "a memory shape the fixture's counters no longer describe"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "cluster_entry_not_demoted")
+  release
+
+emitted_code = row
+  "the decoder's emitted line count moving"
+  true
+  (gating "emitted_code")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "emitted_lines_moved")
+  benchmarks
+
+# The same gate, the other file. One mutation per golden, because a gate that
+# reads two files and is only ever proved against one is proved for one.
+emitted_others = row
+  "another benchmark's emitted line count moving"
+  true
+  (gating "emitted_code")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "emitted_others_moved")
+  benchmarks
+
+# The integer remainder inlines for a proven pair since 2026-09-07; the
+# mutation sends every remainder back to the runtime, and the emitted goldens
+# read the calls that come back.
+remainder = row
+  "every remainder a call to the runtime again"
+  true
+  (gating "emitted_code")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_remainder_calls_the_runtime_again")
+  benchmarks
+
+# ryu_d2d settles a short float by scaling and dividing back since 2026-09-24,
+# and every float the benchmarks render takes that road. The row this replaced
+# guarded ryu's general digit-removal loop through the work vein, and with no
+# benchmark float reaching the loop that vein could no longer see it. The
+# mutation closes the short road; the digits are identical, so the presence
+# counter is what goes red.
+short_float = row
+  "a short float rendered by ryu's multiplies again"
+  true
+  (gating "run_counters")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_short_float_takes_ryu_s_road")
+  benchmarks
+
+# k_b_to_float skips leading zeros before its digit loops since 2026-09-15,
+# so the loops count significant digits unconditionally; the mutation puts
+# `if (w) digits++` back on every digit. The (w, q) handed to eisel-lemire is
+# identical either way, so the work vein is the only thing that can see it.
+leading_zeros = row
+  "every digit asking whether the first nonzero has landed"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "every_digit_asks_whether_the_first_nonzero_has_landed")
+  benchmarks
+
+# k_b_to_int's strtoll fallthrough is a separate cold function since
+# 2026-09-15, so the fast path carries no frame; the mutation inlines it back
+# and the five pushes and five pops return to every call. The value out is
+# identical either way, so the work vein is the only thing that can see it.
+int_cold_tail = row
+  "the int parser's cold tail sharing its frame"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_int_parser_s_cold_tail_shares_its_frame")
+  benchmarks
+
+# Six cold helpers carry preserve_most since 2026-09-15 -- the arena refill,
+# the permanent allocator, the int parser's strtoll tail, the ascii cache's
+# fill and the two arms of an index that allocate or refuse -- so a hot
+# function whose only calls are cold ones opens with no pushes. The mutation
+# strips the attribute from all six and the pushes return. Every value out is
+# identical either way, so the work vein is the only thing that can see it.
+cold_registers = row
+  "the cold helpers clobbering their callers' registers"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_cold_helpers_clobber_their_callers_registers")
+  benchmarks
+
+# k_b_at's two arms that allocate or refuse are separate cold functions since
+# 2026-09-15, so the arm every runbench index takes carries no frame; the
+# mutation inlines both back and the six pushes return to every index. The
+# value out is identical either way, so the work vein is the only thing that
+# can see it.
+index_cold_arms = row
+  "the index's allocating arms sharing its frame"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_index_s_allocating_arms_share_its_frame")
+  benchmarks
+
+# A copy long enough to be libc's goes through a preserve_most wrapper since
+# 2026-09-15, so a function whose short copies are inline words keeps no frame
+# for the long case; the mutation inlines the wrapper back and the pushes
+# return. Every byte copied is the same, so the work vein is the only thing
+# that can see it.
+cold_copy = row
+  "the long copy sharing its caller's frame"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_long_copy_shares_its_callers_frame")
+  benchmarks
+
+# k_b_utf8_slice_raw validates through a door whose two validators sit behind
+# preserve_most wrappers since 2026-09-15, so its 861,498 calls a run open
+# with no pushes; the mutation sends it through the plain door again. The
+# answer is identical either way, so the work vein is the only thing that can
+# see it.
+rare_door = row
+  "the slice door calling the validators directly"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_slice_door_calls_the_validators_directly")
+  benchmarks
+
+# The third cold-frame sweep, 2026-09-15: nine rare arms of hot runtime
+# functions are preserve_most helpers, so k_b_at, k_b_entries, k_b_push_grow,
+# k_b_append_grow, k_closure and k_copy_alloc open with one push or none. The
+# mutation strips the attribute from the nine and leaves kanso#1429's six.
+# Every value out is identical, so the work vein is the only thing that can
+# see it.
+sweep_helpers = row
+  "the third sweep's helpers clobbering their callers' registers"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_third_sweep_s_helpers_clobber_their_callers_registers")
+  benchmarks
+
+# k_b_slice's multibyte walk is its own function in tail position, so the
+# ascii and list arms open with no pushes where the inline walk cost seven;
+# the mutation inlines it back. Every slice is the same bytes, so the work
+# vein is the only thing that can see it.
+slice_walk = row
+  "the slice's walk sharing the door's frame"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_slice_s_walk_shares_the_door_s_frame")
+  benchmarks
+
+# k_closure copies up to eight captures as inline words and hands a longer
+# environment to k_copy_cold; the mutation puts memcpy back above four, a
+# plain call the closure kept five pushes for. Every environment holds the
+# same values, so the work vein is the only thing that can see it.
+scan_inline = row
+  "the two byte scanners called out of line with their constants"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_byte_scanners_rebuild_their_constants_on_every_call")
+  benchmarks
+
+# A tail shorter than a vector is one masked load when the sixteen bytes stay
+# inside the page; the mutation makes the window test answer no, so every
+# short tail walks a byte at a time again, 8,042,860 bytes a run at eight
+# instructions each. Every scan answers the same position either way, so the
+# work vein is the only thing that can see it.
+scan_tail = row
+  "a scan's short tail walked one byte at a time"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_short_scan_tail_walks_a_byte_at_a_time")
+  benchmarks
+
+# Every counter increment sits behind K_COUNTING, so a shipped binary carries
+# none of them; the mutation puts the beat iteration counter's two sites back
+# unguarded, 2,692,767 increments a run on the run program. A counted binary
+# counts the same either way, so the work vein is the only thing that can see
+# it.
+counters_out = row
+  "a counter increment left in a shipped binary"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_beat_iteration_counter_is_counted_in_a_shipped_binary")
+  benchmarks
+
+# A lambda reads its captures out of the environment on entry. Until
+# 2026-09-15 each read was a call to k_env_get, three instructions behind a
+# call and a return, once per capture on every entry: 1,279,648 calls a run
+# on the run program. The read is a getelementptr and a load now, so the
+# emitted vein sees one `call` fewer per capture per lambda, which is what
+# this row asserts. The mutation puts the call back through the same slot
+# pointer, so the twin the emitter writes is otherwise unchanged.
+capture_load = row
+  "a captured value read through a call on every lambda entry"
+  true
+  (gating "emitted_code")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_capture_is_read_through_a_call")
+  benches
+
+empty_room = row
+  "an empty list literal with no room for a push"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "an_empty_list_literal_has_no_room_for_a_push")
+  benchmarks
+
+closure_caps = row
+  "a closure of five captures calling memcpy"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_closure_of_five_captures_calls_memcpy")
+  benchmarks
+
+machine_code = row
+  "the machine code changing size"
+  true
+  (gating "machine_code")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "machine_code_moved")
+  benchmarks
+
+instructions_host = row
+  "the instructions vein read on a host that did not measure it"
+  false
+  (whose "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "instructions_host_unpinned")
+  no_setup
+
+text_host = row
+  "the machine-code vein read under a toolchain that did not emit it"
+  false
+  (whose "text")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "text_host_unpinned")
+  no_setup
+
+compile_allocs = row
+  "a front-end pass that owns the program's names instead of borrowing them"
+  false
+  "sh scripts/gates/compile_allocs.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "compile_allocs_unwatched")
+  release
+
+compile_allocs_host = row
+  "the allocation vein read under a toolchain that did not count it"
+  false
+  (whose "compile_allocs")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "compile_allocs_host_unpinned")
+  no_setup
+
+compile_ir = row
+  "front-end work that costs instructions and moves no other counter"
+  false
+  "sh scripts/gates/compile_instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "compile_ir_unwatched")
+  release
+
+# The same gate, a second row, for the box check's hoist. compile_ir's own
+# mutation stops the vein being read at all; this one leaves the vein alone
+# and asks whether it can still see one pass doing work it can prove is
+# pointless. The two answer different questions about the same number.
+box_check_hoist = row
+  "a whole-program check that asks a question the program already answered"
+  false
+  "sh scripts/gates/compile_instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_box_check_asks_when_nothing_answers_a_box")
+  release
+
+# A third row on the same gate, for the qualified-name join. compile_ir's
+# mutation stops the vein being read; box_check_hoist asks whether it can see
+# a pass doing provably pointless work; this one asks whether it can see the
+# cost of a shape -- the same strings, built the expensive way. All three
+# answer different questions about the same number.
+qualified_name_join = row
+  "a name the loader mints, built through the formatting machinery"
+  false
+  "sh scripts/gates/compile_instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_qualified_name_goes_back_through_format")
+  release
+
+# The same shape for the ENTRY path, which the row above cannot reach: it
+# checks a directory, and a directory takes compile_module_inner. The mutation
+# asks the entry's whole-program check twice, and the two rows separate
+# cleanly on it -- entry_instructions 165,183,406 -> 190,382,616 (+15.25%) in
+# the box, compile_instructions byte-identical at 49,162,592. A vein whose
+# defects another vein already catches would not be worth its callgrind run.
+entry_ir = row
+  "work on the entry path, where the compile row measures a module"
+  false
+  "sh scripts/gates/entry_instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_entry_program_is_checked_twice")
+  release
+
+# And the LIBRARY path, which neither row above reaches. `kanso check` routes a
+# single file by its content: bare statements make it an entry and take
+# compile_parsed_entry, definitions alone make it a library and take
+# compile_library, and the two run different passes in a different order. The
+# mutation asks the library program's whole-program check twice --
+# library_instructions 165,589,540 -> 190,698,277 (+15.16%) in the box, with the
+# entry and module rows untouched, so the three separate cleanly.
+library_ir = row
+  "work on the library path, which the entry and module rows both walk past"
+  false
+  "sh scripts/gates/library_instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_library_program_is_checked_twice")
+  release
+
+entry_rewritten_twice = row
+  "an entry program rewritten twice before it is checked"
+  false
+  "cargo test --release --test rewrite_passes"
+  "specs (unit, golden, differential)"
+  (breaking "an_entry_program_rewritten_twice_before_it_is_checked")
+  release
+
+render_trip = row
+  "a rendered float that truncates instead of rounding"
+  false
+  "cargo test --release --test every_rendered_float_reads_back_as_itself"
+  "specs (unit, golden, differential)"
+  (breaking "a_rendered_float_that_never_rounds_up")
+  release
+
+int_bound = row
+  "an integer fast path whose digit bound can overflow"
+  false
+  "cargo test --release --test the_int_fast_path_agrees_with_libc"
+  "specs (unit, golden, differential)"
+  (breaking "an_eighteen_digit_bound_widened_to_nineteen")
+  release
+
+append_rendered = row
+  "a scalar rendered into a string and copied again"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_scalar_rendered_into_a_string_and_copied_again")
+  benches
+
+arm_narrowed = row
+  "an arm not told what the switch decided"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "an_arm_not_told_what_the_switch_decided")
+  benches
+
+arms_apart = row
+  "a dispatcher's heavy arms inlined into the frame its cheap arms pay"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_dispatchers_heavy_arms_inlined_into_its_frame")
+  benches
+
+shared_path = row
+  "a path copied once per declaration instead of shared"
+  false
+  "sh scripts/gates/compile_allocs.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_path_copied_once_per_declaration")
+  release
+
+rewritten_twice = row
+  "a module rewritten twice before it is checked"
+  false
+  "sh scripts/gates/compile_instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_module_rewritten_twice_before_it_is_checked")
+  release
+
+compile_ir_host = row
+  "the instruction vein read under a toolchain that did not retire it"
+  false
+  (whose "compile_instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "compile_ir_host_unpinned")
+  no_setup
+
+# ONE ROW, ONE VALUE, ruled 2026-09-05. The compile row was keyed by silicon
+# and could pin a pair; both are retired, and the shape they can come back in
+# is a second number appended to the golden's line by a run that disagreed.
+# That is the reproduction failure this vein now halts on rather than records,
+# so it is the thing to watch. It cannot be watched on the gate itself — the
+# gate's own answer costs a callgrind run over the whole front end and refuses
+# outright on a container's toolchain — so the spec reads the golden.
+compile_ir_one_value = row
+  "a second value pinned beside the row, until it admits anything counted"
+  false
+  "cargo test --test the_compile_row_holds_one_value"
+  "specs (unit, golden, differential)"
+  (breaking "the_compile_row_pins_a_second_value")
+  no_setup
+
+# THE MAPS PARSE IS EXTERNAL STATE, ruled 2026-09-15. Rust's startup parses
+# /proc/self/maps to place the stack guard, and the parse costs whatever the
+# binary's layout makes the file: a 64 KiB .bss nothing reaches moved the
+# whole-process count 2,128 with the compiler's own frame identical to the
+# instruction. The three compile gates read their rows as `kanso::main`
+# inclusive, which leaves the parse above the count. The cheap regression is a
+# gate going back to callgrind's summary line, which is one grep shorter and
+# is the whole process again; the spec reads the three gates for the anchor.
+compile_ir_from_main = row
+  "a compile row read from process entry, so the maps parse is in it again"
+  false
+  "cargo test --test the_compile_rows_start_at_the_compilers_main"
+  "specs (unit, golden, differential)"
+  (breaking "a_compile_row_that_counts_from_process_entry")
+  no_setup
+
+# A BUILD IS A TREE, and the codegen rows count all of it. `kanso check` stops
+# before codegen, so the emitter, the clang driver, `clang -cc1`, ld and the
+# linker's own child were uncounted by every other row, and they are the larger
+# half of what a build costs. `--trace-children=yes` is the whole of how the
+# tree is reached. The first measurement of this row was taken on a build that
+# had been REFUSED after emitting its IR -- two processes, both tiers within
+# 0.006% of each other -- so a short tree is the shape of a build that never
+# wrote anything, and the gate refuses one.
+codegen_one_process = row
+  "a codegen row counted on the compiler's process alone, not the build tree"
+  false
+  "sh scripts/gates/codegen_instructions.sh dev"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_codegen_row_that_counts_one_process")
+  no_setup
+
+# A refusal is only as good as what it leaves a reader able to do. This one
+# told CI to copy rows out of a job log that could not contain them, because
+# the gate stopped before it measured. The row watches the two answers stay
+# separate: a container may not measure, CI must.
+host_measures = row
+  "a refusal that sends a reader to rows the gate never printed"
+  false
+  "cargo test --test a_host_that_may_not_be_compared_may_still_be_measured"
+  "specs (unit, golden, differential)"
+  (breaking "a_refusal_that_tells_you_to_read_rows_it_never_printed")
+  no_setup
+
+# The welfare column is written over the stored rows under the current formula
+# — ruled 2026-08-31, restated 2026-09-03 as one line rewritten in place — so
+# the rule is written twice: scripts/welfare scores the goldens and
+# scripts/welfare_rescore scores a row. Two statements of one rule drift, and
+# this one drifts where nobody looks, because a wrong column still draws a
+# line. The spec runs both tools on one set of readings and requires the same
+# answer.
+chart_replay = row
+  "a written column that no longer agrees with the formula being ruled on"
+  false
+  "cargo test --test the_score_says_what_it_was_made_of"
+  "specs (unit, golden, differential)"
+  (breaking "a_chart_that_replays_a_different_formula")
+  no_setup
+
+inline_pin = row
+  "an inline pin the inliner undoes, and a hot wrapper going out of line"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "an_inline_pin_the_inliner_undoes")
+  benches
+
+one_char_memo = row
+  "an indexed character scanned for a length the index already knew"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "an_indexed_character_scanned_for_its_length")
+  release
+
+length_memo = row
+  "a string length that leaves the twin for a memo the header holds"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_string_length_that_leaves_the_twin")
+  benches
+
+length_fold = row
+  "a length twin that asks list-or-bytes as three compares, not one"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_length_twin_that_compares_three_times")
+  benches
+
+# The tenure block sharing that took runbench's phase from forty-nine blocks to
+# one. This row gated on the run program's counters until the lap carry, which
+# stages runbench's inner loop so rarely that one block holds its tenure with
+# or without the sharing, and the mutation left that gate green. The mem
+# fixture an_inner_beat_opens_its_tenure_in_the_block_outside still opens a
+# block per inner beat without it, and goes red.
+ten_open = row
+  "an inner beat that opens its own tenure block beside one with room"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_child_beat_that_opens_its_own_tenure_block")
+  release
+
+# Where a tenure block dies. `ten_blocks` and `ten_frees` count the block being
+# claimed and given back and neither can say at which depth, so freeing a
+# depth's blocks instead of handing them up moved no counter at all until
+# `ten_handups` was minted on 2026-09-22. The fixture that documented the
+# hand-up had claimed for a fortnight to guard it.
+ten_where = row
+  "a tenure block freed at the depth that opened it instead of handed up"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_tenure_block_freed_where_it_was_handed_up")
+  release
+
+# Which block a pointer lies in. Past eight blocks the survival questions are
+# answered from an index sorted by address, and walking the chain instead gives
+# the same answers, so only `chain_finds` can tell the two apart.
+chain_index = row
+  "a long chain walked instead of searched"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_long_chain_walked_instead_of_searched")
+  release
+
+# Where a rewind keeps its place in a string. The cursor is a position cache,
+# so forgetting it moves no output and no allocation; `seek_resumes` was minted
+# on 2026-09-23 so that a scan walking its subject from the front at every
+# position has a counter to show it.
+seek_kept = row
+  "a rewind that forgets the seek cursor whatever string it names"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_rewind_that_forgets_every_seek_cursor")
+  release
+
+pop_fast = row
+  "a beat pop with nothing to migrate that pays the migrates' frame"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_pop_with_nothing_to_do_that_does_it_anyway")
+  benches
+
+push_walk = row
+  "a push off the frontier that walks the chain to place its header"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_push_off_the_frontier_that_walks_the_chain_twice")
+  benches
+
+scalar_words = row
+  "a short utf-8 run validated a byte at a time around its wide characters"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_short_run_validated_a_byte_at_a_time")
+  benches
+
+render_words = row
+  "a rendered number's digits copied through a call"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_rendered_number_copied_through_a_call")
+  benches
+
+map_lit_copy = row
+  "an empty map literal built as any other"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "an_empty_map_literal_built_as_any_other")
+  benches
+
+buf_class_loop = row
+  "a buffer's size class found by doubling up to it"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_size_class_found_by_doubling")
+  benches
+
+walk_once = row
+  "a survivor asked two walks of the chain"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_survivor_asked_two_walks_of_the_chain")
+  benches
+
+data_beside = row
+  "a string's storage walked again behind its header"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_string_s_storage_walked_again_behind_its_header")
+  benches
+
+freeze_all = row
+  "a constant computed by a call rebuilt at every mention"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_constant_computed_by_a_call_rebuilt_at_every_mention")
+  benches
+
+mark_block_first = row
+  "a survivor's block asked after every newer one"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_survivor_s_block_asked_after_every_newer_one")
+  benches
+
+wide_char_cache = row
+  "a wide character built in the arena at every index"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_wide_character_built_in_the_arena_at_every_index")
+  benches
+
+list_test_first = row
+  "a list test every string index pays"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_list_test_every_string_index_pays")
+  benches
+
+ascii_four_blocks = row
+  "four ascii blocks validated one at a time"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "four_ascii_blocks_validated_one_at_a_time")
+  benches
+
+slice_count_words = row
+  "a slice stepped a character at a time between its positions"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_slice_stepped_a_character_at_a_time_between_its_positions")
+  benches
+
+str_words = row
+  "a short string built through a call"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_short_string_built_through_a_call")
+  benches
+
+# render_ryu's plain branches copied ryu's digits with `k_copy_short`, and a
+# row guarded those copies until 2026-09-24, when every benchmark float began
+# taking the direct writer instead and the copies went unreached. This row
+# guards the direct writer: closing it sends the floats back through the
+# digit buffer, and the work vein is the only thing that can see that.
+ryu_words = row
+  "a short float written through the digit buffer again"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_short_float_written_through_the_digit_buffer")
+  benches
+
+size_walk = row
+  "a sizing walk that calls on every immediate"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_sizing_walk_that_calls_on_every_immediate")
+  benches
+
+chain_drift = row
+  "a chain step that sizes its continuation every step"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_chain_step_that_sizes_its_continuation_every_step")
+  benches
+
+# The emitted-code vein is the one that sees this, because what the set
+# removes is a call: `k_force_fast` in front of every `if` over a comparison.
+# The allocation counters cannot -- forcing a value that is not a thunk
+# allocates nothing -- and that is the dimension #1064 built this gate for.
+thunk_set = row
+  "a comparison the emitter could not prove is not a thunk"
+  false
+  (gating "emitted_code")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_comparison_that_might_be_a_thunk")
+  benches
+
+# The same vein, one bit apart. ERR is outside BOOL, so putting it back stops
+# `inline_not_failure` proving the value is a boolean and the tag test is
+# written again -- 51 of them in runbench. Two rows rather than one because
+# the thunk row mutates to TOP, which takes out both facts at once and could
+# not tell a reader which of them had gone.
+failure_set = row
+  "a comparison the emitter could not prove is not a failure"
+  false
+  (gating "emitted_code")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_comparison_that_might_be_a_failure")
+  benches
+
+pop_deep = row
+  "a carried pop that prunes at a survivor"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_carried_pop_that_prunes_at_a_survivor")
+  release
+
+compile_mem = row
+  "a front end holding bytes the golden does not claim it holds"
+  false
+  "sh scripts/gates/compile_memory.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "compile_memory_banded")
+  release
+
+compile_mem_host = row
+  "the peak vein read under a toolchain that did not allocate it"
+  false
+  (whose "compile_memory")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "compile_memory_host_unpinned")
+  no_setup
+
+perf_row = row
+  "a history row that loses a counter it extracted"
+  false
+  "./target/release/kanso run scripts/perf_record"
+  "perf history (appended to the history branch)"
+  (breaking "perf_row_loses_a_group")
+  release
+
+# The row assembles and the row is COMPLETE are two properties, and perf_row
+# above only watches the first. A row is scored on the counters it carries, so
+# a row whose counters are spelled some other way is scored on less of the
+# objective than every other point on the line while looking like all of them
+# — which is what the newest row was doing when it held 12 of 24.
+objective_row = row
+  "a row whose counters are spelled where the objective cannot find them"
+  false
+  "sh scripts/gates/row_carries_the_objective.sh"
+  "perf history (appended to the history branch)"
+  (breaking "a_row_loses_a_counter_the_objective_weighs")
+  release
+
+trend = row
+  "a counter worsening with nothing traded and nothing attributed"
+  true
+  "./target/release/kanso run scripts/trend_gate -- origin/main"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_counter_worsens_for_nothing")
+  release
+
+# The same refusal in the other vein. Two rows, because the two goldens are
+# read by different code: one is `name=value` and the gate has always parsed
+# it, the other is `name value` and the gate saw nothing in it at all.
+trend_runtime = row
+  "the decoder's retired instructions rising with nothing traded for them"
+  true
+  "./target/release/kanso run scripts/trend_gate -- origin/main"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_runtime_counter_worsens_for_nothing")
+  release
+
+# The half of the trend gate's refusal that a joining sample could hide. The
+# gate sums a golden's fields across its samples, so adding a benchmark raises
+# every sum at once; comparing over the samples both sides have is what keeps
+# that from reading as a regression, and this row is what keeps the fix from
+# being written the lazy way. Its first draft skipped the whole golden for the
+# run, and skipped a real rise sitting beside the new sample.
+trend_joined = row
+  "a counter worsening in a sample that was already there, while one joins"
+  true
+  "./target/release/kanso run scripts/trend_gate -- origin/main"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_worsening_hidden_behind_a_joining_sample")
+  release
+
+# The half of the refusal an unclassified counter could pay for. `worsened?`
+# answers false for a name no direction table knows, and the listing called
+# every not-worsened move an improvement, so one of those landed in `better`
+# and no worsening was ever alone.
+trend_adrift = row
+  "a worsening whose only trade is a counter no direction table names"
+  true
+  "./target/release/kanso run scripts/trend_gate -- origin/main"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_worsening_paid_for_by_an_unclassified_counter")
+  release
+
+# The half of the refusal a DEFINITION CHANGE could pay for. A counter whose
+# golden and whose welfare baseline move together is not a win — the two
+# readings are of different quantities — and the gate counted it as one and
+# let it stand in for the trade a worsening needs. kanso#1241 is the fixture:
+# `improved: compile_instructions 41,845,704 -> 41,379,840` is in the record
+# of that merge and nothing in the compiler got faster.
+# The vein the list was short by. readbench joined the objective on the day
+# before this row and `bench/cost_golden_read.txt` was never listed, so two
+# welfare terms had no watcher at all — the same failure kanso#1046 fixed for
+# three other cost goldens, one benchmark later.
+trend_read = row
+  "the read vein's peak rising with nothing traded for it"
+  true
+  "./target/release/kanso run scripts/trend_gate -- origin/main"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_read_counter_worsens_for_nothing")
+  release
+
+trend_rebased = row
+  "a definition change standing in for the win a regression needs"
+  true
+  "./target/release/kanso run scripts/trend_gate -- origin/main"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_re_basing_that_pays_for_a_regression")
+  release
+
+welfare_floor = row
+  "a run-speed term falling below the ratcheted floor"
+  true
+  "./target/release/kanso run scripts/welfare"
+  "welfare (one number over runtime and compile cost, ratcheted)"
+  (breaking "welfare_term_worsens")
+  release
+
+# The other step in that job. `welfare_floor` above satisfied `cover` for both
+# of them, so this one had never been watched fail — and it had a live failure
+# to be watched at: a number stated as a fact about the present went stale
+# three times over with the gate reporting no drift.
+published_numbers = row
+  "a number the page states about the present drifting from its golden"
+  true
+  "./target/release/kanso run scripts/golden_prose"
+  "welfare (one number over runtime and compile cost, ratcheted)"
+  (breaking "a_published_number_drifts")
+  release
+
+grammar = row
+  "an editor grammar that stops naming a string a string"
+  true
+  "./target/release/kanso run scripts/grammar_check"
+  "editor grammar (types, strings, comments, operators)"
+  (breaking "grammar_stops_painting")
+  release
+
+book_outputs = row
+  "a recorded sample output the sample no longer produces"
+  true
+  "sh scripts/book_check.sh"
+  "book samples (every panel executed, outputs verified)"
+  (breaking "drifted_book_output")
+  release
+
+# book_check.sh runs two harnesses, and they fail for different reasons. The
+# first regenerates a panel from the sample it renders; the second reads the
+# panels that harness cannot resolve — a title naming a file this repository
+# owns, or a directory module — against what those files declare and can name.
+# One row per harness, because a mutation that reddens one leaves the other
+# green, which is the whole point of asking.
+book_quotes = row
+  "a panel quoting a library the library no longer matches"
+  true
+  "./target/release/kanso run scripts/book_quotes"
+  "book samples (every panel executed, outputs verified)"
+  (breaking "a_quoting_panel_stops_matching_its_file")
+  release
+
+diagnostics = row
+  "one engine wording a failure the other does not"
+  true
+  "./target/release/kanso run scripts/diagnostic_differential"
+  "diagnostics differential (both engines say the same thing)"
+  (breaking "one_engine_reworded")
+  release
+
+accumulator = row
+  "the accumulator rewrite deleted, which no counter and no golden can see"
+  true
+  "./target/release/kanso run scripts/trmc_differential"
+  "diagnostics differential (both engines say the same thing)"
+  (breaking "accumulator_rewrite_deleted")
+  release
+
+rendering = row
+  "the two renderers disagreeing on a value nobody thought to print"
+  true
+  "./target/release/kanso run scripts/render_differential"
+  "diagnostics differential (both engines say the same thing)"
+  (breaking "native_renders_a_float_wider")
+  release
+
+# The row above covers the INTEGRAL fast path, which is the cast that renders a
+# whole number under 1e15, and stops there. A value with a fraction or a wide
+# exponent takes the shortest-round-trip branch instead, where the sign and the
+# digits are placed by two different pieces of code that have to agree on an
+# offset: the caller writes the minus and render_ryu is handed the magnitude
+# and writes one byte past it. Seventy-three mutations and not one of them was
+# a sign.
+negative_sign = row
+  "a negative rendering placed one byte off, so the sign is overwritten"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "native_drops_a_negative_sign")
+  release
+
+# A record of four fields or fewer copies them one at a time now, and a loop
+# can be wrong about a count where the memcpy it replaced could not be: the
+# count was that call's argument. A record that quietly loses its last field
+# answers differently everywhere, which is what the corpus is for.
+small_record = row
+  "a small record's copy loop dropping a field"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_small_record_drops_its_last_field")
+  release
+
+# Sixteen bytes or fewer are appended by a pair of overlapping loads now, and
+# the two stores in that pair differ in one character. Writing the head word
+# where the tail word belongs corrupts every append of nine to sixteen bytes
+# and nothing else, which is the size of an ordinary object key.
+short_append = row
+  "a short append writing its head word twice"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_short_append_copies_its_head_twice")
+  release
+
+# The mark's sanity check moved from the rewind to the push, where the mark is
+# written, and the move is only sound if the check still runs. Nothing else
+# would notice it going missing -- it is a diagnostic, and one that never fires
+# reads exactly like one that was deleted. Inverting it kills every program
+# with a beat loop at its first push.
+beat_mark = row
+  "the beat mark's sanity check reaching no program"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "the_beat_mark_check_fires_at_every_push")
+  release
+
+# A cluster of several members rewinds on the back edges of a walk over its
+# tail graph since 2026-09-07, once a trip; before that on every internal
+# edge, which runbench's four-member escape cycle paid 1.06% of the program
+# for. The mutation puts every edge back. beat_iters is pinned by every .mem
+# golden in the corpus, and the four-member fixture pins one a trip exactly.
+every_edge = row
+  "a cluster rewinding on every internal tail edge again"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_cluster_rewinds_on_every_edge_again")
+  release
+
+# A cycle that only appends into a proven-unique builder allocates nothing in
+# the arena, and since 2026-09-07 the classifier sees that and leaves it
+# unbracketed. The mutation makes every append read as an allocation again;
+# the fixture that allocates nothing pins beat_iters at zero.
+pure_cycle = row
+  "a cycle that allocates nothing bracketed and rewound again"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_pure_cycle_bracketed_again")
+  release
+
+behaviour = row
+  "a legal call answered differently at an edge, with nothing complaining"
+  true
+  "./target/release/kanso run scripts/behaviour_differential"
+  "diagnostics differential (both engines say the same thing)"
+  (breaking "native_rounds_a_half_to_even")
+  release
+
+beat_cursor = row
+  "a character read remembering a position into a string a beat has freed"
+  true
+  "./target/release/kanso run scripts/beat_differential"
+  "diagnostics differential (both engines say the same thing)"
+  (breaking "a_cursor_that_outlives_its_string")
+  release
+
+dispatch = row
+  "the two engines taking different arms for the same call"
+  true
+  "./target/release/kanso run scripts/dispatch_differential"
+  "diagnostics differential (both engines say the same thing)"
+  (breaking "a_literal_arm_ranks_below_a_wildcard")
+  release
+
+numeric = row
+  "the two engines answering one arithmetic operator differently"
+  true
+  "./target/release/kanso run scripts/numeric_differential -- 0"
+  "diagnostics differential (both engines say the same thing)"
+  (breaking "native_floors_a_negative_modulo")
+  release
+
+effects = row
+  "the first step of a bind skipped on one engine"
+  true
+  "./target/release/kanso run scripts/effects_differential"
+  "diagnostics differential (both engines say the same thing)"
+  (breaking "native_sequences_two_effects_backwards")
+  release
+
+modules = row
+  "a name a module keeps private crossing an import anyway"
+  true
+  "./target/release/kanso run scripts/module_differential"
+  "diagnostics differential (both engines say the same thing)"
+  (breaking "a_private_name_crosses_an_import")
+  release
+
+coverage = row
+  "a diagnostic arriving with no golden pinning its text"
+  true
+  "./target/release/kanso run scripts/diagnostic_coverage"
+  "diagnostics differential (both engines say the same thing)"
+  (breaking "a_diagnostic_arrives_without_a_golden")
+  release
+
+decoder = row
+  "a json decoder that reads something other than the document"
+  true
+  "sh scripts/gates/native_checksum.sh"
+  "json decoder end-to-end (native, 150 decodes)"
+  (breaking "a_decoder_that_answers_a_wrong_checksum")
+  release
+
+validator = row
+  "a utf-8 validator the independent reference disagrees with"
+  true
+  "./target/release/kanso run scripts/utf8_differential"
+  "utf-8 validator (differential vs an independent reference)"
+  (breaking "a_validator_the_reference_disagrees_with")
+  release
+
+# A second row over the same sweep, because the sweep once could not see this
+# one. Its sampled band stopped at eight bytes, and a validator that never
+# reads past byte eight of a longer run passed 45,189,025 cases with nothing
+# to say. The band reaches twenty-four now; this row is what keeps it there.
+#
+# Its gate read `whose "validator"` until 2026-09-03, which is
+# `measured_on.sh bench/validator_golden.txt` — and there is no validator
+# vein, so the file has never existed and the gate was red on every host
+# before any mutation ran. The row therefore reported `red` and proved
+# nothing from the day it was written. `prove`'s baseline pass found it on
+# the first runtime-touching pull request after that pass landed, which is
+# the whole reason the pass exists. The gate is the sweep the claim is about,
+# the same one the row above it uses.
+validator_tail = row
+  "a utf-8 validator that never looks at the end of a long run"
+  true
+  "./target/release/kanso run scripts/utf8_differential"
+  "utf-8 validator (differential vs an independent reference)"
+  (breaking "a_validator_that_skips_its_tail")
+  release
+
+landing = row
+  "a landing sample and the output the page prints under it disagreeing"
+  true
+  "./target/release/kanso run scripts/site_smoke"
+  "site (landing sample and playground run in a browser)"
+  (breaking "a_landing_sample_that_breaks_its_promise")
+  with_blob
+
+in_the_page = row
+  "the engine in the page answering what no other engine answers"
+  true
+  "bash scripts/browser_differential.sh"
+  "browser differential (three engines, byte-identical, headless chrome)"
+  (breaking "the_page_answers_something_else")
+  release
+
+# The page's route inside cargo test: tests/wasm_engine.rs compiles the corpus
+# through the toolchain, lowers each module with `ir_wasm`, and runs it on the
+# runtime under wasmi. Chrome is the confirmation; this is the walk a branch
+# can run without one.
+page_corpus = "the_page_agrees_with_the_golden_corpus"
+
+page_route = row
+  "the translator writing one instruction for another"
+  true
+  "cargo test --release --test wasm_engine {page_corpus}"
+  "specs (unit, golden, differential)"
+  (breaking "a_translator_that_subtracts_for_add")
+  with_blob
+
+shop_window = row
+  "a playground example the language will not run"
+  true
+  "cargo test --test playground"
+  "playground examples (every engine)"
+  (breaking "a_playground_example_the_engine_refuses")
+  release
+
+coverage_floor = row
+  "a diagnostic whose literal run is the shortest the scan will keep"
+  true
+  "./target/release/kanso run scripts/diagnostic_coverage"
+  "diagnostics differential (both engines say the same thing)"
+  (breaking "a_ten_character_diagnostic_arrives_without_a_golden")
+  release
+
+coverage_driver = row
+  "a refusal the driver prints as plain text, with no golden"
+  true
+  "./target/release/kanso run scripts/diagnostic_coverage"
+  "diagnostics differential (both engines say the same thing)"
+  (breaking "a_driver_refusal_arrives_without_a_golden")
+  release
+
+itself = row
+  "a gating job nobody said how to prove"
+  true
+  "./target/release/kanso run scripts/ratchet"
+  "the ratchet (every gate has a mutation that turns it red)"
+  (breaking "unrowed_ci_job")
+  release
+
+# The one vein whose headline row is a high water mark. Every other
+# benchmark's peak is bounded by the size of its own text, so a change that
+# moves what a program HOLDS and not what it allocates is invisible to them.
+digest_counters = row
+  "an arena block size raised without the peak it moves being measured"
+  true
+  (gating "digest_counters")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "an_arena_block_that_grew_unmeasured")
+  benchmarks
+
+rows_a0 = [formatting linting python_free goldens scan_leak]
+
+rows_a = list/concat rows_a0 [mem_shapes release_profile]

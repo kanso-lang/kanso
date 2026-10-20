@@ -1,6 +1,6 @@
 //! A ratchet row is only a row if the harness reaches it.
 //!
-//! `scripts/ratchet/ratchet.kso` writes each row as a binding and then
+//! `scripts/ratchet/ratchet/` writes each row as a binding and then
 //! assembles them into `rows` through a chain of `list/concat`s. Writing the
 //! binding is the visible half and joining the chain is the half nobody looks
 //! at, so a row can be added, reviewed and merged while the harness never runs
@@ -21,7 +21,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-const RATCHET: &str = include_str!("../scripts/ratchet/ratchet.kso");
+#[path = "support/ratchet.rs"]
+mod ratchet;
 
 /// Every `name = row` binding in the file.
 fn rows_defined(src: &str) -> BTreeSet<String> {
@@ -87,20 +88,20 @@ fn rows_reached(src: &str) -> BTreeSet<String> {
 
 #[test]
 fn the_root_binding_is_there_to_walk_from() {
-    let lists = list_bindings(RATCHET);
+    let lists = list_bindings(&ratchet::ratchet_source());
     assert!(
         lists.contains_key("rows"),
-        "scripts/ratchet/ratchet.kso binds no `rows` list, so this file walks \
+        "scripts/ratchet/ratchet/ binds no `rows` list, so this file walks \
          nothing and would pass over a ratchet that runs nothing at all"
     );
 }
 
 #[test]
 fn the_file_defines_rows_at_all() {
-    let defined = rows_defined(RATCHET);
+    let defined = rows_defined(&ratchet::ratchet_source());
     assert!(
         defined.len() > 50,
-        "found only {} row bindings in scripts/ratchet/ratchet.kso; the shape \
+        "found only {} row bindings in scripts/ratchet/ratchet/; the shape \
          moved and this file is now reading the wrong thing",
         defined.len()
     );
@@ -108,12 +109,12 @@ fn the_file_defines_rows_at_all() {
 
 #[test]
 fn every_row_written_is_a_row_the_harness_runs() {
-    let defined = rows_defined(RATCHET);
-    let reached = rows_reached(RATCHET);
+    let defined = rows_defined(&ratchet::ratchet_source());
+    let reached = rows_reached(&ratchet::ratchet_source());
     let orphans: Vec<_> = defined.difference(&reached).cloned().collect();
     assert!(
         orphans.is_empty(),
-        "these rows are written in scripts/ratchet/ratchet.kso and never join \
+        "these rows are written in scripts/ratchet/ratchet/ and never join \
          the chain that `rows` assembles, so the harness never applies their \
          mutation and they prove nothing: {orphans:?}"
     );
