@@ -1,0 +1,1025 @@
+import "std/io"
+import "std/list"
+import "std/os"
+import "std/text"
+
+# A gate nobody has watched fail has no evidence it works. Five checks went
+# green in one day while checking nothing: a book gate whose writer was never
+# run, a fusion that fired zero times, a corpus that crossed no err-provenance
+# seam, an instruction count measuring the length of a run id. Each of them
+# passed, and each of them was blind.
+#
+# So every job in .github/workflows/ci.yml carries at least one row here: a
+# defect to introduce and the command that must then go red. `cover` checks
+# that correspondence and costs nothing, so it runs on every change and a new
+# job cannot land without its row. `prove` reads every gate once on an
+# unmutated worktree, then applies each mutation in a scratch worktree of its
+# own and refuses a gate that stayed green.
+#
+#   kanso run scripts/ratchet                 every job has a row
+#   kanso run scripts/ratchet -- prove        every row turns its gate red
+#   kanso run scripts/ratchet -- prove cheap  the rows that need no build
+#   kanso run scripts/ratchet -- prove utf-8  the rows whose job name says so
+#   kanso run scripts/ratchet -- shard 3 8    every eighth row, from the third
+#
+# `prove` is authoritative on linux, where every gate can run. A gate needing
+# a tool the host lacks says so and exits non-zero, which reads here as red
+# and is not evidence: the nightly runs where ci does.
+#
+# `setup` prepares what the gate reads and MUST succeed. It used to be allowed
+# to fail, on the reading that a build the mutation broke is the gate going red
+# early; that reading credits a row whose gate never ran. The ten rows that
+# carry `release` as setup all have gates that read a counter or a golden, and
+# a tree that will not compile never reaches one, so a broken build there is
+# UNBUILT rather than red. The rows whose defect IS a build or lint failure —
+# clippy bait, misformatted source, a given-up tail call — carry `no_setup` and
+# do the building inside the gate, where it still counts. `dear` marks a row
+# that builds the compiler.
+type row
+  claim
+  dear
+  gate
+  job
+  mutation
+  setup
+
+type unproven
+  job
+  why
+
+# A finding names the gate it is about, not only the line it prints. The
+# proving pass reads that back: a host-bound row is skipped when the BASELINE
+# could not answer its gate, and proved normally when it could, which is what
+# `type bound` below has always said should happen.
+type finding
+  line
+  ok
+  gate
+
+# A gate whose answer is only meaningful where its golden was measured.
+#
+# `bench/instructions_golden.txt` pins eleven exact counts and the runner pool
+# is not one machine. On 2026-09-03 the cost-goldens job and the ratchet job,
+# on ONE commit, read `digestbench 81252316` and `81252330` — fourteen apart,
+# two runners, one image, one glibc. A row whose gate diffs those counts is red
+# on any runner but the golden's, whatever the mutation did.
+#
+# That is not the branch's failure and no diff fixes it, so the baseline reports
+# such a gate and does not fail on it. The row is NOT credited either: the
+# proving pass skips every row sharing that gate and says so. The distinction
+# is the whole point — before kanso#1228 a red gate was counted as proof, which
+# is the blindness; saying out loud that a row went unproven this run is the
+# opposite of that, and on a run that lands on the golden's silicon the row is
+# proved normally.
+type bound
+  gate
+  why
+
+# One (gate, setup) pair the baseline reads once, named by the first row that
+# carries it.
+type pair
+  gate
+  job
+  setup
+
+no_setup = "true"
+
+release = "cargo build --release"
+
+# The work vein reads the eleven binaries, so they have to exist and be
+# rebuilt from the mutated runtime before the gate can see anything.
+benches = "cargo build --release && sh scripts/gates/build_benchmarks.sh"
+
+# One line because a gate is a shell string. `$PWD` is read before the `cd`,
+# so KANSO names the worktree's own binary rather than anything on the host.
+kq_clone = "rm -rf /tmp/kq && sh .github/clone-sibling.sh kq /tmp/kq"
+
+kq_run = "KANSO=$K KQ_STORED=report sh spec.sh"
+
+kq_gate = "{kq_clone} && K=$PWD/target/release/kanso && cd /tmp/kq && {kq_run}"
+
+# The asset-digests job builds the site with a jekyll ACTION, which a shell gate
+# cannot run — which is what the excuse this replaces said, and it was reading
+# the job rather than the assertion. What the job asserts is
+# `scripts/gates/undigested_references.sh`, two greps over a built `_site`, and
+# a plain copy of `docs/` reproduces both states: green once fingerprint has
+# rewritten the references, red before it has. Measured both ways.
+#
+# `kanso.wasm` is stood in for. The assertion counts surviving references and
+# says nothing about any digest, so the size of one asset cannot change the
+# answer — and the real blob costs about fourteen gigabytes of live arena to
+# hash, which is filed as a blocking decision in design/pending-gavels.md. A
+# second CI job holding that much every run is not a cost to add while the
+# question is open.
+ag_dir = "rm -rf /tmp/agsite && mkdir -p /tmp/agsite"
+
+ag_site = "{ag_dir} && cp -r docs /tmp/agsite/_site"
+
+ag_stub = "printf 'stand-in\\n' > /tmp/agsite/_site/kanso.wasm"
+
+# The runtime the playground links against is a build artifact like the engine,
+# and the fingerprinter refuses a site without it, so it is stood in for too.
+ag_stub_rt = "printf 'stand-in\\n' > /tmp/agsite/_site/kanso-runtime.wasm"
+
+ag_run = "$W/target/release/kanso run $W/scripts/fingerprint -- ./_site"
+
+ag_check = "sh $W/scripts/gates/undigested_references.sh"
+
+ag_made = "{ag_site} && {ag_stub} && {ag_stub_rt} && W=$PWD"
+
+ag_gate = "{ag_made} && cd /tmp/agsite && {ag_run} && {ag_check}"
+
+benchmarks = "sh scripts/gates/build_benchmarks.sh"
+
+# scripts/site_smoke reads docs/kanso.wasm, and kanso#1350 stopped committing
+# the blob. ci.yml's site job rebuilds it in the step before the gate; the
+# landing row set its worktree up with `release` alone, so from that day the
+# gate answered `cannot read docs/kanso.wasm: no such file` on the baseline
+# before any mutation was applied, and the ratchet reads a red gate as proof.
+# Read off ratchet run 33, 2026-09-13.
+#
+# The wasm32 TARGET was already on the box and is not the same thing:
+# scripts/ratchet/toolchain.sh installs it and says the browser rows' gates
+# rebuild the blob with it, which is true of browser_differential.sh -- that
+# script runs build_wasm.sh itself at line 9 -- and was never true of this one.
+# tests/the_ratchet_carries_what_its_gates_need.rs pins the difference, which
+# its install-line reader could not see.
+with_blob = "sh scripts/build_wasm.sh && cargo build --release"
+
+fn breaking name
+  "sh scripts/ratchet/mutations/{name}.sh"
+
+fn gating name
+  "sh scripts/gates/{name}.sh"
+
+# The host check is one script over two goldens, so its rows name the vein
+# rather than a script of their own.
+fn whose vein
+  "sh scripts/gates/measured_on.sh bench/{vein}_golden.txt"
+
+why_exact = "its golden is exact counts and the pool is not one machine"
+
+work_gate = "sh scripts/gates/instructions.sh"
+
+front_gate = "sh scripts/gates/compile_instructions.sh"
+
+# The entry path's own row. It counts under callgrind exactly as the two above
+# do, so a runner the golden does not name refuses it the same way, and a
+# refusal reported as a regression is the failure this list prevents.
+entry_gate = "sh scripts/gates/entry_instructions.sh"
+
+# The library path's row, the third of the three `kanso check` takes. It counts
+# under callgrind like the rest, so it belongs on this list for the same reason:
+# a runner the golden does not name refuses it, and a refusal read as a
+# regression fails a job over the machine it ran on.
+library_gate = "sh scripts/gates/library_instructions.sh"
+
+# The interpreted run's own row, and the first on this list that counts a
+# program EXECUTING rather than a program being compiled. It counts under
+# callgrind like the four above, so a runner the golden does not name refuses
+# it the same way, and a refusal read as a regression fails a job over the
+# machine it ran on.
+interp_gate = "sh scripts/gates/interp_instructions.sh"
+
+# Start-up, the fourth callgrind row and the only one that reaches codegen: the
+# three above run `kanso check`, which stops before it. It counts the same way
+# they do, so a runner the golden does not name refuses it the same way, and a
+# refusal read as a regression fails a job over the machine it ran on.
+startup_gate = "sh scripts/gates/startup_instructions.sh"
+
+# The two codegen rows. They count a whole `kanso build` tree under
+# callgrind with --trace-children, so they are host-bound for the same reason
+# the four above are: a runner the golden does not name refuses the
+# comparison, and a refusal read as a regression fails a job over the machine
+# it ran on. One script serves both tiers, so one entry covers them.
+codegen_gate = "sh scripts/gates/codegen_instructions.sh"
+
+emit_gate = "sh scripts/gates/emit_instructions.sh"
+
+bound_a = bound work_gate why_exact
+
+bound_b = bound front_gate why_exact
+
+bound_c = bound entry_gate why_exact
+
+bound_d = bound library_gate why_exact
+
+bound_e = bound interp_gate why_exact
+
+bound_f = bound startup_gate why_exact
+
+bound_g = bound codegen_gate why_exact
+
+bound_h = bound emit_gate why_exact
+
+host_bound = [bound_a bound_b bound_c bound_d bound_e bound_f bound_g bound_h]
+
+fn host_bound? gate
+  list/any? host_bound (e -> e.gate == gate)
+
+fn why_bound gate
+  found = list/to_list (list/select host_bound (e -> e.gate == gate))
+  found[1].why
+
+rows = list/concat rows_a (list/concat rows_b rows_c)
+
+# A job with no row and no reason is the thing this refuses. A reason is a
+# sentence, not a flag: it has to say what would prove the job, so the debt is
+# readable rather than a name on a list.
+# The one job that keeps a reason, and the reason is not the one it had.
+#
+# It read "the mutations are `specs`'s; what this adds is a second machine".
+# The second half holds. The first half stopped holding on 2026-08-27, when
+# this job caught a defect `specs` passed on linux: a fixture interpolated its
+# own absolute path into generated kanso source, so the source line's length
+# became a property of the host's temp directory. Eighty characters is the
+# limit; macOS's `/var/folders/...` took it to ninety-nine, and the run died on
+# a formatting refusal before reaching what it meant to test. A defect class
+# only the second machine can see is not `specs`'s mutation.
+#
+# What keeps the job unproven is the harness rather than the mutations. `prove`
+# is authoritative on linux — this file says so in its own header — and it
+# cannot run a macOS gate at all.
+no_row_a = unproven
+  "the other host (macos, arm)"
+  "prove runs on linux and cannot reach a second machine's gate at all"
+
+# The shards of a branch's handful run `touched`, whose rows ARE this table, so
+# the mutation that would prove the job is a row that proves the ratchet from
+# inside the ratchet. `prove` works in fixed directories, and a gate that runs
+# it removes its own baseline worktree; the note above `rows_c` says how that
+# went on kanso#1675. What a shard can drop is held by a spec instead:
+# tests/a_branch_proves_its_rows_in_shards.rs reads the matrix against the run
+# line and asks the harness which rows each shard would prove.
+no_row_b = unproven
+  "the ratchet's rows for this branch, one shard"
+  "its gate is the ratchet's own `prove`, which cannot run inside itself"
+
+unproven_jobs = [no_row_a no_row_b]
+
+workflow = ".github/workflows/ci.yml"
+
+# A job's display name sits at four spaces; a step's at six behind a dash, so
+# the two cannot be confused by their indentation.
+fn job_line? l
+  text/slice l 1 10 == "    name: "
+
+fn job_name l
+  or_empty (text/slice l 11 (length l))
+
+fn jobs_in text
+  lines = list/select (text/split text "\n") job_line?
+  list/to_list (list/map lines job_name)
+
+fn job_of r
+  r.job
+
+fn named? name group
+  list/any? group (g -> g == name)
+
+fn covered? name
+  rowed = list/to_list (list/map rows job_of)
+  excused = list/to_list (list/map unproven_jobs job_of)
+  named? name rowed or named? name excused
+
+fn known? declared name
+  named? name declared
+
+fn missing declared
+  list/to_list (list/select declared (n -> not covered? n))
+
+fn stale declared
+  claimed = list/to_list (list/map rows job_of)
+  excused = list/to_list (list/map unproven_jobs job_of)
+  both = list/concat claimed excused
+  list/to_list (list/select both (n -> not known? declared n))
+
+cover = os/read_file! workflow .> (text -> against (jobs_in text))
+
+fn against declared
+  gaps = missing declared
+  ghosts = stale declared
+  verdict gaps ghosts (length gaps == 0 and length ghosts == 0)
+
+fn verdict _ _ true
+  io/write "ratchet: every ci job carries a mutation or a stated reason\n"
+    .> (_ -> applies_all)
+
+fn verdict gaps ghosts false
+  said = list/to_list (list/map gaps (n -> "  no row and no reason: {n}\n"))
+  gone = list/to_list (list/map ghosts (n -> "  no such ci job: {n}\n"))
+  body = text/join (list/concat said gone) ""
+  saying = "ratchet: the table and ci.yml disagree\n{body}"
+  io/write_err saying .> (_ -> os/exit 1)
+
+# APPLYING a mutation costs a sed; proving it reddens its gate costs a build.
+# Those are different prices, and only the second one needs the nightly. So the
+# cheap half runs here, on every change: a mutation that no longer matches the
+# source it patches is a row that has quietly stopped proving anything.
+#
+# This exists because pending_cells_proven_strict anchored on a line #1015
+# rewrote, and the nightly said so the next morning — correctly, precisely, and
+# to nobody. Fifteen hours later it was still red. A per-PR signal gets answered
+# because it blocks a merge, so the check that would have caught #1015 belongs
+# in #1015's own pull request.
+#
+# Like `prove`, this reads a worktree of HEAD rather than the working tree, so
+# it answers for what a pull request carries rather than for what is still
+# unsaved beside it.
+applies_all = borrowed "/tmp/kanso-ratchet-applies"
+
+fn borrowed dir
+  os/run "git" ["worktree" "add" "--detach" "--force" dir "HEAD"]
+    .> (_ -> applying dir rows 1 [])
+
+fn applying dir list at acc
+  applied dir list at acc (at > length list)
+
+fn applied dir _ _ acc true
+  os/run "git" ["worktree" "remove" "--force" dir] .> (_ -> intact acc)
+
+fn applied dir list at acc false
+  r = list[at]
+  shell dir r.mutation .> (m -> after_try dir list at acc r m.status)
+
+# The worktree is restored between rows so one stale mutation cannot make the
+# next one look stale too.
+fn after_try dir list at acc _ 0
+  restored dir .> (_ -> applying dir list (at + 1) acc)
+
+fn after_try dir list at acc r _
+  restored dir .> (_ -> applying dir list (at + 1) (push acc r))
+
+fn restored dir
+  shell dir "git checkout -- . && git clean -fdq"
+
+fn intact acc
+  standing acc (length acc == 0)
+
+fn standing _ true
+  io/write "ratchet: every mutation still matches the source it patches\n"
+
+fn standing acc false
+  said = list/to_list (list/map acc (r -> "  STALE {r.job} — {r.claim}\n"))
+  body = text/join said ""
+  saying = "ratchet: {length acc} mutations no longer apply\n{body}"
+  io/write_err saying .> (_ -> os/exit 1)
+
+# Each row runs in a worktree of HEAD, so a mutation cannot reach the tree the
+# author is working in and two rows cannot see each other's damage.
+fn shell dir cmd
+  os/run "sh" ["-c" "cd {dir} && {cmd}"]
+
+# A mutation that still applies can still prove nothing. kanso#1157 put an
+# early return above the line compile_allocs_unwatched.sh patches, and the
+# patch went on applying — to a line eleven thousand of lib/json's twelve
+# thousand occurrences never reach. The counter moved by zero and the row was
+# blind. `applies_all` cannot see that, because applying is not proving, and
+# only proving costs a build. The nightly saw it the next morning, twice, and
+# said so to nobody.
+#
+# Both rows that went blind on 2026-08-30 were killed by a change to the very
+# file their own mutation patches, and which files a change touches is
+# something a pull request knows about itself:
+#
+#   kanso run scripts/ratchet -- touched origin/main
+#
+# keeps the rows whose mutation GUARDS on a file the branch changed and proves
+# that handful. `read_it` below says why the guard rather than the mention.
+#
+# HOW BIG THE HANDFUL IS depends on what the branch touched, and the honest
+# answer is a range rather than a number. A branch touching one source file
+# selects the rows guarding on it: #1171 touched src/runtime.c and #1157 and
+# #1188 touched src/lib.rs, and all three would have been answered on the pull
+# request that broke them. But src/runtime.c alone is guarded on by thirteen
+# mutations, so a runtime branch selects a large block however the rule is
+# written, and the saving here does not reach that case. That number said
+# twenty and counted GUARD LINES rather than rows, which is not what the rule
+# selects: twelve mutations guarded on the file across twenty-one lines, and
+# the row this change adds makes it thirteen across twenty-three. Measured on
+# three real diffs:
+#
+#     kanso#1249, 45 changed files    naming 32 rows -> guard 14
+#     kanso#1252, 21 changed files    naming  7 rows -> guard  1
+#     kanso#1253, 10 changed files    naming  8 rows -> guard  1
+#
+# Those are a reading of a corpus that moves: taken against 73 mutations, and
+# there are 74 on disk now. An earlier reading of the first two, at 72
+# mutations, put them at 33 -> 12 and 8 -> 1. So the figures are an order of
+# magnitude rather than a pin, and the specs beside this deliberately assert no
+# count for that reason.
+#
+# The comment this replaces said "usually empty and occasionally one to three",
+# which was true of the branches it cited and wrong by an order of magnitude on
+# a goldens-heavy one.
+#
+# It is a middle, not a replacement. `cover` still runs on every change and
+# the nightly still proves the whole table, because a row can also go blind
+# from a distance — the guard #1157 added is in the file, but a change to what
+# a gate READS could hollow a row without touching a line any sed matches.
+fn touched base mode
+  os/run "git" ["diff" "--name-only" "{base}...HEAD"] .> (d -> diffed d mode)
+
+fn diffed d mode
+  branch_files d mode (d.status == 0)
+
+# Carrying git's own words, because the first thing this refusal caught was a
+# shallow checkout with no merge base to diff against, and "would not run" sent
+# a reader to the ratchet rather than to the workflow's fetch-depth.
+fn branch_files d _ false
+  said = "ratchet: git could not name this branch's files\n"
+  io/write_err "{said}{d.stderr}" .> (_ -> os/exit 1)
+
+fn branch_files d mode true
+  named = list/select (text/split d.stdout "\n") (f -> length f > 0)
+  winnowing mode (list/to_list named) rows 1 []
+
+fn winnowing mode files list at acc
+  winnowed mode files list at acc (at > length list)
+
+fn winnowed mode _ _ _ acc true
+  handful mode acc
+
+fn winnowed mode files list at acc false
+  r = list[at]
+  os/read_file! (script_of r) .> (s -> read_it mode files list at acc r s)
+
+# A row's mutation is a shell command and its script is the word after `sh `.
+fn script_of r
+  or_empty (text/slice r.mutation 4 (length r.mutation))
+
+# The slices in this file stay inside their value, so they are never none; the
+# arm is there because the checker cannot see that.
+fn or_empty none
+  ""
+
+fn or_empty piece
+  piece
+
+# WHAT A ROW DEPENDS ON is its guard, not every path its script mentions.
+#
+# A mutation carries `grep -q '<literal>' <file>` precisely so it refuses
+# rather than silently applying when the text it patches has moved. That guard
+# IS the dependency: a change can only make a mutation inert by moving what the
+# guard matches. Reading the whole script instead selects every row that
+# mentions a file for any reason, which on a goldens-heavy branch is most of
+# the table — measured against kanso#1249's 45 changed files, naming selected
+# 33 rows where 12 were at risk.
+#
+# GOLDENS COME OUT, checked rather than assumed. Over all the mutations on
+# disk, exactly two golden guards carry a value-shaped number and both are
+# POST-conditions checking what the mutation itself just wrote. Every other
+# golden guard matches a key name and a digit class — `^jsonbench [0-9]`,
+# `^defines=999999` — so a regeneration moves the digits and the guard still
+# matches. Regenerating a golden cannot make any of them inert, so a row whose
+# only touched guard is a golden has nothing to prove.
+fn read_it mode files list at acc r s
+  guards = guarding s
+  hit = list/any? files (f -> at_risk? guards f)
+  reaches mode files list at acc r hit
+
+# A GUARD IS ANY GREP THAT WOULD FAIL WHEN THE ANCHOR MOVES, and there are two
+# spellings of it in the mutations on disk. `grep -q '<anchor>' <file>` under
+# `set -e` is the common one. The other counts and asserts the count:
+#
+#     n=$(grep -cF "$target" src/lib.rs)
+#     [ "$n" -eq 1] || { echo "moved or multiplied ($n)" >&2; exit 1; }
+#
+# which is a STRICTER guard than the first -- it catches the anchor multiplying
+# as well as vanishing -- and this read `grep -q` only, so three mutations that
+# guard better than their neighbours were the ones it could not see.
+#
+# Widening it is measured, not assumed: over the 112 mutations on disk it takes
+# the count that satisfies the predicate from 69 to 72, and the three are
+# exactly the three that were blind. Nothing else changes, so this cannot
+# over-select.
+fn guarding s
+  list/select (text/split s "\n") (l -> guard? l)
+
+fn guard? l
+  spells? l "grep -q" or spells? l "grep -c"
+
+fn at_risk? guards f
+  source? f and list/any? guards (l -> spells? l f)
+
+fn source? f
+  not under? f "bench/" and not under? f "tests/golden/"
+
+fn under? f dir
+  length f > length dir and text/slice f 1 (length dir) == dir
+
+fn spells? text path
+  length (text/split text path) > 1
+
+fn reaches mode files list at acc _ false
+  winnowing mode files list (at + 1) acc
+
+fn reaches mode files list at acc r true
+  winnowing mode files list (at + 1) (push acc r)
+
+fn handful mode acc
+  chose mode acc (length acc == 0)
+
+fn chose _ _ true
+  io/write "ratchet: this branch touches no file any mutation patches\n"
+
+fn chose mode acc false
+  words = text/split mode " "
+  cut words acc (words[1] == "shard")
+
+fn cut words acc false
+  return onto "prove" acc if length words < 1
+  said = "ratchet: {length acc} rows patch a file this branch changed\n"
+  listed = list/to_list (list/map acc (r -> "  {r.job} — {r.claim}\n"))
+  body = text/join listed ""
+  io/write "{said}{body}" .> (_ -> onto words[1] acc)
+
+# `touched_mode` writes all four words, so the guard is for the reader.
+fn cut words acc true
+  return cutting 0 0 "prove" acc true if length words < 4
+  k = text/to_int words[2]
+  n = text/to_int words[3]
+  cutting k n words[4] acc (k < 1 or n < k)
+
+fn cutting k n _ _ true
+  said = "ratchet: a shard is `shard K N` with 1 <= K <= N, not {k} of {n}\n"
+  io/write_err said .> (_ -> os/exit 1)
+
+# Every Nth row from K, as the nightly takes them, so the shards of one branch
+# prove its handful once between them.
+fn cutting k n mode acc false
+  picked = every_nth acc k n []
+  all = "ratchet: {length acc} rows patch a file this branch changed"
+  said = "{all}; shard {k} of {n} proves {length picked}\n"
+  listed = list/to_list (list/map picked (r -> "  {r.job} — {r.claim}\n"))
+  body = text/join listed ""
+  io/write "{said}{body}" .> (_ -> share mode picked (length picked == 0))
+
+# A branch whose handful is smaller than the shard count leaves some shards
+# nothing. That shard has proved nothing and claims nothing, and it is not a
+# failure, since the rows went to the others.
+fn share _ _ true
+  io/write "ratchet: no row falls to this shard\n"
+
+fn share mode picked false
+  onto mode picked
+
+# `list` names the handful and stops, the way somebody about to spend six
+# minutes of runner wants to know what they are spending it on. Anything else
+# proves them.
+fn onto "list" _
+  io/write ""
+
+fn onto _ acc
+  baselined acc
+
+fn prove_all scope
+  picked = list/to_list (list/select rows (r -> asked? scope r))
+  chose_rows scope picked (length picked == 0)
+
+# A scope naming no row would otherwise prove nothing and report that every
+# row turned its gate red, which is the same false green in miniature.
+fn chose_rows scope _ true
+  io/write_err "ratchet: no row is named by `{scope}`\n" .> (_ -> os/exit 1)
+
+fn chose_rows _ picked false
+  baselined picked
+
+fn asked? "all" _
+  true
+
+fn asked? "cheap" r
+  not r.dear
+
+# Any other word selects by job name, so a spec — or somebody debugging one
+# row — can prove a single gate without paying for sixty.
+fn asked? scope r
+  spells? r.job scope
+
+# A row is proof only if the gate it reddened was green to begin with, and
+# nothing checked that. `after_gate` read a non-zero exit as the mutation's
+# doing, so a gate already red on HEAD would have been credited to every
+# mutation that shares it: the rows would pass while proving nothing, which is
+# the exact defect this table exists to catch, sitting inside the table's own
+# harness. It is not a hypothetical shape: `prove` builds in a worktree with a
+# shared target directory and stub scratch dirs that ci.yml does not use, and a
+# gate red for one of those reasons looks identical to a gate red for the
+# mutation.
+#
+# So every gate is read once on an unmutated worktree first, and a baseline
+# that is not green stops the run rather than colouring it. Deduplicated
+# because the 62 rows name 50 distinct (gate, setup) pairs — nine rows share
+# the diagnostic-coverage gate and four share the trend gate — so the baseline
+# costs 50 gate runs beside the 62 the proving already pays. One worktree
+# serves the whole pass: nothing mutates it, so there is nothing to restore
+# between pairs and only the first setup's build is cold.
+#
+# It reads HEAD before any row runs, so it answers for the tree and not for
+# what a row leaves behind: a mutation that dirties a shared scratch path and
+# reddens a LATER row's gate is still counted as that row's proof. Rows do not
+# share scratch paths today, and the fix if one ever does is to re-read that
+# gate rather than to widen this pass.
+base_dir = "/tmp/kanso-ratchet-base"
+
+fn pairs_in list at acc
+  pair_seen list at acc (at > length list)
+
+fn pair_seen _ _ acc true
+  acc
+
+fn pair_seen list at acc false
+  r = list[at]
+  same? = (p -> p.gate == r.gate and p.setup == r.setup)
+  kept list at acc r (list/any? acc same?)
+
+fn kept list at acc _ true
+  pairs_in list (at + 1) acc
+
+fn kept list at acc r false
+  pairs_in list (at + 1) (push acc (pair r.gate r.job r.setup))
+
+fn baselined picked
+  made = ["worktree" "add" "--detach" "--force" base_dir "HEAD"]
+  os/run "git" made .> (_ -> base_linked picked)
+
+fn base_linked picked
+  linking = "mkdir -p {shared_target} && ln -s {shared_target} target"
+  pairs = pairs_in picked 1 []
+  shell base_dir linking .> (_ -> greening picked pairs 1 [])
+
+fn greening picked pairs at acc
+  greened picked pairs at acc (at > length pairs)
+
+fn greened picked pairs _ acc true
+  os/run "git" ["worktree" "remove" "--force" base_dir]
+    .> (_ -> unmutated picked pairs acc)
+
+fn greened picked pairs at acc false
+  p = pairs[at]
+  shell base_dir p.setup .> (s -> base_setup picked pairs at acc p s.status)
+
+fn base_setup picked pairs at acc p 0
+  shell base_dir p.gate .> (g -> base_gate picked pairs at acc p g)
+
+fn base_setup picked pairs at acc p s
+  greening picked pairs (at + 1) (push acc (unmade p s))
+
+fn base_gate picked pairs at acc p g
+  read_gate picked pairs at acc p g (g.status == 0)
+
+fn read_gate picked pairs at acc _ _ true
+  greening picked pairs (at + 1) acc
+
+fn read_gate picked pairs at acc p g false
+  greening picked pairs (at + 1) (push acc (presumed p g))
+
+# The last two dozen lines of what the gate said, indented under the finding.
+#
+# Naming the gate was the previous shape of this, and it answered the question
+# it was built for on its first run: `sh scripts/gates/instructions.sh`, red
+# because valgrind was not on the ratchet's box. It could not answer the SECOND
+# one. With valgrind installed the same gate was still red, and a report that
+# says only which gate leaves the reader with a list of hypotheses and no way
+# to choose — which is the shape of reasoning this repo keeps catching. A gate
+# writes down why it failed; the ratchet was throwing that away.
+#
+# TWENTY-FOUR because eight was not enough on the first run that used it. The
+# instructions gate prints the cpu it is about to count on, then eleven rows,
+# then its diff, then six lines of advice — and eight lines caught the advice
+# and one row. The row it caught was the useful part (`digestbench 81252330`
+# against the cost-goldens job's 81252316 on the same commit), so the next one
+# should carry the whole diff and the cpu line rather than needing a second run
+# to ask again.
+fn spoke r
+  said = "{r.stdout}{r.stderr}"
+  lines = text/split said "\n"
+  over = length lines - 24
+  tail = list/to_list (list/drop lines (chose_drop over (over > 0)))
+  text/join (list/to_list (list/map tail (l -> "      {l}\n"))) ""
+
+fn chose_drop over true
+  over
+
+fn chose_drop _ false
+  0
+
+fn unmade p r
+  said = "  UNBUILT {p.job}\n    gate: {p.gate}\n"
+  finding "{said}    the baseline would not build\n{spoke r}" false p.gate
+
+fn presumed p r
+  told p r (host_bound? p.gate)
+
+fn told p r true
+  said = "  UNPROVEN THIS RUN {p.job}\n    gate: {p.gate}\n"
+  why = "{why_bound p.gate}, so this run cannot prove a row sharing it"
+  finding "{said}    {why}\n{spoke r}" true p.gate
+
+fn told p r false
+  said = "  ALREADY RED {p.job}\n    gate: {p.gate}\n"
+  why = "red before any mutation, so no row sharing it is proof"
+  finding "{said}    {why}\n{spoke r}" false p.gate
+
+fn unmutated picked pairs acc
+  bad = list/to_list (list/select acc (f -> not f.ok))
+  settled_base picked pairs acc (length bad == 0)
+
+# A note is printed and then the run carries on; only a finding nobody excused
+# stops it. Both go to stderr, because a row that went unproven is news.
+fn settled_base picked pairs acc true
+  said = green_line pairs acc (length acc == 0)
+  answerable_rows = kept_provable picked acc
+  io/write_err (said_with acc said) .> (_ -> proving answerable_rows 1 [])
+
+# Two numbers when any gate went unproven, because "green" would be a claim
+# about gates this runner never answered. One number when none did, which is
+# the ordinary run and the wording the spec has pinned since kanso#1228.
+fn green_line pairs _ true
+  "ratchet: {length pairs} gates green before any mutation\n"
+
+fn green_line pairs acc false
+  read = length pairs
+  "ratchet: {read} gates read, {length acc} unproven on this runner\n"
+
+fn settled_base _ _ acc false
+  said = "ratchet: the baseline is not green\n"
+  io/write_err (said_with acc said) .> (_ -> os/exit 1)
+
+fn said_with acc said
+  lines = list/to_list (list/map acc (f -> f.line))
+  body = text/join lines ""
+  "{said}{body}"
+
+# A row whose gate this run COULD NOT ANSWER is not run under mutation either:
+# applying a mutation to an already-red gate and reading red is the credit the
+# baseline exists to refuse.
+#
+# Which rows those are is read off the baseline, not off the host_bound list.
+# `host_bound?` is a property of the GATE -- its golden pins exact counts and
+# the runner pool is not one machine -- and answering it says nothing about
+# whether THIS run landed on the golden's silicon. The baseline already asked
+# that question, by running the gate on an unmutated worktree, and this reads
+# its answer back.
+#
+# Keying on the static property instead meant a host-bound row was dropped on
+# every host, including the one where its gate is green, so `library_ir`,
+# `entry_ir`, `compile_ir` and `work` could be selected and never proved
+# anywhere. `type bound` above has said the opposite since kanso#1228 -- "on a
+# run that lands on the golden's silicon the row is proved normally" -- and the
+# code has never done it. kanso#1338's ratchet job is the instance: five gates
+# green before any mutation, five rows selected, and
+#
+#     ratchet: 3 rows
+#
+# with the entry and library rows gone from the report without a line. They
+# were selected for the first time on that branch, by the guard-line repair it
+# carried, and the runner had just proved it could answer both.
+fn kept_provable picked acc
+  list/to_list (list/select picked (r -> provable? r acc))
+
+fn provable? r acc
+  answerable? r acc (host_bound? r.gate)
+
+fn answerable? _ _ false
+  true
+
+# The baseline pushes a finding for every gate it could not answer, and each
+# finding names its gate. No finding for this gate means the baseline ran it
+# and it was green.
+#
+# Every finding that reaches here is a host-bound refusal: an UNBUILT setup or
+# an ALREADY RED gate carries ok = false, and `settled_base` exits on those
+# before proving starts. So this is asking exactly the question it looks like it
+# is asking, and not standing in for a wider one.
+fn answerable? r acc true
+  not list/any? acc (f -> f.gate == r.gate)
+
+fn proving list at acc
+  proven list at acc (at > length list)
+
+fn proven list _ acc true
+  reported list acc
+
+# Each row is announced on stderr as it starts, because the report below is
+# written once, after the last row. A run that stops before then printed
+# nothing about any row: the nightly was cancelled at its timeout every night
+# from 2026-09-14 to 2026-09-26 and its logs said only how many gates the
+# baseline read, and kanso#1670's step ran two and a half hours with no way to
+# tell a slow row from a stuck one. The line names the row, so the last one
+# printed is the one that was running.
+fn proven list at acc false
+  r = list[at]
+  said = "ratchet: row {at} of {length list}, {r.job} — {r.claim}\n"
+  io/write_err said .> (_ -> started list at acc r)
+
+fn started list at acc r
+  dir = "/tmp/kanso-ratchet-{at}"
+  made = ["worktree" "add" "--detach" "--force" dir "HEAD"]
+  os/run "git" made .> (_ -> after_worktree list at acc r dir)
+
+# Every row's build lands in one directory, so the first is cold and the rest
+# are incremental. A dozen rows each paying a full release build is an hour
+# that buys nothing: cargo already rebuilds exactly what the mutation touched.
+# Created here rather than assumed: nothing else makes this directory, so on a
+# fresh machine the symlink dangled, `cargo build` failed with "Not a
+# directory", and every row carrying `release` as setup was counted red without
+# its gate ever running.
+shared_target = "/tmp/kanso-ratchet-target"
+
+fn after_worktree list at acc r dir
+  linking = "mkdir -p {shared_target} && ln -s {shared_target} target"
+  shell dir linking .> (_ -> after_target list at acc r dir)
+
+fn after_target list at acc r dir
+  shell dir r.mutation .> (m -> after_mutation list at acc r dir m.status)
+
+fn after_mutation list at acc r dir 0
+  shell dir r.setup .> (s -> after_setup list at acc r dir s.status)
+
+fn after_mutation list at acc r dir _
+  cleaned dir .> (_ -> proving list (at + 1) (push acc (broke r)))
+
+fn after_setup list at acc r dir 0
+  shell dir r.gate .> (g -> after_gate list at acc r dir g.status)
+
+fn after_setup list at acc r dir _
+  cleaned dir .> (_ -> proving list (at + 1) (push acc (unbuilt r)))
+
+fn after_gate list at acc r dir 0
+  cleaned dir .> (_ -> proving list (at + 1) (push acc (blind r)))
+
+fn after_gate list at acc r dir _
+  cleaned dir .> (_ -> proving list (at + 1) (push acc (red r)))
+
+fn cleaned dir
+  os/run "git" ["worktree" "remove" "--force" dir]
+
+fn red r
+  finding "  red   {r.job} — {r.claim}\n" true r.gate
+
+fn blind r
+  finding "  BLIND {r.job} — {r.claim}: the gate stayed green\n" false r.gate
+
+fn broke r
+  said = "  BROKE {r.job} — {r.claim}: the mutation would not apply\n"
+  finding said false r.gate
+
+fn unbuilt r
+  finding "  UNBUILT {r.job} — {r.claim}: it would not build\n" false r.gate
+
+fn reported list acc
+  lines = list/to_list (list/map acc (f -> f.line))
+  body = text/join lines ""
+  bad = list/to_list (list/select acc (f -> not f.ok))
+  io/write "ratchet: {length list} rows\n{body}" .> (_ -> settled list bad)
+
+fn settled list bad
+  closed list bad (length bad == 0)
+
+# An empty list here is not success. When every row a branch selected shares a
+# gate the baseline could not answer, `kept_provable` drops them all and the
+# loop has nothing to run — and the old wording congratulated it, which is the
+# false green this whole pass exists to refuse. Nothing was proved, the run says
+# so, and it does not fail, because no diff could have proved them on this
+# runner. A row dropped this way always has a finding above it naming its gate,
+# so the reader is never left to wonder where it went.
+fn closed list _ true
+  none_left (length list == 0)
+
+fn none_left true
+  said = "ratchet: no row on this runner could be proved; none was claimed\n"
+  io/write_err said
+
+fn none_left false
+  io/write "ratchet: every row turned its gate red\n"
+
+fn closed _ bad false
+  io/write_err "ratchet: {length bad} rows proved nothing\n" .> (_ -> os/exit 1)
+
+fn asked given
+  verb given (length given > 0)
+
+fn verb given true
+  return verb given false if length given < 1
+  chosen given[1] given
+
+fn verb _ false
+  cover
+
+fn chosen "prove" given
+  prove_all (second given "all")
+
+fn chosen "touched" given
+  mode = touched_mode (third given "prove") given
+  touched (second given "origin/main") mode
+
+# A branch that touches src/runtime.c selected 78 rows on that file alone on
+# 2026-09-26, and one job proving such a handful ran two and a half hours on
+# kanso#1670. So a pull request proves its handful in parts, the way the
+# nightly proves the table:
+#
+#   kanso run scripts/ratchet -- touched origin/main shard 2 4
+#   kanso run scripts/ratchet -- touched origin/main shard 2 4 list
+#
+# The mode travels as one word list so that the functions between here and
+# `chose` carry it without learning about shards.
+fn touched_mode "shard" given
+  "shard {fourth given "0"} {nth_arg given 5 "0"} {nth_arg given 6 "prove"}"
+
+fn touched_mode mode _
+  mode
+
+# The selection rule, driven by a file list written on the command line rather
+# than asked of git:
+#
+#   kanso run scripts/ratchet -- select src/runtime.c bench/cost_golden.txt
+#
+# `touched` gets its files from `git diff` against a base, which makes the rule
+# it applies impossible to check without a repository shaped for the check.
+# This is the same rule with the same code and the list handed in, so a spec can
+# ask what a diff of one source file selects, what a goldens-only diff selects,
+# and what the two together select, on inputs it wrote down. It lists and stops;
+# proving is `touched`'s job.
+fn chosen "select" given
+  winnowing "list" (list/to_list (list/drop given 1)) rows 1 []
+
+# The nightly proves the table in parts:
+#
+#   kanso run scripts/ratchet -- shard 3 8        prove rows 3, 11, 19, ...
+#   kanso run scripts/ratchet -- shard 3 8 list   name them and stop
+#
+# One job proving every row stopped fitting in its ninety minutes on
+# 2026-09-14. The baseline took eleven and a half minutes, the rows ran for the
+# other seventy-eight, and the job was cancelled, every night from then until
+# this was written. A cancelled run prints nothing, because the report is
+# written once at the end, so twelve nights proved no row and said so to
+# nobody. Before that, from 2026-09-05, it had failed nine nights running.
+#
+# A shard takes every Nth row from K rather than a contiguous block. Rows are
+# appended as they are written, so a block would give the last shard every row
+# added since the split and leave it to outgrow its job again on its own.
+fn chosen "shard" given
+  k = text/to_int (second given "0")
+  n = text/to_int (third given "0")
+  sharding k n (fourth given "prove") (k < 1 or n < k)
+
+fn sharding k n _ true
+  said = "ratchet: a shard is `shard K N` with 1 <= K <= N, not {k} of {n}\n"
+  io/write_err said .> (_ -> os/exit 1)
+
+fn sharding k n mode false
+  picked = every_nth rows k n []
+  said = "ratchet: shard {k} of {n}, {length picked} rows\n"
+  listed = list/to_list (list/map picked (r -> "  {r.job} — {r.claim}\n"))
+  body = text/join listed ""
+  io/write "{said}{body}" .> (_ -> onto mode picked)
+
+fn every_nth list at n acc
+  nth_seen list at n acc (at > length list)
+
+fn nth_seen _ _ _ acc true
+  acc
+
+fn nth_seen list at n acc false
+  every_nth list (at + n) n (push acc list[at])
+
+fn chosen _ _
+  cover
+
+fn second given fallback
+  beyond given fallback (length given > 1)
+
+fn beyond given _ true
+  given[2]
+
+fn beyond _ fallback false
+  fallback
+
+fn third given fallback
+  past given fallback (length given > 2)
+
+fn past given _ true
+  given[3]
+
+fn past _ fallback false
+  fallback
+
+fn fourth given fallback
+  further given fallback (length given > 3)
+
+fn further given _ true
+  given[4]
+
+fn further _ fallback false
+  fallback
+
+fn nth_arg given at fallback
+  arg_at given at fallback (length given >= at)
+
+fn arg_at given at _ true
+  given[at]
+
+fn arg_at _ _ fallback false
+  fallback
+
+pub play = os/args .> (given -> asked given)

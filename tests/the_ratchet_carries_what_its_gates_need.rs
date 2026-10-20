@@ -96,7 +96,8 @@ fn both_workflows_that_run_the_ratchet_run_the_toolchain_script() {
     }
 }
 
-const RATCHET: &str = include_str!("../scripts/ratchet/ratchet.kso");
+#[path = "support/ratchet.rs"]
+mod ratchet;
 const SMOKE: &str = include_str!("../scripts/site_smoke/site_smoke.kso");
 
 /// A tool is installed; an ARTIFACT is built, and this file could not see the
@@ -121,7 +122,7 @@ fn the_ratchet_builds_the_blob_its_site_gate_reads() {
          satisfying it"
     );
     assert!(
-        builds_the_blob(RATCHET),
+        builds_the_blob(&ratchet::ratchet_source()),
         "scripts/site_smoke reads docs/kanso.wasm, which is built and not \
          committed, so a ratchet row running that gate needs a setup that runs \
          scripts/build_wasm.sh. Without it the gate is red before any mutation \

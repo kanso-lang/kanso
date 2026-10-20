@@ -8,7 +8,7 @@
 //! those counts is red on any runner but the golden's, whatever the mutation
 //! did, and no branch diff fixes it.
 //!
-//! So `scripts/ratchet/ratchet.kso` carries `host_bound`: gates whose red the
+//! So `scripts/ratchet/ratchet/ratchet.kso` carries `host_bound`: gates whose red the
 //! baseline REPORTS and does not fail on, and whose rows the proving pass then
 //! SKIPS. Reported and skipped is the opposite of the blindness kanso#1228 was
 //! built to catch, where a red gate was silently counted as proof.
@@ -34,7 +34,7 @@ fn root() -> &'static Path {
     Path::new(env!("CARGO_MANIFEST_DIR"))
 }
 
-const TABLE: &str = include_str!("../scripts/ratchet/ratchet.kso");
+const TABLE: &str = include_str!("../scripts/ratchet/ratchet/ratchet.kso");
 
 /// The gates the table declares host-bound. This walks the `host_bound` LIST,
 /// not the `bound` bindings: the first draft read the bindings, so removing an

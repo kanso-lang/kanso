@@ -43,7 +43,7 @@ fn named(body: &str) -> Vec<String> {
     out
 }
 
-/// The lines `scripts/ratchet/ratchet.kso`'s `guarding` keeps. Both spellings:
+/// The lines `scripts/ratchet/ratchet/ratchet.kso`'s `guarding` keeps. Both spellings:
 /// `grep -q` fails outright when the anchor moves, and `grep -c` feeds a count
 /// assertion that catches the anchor multiplying as well as vanishing.
 fn guards(body: &str) -> Vec<&str> {

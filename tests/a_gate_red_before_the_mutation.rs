@@ -190,11 +190,18 @@ fn proved_under_a_host_bound_gate(key: &str) -> (Output, String) {
     std::fs::create_dir_all(&staged).expect("the staged program has a home");
     let source = root().join("scripts/ratchet");
     std::fs::copy(source.join("main.kso"), staged.join("main.kso")).expect("main copies");
-    let program = std::fs::read_to_string(source.join("ratchet.kso")).expect("the ratchet reads");
+    std::fs::create_dir_all(staged.join("ratchet")).expect("the staged module has a home");
+    for entry in std::fs::read_dir(source.join("ratchet")).expect("the ratchet module reads") {
+        let file = entry.expect("a directory entry").path();
+        let name = file.file_name().expect("a file name");
+        std::fs::copy(&file, staged.join("ratchet").join(name)).expect("a ratchet file copies");
+    }
+    let runner = staged.join("ratchet/ratchet.kso");
+    let program = std::fs::read_to_string(&runner).expect("the ratchet reads");
     let real = "work_gate = \"sh scripts/gates/instructions.sh\"";
     assert!(program.contains(real), "the work gate is still spelled the way this fixture edits");
     let bent = program.replace(real, "work_gate = \"sh scripts/gates/python_free.sh\"");
-    std::fs::write(staged.join("ratchet.kso"), bent).expect("the staged ratchet writes");
+    std::fs::write(&runner, bent).expect("the staged ratchet writes");
 
     let done = Command::new(env!("CARGO_BIN_EXE_kanso"))
         .arg("run")
