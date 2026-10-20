@@ -1855,7 +1855,8 @@ interp_peak_bytes 614,115 -> 617,367. The library grows by the two arms of
 `key_at`, and every program that imports std/json compiles them: compile_instructions
 24,089,825 -> 24,321,293, entry_instructions 75,139,973 -> 75,148,170,
 library_instructions 74,835,835 -> 74,843,912, compile_allocs 13,382 ->
-13,465 and front_end_visits 6,938 -> 7,063. The decoder's emitted code reads
+13,465, compile_peak_bytes 572,289 -> 575,715 and front_end_visits 6,938 ->
+7,063. The decoder's emitted code reads
 emitted_defines 134 -> 136, emitted_calls 1,249 -> 1,282, emitted_branches
 1,336 -> 1,374 and emitted_lines 12,690 -> 13,010, and the other programs
 that decode emitted_other_defines 2,148 -> 2,154, emitted_other_calls 18,298
