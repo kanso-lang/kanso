@@ -1845,3 +1845,23 @@ dropped.
 Over 100,000 fuzzed documents decoded byte for byte alike on native, the
 interpreter and #2014's build, and the harness went red when the key's end
 was put one byte early.
+
+CI's rows. The work vein: work_runbench 1,137,672,504 -> 1,104,562,811
+(-2.91%), work_jsonbench 812,108,477 -> 763,196,627 (-6.02%), work_oneshot
+12,776,869 -> 12,450,454 and work_livebench 1,370,942,122 -> 1,370,617,065.
+The interpreter reads its corpus's keys the same way: interp_instructions
+484,702,222 -> 463,217,423 and interp_allocs 539,460 -> 502,624, with
+interp_peak_bytes 614,115 -> 617,367. The library grows by the two arms of
+`key_at`, and every program that imports std/json compiles them: compile_instructions
+24,089,825 -> 24,321,293, entry_instructions 75,139,973 -> 75,148,170,
+library_instructions 74,835,835 -> 74,843,912, compile_allocs 13,382 ->
+13,465 and front_end_visits 6,938 -> 7,063. The decoder's emitted code reads
+emitted_defines 134 -> 136, emitted_calls 1,249 -> 1,282, emitted_branches
+1,336 -> 1,374 and emitted_lines 12,690 -> 13,010, and the other programs
+that decode emitted_other_defines 2,148 -> 2,154, emitted_other_calls 18,298
+-> 18,397, emitted_other_branches 17,145 -> 17,259 and emitted_other_lines
+156,673 -> 157,633. Machine code: text 5,283,518 -> 5,286,574, 880 bytes on
+each program that decodes JSON and 416 on runbench. In the tab the run falls
+and the compile rises with the library: browser_run_instructions 35,361,799
+-> 34,316,072, browser_compile_instructions 408,301,693 -> 413,585,272 and
+browser_compile_peak_bytes 749,207 -> 757,553.

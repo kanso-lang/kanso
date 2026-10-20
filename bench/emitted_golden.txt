@@ -253,7 +253,7 @@
 # keep their fused doors under a library-only spelling, so defines, calls and
 # branches are unchanged; lines 10,161 -> 10,165, three of them the longer
 # comment on the fused append door in the prelude.
-defines=134
-calls=1249
-branches=1336
-lines=12690
+defines=136
+calls=1282
+branches=1374
+lines=13010
