@@ -1,0 +1,13 @@
+import "std/list"
+import "std/text"
+
+# An int interpolated on its own is rendered by counting its digits once and
+# writing them into a string of exactly that length. These cover one digit,
+# each width where the count changes, a sign, and both ends of the word.
+xs = [0 7 9 10 -1 -9 -10 99 100 -100 12345 -12345 1000000000000000000]
+
+ends = [9223372036854775807 (-9223372036854775807 - 1)]
+
+pub play =
+  print (text/join (list/to_list (list/map xs (i -> "{i}"))) ",")
+  print (text/join (list/to_list (list/map ends (i -> "{i}"))) ",")
