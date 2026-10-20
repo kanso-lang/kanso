@@ -1513,16 +1513,16 @@ static int k_number_byte(unsigned char c) {
     return (unsigned)(c - '0') < 10 || c == '+' || c == '-' || c == '.' || c == 'e' || c == 'E';
 }
 
-KValue k_b_number_span(KValue cs, KValue fromv) {
+/* The scan behind `number_span`, with the KValue convention taken off its
+   inputs: a pointer, a length and a position, and the answer as a plain
+   integer. The emitter reaches it through the `k_b_number_span_fast` twin,
+   which tests the two tags inline, so a call whose bytes and position are
+   what they say skips the failure and tag ladder below; on the run program
+   that is 417,483 calls. `k_b_number_span` is the same scan for anything the
+   twin turns away. The counter is here so both doors count a call once. */
+long long k_b_number_span_raw(const unsigned char* d, long long len, long long from) {
     if (K_COUNTING) k_stat_number_spans++;
-    if (__builtin_expect(!k_not_failure(cs) || !k_not_failure(fromv), 0)) return k_failed2(cs, fromv);
-    if (cs.tag != K_BYTES || !K_IS_INT(fromv)) k_die("number_span takes bytes and a position");
-    if (fromv.tag == K_BIG) return fromv;
-    KBytes* by = k_as_bytes(cs);
-    const unsigned char* d = by->data;
-    long long len = by->len;
-    long long from = fromv.payload;
-    if (from < 1 || from > len) return fromv;
+    if (from < 1 || from > len) return from;
     long long i = from - 1;
     /* RFC 8259 §6 asks three things of a number that the converters do not
        (#1999): a digit first, after any minus; no digit after a leading 0;
@@ -1531,9 +1531,9 @@ KValue k_b_number_span(KValue cs, KValue fromv) {
     long long lead = i + (d[i] == '-');
     if (__builtin_expect(lead >= len || (unsigned)(d[lead] - '0') > 9, 0)) {
         /* no byte that can be part of a number is the empty run, below */
-        if (k_number_byte(d[i])) return k_int(0);
+        if (k_number_byte(d[i])) return 0;
     } else if (d[lead] == '0' && lead + 1 < len && (unsigned)(d[lead + 1] - '0') < 10) {
-        return k_int(0);
+        return 0;
     }
     int mark = 0;
     int bare = 0;
@@ -1560,9 +1560,9 @@ KValue k_b_number_span(KValue cs, KValue fromv) {
         if (out) {
             unsigned k = (unsigned)__builtin_ctz(out);
             if (marks & ((1u << k) - 1)) mark = 1;
-            if (bare || (bares & ((1u << k) - 1))) return k_int(0);
+            if (bare || (bares & ((1u << k) - 1))) return 0;
             i += k;
-            return k_int(mark ? -(i + 1) : i + 1);
+            return mark ? -(i + 1) : i + 1;
         }
         if (marks) mark = 1;
         if (bares & 0x7fffu) bare = 1;
@@ -1579,8 +1579,22 @@ KValue k_b_number_span(KValue cs, KValue fromv) {
         }
         i++;
     }
-    if (bare) return k_int(0);
-    return k_int(mark ? -(i + 1) : i + 1);
+    if (bare) return 0;
+    return mark ? -(i + 1) : i + 1;
+}
+
+KValue k_b_number_span(KValue cs, KValue fromv) {
+    if (__builtin_expect(!k_not_failure(cs) || !k_not_failure(fromv), 0)) {
+        if (K_COUNTING) k_stat_number_spans++;
+        return k_failed2(cs, fromv);
+    }
+    if (cs.tag != K_BYTES || !K_IS_INT(fromv)) k_die("number_span takes bytes and a position");
+    if (fromv.tag == K_BIG) {
+        if (K_COUNTING) k_stat_number_spans++;
+        return fromv;
+    }
+    KBytes* by = k_as_bytes(cs);
+    return k_int(k_b_number_span_raw(by->data, by->len, fromv.payload));
 }
 
 

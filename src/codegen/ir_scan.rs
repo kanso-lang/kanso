@@ -119,7 +119,7 @@ fn symbols_before_newline(text: &str) -> crate::hash::Set<&str> {
 /// The symbols DECLARES calls from its own inline definitions, written down
 /// rather than scanned for.
 ///
-/// DECLARES is a `const`: the same 65 names in every process kanso runs.
+/// DECLARES is a `const`: the same names in every process kanso runs.
 /// Reading them off it once cost 62 answers for 1,024 lines of scanning, and
 /// the scanning was 94% of the index this branch builds -- 292,701 of the
 /// 278,812 `called_symbols` charges on the start-up corpus came through
@@ -171,6 +171,9 @@ const DECLARES_CONTEXT_CALLS: &[&str] = &[
     "k_b_find2_raw",
     "k_b_length",
     "k_b_length_fast",
+    "k_b_number_span",
+    "k_b_number_span_fast",
+    "k_b_number_span_raw",
     "k_b_push_mut",
     "k_b_push_mut_fast",
     "k_b_push_mut_known",
@@ -179,6 +182,12 @@ const DECLARES_CONTEXT_CALLS: &[&str] = &[
     "k_b_slice",
     "k_b_slice_fast",
     "k_b_slice_raw",
+    "k_b_to_float_slice",
+    "k_b_to_float_slice_fast",
+    "k_b_to_float_slice_raw",
+    "k_b_to_int_slice",
+    "k_b_to_int_slice_fast",
+    "k_b_to_int_slice_raw",
     "k_b_utf8_slice",
     "k_b_utf8_slice_fast",
     "k_b_utf8_slice_raw",

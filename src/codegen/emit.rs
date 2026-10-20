@@ -3383,8 +3383,13 @@ impl<'a> Backend<'a> {
                             },
                         };
                         let t = f.tmp();
+                        // three KValues and the origin want seven of the six
+                        // integer registers, so the last spilled at every
+                        // number; the twin tests the tags and hands the raw
+                        // door a pointer, a length, two positions and the
+                        // origin
                         f.line_fmt(format_args!(
-                            "{t} = call %KValue @k_b_{door}_slice(%KValue {}, %KValue {}, %KValue {}, {origin})",
+                            "{t} = call %KValue @k_b_{door}_slice_fast(%KValue {}, %KValue {}, %KValue {}, {origin})",
                             parts[0], parts[1], parts[2]
                         ));
                         f.record(&t, infer::builtin_set(door, &[sliced]));
@@ -4021,6 +4026,13 @@ impl<'a> Backend<'a> {
                 // the scan a pointer, a length and four integers — six, and
                 // nothing spills.
                 "find2_below_fast"
+            } else if name == "number_span" {
+                // the scan is the work; the two failure guards and the two
+                // tag tests in front of it were paid on every number a
+                // decode reads, 417,483 on the run program. The twin tests
+                // the tags and hands the scan a pointer, a length and a
+                // position.
+                "number_span_fast"
             } else if name == "bytes" {
                 // two field reads and a three-field header into the arena, and
                 // the arena bump is already inline in the append twin. The
