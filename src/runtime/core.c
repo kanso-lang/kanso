@@ -104,6 +104,7 @@ static inline int k_buf_malloced(const KBuf* b) { return (int)(b->capw & 1); }
 static inline void k_buf_set_cap(KBuf* b, long long cap, int malloced) {
     b->capw = 2 * cap + (malloced ? 1 : 0);
 }
+static KBuf* k_buf_of(KValue* items);
 /* cap == 0 is a borrowed view; cap != 0 marks data as the body of a
    KBuf-headed buffer this value may extend at its frontier. */
 typedef struct { long long len; const unsigned char* data; long long cap; } KBytes;
@@ -2782,9 +2783,12 @@ static void k_repair_interior(KValue v, void* p, KCopy* cp) {
             b->cap = 0;
             break;
         }
+        /* Copying a list's malloc'd buffer into the arena would drop the
+           only pointer to it, and the registration that frees it would find
+           an arena buffer in the field. Only its slots need the walk. */
         case K_LIST: {
             KList* l = (KList*)p;
-            if (!k_survives_x(l->items, cp->mark)) {
+            if (!k_buf_malloced(k_buf_of(l->items)) && !k_survives_x(l->items, cp->mark)) {
                 long long cap = l->len ? l->len : 1;
                 KBuf* nb = k_copy_alloc(cp, sizeof(KBuf) + sizeof(KValue) * (size_t)cap);
                 k_buf_set_cap(nb, cap, 0);
@@ -2908,8 +2912,6 @@ static int k_memo_outlives(KValue result) {
     KMark* inner = &k_beat_stack[k_beat_depth - 1];
     return k_survives((const void*)(intptr_t)result.payload, inner);
 }
-
-static KBuf* k_buf_of(KValue* items);
 
 /* Whether `p` lies in depth d's carry pair. */
 static int k_carry_at_holds(long long d, const void* p) {

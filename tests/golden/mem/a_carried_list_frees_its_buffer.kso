@@ -1,0 +1,31 @@
+# A list grown inside a loop's beat keeps its storage outside the arena, and
+# the beat that would reclaim the list's header frees that storage when it
+# rewinds (#2015). Here `fill` carries a bag record through its beat and
+# `laps` is the beat around it. Before the fix, the pop of `fill`'s beat
+# walked the bag to repair it and copied the list's items into the arena,
+# leaving the outside buffer with nothing pointing at it, so one 8,208-byte
+# buffer was still live at exit. The pop now repairs only the slots, and
+# perm_live_bytes reads zero.
+type bag
+  count
+  items
+
+fn add b i
+  bag (b.count + 1) (push b.items i)
+
+fn fill b 0
+  b
+
+fn fill b n
+  fill (add b n) (n - 1)
+
+fn total n
+  length (fill (bag 0 []) n).items
+
+fn laps acc 0
+  acc
+
+fn laps acc n
+  laps (acc + total 300) (n - 1)
+
+pub play = print (laps 0 4)
