@@ -594,7 +594,7 @@ basket         10,000                0          1,048,576</code></pre>
 
 <p>a beat around a loop whose body allocates nothing is the general shape, and the profile it exposed did pay. <code>k_beat_iter</code> was 28.65% of escapebench, and eight of its thirty instructions were a sanity check on the mark's own two words — a question fixed when the mark is written and re-asked at every rewind. moving it to the push took escapebench 7.36%.</p>
 
-<p>recorded here so the fold does not get rewritten again on the strength of the profile alone. the fold itself is gone since §218, which escapes a string in the runtime.</p>
+<p>recorded here so the fold does not get rewritten again on the strength of the profile alone. the fold itself is gone since §219, which escapes a string in the runtime.</p>
 
 <p><strong>14. refusing a beat to a loop that rewinds for nothing <span class="status status-declined">built, measured, declined</span></strong> — the entry above ends on a beat that reclaimed nothing, and the obvious next move is to stop granting it. escapebench is where to look: one group, <code>filled</code>, owns 1,206,000 of that benchmark's 1,206,002 rewinds, and a probe in the rewind says 99.75% of them find the arena pointer exactly where the mark left it. at about twenty-two instructions each that is 26 million of escapebench's 121, spent putting back something nothing moved.</p>
 
@@ -4012,7 +4012,15 @@ welfare                      77.37         82.09</code></pre>
 
 <p>Naming an insisting form's caller had cost three allocations on every call, because native wrapped each <code>!</code> answer in a rescue step holding a closure with the caller's site. The step now holds the site itself, and a box that has already settled, as <code>effect</code> answers, is decided at once with no step at all. A benchmark that reads its input with <code>os/read_file!</code> allocates two fewer, and an insisting form whose box has settled allocates 104 against 164 in its fixture. The larger step had stopped the C compiler inlining it into the two chain walks, which showed up as a 2% rise on deepbench with every counter unchanged, so the step is now always inlined and its failure branch runs out of line.</p>
 
-<h2 id="onecall"><span class="sec-num">218</span>a JSON string read and written in one call</h2>
+<h2 id="linkorder"><span class="sec-num">218</span>a row that followed the runner's disk</h2>
+
+<p>The dev codegen row counts clang and <code>ld.gold</code> building the codegen corpus, and on one pull request it read 116,000,241, then 116,000,233, then 116,000,241 again on commits that changed no code. All 8 instructions were in gold, and a second reading in the same job always matched the first, so the variable was fixed for a job and changed between jobs.</p>
+
+<p>It was the order gold reads its link directory in. The gate stages a directory holding the five libraries the link needs, so that what the runner image has installed cannot reach the row, and gold reads every <code>-L</code> directory whole in the order <code>readdir</code> returns it. Linking the same inputs with those five entries listed three ways read 22,443,938, 22,443,953 and 22,443,989 instructions. ext4 orders a directory by a hash of each name, seeded per filesystem, and every CI runner is a fresh filesystem.</p>
+
+<p>The directory now lives on tmpfs, which lists entries in the order they were made, and the gate makes them in a fixed order. Making them in the reverse order moves gold by 17, so the order is the script's now. Under it the row reads 620 more than main's golden did. That value was one runner's draw, so the welfare floor came down by the measured 620 rather than the change being treated as a regression. Clay made that a standing rule: a fix that only normalizes what a row reads re-bases the floor by CI's measured cost.</p>
+
+<h2 id="onecall"><span class="sec-num">219</span>a JSON string read and written in one call</h2>
 
 <p>The decoder used to read a string in three steps: a span up to the first quote or backslash, a dispatch on the byte the span stopped at, and a utf-8 check on the bytes. A string with escapes then went through kanso one run and one escape at a time, and the writer escaped strings the same way. Three internal builtins now handle the common cases. <code>builtin_plain_string</code> scans from the string's first byte and answers the text when no backslash comes before the closing quote, or the closing quote's position when one does. <code>builtin_unescape</code> undoes the eight one-letter escapes over that range. Both answer <code>none</code> for anything else, such as a <code>\u</code> escape, a bad escape, a string that never closes or bytes that are not utf-8, and the decoder then reads the string the old way from its start. Every error is still named by the code that named it before.</p>
 

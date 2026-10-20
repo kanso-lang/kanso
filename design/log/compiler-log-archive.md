@@ -104663,3 +104663,29 @@ Owes, on #1943: `text/slice!` answering a box on every engine; the emitter
 fusing `slice! ... .> utf8`, `.> append acc`, `.> to_int` and `.> to_float`;
 the decoder's call sites moved onto those chains; a micro golden for an
 in-range `slice!` and an error golden for one out of range; appendix B.
+
+## 2026-10-14 — a box handed to a library function that reads it is refused at the call
+
+#1957. The checker refuses a box handed to a builtin that takes a value, so
+`length (os/read_file! "x")` is refused where it is written. Handed to
+`text/utf8` instead, the same box checked clean, and both engines died with
+"utf8 takes a list of byte values". `text/utf8` is a library function whose
+body calls the builtin as `builtin_utf8`, and the table of builtins that read
+a value was asked under that spelling, which it does not hold.
+
+The table is now asked with the prefix taken off. That alone moved the
+refusal into std/text, naming `builtin_utf8` and a line the program's author
+cannot change. So when a box goes into a standard-library function whose body
+reads that parameter as a value, the refusal comes at the program's call and
+names the function called. An arm that takes an effect at that position is
+where a box belongs, and a group with one is left alone. A box handed to the
+program's own functions is still followed into the body, as ruled on
+2026-09-30. `a_box_handed_to_a_library_wrapper` pins the refusal and was red
+with the change taken back out.
+
+`browser_compile_instructions` moved 437,381,994 -> 437,416,347 for the
+extra walk over a std group's arms, under a ten-thousandth of a point. CI
+read `compile_instructions` 31,948,363 -> 31,940,603, `entry_instructions`
+101,372,705 -> 101,349,935 and `library_instructions` 100,887,003 ->
+100,864,357, a fall of a few hundredths of a percent that this change does not
+explain, so it is named as layout.

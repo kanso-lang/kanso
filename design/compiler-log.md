@@ -21,32 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-14 — a box handed to a library function that reads it is refused at the call
-
-#1957. The checker refuses a box handed to a builtin that takes a value, so
-`length (os/read_file! "x")` is refused where it is written. Handed to
-`text/utf8` instead, the same box checked clean, and both engines died with
-"utf8 takes a list of byte values". `text/utf8` is a library function whose
-body calls the builtin as `builtin_utf8`, and the table of builtins that read
-a value was asked under that spelling, which it does not hold.
-
-The table is now asked with the prefix taken off. That alone moved the
-refusal into std/text, naming `builtin_utf8` and a line the program's author
-cannot change. So when a box goes into a standard-library function whose body
-reads that parameter as a value, the refusal comes at the program's call and
-names the function called. An arm that takes an effect at that position is
-where a box belongs, and a group with one is left alone. A box handed to the
-program's own functions is still followed into the body, as ruled on
-2026-09-30. `a_box_handed_to_a_library_wrapper` pins the refusal and was red
-with the change taken back out.
-
-`browser_compile_instructions` moved 437,381,994 -> 437,416,347 for the
-extra walk over a std group's arms, under a ten-thousandth of a point. CI
-read `compile_instructions` 31,948,363 -> 31,940,603, `entry_instructions`
-101,372,705 -> 101,349,935 and `library_instructions` 100,887,003 ->
-100,864,357, a fall of a few hundredths of a percent that this change does not
-explain, so it is named as layout.
-
 ## 2026-10-14 — checking only what a module reaches, measured and set aside
 
 #1952 asked whether the merged check could skip the dependency functions a
@@ -1570,10 +1544,11 @@ position and the place of each. They stay two. What was doubled was inside
 this file: `call_graph` and `kept_out` each defined the same walker over a
 body's names, and it is `name_mentions` now, once.
 
-The move alone shifted codegen_instructions_dev by 15 instructions, since that
-row counts the whole `kanso build` tree and kanso's own emitting moves with
-the binary's layout; with the walker defined once it reads main's
-115,648,918 again. The tab's compile, which runs the prune in the wasm build,
+The move alone shifted codegen_instructions_dev by 15 instructions, and with
+the walker defined once it read main's 115,648,918 again. (Corrected: this
+entry first put the 15 down to kanso's layout, but the row leaves out kanso's
+own process. The order the link directory lists in moves gold by that much
+from one runner to the next; see "the link directory lists in one order".) The tab's compile, which runs the prune in the wasm build,
 reads browser_compile_instructions 422,962,643, 9,485 fewer, and welfare's
 rise is banked.
 
@@ -1764,8 +1739,37 @@ the page's prose and CLAUDE.md as well as the compiler, and keeps the page
 within `page_drift`'s three entries of the log itself. The chat files, labels
 and closes issues and writes rulings onto them, and logs a ruling's `— gavel:`
 entry itself or leaves it to cloud's next pull request. CLAUDE.md's "Two sessions"
-section states the split. The first page section written under it is §218,
+section states the split. The first page section written under it is §219,
 which covers the four entries from the prune's move to the string builtins.
+
+## 2026-10-20 — the link directory lists in one order
+
+The dev codegen row read 116,000,241, then 116,000,233, then 116,000,241 on
+three commits of #2014 that changed no code. The profiles put all 8
+instructions in `ld.gold`; kanso and clang read the same each time. A second
+reading in the same job always agreed with the first, so whatever moved was
+fixed for a job and differed between jobs.
+
+It is the order gold reads the link directory in. gold reads every `-L`
+directory whole, and the codegen box stages one holding the five libraries the
+link resolves. ext4 lists a directory by a hash of each name, seeded per
+filesystem, so each fresh runner can list those five its own way. Linking the
+same inputs on this container with the five listed three ways read
+22,443,938, 22,443,953 and 22,443,989.
+
+`scripts/gates/codegen_box.sh` now keeps the entries on tmpfs, which lists
+them in the order they were made, and makes them in a fixed order; on Linux
+`$box/link` is a link to `/dev/shm/kanso-codegen-link`, so the path the build
+is given does not change. Two readings here agree, and making the entries in
+the reverse order moves gold by 17, so the order is now the script's. The
+staging refuses to run when `/dev/shm` is not a tmpfs. Under the new order CI
+reads codegen_instructions_dev 115,822,000 -> 115,822,620 on main's tree, and
+the floor is re-based by that cost under kanso#2017's gavel: a fix that
+normalizes a measurement re-bases the floor without a ruling.
+
+The prune's entry put an earlier move of this row down to kanso's layout. The
+row leaves out kanso's process, so that cannot be the reason, and the entry
+says so now.
 
 ## 2026-10-20 — gavel: a fix that normalizes a measurement re-bases the floor without a ruling
 

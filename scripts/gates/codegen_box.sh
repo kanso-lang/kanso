@@ -31,7 +31,27 @@ cp -r bench/codegen_corpus "$box/pkg/"
 # environment the measurement runs in, and a name clang cannot resolve stops
 # the staging: a link that finds nothing here fails, and a failed link is
 # not a row.
-mkdir -p "$box/link"
+#
+# THE DIRECTORY LISTS ITS ENTRIES IN ONE ORDER. gold reads the directory in
+# the order readdir returns it, and that order changes what the link costs: the
+# same link of the same inputs read 22,443,938, 22,443,953 and 22,443,989 with
+# these five entries listed three ways. ext4 lists a directory by a hash of
+# each name seeded per filesystem, so every fresh runner could list the box its
+# own way, and the dev row read 116,000,233 and 116,000,241 on commits that
+# changed no code. tmpfs lists entries by when they were made, and the loop
+# below makes them in a fixed order, so on Linux the entries live there and
+# the box keeps its path to them.
+if [ "$(uname -s)" = Linux ]; then
+  if [ "$(stat -f -c %T /dev/shm 2>/dev/null)" != tmpfs ]; then
+    echo "::error::/dev/shm is not a tmpfs here, so the link directory would list in the filesystem's own order" >&2
+    exit 1
+  fi
+  rm -rf /dev/shm/kanso-codegen-link
+  mkdir -p /dev/shm/kanso-codegen-link
+  ln -s /dev/shm/kanso-codegen-link "$box/link"
+else
+  mkdir -p "$box/link"
+fi
 for lib in libm.so libgcc.a libgcc_s.so libgcc_s.so.1 libc.so; do
   found=$(env -i PATH=/usr/local/bin:/usr/bin:/bin clang -print-file-name="$lib")
   case "$found" in
