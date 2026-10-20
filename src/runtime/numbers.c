@@ -150,6 +150,26 @@ K_DOORCC KValue k_b_to_float_slice(KValue cs, KValue fromv, KValue tov, const ch
     return k_b_to_float(k_b_slice(cs, fromv, tov), origin);
 }
 
+/* The two doors with the KValue convention taken off their inputs, for the
+   `_fast` twins the emitter calls: three KValues and the origin want seven
+   of the six integer registers the abi has, so the last one spilled at every
+   number the decoder read. The twin tests the three tags inline and hands
+   these a pointer, a length, two positions and the origin. A range outside
+   the bytes takes the long way, as the doors above do. */
+KValue k_b_to_int_slice_raw(const unsigned char* d, long long len, long long from, long long to,
+                            const char* origin) {
+    if (k_span_in(from, to, len))
+        return k_to_int_text((const char*)d + (from - 1), to - from + 1, to, origin);
+    return k_b_to_int(k_b_slice_raw(d, len, from, to), origin);
+}
+
+KValue k_b_to_float_slice_raw(const unsigned char* d, long long len, long long from,
+                              long long to, const char* origin) {
+    if (k_span_in(from, to, len))
+        return k_to_float_text((const char*)d + (from - 1), to - from + 1, to, origin);
+    return k_b_to_float(k_b_slice_raw(d, len, from, to), origin);
+}
+
 /* Ruled 2026-10-04: `list/tie ids maker` calls the maker once per id with
    the id and `ref`, and answers the map from id to node. Each id's cell is a
    blackhole made before the first node, so a node can store the cell of an id

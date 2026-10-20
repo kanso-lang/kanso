@@ -1513,16 +1513,16 @@ static int k_number_byte(unsigned char c) {
     return (unsigned)(c - '0') < 10 || c == '+' || c == '-' || c == '.' || c == 'e' || c == 'E';
 }
 
-KValue k_b_number_span(KValue cs, KValue fromv) {
+/* The scan behind `number_span`, with the KValue convention taken off its
+   inputs: a pointer, a length and a position, and the answer as a plain
+   integer. The emitter reaches it through the `k_b_number_span_fast` twin,
+   which tests the two tags inline, so a call whose bytes and position are
+   what they say skips the failure and tag ladder below; on the run program
+   that is 417,483 calls. `k_b_number_span` is the same scan for anything the
+   twin turns away. The counter is here so both doors count a call once. */
+long long k_b_number_span_raw(const unsigned char* d, long long len, long long from) {
     if (K_COUNTING) k_stat_number_spans++;
-    if (__builtin_expect(!k_not_failure(cs) || !k_not_failure(fromv), 0)) return k_failed2(cs, fromv);
-    if (cs.tag != K_BYTES || !K_IS_INT(fromv)) k_die("number_span takes bytes and a position");
-    if (fromv.tag == K_BIG) return fromv;
-    KBytes* by = k_as_bytes(cs);
-    const unsigned char* d = by->data;
-    long long len = by->len;
-    long long from = fromv.payload;
-    if (from < 1 || from > len) return fromv;
+    if (from < 1 || from > len) return from;
     long long i = from - 1;
     /* RFC 8259 §6 asks three things of a number that the converters do not
        (#1999): a digit first, after any minus; no digit after a leading 0;
@@ -1531,9 +1531,9 @@ KValue k_b_number_span(KValue cs, KValue fromv) {
     long long lead = i + (d[i] == '-');
     if (__builtin_expect(lead >= len || (unsigned)(d[lead] - '0') > 9, 0)) {
         /* no byte that can be part of a number is the empty run, below */
-        if (k_number_byte(d[i])) return k_int(0);
+        if (k_number_byte(d[i])) return 0;
     } else if (d[lead] == '0' && lead + 1 < len && (unsigned)(d[lead + 1] - '0') < 10) {
-        return k_int(0);
+        return 0;
     }
     int mark = 0;
     int bare = 0;
@@ -1560,9 +1560,9 @@ KValue k_b_number_span(KValue cs, KValue fromv) {
         if (out) {
             unsigned k = (unsigned)__builtin_ctz(out);
             if (marks & ((1u << k) - 1)) mark = 1;
-            if (bare || (bares & ((1u << k) - 1))) return k_int(0);
+            if (bare || (bares & ((1u << k) - 1))) return 0;
             i += k;
-            return k_int(mark ? -(i + 1) : i + 1);
+            return mark ? -(i + 1) : i + 1;
         }
         if (marks) mark = 1;
         if (bares & 0x7fffu) bare = 1;
@@ -1579,8 +1579,22 @@ KValue k_b_number_span(KValue cs, KValue fromv) {
         }
         i++;
     }
-    if (bare) return k_int(0);
-    return k_int(mark ? -(i + 1) : i + 1);
+    if (bare) return 0;
+    return mark ? -(i + 1) : i + 1;
+}
+
+KValue k_b_number_span(KValue cs, KValue fromv) {
+    if (__builtin_expect(!k_not_failure(cs) || !k_not_failure(fromv), 0)) {
+        if (K_COUNTING) k_stat_number_spans++;
+        return k_failed2(cs, fromv);
+    }
+    if (cs.tag != K_BYTES || !K_IS_INT(fromv)) k_die("number_span takes bytes and a position");
+    if (fromv.tag == K_BIG) {
+        if (K_COUNTING) k_stat_number_spans++;
+        return fromv;
+    }
+    KBytes* by = k_as_bytes(cs);
+    return k_int(k_b_number_span_raw(by->data, by->len, fromv.payload));
 }
 
 
@@ -2063,13 +2077,36 @@ KValue k_b_slice_raw(const unsigned char* data, long long len, long long from,
     return k_bytes_view(data + (from - 1), to - from + 1);
 }
 
-/* Count characters a word at a time from `*at`, which is on a character
-   boundary with `*seen` characters before it, and stop short of the
-   character numbered `next`, so the caller's character loop still lands on
-   it. A word's characters are its bytes less its continuation bytes; a
+/* Count characters in blocks and then words from `*at`, which is on a
+   character boundary with `*seen` characters before it, and stop short of
+   the character numbered `next`, so the caller's character loop still lands
+   on it. A word's characters are its bytes less its continuation bytes; a
    character cut by the word's end is given back, and `*at` stays on a
    boundary. */
 static void k_slice_skip(KStr* s, long* at, long long* seen, long long next) {
+    /* Sixty-four bytes hold at most sixty-four characters, so while the
+       target is further off than that, whole blocks are counted by
+       k_utf8_chars without asking where in them it falls. The last block can
+       end inside a character whose lead it counted; stepping back to that
+       lead gives the character back. The bound assumes one byte a character,
+       so on wider text a pass falls short and the next one counts on from
+       there. The index phase slices 690,000 characters out of 1.4 MB, and
+       the word loop below took 5,933,416 instructions to cross it. */
+    for (;;) {
+        long long blocks = (next - 1 - *seen) / 64;
+        long long whole = (s->len - *at) / 64;
+        if (whole < blocks) blocks = whole;
+        if (blocks <= 0) break;
+        long n = (long)(blocks * 64);
+        *seen += k_utf8_chars((const unsigned char*)s->data + *at, n);
+        long nat = *at + n;
+        *at = nat;
+        while (((unsigned char)s->data[nat] & 0xC0) == 0x80) nat--;
+        if (nat < *at) {
+            (*seen)--;
+            *at = nat;
+        }
+    }
     while (*at + 8 <= s->len) {
         unsigned long long w;
         memcpy(&w, s->data + *at, sizeof w);
@@ -2176,7 +2213,7 @@ static __attribute__((noinline)) KValue k_b_slice_walk(KStr* s, long long from, 
         }
         /* Between the two positions the walk is looking for, the bytes are
            only counted, and a distance of ten characters or more is counted
-           a word at a time: the index phase's subject is 1.4 MB of two- and
+           by k_slice_skip: the index phase's subject is 1.4 MB of two- and
            four-byte characters, sliced once from the front, and the
            character loop below took fourteen instructions a character over
            it. A short slice -- the matcher's, a few characters at a time --

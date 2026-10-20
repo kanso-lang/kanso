@@ -605,6 +605,76 @@ slow:
   %f = call %KValue @k_b_find2_below(%KValue %cs, %KValue %from, %KValue %a, %KValue %b, %KValue %lim)
   ret %KValue %f
 }
+define internal %KValue @k_b_to_int_slice_fast(%KValue %cs, %KValue %from, %KValue %to, ptr %origin) alwaysinline {
+  %cst = extractvalue %KValue %cs, 0
+  %ft = extractvalue %KValue %from, 0
+  %tt = extractvalue %KValue %to, 0
+  %isb = icmp eq i64 %cst, 13
+  %isf = icmp eq i64 %ft, 0
+  %ist = icmp eq i64 %tt, 0
+  %g = and i1 %isb, %isf
+  %plain = and i1 %g, %ist
+  br i1 %plain, label %read, label %slow
+read:
+  %bp = extractvalue %KValue %cs, 1
+  %by = inttoptr i64 %bp to ptr
+  %len = load i64, ptr %by
+  %dp = getelementptr i8, ptr %by, i64 8
+  %d = load ptr, ptr %dp
+  %fv = extractvalue %KValue %from, 1
+  %tv = extractvalue %KValue %to, 1
+  %r = call %KValue @k_b_to_int_slice_raw(ptr %d, i64 %len, i64 %fv, i64 %tv, ptr %origin)
+  ret %KValue %r
+slow:
+  %s = call %KValue @k_b_to_int_slice(%KValue %cs, %KValue %from, %KValue %to, ptr %origin)
+  ret %KValue %s
+}
+define internal %KValue @k_b_to_float_slice_fast(%KValue %cs, %KValue %from, %KValue %to, ptr %origin) alwaysinline {
+  %cst = extractvalue %KValue %cs, 0
+  %ft = extractvalue %KValue %from, 0
+  %tt = extractvalue %KValue %to, 0
+  %isb = icmp eq i64 %cst, 13
+  %isf = icmp eq i64 %ft, 0
+  %ist = icmp eq i64 %tt, 0
+  %g = and i1 %isb, %isf
+  %plain = and i1 %g, %ist
+  br i1 %plain, label %read, label %slow
+read:
+  %bp = extractvalue %KValue %cs, 1
+  %by = inttoptr i64 %bp to ptr
+  %len = load i64, ptr %by
+  %dp = getelementptr i8, ptr %by, i64 8
+  %d = load ptr, ptr %dp
+  %fv = extractvalue %KValue %from, 1
+  %tv = extractvalue %KValue %to, 1
+  %r = call %KValue @k_b_to_float_slice_raw(ptr %d, i64 %len, i64 %fv, i64 %tv, ptr %origin)
+  ret %KValue %r
+slow:
+  %s = call %KValue @k_b_to_float_slice(%KValue %cs, %KValue %from, %KValue %to, ptr %origin)
+  ret %KValue %s
+}
+define internal %KValue @k_b_number_span_fast(%KValue %cs, %KValue %from, ptr %site) alwaysinline {
+  %cst = extractvalue %KValue %cs, 0
+  %ft = extractvalue %KValue %from, 0
+  %isb = icmp eq i64 %cst, 13
+  %isf = icmp eq i64 %ft, 0
+  %plain = and i1 %isb, %isf
+  br i1 %plain, label %scan, label %slow
+scan:
+  %bp = extractvalue %KValue %cs, 1
+  %by = inttoptr i64 %bp to ptr
+  %len = load i64, ptr %by
+  %dp = getelementptr i8, ptr %by, i64 8
+  %d = load ptr, ptr %dp
+  %fv = extractvalue %KValue %from, 1
+  %at = call i64 @k_b_number_span_raw(ptr %d, i64 %len, i64 %fv)
+  %r = insertvalue %KValue { i64 0, i64 undef }, i64 %at, 1
+  ret %KValue %r
+slow:
+  store ptr %site, ptr @k_site
+  %n = call %KValue @k_b_number_span(%KValue %cs, %KValue %from)
+  ret %KValue %n
+}
 define internal %KValue @k_b_find2_fast(%KValue %cs, %KValue %from, %KValue %a, %KValue %b, ptr %site) alwaysinline {
   %cst = extractvalue %KValue %cs, 0
   %ft = extractvalue %KValue %from, 0
@@ -1391,10 +1461,13 @@ declare i64 @k_b_find2_raw(ptr, i64, i64, i64, i64)
 declare %KValue @k_b_find2_below(%KValue, %KValue, %KValue, %KValue, %KValue)
 declare i64 @k_b_find2_below_raw(ptr, i64, i64, i64, i64, i64)
 declare %KValue @k_b_number_span(%KValue, %KValue)
+declare i64 @k_b_number_span_raw(ptr, i64, i64)
 declare %KValue @k_b_append(%KValue, %KValue)
 declare %KValue @k_b_append_slice(%KValue, %KValue, %KValue, %KValue, i64)
 declare %KValue @k_b_to_int_slice(%KValue, %KValue, %KValue, ptr)
 declare %KValue @k_b_to_float_slice(%KValue, %KValue, %KValue, ptr)
+declare %KValue @k_b_to_int_slice_raw(ptr, i64, i64, i64, ptr)
+declare %KValue @k_b_to_float_slice_raw(ptr, i64, i64, i64, ptr)
 declare %KValue @k_b_append_rendered(%KValue, %KValue, i64)
 declare %KValue @k_b_sort(%KValue)
 declare %KValue @k_b_sum(%KValue)
