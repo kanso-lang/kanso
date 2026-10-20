@@ -1832,9 +1832,11 @@ The compile goldens read lines 1,396 -> 1,412 and module_lines 1,137 ->
 emitted_defines 130 -> 134, emitted_calls 1,222 -> 1,249, emitted_branches
 1,303 -> 1,336 and emitted_lines 12,368 -> 12,690, while the other programs
 lose the escaper (emitted_other_lines 157,286 -> 156,673). Machine code: text
-5,201,182 -> 5,283,518. codegen_instructions_dev 115,822,000 -> 116,000,241,
+5,201,182 -> 5,283,518. codegen_instructions_dev 115,822,000 -> 116,000,233,
 codegen_instructions_release 453,660,707 -> 453,685,379 and
 emit_instructions 6,202,944 -> 6,233,826 rise with the declarations.
+The dev row first read 116,000,241 and then 116,000,233 on the commit that
+added only page prose and this log; the 8 instructions are not isolated.
 
 The mem fixture `append_of_a_slice_boxes_nothing` pins the fused append of a
 slice, which std/json made for the run before each escape. Its `\n` escapes
