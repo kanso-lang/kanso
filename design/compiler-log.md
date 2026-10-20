@@ -21,43 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-13 — `list/concat` joins two lists
-
-#1906 moves concat to the module of the type it works on. `list/concat a b`
-joins two lists, or the byte values `text/bytes` answers, and is the same
-builtin underneath that `text/concat` was, so every engine runs it as
-before. `text/concat` is gone from `lib/text/text.kso`, and every caller in
-the tree moved: the library, the scripts, the benchmarks, the examples, the
-book and the goldens. Files that imported std/text only for concat now
-import std/list instead.
-
-Two strings join by interpolation, `"{a}{b}"`, and a list of them by
-`text/join`. The checker refuses a string handed to `list/concat` when it
-can see one: a string literal, a template, or a call whose every answer is a
-string. A string it cannot see still reaches the runtime, which raises
-"concat takes two lists" on both engines. A call to `text/concat` is
-refused at check with the unknown-name diagnostic, which now names
-`list/concat` and interpolation. Each refusal has an error golden.
-
-Appendix B's entry is rewritten under std/list. std/text lost three lines
-above `to_float` and `to_int`, so the line numbers that goldens and the book
-quote from `std/text/text.kso` moved with it.
-
-kq's one caller moves on the kq branch of the same name.
-
-On CI's rows the front end pays for the new refusal and for the moved imports,
-and I have not split the cost between the two. compile_instructions went from
-28,002,980 to 28,257,376, entry_instructions from 92,393,206 to 93,065,372,
-library_instructions from 91,989,327 to 92,696,544, `compile_peak_bytes` from
-703,170 to 703,187 and browser_compile_instructions from 413,936,384 to
-416,674,694. The interpreted run's `interp_peak_bytes` went from 722,393 to
-725,610 while its instructions fell to 495,318,943 and its allocations to
-589,643. compile_allocs fell to 15,937 and emit_instructions to 7,239,817. On
-the module path `module_visits` went from 2,909 to 2,912. The ratchet's
-mutation for a concat accumulator anchored on the line naming `text/concat`,
-so it now names `list/concat`, and the mem spec still goes red under it. The
-floor follows the score, since #1906 builds a ruled part of the language.
-
 ## 2026-10-13 — six names for the library gaps, and `list/to_sorted`
 
 #1914 rules nine names. Six of them are built here, in kanso, in
@@ -1894,3 +1857,25 @@ compile_instructions 25,066,066, entry_instructions 76,561,037 and
 library_instructions 76,265,989. Welfare scores 91.24 against a floor of
 91.25; this builds a ruled part of the language, so the floor moves down by
 that cost.
+
+## 2026-10-20 — the prune moves out of codegen.rs
+
+The last item of #2005. `prune_unnamed`, the name-level call graph and
+`kept_out` move unedited into `src/codegen/prune.rs`, read with include! as
+`narrow.rs` and `wasm32.rs` are since #2006; `src/codegen.rs` is 4,674 lines.
+The ratchet mutation that strikes the prune's mark patches the new file.
+
+#2005 asked whether this graph and the one `src/deep.rs` builds should be one.
+They answer different questions. This one records every name a body mentions,
+values and partials included, keyed by name, which is what the prune needs;
+`deep.rs` records the calls a body makes, keyed by name and arity, with tail
+position and the place of each. They stay two. What was doubled was inside
+this file: `call_graph` and `kept_out` each defined the same walker over a
+body's names, and it is `name_mentions` now, once.
+
+The move alone shifted codegen_instructions_dev by 15 instructions, since that
+row counts the whole `kanso build` tree and kanso's own emitting moves with
+the binary's layout; with the walker defined once it reads main's
+115,648,918 again. The tab's compile, which runs the prune in the wasm build,
+reads browser_compile_instructions 422,962,643, 9,485 fewer, and welfare's
+rise is banked.
