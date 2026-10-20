@@ -7,9 +7,9 @@
 # test that sees the mutation is the fused-call one: std/text's to_float, named
 # by a body and called by nothing, stays in the module.
 set -e
-grep -qF '    let mut alive = vec![false; blocks.len()];' src/codegen.rs || {
+grep -qF '    let mut alive = vec![false; blocks.len()];' src/codegen/prune.rs || {
   echo "the prune's mark moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i 's|^    let mut alive = vec!\[false; blocks.len()\];$|    let mut alive = vec![true; blocks.len()];|' src/codegen.rs
-[ "$(grep -cF '    let mut alive = vec![true; blocks.len()];' src/codegen.rs)" -eq 1 ]
+sed -i 's|^    let mut alive = vec!\[false; blocks.len()\];$|    let mut alive = vec![true; blocks.len()];|' src/codegen/prune.rs
+[ "$(grep -cF '    let mut alive = vec![true; blocks.len()];' src/codegen/prune.rs)" -eq 1 ]
