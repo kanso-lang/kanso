@@ -55,8 +55,13 @@
 # 1,252,870; browser_compile_peak_bytes 757,553 -> 752,985;
 # browser_run_instructions 34,136,382 -> 34,370,238, a RISE of 233,856. On
 # rustc 1.98.1.
+# 2026-10-21: a position read beside its byte is in range, and a length
+# (kanso#2026). browser_compile_instructions 412,332,402 -> 413,098,267, a RISE
+# of 765,865; browser_compile_peak_bytes 752,985 -> 735,031;
+# browser_run_instructions 34,370,238 -> 34,153,178, a FALL of 217,060. On
+# rustc 1.98.1.
 # measured-on rustc=1.98.1
-browser_compile_instructions=412332402
-browser_compile_peak_bytes=752985
-browser_run_instructions=34370238
+browser_compile_instructions=413098267
+browser_compile_peak_bytes=735031
+browser_run_instructions=34153178
 browser_run_peak_bytes=1441792
