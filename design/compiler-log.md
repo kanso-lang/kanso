@@ -1802,8 +1802,10 @@ same three (run 5,735,070 -> 5,737,050, live 25,489,200 -> 25,498,000,
 oneshot 63,723 -> 63,745). emitted_lines 13,078 -> 13,089 for the decoder and
 +11 in every other program, +32 in runbench (56,807 -> 56,839), oneshot and
 livebench, where emitted calls fall by three (runbench 7,380 -> 7,377) and
-emitted branches rise by three (6,434 -> 6,437). The module compile's
-module_lines 1,135 -> 1,146. In the tab,
+emitted branches rise by three (6,434 -> 6,437); in all, emitted_other_lines
+158,441 -> 158,647 and emitted_other_branches 16,954 -> 16,963. text sums to
+5,124,302 -> 5,165,726. The compile corpus's lines 1,412 -> 1,456 and the
+module compile's module_lines 1,135 -> 1,146 carry the same comment. In the tab,
 browser_run_instructions 34,153,178 -> 33,548,279 (-1.8%) and
 browser_compile_instructions 413,098,267 -> 412,842,483 fall, and
 browser_compile_peak_bytes rises 735,031 -> 738,682. The welfare sum rose,
