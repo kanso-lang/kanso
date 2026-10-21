@@ -56,7 +56,7 @@ pub fn counters_wanted() -> bool {
 
 /// How many `k_stats_on` gates DECLARES carries. Pinned so that adding one
 /// without teaching `index_declares` about it fails the build.
-pub const STATS_GATE_SITES: usize = 10;
+pub const STATS_GATE_SITES: usize = 11;
 
 include!("codegen/declares.rs");
 
@@ -81,7 +81,7 @@ fn ties(program: &Program) -> bool {
     program.fns.iter().filter(|d| !d.name.starts_with("list/")).any(|d| d.body.iter().any(stmt))
 }
 
-pub(crate) const BUILTIN_CALLS: [&str; 67] = [
+pub(crate) const BUILTIN_CALLS: [&str; 68] = [
     "effect",
     "built_text",
     "net_port",
@@ -96,6 +96,7 @@ pub(crate) const BUILTIN_CALLS: [&str; 67] = [
     "plain_string",
     "unescape",
     "append_escaped",
+    "append_key",
     "bytes",
     "to_bytes",
     "bind",

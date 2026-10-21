@@ -125,7 +125,7 @@ pub fn moved_writes(program: &Program) -> HashSet<(std::sync::Arc<str>, usize, u
 /// tells them all apart in one match.
 macro_rules! appends_bytes {
     () => {
-        "append" | "builtin_append" | "builtin_append_escaped"
+        "append" | "builtin_append" | "builtin_append_escaped" | "builtin_append_key"
     };
 }
 pub(crate) use appends_bytes;

@@ -1972,6 +1972,7 @@ pub fn builtin_set(name: &str, args: &[Set]) -> Set {
         "plain_string" => STR | INT | NONE | fails,
         "unescape" => STR | NONE | fails,
         "append_escaped" => BYTES | fails,
+        "append_key" => BYTES | fails,
         "slice" => (args[0] & (BYTES | LIST | STR)) | NONE | fails,
         // std's own measured ranges (#1890): a range the library took from a
         // scan of the same value never leaves it, so it answers no none.

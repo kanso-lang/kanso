@@ -4004,6 +4004,9 @@ impl<'a> Backend<'a> {
                 // a site linearity proved unique writes into the builder it
                 // was handed, as an in-place `append` does
                 "append_escaped_mut"
+            } else if name == "append_key" && in_place {
+                // a shared clean token is claimed and written inline
+                "append_key_fast"
             } else if name == "append" && in_place {
                 // the in-place byte claim inlines whole; a byte that does not
                 // fit falls through to the C path inside the twin. Where the
