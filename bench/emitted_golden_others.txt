@@ -259,16 +259,22 @@
 # assume a length read. runbench reads calls 7,301 -> 7,380 and lines 56,649
 # -> 56,807; eight other programs gain 1 to 39 calls; branches and defines
 # hold everywhere.
-encodebench defines=141 calls=1236 branches=919 lines=10507
-oneshot defines=154 calls=1510 branches=1379 lines=14040
-basket defines=127 calls=1117 branches=1032 lines=9206
-widebench defines=157 calls=1393 branches=1037 lines=11608
-deepbench defines=53 calls=253 branches=257 lines=2385
-escapebench defines=21 calls=92 branches=93 lines=1002
-pendbench defines=71 calls=491 branches=414 lines=3660
-scanbench defines=322 calls=3054 branches=2947 lines=25273
-indexbench defines=21 calls=70 branches=48 lines=758
-digestbench defines=134 calls=935 branches=928 lines=8101
-readbench defines=21 calls=70 branches=44 lines=731
-livebench defines=155 calls=1549 branches=1422 lines=14363
-runbench defines=777 calls=7380 branches=6434 lines=56807
+# 2026-10-21: a JSON key goes out through one builtin. Every program gains
+# 11 lines, the inline path's comment and its two globals. runbench, oneshot
+# and livebench encode objects through the path and gain 32: the three
+# appends and the escape around each key become one call, so calls fall by
+# three and branches rise by three in each (runbench 7,380 -> 7,377 and
+# 6,434 -> 6,437). defines hold everywhere.
+encodebench defines=141 calls=1236 branches=919 lines=10518
+oneshot defines=154 calls=1507 branches=1382 lines=14072
+basket defines=127 calls=1117 branches=1032 lines=9217
+widebench defines=157 calls=1393 branches=1037 lines=11619
+deepbench defines=53 calls=253 branches=257 lines=2396
+escapebench defines=21 calls=92 branches=93 lines=1013
+pendbench defines=71 calls=491 branches=414 lines=3671
+scanbench defines=322 calls=3054 branches=2947 lines=25284
+indexbench defines=21 calls=70 branches=48 lines=769
+digestbench defines=134 calls=935 branches=928 lines=8112
+readbench defines=21 calls=70 branches=44 lines=742
+livebench defines=155 calls=1546 branches=1425 lines=14395
+runbench defines=777 calls=7377 branches=6437 lines=56839
