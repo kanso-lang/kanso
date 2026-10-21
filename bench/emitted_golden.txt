@@ -258,7 +258,13 @@
 # no 56-bit range and unpacking it has no spilled branch to take. calls
 # 1,282 -> 1,261, branches 1,374 -> 1,332, lines 13,010 -> 12,909; defines
 # stay 136.
+#
+# 2026-10-21: a position read beside its byte is in range. In an arm that
+# takes the byte as a byte, the emitter tells LLVM the position is a word well
+# inside the word's range, in assumes the call count reads, and the additions
+# to the position lose their overflow tests. calls 1,261 -> 1,381, branches
+# 1,332 -> 1,305, lines 12,909 -> 13,052; defines stay 136.
 defines=136
-calls=1261
-branches=1332
-lines=12909
+calls=1381
+branches=1305
+lines=13052

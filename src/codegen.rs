@@ -981,6 +981,7 @@ fn emit_with(
         builtin_value_wrappers: Vec::new(),
         defers_self_reference: !knotted.is_empty() || ties(program),
         knotted,
+        read_links: crate::read_at::links(program),
         print_value_wrapper: false,
         caf_cells: Vec::new(),
         ahead_cells: Vec::new(),
@@ -1279,6 +1280,9 @@ struct Backend<'a> {
     defers_self_reference: bool,
     /// Zero-arity names that reach themselves through other constants.
     knotted: crate::hash::Set<String>,
+    /// Groups whose every call passes a collection, a value read out of it
+    /// and the position it was read at: `read_at`.
+    read_links: crate::read_at::Links,
     print_value_wrapper: bool,
     /// Work-ahead's lifted constants (#1856) and the cell each was given,
     /// in the order they were emitted: the pool forces these.

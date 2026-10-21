@@ -23,6 +23,7 @@ pub mod linear;
 pub mod name;
 pub mod parser;
 pub mod provenance;
+pub mod read_at;
 pub mod repl;
 pub mod trmc;
 pub mod wasm;

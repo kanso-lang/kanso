@@ -507,8 +507,12 @@ impl<'a> Backend<'a> {
             if let Some(set) = narrowed {
                 f.record(&format!("%x{disc}"), set);
             }
+            let restore = self.read_positions(&mut f, name, arity, decls, k);
             self.emit_fn_body(&mut f, &decl.body)?;
             f.record(&format!("%x{disc}"), whole);
+            for (at, set) in restore {
+                f.record(&at, set);
+            }
         }
         let text = f.body();
         self.room(header.len() + text.len() + 4);
@@ -519,6 +523,84 @@ impl<'a> Backend<'a> {
 "
         );
         Ok(())
+    }
+
+    /// An arm its byte reached as a byte. Every call to the group passed the
+    /// byte as a read of a collection at a position it also passed
+    /// (`read_at`), so in such an arm that read succeeded and the position
+    /// indexes the collection: a word, and far inside the word's range.
+    /// LLVM is told both, and an addition to the position needs no
+    /// overflow test. A byte reaches as a byte in an arm that matches it
+    /// against a literal, or in one that takes anything after an arm that
+    /// takes `none` there and anything everywhere else, and never when the
+    /// read or the position may arrive deferred. The sets recorded
+    /// for the arm come back, for the caller to restore once its body is
+    /// emitted.
+    fn read_positions(
+        &self,
+        f: &mut FnEmit,
+        name: &str,
+        arity: usize,
+        decls: &[&FnDecl],
+        k: usize,
+    ) -> Vec<(String, Set)> {
+        let mut restore = Vec::new();
+        let Some(links) = self.read_links.get(&(name.to_string(), arity)) else {
+            return restore;
+        };
+        let any = |p: &Pattern| matches!(p, Pattern::Var(..) | Pattern::Wildcard(..));
+        for link in links {
+            let readable = BYTES | crate::infer::STR | LIST;
+            let coll = self.own_param_set(name, arity, link.coll);
+            if coll == 0 || coll & !readable != 0 {
+                continue;
+            }
+            // A deferred read is a thunk, which passes the `none` arm's tag
+            // test and a variable's failure test alike and may still force
+            // to `none`; a deferred position is a thunk whose tag is not an
+            // int's.
+            let deferred = |i| self.own_param_set(name, arity, i) & crate::infer::THUNK != 0;
+            if deferred(link.byte) || deferred(link.pos) {
+                continue;
+            }
+            let read = match &decls[k].params[link.byte] {
+                Pattern::IntLit(..) => true,
+                p if any(p) => decls[..k].iter().any(|d| {
+                    d.params.iter().enumerate().all(|(i, p)| match i == link.byte {
+                        true => matches!(p, Pattern::Nullary(n, _) if n == "none"),
+                        false => any(p),
+                    })
+                }),
+                _ => false,
+            };
+            if !read {
+                continue;
+            }
+            let at = format!("%x{}", link.pos);
+            let word = match self.own_unboxed(name, arity, link.pos) {
+                true => format!("{at}r"),
+                false => {
+                    let tag = f.tmp();
+                    f.line_fmt(format_args!("{tag} = extractvalue %KValue {at}, 0"));
+                    let is = f.tmp();
+                    f.line_fmt(format_args!("{is} = icmp eq i64 {tag}, 0"));
+                    f.line_fmt(format_args!("call void @llvm.assume(i1 {is})"));
+                    let w = f.tmp();
+                    f.line_fmt(format_args!("{w} = extractvalue %KValue {at}, 1"));
+                    restore.push((at.clone(), f.set_of(&at)));
+                    f.record(&at, crate::infer::INT);
+                    w.to_string()
+                }
+            };
+            const FAR: i64 = 1 << 62;
+            let above = f.tmp();
+            f.line_fmt(format_args!("{above} = icmp sgt i64 {word}, {}", -FAR));
+            f.line_fmt(format_args!("call void @llvm.assume(i1 {above})"));
+            let below = f.tmp();
+            f.line_fmt(format_args!("{below} = icmp slt i64 {word}, {FAR}"));
+            f.line_fmt(format_args!("call void @llvm.assume(i1 {below})"));
+        }
+        restore
     }
 
     /// The check call accepting one named type (chain-aware when the
@@ -779,7 +861,11 @@ impl<'a> Backend<'a> {
                     }
                 }
             }
+            let restore = self.read_positions(&mut f, name, arity, decls, k);
             self.emit_fn_body(&mut f, &decl.body)?;
+            for (at, set) in restore {
+                f.record(&at, set);
+            }
             if !branches_to(&f.out[arm_at..], &fail) {
                 open = false;
                 break;
