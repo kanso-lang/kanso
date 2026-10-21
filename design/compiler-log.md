@@ -1796,8 +1796,10 @@ The micro golden `a_position_read_beside_its_byte_stays_exact` runs one
 group linked at every call, from positions at both ends of the word, past
 it and below zero, and one group whose second call passes a literal byte
 beside the largest word. With the call sites' intersection taken out, that
-second group is linked anyway and `p + 1` wraps to -9223372036854775808 where
-the interpreter prints 9223372036854775808. The ratchet carries that as
+second group is linked anyway and a release build's `p + 1` wraps to
+-9223372036854775808 where the interpreter prints 9223372036854775808. The
+dev tier never acts on the assume, so the ratchet's row reads the
+release-built corpus. The ratchet carries that as
 `a_read_position_assumed_past_a_literal`, and `a_read_position_left_unbounded`
 drops every link, which the emitted goldens read.
 

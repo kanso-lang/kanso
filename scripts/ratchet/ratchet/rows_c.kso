@@ -2677,11 +2677,12 @@ rows_cq17 = list/concat rows_cq16 insisted_places
 # A byte handed on beside the position it was read at bounds that position in
 # an arm that takes the byte as a byte, and the fact holds only when every
 # call passes such a pair. One mutation keeps a link a call broke, which a
-# program can see; the other drops every link, which the emitted code shows.
+# program built for release can see (the dev tier never acts on the assume);
+# the other drops every link, which the emitted code shows.
 read_link_kept = row
   "a read position assumed where a call passed a literal"
   true
-  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "cargo test --release --test golden micro_corpus_survives_a_release_build"
   "specs (unit, golden, differential)"
   (breaking "a_read_position_assumed_past_a_literal")
   release
