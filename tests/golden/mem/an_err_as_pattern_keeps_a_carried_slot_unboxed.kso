@@ -1,9 +1,10 @@
 # A scanner's answer is a two-field record that travels in three registers:
 # both tags in the first word, the value's payload in the second, the
-# position in the third. A consumer whose arm destructures the record reads the words
-# directly and no record is ever built. An arm that names the whole value,
-# like `r@(parsed p v)`, wants the record itself, so a slot with such an arm
-# is passed boxed for every arm, and the scanner builds a record per answer.
+# position in the third. A consumer whose arm destructures the record reads
+# the words directly and no record is ever built. An arm that names the
+# whole value, like `r@(parsed p v)`, wants the record itself, so a slot
+# with such an arm is passed boxed for every arm, and the scanner builds a
+# record per answer.
 #
 # `e@(err _)` is not that arm. The dispatcher reads the first two words as one
 # value before it matches, and on the failure path that value is the failure

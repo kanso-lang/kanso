@@ -3472,10 +3472,11 @@ impl<'a> Backend<'a> {
     /// The LLVM return type of a function group: `%parsed` when it hands back a
     /// register-returnable record by value, else `%KValue`.
     fn ret_ty(&self, name: &str, arity: usize) -> &'static str {
-        // A knotted constant's cell holds a blackhole while the cycle is still
-        // building, and a register-returned record has nowhere to put a thunk:
-        // the caller would read the thunk's payload as a record pointer.
-        if arity == 0 && self.knotted.contains(name) {
+        // Every constant is frozen behind a cell that holds a `%KValue`, and
+        // its symbol returns what the cell holds. The two-word record shared
+        // a `%KValue`'s layout, so a constant returning one read back by
+        // accident; three words do not.
+        if arity == 0 {
             return "%KValue";
         }
         if self.escape.returns_ty(name, arity).is_some() {

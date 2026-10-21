@@ -205,7 +205,6 @@ fn the_ir_kanso_writes_passes_that_verifier() {
 /// stops, the sample has quietly become a different test and wants splitting
 /// rather than the assertion relaxed.
 const CARRIED: &[&str] = &[
-    "a_constant_naming_a_record_constant",
     "a_closure_captures_a_record",
     "a_field_read_of_a_carried_record",
     "a_carried_record_answered_by_name",
