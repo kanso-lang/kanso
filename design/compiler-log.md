@@ -1795,7 +1795,8 @@ The C path adds 3,264 bytes of text to every program (text runbench 715,289
 with the helper. codegen_instructions_release 422,291,078 -> 422,279,602,
 compile_instructions 24,286,340 -> 24,227,124, entry_instructions
 75,053,355 -> 75,007,797, library_instructions 74,749,069 -> 74,686,591,
-compile_allocs 13,465 -> 13,434 and front_end_visits 7,063 -> 7,047 fall. The
+compile_allocs 13,465 -> 13,434, compile_peak_bytes 575,715 -> 575,051 and
+front_end_visits 7,063 -> 7,047 fall. The
 counters: perm_allocs falls by one in run (101 -> 100), live (8 -> 7) and
 oneshot (9 -> 8), the closing pair's literal, and append_fast rises in the
 same three (run 5,735,070 -> 5,737,050, live 25,489,200 -> 25,498,000,
