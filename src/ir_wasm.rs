@@ -1159,7 +1159,7 @@ fn body(text: &str, types: &HashMap<String, Ty>) -> Result<Func, String> {
     let mut entry_named = false;
     let mut toks = Vec::with_capacity(32);
     while let Some(raw) = lines.next() {
-        // The six lines whose offsets differ on wasm32 are rewritten as they
+        // The lines whose offsets differ on wasm32 are rewritten as they
         // are read, so the native module translates as it is and needs no
         // retargeted copy of its own. `codegen::retarget_wasm32` makes the
         // same substitution for the text clang reads.
