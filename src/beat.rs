@@ -1701,6 +1701,7 @@ fn expr_allocates(
         "chars",
         "concat",
         "entries",
+        "entry_count",
         "err",
         "filter",
         "from_code",
@@ -1723,11 +1724,13 @@ fn expr_allocates(
         "find2_below",
         "number_span",
         "if",
+        "key_at",
         "length",
         "sum",
         "to_float",
         "to_int",
         "print",
+        "value_at",
     ];
     match e {
         Expr::List(..) | Expr::MapLit(..) | Expr::Lambda { .. } | Expr::Partial(..) => true,

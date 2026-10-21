@@ -1307,6 +1307,37 @@ KValue k_b_values(KValue mv) { return k_map_column(mv, 1, "values takes a map");
    are the answer and the values go to `*values`. Each buffer carries its own
    capacity in its header, so either can be outgrown and handed to the free
    list without taking the other with it. */
+/* A map's entry at a position, counted from one in the order `keys` and
+   `values` give: lib/json writes a map by walking its entries in place, where
+   building the two columns allocated a buffer for each per map. A position
+   past either end answers none. */
+static KValue k_entry_at(KValue mv, KValue iv, int side, const char* refusal) {
+    if (!k_not_failure(mv) || !k_not_failure(iv)) return k_failed2(mv, iv);
+    if (mv.tag != K_MAP || !K_IS_INT(iv)) k_die(refusal);
+    if (iv.tag == K_BIG) return k_none();
+    long long n;
+    KValue* s = k_map_sorted(k_as_map(mv), &n);
+    long long i = iv.payload;
+    if (i < 1 || i > n) return k_none();
+    return s[2 * (i - 1) + side];
+}
+
+/* How many entries `key_at` and `value_at` can reach. Counting them builds
+   the map's sorted view, which is the allocation a walk of the entries makes,
+   so the encoder asks once per map and the analysis that scopes regions sees
+   it there rather than at every pair. */
+KValue k_b_entry_count(KValue mv) {
+    if (!k_not_failure(mv)) return mv;
+    if (mv.tag != K_MAP) k_die("entry_count takes a map");
+    long long n;
+    k_map_sorted(k_as_map(mv), &n);
+    return k_int(n);
+}
+
+KValue k_b_key_at(KValue mv, KValue iv) { return k_entry_at(mv, iv, 0, "key_at takes a map and a position"); }
+
+KValue k_b_value_at(KValue mv, KValue iv) { return k_entry_at(mv, iv, 1, "value_at takes a map and a position"); }
+
 KValue k_b_columns(KValue mv, KValue* values) {
     if (!k_not_failure(mv)) { *values = mv; return mv; }
     if (mv.tag != K_MAP) k_die("keys takes a map");

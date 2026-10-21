@@ -404,6 +404,13 @@ impl<'a> Interp<'a> {
                 let key = map_key(key, span)?;
                 let alone = Rc::strong_count(&entries) == 2;
                 if self.writes_in_place(span, frame) || (alone && self.moved_here(span, frame)) {
+                    let mut cache = self.entries_at.borrow_mut();
+                    if matches!(&*cache,
+                        Some((m, _)) if std::ptr::eq(m.as_ptr(), Rc::as_ptr(&entries)))
+                    {
+                        *cache = None;
+                    }
+                    drop(cache);
                     Self::written_in_place(&entries).insert(key, value);
                     return Ok(Value::Map(entries));
                 }
@@ -953,6 +960,64 @@ impl<'a> Interp<'a> {
                     Ok(s) => Ok(Value::Str(Text::from(s.to_string()))),
                     Err(_) => Ok(Value::NoneV),
                 }
+            }
+            b"entry_count" => {
+                let [map] = arity(args, name, span)?;
+                if is_failure(&map) {
+                    return Ok(map);
+                }
+                let Value::Map(entries) = &map else {
+                    return Err(RuntimeError {
+                        at: None,
+                        message: "entry_count takes a map".to_string(),
+                        span,
+                    });
+                };
+                Ok(Value::int(entries.len() as i64))
+            }
+            b"key_at" | b"value_at" => {
+                let [map, at] = arity(args, name, span)?;
+                for v in [&map, &at] {
+                    if is_failure(v) {
+                        return Ok(v.clone());
+                    }
+                }
+                let (Value::Map(entries), Value::Int(at)) = (&map, &at) else {
+                    return Err(RuntimeError {
+                        at: None,
+                        message: format!("{name} takes a map and a position"),
+                        span,
+                    });
+                };
+                let Some(i) = at.to_i64().filter(|&i| i >= 1 && i as u64 <= entries.len() as u64)
+                else {
+                    return Ok(Value::NoneV);
+                };
+                let (key, value) = match &**entries {
+                    Entries::Few(few) => {
+                        let (k, v) = &few[i as usize - 1];
+                        (k.clone(), v.clone())
+                    }
+                    Entries::Many(_) => {
+                        let mut cache = self.entries_at.borrow_mut();
+                        let hit = matches!(&*cache,
+                            Some((m, _)) if std::ptr::eq(m.as_ptr(), Rc::as_ptr(entries)));
+                        if !hit {
+                            let all: Rc<[(MapKey, Value)]> =
+                                entries.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+                            *cache = Some((Rc::downgrade(entries), all));
+                        }
+                        let (_, all) = cache.as_ref().expect("the cache was just filled");
+                        all[i as usize - 1].clone()
+                    }
+                };
+                Ok(match name {
+                    "key_at" => match key {
+                        MapKey::Int(n) => Value::int(n),
+                        MapKey::Str(s) => Value::Str(s),
+                    },
+                    _ => value,
+                })
             }
             b"append_escaped" | b"append_key" => {
                 let [acc, s] = arity(args, name, span)?;

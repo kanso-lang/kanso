@@ -1973,6 +1973,11 @@ pub fn builtin_set(name: &str, args: &[Set]) -> Set {
         "unescape" => STR | NONE | fails,
         "append_escaped" => BYTES | fails,
         "append_key" => BYTES | fails,
+        // a map's entry at a position: its key, an int or a string, or
+        // what it holds; past the last entry, none
+        "entry_count" => INT | fails,
+        "key_at" => ANY_INT | STR | NONE | fails,
+        "value_at" => (TOP & !FAIL) | NONE | fails,
         "slice" => (args[0] & (BYTES | LIST | STR)) | NONE | fails,
         // std's own measured ranges (#1890): a range the library took from a
         // scan of the same value never leaves it, so it answers no none.

@@ -421,6 +421,108 @@ slow:
   %f = call %KValue @k_b_append_key_mut(%KValue %acc, %KValue %x)
   ret %KValue %f
 }
+; `entry_count m`, `key_at m i` and `value_at m i` where the map's sorted
+; view is built. The count is a field, and the view is `[k v k v ...]`, so a
+; key or a value is a bounds test and one load. The view's
+; pointer carries a side mark, the top bit natively and the low bit on wasm32,
+; and both are tested so the one text serves both. A stale or missing view,
+; and anything else, is the C, which builds the view first.
+define internal %KValue @k_b_entry_count_fast(%KValue %mv) alwaysinline {
+  %tm = extractvalue %KValue %mv, 0
+  %ismap = icmp eq i64 %tm, 10
+  br i1 %ismap, label %view, label %slow
+view:
+  %mp = extractvalue %KValue %mv, 1
+  %m = inttoptr i64 %mp to ptr
+  %sortedp = getelementptr i8, ptr %m, i64 16
+  %sorted = load ptr, ptr %sortedp
+  %si = ptrtoint ptr %sorted to i64
+  %side = and i64 %si, -9223372036854775807
+  %unmarked = icmp eq i64 %side, 0
+  %present = icmp ne i64 %si, 0
+  %fresh = and i1 %unmarked, %present
+  br i1 %fresh, label %count, label %slow
+count:
+  %nmp = getelementptr i8, ptr %m, i64 24
+  %n = load i64, ptr %nmp
+  %v = insertvalue %KValue { i64 0, i64 undef }, i64 %n, 1
+  ret %KValue %v
+slow:
+  %f = call %KValue @k_b_entry_count(%KValue %mv)
+  ret %KValue %f
+}
+define internal %KValue @k_b_key_at_fast(%KValue %mv, %KValue %iv) alwaysinline {
+  %tm = extractvalue %KValue %mv, 0
+  %ismap = icmp eq i64 %tm, 10
+  %ti = extractvalue %KValue %iv, 0
+  %isint = icmp eq i64 %ti, 0
+  %both = and i1 %ismap, %isint
+  br i1 %both, label %view, label %slow
+view:
+  %mp = extractvalue %KValue %mv, 1
+  %m = inttoptr i64 %mp to ptr
+  %sortedp = getelementptr i8, ptr %m, i64 16
+  %sorted = load ptr, ptr %sortedp
+  %si = ptrtoint ptr %sorted to i64
+  %side = and i64 %si, -9223372036854775807
+  %unmarked = icmp eq i64 %side, 0
+  %present = icmp ne i64 %si, 0
+  %fresh = and i1 %unmarked, %present
+  br i1 %fresh, label %range, label %slow
+range:
+  %nmp = getelementptr i8, ptr %m, i64 24
+  %n = load i64, ptr %nmp
+  %i = extractvalue %KValue %iv, 1
+  %lo = icmp sgt i64 %i, 0
+  %hi = icmp sle i64 %i, %n
+  %inr = and i1 %lo, %hi
+  br i1 %inr, label %pick, label %slow
+pick:
+  %twice = shl i64 %i, 1
+  %j = add i64 %twice, -2
+  %at = getelementptr %KValue, ptr %sorted, i64 %j
+  %v = load %KValue, ptr %at
+  ret %KValue %v
+slow:
+  %f = call %KValue @k_b_key_at(%KValue %mv, %KValue %iv)
+  ret %KValue %f
+}
+define internal %KValue @k_b_value_at_fast(%KValue %mv, %KValue %iv) alwaysinline {
+  %tm = extractvalue %KValue %mv, 0
+  %ismap = icmp eq i64 %tm, 10
+  %ti = extractvalue %KValue %iv, 0
+  %isint = icmp eq i64 %ti, 0
+  %both = and i1 %ismap, %isint
+  br i1 %both, label %view, label %slow
+view:
+  %mp = extractvalue %KValue %mv, 1
+  %m = inttoptr i64 %mp to ptr
+  %sortedp = getelementptr i8, ptr %m, i64 16
+  %sorted = load ptr, ptr %sortedp
+  %si = ptrtoint ptr %sorted to i64
+  %side = and i64 %si, -9223372036854775807
+  %unmarked = icmp eq i64 %side, 0
+  %present = icmp ne i64 %si, 0
+  %fresh = and i1 %unmarked, %present
+  br i1 %fresh, label %range, label %slow
+range:
+  %nmp = getelementptr i8, ptr %m, i64 24
+  %n = load i64, ptr %nmp
+  %i = extractvalue %KValue %iv, 1
+  %lo = icmp sgt i64 %i, 0
+  %hi = icmp sle i64 %i, %n
+  %inr = and i1 %lo, %hi
+  br i1 %inr, label %pick, label %slow
+pick:
+  %twice = shl i64 %i, 1
+  %j = add i64 %twice, -1
+  %at = getelementptr %KValue, ptr %sorted, i64 %j
+  %v = load %KValue, ptr %at
+  ret %KValue %v
+slow:
+  %f = call %KValue @k_b_value_at(%KValue %mv, %KValue %iv)
+  ret %KValue %f
+}
 define internal %KValue @k_b_append_mut_word(%KValue %acc, i64 %word, i64 %n, ptr %lit, ptr %cell) alwaysinline {
   %atag = extractvalue %KValue %acc, 0
   %isb = icmp eq i64 %atag, 13
@@ -1620,6 +1722,9 @@ declare %KValue @k_b_unescape(%KValue, %KValue, %KValue)
 declare %KValue @k_b_append_escaped(%KValue, %KValue)
 declare %KValue @k_b_append_escaped_mut(%KValue, %KValue)
 declare %KValue @k_b_append_key(%KValue, %KValue)
+declare %KValue @k_b_entry_count(%KValue)
+declare %KValue @k_b_key_at(%KValue, %KValue)
+declare %KValue @k_b_value_at(%KValue, %KValue)
 declare %KValue @k_b_append_key_mut(%KValue, %KValue)
 declare i64 @k_b_number_span_raw(ptr, i64, i64)
 declare %KValue @k_b_append(%KValue, %KValue)

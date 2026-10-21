@@ -4058,6 +4058,14 @@ impl<'a> Backend<'a> {
                 // the byte the span stopped at, and a second door for the
                 // utf8. The twin tests the tags and runs both.
                 "plain_string_fast"
+            } else if name == "entry_count" {
+                "entry_count_fast"
+            } else if name == "key_at" {
+                // a map's sorted view is `[k v k v ...]`: a bounds test and a
+                // load where the view is built, the C where it is not
+                "key_at_fast"
+            } else if name == "value_at" {
+                "value_at_fast"
             } else if name == "bytes" {
                 // two field reads and a three-field header into the arena, and
                 // the arena bump is already inline in the append twin. The
