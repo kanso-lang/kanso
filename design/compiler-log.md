@@ -21,53 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-14 — `text/slice!` answers a box
-
-This builds the program-facing half of #1943's gavel, as the 2026-09-16 ruling
-shapes it: `text/slice! s a b` answers a box holding the slice, or an err when
-the range leaves the value. The err bubbles: `.>` passes it by, `.?` and a
-foreign `rescue` reach it, and unhandled it stops the program at the endpoint.
-An inverted range stays inside the value and is the empty slice, as it is for
-`text/slice`.
-
-It is written in lib/text over `slice`, the way `math/round!` is written over
-`round`, so every engine runs the same definition and no builtin was added.
-The definition sits at the end of the file because the runtime corpus quotes
-lib/text's line numbers, and a definition near the top moved them.
-
-`a_bang_slice_fails_inside_its_box` pins seven ranges on strings and lists on
-the interpreter and both native tiers; with the range check taken out, the
-out-of-range cases printed `<none>` and the program exited 0.
-`a_slice_bang_past_the_end_reaches_the_endpoint` pins the unhandled failure.
-Appendix B lists `text/slice!` beside `text/slice`.
-
-A generator of forty random ranges per program, over strings with multi-byte
-characters, lists and bytes, ran 150 programs through `text/slice` and 150
-through `text/slice!`. The interpreter, a dev build and a release build printed
-the same bytes for all 300.
-
-The other owed item, moving the JSON decoder onto `slice! … .>` chains, is
-#1960: a chain answers a box, so the move would make `json/decode` answer one.
-Until it is answered the decoder keeps `builtin_slice_in`.
-
-The rows move because lib/text grew a definition, and lib/text is compiled
-into every program that imports it. CI on f50c9ec4 read:
-
-- `compile_instructions` 32,407,659 -> 32,770,085, `entry_instructions`
-  103,133,571 -> 104,020,985 and `library_instructions` 102,649,522 ->
-  103,487,067.
-- `compile_allocs` 17,980 -> 18,250, `compile_peak_bytes` 795,133 -> 804,635
-  and `front_end_visits` 9,225 -> 9,242.
-- `emit_instructions` 7,655,444 -> 7,704,002.
-- `interp_instructions` 495,119,692 -> 496,124,589, `interp_allocs` 592,317
-  -> 592,648 and `interp_peak_bytes` 797,868 -> 807,370.
-- `browser_compile_instructions` 439,552,195 -> 441,096,528 and
-  `browser_compile_peak_bytes` 728,883 -> 731,449. The browser's run rows did
-  not move.
-
-No runtime counter moved. Welfare goes 91.2395 -> 91.2300, a fall of 0.0095.
-This builds a ruled part of the language, so the floor drops by exactly that.
-
 ## 2026-10-14 — `kanso test .` finds the module it is run inside
 
 A test file imports the module beside it as `../<name>` (the 2026-10-12
@@ -1738,3 +1691,77 @@ float path moved out of line the same way, was measured and dropped too: it
 read the run program 1,100,103,349 -> 1,104,459,315 and encodebench
 2,464,678,011 -> 2,484,039,482, because every float paid the extra call
 level and floats are half of what the encoder renders.
+
+## 2026-10-21 — a carried record returns in three words
+
+A two-field record whose first field is an int, like the decoder's
+`parsed`, goes back to its caller in registers. It used to take two words:
+the int shifted above the value's tag in the first, the value's payload in
+the second. Every pack checked that the int survived the shift, and every
+unpack branched on a marker for the record built on the heap when it did
+not. On the run program that was 725,703 checked packs and 1,791,207
+unpacks (#2024). The record now takes three words. Both tags share the
+first, the value's payload is the second and the int's word is the third,
+so every int fits, a bignum crosses as its pointer, and nothing spills.
+`k_parsed_spill` and the two readers of a spilled record are gone. A
+failure still travels in the first two words, which read as a `%KValue`.
+
+The first build read the run program 1,100,103,349 -> 1,093,152,335.
+`obj_key_end` grew by 3,136,716: with the int's tag read out of a word,
+LLVM no longer knew it was an int's, and tested it for a thunk on every
+record. An `llvm.assume` that the tag is K_INT or K_BIG gives that back.
+Here the run program read 1,100,103,349 -> 1,085,159,551 (-1.36%), and
+every decoder function in the profile fell.
+
+CI's rows: work_runbench 1,100,104,536 -> 1,085,160,738 (-1.36%),
+work_jsonbench 763,196,627 -> 749,951,027 (-1.74%), work_oneshot
+12,451,007 -> 12,362,488, work_widebench 28,740,070 -> 28,580,079,
+work_livebench 1,370,617,002 -> 1,370,528,510 and work_encodebench
+2,464,677,731 -> 2,464,443,931. Machine code shrinks in every benchmark:
+text runbench 741,161 -> 737,929 and jsonbench 382,825 -> 379,049, the
+rest by 240 to 3,840 bytes. The decoder's emitted code reads calls 1,282 ->
+1,261, branches 1,374 -> 1,332 and lines 13,010 -> 12,909, and the other
+programs that decode JSON fall the same way. codegen_instructions_dev
+116,002,877 -> 115,990,552, codegen_instructions_release 453,797,745 ->
+453,689,156 and emit_instructions 6,233,826 -> 6,232,336. In the tab,
+browser_compile_instructions 413,585,272 -> 412,332,402 and
+browser_compile_peak_bytes 757,553 -> 752,985 fall, and
+browser_run_instructions 34,136,382 -> 34,370,238 rises by 0.69%. The
+tab runs the emitter's IR through its own translator, which drops the
+assume's call but computes the test that feeds it, and returns a struct
+through memory, now three words of it. How the rise divides between those
+has not been measured. The welfare sum rose, and the floor moves 91.78 ->
+91.84.
+
+The x86 rewrite to `preserve_nonecc` flattens a struct parameter into
+words, and it assumed every struct was two. A `%parsed` parameter lost its
+third word, the decoder's tail calls stopped matching, and the run program
+ran out of stack. `flat_words` now gives each type's width, and the other
+counts read from it.
+
+A constant is built once into a cell that holds a `%KValue`, and its
+symbol returns what the cell holds. A constant whose body built a carried
+record still had a builder returning `%parsed`, and callers that asked for
+one: the cell kept the two words as if they were a value, and it read back
+because the shapes matched. Three words do not, and
+`a_constant_naming_a_record_constant` printed 14, the thunk tag, where it
+prints 1. A constant now always returns a `%KValue`, which costs nothing,
+since the cell boxed it anyway, and the sample leaves `ir_verifier`'s list
+of carried samples.
+
+The micro golden `an_int_of_any_width_crosses_in_its_own_word` sends ints
+either side of the old 56-bit line, both ends of the word, a bignum and a
+word that overflows into one through four groups that return the record by
+value. It joins the samples `ir_verifier` requires to stay carried. The
+ratchet's two mutations for the old shape, an unsigned shift back and a
+wide int packed anyway, went with the code they broke. Two new ones drop
+the bignum tag on the way in and on the way back, and the new golden reads
+a pointer as a number under each.
+
+Passing the key's closing `":` down into `escape_onto`, so that each arm
+of its test could append its own tail, was measured and dropped. The run
+program read 1,103,713,022 against 1,085,159,551. The tail arrived as a
+string value, and the emitter's one-word store for a short literal no
+longer applied. Bound to a name instead of written in the arms, the plain
+arm read `acc` twice, the append stopped writing in place, and the run
+program read 1,365,286,224.
