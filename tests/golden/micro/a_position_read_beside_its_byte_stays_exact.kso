@@ -1,0 +1,39 @@
+# A byte handed on beside the position it was read at, `cs[p + 1]` and
+# `p + 1`, tells the arm that matches it as a byte that the read succeeded:
+# the position indexes `cs`, so adding one to it cannot leave the word, and
+# native drops the overflow test. `skip` is called that way everywhere, from
+# positions at both ends of the word and past it, where the read finds
+# nothing and the `none` arm answers the position untouched.
+#
+# `step` is called that way once and once with a literal byte beside the
+# largest word. A read did not produce that byte, so the group keeps its
+# test, and `p + 1` there is the bignum one past the word.
+import "std/text"
+
+fn skip cs 32 p
+  skip cs cs[p + 1] (p + 1)
+
+fn skip _ none p
+  p
+
+fn skip _ _ p
+  p
+
+fn step _ 32 p
+  p + 1
+
+fn step _ none p
+  p
+
+fn step _ _ p
+  p
+
+top = 9223372036854775807
+
+big = 18446744073709551616
+
+pub play =
+  s = text/bytes "   x"
+  print "{skip s s[1] 1} {skip s s[0 - 1] (0 - 1)} {skip s s[top] top}"
+    .> (_ -> print "{skip s s[big] big} {skip s s[0 - big] (0 - big)}")
+    .> (_ -> print "{step s s[1] 1} {step s 32 top}")

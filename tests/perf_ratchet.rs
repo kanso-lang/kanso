@@ -320,9 +320,11 @@ fn an_index_assumes_its_length_is_not_negative() {
         .collect();
     let assumed: Vec<&&str> = lengths
         .iter()
-        .filter(|len| body.lines().any(|l| l.trim().ends_with(&format!("icmp sge i64 {len}, 0"))))
+        .filter(|len| {
+            body.lines().any(|l| l.trim().ends_with(&format!("icmp ult i64 {len}, {}", 1i64 << 62)))
+        })
         .collect();
-    assert_eq!(assumed.len(), 1, "one length read here should be assumed non-negative: {body}");
+    assert_eq!(assumed.len(), 1, "one length read here should be assumed in range: {body}");
     // A read the sets do not prove goes through an index helper, and the
     // helper makes the same promise.
     let ir = ir_for(UNPROVEN_READ);

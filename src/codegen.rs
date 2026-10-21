@@ -981,6 +981,7 @@ fn emit_with(
         builtin_value_wrappers: Vec::new(),
         defers_self_reference: !knotted.is_empty() || ties(program),
         knotted,
+        read_links: crate::read_at::links(program),
         print_value_wrapper: false,
         caf_cells: Vec::new(),
         ahead_cells: Vec::new(),
@@ -1279,6 +1280,9 @@ struct Backend<'a> {
     defers_self_reference: bool,
     /// Zero-arity names that reach themselves through other constants.
     knotted: crate::hash::Set<String>,
+    /// Groups whose every call passes a collection, a value read out of it
+    /// and the position it was read at: `read_at`.
+    read_links: crate::read_at::Links,
     print_value_wrapper: bool,
     /// Work-ahead's lifted constants (#1856) and the cell each was given,
     /// in the order they were emitted: the pool forces these.
@@ -2833,10 +2837,13 @@ fn index_in_range(f: &mut FnEmit, idx: &str, len_ptr: &str, hit: &str, miss: &st
 
 /// A length read out of a container is never negative, and saying so lets
 /// LLVM merge a `1 <= i <= len` test into one unsigned compare where the
-/// signed pair also stays visible to whatever proved it true upstream.
+/// signed pair also stays visible to whatever proved it true upstream. It is
+/// also far below the largest word, since it counts what memory holds, so
+/// an `i` a guard has kept at or under it can be stepped by one without an
+/// overflow test: `return acc if length xs < i` before `i + 1`.
 fn assume_length(f: &mut FnEmit, len: &str) {
     let ok = f.tmp();
-    f.line_fmt(format_args!("{ok} = icmp sge i64 {len}, 0"));
+    f.line_fmt(format_args!("{ok} = icmp ult i64 {len}, {}", 1i64 << 62));
     f.line_fmt(format_args!("call void @llvm.assume(i1 {ok})"));
 }
 

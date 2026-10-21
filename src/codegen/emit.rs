@@ -3963,6 +3963,7 @@ impl<'a> Backend<'a> {
                 ));
                 let len = f.tmp();
                 f.line_fmt(format_args!("{len} = load i64, ptr {len_ptr}"));
+                assume_length(f, &len);
                 let t = f.tmp();
                 f.line_fmt(format_args!(
                     "{t} = insertvalue %KValue {{ i64 0, i64 undef }}, i64 {len}, 1"
