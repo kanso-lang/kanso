@@ -983,11 +983,11 @@ impl<'a> Interp<'a> {
                     }
                 }
                 let (Value::Map(entries), Value::Int(at)) = (&map, &at) else {
-                    return Err(RuntimeError {
-                        at: None,
-                        message: format!("{name} takes a map and a position"),
-                        span,
-                    });
+                    let message = match name {
+                        "key_at" => "key_at takes a map and a position",
+                        _ => "value_at takes a map and a position",
+                    };
+                    return Err(RuntimeError { at: None, message: message.to_string(), span });
                 };
                 let Some(i) = at.to_i64().filter(|&i| i >= 1 && i as u64 <= entries.len() as u64)
                 else {
