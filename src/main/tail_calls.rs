@@ -10,16 +10,13 @@
 /// that backend goes wrong (see `wide_tailcc_keeps_its_jumps`).
 const ARM64_TAILCC_WIDEST: usize = 8;
 
-/// How many argument registers a parameter list wants: a %KValue and a %parsed
-/// are each two i64s, everything else is one.
+/// How many argument registers a parameter list wants: `flat_words` of each
+/// type, and one for any type it does not flatten.
 fn arg_registers(params: &str) -> usize {
     params
         .split(", ")
         .filter(|p| !p.trim().is_empty())
-        .map(|p| match p.starts_with("%KValue") || p.starts_with("%parsed") {
-            true => 2,
-            false => 1,
-        })
+        .map(|p| p.split_whitespace().next().and_then(flat_words).unwrap_or(1))
         .sum()
 }
 
@@ -124,7 +121,8 @@ const PRESERVE_NONE_REGISTERS: usize = 12;
 /// `None` for a type the rewrite does not carry.
 fn flat_words(ty: &str) -> Option<usize> {
     match ty {
-        "%KValue" | "%parsed" => Some(2),
+        "%KValue" => Some(2),
+        "%parsed" => Some(3),
         "i64" | "ptr" | "double" => Some(1),
         _ => None,
     }
@@ -379,12 +377,21 @@ fn preserve_none_tails(ir: String) -> String {
                         lines.push_str(&format!("  {value} = bitcast i64 {value}.w to double\n"));
                     }
                     _ => {
-                        signature.push(format!("i64 {value}.w0"));
-                        signature.push(format!("i64 {value}.w1"));
-                        lines.push_str(&format!(
-                            "  {value}.half = insertvalue {ty} poison, i64 {value}.w0, 0\n  \
-                             {value} = insertvalue {ty} {value}.half, i64 {value}.w1, 1\n"
-                        ));
+                        // each word goes into the aggregate the one before
+                        // it built, and the last is the parameter's own name
+                        let n = flat_words(ty).expect("a flattened parameter");
+                        let mut built = "poison".to_string();
+                        for w in 0..n {
+                            signature.push(format!("i64 {value}.w{w}"));
+                            let into = match w + 1 == n {
+                                true => value.to_string(),
+                                false => format!("{value}.part{w}"),
+                            };
+                            lines.push_str(&format!(
+                                "  {into} = insertvalue {ty} {built}, i64 {value}.w{w}, {w}\n"
+                            ));
+                            built = into;
+                        }
                     }
                 }
             }
@@ -422,14 +429,15 @@ fn preserve_none_tails(ir: String) -> String {
                             ));
                             args.push(format!("i64 %pn{fresh}"));
                         }
-                        _ => match literal_words(value) {
+                        _ => match literal_words(value).filter(|_| ty == "%KValue") {
                             // a literal's words are written, not read off it
                             Some((a, b)) => {
                                 args.push(format!("i64 {a}"));
                                 args.push(format!("i64 {b}"));
                             }
                             None => {
-                                for half in 0..2 {
+                                let n = flat_words(ty).expect("a flattened argument");
+                                for half in 0..n {
                                     fresh += 1;
                                     out.push_str(&format!(
                                         "{indent}%pn{fresh} = extractvalue {ty} {value}, {half}\n"
@@ -629,7 +637,7 @@ mod a_tail_cycle_takes_one_flat_signature {
         // and the entry, which is not in the cycle, calls in the same way
         assert!(out.contains("%p = call preserve_nonecc %parsed @\"d/a_2\"("), "{out}");
         // the parameters are put back together before the body reads them
-        assert!(out.contains("entry:\n  %x0.half = insertvalue %KValue poison, i64 %x0.w0, 0\n  %x0 = insertvalue %KValue %x0.half, i64 %x0.w1, 1\n"), "{out}");
+        assert!(out.contains("entry:\n  %x0.part0 = insertvalue %KValue poison, i64 %x0.w0, 0\n  %x0 = insertvalue %KValue %x0.part0, i64 %x0.w1, 1\n"), "{out}");
     }
 
     /// A member whose address is taken may be reached by an indirect call

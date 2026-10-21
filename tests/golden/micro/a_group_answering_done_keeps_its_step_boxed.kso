@@ -1,6 +1,6 @@
 import "std/list"
 
-# A record goes back to its caller in two words only when every arm of the
+# A record goes back to its caller in registers only when every arm of the
 # group answers that record or a failure. `list/next` answers `done` beside
 # its `step`, and a native build that left the rest of std/list out of the
 # program let `step` go by value and read `done` back as one: the walk

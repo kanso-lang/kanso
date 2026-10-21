@@ -1,0 +1,40 @@
+# A scanner's answer is a two-field record that travels in three registers:
+# both fields' tags in the first word, the value's payload in the second and
+# the position's own word in the third. Every int crosses whole, a bignum as
+# its pointer. Until the position had a word of its own it was shifted above
+# the value's tag, and an int past 56 bits, or a bignum, was built into a
+# record on the heap instead. These positions sit on both sides of that line.
+type parsed
+  pos
+  val
+
+fn scan n
+  parsed n "at {n}"
+
+fn back n
+  parsed (n - 1) (n * 2)
+
+fn show (parsed p v)
+  "{p} {v}"
+
+fn show e@(err _)
+  "failed: {e.reason}"
+
+fn both (parsed p v) (parsed q w)
+  "{p + q} {v} {w}"
+
+fn lines n
+  print (show (scan n))
+  print (show (back n))
+
+pub play = lines 0
+  .> (_ -> lines (0 - 1))
+  .> (_ -> lines 72057594037927935)
+  .> (_ -> lines 72057594037927936)
+  .> (_ -> lines (0 - 72057594037927936))
+  .> (_ -> lines (0 - 72057594037927937))
+  .> (_ -> lines 9223372036854775807)
+  .> (_ -> lines (0 - 9223372036854775807))
+  .> (_ -> lines 1180591620717411303424)
+  .> (_ -> print (show (scan (9223372036854775807 + 1))))
+  .> (_ -> print (both (scan 1180591620717411303424) (back 72057594037927936)))

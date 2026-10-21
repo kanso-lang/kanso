@@ -343,11 +343,11 @@ fn a_subtype_survives_being_stored_across_the_entry() {
     assert_eq!(interp, native, "the engines disagree on a stored subtype");
 }
 
-/// A record of an int and one other value crosses a call in two words, and the
-/// entry is where it is built back into an ordinary record. The shift that
-/// reads the int back was logical and an int has 64 bits where 56 are left
-/// above the tag, so `at 0` read as 2^56 - 8 and the least int read as 0. The
-/// middle record sits on the first int that does not fit.
+/// A record of an int and one other value crosses a call in registers, and the
+/// entry is where it is built back into an ordinary record. When the int was
+/// shifted above the value's tag, the shift back was logical and 56 bits were
+/// left for it, so `at 0` read as 2^56 - 8 and the least int read as 0. The
+/// middle record sits on the first int that did not fit.
 #[test]
 fn a_packed_record_keeps_its_int_across_the_entry() {
     let fixture = "tests/golden/entryfile/a_packed_record_across_the_entry";

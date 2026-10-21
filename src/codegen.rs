@@ -911,12 +911,10 @@ fn emit_with(
         type_ids.insert(name, id);
     }
     let mut escape = crate::escape::analyze(program, &inference);
-    // The by-value `%parsed` is two i64s, so it only fits a record shaped like
-    // the scanner's `_parsed`: exactly two fields, a small int position packed
-    // into the tag word and a non-failure value in the payload word. Any other
-    // register-returnable record keeps the heap representation. A position
-    // that may be a bignum still packs when it is a word, and spills when it
-    // is not, as a word past 56 bits does.
+    // The by-value `%parsed` is three i64s, so it only fits a record shaped
+    // like the scanner's `_parsed`: exactly two fields, an int position whose
+    // tag shares the first word with the value's, and a non-failure value.
+    // Any other register-returnable record keeps the heap representation.
     let type_index: HashMap<&str, usize> =
         program.types.iter().enumerate().map(|(i, t)| (t.name.as_str(), i)).collect();
     escape.field_count.retain(|ty, n| {
@@ -1717,10 +1715,10 @@ impl FnEmit {
         }))
     }
 
-    /// Undo the by-value convention: rebuild the record the two words hold.
+    /// Undo the by-value convention: rebuild the record the three words hold.
     /// The type is whatever produced the value, which the escape analysis
     /// already knows, because only a returnable type is ever in this shape.
-    /// A failure rides in the same two words and comes back as itself: the
+    /// A failure rides in the first two words and comes back as itself: the
     /// runtime asks before it builds, which the inline build here did not.
     fn box_parsed(&mut self, e: &str) -> String {
         let (_, id) = self.parsed[e];
@@ -1728,8 +1726,12 @@ impl FnEmit {
         self.raw(&format!("{w0} = extractvalue %parsed {e}, 0"));
         let w1 = self.tmp();
         self.raw(&format!("{w1} = extractvalue %parsed {e}, 1"));
+        let w2 = self.tmp();
+        self.raw(&format!("{w2} = extractvalue %parsed {e}, 2"));
         let t = self.tmp();
-        self.raw(&format!("{t} = call %KValue @k_parsed_box(i64 {id}, i64 {w0}, i64 {w1})"));
+        self.raw(&format!(
+            "{t} = call %KValue @k_parsed_box(i64 {id}, i64 {w0}, i64 {w1}, i64 {w2})"
+        ));
         t.to_string()
     }
 
@@ -2838,89 +2840,54 @@ fn assume_length(f: &mut FnEmit, len: &str) {
     f.line_fmt(format_args!("call void @llvm.assume(i1 {ok})"));
 }
 
-/// The low byte of a `%parsed` first word that holds no value's tag: the int
-/// did not fit above the tag, and the second word is the record on the heap.
-/// `K_PARSED_WIDE` in the runtime.
-const PARSED_WIDE: i64 = 255;
-
-/// Pack an int and a value into a `%parsed`'s two words: the int above the
-/// value's tag in the first, the value's payload in the second. An int that
-/// does not survive the shift and back is spilled, so the record is built on
-/// the heap and crosses as `PARSED_WIDE` over its pointer.
-fn pack_words(f: &mut FnEmit, id: i64, pos: &str, value: &str) -> (String, String) {
+/// Pack an int and a value into a `%parsed`'s three words: both tags in the
+/// first, the value's tag in its low byte and the int's above it, then the
+/// value's payload, then the int's word. A bignum's word is its pointer and
+/// crosses as one, so every int packs. The first two words are the value's
+/// own tag and payload whenever the int is a word, which is what lets a
+/// failure ride in the same shape.
+fn pack_words(f: &mut FnEmit, pos: &str, value: &str) -> (String, String, String) {
     let ptag = f.tmp();
     f.line_fmt(format_args!("{ptag} = extractvalue %KValue {pos}, 0"));
     let n = f.tmp();
     f.line_fmt(format_args!("{n} = extractvalue %KValue {pos}, 1"));
-    let shifted = f.tmp();
-    f.line_fmt(format_args!("{shifted} = shl i64 {n}, 8"));
-    let back = f.tmp();
-    f.line_fmt(format_args!("{back} = ashr i64 {shifted}, 8"));
-    let same = f.tmp();
-    f.line_fmt(format_args!("{same} = icmp eq i64 {back}, {n}"));
-    // a bignum is a pointer, which the shift would ruin, so it spills too
-    let word = f.tmp();
-    f.line_fmt(format_args!("{word} = icmp eq i64 {ptag}, 0"));
-    let fits = f.tmp();
-    f.line_fmt(format_args!("{fits} = and i1 {same}, {word}"));
     let vtag = f.tmp();
     f.line_fmt(format_args!("{vtag} = extractvalue %KValue {value}, 0"));
     let vpay = f.tmp();
     f.line_fmt(format_args!("{vpay} = extractvalue %KValue {value}, 1"));
-    let packed = f.tmp();
-    f.line_fmt(format_args!("{packed} = or i64 {shifted}, {vtag}"));
-    let from = f.cur_label.clone();
-    let (wide, join) = (f.label(), f.label());
-    f.line_fmt(format_args!("br i1 {fits}, label %{join}, label %{wide}"));
-    f.start_block(&wide);
-    let spilled = f.tmp();
-    f.line_fmt(format_args!(
-        "{spilled} = call %KValue @k_parsed_spill(i64 {id}, i64 {ptag}, i64 {n}, i64 {vtag}, i64 {vpay})"
-    ));
-    let (s0, s1) = (f.tmp(), f.tmp());
-    f.line_fmt(format_args!("{s0} = extractvalue %KValue {spilled}, 0"));
-    f.line_fmt(format_args!("{s1} = extractvalue %KValue {spilled}, 1"));
-    f.line_fmt(format_args!("br label %{join}"));
-    f.start_block(&join);
-    let (w0, w1) = (f.tmp(), f.tmp());
-    f.line_fmt(format_args!("{w0} = phi i64 [ {packed}, %{from} ], [ {s0}, %{wide} ]"));
-    f.line_fmt(format_args!("{w1} = phi i64 [ {vpay}, %{from} ], [ {s1}, %{wide} ]"));
-    (w0.to_string(), w1.to_string())
+    let high = f.tmp();
+    f.line_fmt(format_args!("{high} = shl i64 {ptag}, 8"));
+    let tags = f.tmp();
+    f.line_fmt(format_args!("{tags} = or i64 {high}, {vtag}"));
+    (tags.to_string(), vpay.to_string(), n.to_string())
 }
 
-/// Read a `%parsed`'s two words back as the int's tag and word, the value's
-/// tag and the value's payload. The shift is arithmetic, so a negative int
-/// keeps its sign, and a spilled record is read off the heap, where the int
-/// may be a bignum.
-fn unpack_words(f: &mut FnEmit, w0: &str, w1: &str) -> (String, String, String, String) {
-    let low = f.tmp();
-    f.line_fmt(format_args!("{low} = and i64 {w0}, 255"));
-    let spilled = f.tmp();
-    f.line_fmt(format_args!("{spilled} = icmp eq i64 {low}, {PARSED_WIDE}"));
-    let n = f.tmp();
-    f.line_fmt(format_args!("{n} = ashr i64 {w0}, 8"));
-    let from = f.cur_label.clone();
-    let (wide, join) = (f.label(), f.label());
-    f.line_fmt(format_args!("br i1 {spilled}, label %{wide}, label %{join}"));
-    f.start_block(&wide);
-    let wfirst = f.tmp();
-    f.line_fmt(format_args!("{wfirst} = call %KValue @k_parsed_wide_first(i64 {w1})"));
-    let (wnt, wn) = (f.tmp(), f.tmp());
-    f.line_fmt(format_args!("{wnt} = extractvalue %KValue {wfirst}, 0"));
-    f.line_fmt(format_args!("{wn} = extractvalue %KValue {wfirst}, 1"));
-    let wv = f.tmp();
-    f.line_fmt(format_args!("{wv} = call %KValue @k_parsed_wide_value(i64 {w1})"));
-    let (wt, wp) = (f.tmp(), f.tmp());
-    f.line_fmt(format_args!("{wt} = extractvalue %KValue {wv}, 0"));
-    f.line_fmt(format_args!("{wp} = extractvalue %KValue {wv}, 1"));
-    f.line_fmt(format_args!("br label %{join}"));
-    f.start_block(&join);
-    let (pnt, pn, pt, pp) = (f.tmp(), f.tmp(), f.tmp(), f.tmp());
-    f.line_fmt(format_args!("{pnt} = phi i64 [ 0, %{from} ], [ {wnt}, %{wide} ]"));
-    f.line_fmt(format_args!("{pn} = phi i64 [ {n}, %{from} ], [ {wn}, %{wide} ]"));
-    f.line_fmt(format_args!("{pt} = phi i64 [ {low}, %{from} ], [ {wt}, %{wide} ]"));
-    f.line_fmt(format_args!("{pp} = phi i64 [ {w1}, %{from} ], [ {wp}, %{wide} ]"));
-    (pnt.to_string(), pn.to_string(), pt.to_string(), pp.to_string())
+/// Read a `%parsed`'s three words back as the int's tag and word, the
+/// value's tag and the value's payload. The int's tag is a word's or a
+/// bignum's, and saying so lets LLVM drop the thunk and failure tests a
+/// field read would otherwise make of it.
+fn unpack_words(f: &mut FnEmit, w0: &str, w1: &str, w2: &str) -> (String, String, String, String) {
+    let ptag = f.tmp();
+    f.line_fmt(format_args!("{ptag} = lshr i64 {w0}, 8"));
+    let stray = f.tmp();
+    f.line_fmt(format_args!("{stray} = and i64 {ptag}, {}", !K_BIG));
+    let int = f.tmp();
+    f.line_fmt(format_args!("{int} = icmp eq i64 {stray}, 0"));
+    f.line_fmt(format_args!("call void @llvm.assume(i1 {int})"));
+    let vtag = f.tmp();
+    f.line_fmt(format_args!("{vtag} = and i64 {w0}, 255"));
+    (ptag.to_string(), w2.to_string(), vtag.to_string(), w1.to_string())
+}
+
+/// A `%parsed` built from its three words.
+fn parsed_of(f: &mut FnEmit, w0: &str, w1: &str, w2: &str) -> String {
+    let a = f.tmp();
+    f.line_fmt(format_args!("{a} = insertvalue %parsed undef, i64 {w0}, 0"));
+    let b = f.tmp();
+    f.line_fmt(format_args!("{b} = insertvalue %parsed {a}, i64 {w1}, 1"));
+    let p = f.tmp();
+    f.line_fmt(format_args!("{p} = insertvalue %parsed {b}, i64 {w2}, 2"));
+    p.to_string()
 }
 
 /// Whether a value is not a failure, as one compare of its tag against the
@@ -3322,8 +3289,9 @@ impl<'a> Backend<'a> {
             return format!("i64 {raw}");
         }
         // A register-returned record reaching a slot that wants an ordinary
-        // value has to be built back into one. The two words carry the whole
-        // record — `(field0.payload << 8 | field1.tag, field1.payload)` — so
+        // value has to be built back into one. The three words carry the whole
+        // record — `(field0.tag << 8 | field1.tag, field1.payload,
+        // field0.payload)` — so
         // nothing is lost, but only a real record can be dispatched on, and a
         // getter is exactly the caller that dispatches.
         let boxed;
@@ -3349,10 +3317,9 @@ impl<'a> Backend<'a> {
             f.line_fmt(format_args!("{w0} = extractvalue %KValue {u}, 0"));
             let w1 = f.tmp();
             f.line_fmt(format_args!("{w1} = extractvalue %KValue {u}, 1"));
-            let a = f.tmp();
-            f.line_fmt(format_args!("{a} = insertvalue %parsed undef, i64 {w0}, 0"));
-            let p = f.tmp();
-            f.line_fmt(format_args!("{p} = insertvalue %parsed {a}, i64 {w1}, 1"));
+            let w2 = f.tmp();
+            f.line_fmt(format_args!("{w2} = call i64 @k_parsed_int(%KValue {e})"));
+            let p = parsed_of(f, &w0, &w1, &w2);
             format!("%parsed {p}")
         } else if self.unboxed_param(callee, arity, i) {
             let p = inline_payload(f, e);

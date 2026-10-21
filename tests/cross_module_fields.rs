@@ -39,7 +39,7 @@ fn a_field_of_an_imported_record_reads() {
 
 /// The other half: a record that lacks the field must say so. Native used to
 /// answer a number here — it took the by-value calling convention on trust
-/// and read two words out of a record holding one.
+/// and read a record's words out of a record holding one.
 #[test]
 fn a_field_the_record_lacks_is_reported_not_invented() {
     let mut answers = Vec::new();
@@ -55,7 +55,7 @@ fn a_field_the_record_lacks_is_reported_not_invented() {
     assert_eq!(answers[0], answers[1], "the engines disagree on a missing field");
 }
 
-/// A register-returnable record comes back in two registers rather than as an
+/// A register-returnable record comes back in registers rather than as an
 /// ordinary value, and every consumer downstream reads an ordinary one. Render
 /// it, read a field of it, and hand it to a function that destructures it —
 /// the three shapes that used to emit invalid IR or, worse, a number.
@@ -70,7 +70,7 @@ fn a_record_returned_in_registers_survives_every_consumer() {
     }
 }
 
-/// The same two words also encode a failure, so nothing downstream may treat
+/// The same words also encode a failure, so nothing downstream may treat
 /// one as a record. Native used to read fields off it and print a number.
 #[test]
 fn a_failure_in_the_register_convention_stays_a_failure() {

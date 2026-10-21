@@ -731,15 +731,16 @@ impl<'a> Backend<'a> {
         self.rebox_params(&mut f, name, arity);
         self.emit_reader_hole(&mut f, name, arity)?;
         self.record_param_sets(&mut f, name, arity);
-        // A `%parsed` and a `%KValue` share a `{i64,i64}` layout: reinterpret the
-        // parameter's two words as the discriminator KValue once, so the arms can
-        // match failures and the propagation loop can hop. On the failure path it
-        // *is* the failure; on success its low word (value.tag | pos<<8) is never
-        // a failure tag, so `k_not_failure` still separates the two.
+        // A `%parsed`'s first two words read as the discriminator KValue, once,
+        // so the arms can match failures and the propagation loop can hop. On
+        // the failure path they *are* the failure; on success the first word
+        // (pos.tag << 8 | value.tag) is never the err tag, so `k_not_failure`
+        // still separates the two. The third word is the position's own.
         for i in 0..arity {
             if self.escape.carries_ty(name, arity, i).is_some() {
                 f.line_fmt(format_args!("%x{i}w0 = extractvalue %parsed %x{i}, 0"));
                 f.line_fmt(format_args!("%x{i}w1 = extractvalue %parsed %x{i}, 1"));
+                f.line_fmt(format_args!("%x{i}w2 = extractvalue %parsed %x{i}, 2"));
                 f.line_fmt(format_args!("%x{i}sa = insertvalue %KValue undef, i64 %x{i}w0, 0"));
                 f.line_fmt(format_args!("%x{i}s = insertvalue %KValue %x{i}sa, i64 %x{i}w1, 1"));
             }
@@ -769,7 +770,8 @@ impl<'a> Backend<'a> {
                 match self.escape.carries_ty(name, arity, i) {
                     Some(ty) => {
                         let ty = ty.to_string();
-                        self.emit_parsed_pattern(&mut f, &format!("%x{i}s"), pattern, &fail, &ty)?;
+                        let (status, int_word) = (format!("%x{i}s"), format!("%x{i}w2"));
+                        self.emit_parsed_pattern(&mut f, &status, &int_word, pattern, &fail, &ty)?;
                     }
                     None => {
                         let known = self.own_param_set(name, arity, i);

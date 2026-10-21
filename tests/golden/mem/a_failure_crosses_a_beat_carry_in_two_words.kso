@@ -1,11 +1,11 @@
-# A scanner's answer is a two-field record that travels in two registers,
-# the position packed above the value's tag in one word and the value's
-# payload in the other. A failure travels in the same two words untouched:
+# A scanner's answer is a two-field record that travels in three registers:
+# both tags in the first word, the value's payload in the second and the
+# position's in the third. A failure travels in the first two untouched:
 # its first word is the err tag, which no packed record's first word can be.
 #
 # This loop is a beat: it allocates nothing it keeps, so the arena rewinds
 # every trip, and the scanner's answer has to cross the rewind through the
-# carry. The carry stages boxed values, so the two words are built into a
+# carry. The carry stages boxed values, so the words are built into a
 # record on the way in and read back out of one on the way out. Until
 # 2026-09-16 both conversions assumed a record: the failure's words were
 # built into a record whose second field was the failure, k_rec merged that
@@ -18,7 +18,7 @@
 #
 # The record built for the carry is the reason `sh_rec` reads 64,000 here
 # and not 0: a thousand scans, sixty-four bytes each. A beat that could
-# stage the two words themselves would not build them, and does not yet.
+# stage the words themselves would not build them, and does not yet.
 type parsed
   pos
   val

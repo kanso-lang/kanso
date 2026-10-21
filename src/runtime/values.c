@@ -797,67 +797,38 @@ KValue k_field(KValue v, long long i) {
     return k_as_rec(v)->fields[i];
 }
 
-/* The by-value record convention packs a two-field record into two words:
-   field 0's int payload shifted above field 1's tag in the first word,
-   field 1's payload in the second. A failure crosses in the same two words
-   untouched: its first word is exactly K_ERR, and no packed value's first
-   word is, since a packed word carries an int above bit eight over a field
-   the analysis proved is never a failure. These are the only conversions
-   between the two shapes, and all of them pass a failure through.
-   Until 2026-09-16 the emitter inlined them and neither did: a failure
-   staged through a beat carry was boxed as a record whose second field was
-   the failure, k_rec merged that into a failure, and the unpack on the far
-   side read two fields off it and handed the consumer a value whose first
-   word was not K_ERR. The consumer's record arm matched a failure.
-
-   The convention was built for the scanner's byte position, but the
-   analysis admits any record whose first field is an int. Eight bits of a
-   64-bit int do not survive the shift, so an int outside 56 signed bits
-   does not pack, and neither does a bignum: the record is built on the heap and crosses as
-   K_PARSED_WIDE in the low byte, which no value's tag is, with the record
-   in the second word. The shift back is arithmetic, so a negative int
-   keeps its sign. Until 2026-09-29 it was logical and neither case was
-   handled: `pt (x - 8) "a"` at x = 0 read back as 2^56 - 8. */
-#define K_PARSED_WIDE 255
-static int k_packs(long long n) {
-    return (long long)((unsigned long long)n << 8) >> 8 == n;
-}
-static KValue k_parsed_spilled(long long w1) {
-    KValue v; v.tag = K_REC; v.payload = w1; return v;
-}
-KValue k_parsed_box(long long type_id, long long w0, long long w1) {
+/* The by-value record convention packs a two-field record into three
+   words: field 1's tag in the low byte of the first with field 0's tag
+   above it, field 1's payload in the second, field 0's payload in the
+   third. Field 0 is an int, a word or a bignum's pointer, and either fits.
+   A failure crosses in the first two words untouched: its first word is
+   exactly K_ERR, and no packed value's first word is, since field 1 is a
+   value the analysis proved is never a failure. These are the only
+   conversions between the two shapes, and all of them pass a failure
+   through. Until 2026-09-16 the emitter inlined them and neither did, and a
+   record arm on the far side of a beat carry matched a failure. */
+KValue k_parsed_box(long long type_id, long long w0, long long w1, long long w2) {
     KValue words; words.tag = w0; words.payload = w1;
     if (!k_not_failure(words)) return words;
-    if ((w0 & 255) == K_PARSED_WIDE) return k_parsed_spilled(w1);
     KValue fields[2];
-    fields[0].tag = K_INT; fields[0].payload = w0 >> 8;
+    fields[0].tag = (unsigned long long)w0 >> 8; fields[0].payload = w2;
     fields[1].tag = w0 & 255; fields[1].payload = w1;
     return k_rec(type_id, 2, fields);
 }
+/* The first two words of a boxed record's packing; k_parsed_int is the
+   third. */
 KValue k_parsed_words(KValue v) {
     if (!k_not_failure(v)) return v;
     KValue f0 = k_field(v, 0), f1 = k_field(v, 1);
     KValue out;
-    if (f0.tag != K_INT || !k_packs(f0.payload)) {
-        out.tag = K_PARSED_WIDE;
-        out.payload = k_ptr(k_as_rec(v.tag == K_SUB ? k_sub_base(v) : v));
-        return out;
-    }
-    out.tag = (long long)((unsigned long long)f0.payload << 8) | f1.tag;
+    out.tag = (long long)((unsigned long long)f0.tag << 8) | f1.tag;
     out.payload = f1.payload;
     return out;
 }
-/* The emitter's slow side of a pack: the int did not fit, so the record is
-   built here and handed back in its spilled words. */
-KValue k_parsed_spill(long long type_id, long long ntag, long long n, long long vtag, long long vpay) {
-    KValue fields[2];
-    fields[0].tag = ntag; fields[0].payload = n;
-    fields[1].tag = vtag; fields[1].payload = vpay;
-    KValue out; out.tag = K_PARSED_WIDE; out.payload = k_rec(type_id, 2, fields).payload;
-    return out;
+long long k_parsed_int(KValue v) {
+    if (!k_not_failure(v)) return 0;
+    return k_field(v, 0).payload;
 }
-KValue k_parsed_wide_first(long long w1) { return k_as_rec(k_parsed_spilled(w1))->fields[0]; }
-KValue k_parsed_wide_value(long long w1) { return k_as_rec(k_parsed_spilled(w1))->fields[1]; }
 KValue k_err_inner(KValue v) { return k_err_box(v)->reason; }
 
 /* An err's three readers, `.reason`, `.cause` and `.origin` — the second

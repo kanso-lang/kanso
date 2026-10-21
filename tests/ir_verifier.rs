@@ -192,7 +192,7 @@ fn the_ir_kanso_writes_passes_that_verifier() {
 }
 
 /// Samples written to exercise the register-return convention, where a record
-/// small enough travels as two words rather than a boxed value.
+/// small enough travels as three words rather than a boxed value.
 ///
 /// They sit inside a trap. Escape analysis decides the convention per GROUP,
 /// so ONE escaping use boxes every use. A sample that grows a consumer the
@@ -210,6 +210,7 @@ const CARRIED: &[&str] = &[
     "a_field_read_of_a_carried_record",
     "a_carried_record_answered_by_name",
     "a_carried_record_refuses_a_failure_in_its_value",
+    "an_int_of_any_width_crosses_in_its_own_word",
 ];
 
 #[test]
