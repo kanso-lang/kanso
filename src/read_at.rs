@@ -46,8 +46,8 @@ pub fn links(program: &Program) -> Links {
     found
 }
 
-fn walk<'a>(
-    e: &'a Expr,
+fn walk(
+    e: &Expr,
     groups: &HashSet<(&str, usize)>,
     found: &mut HashMap<(String, usize), Vec<Link>>,
     refused: &mut HashSet<String>,
@@ -83,8 +83,8 @@ fn at_call(args: &[Expr]) -> Vec<Link> {
             if !same(&args[coll], base) {
                 continue;
             }
-            for pos in 0..args.len() {
-                if same(&args[pos], index) {
+            for (pos, at) in args.iter().enumerate() {
+                if same(at, index) {
                     out.push(Link { coll, byte, pos });
                 }
             }
