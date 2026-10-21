@@ -1713,7 +1713,7 @@ every changed counter is priced (or improved).</code></pre>
 
 <p>the fixture is <code>tests/golden/micro/utf8_of_a_byte_slice_at_its_edges.kso</code>. nothing in the corpus had reached this door over bytes: the one program that read an invalid byte through a slice passed a list, which falls through to the general slice and the general <code>utf8</code>. the fixture walks every range the clamp refuses and both sides of the validity test &#8212; a two-byte sequence taken whole, the same sequence cut in half, and its continuation byte alone.</p>
 
-<h2 id="census"><span class="sec-num">50</span>counting the doors instead of guessing them</h2>
+<h2 id="doorcount"><span class="sec-num">50</span>counting the doors instead of guessing them</h2>
 
 <p>three doors were twinned by reading a profile and picking what looked expensive. the question the mechanism actually asks is narrower and countable: which of the functions the emitter declares take more than the six integer argument registers the abi has? a <code>KValue</code> is two, so the answer comes out of the source with no measurement at all. it is five. <code>k_call4</code> and <code>k_b_find2_below</code> take ten, <code>k_call3</code> and <code>k_b_find2</code> eight, <code>k_b_utf8_slice</code> seven.</p>
 
@@ -4031,6 +4031,12 @@ welfare                      77.37         82.09</code></pre>
 <p>Three other leads in the decoder were built, measured and dropped. Deciding a string's closing quote inside <code>string_at</code>, to save the call level spans added, stopped <code>parsed</code> being returned by value and cost more than it saved. Marking the flattened twins <code>alwaysinline</code> left the twin it was meant for unchanged to the instruction, because the twins reach each other through musttail calls and LLVM does not inline across those; on every twin it grew the callers. A short-number path ahead of <code>number_span</code>'s sixteen-byte walk saved 0.03% of the run program. About half of that call's 93 instructions are fixed work: the failure and tag checks, the bounds, and RFC 8259's rules for a number's first bytes.</p>
 
 <p>The name-level call graph the prune uses moved unedited from <code>src/codegen.rs</code> to <code>src/codegen/prune.rs</code>, and two copies of its walker over a body's names became one. It stays separate from the graph in <code>src/deep.rs</code>. The prune needs every name a body mentions, and <code>deep.rs</code> records calls by name and arity, with their tail positions.</p>
+
+<h2 id="carriedwords"><span class="sec-num">220</span>a carried record in three words</h2>
+
+<p>A record of an int and one other value, like the decoder's <code>parsed</code>, goes back to its caller in registers when nothing needs it boxed. It used to take two words, with the int shifted above the value's tag. An int needs 64 bits and only 56 were left, so every pack checked that the int fit, and every unpack tested for a record that had been built on the heap because it did not. The record now takes three words: both tags in the first, the value's payload in the second, the int's own word in the third. Every int fits, a bignum crosses as its pointer, and the heap path is gone. A failure still travels in the first two words.</p>
+
+<p>Moving the int's tag into a word cost LLVM a fact. It had known the tag was an int's on the path that did not spill, and without that it tested the tag for a thunk on every record, which put 3.1M instructions back on the run program. An <code>llvm.assume</code> that the tag belongs to a word or a bignum gives the fact back. With it the run program fell 1.36% and jsonbench 1.74%, and the machine code of every benchmark got smaller. The in-browser engine runs the same IR through its own translator without LLVM, and there the run rose 0.69% while the compile fell. The micro golden <code>an_int_of_any_width_crosses_in_its_own_word</code> sends ints either side of the old 56-bit line, both ends of the word and a bignum through groups that return the record by value.</p>
 
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 

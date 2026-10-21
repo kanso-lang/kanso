@@ -1,5 +1,7 @@
-# a constant whose body calls another constant: the callee returns its record
-# in registers, and everything reading it here wants the boxed shape
+# a constant whose body calls another constant. A constant's record is held
+# in a cell as a boxed value, so it is never returned in registers: when it
+# was, the cell kept the words as if they were a value, and three words read
+# back as two printed the thunk tag, 14, where this prints 1
 type node
   id
   peer

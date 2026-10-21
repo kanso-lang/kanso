@@ -253,7 +253,12 @@
 # keep their fused doors under a library-only spelling, so defines, calls and
 # branches are unchanged; lines 10,161 -> 10,165, three of them the longer
 # comment on the fused append door in the prelude.
+#
+# 2026-10-21: a carried record returns in three words, so packing it checks
+# no 56-bit range and unpacking it has no spilled branch to take. calls
+# 1,282 -> 1,261, branches 1,374 -> 1,332, lines 13,010 -> 12,909; defines
+# stay 136.
 defines=136
-calls=1282
-branches=1374
-lines=13010
+calls=1261
+branches=1332
+lines=12909

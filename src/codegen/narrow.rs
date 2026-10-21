@@ -269,7 +269,8 @@ fn trampoline_name(name: &str) -> String {
 /// How many argument registers a parameter of this type occupies.
 fn register_width(ty: &str) -> usize {
     match ty {
-        "%KValue" | "%parsed" => 2,
+        "%parsed" => 3,
+        "%KValue" => 2,
         _ => 1,
     }
 }

@@ -1,7 +1,7 @@
-# A record built by a group that answers it in two registers, bound to a name
+# A record built by a group that answers it in registers, bound to a name
 # and handed to a parameter nobody reads, so the call goes into a lazy cell.
 # The cell's site is a `%KValue` function tail-calling a `%parsed` one, and it
-# has to box the pair before it returns it. a_lazy_record_call_nobody_reads
+# has to box the words before it returns them. a_lazy_record_call_nobody_reads
 # reached that site through a function nobody called; since 2026-10-09 a
 # native build drops such a function before the emitter sees it, and that
 # fixture stopped reaching the site at all. This one is called.

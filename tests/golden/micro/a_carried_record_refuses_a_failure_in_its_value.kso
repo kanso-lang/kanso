@@ -1,8 +1,8 @@
-# A record small enough to travel in two registers still refuses a failure.
+# A record small enough to travel in registers still refuses a failure.
 #
-# When a group returns a record by value, a failure travels in the same two
-# words: the err's tag in the first, where the record would keep its position
-# above a byte holding its value field's tag. That low byte then reads as a
+# When a group returns a record by value, a failure travels in its first two
+# words: the err's tag in the first, where the record would keep its position's
+# tag above a byte holding its value field's tag. That low byte then reads as a
 # failure too, so a pattern that takes the record apart refuses the failure
 # when it tests the value field, and the compiler asks that one question
 # rather than testing the whole word first and the field again.

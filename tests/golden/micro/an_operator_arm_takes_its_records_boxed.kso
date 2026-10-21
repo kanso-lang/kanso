@@ -1,4 +1,4 @@
-# a record holding an int and one other value fits in two registers, and a
+# a record holding an int and one other value fits in registers, and a
 # group whose arms all take one may be passed its words instead of the
 # record. An operator's arms are reached through the operator, which hands
 # them the boxed record, so the arm read a pointer as a packed int and the

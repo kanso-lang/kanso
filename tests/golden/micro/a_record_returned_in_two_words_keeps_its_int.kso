@@ -1,15 +1,15 @@
-# A record of an int and one other value crosses a call in two words when
+# A record of an int and one other value crosses a call in registers when
 # nothing does anything with it but build it in tail position and take it
-# apart in a pattern: the int shifted above the value's tag in the first word,
-# the value's payload in the second. `at` returns one, `bump` takes one and
-# returns one, and `read` and `show` take one apart.
+# apart in a pattern. `at` returns one, `bump` takes one and returns one, and
+# `read` and `show` take one apart. The convention once had two words, with
+# the int shifted above the value's tag in the first.
 #
-# The convention was built for a byte position and read the int back with a
+# That convention was built for a byte position and read the int back with a
 # logical shift, so a negative int came back as 2^56 plus it: `at 0` read as
-# 72057594037927928. And an int needs 64 bits where 56 are left above the
+# 72057594037927928. And an int needs 64 bits where 56 were left above the
 # tag, so one past 2^55 lost its top byte: `at most` read as 2^56 - 9. The
-# edges are the ints either side of each boundary. An int that does not fit is
-# now built on the heap and crosses marked, and the shift back is arithmetic.
+# edges are the ints either side of each boundary. The int now has a word of
+# its own.
 import "std/list"
 import "std/text"
 

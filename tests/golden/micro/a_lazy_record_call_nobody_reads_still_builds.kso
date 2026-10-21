@@ -1,6 +1,6 @@
 # A function nobody calls, whose `list/drop` goes lazily to a parameter nobody
-# reads. The drop's group returns its record in two registers, and the lazy
-# cell's site returned that pair as a tagged value without boxing it: clang
+# reads. The drop's group returns its record in registers, and the lazy
+# cell's site returned those words as a tagged value without boxing them: clang
 # refused the module with "defined with type '%parsed' but expected
 # '%KValue'", so a program the interpreter ran could not be built at all.
 # The analysis that matches a tail caller's return shape to its callee's

@@ -1,5 +1,5 @@
 # `mk` builds a record whose first field is an int, and nothing takes the
-# record apart, so the escape analysis let `mk` hand it back in two registers.
+# record apart, so the escape analysis let `mk` hand it back in registers.
 # `&mk`, and a bare `mk` passed to `apply`, make it a function value, which is
 # called through a wrapper that answers one boxed word. Native refused the
 # build, saying `mk` cannot be used as a function value, and the interpreter

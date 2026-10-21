@@ -26,6 +26,7 @@ impl<'a> Backend<'a> {
         &mut self,
         f: &mut FnEmit,
         status: &str,
+        int_word: &str,
         pattern: &Pattern,
         fail: &str,
         ty: &str,
@@ -57,7 +58,7 @@ impl<'a> Backend<'a> {
                 f.line_fmt(format_args!("{w0} = extractvalue %KValue {status}, 0"));
                 let w1 = f.tmp();
                 f.line_fmt(format_args!("{w1} = extractvalue %KValue {status}, 1"));
-                let (post, posp, vtag, w1) = unpack_words(f, &w0, &w1);
+                let (post, posp, vtag, w1) = unpack_words(f, &w0, &w1, int_word);
                 let posa = f.tmp();
                 f.line_fmt(format_args!("{posa} = insertvalue %KValue undef, i64 {post}, 0"));
                 let poskv = f.tmp();
@@ -108,18 +109,15 @@ impl<'a> Backend<'a> {
         }
     }
 
-    /// A `%parsed` and a `%KValue` share a `{i64,i64}` layout. On the failure
-    /// path the two are the same value: the failure's tag/payload become the
-    /// `%parsed` words, so the discriminator (low word ∈ {4,5}) stays intact.
+    /// A `%parsed`'s first two words read as a `%KValue`. On the failure path
+    /// they are the failure's tag and payload and the third word is zero, so
+    /// the discriminator (the err tag in the first word) stays intact.
     fn emit_parsed_from_failure(&self, f: &mut FnEmit, failure: &str) {
         let w0 = f.tmp();
         f.line_fmt(format_args!("{w0} = extractvalue %KValue {failure}, 0"));
         let w1 = f.tmp();
         f.line_fmt(format_args!("{w1} = extractvalue %KValue {failure}, 1"));
-        let a = f.tmp();
-        f.line_fmt(format_args!("{a} = insertvalue %parsed undef, i64 {w0}, 0"));
-        let p = f.tmp();
-        f.line_fmt(format_args!("{p} = insertvalue %parsed {a}, i64 {w1}, 1"));
+        let p = parsed_of(f, &w0, &w1, "0");
         f.line_fmt(format_args!("ret %parsed {p}"));
     }
 
@@ -158,37 +156,26 @@ impl<'a> Backend<'a> {
         let value = self.emit_expr(f, &args[1])?;
         self.bail_on_failure(f, &value);
         let pid = self.type_ids[ty];
-        let (w0, w1) = pack_words(f, pid, &pos, &value);
-        let a = f.tmp();
-        f.line_fmt(format_args!("{a} = insertvalue %parsed undef, i64 {w0}, 0"));
-        let p = f.tmp();
-        f.line_fmt(format_args!("{p} = insertvalue %parsed {a}, i64 {w1}, 1"));
+        let (w0, w1, w2) = pack_words(f, &pos, &value);
+        let p = parsed_of(f, &w0, &w1, &w2);
         f.record_parsed(&p, ty, pid);
         Ok(p.to_string())
     }
 
     /// Build a register-returnable record in tail position as a by-value
-    /// `%parsed`. The two words hold `(value.tag | pos << 8, value.payload)` — a
-    /// non-failure value's tag never collides with the failure tags 4/5, so the
-    /// low byte of word 0 still tells success from failure. A failing field
+    /// `%parsed`. The three words hold `(pos.tag << 8 | value.tag,
+    /// value.payload, pos.payload)`; a non-failure value's tag is never the
+    /// err tag, so word 0 still tells success from failure. A failing field
     /// propagates exactly as `k_rec` would have — which means BOTH fields are
     /// evaluated and two failures merge, the way two failing operands of an
     /// operator do. Bailing on the first one skipped the second field
     /// entirely and handed back one reason where the oracle carried two.
-    fn emit_parsed_construction(
-        &mut self,
-        f: &mut FnEmit,
-        ty: &str,
-        args: &[Expr],
-    ) -> Result<(), String> {
+    fn emit_parsed_construction(&mut self, f: &mut FnEmit, args: &[Expr]) -> Result<(), String> {
         let pos = self.emit_expr(f, &args[0])?;
         let value = self.emit_expr(f, &args[1])?;
         self.bail_on_pair_failure(f, &pos, &value);
-        let (w0, w1) = pack_words(f, self.type_ids[ty], &pos, &value);
-        let a = f.tmp();
-        f.line_fmt(format_args!("{a} = insertvalue %parsed undef, i64 {w0}, 0"));
-        let p = f.tmp();
-        f.line_fmt(format_args!("{p} = insertvalue %parsed {a}, i64 {w1}, 1"));
+        let (w0, w1, w2) = pack_words(f, &pos, &value);
+        let p = parsed_of(f, &w0, &w1, &w2);
         f.line_fmt(format_args!("ret %parsed {p}"));
         Ok(())
     }
@@ -1514,7 +1501,7 @@ impl<'a> Backend<'a> {
                 // by-value %parsed result directly — no heap allocation.
                 if let Some(&nfields) = self.escape.field_count.get(name.as_str()) {
                     if f.ret_ty == "%parsed" && args.len() == nfields {
-                        return self.emit_parsed_construction(f, name, args);
+                        return self.emit_parsed_construction(f, args);
                     }
                 }
                 // A demoted tail entry: emitted as a plain call so the
@@ -3750,7 +3737,7 @@ impl<'a> Backend<'a> {
                 .map(|(i, e)| self.call_arg(f, name, n, i, e, args.get(i)))
                 .collect();
             let callee_ret = self.ret_ty(name, n);
-            // A register-returned record comes back as two raw field words,
+            // A register-returned record comes back as three raw field words,
             // not a tagged value, and both pops read a KValue. Reinterpreting
             // one would hand them a pair of fields to treat as a tag and a
             // payload, so the frontier goes unmarked instead: these calls give

@@ -1102,27 +1102,26 @@ part_entered = row
 
 rows_c1zzzx = list/concat rows_c1zzzw [part_closure part_entered]
 
-# A record of an int and a value crosses a call in two words, the int above
-# the value's tag. Until 2026-09-29 the int came back through a logical shift
-# and every int was packed, so a negative one read as 2^56 plus it and one
-# past 56 bits lost its top byte.
-packed_sign = row
-  "a packed int read back unsigned"
+# A record of an int and a value crosses a call in three words, both tags in
+# the first. An int that is a bignum crosses as its pointer, and only its tag
+# says so; dropped on either side, the pointer reads back as a number.
+packed_back = row
+  "a bignum position read back as a word"
   true
   "cargo test --release --test golden micro_corpus_agrees_across_engines"
   "specs (unit, golden, differential)"
-  (breaking "a_packed_int_read_back_unsigned")
+  (breaking "a_bignum_position_read_back_as_a_word")
   release
 
-packed_wide = row
-  "a wide int packed anyway"
+packed_in = row
+  "a bignum position packed as a word"
   true
   "cargo test --release --test golden micro_corpus_agrees_across_engines"
   "specs (unit, golden, differential)"
-  (breaking "a_wide_int_packed_anyway")
+  (breaking "a_bignum_position_packed_as_a_word")
   release
 
-rows_c1zzzy = list/concat rows_c1zzzx [packed_sign packed_wide]
+rows_c1zzzy = list/concat rows_c1zzzx [packed_back packed_in]
 
 # A partial over a group hands the group out as a value, so its parameters
 # go TOP as they do for a bare mention. Left narrow, a held subtype of int
