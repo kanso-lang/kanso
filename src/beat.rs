@@ -3058,10 +3058,11 @@ mod tests {
         // so the cycle is not a beat: no bracket, no rewind, nothing to free.
         //
         // The two encoders were beats until 2026-09-25, for one allocation:
-        // the columns a nested map builds as it descends -- `entries` then,
-        // `keys` and `values` since 2026-09-27. That call is a region, which
-        // reclaims them once per nested map, and the loops allocate nothing
-        // else an iteration outlives.
+        // what a nested map builds as it descends -- `entries` then, `keys`
+        // and `values` from 2026-09-27, and since 2026-10-21 the sorted view
+        // `entry_count` may build. That call is a region, which reclaims it
+        // once per nested map, and the loops allocate nothing else an
+        // iteration outlives.
         //
         // The string scanners joined on 2026-10-10, when a cluster entered by
         // a tail call began to carry its slots. That is this library read on
@@ -3108,7 +3109,7 @@ mod tests {
         assert_eq!(
             regions,
             vec![69],
-            "the one region is the descent into a map, `encode_map acc (keys m) (values m)`"
+            "the one region is the descent into a map, `encode_map acc m (builtin_entry_count m)`"
         );
     }
 
