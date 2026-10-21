@@ -61,7 +61,7 @@
 # browser_run_instructions 34,370,238 -> 34,153,178, a FALL of 217,060. On
 # rustc 1.98.1.
 # measured-on rustc=1.98.1
-browser_compile_instructions=413098267
-browser_compile_peak_bytes=735031
-browser_run_instructions=34153178
+browser_compile_instructions=412842483
+browser_compile_peak_bytes=738682
+browser_run_instructions=33548279
 browser_run_peak_bytes=1441792

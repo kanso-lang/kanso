@@ -21,72 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-14 — An import reads only what the program names
-
-A program that imported a std module lexed, parsed, inferred and checked all
-of it (#1952). The first attempt, recorded on the issue, set unreached
-functions aside for the merged check only, and its reach walk cost more than
-the check it saved. This one works before the lexer: a shipped module's `fn`
-declarations whose names no reached text spells are blanked out of the
-source.
-
-Reach is by word. The roots are every word in the program's own files and
-five names the compiler calls without the program spelling them: `fold`,
-`bump`, `file_under`, `to_string` and `tie`. Each declaration kept adds its
-own words, over a module's files together, and a name kept keeps every arm
-of it. A blanked line stays an empty line, so every span points where it
-did. Blank-line policy and the unused-import check are skipped on a pruned
-file; `tests/every_shipped_module_checks_clean.rs` still checks each module
-whole.
-
-When the pruned compile fails, the compile runs again on the whole library
-and that run reports, so no diagnostic changes. A debug build panics when the
-whole library accepts a program the pruned one refused, and the suite ran
-clean under it. The one fixture that needed an unreached function,
-`list/spread` in a codegen unit test, now names it in a comment.
-
-`tests/an_import_reads_what_the_program_names.rs` compiles
-`print (text/uppercase "kanso")`. On main the program held 48 declarations,
-`text/pad_start` among them, and inference visited 627 expressions. It now
-holds 12 and visits 224.
-
-Rows, from CI: `compile_instructions` 32,770,085 -> 22,632,999,
-`entry_instructions` 104,020,991 -> 74,989,410, `library_instructions`
-103,487,067 -> 74,674,363, `emit_instructions` 7,704,002 -> 5,438,857,
-`compile_allocs` 18,250 -> 12,160, `compile_peak_bytes` 804,635 -> 552,167,
-`front_end_visits` 9,242 -> 6,363, `codegen_instructions_dev` 119,402,816 ->
-112,581,257, `codegen_instructions_release` 476,979,642 -> 441,727,359,
-`interp_instructions` 496,124,589 -> 492,626,313, `interp_allocs` 592,648 ->
-584,659, `interp_peak_bytes` 807,370 -> 590,970,
-`browser_compile_instructions` 441,097,975 -> 381,571,779,
-`browser_compile_peak_bytes` 731,449 -> 643,478 and
-`browser_run_instructions` 34,183,924 -> 34,181,240. The module sample in
-`bench/compile_golden_modules.txt` reads visits 3,666 -> 1,368, rounds 8 ->
-4 and lines 1,288 -> 1,106.
-
-Six benchmarks emit less code, because the emitter still wrote some std code
-nothing called: encodebench, widebench, deepbench and digestbench lose 157
-lines each, scanbench 30 and runbench 32, and their machine code shrinks with
-them. Three runtime rows move with the smaller binaries: `work_deepbench`
-403,499,516 -> 403,115,516, `work_scanbench` 273,717 -> 273,812 and
-`work_runbench` 1,177,696,285 -> 1,177,696,572. The two rises are 95 and 287 instructions on
-programs whose work did not change, so they are layout. Every allocation
-counter holds.
-
-The ratchet's row "a door matched by the prefix of its name" proved nothing
-on this branch, and it proves nothing on main either: with the mutation
-applied, `micro_corpus_agrees_across_engines` stays green at dfc9fe2f. The
-mutation hands the door's convention to `k_b_utf8_slice` and
-`k_b_utf8_slice_raw`, and since a slice past the end answers `none` a program
-reaches them only through the JSON decoder's `string_ok`, for a string with
-no escape in it. Every decoded string in the micro corpus had an escape.
-`a_plain_decoded_string_is_cut_in_place` decodes three plain strings; under
-the mutation the release build prints `["" "" ""]` and the row goes red.
-
-Lazy parsing by declaration, the larger fix #1952 names, has not been built. This
-change narrows what is read; it does not make one declaration cheaper to
-read.
-
 ## 2026-10-14 — An Apple release build keeps its wide arms through the link
 
 kanso#1951 kept `tailcc` on arm64 functions whose arguments overflow the
@@ -1816,3 +1750,88 @@ program's binary came out byte-identical. The three appends `encode_map`
 makes for each pair cannot share their header loads because each append's
 slow path may hand back a different builder, so the next append's header
 pointer is a merge of the two paths. Aliasing was not what kept them apart.
+
+## 2026-10-21 — a JSON key goes out in one claim
+
+lib/json wrote an object's key as three appends around a call: the opening
+quote after the brace or comma, `escape_onto` for the key, and the closing
+quote and colon as one word. Each append made its own ownership and room
+tests on the builder. `builtin_append_key acc k` now writes `"k":` in one
+call. The decoder shares every string of four to seven bytes as a token, and
+each token records whether its bytes need escaping, so for a clean token the
+emitter's inline path claims the builder once and writes three stores: the
+quote, the token's whole eight-byte word, and `":` over the bytes past the
+key. Any other key, and any build that counts, goes to the C, which writes
+the same bytes the long way. The interpreter writes the same bytes.
+
+The inline path finds a token's clean flag from where its bytes sit in the
+token store, dividing by the size of a token. A token is a `KStr` and eight
+bytes, which is 24 bytes natively and 20 on wasm32, where a pointer is four.
+The first version used 24 everywhere. Two `WASM32_LINES` rows now give the
+tab its own bound and divisor. `retarget_wasm32` searched only
+`getelementptr` lines for rows to rewrite, so the clang-built wasm32 harness
+kept the native numbers while the playground's translator, which matches
+every line, took the new ones; it now searches for each row by its own text.
+The micro golden `a_dirty_key_beside_a_clean_one_is_escaped` places `ke"y`
+in the slot whose 24-byte reading on wasm32 is `ammo`'s. Before the rows,
+the wasm32 build printed the quote unescaped.
+
+Measured here, the run program read 1,068,720,545 -> 1,049,790,947
+(-1.77%) with the same output, all of it in `encode_map`; the C path ran
+82,800 instructions. The interpreted corpus read 463,213,463 -> 402,112,576
+instructions and 502,624 -> 423,390 allocations, because the interpreter's
+builtin writes into the builder where `escape_onto` and three appends ran as
+kanso.
+
+CI's rows: work_runbench 1,068,721,732 -> 1,049,792,134 (-1.77%),
+work_livebench 1,356,883,942 -> 1,272,755,954 (-6.2%), work_oneshot
+12,207,627 -> 11,997,046 (-1.7%) and work_encodebench 2,456,797,406 ->
+2,456,796,902; jsonbench and widebench carry their own copy of lib/json and
+hold. interp_instructions 463,213,463 -> 402,108,616 (-13.2%),
+interp_allocs 502,624 -> 423,390 and interp_peak_bytes 617,367 -> 616,817.
+The C path adds 3,264 bytes of text to every program (text runbench 715,289
+-> 717,129, jsonbench 364,137 -> 367,401), and codegen_instructions_dev
+115,922,261 -> 115,971,597 and emit_instructions 6,283,165 -> 6,307,623 rise
+with the helper. codegen_instructions_release 422,291,078 -> 422,279,602,
+compile_instructions 24,286,340 -> 24,227,124, entry_instructions
+75,053,355 -> 75,007,797, library_instructions 74,749,069 -> 74,686,591,
+compile_allocs 13,465 -> 13,434 and front_end_visits 7,063 -> 7,047 fall. The
+counters: perm_allocs falls by one in run (101 -> 100), live (8 -> 7) and
+oneshot (9 -> 8), the closing pair's literal, and append_fast rises in the
+same three (run 5,735,070 -> 5,737,050, live 25,489,200 -> 25,498,000,
+oneshot 63,723 -> 63,745). emitted_lines 13,078 -> 13,089 for the decoder and
++11 in every other program, +32 in runbench (56,807 -> 56,839), oneshot and
+livebench, where emitted calls fall by three (runbench 7,380 -> 7,377) and
+emitted branches rise by three (6,434 -> 6,437). The module compile's
+module_lines 1,135 -> 1,146. In the tab,
+browser_run_instructions 34,153,178 -> 33,548,279 (-1.8%) and
+browser_compile_instructions 413,098,267 -> 412,842,483 fall, and
+browser_compile_peak_bytes rises 735,031 -> 738,682. The welfare sum rose,
+and the floor moves 91.92 -> 92.03.
+
+The micro golden `a_key_goes_out_quoted_with_its_colon` decodes and encodes
+keys at the edges twice, so the second pass reads shared tokens: empty, one
+byte, seven and eight bytes, a two-byte character, an escaped `\u00e9`, and
+tokens with a quote, a backslash or a tab. With the inline path's length
+short by one, the clean keys lost their colons; with the C's colon replaced
+by a quote, the other keys did. Two ratchet rows:
+`a_key_claimed_one_byte_at_a_time` sends every key to the C and turns the
+emitted gate red, and
+`a_token_measured_at_its_native_size_on_wasm32` gives the tab the native
+numbers back and turns the translator's micro corpus red. The room-test spec
+counts ten frontier branches now. The mem rows move because a clean key no
+longer passes through `escape_onto`: `find2_calls` falls to 0 in three
+programs, and `perm_allocs` falls by one, the closing pair's literal.
+
+Measured and dropped on the way, recorded so they stay declined:
+
+- A fused `builtin_append_key acc lead k` that also wrote the brace or comma,
+  as a C entry. The run program read 1,068,720,545 -> 1,181,687,667: the C
+  cost 135 instructions a call against the inline path's check and copy,
+  and `k_region_pop` grew 32.4M because `encode_map` then handed its value
+  to `encode_onto` directly.
+- Passing the key's tail into `escape_onto` (+18.5M) and a copy of the key
+  arms (+19M).
+
+Open: `encode_map` still copies a map's keys and values into two columns per
+map, 25M on the run program with the region around it.
