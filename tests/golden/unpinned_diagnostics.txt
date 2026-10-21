@@ -445,3 +445,11 @@ plain_string takes bytes and a position
 unescape takes bytes and two positions
 append_escaped takes bytes and a string
 append_key takes bytes and a string
+
+# The map reads the JSON writer makes, unreachable by name for the same
+# reason. `encode_onto` passes them the map its `m:map[string some]` arm
+# took, `entry_count` once and `key_at` and `value_at` at positions from 1 to
+# that count.
+entry_count takes a map
+key_at takes a map and a position
+value_at takes a map and a position
