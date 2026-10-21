@@ -420,3 +420,43 @@ fn an_index_loads_its_length_after_its_lower_bound() {
         body.join("\n")
     );
 }
+
+const BYTE_PAIRS: &str = "import \"std/text\"
+
+fn escaped acc 0
+  acc
+
+fn escaped acc n
+  escaped (text/append (text/append acc 92) 110) (n - 1)
+
+print (text/utf8 (escaped (text/bytes \"\") 3))
+";
+
+/// Two byte appends in a row onto a builder the function owns are one call
+/// that asks for room once. No benchmark writes such a pair since the json
+/// encoder's keys took their own builtin, so the work vein cannot see the
+/// merge go; this reads it in the emitted code.
+#[test]
+fn two_byte_appends_are_one_call() {
+    let program =
+        kanso::compile_play_file("spec.kso", BYTE_PAIRS).expect("the spec program compiles");
+    let ir = kanso::codegen::emit_ir(&program, kanso::codegen::ClosureConvention::Absent)
+        .expect("the spec program lowers to IR");
+    let body: String = ir
+        .lines()
+        .skip_while(|l| !(l.starts_with("define") && l.contains("escaped_2")))
+        .take_while(|l| !l.starts_with('}'))
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(!body.is_empty(), "escaped was not emitted: {ir}");
+    assert_eq!(
+        body.matches("@k_b_append_mut_int2(").count(),
+        1,
+        "the backslash and the letter should be one append: {body}"
+    );
+    assert_eq!(
+        body.matches("@k_b_append_mut_int(").count(),
+        0,
+        "a byte of the pair is appended on its own: {body}"
+    );
+}

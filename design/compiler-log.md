@@ -1821,7 +1821,13 @@ by a quote, the other keys did. Two ratchet rows:
 `a_key_claimed_one_byte_at_a_time` sends every key to the C and turns the
 emitted gate red, and
 `a_token_measured_at_its_native_size_on_wasm32` gives the tab the native
-numbers back and turns the translator's micro corpus red. The room-test spec
+numbers back and turns the translator's micro corpus red. The two byte-pair
+rows went blind: the encoder no longer writes two byte appends in a row,
+since the brace or comma before a key is one append now. The micro fixture
+`two_bytes_appended_at_once` appends a backslash and a letter itself, and
+`a_byte_pair_appended_one_at_a_time` is gated by a perf_ratchet spec,
+`two_byte_appends_are_one_call`, that reads the merged call in the emitted
+code; each mutation turns its witness red. The room-test spec
 counts ten frontier branches now. The mem rows move because a clean key no
 longer passes through `escape_onto`: `find2_calls` falls to 0 in three
 programs, and `perm_allocs` falls by one, the closing pair's literal.
