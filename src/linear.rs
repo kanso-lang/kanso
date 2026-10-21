@@ -119,11 +119,30 @@ pub fn moved_writes(program: &Program) -> HashSet<(std::sync::Arc<str>, usize, u
     out
 }
 
+/// The builtins that append onto a byte builder, each `name acc x`, and write
+/// into `acc` where nobody else holds it, as a pattern over the name. A
+/// pattern rather than a function, so a site that adds names of its own still
+/// tells them all apart in one match.
+macro_rules! appends_bytes {
+    () => {
+        "append" | "builtin_append" | "builtin_append_escaped"
+    };
+}
+pub(crate) use appends_bytes;
+
+/// The two-argument builtins that write into their first argument where
+/// nobody else holds it: `push` onto a list, and the byte appends.
+macro_rules! grows_first {
+    () => {
+        "push" | appends_bytes!()
+    };
+}
+
 fn walk_for_moved(decl: &FnDecl, e: &Expr, out: &mut HashSet<(std::sync::Arc<str>, usize, usize)>) {
     if let Expr::App { head, args, span, .. } = e {
         let writes = match head.as_ref() {
             Expr::Ident(n, _, _) => match n.as_str() {
-                "push" | "append" | "builtin_append" | "builtin_append_escaped" => args.len() == 2,
+                grows_first!() => args.len() == 2,
                 "put" => args.len() == 3,
                 _ => false,
             },
@@ -838,13 +857,7 @@ impl<'a> Analysis<'a> {
                     // arguments, so a sibling may read the accumulator.
                     let builtin = (matches!(
                         callee.as_str(),
-                        "push"
-                            | "append"
-                            | "builtin_append"
-                            | "builtin_append_escaped"
-                            | "concat"
-                            | "list/concat"
-                            | "builtin_concat"
+                        grows_first!() | "concat" | "list/concat" | "builtin_concat"
                     ) && args.len() == 2)
                         || (callee == "put" && args.len() == 3);
                     if !takes_acc_first_with(args, acc, builtin) {
@@ -934,12 +947,7 @@ impl<'a> Analysis<'a> {
                 self.unique_in_with(early, ctx, scoped, exempt) && tail
             }
             Expr::App { head, args, .. } => match head.as_ref() {
-                Expr::Ident(n, _, _)
-                    if matches!(
-                        n.as_str(),
-                        "push" | "append" | "builtin_append" | "builtin_append_escaped"
-                    ) && args.len() == 2 =>
-                {
+                Expr::Ident(n, _, _) if matches!(n.as_str(), grows_first!()) && args.len() == 2 => {
                     self.unique_in(&args[0], ctx, scoped)
                 }
                 Expr::Ident(n, _, _) if n == "put" && args.len() == 3 => {
@@ -1034,8 +1042,7 @@ fn written_fields(program: &Program) -> HashSet<String> {
     fn walk(e: &Expr, out: &mut HashSet<String>) {
         if let Expr::App { head, args, .. } = e {
             if matches!(head.as_ref(), Expr::Ident(n, _, _) if matches!(n.as_str(),
-                "push" | "append" | "builtin_append" | "builtin_append_escaped" | "put"
-                    | "concat" | "list/concat" | "builtin_concat"))
+                grows_first!() | "put" | "concat" | "list/concat" | "builtin_concat"))
             {
                 if let Some((_, f)) = args.first().and_then(field_read) {
                     out.insert(f.to_string());
@@ -1212,7 +1219,7 @@ fn walk_for_push_in(
     if let Expr::App { head, args, span, .. } = e {
         // push extends a list, append extends a byte builder, and each writes
         // into its own frontier when nobody else holds the value
-        if matches!(head.as_ref(), Expr::Ident(n, _, _) if matches!(n.as_str(), "push" | "append" | "builtin_append" | "builtin_append_escaped"))
+        if matches!(head.as_ref(), Expr::Ident(n, _, _) if matches!(n.as_str(), grows_first!()))
             && args.len() == 2
             && a.unique_in(&args[0], decl, scoped)
         {
@@ -1357,7 +1364,7 @@ fn fed_to_consumer(var: &str, v: &str, e: &Expr) -> Option<usize> {
     let mut n = 0;
     if let Expr::App { head, args, .. } = e {
         let consuming = matches!(head.as_ref(), Expr::Ident(h, _, _)
-            if matches!(h.as_str(), "put" | "push" | "append" | "builtin_append" | "builtin_append_escaped"));
+            if matches!(h.as_str(), "put" | grows_first!()));
         if consuming && matches!(args.first(), Some(Expr::Ident(first, _, _)) if first == var) {
             for sibling in &args[1..] {
                 n += forced_operand(v, sibling)?;
@@ -1391,7 +1398,7 @@ fn consumed_sibling_uses(var: &str, e: &Expr) -> usize {
     let mut n = 0;
     if let Expr::App { head, args, .. } = e {
         let consuming = matches!(head.as_ref(), Expr::Ident(h, _, _)
-            if matches!(h.as_str(), "put" | "push" | "append" | "builtin_append" | "builtin_append_escaped"));
+            if matches!(h.as_str(), "put" | grows_first!()));
         if consuming && matches!(args.first(), Some(Expr::Ident(first, _, _)) if first == var) {
             for sibling in args[1..].iter().filter(|s| !holds(var, s)) {
                 n += count_in_expr(var, sibling);
