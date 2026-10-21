@@ -617,7 +617,7 @@ fn is_chain(
         }
         Expr::App { head, args, span, .. } => match head.as_ref() {
             Expr::Ident(n, _, _)
-                if matches!(n.as_str(), "append" | "builtin_append" | "builtin_append_escaped")
+                if matches!(n.as_str(), crate::linear::appends_bytes!())
                     && args.len() == 2
                     && mut_sites.contains(&(
                         decl.file.clone(),
@@ -1655,7 +1655,7 @@ impl Site<'_> {
     /// copy by the emitter. Pushes and puts are not admitted here: a list or
     /// map grown in place still takes its next buffer from the arena.
     fn in_place_append(&self, head: &Expr, args: &[Expr], span: &crate::diag::Span) -> bool {
-        matches!(head, Expr::Ident(n, _, _) if matches!(n.as_str(), "append" | "builtin_append" | "builtin_append_escaped"))
+        matches!(head, Expr::Ident(n, _, _) if matches!(n.as_str(), crate::linear::appends_bytes!()))
             && args.len() == 2
             && self.mut_sites.contains(&(
                 std::sync::Arc::clone(self.file),
