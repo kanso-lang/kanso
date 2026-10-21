@@ -265,16 +265,21 @@
 # appends and the escape around each key become one call, so calls fall by
 # three and branches rise by three in each (runbench 7,380 -> 7,377 and
 # 6,434 -> 6,437). defines hold everywhere.
-encodebench defines=141 calls=1236 branches=919 lines=10518
-oneshot defines=154 calls=1507 branches=1382 lines=14072
-basket defines=127 calls=1117 branches=1032 lines=9217
-widebench defines=157 calls=1393 branches=1037 lines=11619
-deepbench defines=53 calls=253 branches=257 lines=2396
-escapebench defines=21 calls=92 branches=93 lines=1013
-pendbench defines=71 calls=491 branches=414 lines=3671
-scanbench defines=322 calls=3054 branches=2947 lines=25284
-indexbench defines=21 calls=70 branches=48 lines=769
-digestbench defines=134 calls=935 branches=928 lines=8112
-readbench defines=21 calls=70 branches=44 lines=742
-livebench defines=155 calls=1546 branches=1425 lines=14395
-runbench defines=777 calls=7377 branches=6437 lines=56839
+# 2026-10-21: the encoder reads a map's entries in place rather than taking
+# two columns. Every program carries the inline paths' comment, 9 lines.
+# runbench, oneshot and livebench, which encode objects, gain 5 defines and
+# lose 27 branches and about 100 lines each (runbench defines 777 -> 782,
+# calls 7,377 -> 7,376, branches 6,437 -> 6,410, lines 56,839 -> 56,741).
+encodebench defines=141 calls=1236 branches=919 lines=10527
+oneshot defines=159 calls=1505 branches=1355 lines=13973
+basket defines=127 calls=1117 branches=1032 lines=9226
+widebench defines=157 calls=1393 branches=1037 lines=11628
+deepbench defines=53 calls=253 branches=257 lines=2405
+escapebench defines=21 calls=92 branches=93 lines=1022
+pendbench defines=71 calls=491 branches=414 lines=3680
+scanbench defines=322 calls=3054 branches=2947 lines=25293
+indexbench defines=21 calls=70 branches=48 lines=778
+digestbench defines=134 calls=935 branches=928 lines=8121
+readbench defines=21 calls=70 branches=44 lines=751
+livebench defines=160 calls=1544 branches=1398 lines=14296
+runbench defines=782 calls=7376 branches=6410 lines=56741
