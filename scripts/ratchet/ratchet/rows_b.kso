@@ -815,7 +815,7 @@ token_cache = row
 
 rows_b1tc = list/concat rows_b1hg [token_cache]
 
-# A map key reaches escape_onto through a parameter typed as a string.
+# A map key reaches append_key through a parameter typed as a string.
 key_typed = row
   "a key written as any value, so every key pays the untyped escape"
   true
