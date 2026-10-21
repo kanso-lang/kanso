@@ -254,16 +254,21 @@
 # 6,434 and lines 56,506 -> 56,649; encodebench, oneshot, widebench and
 # livebench gain 120 to 137 calls and lose 13 to 27 branches each. defines
 # hold everywhere.
-encodebench defines=141 calls=1223 branches=919 lines=10481
-oneshot defines=154 calls=1487 branches=1379 lines=13994
-basket defines=127 calls=1107 branches=1032 lines=9186
-widebench defines=157 calls=1378 branches=1037 lines=11578
+#
+# 2026-10-21: an inline length is bounded far below the largest word, one
+# assume a length read. runbench reads calls 7,301 -> 7,380 and lines 56,649
+# -> 56,807; eight other programs gain 1 to 39 calls; branches and defines
+# hold everywhere.
+encodebench defines=141 calls=1236 branches=919 lines=10507
+oneshot defines=154 calls=1510 branches=1379 lines=14040
+basket defines=127 calls=1117 branches=1032 lines=9206
+widebench defines=157 calls=1393 branches=1037 lines=11608
 deepbench defines=53 calls=253 branches=257 lines=2385
-escapebench defines=21 calls=91 branches=93 lines=1000
+escapebench defines=21 calls=92 branches=93 lines=1002
 pendbench defines=71 calls=491 branches=414 lines=3660
-scanbench defines=322 calls=3015 branches=2947 lines=25195
+scanbench defines=322 calls=3054 branches=2947 lines=25273
 indexbench defines=21 calls=70 branches=48 lines=758
-digestbench defines=134 calls=920 branches=928 lines=8071
+digestbench defines=134 calls=935 branches=928 lines=8101
 readbench defines=21 calls=70 branches=44 lines=731
-livebench defines=155 calls=1526 branches=1422 lines=14317
-runbench defines=777 calls=7301 branches=6434 lines=56649
+livebench defines=155 calls=1549 branches=1422 lines=14363
+runbench defines=777 calls=7380 branches=6434 lines=56807

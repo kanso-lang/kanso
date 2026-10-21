@@ -2694,7 +2694,15 @@ read_link_lost = row
   (breaking "a_read_position_left_unbounded")
   benchmarks
 
-read_positions = [read_link_kept read_link_lost]
+length_bound = row
+  "an inline length left unbounded"
+  true
+  (gating "emitted_code")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "an_inline_length_left_unbounded")
+  benchmarks
+
+read_positions = [read_link_kept read_link_lost length_bound]
 
 rows_cq18 = list/concat rows_cq17 read_positions
 

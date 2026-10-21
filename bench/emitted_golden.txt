@@ -264,7 +264,12 @@
 # inside the word's range, in assumes the call count reads, and the additions
 # to the position lose their overflow tests. calls 1,261 -> 1,381, branches
 # 1,332 -> 1,305, lines 12,909 -> 13,052; defines stay 136.
+#
+# 2026-10-21: an inline length is bounded far below the largest word, so a
+# position a guard kept at or under it steps by one with no overflow test.
+# One assume a length read: calls 1,381 -> 1,394, lines 13,052 -> 13,078;
+# branches and defines hold.
 defines=136
-calls=1381
+calls=1394
 branches=1305
-lines=13052
+lines=13078
