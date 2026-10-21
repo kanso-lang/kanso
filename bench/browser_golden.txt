@@ -50,8 +50,13 @@
 # check (kanso#1984). browser_compile_instructions 382,590,239 -> 382,741,447,
 # a RISE of 151,208 for the walk the check adds; the run rows are unchanged.
 # On rustc 1.98.1.
+# 2026-10-21: a carried record returns in three words (kanso#2025).
+# browser_compile_instructions 413,585,272 -> 412,332,402, a FALL of
+# 1,252,870; browser_compile_peak_bytes 757,553 -> 752,985;
+# browser_run_instructions 34,136,382 -> 34,370,238, a RISE of 233,856. On
+# rustc 1.98.1.
 # measured-on rustc=1.98.1
-browser_compile_instructions=413585272
-browser_compile_peak_bytes=757553
-browser_run_instructions=34136382
+browser_compile_instructions=412332402
+browser_compile_peak_bytes=752985
+browser_run_instructions=34370238
 browser_run_peak_bytes=1441792
