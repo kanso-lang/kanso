@@ -369,9 +369,9 @@ live_counters = row
   benchmarks
 
 # The skip in front of a string's first escape landed on 2026-09-07 as a
-# library change, and this row is what keeps it. Since 2026-10-20 the run is
-# copied by the runtime eight bytes a step, which no allocation counter sees,
-# so the work vein reads it being copied a byte at a time again.
+# library change, and this row is what keeps it. Since 2026-10-22 the run is
+# copied by the runtime sixteen bytes a block, which no allocation counter
+# sees, so the work vein reads it being copied a byte at a time again.
 clean_run = row
   "a clean run between two escapes copied a byte at a time again"
   false
