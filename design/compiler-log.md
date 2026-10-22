@@ -21,81 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-14 — Work bound ahead of the first sleep moves into it
-
-The 05:25 comment on #1856 measured a gap in the first cut of work-ahead. A
-program that binds its work as a plain value before the sleep,
-
-```
-total = spin 150000000 0
-sleep 2000 .> (_ -> print "delivery: made") .> (_ -> print "report: {total}")
-```
-
-took 3.01 s against 2.01 s for the rig, which binds the same work as a chain.
-An entry binding is computed at its own statement, so the work ran before the
-sleep began and the pool had nothing left to force.
-
-`src/ahead.rs` now moves such a binding into the park. The move applies when
-every statement ahead of the first sleep is a binding, since a binding performs
-no effect and the sleep is then the first thing the program does that can be
-seen. A binding qualifies when its value is closed (a literal, or a call of the
-program's own functions on closed arguments) and no other binder in the entry
-uses its name. It becomes a constant named `ahead~moved~N`, its reads in the
-statements after it read the constant, and the pool forces these constants
-first, in the order they were written. A read of a moved binding counts as
-closed, so a later binding built from one moves too, and so does a call after
-the sleep whose arguments name only moved bindings: `spin n 0`, with
-`n = 150000000` bound ahead of the sleep, is lifted like `spin 150000000 0`.
-
-The 2026-10-11 gavel on #1862 says a pooled failure is raised where the
-program as written raises it. For a moved binding that place is the park,
-because nothing printed between the binding and the sleep. The pool reads a
-moved constant through `k_ahead_try` like any other; when the try reports a
-death, the pool reads it once more outside the try, so the failure is raised
-there with its message on stderr. The work is pure, so the second read meets
-the same failure. A constant lifted from a continuation keeps its old
-treatment: the pool stops and the failure comes where the value is read.
-
-On this container the program above went from 3.80 s to 2.08 s under
-`kanso play`, compile included, with the same two lines printed; the `spin n 0`
-form went from 4.04 s to 2.09 s.
-`tests/golden/mem/work_ahead_moves_a_binding_into_the_park` pins
-`ahead_forced=1`, `tests/golden/mem/work_ahead_reads_a_moved_binding` pins
-`ahead_forced=2` for the moved count and the call that reads it, and `a_moved_binding_fails_at_the_park` in
-`tests/work_ahead.rs` pins a moved binding that overflows the stack: nothing on
-stdout and the overflow on stderr, the interpreter's transcript. Without the
-second read the native build printed `first` before the overflow. Three ratchet
-rows cover the move, the second read, and a moved binding read as closed.
-
-Two cleanups ride along. The mutable child walk was written twice, in
-`src/inline.rs` and `src/lib/hoist.rs`; it is now `for_each_child_mut` in
-lib.rs beside `for_each_child`. Taking its callback as `&mut dyn FnMut`, as
-hoist's copy did, cost the tab's compile of its corpus 2,229,038 more wasm
-instructions on this container than the two private copies, because the copy
-in inline.rs had been inlined into its two callers and devirtualized there.
-The shared walk takes its callback as a type parameter instead, as
-`for_each_child` does. A pattern's binders were listed twice, by
-codegen's `pattern_names` and trmc's `bound_names`; both call
-`Pattern::each_name` now, and trmc's list gains the as-pattern's name it used
-to leave out.
-
-CI moved six rows. `browser_compile_instructions` went from 381,571,779 to
-382,410,206, up 838,427, the same reading this container gave. A bisect here
-put 305,579 of that on the shared walk, 32,693 on `each_name` and 500,155 on
-the move, of which the move's codegen change accounts for 3,436. The tab's
-corpus never sleeps, so most of the rest is how rustc divided the wasm build
-into codegen units. The native front end rose with it: `entry_instructions`
-74,989,410 -> 75,110,529, `library_instructions` 74,674,363 -> 74,797,007,
-`compile_instructions` 22,632,999 -> 22,665,231. `interp_instructions` fell
-756 to 492,625,557 and `emit_instructions` fell 9 to 5,438,848. No runtime row
-moved. Welfare fell 0.00094 to 91.52438, and the floor is lowered by exactly
-that, since this builds a ruled part of the language.
-
-Still not built for #1856: an entry with more than one effect line, which
-never pools (the next entry corrects this line), calls whose arguments name
-locals that cannot move (a lambda's parameter, a value read from io), which
-need the (site, args) pool, and the cost gate on admission.
-
 ## 2026-10-14 — The pool takes only work
 
 This is the grain piece of #1856. The pool reads each constant inside
@@ -1893,3 +1818,60 @@ and book_quotes refused it once the encoder stopped naming `keys` and `values`;
 it now shows the map going in whole with its count. The ratchet row
 `a_map_entry_read_through_the_c` sends `key_at` to the C and turns the emitted
 gate red.
+
+## 2026-10-22 — a JSON string value goes out in one claim
+
+The encoder wrote a string value as an opening quote, `escape_onto` and a
+closing quote. `escape_onto` scanned the string for a byte that needs escaping
+and either appended it as it stands or handed it to `append_escaped`, which
+scanned it again as it escaped it. On the run program's document 1,773 of every
+2,114 string values need escaping. They average 16 bytes with 2.6 escapes each,
+so most values paid for both scans. `builtin_append_string acc s` now writes the
+quotes and the escaped bytes in one call. Where the builder is at its frontier
+with room for the worst case, the C writes the quote, escapes straight into the
+builder and writes the closing quote. A value the decoder shared as a clean
+token takes the same inline path as a key, with a closing quote where a key has
+`":`. The interpreter's arm writes the same bytes.
+
+Measured here, on top of the map read, the run program read 1,039,464,472 ->
+1,028,684,506 (-1.04%) with the same output, and the interpreted corpus read
+401,548,849 -> 384,232,761 instructions and 420,781 -> 400,588 allocations.
+
+CI's rows: work_runbench 1,039,465,659 -> 1,028,685,693 (-1.04%), work_livebench
+1,219,792,784 -> 1,172,094,931 (-3.9%) and work_oneshot 11,902,783 -> 11,785,186
+(-0.99%); work_encodebench 2,456,797,749 -> 2,456,797,637. The counters:
+find2_calls falls in run (1,667,049 -> 1,488,669), live (807,837 -> 15,037) and
+oneshot (17,019 -> 15,037), since a value no longer passes through escape_onto's
+scan, and append_fast falls in the same three, the quote appends no longer made
+one at a time: run_append_fast 5,737,050 -> 5,328,270, live_append_fast
+25,498,000 -> 23,681,200 and oneshot_append_fast 63,745 -> 59,203.
+interp_instructions 401,548,849 -> 384,232,761, interp_allocs 420,781 -> 400,588
+and interp_peak_bytes 616,944 -> 608,798. The library is smaller to compile:
+compile_instructions 24,218,897 -> 23,713,618, entry_instructions 75,050,737 ->
+74,424,236, library_instructions 74,724,744 -> 74,085,135, compile_allocs 13,427
+-> 13,179, front_end_visits 7,010 -> 6,914 and compile_peak_bytes 575,175 ->
+565,175, and codegen_instructions_release 422,550,641 -> 422,357,890. The
+runtime's C entry adds about 5,000 bytes of text to every program (text
+jsonbench 367,721 -> 372,777, runbench 720,681 -> 721,209), and
+codegen_instructions_dev 116,025,482 -> 116,064,263 and emit_instructions
+6,341,758 -> 6,364,404 rise with the path. Emitted code: the decoder's
+emitted_lines 13,098 -> 13,102; runbench, oneshot and livebench lose
+escape_onto's steps (runbench defines 782 -> 778, calls 7,376 -> 7,357, lines
+56,741 -> 56,666) and gain 5 branches (6,410 -> 6,415); the compile corpus's
+lines 1,492 -> 1,508 and module_lines 1,155 -> 1,159; in all,
+emitted_other_branches 16,882 -> 16,897 and text 5,179,630 -> 5,236,430. In the
+tab, browser_run_instructions 32,722,014 -> 32,241,456 (-1.5%),
+browser_compile_instructions 412,895,911 -> 406,640,369 (-1.5%) and
+browser_compile_peak_bytes 735,564 -> 732,776 fall. The welfare sum rose, and
+the floor moves 92.07 -> 92.13.
+
+The micro golden `a_string_value_goes_out_between_its_quotes` decodes and
+encodes string values at the edges twice: empty, one byte, seven and eight
+bytes, `été`, an escaped `\u00e9`, and tokens with a quote, a backslash or a
+tab. With the inline path's length short by one, the clean tokens lost their
+closing quotes; with the C's closing quote replaced, the values it wrote showed
+the replacement. The ratchet row `a_string_value_claimed_three_times` writes
+values the old way and turns the emitted gate red. The book's chapter 08 panel
+showed the string arm as `_escape_onto` and called its sample the library's
+escape functions verbatim, which stopped being true when escaping moved to the
+runtime; it now shows the one call and says what the runtime does.
