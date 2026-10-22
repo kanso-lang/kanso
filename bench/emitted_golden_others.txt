@@ -282,7 +282,7 @@
 # branches and 32 lines each (runbench 778 -> 777, 7,357 -> 7,355, 6,415 ->
 # 6,412, 56,666 -> 56,634).
 encodebench defines=141 calls=1236 branches=919 lines=10533
-oneshot defines=154 calls=1484 branches=1357 lines=13866
+oneshot defines=154 calls=1481 branches=1357 lines=13868
 basket defines=127 calls=1117 branches=1032 lines=9232
 widebench defines=157 calls=1393 branches=1037 lines=11634
 deepbench defines=53 calls=253 branches=257 lines=2411
@@ -292,5 +292,5 @@ scanbench defines=322 calls=3054 branches=2947 lines=25299
 indexbench defines=21 calls=70 branches=48 lines=784
 digestbench defines=134 calls=935 branches=928 lines=8127
 readbench defines=21 calls=70 branches=44 lines=757
-livebench defines=155 calls=1523 branches=1400 lines=14189
-runbench defines=777 calls=7355 branches=6412 lines=56634
+livebench defines=155 calls=1520 branches=1400 lines=14191
+runbench defines=777 calls=7352 branches=6412 lines=56636
