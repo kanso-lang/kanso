@@ -1,0 +1,26 @@
+# A string value is written by one builtin: a quote, the string escaped and a
+# quote. A value the decoder shared as a token of four to seven bytes that
+# needs no escaping is copied as one word; every other value is escaped byte
+# by byte. The document holds values at the edges: empty, one byte, exactly
+# seven and eight bytes, a two-byte character, an escaped one, and shared
+# tokens with a quote, a backslash or a tab in them. It is decoded and
+# encoded twice, so the second pass reads the tokens the first one shared.
+import "std/io"
+import "std/json"
+
+short = "\"\",\"a\",\"abcd\",\"seven77\",\"eight888\""
+
+wide = "\"été\",\"\\u00e9\",\"q\\\"uo\",\"b\\\\sl\",\"t\\tab\""
+
+doc = "[{short},{wide},\{\"in\":[\"wxyz\"]}]"
+
+fn encoded (err _)
+  "refused"
+
+fn encoded v
+  json/encode v
+
+fn shown _
+  encoded (json/decode doc)
+
+pub play = io/write "{shown 0}\n{shown 0}\n"
