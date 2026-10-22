@@ -105051,3 +105051,42 @@ the mutation the release build prints `["" "" ""]` and the row goes red.
 Lazy parsing by declaration, the larger fix #1952 names, has not been built. This
 change narrows what is read; it does not make one declaration cheaper to
 read.
+
+## 2026-10-14 — An Apple release build keeps its wide arms through the link
+
+kanso#1951 kept `tailcc` on arm64 functions whose arguments overflow the
+eight argument registers, and marked them so the backend makes no sibling
+call there (`wide_tailcc_keeps_its_jumps`). Linux arm64 ran correctly. An
+Apple arm64 host did not: on the macOS job,
+`a_spilling_tail_call_named_with_a_mark` printed nothing, though the same IR
+ran under qemu for linux arm64. So Apple kept `narrow_tailcc`, which gives a
+wide function the C convention. Each hop through one then spends a frame, and
+the three tests that recurse deeply through a wide arm were gated off on
+Apple: `a_self_call_through_a_thirteen_word_arm_runs_in_one_frame`,
+`a_cycle_through_a_twelve_word_arm_runs_in_one_frame` and
+`an_object_of_300_000_keys_decodes` (#1912).
+
+The cause is ld64's LTO. It runs LLVM's default pipeline over the linked
+module, and that pipeline includes dead-argument elimination. Once LTO
+internalizes a wide `tailcc` function, the pass is free to drop the arguments
+it never reads. On the macOS job it cut `reached?_5_w` in the mark test to one
+argument and a plain `ret`, while its caller still ran `sub sp, sp, #0x10`
+after the call for the stack arguments it expected the callee to pop. The stack
+pointer came back sixteen bytes off. The Linux link takes the pass out already
+(`LTO_O3_WITHOUT_DEADARGELIM`, since kanso#1705), which is why the same IR was
+fine there.
+
+A function named in `@llvm.used` is never internalized, so the pass leaves its
+signature alone. That custom pipeline applies only when clang is 18 or 19 and
+lld takes the link, so every arm64 release build now marks its wide functions as
+before and also lists each `tailcc` definition with more argument words than
+the registers hold in `@llvm.used`, in the `llvm.metadata` section. A program
+with no such function gets no global. Two unit tests in `tail_calls.rs` pin the
+list: only a function past the registers is named, and a program without one
+names none. The three tests above run ungated, and on the macOS job all three
+pass.
+
+`narrow_tailcc` and its helper `called_symbol` are gone, and the
+tail-call-given-up mutation now strips both host arms. No row moved. The
+change is confined to the arm64 host arm, and every Linux row the branch's CI
+read matched main's goldens, `compile_instructions` included.
