@@ -22,7 +22,8 @@
 //! is sensitive, in bench/cost_golden.txt.
 //!
 //! `reading_insisted.kso` is the third program and the bang's own case. It
-//! read `beat_iters=1` against the other two's 201 and 801: `desc_yield` was
+//! read `beat_iters=1` against the other two's 201 and 801 (200 and 800 since
+//! 2026-10-22): `desc_yield` was
 //! a table keyed on a chain head's BARE name, `os/read_file` hit it because
 //! the name collides with the builtin's, and `os/read_file!` — same body, one
 //! character more — missed and fell to the top set. The yield is carried per
@@ -47,16 +48,17 @@
 use std::process::Command;
 
 /// The loop brackets rather than running once: `beat_iters` is one per
-/// iteration plus one for the program. Measured at 0 when the loop keeps the
-/// grow-only arena: nothing brackets, so nothing counts.
+/// iteration. It read one more, for the program's own chain, until that chain
+/// stopped staging its first step (2026-10-22). Measured at 0 when the loop
+/// keeps the grow-only arena: nothing brackets, so nothing counts.
 #[test]
 fn the_loop_brackets_every_iteration() {
     let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/golden/read_beat");
     for (file, want) in [
-        ("reading.kso", "beat_iters=201"),
-        ("reading_long.kso", "beat_iters=801"),
-        ("reading_insisted.kso", "beat_iters=201"),
-        ("reading_branch.kso", "beat_iters=201"),
+        ("reading.kso", "beat_iters=200"),
+        ("reading_long.kso", "beat_iters=800"),
+        ("reading_insisted.kso", "beat_iters=200"),
+        ("reading_branch.kso", "beat_iters=200"),
     ] {
         let out = Command::new(env!("CARGO_BIN_EXE_kanso"))
             .arg("play")

@@ -1086,9 +1086,10 @@ static KValue k_exec(KDesc* d) {
                costs constant C stack. the final result goes through the
                pop, which copies a heap survivor out of the buffers. */
             k_beat_push();
-            /* A chain's first step always sizes and stages: its depth's
-               last stage, if any, was another chain's. */
-            k_carries[k_beat_depth - 1].at_arena = NULL;
+            /* The drift is measured from where this chain began: the
+               depth's last stage, if any, was another chain's. */
+            k_carries[k_beat_depth - 1].at_arena = k_arena;
+            k_carries[k_beat_depth - 1].at_blocks = (const void*)k_blocks;
             KValue cur;
             cur.tag = K_DESC;
             cur.payload = k_ptr(d);

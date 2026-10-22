@@ -32,6 +32,8 @@ done:
 @k_stats_on = external global i32
 @k_token_store = external global i8
 @k_token_clean = external global i8
+@k_token_key = external global i64
+@k_token_cache = external global %KValue
 
 define internal %KValue @k_b_append_byte(%KValue %acc, %KValue %x, ptr %site) alwaysinline {
   %atag = extractvalue %KValue %acc, 0
@@ -355,7 +357,7 @@ slow:
 ; the key and the closing pair were three claims before, each with its own
 ; ownership and room tests. Anything else is the C, which writes the same
 ; bytes the long way.
-define internal %KValue @k_b_append_key_fast(%KValue %acc, %KValue %x) alwaysinline {
+define internal %KValue @k_b_append_key_fast(%KValue %acc, %KValue %x, ptr %site) alwaysinline {
   %atag = extractvalue %KValue %acc, 0
   %isb = icmp eq i64 %atag, 13
   %xtag = extractvalue %KValue %x, 0
@@ -418,13 +420,14 @@ write:
   store i64 %lenn, ptr %b
   ret %KValue %acc
 slow:
+  store ptr %site, ptr @k_site
   %f = call %KValue @k_b_append_key_mut(%KValue %acc, %KValue %x)
   ret %KValue %f
 }
 ; `append_string acc s` on a builder this function owns, for a string value
 ; the decoder shared as a clean token: the same three stores as a key, with
 ; the closing quote alone after the bytes.
-define internal %KValue @k_b_append_string_fast(%KValue %acc, %KValue %x) alwaysinline {
+define internal %KValue @k_b_append_string_fast(%KValue %acc, %KValue %x, ptr %site) alwaysinline {
   %atag = extractvalue %KValue %acc, 0
   %isb = icmp eq i64 %atag, 13
   %xtag = extractvalue %KValue %x, 0
@@ -487,6 +490,7 @@ write:
   store i64 %lenn, ptr %b
   ret %KValue %acc
 slow:
+  store ptr %site, ptr @k_site
   %f = call %KValue @k_b_append_string_mut(%KValue %acc, %KValue %x)
   ret %KValue %f
 }
@@ -496,7 +500,7 @@ slow:
 ; pointer carries a side mark, the top bit natively and the low bit on wasm32,
 ; and both are tested so the one text serves both. A stale or missing view,
 ; and anything else, is the C, which builds the view first.
-define internal %KValue @k_b_entry_count_fast(%KValue %mv) alwaysinline {
+define internal %KValue @k_b_entry_count_fast(%KValue %mv, ptr %site) alwaysinline {
   %tm = extractvalue %KValue %mv, 0
   %ismap = icmp eq i64 %tm, 10
   br i1 %ismap, label %view, label %slow
@@ -517,10 +521,54 @@ count:
   %v = insertvalue %KValue { i64 0, i64 undef }, i64 %n, 1
   ret %KValue %v
 slow:
+  store ptr %site, ptr @k_site
   %f = call %KValue @k_b_entry_count(%KValue %mv)
   ret %KValue %f
 }
-define internal %KValue @k_b_key_at_fast(%KValue %mv, %KValue %iv) alwaysinline {
+; `key_at m i` and `value_at m i` side by side in one call's arguments: the
+; view is tested once and both are loaded, the value into the caller's slot.
+define internal %KValue @k_b_entry_pair_fast(%KValue %mv, %KValue %iv, ptr %out) alwaysinline {
+  %tm = extractvalue %KValue %mv, 0
+  %ismap = icmp eq i64 %tm, 10
+  %ti = extractvalue %KValue %iv, 0
+  %isint = icmp eq i64 %ti, 0
+  %both = and i1 %ismap, %isint
+  br i1 %both, label %view, label %slow
+view:
+  %mp = extractvalue %KValue %mv, 1
+  %m = inttoptr i64 %mp to ptr
+  %sortedp = getelementptr i8, ptr %m, i64 16
+  %sorted = load ptr, ptr %sortedp
+  %si = ptrtoint ptr %sorted to i64
+  %side = and i64 %si, -9223372036854775807
+  %unmarked = icmp eq i64 %side, 0
+  %present = icmp ne i64 %si, 0
+  %fresh = and i1 %unmarked, %present
+  br i1 %fresh, label %range, label %slow
+range:
+  %nmp = getelementptr i8, ptr %m, i64 24
+  %n = load i64, ptr %nmp
+  %i = extractvalue %KValue %iv, 1
+  %lo = icmp sgt i64 %i, 0
+  %hi = icmp sle i64 %i, %n
+  %inr = and i1 %lo, %hi
+  br i1 %inr, label %pick, label %slow
+pick:
+  %twice = shl i64 %i, 1
+  %j = add i64 %twice, -2
+  %kat = getelementptr %KValue, ptr %sorted, i64 %j
+  %k = load %KValue, ptr %kat
+  %vat = getelementptr %KValue, ptr %kat, i64 1
+  %v = load %KValue, ptr %vat
+  store %KValue %v, ptr %out
+  ret %KValue %k
+slow:
+  %fk = call %KValue @k_b_key_at(%KValue %mv, %KValue %iv)
+  %fv = call %KValue @k_b_value_at(%KValue %mv, %KValue %iv)
+  store %KValue %fv, ptr %out
+  ret %KValue %fk
+}
+define internal %KValue @k_b_key_at_fast(%KValue %mv, %KValue %iv, ptr %site) alwaysinline {
   %tm = extractvalue %KValue %mv, 0
   %ismap = icmp eq i64 %tm, 10
   %ti = extractvalue %KValue %iv, 0
@@ -553,10 +601,11 @@ pick:
   %v = load %KValue, ptr %at
   ret %KValue %v
 slow:
+  store ptr %site, ptr @k_site
   %f = call %KValue @k_b_key_at(%KValue %mv, %KValue %iv)
   ret %KValue %f
 }
-define internal %KValue @k_b_value_at_fast(%KValue %mv, %KValue %iv) alwaysinline {
+define internal %KValue @k_b_value_at_fast(%KValue %mv, %KValue %iv, ptr %site) alwaysinline {
   %tm = extractvalue %KValue %mv, 0
   %ismap = icmp eq i64 %tm, 10
   %ti = extractvalue %KValue %iv, 0
@@ -589,6 +638,7 @@ pick:
   %v = load %KValue, ptr %at
   ret %KValue %v
 slow:
+  store ptr %site, ptr @k_site
   %f = call %KValue @k_b_value_at(%KValue %mv, %KValue %iv)
   ret %KValue %f
 }
@@ -989,6 +1039,34 @@ closed:
   %e = insertvalue %KValue { i64 0, i64 undef }, i64 %q2, 1
   ret %KValue %e
 text:
+  %tl = sub i64 %q, %fv
+  %tm4 = sub i64 %tl, 4
+  %short = icmp ult i64 %tm4, 4
+  br i1 %short, label %token, label %general
+token:
+  %f1 = sub i64 %fv, 1
+  %tp = getelementptr i8, ptr %d, i64 %f1
+  %ta = load i32, ptr %tp, align 1
+  %tep = getelementptr i8, ptr %tp, i64 %tm4
+  %tb = load i32, ptr %tep, align 1
+  %ta64 = zext i32 %ta to i64
+  %tb64 = zext i32 %tb to i64
+  %tsh = shl i64 %tm4, 3
+  %tbs = shl i64 %tb64, %tsh
+  %tln = shl i64 %tl, 56
+  %tk1 = or i64 %ta64, %tbs
+  %tkey = or i64 %tk1, %tln
+  %th = mul i64 %tkey, -7046029254386353131
+  %tslot = lshr i64 %th, 52
+  %tkp = getelementptr i64, ptr @k_token_key, i64 %tslot
+  %tkv = load i64, ptr %tkp
+  %thit = icmp eq i64 %tkv, %tkey
+  br i1 %thit, label %cached, label %general
+cached:
+  %tcp = getelementptr %KValue, ptr @k_token_cache, i64 %tslot
+  %tcv = load %KValue, ptr %tcp
+  ret %KValue %tcv
+general:
   %s = call %KValue @k_b_utf8_slice_raw(ptr %d, i64 %len, i64 %fv, i64 %qi, ptr %site)
   %st = extractvalue %KValue %s, 0
   %bad = icmp eq i64 %st, 5

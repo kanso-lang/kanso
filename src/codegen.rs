@@ -251,6 +251,19 @@ fn column_of<'e>(e: &'e Expr, which: &str) -> Option<&'e str> {
     }
 }
 
+/// The map and position of `which m i`, a read of one map entry.
+fn entry_of<'e>(e: &'e Expr, which: &str) -> Option<(&'e str, &'e str)> {
+    let Expr::App { head, args, piped: false, .. } = e else { return None };
+    match (&**head, args.as_slice()) {
+        (Expr::Ident(h, _, _), [Expr::Ident(m, _, _), Expr::Ident(i, _, _)])
+            if h.as_str() == which =>
+        {
+            Some((m.as_str(), i.as_str()))
+        }
+        _ => None,
+    }
+}
+
 /// The count a builtin the native backend emits a direct call for takes.
 /// Membership is this file's business — which builtins get a C entry rather
 /// than an inline expansion — and the count is `check`'s, so this asks each
@@ -962,6 +975,7 @@ fn emit_with(
         group_by_name: group_indices_by_name(program),
         cycle_reached: cycle_reached(program),
         cycle_members: cycle_members(program),
+        reaches_cycle: reaches_cycle(program, &beat.allocating),
         deep: crate::deep::Deep::of(program),
         twin_of: None,
         kept_out: kept_out(program),
@@ -1239,6 +1253,9 @@ struct Backend<'a> {
     cycle_reached: crate::hash::Set<&'a str>,
     /// Names on a cycle, the groups that get a word twin. See `has_twin`.
     cycle_members: crate::hash::Set<&'a str>,
+    /// Names that run a loop before they answer, whose calls keep a cohort
+    /// bracket from a caller a cycle reaches. See `reaches_cycle`.
+    reaches_cycle: crate::hash::Set<&'a str>,
     /// The cycles that grow the stack, and the place an overflow in each
     /// names (see `crate::deep`).
     deep: crate::deep::Deep,
@@ -1835,10 +1852,10 @@ include!("codegen/prune.rs");
 /// The byte views that live in their function's frame. `bytes s` of a
 /// string writes a three-word header -- length, data, capacity -- and the
 /// header is all it allocates, since the view borrows the string's bytes.
-/// JSON's `escape_onto` makes one per string it writes, 942,750 on the run
-/// program, and reads it for a length, a scan and some slices before it
-/// returns. A header in the arena costs the bump and every read through it;
-/// a header in the frame is three stores LLVM takes apart into registers.
+/// JSON's `escape_onto` makes one per string it escapes and reads it for a
+/// length, a scan and some slices before it returns. A header in the arena
+/// costs the bump and every read through it; a header in the frame is three
+/// stores LLVM takes apart into registers.
 ///
 /// The frame must outlive every read. So a binding `x = bytes e` qualifies
 /// when its function sits on no cycle of the call graph, which keeps the

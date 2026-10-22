@@ -1,0 +1,38 @@
+# A key of four to seven bytes that the token cache already holds is read
+# from the cache by the decoder's own code, without a call into the runtime.
+# The first object fills the cache and the second reads from it, in the
+# other order. The keys come in pairs that differ in one byte at the front
+# or the back, at every length the cache takes, beside keys of three and
+# eight bytes that it does not take, a key with a two-byte character and
+# one with an escape. `aaaz` and `abae` hash to the same slot, so the first
+# takes it and the second goes to the slot beside it: a hit read from the
+# wrong one of the two, or a slot taken as a hit without comparing its key,
+# answers one key for the other.
+import "std/io"
+import "std/json"
+import "std/list"
+import "std/text"
+
+four = ["aaaz" "abae" "abcd" "bbcd" "abce"]
+
+longer = ["wxyzw" "wxyzv" "pqrstu" "qqrstu" "abcdefg"]
+
+others = ["abcdefh" "abc" "abcdefgh" "héllo" "ab\\\"c"]
+
+names = list/concat four (list/concat longer others)
+
+fn member k
+  "\"{k}\":\"{k}\""
+
+fn object ks
+  "\{{text/join (list/to_list (list/map ks member)) ","}}"
+
+source = "[{object names},{object (list/reverse names)}]"
+
+fn shown (err r)
+  "refused: {r}"
+
+fn shown v
+  json/encode v
+
+pub play = io/write "{json/decode source .> shown}\n"

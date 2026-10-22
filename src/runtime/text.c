@@ -300,8 +300,8 @@ K_DOORCC KValue k_b_utf8(KValue lv, const char* origin);
    hit is valid utf-8 because the bytes it matched were validated when the
    slot was filled. A zero key never matches, since every key carries its
    length in the top byte. */
-static uint64_t k_token_key[1 << K_TOKEN_BITS];
-static KValue k_token_cache[1 << K_TOKEN_BITS];
+uint64_t k_token_key[1 << K_TOKEN_BITS];
+KValue k_token_cache[1 << K_TOKEN_BITS];
 
 static __attribute__((noinline, cold, preserve_most)) KValue k_token_miss(const char* data, long long len,
                                                                           const char* origin,
@@ -1617,20 +1617,48 @@ KValue k_b_unescape(KValue cs, KValue fromv, KValue ev) {
    lib/json walked a number one byte a step, a dispatch on every byte, and it
    cost the run program 23 instructions a character; sixteen bytes are
    classified here at once. */
+/* A word's bytes that are not ascii digits, as 0x80 in each such byte. Each
+   byte is xored with '0', so a digit becomes 0 to 9, and a byte is flagged
+   when it is above 9: its low seven bits plus 0x76 reach 0x80 from 0x0A up,
+   and its own top bit covers the rest. The add stays under 0x100 in every
+   byte, so no byte's answer carries into its neighbour's. */
+static inline uint64_t k_nondigits8(uint64_t x) {
+    uint64_t t = x ^ 0x3030303030303030ULL;
+    return (((t & 0x7F7F7F7F7F7F7F7FULL) + 0x7676767676767676ULL) | t) & 0x8080808080808080ULL;
+}
+
+/* Where a run of ascii digits that starts at `j` ends, read eight bytes at a
+   time; -1 past sixteen digits. The caller guarantees sixteen bytes from `j`
+   are inside the buffer. */
+static inline __attribute__((always_inline)) long long k_digits_end(const unsigned char* d,
+                                                                    long long j) {
+    uint64_t w;
+    memcpy(&w, d + j, 8);
+    uint64_t nd = k_nondigits8(w);
+    if (nd) return j + (__builtin_ctzll(nd) >> 3);
+    memcpy(&w, d + j + 8, 8);
+    nd = k_nondigits8(w);
+    if (nd) return j + 8 + (__builtin_ctzll(nd) >> 3);
+    return -1;
+}
+
+/* The same question as a table, for the word-at-a-time path in
+   `k_b_number_span_raw`, which asks it of the byte after a run. */
+static const unsigned char k_number_bytes[256] = {
+    ['+'] = 1, ['-'] = 1, ['.'] = 1, ['0'] = 1, ['1'] = 1, ['2'] = 1, ['3'] = 1,
+    ['4'] = 1, ['5'] = 1, ['6'] = 1, ['7'] = 1, ['8'] = 1, ['9'] = 1, ['E'] = 1,
+    ['e'] = 1,
+};
+
 static int k_number_byte(unsigned char c) {
     return (unsigned)(c - '0') < 10 || c == '+' || c == '-' || c == '.' || c == 'e' || c == 'E';
 }
 
-/* The scan behind `number_span`, with the KValue convention taken off its
-   inputs: a pointer, a length and a position, and the answer as a plain
-   integer. The emitter reaches it through the `k_b_number_span_fast` twin,
-   which tests the two tags inline, so a call whose bytes and position are
-   what they say skips the failure and tag ladder below; on the run program
-   that is 417,483 calls. `k_b_number_span` is the same scan for anything the
-   twin turns away. The counter is here so both doors count a call once. */
-long long k_b_number_span_raw(const unsigned char* d, long long len, long long from) {
-    if (K_COUNTING) k_stat_number_spans++;
-    if (from < 1 || from > len) return from;
+/* Every number the word-at-a-time path in `k_b_number_span_raw` turns
+   away: the RFC's checks, then sixteen bytes a step. Out of line, because
+   the registers the step wants made every call build a frame. */
+static __attribute__((noinline)) long long k_number_span_scan(const unsigned char* d,
+                                                             long long len, long long from) {
     long long i = from - 1;
     /* RFC 8259 §6 asks three things of a number that the converters do not
        (#1999): a digit first, after any minus; no digit after a leading 0;
@@ -1689,6 +1717,38 @@ long long k_b_number_span_raw(const unsigned char* d, long long len, long long f
     }
     if (bare) return 0;
     return mark ? -(i + 1) : i + 1;
+}
+
+/* The scan behind `number_span`, with the KValue convention taken off its
+   inputs: a pointer, a length and a position, and the answer as a plain
+   integer. The emitter reaches it through the `k_b_number_span_fast` twin,
+   which tests the two tags inline, so a call whose bytes and position are
+   what they say skips the failure and tag ladder below; on the run program
+   that is 417,483 calls. `k_b_number_span` is the same scan for anything the
+   twin turns away. The counter is here so both doors count a call once. */
+long long k_b_number_span_raw(const unsigned char* d, long long len, long long from) {
+    if (K_COUNTING) k_stat_number_spans++;
+    if (from < 1 || from > len) return from;
+    /* The shape nearly every number has, `-?D+` or `-?D+.D+` with no
+       leading zero and then a byte no number holds, read a word at a time.
+       Anything else, and any number within forty bytes of the end, is left
+       to the checks and the scan below, which start again from `from`. The
+       run program's 417,483 numbers are all this shape, four to nine bytes
+       long. */
+    if (from + 40 <= len) {
+        long long lead = from - 1 + (d[from - 1] == '-');
+        if ((unsigned)(d[lead] - '1') < 9) {
+            long long e = k_digits_end(d, lead);
+            if (e >= 0) {
+                if (!k_number_bytes[d[e]]) return e + 1;
+                if (d[e] == '.' && (unsigned)(d[e + 1] - '0') < 10) {
+                    long long f = k_digits_end(d, e + 1);
+                    if (f >= 0 && !k_number_bytes[d[f]]) return -(f + 1);
+                }
+            }
+        }
+    }
+    return k_number_span_scan(d, len, from);
 }
 
 KValue k_b_number_span(KValue cs, KValue fromv) {
@@ -1942,6 +2002,36 @@ static __attribute__((noinline)) KValue k_b_append_grow(KValue acc, KBytes* a,
         a->cap = cap;
         return acc;
     }
+    /* An arena buffer that is the last thing the arena handed out grows by
+       moving the frontier past it, and its bytes stay where they are. A
+       header above the innermost mark was allocated after that mark, and a
+       buffer at the frontier after the header, so the extension dies with
+       the header at the same rewind. The header must own the buffer's
+       frontier: a grow is also how an append reaches a buffer another
+       header has written past. Anything else takes a new buffer and copies,
+       which in the arena is every doubling a builder passes through. */
+    if (mutate && dies && (a->cap & 1) && (a->cap & ~1LL)
+        && (((KBuf*)a->data) - 1)->used == a->len) {
+        KBuf* old = ((KBuf*)a->data) - 1;
+        long long ocap = a->cap & ~1LL;
+        uintptr_t end = ((uintptr_t)(old + 1) + (uintptr_t)ocap + 15) & ~(uintptr_t)15;
+        if (end == (uintptr_t)k_arena) {
+            size_t extra = (((sizeof(KBuf) + (size_t)cap) + 15) & ~(size_t)15)
+                           - (((sizeof(KBuf) + (size_t)ocap) + 15) & ~(size_t)15);
+            if (extra <= k_arena_left) {
+                if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0))
+                    k_stat_alloc_bytes += (long long)extra;
+                k_arena += extra;
+                k_arena_left -= extra;
+                k_buf_set_cap(old, cap, 0);
+                old->used = a->len + n;
+                k_copy_short((char*)a->data + a->len, (const char*)src, n);
+                a->len += n;
+                a->cap = cap | 1;
+                return acc;
+            }
+        }
+    }
     KBuf* buf;
     long long marked;
     if (dies) {
@@ -2088,14 +2178,12 @@ K_DOORCC KValue k_b_append_rendered(KValue acc, KValue v, long long mutate) {
 __attribute__((always_inline)) long long k_b_find2_below_raw(const unsigned char* d, long long len,
                               long long from, long long a, long long b,
                               long long floor_v) {
-    /* The JSON writer's scan, over a shared token already known to hold none
-       of the three. The decoder hands the writer the same few hundred keys on
-       every document, and the run program scans 942,750 strings a run
-       through this door. The byte triple is a literal at every emitted site,
-       so the test folds away everywhere else. A view that starts inside a token reads the whole
-       token's flag, which is safe: a clean token has no dirty sub-range.
-       `find2_calls` is counted after this, so it counts scans, and a skip
-       that stops firing shows there. */
+    /* `json/escape_onto`'s scan, over a shared token already known to hold
+       none of the three. The byte triple is a literal at every emitted site,
+       so the test folds away everywhere else. A view that starts inside a
+       token reads the whole token's flag, which is safe: a clean token has no
+       dirty sub-range. `find2_calls` is counted after this, so it counts
+       scans, and a skip that stops firing shows there. */
     if (a == 34 && b == 92 && floor_v == 32) {
         uintptr_t off = (uintptr_t)((const char*)d - (const char*)k_token_store);
         if (off < sizeof(k_token_store) && k_token_clean[off / sizeof(KToken)]) return len + 1;

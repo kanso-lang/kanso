@@ -1548,7 +1548,21 @@ impl<'a> Backend<'a> {
                     };
                     let mut deferred: Vec<(usize, Vec<String>)> = Vec::new();
                     let mut overflow: Vec<String> = Vec::new();
+                    let entries = self.both_entries(f, args);
+                    let mut value_of_the_entry: Option<String> = None;
                     for (i, arg) in args.iter().enumerate() {
+                        if entries == Some(i) {
+                            let (k, v) = self.emit_entry_pair(f, arg)?;
+                            value_of_the_entry = Some(v);
+                            emitted.push(k);
+                            packed.push(None);
+                            continue;
+                        }
+                        if entries.map(|k| k + 1) == Some(i) {
+                            emitted.push(value_of_the_entry.take().expect("the key came first"));
+                            packed.push(None);
+                            continue;
+                        }
                         match self.packed_arg_fields(name, n, i, arg) {
                             Some(fields) => {
                                 let fields = fields.to_vec();
@@ -3047,6 +3061,43 @@ impl<'a> Backend<'a> {
         self.columns_are_the_builtins(f, map).then_some((keys_at, values_at))
     }
 
+    /// Where two adjacent arguments read one map's entry at one position,
+    /// `builtin_key_at m i` and then `builtin_value_at m i`, the position of
+    /// the first. Both names are the library's own and resolve nowhere else.
+    fn both_entries(&self, f: &FnEmit, args: &[Expr]) -> Option<usize> {
+        let at = args.windows(2).position(|pair| {
+            let key = entry_of(&pair[0], "builtin_key_at");
+            key.is_some() && key == entry_of(&pair[1], "builtin_value_at")
+        })?;
+        let (m, i) = entry_of(&args[at], "builtin_key_at")?;
+        (f.lookup(m).is_some() && f.lookup(i).is_some()).then_some(at)
+    }
+
+    /// `key_at m i` and `value_at m i` in one call, for `both_entries`.
+    fn emit_entry_pair(
+        &mut self,
+        f: &mut FnEmit,
+        key_call: &Expr,
+    ) -> Result<(String, String), String> {
+        let Expr::App { args, .. } = key_call else { unreachable!("both_entries matched a call") };
+        let m = self.emit_expr(f, &args[0])?;
+        let m = self.maybe_force(f, m);
+        let i = self.emit_expr(f, &args[1])?;
+        let i = self.maybe_force(f, i);
+        let (ms, is) = (f.set_of(&m), f.set_of(&i));
+        let slot = f.tmp();
+        f.line_fmt(format_args!("{slot} = alloca %KValue, align 8"));
+        let k = f.tmp();
+        f.line_fmt(format_args!(
+            "{k} = call %KValue @k_b_entry_pair_fast(%KValue {m}, %KValue {i}, ptr {slot})"
+        ));
+        let v = f.tmp();
+        f.line_fmt(format_args!("{v} = load %KValue, ptr {slot}, align 8"));
+        f.record(&k, infer::builtin_set("key_at", &[ms, is]));
+        f.record(&v, infer::builtin_set("value_at", &[ms, is]));
+        Ok((k.to_string(), v.to_string()))
+    }
+
     /// Whether `keys` and `values` here are the builtins and `map` a local:
     /// a program that declares or binds either name calls its own function.
     fn columns_are_the_builtins(&self, f: &FnEmit, map: &str) -> bool {
@@ -3541,6 +3592,11 @@ impl<'a> Backend<'a> {
         let skip = usize::from(first.is_some());
         let columns = self.both_columns(f, &args[skip..]).map(|(k, v)| (k + skip, v + skip));
         let mut values_of_the_pair: Option<String> = None;
+        let entries = match columns {
+            None => self.both_entries(f, &args[skip..]).map(|k| k + skip),
+            Some(_) => None,
+        };
+        let mut value_of_the_entry: Option<String> = None;
         let mut iter = args.iter().enumerate();
         if let Some(first_value) = first {
             emitted.push(first_value);
@@ -3555,6 +3611,14 @@ impl<'a> Backend<'a> {
                 }
                 Some((_, values_at)) if at == values_at => {
                     emitted.push(values_of_the_pair.take().expect("the keys came first"));
+                }
+                _ if entries == Some(at) => {
+                    let (k, v) = self.emit_entry_pair(f, arg)?;
+                    value_of_the_entry = Some(v);
+                    emitted.push(k);
+                }
+                _ if entries.map(|k| k + 1) == Some(at) => {
+                    emitted.push(value_of_the_entry.take().expect("the key came first"));
                 }
                 _ => emitted.push(self.emit_expr(f, arg)?),
             }
@@ -3776,7 +3840,9 @@ impl<'a> Backend<'a> {
                 && !region
                 && !register_returned
                 && crosses_down
-                && !self.cycle_reached.contains(f.group.as_str())
+                && (!self.cycle_reached.contains(f.group.as_str())
+                    || (self.reaches_cycle.contains(name)
+                        && self.group_return_set(name, n) & heapish == 0))
                 && !f.synthetic
                 && !caller_loops
                 && emitted.iter().all(|e| f.set_of(e) & arg_heapish == 0);

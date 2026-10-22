@@ -1,0 +1,9 @@
+1, -2, 3.25, -4.5, 1234567890123456789, 1234567890123456, 0.5, -0.25, 1e3, 2.5E-2, 70, 9.0123456789012345, -0, 10: [1,-2,3.25,-4.5,1234567890123456789,1234567890123456,0.5,-0.25,1000.0,0.025,70,9.012345678901234,0,10,"the forty bytes after every number end the document here"]
+1.: refused: json/parse_failure 2 "invalid number"
+01: refused: json/parse_failure 2 "invalid number"
+1.2.3: refused: json/parse_failure 2 "invalid number"
+-: refused: json/parse_failure 2 "invalid number"
+1.e5: refused: json/parse_failure 2 "invalid number"
+3x: refused: json/parse_failure 3 "expected `,` or `]`, found `x`"
+-.5: refused: json/parse_failure 2 "invalid number"
+00.5: refused: json/parse_failure 2 "invalid number"

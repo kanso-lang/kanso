@@ -44,4 +44,4 @@
 # -> 1,106, calls 130 -> 110, branches 105 -> 83, defines 30 -> 29, rounds 8
 # -> 4, visits 3,666 -> 1,368. The shipped modules' declarations the sample
 # never names are no longer read, so they are neither decided nor written.
-module lines=1159 calls=111 branches=82 defines=29 rounds=4 visits=1368
+module lines=1163 calls=111 branches=82 defines=29 rounds=4 visits=1368

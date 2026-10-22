@@ -1,0 +1,8 @@
+import "std/text"
+
+fn doubled s n
+  return s if length s >= n
+  doubled (text/join [s s] "") n
+
+pub fn total n
+  length (doubled "abcdefgh" n)

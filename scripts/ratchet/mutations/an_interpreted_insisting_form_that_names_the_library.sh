@@ -4,9 +4,9 @@
 # names the library's line and the engines disagree.
 set -e
 line='        Value::ErrV(info) if info.hako.as_deref() == Some(&**hako) => {'
-[ "$(grep -cxF "$line" src/eval.rs)" -eq 1 ] || {
+[ "$(grep -cxF "$line" src/eval/errors.rs)" -eq 1 ] || {
   echo "restamped moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i 's/^        Value::ErrV(info) if info.hako.as_deref() == Some(&\*\*hako) => {$/        Value::ErrV(info) if false \&\& info.hako.as_deref() == Some(\&**hako) => {/' src/eval.rs
-if grep -qxF "$line" src/eval.rs; then exit 1; fi
+sed -i 's/^        Value::ErrV(info) if info.hako.as_deref() == Some(&\*\*hako) => {$/        Value::ErrV(info) if false \&\& info.hako.as_deref() == Some(\&**hako) => {/' src/eval/errors.rs
+if grep -qxF "$line" src/eval/errors.rs; then exit 1; fi

@@ -21,322 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-14 — The pool takes only work
-
-This is the grain piece of #1856. The pool reads each constant inside
-`k_ahead_try`, whose `sigsetjmp` saves the signal mask with a system call. A
-literal bound ahead of the first sleep moved into a constant like any closed
-binding, so the pool made that call to build a literal. `ahead::admits` now
-lets a constant into the pool only when its value calls one of the
-program's functions, directly or inside a string or list it builds. That is
-the test the lazy cost gate puts to a cell (`demand::expensive`). The literal
-still moves, because a call lifted after the sleep may name it, and it is
-built where it is first read.
-
-`tests/golden/mem/work_ahead_leaves_a_literal_where_it_is` binds a literal
-and a call ahead of the sleep, and `ahead_forced` reads 1 where main read 2.
-`work_ahead_reads_a_moved_binding` goes from 2 to 1 for the same reason. The
-ratchet row "a literal handed to the pool" admits every constant and turns
-the first golden red.
-
-The previous entry listed "work bound after a statement with an effect" as
-unbuilt. No program can be written that way. The parser refuses a binding
-after an effect line, joins a body's effect lines into one group, and runs
-every binding before the group starts. The runtime runs the pool only at a
-sleep outside a group, so an entry with two effect lines never pools at all.
-`tests/golden/workahead/a_binding_before_a_print_fails_before_it` pins the
-transcript of such an entry whose binding fails: nothing on stdout, the
-overflow on stderr. A ratchet mutation that let the park be any sleep was
-tried and left the fixture green, because the group hides the sleep from
-`ahead` before the search runs, so that row was dropped.
-
-CI moved five rows, all of them compile cost. `browser_compile_instructions`
-fell 255,236 to 382,154,970, the same reading this container gave. The tab's
-corpus never sleeps and the tab compiles the pool out, so the pool decides
-nothing there; nothing in this change isolates the drop further.
-`compile_instructions` fell 15 to 22,665,216, `entry_instructions` 25 to
-75,110,504 and `library_instructions` 25 to 74,796,982. `emit_instructions`
-rose 72 to 5,438,920; the emitter now passes the program's declarations
-through `admits`, the one change on that path. No runtime
-row moved. Welfare rose 0.00022 to 91.52460, and the floor is banked there.
-
-Still not built for #1856: pooling inside an effect group, and calls whose
-arguments name locals that cannot move, which need the (site, args) pool.
-
-## 2026-10-14 — A group of effect lines pools while it waits
-
-#1856's work-ahead pool ran only at a bare sleep, and a body with two or more
-effect lines has none: the parser joins the lines into one group, and the
-scheduler runs a sleep inside it by parking that side. So `print "start"`
-followed by a sleep with work behind it never pooled.
-
-The scheduler now runs the pool at the group's first idle point, the first
-time every side is waiting on a timer, and the wall-credit it already keeps
-counts the pool's time against that wait. Which work runs there is fixed at
-compile time and the idle point is a fact of the schedule, never of the
-clock, so the transcript and the counters are the same on every run. On the
-compiler side, `ahead` reads each side of the group that begins with a sleep
-the way it reads a lone statement. A failure in the pool is dropped and
-raised where the value is read, as before, so a program in a group prints
-the transcript it prints without the pool. Bindings still move only when the
-park is the body's single effect line.
-
-`print "start"` and a 2-second sleep followed by a report of `spin 150000000
-0`, run with `kanso play` on this container: 3.80 s and 3.96 s on main, 2.08 s
-and 2.01 s on this branch, with the same output.
-
-Pinned by:
-- `tests/golden/mem/work_ahead_forces_inside_a_group`: `ahead_forced=1`, where
-  main printed no work-ahead counters at all;
-- `tests/golden/workahead/a_pooled_overflow_in_a_group_fails_where_it_is_read`:
-  "start", "first", then the overflow, on both engines;
-- ratchet rows "a group that never pools" and "a group's side left unread",
-  each seen red on the new golden.
-
-`k_schedule` grew 16 bytes on CI, and every benchmark in
-`bench/text_golden.txt` grew by the same 16, so `text` went from 4,878,382 to
-4,878,606. `browser_compile_instructions`
-went from 382,154,970 to 382,155,032, though the tab compiles the pool out.
-The front end rose: `compile_instructions` 22,665,216 -> 22,679,084,
-`entry_instructions` 75,110,504 -> 75,152,899, `library_instructions`
-74,796,982 -> 74,839,906, `emit_instructions` 5,438,920 -> 5,440,488 and
-`interp_instructions` 492,625,557 -> 492,635,997. Codegen rose 967 at dev,
-`codegen_instructions_dev` 112,581,257 -> 112,582,224, and 1,390 at release,
-`codegen_instructions_release` 441,727,359 -> 441,728,749.
-
-Three of the four CI runs landed on Intel parts, and the fourth on the AMD
-part `bench/instructions_golden.txt` is recorded on. It moved four work rows:
-`work_encodebench` 2,387,084,547 -> 2,387,083,945, `work_oneshot` 13,207,833
--> 13,207,567, `work_livebench` 1,474,835,144 -> 1,474,835,683 and
-`work_runbench` 1,177,696,572 -> 1,177,697,090. This container, an Intel part, read the same
-four differences between main and this branch built from the same inputs.
-No benchmark sleeps, so no pooled work runs in them, and nothing here
-isolates where the difference comes from. Welfare fell 0.00009 to 91.52451,
-and the floor is lowered by exactly that, since this builds a ruled part of
-#1856.
-
-## 2026-10-14 — A call on a function's locals is pooled as a cell
-
-#1856's pool took only constants: calls whose arguments name nothing local,
-lifted out of the entry. A function that sleeps and then reports on its own
-parameter had no constant to offer, so its work ran after the wait:
-
-```
-fn report n
-  sleep 2000
-    .> (_ -> print "delivery: made")
-    .> (_ -> print "report: {spin (150000000 + n) 0}")
-```
-
-This is the "Discovery" piece of the ruling, the (site, args) pool. A
-function whose result is a chain beginning with a sleep, and which is the
-only arm of its name and count, has each certain call on its locals bound
-ahead of the chain as a cell. `emit_cell` already builds a cell from a site
-and the values it captures; `ahead::pool` names the binding, `demand` makes
-it a cell whatever its uses, and the chain's sleep carries the cells in its
-descriptor. The runtime queues them when that sleep parks and forces them, in
-order, under the same try as the constants. A chain that is never run parks
-nowhere, so its cells are made and never forced, and no work runs early that
-the program would not have run. The interpreter does not pool.
-
-A cell the pool forces is not a lazy binding the program has, and the thunk
-counters are what both engines must agree on, so `k_thunk_new_pooled` builds
-it with a flag those counters skip. `ahead_forced` counts it instead.
-
-The program above, run with `kanso play` on this container: 3.87 to 4.07 s on
-main, 2.01 s on this branch, with the same output. Built and run directly,
-the dev binary takes 3.95 s against 2.00 s, and the release binary 2.20 s
-against 2.00 s.
-
-Pinned by:
-- `tests/golden/mem/work_ahead_pools_a_call_on_a_local`: `ahead_forced=1`,
-  and the thunk counters at zero on both engines;
-- `tests/golden/mem/work_ahead_leaves_a_chain_never_run`: a chain built and
-  never run, `ahead_forced=0`;
-- `tests/golden/workahead/a_pooled_cell_fails_where_it_is_read`: the
-  overflow is raised after "first", on both engines;
-- five ratchet rows, each seen red.
-
-`a_group_that_never_pools.sh` anchored on a comment and a call this change
-rewrote, so it is rewritten to the new ones; every other mutation still
-applies.
-
-Still not built for #1856: a lambda's body, which has no statements to bind a
-cell in; a function with more than one arm of its name and count; and the cost
-gate's view of a pooled call, which admits any call of the program's own.
-
-CI's rows for the branch. The runtime rows were read before main's IR-scan
-move was merged in, and the compiler's own rows after kanso#1976 was. The
-runtime grew by the queue and its drain, so every benchmark's machine code
-rose by 2,192 bytes: jsonbench text=336,265, encodebench text=345,129,
-oneshot text=351,145, basket text=313,289, widebench text=354,393,
-deepbench text=288,025, escapebench text=279,113, pendbench text=296,841,
-indexbench text=277,625, scanbench text=462,073, digestbench text=318,537,
-readbench text=279,273, livebench text=354,889, runbench text=652,697, and
-the `text` total 4,878,606 -> 4,909,294. Work moved on five:
-`work_encodebench` 2,387,083,945 -> 2,387,084,099, `work_oneshot` 13,207,567
--> 13,207,693, `work_pendbench` 191,674,024 -> 191,674,224, `work_livebench`
-1,474,835,683 -> 1,474,835,606 and `work_runbench` 1,177,697,090 ->
-1,177,696,062.
-The compiler's own rows: `compile_instructions` 22,664,963 -> 22,595,494,
-`entry_instructions` 75,111,766 -> 74,872,489, `library_instructions`
-74,798,192 -> 74,559,617, `emit_instructions` 5,439,036 -> 5,449,223,
-`interp_instructions` 492,629,961 -> 492,636,904,
-`codegen_instructions_dev` 112,582,224 -> 112,677,448 and
-`codegen_instructions_release` 441,728,749 -> 441,885,670. The tab, read
-here on rustc 1.98.1 after the merge: `browser_compile_instructions`
-382,297,788 -> 381,261,098, `browser_compile_peak_bytes` 643,478 -> 643,605
-and `browser_run_instructions` 34,181,240 -> 34,181,355. Welfare rises, and
-the rise is banked here.
-
-## 2026-10-14 — Neither verb sends a reader to the other
-
-The 2026-10-14 audit of #1893 found one file shape that both running verbs
-refuse while pointing at each other. A file that declares a function, runs a
-statement and imports a neighbour is a library to `kanso run`, which
-suggested `kanso play`; `kanso play` takes the stdlib and nothing else, and
-suggested `kanso run`. Both refusals now give the route that runs the file:
-move the statements into a main.kso beside it, mark the definitions they use
-`pub`, and run the directory. A play file of statements alone that imports a
-neighbour is still sent to `kanso run`, which takes it.
-
-`tests/golden/play/beside/sum.kso` is the reduction. Its `.stderr` and
-`.run.stderr` pin what each verb says, and
-`definitions_beside_a_local_import_are_sent_to_a_module` in
-`tests/play_verb.rs` builds the module the messages describe and runs it.
-
-No test read the `.stderr` files in `tests/golden/play`. The archive noted
-this for one of them on 2026-10-10. `every_play_golden_is_read` now reads
-every golden in that directory: each `.stdout` on both engines, each
-`.stderr` under `play`, and each `.run.stderr` under `run`. Two goldens
-were stale. `no_local_imports.stderr` spelled the import without its
-`./`. `decls_after_statements.stderr` held a refusal the play parser
-dropped when it began sorting a file's lines by kind; that fixture now
-prints `first`, so its golden is a `.stdout`.
-
-The audit's other findings on #1893 are open there. An insisting form's
-failure names the library line instead of the call, and neither a wrong
-kind reaching a builtin or operator nor a stack overflow has a location.
-
-CI's rows for this branch fall, and the change reaches no decision they
-count, so the move is the binary's layout: `compile_instructions`
-22,679,084 -> 22,664,963, `entry_instructions` 75,152,899 -> 75,111,766,
-`library_instructions` 74,839,906 -> 74,798,192, `emit_instructions`
-5,440,488 -> 5,439,036, and `interp_instructions` 492,635,997 ->
-492,629,961. The tab's compile rises: `browser_compile_instructions`
-382,155,032 -> 382,297,788, on rustc 1.98.1. The arms this change adds run
-only when a file is refused, and no file in the corpus is. Marking
-`local_import` cold moved the row by 1,529, so the rise is not that
-function. The browser rise outweighs the five falls by less than 0.0001 of
-welfare, and the floor moves to the score with the reason recorded, as it
-did for kanso#1959 and kanso#1963.
-
-## 2026-10-14 — The work-ahead rig builds again
-
-The compiler page tells a reader to build `bench/workahead/aswritten.kso` and
-`overlapped.kso`. Each file declares `grind` and `spin` beside its statements,
-and since files of that shape became libraries, `kanso build` refuses both.
-Nothing else reads the rig, so nothing went red. The two programs are now
-modules, `bench/workahead/aswritten` and `bench/workahead/overlapped`, and
-both import the functions from `bench/workahead/rig`.
-
-The panel's rows are re-sat: 15 interleaved heats each on the build
-container. As-written reads a minimum of 2,004 ms where the panel said
-2,913, because the pool now builds `grind 150000000` during the sleep.
-Overlapped reads 2,004 ms where the panel said 2,008. The two differ in their
-output: overlapped prints the report before the delivery, and as-written
-keeps the order it was written in.
-
-## 2026-10-14 — A pooled call may read its arguments through a builtin
-
-The pool from kanso#1978 took a call on a function's locals only when every
-argument was a local, a literal, an operator over those, or a call of the
-program's own. A call that measured its argument first was left after the
-wait:
-
-```
-os/args .> (a -> wait a)
-
-fn wait a
-  sleep 2000
-    .> (_ -> print "delivery: made")
-    .> (_ -> print "report: {spin (150000000 + length a) 0}")
-```
-
-`length a` is a builtin, so `spin` ran after the sleep. With the length
-taken before `wait` is called, the same program already pooled: 2.01 s
-against 4.38 s on main.
-
-A pooled call's arguments may now apply a builtin that reads a value and
-answers a new one: `length`, `keys`, `values`, `entries`, `chars`, `bytes`,
-`char_code`, `from_code`, `to_int`, `to_float`, `round`, `sqrt`, `sum` and
-the six `bit_` words. The words that extend a value stay out. The beat pass
-may write the result of `push`, `put`, `concat` and the rest into the
-storage of the value they were given, and a pooled cell runs before the
-program's own reads of that value.
-
-The program above, run with `kanso play` on this container: 4.07 to 4.57 s
-on main, 4.01 to 4.21 s on kanso#1978's branch, and 2.01 to 2.08 s on this
-one, with the same output.
-
-Pinned by:
-- `tests/golden/mem/work_ahead_pools_a_call_on_a_builtin_read`:
-  `ahead_forced=1`;
-- `tests/golden/mem/work_ahead_leaves_an_extending_builtin`: a `push` inside
-  the argument, `ahead_forced=0`;
-- two ratchet rows, each seen red on its golden.
-
-## 2026-10-14 — A lambda whose body parks first is pooled like a function
-
-A lambda has no statements to bind a cell in, so the pool never reached one:
-
-```
-k = 150000000
-os/args .> (a -> sleep 2000 .> (_ -> print "r: {spin (k + length a) 0}"))
-```
-
-`pool` now lifts such a lambda into a function of its own, `ahead~lam~N`,
-whose parameters are the locals the body reads (`k` here) followed by the
-lambda's own. The lambda stays where it was and calls the function. The
-lift is kept only when the function pools something; a lambda with nothing
-to pool keeps its body, since the call would buy nothing. A body that holds
-an `if` block or a guard is left alone, because the walk does not follow
-the names those bind.
-
-The program above, with `kanso play` on this container: 3.71 to 4.09 s on
-main, 2.02 to 2.09 s on this branch, with the same output.
-
-Pinned by `tests/golden/mem/work_ahead_lifts_a_parking_lambda`
-(`ahead_forced=1`) and the ratchet row "a parking lambda never lifted",
-seen red on that golden.
-
-The walk for a parking lambda runs only when the program reaches
-`time/sleep`, the one function that parks; a program that never calls it
-has had it pruned. Without that guard the walk cost the tab 366,863
-instructions on a corpus with no sleep in it.
-
-Rows against kanso#1978, the browser row read here on rustc 1.98.1 and the
-rest by the compile sweep on this container, where `compile_instructions`
-read what CI read for the unguarded branch: `emit_instructions` 5,449,223 ->
-5,452,431 for the guard and its check. `browser_compile_instructions`
-381,261,098 -> 382,590,239. Of that rise, 1,320,831 stays with the walk
-switched off entirely, and the builtin-read commit alone leaves the row
-where kanso#1978 put it, so it arrives with the commit that adds the lift
-while none of its code runs; marking `pool` and `lift` never-inline did not
-move it. The front end's rows rose with the binary, since `kanso check`
-never reaches the pass: `compile_instructions` 22,595,494 -> 22,699,901,
-`entry_instructions` 74,872,489 -> 75,214,425 and `library_instructions`
-74,559,617 -> 74,901,006; `interp_instructions` fell with it, 492,636,904 ->
-492,620,187. The runtime and machine-code rows did not move. Welfare falls,
-and the floor moves by that amount under #1856's ruling, as it did for the
-group pool in kanso#1972.
-
-A pool-shaped differential ran 400 generated programs, each with a sleep
-whose continuations read locals, lambda parameters and builtins of them,
-some inside a function and some in nested lambdas. The interpreter and the
-native build agreed on all 399 the front end accepted; 85 of the first 100
-forced at least one pooled call.
-
 ## 2026-10-15 — gavel: a record field carries no type, and kanso has no type parameters
 
 Clay ruled #1946. Two July rulings could not both stand. On 2026-07-25 a type
@@ -1882,3 +1566,366 @@ It turns off the clean-token skip in `find2_below`, which served
 encodebench's own copy of lib/json still sends every string through it, so the
 row now gates on the encode vein, where the mutation moves `find2_calls`
 803,275 -> 4,200,475.
+
+## 2026-10-22 — a map entry's key and value are read with one test
+
+`entry_onto` reads a pair as `pair_onto acc (builtin_key_at m i)
+(builtin_value_at m i)`, and each read tested the map's view on its own: the
+tags, the view pointer and its mark, and the bounds. Where one call's
+arguments read a key and then a value of the same local map at the same local
+position, the emitter now calls `k_b_entry_pair_fast` once. It tests the view,
+returns the key and stores the value into a slot in the caller's frame, which
+the call's next argument loads. A view that is missing or marked goes to the
+C for both reads, as each read did alone. The pair is found in both places the
+emitter writes a call's arguments, the plain call and the tail call, and
+`entry_onto`'s call is a tail call.
+
+Measured here, the run program read 1,028,684,506 -> 1,018,405,282 (-1.0%)
+with the same output.
+
+CI's rows: work_runbench 1,028,685,693 -> 1,018,406,469 (-1.0%),
+work_livebench 1,172,094,931 -> 1,126,408,749 (-3.9%) and work_oneshot
+11,785,186 -> 11,669,620 (-1.0%). The three programs that encode objects lose
+one define, two calls and three branches each and are smaller (text runbench
+721,209 -> 720,921, oneshot 380,633 -> 380,393, livebench 384,409 ->
+384,169; emitted runbench lines 56,666 -> 56,634, oneshot 13,898 -> 13,866,
+livebench 14,221 -> 14,189). Every other program carries the helper's two
+lines (emitted_lines 13,102 -> 13,104 for the decoder, and +2 in the others),
+the compile corpus's lines move by two each (recursion 449 -> 451, dispatch
+348 -> 350, guards 305 -> 307, records 406 -> 408; lines 1,508 -> 1,516) and
+module_lines 1,159 -> 1,161.
+codegen_instructions_dev 116,064,263 -> 116,067,612,
+codegen_instructions_release 422,357,890 -> 422,361,029 and
+emit_instructions 6,364,404 -> 6,377,706 rise with them. In the tab,
+browser_run_instructions 32,241,456 -> 31,991,504 and
+browser_compile_instructions 406,640,369 -> 406,222,752 fall, and
+browser_compile_peak_bytes rises 732,776 -> 733,266. The welfare sum rose, and
+the floor moves 92.13 -> 92.17.
+
+The map golden `a_map_is_encoded_from_its_entries_in_place` is the pair's
+witness for its bytes: with the value loaded from the key's slot, every value
+printed as its key. The ratchet row `an_entry_read_twice` never sees the pair
+and turns the emitted gate red. The row `a_map_entry_read_through_the_c` patched
+`key_at_fast` and read BLIND once the pair took every key the encoder reads;
+it now sends the pair to the C, which reads the run program 935,900,947 ->
+967,870,853, and it gates the instructions vein.
+
+## 2026-10-22 — a builder at the arena's frontier grows where it stands
+
+A builder that outgrew its buffer took a new one and copied, in the arena or
+from malloc depending on where its header sat against the innermost mark. When
+the header lies above that mark, the buffer is arena storage, and when the
+buffer is also the last thing the arena handed out, it now grows by moving
+the frontier past it: no new buffer and no copy. A header above the innermost
+mark was allocated after it, and a buffer at the frontier after the header, so
+the extension dies with the header at the same rewind. The grow also requires
+the header to own the buffer's frontier, since a grow is how an append reaches
+a buffer another header has written past. The extension's bytes count in
+`alloc_bytes`.
+
+That made a second change pay. On 2026-10-21 `entry_count` was left
+allocating to the beat analysis, which kept a region around each map the
+encoder descends into: inside the region the builder's header sat below the
+mark and grew by realloc, and without it the builder grew in the arena by
+doubling and copying (+24.7M memcpy). `entry_count` is now pure, as `key_at`
+and `value_at` are. The view it may build comes from malloc, and only a sort's
+scratch index lands in the arena, where the enclosing loop's rewind takes it.
+The region is gone, and the builder now grows in place.
+
+Measured here, the run program read 1,018,405,282 -> 999,948,734 (-1.81%)
+with the same output: `k_region_pop`'s 10.7M is gone, and `encode_list` and
+`encode_map` fall 3.5M and 3.8M.
+
+CI's rows: work_runbench 1,018,406,469 -> 999,949,921 (-1.81%),
+work_livebench 1,126,408,749 -> 1,043,615,776 (-7.3%), work_oneshot
+11,669,620 -> 11,443,335 (-1.9%) and work_encodebench 2,456,797,637 ->
+2,456,796,655. work_widebench rises 28,571,443 -> 28,619,441 (+0.17%); it
+carries its own copy of lib/json and grows its builders in the arena too. The
+run program's held_peak_bytes falls 200,978 -> 111,920, and run allocs
+1,447,994 -> 1,446,734, alloc_bytes 249,236,356 -> 221,966,536, append_grow
+1,260 -> 1,080, append_fast 5,328,270 -> 5,328,540, bytes_malloc 9,140 ->
+7,880 and bytes_freed 9,010 -> 7,750. The one-shot and live programs'
+builders never leave the arena: held_peak_bytes 200,978 -> 0 in both,
+bytes_malloc and bytes_freed 14 -> 0 and 5,600 -> 0, oneshot allocs 7,531 ->
+7,517, alloc_bytes 1,790,518 -> 1,487,520, append_grow 14 -> 12, append_fast
+59,203 -> 59,206; live allocs 13,914 -> 8,314, alloc_bytes 235,351,504 ->
+114,152,304, append_grow 5,600 -> 4,800, append_fast 23,681,200 ->
+23,682,400. Without the region runbench, oneshot and livebench make three
+fewer calls (runbench calls 7,355 -> 7,352, lines 56,634 -> 56,636; oneshot
+calls 1,484 -> 1,481, lines 13,866 -> 13,868; livebench calls 1,523 -> 1,520,
+lines 14,189 -> 14,191). The runtime's text grows 336 bytes in every program
+(text jsonbench 372,777 -> 373,113) and shrinks where the region went (text
+runbench 720,921 -> 719,977, oneshot 380,393 -> 379,641, livebench 384,169 ->
+383,177). codegen_instructions_dev 116,067,612 -> 116,068,279 and
+codegen_instructions_release 422,361,029 -> 422,367,718 rise, and
+emit_instructions 6,377,706 -> 6,377,307 falls. In the tab,
+browser_run_instructions 31,991,504 -> 31,623,429,
+browser_run_peak_bytes 1,441,792 -> 1,376,256, browser_compile_instructions
+406,222,752 -> 406,034,117 and browser_compile_peak_bytes 733,266 -> 732,887
+fall. The welfare sum rose, and the floor moves 92.17 -> 92.25.
+
+The frees fall with the mallocs they answered: run_bytes_freed 9,010 -> 7,750,
+oneshot_bytes_freed 14 -> 0, live_bytes_freed 5,600 -> 0 and
+a_literal_appended_across_a_rewind_bytes_freed 40 -> 0. Over all programs,
+emitted_other_lines 158,180 -> 158,186 and text 5,235,662 -> 5,236,670.
+
+The mem corpus moves where builders grow in the arena:
+`a_literal_appended_across_a_rewind` allocs 136 -> 96, alloc_bytes 11,920 ->
+9,040, bytes_malloc and bytes_freed 40 -> 0, held_peak_bytes 152 -> 0;
+`three_storage_regimes_share_one_append` allocs 1,640 -> 1,040, alloc_bytes
+186,274 -> 114,274; `append_of_a_slice_boxes_nothing` allocs 14 -> 12,
+alloc_bytes 2,396 -> 2,156. The micro golden
+`a_builder_grows_where_it_stands_until_something_follows_it` grows a builder
+in place, appends a string made after the buffer, and grows again by copying,
+300 rounds inside a loop against one built outside any; with the in-place
+write one byte early it printed `0 of 300 rounds agree`. Two ratchet rows:
+`a_builder_copied_at_the_frontier` turns the mem corpus red, and
+`a_maps_count_held_as_allocating` puts the region back and turns the run
+counters red.
+
+## 2026-10-22 — a call into a loop keeps its cohort bracket under a cycle
+
+A cohort bracket marks the arena before a call that crosses into another
+module with immutable arguments, and its pop gives back what the call left.
+The license refused every caller a cycle reaches (`cycle_reached`), since such
+a caller can run once per element of something and its calls are usually
+small. It now admits one when the callee reaches a cycle that allocates
+(`reaches_cycle`: the members of every cycle whose members the beat analysis
+finds allocating, and everything that mentions them, followed backward) and
+answers no heap value. A call into a loop pays
+its push and pop once against the whole loop, and with no heap value to keep
+the pop rewinds without copying anything out.
+
+On the run program the index phase builds 1.5 MB of text to answer an int,
+and nothing marked the arena around it, so the string lived until the program
+ended. `tally` is reached by a cycle, so the license refused the call. Measured
+here, arena_peak_bytes 4,718,608 -> 3,670,032 and the run read 999,948,734 ->
+999,793,761 with the same output. The peak now sits at two live megabyte
+blocks, the file read and its decoded document, and the 1,572,880-byte string
+the phase builds; the program needs all three at that moment.
+
+Three other shapes were measured on the way. Seeded from every cycle, the
+reach admitted widebench's whitespace skip, a loop that builds nothing, called
+once per value from its parser; CI read widebench 28,619,441 -> 34,955,663
+(+22%) and encodebench 2,456,796,655 -> 2,461,704,983, 4.0M of it
+`k_cohort_pop` with nothing to give back. The ratchet row
+`a_loop_that_builds_nothing_bracketed` puts that seed back and turns the
+instructions gate red. Without the heap-value condition
+one bracket evacuated a heap result through the carry, and `k_deep_copy` and
+`k_copy_size` cost 1.7M more. A region of the beat analysis's kind, marked
+before the arguments, made `a_long_chain_answers_survival_from_its_index`
+evacuate its 100,000 rows on every lap (evac_allocs 25 -> 480,009), because
+the rows its argument built landed inside the mark.
+
+CI's rows: work_runbench 999,949,921 -> 999,794,948 (-0.02%), and no other
+benchmark's work moves. The run program's run_arena_peak_bytes 4,718,608 ->
+3,670,032 and run_cohort_frees 1 -> 4; run_allocs 1,446,734 -> 1,446,735,
+run_alloc_bytes 221,966,536 -> 221,966,568, run_evac_allocs 48,953 -> 48,955,
+run_evac_bytes 9,271,280 -> 9,271,408, run_survive_slots 4,856 -> 4,854,
+run_str_scans 1,023 -> 1,024, run_str_scan_bytes 17,996,094 -> 17,996,158 and
+run_sh_rec 3,776,192 -> 3,776,128. The run program makes 24 more calls
+(emitted_other_calls 19,064 -> 19,088, emitted_other_lines 158,186 ->
+158,210) and its machine code grows 719,977 -> 722,233 bytes (text 5,236,670
+-> 5,238,926 over all the binaries). compile_instructions 23,713,618 ->
+23,736,301, entry_instructions 74,424,236 -> 74,485,199, library_instructions
+74,085,135 -> 74,147,760 and emit_instructions 6,377,307 -> 6,423,478 rise,
+and interp_instructions 384,232,761 -> 384,228,496 falls. In the tab,
+browser_compile_instructions 406,034,117 -> 401,989,712 falls. The welfare
+sum rose, and the floor moves 92.25 -> 92.28.
+
+`tests/cohort.rs` `a_call_into_a_loop_gives_back_what_it_built` runs a new
+two-module fixture, `tests/golden/cohort/phases`: each pass of a loop calls
+`grow/total` twice, and each call builds a megabyte of text to answer its
+length. It pins cohort_frees=6 and arena_peak_bytes=2097168; under the old
+license it read 0 and 3145760. The ratchet row
+`a_call_into_a_loop_left_unbracketed` takes the license back and turns the run
+counters red.
+
+## 2026-10-22 — the JSON helpers store their call's site only where they can fail
+
+A failure names its place through `k_site`, which the emitter stamps before a
+call that can stop the program. Since #1975 an inline twin that takes the site
+as its last argument stores it only on the branch that reaches the C, and its
+caller skips the stamp. Five twins the encoder calls once per pair or item
+took none: `append_key`, `append_string`, `entry_count`, `key_at` and
+`value_at`. They now take the site and store it in their slow blocks. The run
+program executed 5,384,347 `k_site` stores and now 4,366,872, and read
+999,793,761 -> 997,774,101 here with the same output.
+
+Passing the string index (`s[i]`, 690,000 calls in the index phase) its site
+the same way, through a C entry that stored it only before refusing, was
+measured and dropped: -275k, since the extra argument costs what the store
+did.
+
+CI's rows: work_runbench 999,794,948 -> 997,775,288 (-0.20%), work_livebench
+1,043,615,776 -> 1,033,729,698 (-0.95%) and work_oneshot 11,443,335 ->
+11,424,128 (-0.17%). The run program's machine code grows 722,233 -> 722,249
+bytes (text 5,238,926 -> 5,238,942 over all the binaries), and
+emit_instructions rises 6,423,478 -> 6,426,328. In the tab,
+browser_run_instructions falls 31,623,429 -> 31,602,327, and
+browser_compile_instructions 401,989,712 -> 402,017,479 and
+browser_compile_peak_bytes 732,887 -> 733,103 rise. The welfare sum rose, and
+the floor moves 92.276 -> 92.284.
+
+The builtins are internal to the standard library and every call in lib/json
+passes the types they take, so no program reaches the branches that store the
+site and no output moves. The emitted counts do not move either: each twin
+loses a store at its call and gains one in its slow block. The ratchet row
+`a_sited_call_stamped_anyway` stamps every sited call as well; the run
+program then reads 1,012,744,021, and the instructions gate goes red.
+
+## 2026-10-22 — a short key is found in the token cache without a call
+
+The decoder reads an object's key through `k_b_plain_string_fast`, which finds
+the closing quote and, when no backslash came first, calls
+`k_b_utf8_slice_raw` for the string. A key of four to seven bytes is almost
+always in the token cache, a direct-mapped table of strings keyed by the
+token's bytes and length, so the call usually did a bounds test, a hash and
+two loads. The helper's IR now does the hash and the compare itself and loads
+the cached string when the slot's key matches; anything else, including a key
+that went to the slot beside its own, still takes the call. `k_token_key` and
+`k_token_cache` lose `static` so the emitted code can read them.
+
+The run program's calls into the slice from the key path fall from 784,179 to
+17,501, and it read 997,774,087 -> 977,794,290 here (-2.0%) with the same
+output.
+
+Lifting `k_b_utf8_slice_raw` into the hot unit beside `k_b_find2_raw`, so the
+LTO link could inline it, was tried first and read 997,020,816, because the
+link kept the call. The emitted IR spells the return type `%KValue` and
+clang's unit a literal `{ i64, i64 }`, which may be what stopped it; that was
+not isolated.
+
+CI's rows: work_runbench 997,775,288 -> 977,795,537 (-2.00%), work_jsonbench
+731,748,677 -> 699,198,721 (-4.45%), work_oneshot 11,424,128 -> 11,233,739
+(-1.67%) and work_livebench 1,033,729,698 -> 1,033,539,043. The four
+programs that decode objects carry the inline path and grow: text jsonbench
+373,113 -> 374,057, oneshot 379,641 -> 380,585, livebench 383,177 ->
+384,121 and runbench 722,249 -> 723,129, text 5,238,942 -> 5,242,654 over
+all the binaries. Every program declares the two tables: emitted_lines
+13,104 -> 13,134 and emitted_branches 1,305 -> 1,307 for the decoder,
+emitted_other_lines 158,210 -> 158,320 and emitted_other_branches 16,888 ->
+16,894, module_lines 1,161 -> 1,163, and each compile sample two lines more
+(recursion 451 -> 453, dispatch 350 -> 352, guards 307 -> 309, records 408
+-> 410; lines 1,516 -> 1,524 in all). emit_instructions 6,426,328 -> 6,435,278 and
+codegen_instructions_release 422,367,718 -> 422,642,173 rise, and
+codegen_instructions_dev 116,068,279 -> 116,064,144 falls. In the tab, browser_run_instructions
+31,602,327 -> 31,449,729 falls, and browser_compile_instructions 402,017,479
+-> 402,486,449 and browser_compile_peak_bytes 733,103 -> 735,005 rise. The
+welfare sum rose, and the floor moves 92.28 -> 92.36.
+
+The micro golden `a_short_key_is_found_in_the_cache_in_place` decodes two
+objects with the same fifteen keys, the second reading what the first filled.
+Two of its keys, `aaaz` and `abae`, hash to one slot, so the second goes to
+the slot beside it. Reading the string from the neighbouring slot, or taking
+a slot as a hit without comparing its key, answers one of the two for the
+other, and the golden goes red under both; the first is the ratchet row
+`a_short_key_read_from_the_slot_beside_it`. The row
+`a_short_key_left_to_the_call` sends every key to the call again and turns
+the instructions gate red.
+
+## 2026-10-22 — a plain number is read a word at a time
+
+`number_span` finds where a JSON number's bytes end by classifying sixteen
+bytes a step against the five characters a number holds besides digits. The
+run program's 417,483 numbers are four to nine bytes long and all of one
+shape: an optional minus, digits, and an optional point with digits after
+it. `k_b_number_span_raw` now reads that shape first, finding the end of each
+run of digits eight bytes at a time and checking that the byte after the
+number is one no number holds. A leading zero, an exponent, a point with no
+digit after it, any other byte a number may hold after the run, and any number
+within forty bytes of the end of its document go to the sixteen-byte scan,
+which starts again from the beginning. That scan moved into its own function,
+`k_number_span_scan`, because the registers it wants made every call build a
+frame. `k_nondigits8` moved from numbers.c to text.c, which comes first in the
+runtime, so both files use one copy.
+
+The float parse had the same shape of cost. `k_to_float_text` answers the
+`[-]I.F` shape from two words and parses everything else with a scan that ends
+in a strtod fallback, and the fallback's buffer made every call build a frame.
+The slice doors now call that scan out of line, and the shaped case is a
+leaf. `k_b_to_float`, the door for a string, keeps it inline: a short string
+has no room for the shape's two words and always scans, and with the scan out
+of line there CI read widebench 28,619,441 -> 28,939,500.
+
+Measured here, the run program read 977,794,290 -> 966,447,210 (-1.16%) with
+the same output: the span 977,794,290 -> 968,235,476, `k_b_number_span_raw`
+34,243,704 -> 24,644,367, and the float split 968,235,476 -> 966,447,210,
+`k_b_to_float_slice_raw` 28,270,242 -> 26,482,302. Moving the slice that an
+out-of-range float or integer builds out of line as well read 966,243,735, a
+further 203,475, and made the integer door slower by 217,306; it was dropped. The new
+path and the old function, both extracted from the source, agreed on
+50,000,000 random byte strings and positions. The harness saw a float answered
+as an integer and a leading zero let through, each in about 2,000 of a
+million cases.
+
+CI's rows: work_runbench 977,795,537 -> 966,449,322 (-1.16%), work_jsonbench
+699,198,721 -> 682,006,171 (-2.46%), work_oneshot 11,233,739 -> 11,118,597
+(-1.02%), work_livebench 1,033,539,043 -> 1,033,424,160 and
+work_encodebench 2,456,796,655 -> 2,456,796,277. Every binary's machine code
+shrinks by 1,376 bytes, the float scan no longer inlined into the slice doors
+(text 5,242,654 -> 5,223,390 over all of them; runbench 723,129 -> 721,753).
+codegen_instructions_release 422,642,173 -> 422,580,983 falls and
+codegen_instructions_dev 116,064,144 -> 116,068,622 rises. In the tab, browser_run_instructions 31,449,729 ->
+31,370,234 falls. The
+welfare sum rose, and the floor moves 92.36 -> 92.41.
+
+The micro golden `a_number_far_from_the_end_is_read_a_word_at_a_time` decodes
+documents whose numbers sit ahead of a long string, so they are within reach
+of the new path: plain numbers of both kinds beside exponents, a sixteen-digit
+run and `-0`, then eight malformed numbers. The ratchet row
+`a_point_forgotten_on_the_fast_path` answers a float as an integer there and
+turns the golden red; `a_number_scanned_sixteen_bytes_at_a_time_anyway` turns
+the path off and turns the instructions gate red. The row
+`a_digit_word_that_reads_a_colon_as_ten` patched `k_nondigits8` in
+numbers.c and would not apply once it moved; it patches text.c now.
+
+## 2026-10-22 — a bind chain measures its drift from where it began
+
+A bind chain stages a step's continuation (sizes it, copies it through the
+carry pair and rewinds) only when the arena has drifted a quarter megabyte
+since the chain's last stage; otherwise the continuation stays where it is.
+`k_exec` set the carry's `at_arena` to null when it pushed the chain's beat,
+because the depth's last stage, if any, was another chain's. That made every
+chain's first step size and stage its continuation however little it had
+allocated, and the run program pushes a chain 7,091 times: 7,162 stages,
+15,288,786 instructions in `k_beat_iter_carry` and 6,099,136 sizing in
+`k_copy_size`. The push now records the arena's position and block, so the
+drift is measured from where this chain began. A skipped step was already
+sound everywhere, since the 2026-09-07 drift gate made the copy-out at a
+carried pop walk deep.
+
+Measured here, the run program read 966,447,210 -> 935,900,947 (-3.16%) with
+the same output, and `k_beat_iter_carry` left the profile.
+
+CI's rows: work_runbench 966,449,322 -> 935,902,128 (-3.16%) and
+work_deepbench 406,819,829 -> 203,571,400 (-49.96%). work_pendbench
+176,534,752 -> 176,531,937, work_readbench 4,583,965 -> 4,582,072,
+work_jsonbench 682,006,171 -> 682,004,279 and work_livebench 1,033,424,160
+-> 1,033,424,099 fall a little, and work_encodebench 2,456,796,277 ->
+2,456,796,762, work_oneshot 11,118,597 -> 11,118,893, work_widebench
+28,619,441 -> 28,619,457 and work_digestbench 5,241,183 -> 5,241,199 rise
+by a few hundred instructions or less. Every binary's machine code grows 16
+bytes (text 5,223,390 -> 5,223,614 over all of them; runbench 721,753 -> 721,769).
+codegen_instructions_dev 116,068,622 -> 116,068,667 and
+codegen_instructions_release 422,580,983 -> 422,581,877 rise. In the tab, browser_run_instructions 31,370,234 ->
+31,370,376 rises. The
+welfare sum rose, and the floor moves 92.41 -> 92.53.
+
+The counter veins move where chains no longer stage their first step. The
+run program's run_evac_allocs 48,955 -> 1,624, run_evac_bytes 9,271,408 ->
+7,416,368, run_allocs 1,446,735 -> 1,438,645, run_alloc_bytes 221,966,568 ->
+221,297,400, run_beat_iters 92,018 -> 84,938, run_survive_slots 4,854 ->
+4,560, run_buf_reuse 134 -> 139 and run_sh_buf 87,167,344 -> 86,585,920; no
+peak moves. pend_allocs 805,977 -> 805,967, pend_alloc_bytes 45,563,312 ->
+45,539,584, pend_beat_iters 101 -> 99, pend_evac_allocs 2,225 -> 2,210,
+pend_evac_bytes 381,648 -> 378,048, pend_survive_slots 78,611 -> 77,616,
+pend_buf_reuse 502 -> 505 and pend_sh_buf 15,860,144 -> 15,838,096;
+read_beat_iters 201 -> 200, read_evac_allocs 19 -> 16 and read_evac_bytes
+656 -> 576; the decoder's beat_iters 151 -> 150, evac_allocs 19 -> 16 and
+evac_bytes 688 -> 576.
+The mem corpus moves in nineteen fixtures, each where a chain's first step no
+longer stages: a_carried_value_written_into_an_older_node_alloc_bytes 2,595,040 -> 2,568,080, a_carried_value_written_into_an_older_node_beat_iters 11 -> 9, a_carried_value_written_into_an_older_node_evac_allocs 1,697 -> 1,692, a_carried_value_written_into_an_older_node_evac_bytes 174,224 -> 168,896, a_carried_value_written_into_an_older_node_survive_slots 407 -> 404, a_carried_value_written_into_an_older_node_carry_dedup 446 -> 621, a_carried_value_written_into_an_older_node_buf_reuse 781 -> 783, a_carried_value_written_into_an_older_node_sh_buf 682,096 -> 657,104; a_loop_invariant_capture_is_copied_every_rewind_beat_iters 502 -> 501, a_loop_invariant_capture_is_copied_every_rewind_evac_allocs 10 -> 4, a_loop_invariant_capture_is_copied_every_rewind_evac_bytes 8,336 -> 144; a_repaired_node_below_the_mark_holds_tenure_allocs 34,047 -> 34,049, a_repaired_node_below_the_mark_holds_tenure_alloc_bytes 2,493,952 -> 2,510,528, a_repaired_node_below_the_mark_holds_tenure_beat_iters 10 -> 9, a_repaired_node_below_the_mark_holds_tenure_evac_allocs 2,469 -> 2,468, a_repaired_node_below_the_mark_holds_tenure_evac_bytes 162,960 -> 171,840, a_repaired_node_below_the_mark_holds_tenure_carry_dedup 46 -> 80, a_repaired_node_below_the_mark_holds_tenure_sh_buf 567,232 -> 579,536; a_slice_bang_chain_builds_no_slice_beat_iters 2 -> 0, a_slice_bang_chain_builds_no_slice_evac_allocs 15 -> 8, a_slice_bang_chain_builds_no_slice_evac_bytes 528 -> 288; an_inner_beat_opens_its_tenure_in_the_block_outside_allocs 180,196 -> 179,380, an_inner_beat_opens_its_tenure_in_the_block_outside_alloc_bytes 14,926,832 -> 14,712,048, an_inner_beat_opens_its_tenure_in_the_block_outside_beat_iters 60 -> 54, an_inner_beat_opens_its_tenure_in_the_block_outside_evac_allocs 48,411 -> 45,168, an_inner_beat_opens_its_tenure_in_the_block_outside_evac_bytes 3,002,288 -> 2,788,720, an_inner_beat_opens_its_tenure_in_the_block_outside_survive_slots 2,004 -> 11,204, an_inner_beat_opens_its_tenure_in_the_block_outside_carry_dedup 209 -> 459, an_inner_beat_opens_its_tenure_in_the_block_outside_buf_reuse 3,895 -> 3,907, an_inner_beat_opens_its_tenure_in_the_block_outside_sh_buf 5,070,416 -> 4,887,632; an_insisting_form_that_settled_builds_no_step_beat_iters 2 -> 0, an_insisting_form_that_settled_builds_no_step_evac_allocs 18 -> 9, an_insisting_form_that_settled_builds_no_step_evac_bytes 560 -> 288; effect_push_shape_allocs 56 -> 52, effect_push_shape_alloc_bytes 2,544 -> 2,320, effect_push_shape_beat_iters 5 -> 0, effect_push_shape_evac_allocs 50 -> 14, effect_push_shape_evac_bytes 1,696 -> 464, effect_push_shape_survive_slots 10 -> 4, effect_push_shape_sh_buf 768 -> 608; stream_write_beat_iters 1,601 -> 1,600, stream_write_evac_allocs 12 -> 6, stream_write_evac_bytes 480 -> 240, stream_write_held_peak_bytes 16,000 -> 16,160; the_same_capture_built_below_the_mark_is_shared_beat_iters 502 -> 501, the_same_capture_built_below_the_mark_is_shared_evac_allocs 10 -> 6, the_same_capture_built_below_the_mark_is_shared_evac_bytes 8,352 -> 8,192, the_same_capture_built_below_the_mark_is_shared_survive_slots 504 -> 4; tie_cycle_beat_iters 1 -> 0, tie_cycle_evac_allocs 15 -> 12, tie_cycle_evac_bytes 560 -> 464; work_ahead_forces_what_follows_a_park_beat_iters 2 -> 0, work_ahead_forces_what_follows_a_park_evac_allocs 11 -> 7, work_ahead_forces_what_follows_a_park_evac_bytes 368 -> 240; work_ahead_leaves_a_chain_never_run_beat_iters 1 -> 0, work_ahead_leaves_a_chain_never_run_evac_allocs 5 -> 4, work_ahead_leaves_a_chain_never_run_evac_bytes 192 -> 144; work_ahead_leaves_a_literal_where_it_is_beat_iters 2 -> 0, work_ahead_leaves_a_literal_where_it_is_evac_allocs 11 -> 7, work_ahead_leaves_a_literal_where_it_is_evac_bytes 368 -> 240; work_ahead_leaves_an_extending_builtin_beat_iters 4,002 -> 4,000, work_ahead_leaves_an_extending_builtin_evac_allocs 13 -> 9, work_ahead_leaves_an_extending_builtin_evac_bytes 448 -> 320; work_ahead_lifts_a_parking_lambda_beat_iters 1,001 -> 1,000, work_ahead_lifts_a_parking_lambda_evac_allocs 12 -> 4, work_ahead_lifts_a_parking_lambda_evac_bytes 384 -> 144; work_ahead_moves_a_binding_into_the_park_beat_iters 2 -> 0, work_ahead_moves_a_binding_into_the_park_evac_allocs 11 -> 7, work_ahead_moves_a_binding_into_the_park_evac_bytes 368 -> 240; work_ahead_pools_a_call_on_a_builtin_read_beat_iters 3,002 -> 3,000, work_ahead_pools_a_call_on_a_builtin_read_evac_allocs 15 -> 11, work_ahead_pools_a_call_on_a_builtin_read_evac_bytes 496 -> 368; work_ahead_pools_a_call_on_a_local_beat_iters 1,002 -> 1,000, work_ahead_pools_a_call_on_a_local_evac_allocs 13 -> 9, work_ahead_pools_a_call_on_a_local_evac_bytes 416 -> 288; work_ahead_reads_a_moved_binding_beat_iters 2 -> 0, work_ahead_reads_a_moved_binding_evac_allocs 11 -> 7, work_ahead_reads_a_moved_binding_evac_bytes 368 -> 240. The only peak among them is stream_write's held peak, 160 bytes higher. The ratchet row `a_chain_staged_on_its_first_step` puts the null back
+and turns the run counters red. `tests/a_document_read_from_a_file_keeps_its_loop.rs`
+counted one beat per iteration and one for the program; the program's own
+chain no longer stages, and its four programs read 200, 800, 200 and 200.

@@ -2730,7 +2730,7 @@ rows_cq19 = list/concat rows_cq18 key_paths
 entry_inline = row
   "a map entry read through the C"
   true
-  (gating "emitted_code")
+  (gating "instructions")
   "cost goldens (deterministic ratchet, no clocks)"
   (breaking "a_map_entry_read_through_the_c")
   benchmarks
@@ -2747,4 +2747,106 @@ string_claimed = row
 
 rows_cq21 = list/concat rows_cq20 [string_claimed]
 
-rows_c = list/concat rows_cq21 [itself]
+entry_twice = row
+  "an entry read twice"
+  true
+  (gating "emitted_code")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "an_entry_read_twice")
+  benchmarks
+
+rows_cq22 = list/concat rows_cq21 [entry_twice]
+
+frontier_copied = row
+  "a builder copied at the frontier"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_builder_copied_at_the_frontier")
+  no_setup
+
+count_allocating = row
+  "a map's count held as allocating"
+  true
+  (gating "run_counters")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_maps_count_held_as_allocating")
+  benchmarks
+
+rows_cq23 = list/concat rows_cq22 [frontier_copied count_allocating]
+
+loop_unbracketed = row
+  "a call into a loop left unbracketed"
+  true
+  (gating "run_counters")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_call_into_a_loop_left_unbracketed")
+  benchmarks
+
+nothing_bracketed = row
+  "a loop that builds nothing bracketed"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_loop_that_builds_nothing_bracketed")
+  benchmarks
+
+rows_cq24 = list/concat rows_cq23 [loop_unbracketed nothing_bracketed]
+
+sited_stamped = row
+  "a sited call stamped anyway"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_sited_call_stamped_anyway")
+  benchmarks
+
+rows_cq25 = list/concat rows_cq24 [sited_stamped]
+
+key_beside = row
+  "a short key read from the slot beside it"
+  true
+  "cargo test --release --test golden micro_corpus_survives_a_release_build"
+  "specs (unit, golden, differential)"
+  (breaking "a_short_key_read_from_the_slot_beside_it")
+  no_setup
+
+key_called = row
+  "a short key left to the call"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_short_key_left_to_the_call")
+  benchmarks
+
+rows_cq26 = list/concat rows_cq25 [key_beside key_called]
+
+point_forgotten = row
+  "a point forgotten on the fast path"
+  true
+  "cargo test --release --test golden micro_corpus_survives_a_release_build"
+  "specs (unit, golden, differential)"
+  (breaking "a_point_forgotten_on_the_fast_path")
+  no_setup
+
+number_scanned = row
+  "a number scanned sixteen bytes at a time anyway"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_number_scanned_sixteen_bytes_at_a_time_anyway")
+  benchmarks
+
+rows_cq27 = list/concat rows_cq26 [point_forgotten number_scanned]
+
+chain_first = row
+  "a chain staged on its first step"
+  true
+  (gating "run_counters")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_chain_staged_on_its_first_step")
+  benchmarks
+
+rows_cq28 = list/concat rows_cq27 [chain_first]
+
+rows_c = list/concat rows_cq28 [itself]

@@ -47,6 +47,7 @@ static KValue k_to_int_text(const char* data, long long len, long long room,
                             const char* origin);
 static KValue k_to_float_text(const char* data, long long len, long long room,
                               const char* origin);
+static KValue k_to_float_whole(const char* data, long long len, const char* origin);
 KValue k_b_to_float(KValue v, const char* origin);
 
 KValue k_b_to_int(KValue sv, const char* origin) {
@@ -58,16 +59,6 @@ KValue k_b_to_int(KValue sv, const char* origin) {
     if (sv.tag == K_STR) { KStr* s = k_as_str(sv); data = s->data; len = s->len; }
     else { KBytes* b = k_as_bytes(sv); data = (const char*)b->data; len = b->len; }
     return k_to_int_text(data, len, len, origin);
-}
-
-/* A word's bytes that are not ascii digits, as 0x80 in each such byte. Each
-   byte is xored with '0', so a digit becomes 0 to 9, and a byte is flagged
-   when it is above 9: its low seven bits plus 0x76 reach 0x80 from 0x0A up,
-   and its own top bit covers the rest. The add stays under 0x100 in every
-   byte, so no byte's answer carries into its neighbour's. */
-static inline uint64_t k_nondigits8(uint64_t x) {
-    uint64_t t = x ^ 0x3030303030303030ULL;
-    return (((t & 0x7F7F7F7F7F7F7F7FULL) + 0x7676767676767676ULL) | t) & 0x8080808080808080ULL;
 }
 
 /* The top `n` bytes of `w` read as decimal digits, 1 <= n <= 8, most
@@ -1182,7 +1173,7 @@ KValue k_b_to_float(KValue v, const char* origin) {
     long long len;
     if (v.tag == K_STR) { KStr* s = k_as_str(v); data = s->data; len = s->len; }
     else { KBytes* b = k_as_bytes(v); data = (const char*)b->data; len = b->len; }
-    return k_to_float_text(data, len, len, origin);
+    return k_to_float_whole(data, len, origin);
 }
 
 static const unsigned long long k_pow10_small[8] = {
@@ -1220,15 +1211,37 @@ static inline int k_float_shape8(const char* data, long long len, long long room
     return 1;
 }
 
-/* Inlined into both doors by name. With the shape above in it, clang stopped
-   inlining it into k_b_to_float, and widebench's 72,000 parses paid the
-   call: 272,000 instructions. */
+static inline __attribute__((always_inline)) KValue
+k_to_float_scan(const char* data, long long len, const char* origin);
+
+/* The scan out of line, for the slice doors: its fallback's buffer and the
+   registers its loops want made every call build a frame, and a slice of a
+   document nearly always has the room the `[-]I.F` shape needs. */
+static __attribute__((noinline)) KValue k_to_float_scan_out(const char* data, long long len,
+                                                            const char* origin) {
+    return k_to_float_scan(data, len, origin);
+}
+
 static inline __attribute__((always_inline)) KValue
 k_to_float_text(const char* data, long long len, long long room, const char* origin) {
-    {
-        double shaped;
-        if (k_float_shape8(data, len, room, &shaped)) return k_float(shaped);
-    }
+    double shaped;
+    if (k_float_shape8(data, len, room, &shaped)) return k_float(shaped);
+    return k_to_float_scan_out(data, len, origin);
+}
+
+/* A string's own door keeps the scan inline. A short string has no room for
+   the shape's two words and always scans, and with the scan out of line
+   widebench's 72,000 parses paid the call: 272,000 instructions the first
+   time, and 320,059 when the slice doors moved it out again. */
+static inline __attribute__((always_inline)) KValue
+k_to_float_whole(const char* data, long long len, const char* origin) {
+    double shaped;
+    if (k_float_shape8(data, len, len, &shaped)) return k_float(shaped);
+    return k_to_float_scan(data, len, origin);
+}
+
+static inline __attribute__((always_inline)) KValue
+k_to_float_scan(const char* data, long long len, const char* origin) {
     /* the fast path: a plain decimal scanned into (w, q) and parsed by
        eisel-lemire; anything it can't be certain about — overlong digits,
        exotic forms, halfway cases — falls through to strtod, which stays
