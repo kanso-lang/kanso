@@ -21,36 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-15 — An operator handed a literal string, list or map is refused at check
-
-The first piece of #1975, and the one that costs nothing at run time. `+`,
-`-`, `*`, `/` and `%` take numbers, and an operator arm routes only a record,
-so a string, a list or a map stops the run on every engine. The check now
-refuses one at the operand, in `wrong_kind_at_an_operator` in
-`src/check/after_infer.rs`, beside the `list/concat` refusal.
-
-It refuses only an operand that cannot hold an err: a literal with nothing
-interpolated, or a call of such literals into a group whose every arm answers
-a string, a list or a map and none fails. The first draft read the callee's
-answer set alone, and `tests/golden/micro/a_merged_err_stays_flat_across_a_hop`
-caught it: `through merged + e3` calls a group whose arms all answer strings,
-but `through` has no err arm, so the err it is handed hops through it and the
-two errs merge at `+`. An operator hands an err on, so anything that might
-carry one is left to the run.
-
-That leaves the ports' case, `twice "x"` where `twice n` is `n * 2`, to the
-run, which is what the rest of #1975 locates. Pinned by
-`tests/golden/errors/an_operator_handed_a_value_it_never_takes`, seen red with
-the call removed; the ratchet row `operator_kind_unchecked` runs the same
-mutation.
-
-The walk costs compile time, which CI measured: `compile_instructions`
-22,699,901 -> 22,715,476, `entry_instructions` 75,214,425 -> 75,262,121,
-`library_instructions` 74,901,006 -> 74,948,228 and
-`browser_compile_instructions` 382,590,239 -> 382,741,447. The run rows did
-not move. This builds a ruled part of the language, so the welfare floor
-moved down by exactly that cost, to 91.52, with this entry as the reason.
-
 ## 2026-10-17 — gavel: every run-time failure names its line except a stack overflow
 
 Clay ruled #1987. The #1975 ruling accepted naming every run-time failure's
@@ -2149,3 +2119,49 @@ the most it could have saved.
 Kanso#2024 is closed. Its first lead shipped in #2025 and its third with
 `append_key`. Of its second, 8,091,439 overflow checks still execute. Most
 guard arithmetic on ints with no bound inside their own group.
+
+## 2026-10-22 — a string index the checker proves goes straight to the text
+
+Where the sets prove the container a string and the position an int, the
+emitter now calls `k_b_at_str` with the string's pointer and the position.
+It is the string arm of `k_b_at`, lifted out, and `k_b_at` calls it too. The
+site used to emit a bytes test that a string never passes, then call
+`k_b_at` with two KValues, which tested both tags again, then merge the slow
+answer back with a select that rebuilt the byte form. The arm answers a
+one-character string or `none`, and nothing in it stops the program but
+running out of memory, so the site stamps no place for a death.
+
+Measured here on #2047's build, the run program 855,758,710 -> 844,029,230
+(-1.37%) with the same output. Every index in it of this shape is the index
+phase's walk, 690,000 calls: the door fell 40,070,237 -> 34,500,017
+(`k_b_at` against `k_b_at_str`), and `tally_4`, where the walk is inlined,
+fell 22,887,971 -> 16,677,970 without the bytes test and the merge.
+
+CI's rows. run_instructions 855,758,740 -> 844,029,138 (-1.37%), and
+work_indexbench, which is the same walk alone, 2,326,925 -> 1,986,925
+(-14.6%). Three moved by amounts this entry does not account for:
+work_encodebench 2,456,797,378 -> 2,456,796,006, work_oneshot 10,361,059 ->
+10,361,367 and work_livebench 990,759,394 -> 990,759,429. The emitted code
+of the two programs with the walk shrinks: indexbench's branches 48 -> 42
+and lines 787 -> 756, runbench's branches 6,451 -> 6,445 and lines 57,875 ->
+57,843, so emitted_other_branches and emitted_other_lines fall. Machine code
+grows by 1,040 bytes in most programs and 960 and 992 in the two with the
+walk, since `k_b_at_str` is a function beside `k_b_at`: text 5,317,806 ->
+5,332,238. Building the run program: codegen_instructions_dev 116,141,087 ->
+116,162,655, codegen_instructions_release 422,507,483 -> 422,568,857, and
+emit_instructions 6,433,837 -> 6,434,680. In the tab:
+browser_compile_instructions 428,036,106 -> 427,996,730,
+browser_compile_peak_bytes 768,205 -> 768,243 and browser_run_instructions
+30,460,236 -> 30,450,747. The welfare floor rises 92.83 -> 92.88.
+
+Declined: giving the index twin `k_b_at_fast` the same string arm, for
+indexes whose sets do not prove a string. Alone it read the run program
+-8,405, against a branch and a call at every unproven index site.
+
+The micro golden `a_string_index_the_checker_proves_goes_straight_to_the_text`
+walks strings of one- to four-byte characters forward, which steps the
+cursor, and backward, which seeks, with positions past both ends. The
+release build, which the corpus runs, takes `k_b_at_str` at both walks. With
+the cursor stepping one byte instead of one character the walk splits the
+wide characters and the golden goes red. The ratchet row
+`a_proven_string_index_through_the_tag_tests` takes the arm away.
