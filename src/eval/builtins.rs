@@ -1034,11 +1034,7 @@ impl<'a> Interp<'a> {
                         "append_string" => "append_string takes bytes and a string",
                         _ => "append_escaped takes bytes and a string",
                     };
-                    return Err(RuntimeError {
-                        at: None,
-                        message: message.to_string(),
-                        span,
-                    });
+                    return Err(RuntimeError { at: None, message: message.to_string(), span });
                 };
                 // `s` as a JSON string holds it, in lib/json's forms, as
                 // k_b_append_escaped writes it; in place where `append` would be.
