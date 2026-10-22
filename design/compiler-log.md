@@ -21,58 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-14 — A group of effect lines pools while it waits
-
-#1856's work-ahead pool ran only at a bare sleep, and a body with two or more
-effect lines has none: the parser joins the lines into one group, and the
-scheduler runs a sleep inside it by parking that side. So `print "start"`
-followed by a sleep with work behind it never pooled.
-
-The scheduler now runs the pool at the group's first idle point, the first
-time every side is waiting on a timer, and the wall-credit it already keeps
-counts the pool's time against that wait. Which work runs there is fixed at
-compile time and the idle point is a fact of the schedule, never of the
-clock, so the transcript and the counters are the same on every run. On the
-compiler side, `ahead` reads each side of the group that begins with a sleep
-the way it reads a lone statement. A failure in the pool is dropped and
-raised where the value is read, as before, so a program in a group prints
-the transcript it prints without the pool. Bindings still move only when the
-park is the body's single effect line.
-
-`print "start"` and a 2-second sleep followed by a report of `spin 150000000
-0`, run with `kanso play` on this container: 3.80 s and 3.96 s on main, 2.08 s
-and 2.01 s on this branch, with the same output.
-
-Pinned by:
-- `tests/golden/mem/work_ahead_forces_inside_a_group`: `ahead_forced=1`, where
-  main printed no work-ahead counters at all;
-- `tests/golden/workahead/a_pooled_overflow_in_a_group_fails_where_it_is_read`:
-  "start", "first", then the overflow, on both engines;
-- ratchet rows "a group that never pools" and "a group's side left unread",
-  each seen red on the new golden.
-
-`k_schedule` grew 16 bytes on CI, and every benchmark in
-`bench/text_golden.txt` grew by the same 16, so `text` went from 4,878,382 to
-4,878,606. `browser_compile_instructions`
-went from 382,154,970 to 382,155,032, though the tab compiles the pool out.
-The front end rose: `compile_instructions` 22,665,216 -> 22,679,084,
-`entry_instructions` 75,110,504 -> 75,152,899, `library_instructions`
-74,796,982 -> 74,839,906, `emit_instructions` 5,438,920 -> 5,440,488 and
-`interp_instructions` 492,625,557 -> 492,635,997. Codegen rose 967 at dev,
-`codegen_instructions_dev` 112,581,257 -> 112,582,224, and 1,390 at release,
-`codegen_instructions_release` 441,727,359 -> 441,728,749.
-
-Three of the four CI runs landed on Intel parts, and the fourth on the AMD
-part `bench/instructions_golden.txt` is recorded on. It moved four work rows:
-`work_encodebench` 2,387,084,547 -> 2,387,083,945, `work_oneshot` 13,207,833
--> 13,207,567, `work_livebench` 1,474,835,144 -> 1,474,835,683 and
-`work_runbench` 1,177,696,572 -> 1,177,697,090. This container, an Intel part, read the same
-four differences between main and this branch built from the same inputs.
-No benchmark sleeps, so no pooled work runs in them, and nothing here
-isolates where the difference comes from. Welfare fell 0.00009 to 91.52451,
-and the floor is lowered by exactly that, since this builds a ruled part of
-#1856.
-
 ## 2026-10-14 — A call on a function's locals is pooled as a cell
 
 #1856's pool took only constants: calls whose arguments name nothing local,
@@ -1880,3 +1828,76 @@ The map golden `a_map_is_encoded_from_its_entries_in_place` is the pair's
 witness for its bytes: with the value loaded from the key's slot, every value
 printed as its key. The ratchet row `an_entry_read_twice` never sees the pair
 and turns the emitted gate red.
+
+## 2026-10-22 — a builder at the arena's frontier grows where it stands
+
+A builder that outgrew its buffer took a new one and copied, in the arena or
+from malloc depending on where its header sat against the innermost mark. When
+the header lies above that mark, the buffer is arena storage, and when the
+buffer is also the last thing the arena handed out, it now grows by moving
+the frontier past it: no new buffer and no copy. A header above the innermost
+mark was allocated after it, and a buffer at the frontier after the header, so
+the extension dies with the header at the same rewind. The grow also requires
+the header to own the buffer's frontier, since a grow is how an append reaches
+a buffer another header has written past. The extension's bytes count in
+`alloc_bytes`.
+
+That made a second change pay. On 2026-10-21 `entry_count` was left
+allocating to the beat analysis, which kept a region around each map the
+encoder descends into: inside the region the builder's header sat below the
+mark and grew by realloc, and without it the builder grew in the arena by
+doubling and copying (+24.7M memcpy). `entry_count` is now pure, as `key_at`
+and `value_at` are. The view it may build comes from malloc, and only a sort's
+scratch index lands in the arena, where the enclosing loop's rewind takes it.
+The region is gone, and the builder now grows in place.
+
+Measured here, the run program read 1,018,405,282 -> 999,948,734 (-1.81%)
+with the same output: `k_region_pop`'s 10.7M is gone, and `encode_list` and
+`encode_map` fall 3.5M and 3.8M.
+
+CI's rows: work_runbench 1,018,406,469 -> 999,949,921 (-1.81%),
+work_livebench 1,126,408,749 -> 1,043,615,776 (-7.3%), work_oneshot
+11,669,620 -> 11,443,335 (-1.9%) and work_encodebench 2,456,797,637 ->
+2,456,796,655. work_widebench rises 28,571,443 -> 28,619,441 (+0.17%); it
+carries its own copy of lib/json and grows its builders in the arena too. The
+run program's held_peak_bytes falls 200,978 -> 111,920, and run allocs
+1,447,994 -> 1,446,734, alloc_bytes 249,236,356 -> 221,966,536, append_grow
+1,260 -> 1,080, append_fast 5,328,270 -> 5,328,540, bytes_malloc 9,140 ->
+7,880 and bytes_freed 9,010 -> 7,750. The one-shot and live programs'
+builders never leave the arena: held_peak_bytes 200,978 -> 0 in both,
+bytes_malloc and bytes_freed 14 -> 0 and 5,600 -> 0, oneshot allocs 7,531 ->
+7,517, alloc_bytes 1,790,518 -> 1,487,520, append_grow 14 -> 12, append_fast
+59,203 -> 59,206; live allocs 13,914 -> 8,314, alloc_bytes 235,351,504 ->
+114,152,304, append_grow 5,600 -> 4,800, append_fast 23,681,200 ->
+23,682,400. Without the region runbench, oneshot and livebench make three
+fewer calls (runbench calls 7,355 -> 7,352, lines 56,634 -> 56,636; oneshot
+calls 1,484 -> 1,481, lines 13,866 -> 13,868; livebench calls 1,523 -> 1,520,
+lines 14,189 -> 14,191). The runtime's text grows 336 bytes in every program
+(text jsonbench 372,777 -> 373,113) and shrinks where the region went (text
+runbench 720,921 -> 719,977, oneshot 380,393 -> 379,641, livebench 384,169 ->
+383,177). codegen_instructions_dev 116,067,612 -> 116,068,279 and
+codegen_instructions_release 422,361,029 -> 422,367,718 rise, and
+emit_instructions 6,377,706 -> 6,377,307 falls. In the tab,
+browser_run_instructions 31,991,504 -> 31,623,429,
+browser_run_peak_bytes 1,441,792 -> 1,376,256, browser_compile_instructions
+406,222,752 -> 406,034,117 and browser_compile_peak_bytes 733,266 -> 732,887
+fall. The welfare sum rose, and the floor moves 92.17 -> 92.25.
+
+The frees fall with the mallocs they answered: run_bytes_freed 9,010 -> 7,750,
+oneshot_bytes_freed 14 -> 0, live_bytes_freed 5,600 -> 0 and
+a_literal_appended_across_a_rewind_bytes_freed 40 -> 0. Over all programs,
+emitted_other_lines 158,180 -> 158,186 and text 5,235,662 -> 5,236,670.
+
+The mem corpus moves where builders grow in the arena:
+`a_literal_appended_across_a_rewind` allocs 136 -> 96, alloc_bytes 11,920 ->
+9,040, bytes_malloc and bytes_freed 40 -> 0, held_peak_bytes 152 -> 0;
+`three_storage_regimes_share_one_append` allocs 1,640 -> 1,040, alloc_bytes
+186,274 -> 114,274; `append_of_a_slice_boxes_nothing` allocs 14 -> 12,
+alloc_bytes 2,396 -> 2,156. The micro golden
+`a_builder_grows_where_it_stands_until_something_follows_it` grows a builder
+in place, appends a string made after the buffer, and grows again by copying,
+300 rounds inside a loop against one built outside any; with the in-place
+write one byte early it printed `0 of 300 rounds agree`. Two ratchet rows:
+`a_builder_copied_at_the_frontier` turns the mem corpus red, and
+`a_maps_count_held_as_allocating` puts the region back and turns the run
+counters red.

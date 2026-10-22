@@ -105207,3 +105207,55 @@ row moved. Welfare rose 0.00022 to 91.52460, and the floor is banked there.
 
 Still not built for #1856: pooling inside an effect group, and calls whose
 arguments name locals that cannot move, which need the (site, args) pool.
+
+## 2026-10-14 — A group of effect lines pools while it waits
+
+#1856's work-ahead pool ran only at a bare sleep, and a body with two or more
+effect lines has none: the parser joins the lines into one group, and the
+scheduler runs a sleep inside it by parking that side. So `print "start"`
+followed by a sleep with work behind it never pooled.
+
+The scheduler now runs the pool at the group's first idle point, the first
+time every side is waiting on a timer, and the wall-credit it already keeps
+counts the pool's time against that wait. Which work runs there is fixed at
+compile time and the idle point is a fact of the schedule, never of the
+clock, so the transcript and the counters are the same on every run. On the
+compiler side, `ahead` reads each side of the group that begins with a sleep
+the way it reads a lone statement. A failure in the pool is dropped and
+raised where the value is read, as before, so a program in a group prints
+the transcript it prints without the pool. Bindings still move only when the
+park is the body's single effect line.
+
+`print "start"` and a 2-second sleep followed by a report of `spin 150000000
+0`, run with `kanso play` on this container: 3.80 s and 3.96 s on main, 2.08 s
+and 2.01 s on this branch, with the same output.
+
+Pinned by:
+- `tests/golden/mem/work_ahead_forces_inside_a_group`: `ahead_forced=1`, where
+  main printed no work-ahead counters at all;
+- `tests/golden/workahead/a_pooled_overflow_in_a_group_fails_where_it_is_read`:
+  "start", "first", then the overflow, on both engines;
+- ratchet rows "a group that never pools" and "a group's side left unread",
+  each seen red on the new golden.
+
+`k_schedule` grew 16 bytes on CI, and every benchmark in
+`bench/text_golden.txt` grew by the same 16, so `text` went from 4,878,382 to
+4,878,606. `browser_compile_instructions`
+went from 382,154,970 to 382,155,032, though the tab compiles the pool out.
+The front end rose: `compile_instructions` 22,665,216 -> 22,679,084,
+`entry_instructions` 75,110,504 -> 75,152,899, `library_instructions`
+74,796,982 -> 74,839,906, `emit_instructions` 5,438,920 -> 5,440,488 and
+`interp_instructions` 492,625,557 -> 492,635,997. Codegen rose 967 at dev,
+`codegen_instructions_dev` 112,581,257 -> 112,582,224, and 1,390 at release,
+`codegen_instructions_release` 441,727,359 -> 441,728,749.
+
+Three of the four CI runs landed on Intel parts, and the fourth on the AMD
+part `bench/instructions_golden.txt` is recorded on. It moved four work rows:
+`work_encodebench` 2,387,084,547 -> 2,387,083,945, `work_oneshot` 13,207,833
+-> 13,207,567, `work_livebench` 1,474,835,144 -> 1,474,835,683 and
+`work_runbench` 1,177,696,572 -> 1,177,697,090. This container, an Intel part, read the same
+four differences between main and this branch built from the same inputs.
+No benchmark sleeps, so no pooled work runs in them, and nothing here
+isolates where the difference comes from. Welfare fell 0.00009 to 91.52451,
+and the floor is lowered by exactly that, since this builds a ruled part of
+#1856.

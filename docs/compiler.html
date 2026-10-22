@@ -4054,7 +4054,7 @@ welfare                      77.37         82.09</code></pre>
 
 <p>The encoder wrote a map from its two columns, <code>keys m</code> and <code>values m</code>, which the runtime copied into two lists per map. A map already keeps its entries sorted as <code>[k v k v ...]</code>, so three library builtins now read it in place: <code>entry_count</code>, and <code>key_at</code> and <code>value_at</code> at a position. Where the sorted view is built each read is a bounds test and a load, written inline; a missing view goes to the runtime, which builds it first. The run program fell 0.98%, and livebench, which encodes many small maps, fell 4.2% and made 13,914 allocations where it made 1,118,314.</p>
 
-<p>The count is computed where the columns were, as an argument at the call, because the analysis that places memory regions treats it as an allocation. Moved inside <code>encode_map</code>, it made the pair loop a region of its own and cost 17.9M instructions. Treated as allocating nothing, it removed the region around each map, and the output buffer, no longer below the region's mark, grew by copying at each doubling: 24.7M instructions of memcpy, more than the regions cost.</p>
+<p>The count is computed where the columns were, as an argument at the call. Moved inside <code>encode_map</code>, it made the pair loop a region of its own and cost 17.9M instructions.</p>
 
 <h2 id="strvalue"><span class="sec-num">224</span>a string value in one call</h2>
 
@@ -4063,6 +4063,12 @@ welfare                      77.37         82.09</code></pre>
 <h2 id="entrypair"><span class="sec-num">225</span>one test for a key and its value</h2>
 
 <p>The encoder reads each pair of a map as <code>key_at m i</code> and <code>value_at m i</code>, two arguments of one call, and each read tested the map's sorted view on its own: the tags, the view and its mark, and the position against the count. When a call's arguments read a key and then a value of the same map at the same position, the emitter now makes one test and two loads, and hands the value to the next argument through a slot in the frame. A view that is missing or marked still goes to the C for both reads. The run program fell 1.0%, and the encoder-only benchmark 3.9%.</p>
+
+<h2 id="inplace"><span class="sec-num">226</span>a builder that grows where it stands</h2>
+
+<p>A builder that outgrows its buffer takes a new one and copies. When the buffer lives in the arena and is the last thing the arena handed out, it now grows by moving the arena's frontier past it, which needs no copy. Its header must lie above the innermost mark, so the extension dies at the same rewind the header does, and must own the buffer's frontier.</p>
+
+<p>That made a second change pay. The encoder had kept a region around each map it descends into, because the analysis that places regions treated a map's entry count as an allocation. Inside the region the builder grew by <code>realloc</code>; treated as pure, the count removed the region, and the builder grew in the arena by doubling and copying, 24.7M instructions of memcpy, more than the regions cost. With the builder growing in place, the count is pure, as the key and value reads already were, and the region is gone. The run program fell 1.81% and its held peak 44%; the encoder-only benchmark fell 7.3%.</p>
 
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
