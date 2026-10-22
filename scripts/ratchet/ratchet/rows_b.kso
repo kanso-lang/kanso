@@ -432,10 +432,10 @@ byte_pair_swapped = row
 byte_pair_apart = row
   "a byte pair appended one at a time"
   true
-  (gating "instructions")
-  "cost goldens (deterministic ratchet, no clocks)"
+  "cargo test --release --test perf_ratchet two_byte_appends_are_one_call"
+  "specs (unit, golden, differential)"
   (breaking "a_byte_pair_appended_one_at_a_time")
-  benchmarks
+  release
 
 rows_b1bp = list/concat rows_b1ua [byte_pair_swapped byte_pair_apart]
 
@@ -815,7 +815,7 @@ token_cache = row
 
 rows_b1tc = list/concat rows_b1hg [token_cache]
 
-# A map key reaches escape_onto through a parameter typed as a string.
+# A map key reaches append_key through a parameter typed as a string.
 key_typed = row
   "a key written as any value, so every key pays the untyped escape"
   true

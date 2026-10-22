@@ -2270,6 +2270,24 @@ KValue k_b_append_escaped(KValue acc, KValue sv) { return k_append_escaped(acc, 
 
 KValue k_b_append_escaped_mut(KValue acc, KValue sv) { return k_append_escaped(acc, sv, 1); }
 
+/* `append_key acc k`: `acc` with `k` written as a JSON object key, quoted,
+   escaped and followed by a colon. The emitter's twin claims the builder
+   once for a key the decoder shared as a clean token; this is everything
+   else, the three appends the key stands for. */
+static KValue k_append_key(KValue acc, KValue sv, int mutate) {
+    if (!k_not_failure(acc) || !k_not_failure(sv)) return k_failed2(acc, sv);
+    if (acc.tag != K_BYTES || sv.tag != K_STR) k_die("append_key takes bytes and a string");
+    KValue quote = k_int(34), colon = k_int(58);
+    acc = mutate ? k_b_append_mut(acc, quote) : k_b_append(acc, quote);
+    acc = k_append_escaped(acc, sv, mutate);
+    acc = mutate ? k_b_append_mut(acc, quote) : k_b_append(acc, quote);
+    return mutate ? k_b_append_mut(acc, colon) : k_b_append(acc, colon);
+}
+
+KValue k_b_append_key(KValue acc, KValue sv) { return k_append_key(acc, sv, 0); }
+
+KValue k_b_append_key_mut(KValue acc, KValue sv) { return k_append_key(acc, sv, 1); }
+
 /* The bytes arm of `slice`, with the KValue convention taken off its inputs.
    A view is a header and two words, so the arithmetic here is four compares
    and an add; everything before it in `k_b_slice` is the boxing. The emitter

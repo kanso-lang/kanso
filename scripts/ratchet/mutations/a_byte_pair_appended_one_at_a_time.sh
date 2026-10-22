@@ -1,7 +1,8 @@
 #!/bin/sh
 # Two byte appends in a row are merged into one call after the body is
 # emitted. This mutation skips the merge, so each byte asks for room on its
-# own again. The answers are the same; the work vein is the witness.
+# own again. The answers are the same; the witness is the perf_ratchet spec
+# two_byte_appends_are_one_call, which reads the merge in the emitted code.
 set -e
 line='        let pieces: Vec<String> = pruned.into_iter().map(paired_appends).collect();'
 [ "$(grep -cxF "$line" src/codegen.rs)" -eq 1 ] || {

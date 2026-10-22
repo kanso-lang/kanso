@@ -40,7 +40,7 @@ fn encode_list acc xs
 # indexes both rather than building and taking apart a record per pair.
 fn encode_map acc ks vs
   return text/append acc "\{}" if length ks == 0 or length vs == 0
-  opened = pair_onto (text/append (text/append acc 123) 34) ks[1] vs[1]
+  opened = pair_onto (text/append acc 123) ks[1] vs[1]
   text/append (encode_pairs opened ks vs 2) 125
 
 fn encode_onto acc true
@@ -70,18 +70,17 @@ fn encode_onto acc m:map[string some]
 
 fn encode_pairs acc ks vs i
   return acc if i < 1 or length ks < i or length vs < i
-  opened = text/append (text/append acc 44) 34
+  opened = text/append acc 44
   encode_pairs (pair_onto opened ks[i] vs[i]) ks vs (i + 1)
 
 fn pair_onto acc k v
   encode_onto (key_onto acc k) v
 
-# A key is always a string, and saying so is what lets the emitter reach
-# escape_onto without the type test encode_onto makes on every value. The
-# quote that opens it is appended by the caller, straight after the brace or
-# the comma, and the quote that closes it goes out with the colon as one word.
+# A key is always a string, and goes out quoted, escaped and followed by its
+# colon in one builtin, which claims the builder once for a key the decoder
+# shared as a clean token. The brace or comma before it is the caller's.
 fn key_onto acc k:string
-  text/append (escape_onto acc k) "\":"
+  builtin_append_key acc k
 
 fn finish _ none
   err (parse_failure 0 "unexpected end of input")

@@ -1,0 +1,28 @@
+# An object key is written by one builtin: a quote, the key escaped, a quote
+# and a colon. A key the decoder shared as a token of four to seven bytes that
+# needs no escaping is copied as one word; every other key is escaped byte by
+# byte. The document below holds keys of both kinds and keys at the edges:
+# empty, one byte, exactly seven and eight bytes, a two-byte character, and
+# shared tokens with a quote, a backslash or a tab in them. It is decoded and
+# encoded twice, so the second pass reads the tokens the first one shared.
+import "std/io"
+import "std/json"
+
+short = "\"\":0,\"a\":1,\"abcd\":2,\"seven77\":3,\"eight888\":4"
+
+wide = "\"été\":5,\"\\u00e9\":10,\"q\\\"uo\":6,\"b\\\\sl\":7,\"t\\tab\":8"
+
+nested = "\"nested\":\{\"abcd\":[\{\"wxyz\":9}]}"
+
+doc = "\{{short},{wide},{nested}}"
+
+fn encoded (err _)
+  "refused"
+
+fn encoded v
+  json/encode v
+
+fn shown _
+  encoded (json/decode doc)
+
+pub play = io/write "{shown 0}\n{shown 0}\n"

@@ -436,10 +436,12 @@ built_text was handed bytes that are not text
 # calls each in one place in lib/json. `plain_string` and `unescape` take the
 # bytes `decode` made with `text/bytes` and positions it computed: `p` one past
 # an opening quote, `e` the closing quote `plain_string` itself answered.
-# `append_escaped` takes the writer's accumulator, which begins as
-# `text/bytes ""` and is only ever appended to, and a string `escape_onto` was
-# handed. The native and interpreted refusals stay because a builtin must
-# answer what it is handed.
+# `append_escaped` and `append_key` take the writer's accumulator, which
+# begins as `text/bytes ""` and is only ever appended to, and a string:
+# the one `escape_onto` was handed, or a key `key_onto` annotated `string`.
+# The native and interpreted refusals stay because a builtin must answer what
+# it is handed.
 plain_string takes bytes and a position
 unescape takes bytes and two positions
 append_escaped takes bytes and a string
+append_key takes bytes and a string

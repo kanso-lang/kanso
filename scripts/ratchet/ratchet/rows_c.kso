@@ -2707,4 +2707,24 @@ read_positions = [read_link_kept read_link_lost length_bound]
 
 rows_cq18 = list/concat rows_cq17 read_positions
 
-rows_c = list/concat rows_cq18 [itself]
+key_claimed = row
+  "a key claimed one byte at a time"
+  true
+  (gating "emitted_code")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_key_claimed_one_byte_at_a_time")
+  benchmarks
+
+token_size = row
+  "a token measured at its native size on wasm32"
+  true
+  "cargo test --release --test ir_to_wasm"
+  "specs (unit, golden, differential)"
+  (breaking "a_token_measured_at_its_native_size_on_wasm32")
+  release
+
+key_paths = [key_claimed token_size]
+
+rows_cq19 = list/concat rows_cq18 key_paths
+
+rows_c = list/concat rows_cq19 [itself]

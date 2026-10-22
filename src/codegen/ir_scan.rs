@@ -138,6 +138,8 @@ fn symbols_before_newline(text: &str) -> crate::hash::Set<&str> {
 const DECLARES_CONTEXT_CALLS: &[&str] = &[
     "k_b_append",
     "k_b_append_byte",
+    "k_b_append_key_fast",
+    "k_b_append_key_mut",
     "k_b_append_mut",
     "k_b_append_mut_byte",
     "k_b_append_mut_int",

@@ -13,13 +13,15 @@
 /// bytes; `KMap`'s `sorted` follows two pointers where `pairs` follows a
 /// `long long`; and `KClosure` is `{ fn, env, int ncaps, int arity, body }`,
 /// so `env` follows the function pointer and `arity` and `body` follow two
-/// pointers.
+/// pointers. A shared token is a `KStr` and eight bytes, 24 natively and 20
+/// on wasm32, so the key builtin's test that a string is a token, and the
+/// division that finds the token's clean flag, change with it.
 ///
 /// A line is matched whole, so a helper whose text changes stops matching
 /// rather than matching something else. tests/native_layout_on_wasm32.rs reads
 /// the emitter for each left-hand side and fails when one is missing, and
 /// runs the micro corpus through this pass against its goldens.
-pub const WASM32_LINES: [(&str, &str); 7] = [
+pub const WASM32_LINES: [(&str, &str); 9] = [
     ("%slenp = getelementptr i8, ptr %sp, i64 8", "%slenp = getelementptr i8, ptr %sp, i64 4"),
     ("%lenp = getelementptr i8, ptr %s, i64 8", "%lenp = getelementptr i8, ptr %s, i64 4"),
     ("%cp = getelementptr i8, ptr %sptr, i64 12", "%cp = getelementptr i8, ptr %sptr, i64 8"),
@@ -27,6 +29,8 @@ pub const WASM32_LINES: [(&str, &str); 7] = [
     ("%arp = getelementptr i8, ptr %c, i64 20", "%arp = getelementptr i8, ptr %c, i64 12"),
     ("%bodyp = getelementptr i8, ptr %c, i64 24", "%bodyp = getelementptr i8, ptr %c, i64 16"),
     ("%envp = getelementptr i8, ptr %c, i64 8", "%envp = getelementptr i8, ptr %c, i64 4"),
+    ("%intok = icmp ult i64 %off, 98304", "%intok = icmp ult i64 %off, 81920"),
+    ("%slot = udiv i64 %off, 24", "%slot = udiv i64 %off, 20"),
 ];
 
 /// An emitted module, rewritten for wasm32 so that clang can build it against
@@ -36,7 +40,7 @@ pub const WASM32_LINES: [(&str, &str); 7] = [
 /// wasm32 and the x86 data layout goes, so clang supplies its own. The calling
 /// conventions: wasm has neither `tailcc` nor `preserve_none`, and a module
 /// built with `-mtail-call` keeps every `musttail` as a real tail call under
-/// the C convention. And the six offsets in `WASM32_LINES`.
+/// the C convention. And the lines in `WASM32_LINES`.
 ///
 /// Only code is rewritten, for the reason `narrow_tailcc` gives: a line
 /// opening with `@` is a global, and a string constant's bytes are the
@@ -72,14 +76,16 @@ pub fn retarget_wasm32(module: &str) -> String {
         }
         edits.push((at + 3 - cc.len(), at + 3, ""));
     }
-    for (start, end) in lines_holding(module, " = getelementptr i8, ptr %") {
-        let line = &module[start..end];
-        if line.starts_with('@') {
-            continue;
-        }
-        let body = line.trim_start();
-        if let Some((_, wasm)) = WASM32_LINES.iter().find(|(native, _)| *native == body) {
-            edits.push((end - body.len(), end, wasm));
+    // Each row is searched for by its own text, as `ir_wasm` matches every
+    // line against the table: a search for `getelementptr` alone missed the
+    // token store's bound and division, and the clang-built module kept the
+    // native numbers while the playground's took the wasm32 ones.
+    for (native, wasm) in WASM32_LINES {
+        for (start, end) in lines_holding(module, native) {
+            let line = &module[start..end];
+            if !line.starts_with('@') && line.trim_start() == native {
+                edits.push((end - native.len(), end, wasm));
+            }
         }
     }
     edits.sort_unstable_by_key(|&(start, _, _)| start);

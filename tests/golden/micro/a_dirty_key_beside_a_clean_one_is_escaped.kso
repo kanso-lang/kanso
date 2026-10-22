@@ -1,0 +1,25 @@
+# A shared token's clean flag is found from where its bytes sit in the token
+# store, by dividing by the size of a token. That size is 24 bytes natively
+# and 20 on wasm32, where a pointer is four bytes. The two keys here were
+# chosen so that `ke"y`, which must be escaped, sits in a slot whose 24-byte
+# reading on wasm32 lands on `ammo`, which is clean.
+import "std/io"
+import "std/json"
+import "std/text"
+
+source = text/bytes "ammo|ke\"y"
+
+fn token from to
+  decoded (text/slice source from to)
+
+# Both ranges are inside `source`, so the slice is never none.
+fn decoded none
+  ""
+
+fn decoded piece
+  text/utf8 piece
+
+fn keyed _
+  put (put {} (token 1 4) 1) (token 6 9) 2
+
+pub play = io/write "{json/encode (keyed 0)}\n"

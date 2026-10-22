@@ -954,23 +954,30 @@ impl<'a> Interp<'a> {
                     Err(_) => Ok(Value::NoneV),
                 }
             }
-            b"append_escaped" => {
+            b"append_escaped" | b"append_key" => {
                 let [acc, s] = arity(args, name, span)?;
                 for v in [&acc, &s] {
                     if is_failure(v) {
                         return Ok(v.clone());
                     }
                 }
+                let key = name == "append_key";
                 let (Value::Bytes(items), Value::Str(text)) = (acc, &s) else {
+                    let which = if key { "append_key" } else { "append_escaped" };
                     return Err(RuntimeError {
                         at: None,
-                        message: "append_escaped takes bytes and a string".to_string(),
+                        message: format!("{which} takes bytes and a string"),
                         span,
                     });
                 };
                 // `s` as a JSON string holds it, in lib/json's forms, as
-                // k_b_append_escaped writes it; in place where `append` would be
+                // k_b_append_escaped writes it; in place where `append` would be.
+                // `append_key` writes it as an object key, quoted and followed
+                // by a colon.
                 let mut escaped = Vec::with_capacity(text.len() + 8);
+                if key {
+                    escaped.push(b'"');
+                }
                 for &c in text.as_bytes() {
                     match c {
                         b'"' => escaped.extend_from_slice(b"\\\""),
@@ -983,6 +990,9 @@ impl<'a> Interp<'a> {
                         c if c < 32 => escaped.extend_from_slice(format!("\\u{c:04x}").as_bytes()),
                         c => escaped.push(c),
                     }
+                }
+                if key {
+                    escaped.extend_from_slice(b"\":");
                 }
                 let alone = Rc::strong_count(&items) == 2;
                 if self.writes_in_place(span, frame) || (alone && self.moved_here(span, frame)) {

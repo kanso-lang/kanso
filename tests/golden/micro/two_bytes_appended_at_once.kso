@@ -1,8 +1,20 @@
 # Two bytes appended one after the other to a builder the function owns are
-# one call that asks for room once and writes both, in order. The json
-# encoder's escapes are that shape -- a backslash, then the letter -- so a
-# pair written the wrong way round, or one byte short, shows in the text.
+# one call that asks for room once and writes both, in order. `escaped` writes
+# a backslash and then a letter for each of its steps, so a pair written the
+# wrong way round, or one byte short, shows in the text.
 import "std/io"
-import "std/json"
+import "std/text"
 
-pub play = io/write "{json/encode ["q\"uote" "new\nline" "tab\tand\\back"]}\n"
+fn escaped acc 0
+  acc
+
+fn escaped acc n
+  escaped (text/append (text/append acc 92) 110) (n - 1)
+
+fn shown (err _)
+  "refused"
+
+fn shown s
+  s
+
+pub play = io/write "{shown (text/utf8 (escaped (text/bytes "") 3))}\n"
