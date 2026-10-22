@@ -5,10 +5,9 @@
 # The output is the same; the witness is the work vein.
 set -e
 line='    k_unescaped_d = d;'
-n=$(grep -cxF "$line" src/runtime/text.c)
-[ "$n" -eq 1 ] || {
-  echo "the kept string's key moved ($n); this mutation needs rewriting" >&2
+grep -qxF "$line" src/runtime/text.c || {
+  echo "the kept string's key moved; this mutation needs rewriting" >&2
   exit 1
 }
 sed -i 's/^    k_unescaped_d = d;$/    k_unescaped_d = NULL;/' src/runtime/text.c
-[ "$(grep -cxF '    k_unescaped_d = NULL;' src/runtime/text.c)" -eq 2 ]
+if grep -qxF "$line" src/runtime/text.c; then exit 1; fi
