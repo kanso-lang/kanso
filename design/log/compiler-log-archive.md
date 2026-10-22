@@ -105527,3 +105527,27 @@ fused doors (`utf8`, `append`, `to_int`, `to_float`) on a sliced span; the
 decoder moved off `builtin_slice_in` onto spans; micro goldens on every
 engine. The name of each new public function goes to Clay as one question
 before it ships.
+
+## 2026-10-15 — gavel: a run-time failure names the line it happened on
+
+Clay ruled #1975. All twenty ports met failures that named no file or line:
+a wrong kind reaching an operator or builtin (`` `*` is not defined for these
+values ``, `write takes a string`) and a stack overflow. The interpreter has
+the span and drops it, because native has nothing to print beside it and the
+engines must agree byte for byte.
+
+**The ruling.** Every run-time failure names the file and line it happened
+on, on every engine. Compiled code records a constant `file:line` before each
+runtime call that can stop the program, and the runtime prints it when it
+dies; the interpreter prints the span it already holds, and the tab shares
+the C runtime. An insisting form names its caller's line rather than the
+library's. The cost is one store per such call, measured at no more than
+0.42% of runbench before the build; Clay accepted it, and the floor drops by
+what CI measures, recorded with this entry as the reason. A refusal at check
+where the wrong kind is certain costs nothing at run time and goes in beside
+it.
+
+Owes, on #1975: the stamp in codegen and the runtime's print; the
+interpreter printing its span; insisting forms stamping the caller; error
+goldens on every engine for an operator, a builtin and a stack overflow;
+CI's rows and the floor moved by them.
