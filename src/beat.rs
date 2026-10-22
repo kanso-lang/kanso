@@ -1701,7 +1701,6 @@ fn expr_allocates(
         "chars",
         "concat",
         "entries",
-        "entry_count",
         "err",
         "filter",
         "from_code",
@@ -1720,6 +1719,7 @@ fn expr_allocates(
         "at",
         "bytes",
         "char_code",
+        "entry_count",
         "find2",
         "find2_below",
         "number_span",
@@ -3059,9 +3059,12 @@ mod tests {
         //
         // The two encoders were beats until 2026-09-25, for one allocation:
         // what a nested map builds as it descends -- `entries` then, `keys`
-        // and `values` from 2026-09-27, and since 2026-10-21 the sorted view
-        // `entry_count` may build. That call is a region, which reclaims it
-        // once per nested map, and the loops allocate nothing else an
+        // and `values` from 2026-09-27. From 2026-10-21 the descent was a
+        // region around `entry_count`, which may build the map's sorted view.
+        // Since 2026-10-22 `entry_count` is pure, as `key_at` and `value_at`
+        // are: the view comes from malloc, and only a sort's scratch index
+        // lands in the arena, where the enclosing loop's rewind takes it. So
+        // the descent is no region, and the loops allocate nothing an
         // iteration outlives.
         //
         // The string scanners joined on 2026-10-10, when a cluster entered by
@@ -3108,8 +3111,8 @@ mod tests {
         let regions: Vec<usize> = loops.regions.iter().map(|(_, line, _)| *line).collect();
         assert_eq!(
             regions,
-            vec![68],
-            "the one region is the descent into a map, `encode_map acc m (builtin_entry_count m)`"
+            Vec::<usize>::new(),
+            "the library has no region: `entry_count` is pure, as `key_at` and `value_at` are"
         );
     }
 

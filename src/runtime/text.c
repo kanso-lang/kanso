@@ -1942,6 +1942,36 @@ static __attribute__((noinline)) KValue k_b_append_grow(KValue acc, KBytes* a,
         a->cap = cap;
         return acc;
     }
+    /* An arena buffer that is the last thing the arena handed out grows by
+       moving the frontier past it, and its bytes stay where they are. A
+       header above the innermost mark was allocated after that mark, and a
+       buffer at the frontier after the header, so the extension dies with
+       the header at the same rewind. The header must own the buffer's
+       frontier: a grow is also how an append reaches a buffer another
+       header has written past. Anything else takes a new buffer and copies,
+       which in the arena is every doubling a builder passes through. */
+    if (mutate && dies && (a->cap & 1) && (a->cap & ~1LL)
+        && (((KBuf*)a->data) - 1)->used == a->len) {
+        KBuf* old = ((KBuf*)a->data) - 1;
+        long long ocap = a->cap & ~1LL;
+        uintptr_t end = ((uintptr_t)(old + 1) + (uintptr_t)ocap + 15) & ~(uintptr_t)15;
+        if (end == (uintptr_t)k_arena) {
+            size_t extra = (((sizeof(KBuf) + (size_t)cap) + 15) & ~(size_t)15)
+                           - (((sizeof(KBuf) + (size_t)ocap) + 15) & ~(size_t)15);
+            if (extra <= k_arena_left) {
+                if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0))
+                    k_stat_alloc_bytes += (long long)extra;
+                k_arena += extra;
+                k_arena_left -= extra;
+                k_buf_set_cap(old, cap, 0);
+                old->used = a->len + n;
+                k_copy_short((char*)a->data + a->len, (const char*)src, n);
+                a->len += n;
+                a->cap = cap | 1;
+                return acc;
+            }
+        }
+    }
     KBuf* buf;
     long long marked;
     if (dies) {

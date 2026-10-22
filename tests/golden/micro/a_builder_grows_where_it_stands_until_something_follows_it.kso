@@ -1,0 +1,32 @@
+# A builder whose buffer is the last thing in the arena grows by moving the
+# arena's frontier, and its bytes stay where they are. A round grows one that
+# way, appends a string made after the buffer, and grows again, which has to
+# copy. Inside the loop each round's builder lives in the arena, so the rounds
+# take that path. The first round runs outside any loop, where a builder's
+# buffer comes from malloc, and every round has to match it.
+import "std/text"
+
+fn grown acc 0
+  acc
+
+fn grown acc n
+  grown (text/append acc (97 + n % 26)) (n - 1)
+
+fn round i
+  first = grown (text/bytes "<") 100
+  second = grown (text/append first "|{i}|") 150
+  text/utf8 (text/append second ">")
+
+fn agrees a b
+  if (a == b) 1 0
+
+fn rounds _ 0 acc
+  acc
+
+fn rounds want n acc
+  rounds want (n - 1) (acc + agrees (round 7) want)
+
+pub play =
+  want = round 7
+  print want
+  print "{rounds want 300 0} of 300 rounds agree"

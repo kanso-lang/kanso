@@ -2757,4 +2757,22 @@ entry_twice = row
 
 rows_cq22 = list/concat rows_cq21 [entry_twice]
 
-rows_c = list/concat rows_cq22 [itself]
+frontier_copied = row
+  "a builder copied at the frontier"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_builder_copied_at_the_frontier")
+  no_setup
+
+count_allocating = row
+  "a map's count held as allocating"
+  true
+  (gating "run_counters")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_maps_count_held_as_allocating")
+  benchmarks
+
+rows_cq23 = list/concat rows_cq22 [frontier_copied count_allocating]
+
+rows_c = list/concat rows_cq23 [itself]
