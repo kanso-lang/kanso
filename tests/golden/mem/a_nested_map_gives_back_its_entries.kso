@@ -1,14 +1,9 @@
-# Each map the encoder meets builds its `keys` and `values` as it descends,
-# and nothing needs them once the map is written. The descent into a map is a
-# region: the mark goes down before the two lists are built and comes back up
-# when the map is done, so a document of many maps holds one map's lists at a
-# time. They were one `entries` list of records until 2026-09-27.
-#
-# Without the region the encoder's two loops would still take no beat, since
-# they allocate nothing else, and all 3,000 maps' lists would stay in the
-# arena until the next rewind outside the encode. The arena peak pins the
-# difference: 2,097,152 bytes with the region, 4,194,304 with a pop that keeps
-# what the region made.
+# The encoder writes each map from its entries in place: position i of
+# `key_at` and `value_at` is the pair at position i, and reading them builds
+# nothing. A document of 3,000 maps therefore allocates no per-map lists for
+# the encoder to give back. Until 2026-10-22 the descent into a map built its
+# `keys` and `values` and took a region to return them, and this fixture was
+# that region's witness; a_descent_gives_back_the_keys_it_built is now.
 import "std/json"
 import "std/list"
 

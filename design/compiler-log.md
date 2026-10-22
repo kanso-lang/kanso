@@ -21,36 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-15 — An operator handed a literal string, list or map is refused at check
-
-The first piece of #1975, and the one that costs nothing at run time. `+`,
-`-`, `*`, `/` and `%` take numbers, and an operator arm routes only a record,
-so a string, a list or a map stops the run on every engine. The check now
-refuses one at the operand, in `wrong_kind_at_an_operator` in
-`src/check/after_infer.rs`, beside the `list/concat` refusal.
-
-It refuses only an operand that cannot hold an err: a literal with nothing
-interpolated, or a call of such literals into a group whose every arm answers
-a string, a list or a map and none fails. The first draft read the callee's
-answer set alone, and `tests/golden/micro/a_merged_err_stays_flat_across_a_hop`
-caught it: `through merged + e3` calls a group whose arms all answer strings,
-but `through` has no err arm, so the err it is handed hops through it and the
-two errs merge at `+`. An operator hands an err on, so anything that might
-carry one is left to the run.
-
-That leaves the ports' case, `twice "x"` where `twice n` is `n * 2`, to the
-run, which is what the rest of #1975 locates. Pinned by
-`tests/golden/errors/an_operator_handed_a_value_it_never_takes`, seen red with
-the call removed; the ratchet row `operator_kind_unchecked` runs the same
-mutation.
-
-The walk costs compile time, which CI measured: `compile_instructions`
-22,699,901 -> 22,715,476, `entry_instructions` 75,214,425 -> 75,262,121,
-`library_instructions` 74,901,006 -> 74,948,228 and
-`browser_compile_instructions` 382,590,239 -> 382,741,447. The run rows did
-not move. This builds a ruled part of the language, so the welfare floor
-moved down by exactly that cost, to 91.52, with this entry as the reason.
-
 ## 2026-10-17 — gavel: every run-time failure names its line except a stack overflow
 
 Clay ruled #1987. The #1975 ruling accepted naming every run-time failure's
@@ -2034,6 +2004,26 @@ A container that restarted came up with clang 18, where the probe for
 `preserve_none` answers no and the emitter writes another convention: main
 emitted 2,135 fewer lines for jsonbench there than its golden says. The rows
 above were taken under clang 19, as CI installs it.
+
+## 2026-10-22 — the region row has a witness again
+
+The ratchet row `a region that keeps what it made` went blind when std/json
+began writing a map from its entries in place (c2b48e57). Its mutation makes
+`k_region_pop` keep everything the region allocated, and its witness was the
+mem fixture `a_nested_map_gives_back_its_entries`, whose arena peak doubled
+under it. Once the encoder stopped building `keys` and `values` for each map,
+its calls had no allocating argument, so the emitter made no region at all:
+no program in the benchmark corpus or the mem vein calls `k_region_pop` now,
+and with the mutation applied the whole mem corpus stayed green on main. The
+row came up on #2047, whose diff touches `core.c`, and read BLIND.
+
+The new mem fixture `a_descent_gives_back_the_keys_it_built` keeps the
+encoder's old shape: a walk that builds a map's keys as the argument of its
+call into the map and answers bytes. The emitter makes that call a region.
+It reads arena_peak_bytes 8,388,608 and arena_blocks 8; with the mutation,
+12,582,912 and 12, and chain_finds 0 -> 9. The interpreter prints the same
+total and the oracle's counters agree. The old fixture's comment, which still
+described the region it no longer has, says what it pins now.
 
 ## 2026-10-22 — JSON escapes are written and undone sixteen bytes at a time
 
