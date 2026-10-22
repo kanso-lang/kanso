@@ -32,6 +32,8 @@ done:
 @k_stats_on = external global i32
 @k_token_store = external global i8
 @k_token_clean = external global i8
+@k_token_key = external global i64
+@k_token_cache = external global %KValue
 
 define internal %KValue @k_b_append_byte(%KValue %acc, %KValue %x, ptr %site) alwaysinline {
   %atag = extractvalue %KValue %acc, 0
@@ -1037,6 +1039,34 @@ closed:
   %e = insertvalue %KValue { i64 0, i64 undef }, i64 %q2, 1
   ret %KValue %e
 text:
+  %tl = sub i64 %q, %fv
+  %tm4 = sub i64 %tl, 4
+  %short = icmp ult i64 %tm4, 4
+  br i1 %short, label %token, label %general
+token:
+  %f1 = sub i64 %fv, 1
+  %tp = getelementptr i8, ptr %d, i64 %f1
+  %ta = load i32, ptr %tp, align 1
+  %tep = getelementptr i8, ptr %tp, i64 %tm4
+  %tb = load i32, ptr %tep, align 1
+  %ta64 = zext i32 %ta to i64
+  %tb64 = zext i32 %tb to i64
+  %tsh = shl i64 %tm4, 3
+  %tbs = shl i64 %tb64, %tsh
+  %tln = shl i64 %tl, 56
+  %tk1 = or i64 %ta64, %tbs
+  %tkey = or i64 %tk1, %tln
+  %th = mul i64 %tkey, -7046029254386353131
+  %tslot = lshr i64 %th, 52
+  %tkp = getelementptr i64, ptr @k_token_key, i64 %tslot
+  %tkv = load i64, ptr %tkp
+  %thit = icmp eq i64 %tkv, %tkey
+  br i1 %thit, label %cached, label %general
+cached:
+  %tcp = getelementptr %KValue, ptr @k_token_cache, i64 %tslot
+  %tcv = load %KValue, ptr %tcp
+  ret %KValue %tcv
+general:
   %s = call %KValue @k_b_utf8_slice_raw(ptr %d, i64 %len, i64 %fv, i64 %qi, ptr %site)
   %st = extractvalue %KValue %s, 0
   %bad = icmp eq i64 %st, 5

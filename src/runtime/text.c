@@ -300,8 +300,8 @@ K_DOORCC KValue k_b_utf8(KValue lv, const char* origin);
    hit is valid utf-8 because the bytes it matched were validated when the
    slot was filled. A zero key never matches, since every key carries its
    length in the top byte. */
-static uint64_t k_token_key[1 << K_TOKEN_BITS];
-static KValue k_token_cache[1 << K_TOKEN_BITS];
+uint64_t k_token_key[1 << K_TOKEN_BITS];
+KValue k_token_cache[1 << K_TOKEN_BITS];
 
 static __attribute__((noinline, cold, preserve_most)) KValue k_token_miss(const char* data, long long len,
                                                                           const char* origin,

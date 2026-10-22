@@ -2803,4 +2803,22 @@ sited_stamped = row
 
 rows_cq25 = list/concat rows_cq24 [sited_stamped]
 
-rows_c = list/concat rows_cq25 [itself]
+key_beside = row
+  "a short key read from the slot beside it"
+  true
+  "cargo test --release --test golden micro_corpus_survives_a_release_build"
+  "specs (unit, golden, differential)"
+  (breaking "a_short_key_read_from_the_slot_beside_it")
+  no_setup
+
+key_called = row
+  "a short key left to the call"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_short_key_left_to_the_call")
+  benchmarks
+
+rows_cq26 = list/concat rows_cq25 [key_beside key_called]
+
+rows_c = list/concat rows_cq26 [itself]
