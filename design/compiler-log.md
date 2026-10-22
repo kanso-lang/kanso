@@ -1605,7 +1605,10 @@ the floor moves 92.13 -> 92.17.
 The map golden `a_map_is_encoded_from_its_entries_in_place` is the pair's
 witness for its bytes: with the value loaded from the key's slot, every value
 printed as its key. The ratchet row `an_entry_read_twice` never sees the pair
-and turns the emitted gate red.
+and turns the emitted gate red. The row `a_map_entry_read_through_the_c` patched
+`key_at_fast` and read BLIND once the pair took every key the encoder reads;
+it now sends the pair to the C, which reads the run program 935,900,947 ->
+967,870,853, and it gates the instructions vein.
 
 ## 2026-10-22 — a builder at the arena's frontier grows where it stands
 
@@ -1873,7 +1876,9 @@ of the new path: plain numbers of both kinds beside exponents, a sixteen-digit
 run and `-0`, then eight malformed numbers. The ratchet row
 `a_point_forgotten_on_the_fast_path` answers a float as an integer there and
 turns the golden red; `a_number_scanned_sixteen_bytes_at_a_time_anyway` turns
-the path off and turns the instructions gate red.
+the path off and turns the instructions gate red. The row
+`a_digit_word_that_reads_a_colon_as_ten` patched `k_nondigits8` in
+numbers.c and would not apply once it moved; it patches text.c now.
 
 ## 2026-10-22 — a bind chain measures its drift from where it began
 

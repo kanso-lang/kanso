@@ -2730,7 +2730,7 @@ rows_cq19 = list/concat rows_cq18 key_paths
 entry_inline = row
   "a map entry read through the C"
   true
-  (gating "emitted_code")
+  (gating "instructions")
   "cost goldens (deterministic ratchet, no clocks)"
   (breaking "a_map_entry_read_through_the_c")
   benchmarks
