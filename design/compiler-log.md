@@ -1875,3 +1875,10 @@ values the old way and turns the emitted gate red. The book's chapter 08 panel
 showed the string arm as `_escape_onto` and called its sample the library's
 escape functions verbatim, which stopped being true when escaping moved to the
 runtime; it now shows the one call and says what the runtime does.
+
+The ratchet row `a_clean_token_scanned_anyway` went blind with this change.
+It turns off the clean-token skip in `find2_below`, which served
+`escape_onto`, and the run program's values no longer reach `escape_onto`.
+encodebench's own copy of lib/json still sends every string through it, so the
+row now gates on the encode vein, where the mutation moves `find2_calls`
+803,275 -> 4,200,475.

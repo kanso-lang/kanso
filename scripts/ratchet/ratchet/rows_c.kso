@@ -374,7 +374,7 @@ token_clean = row
 token_skip = row
   "a clean token scanned anyway"
   true
-  (gating "run_counters")
+  (gating "encode_counters")
   "cost goldens (deterministic ratchet, no clocks)"
   (breaking "a_clean_token_scanned_anyway")
   benchmarks
