@@ -105375,3 +105375,19 @@ only when a file is refused, and no file in the corpus is. Marking
 function. The browser rise outweighs the five falls by less than 0.0001 of
 welfare, and the floor moves to the score with the reason recorded, as it
 did for kanso#1959 and kanso#1963.
+
+## 2026-10-14 — The work-ahead rig builds again
+
+The compiler page tells a reader to build `bench/workahead/aswritten.kso` and
+`overlapped.kso`. Each file declares `grind` and `spin` beside its statements,
+and since files of that shape became libraries, `kanso build` refuses both.
+Nothing else reads the rig, so nothing went red. The two programs are now
+modules, `bench/workahead/aswritten` and `bench/workahead/overlapped`, and
+both import the functions from `bench/workahead/rig`.
+
+The panel's rows are re-sat: 15 interleaved heats each on the build
+container. As-written reads a minimum of 2,004 ms where the panel said
+2,913, because the pool now builds `grind 150000000` during the sleep.
+Overlapped reads 2,004 ms where the panel said 2,008. The two differ in their
+output: overlapped prints the report before the delivery, and as-written
+keeps the order it was written in.
