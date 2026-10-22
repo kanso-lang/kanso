@@ -837,10 +837,6 @@ fn release(value: Value) {
     }
 }
 
-/// The binding at a place `local_at` recorded, if the name is still there. The
-/// frames between the reference and its binder are fixed by where the
-/// reference sits, so the place found once is the place every later run finds;
-/// the name is compared anyway, and a miss walks.
 /// An integer literal's value, out of line so the front door that calls it
 /// stays small enough to inline.
 #[inline(never)]
@@ -848,6 +844,10 @@ fn int_literal(n: &BigInt) -> Value {
     Value::int(n)
 }
 
+/// The binding at a place `local_at` recorded, if the name is still there. The
+/// frames between the reference and its binder are fixed by where the
+/// reference sits, so the place found once is the place every later run finds;
+/// the name is compared anyway, and a miss walks.
 fn lookup_at(env: &Option<Rc<Env>>, name: &Name, place: u32) -> Option<Value> {
     let place = place - 3;
     let mut frame = env.as_ref()?;

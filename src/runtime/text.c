@@ -2088,14 +2088,12 @@ K_DOORCC KValue k_b_append_rendered(KValue acc, KValue v, long long mutate) {
 __attribute__((always_inline)) long long k_b_find2_below_raw(const unsigned char* d, long long len,
                               long long from, long long a, long long b,
                               long long floor_v) {
-    /* The JSON writer's scan, over a shared token already known to hold none
-       of the three. The decoder hands the writer the same few hundred keys on
-       every document, and the run program scans 942,750 strings a run
-       through this door. The byte triple is a literal at every emitted site,
-       so the test folds away everywhere else. A view that starts inside a token reads the whole
-       token's flag, which is safe: a clean token has no dirty sub-range.
-       `find2_calls` is counted after this, so it counts scans, and a skip
-       that stops firing shows there. */
+    /* `json/escape_onto`'s scan, over a shared token already known to hold
+       none of the three. The byte triple is a literal at every emitted site,
+       so the test folds away everywhere else. A view that starts inside a
+       token reads the whole token's flag, which is safe: a clean token has no
+       dirty sub-range. `find2_calls` is counted after this, so it counts
+       scans, and a skip that stops firing shows there. */
     if (a == 34 && b == 92 && floor_v == 32) {
         uintptr_t off = (uintptr_t)((const char*)d - (const char*)k_token_store);
         if (off < sizeof(k_token_store) && k_token_clean[off / sizeof(KToken)]) return len + 1;
