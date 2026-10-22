@@ -5,9 +5,9 @@
 # interpreted row is the witness.
 set -e
 kept='(d, s) if d < 128 && s < 256 => 3 + (d << 8) + s as u32,'
-[ "$(grep -cF "$kept" src/eval.rs)" -eq 1 ] || {
+[ "$(grep -cF "$kept" src/eval/env.rs)" -eq 1 ] || {
   echo "the kept place moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i 's/(d, s) if d < 128 \&\& s < 256 => 3 + (d << 8) + s as u32,/(d, s) if d < 128 \&\& s < 256 \&\& false => 3 + (d << 8) + s as u32,/' src/eval.rs
-if grep -qF "$kept" src/eval.rs; then exit 1; fi
+sed -i 's/(d, s) if d < 128 \&\& s < 256 => 3 + (d << 8) + s as u32,/(d, s) if d < 128 \&\& s < 256 \&\& false => 3 + (d << 8) + s as u32,/' src/eval/env.rs
+if grep -qF "$kept" src/eval/env.rs; then exit 1; fi
