@@ -105430,3 +105430,54 @@ Pinned by:
 - `tests/golden/mem/work_ahead_leaves_an_extending_builtin`: a `push` inside
   the argument, `ahead_forced=0`;
 - two ratchet rows, each seen red on its golden.
+
+## 2026-10-14 — A lambda whose body parks first is pooled like a function
+
+A lambda has no statements to bind a cell in, so the pool never reached one:
+
+```
+k = 150000000
+os/args .> (a -> sleep 2000 .> (_ -> print "r: {spin (k + length a) 0}"))
+```
+
+`pool` now lifts such a lambda into a function of its own, `ahead~lam~N`,
+whose parameters are the locals the body reads (`k` here) followed by the
+lambda's own. The lambda stays where it was and calls the function. The
+lift is kept only when the function pools something; a lambda with nothing
+to pool keeps its body, since the call would buy nothing. A body that holds
+an `if` block or a guard is left alone, because the walk does not follow
+the names those bind.
+
+The program above, with `kanso play` on this container: 3.71 to 4.09 s on
+main, 2.02 to 2.09 s on this branch, with the same output.
+
+Pinned by `tests/golden/mem/work_ahead_lifts_a_parking_lambda`
+(`ahead_forced=1`) and the ratchet row "a parking lambda never lifted",
+seen red on that golden.
+
+The walk for a parking lambda runs only when the program reaches
+`time/sleep`, the one function that parks; a program that never calls it
+has had it pruned. Without that guard the walk cost the tab 366,863
+instructions on a corpus with no sleep in it.
+
+Rows against kanso#1978, the browser row read here on rustc 1.98.1 and the
+rest by the compile sweep on this container, where `compile_instructions`
+read what CI read for the unguarded branch: `emit_instructions` 5,449,223 ->
+5,452,431 for the guard and its check. `browser_compile_instructions`
+381,261,098 -> 382,590,239. Of that rise, 1,320,831 stays with the walk
+switched off entirely, and the builtin-read commit alone leaves the row
+where kanso#1978 put it, so it arrives with the commit that adds the lift
+while none of its code runs; marking `pool` and `lift` never-inline did not
+move it. The front end's rows rose with the binary, since `kanso check`
+never reaches the pass: `compile_instructions` 22,595,494 -> 22,699,901,
+`entry_instructions` 74,872,489 -> 75,214,425 and `library_instructions`
+74,559,617 -> 74,901,006; `interp_instructions` fell with it, 492,636,904 ->
+492,620,187. The runtime and machine-code rows did not move. Welfare falls,
+and the floor moves by that amount under #1856's ruling, as it did for the
+group pool in kanso#1972.
+
+A pool-shaped differential ran 400 generated programs, each with a sleep
+whose continuations read locals, lambda parameters and builtins of them,
+some inside a function and some in nested lambdas. The interpreter and the
+native build agreed on all 399 the front end accepted; 85 of the first 100
+forced at least one pooled call.
