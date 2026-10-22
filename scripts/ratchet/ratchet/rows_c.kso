@@ -2783,6 +2783,14 @@ loop_unbracketed = row
   (breaking "a_call_into_a_loop_left_unbracketed")
   benchmarks
 
-rows_cq24 = list/concat rows_cq23 [loop_unbracketed]
+nothing_bracketed = row
+  "a loop that builds nothing bracketed"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_loop_that_builds_nothing_bracketed")
+  benchmarks
+
+rows_cq24 = list/concat rows_cq23 [loop_unbracketed nothing_bracketed]
 
 rows_c = list/concat rows_cq24 [itself]

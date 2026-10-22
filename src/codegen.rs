@@ -975,7 +975,7 @@ fn emit_with(
         group_by_name: group_indices_by_name(program),
         cycle_reached: cycle_reached(program),
         cycle_members: cycle_members(program),
-        reaches_cycle: reaches_cycle(program),
+        reaches_cycle: reaches_cycle(program, &beat.allocating),
         deep: crate::deep::Deep::of(program),
         twin_of: None,
         kept_out: kept_out(program),

@@ -132,6 +132,8 @@ pub struct Beats {
     pub rewind: HashSet<(Group, Group)>,
     /// The calls that take a mark of their own: see `region_sites`.
     pub regions: RegionSites,
+    /// The groups whose evaluation may allocate, by name: see `alloc_groups`.
+    pub allocating: HashSet<String>,
     /// Loops that allocate nothing but the bignum an int argument can become:
     /// see `widens`. Their word twin, which carries words only, skips the
     /// rewind; the general body, which a bignum reaches, rewinds.
@@ -275,7 +277,8 @@ pub fn beat_loops(program: &Program, inference: &infer::Inference, mut_sites: &M
             || widening.contains(from)
             || !grows_only_itself(program, mut_sites, &regions, &allocating, from)
     });
-    Beats { ids, demoted, carried, rewind, regions, widening }
+    let allocating = allocating.into_iter().map(str::to_string).collect();
+    Beats { ids, demoted, carried, rewind, regions, allocating, widening }
 }
 
 /// The loops that hand themselves an int that can leave the word. Arithmetic

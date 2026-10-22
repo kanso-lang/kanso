@@ -244,11 +244,16 @@ fn cycle_reached(program: &Program) -> crate::hash::Set<&str> {
     names.iter().zip(hot).filter(|(_, h)| *h).map(|(n, _)| *n).collect()
 }
 
-/// Every declared name that can reach a cycle: the members of every cycle,
-/// and every name that mentions one of those, backward. A call to one of
-/// these runs a loop or a recursion before it answers, so a cohort bracket
-/// around it is paid once against the work of a whole loop.
-fn reaches_cycle(program: &Program) -> crate::hash::Set<&str> {
+/// Every declared name that can reach a cycle that allocates: the members of
+/// every such cycle, and every name that mentions one of those, backward. A
+/// call to one of these runs a loop that builds something before it answers,
+/// so a cohort bracket around it is paid once against a whole loop's garbage.
+/// A loop that allocates nothing leaves the bracket nothing to give back:
+/// widebench's whitespace skip is a loop, run once per value.
+fn reaches_cycle<'p>(
+    program: &'p Program,
+    allocating: &crate::hash::Set<String>,
+) -> crate::hash::Set<&'p str> {
     let (names, adj) = call_graph(program);
     let mut back: Vec<Vec<usize>> = vec![Vec::new(); names.len()];
     for (from, outs) in adj.iter().enumerate() {
@@ -260,7 +265,7 @@ fn reaches_cycle(program: &Program) -> crate::hash::Set<&str> {
     let mut queue: Vec<usize> = Vec::new();
     for scc in crate::beat::sccs_of(&adj) {
         if scc.len() >= 2 || adj[scc[0]].contains(&scc[0]) {
-            queue.extend(scc);
+            queue.extend(scc.into_iter().filter(|&at| allocating.contains(names[at])));
         }
     }
     while let Some(at) = queue.pop() {
