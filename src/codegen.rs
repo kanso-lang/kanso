@@ -1848,10 +1848,10 @@ include!("codegen/prune.rs");
 /// The byte views that live in their function's frame. `bytes s` of a
 /// string writes a three-word header -- length, data, capacity -- and the
 /// header is all it allocates, since the view borrows the string's bytes.
-/// JSON's `escape_onto` makes one per string it writes, 942,750 on the run
-/// program, and reads it for a length, a scan and some slices before it
-/// returns. A header in the arena costs the bump and every read through it;
-/// a header in the frame is three stores LLVM takes apart into registers.
+/// JSON's `escape_onto` makes one per string it escapes and reads it for a
+/// length, a scan and some slices before it returns. A header in the arena
+/// costs the bump and every read through it; a header in the frame is three
+/// stores LLVM takes apart into registers.
 ///
 /// The frame must outlive every read. So a binding `x = bytes e` qualifies
 /// when its function sits on no cycle of the call graph, which keeps the
