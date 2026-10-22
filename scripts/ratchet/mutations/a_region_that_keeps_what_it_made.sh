@@ -1,11 +1,13 @@
 #!/bin/sh
 # A region hands everything it allocated up to the enclosing frame.
 #
-# The descent into a map takes a mark before its `entries` are built, and the
-# pop gives the region back when the result is the builder that was there
-# before the mark. With the pop keeping the region instead, every map's
-# entries stay in the arena until the next rewind outside the encode, and the
-# mem fixture a_nested_map_gives_back_its_entries reads a higher arena peak.
+# A descent into a map whose call builds the map's keys as an argument takes
+# a mark before they are built, and the pop gives the region back when the
+# result is the builder that was there before the mark. With the pop keeping
+# the region instead, every map's keys stay in the arena until the next
+# rewind, and the mem fixture a_descent_gives_back_the_keys_it_built reads a
+# higher arena peak. std/json's encoder no longer builds anything there, so
+# a_nested_map_gives_back_its_entries stopped seeing this on 2026-10-22.
 set -e
 f=src/runtime/core.c
 grep -q 'KValue k_region_pop(KValue r)' src/runtime/core.c
