@@ -2737,4 +2737,14 @@ entry_inline = row
 
 rows_cq20 = list/concat rows_cq19 [entry_inline]
 
-rows_c = list/concat rows_cq20 [itself]
+string_claimed = row
+  "a string value claimed three times"
+  true
+  (gating "emitted_code")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_string_value_claimed_three_times")
+  benchmarks
+
+rows_cq21 = list/concat rows_cq20 [string_claimed]
+
+rows_c = list/concat rows_cq21 [itself]

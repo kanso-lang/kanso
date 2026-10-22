@@ -436,15 +436,17 @@ built_text was handed bytes that are not text
 # calls each in one place in lib/json. `plain_string` and `unescape` take the
 # bytes `decode` made with `text/bytes` and positions it computed: `p` one past
 # an opening quote, `e` the closing quote `plain_string` itself answered.
-# `append_escaped` and `append_key` take the writer's accumulator, which
-# begins as `text/bytes ""` and is only ever appended to, and a string:
-# the one `escape_onto` was handed, or a key `key_onto` annotated `string`.
+# `append_escaped`, `append_key` and `append_string` take the writer's
+# accumulator, which begins as `text/bytes ""` and is only ever appended to,
+# and a string: the one `escape_onto` was handed, a key `key_onto` annotated
+# `string`, or the value `encode_onto`'s `s:string` arm took.
 # The native and interpreted refusals stay because a builtin must answer what
 # it is handed.
 plain_string takes bytes and a position
 unescape takes bytes and two positions
 append_escaped takes bytes and a string
 append_key takes bytes and a string
+append_string takes bytes and a string
 
 # The map reads the JSON writer makes, unreachable by name for the same
 # reason. `encode_onto` passes them the map its `m:map[string some]` arm

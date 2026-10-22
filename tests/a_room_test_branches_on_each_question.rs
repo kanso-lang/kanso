@@ -32,5 +32,5 @@ fn no_room_test_joins_its_questions() {
         .lines()
         .filter(|l| l.starts_with("  br i1 %") && l.contains("front, label %"))
         .count();
-    assert_eq!(split, 10, "the emitter should branch on the frontier at all ten room tests");
+    assert_eq!(split, 11, "the emitter should branch on the frontier at all eleven room tests");
 }
