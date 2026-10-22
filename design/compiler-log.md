@@ -21,80 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-14 — A call on a function's locals is pooled as a cell
-
-#1856's pool took only constants: calls whose arguments name nothing local,
-lifted out of the entry. A function that sleeps and then reports on its own
-parameter had no constant to offer, so its work ran after the wait:
-
-```
-fn report n
-  sleep 2000
-    .> (_ -> print "delivery: made")
-    .> (_ -> print "report: {spin (150000000 + n) 0}")
-```
-
-This is the "Discovery" piece of the ruling, the (site, args) pool. A
-function whose result is a chain beginning with a sleep, and which is the
-only arm of its name and count, has each certain call on its locals bound
-ahead of the chain as a cell. `emit_cell` already builds a cell from a site
-and the values it captures; `ahead::pool` names the binding, `demand` makes
-it a cell whatever its uses, and the chain's sleep carries the cells in its
-descriptor. The runtime queues them when that sleep parks and forces them, in
-order, under the same try as the constants. A chain that is never run parks
-nowhere, so its cells are made and never forced, and no work runs early that
-the program would not have run. The interpreter does not pool.
-
-A cell the pool forces is not a lazy binding the program has, and the thunk
-counters are what both engines must agree on, so `k_thunk_new_pooled` builds
-it with a flag those counters skip. `ahead_forced` counts it instead.
-
-The program above, run with `kanso play` on this container: 3.87 to 4.07 s on
-main, 2.01 s on this branch, with the same output. Built and run directly,
-the dev binary takes 3.95 s against 2.00 s, and the release binary 2.20 s
-against 2.00 s.
-
-Pinned by:
-- `tests/golden/mem/work_ahead_pools_a_call_on_a_local`: `ahead_forced=1`,
-  and the thunk counters at zero on both engines;
-- `tests/golden/mem/work_ahead_leaves_a_chain_never_run`: a chain built and
-  never run, `ahead_forced=0`;
-- `tests/golden/workahead/a_pooled_cell_fails_where_it_is_read`: the
-  overflow is raised after "first", on both engines;
-- five ratchet rows, each seen red.
-
-`a_group_that_never_pools.sh` anchored on a comment and a call this change
-rewrote, so it is rewritten to the new ones; every other mutation still
-applies.
-
-Still not built for #1856: a lambda's body, which has no statements to bind a
-cell in; a function with more than one arm of its name and count; and the cost
-gate's view of a pooled call, which admits any call of the program's own.
-
-CI's rows for the branch. The runtime rows were read before main's IR-scan
-move was merged in, and the compiler's own rows after kanso#1976 was. The
-runtime grew by the queue and its drain, so every benchmark's machine code
-rose by 2,192 bytes: jsonbench text=336,265, encodebench text=345,129,
-oneshot text=351,145, basket text=313,289, widebench text=354,393,
-deepbench text=288,025, escapebench text=279,113, pendbench text=296,841,
-indexbench text=277,625, scanbench text=462,073, digestbench text=318,537,
-readbench text=279,273, livebench text=354,889, runbench text=652,697, and
-the `text` total 4,878,606 -> 4,909,294. Work moved on five:
-`work_encodebench` 2,387,083,945 -> 2,387,084,099, `work_oneshot` 13,207,567
--> 13,207,693, `work_pendbench` 191,674,024 -> 191,674,224, `work_livebench`
-1,474,835,683 -> 1,474,835,606 and `work_runbench` 1,177,697,090 ->
-1,177,696,062.
-The compiler's own rows: `compile_instructions` 22,664,963 -> 22,595,494,
-`entry_instructions` 75,111,766 -> 74,872,489, `library_instructions`
-74,798,192 -> 74,559,617, `emit_instructions` 5,439,036 -> 5,449,223,
-`interp_instructions` 492,629,961 -> 492,636,904,
-`codegen_instructions_dev` 112,582,224 -> 112,677,448 and
-`codegen_instructions_release` 441,728,749 -> 441,885,670. The tab, read
-here on rustc 1.98.1 after the merge: `browser_compile_instructions`
-382,297,788 -> 381,261,098, `browser_compile_peak_bytes` 643,478 -> 643,605
-and `browser_run_instructions` 34,181,240 -> 34,181,355. Welfare rises, and
-the rise is banked here.
-
 ## 2026-10-14 — Neither verb sends a reader to the other
 
 The 2026-10-14 audit of #1893 found one file shape that both running verbs
@@ -1900,4 +1826,62 @@ in place, appends a string made after the buffer, and grows again by copying,
 write one byte early it printed `0 of 300 rounds agree`. Two ratchet rows:
 `a_builder_copied_at_the_frontier` turns the mem corpus red, and
 `a_maps_count_held_as_allocating` puts the region back and turns the run
+counters red.
+
+## 2026-10-22 — a call into a loop keeps its cohort bracket under a cycle
+
+A cohort bracket marks the arena before a call that crosses into another
+module with immutable arguments, and its pop gives back what the call left.
+The license refused every caller a cycle reaches (`cycle_reached`), since such
+a caller can run once per element of something and its calls are usually
+small. It now admits one when the callee reaches a cycle that allocates
+(`reaches_cycle`: the members of every cycle whose members the beat analysis
+finds allocating, and everything that mentions them, followed backward) and
+answers no heap value. A call into a loop pays
+its push and pop once against the whole loop, and with no heap value to keep
+the pop rewinds without copying anything out.
+
+On the run program the index phase builds 1.5 MB of text to answer an int,
+and nothing marked the arena around it, so the string lived until the program
+ended. `tally` is reached by a cycle, so the license refused the call. Measured
+here, arena_peak_bytes 4,718,608 -> 3,670,032 and the run read 999,948,734 ->
+999,793,761 with the same output. The peak now sits at two live megabyte
+blocks, the file read and its decoded document, and the 1,572,880-byte string
+the phase builds; the program needs all three at that moment.
+
+Three other shapes were measured on the way. Seeded from every cycle, the
+reach admitted widebench's whitespace skip, a loop that builds nothing, called
+once per value from its parser; CI read widebench 28,619,441 -> 34,955,663
+(+22%) and encodebench 2,456,796,655 -> 2,461,704,983, 4.0M of it
+`k_cohort_pop` with nothing to give back. The ratchet row
+`a_loop_that_builds_nothing_bracketed` puts that seed back and turns the
+instructions gate red. Without the heap-value condition
+one bracket evacuated a heap result through the carry, and `k_deep_copy` and
+`k_copy_size` cost 1.7M more. A region of the beat analysis's kind, marked
+before the arguments, made `a_long_chain_answers_survival_from_its_index`
+evacuate its 100,000 rows on every lap (evac_allocs 25 -> 480,009), because
+the rows its argument built landed inside the mark.
+
+CI's rows: work_runbench 999,949,921 -> 999,794,948 (-0.02%), and no other
+benchmark's work moves. The run program's run_arena_peak_bytes 4,718,608 ->
+3,670,032 and run_cohort_frees 1 -> 4; run_allocs 1,446,734 -> 1,446,735,
+run_alloc_bytes 221,966,536 -> 221,966,568, run_evac_allocs 48,953 -> 48,955,
+run_evac_bytes 9,271,280 -> 9,271,408, run_survive_slots 4,856 -> 4,854,
+run_str_scans 1,023 -> 1,024, run_str_scan_bytes 17,996,094 -> 17,996,158 and
+run_sh_rec 3,776,192 -> 3,776,128. The run program makes 24 more calls
+(emitted_other_calls 19,064 -> 19,088, emitted_other_lines 158,186 ->
+158,210) and its machine code grows 719,977 -> 722,233 bytes (text 5,236,670
+-> 5,238,926 over all the binaries). compile_instructions 23,713,618 ->
+23,736,301, entry_instructions 74,424,236 -> 74,485,199, library_instructions
+74,085,135 -> 74,147,760 and emit_instructions 6,377,307 -> 6,423,478 rise,
+and interp_instructions 384,232,761 -> 384,228,496 falls. In the tab,
+browser_compile_instructions 406,034,117 -> 401,989,712 falls. The welfare
+sum rose, and the floor moves 92.25 -> 92.28.
+
+`tests/cohort.rs` `a_call_into_a_loop_gives_back_what_it_built` runs a new
+two-module fixture, `tests/golden/cohort/phases`: each pass of a loop calls
+`grow/total` twice, and each call builds a megabyte of text to answer its
+length. It pins cohort_frees=6 and arena_peak_bytes=2097168; under the old
+license it read 0 and 3145760. The ratchet row
+`a_call_into_a_loop_left_unbracketed` takes the license back and turns the run
 counters red.

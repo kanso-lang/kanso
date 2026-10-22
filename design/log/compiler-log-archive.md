@@ -105259,3 +105259,77 @@ No benchmark sleeps, so no pooled work runs in them, and nothing here
 isolates where the difference comes from. Welfare fell 0.00009 to 91.52451,
 and the floor is lowered by exactly that, since this builds a ruled part of
 #1856.
+
+## 2026-10-14 — A call on a function's locals is pooled as a cell
+
+#1856's pool took only constants: calls whose arguments name nothing local,
+lifted out of the entry. A function that sleeps and then reports on its own
+parameter had no constant to offer, so its work ran after the wait:
+
+```
+fn report n
+  sleep 2000
+    .> (_ -> print "delivery: made")
+    .> (_ -> print "report: {spin (150000000 + n) 0}")
+```
+
+This is the "Discovery" piece of the ruling, the (site, args) pool. A
+function whose result is a chain beginning with a sleep, and which is the
+only arm of its name and count, has each certain call on its locals bound
+ahead of the chain as a cell. `emit_cell` already builds a cell from a site
+and the values it captures; `ahead::pool` names the binding, `demand` makes
+it a cell whatever its uses, and the chain's sleep carries the cells in its
+descriptor. The runtime queues them when that sleep parks and forces them, in
+order, under the same try as the constants. A chain that is never run parks
+nowhere, so its cells are made and never forced, and no work runs early that
+the program would not have run. The interpreter does not pool.
+
+A cell the pool forces is not a lazy binding the program has, and the thunk
+counters are what both engines must agree on, so `k_thunk_new_pooled` builds
+it with a flag those counters skip. `ahead_forced` counts it instead.
+
+The program above, run with `kanso play` on this container: 3.87 to 4.07 s on
+main, 2.01 s on this branch, with the same output. Built and run directly,
+the dev binary takes 3.95 s against 2.00 s, and the release binary 2.20 s
+against 2.00 s.
+
+Pinned by:
+- `tests/golden/mem/work_ahead_pools_a_call_on_a_local`: `ahead_forced=1`,
+  and the thunk counters at zero on both engines;
+- `tests/golden/mem/work_ahead_leaves_a_chain_never_run`: a chain built and
+  never run, `ahead_forced=0`;
+- `tests/golden/workahead/a_pooled_cell_fails_where_it_is_read`: the
+  overflow is raised after "first", on both engines;
+- five ratchet rows, each seen red.
+
+`a_group_that_never_pools.sh` anchored on a comment and a call this change
+rewrote, so it is rewritten to the new ones; every other mutation still
+applies.
+
+Still not built for #1856: a lambda's body, which has no statements to bind a
+cell in; a function with more than one arm of its name and count; and the cost
+gate's view of a pooled call, which admits any call of the program's own.
+
+CI's rows for the branch. The runtime rows were read before main's IR-scan
+move was merged in, and the compiler's own rows after kanso#1976 was. The
+runtime grew by the queue and its drain, so every benchmark's machine code
+rose by 2,192 bytes: jsonbench text=336,265, encodebench text=345,129,
+oneshot text=351,145, basket text=313,289, widebench text=354,393,
+deepbench text=288,025, escapebench text=279,113, pendbench text=296,841,
+indexbench text=277,625, scanbench text=462,073, digestbench text=318,537,
+readbench text=279,273, livebench text=354,889, runbench text=652,697, and
+the `text` total 4,878,606 -> 4,909,294. Work moved on five:
+`work_encodebench` 2,387,083,945 -> 2,387,084,099, `work_oneshot` 13,207,567
+-> 13,207,693, `work_pendbench` 191,674,024 -> 191,674,224, `work_livebench`
+1,474,835,683 -> 1,474,835,606 and `work_runbench` 1,177,697,090 ->
+1,177,696,062.
+The compiler's own rows: `compile_instructions` 22,664,963 -> 22,595,494,
+`entry_instructions` 75,111,766 -> 74,872,489, `library_instructions`
+74,798,192 -> 74,559,617, `emit_instructions` 5,439,036 -> 5,449,223,
+`interp_instructions` 492,629,961 -> 492,636,904,
+`codegen_instructions_dev` 112,582,224 -> 112,677,448 and
+`codegen_instructions_release` 441,728,749 -> 441,885,670. The tab, read
+here on rustc 1.98.1 after the merge: `browser_compile_instructions`
+382,297,788 -> 381,261,098, `browser_compile_peak_bytes` 643,478 -> 643,605
+and `browser_run_instructions` 34,181,240 -> 34,181,355. Welfare rises, and
+the rise is banked here.
