@@ -13,9 +13,34 @@ fn array_delim _ none p _
 # first. `skip_ws` used to walk to the next non-blank byte and hand back only
 # the position, so the caller loaded that byte a second time to dispatch on
 # it. One dispatch on one loaded byte does both jobs.
+#
+# A blank run is skipped out of line and dispatched by `array_delim_after`,
+# which has the same arms and no blank one, so the state is no longer a loop.
+# The states call one another in a cycle, and which of them loop decides
+# which states LLVM folds together. Each choice was measured on the run
+# benchmark against all six out of line, one state looped at a time:
+# `array_delim` +13.8M instructions, `array_open` +26.6M, `obj_open` +1.9M,
+# `obj_delim` +1.2M, `obj_key_end` -4.6M and `obj_key_start` -18.1M. The
+# effects do not add: the two key states looped together read +13.6M. So
+# `obj_key_start` alone keeps the arm that calls itself.
 fn array_delim cs c p acc
   blank = ws? c
-  if blank (array_delim cs cs[p + 1] (p + 1) acc) (array_bad c p)
+  if blank (array_delim_past cs (skip_ws cs (p + 1)) acc) (array_bad c p)
+
+fn array_delim_past cs p acc
+  array_delim_after cs cs[p] p acc
+
+fn array_delim_after cs 44 p acc
+  array_items cs (p + 1) acc
+
+fn array_delim_after _ 93 p acc
+  parsed (p + 1) acc
+
+fn array_delim_after _ none p _
+  fail p "unexpected end of input"
+
+fn array_delim_after _ c p _
+  array_bad c p
 
 fn array_bad c p
   fail p "expected `,` or `]`, found `{text/utf8 [c]}`"
@@ -34,7 +59,19 @@ fn array_open _ none p
 
 fn array_open cs c p
   blank = ws? c
-  if blank (array_open cs cs[p + 1] (p + 1)) (array_items cs p [])
+  if blank (array_open_past cs (skip_ws cs (p + 1))) (array_items cs p [])
+
+fn array_open_past cs p
+  array_open_after cs cs[p] p
+
+fn array_open_after _ 93 p
+  parsed (p + 1) []
+
+fn array_open_after _ none p
+  fail p "unexpected end of input"
+
+fn array_open_after cs _ p
+  array_items cs p []
 
 fn array_step cs (parsed p v) acc
   array_delim cs cs[p] p (push acc v)
@@ -59,7 +96,22 @@ fn obj_delim _ none p _
 
 fn obj_delim cs c p acc
   blank = ws? c
-  if blank (obj_delim cs cs[p + 1] (p + 1) acc) (obj_bad c p)
+  if blank (obj_delim_past cs (skip_ws cs (p + 1)) acc) (obj_bad c p)
+
+fn obj_delim_past cs p acc
+  obj_delim_after cs cs[p] p acc
+
+fn obj_delim_after cs 44 p acc
+  obj_items cs (p + 1) acc
+
+fn obj_delim_after _ 125 p acc
+  parsed (p + 1) acc
+
+fn obj_delim_after _ none p _
+  fail p "unexpected end of input"
+
+fn obj_delim_after _ c p _
+  obj_bad c p
 
 fn obj_bad c p
   fail p "expected `,` or `}`, found `{text/utf8 [c]}`"
@@ -81,11 +133,26 @@ fn obj_key_end cs 58 p k acc
   obj_colon cs (p + 1) k acc
 
 fn obj_key_end _ none p _ _
-  fail p "expected `:`"
+  colon_bad p
 
 fn obj_key_end cs c p k acc
   blank = ws? c
-  if blank (obj_key_end cs cs[p + 1] (p + 1) k acc) (fail p "expected `:`")
+  if blank (obj_key_end_past cs (skip_ws cs (p + 1)) k acc) (colon_bad p)
+
+fn obj_key_end_past cs p k acc
+  obj_key_end_after cs cs[p] p k acc
+
+fn obj_key_end_after cs 58 p k acc
+  obj_colon cs (p + 1) k acc
+
+fn obj_key_end_after _ none p _ _
+  colon_bad p
+
+fn obj_key_end_after _ _ p _ _
+  colon_bad p
+
+fn colon_bad p
+  fail p "expected `:`"
 
 fn obj_key_start cs 34 p acc
   key_at cs (p + 1) (builtin_plain_string cs (p + 1)) acc
@@ -117,7 +184,19 @@ fn obj_open _ none p
 
 fn obj_open cs c p
   blank = ws? c
-  if blank (obj_open cs cs[p + 1] (p + 1)) (obj_items cs p {})
+  if blank (obj_open_past cs (skip_ws cs (p + 1))) (obj_items cs p {})
+
+fn obj_open_past cs p
+  obj_open_after cs cs[p] p
+
+fn obj_open_after _ 125 p
+  parsed (p + 1) {}
+
+fn obj_open_after _ none p
+  fail p "unexpected end of input"
+
+fn obj_open_after cs _ p
+  obj_items cs p {}
 
 fn obj_value cs (parsed p v) k acc
   obj_delim cs cs[p] p (put acc k v)

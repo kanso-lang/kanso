@@ -1,0 +1,23 @@
+[]
+[1]
+unexpected end of input at 4
+unexpected character `x` at 4
+[1 2]
+[1]
+unexpected end of input at 5
+expected `,` or `]`, found `x` at 6
+{}
+{ "a":1 }
+unexpected end of input at 4
+expected a string key at 4
+{ "a":1 "b":2 }
+unexpected end of input at 9
+expected a string key at 10
+{ "a":1 }
+expected `:` at 6
+expected `:` at 7
+{ "a":1 "b":2 }
+{ "a":1 }
+unexpected end of input at 9
+expected `,` or `}`, found `x` at 9
+[{ "a":[1 2] "b":{} } []]

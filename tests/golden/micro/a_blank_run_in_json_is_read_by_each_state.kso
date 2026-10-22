@@ -1,0 +1,34 @@
+import "std/json"
+
+# Each state of the decoder skips a run of blanks and then reads the next
+# byte with arms of its own, apart from the arms it reads a byte with when no
+# blank came first. Each line puts a run of blanks (tab, newline, carriage
+# return, space) in front of every byte a state can meet: the bytes it
+# takes, a byte it refuses, and the end of the input. A refusal prints its
+# reason and the position it names, which counts the blanks it walked past.
+fn read doc
+  rescue (json/decode doc) (e -> "{e.reason.reason} at {e.reason.position}")
+
+pub play = print (read "[ \t]")
+  .> (_ -> print (read "[\n 1]"))
+  .> (_ -> print (read "[\r\n"))
+  .> (_ -> print (read "[  x]"))
+  .> (_ -> print (read "[1 \t,2]"))
+  .> (_ -> print (read "[1\n]"))
+  .> (_ -> print (read "[1  "))
+  .> (_ -> print (read "[1 \r x]"))
+  .> (_ -> print (read "\{ \n}"))
+  .> (_ -> print (read "\{\t\"a\":1}"))
+  .> (_ -> print (read "\{  "))
+  .> (_ -> print (read "\{ \r3}"))
+  .> (_ -> print (read "\{\"a\":1, \n\"b\":2}"))
+  .> (_ -> print (read "\{\"a\":1,\t"))
+  .> (_ -> print (read "\{\"a\":1,  4}"))
+  .> (_ -> print (read "\{\"a\" \t:1}"))
+  .> (_ -> print (read "\{\"a\"\n"))
+  .> (_ -> print (read "\{\"a\"  x}"))
+  .> (_ -> print (read "\{\"a\":1 \n,\"b\":2}"))
+  .> (_ -> print (read "\{\"a\":1\r}"))
+  .> (_ -> print (read "\{\"a\":1  "))
+  .> (_ -> print (read "\{\"a\":1 \tx}"))
+  .> (_ -> print (read " \n [ \{ \"a\" : [ 1 , 2 ] , \"b\" : \{ } } , [ ] ] "))
