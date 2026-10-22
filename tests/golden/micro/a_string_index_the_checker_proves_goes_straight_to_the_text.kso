@@ -1,0 +1,32 @@
+import "std/text"
+
+# An index of a value the checker proves is a string, at a position it proves
+# is an int, goes straight to the string arm of the runtime's index. Each walk
+# prints what every position answers, `_` for none: forward one character at
+# a time, which steps the cursor, then backward, which seeks, then positions
+# past either end, over characters one to four bytes wide.
+fn shown none
+  "_"
+
+fn shown c
+  c
+
+fn text none
+  ""
+
+fn text s
+  s
+
+fn forward s i n acc
+  if (i > n) acc (forward s (i + 1) n "{acc}{shown s[i]}")
+
+fn backward s i acc
+  if (i < -1) acc (backward s (i - 1) "{acc}{shown s[i]}")
+
+fn said s
+  print "{forward s 0 (length s + 1) ""} {backward s (length s + 1) ""}"
+
+pub play = said (text "aé😀b€z")
+  .> (_ -> said (text ""))
+  .> (_ -> said (text "plain"))
+  .> (_ -> said (text (text/slice "xx€€yy" 2 5)))

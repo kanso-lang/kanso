@@ -152,6 +152,7 @@ const DECLARES_CONTEXT_CALLS: &[&str] = &[
     "k_b_append_word_slow",
     "k_b_at",
     "k_b_at_fast",
+    "k_b_at_str",
     "k_b_bit_and",
     "k_b_bit_and_fast",
     "k_b_bit_not",
