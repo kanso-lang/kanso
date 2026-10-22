@@ -2839,4 +2839,14 @@ number_scanned = row
 
 rows_cq27 = list/concat rows_cq26 [point_forgotten number_scanned]
 
-rows_c = list/concat rows_cq27 [itself]
+chain_first = row
+  "a chain staged on its first step"
+  true
+  (gating "run_counters")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_chain_staged_on_its_first_step")
+  benchmarks
+
+rows_cq28 = list/concat rows_cq27 [chain_first]
+
+rows_c = list/concat rows_cq28 [itself]
