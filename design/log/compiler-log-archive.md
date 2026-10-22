@@ -105391,3 +105391,42 @@ container. As-written reads a minimum of 2,004 ms where the panel said
 Overlapped reads 2,004 ms where the panel said 2,008. The two differ in their
 output: overlapped prints the report before the delivery, and as-written
 keeps the order it was written in.
+
+## 2026-10-14 — A pooled call may read its arguments through a builtin
+
+The pool from kanso#1978 took a call on a function's locals only when every
+argument was a local, a literal, an operator over those, or a call of the
+program's own. A call that measured its argument first was left after the
+wait:
+
+```
+os/args .> (a -> wait a)
+
+fn wait a
+  sleep 2000
+    .> (_ -> print "delivery: made")
+    .> (_ -> print "report: {spin (150000000 + length a) 0}")
+```
+
+`length a` is a builtin, so `spin` ran after the sleep. With the length
+taken before `wait` is called, the same program already pooled: 2.01 s
+against 4.38 s on main.
+
+A pooled call's arguments may now apply a builtin that reads a value and
+answers a new one: `length`, `keys`, `values`, `entries`, `chars`, `bytes`,
+`char_code`, `from_code`, `to_int`, `to_float`, `round`, `sqrt`, `sum` and
+the six `bit_` words. The words that extend a value stay out. The beat pass
+may write the result of `push`, `put`, `concat` and the rest into the
+storage of the value they were given, and a pooled cell runs before the
+program's own reads of that value.
+
+The program above, run with `kanso play` on this container: 4.07 to 4.57 s
+on main, 4.01 to 4.21 s on kanso#1978's branch, and 2.01 to 2.08 s on this
+one, with the same output.
+
+Pinned by:
+- `tests/golden/mem/work_ahead_pools_a_call_on_a_builtin_read`:
+  `ahead_forced=1`;
+- `tests/golden/mem/work_ahead_leaves_an_extending_builtin`: a `push` inside
+  the argument, `ahead_forced=0`;
+- two ratchet rows, each seen red on its golden.
