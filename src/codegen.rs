@@ -975,6 +975,7 @@ fn emit_with(
         group_by_name: group_indices_by_name(program),
         cycle_reached: cycle_reached(program),
         cycle_members: cycle_members(program),
+        reaches_cycle: reaches_cycle(program),
         deep: crate::deep::Deep::of(program),
         twin_of: None,
         kept_out: kept_out(program),
@@ -1252,6 +1253,9 @@ struct Backend<'a> {
     cycle_reached: crate::hash::Set<&'a str>,
     /// Names on a cycle, the groups that get a word twin. See `has_twin`.
     cycle_members: crate::hash::Set<&'a str>,
+    /// Names that run a loop before they answer, whose calls keep a cohort
+    /// bracket from a caller a cycle reaches. See `reaches_cycle`.
+    reaches_cycle: crate::hash::Set<&'a str>,
     /// The cycles that grow the stack, and the place an overflow in each
     /// names (see `crate::deep`).
     deep: crate::deep::Deep,

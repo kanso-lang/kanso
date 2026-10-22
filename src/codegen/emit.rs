@@ -3840,7 +3840,9 @@ impl<'a> Backend<'a> {
                 && !region
                 && !register_returned
                 && crosses_down
-                && !self.cycle_reached.contains(f.group.as_str())
+                && (!self.cycle_reached.contains(f.group.as_str())
+                    || (self.reaches_cycle.contains(name)
+                        && self.group_return_set(name, n) & heapish == 0))
                 && !f.synthetic
                 && !caller_loops
                 && emitted.iter().all(|e| f.set_of(e) & arg_heapish == 0);

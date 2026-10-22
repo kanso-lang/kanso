@@ -2775,4 +2775,14 @@ count_allocating = row
 
 rows_cq23 = list/concat rows_cq22 [frontier_copied count_allocating]
 
-rows_c = list/concat rows_cq23 [itself]
+loop_unbracketed = row
+  "a call into a loop left unbracketed"
+  true
+  (gating "run_counters")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_call_into_a_loop_left_unbracketed")
+  benchmarks
+
+rows_cq24 = list/concat rows_cq23 [loop_unbracketed]
+
+rows_c = list/concat rows_cq24 [itself]

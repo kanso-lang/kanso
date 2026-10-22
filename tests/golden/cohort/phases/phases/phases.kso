@@ -1,0 +1,17 @@
+# A loop whose every pass calls into a module twice, and each call builds a
+# megabyte of text to answer one number. The caller sits under a cycle, so a
+# cohort bracket around its calls would usually be paid on small calls; here
+# the callee runs a loop of its own, the bracket costs nothing beside it, and
+# the pop gives back each megabyte before the next call builds its own.
+import "./grow"
+
+fn phase i
+  grow/total (1000000 + i) + grow/total (1000000 - i)
+
+fn rounds 0 acc
+  acc
+
+fn rounds n acc
+  rounds (n - 1) (acc + phase n)
+
+pub play = print "{rounds 3 0}"

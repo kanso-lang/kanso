@@ -108,3 +108,29 @@ fn a_result_heavy_cohort_is_kept_not_copied() {
     assert!(stderr.contains("beat_iters=0"), "the loop is bracketed again: {stderr}");
     assert!(output.status.success());
 }
+
+/// A cohort around a call that runs a loop, made by a caller a cycle reaches.
+/// The license had refused every such caller, because a call made once per
+/// element of something is usually small; a call into a loop is not, and its
+/// bracket is paid once against the whole loop. Each pass of `rounds` calls
+/// `grow/total` twice, and each call builds a megabyte of text to answer its
+/// length. With the bracket each megabyte goes back before the next call
+/// builds its own: six cohorts free, and the arena peaks at two blocks. Watched
+/// red with the license as it was: no cohort fired and the peak was three.
+#[test]
+fn a_call_into_a_loop_gives_back_what_it_built() {
+    let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/golden/cohort/phases");
+    let output = Command::new(env!("CARGO_BIN_EXE_kanso"))
+        .arg("run")
+        .arg(dir)
+        .env("KANSO_COUNTERS", "1")
+        .output()
+        .expect("kanso binary runs");
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(stdout, "6291456\n", "stdout mismatch: {stderr}");
+    assert!(stderr.contains("\ncohort_frees=6\n"), "the calls were not bracketed: {stderr}");
+    assert!(stderr.contains("\narena_peak_bytes=2097168\n"), "the peak moved: {stderr}");
+    assert!(output.status.success());
+}
