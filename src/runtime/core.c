@@ -522,9 +522,13 @@ typedef struct {
    -4,571,478, `utf8` -2,157,799 and `to_float_slice` -1,113,156. The same
    trial made `at` dearer by 9,209,935 and `utf8_slice_raw` by 4,306,698,
    because their callers keep more live across the call than the callee used
-   to save, so they stay on the C convention. The emitter writes the keyword
-   on the declares and calls of exactly these, in `PRESERVE_NONE_DOORS`, and
-   `tests/the_doors_the_program_calls_agree.rs` holds the two lists equal. */
+   to save, so they stay on the C convention. Two joined later, measured the
+   same way on the run program: `append_string_mut` -2,228,335 and
+   `to_float_slice_raw`, the door the decoder's number twin calls now,
+   -1,113,877; `to_int_slice_raw` read +472,341 and stays. The emitter writes
+   the keyword on the declares and calls of exactly these, in
+   `PRESERVE_NONE_DOORS`, and `tests/the_doors_the_program_calls_agree.rs`
+   holds the two lists equal. */
 #define K_DOORCC K_CLOSCC
 
 /* `fn` is the wrapper C calls through. `body` is the lambda itself on the

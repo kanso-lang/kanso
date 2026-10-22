@@ -2645,7 +2645,9 @@ static KValue k_append_string(KValue acc, KValue sv, int mutate) {
 
 KValue k_b_append_string(KValue acc, KValue sv) { return k_append_string(acc, sv, 0); }
 
-KValue k_b_append_string_mut(KValue acc, KValue sv) { return k_append_string(acc, sv, 1); }
+K_DOORCC KValue k_b_append_string_mut(KValue acc, KValue sv) {
+    return k_append_string(acc, sv, 1);
+}
 
 KValue k_b_append_key_mut(KValue acc, KValue sv) { return k_append_key(acc, sv, 1); }
 
