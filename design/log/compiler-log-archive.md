@@ -105165,3 +105165,45 @@ Still not built for #1856: an entry with more than one effect line, which
 never pools (the next entry corrects this line), calls whose arguments name
 locals that cannot move (a lambda's parameter, a value read from io), which
 need the (site, args) pool, and the cost gate on admission.
+
+## 2026-10-14 — The pool takes only work
+
+This is the grain piece of #1856. The pool reads each constant inside
+`k_ahead_try`, whose `sigsetjmp` saves the signal mask with a system call. A
+literal bound ahead of the first sleep moved into a constant like any closed
+binding, so the pool made that call to build a literal. `ahead::admits` now
+lets a constant into the pool only when its value calls one of the
+program's functions, directly or inside a string or list it builds. That is
+the test the lazy cost gate puts to a cell (`demand::expensive`). The literal
+still moves, because a call lifted after the sleep may name it, and it is
+built where it is first read.
+
+`tests/golden/mem/work_ahead_leaves_a_literal_where_it_is` binds a literal
+and a call ahead of the sleep, and `ahead_forced` reads 1 where main read 2.
+`work_ahead_reads_a_moved_binding` goes from 2 to 1 for the same reason. The
+ratchet row "a literal handed to the pool" admits every constant and turns
+the first golden red.
+
+The previous entry listed "work bound after a statement with an effect" as
+unbuilt. No program can be written that way. The parser refuses a binding
+after an effect line, joins a body's effect lines into one group, and runs
+every binding before the group starts. The runtime runs the pool only at a
+sleep outside a group, so an entry with two effect lines never pools at all.
+`tests/golden/workahead/a_binding_before_a_print_fails_before_it` pins the
+transcript of such an entry whose binding fails: nothing on stdout, the
+overflow on stderr. A ratchet mutation that let the park be any sleep was
+tried and left the fixture green, because the group hides the sleep from
+`ahead` before the search runs, so that row was dropped.
+
+CI moved five rows, all of them compile cost. `browser_compile_instructions`
+fell 255,236 to 382,154,970, the same reading this container gave. The tab's
+corpus never sleeps and the tab compiles the pool out, so the pool decides
+nothing there; nothing in this change isolates the drop further.
+`compile_instructions` fell 15 to 22,665,216, `entry_instructions` 25 to
+75,110,504 and `library_instructions` 25 to 74,796,982. `emit_instructions`
+rose 72 to 5,438,920; the emitter now passes the program's declarations
+through `admits`, the one change on that path. No runtime
+row moved. Welfare rose 0.00022 to 91.52460, and the floor is banked there.
+
+Still not built for #1856: pooling inside an effect group, and calls whose
+arguments name locals that cannot move, which need the (site, args) pool.

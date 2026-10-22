@@ -834,7 +834,7 @@
 # each fall 64 bytes.
 jsonbench text=372777
 encodebench text=343497
-oneshot text=380633
+oneshot text=380393
 basket text=334921
 widebench text=354857
 deepbench text=307689
@@ -844,5 +844,5 @@ indexbench text=296025
 scanbench text=493673
 digestbench text=335321
 readbench text=297641
-livebench text=384409
-runbench text=721209
+livebench text=384169
+runbench text=720921

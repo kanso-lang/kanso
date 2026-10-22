@@ -21,48 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-14 — The pool takes only work
-
-This is the grain piece of #1856. The pool reads each constant inside
-`k_ahead_try`, whose `sigsetjmp` saves the signal mask with a system call. A
-literal bound ahead of the first sleep moved into a constant like any closed
-binding, so the pool made that call to build a literal. `ahead::admits` now
-lets a constant into the pool only when its value calls one of the
-program's functions, directly or inside a string or list it builds. That is
-the test the lazy cost gate puts to a cell (`demand::expensive`). The literal
-still moves, because a call lifted after the sleep may name it, and it is
-built where it is first read.
-
-`tests/golden/mem/work_ahead_leaves_a_literal_where_it_is` binds a literal
-and a call ahead of the sleep, and `ahead_forced` reads 1 where main read 2.
-`work_ahead_reads_a_moved_binding` goes from 2 to 1 for the same reason. The
-ratchet row "a literal handed to the pool" admits every constant and turns
-the first golden red.
-
-The previous entry listed "work bound after a statement with an effect" as
-unbuilt. No program can be written that way. The parser refuses a binding
-after an effect line, joins a body's effect lines into one group, and runs
-every binding before the group starts. The runtime runs the pool only at a
-sleep outside a group, so an entry with two effect lines never pools at all.
-`tests/golden/workahead/a_binding_before_a_print_fails_before_it` pins the
-transcript of such an entry whose binding fails: nothing on stdout, the
-overflow on stderr. A ratchet mutation that let the park be any sleep was
-tried and left the fixture green, because the group hides the sleep from
-`ahead` before the search runs, so that row was dropped.
-
-CI moved five rows, all of them compile cost. `browser_compile_instructions`
-fell 255,236 to 382,154,970, the same reading this container gave. The tab's
-corpus never sleeps and the tab compiles the pool out, so the pool decides
-nothing there; nothing in this change isolates the drop further.
-`compile_instructions` fell 15 to 22,665,216, `entry_instructions` 25 to
-75,110,504 and `library_instructions` 25 to 74,796,982. `emit_instructions`
-rose 72 to 5,438,920; the emitter now passes the program's declarations
-through `admits`, the one change on that path. No runtime
-row moved. Welfare rose 0.00022 to 91.52460, and the floor is banked there.
-
-Still not built for #1856: pooling inside an effect group, and calls whose
-arguments name locals that cannot move, which need the (site, args) pool.
-
 ## 2026-10-14 — A group of effect lines pools while it waits
 
 #1856's work-ahead pool ran only at a bare sleep, and a body with two or more
@@ -1882,3 +1840,43 @@ It turns off the clean-token skip in `find2_below`, which served
 encodebench's own copy of lib/json still sends every string through it, so the
 row now gates on the encode vein, where the mutation moves `find2_calls`
 803,275 -> 4,200,475.
+
+## 2026-10-22 — a map entry's key and value are read with one test
+
+`entry_onto` reads a pair as `pair_onto acc (builtin_key_at m i)
+(builtin_value_at m i)`, and each read tested the map's view on its own: the
+tags, the view pointer and its mark, and the bounds. Where one call's
+arguments read a key and then a value of the same local map at the same local
+position, the emitter now calls `k_b_entry_pair_fast` once. It tests the view,
+returns the key and stores the value into a slot in the caller's frame, which
+the call's next argument loads. A view that is missing or marked goes to the
+C for both reads, as each read did alone. The pair is found in both places the
+emitter writes a call's arguments, the plain call and the tail call, and
+`entry_onto`'s call is a tail call.
+
+Measured here, the run program read 1,028,684,506 -> 1,018,405,282 (-1.0%)
+with the same output.
+
+CI's rows: work_runbench 1,028,685,693 -> 1,018,406,469 (-1.0%),
+work_livebench 1,172,094,931 -> 1,126,408,749 (-3.9%) and work_oneshot
+11,785,186 -> 11,669,620 (-1.0%). The three programs that encode objects lose
+one define, two calls and three branches each and are smaller (text runbench
+721,209 -> 720,921, oneshot 380,633 -> 380,393, livebench 384,409 ->
+384,169; emitted runbench lines 56,666 -> 56,634, oneshot 13,898 -> 13,866,
+livebench 14,221 -> 14,189). Every other program carries the helper's two
+lines (emitted_lines 13,102 -> 13,104 for the decoder, and +2 in the others),
+the compile corpus's lines move by two each (recursion 449 -> 451, dispatch
+348 -> 350, guards 305 -> 307, records 406 -> 408; lines 1,508 -> 1,516) and
+module_lines 1,159 -> 1,161.
+codegen_instructions_dev 116,064,263 -> 116,067,612,
+codegen_instructions_release 422,357,890 -> 422,361,029 and
+emit_instructions 6,364,404 -> 6,377,706 rise with them. In the tab,
+browser_run_instructions 32,241,456 -> 31,991,504 and
+browser_compile_instructions 406,640,369 -> 406,222,752 fall, and
+browser_compile_peak_bytes rises 732,776 -> 733,266. The welfare sum rose, and
+the floor moves 92.13 -> 92.17.
+
+The map golden `a_map_is_encoded_from_its_entries_in_place` is the pair's
+witness for its bytes: with the value loaded from the key's slot, every value
+printed as its key. The ratchet row `an_entry_read_twice` never sees the pair
+and turns the emitted gate red.
