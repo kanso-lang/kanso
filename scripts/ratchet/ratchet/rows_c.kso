@@ -2821,4 +2821,22 @@ key_called = row
 
 rows_cq26 = list/concat rows_cq25 [key_beside key_called]
 
-rows_c = list/concat rows_cq26 [itself]
+point_forgotten = row
+  "a point forgotten on the fast path"
+  true
+  "cargo test --release --test golden micro_corpus_survives_a_release_build"
+  "specs (unit, golden, differential)"
+  (breaking "a_point_forgotten_on_the_fast_path")
+  no_setup
+
+number_scanned = row
+  "a number scanned sixteen bytes at a time anyway"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_number_scanned_sixteen_bytes_at_a_time_anyway")
+  benchmarks
+
+rows_cq27 = list/concat rows_cq26 [point_forgotten number_scanned]
+
+rows_c = list/concat rows_cq27 [itself]

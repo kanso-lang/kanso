@@ -60,16 +60,6 @@ KValue k_b_to_int(KValue sv, const char* origin) {
     return k_to_int_text(data, len, len, origin);
 }
 
-/* A word's bytes that are not ascii digits, as 0x80 in each such byte. Each
-   byte is xored with '0', so a digit becomes 0 to 9, and a byte is flagged
-   when it is above 9: its low seven bits plus 0x76 reach 0x80 from 0x0A up,
-   and its own top bit covers the rest. The add stays under 0x100 in every
-   byte, so no byte's answer carries into its neighbour's. */
-static inline uint64_t k_nondigits8(uint64_t x) {
-    uint64_t t = x ^ 0x3030303030303030ULL;
-    return (((t & 0x7F7F7F7F7F7F7F7FULL) + 0x7676767676767676ULL) | t) & 0x8080808080808080ULL;
-}
-
 /* The top `n` bytes of `w` read as decimal digits, 1 <= n <= 8, most
    significant first in memory, with the bytes below them read as leading
    zeros. The caller has checked they are digits. The combine is three
@@ -1223,12 +1213,21 @@ static inline int k_float_shape8(const char* data, long long len, long long room
 /* Inlined into both doors by name. With the shape above in it, clang stopped
    inlining it into k_b_to_float, and widebench's 72,000 parses paid the
    call: 272,000 instructions. */
+static __attribute__((noinline)) KValue k_to_float_scan(const char* data, long long len,
+                                                        const char* origin);
+
+/* The `[-]I.F` shape above is answered here and everything else by the scan
+   below it, which is out of line: its fallback's buffer and the registers its
+   loops want made every call build a frame, the shaped ones included. */
 static inline __attribute__((always_inline)) KValue
 k_to_float_text(const char* data, long long len, long long room, const char* origin) {
-    {
-        double shaped;
-        if (k_float_shape8(data, len, room, &shaped)) return k_float(shaped);
-    }
+    double shaped;
+    if (k_float_shape8(data, len, room, &shaped)) return k_float(shaped);
+    return k_to_float_scan(data, len, origin);
+}
+
+static __attribute__((noinline)) KValue k_to_float_scan(const char* data, long long len,
+                                                        const char* origin) {
     /* the fast path: a plain decimal scanned into (w, q) and parsed by
        eisel-lemire; anything it can't be certain about — overlong digits,
        exotic forms, halfway cases — falls through to strtod, which stays

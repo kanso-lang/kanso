@@ -1617,20 +1617,48 @@ KValue k_b_unescape(KValue cs, KValue fromv, KValue ev) {
    lib/json walked a number one byte a step, a dispatch on every byte, and it
    cost the run program 23 instructions a character; sixteen bytes are
    classified here at once. */
+/* A word's bytes that are not ascii digits, as 0x80 in each such byte. Each
+   byte is xored with '0', so a digit becomes 0 to 9, and a byte is flagged
+   when it is above 9: its low seven bits plus 0x76 reach 0x80 from 0x0A up,
+   and its own top bit covers the rest. The add stays under 0x100 in every
+   byte, so no byte's answer carries into its neighbour's. */
+static inline uint64_t k_nondigits8(uint64_t x) {
+    uint64_t t = x ^ 0x3030303030303030ULL;
+    return (((t & 0x7F7F7F7F7F7F7F7FULL) + 0x7676767676767676ULL) | t) & 0x8080808080808080ULL;
+}
+
+/* Where a run of ascii digits that starts at `j` ends, read eight bytes at a
+   time; -1 past sixteen digits. The caller guarantees sixteen bytes from `j`
+   are inside the buffer. */
+static inline __attribute__((always_inline)) long long k_digits_end(const unsigned char* d,
+                                                                    long long j) {
+    uint64_t w;
+    memcpy(&w, d + j, 8);
+    uint64_t nd = k_nondigits8(w);
+    if (nd) return j + (__builtin_ctzll(nd) >> 3);
+    memcpy(&w, d + j + 8, 8);
+    nd = k_nondigits8(w);
+    if (nd) return j + 8 + (__builtin_ctzll(nd) >> 3);
+    return -1;
+}
+
+/* The same question as a table, for the word-at-a-time path in
+   `k_b_number_span_raw`, which asks it of the byte after a run. */
+static const unsigned char k_number_bytes[256] = {
+    ['+'] = 1, ['-'] = 1, ['.'] = 1, ['0'] = 1, ['1'] = 1, ['2'] = 1, ['3'] = 1,
+    ['4'] = 1, ['5'] = 1, ['6'] = 1, ['7'] = 1, ['8'] = 1, ['9'] = 1, ['E'] = 1,
+    ['e'] = 1,
+};
+
 static int k_number_byte(unsigned char c) {
     return (unsigned)(c - '0') < 10 || c == '+' || c == '-' || c == '.' || c == 'e' || c == 'E';
 }
 
-/* The scan behind `number_span`, with the KValue convention taken off its
-   inputs: a pointer, a length and a position, and the answer as a plain
-   integer. The emitter reaches it through the `k_b_number_span_fast` twin,
-   which tests the two tags inline, so a call whose bytes and position are
-   what they say skips the failure and tag ladder below; on the run program
-   that is 417,483 calls. `k_b_number_span` is the same scan for anything the
-   twin turns away. The counter is here so both doors count a call once. */
-long long k_b_number_span_raw(const unsigned char* d, long long len, long long from) {
-    if (K_COUNTING) k_stat_number_spans++;
-    if (from < 1 || from > len) return from;
+/* Every number the word-at-a-time path in `k_b_number_span_raw` turns
+   away: the RFC's checks, then sixteen bytes a step. Out of line, because
+   the registers the step wants made every call build a frame. */
+static __attribute__((noinline)) long long k_number_span_scan(const unsigned char* d,
+                                                             long long len, long long from) {
     long long i = from - 1;
     /* RFC 8259 §6 asks three things of a number that the converters do not
        (#1999): a digit first, after any minus; no digit after a leading 0;
@@ -1689,6 +1717,38 @@ long long k_b_number_span_raw(const unsigned char* d, long long len, long long f
     }
     if (bare) return 0;
     return mark ? -(i + 1) : i + 1;
+}
+
+/* The scan behind `number_span`, with the KValue convention taken off its
+   inputs: a pointer, a length and a position, and the answer as a plain
+   integer. The emitter reaches it through the `k_b_number_span_fast` twin,
+   which tests the two tags inline, so a call whose bytes and position are
+   what they say skips the failure and tag ladder below; on the run program
+   that is 417,483 calls. `k_b_number_span` is the same scan for anything the
+   twin turns away. The counter is here so both doors count a call once. */
+long long k_b_number_span_raw(const unsigned char* d, long long len, long long from) {
+    if (K_COUNTING) k_stat_number_spans++;
+    if (from < 1 || from > len) return from;
+    /* The shape nearly every number has, `-?D+` or `-?D+.D+` with no
+       leading zero and then a byte no number holds, read a word at a time.
+       Anything else, and any number within forty bytes of the end, is left
+       to the checks and the scan below, which start again from `from`. The
+       run program's 417,483 numbers are all this shape, four to nine bytes
+       long. */
+    if (from + 40 <= len) {
+        long long lead = from - 1 + (d[from - 1] == '-');
+        if ((unsigned)(d[lead] - '1') < 9) {
+            long long e = k_digits_end(d, lead);
+            if (e >= 0) {
+                if (!k_number_bytes[d[e]]) return e + 1;
+                if (d[e] == '.' && (unsigned)(d[e + 1] - '0') < 10) {
+                    long long f = k_digits_end(d, e + 1);
+                    if (f >= 0 && !k_number_bytes[d[f]]) return -(f + 1);
+                }
+            }
+        }
+    }
+    return k_number_span_scan(d, len, from);
 }
 
 KValue k_b_number_span(KValue cs, KValue fromv) {

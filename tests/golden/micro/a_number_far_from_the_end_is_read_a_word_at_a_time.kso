@@ -1,0 +1,37 @@
+# A number at least forty bytes before the end of the document is read a
+# word at a time when it has the plain shape, an optional minus, digits and
+# an optional point with digits after it, and by the general scan when it
+# does not. Every document here ends in a long string so that its numbers
+# sit where the word-at-a-time path can reach them. The good document mixes
+# both kinds; each of the others breaks a rule, some in a way the fast path
+# hands on and some in a way it never sees.
+import "std/io"
+import "std/json"
+import "std/list"
+import "std/text"
+
+tail = "\"the forty bytes after every number end the document here\""
+
+good = "1, -2, 3.25, -4.5, 1234567890123456789, 1234567890123456, 0.5, -0.25"
+
+more = "1e3, 2.5E-2, 70, 9.0123456789012345, -0, 10"
+
+bad = ["1." "01" "1.2.3" "-" "1.e5" "3x" "-.5" "00.5"]
+
+fn shown (err r)
+  "refused: {r}"
+
+fn shown v
+  json/encode v
+
+fn decoded body
+  shown (json/decode "[{body}, {tail}]")
+
+fn line body
+  "{body}: {decoded body}"
+
+bodies = list/concat ["{good}, {more}"] bad
+
+lines = list/to_list (list/map bodies line)
+
+pub play = io/write "{text/join lines "\n"}\n"
