@@ -25,5 +25,5 @@
 # regenerate.
 defines=157
 calls=1557
-branches=1346
-lines=14330
+branches=1344
+lines=14319

@@ -1513,6 +1513,105 @@ static long long k_json_quote_after(const unsigned char* d, long long len, long 
     }
 }
 
+/* THE STRING THE QUOTE WALK JUST UNDID. A JSON string with an escape in it was
+   read twice: once by the walk to its closing quote, which answers
+   `plain_string`, and again by `unescape`, which the decoder calls on the same
+   range straight after. `k_json_escaped` does both in one walk. It writes the
+   undone bytes at the arena's frontier as it goes, and when it reaches the
+   quote it allocates the string `unescape` would have allocated, at the
+   length `unescape` would have asked for, which lands where the bytes
+   already are. The string is kept here, keyed by the bytes and the range, and
+   `unescape` answers it when it is asked for that range. A `u` escape, any
+   other escape, or a frontier without room for the string leaves no string
+   behind, and the old walk finds the quote. */
+static const unsigned char* k_unescaped_d;
+static long long k_unescaped_from, k_unescaped_e;
+static KValue k_unescaped_v;
+
+/* The closing quote of a string whose walk stopped at `p`, counted from zero,
+   on a byte no backslash escapes. */
+static long long k_json_quote_from(const unsigned char* d, long long len, long long p) {
+    long long q = k_b_find2_raw(d, len, p + 1, 34, 92);
+    if (q > len) return 0;
+    if (d[q - 1] == 34) return q;
+    return k_json_quote_after(d, len, q);
+}
+
+/* `q` is the first backslash, found by the caller's scan from `from`; both
+   count from one. Answers the closing quote's position, or zero when the
+   string runs out first, as the walk it replaces did. */
+long long k_json_escaped(const unsigned char* d, long long len, long long from, long long q) {
+    static const char undo[256] = {
+        ['"'] = '"', ['\\'] = '\\', ['/'] = '/', ['b'] = 8, ['f'] = 12, ['n'] = 10,
+        ['r'] = 13, ['t'] = 9,
+    };
+    const uint64_t ones = 0x0101010101010101ULL, high = 0x8080808080808080ULL;
+    const uint64_t slashes = 0x5C5C5C5C5C5C5C5CULL, quotes = 0x2222222222222222ULL;
+    k_unescaped_d = NULL;
+    char* o0 = k_arena + sizeof(KStr);
+    char* lim = k_arena + k_arena_left;
+    long long head = q - from;
+    if (o0 + head + 9 > lim) return k_json_quote_after(d, len, q);
+    /* the run before the first backslash, a word at a time; the word that
+       reaches past it writes bytes the walk below writes over */
+    const unsigned char* src = d + from - 1;
+    long long i = 0;
+    if (from - 1 + head + 8 <= len) {
+        for (; i < head; i += 8) {
+            uint64_t w;
+            memcpy(&w, src + i, 8);
+            memcpy(o0 + i, &w, 8);
+        }
+    } else {
+        for (; i < head; i++) o0[i] = (char)src[i];
+    }
+    char* o = o0 + head;
+    long long p = q - 1;
+    for (;;) {
+        /* d[p] is a backslash, and it takes the byte after it along */
+        if (p + 1 >= len) return 0;
+        char r = undo[d[p + 1]];
+        if (!r) return k_json_quote_after(d, len, p + 1);
+        *o++ = r;
+        p += 2;
+        while (p + 8 <= len) {
+            if (o + 9 > lim) return k_json_quote_from(d, len, p);
+            uint64_t w;
+            memcpy(&w, d + p, 8);
+            uint64_t xs = w ^ slashes, xq = w ^ quotes;
+            uint64_t hit = (((xs - ones) & ~xs) | ((xq - ones) & ~xq)) & high;
+            memcpy(o, &w, 8);
+            if (hit) {
+                int k = __builtin_ctzll(hit) >> 3;
+                o += k;
+                p += k;
+                goto stop;
+            }
+            o += 8;
+            p += 8;
+        }
+        while (p < len && d[p] != 34 && d[p] != 92) {
+            if (o + 1 > lim) return k_json_quote_from(d, len, p);
+            *o++ = (char)d[p++];
+        }
+        if (p >= len) return 0;
+    stop:
+        if (d[p] == 34) break;
+    }
+    long long e = p + 1;
+    long long n = (long long)(o - o0);
+    KStr* s = k_str_alloc(e - from);
+    if (s->data != o0) memcpy(s->data, o0, (size_t)n);
+    s->len = (int)n;
+    s->data[n] = 0;
+    k_unescaped_d = d;
+    k_unescaped_from = from;
+    k_unescaped_e = e;
+    k_unescaped_v.tag = K_STR;
+    k_unescaped_v.payload = k_ptr(s);
+    return e;
+}
+
 /* `plain_string cs p`, for a JSON string whose body starts at `p`. With no
    backslash before the closing quote it answers the text in front of the
    quote, when that is utf-8. With one, it answers the closing quote's
@@ -1599,13 +1698,25 @@ KValue k_b_unescape_raw(const unsigned char* d, long long len, long long from, l
     KValue v; v.tag = K_STR; v.payload = k_ptr(s); return v;
 }
 
-KValue k_b_unescape(KValue cs, KValue fromv, KValue ev) {
+static __attribute__((noinline)) KValue k_b_unescape_rest(KValue cs, KValue fromv, KValue ev) {
     if (__builtin_expect(!k_not_failure(cs) || !k_not_failure(fromv) || !k_not_failure(ev), 0))
         return k_failed3(cs, fromv, ev);
     if (cs.tag != K_BYTES || fromv.tag != K_INT || ev.tag != K_INT)
         k_die("unescape takes bytes and two positions");
     KBytes* b = k_as_bytes(cs);
     return k_b_unescape_raw(b->data, b->len, fromv.payload, ev.payload);
+}
+
+/* The string `k_json_escaped` kept for this range is answered first, and
+   without a frame; everything else is read as it always was. */
+KValue k_b_unescape(KValue cs, KValue fromv, KValue ev) {
+    if (cs.tag == K_BYTES && fromv.tag == K_INT && ev.tag == K_INT
+        && k_as_bytes(cs)->data == k_unescaped_d && fromv.payload == k_unescaped_from
+        && ev.payload == k_unescaped_e) {
+        k_unescaped_d = NULL;
+        return k_unescaped_v;
+    }
+    return k_b_unescape_rest(cs, fromv, ev);
 }
 
 /* Where a JSON number's bytes end. The answer is the first position at or

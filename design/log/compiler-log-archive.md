@@ -105501,3 +105501,29 @@ same reason, and now it is gone from type declarations too.
 
 Owes: #1941 closed with a pointer here; `sorted` stays a plain type, and the
 #1903 entry's mention of `<k>sorted` no longer describes anything to build.
+
+## 2026-10-15 — gavel: a span is a range a check has proven inside its string, and slicing one cannot miss
+
+Clay ruled #1960. `text/slice!` answers a box (2026-09-16), and a box spreads
+to every caller, so the JSON decoder written with it would make `json/decode`
+answer a box. The insisting form could not give a caller that knows its
+bounds a plain string. Proving ranges by inference was weighed and set aside:
+a reader cannot see whether a slice is proven, and an edit to the scan
+breaks the proof far from where the error lands.
+
+**The ruling.** A span is a range of positions inside one particular string,
+and only a function that has checked the bounds makes one, the way only
+`list/to_sorted` makes a `sorted`. `text/slice` on a span answers the string,
+with no `none`, because the range cannot leave it. A slice from bare numbers
+answers `none` past the end, as ruled on #1890, and `text/slice!` insists
+with a box, as ruled on #1943. The word is span, after C++'s `std::span` and
+the source ranges compilers carry: a value holding two positions into a
+string that already exists, holding none of its characters.
+
+Owes, on #1960: the span value in std/text, built only by bounds-checked
+functions; the scanning functions the decoder uses (`find2` and its
+siblings) answering spans or `none`; `text/slice` arms for a span; the
+fused doors (`utf8`, `append`, `to_int`, `to_float`) on a sliced span; the
+decoder moved off `builtin_slice_in` onto spans; micro goldens on every
+engine. The name of each new public function goes to Clay as one question
+before it ships.

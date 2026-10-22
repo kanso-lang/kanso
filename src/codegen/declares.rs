@@ -1020,21 +1020,9 @@ look:
   %isq = icmp eq i8 %qc, 34
   br i1 %isq, label %text, label %escaped
 escaped:
-  %at = phi i64 [ %q, %look ], [ %q2, %look2 ]
-  %after = add i64 %at, 1
-  %room = icmp sle i64 %after, %len
-  br i1 %room, label %rescan, label %none
-rescan:
-  %past = add i64 %at, 2
-  %q2 = call i64 @k_b_find2_raw(ptr %d, i64 %len, i64 %past, i64 34, i64 92)
-  %in2 = icmp sle i64 %q2, %len
-  br i1 %in2, label %look2, label %none
-look2:
-  %qi2 = sub i64 %q2, 1
-  %qp2 = getelementptr i8, ptr %d, i64 %qi2
-  %qc2 = load i8, ptr %qp2
-  %isq2 = icmp eq i8 %qc2, 34
-  br i1 %isq2, label %closed, label %escaped
+  %q2 = call i64 @k_json_escaped(ptr %d, i64 %len, i64 %fv, i64 %q)
+  %got = icmp sgt i64 %q2, 0
+  br i1 %got, label %closed, label %none
 closed:
   %e = insertvalue %KValue { i64 0, i64 undef }, i64 %q2, 1
   ret %KValue %e
@@ -1882,6 +1870,7 @@ declare %KValue @k_b_to_int_slice(%KValue, %KValue, %KValue, ptr)
 declare %KValue @k_b_to_float_slice(%KValue, %KValue, %KValue, ptr)
 declare %KValue @k_b_to_int_slice_raw(ptr, i64, i64, i64, ptr)
 declare %KValue @k_b_to_float_slice_raw(ptr, i64, i64, i64, ptr)
+declare i64 @k_json_escaped(ptr, i64, i64, i64)
 declare %KValue @k_b_append_rendered(%KValue, %KValue, i64)
 declare %KValue @k_b_sort(%KValue)
 declare %KValue @k_b_sum(%KValue)

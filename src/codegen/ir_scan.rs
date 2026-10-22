@@ -220,6 +220,7 @@ const DECLARES_CONTEXT_CALLS: &[&str] = &[
     "k_index",
     "k_index_fast",
     "k_int",
+    "k_json_escaped",
     "k_none",
     "k_str_lit",
     "k_str_lit_fast",
