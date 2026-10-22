@@ -280,7 +280,7 @@
 # 2026-10-22: a map's key and value read side by side test the view once.
 # The decoder's program carries the pair path's comment: lines 13,102 ->
 # 13,104.
-defines=136
-calls=1394
-branches=1307
-lines=13134
+defines=157
+calls=1557
+branches=1346
+lines=14330

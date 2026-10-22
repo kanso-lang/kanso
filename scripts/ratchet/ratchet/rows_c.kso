@@ -2849,4 +2849,14 @@ chain_first = row
 
 rows_cq28 = list/concat rows_cq27 [chain_first]
 
-rows_c = list/concat rows_cq28 [itself]
+comma_looped = row
+  "a blank run looped at the comma"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_blank_run_looped_at_the_comma")
+  benchmarks
+
+rows_cq29 = list/concat rows_cq28 [comma_looped]
+
+rows_c = list/concat rows_cq29 [itself]
