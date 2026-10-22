@@ -47,6 +47,7 @@ static KValue k_to_int_text(const char* data, long long len, long long room,
                             const char* origin);
 static KValue k_to_float_text(const char* data, long long len, long long room,
                               const char* origin);
+static KValue k_to_float_whole(const char* data, long long len, const char* origin);
 KValue k_b_to_float(KValue v, const char* origin);
 
 KValue k_b_to_int(KValue sv, const char* origin) {
@@ -1172,7 +1173,7 @@ KValue k_b_to_float(KValue v, const char* origin) {
     long long len;
     if (v.tag == K_STR) { KStr* s = k_as_str(v); data = s->data; len = s->len; }
     else { KBytes* b = k_as_bytes(v); data = (const char*)b->data; len = b->len; }
-    return k_to_float_text(data, len, len, origin);
+    return k_to_float_whole(data, len, origin);
 }
 
 static const unsigned long long k_pow10_small[8] = {
@@ -1210,24 +1211,37 @@ static inline int k_float_shape8(const char* data, long long len, long long room
     return 1;
 }
 
-/* Inlined into both doors by name. With the shape above in it, clang stopped
-   inlining it into k_b_to_float, and widebench's 72,000 parses paid the
-   call: 272,000 instructions. */
-static __attribute__((noinline)) KValue k_to_float_scan(const char* data, long long len,
-                                                        const char* origin);
+static inline __attribute__((always_inline)) KValue
+k_to_float_scan(const char* data, long long len, const char* origin);
 
-/* The `[-]I.F` shape above is answered here and everything else by the scan
-   below it, which is out of line: its fallback's buffer and the registers its
-   loops want made every call build a frame, the shaped ones included. */
+/* The scan out of line, for the slice doors: its fallback's buffer and the
+   registers its loops want made every call build a frame, and a slice of a
+   document nearly always has the room the `[-]I.F` shape needs. */
+static __attribute__((noinline)) KValue k_to_float_scan_out(const char* data, long long len,
+                                                            const char* origin) {
+    return k_to_float_scan(data, len, origin);
+}
+
 static inline __attribute__((always_inline)) KValue
 k_to_float_text(const char* data, long long len, long long room, const char* origin) {
     double shaped;
     if (k_float_shape8(data, len, room, &shaped)) return k_float(shaped);
+    return k_to_float_scan_out(data, len, origin);
+}
+
+/* A string's own door keeps the scan inline. A short string has no room for
+   the shape's two words and always scans, and with the scan out of line
+   widebench's 72,000 parses paid the call: 272,000 instructions the first
+   time, and 320,059 when the slice doors moved it out again. */
+static inline __attribute__((always_inline)) KValue
+k_to_float_whole(const char* data, long long len, const char* origin) {
+    double shaped;
+    if (k_float_shape8(data, len, len, &shaped)) return k_float(shaped);
     return k_to_float_scan(data, len, origin);
 }
 
-static __attribute__((noinline)) KValue k_to_float_scan(const char* data, long long len,
-                                                        const char* origin) {
+static inline __attribute__((always_inline)) KValue
+k_to_float_scan(const char* data, long long len, const char* origin) {
     /* the fast path: a plain decimal scanned into (w, q) and parsed by
        eisel-lemire; anything it can't be certain about — overlong digits,
        exotic forms, halfway cases — falls through to strtod, which stays
