@@ -11,9 +11,9 @@
 /// before them is a `long long`. These are the ones that follow a pointer:
 /// `KStr` is `{ char*, int, int }`, so its length and capacity move up four
 /// bytes; `KMap`'s `sorted` follows two pointers where `pairs` follows a
-/// `long long`; and `KClosure` is `{ fn, env, int ncaps, int arity, body }`,
-/// so `env` follows the function pointer and `arity` and `body` follow two
-/// pointers. A shared token is a `KStr` and eight bytes, 24 natively and 20
+/// `long long`, and `sorted_len` follows it; and `KClosure` is
+/// `{ fn, env, int ncaps, int arity, body }`, so `env` follows the function
+/// pointer and `arity` and `body` follow two pointers. A shared token is a `KStr` and eight bytes, 24 natively and 20
 /// on wasm32, so the key builtin's test that a string is a token, and the
 /// division that finds the token's clean flag, change with it.
 ///
@@ -21,7 +21,7 @@
 /// rather than matching something else. tests/native_layout_on_wasm32.rs reads
 /// the emitter for each left-hand side and fails when one is missing, and
 /// runs the micro corpus through this pass against its goldens.
-pub const WASM32_LINES: [(&str, &str); 9] = [
+pub const WASM32_LINES: [(&str, &str); 10] = [
     ("%slenp = getelementptr i8, ptr %sp, i64 8", "%slenp = getelementptr i8, ptr %sp, i64 4"),
     ("%lenp = getelementptr i8, ptr %s, i64 8", "%lenp = getelementptr i8, ptr %s, i64 4"),
     ("%cp = getelementptr i8, ptr %sptr, i64 12", "%cp = getelementptr i8, ptr %sptr, i64 8"),
@@ -31,6 +31,7 @@ pub const WASM32_LINES: [(&str, &str); 9] = [
     ("%envp = getelementptr i8, ptr %c, i64 8", "%envp = getelementptr i8, ptr %c, i64 4"),
     ("%intok = icmp ult i64 %off, 98304", "%intok = icmp ult i64 %off, 81920"),
     ("%slot = udiv i64 %off, 24", "%slot = udiv i64 %off, 20"),
+    ("%nmp = getelementptr i8, ptr %m, i64 24", "%nmp = getelementptr i8, ptr %m, i64 16"),
 ];
 
 /// An emitted module, rewritten for wasm32 so that clang can build it against

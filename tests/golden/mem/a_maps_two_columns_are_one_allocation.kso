@@ -1,15 +1,18 @@
 # A call whose arguments are `keys m` and then `values m` of the same map
 # takes both lists from one runtime call, which tests the map and finds its
-# sorted view once and allocates the two lists together. The encoder hands
-# every map to its walk that way, so writing a thousand maps allocates a
-# thousand pairs of lists in a thousand allocations, where it took two
-# thousand.
-import "std/json"
+# sorted view once and allocates the two lists together. A thousand such
+# calls allocate a thousand pairs of lists in a thousand allocations, where
+# they took two thousand.
 import "std/list"
 
 fn row i
   { "a":i "b":i }
 
-doc = list/to_list (list/map (list/take list/naturals 1000) (i -> row i))
+fn widths ks vs
+  length ks + length vs
 
-pub play = print "{length (json/encode doc)}"
+fn counted i
+  m = row i
+  widths (keys m) (values m)
+
+pub play = print "{list/sum (list/map (list/take list/naturals 1000) counted)}"

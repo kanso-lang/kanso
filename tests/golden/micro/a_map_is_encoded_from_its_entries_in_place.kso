@@ -1,0 +1,24 @@
+# lib/json writes a map by reading its entries by position, where it used to
+# copy its keys and its values into two lists. Each line here meets an edge
+# of that read: no entries, two maps with more entries than the interpreter
+# keeps in a sorted vector, and a map read, extended by a put and read again,
+# small and large, so the second read must see the entry the put added.
+import "std/io"
+import "std/json"
+
+fn wide i m
+  if (i > 12) m (wide (i + 1) (put m "k{i}" i))
+
+fn encoded m
+  json/encode m
+
+fn shown _
+  first = put (put {} "b" 2) "a" 1
+  before = encoded first
+  after = encoded (put first "c" 3)
+  widths = "{encoded (wide 1 {})}\n{encoded (wide 3 {})}"
+  large = wide 1 {}
+  grown = "{encoded large}\n{encoded (put large "k0" 0)}"
+  "{encoded {}}\n{widths}\n{before}\n{after}\n{grown}\n"
+
+pub play = io/write (shown 0)

@@ -35,13 +35,13 @@ fn encode_list acc xs
   opened = encode_onto (text/append acc 91) xs[1]
   text/append (encode_items opened xs 2) 93
 
-# A map is written from its two columns: `keys m` and `values m` are in the
-# order `entries m` gives, so position i of each is one pair, and the walk
-# indexes both rather than building and taking apart a record per pair.
-fn encode_map acc ks vs
-  return text/append acc "\{}" if length ks == 0 or length vs == 0
-  opened = pair_onto (text/append acc 123) ks[1] vs[1]
-  text/append (encode_pairs opened ks vs 2) 125
+# A map is written from its entries in place: position i of `key_at` and
+# `value_at` is the pair at position i of `entries m`, and reading them builds
+# nothing, where `keys m` and `values m` allocated a column each per map.
+fn encode_map acc m n
+  return text/append acc "\{}" if n == 0
+  opened = entry_onto (text/append acc 123) m 1
+  text/append (encode_pairs opened m 2 n) 125
 
 fn encode_onto acc true
   text/append acc "true"
@@ -66,12 +66,15 @@ fn encode_onto acc xs:[]some
   encode_list acc xs
 
 fn encode_onto acc m:map[string some]
-  encode_map acc (keys m) (values m)
+  encode_map acc m (builtin_entry_count m)
 
-fn encode_pairs acc ks vs i
-  return acc if i < 1 or length ks < i or length vs < i
+fn encode_pairs acc m i n
+  return acc if i < 1 or n < i
   opened = text/append acc 44
-  encode_pairs (pair_onto opened ks[i] vs[i]) ks vs (i + 1)
+  encode_pairs (entry_onto opened m i) m (i + 1) n
+
+fn entry_onto acc m i
+  pair_onto acc (builtin_key_at m i) (builtin_value_at m i)
 
 fn pair_onto acc k v
   encode_onto (key_onto acc k) v

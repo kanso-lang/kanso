@@ -29,6 +29,9 @@ pub enum Entries {
     Many(BTreeMap<MapKey, Value>),
 }
 
+/// A large map, held weakly, beside its entries in order (`Interp::entries_at`).
+type EntriesAt = (std::rc::Weak<Entries>, Rc<[(MapKey, Value)]>);
+
 /// The most entries a map keeps as a sorted vector.
 const FEW_ENTRIES: usize = 8;
 
@@ -1212,6 +1215,16 @@ pub struct Interp<'a> {
     /// buffer beside the winner's, and it was allocated for that dispatch and
     /// freed at its end.
     spare_binds: RefCell<Vec<Bindings>>,
+    /// The entries of the last large map `key_at` or `value_at` read, in
+    /// order. A map past eight entries is a B-tree, where reaching the i-th
+    /// entry walks i of them, so reading every position of one would be
+    /// quadratic; lib/json's encoder reads every position of every map.
+    ///
+    /// The map is held weakly, so holding it changes no count that `put`
+    /// asks before writing in place, and its address cannot be reused while
+    /// the cache names it. A put that writes in place regardless, at a site
+    /// the linearity analysis proved unique, empties the cache first.
+    entries_at: RefCell<Option<EntriesAt>>,
     /// The constants that reach themselves through a chain of mentions --
     /// the same set the emitter computes, so the two engines count the same
     /// cells. Every constant goes through `knotted`, but only these are the
@@ -1353,6 +1366,7 @@ impl<'a> Interp<'a> {
             ties: RefCell::new(Vec::new()),
             tie_serial: Cell::new(0),
             spare_binds: RefCell::new(Vec::new()),
+            entries_at: RefCell::new(None),
             cycles: std::cell::OnceCell::new(),
             in_place: std::cell::OnceCell::new(),
             moved: std::cell::OnceCell::new(),

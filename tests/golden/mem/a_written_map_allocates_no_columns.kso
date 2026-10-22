@@ -1,0 +1,12 @@
+# The encoder reads a map's entries where they stand in its sorted view, so
+# writing a thousand maps allocates no lists for them. It used to take each
+# map's `keys` and `values` as two columns, a thousand allocations here.
+import "std/json"
+import "std/list"
+
+fn row i
+  { "a":i "b":i }
+
+doc = list/to_list (list/map (list/take list/naturals 1000) (i -> row i))
+
+pub play = print "{length (json/encode doc)}"

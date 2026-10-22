@@ -281,9 +281,9 @@ grows_itself = row
 
 rows_c1zm = list/concat rows_c1zg [grows_itself]
 
-# `keys` and `values` are the two columns of `entries`, in its order; the JSON
-# encoder indexes both, so a column read in another order writes a wrong
-# document with nothing failing.
+# `keys` and `values` are the two columns of `entries`, in its order; a
+# program that indexes both pairs a key with the wrong value when one column
+# is read in another order, with nothing failing.
 columns_line_up = row
   "a values column read in insertion order"
   false
@@ -2727,4 +2727,14 @@ key_paths = [key_claimed token_size]
 
 rows_cq19 = list/concat rows_cq18 key_paths
 
-rows_c = list/concat rows_cq19 [itself]
+entry_inline = row
+  "a map entry read through the C"
+  true
+  (gating "emitted_code")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_map_entry_read_through_the_c")
+  benchmarks
+
+rows_cq20 = list/concat rows_cq19 [entry_inline]
+
+rows_c = list/concat rows_cq20 [itself]

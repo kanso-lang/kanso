@@ -3,7 +3,7 @@ use crate::diag::{article, Diagnostic, Span};
 use crate::hash::{Map as HashMap, Set as HashSet};
 use num_traits::Zero;
 
-pub const BUILTINS: [&str; 74] = [
+pub const BUILTINS: [&str; 77] = [
     "annotate",
     "built_text",
     "append",
@@ -23,6 +23,9 @@ pub const BUILTINS: [&str; 74] = [
     "unescape",
     "append_escaped",
     "append_key",
+    "entry_count",
+    "key_at",
+    "value_at",
     "from_code",
     "list_dir",
     "now",
@@ -102,7 +105,7 @@ pub const AMBIENT: [&str; 14] = [
 /// `native backend: `length` takes 1 argument(s)` and no span, the page
 /// died at the call, and `kanso check` said ok. So the counts live here,
 /// beside the names, and every reader takes them from one place.
-pub const BUILTIN_ARITY: [(&str, usize); 79] = [
+pub const BUILTIN_ARITY: [(&str, usize); 82] = [
     ("accept", 1),
     ("annotate", 2),
     ("append", 2),
@@ -125,6 +128,7 @@ pub const BUILTIN_ARITY: [(&str, usize); 79] = [
     ("delete", 2),
     ("effect", 1),
     ("entries", 1),
+    ("entry_count", 1),
     ("env", 1),
     ("exists", 1),
     ("filter", 2),
@@ -134,6 +138,7 @@ pub const BUILTIN_ARITY: [(&str, usize); 79] = [
     ("is_desc", 1),
     ("is_dir", 1),
     ("join", 2),
+    ("key_at", 2),
     ("keys", 1),
     ("kill", 1),
     ("length", 1),
@@ -177,6 +182,7 @@ pub const BUILTIN_ARITY: [(&str, usize); 79] = [
     ("to_int", 1),
     ("unescape", 3),
     ("utf8", 1),
+    ("value_at", 2),
     ("values", 1),
     ("wrap_err", 2),
     ("write", 1),
