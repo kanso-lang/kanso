@@ -5,61 +5,13 @@
 # peak is the toolchain allocator's requested bytes and the run's memory is
 # what the runtime's linear memory grew by, so every row is the same on every
 # run of the same code. See tests/browser_cost.rs.
-# 2026-10-08: the interpreter's string value and map key changed shape, and
-# the engine links the interpreter. browser_compile_instructions
-# 395,882,998 -> 396,604,174, a RISE of 721,176 (+0.18%), on rustc 1.98.1 as
-# CI builds it. The value change alone had moved it 1,238.
-# 2026-10-09: the translation to wasm reads the module more cheaply -- a table
-# for the name bytes, one pass to read a temporary's number, and tokens moved
-# out of the line rather than cloned. browser_compile_instructions
-# 396,716,054 -> 389,803,790, a FALL of 6,912,264 (-1.74%). The run rows are
-# byte-identical, so the module the tab builds did not change.
-# 2026-10-12: inference widens an operator's own arms when a record meets
-# the operator. browser_compile_instructions 390,029,358 -> 391,974,060, a
-# RISE of 1,944,702 (+0.50%), on rustc 1.98.1 as CI builds it. The run rows
-# are unchanged.
-# 2026-10-12: the wasm runtime empties stdout before stderr, a read, a sleep
-# or a fork. browser_run_instructions 34,124,990 -> 34,125,823, a RISE of
-# 833, on rustc 1.98.1 as CI builds it.
-# 2026-10-13: the carried ruled queue (kanso#1938), sixteen pull requests
-# that build ruled parts of the language. browser_compile_instructions
-# 401,770,760 -> 413,925,406, a RISE of 12,154,646 (+3.03%), and
-# browser_run_peak_bytes 1,179,648 -> 1,441,792, on rustc 1.98.1 as CI builds
-# it. The peak is #1901's: its log entry prices the 256 KiB block the corpus's
-# railway sample now holds while it sizes the document before a tail call.
-# 2026-10-13: the lexer reads hex and binary integers and floats with an
-# exponent (kanso#1944). browser_compile_instructions 413,925,406 ->
-# 413,936,384, a RISE of 10,978, on rustc 1.98.1 as CI builds it. The run
-# rows are unchanged.
-# 2026-10-14: the emitter moves to src/codegen/emit.rs (kanso#1954), a pure
-# move. browser_compile_instructions 437,381,890 -> 437,381,994, a RISE of
-# 104, which is layout. The run rows are unchanged.
-# 2026-10-14: the two running verbs' refusals name the route that runs a
-# file with a local import (kanso#1976). browser_compile_instructions
-# 382,155,032 -> 382,297,788, a RISE of 142,756 (+0.04%), on rustc 1.98.1.
-# The run rows are unchanged.
-# 2026-10-14: a call on a function's locals is pooled as a cell (kanso#1978).
-# browser_compile_instructions 382,297,788 -> 381,261,098, a FALL of 1,036,690;
-# browser_compile_peak_bytes 643,478 -> 643,605; browser_run_instructions
-# 34,181,240 -> 34,181,355. On rustc 1.98.1.
-# 2026-10-14: builtin reads and lifted lambdas in the pool (kanso#1981).
-# browser_compile_instructions 381,261,098 -> 382,590,239, a RISE of
-# 1,329,141, from the commit that adds the lambda lift with its walk unreached;
-# the run rows are unchanged. On rustc 1.98.1.
-# 2026-10-16: an operator handed a literal string, list or map is refused at
-# check (kanso#1984). browser_compile_instructions 382,590,239 -> 382,741,447,
-# a RISE of 151,208 for the walk the check adds; the run rows are unchanged.
-# On rustc 1.98.1.
-# 2026-10-21: a carried record returns in three words (kanso#2025).
-# browser_compile_instructions 413,585,272 -> 412,332,402, a FALL of
-# 1,252,870; browser_compile_peak_bytes 757,553 -> 752,985;
-# browser_run_instructions 34,136,382 -> 34,370,238, a RISE of 233,856. On
-# rustc 1.98.1.
-# 2026-10-21: a position read beside its byte is in range, and a length
-# (kanso#2026). browser_compile_instructions 412,332,402 -> 413,098,267, a RISE
-# of 765,865; browser_compile_peak_bytes 752,985 -> 735,031;
-# browser_run_instructions 34,370,238 -> 34,153,178, a FALL of 217,060. On
-# rustc 1.98.1.
+#
+# The rows belong to the rustc that built docs/kanso.wasm, which the last
+# line of this header names. Take them from CI: the specs job prints the
+# measured rows when they move.
+#
+# A rise is a regression to explain and a fall is a win to bank: say which in
+# design/compiler-log.md, which holds the history of every move.
 # measured-on rustc=1.98.1
 browser_compile_instructions=428211402
 browser_compile_peak_bytes=768853
