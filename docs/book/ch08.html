@@ -618,8 +618,7 @@ test_roundtrip ... ok
   <span class="f">text/append</span> acc <span class="s">"<span class="i">{n}</span>"</span>
 
 <span class="k">fn</span> <span class="f">_encode_onto</span> acc s:<span class="t">string</span>
-  opened <span class="o">=</span> <span class="f">_escape_onto</span> (<span class="f">text/append</span> acc <span class="n">34</span>) s
-  <span class="f">text/append</span> opened <span class="n">34</span>
+  <span class="f">builtin_append_string</span> acc s
 
 <span class="k">fn</span> <span class="f">_encode_onto</span> acc xs:<span class="t">[]json</span>
   <span class="k">if</span> (<span class="f">length</span> xs <span class="o">==</span> <span class="n">0</span>) (<span class="f">text/append</span> acc <span class="s">"[]"</span>) (<span class="f">_encode_list</span> acc xs)
@@ -630,7 +629,7 @@ test_roundtrip ... ok
 
 <p>(the <code>false</code> and <code>float64</code> arms read exactly like their neighbors, and <code>_encode_list</code> and <code>_encode_map</code> walk their elements with a comma between each pair. a map goes in whole, with the count of its entries, and the walk reads the <em>i</em>th key and the <em>i</em>th value where they sit in the map's sorted entries, so it builds no list to walk.) where the literal arms dispatch on a value, the last four dispatch on a <em>type</em>—<code>n:int</code>, <code>xs:[]json</code>—which is the other half of chapter 03. <code>text/append</code> is the builder from chapter 06: the accumulator owns its buffer and extends it in place when it can, so the fold of appends costs what one pass over the output costs, while every intermediate stays an ordinary value.</p>
 
-<p>the one arm with real work is strings, and the work is <code>_escape_onto</code>: decode's escape path run in reverse. it dispatches on bytes, the way decode's scanner does, and it borrows decode's other habit too—one scan (<code>find2_below</code>: the first quote, backslash, or control byte) proves most strings need no escaping at all, and a proven-clean string is appended whole, in one copy. the sample carries the library's escape functions verbatim and quotes two awkward strings—one with a quote and a newline, one with a bell character (byte 7) in the middle:</p>
+<p>the one arm with real work is strings, and it is one call into the runtime: <code>builtin_append_string</code> writes the opening quote, the string with what json cannot hold escaped, and the closing quote. the escapes are decode's run in reverse. the runtime looks at eight bytes at a time for a quote, a backslash or a control byte, copies a clean run whole, and writes the escape for what it finds, so a string with nothing to escape costs about one copy. the sample spells the same escapes in kanso, a byte at a time, and quotes two awkward strings—one with a quote and a newline, one with a bell character (byte 7) in the middle:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">escapes.kso</div>

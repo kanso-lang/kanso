@@ -3108,7 +3108,7 @@ mod tests {
         let regions: Vec<usize> = loops.regions.iter().map(|(_, line, _)| *line).collect();
         assert_eq!(
             regions,
-            vec![69],
+            vec![68],
             "the one region is the descent into a map, `encode_map acc m (builtin_entry_count m)`"
         );
     }

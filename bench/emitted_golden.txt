@@ -275,7 +275,9 @@
 # branches hold.
 # 2026-10-21: the encoder reads a map's entries in place. The decoder's
 # program carries the inline paths' comment: lines 13,089 -> 13,098.
+# 2026-10-21: a string value goes out through one builtin. The decoder's
+# program carries the value path's comment: lines 13,098 -> 13,102.
 defines=136
 calls=1394
 branches=1305
-lines=13098
+lines=13102

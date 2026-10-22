@@ -59,8 +59,7 @@ fn encode_onto acc x:float64
   text/append acc "{x}"
 
 fn encode_onto acc s:string
-  opened = escape_onto (text/append acc 34) s
-  text/append opened 34
+  builtin_append_string acc s
 
 fn encode_onto acc xs:[]some
   encode_list acc xs

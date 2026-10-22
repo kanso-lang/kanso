@@ -4007,6 +4007,8 @@ impl<'a> Backend<'a> {
             } else if name == "append_key" && in_place {
                 // a shared clean token is claimed and written inline
                 "append_key_fast"
+            } else if name == "append_string" && in_place {
+                "append_string_fast"
             } else if name == "append" && in_place {
                 // the in-place byte claim inlines whole; a byte that does not
                 // fit falls through to the C path inside the twin. Where the

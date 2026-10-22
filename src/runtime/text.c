@@ -2286,6 +2286,41 @@ static KValue k_append_key(KValue acc, KValue sv, int mutate) {
 
 KValue k_b_append_key(KValue acc, KValue sv) { return k_append_key(acc, sv, 0); }
 
+/* `append_string acc s`: `s` as a JSON string value, between its quotes. A
+   builder at its frontier with room for the worst case takes the quotes and
+   the escaped bytes in one claim; anything else is three appends. */
+static KValue k_append_string(KValue acc, KValue sv, int mutate) {
+    if (!k_not_failure(acc) || !k_not_failure(sv)) return k_failed2(acc, sv);
+    if (acc.tag != K_BYTES || sv.tag != K_STR) k_die("append_string takes bytes and a string");
+    KStr* s = k_as_str(sv);
+    long long len = s->len;
+    KBytes* a = k_as_bytes(acc);
+    long long acap = a->cap & ~1LL;
+    if (acap) {
+        KBuf* kb = ((KBuf*)a->data) - 1;
+        if (kb->used == a->len && a->len + 6 * len + 10 <= acap) {
+            char* o = (char*)a->data + a->len;
+            o[0] = '"';
+            long long n = k_json_escape_into(o + 1, (const unsigned char*)s->data, len);
+            o[n + 1] = '"';
+            kb->used = a->len + n + 2;
+            if (mutate) {
+                a->len += n + 2;
+                return acc;
+            }
+            return k_bytes_owned(a->len + n + 2, a->data, a->cap);
+        }
+    }
+    KValue quote = k_int(34);
+    acc = mutate ? k_b_append_mut(acc, quote) : k_b_append(acc, quote);
+    acc = k_append_escaped(acc, sv, mutate);
+    return mutate ? k_b_append_mut(acc, quote) : k_b_append(acc, quote);
+}
+
+KValue k_b_append_string(KValue acc, KValue sv) { return k_append_string(acc, sv, 0); }
+
+KValue k_b_append_string_mut(KValue acc, KValue sv) { return k_append_string(acc, sv, 1); }
+
 KValue k_b_append_key_mut(KValue acc, KValue sv) { return k_append_key(acc, sv, 1); }
 
 /* The bytes arm of `slice`, with the KValue convention taken off its inputs.

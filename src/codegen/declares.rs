@@ -421,6 +421,75 @@ slow:
   %f = call %KValue @k_b_append_key_mut(%KValue %acc, %KValue %x)
   ret %KValue %f
 }
+; `append_string acc s` on a builder this function owns, for a string value
+; the decoder shared as a clean token: the same three stores as a key, with
+; the closing quote alone after the bytes.
+define internal %KValue @k_b_append_string_fast(%KValue %acc, %KValue %x) alwaysinline {
+  %atag = extractvalue %KValue %acc, 0
+  %isb = icmp eq i64 %atag, 13
+  %xtag = extractvalue %KValue %x, 0
+  %iss = icmp eq i64 %xtag, 6
+  %both = and i1 %isb, %iss
+  br i1 %both, label %stat, label %slow
+stat:
+  %so = load i32, ptr @k_stats_on
+  %counting = icmp ne i32 %so, 0
+  br i1 %counting, label %slow, label %tok
+tok:
+  %xp = extractvalue %KValue %x, 1
+  %sp = inttoptr i64 %xp to ptr
+  %sdata = load ptr, ptr %sp
+  %sdi = ptrtoint ptr %sdata to i64
+  %sti = ptrtoint ptr @k_token_store to i64
+  %off = sub i64 %sdi, %sti
+  %intok = icmp ult i64 %off, 98304
+  br i1 %intok, label %clean, label %slow
+clean:
+  %slot = udiv i64 %off, 24
+  %cp = getelementptr i8, ptr @k_token_clean, i64 %slot
+  %c = load i8, ptr %cp
+  %isclean = icmp ne i8 %c, 0
+  br i1 %isclean, label %claim, label %slow
+claim:
+  %slenp = getelementptr i8, ptr %sp, i64 8
+  %slen32 = load i32, ptr %slenp
+  %n = sext i32 %slen32 to i64
+  %bp = extractvalue %KValue %acc, 1
+  %b = inttoptr i64 %bp to ptr
+  %len = load i64, ptr %b
+  %datap = getelementptr i8, ptr %b, i64 8
+  %data = load ptr, ptr %datap
+  %capp = getelementptr i8, ptr %b, i64 16
+  %cap = load i64, ptr %capp
+  %capa = and i64 %cap, -2
+  %owned = icmp ne i64 %cap, 0
+  br i1 %owned, label %fr, label %slow
+fr:
+  %usedp = getelementptr i8, ptr %data, i64 -8
+  %used = load i64, ptr %usedp
+  %atfront = icmp eq i64 %used, %len
+  br i1 %atfront, label %room, label %slow
+room:
+  %len11 = add i64 %len, 11
+  %fits = icmp sle i64 %len11, %capa
+  br i1 %fits, label %write, label %slow
+write:
+  %dst = getelementptr i8, ptr %data, i64 %len
+  store i8 34, ptr %dst
+  %kw = load i64, ptr %sdata, align 1
+  %dst1 = getelementptr i8, ptr %dst, i64 1
+  store i64 %kw, ptr %dst1, align 1
+  %tailp = getelementptr i8, ptr %dst1, i64 %n
+  store i8 34, ptr %tailp, align 1
+  %grown = add i64 %len, %n
+  %lenn = add i64 %grown, 2
+  store i64 %lenn, ptr %usedp
+  store i64 %lenn, ptr %b
+  ret %KValue %acc
+slow:
+  %f = call %KValue @k_b_append_string_mut(%KValue %acc, %KValue %x)
+  ret %KValue %f
+}
 ; `entry_count m`, `key_at m i` and `value_at m i` where the map's sorted
 ; view is built. The count is a field, and the view is `[k v k v ...]`, so a
 ; key or a value is a bounds test and one load. The view's
@@ -1722,6 +1791,8 @@ declare %KValue @k_b_unescape(%KValue, %KValue, %KValue)
 declare %KValue @k_b_append_escaped(%KValue, %KValue)
 declare %KValue @k_b_append_escaped_mut(%KValue, %KValue)
 declare %KValue @k_b_append_key(%KValue, %KValue)
+declare %KValue @k_b_append_string(%KValue, %KValue)
+declare %KValue @k_b_append_string_mut(%KValue, %KValue)
 declare %KValue @k_b_entry_count(%KValue)
 declare %KValue @k_b_key_at(%KValue, %KValue)
 declare %KValue @k_b_value_at(%KValue, %KValue)

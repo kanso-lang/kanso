@@ -147,6 +147,8 @@ const DECLARES_CONTEXT_CALLS: &[&str] = &[
     "k_b_append_mut_word",
     "k_b_append_slice",
     "k_b_append_slice_fast",
+    "k_b_append_string_fast",
+    "k_b_append_string_mut",
     "k_b_append_word_slow",
     "k_b_at",
     "k_b_at_fast",

@@ -1973,6 +1973,7 @@ pub fn builtin_set(name: &str, args: &[Set]) -> Set {
         "unescape" => STR | NONE | fails,
         "append_escaped" => BYTES | fails,
         "append_key" => BYTES | fails,
+        "append_string" => BYTES | fails,
         // a map's entry at a position: its key, an int or a string, or
         // what it holds; past the last entry, none
         "entry_count" => INT | fails,
