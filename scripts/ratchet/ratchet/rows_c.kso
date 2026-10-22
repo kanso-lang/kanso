@@ -2793,4 +2793,14 @@ nothing_bracketed = row
 
 rows_cq24 = list/concat rows_cq23 [loop_unbracketed nothing_bracketed]
 
-rows_c = list/concat rows_cq24 [itself]
+sited_stamped = row
+  "a sited call stamped anyway"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_sited_call_stamped_anyway")
+  benchmarks
+
+rows_cq25 = list/concat rows_cq24 [sited_stamped]
+
+rows_c = list/concat rows_cq25 [itself]

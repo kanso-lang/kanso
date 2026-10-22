@@ -355,7 +355,7 @@ slow:
 ; the key and the closing pair were three claims before, each with its own
 ; ownership and room tests. Anything else is the C, which writes the same
 ; bytes the long way.
-define internal %KValue @k_b_append_key_fast(%KValue %acc, %KValue %x) alwaysinline {
+define internal %KValue @k_b_append_key_fast(%KValue %acc, %KValue %x, ptr %site) alwaysinline {
   %atag = extractvalue %KValue %acc, 0
   %isb = icmp eq i64 %atag, 13
   %xtag = extractvalue %KValue %x, 0
@@ -418,13 +418,14 @@ write:
   store i64 %lenn, ptr %b
   ret %KValue %acc
 slow:
+  store ptr %site, ptr @k_site
   %f = call %KValue @k_b_append_key_mut(%KValue %acc, %KValue %x)
   ret %KValue %f
 }
 ; `append_string acc s` on a builder this function owns, for a string value
 ; the decoder shared as a clean token: the same three stores as a key, with
 ; the closing quote alone after the bytes.
-define internal %KValue @k_b_append_string_fast(%KValue %acc, %KValue %x) alwaysinline {
+define internal %KValue @k_b_append_string_fast(%KValue %acc, %KValue %x, ptr %site) alwaysinline {
   %atag = extractvalue %KValue %acc, 0
   %isb = icmp eq i64 %atag, 13
   %xtag = extractvalue %KValue %x, 0
@@ -487,6 +488,7 @@ write:
   store i64 %lenn, ptr %b
   ret %KValue %acc
 slow:
+  store ptr %site, ptr @k_site
   %f = call %KValue @k_b_append_string_mut(%KValue %acc, %KValue %x)
   ret %KValue %f
 }
@@ -496,7 +498,7 @@ slow:
 ; pointer carries a side mark, the top bit natively and the low bit on wasm32,
 ; and both are tested so the one text serves both. A stale or missing view,
 ; and anything else, is the C, which builds the view first.
-define internal %KValue @k_b_entry_count_fast(%KValue %mv) alwaysinline {
+define internal %KValue @k_b_entry_count_fast(%KValue %mv, ptr %site) alwaysinline {
   %tm = extractvalue %KValue %mv, 0
   %ismap = icmp eq i64 %tm, 10
   br i1 %ismap, label %view, label %slow
@@ -517,6 +519,7 @@ count:
   %v = insertvalue %KValue { i64 0, i64 undef }, i64 %n, 1
   ret %KValue %v
 slow:
+  store ptr %site, ptr @k_site
   %f = call %KValue @k_b_entry_count(%KValue %mv)
   ret %KValue %f
 }
@@ -563,7 +566,7 @@ slow:
   store %KValue %fv, ptr %out
   ret %KValue %fk
 }
-define internal %KValue @k_b_key_at_fast(%KValue %mv, %KValue %iv) alwaysinline {
+define internal %KValue @k_b_key_at_fast(%KValue %mv, %KValue %iv, ptr %site) alwaysinline {
   %tm = extractvalue %KValue %mv, 0
   %ismap = icmp eq i64 %tm, 10
   %ti = extractvalue %KValue %iv, 0
@@ -596,10 +599,11 @@ pick:
   %v = load %KValue, ptr %at
   ret %KValue %v
 slow:
+  store ptr %site, ptr @k_site
   %f = call %KValue @k_b_key_at(%KValue %mv, %KValue %iv)
   ret %KValue %f
 }
-define internal %KValue @k_b_value_at_fast(%KValue %mv, %KValue %iv) alwaysinline {
+define internal %KValue @k_b_value_at_fast(%KValue %mv, %KValue %iv, ptr %site) alwaysinline {
   %tm = extractvalue %KValue %mv, 0
   %ismap = icmp eq i64 %tm, 10
   %ti = extractvalue %KValue %iv, 0
@@ -632,6 +636,7 @@ pick:
   %v = load %KValue, ptr %at
   ret %KValue %v
 slow:
+  store ptr %site, ptr @k_site
   %f = call %KValue @k_b_value_at(%KValue %mv, %KValue %iv)
   ret %KValue %f
 }
