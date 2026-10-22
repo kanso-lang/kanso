@@ -21,30 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-15 — gavel: a run-time failure names the line it happened on
-
-Clay ruled #1975. All twenty ports met failures that named no file or line:
-a wrong kind reaching an operator or builtin (`` `*` is not defined for these
-values ``, `write takes a string`) and a stack overflow. The interpreter has
-the span and drops it, because native has nothing to print beside it and the
-engines must agree byte for byte.
-
-**The ruling.** Every run-time failure names the file and line it happened
-on, on every engine. Compiled code records a constant `file:line` before each
-runtime call that can stop the program, and the runtime prints it when it
-dies; the interpreter prints the span it already holds, and the tab shares
-the C runtime. An insisting form names its caller's line rather than the
-library's. The cost is one store per such call, measured at no more than
-0.42% of runbench before the build; Clay accepted it, and the floor drops by
-what CI measures, recorded with this entry as the reason. A refusal at check
-where the wrong kind is certain costs nothing at run time and goes in beside
-it.
-
-Owes, on #1975: the stamp in codegen and the runtime's print; the
-interpreter printing its span; insisting forms stamping the caller; error
-goldens on every engine for an operator, a builtin and a stack overflow;
-CI's rows and the floor moved by them.
-
 ## 2026-10-15 — An operator handed a literal string, list or map is refused at check
 
 The first piece of #1975, and the one that costs nothing at run time. `+`,
@@ -2058,3 +2034,23 @@ A container that restarted came up with clang 18, where the probe for
 `preserve_none` answers no and the emitter writes another convention: main
 emitted 2,135 fewer lines for jsonbench there than its golden says. The rows
 above were taken under clang 19, as CI installs it.
+
+## 2026-10-22 — the region row has a witness again
+
+The ratchet row `a region that keeps what it made` went blind when std/json
+began writing a map from its entries in place (c2b48e57). Its mutation makes
+`k_region_pop` keep everything the region allocated, and its witness was the
+mem fixture `a_nested_map_gives_back_its_entries`, whose arena peak doubled
+under it. Once the encoder stopped building `keys` and `values` for each map,
+its calls had no allocating argument, so the emitter made no region at all:
+no program in the benchmark corpus or the mem vein calls `k_region_pop` now,
+and with the mutation applied the whole mem corpus stayed green on main. The
+row came up on #2047, whose diff touches `core.c`, and read BLIND.
+
+The new mem fixture `a_descent_gives_back_the_keys_it_built` keeps the
+encoder's old shape: a walk that builds a map's keys as the argument of its
+call into the map and answers bytes. The emitter makes that call a region.
+It reads arena_peak_bytes 8,388,608 and arena_blocks 8; with the mutation,
+12,582,912 and 12, and chain_finds 0 -> 9. The interpreter prints the same
+total and the oracle's counters agree. The old fixture's comment, which still
+described the region it no longer has, says what it pins now.

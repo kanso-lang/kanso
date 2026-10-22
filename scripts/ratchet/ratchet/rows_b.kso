@@ -931,6 +931,7 @@ result_assumed = row
 rows_b1ra = list/concat rows_b1su [result_assumed]
 
 # A region gives back what it allocated when the call's result lies outside it.
+# The witness is the mem fixture a_descent_gives_back_the_keys_it_built.
 region_given_back = row
   "a region that keeps what it made"
   true

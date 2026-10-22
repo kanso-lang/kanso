@@ -1,0 +1,66 @@
+# A tree walk that writes into a builder and builds a list as the argument
+# of its call into a nested map is a region: the mark goes down before the
+# keys are built and comes back up when the map is written, because the call
+# answers bytes, which cannot reach what the region made. The encoder in
+# std/json had this shape until it read its pairs in place; this program
+# keeps it so the region still has a program that takes it.
+#
+# The arena peak pins the difference: 8,388,608 bytes with the region, and
+# 12,582,912 with a pop that keeps what the region made.
+import "std/list"
+import "std/text"
+
+fn onto acc none
+  text/append acc "null"
+
+fn onto acc n:int
+  text/append acc "{n}"
+
+fn onto acc xs:[]some
+  items (text/append acc 91) xs 1
+
+fn onto acc m:map[string some]
+  pairs (text/append acc 123) m (keys m) 1
+
+fn items acc xs i
+  return text/append acc 93 if i < 1 or length xs < i
+  items (onto acc xs[i]) xs (i + 1)
+
+fn pairs acc m ks i
+  return text/append acc 125 if i < 1 or length ks < i
+  pairs (onto (text/append acc ks[i]) m[ks[i]]) m ks (i + 1)
+
+fn tags i
+  {
+    "a":i
+    "b":i
+    "c":i
+    "d":i
+    "e":i
+    "f":i
+    "g":i
+    "h":i
+    "j":i
+    "k":i
+    "l":i
+    "m":i
+    "n":i
+    "o":i
+    "p":i
+    "q":i
+    "r":i
+    "s":i
+    "t":i
+    "u":i
+    "v":i
+    "w":i
+    "x":i
+    "y":i
+  }
+
+fn row i
+  { "id":i "tags":(tags i) }
+
+doc = list/to_list (list/map (list/take list/naturals 8000) (i -> row i))
+
+pub play = print "{length (onto (text/bytes "") doc)}"
