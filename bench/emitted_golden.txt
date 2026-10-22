@@ -277,7 +277,10 @@
 # program carries the inline paths' comment: lines 13,089 -> 13,098.
 # 2026-10-21: a string value goes out through one builtin. The decoder's
 # program carries the value path's comment: lines 13,098 -> 13,102.
+# 2026-10-22: a map's key and value read side by side test the view once.
+# The decoder's program carries the pair path's comment: lines 13,102 ->
+# 13,104.
 defines=136
 calls=1394
 branches=1305
-lines=13102
+lines=13104

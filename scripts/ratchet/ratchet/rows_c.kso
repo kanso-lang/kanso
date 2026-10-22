@@ -2747,4 +2747,14 @@ string_claimed = row
 
 rows_cq21 = list/concat rows_cq20 [string_claimed]
 
-rows_c = list/concat rows_cq21 [itself]
+entry_twice = row
+  "an entry read twice"
+  true
+  (gating "emitted_code")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "an_entry_read_twice")
+  benchmarks
+
+rows_cq22 = list/concat rows_cq21 [entry_twice]
+
+rows_c = list/concat rows_cq22 [itself]
