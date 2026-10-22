@@ -1,0 +1,12 @@
+"0123456789abcd\n"
+"0123456789abcde\n"
+"0123456789abcdef\n"
+"0123456789abcdefg\n"
+"\n0123456789abcde\"0123456789abcdef\t"
+"0123456789abcdef0123456789abcde\\"
+"0123456789abcdef\u001fx\u0001"
+"\n\t\r\b\f\"\\\u0000\u0007\u001e"
+"ééééééééé\téé"
+{"a key that runs past sixteen\n":"v\u0002"}
+["seven..\nseven..\nseven..\nseven..\n",""]
+"0123456789abcdef0123456789abcdef"

@@ -2869,4 +2869,22 @@ escaped_twice = row
 
 rows_cq30 = list/concat rows_cq29 [escaped_twice]
 
-rows_c = list/concat rows_cq30 [itself]
+escape_by_words = row
+  "an escaped string written a word at a time"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "an_escaped_string_written_a_word_at_a_time")
+  benchmarks
+
+undo_by_words = row
+  "an escaped string undone a word at a time"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "an_escaped_string_undone_a_word_at_a_time")
+  benchmarks
+
+rows_cq31 = list/concat rows_cq30 [escape_by_words, undo_by_words]
+
+rows_c = list/concat rows_cq31 [itself]
