@@ -1,0 +1,35 @@
+import "std/json"
+
+# A JSON string with an escape in it is undone by the same walk that finds its
+# closing quote, and the decoder's `unescape` answers what that walk kept.
+# Each line decodes one document and prints the value, or the reason and
+# position the decoder gave. The escapes sit at the front, the back and every
+# place a word boundary can fall, two backslashes run together, an escaped
+# quote stands just before the closing one, and some documents end a byte or
+# two after the string, so the walk's last word reaches past the bytes. A `u`
+# escape and an escape JSON does not have go the long way, and a string that
+# runs out is refused where the walk ran out.
+fn read doc
+  rescue (json/decode doc) (e -> "{e.reason.reason} at {e.reason.position}")
+
+fn said s
+  print (read s)
+
+far = "a long value with an escape far from its start"
+
+pub play = said "\"\\n\""
+  .> (_ -> said "\"a\\tb\"")
+  .> (_ -> said "\"\\\"quoted\\\"\"")
+  .> (_ -> said "\"ends with a slash \\\\\"")
+  .> (_ -> said "\"\\\\\\\\ two \\\\\\\\\"")
+  .> (_ -> said "\"1234567\\n\"")
+  .> (_ -> said "\"12345678\\n\"")
+  .> (_ -> said "\"123456789\\n9876543210\\t\"")
+  .> (_ -> said "\"\\b\\f\\n\\r\\t\\/\\\"\\\\\"")
+  .> (_ -> said "[\"x\\ny\", \"plain\", \"é\\té\"]")
+  .> (_ -> said "\{\"k\\ney\": \"v\\nal\", \"k2\": \"\\\"\"}")
+  .> (_ -> said "\"caf\\u00e9 \\n\"")
+  .> (_ -> said "\"bad \\x escape\"")
+  .> (_ -> said "\"runs out \\n")
+  .> (_ -> said "\"runs out on a slash \\")
+  .> (_ -> said "[\"{far}, \\n and more after it\"]")

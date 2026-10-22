@@ -1,0 +1,26 @@
+
+
+a	b
+"quoted"
+ends with a slash \
+\\ two \\
+1234567
+
+12345678
+
+123456789
+9876543210	
+
+	/"\
+["x
+y" "plain" "é	é"]
+{ "k
+ey":"v
+al" "k2":""" }
+café 
+
+invalid escape `\x` at 6
+unterminated string at 13
+unterminated string at 22
+["a long value with an escape far from its start, 
+ and more after it"]

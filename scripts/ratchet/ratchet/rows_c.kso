@@ -2859,4 +2859,14 @@ comma_looped = row
 
 rows_cq29 = list/concat rows_cq28 [comma_looped]
 
-rows_c = list/concat rows_cq29 [itself]
+escaped_twice = row
+  "an escaped string undone twice"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "an_escaped_string_undone_twice")
+  benchmarks
+
+rows_cq30 = list/concat rows_cq29 [escaped_twice]
+
+rows_c = list/concat rows_cq30 [itself]
