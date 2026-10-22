@@ -1404,8 +1404,9 @@ KValue k_b_length(KValue v) {
 
 /* Sixteen bytes read from p stay inside p's page, so a vector load that runs
    past the end of a short string cannot fault: the page holding a valid byte
-   is mapped whole. The two scanners below use it for a tail shorter than a
-   vector, which they used to walk one byte at a time. On the run program
+   is mapped whole. The two scanners below and the JSON escape writer use it
+   for a tail shorter than a vector, which they used to walk one byte at a
+   time. On the run program
    8,042,860 bytes a run went through those byte loops at eight instructions
    each, because a json key or value is usually shorter than sixteen bytes
    and the vector loop never opened; one load and a mask over the bytes that
