@@ -251,6 +251,19 @@ fn column_of<'e>(e: &'e Expr, which: &str) -> Option<&'e str> {
     }
 }
 
+/// The map and position of `which m i`, a read of one map entry.
+fn entry_of<'e>(e: &'e Expr, which: &str) -> Option<(&'e str, &'e str)> {
+    let Expr::App { head, args, piped: false, .. } = e else { return None };
+    match (&**head, args.as_slice()) {
+        (Expr::Ident(h, _, _), [Expr::Ident(m, _, _), Expr::Ident(i, _, _)])
+            if h.as_str() == which =>
+        {
+            Some((m.as_str(), i.as_str()))
+        }
+        _ => None,
+    }
+}
+
 /// The count a builtin the native backend emits a direct call for takes.
 /// Membership is this file's business — which builtins get a C entry rather
 /// than an inline expansion — and the count is `check`'s, so this asks each

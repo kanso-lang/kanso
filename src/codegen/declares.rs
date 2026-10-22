@@ -520,6 +520,49 @@ slow:
   %f = call %KValue @k_b_entry_count(%KValue %mv)
   ret %KValue %f
 }
+; `key_at m i` and `value_at m i` side by side in one call's arguments: the
+; view is tested once and both are loaded, the value into the caller's slot.
+define internal %KValue @k_b_entry_pair_fast(%KValue %mv, %KValue %iv, ptr %out) alwaysinline {
+  %tm = extractvalue %KValue %mv, 0
+  %ismap = icmp eq i64 %tm, 10
+  %ti = extractvalue %KValue %iv, 0
+  %isint = icmp eq i64 %ti, 0
+  %both = and i1 %ismap, %isint
+  br i1 %both, label %view, label %slow
+view:
+  %mp = extractvalue %KValue %mv, 1
+  %m = inttoptr i64 %mp to ptr
+  %sortedp = getelementptr i8, ptr %m, i64 16
+  %sorted = load ptr, ptr %sortedp
+  %si = ptrtoint ptr %sorted to i64
+  %side = and i64 %si, -9223372036854775807
+  %unmarked = icmp eq i64 %side, 0
+  %present = icmp ne i64 %si, 0
+  %fresh = and i1 %unmarked, %present
+  br i1 %fresh, label %range, label %slow
+range:
+  %nmp = getelementptr i8, ptr %m, i64 24
+  %n = load i64, ptr %nmp
+  %i = extractvalue %KValue %iv, 1
+  %lo = icmp sgt i64 %i, 0
+  %hi = icmp sle i64 %i, %n
+  %inr = and i1 %lo, %hi
+  br i1 %inr, label %pick, label %slow
+pick:
+  %twice = shl i64 %i, 1
+  %j = add i64 %twice, -2
+  %kat = getelementptr %KValue, ptr %sorted, i64 %j
+  %k = load %KValue, ptr %kat
+  %vat = getelementptr %KValue, ptr %kat, i64 1
+  %v = load %KValue, ptr %vat
+  store %KValue %v, ptr %out
+  ret %KValue %k
+slow:
+  %fk = call %KValue @k_b_key_at(%KValue %mv, %KValue %iv)
+  %fv = call %KValue @k_b_value_at(%KValue %mv, %KValue %iv)
+  store %KValue %fv, ptr %out
+  ret %KValue %fk
+}
 define internal %KValue @k_b_key_at_fast(%KValue %mv, %KValue %iv) alwaysinline {
   %tm = extractvalue %KValue %mv, 0
   %ismap = icmp eq i64 %tm, 10
