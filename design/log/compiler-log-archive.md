@@ -105481,3 +105481,23 @@ whose continuations read locals, lambda parameters and builtins of them,
 some inside a function and some in nested lambdas. The interpreter and the
 native build agreed on all 399 the front end accepted; 85 of the first 100
 forced at least one pooled call.
+
+## 2026-10-15 — gavel: a record field carries no type, and kanso has no type parameters
+
+Clay ruled #1946. Two July rulings could not both stand. On 2026-07-25 a type
+could declare a parameter (`type <k>pair` with fields `first:k` and
+`second:k`), and on 2026-07-26 a written field type became an error. The
+parameter means nothing unless a field can write `:k`.
+
+**The ruling.** No field carries a written type of any kind, and kanso has no
+type parameters. The archive's "GAVEL (amendment): the binder stays" and the
+"CORRECTION" after it are reversed. The reason is the one the 07-26 ruling
+gave for concrete types. kanso compiles the whole program, so the compiler
+sees every place two fields' values meet. If something needs them to agree,
+a disagreement is refused at that use. If nothing needs them to agree, no
+program depends on it. Declaring the agreement only moves where the error is
+reported. Relating types was already gone from function signatures for the
+same reason, and now it is gone from type declarations too.
+
+Owes: #1941 closed with a pointer here; `sorted` stays a plain type, and the
+#1903 entry's mention of `<k>sorted` no longer describes anything to build.
