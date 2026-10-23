@@ -1296,8 +1296,25 @@ static void k_chunkreg_migrate(int d) {
 
 static long long k_pend_n;
 static void k_pend_drop_above(KMark* m);
+static int k_pend_holds_below(KMark* m);
+static int k_pend_staging = 0;
+void k_carry_reset(void);
+void k_beat_iter_carry(void);
 void k_beat_rewind_slow(KMark* m) {
     if (m == &k_beat_none) return;
+    /* A loop that carries nothing rewinds its lap here, and a node on the
+       list of repaired nodes may lie below its mark and point into the lap.
+       That rewind becomes a stage with nothing staged, which revisits the
+       node, copies what it points at into the carry, rewinds and settles it
+       back under the mark. The stage's own rewind comes back through here,
+       and the flag sends it on to the plain one. */
+    if (k_pend_n && !k_pend_staging && k_beat_depth > 0 && k_beat_depth <= K_BEAT_MAX
+        && m == &k_beat_stack[k_beat_depth - 1] && k_pend_holds_below(m)) {
+        k_carry_reset();
+        k_beat_iter_carry();
+        if (K_COUNTING) k_stat_beat_iters--; /* the lap's own iteration counted it */
+        return;
+    }
     if (k_pend_n) k_pend_drop_above(m);
     k_buf_flush();
     long long d = m - k_beat_stack;
@@ -2543,6 +2560,19 @@ static int k_pend_below(KValue v, KMark* m) {
     return k_where((const void*)(intptr_t)v.payload, m) == K_WHERE_BELOW;
 }
 
+/* Whether the list holds a node below `m`. A loop whose result is a scalar
+   rewinds its whole lap when it pops, on the reading that nothing older than
+   its mark can point into the lap. A node on this list is the exception: a
+   pop inside the loop repaired it to point at a copy at the frontier, which is
+   in the lap. Rewinding there hands that copy back while the node still
+   points at it, so such a pop keeps the lap instead and hands it up, as a pop
+   with a heap result does, and the enclosing stage revisits the node. */
+static __attribute__((noinline, cold)) int k_pend_holds_below(KMark* m) {
+    for (long long i = 0; i < k_pend_n; i++)
+        if (k_pend_below(k_pend[i], m)) return 1;
+    return 0;
+}
+
 /* A rewind to the outermost mark clears the list. What lies above that mark
    is freed by the rewind, and no stage outside it will ever revisit what lies
    below. */
@@ -2991,6 +3021,11 @@ static void k_permreg_migrate_carried(int d) {
 static __attribute__((noinline)) KValue k_beat_pop_slow(KValue r, long long d,
                                                         int rewound) {
     KCarry* c = &k_carries[d];
+    /* A scalar result rewinds the lap, unless the list of repaired nodes holds
+       one below the mark: then the lap is handed up like a heap result's. The
+       test lives here rather than in `k_beat_pop`, which every loop exit
+       inlines, because a scalar pop always comes here. */
+    if (rewound && k_pend_n && k_pend_holds_below(&k_beat_stack[d])) rewound = 0;
     if (rewound) {
         k_beat_rewind(&k_beat_stack[d]);
     } else {
@@ -3058,9 +3093,10 @@ static __attribute__((noinline)) KValue k_region_pop_slow(KValue r) {
         k_beat_set_depth(k_beat_depth - 1);
         long long d = k_beat_depth;
         if (d < K_BEAT_MAX) {
-            int outside = (!k_is_heap(r.tag) && r.tag != K_THUNK)
+            int outside = ((!k_is_heap(r.tag) && r.tag != K_THUNK)
                 || ((r.tag == K_BYTES || r.tag == K_STR)
-                    && !k_above_mark((const void*)(intptr_t)r.payload, &k_beat_stack[d]));
+                    && !k_above_mark((const void*)(intptr_t)r.payload, &k_beat_stack[d])))
+                && !(k_pend_n && k_pend_holds_below(&k_beat_stack[d]));
             if (outside && !k_carries[d].used_flag) {
                 k_beat_rewind(&k_beat_stack[d]);
                 k_ten_release(d);
@@ -3133,7 +3169,7 @@ KValue k_cohort_pop(KValue r) {
         k_permreg_migrate(k_beat_depth);
         return r;
     }
-    if (!k_is_heap(r.tag) && r.tag != K_THUNK) {
+    if (!k_is_heap(r.tag) && r.tag != K_THUNK && !(k_pend_n && k_pend_holds_below(m))) {
         k_beat_set_depth(k_beat_depth - 1);
         k_beat_rewind(m);
         k_spare_release(2);
@@ -3244,7 +3280,10 @@ static void k_pend_revisit(KMark* m, KCopy* cp) {
     k_pend_n = w;
 }
 
-void k_beat_iter_carry(void) {
+/* Out of line. Since a plain rewind can turn into a stage, LLVM inlined this
+   into `k_beat_rewind_slow` and `k_cohort_pop` as well, and every binary grew
+   5,664 bytes for a copy and a rewind that gain nothing from being inlined. */
+__attribute__((noinline)) void k_beat_iter_carry(void) {
     if (K_COUNTING) k_stat_beat_iters++;
     if (k_beat_depth <= 0 || k_beat_depth > K_BEAT_MAX) return;
     for (long long i = 0; i < k_carry_n; i++) {
@@ -3254,6 +3293,7 @@ void k_beat_iter_carry(void) {
     KMark* m = &k_beat_stack[k_beat_depth - 1];
     KCarry* c = &k_carries[k_beat_depth - 1];
     size_t need = 0;
+    k_pend_staging = 1;
     k_ten_on = 1;
     k_from_window(1);
     k_size_in_ten = 0;
@@ -3289,6 +3329,7 @@ void k_beat_iter_carry(void) {
     c->skipped = 0;
     k_ten_on = 0;
     k_from_window(0);
+    k_pend_staging = 0;
 }
 
 /* A compiled loop's carry, which waits until the lap has left something worth
