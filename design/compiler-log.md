@@ -1999,7 +1999,7 @@ went through a pointer into the arena instead of a buffer nothing else can
 alias, and `k_b_append_rendered` rose 1,523,160. The first version, which
 wrote the render call twice, also stopped `render_ryu` being inlined.
 
-## 2026-10-23 — the tab compares bytes a word at a time
+## 2026-10-23 — the tab compares bytes a word at a time and finds switches by their `=`
 
 Counted in executed instructions, the costliest function in the tab's compile
 was `memcmp`: 9.5M of the front end's 68.8M and 17.5M of the emitter's 119.2M
@@ -2031,3 +2031,25 @@ into the highest, dropping the overlapping word, comparing the bytes as signed
 and dropping the second four-byte word each fail it. The ratchet row "a byte
 loop compares in the tab" renames the two exports, and the browser row goes
 back to 293,067,500.
+
+**A switch found by its `=`.** The translator asks of every IR line whether
+it opens a switch, which may run over several lines, and it asked with
+`body.contains("= switch")`. `contains` builds a substring searcher before it
+reads a byte, and on the tab's corpus that setup was 5.9M of the 71.0M
+instructions the translation executed. A function body's line holds one `=`,
+the one that names its result, so the check now finds it with memchr and
+compares the words there.
+
+    browser_compile_instructions  274,134,296 -> 268,290,909  (-2.13%)
+
+Finding every `=` in the line instead of the first read 270,476,791, because
+the second search runs to the end of the line. The ratchet row "a searcher
+built for every line the tab translates" puts `contains` back and the row reads
+274,134,296 again.
+
+One idea measured and dropped: `lines_holding`, the narrowing's search for
+`define `, `musttail call` and `tailcc ` across the whole module, found each
+word by memchr on one of its bytes and compared there. It read 272,919,712
+against 268,290,909. The two-way searcher skips a needle's length at a time
+where the module's text cannot match, and memchr stops at every occurrence of
+the anchor byte.

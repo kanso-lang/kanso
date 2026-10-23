@@ -1172,7 +1172,12 @@ fn body(text: &str, types: &HashMap<String, Ty>) -> Result<Func, String> {
         if body.is_empty() || body.starts_with(';') {
             continue;
         }
-        if body.starts_with("switch") || body.contains("= switch") {
+        // `contains` would build a substring searcher for every line, and
+        // on the tab's corpus that setup alone was 5.9M of the 71.0M
+        // instructions the translation executed. A body line holds one `=`,
+        // the one that names its result, so the words are compared there.
+        let switch = |b: &str| b.find('=').is_some_and(|i| b[i..].starts_with("= switch"));
+        if body.starts_with("switch") || switch(&body) {
             while !body.trim_end().ends_with(']') {
                 let next = lines.next().ok_or("switch runs off the end")?.trim();
                 body.to_mut().push(' ');

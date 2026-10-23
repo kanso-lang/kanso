@@ -2997,4 +2997,17 @@ word_compare = row
 
 rows_cq38 = list/concat rows_cq37 [word_compare]
 
-rows_c = list/concat rows_cq38 [itself]
+# The tab's translator finds a switch line by its `=` rather than by a
+# substring searcher built for every line (2026-10-23). The mutation builds
+# the searcher again, and the browser compile row is the witness.
+switch_line = row
+  "a searcher built for every line the tab translates"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_searcher_built_for_every_line_the_tab_translates")
+  release
+
+rows_cq39 = list/concat rows_cq38 [switch_line]
+
+rows_c = list/concat rows_cq39 [itself]
