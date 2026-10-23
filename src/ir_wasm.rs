@@ -463,24 +463,27 @@ struct Global {
 }
 
 #[derive(Default)]
-struct Ir<'a> {
+struct Ir {
     types: HashMap<String, Ty>,
     globals: Vec<Global>,
     externs: Vec<String>,
     aliases: HashMap<String, String>,
     declares: Vec<(String, Sig)>,
-    funcs: Vec<Head<'a>>,
+    funcs: Vec<Head>,
 }
 
 /// A function as the module's first pass leaves it: its name and signature,
 /// which every other function's lowering may need, and its text from the
 /// `define` line to the closing brace, which only its own lowering reads.
 /// `body` parses that text when the function's turn comes, so one function's
-/// instructions are held at a time rather than the whole module's.
-struct Head<'a> {
+/// instructions are held at a time rather than the whole module's. The text
+/// is named by its piece and its place there, so a piece whose functions are
+/// all lowered can be let go.
+struct Head {
     name: String,
     sig: Sig,
-    text: &'a str,
+    piece: usize,
+    span: std::ops::Range<usize>,
 }
 
 /// A function's local names, numbered in the order they are first read.
@@ -1066,8 +1069,8 @@ impl<'a> Iterator for Lines<'a> {
     }
 }
 
-fn parse(ir: &str) -> Result<Ir<'_>, String> {
-    let mut m = Ir::default();
+/// The module's first pass over one of its pieces, `piece`, into `m`.
+fn parse_into(m: &mut Ir, ir: &str, piece: usize) -> Result<(), String> {
     let mut at = 0;
     while at < ir.len() {
         let end = line_end(ir.as_bytes(), at);
@@ -1154,12 +1157,12 @@ fn parse(ir: &str) -> Result<Ir<'_>, String> {
                 }
                 look = close;
             };
-            m.funcs.push(Head { name, sig, text: &ir[from..to] });
+            m.funcs.push(Head { name, sig, piece, span: from..to });
             continue;
         }
         return Err(format!("unsupported line `{line}`"));
     }
-    Ok(m)
+    Ok(())
 }
 
 /// A function's instructions, parsed from the text its head kept. The
@@ -1488,29 +1491,28 @@ pub struct Side {
 /// It takes the native text or the text `codegen::retarget_wasm32` made from
 /// it, and the two give the same module.
 pub fn translate(ir: &str) -> Result<Side, String> {
-    translate_given(Text::Lent(ir))
+    translate_given(vec![Cow::Borrowed(ir)])
 }
 
-/// `translate` for a caller done with the IR. The text is let go once every
-/// function is lowered, before the module is put together; the tab's compile
-/// peaks in that assembly, and the IR is the largest thing it would otherwise
-/// still hold.
+/// `translate` for a caller done with the IR, which is let go as it is read.
 pub fn translate_owned(ir: String) -> Result<Side, String> {
-    translate_given(Text::Owned(ir))
+    translate_given(vec![Cow::Owned(ir)])
 }
 
-/// The IR handed to the translator: lent, or given to it to let go.
-enum Text<'a> {
-    Lent(&'a str),
-    Owned(String),
+/// `translate_owned` for a module in pieces, as `codegen::emit_ir_tab_pieces`
+/// writes it: no definition is split between two pieces. Each piece is let go
+/// once its functions are lowered, so the tab holds the module once and less
+/// of it as the translation goes.
+pub fn translate_pieces(pieces: Vec<String>) -> Result<Side, String> {
+    translate_given(pieces.into_iter().map(Cow::Owned).collect())
 }
 
-fn translate_given(text: Text<'_>) -> Result<Side, String> {
-    let src = match &text {
-        Text::Lent(s) => *s,
-        Text::Owned(s) => s.as_str(),
-    };
-    let ir = parse(src)?;
+fn translate_given(mut texts: Vec<Cow<'_, str>>) -> Result<Side, String> {
+    let mut ir = Ir::default();
+    for (k, text) in texts.iter().enumerate() {
+        parse_into(&mut ir, text, k)?;
+    }
+    let ir = ir;
     let mut mx = Mx {
         types: Vec::new(),
         func_idx: HashMap::default(),
@@ -1583,8 +1585,14 @@ fn translate_given(text: Text<'_>) -> Result<Side, String> {
     }
 
     let mut codes = Vec::new();
+    let mut held = 0;
     for h in &ir.funcs {
-        let f = body(h.text, &ir.types)?;
+        // the pieces before this function's are read through, and let go
+        while held < h.piece {
+            texts[held] = Cow::Borrowed("");
+            held += 1;
+        }
+        let f = body(&texts[h.piece][h.span.clone()], &ir.types)?;
         codes.push(lower(&mut mx, &f).map_err(|e| format!("{}: {e}", f.name))?);
     }
 
@@ -1611,7 +1619,7 @@ fn translate_given(text: Text<'_>) -> Result<Side, String> {
     // Nothing below reads the IR or what was parsed out of it.
     drop(defined);
     drop(ir);
-    drop(text);
+    drop(texts);
 
     // ---- assemble
     let mut out = vec![0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00];

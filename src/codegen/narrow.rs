@@ -77,23 +77,33 @@ fn holds(line: &str, needle: &str, at: usize) -> bool {
 /// declared length, and clang refused the module.
 #[cfg(test)]
 fn narrow_tailcc(ir: String) -> String {
-    narrowed_in_place(ir, 0)
+    narrowed_pieces(vec![ir], 0).concat()
 }
 
-/// `narrow_tailcc`'s answer for everything in `text` after `from`, written
-/// over the lines it replaces. Every rewrite takes words out of a line or
-/// renames a callee to its trampoline, which is shorter than the words it
-/// lost, so a line never outgrows the one it replaces and the text only moves
-/// down. A rewrite that did grow would send the whole answer into a buffer of
-/// its own, so the answer does not rest on that.
-fn narrowed_in_place(text: String, from: usize) -> String {
+/// `narrow_tailcc`'s answer for a module held as pieces, the first read from
+/// `from`, written over the lines it replaces. No line spans two pieces,
+/// because the emitter opens a piece only between definitions, so the walk
+/// that decides which functions keep the convention reads the pieces in order
+/// as one text would be read, and each piece is rewritten where it stands.
+/// Trampolines go after the last.
+///
+/// Every rewrite takes words out of a line or renames a callee to its
+/// trampoline, which is shorter than the words it lost, so a line never
+/// outgrows the one it replaces and a piece only moves down. A rewrite that
+/// did grow would send its piece into a buffer of its own, so the answer does
+/// not rest on that.
+fn narrowed_pieces(mut pieces: Vec<String>, from: usize) -> Vec<String> {
     let code = |line: &str| !line.starts_with('@');
     // Two walks over the lines, neither of which keeps a list of them: one
     // reads which functions keep the convention and sets aside the few
     // `define tailcc` lines the trampolines are decided from, and one finds
     // the lines to rewrite. A list of every line, held across the three
     // walks this used to make, was a third of the module's size again.
-    let ir = &text[from..];
+    let texts: Vec<&str> = pieces
+        .iter()
+        .enumerate()
+        .map(|(k, piece)| if k == 0 { &piece[from..] } else { piece.as_str() })
+        .collect();
     let mut keep: crate::hash::Set<String> = crate::hash::Set::default();
     let mut current: Option<String> = None;
     let mut tailcc_defines: Vec<&str> = Vec::new();
@@ -101,9 +111,6 @@ fn narrowed_in_place(text: String, from: usize) -> String {
     // searching the text for the words. On the tab's corpus 125 lines of 8,726
     // are a `define` and 96 a musttail call, and the line-by-line walk this
     // replaced was 3.9 million instructions of finding newlines.
-    let defines =
-        lines_holding(ir, "define ").filter(|&(start, _)| ir[start..].starts_with("define "));
-    let musttails = lines_holding(ir, "musttail call");
     // `k_tcall{n}` jumps to a lambda through the pointer its closure carries,
     // an edge this reading cannot see, so every lambda keeps the convention in
     // a module that defines one. Both are read off the define lines the walk
@@ -111,6 +118,10 @@ fn narrowed_in_place(text: String, from: usize) -> String {
     // 739,426 instructions of the tab's compile natively.
     let mut jumps_to_lambdas = false;
     let mut lambdas: Vec<String> = Vec::new();
+    for &ir in &texts {
+    let defines =
+        lines_holding(ir, "define ").filter(|&(start, _)| ir[start..].starts_with("define "));
+    let musttails = lines_holding(ir, "musttail call");
     for (start, end) in merged_lines(defines, musttails) {
         let line = &ir[start..end];
         if !code(line) {
@@ -137,6 +148,7 @@ fn narrowed_in_place(text: String, from: usize) -> String {
                 keep.insert(name);
             }
         }
+    }
     }
     if jumps_to_lambdas {
         keep.extend(lambdas);
@@ -182,7 +194,37 @@ fn narrowed_in_place(text: String, from: usize) -> String {
     }
 
     drop(tailcc_defines);
+    drop(texts);
     let mut rerouted: crate::hash::Set<String> = crate::hash::Set::default();
+    for (k, piece) in pieces.iter_mut().enumerate() {
+        let text = std::mem::take(piece);
+        *piece = rewritten(text, if k == 0 { from } else { 0 }, &keep, &spilling, &mut rerouted);
+    }
+    let last = pieces.last_mut().expect("a module has a piece");
+    if !last.ends_with('\n') {
+        last.push('\n');
+    }
+    // A trampoline no call was rerouted through is a function nothing names,
+    // which clang compiles at `-O0` all the same.
+    for (name, t) in trampolines {
+        if rerouted.contains(&name) {
+            last.push_str(&t);
+        }
+    }
+    pieces
+}
+
+/// One piece with the narrowing's lines rewritten, everything in `text`
+/// after `from`.
+fn rewritten(
+    text: String,
+    from: usize,
+    keep: &crate::hash::Set<String>,
+    spilling: &crate::hash::Set<String>,
+    rerouted: &mut crate::hash::Set<String>,
+) -> String {
+    let code = |line: &str| !line.starts_with('@');
+    let ir = &text[from..];
     // (start, end, replacement) for each line that changes, in order.
     let mut edits: Vec<(usize, usize, String)> = Vec::new();
     for (start, end) in lines_holding(ir, "tailcc ") {
@@ -216,7 +258,7 @@ fn narrowed_in_place(text: String, from: usize) -> String {
         edits.push((at, at + line.len(), rewritten));
     }
     let shrinks = edits.iter().all(|(start, end, line)| line.len() <= end - start);
-    let mut out = match shrinks {
+    match shrinks {
         true => {
             let mut bytes = text.into_bytes();
             let (mut to, mut kept) = (0, 0);
@@ -246,18 +288,7 @@ fn narrowed_in_place(text: String, from: usize) -> String {
             out.push_str(&text[kept..]);
             out
         }
-    };
-    if !out.ends_with('\n') {
-        out.push('\n');
     }
-    // A trampoline no call was rerouted through is a function nothing names,
-    // which clang compiles at `-O0` all the same.
-    for (name, t) in trampolines {
-        if rerouted.contains(&name) {
-            out.push_str(&t);
-        }
-    }
-    out
 }
 
 /// The first symbol a line names, without its quotes.

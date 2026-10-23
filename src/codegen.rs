@@ -509,16 +509,18 @@ pub fn emit_ir_dev_owned(
     emit_ir_for(Given::Owned(program), convention, false)
 }
 
-/// `emit_ir_dev_owned` for the playground tab. It emits only the groups the
-/// entry can reach, as every build does; the prune in `Written::finish` drops
-/// the rest from the module either way. On `bench/interp_corpus` that was 132
-/// definitions and 127,415 bytes of text, a third of what the tab wrote, held
-/// beside the program at the most its compile ever holds.
-pub fn emit_ir_tab_owned(
+/// `emit_ir_dev_owned` for the playground tab, in the pieces
+/// `ir_wasm::translate_pieces` reads (`Written::finish_pieces`). It emits only
+/// the groups the entry can reach, as every build does; the prune in
+/// `Written::finish_pieces` drops the rest from the module either way. On
+/// `bench/interp_corpus` that was 132 definitions and 127,415 bytes of text, a
+/// third of what the tab wrote, held beside the program at the most its
+/// compile ever holds.
+pub fn emit_ir_tab_pieces(
     program: Program,
     convention: ClosureConvention,
-) -> Result<String, String> {
-    emit_written(Given::Owned(program), convention, false).map(Written::finish)
+) -> Result<Vec<String>, String> {
+    emit_written(Given::Owned(program), convention, false).map(Written::finish_pieces)
 }
 
 /// A group's name and arity, and a position in it.
