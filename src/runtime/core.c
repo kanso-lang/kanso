@@ -3021,6 +3021,11 @@ static void k_permreg_migrate_carried(int d) {
 static __attribute__((noinline)) KValue k_beat_pop_slow(KValue r, long long d,
                                                         int rewound) {
     KCarry* c = &k_carries[d];
+    /* A scalar result rewinds the lap, unless the list of repaired nodes holds
+       one below the mark: then the lap is handed up like a heap result's. The
+       test lives here rather than in `k_beat_pop`, which every loop exit
+       inlines, because a scalar pop always comes here. */
+    if (rewound && k_pend_n && k_pend_holds_below(&k_beat_stack[d])) rewound = 0;
     if (rewound) {
         k_beat_rewind(&k_beat_stack[d]);
     } else {
@@ -3062,8 +3067,7 @@ KValue k_beat_pop(KValue r) {
         k_beat_set_depth(k_beat_depth - 1);
         long long d = k_beat_depth;
         if (d < K_BEAT_MAX) {
-            int rewound = !k_is_heap(r.tag) && r.tag != K_THUNK
-                && !(k_pend_n && k_pend_holds_below(&k_beat_stack[d]));
+            int rewound = !k_is_heap(r.tag) && r.tag != K_THUNK;
             /* k_reg_any_at(d) summarises the three registries: every add sets
                its bit and every migrate or flush clears it, and the chunk
                spill count travels with the chunk bit. An empty migrate wrote
