@@ -7,7 +7,7 @@
 # module to wasm in the tab (src/ir_wasm.rs). That module is a side module: it
 # imports this one's memory, table and stack pointer, and calls the same k_*
 # functions a native binary calls. So this module exports everything, its
-# table grows, and wasm/hooks.c gives it slots for the seven functions a
+# table grows, and wasm/hooks.c gives it slots for the eight functions a
 # native link would have resolved by name.
 #
 # What each flag is for:

@@ -27,6 +27,7 @@ done:
 }
 @k_arena = external global ptr
 @k_site = external global ptr
+@k_site_id = external global i32
 @k_deep_site = external global ptr
 @k_arena_left = external global i64
 @k_stats_on = external global i32
@@ -92,6 +93,7 @@ alloc:
   ret %KValue %r0
 slow:
   store ptr %site, ptr @k_site
+  store i32 0, ptr @k_site_id
   %f = call %KValue @k_b_append(%KValue %acc, %KValue %x)
   ret %KValue %f
 }
@@ -245,6 +247,7 @@ swdone:
 
 slow:
   store ptr %site, ptr @k_site
+  store i32 0, ptr @k_site_id
   %f = call %KValue @k_b_append_mut(%KValue %acc, %KValue %x)
   ret %KValue %f
 }
@@ -291,6 +294,7 @@ bwrite:
   ret %KValue %acc
 slow:
   store ptr %site, ptr @k_site
+  store i32 0, ptr @k_site_id
   %f = call %KValue @k_b_append_mut(%KValue %acc, %KValue %x)
   ret %KValue %f
 }
@@ -421,6 +425,7 @@ write:
   ret %KValue %acc
 slow:
   store ptr %site, ptr @k_site
+  store i32 0, ptr @k_site_id
   %f = call %KValue @k_b_append_key_mut(%KValue %acc, %KValue %x)
   ret %KValue %f
 }
@@ -491,6 +496,7 @@ write:
   ret %KValue %acc
 slow:
   store ptr %site, ptr @k_site
+  store i32 0, ptr @k_site_id
   %f = call %KValue @k_b_append_string_mut(%KValue %acc, %KValue %x)
   ret %KValue %f
 }
@@ -522,6 +528,7 @@ count:
   ret %KValue %v
 slow:
   store ptr %site, ptr @k_site
+  store i32 0, ptr @k_site_id
   %f = call %KValue @k_b_entry_count(%KValue %mv)
   ret %KValue %f
 }
@@ -602,6 +609,7 @@ pick:
   ret %KValue %v
 slow:
   store ptr %site, ptr @k_site
+  store i32 0, ptr @k_site_id
   %f = call %KValue @k_b_key_at(%KValue %mv, %KValue %iv)
   ret %KValue %f
 }
@@ -639,6 +647,7 @@ pick:
   ret %KValue %v
 slow:
   store ptr %site, ptr @k_site
+  store i32 0, ptr @k_site_id
   %f = call %KValue @k_b_value_at(%KValue %mv, %KValue %iv)
   ret %KValue %f
 }
@@ -865,6 +874,7 @@ view:
   ret %KValue %r
 slow:
   store ptr %site, ptr @k_site
+  store i32 0, ptr @k_site_id
   %s = call %KValue @k_b_slice(%KValue %c, %KValue %f, %KValue %t)
   ret %KValue %s
 }
@@ -899,6 +909,7 @@ scan:
   ret %KValue %r
 slow:
   store ptr %site, ptr @k_site
+  store i32 0, ptr @k_site_id
   %f = call %KValue @k_b_find2_below(%KValue %cs, %KValue %from, %KValue %a, %KValue %b, %KValue %lim)
   ret %KValue %f
 }
@@ -969,6 +980,7 @@ scan:
   ret %KValue %r
 slow:
   store ptr %site, ptr @k_site
+  store i32 0, ptr @k_site_id
   %n = call %KValue @k_b_number_span(%KValue %cs, %KValue %from)
   ret %KValue %n
 }
@@ -989,6 +1001,7 @@ str:
   ret %KValue %r
 slow:
   store ptr %site, ptr @k_site
+  store i32 0, ptr @k_site_id
   %b = call %KValue @k_b_bytes(%KValue %v)
   %n = call %KValue @k_b_length(%KValue %b)
   ret %KValue %n
@@ -1065,6 +1078,7 @@ none:
   ret %KValue { i64 4, i64 0 }
 slow:
   store ptr %site, ptr @k_site
+  store i32 0, ptr @k_site_id
   %n = call %KValue @k_b_plain_string(%KValue %cs, %KValue %from)
   ret %KValue %n
 }
@@ -1095,6 +1109,7 @@ scan:
   ret %KValue %r
 slow:
   store ptr %site, ptr @k_site
+  store i32 0, ptr @k_site_id
   %f = call %KValue @k_b_find2(%KValue %cs, %KValue %from, %KValue %a, %KValue %b)
   ret %KValue %f
 }
@@ -1138,6 +1153,7 @@ count:
   ret %KValue %rs
 slow:
   store ptr %site, ptr @k_site
+  store i32 0, ptr @k_site_id
   %f = call %KValue @k_b_length(%KValue %v)
   ret %KValue %f
 }
@@ -1185,6 +1201,7 @@ alloc:
   ret %KValue %r0
 slow:
   store ptr %site, ptr @k_site
+  store i32 0, ptr @k_site_id
   %f = call %KValue @k_b_bytes(%KValue %sv)
   ret %KValue %f
 }
@@ -1324,6 +1341,7 @@ ints:
   ret %KValue %v
 slow:
   store ptr %site, ptr @k_site
+  store i32 0, ptr @k_site_id
   %s = call %KValue @k_b_bit_and(%KValue %a, %KValue %b)
   ret %KValue %s
 }
@@ -1342,6 +1360,7 @@ ints:
   ret %KValue %v
 slow:
   store ptr %site, ptr @k_site
+  store i32 0, ptr @k_site_id
   %s = call %KValue @k_b_bit_or(%KValue %a, %KValue %b)
   ret %KValue %s
 }
@@ -1360,6 +1379,7 @@ ints:
   ret %KValue %v
 slow:
   store ptr %site, ptr @k_site
+  store i32 0, ptr @k_site_id
   %s = call %KValue @k_b_bit_xor(%KValue %a, %KValue %b)
   ret %KValue %s
 }
@@ -1381,6 +1401,7 @@ go:
   ret %KValue %v
 slow:
   store ptr %site, ptr @k_site
+  store i32 0, ptr @k_site_id
   %s = call %KValue @k_b_bit_shl(%KValue %a, %KValue %b)
   ret %KValue %s
 }
@@ -1402,6 +1423,7 @@ go:
   ret %KValue %v
 slow:
   store ptr %site, ptr @k_site
+  store i32 0, ptr @k_site_id
   %s = call %KValue @k_b_bit_shr(%KValue %a, %KValue %b)
   ret %KValue %s
 }
@@ -1416,6 +1438,7 @@ int:
   ret %KValue %v
 slow:
   store ptr %site, ptr @k_site
+  store i32 0, ptr @k_site_id
   %s = call %KValue @k_b_bit_not(%KValue %a)
   ret %KValue %s
 }
@@ -1484,6 +1507,7 @@ eknown:
   ret %KValue %kr
 eslow:
   store ptr %site, ptr @k_site
+  store i32 0, ptr @k_site_id
   %er = call %KValue @k_b_push_mut(%KValue %lv, %KValue %item)
   ret %KValue %er
 }
@@ -1521,6 +1545,7 @@ lwrite:
   ret %KValue %lv
 lslow:
   store ptr %site, ptr @k_site
+  store i32 0, ptr @k_site_id
   %lr = call %KValue @k_b_push_mut(%KValue %lv, %KValue %item)
   ret %KValue %lr
 }
@@ -1589,6 +1614,7 @@ pwrite:
   ret %KValue %mv
 pslow:
   store ptr %site, ptr @k_site
+  store i32 0, ptr @k_site_id
   %pr = call %KValue @k_b_put_mut(%KValue %mv, %KValue %k, %KValue %v)
   ret %KValue %pr
 }

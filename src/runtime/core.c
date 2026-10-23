@@ -315,6 +315,14 @@ KValue k_thunk_new_pooled(long long site, int argc, ...) {
 __attribute__((noreturn, noinline)) void k_die(const char* msg);
 __attribute__((noreturn, noinline)) void k_died(void);
 extern const char* k_site;
+extern int k_site_id;
+/* The site last stamped. Compiled code stores an id, which the program's
+   own table maps to the literal; a runtime path that carries the literal
+   stores it in k_site and zeroes the id. */
+extern const char* k_site_name(long long id);
+static inline const char* k_site_now(void) {
+    return k_site_id ? k_site_name(k_site_id) : k_site;
+}
 /* The place a stack overflow names: the outermost cycle that grows the stack
    and is still active (src/deep.rs). */
 extern const char* k_deep_site;
@@ -448,7 +456,7 @@ static __attribute__((noinline)) KValue k_force_slow(KThunk* t) {
         if (k_memo_still_there(t)) return t->result;
         t->forced = K_MEMO_NONE;
     }
-    if (t->site == K_SITE_BLACKHOLE) { k_site = 0; k_die("a lazy binding demands its own value"); }
+    if (t->site == K_SITE_BLACKHOLE) { k_site = 0; k_site_id = 0; k_die("a lazy binding demands its own value"); }
     if (K_COUNTING && !t->pooled) k_stat_thunk_evals++;
     KValue answer = d_thunk_eval(t->site, t->args);
     /* The computation can answer with a cell of its own: a deferred binding
@@ -3444,7 +3452,7 @@ KValue k_caf_freeze(KValue v) {
    that one answers the record it helped build. */
 KValue k_caf_complete(KValue built, KValue seeded) {
     if (built.tag == K_THUNK && seeded.tag == K_THUNK && built.payload == seeded.payload) {
-        { k_site = 0; k_die("a lazy binding demands its own value"); }
+        { k_site = 0; k_site_id = 0; k_die("a lazy binding demands its own value"); }
     }
     KValue frozen = k_caf_freeze(built);
     /* A field that stored this cell mid-flight holds the SEED, and the frozen
@@ -3541,12 +3549,13 @@ static long long k_itoa(char* buf, long long v);
    so the place prints the way `born in` does (ruled on #1975). A death prints
    the second half under its message; NULL is a death nothing stamped. */
 const char* k_site;
+int k_site_id;
 const char* k_deep_site;
 
 __attribute__((noreturn, noinline)) void k_died(void) {
-    if (k_site)
-        fprintf(stderr, "%s  failed in %s%s\n", k_c_dim(), k_site + strlen(k_site) + 1,
-                k_c_off());
+    const char* site = k_site_now();
+    if (site)
+        fprintf(stderr, "%s  failed in %s%s\n", k_c_dim(), site + strlen(site) + 1, k_c_off());
     exit(1);
 }
 
