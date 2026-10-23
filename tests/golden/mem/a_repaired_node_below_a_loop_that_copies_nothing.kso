@@ -1,0 +1,64 @@
+# A record older than a loop, repaired by a pop inside that loop, where the
+# loop carries nothing it has to copy.
+#
+# `outer` carries `keep`, so after its first stage the string lives in the
+# outer loop's carry storage. Each lap builds `box keep` and hands it to
+# `middle`, which starts after the box exists: the box lies below the middle
+# loop's mark. `inner` returns the box inside a list, and its pop copies the
+# string to the arena's frontier and repairs the box to point at the copy.
+# The frontier is in the middle loop's lap, so the pop puts the box on the
+# list of repaired nodes for the middle loop to revisit.
+#
+# `middle` carries the box, which lies below its mark, and a count, so a lap
+# has nothing to copy and ends in a plain rewind instead of a stage. Until
+# 2026-10-23 that rewind gave back the copy the box pointed at, and the second
+# line printed the bytes `cover` wrote over it where it should print `name.`.
+# A plain rewind with a repaired node below its mark now runs as a stage with
+# nothing staged, which revisits the node before it rewinds.
+#
+# `big` makes each lap allocate a few hundred kilobytes, so the loops stage
+# under the lap carry's drift rule as well as at every edge, and `cover` puts
+# new bytes over the freed copy before the box is read.
+type box
+  name
+
+type lap
+  k
+  text
+  prev
+
+# A string of a few hundred kilobytes, so a lap that builds one drifts
+# far enough for its loop to stage.
+fn big t
+  a = "{t}{t}{t}{t}{t}{t}{t}{t}"
+  b = "{a}{a}{a}{a}{a}{a}{a}{a}"
+  c = "{b}{b}{b}{b}{b}{b}{b}{b}"
+  "{c}{c}{c}{c}{c}{c}{c}{c}"
+
+fn inner 0 b acc
+  [b acc]
+
+fn inner k b acc
+  junk = "{k} overwrote the bytes the box named {k} {k} {k} {k} {k} {k}"
+  inner (k - 1) b (lap (k + length (big junk) * 0) junk acc)
+
+fn middle 0 _ total
+  total
+
+fn middle j b total
+  got = inner j b 0
+  drift = length (big "middle lap {j} drifts the arena past the lap mark")
+  middle (j - 1) b (total + length got + drift * 0)
+
+fn outer 0 _ acc
+  acc
+
+fn outer i keep acc
+  b = box keep
+  r = middle 4 b 0
+  cover = length (big "the bytes after the pop go over what it gave back")
+  drift = length (big "outer lap {i} drifts the arena past the lap mark")
+  line = "{b.name} {r} {cover + drift * 0}\n"
+  outer (i - 1) "{keep}." "{acc}{line}"
+
+pub play = print (outer 2 "name" "")
