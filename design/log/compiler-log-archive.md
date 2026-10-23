@@ -105606,3 +105606,27 @@ drops by what CI measures for the rest, under the #1975 gavel.
 
 Owes, on #1987: kanso#1985 without the overflow's entry stores; CI's rows
 and the floor moved by them; a follow-up issue for the outermost-cycle rule.
+
+## 2026-10-17 — gavel: the names for spans
+
+Clay ruled #1983, the names the #1960 gavel said would come to him before
+any shipped.
+
+**The ruling.** In std/text:
+
+- `span` is the type, with readable fields `whole` (the string), `from` and
+  `to` (inclusive, the way `text/slice` counts). An empty run has `to` one
+  less than `from`. Only std/text builds one.
+- `text/span s from to` answers a span when the range lies inside `s`, and
+  `none` otherwise.
+- `text/span_to cs p a b` answers the span from `p` up to the byte before the
+  first `a` or `b`, or to the end of `cs`, and `none` only when `p` lies
+  outside `cs`. `text/span_to_below cs p a b lim` also stops at any byte
+  below `lim`. The names say what they answer. `find2` and `find2_below`
+  keep answering a position.
+- `text/slice run`, an arm of `slice` that takes a span, answers the string
+  with no `none`.
+
+Owes, on #1983 and #1960: the five names on every engine; the fused doors
+reading a sliced span; the decoder's four `builtin_slice_in` sites moved
+onto spans; micro goldens; appendix B; kq's decoder following.
