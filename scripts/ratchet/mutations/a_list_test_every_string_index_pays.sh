@@ -9,7 +9,7 @@
 # list index now pays the two instructions the string index stopped
 # paying.
 set -e
-str_arm='    if (container.tag == K_STR && index.tag == K_INT) {'
+str_arm='    if (container.tag == K_STR && index.tag == K_INT)'
 list_arm='    if (container.tag == K_LIST && index.tag == K_INT) {'
 bytes_arm='    if (container.tag == K_BYTES && index.tag == K_INT) {'
 # The guard names the file this patches, on its own line, the way every other

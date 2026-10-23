@@ -105581,3 +105581,28 @@ The walk costs compile time, which CI measured: `compile_instructions`
 `browser_compile_instructions` 382,590,239 -> 382,741,447. The run rows did
 not move. This builds a ruled part of the language, so the welfare floor
 moved down by exactly that cost, to 91.52, with this entry as the reason.
+
+## 2026-10-17 — gavel: every run-time failure names its line except a stack overflow
+
+Clay ruled #1987. The #1975 ruling accepted naming every run-time failure's
+line at a bound of 0.42% of runbench. Built in kanso#1985, CI measured
++1.70% on runbench, +3.01% on livebench and +4.36% on encodebench. The
+bound had counted only calls into the C runtime. It missed the stores on
+inlined fast paths, which moved onto the slow branch, the stamp before a call
+that can match no arm, and the store on entry to every function of a
+recursion cycle that records an overflow's place. The overflow's place also
+broke the differential law: an engine names the cycle it entered last, and
+the engines run out of stack at different depths, so a program that keeps
+entering a second cycle gets two different answers.
+
+**The ruling.** Every run-time failure names its file and line on every
+engine, except a stack overflow, which keeps its sentence with no line, as
+main prints it today. A call that matches no arm names the caller's line.
+Dropping the overflow's entry stores saves about 0.8% of runbench and 1.5%
+of livebench and encodebench, and the divergence goes with them. Naming an
+overflow's place by the outermost active cycle is possible and is its own
+issue, measured from scratch; nothing in this ruling waits on it. The floor
+drops by what CI measures for the rest, under the #1975 gavel.
+
+Owes, on #1987: kanso#1985 without the overflow's entry stores; CI's rows
+and the floor moved by them; a follow-up issue for the outermost-cycle rule.

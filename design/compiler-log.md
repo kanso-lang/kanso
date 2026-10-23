@@ -21,31 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-17 — gavel: every run-time failure names its line except a stack overflow
-
-Clay ruled #1987. The #1975 ruling accepted naming every run-time failure's
-line at a bound of 0.42% of runbench. Built in kanso#1985, CI measured
-+1.70% on runbench, +3.01% on livebench and +4.36% on encodebench. The
-bound had counted only calls into the C runtime. It missed the stores on
-inlined fast paths, which moved onto the slow branch, the stamp before a call
-that can match no arm, and the store on entry to every function of a
-recursion cycle that records an overflow's place. The overflow's place also
-broke the differential law: an engine names the cycle it entered last, and
-the engines run out of stack at different depths, so a program that keeps
-entering a second cycle gets two different answers.
-
-**The ruling.** Every run-time failure names its file and line on every
-engine, except a stack overflow, which keeps its sentence with no line, as
-main prints it today. A call that matches no arm names the caller's line.
-Dropping the overflow's entry stores saves about 0.8% of runbench and 1.5%
-of livebench and encodebench, and the divergence goes with them. Naming an
-overflow's place by the outermost active cycle is possible and is its own
-issue, measured from scratch; nothing in this ruling waits on it. The floor
-drops by what CI measures for the rest, under the #1975 gavel.
-
-Owes, on #1987: kanso#1985 without the overflow's entry stores; CI's rows
-and the floor moved by them; a follow-up issue for the outermost-cycle rule.
-
 ## 2026-10-17 — gavel: the names for spans
 
 Clay ruled #1983, the names the #1960 gavel said would come to him before
@@ -2139,3 +2114,49 @@ the most it could have saved.
 Kanso#2024 is closed. Its first lead shipped in #2025 and its third with
 `append_key`. Of its second, 8,091,439 overflow checks still execute. Most
 guard arithmetic on ints with no bound inside their own group.
+
+## 2026-10-22 — a string index the checker proves goes straight to the text
+
+Where the sets prove the container a string and the position an int, the
+emitter now calls `k_b_at_str` with the string's pointer and the position.
+It is the string arm of `k_b_at`, lifted out, and `k_b_at` calls it too. The
+site used to emit a bytes test that a string never passes, then call
+`k_b_at` with two KValues, which tested both tags again, then merge the slow
+answer back with a select that rebuilt the byte form. The arm answers a
+one-character string or `none`, and nothing in it stops the program but
+running out of memory, so the site stamps no place for a death.
+
+Measured here on #2047's build, the run program 855,758,710 -> 844,029,230
+(-1.37%) with the same output. Every index in it of this shape is the index
+phase's walk, 690,000 calls: the door fell 40,070,237 -> 34,500,017
+(`k_b_at` against `k_b_at_str`), and `tally_4`, where the walk is inlined,
+fell 22,887,971 -> 16,677,970 without the bytes test and the merge.
+
+CI's rows. run_instructions 855,758,740 -> 844,029,138 (-1.37%), and
+work_indexbench, which is the same walk alone, 2,326,925 -> 1,986,925
+(-14.6%). Three moved by amounts this entry does not account for:
+work_encodebench 2,456,797,378 -> 2,456,796,006, work_oneshot 10,361,059 ->
+10,361,367 and work_livebench 990,759,394 -> 990,759,429. The emitted code
+of the two programs with the walk shrinks: indexbench's branches 48 -> 42
+and lines 787 -> 756, runbench's branches 6,451 -> 6,445 and lines 57,875 ->
+57,843, so emitted_other_branches and emitted_other_lines fall. Machine code
+grows by 1,040 bytes in most programs and 960 and 992 in the two with the
+walk, since `k_b_at_str` is a function beside `k_b_at`: text 5,317,806 ->
+5,332,238. Building the run program: codegen_instructions_dev 116,141,087 ->
+116,162,655, codegen_instructions_release 422,507,483 -> 422,568,857, and
+emit_instructions 6,433,837 -> 6,434,680. In the tab:
+browser_compile_instructions 428,036,106 -> 427,996,730,
+browser_compile_peak_bytes 768,205 -> 768,243 and browser_run_instructions
+30,460,236 -> 30,450,747. The welfare floor rises 92.83 -> 92.88.
+
+Declined: giving the index twin `k_b_at_fast` the same string arm, for
+indexes whose sets do not prove a string. Alone it read the run program
+-8,405, against a branch and a call at every unproven index site.
+
+The micro golden `a_string_index_the_checker_proves_goes_straight_to_the_text`
+walks strings of one- to four-byte characters forward, which steps the
+cursor, and backward, which seeks, with positions past both ends. The
+release build, which the corpus runs, takes `k_b_at_str` at both walks. With
+the cursor stepping one byte instead of one character the walk splits the
+wide characters and the golden goes red. The ratchet row
+`a_proven_string_index_through_the_tag_tests` takes the arm away.

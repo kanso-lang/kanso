@@ -864,69 +864,73 @@ static __attribute__((noinline, cold, preserve_most)) KValue k_b_at_rest(KValue 
     return k_none();
 }
 
+/* `s[want]` on a string: the STR arm of `k_b_at`, with the tags already
+   read. The emitter's index twin calls it when it sees a string and an int,
+   so a walk over text pays neither the call's tag tests a second time nor
+   two KValues where a pointer and a position do. */
+KValue k_b_at_str(KStr* s, long long want) {
+    long at;
+    /* The step. A walk by index asks for the character after the one it
+       just read, and the cursor stands on that one: the answer is the
+       cursor's byte plus its character's width, which `k_str_seek` also
+       finds, but only after asking whether the string is all ascii and
+       whether the cursor's own character was wanted. On the run program's
+       index phase, 690,000 indexes of a multibyte string, those questions
+       cost 8,280,000 instructions. */
+    if (s == k_seek_str && want == k_seek_char + 1 && s->cap != 0 && k_seek_byte < s->len) {
+        if (K_COUNTING) k_stat_seek_resumes++;
+        if (K_COUNTING) k_stat_seek_steps++;
+        at = k_seek_byte + k_cp_len((unsigned char)s->data[k_seek_byte]);
+        if (at >= s->len) return k_none();
+        k_seek_char = want;
+        k_seek_byte = at;
+    } else {
+        if (want < 1) return k_none();
+        at = k_str_seek(s, want);
+        if (at < 0) return k_none();
+    }
+    long w = k_cp_len((unsigned char)s->data[at]);
+    if (w == 1) {
+        /* an ascii character comes from the cache through k_str_n */
+        KValue one = k_str_n(s->data + at, 1);
+        KStr* os = k_as_str(one);
+        if (os->cap == 0) os->cap = -2;
+        return one;
+    }
+    /* A wide character is two, three or four bytes, and it goes over as
+       four: the read past it stops at the string's own terminator at
+       worst, since at + w <= len, and the write lands inside storage
+       k_alloc rounded up to sixteen. glibc's memcpy took seventeen
+       instructions to choose how to move three bytes, 345,000 times a
+       run on runbench; a byte loop bounded by w cost more than the call.
+       One character by construction, so its count is known without a
+       scan: `length s[i]` asked k_utf8_chars to walk the bytes of every
+       multi-byte character it was handed, 345,220 times on runbench. */
+    uint32_t q;
+    memcpy(&q, s->data + at, 4);
+    /* The same character comes back from the same permanent string, the
+       way an ascii one does from k_str_n's cache: a walk over text by
+       index meets the same few characters at every step, and building
+       each one in the arena was an allocation and a hundred instructions
+       a step. The cache is direct-mapped over the character's own bytes
+       and never evicts -- a slot that already holds another character
+       sends this one down the arena path -- so the permanent storage it
+       can hold is bounded by its width, whatever the text does. */
+    uint32_t key = q & (0xffffffffu >> (8 * (4 - w)));
+    unsigned slot = (unsigned)((key * 2654435761u) >> 24);
+    if (k_wide_key[slot] == key && k_wide_ready[slot]) return k_wide_cache[slot];
+    return k_b_at_wide_miss(q, key, slot, w);
+}
+
 KValue k_b_at(KValue container, KValue index) {
     if (__builtin_expect(!k_not_failure(container) || !k_not_failure(index), 0)) return k_failed2(container, index);
-    /* The STR arm is asked FIRST. `length s[i]` over text is the index this
-       runtime meets most -- 690,000 calls on runbench, all of them from
-       tally_4 -- and the LIST test in front of it was two instructions
-       every one of them paid to be told no. A list index pays the same two
-       instructions now, which is why this is measured on the whole work
-       vein rather than on runbench alone. */
-    if (container.tag == K_STR && index.tag == K_INT) {
-        KStr* s = k_as_str(container);
-        long long want = index.payload;
-        long at;
-        /* The step. A walk by index asks for the character after the one it
-           just read, and the cursor stands on that one: the answer is the
-           cursor's byte plus its character's width, which `k_str_seek` also
-           finds, but only after asking whether the string is all ascii and
-           whether the cursor's own character was wanted. On the run program's
-           index phase, 690,000 indexes of a multibyte string, those questions
-           cost 8,280,000 instructions. */
-        if (s == k_seek_str && want == k_seek_char + 1 && s->cap != 0 && k_seek_byte < s->len) {
-            if (K_COUNTING) k_stat_seek_resumes++;
-            if (K_COUNTING) k_stat_seek_steps++;
-            at = k_seek_byte + k_cp_len((unsigned char)s->data[k_seek_byte]);
-            if (at >= s->len) return k_none();
-            k_seek_char = want;
-            k_seek_byte = at;
-        } else {
-            if (want < 1) return k_none();
-            at = k_str_seek(s, want);
-            if (at < 0) return k_none();
-        }
-        long w = k_cp_len((unsigned char)s->data[at]);
-        if (w == 1) {
-            /* an ascii character comes from the cache through k_str_n */
-            KValue one = k_str_n(s->data + at, 1);
-            KStr* os = k_as_str(one);
-            if (os->cap == 0) os->cap = -2;
-            return one;
-        }
-        /* A wide character is two, three or four bytes, and it goes over as
-           four: the read past it stops at the string's own terminator at
-           worst, since at + w <= len, and the write lands inside storage
-           k_alloc rounded up to sixteen. glibc's memcpy took seventeen
-           instructions to choose how to move three bytes, 345,000 times a
-           run on runbench; a byte loop bounded by w cost more than the call.
-           One character by construction, so its count is known without a
-           scan: `length s[i]` asked k_utf8_chars to walk the bytes of every
-           multi-byte character it was handed, 345,220 times on runbench. */
-        uint32_t q;
-        memcpy(&q, s->data + at, 4);
-        /* The same character comes back from the same permanent string, the
-           way an ascii one does from k_str_n's cache: a walk over text by
-           index meets the same few characters at every step, and building
-           each one in the arena was an allocation and a hundred instructions
-           a step. The cache is direct-mapped over the character's own bytes
-           and never evicts -- a slot that already holds another character
-           sends this one down the arena path -- so the permanent storage it
-           can hold is bounded by its width, whatever the text does. */
-        uint32_t key = q & (0xffffffffu >> (8 * (4 - w)));
-        unsigned slot = (unsigned)((key * 2654435761u) >> 24);
-        if (k_wide_key[slot] == key && k_wide_ready[slot]) return k_wide_cache[slot];
-        return k_b_at_wide_miss(q, key, slot, w);
-    }
+    /* The STR arm is asked first, ahead of the LIST test, because a string
+       index was the one this runtime met most: 690,000 calls on runbench,
+       all from tally_4. Those sites have sets that prove a string and an
+       int, and the emitter now sends them to `k_b_at_str` directly, so what
+       reaches this arm is a string index the compiler could not type. */
+    if (container.tag == K_STR && index.tag == K_INT)
+        return k_b_at_str(k_as_str(container), index.payload);
     if (container.tag == K_LIST && index.tag == K_INT) {
         KList* l = k_as_list(container);
         long long i = index.payload;

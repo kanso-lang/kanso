@@ -2792,6 +2792,21 @@ impl<'a> Backend<'a> {
             ));
             return t.to_string();
         }
+        // A plain index of a container the sets prove is a string, at a
+        // position they prove is an int, goes to the string arm of `k_b_at`
+        // with the pointer and the position: no bytes test in front of it,
+        // which a string never passes, and no tag tests behind it. The arm
+        // answers a one-character string or `none`, and stops nothing.
+        if !strict && f.set_of(container) == STR && f.set_of(key) == INT {
+            let sp = inline_payload(f, container);
+            let sptr = f.tmp();
+            f.line_fmt(format_args!("{sptr} = inttoptr i64 {sp} to ptr"));
+            let idx = inline_payload(f, key);
+            let t = f.tmp();
+            f.line_fmt(format_args!("{t} = call %KValue @k_b_at_str(ptr {sptr}, i64 {idx})"));
+            f.record(&t, STR | infer::NONE);
+            return t.to_string();
+        }
         let ct = inline_tag(f, container);
         let is_bytes = f.tmp();
         f.line_fmt(format_args!("{is_bytes} = icmp eq i64 {ct}, 13"));
