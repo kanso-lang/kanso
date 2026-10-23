@@ -2003,7 +2003,7 @@ which put welfare under the floor, so it rides here. With both, the dev row
 reads 116,473,612 -> 116,472,553 and the release row 425,509,331 ->
 425,509,866.
 
-## 2026-10-23 — six leads measured and declined
+## 2026-10-23 — seven leads measured and declined
 
 **A number's value kept by its span.** The decoder asks `number_span` where a
 number ends and then `to_int` or `to_float` what it is worth, and both read
@@ -2067,3 +2067,15 @@ cannot tell the slot from the header. Tagging the twin's loads and stores
 with three TBAA types left the run program at 828,157,323, forty fewer than
 without them. Every loop that pushes also holds the twin's slow path, a call
 that may change the header, so the loads stay where they are.
+
+**Inlining chosen by hand.** An environment switch in the emitter marked one
+named function `alwaysinline` or `noinline`, and each of the 84 functions in
+std/json was tried both ways on the run program (baseline 828,157,901). Six
+single changes saved 2.25M to 2.93M each, all on the object path:
+`obj_colon`, `skip_ws` and `ws?` inlined, `obj_key`, `colon_bad` and
+`obj_items` kept out of line, while `array_bad` kept out cost 3.6M. They do
+not add. The best pair, `obj_colon` in and `obj_key` out, read 822,315,778
+(-0.71%); all six together read 845,054,425 (+2.0%), and `obj_colon` with
+`obj_items` read 843,779,017. These are LLVM's inliner landing on different
+shapes rather than a property of the functions, and a set picked for the
+lowest reading on today's tree is a draw the next change would reshuffle.
