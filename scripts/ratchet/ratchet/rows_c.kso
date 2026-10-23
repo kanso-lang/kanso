@@ -2911,4 +2911,17 @@ site_by_id = row
 
 rows_cq33 = list/concat rows_cq32 [site_by_id]
 
-rows_c = list/concat rows_cq33 [itself]
+# A mention of a constant whose one arm is an integer literal is that
+# literal. The mutation sends every mention back through the constant's cell;
+# the output is the same and the work rows rise.
+literal_constant = row
+  "a literal constant read through its cell"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_literal_constant_read_through_its_cell")
+  benchmarks
+
+rows_cq34 = list/concat rows_cq33 [literal_constant]
+
+rows_c = list/concat rows_cq34 [itself]
