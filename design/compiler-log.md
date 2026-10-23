@@ -21,23 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-18 — gavel: the span maker is `text/to_span`
-
-Clay ruled #1992. The 2026-10-17 gavel on #1983 named a type `span` and a
-function `text/span s from to`. A type's name is its constructor, so the
-constructor `span whole from to` and the function share a name and an arity,
-and the checker refuses the pair.
-
-**The ruling.** The function is `text/to_span s from to`, answering a span
-when the range lies inside `s` and `none` otherwise. A `to_` name means the
-answer is a different kind of thing (2026-10-13, #1914), and `list/to_sorted`
-builds a checked `sorted` from a list the same way. The type stays `span`,
-and `span_to`, `span_to_below` and the span arm of `text/slice` keep the
-names ruled on #1983.
-
-Owes, on #1992: `text/to_span` in place of `text/span` wherever #1983's build
-uses it; appendix B.
-
 ## 2026-10-18 — std/text answers spans, and the decoder takes them
 
 #1960, under the gavels on #1983 and #1992; the second named the maker
@@ -2088,6 +2071,34 @@ only in the site constants, and four work rows moved with them:
 work_runbench 836,829,464 -> 836,829,597, work_encodebench 2,367,636,382 ->
 2,367,636,459, work_oneshot 10,346,159 -> 10,346,621 and work_livebench
 980,646,434 -> 980,646,336.
+
+## 2026-10-23 — the empty literals' C entries take no frame
+
+`[]` and `{}` call `k_list_empty` and `k_map_empty`, and the decoder makes
+557,000 of them on the run program. Each entry bumped the arena through
+`k_alloc`, whose refill is a call, so the entry aligned the stack with a push
+and a pop on every literal. The bump is now written in the entry, and the
+counting path and a short arena go to a cold `*_slow` entry as a tail call;
+the common path is sixteen instructions and no frame. The allocation counters
+cannot move, since counting still goes through `k_alloc`.
+
+CI's rows. run_instructions 836,829,597 -> 835,716,002 (-0.13%), and
+work_jsonbench 585,129,095 -> 583,476,695 (-0.28%), work_oneshot 10,346,621 ->
+10,335,157, work_deepbench 201,843,399 -> 201,739,409 and smaller falls in
+seven more. work_escapebench rose 39,058,492 -> 39,058,532, which this entry
+does not account for. Building compiles the runtime, so
+codegen_instructions_dev 116,434,829 -> 116,444,792 and
+codegen_instructions_release 425,464,049 -> 425,503,297, and machine code
+grows by the slow entries: text 5,335,758 -> 5,338,222. In the tab, where a
+wasm function has no frame to save, browser_run_instructions 30,274,594 ->
+30,275,515.
+
+Declined, both measured on CI first: the same bump written in the emitted IR
+as helpers in DECLARES. Inlined at every literal, the run program fell 0.30%,
+but the release build rose 4.4%, the dev build 1.0%, the tab compile 0.22% and
+its peak memory 0.7%, which the objective scores as a loss. Defined once and
+called, the run program fell 0.133% and the release build still rose 1.65%,
+clang spending it on the new functions inside the decoder.
 
 ## 2026-10-23 — a string index answers its step and its cache hits in the entry
 

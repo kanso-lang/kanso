@@ -240,12 +240,13 @@ KValue k_list_lit(long long n, KValue* items) {
    160. Six is not a class the shelf keeps, so the header and the items come
    from one allocation every time, as an empty map's do. */
 #define K_LIST_SEED 6
-KValue k_list_empty(void) {
-    size_t buf_bytes = (sizeof(KBuf) + sizeof(KValue) * K_LIST_SEED + 15) & ~(size_t)15;
-    if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0))
-        k_stat_sh_buf += (long long)buf_bytes;
+#define K_LIST_SEED_BYTES \
+    (((sizeof(KList) + 15) & ~(size_t)15) + \
+     ((sizeof(KBuf) + sizeof(KValue) * K_LIST_SEED + 15) & ~(size_t)15))
+
+/* The seed laid out in storage the caller has already taken. */
+static inline __attribute__((always_inline)) KValue k_list_seed(unsigned char* whole) {
     size_t head_bytes = ((sizeof(KList) + 15) & ~(size_t)15);
-    unsigned char* whole = k_alloc(head_bytes + buf_bytes);
     KList* l = (KList*)whole;
     KBuf* b = (KBuf*)(whole + head_bytes);
     k_buf_set_cap(b, K_LIST_SEED, 0);
@@ -253,6 +254,27 @@ KValue k_list_empty(void) {
     l->len = 0;
     l->items = (KValue*)(b + 1);
     KValue v; v.tag = K_LIST; v.payload = k_ptr(l); return v;
+}
+
+static __attribute__((noinline, cold)) KValue k_list_empty_slow(void) {
+    size_t buf_bytes = (sizeof(KBuf) + sizeof(KValue) * K_LIST_SEED + 15) & ~(size_t)15;
+    if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0))
+        k_stat_sh_buf += (long long)buf_bytes;
+    return k_list_seed(k_alloc(K_LIST_SEED_BYTES));
+}
+
+/* The bump is written here rather than through k_alloc, whose refill is a
+   call: a function that may call needs its stack aligned, and the push and
+   pop that bought it were on every empty literal. The counting path and an
+   arena too short go to the slow entry as a tail call, so the common one
+   takes no frame. */
+KValue k_list_empty(void) {
+    if (__builtin_expect((K_COUNTING && k_stats_on > 0) || K_LIST_SEED_BYTES > k_arena_left, 0))
+        return k_list_empty_slow();
+    unsigned char* whole = (unsigned char*)k_arena;
+    k_arena += K_LIST_SEED_BYTES;
+    k_arena_left -= K_LIST_SEED_BYTES;
+    return k_list_seed(whole);
 }
 
 KValue k_closure(KValue (K_CLOSCC *fn)(void*, KValue), long long arity, long long ncaps, KValue* caps, void* body) {
@@ -840,12 +862,12 @@ KValue k_map_lit(long long n, KValue* flat_pairs) {
    the header and the pairs come from one allocation every time; a map that
    outgrows them moves to sixteen slots, which is. */
 #define K_MAP_SEED 10
-KValue k_map_empty(void) {
-    size_t buf_bytes = (sizeof(KBuf) + sizeof(KValue) * K_MAP_SEED + 15) & ~(size_t)15;
-    if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0))
-        k_stat_sh_buf += (long long)buf_bytes;
+#define K_MAP_SEED_BYTES \
+    (((sizeof(KMap) + 15) & ~(size_t)15) + \
+     ((sizeof(KBuf) + sizeof(KValue) * K_MAP_SEED + 15) & ~(size_t)15))
+
+static inline __attribute__((always_inline)) KValue k_map_seed(unsigned char* whole) {
     size_t head_bytes = ((sizeof(KMap) + 15) & ~(size_t)15);
-    unsigned char* whole = k_alloc(head_bytes + buf_bytes);
     KMap* m = (KMap*)whole;
     KBuf* b = (KBuf*)(whole + head_bytes);
     k_buf_set_cap(b, K_MAP_SEED, 0);
@@ -855,6 +877,23 @@ KValue k_map_empty(void) {
     m->sorted = NULL;
     m->sorted_len = 0;
     KValue mv; mv.tag = K_MAP; mv.payload = k_ptr(m); return mv;
+}
+
+static __attribute__((noinline, cold)) KValue k_map_empty_slow(void) {
+    size_t buf_bytes = (sizeof(KBuf) + sizeof(KValue) * K_MAP_SEED + 15) & ~(size_t)15;
+    if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0))
+        k_stat_sh_buf += (long long)buf_bytes;
+    return k_map_seed(k_alloc(K_MAP_SEED_BYTES));
+}
+
+/* As k_list_empty: the bump in place, and everything else a tail call. */
+KValue k_map_empty(void) {
+    if (__builtin_expect((K_COUNTING && k_stats_on > 0) || K_MAP_SEED_BYTES > k_arena_left, 0))
+        return k_map_empty_slow();
+    unsigned char* whole = (unsigned char*)k_arena;
+    k_arena += K_MAP_SEED_BYTES;
+    k_arena_left -= K_MAP_SEED_BYTES;
+    return k_map_seed(whole);
 }
 
 /* Only an int or a string keys a map, which is what the interpreter has
