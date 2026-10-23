@@ -342,7 +342,8 @@ struct Numbered {
 }
 
 impl Numbered {
-    fn new(prefix: &[u8], n: usize) -> Numbered {
+    fn new(prefix: &str, n: usize) -> Numbered {
+        let prefix = prefix.as_bytes();
         let mut buf = [0u8; 24];
         buf[..prefix.len()].copy_from_slice(prefix);
         let mut digits = [0u8; 20];
@@ -366,8 +367,12 @@ impl Numbered {
 impl std::ops::Deref for Numbered {
     type Target = str;
     fn deref(&self) -> &str {
-        // a prefix and ASCII digits, nothing else
-        std::str::from_utf8(&self.buf[..self.len as usize]).unwrap_or_default()
+        // SAFETY: `Numbered::new` is the only place a `Numbered` is built, and
+        // it writes a `&str` prefix and ASCII digits after it, so `buf[..len]`
+        // is UTF-8 by construction. Checking it on every read was 1.1M of the
+        // tab's 257M compile instructions; the emitter reads one for nearly
+        // every instruction it writes.
+        unsafe { std::str::from_utf8_unchecked(&self.buf[..self.len as usize]) }
     }
 }
 
@@ -1360,12 +1365,12 @@ impl FnEmit {
 
     fn tmp(&mut self) -> Numbered {
         self.tmp += 1;
-        Numbered::new(b"%t", self.tmp)
+        Numbered::new("%t", self.tmp)
     }
 
     fn label(&mut self) -> Numbered {
         self.label += 1;
-        Numbered::new(b"L", self.label)
+        Numbered::new("L", self.label)
     }
 
     /// Only a carried argument slot reads the two-word convention. Every other
