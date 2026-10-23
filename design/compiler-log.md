@@ -2182,7 +2182,7 @@ codegen_instructions_dev 116,162,655 -> 116,434,655 and
 codegen_instructions_release 422,568,857 -> 425,459,550 (+0.68%).
 compile_instructions, entry_instructions and library_instructions each fell
 by 15 to 25, which is layout. In the tab: browser_compile_instructions
-427,996,730 -> 428,979,735, browser_compile_peak_bytes 768,243 -> 769,385 and
+427,996,730 -> 428,979,212, browser_compile_peak_bytes 768,243 -> 769,385 and
 browser_run_instructions 30,450,747 -> 30,299,391. The run side outweighs the
 compile side, and welfare rises.
 
