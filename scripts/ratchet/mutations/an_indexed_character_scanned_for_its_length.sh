@@ -7,20 +7,22 @@
 # more by `length`. str_scans in the fixture rises by one per non-ascii
 # position, 2,003 on 4,000, and the mem corpus goes red on that row.
 #
-# The wide-character memo lives in k_b_at_wide_miss since 2026-09-15, and the
-# ascii one in k_b_at_str since 2026-10-22, each one indent level up from
-# where it sat inside k_b_at; the anchors follow them.
+# The wide-character memo lives in k_b_at_wide_miss. The ascii one is written
+# in two places: k_at_char, where the cache answers, and k_at_ascii_miss,
+# where it does not; the anchors follow both.
 set -e
-grep -q '^        if (os->cap == 0) os->cap = -2;$' src/runtime/text.c || {
-  echo "k_b_at's ascii memo changed shape; this needs rewriting" >&2
-  exit 1
-}
-grep -q '^    os->cap = -2;$' src/runtime/text.c || {
-  echo "k_b_at's wide-character memo changed shape; this needs rewriting" >&2
-  exit 1
-}
-sed -i 's|^        if (os->cap == 0) os->cap = -2;$|        if (os->cap == 0) os->cap = 0;|' \
-  src/runtime/text.c
+hit='            if (os->cap == 0) os->cap = -2;'
+miss='    if (os->cap == 0) os->cap = -2;'
+wide='    os->cap = -2;'
+for l in "$hit" "$miss" "$wide"; do
+  [ "$(grep -cxF "$l" src/runtime/text.c)" -eq 1 ] || {
+    echo "k_b_at_str's count memos changed shape; this needs rewriting" >&2
+    exit 1
+  }
+done
+sed -i 's|^            if (os->cap == 0) os->cap = -2;$|            if (os->cap == 0) os->cap = 0;|' src/runtime/text.c
+sed -i 's|^    if (os->cap == 0) os->cap = -2;$|    if (os->cap == 0) os->cap = 0;|' src/runtime/text.c
 sed -i 's|^    os->cap = -2;$|    os->cap = 0;|' src/runtime/text.c
-grep -q '^        if (os->cap == 0) os->cap = 0;$' src/runtime/text.c
-grep -q '^    os->cap = 0;$' src/runtime/text.c
+for l in "$hit" "$miss" "$wide"; do
+  if grep -qxF "$l" src/runtime/text.c; then exit 1; fi
+done
