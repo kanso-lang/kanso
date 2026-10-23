@@ -388,8 +388,8 @@ resembles it. Before an argument rests on one:
   versus actual production run time and stuff but it doesn't have zero
   weight." An engine or tier joins the objective in the pull request that adds
   it, with a golden, a gate and a re-banked floor. The browser side counts
-  `bench/interp_corpus` compiled and run in the tab under wasmi's fuel meter
-  (`tests/browser_cost.rs`, `scripts/gates/browser_cost.sh`); its rows belong to
+  `bench/interp_corpus` compiled and run in the tab, in wasm instructions
+  executed under wasmi (`tests/browser_cost.rs`, `scripts/gates/browser_cost.sh`); its rows belong to
   the rustc that built `docs/kanso.wasm`, so take them from CI.
 - **The function is provisional.** Wall time is absent because it cannot be
   made deterministic, and anything the model leaves out it weights at zero.

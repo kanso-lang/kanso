@@ -201,22 +201,22 @@ d_interp_memory = dimension interp_memory_counters "interpreter memory" 1.0 0.04
 #
 # Four terms over one workload, bench/interp_corpus, the program the interpreted
 # row runs, so the browser and the interpreter are priced on the same work.
-# Every row is counted under wasmi with fuel metering -- fuel is spent per
-# executed wasm instruction -- and the peaks are the toolchain allocator's own
-# tally, so the same artifact reads the same number on every machine. Wall time
+# The instruction rows count the wasm instructions executed under wasmi, and
+# the peaks are the toolchain allocator's own tally, so the same artifact reads
+# the same number on every machine. Wall time
 # in a browser cannot be made to do that and is absent for the reason it is
 # absent everywhere else.
 #
 # The weights inside the side: running the program 0.40 and compiling it 0.30,
-# because the run is the larger wait -- 2.33 billion instructions against 344
-# million on the first sitting -- and what the reader came to see. Memory takes
-# the rest at a third of each, 0.20 and 0.10: a tab that holds sixteen
-# megabytes is not a tab anyone notices, but a registry that grows without
-# bound takes the page down, so the run's peak is weighed and weighed more than
-# the compile's. Compiling satiates at 0.5 like the native front end, since a
-# compile in the tab already answers inside a keystroke's patience. Running
-# satiates at 1.0 like the interpreter, which is the engine the tab's runtime
-# calls into for every value it holds.
+# because the run is the larger wait -- 2.33 billion units of wasmi fuel
+# against 344 million on the first sitting -- and what the reader came to see.
+# Memory takes the rest at a third of each, 0.20 and 0.10: a tab that holds
+# sixteen megabytes is not a tab anyone notices, but a registry that grows
+# without bound takes the page down, so the run's peak is weighed and weighed
+# more than the compile's. Compiling satiates at 0.5 like the native front
+# end, since a compile in the tab already answers inside a keystroke's
+# patience. Running satiates at 1.0 like the interpreter, which is the engine
+# the tab's runtime calls into for every value it holds.
 d_tab_compile = dimension tab_compile_counters "browser compile speed" 0.5 0.30
 
 d_tab_held = dimension tab_held_counters "browser compile memory" 0.5 0.10
