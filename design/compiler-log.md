@@ -2071,30 +2071,31 @@ size after one counting pass, the rise is 1,142 bytes. Encoding the offsets as
 a byte string rather than `[N x i32]` read the same to within 160 bytes, so
 the table keeps the readable form.
 
-CI's rows. run_instructions 844,029,138 -> 841,827,035 (-0.26%). The other
-work rows that fell most: work_encodebench 2,456,796,006 -> 2,367,636,452
-(-3.6%), work_livebench 990,759,429 -> 980,646,413 (-1.0%), work_deepbench
-203,571,400 -> 201,843,399 (-0.85%), work_pendbench 176,531,937 ->
-175,730,070, work_digestbench 5,241,199 -> 5,211,213, work_basket
-31,152,439 -> 31,117,160, work_widebench 28,619,457 -> 28,587,459,
-work_oneshot 10,361,367 -> 10,346,579, work_scanbench 274,277 -> 274,149 and
-work_readbench 4,582,081 -> 4,581,876. Two rose: work_jsonbench 584,083,829 ->
-585,129,095 (+0.18%) and work_escapebench 39,058,437 -> 39,058,492;
-work_indexbench moved by one, 1,986,925 -> 1,986,926. Every program gains the
-`k_site_name` definition, and the stamps' literals leave the body:
-emitted_other_defines 2,217 -> 2,230 and emitted_other_lines 161,822 ->
-161,270, and the decoder's emitted_defines 157 -> 158 and emitted_lines
-14,319 -> 14,296. The small compile corpus, which has few stamps, gains more
-lines than it loses: its defines 42 -> 46 and lines 1,528 -> 1,569, and the
-module build's module_defines 29 -> 30 and module_lines 1,164 -> 1,171. Machine code falls, text
-5,332,238 -> 5,330,382. The emitter's scan for surviving stamps and the
+CI's rows, against main with the join merged. run_instructions 839,032,001
+-> 836,829,464 (-0.26%). The other work rows that fell most:
+work_encodebench 2,456,797,210 -> 2,367,636,382 (-3.6%), work_livebench
+990,759,737 -> 980,646,434 (-1.0%), work_deepbench 203,571,400 ->
+201,843,399 (-0.85%), work_digestbench 5,241,199 -> 5,211,213,
+work_pendbench 156,541,737 -> 155,739,870, work_oneshot 10,361,430 ->
+10,346,159, work_basket 31,104,262 -> 31,068,983, work_widebench 28,619,457
+-> 28,587,459, work_scanbench 274,340 -> 274,212 and work_readbench 4,582,081
+-> 4,581,876. Two rose: work_jsonbench 584,083,829 -> 585,129,095 (+0.18%)
+and work_escapebench 39,058,437 -> 39,058,492; work_indexbench moved by one,
+1,987,038 -> 1,987,039. Every program gains the `k_site_name` definition,
+and the stamps' literals leave the body: emitted_other_defines 2,217 ->
+2,230 and emitted_other_lines 161,822 -> 161,270, and the decoder's
+emitted_defines 157 -> 158 and emitted_lines 14,319 -> 14,296. The small
+compile corpus, which has few stamps, gains more lines than it loses: its
+defines 42 -> 46 and lines 1,528 -> 1,569, and the module build's
+module_defines 29 -> 30 and module_lines 1,164 -> 1,171. Machine code falls,
+text 5,337,614 -> 5,335,758. The emitter's scan for surviving stamps and the
 table cost the compiler: emit_instructions 6,434,680 -> 6,521,335 (+1.3%),
-codegen_instructions_dev 116,162,655 -> 116,434,655 and
-codegen_instructions_release 422,568,857 -> 425,459,550 (+0.68%).
+codegen_instructions_dev 116,163,063 -> 116,434,829 and
+codegen_instructions_release 422,573,245 -> 425,464,049 (+0.68%).
 compile_instructions, entry_instructions and library_instructions each fell
 by 15 to 25, which is layout. In the tab: browser_compile_instructions
 427,996,730 -> 428,979,212, browser_compile_peak_bytes 768,243 -> 769,385 and
-browser_run_instructions 30,450,747 -> 30,299,391. The run side outweighs the
+browser_run_instructions 30,425,950 -> 30,274,594. The run side outweighs the
 compile side, and welfare rises.
 
 jsonbench rises: `d_json/obj_key_start_4_w`'s IR differs from main by the one
