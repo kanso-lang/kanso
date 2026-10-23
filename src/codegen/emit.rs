@@ -3336,7 +3336,7 @@ impl<'a> Backend<'a> {
                         // only a value that is not bytes stops the program,
                         // and the oracle stops it inside the wrapper
                         if sets[0] != BYTES {
-                            f.line_fmt(format_args!("store {origin}, ptr @k_site"));
+                            self.stamp(f, &origin);
                         }
                         let t = f.tmp();
                         // three KValues and the origin pointer want seven of

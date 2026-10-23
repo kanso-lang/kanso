@@ -993,6 +993,8 @@ fn emit_with(
         strings: Vec::new(),
         globals: String::new(),
         interned: HashMap::default(),
+        sites: Vec::new(),
+        site_ids: Vec::new(),
         body: String::new(),
         sealed: Vec::new(),
         lift_counter: 0,
@@ -1033,6 +1035,9 @@ struct Written {
     closure_cells: Vec<String>,
     strings: Vec<(String, Vec<u8>)>,
     globals: String,
+    /// The literal each stamped site id names, by its position in `strings`,
+    /// id 1 first.
+    sites: Vec<u32>,
 }
 
 impl Written {
@@ -1137,6 +1142,7 @@ impl Written {
                 "@{cell} = internal constant %KValue                  {{ i64 11, i64 ptrtoint (ptr @{cell}_clo to i64) }}"
             );
         }
+        let stamped = stamped_sites(self.sites.len(), &pieces);
         // A string is interned when a function asks for it, and the function
         // may since have been pruned: on the codegen corpus 198 of 270
         // strings and 264 of their literal cells were named by nothing, 36% of
@@ -1168,11 +1174,14 @@ impl Written {
         out.push_str(&self.globals);
         out.push('\n');
         let declared = declares.len() + 1;
-        let size = declared + out.len() + pieces.iter().map(String::len).sum::<usize>();
+        let mut table = Count(0);
+        site_table(&mut table, &self.sites, &self.strings, &stamped);
+        let size = declared + out.len() + table.0 + pieces.iter().map(String::len).sum::<usize>();
         let mut module = String::with_capacity(size);
         module.push_str(&declares);
         module.push('\n');
         module.push_str(&out);
+        site_table(&mut module, &self.sites, &self.strings, &stamped);
         drop((declares, out));
         for piece in pieces {
             module.push_str(&piece);
@@ -1292,6 +1301,12 @@ struct Backend<'a> {
     /// calls do not walk them.
     globals: String,
     interned: HashMap<Vec<u8>, String>,
+    /// The interned literal each stamped site id names, by its position in
+    /// `strings`, id 1 first; and the id each position was given, 0 for none.
+    /// A stamp stores the id, and `k_site_name` reads the literal back only
+    /// when the program dies.
+    sites: Vec<u32>,
+    site_ids: Vec<u32>,
     /// The functions written so far, in pieces. `body` is the piece being
     /// written and `sealed` the ones before it, in order. A piece is closed
     /// when the next function would not fit in the room it has, so the text
@@ -2375,6 +2390,77 @@ fn type_table(globals: &mut String, symbol: &str, names: &[String], fallback: &s
          br i1 %in, label %T, label %TD\nT:\n  \
          %at = getelementptr [{slots} x ptr], ptr @{symbol}_table, i64 0, i64 %id\n  \
          %name = load ptr, ptr %at\n  ret ptr %name\nTD:\n  ret ptr @{fallback}\n}}\n"
+    );
+}
+
+/// Which site ids the pruned body still stamps, read off its
+/// `store i32 N, ptr @k_site_id` lines; slot 0 is no site.
+fn stamped_sites(ids: usize, pieces: &[String]) -> Vec<bool> {
+    let mut stamped = vec![false; ids + 1];
+    for piece in pieces {
+        for (at, _) in piece.match_indices(", ptr @k_site_id") {
+            let head = &piece[..at];
+            let digits = head.len() - head.trim_end_matches(|c: char| c.is_ascii_digit()).len();
+            if let Ok(id) = head[head.len() - digits..].parse::<usize>() {
+                stamped[id] = true;
+            }
+        }
+    }
+    stamped
+}
+
+/// A sink that keeps only the length of what is written to it.
+struct Count(usize);
+
+impl std::fmt::Write for Count {
+    fn write_str(&mut self, s: &str) -> std::fmt::Result {
+        self.0 += s.len();
+        Ok(())
+    }
+}
+
+/// `k_site_name`: the literal each site id names, as an offset into one
+/// constant holding every stamped literal's bytes. Offsets rather than
+/// pointers, because a table of pointers in a position-independent binary is
+/// a relocation per slot for the loader to apply at every start. A slot whose
+/// stamp was pruned with its function is left at zero, and its text is not
+/// written. It is written twice, once to count and once into the module,
+/// which is allocated at its final size: a buffer of its own, or the globals
+/// pushed past a doubling, raised the tab compile's peak memory.
+fn site_table(
+    w: &mut impl std::fmt::Write,
+    sites: &[u32],
+    strings: &[(String, Vec<u8>)],
+    stamped: &[bool],
+) {
+    let slots = stamped.iter().rposition(|&s| s).map_or(1, |m| m + 1);
+    let text = |id: usize| &strings[sites[id - 1] as usize].1;
+    let size: usize =
+        1 + (1..slots).filter(|&id| stamped[id]).map(|id| text(id).len()).sum::<usize>();
+    let _ = write!(w, "@k_site_text = private unnamed_addr constant [{size} x i8] c\"\\00");
+    for id in (1..slots).filter(|&id| stamped[id]) {
+        ir_bytes_into(w, text(id));
+    }
+    let _ =
+        write!(w, "\"\n@k_site_name_table = private unnamed_addr constant [{slots} x i32] [i32 0");
+    let mut offset = 1;
+    for (id, &on) in stamped.iter().enumerate().take(slots).skip(1) {
+        match on {
+            true => {
+                let _ = write!(w, ", i32 {offset}");
+                offset += text(id).len();
+            }
+            false => {
+                let _ = w.write_str(", i32 0");
+            }
+        }
+    }
+    let _ = writeln!(
+        w,
+        "]\ndefine ptr @k_site_name(i64 %id) {{\nentry:\n  \
+         %at = getelementptr i32, ptr @k_site_name_table, i64 %id\n  \
+         %off = load i32, ptr %at\n  %wide = zext i32 %off to i64\n  \
+         %name = getelementptr i8, ptr @k_site_text, i64 %wide\n  ret ptr %name\n}}\n"
     );
 }
 
@@ -4154,6 +4240,7 @@ impl<'a> Backend<'a> {
             closure_cells: std::mem::take(&mut self.closure_cells),
             strings: std::mem::take(&mut self.strings),
             globals: std::mem::take(&mut self.globals),
+            sites: std::mem::take(&mut self.sites),
         })
     }
 
@@ -4267,7 +4354,26 @@ impl<'a> Backend<'a> {
     /// (ruled on #1975). One store, before a call that can stop the program.
     fn stamp_site(&mut self, f: &mut FnEmit, span: Span) {
         let site = self.origin_arg(f, span);
-        f.line_fmt(format_args!("store {site}, ptr @k_site"));
+        self.stamp(f, &site);
+    }
+
+    /// Stores `site`, an interned `ptr @name`, as the place a death names.
+    /// The store is its id, an immediate, where the literal's address would
+    /// be an address to materialise first; `k_site_name` maps it back.
+    fn stamp(&mut self, f: &mut FnEmit, site: &str) {
+        let index: usize = site
+            .strip_prefix("ptr @s")
+            .and_then(|n| n.parse().ok())
+            .expect("a site is an interned literal");
+        if self.site_ids.len() <= index {
+            self.site_ids.resize(index + 1, 0);
+        }
+        if self.site_ids[index] == 0 {
+            self.sites.push(index as u32);
+            self.site_ids[index] = self.sites.len() as u32;
+        }
+        let id = self.site_ids[index];
+        f.line_fmt(format_args!("store i32 {id}, ptr @k_site_id"));
     }
 
     fn emit_type_names(&mut self) {
@@ -4487,15 +4593,21 @@ fn collect_idents(expr: &Expr, out: &mut Vec<String>) {
 
 fn ir_bytes(bytes: &[u8]) -> String {
     let mut out = String::new();
+    ir_bytes_into(&mut out, bytes);
+    out
+}
+
+fn ir_bytes_into(out: &mut impl std::fmt::Write, bytes: &[u8]) {
     for byte in bytes {
         match byte {
-            0x20..=0x7e if *byte != b'"' && *byte != b'\\' => out.push(*byte as char),
+            0x20..=0x7e if *byte != b'"' && *byte != b'\\' => {
+                let _ = out.write_char(*byte as char);
+            }
             _ => {
                 let _ = write!(out, "\\{byte:02X}");
             }
         }
     }
-    out
 }
 
 include!("codegen/narrow.rs");

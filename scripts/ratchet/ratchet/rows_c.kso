@@ -2897,4 +2897,18 @@ string_index_by_tags = row
 
 rows_cq32 = list/concat rows_cq31 [string_index_by_tags]
 
-rows_c = list/concat rows_cq32 [itself]
+# A death names its place through an id the stamp stored, read back through
+# the program's site table. The mutation has the runtime read only the
+# address a stamp used to store, and a death behind an id stamp loses its
+# `failed in` line.
+site_by_id = row
+  "a death's place read only from the address a stamp used to store"
+  true
+  "cargo test --release --test golden runtime_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_site_named_by_its_address_alone")
+  no_setup
+
+rows_cq33 = list/concat rows_cq32 [site_by_id]
+
+rows_c = list/concat rows_cq33 [itself]

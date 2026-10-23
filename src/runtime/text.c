@@ -1680,7 +1680,7 @@ KValue k_b_plain_string(KValue cs, KValue fromv) {
         long long e = k_json_quote_after(b->data, b->len, q);
         return e ? k_int(e) : k_none();
     }
-    KValue s = k_b_utf8_slice_raw(b->data, b->len, from, q - 1, k_site);
+    KValue s = k_b_utf8_slice_raw(b->data, b->len, from, q - 1, k_site_now());
     return s.tag == K_ERR ? k_none() : s;
 }
 

@@ -1275,9 +1275,10 @@ enum Reloc {
     Extern(u32),
 }
 
-const HOOKS: [(&str, &str); 7] = [
+const HOOKS: [(&str, &str); 8] = [
     ("k_hook_thunk_eval", "d_thunk_eval"),
     ("k_hook_type_name", "k_type_name"),
+    ("k_hook_site_name", "k_site_name"),
     ("k_hook_type_shown", "k_type_shown"),
     ("k_hook_type_field_count", "k_type_field_count"),
     ("k_hook_type_field_name", "k_type_field_name"),
