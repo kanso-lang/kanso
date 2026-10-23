@@ -631,7 +631,7 @@ impl<'a> Analysis<'a> {
         for decl in self.group(name, arity) {
             match decl.params.get(i) {
                 Some(Pattern::Var(pname, _)) => {
-                    if effective_uses(pname, &decl.body) > 1 {
+                    if effective_uses(pname, &decl.body) > 1 && !only_rendered(pname, &decl.body) {
                         return false;
                     }
                 }
@@ -1049,6 +1049,14 @@ fn written_fields(program: &Program) -> HashSet<String> {
                 grows_first!() | "put" | "concat" | "list/concat" | "builtin_concat"))
             {
                 if let Some((_, f)) = args.first().and_then(field_read) {
+                    out.insert(f.to_string());
+                }
+            }
+        }
+        // and a template that starts with a field joins onto it
+        if let Expr::Str(parts, _) = e {
+            if let (true, Some(TemplatePart::Interp(first))) = (parts.len() > 1, parts.first()) {
+                if let Some((_, f)) = field_read(first) {
                     out.insert(f.to_string());
                 }
             }
@@ -2010,11 +2018,43 @@ fn walk_for_builder(
                     accs.insert((decl.name.clone(), decl.params.len(), i));
                 }
             }
+            // `"{st.body}x"`, where `st` is a record handed over whole whose
+            // `body` nothing else holds, every mention of `st` reads a field,
+            // and `body` is read here alone: the string is finished with by
+            // the time the join runs, as a builder parameter's is.
+            if let Some(TemplatePart::Interp(first)) = parts.first() {
+                if let Some((p, f)) = field_read(first) {
+                    if a.field_moves(p, f, decl) {
+                        sites.insert((decl.file.clone(), span.line as usize, span.col as usize));
+                    }
+                }
+            }
         }
     }
     for child in child_exprs(e) {
         walk_for_builder(a, decl, child, sites, accs);
     }
+}
+
+/// Whether every mention of `name` in an arm is a piece of a template. A
+/// template reads its pieces into a string of its own and keeps none of them,
+/// so an arm like `seed n acc = seed (n - 1) "{acc}{acc}"` reads the value
+/// twice and leaves nothing holding it.
+fn only_rendered(name: &str, body: &[Stmt]) -> bool {
+    fn ok(name: &str, e: &Expr) -> bool {
+        match e {
+            Expr::Ident(n, _, _) => n != name,
+            Expr::Str(parts, _) => parts.iter().all(|part| match part {
+                TemplatePart::Interp(Expr::Ident(_, _, _)) => true,
+                TemplatePart::Interp(inner) => ok(name, inner),
+                TemplatePart::Lit(_) => true,
+            }),
+            _ => child_exprs(e).all(|c| ok(name, c)),
+        }
+    }
+    body.iter().all(|s| match s {
+        Stmt::Bind { expr, .. } | Stmt::Expr(expr) => ok(name, expr),
+    })
 }
 
 /// Is `e` a template that starts with `acc` and mentions it nowhere else?

@@ -21,96 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-19 — an insisting form builds no closure, and no step once its box has settled
-
-Since #1975 an insisting form names its caller's line. On native,
-`k_b_insisted` did that by wrapping every box a `!` function answered in a
-rescue step whose callee was a closure holding the caller's site: three
-allocations on every call, whether or not anything failed. Measuring #1943's
-first version found it, where a `!` helper cost 7 allocations a step against
-4 for the same helper without the `!`.
-
-The step now holds the site where a rescue holds its function, and
-`k_worded_step` reads it on the failure path, so no closure is built. A box that
-has already settled, which is what `effect` answers, is decided at once: its
-value passes untouched and its failure is pointed at the caller then. That
-covers `text/slice!` and every `!` function written as `effect` over a value.
-`os/read_file!` answers a box that has not run, and keeps the step without
-the closure, so each benchmark that reads its input with it allocates two
-fewer: eight cost goldens move by that and nothing else.
-
-The new mem fixture `an_insisting_form_that_settled_builds_no_step` reads 104
-allocations against 164. The runtime corpus's two insisting goldens,
-`a_slice_bang_past_the_end_reaches_the_endpoint` (a settled box) and
-`read_missing_file` (one that has not run), name the same lines as before on
-both engines.
-
-The first build of this change read deepbench 2% higher with every counter
-unchanged. `k_exec` and `k_step` had each shrunk by about the size of
-`k_worded_step`: the insisting branch made the step big enough that the C
-compiler stopped inlining it into the two chain walks. It is static and
-always inlined now, and the insisting branch is a cold call out of line.
-
-Rows, from CI. Every binary's `.text` is 1,824 bytes smaller. deepbench
-falls 663,690 to 406,723,831, runbench 150,682 to 1,221,426,280 and
-widebench 32,285 to 28,596,028; the run vein falls by two allocations,
-run_allocs 1,872,051. work_livebench rises 36,885 to 1,498,510,746,
-work_readbench 1,264 to 4,583,930, work_oneshot 297 to 13,543,783 and
-browser_run_instructions 133 to 37,494,262, by mechanisms not isolated. The
-cohort spec's `evac_bytes` pin reads 800,720, the closure's 48 bytes fewer.
-Welfare rises, and the floor is banked.
-
-## 2026-10-19 — json/decode refuses a number RFC 8259 refuses
-
-#1999. `json/decode` took `1.`, `2.e5`, `01`, `-01`, `00` and `-.5`, and
-`[1., 2]` decoded as `[1.0 2]`. RFC 8259 §6 refuses all of them. The decoder
-finds a number's bytes with `text/number_span` and hands them to `to_int` or
-`to_float`, and the converters are more lenient than JSON. They already refuse
-`1e`, `1..2`, `1+2` and `--1`, so what they take that JSON does not comes down
-to three rules: a leading 0 has no digit after it, a minus has one, and so
-does a point.
-
-`number_span` answers zero when a number breaks one of them. The first two are
-reads at the number's start. The third uses the masks the sixteen-byte walk
-already builds: a point whose next bit is not a digit, with the block's last
-byte checked against the next block. The interpreter keeps the same three
-rules, so `number_span` answers the same on every engine for every input.
-lib/json needs no new arm: a zero sends the integer path to ask `to_span` for
-a range that ends before it starts, which answers none, and the decoder fails
-as `invalid number`.
-
-The first version checked the rules in lib/json with a `find2_below` for the
-point, and jsonbench read 948M against 872M, about 240 instructions a float.
-A full grammar walk inside `number_span` read 942M, since jsonbench's numbers
-are long. The three rules on the masks read 885.5M, 22 instructions a number.
-
-A differential fuzzer against the RFC's grammar written as a regular
-expression decoded 200,000 random strings over the number alphabet, each bare
-and again padded past a block, on both engines, with 0 mismatches. Main read
-1,317 mismatches on the first 20,000. `number_span` agrees across engines at
-every position of 3,000 random strings. `a_json_number_follows_rfc_8259` pins
-the cases, and `a_number_span_ends_where_the_byte_walk_ends` gains the zero
-answers, with a bare point at a block's last byte and in the walk.
-
-kq carries its own decoder and keeps a number as the decimal its author
-wrote, with jq as its oracle, so what it accepts is jq's question and this
-change leaves it alone.
-
-Rows, from CI, read again after main took #2001's insisting forms. All of
-the run rows' movement is in `number_span`: work_jsonbench lands on
-885,495,792 (+13,919,550), work_runbench on 1,230,612,980 (+9,186,700),
-work_oneshot on 13,636,587, work_livebench on 1,498,602,745 and
-work_encodebench on 2,464,674,586. The tab's run, browser_run_instructions,
-rises to 37,652,207, and its compile to browser_compile_instructions
-419,365,540 with browser_compile_peak_bytes 752,376. text lands on 5,111,406,
-288 bytes a binary for the check. compile_instructions 25,085,857,
-entry_instructions 76,583,774, library_instructions 76,287,809,
-interp_instructions 570,745,964, codegen_instructions_dev 115,143,517 and
-codegen_instructions_release 449,248,021 rise for the edit to the compiler's
-Rust. Every allocation counter agrees with main. The floor drops by the cost
-under the rule for a change that makes the language work as specified, a JSON
-decoder that refuses what RFC 8259 refuses: welfare falls 0.03, to 91.25.
-
 ## 2026-10-19 — a stack overflow names the outermost cycle still running
 
 #1991, owed by the 2026-10-17 gavel (#1987): every run-time failure names its
@@ -2045,3 +1955,127 @@ codegen_instructions_release 425,504,615 -> 425,509,331.
 browser_run_instructions 30,275,515 -> 30,276,840. Welfare falls by what the
 fix costs, and the floor moves down with it under the rule for the language
 doing what it says.
+
+## 2026-10-23 — a template joins onto a record field in place
+
+A template whose first piece is a field, `"{st.body}{d}"`, copied the whole
+string on every pass, even where nothing else could see it. The run program's
+restate phase does that to a 64 KiB string 128 times, and the beat carry
+copied the result again. The string-builder analysis now takes a field read as
+the builder when `field_moves` already proves the field alone: the record is
+handed over whole, every mention of it in the arm reads a field, and this
+field is read once. A template's first field joins the set of fields the field
+fixpoint asks about. `k_concat_arr_mut` then writes into the string, and since
+a builder's storage is malloc'd, the carry shares it instead of copying it.
+
+For the restate phase's seed to count as alone, a parameter an arm reads only
+into templates can now be an accumulator. `seed n acc = seed (n - 1)
+"{acc}{acc}"` reads `acc` twice, and a template keeps none of its pieces, so
+nothing is left holding it. The exemption covers only arms whose every mention
+is a template piece.
+
+CI's rows, against main with #2060's fix merged. run_instructions 828,089,940
+-> 816,801,024 (-1.36%), and work_runbench with it. The run
+program allocates 221,297,400 -> 212,891,960 bytes and evacuates 7,416,368 ->
+4,591,200, and none of its peaks move. The mem vein's new
+`a_record_field_joined_in_place` makes 10 allocations where main made 2,024,
+and `an_interpolated_state_string_is_not_kept_under_the_mark` allocates
+107,668,139 -> 2,796,683 bytes with its arena peak 3,145,984 -> 1,048,576.
+Its scans rose,
+`an_interpolated_state_string_is_not_kept_under_the_mark_str_scans` 2 -> 11,
+while the bytes they read fell 1,048,677 -> 11, which this entry does not
+account for. On
+the compiler's side compile_instructions 25,221,632 -> 25,204,865,
+entry_instructions 74,568,239 -> 74,522,559, library_instructions 74,230,433
+-> 74,182,975 and emit_instructions 6,449,884 -> 6,459,502; interp_instructions
+rose 385,357,985 -> 385,504,156, which is the interpreter's layout, since the
+analysis does not run there. browser_compile_instructions rose 427,933,127 ->
+433,668,787 (+1.34%). The same route compiled natively moves +0.10% and lowers
+to the same module, and padding the tab's heap before the compile moved the
+row by at most 6,000, so the rise is in the wasm build of the compiler and not
+in allocator layout. I have not found where. Welfare rises 92.94 -> 92.99.
+
+The same pull request moves the JSON string kernels out of `text.c` into
+`src/runtime/json.c` (#2059) and removes `k_shareable`, `k_viewreg_add` and
+`k_ten_holds`, which nothing called. On its own the move cost
+codegen_instructions_dev 1,744 and codegen_instructions_release 570 by layout,
+which put welfare under the floor, so it rides here. With both, the dev row
+reads 116,473,612 -> 116,472,553 and the release row 425,509,331 ->
+425,509,866.
+
+## 2026-10-23 — seven leads measured and declined
+
+**A number's value kept by its span.** The decoder asks `number_span` where a
+number ends and then `to_int` or `to_float` what it is worth, and both read
+the same bytes. The span's word path was made to leave the number's value,
+keyed by its bytes, for the two slice doors to answer from. The doors fell
+23.5M instructions on the run program, and the span rose 31.4M: it now built
+a frame of six registers on every call, and the value's arithmetic only moved
+from one function to the other. A second version kept only the number's
+shape and raw bytes, so the doors skipped their own shape checks and still
+did the digits. The doors fell 6.4M and the span rose 10.0M. The converters
+were already close to their floor: `k_to_int_text` reads up to eight digits
+as one word and `k_float_shape8` reaches Clinger's exact path, so the only
+work the two calls repeat is the shape test, and keeping a record across the
+calls costs more than that.
+
+**The float renderer's integral test as a cast.** `k_render_number` asks
+`d == floor(d)` before printing a float as an integer, which is a call into
+libm on each of the run program's 191,070 floats. Asking whether
+`(double)(long long)d == d` under 1e15 costs as many instructions inline as
+the call it replaces, and the run program read 182,140 more.
+
+**A digit count from the bit length.** `ryu_declen` counts a number's
+decimal digits with a ladder of nineteen compares. Estimating the count from
+the bit length and correcting it with one table compare is exact (checked at
+every power of two and of ten, either side), but the numbers the run program
+renders are short, the ladder leaves early for them, and the run program read
+327,397 more: `k_b_append_rendered` rose 607,050 and `k_b_render_value` fell
+235,522.
+
+**A decoded document trimmed to its contents.** An empty map opens with room
+for five pairs and an empty list with room for six, which is every size
+bench/large.json uses, so the decoded document carries about 280 KB of unused
+slots in its 1.0 MB. When the 1.5 MiB string the index phase builds is
+allocated, the input and the document fill one 1 MiB block and 157,568 bytes
+of a second, and the run program's counted peak is those two blocks and the
+string's. A builtin that gives a finished container's room back when nothing
+was allocated after it, with arrays opened at their first element and maps
+taking their pairs at their first put, fit the input and the document in one
+block: arena_peak_bytes 3,670,032 -> 2,621,456. The run-memory term is near
+its ceiling, though, because its baseline was 1.43 GB, so a whole block is
+worth +0.03 of welfare. The trim alone cost 37M instructions, 14M in the
+kernel and the rest in how LLVM folded the decoder's states around the new
+call. With the maps seeded late as well, the run program read 963.7M and its
+evacuations rose from 1,624 to 70,982, which I did not trace further. One
+percent of run_instructions is worth about 0.063
+of welfare, so the trade loses by a wide margin.
+
+**An object's scalar value read in the object's loop.** An array's elements
+are parsed inside its loop, because LLVM inlines `parse_value` there, while
+an object calls `parse_value` for every value, 827,739 calls a run at about
+51 instructions each. Dispatching on the value's first byte after the colon,
+and calling `parse_value` only for a nested array or object, read 890,453,082:
++62M. LLVM split the states it had folded into the object's loop into
+separate functions, `obj_value_at`, `value_for` and `parse_string` among
+them, and the calls between them cost more than the one they replaced. The
+emitter has no say in which kanso functions LLVM inlines.
+
+**Type-based alias tags on the in-place push.** The push twin reloads the
+list's length and items pointer after every slot it writes, because LLVM
+cannot tell the slot from the header. Tagging the twin's loads and stores
+with three TBAA types left the run program at 828,157,323, forty fewer than
+without them. Every loop that pushes also holds the twin's slow path, a call
+that may change the header, so the loads stay where they are.
+
+**Inlining chosen by hand.** An environment switch in the emitter marked one
+named function `alwaysinline` or `noinline`, and each of the 84 functions in
+std/json was tried both ways on the run program (baseline 828,157,901). Six
+single changes saved 2.25M to 2.93M each, all on the object path:
+`obj_colon`, `skip_ws` and `ws?` inlined, `obj_key`, `colon_bad` and
+`obj_items` kept out of line, while `array_bad` kept out cost 3.6M. They do
+not add. The best pair, `obj_colon` in and `obj_key` out, read 822,315,778
+(-0.71%); all six together read 845,054,425 (+2.0%), and `obj_colon` with
+`obj_items` read 843,779,017. These are LLVM's inliner landing on different
+shapes rather than a property of the functions, and a set picked for the
+lowest reading on today's tree is a draw the next change would reshuffle.

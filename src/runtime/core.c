@@ -1160,12 +1160,6 @@ static inline __attribute__((always_inline)) void k_viewreg_migrate(int d) {
 
 static int k_born_this_beat(const void* p);
 
-static void k_viewreg_add(KMap* m) {
-    int d = k_beat_depth - 1;
-    if (d < 0 || d >= K_BEAT_MAX) return;
-    k_viewreg_push(d, m);
-}
-
 static int k_frozen_holds(const void* p);
 static int k_survives(const void* p, KMark* m);
 static int k_frozen_n;
@@ -1617,7 +1611,6 @@ static long long k_carry_n = 0;
    Tenured storage is released immediately after that walk, so there it must
    be copied, and the test is skipped. */
 static int k_ten_any = 0;
-static int k_ten_holds(const void* p, KMark* m);
 
 static int k_survives(const void* p, KMark* m) {
     const char* q = (const char*)p;
@@ -1657,7 +1650,6 @@ static int k_still_live(const void* p) {
    below the mark wants anyway. k_born_this_beat is the one that would be
    wrong — answering yes there licenses growing a tenured list in place, and it
    is shared. */
-static int k_ten_holds(const void* p, KMark* m);
 
 /* Is p in the arena above the mark -- storage the rewind reclaims? Such a
    pointer cannot be tenured, since tenure blocks are malloc'd, so the walk of
@@ -1870,15 +1862,16 @@ static size_t k_ten_bytes[K_BEAT_MAX];
 /* The first block, and the base the doubling below starts from. 64 KiB left
    the wide-array benchmark needing a second block for 128 KiB of tenured
    storage, so every membership miss walked two; 256 KiB holds it in one and
-   takes k_ten_holds from 37.7 instructions an ask to 30.4, with the call count
+   took a tenure lookup from 37.7 instructions an ask to 30.4, with the call count
    unchanged. What it costs is address space rather than pages — malloc mmaps
    a block this size and untouched pages never become resident — and the
    measured peak is 80 KiB on widebench. */
 #define K_TEN_BLOCK (256u << 10)
 static int k_ten_on = 0;
 
-/* Is this pointer tenured, at this beat depth or any outer one? A value
-   promoted by an outer loop is outside the arena for an inner one too.
+/* Is this pointer, which is in no arena block, tenured at this beat depth or
+   any outer one? A value promoted by an outer loop is outside the arena for an
+   inner one too.
 
    A walk of the blocks, which is only affordable because each block doubles
    the one before it: 64 MiB of tenured storage is eleven blocks, not the
@@ -1892,13 +1885,6 @@ static int k_ten_on = 0;
    costs the other 80,416 a load and two compares before they walk two blocks
    anyway. That is 634,925 instructions spent to save 16,080 short walks, so
    the memo went. */
-static __attribute__((noinline)) int k_ten_holds(const void* p, KMark* m) {
-    if (k_above_mark(p, m)) return 0;
-    return k_ten_holds_outside(p);
-}
-
-/* The tenure half of k_ten_holds, for a caller that already knows the
-   pointer is in no arena block. */
 static __attribute__((noinline)) int k_ten_holds_outside(const void* p) {
     const char* q = (const char*)p;
     unsigned long long held = k_ten_mask;
@@ -2273,11 +2259,6 @@ static int k_interior_survives(KValue v, const void* p, KMark* m) {
         }
         default: return 1;
     }
-}
-
-/* Shareable: the node and its interior both outlive the rewind. */
-static int k_shareable(KValue v, const void* p, KMark* m) {
-    return k_survives_x(p, m) && k_interior_survives(v, p, m);
 }
 
 /* The cohort guard sizes a survivor only until the verdict is settled: a

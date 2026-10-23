@@ -1,0 +1,27 @@
+# A record carried round a loop, with a string field each pass extends.
+#
+# `spin` reads `st.body` once, as the first piece of the template that makes
+# the next body, and reads `st` nowhere but its fields. Every record that
+# reaches `spin` holds a body nothing else holds: the first is built from
+# `grown`, which reads its accumulator only into templates and hands back a
+# string of its own, and each later one holds the template's result. So the
+# join writes into the body it was given, and a pass costs the bytes it adds.
+# Until 2026-10-23 each pass copied the whole body into a new string, so
+# alloc_bytes grew with the square of the passes.
+type state
+  count
+  body
+
+fn grown 0 acc
+  acc
+
+fn grown n acc
+  grown (n - 1) "{acc}{acc}"
+
+fn spin 0 st
+  st
+
+fn spin n st
+  spin (n - 1) (state (st.count + 1) "{st.body}{st.count % 10}")
+
+pub play = print (length (spin 2000 (state 0 (grown 10 "x"))).body)
