@@ -12,8 +12,8 @@ block='        if (left >= 16) {'
 tail='        } else if (k_tail_window(d + i)) {'
 word='        if (i + 8 <= len) {'
 for l in "$block" "$tail" "$word"; do
-  n=$(grep -cxF "$l" src/runtime/text.c)
+  n=$(grep -cxF "$l" src/runtime/json.c)
   [ "$n" -eq 1 ] || { echo "k_json_escape_into changed shape ($n); rewrite this" >&2; exit 1; }
 done
-sed -i 's|^        if (left >= 16) {$|        if (0) {|; s|^        } else if (k_tail_window(d + i)) {$|        } else if (0) {|; s|^        if (i + 8 <= len) {$|        if (0 \&\& i + 8 <= len) {|' src/runtime/text.c
-grep -qxF '        if (0 && i + 8 <= len) {' src/runtime/text.c
+sed -i 's|^        if (left >= 16) {$|        if (0) {|; s|^        } else if (k_tail_window(d + i)) {$|        } else if (0) {|; s|^        if (i + 8 <= len) {$|        if (0 \&\& i + 8 <= len) {|' src/runtime/json.c
+grep -qxF '        if (0 && i + 8 <= len) {' src/runtime/json.c

@@ -6,9 +6,9 @@
 # the kept string are the same; the witness is the work vein.
 set -e
 line='                if (!hit || o + 17 > lim) break;'
-grep -qxF "$line" src/runtime/text.c || {
+grep -qxF "$line" src/runtime/json.c || {
   echo "the undo walk's mask loop moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i 's/^                if (!hit || o + 17 > lim) break;$/                break;/' src/runtime/text.c
-if grep -qxF "$line" src/runtime/text.c; then exit 1; fi
+sed -i 's/^                if (!hit || o + 17 > lim) break;$/                break;/' src/runtime/json.c
+if grep -qxF "$line" src/runtime/json.c; then exit 1; fi

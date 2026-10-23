@@ -5,9 +5,9 @@
 # vein.
 set -e
 line='        while (p + 16 <= len) {'
-grep -qxF "$line" src/runtime/text.c || {
+grep -qxF "$line" src/runtime/json.c || {
   echo "the undo walk's block loop moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i 's/^        while (p + 16 <= len) {$/        while (0) {/' src/runtime/text.c
-if grep -qxF "$line" src/runtime/text.c; then exit 1; fi
+sed -i 's/^        while (p + 16 <= len) {$/        while (0) {/' src/runtime/json.c
+if grep -qxF "$line" src/runtime/json.c; then exit 1; fi
