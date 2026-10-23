@@ -1275,7 +1275,10 @@ fn writes_state(line: &str) -> bool {
 /// line, so a line that ever carried the needle elsewhere is caught rather
 /// than quietly written into the wrong block.
 pub fn is_a_stack_slot(text: &str) -> bool {
-    match text.find(' ') {
+    // The space ends the line's first word a few bytes in, nearer than a
+    // searcher's setup and a call into memchr would pay for; this runs on
+    // every line the emitter writes.
+    match text.bytes().position(|b| b == b' ') {
         Some(at) => text[at..].starts_with(" = alloca "),
         None => false,
     }

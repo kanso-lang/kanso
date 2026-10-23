@@ -1039,11 +1039,55 @@ fn parse_inst(p: &mut P, types: &mut Vec<Option<Ty>>) -> Result<Inst, String> {
     Ok(inst)
 }
 
+/// Where the line starting at `from` ends: the next newline, or the end of
+/// the text. Eight bytes are read per pass, and the lowest byte of the word
+/// that equals a newline is found from the classic has-zero test. `find('\n')`
+/// costs a searcher's setup, a call into memchr and a one-byte compare for
+/// every line, and the translator asks it of every line in the module.
+fn line_end(s: &[u8], mut i: usize) -> usize {
+    const LO: u64 = 0x0101_0101_0101_0101;
+    const HI: u64 = 0x8080_8080_8080_8080;
+    const NL: u64 = 0x0a0a_0a0a_0a0a_0a0a;
+    while i + 8 <= s.len() {
+        let w = u64::from_le_bytes(s[i..i + 8].try_into().expect("eight bytes")) ^ NL;
+        let z = w.wrapping_sub(LO) & !w & HI;
+        if z != 0 {
+            return i + (z.trailing_zeros() / 8) as usize;
+        }
+        i += 8;
+    }
+    while i < s.len() && s[i] != b'\n' {
+        i += 1;
+    }
+    i
+}
+
+/// `str::lines` for text with no carriage returns, which emitted IR never
+/// has, ending each line with `line_end`.
+struct Lines<'a> {
+    text: &'a str,
+    at: usize,
+}
+
+impl<'a> Iterator for Lines<'a> {
+    type Item = &'a str;
+
+    fn next(&mut self) -> Option<&'a str> {
+        if self.at >= self.text.len() {
+            return None;
+        }
+        let end = line_end(self.text.as_bytes(), self.at);
+        let line = &self.text[self.at..end];
+        self.at = end + 1;
+        Some(line)
+    }
+}
+
 fn parse(ir: &str) -> Result<Ir<'_>, String> {
     let mut m = Ir::default();
     let mut at = 0;
     while at < ir.len() {
-        let end = ir[at..].find('\n').map_or(ir.len(), |n| at + n);
+        let end = line_end(ir.as_bytes(), at);
         let raw = &ir[at..end];
         at = end + 1;
         let line = raw.trim();
@@ -1139,7 +1183,7 @@ fn parse(ir: &str) -> Result<Ir<'_>, String> {
 /// `define` line is read again here because the names it binds number the
 /// body's locals.
 fn body(text: &str, types: &HashMap<String, Ty>) -> Result<Func, String> {
-    let mut lines = text.lines();
+    let mut lines = Lines { text, at: 0 };
     let head = lines.next().unwrap_or("").trim();
     let mut names = Locals::default();
     let mut slots: Vec<Option<Ty>> = Vec::new();
@@ -1172,7 +1216,14 @@ fn body(text: &str, types: &HashMap<String, Ty>) -> Result<Func, String> {
         if body.is_empty() || body.starts_with(';') {
             continue;
         }
-        if body.starts_with("switch") || body.contains("= switch") {
+        // `contains` would build a substring searcher for every line, and
+        // on the tab's corpus that setup alone was 5.9M of the 71.0M
+        // instructions the translation executed. A body line holds one `=`,
+        // the one that names its result, so the words are compared there.
+        let switch = |b: &str| {
+            b.bytes().position(|c| c == b'=').is_some_and(|i| b[i..].starts_with("= switch"))
+        };
+        if body.starts_with("switch") || switch(&body) {
             while !body.trim_end().ends_with(']') {
                 let next = lines.next().ok_or("switch runs off the end")?.trim();
                 body.to_mut().push(' ');
@@ -2456,5 +2507,45 @@ impl Fx<'_> {
             n => return Err(format!("unsupported intrinsic llvm.{n}")),
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod a_line_ends_where_the_first_newline_is {
+    use super::{line_end, Lines};
+
+    /// xorshift64*, seeded, so a failure names a case that can be replayed.
+    fn next(s: &mut u64) -> u64 {
+        *s ^= *s >> 12;
+        *s ^= *s << 25;
+        *s ^= *s >> 27;
+        s.wrapping_mul(0x2545_f491_4f6c_dd1d)
+    }
+
+    /// Against `position` over the same bytes: texts up to 40 bytes with
+    /// newlines at random places, bytes that differ from a newline in one bit
+    /// (0x0b, 0x08, 0x8a) to try the has-zero test's carries, and every
+    /// starting point in each text.
+    #[test]
+    fn line_end_agrees_with_position() {
+        let mut seed = 0x9e37_79b9_7f4a_7c15u64;
+        let pool = [b'\n', 0x0b, 0x08, 0x8a, 0x09, b'a', b' ', 0xff, 0x00, 0x0a ^ 0x80];
+        for case in 0..400_000 {
+            let len = (next(&mut seed) % 41) as usize;
+            let text: Vec<u8> =
+                (0..len).map(|_| pool[(next(&mut seed) % pool.len() as u64) as usize]).collect();
+            for from in 0..=len {
+                let want = text[from..].iter().position(|&b| b == b'\n').map_or(len, |n| from + n);
+                assert_eq!(line_end(&text, from), want, "case {case}: {text:?} from {from}");
+            }
+        }
+    }
+
+    #[test]
+    fn lines_are_str_lines() {
+        for text in ["", "\n", "a", "a\n", "a\nb", "a\n\nb\n", "\n\n", "abcdefghijklmnop\nq"] {
+            let got: Vec<&str> = Lines { text, at: 0 }.collect();
+            assert_eq!(got, text.lines().collect::<Vec<_>>(), "{text:?}");
+        }
     }
 }

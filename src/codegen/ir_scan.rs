@@ -32,9 +32,15 @@ fn named_strings(texts: &[&str], count: usize) -> Vec<[bool; 2]> {
     for text in texts {
         let bytes = text.as_bytes();
         let mut at = 0;
-        while let Some(next) = text[at..].find("@s") {
-            let from = at + next + 2;
+        // `find("@s")` builds a two-way searcher, which a needle this short
+        // lets skip almost nothing; `@` is found by memchr and the `s` checked.
+        while let Some(at_sign) = text[at..].find('@') {
+            let from = at + at_sign + 1;
             at = from;
+            if bytes.get(from) != Some(&b's') {
+                continue;
+            }
+            let from = from + 1;
             let mut to = from;
             let mut n = 0usize;
             while to < bytes.len() && bytes[to].is_ascii_digit() {
