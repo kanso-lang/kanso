@@ -32,12 +32,12 @@ encodebench 2367621761
 oneshot 10291652
 basket 31067929
 widebench 28587457
-deepbench 201739409
-escapebench 39058532
+deepbench 201098912
+escapebench 40308322
 pendbench 155739076
 indexbench 1947078
 scanbench 274202
-digestbench 5210951
+digestbench 4150769
 readbench 4581876
 livebench 975722811
-runbench 830143044
+runbench 828053655

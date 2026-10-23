@@ -991,6 +991,9 @@ impl<'a> Backend<'a> {
                     return Ok(t.to_string());
                 }
                 if self.declares_at(name, 0) {
+                    if let Some(n) = self.literal_word_constant(name) {
+                        return Ok(format!("{{ i64 0, i64 {n} }}"));
+                    }
                     let callee_ret = self.ret_ty(name, 0);
                     let t = f.tmp();
                     f.line_fmt(format_args!("{t} = call tailcc {callee_ret} @{}()", dsym(name, 0)));
