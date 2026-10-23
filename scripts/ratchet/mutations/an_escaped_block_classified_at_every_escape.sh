@@ -6,10 +6,10 @@
 # same; the witness is the work vein.
 set -e
 line='            k_json_rest(o, x, at);'
-grep -qxF "$line" src/runtime/text.c || {
+grep -qxF "$line" src/runtime/json.c || {
   echo "the escape writer's rest store moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i 's/^            k_json_rest(o, x, at);$/            span = at; break;/' src/runtime/text.c
-grep -qx '            span = at; break;' src/runtime/text.c
-if grep -qxF "$line" src/runtime/text.c; then exit 1; fi
+sed -i 's/^            k_json_rest(o, x, at);$/            span = at; break;/' src/runtime/json.c
+grep -qx '            span = at; break;' src/runtime/json.c
+if grep -qxF "$line" src/runtime/json.c; then exit 1; fi

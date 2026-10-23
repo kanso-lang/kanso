@@ -5,9 +5,9 @@
 # The output is the same; the witness is the work vein.
 set -e
 line='    k_unescaped_d = d;'
-grep -qxF "$line" src/runtime/text.c || {
+grep -qxF "$line" src/runtime/json.c || {
   echo "the kept string's key moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i 's/^    k_unescaped_d = d;$/    k_unescaped_d = NULL;/' src/runtime/text.c
-if grep -qxF "$line" src/runtime/text.c; then exit 1; fi
+sed -i 's/^    k_unescaped_d = d;$/    k_unescaped_d = NULL;/' src/runtime/json.c
+if grep -qxF "$line" src/runtime/json.c; then exit 1; fi

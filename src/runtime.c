@@ -13,5 +13,6 @@
 #include "runtime/effects.c"
 #include "runtime/collections.c"
 #include "runtime/text.c"
+#include "runtime/json.c"
 #include "runtime/numbers.c"
 #include "runtime/main.c"
