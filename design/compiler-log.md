@@ -1974,7 +1974,8 @@ into templates can now be an accumulator. `seed n acc = seed (n - 1)
 nothing is left holding it. The exemption covers only arms whose every mention
 is a template piece.
 
-CI's rows. run_instructions 830,143,044 -> 818,854,757 (-1.36%). The run
+CI's rows, against main with #2060's fix merged. run_instructions 828,089,940
+-> 816,801,024 (-1.36%), and work_runbench with it. The run
 program allocates 221,297,400 -> 212,891,960 bytes and evacuates 7,416,368 ->
 4,591,200, and none of its peaks move. The mem vein's new
 `a_record_field_joined_in_place` makes 10 allocations where main made 2,024,
@@ -1986,24 +1987,23 @@ while the bytes they read fell 1,048,677 -> 11, which this entry does not
 account for. On
 the compiler's side compile_instructions 25,221,632 -> 25,204,865,
 entry_instructions 74,568,239 -> 74,522,559, library_instructions 74,230,433
--> 74,182,975 and emit_instructions 6,449,595 -> 6,459,213; interp_instructions
+-> 74,182,975 and emit_instructions 6,449,884 -> 6,459,502; interp_instructions
 rose 385,357,985 -> 385,504,156, which is the interpreter's layout, since the
-analysis does not run there. browser_compile_instructions rose 427,904,481 ->
-433,640,141 (+1.34%). The same route compiled natively moves +0.10% and lowers
+analysis does not run there. browser_compile_instructions rose 427,933,127 ->
+433,668,787 (+1.34%). The same route compiled natively moves +0.10% and lowers
 to the same module, and padding the tab's heap before the compile moved the
 row by at most 6,000, so the rise is in the wasm build of the compiler and not
-in allocator layout. I have not found where. The model scores the trade at
-+0.04.
+in allocator layout. I have not found where. Welfare rises 92.94 -> 92.99.
 
 The same pull request moves the JSON string kernels out of `text.c` into
 `src/runtime/json.c` (#2059) and removes `k_shareable`, `k_viewreg_add` and
 `k_ten_holds`, which nothing called. On its own the move cost
 codegen_instructions_dev 1,744 and codegen_instructions_release 570 by layout,
 which put welfare under the floor, so it rides here. With both, the dev row
-reads 116,461,460 -> 116,463,204 and the release row 425,504,615 ->
-425,505,262.
+reads 116,473,612 -> 116,472,553 and the release row 425,509,331 ->
+425,509,866.
 
-## 2026-10-23 — four leads measured and declined
+## 2026-10-23 — six leads measured and declined
 
 **A number's value kept by its span.** The decoder asks `number_span` where a
 number ends and then `to_int` or `to_float` what it is worth, and both read
@@ -2050,3 +2050,20 @@ call. With the maps seeded late as well, the run program read 963.7M and its
 evacuations rose from 1,624 to 70,982, which I did not trace further. One
 percent of run_instructions is worth about 0.063
 of welfare, so the trade loses by a wide margin.
+
+**An object's scalar value read in the object's loop.** An array's elements
+are parsed inside its loop, because LLVM inlines `parse_value` there, while
+an object calls `parse_value` for every value, 827,739 calls a run at about
+51 instructions each. Dispatching on the value's first byte after the colon,
+and calling `parse_value` only for a nested array or object, read 890,453,082:
++62M. LLVM split the states it had folded into the object's loop into
+separate functions, `obj_value_at`, `value_for` and `parse_string` among
+them, and the calls between them cost more than the one they replaced. The
+emitter has no say in which kanso functions LLVM inlines.
+
+**Type-based alias tags on the in-place push.** The push twin reloads the
+list's length and items pointer after every slot it writes, because LLVM
+cannot tell the slot from the header. Tagging the twin's loads and stores
+with three TBAA types left the run program at 828,157,323, forty fewer than
+without them. Every loop that pushes also holds the twin's slow path, a call
+that may change the header, so the loads stay where they are.
