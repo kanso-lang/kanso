@@ -2087,14 +2087,32 @@ The ratchet row `a_site_named_by_its_address_alone` has the runtime read only
 `k_site`, and `runtime_corpus_reports_endpoint_violations` goes red: a death
 behind an id stamp loses its `failed in` line.
 
-## 2026-10-23 — the module writer moves out of codegen.rs
+## 2026-10-23 — the module writer moves out of codegen.rs, and the site table stops searching
 
 `src/codegen.rs` was 4,680 lines. The code that writes the module around the
 finished body now sits in `src/codegen/module.rs`, read with `include!` like
 `narrow.rs`: `Written` and `finish`, the doors and `through_doors`, the call
-twins, the type and site tables, `paired_appends` and `ir_bytes`. It is a pure
-move (#2053). The emitted IR of the run program is byte-identical once the
-checkout's path is set aside. Four ratchet mutations and the wasm32 line
-check read the new file.
+twins, the type and site tables, `paired_appends` and `ir_bytes` (#2053). The
+emitted IR of the run program is byte-identical once the checkout's path is
+set aside. Four ratchet mutations and the wasm32 line check read the new
+file. Alone, the move read browser_compile_instructions 428,979,212 ->
+428,979,320 by layout, which put welfare just under its floor, so it lands
+with the change below.
 
-CI's rows. One moved, by layout: emit_instructions 6,521,335 -> 6,521,323.
+#2051's site table wrote text only for the stamps that survived the prune,
+and finding them was a substring search over every piece of the body:
+3,184,599 of the 96,470,945 instructions of a build of the browser corpus.
+Almost every site survives. The table now writes every site the emitter
+stamped, which adds 92 bytes of site text to that corpus and 802 to the run
+program, and the search is gone.
+
+CI's rows. emit_instructions 6,521,335 -> 6,449,595 (-1.1%) and
+browser_compile_instructions 428,979,212 -> 427,904,481 (-0.25%);
+browser_compile_peak_bytes rises 769,385 -> 769,408. Three front-end rows
+return to what they read before #2051, by layout: compile_instructions
+25,221,617 -> 25,221,632, entry_instructions 74,568,214 -> 74,568,239 and
+library_instructions 74,230,408 -> 74,230,433. The run program's IR differs
+only in the site constants, and four work rows moved with them:
+work_runbench 836,829,464 -> 836,829,597, work_encodebench 2,367,636,382 ->
+2,367,636,459, work_oneshot 10,346,159 -> 10,346,621 and work_livebench
+980,646,434 -> 980,646,336.
