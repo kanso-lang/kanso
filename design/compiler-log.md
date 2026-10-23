@@ -2169,6 +2169,9 @@ each eight-byte word for both.
 
     browser_compile_instructions  248,961,764 -> 244,730,101
 
+`called_symbols`, which reads from each `@` to its `(` or the line's end, uses
+it too: -> 244,413,637.
+
 `either_from` has a fuzzer of its own beside `byte_from`'s, for three pairs of
 target bytes, and dropping the second test's `& !` fails it.
 

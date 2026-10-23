@@ -75,10 +75,7 @@ fn called_symbols(text: &str) -> crate::hash::Set<&str> {
     // `find` on an ascii char is memchr; `position` walked a byte a step.
     while let Some(next) = crate::compare::find(&bytes[at..], b'@') {
         let from = at + next + 1;
-        let mut to = from;
-        while to < bytes.len() && bytes[to] != b'(' && bytes[to] != b'\n' {
-            to += 1;
-        }
+        let to = crate::compare::either_from(bytes, from, b'(', b'\n');
         if to < bytes.len() && bytes[to] == b'(' {
             found.insert(&text[from..to]);
         }
