@@ -180,7 +180,12 @@ static PEAK_BYTES: AtomicU64 = AtomicU64::new(0);
 unsafe impl std::alloc::GlobalAlloc for Counting {
     unsafe fn alloc(&self, layout: std::alloc::Layout) -> *mut u8 {
         let n = layout.size() as u64;
+        // `compiler_counters` and `interpreter_counters` read these two, and
+        // only the command line prints them; the tab reads the live bytes and
+        // the peak, so its compile keeps no tally it never reads.
+        #[cfg(not(target_arch = "wasm32"))]
         ALLOC_BYTES.fetch_add(n, Ordering::Relaxed);
+        #[cfg(not(target_arch = "wasm32"))]
         ALLOC_CALLS.fetch_add(1, Ordering::Relaxed);
         let live = LIVE_BYTES.fetch_add(n, Ordering::Relaxed) + n;
         PEAK_BYTES.fetch_max(live, Ordering::Relaxed);
@@ -233,8 +238,6 @@ unsafe impl std::alloc::GlobalAlloc for Counting {
     #[cfg(target_arch = "wasm32")]
     unsafe fn realloc(&self, ptr: *mut u8, layout: std::alloc::Layout, new_size: usize) -> *mut u8 {
         let (old, new) = (layout.size() as u64, new_size as u64);
-        ALLOC_BYTES.fetch_add(new, Ordering::Relaxed);
-        ALLOC_CALLS.fetch_add(1, Ordering::Relaxed);
         let live = LIVE_BYTES.load(Ordering::Relaxed);
         PEAK_BYTES.fetch_max(live + new, Ordering::Relaxed);
         LIVE_BYTES.store(live + new - old, Ordering::Relaxed);

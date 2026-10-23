@@ -3091,4 +3091,16 @@ stack_slot = row
 
 rows_cq42 = list/concat rows_cq41 [stack_slot]
 
-rows_c = list/concat rows_cq42 [itself]
+# The wasm build keeps no allocation tally the tab never reads (2026-10-23).
+# The mutation keeps it again, and the browser compile row is the witness.
+tab_tally = row
+  "a tally the tab never reads"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_tally_the_tab_never_reads")
+  release
+
+rows_cq43 = list/concat rows_cq42 [tab_tally]
+
+rows_c = list/concat rows_cq43 [itself]

@@ -1999,7 +1999,7 @@ went through a pointer into the arena instead of a buffer nothing else can
 alias, and `k_b_append_rendered` rose 1,523,160. The first version, which
 wrote the render call twice, also stopped `render_ryu` being inlined.
 
-## 2026-10-23 — seven costs out of the tab's compile
+## 2026-10-23 — eight costs out of the tab's compile
 
 Counted in executed instructions, the costliest function in the tab's compile
 was `memcmp`: 9.5M of the front end's 68.8M and 17.5M of the emitter's 119.2M
@@ -2099,8 +2099,18 @@ the loop reads.
 The ratchet row "a stack slot found by a searcher" puts `find` back and the row
 reads 259,885,584.
 
-Across the seven changes the tab's compile falls from 293,067,500 to
-258,016,805 executed instructions, 12.0%.
+**No tally the tab never reads.** The counting allocator adds every
+allocation's size and count to `compile_alloc_bytes` and `compile_allocs`,
+which only the command line prints. The tab reads the live bytes and the peak,
+so the wasm build now skips the other two.
+
+    browser_compile_instructions  258,016,805 -> 256,933,580  (-0.42%)
+
+The ratchet row "a tally the tab never reads" keeps the two counts in `alloc`
+again, and the row reads 257,851,861.
+
+Across the eight changes the tab's compile falls from 293,067,500 to
+256,933,580 executed instructions, 12.3%.
 
 **The epoch the meter change owed.** bench/compile_epochs.txt now names
 bda14b8, the first history row counted in executed instructions, with
