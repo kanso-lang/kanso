@@ -58,8 +58,8 @@ impl Toolchain {
         let engine = Engine::new(&Config::default());
         let bytes = std::fs::read(root().join("docs/kanso.wasm"))
             .expect("docs/kanso.wasm reads; run scripts/build_wasm.sh");
-        let module =
-            Module::new(&engine, &wasm32::counted(&bytes)[..]).expect("the artifact is a wasm module");
+        let module = Module::new(&engine, &wasm32::counted(&bytes)[..])
+            .expect("the artifact is a wasm module");
         let mut store = Store::new(&engine, ());
         let instance = Linker::new(&engine)
             .instantiate_and_start(&mut store, &module)
@@ -264,9 +264,14 @@ fn the_count_is_every_instruction_control_reached() {
     let engine = Engine::new(&Config::default());
     let module = Module::new(&engine, &wasm32::counted(&module)[..]).expect("the copy validates");
     let mut store = Store::new(&engine, ());
-    let instance = Linker::new(&engine).instantiate_and_start(&mut store, &module).expect("it links");
+    let instance =
+        Linker::new(&engine).instantiate_and_start(&mut store, &module).expect("it links");
     let run = instance.get_typed_func::<i32, i32>(&store, "run").expect("it exports run");
-    assert_eq!(run.call(&mut store, 4).expect("it runs"), 24, "the copy computes what the module does");
+    assert_eq!(
+        run.call(&mut store, 4).expect("it runs"),
+        24,
+        "the copy computes what the module does"
+    );
     assert_eq!(wasm32::executed(&store, &instance), 91);
 }
 
