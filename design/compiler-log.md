@@ -2148,6 +2148,20 @@ Shrinking where the parser builds a body instead read 615,869 and cost 116K
 instructions, because it also shrinks the groups the walk leaves out and every
 native build pays for it.
 
+**The narrowing's searches by one byte.** With `byte_from` inline, the
+narrowing's three whole-module searches find `define `, `musttail call` and
+`tailcc ` by their `f`, `m` and `c` and compare the word where one lands. The
+same anchors read through `str::find` lost to the two-way searcher earlier
+today, because each hit paid for a searcher and a call into memchr; inline,
+the three cost less than the 7.1M the searcher took.
+
+    browser_compile_instructions  251,201,816 -> 248,961,764
+
+A spec builds 20,000 random texts from the three words, their anchors and near
+misses, and holds `lines_holding_at` to `lines_holding` on each; comparing from
+the anchor rather than from the word's start, or reporting a line once per
+anchor in it, each fail it.
+
 **Specs.** The interp corpus cut into pieces every seventh definition translates
 to the same module as the whole text, and letting a piece go before its
 functions are lowered fails it. The lean emit writes the pieces the whole emit

@@ -3168,6 +3168,26 @@ kept_room = row
   (breaking "the_tabs_syntax_kept_with_its_room")
   release
 
-rows_cq44 = list/concat rows_cq44b [early_piece kept_room]
+narrowing_word = row
+  "a narrowing that searches by the word"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_narrowing_that_searches_by_the_word")
+  release
+
+anchored_test = "a_line_found_by_one_byte_is_a_line_found_by_the_word"
+
+late_line = row
+  "a line found one byte late"
+  true
+  "cargo test --release --lib {anchored_test}"
+  "specs (unit, golden, differential)"
+  (breaking "a_line_found_one_byte_late")
+  no_setup
+
+rows_cq44c = list/concat rows_cq44b [early_piece kept_room]
+
+rows_cq44 = list/concat rows_cq44c [narrowing_word late_line]
 
 rows_c = list/concat rows_cq44 [itself]

@@ -20,6 +20,37 @@ fn lines_holding<'a>(text: &'a str, needle: &'a str) -> impl Iterator<Item = (us
     })
 }
 
+/// `lines_holding`, found by one byte of the needle, `needle[at]`, eight bytes
+/// a pass (`crate::compare::byte_from`), and the needle compared where that
+/// byte lands. The two-way searcher behind `match_indices` can rarely skip a
+/// needle's length in IR when the needle holds a space, as the narrowing's
+/// three do; in the tab's compile the three searches were 7.1M of 251M
+/// instructions. Pick `at` so the byte is rare in the emitter's text.
+fn lines_holding_at<'a>(
+    text: &'a str,
+    needle: &'a str,
+    at: usize,
+) -> impl Iterator<Item = (usize, usize)> + 'a {
+    let bytes = text.as_bytes();
+    let anchor = needle.as_bytes()[at];
+    let mut from = at;
+    std::iter::from_fn(move || loop {
+        let hit = crate::compare::byte_from(bytes, from, anchor);
+        if hit >= bytes.len() {
+            return None;
+        }
+        from = hit + 1;
+        let s = hit - at;
+        if !bytes[s..].starts_with(needle.as_bytes()) {
+            continue;
+        }
+        let start = text[..s].rfind('\n').map_or(0, |n| n + 1);
+        let end = crate::compare::byte_from(bytes, s, b'\n');
+        from = from.max(end);
+        return Some((start, end));
+    })
+}
+
 /// Two ascending runs of line ranges as one, a line in both given once.
 fn merged_lines(
     a: impl Iterator<Item = (usize, usize)>,
@@ -120,8 +151,8 @@ fn narrowed_pieces(mut pieces: Vec<String>, from: usize) -> Vec<String> {
     let mut lambdas: Vec<String> = Vec::new();
     for &ir in &texts {
     let defines =
-        lines_holding(ir, "define ").filter(|&(start, _)| ir[start..].starts_with("define "));
-    let musttails = lines_holding(ir, "musttail call");
+        lines_holding_at(ir, "define ", 2).filter(|&(start, _)| ir[start..].starts_with("define "));
+    let musttails = lines_holding_at(ir, "musttail call", 0);
     for (start, end) in merged_lines(defines, musttails) {
         let line = &ir[start..end];
         if !code(line) {
@@ -227,7 +258,7 @@ fn rewritten(
     let ir = &text[from..];
     // (start, end, replacement) for each line that changes, in order.
     let mut edits: Vec<(usize, usize, String)> = Vec::new();
-    for (start, end) in lines_holding(ir, "tailcc ") {
+    for (start, end) in lines_holding_at(ir, "tailcc ", 4) {
         // Every rewrite below needs the word, so a line without it stands as
         // it is and its callee is never looked up.
         let line = &ir[start..end];
@@ -376,5 +407,36 @@ mod a_lambda_keeps_the_convention_where_a_closure_jump_can_reach_it {
     fn narrowed_without_it() {
         let out = narrow_tailcc(LAMBDA.to_string());
         assert!(out.contains("define %KValue @klam3("), "the lambda kept tailcc:\n{out}");
+    }
+}
+
+#[cfg(test)]
+mod a_line_found_by_one_byte_is_a_line_found_by_the_word {
+    use super::{lines_holding, lines_holding_at};
+
+    /// Texts of random lines built from the narrowing's three words, the
+    /// bytes they are anchored on, and near misses, against `lines_holding`.
+    #[test]
+    fn the_two_searches_agree() {
+        let words = [
+            "define ", "define", "tailcc ", "tailcc", "musttail call", "musttail", "call ",
+            "f", "m", "c", "d", "  ", "@g(", "%t1 = ", "x", "\n", "\n", "\n",
+        ];
+        let mut seed = 0x9e37_79b9_7f4a_7c15u64;
+        let mut next = || {
+            seed ^= seed >> 12;
+            seed ^= seed << 25;
+            seed ^= seed >> 27;
+            seed.wrapping_mul(0x2545_f491_4f6c_dd1d)
+        };
+        for case in 0..20_000 {
+            let n = (next() % 40) as usize;
+            let text: String = (0..n).map(|_| words[(next() % words.len() as u64) as usize]).collect();
+            for (needle, at) in [("define ", 2), ("musttail call", 0), ("tailcc ", 4)] {
+                let want: Vec<_> = lines_holding(&text, needle).collect();
+                let got: Vec<_> = lines_holding_at(&text, needle, at).collect();
+                assert_eq!(got, want, "case {case}, {needle:?} in {text:?}");
+            }
+        }
     }
 }
