@@ -34,7 +34,7 @@ fn named_strings(texts: &[&str], count: usize) -> Vec<[bool; 2]> {
         let mut at = 0;
         // `find("@s")` builds a two-way searcher, which a needle this short
         // lets skip almost nothing; `@` is found by memchr and the `s` checked.
-        while let Some(at_sign) = text[at..].find('@') {
+        while let Some(at_sign) = crate::compare::find(&bytes[at..], b'@') {
             let from = at + at_sign + 1;
             at = from;
             if bytes.get(from) != Some(&b's') {
@@ -73,7 +73,7 @@ fn called_symbols(text: &str) -> crate::hash::Set<&str> {
     let mut found = crate::hash::Set::default();
     let mut at = 0;
     // `find` on an ascii char is memchr; `position` walked a byte a step.
-    while let Some(next) = text[at..].find('@') {
+    while let Some(next) = crate::compare::find(&bytes[at..], b'@') {
         let from = at + next + 1;
         let mut to = from;
         while to < bytes.len() && bytes[to] != b'(' && bytes[to] != b'\n' {

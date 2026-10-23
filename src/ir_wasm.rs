@@ -1040,26 +1040,9 @@ fn parse_inst(p: &mut P, types: &mut Vec<Option<Ty>>) -> Result<Inst, String> {
 }
 
 /// Where the line starting at `from` ends: the next newline, or the end of
-/// the text. Eight bytes are read per pass, and the lowest byte of the word
-/// that equals a newline is found from the classic has-zero test. `find('\n')`
-/// costs a searcher's setup, a call into memchr and a one-byte compare for
-/// every line, and the translator asks it of every line in the module.
-fn line_end(s: &[u8], mut i: usize) -> usize {
-    const LO: u64 = 0x0101_0101_0101_0101;
-    const HI: u64 = 0x8080_8080_8080_8080;
-    const NL: u64 = 0x0a0a_0a0a_0a0a_0a0a;
-    while i + 8 <= s.len() {
-        let w = u64::from_le_bytes(s[i..i + 8].try_into().expect("eight bytes")) ^ NL;
-        let z = w.wrapping_sub(LO) & !w & HI;
-        if z != 0 {
-            return i + (z.trailing_zeros() / 8) as usize;
-        }
-        i += 8;
-    }
-    while i < s.len() && s[i] != b'\n' {
-        i += 1;
-    }
-    i
+/// the text (`crate::compare::byte_from`).
+fn line_end(s: &[u8], from: usize) -> usize {
+    crate::compare::byte_from(s, from, b'\n')
 }
 
 /// `str::lines` for text with no carriage returns, which emitted IR never
@@ -2512,34 +2495,7 @@ impl Fx<'_> {
 
 #[cfg(test)]
 mod a_line_ends_where_the_first_newline_is {
-    use super::{line_end, Lines};
-
-    /// xorshift64*, seeded, so a failure names a case that can be replayed.
-    fn next(s: &mut u64) -> u64 {
-        *s ^= *s >> 12;
-        *s ^= *s << 25;
-        *s ^= *s >> 27;
-        s.wrapping_mul(0x2545_f491_4f6c_dd1d)
-    }
-
-    /// Against `position` over the same bytes: texts up to 40 bytes with
-    /// newlines at random places, bytes that differ from a newline in one bit
-    /// (0x0b, 0x08, 0x8a) to try the has-zero test's carries, and every
-    /// starting point in each text.
-    #[test]
-    fn line_end_agrees_with_position() {
-        let mut seed = 0x9e37_79b9_7f4a_7c15u64;
-        let pool = [b'\n', 0x0b, 0x08, 0x8a, 0x09, b'a', b' ', 0xff, 0x00, 0x0a ^ 0x80];
-        for case in 0..400_000 {
-            let len = (next(&mut seed) % 41) as usize;
-            let text: Vec<u8> =
-                (0..len).map(|_| pool[(next(&mut seed) % pool.len() as u64) as usize]).collect();
-            for from in 0..=len {
-                let want = text[from..].iter().position(|&b| b == b'\n').map_or(len, |n| from + n);
-                assert_eq!(line_end(&text, from), want, "case {case}: {text:?} from {from}");
-            }
-        }
-    }
+    use super::Lines;
 
     #[test]
     fn lines_are_str_lines() {

@@ -178,7 +178,7 @@ fn queries_named<'a>(text: &str, queries: &crate::hash::Set<&'a str>) -> crate::
     let mut found = crate::hash::Set::default();
     let mut at = 0;
     // `find` on an ascii char is memchr; `position` walked a byte a step.
-    while let Some(next) = text[at..].find('@') {
+    while let Some(next) = crate::compare::find(&bytes[at..], b'@') {
         let from = at + next + 1;
         at = from;
         let end = match bytes.get(from) {

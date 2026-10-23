@@ -1,4 +1,4 @@
-//! Byte comparison a word at a time, for the tab's `memcmp`.
+//! Byte comparison and byte search a word at a time, for the tab.
 //!
 //! The `memcmp` wasm32 links by default is compiler-builtins' loop of one byte
 //! per pass, and comparing names and keys made it the costliest function in
@@ -80,4 +80,41 @@ unsafe fn half(a: *const u8, b: *const u8, at: usize) -> u64 {
 unsafe fn first(a: *const u8, b: *const u8, at: usize, diff: u64) -> i32 {
     let at = at + (diff.trailing_zeros() / 8) as usize;
     unsafe { *a.add(at) as i32 - *b.add(at) as i32 }
+}
+
+/// Where the first `byte` at or after `from` is in `s`, or `s.len()` if there
+/// is none. Eight bytes are read per pass, and the lowest byte of the word
+/// that equals `byte` is found from the has-zero test: subtracting one from
+/// every byte borrows through a zero byte, and `!w` keeps a byte at 0x80 or
+/// above from passing for one.
+///
+/// `str::find` on a char pays a searcher's setup, a call into memchr and a
+/// one-byte compare before it reads a byte, which in the tab's compile costs
+/// more than the scan between hits when they are close, as the module's
+/// newlines and `@` signs are. Natively memchr is vectorised, and the callers
+/// here are on the tab's path, where wasm32 has neither.
+#[inline]
+pub fn byte_from(s: &[u8], mut i: usize, byte: u8) -> usize {
+    const LO: u64 = 0x0101_0101_0101_0101;
+    const HI: u64 = 0x8080_8080_8080_8080;
+    let pattern = LO * byte as u64;
+    while i + 8 <= s.len() {
+        let w = u64::from_le_bytes(s[i..i + 8].try_into().expect("eight bytes")) ^ pattern;
+        let z = w.wrapping_sub(LO) & !w & HI;
+        if z != 0 {
+            return i + (z.trailing_zeros() / 8) as usize;
+        }
+        i += 8;
+    }
+    while i < s.len() && s[i] != byte {
+        i += 1;
+    }
+    i
+}
+
+/// `byte_from` from the start, as `Option`, the shape `str::find` answers in.
+#[inline]
+pub fn find(s: &[u8], byte: u8) -> Option<usize> {
+    let i = byte_from(s, 0, byte);
+    (i < s.len()).then_some(i)
 }
