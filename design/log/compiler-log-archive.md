@@ -105752,3 +105752,27 @@ comes back inside a description holding the caller's line, so each allocates
 This builds a ruled part of the language, so the welfare floor moves down by
 exactly what the rows cost, under the #1975 gavel as narrowed by the
 2026-10-17 gavel: 91.5235 -> 91.4587.
+
+## 2026-10-18 — A module's own function beats a type an import declares
+
+Building std/text's `span` turned up a check that read the wrong name. In a
+merged module check, the bare name of a type another module declares reached
+the construction check before a function of the same name in the program's
+own module. `fn sorted a b` beside `import "std/list"` was refused as a
+construction of std/list's `sorted` with too many fields, and any program
+with a helper named `span` would have been refused the same way once std/text
+declares the type. A type and a function cannot share a name inside one
+module, so a bare name that is both is the module's function. `arity_at` now
+skips the construction check for a name that is a known function group.
+
+The fixture is `a_function_named_like_an_imported_type_is_the_function` in
+the micro corpus. Without the change, `kanso check` refuses it with the arity
+error. With the change, it prints `3` on every engine.
+
+Rows, from CI: `compile_instructions` 22,715,476 -> 22,716,927,
+`entry_instructions` 75,262,121 -> 75,265,987, `library_instructions`
+74,948,228 -> 74,952,083 and `browser_compile_instructions` 382,741,447 ->
+382,750,920. The check does no new work on these programs, so most of the
+movement is the binary's layout. The floor drops by the cost to 91.52, under
+the rule that a change making the language work as specified lowers it by
+exactly what it costs.
