@@ -7,9 +7,9 @@
 # run program prints a wrong tally without failing, and the micro corpus
 # disagrees with the interpreter.
 set -e
-grep -q "^            .any(|d| name.strip_prefix(d).is_some_and(|after| after.starts_with('(')));$" src/codegen.rs || {
+grep -q "^            .any(|d| name.strip_prefix(d).is_some_and(|after| after.starts_with('(')));$" src/codegen/module.rs || {
   echo "the door match changed shape; rewrite this" >&2
   exit 1
 }
-sed -i "s/^            .any(|d| name.strip_prefix(d).is_some_and(|after| after.starts_with('(')));$/            .any(|d| name.starts_with(d));/" src/codegen.rs
-grep -q '^            .any(|d| name.starts_with(d));$' src/codegen.rs
+sed -i "s/^            .any(|d| name.strip_prefix(d).is_some_and(|after| after.starts_with('(')));$/            .any(|d| name.starts_with(d));/" src/codegen/module.rs
+grep -q '^            .any(|d| name.starts_with(d));$' src/codegen/module.rs
