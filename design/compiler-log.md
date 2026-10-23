@@ -2169,4 +2169,7 @@ writes. Ratchet rows undo each change; the browser rows are the witness for
 six of them.
 
 **Declined.** Body pieces of 8, 16 and 32 KiB instead of 64 moved the peak by
-at most 5,564 bytes and cost 0.8M to 1.5M instructions.
+at most 5,564 bytes and cost 0.8M to 1.5M instructions. The same one-byte anchor for
+`paired_appends`'s long needle saved 172,616 instructions and for
+`branches_to`'s `label %` probe 286,197, too little to give either a helper of
+its own.
