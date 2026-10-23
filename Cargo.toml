@@ -29,6 +29,11 @@ crate-type = ["cdylib", "rlib"]
 
 [dev-dependencies]
 wasmi = "1.1.0"
+# The browser rows count every wasm instruction a module executes, with a
+# counter written into a copy of the module (`tests/support/wasm32.rs`).
+wasmparser = { version = "0.254", default-features = false, features = ["std"] }
+wasm-encoder = { version = "0.254", default-features = false, features = ["std", "wasmparser"] }
+wat = "1.254"
 
 # wasmi interprets the whole toolchain, so an unoptimised build of it turns
 # the third engine's corpus run from seconds into minutes. Only the dependency

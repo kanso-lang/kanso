@@ -6,9 +6,10 @@
 //! for wasm32 (`docs/kanso-runtime.wasm`). Ruled 2026-10-06: every environment
 //! kanso runs in has terms in the objective, for CPU and for memory, and none
 //! at zero. Wall time in a browser cannot be made to read the same number
-//! twice, so neither stage is timed. wasmi runs both with fuel metering on,
-//! and fuel is spent per executed wasm instruction: the same module on the
-//! same input spends the same fuel on every machine. The compile's memory is
+//! twice, so neither stage is timed. wasmi runs both, each module a copy that
+//! counts the wasm instructions it executes (`wasm32::counted`, which says why
+//! wasmi's fuel is not that count): the same module on the same input executes
+//! the same instructions on every machine. The compile's memory is
 //! the toolchain's own allocator tally (`kanso_heap_*` in `src/main.rs`), in
 //! requested bytes. The run's memory is what the runtime's linear memory grew
 //! by while the program ran, in whole 64 KiB pages, which is what the page
@@ -19,10 +20,10 @@
 //! builds its own input and imports only std, so the tab needs no files.
 //!
 //! Four rows:
-//!   browser_compile_instructions  fuel spent compiling the entry in the tab
+//!   browser_compile_instructions  instructions executed compiling the entry
 //!   browser_compile_peak_bytes    the most the compile held above where it began
-//!   browser_run_instructions      fuel spent running the program, its module
-//!                                 and every runtime function it calls
+//!   browser_run_instructions      instructions executed running the program,
+//!                                 its module and every runtime function it calls
 //!   browser_run_peak_bytes        what the runtime's linear memory grew by
 //!                                 while the program ran
 //!
@@ -47,10 +48,6 @@ fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
-/// Enough fuel that no workload this size runs out; what is left afterwards is
-/// what says how much was spent.
-const TANK: u64 = u64::MAX / 4;
-
 struct Toolchain {
     store: Store<()>,
     instance: wasmi::Instance,
@@ -58,14 +55,12 @@ struct Toolchain {
 
 impl Toolchain {
     fn load() -> Toolchain {
-        let mut config = Config::default();
-        config.consume_fuel(true);
-        let engine = Engine::new(&config);
+        let engine = Engine::new(&Config::default());
         let bytes = std::fs::read(root().join("docs/kanso.wasm"))
             .expect("docs/kanso.wasm reads; run scripts/build_wasm.sh");
-        let module = Module::new(&engine, &bytes[..]).expect("the artifact is a wasm module");
+        let module = Module::new(&engine, &wasm32::counted(&bytes)[..])
+            .expect("the artifact is a wasm module");
         let mut store = Store::new(&engine, ());
-        store.set_fuel(TANK).expect("fuel is on");
         let instance = Linker::new(&engine)
             .instantiate_and_start(&mut store, &module)
             .expect("the toolchain instantiates");
@@ -120,20 +115,20 @@ impl Toolchain {
         bytes
     }
 
-    fn fuel(&self) -> u64 {
-        self.store.get_fuel().expect("fuel is on")
+    fn executed(&self) -> u64 {
+        wasm32::executed(&self.store, &self.instance)
     }
 
-    /// The fuel and the peak a stage spends, the peak measured above the live
-    /// bytes the stage began with.
+    /// The instructions and the peak a stage spends, the peak measured above
+    /// the live bytes the stage began with.
     fn begin(&mut self) -> (u64, u64) {
         self.call("kanso_heap_reset", &[], &mut []);
         let live = self.i64_call("kanso_heap_live");
-        (self.fuel(), live)
+        (self.executed(), live)
     }
 
-    fn end(&mut self, (fuel, live): (u64, u64)) -> (u64, u64) {
-        let spent = fuel - self.fuel();
+    fn end(&mut self, (executed, live): (u64, u64)) -> (u64, u64) {
+        let spent = self.executed() - executed;
         let peak = self.i64_call("kanso_heap_peak") - live;
         (spent, peak)
     }
@@ -189,7 +184,7 @@ fn sitting(rt: &[u8]) -> Sitting {
     let table = t.i32_call("kanso_side_table", &[]) as u32;
     let ran = wasm32::execute(rt, &side, data, table, &[("KANSO_SEED", "1")]).expect("it runs");
     assert_eq!(ran.exit, 0, "the corpus runs to completion: {}", ran.err);
-    Sitting { compile, run: (ran.fuel, ran.grown), output: ran.out }
+    Sitting { compile, run: (ran.executed, ran.grown), output: ran.out }
 }
 
 fn rows(s: &Sitting) -> String {
@@ -212,12 +207,73 @@ fn rustc_here() -> String {
 const HEADER: &str = "\
 # What the browser engine costs: bench/interp_corpus compiled by
 # docs/kanso.wasm the way kanso build compiles it, its module lowered to wasm
-# in the toolchain, and run against runtime.c built for wasm32, all under wasmi
-# with fuel metering. Fuel is spent per executed wasm instruction, the compile
+# in the toolchain, and run against runtime.c built for wasm32, all under wasmi.
+# The instruction rows count the wasm instructions executed, the compile
 # peak is the toolchain allocator's requested bytes and the run's memory is
 # what the runtime's linear memory grew by, so every row is the same on every
 # run of the same code. See tests/browser_cost.rs.
 ";
+
+/// The count the rows rest on, on a loop whose instructions were counted by
+/// hand. Each pass runs a `br_table` into one of two arms, which wasmi's fuel
+/// would charge both of; an even `n` takes the arm of 5 instructions and an
+/// odd one the arm of 7, so a pass costs 20 or 22. Four passes, two of each,
+/// cost 84; the two `block`/`loop` openings before them and the five
+/// instructions of the last test and the return make 91.
+#[test]
+fn the_count_is_every_instruction_control_reached() {
+    let module = wat::parse_str(
+        r#"(module
+          (func (export "run") (param $n i32) (result i32) (local $acc i32)
+            block $done
+              loop $top
+                local.get $n
+                i32.eqz
+                br_if $done
+                block $out
+                  block $b
+                    block $a
+                      local.get $n
+                      i32.const 2
+                      i32.rem_u
+                      br_table $a $b
+                    end
+                    local.get $acc
+                    i32.const 1
+                    i32.add
+                    local.set $acc
+                    br $out
+                  end
+                  local.get $acc
+                  i32.const 10
+                  i32.add
+                  i32.const 1
+                  i32.add
+                  local.set $acc
+                end
+                local.get $n
+                i32.const 1
+                i32.sub
+                local.set $n
+                br $top
+              end
+            end
+            local.get $acc))"#,
+    )
+    .expect("the module assembles");
+    let engine = Engine::new(&Config::default());
+    let module = Module::new(&engine, &wasm32::counted(&module)[..]).expect("the copy validates");
+    let mut store = Store::new(&engine, ());
+    let instance =
+        Linker::new(&engine).instantiate_and_start(&mut store, &module).expect("it links");
+    let run = instance.get_typed_func::<i32, i32>(&store, "run").expect("it exports run");
+    assert_eq!(
+        run.call(&mut store, 4).expect("it runs"),
+        24,
+        "the copy computes what the module does"
+    );
+    assert_eq!(wasm32::executed(&store, &instance), 91);
+}
 
 #[test]
 fn the_browser_engine_costs_what_the_golden_says() {

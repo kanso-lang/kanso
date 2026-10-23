@@ -273,16 +273,16 @@ divided by the weight those terms carry, times a hundred.</p>
       note: 'That run\u2019s high-water mark. Last of the three the 2026-09-16 gavel ordered for the interpreted engine: start-up matters most, then speed, then this.' },
     // The browser side, the third under the meta since 2026-10-06: the
     // playground compiling the interpreter's corpus inside the tab and running
-    // what it emits, counted by wasmi's fuel meter rather than timed.
+    // what it emits, counted in wasm instructions executed rather than timed.
     { token: 'browser_compile_instructions', hue: 'var(--series-browser-compile)',
       label: 'browser compile', read: (r) => r.browser_compile_instructions,
-      note: 'Wasm instructions the playground spends compiling the interpreter\u2019s corpus inside the tab, counted under wasmi with fuel metering. Fuel is spent per executed instruction, so the same artifact reads the same number on every machine.' },
+      note: 'Wasm instructions the playground executes compiling the interpreter\u2019s corpus inside the tab, so the same artifact reads the same number on every machine. Points before 2026-10-23 are wasmi\u2019s fuel, which charges a loop for code its pass does not run.' },
     { token: 'browser_compile_peak_bytes', hue: 'var(--series-browser-compile-memory)',
       label: 'browser compile memory', read: (r) => r.browser_compile_peak_bytes,
       note: 'The most the in-tab compile held above where it began, from the toolchain allocator\u2019s own tally.' },
     { token: 'browser_run_instructions', hue: 'var(--series-browser-run)',
       label: 'browser run', read: (r) => r.browser_run_instructions,
-      note: 'Wasm instructions spent running the module the tab compiled, including every call it makes into the runtime, which is kanso\u2019s own runtime built for wasm32 and lays values out as a native build does.' },
+      note: 'Wasm instructions executed running the module the tab compiled, including every call it makes into the runtime, which is kanso\u2019s own runtime built for wasm32 and lays values out as a native build does.' },
     { token: 'browser_run_peak_bytes', hue: 'var(--series-browser-run-memory)',
       label: 'browser run memory', read: (r) => r.browser_run_peak_bytes,
       note: 'How far the runtime\u2019s linear memory grew while the program ran, in whole 64 KiB pages.' },

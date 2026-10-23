@@ -157,21 +157,186 @@ fn wasi(name: &str, c: &mut Caller<'_, Host>, args: &[Val]) -> Result<i32, wasmi
     })
 }
 
+/// The export `counted` adds: an i64 global holding how many wasm instructions
+/// the module has executed.
+pub const COUNTER: &str = "__kanso_executed";
+
+/// A copy of `module` that counts the wasm instructions it executes.
+///
+/// wasmi's fuel cannot be the count. It charges a whole frame (a function
+/// body, a loop body, an if arm) when control enters it, and a `block` is not
+/// a frame of its own, so a loop around a `br_table` dispatch pays for every
+/// arm on every pass. On 2026-10-23 the tab's compile spent 433,668,787 fuel
+/// and executed 293,067,500 instructions.
+///
+/// So the copy splits each function body into runs that control can enter only
+/// at their first instruction (a run ends after any instruction that branches,
+/// opens or closes a block, or traps) and adds each run's length to one global
+/// as the run begins. Every branch lands after a `block`'s `end`, after a
+/// `loop`, or after an `if` or `else`, which is where runs begin, so the global
+/// ends up holding the number of instructions control reached.
+pub fn counted(module: &[u8]) -> Vec<u8> {
+    use wasm_encoder::reencode::{Reencode, RoundtripReencoder};
+    use wasm_encoder::{ConstExpr, Instruction, RawSection};
+    use wasmparser::{Operator, Parser, Payload};
+
+    let mut globals = 0u32;
+    for payload in Parser::new(0).parse_all(module) {
+        match payload.expect("the module parses") {
+            Payload::ImportSection(r) => {
+                for import in r.into_imports() {
+                    if let wasmparser::TypeRef::Global(_) = import.expect("an import parses").ty {
+                        globals += 1;
+                    }
+                }
+            }
+            Payload::GlobalSection(r) => globals += r.count(),
+            _ => {}
+        }
+    }
+    let counter = globals;
+    let ty = wasm_encoder::GlobalType {
+        val_type: wasm_encoder::ValType::I64,
+        mutable: true,
+        shared: false,
+    };
+    // Sections come in a fixed order, which is not the order of their ids, and
+    // a module may have no global or export section of its own; the counter's
+    // go where those would have.
+    let rank = |id: u8| match id {
+        13 => 5,
+        6 => 6,
+        7 => 7,
+        8 => 8,
+        9 => 9,
+        12 => 10,
+        10 => 11,
+        11 => 12,
+        _ => 0,
+    };
+    let mut re = RoundtripReencoder;
+    let mut out = wasm_encoder::Module::new();
+    let mut global_done = false;
+    let mut export_done = false;
+    let mut code = wasm_encoder::CodeSection::new();
+    let mut in_code = false;
+    for payload in Parser::new(0).parse_all(module) {
+        let payload = payload.expect("the module parses");
+        let id = match &payload {
+            Payload::CodeSectionStart { .. } => Some(10),
+            p => p.as_section().map(|(id, _)| id),
+        };
+        if let Some(id) = id {
+            if !global_done && rank(id) > rank(6) {
+                let mut g = wasm_encoder::GlobalSection::new();
+                g.global(ty, &ConstExpr::i64_const(0));
+                out.section(&g);
+                global_done = true;
+            }
+            if !export_done && rank(id) > rank(7) {
+                let mut e = wasm_encoder::ExportSection::new();
+                e.export(COUNTER, wasm_encoder::ExportKind::Global, counter);
+                out.section(&e);
+                export_done = true;
+            }
+        }
+        match payload {
+            Payload::GlobalSection(r) => {
+                let mut g = wasm_encoder::GlobalSection::new();
+                re.parse_global_section(&mut g, r).expect("the globals copy");
+                g.global(ty, &ConstExpr::i64_const(0));
+                out.section(&g);
+                global_done = true;
+            }
+            Payload::ExportSection(r) => {
+                let mut e = wasm_encoder::ExportSection::new();
+                re.parse_export_section(&mut e, r).expect("the exports copy");
+                e.export(COUNTER, wasm_encoder::ExportKind::Global, counter);
+                out.section(&e);
+                export_done = true;
+            }
+            Payload::CodeSectionStart { .. } => in_code = true,
+            Payload::CodeSectionEntry(body) => {
+                let mut f = re.new_function_with_parsed_locals(&body).expect("the locals copy");
+                let ops: Vec<Operator> = body
+                    .get_operators_reader()
+                    .expect("the body reads")
+                    .into_iter()
+                    .map(|op| op.expect("an instruction parses"))
+                    .collect();
+                let mut at = 0;
+                while at < ops.len() {
+                    let mut end = at;
+                    while end < ops.len() {
+                        end += 1;
+                        if matches!(
+                            ops[end - 1],
+                            Operator::Block { .. }
+                                | Operator::Loop { .. }
+                                | Operator::If { .. }
+                                | Operator::Else
+                                | Operator::End
+                                | Operator::Br { .. }
+                                | Operator::BrIf { .. }
+                                | Operator::BrTable { .. }
+                                | Operator::Return
+                                | Operator::Unreachable
+                        ) {
+                            break;
+                        }
+                    }
+                    f.instruction(&Instruction::GlobalGet(counter));
+                    f.instruction(&Instruction::I64Const((end - at) as i64));
+                    f.instruction(&Instruction::I64Add);
+                    f.instruction(&Instruction::GlobalSet(counter));
+                    for op in &ops[at..end] {
+                        f.instruction(&re.instruction(op.clone()).expect("an instruction copies"));
+                    }
+                    at = end;
+                }
+                code.function(&f);
+            }
+            payload => {
+                if in_code {
+                    out.section(&code);
+                    in_code = false;
+                }
+                if let Some((id, range)) = payload.as_section() {
+                    out.section(&RawSection { id, data: &module[range] });
+                }
+            }
+        }
+    }
+    if in_code {
+        out.section(&code);
+    }
+    out.finish()
+}
+
+/// What the counter in a module `counted` wrote reads now.
+pub fn executed<T>(store: &Store<T>, instance: &wasmi::Instance) -> u64 {
+    let global = instance.get_global(store, COUNTER).expect("the module is counted");
+    global.get(store).i64().expect("the counter is an i64") as u64
+}
+
 pub struct Ran {
     pub out: String,
     pub err: String,
     pub exit: i32,
-    pub fuel: u64,
+    /// Wasm instructions the runtime and the module executed (`counted`).
+    pub executed: u64,
     /// Bytes the runtime's linear memory grew by while the program ran: the
     /// memory a page holds for it beyond what instantiation set aside.
     pub grown: u64,
 }
 
 /// Instantiates the runtime, links `module` into it with `data` bytes and
-/// `table` slots set aside, and runs `_start`. A micro program spends well
-/// under a hundred million units of fuel; a translation that loops forever
-/// stops at two billion and reads as a trap. `env` is the process
-/// environment the runtime's `getenv` sees.
+/// `table` slots set aside, and runs `_start`, both modules as `counted`
+/// copies. Fuel is only the stop: the heaviest micro program executes 927
+/// million instructions, which its counted copy spends 2.33 billion units of
+/// fuel on, and a translation that loops forever stops at ten billion and
+/// reads as a trap. `env` is the process environment the runtime's `getenv`
+/// sees.
 pub fn execute(
     runtime: &[u8],
     module: &[u8],
@@ -186,11 +351,14 @@ pub fn execute(
     // reach past a thousand frames on every engine that runs them.
     config.set_max_recursion_depth(10_000);
     let engine = Engine::new(&config);
-    let rt = Module::new(&engine, runtime).map_err(|e| format!("runtime: {e}"))?;
-    let prog = Module::new(&engine, module).map_err(|e| format!("the module validates: {e}"))?;
+    let rt = Module::new(&engine, &counted(runtime)[..]).map_err(|e| format!("runtime: {e}"))?;
+    // validated as written, then run as the counted copy
+    Module::validate(&engine, module).map_err(|e| format!("the module validates: {e}"))?;
+    let prog = Module::new(&engine, &counted(module)[..])
+        .map_err(|e| format!("the module validates: {e}"))?;
     let env = env.iter().map(|(k, v)| format!("{k}={v}\0").into_bytes()).collect();
     let mut store = Store::new(&engine, Host { env, ..Host::default() });
-    store.set_fuel(2_000_000_000).expect("fuel is on");
+    store.set_fuel(10_000_000_000).expect("fuel is on");
     let mut linker = Linker::<Host>::new(&engine);
     for import in rt.imports() {
         let wasmi::ExternType::Func(ty) = import.ty() else { continue };
@@ -229,11 +397,11 @@ pub fn execute(
         };
         plinker.define("env", name, ext).map_err(|e| format!("{name}: {e}"))?;
     }
-    plinker
+    let pi = plinker
         .instantiate_and_start(&mut store, &prog)
         .map_err(|e| format!("the module links: {e}"))?;
     let start = rti.get_func(&store, "_start").expect("a command exports _start");
-    let before = store.get_fuel().expect("fuel is on");
+    let before = executed(&store, &rti) + executed(&store, &pi);
     let size = memory.size(&store);
     let finished = start.call(&mut store, &[], &mut []);
     // A trap leaves the instance usable, so the page's host asks the runtime
@@ -247,7 +415,7 @@ pub fn execute(
             Some(String::from_utf8_lossy(&bytes[..end]).into_owned())
         }
     };
-    let fuel = before - store.get_fuel().expect("fuel is on");
+    let executed = executed(&store, &rti) + executed(&store, &pi) - before;
     let grown = (memory.size(&store) - size) * 65536;
     let host = store.data();
     let mut err = String::from_utf8_lossy(&host.err).into_owned();
@@ -262,5 +430,5 @@ pub fn execute(
         }
         (Err(e), None) => return Err(format!("trapped: {e}")),
     };
-    Ok(Ran { out: String::from_utf8_lossy(&host.out).into_owned(), err, exit, fuel, grown })
+    Ok(Ran { out: String::from_utf8_lossy(&host.out).into_owned(), err, exit, executed, grown })
 }

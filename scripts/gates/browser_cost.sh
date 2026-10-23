@@ -5,11 +5,12 @@
 #   sh scripts/gates/browser_cost.sh
 #
 # Ruled 2026-10-06: welfare weighs every environment kanso runs in, and none at
-# zero. tests/browser_cost.rs loads docs/kanso.wasm into wasmi with fuel
-# metering on, compiles bench/interp_corpus with it, runs what comes out, and
-# compares four rows with bench/browser_golden.txt. Fuel is spent per executed
-# wasm instruction and the peaks are the toolchain allocator's own tally, so
-# the same artifact reads the same number on every run and every machine.
+# zero. tests/browser_cost.rs loads into wasmi a copy of docs/kanso.wasm that
+# counts the wasm instructions it executes, compiles bench/interp_corpus with
+# it, runs what comes out the same way, and compares four rows with
+# bench/browser_golden.txt. The instruction rows are that count and the peaks
+# are the toolchain allocator's own tally, so the same artifact reads the same
+# number on every run and every machine.
 #
 # THE ARTIFACT IS BUILT HERE, because no gate may read a file it did not build:
 # the compile sweep learned that on 2026-09-06 from three-minute-old binaries.
