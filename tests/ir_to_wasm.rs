@@ -111,11 +111,11 @@ fn the_micro_corpus_answers_the_same_through_the_translator() {
                     || ran.exit != want_exit
                 {
                     failures.push(format!(
-                        "{name}: out {:?} err {:?} exit {} (fuel {})",
+                        "{name}: out {:?} err {:?} exit {} ({} instructions)",
                         ran.out.chars().take(200).collect::<String>(),
                         ran.err.chars().take(200).collect::<String>(),
                         ran.exit,
-                        ran.fuel
+                        ran.executed
                     ));
                 }
             }
@@ -177,7 +177,7 @@ fn the_interp_corpus_answers_through_the_translator() {
     assert_eq!(ran.exit, 0);
     println!(
         "translated, interp corpus: {} wasm instructions, module {} bytes, data {} bytes, {} table slots",
-        ran.fuel,
+        ran.executed,
         side.wasm.len(),
         side.data,
         side.table

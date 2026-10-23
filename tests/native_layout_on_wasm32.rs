@@ -412,7 +412,7 @@ fn the_interp_corpus_answers_on_native_layout_in_wasm32() {
     let _ = std::fs::remove_dir_all(&work);
     assert_eq!(ran.out, String::from_utf8_lossy(&native.stdout), "the corpus's answer");
     assert_eq!(ran.exit, 0);
-    println!("native layout on wasm32, interp corpus: {} wasm instructions", ran.fuel);
+    println!("native layout on wasm32, interp corpus: {} units of wasmi fuel", ran.fuel);
 }
 
 /// Every line `WASM32_LINES` rewrites is one the emitter writes, so a helper
