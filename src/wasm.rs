@@ -201,7 +201,9 @@ thread_local! {
 pub extern "C" fn kanso_compile_native(ptr: *const u8, len: usize) -> i32 {
     let source = take_input(ptr, len);
     match crate::compile_source("run", &current_file(), &source) {
-        Ok(program) => lower_native(program),
+        Ok(program) => {
+            lower_native(program, || crate::compile_source("run", &current_file(), &source))
+        }
         Err(rendered) => {
             set_out(&rendered);
             2
@@ -215,7 +217,7 @@ pub extern "C" fn kanso_compile_native(ptr: *const u8, len: usize) -> i32 {
 pub extern "C" fn kanso_play_native(ptr: *const u8, len: usize) -> i32 {
     let source = take_input(ptr, len);
     match crate::compile_play_file(&current_file(), &source) {
-        Ok(program) => lower_native(program),
+        Ok(program) => lower_native(program, || crate::compile_play_file(&current_file(), &source)),
         Err(rendered) => {
             set_out(&rendered);
             2
@@ -231,9 +233,19 @@ pub extern "C" fn kanso_play_native(ptr: *const u8, len: usize) -> i32 {
 /// is, rewriting the wasm32 offsets line by line and letting each piece go
 /// once its functions are lowered, so the module text is held once.
 #[cfg(target_arch = "wasm32")]
-fn lower_native(program: crate::ast::Program) -> i32 {
+fn lower_native(
+    program: crate::ast::Program,
+    again: impl FnOnce() -> Result<crate::ast::Program, String>,
+) -> i32 {
     let convention = crate::codegen::ClosureConvention::Absent;
-    let ir = crate::codegen::emit_ir_tab_pieces(program, convention);
+    // A miss lets the program go with what it left out, so the source is
+    // compiled again and emitted whole (`emit_ir_tab_pieces`).
+    let ir =
+        crate::codegen::emit_ir_tab_pieces(program, convention).and_then(|pieces| match pieces {
+            Some(pieces) => Ok(pieces),
+            None => again()
+                .and_then(|whole| crate::codegen::emit_ir_tab_pieces_whole(whole, convention)),
+        });
     let side = ir.and_then(crate::ir_wasm::translate_pieces);
     match side {
         Ok(side) => {

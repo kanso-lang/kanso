@@ -516,7 +516,24 @@ pub fn emit_ir_dev_owned(
 /// `bench/interp_corpus` that was 132 definitions and 127,415 bytes of text, a
 /// third of what the tab wrote, held beside the program at the most its
 /// compile ever holds.
+///
+/// The groups the entry cannot reach are let go before anything is emitted,
+/// where every other build keeps them in case the emitter asks for one; that
+/// held 65,530 bytes of syntax at the tab's compile peak on the corpus. A miss
+/// answers `None`, and the tab compiles the source again and calls
+/// `emit_ir_tab_pieces_whole`, which keeps them, so a miss costs the tab a
+/// second compile and never changes the module.
 pub fn emit_ir_tab_pieces(
+    program: Program,
+    convention: ClosureConvention,
+) -> Result<Option<Vec<String>>, String> {
+    let written = emit_written_as(Given::Owned(program), convention, false, true)?;
+    Ok(written.map(Written::finish_pieces))
+}
+
+/// `emit_ir_tab_pieces` holding what the entry cannot reach, for a program
+/// that missed without it.
+pub fn emit_ir_tab_pieces_whole(
     program: Program,
     convention: ClosureConvention,
 ) -> Result<Vec<String>, String> {
@@ -789,6 +806,18 @@ fn emit_written(
     convention: ClosureConvention,
     inline_helpers: bool,
 ) -> Result<Written, String> {
+    emit_written_as(program, convention, inline_helpers, false)
+        .map(|written| written.expect("a build that keeps what it left out never misses"))
+}
+
+/// `emit_written`, and when `lean`, letting the groups the entry cannot reach
+/// go before emitting and answering `None` where the emitter missed one.
+fn emit_written_as(
+    program: Given<'_>,
+    convention: ClosureConvention,
+    inline_helpers: bool,
+    lean: bool,
+) -> Result<Option<Written>, String> {
     // The prune also answers the positions a group read as written and no
     // longer reads. A thunk handed to such a position is forced by
     // the interpreter, whose dispatcher still holds the dropped arm and has to
@@ -843,6 +872,13 @@ fn emit_written(
         }
     }
     let names: crate::hash::Set<String> = left_out.iter().map(|(_, d)| d.name.clone()).collect();
+    let left_names: Vec<(String, usize)> = match lean {
+        true => std::mem::take(&mut left_out)
+            .into_iter()
+            .map(|(_, d)| (d.name, d.params.len()))
+            .collect(),
+        false => Vec::new(),
+    };
     let first = emit_with(&program, convention, inline_helpers, &unread_positions, names);
     // The walk reads names the bodies mention, and the emitter can reach a
     // group no body names, by calling it or by asking whether it exists. Either
@@ -850,12 +886,29 @@ fn emit_written(
     // in its place, and emits it again, so a miss costs time and never changes
     // the module. So does a refusal: a call to a group that is not there is one
     // the emitter declines to lower, and the program as written may not be.
+    if lean {
+        let missed = match &first {
+            Ok(written) => {
+                written.asked_left_out
+                    || written.names_any(left_names.iter().map(|(n, a)| (n.as_str(), *a)))
+            }
+            Err(_) => true,
+        };
+        return match (missed && !left_names.is_empty(), first) {
+            (true, _) => Ok(None),
+            (false, first) => first.map(Some),
+        };
+    }
     let missed = match &first {
-        Ok(written) => written.asked_left_out || written.names_any(left_out.iter().map(|(_, d)| d)),
+        Ok(written) => {
+            written.asked_left_out
+                || written
+                    .names_any(left_out.iter().map(|(_, d)| (d.name.as_str(), d.params.len())))
+        }
         Err(_) => true,
     };
     if left_out.is_empty() || !missed {
-        return first;
+        return first.map(Some);
     }
     if let Given::Owned(owned) = &mut program {
         let total = owned.fns.len() + left_out.len();
@@ -868,7 +921,7 @@ fn emit_written(
             }
         }
     }
-    emit_with(&program, convention, inline_helpers, &unread_positions, Default::default())
+    emit_with(&program, convention, inline_helpers, &unread_positions, Default::default()).map(Some)
 }
 
 /// The names the entry reaches, by what each body mentions, or `None` for a
@@ -4223,9 +4276,25 @@ mod a_group_the_walk_misses_is_put_back {
         assert_eq!(out.len(), gone.len(), "the fixture lacks one of {gone:?}");
         let names = out.iter().map(|d| d.name.clone()).collect();
         match emit_with(&program, ClosureConvention::Absent, false, &Vec::new(), names) {
-            Ok(written) => written.asked_left_out || written.names_any(out.iter()),
+            Ok(written) => {
+                written.asked_left_out
+                    || written.names_any(out.iter().map(|d| (d.name.as_str(), d.params.len())))
+            }
             Err(_) => true,
         }
+    }
+
+    /// The tab lets go of what its walk left out before it emits, and a
+    /// module it writes that way is the module the build that keeps them
+    /// writes.
+    #[test]
+    fn the_lean_emit_writes_what_the_whole_one_writes() {
+        let lean = super::emit_ir_tab_pieces(program(), ClosureConvention::Absent)
+            .expect("the fixture emits")
+            .expect("the fixture misses nothing");
+        let whole = super::emit_ir_tab_pieces_whole(program(), ClosureConvention::Absent)
+            .expect("the fixture emits");
+        assert!(lean == whole, "the lean emit wrote another module");
     }
 
     #[test]

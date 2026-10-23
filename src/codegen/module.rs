@@ -31,10 +31,9 @@ struct Written {
 impl Written {
     /// Whether the body names a symbol of one of `decls`: its dispatcher,
     /// word twin, value wrapper or wrapper record.
-    fn names_any<'d>(&self, decls: impl Iterator<Item = &'d FnDecl>) -> bool {
+    fn names_any<'d>(&self, groups: impl Iterator<Item = (&'d str, usize)>) -> bool {
         let mut symbols: Vec<String> = Vec::new();
-        for decl in decls {
-            let (name, arity) = (decl.name.as_str(), decl.params.len());
+        for (name, arity) in groups {
             symbols.extend([
                 dsym(name, arity),
                 tsym(name, arity),
@@ -47,8 +46,6 @@ impl Written {
             && self.pieces.iter().any(|piece| !queries_named(piece, &queries).is_empty())
     }
 
-    /// The module: the body pruned, the declarations and globals it names
-    /// written in front of it, and the tail calls narrowed.
     /// The module as one text, for clang: the pieces `finish_pieces` gives,
     /// joined at their summed size, each let go as it is copied.
     fn finish(self) -> String {
@@ -61,7 +58,9 @@ impl Written {
         through_doors(module, convention)
     }
 
-    /// The module as the emitter wrote it, in pieces: first the declarations,
+    /// The module as the emitter wrote it, in pieces, with the body pruned,
+    /// the declarations and globals it names written in front of it, and the
+    /// tail calls narrowed: first the declarations,
     /// the globals and the site table, then the body's pieces, none of which
     /// splits a definition. The tab translates the pieces as they are, so
     /// the module is never held twice; joining them while every piece was
