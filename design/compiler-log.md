@@ -21,34 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-18 — A module's own type beats an imported type's twin
-
-The type-side partner of the entry above. The loader clones each exported
-type under its short name, so a program may write `sorted` for
-`list/sorted`. A module that declared its own `type sorted` kept the twin
-beside its declaration, and the twin answered: the module's constructions
-were refused as foreign, with the import's field count held against them.
-Once a module's types join the merged program, `own_types_beat_twins` drops
-a synthetic short-named twin that shares a name with one of them, and the
-import's type is still reachable by its qualified name. std/text's `span`
-met this in `tests/golden/entryfile`'s diff module, which declares its own
-six-field `span`.
-
-The fixture is `a_type_named_like_an_imported_type_is_the_modules` in the
-micro corpus, refused by both `kanso check` and a run before the change and
-printing `2` on both engines after it. The first build kept a set of the
-module's type names on every compile, 23 allocations in `compile_allocs` and
-`interp_allocs` for a collision almost no program has; the filter now
-allocates only when it finds a twin to drop, and both rows are where they
-were.
-
-Rows, from CI: `compile_instructions` 22,716,927 -> 22,721,761,
-`entry_instructions` 75,265,987 -> 75,287,373, `library_instructions`
-74,952,083 -> 74,973,469, and `browser_compile_instructions` 382,750,920 ->
-382,767,025: each compile asks every type whether it is a beaten twin. The
-floor drops by the cost to 91.52 under the rule for a change that makes the
-language work as specified.
-
 ## 2026-10-18 — gavel: the span maker is `text/to_span`
 
 Clay ruled #1992. The 2026-10-17 gavel on #1983 named a type `span` and a
@@ -2116,3 +2088,31 @@ only in the site constants, and four work rows moved with them:
 work_runbench 836,829,464 -> 836,829,597, work_encodebench 2,367,636,382 ->
 2,367,636,459, work_oneshot 10,346,159 -> 10,346,621 and work_livebench
 980,646,434 -> 980,646,336.
+
+## 2026-10-23 — the empty literals' C entries take no frame
+
+`[]` and `{}` call `k_list_empty` and `k_map_empty`, and the decoder makes
+557,000 of them on the run program. Each entry bumped the arena through
+`k_alloc`, whose refill is a call, so the entry aligned the stack with a push
+and a pop on every literal. The bump is now written in the entry, and the
+counting path and a short arena go to a cold `*_slow` entry as a tail call;
+the common path is sixteen instructions and no frame. The allocation counters
+cannot move, since counting still goes through `k_alloc`.
+
+CI's rows. run_instructions 836,829,597 -> 835,716,002 (-0.13%), and
+work_jsonbench 585,129,095 -> 583,476,695 (-0.28%), work_oneshot 10,346,621 ->
+10,335,157, work_deepbench 201,843,399 -> 201,739,409 and smaller falls in
+seven more. work_escapebench rose 39,058,492 -> 39,058,532, which this entry
+does not account for. Building compiles the runtime, so
+codegen_instructions_dev 116,434,829 -> 116,444,792 and
+codegen_instructions_release 425,464,049 -> 425,503,297, and machine code
+grows by the slow entries: text 5,335,758 -> 5,338,222. In the tab, where a
+wasm function has no frame to save, browser_run_instructions 30,274,594 ->
+30,275,515.
+
+Declined, both measured on CI first: the same bump written in the emitted IR
+as helpers in DECLARES. Inlined at every literal, the run program fell 0.30%,
+but the release build rose 4.4%, the dev build 1.0%, the tab compile 0.22% and
+its peak memory 0.7%, which the objective scores as a loss. Defined once and
+called, the run program fell 0.133% and the release build still rose 1.65%,
+clang spending it on the new functions inside the decoder.
