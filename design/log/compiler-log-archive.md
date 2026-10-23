@@ -105905,3 +105905,32 @@ reads 51 more library lines: `compile_instructions` 22,693,337 -> 24,958,388,
 `browser_compile_peak_bytes` 675,444 -> 752,488 and `browser_run_instructions`
 35,216,926 -> 37,494,108. Welfare falls 0.20, to 91.26, and the floor drops by
 exactly that under the rule for building a ruled part of the language.
+
+## 2026-10-18 — A local binding hides an alias only where it is bound
+
+`canonicalize_bare_aliases` rewrites a bare call to an import's export into
+the qualified name, and keeps a name bare wherever a local of that spelling
+might mean the local. It kept the name bare in every declaration of the
+program when any one of them bound it. A parameter called `run` in one
+module therefore sent every other module's `run` through the loader's
+short-named clone. An err born in that `run` said `born in run` where the
+same program without the other module says `born in refusals/run`, and
+basket, once std/text's `slice run:span` bound the name, read 6,113M
+instructions against 31M, with 4,010 view allocations and 256MB held against
+17 and 71KB. Both reproduce on main with no spans in them.
+
+A declaration that binds an alias's name now keeps the bare spelling and the
+clone it dispatches through, and every other declaration is rewritten.
+`tests/bound_elsewhere.rs` runs `tests/golden/bound_elsewhere` on both
+engines and fails on main with `born in run`. The first build walked each
+declaration's bindings into a set of its own and cost entry and library
+about 2.5%; the binding walker hands each name to a callback now, so one
+walk asks the aliases about every bound name and builds no set.
+
+Rows, against main with #1985 in it: `compile_instructions` 22,693,337 ->
+22,742,937, `entry_instructions` 75,197,395 -> 75,386,824,
+`library_instructions` 74,884,283 -> 75,073,678, `emit_instructions`
+6,061,105 -> 6,063,934, `compile_allocs` 12,160 -> 12,151, `interp_allocs`
+584,659 -> 584,645, and `browser_compile_instructions` 389,899,281 ->
+390,131,214. The floor drops by the cost under the rule for a change that
+makes the language work as specified.

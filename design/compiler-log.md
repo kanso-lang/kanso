@@ -21,35 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-18 — A local binding hides an alias only where it is bound
-
-`canonicalize_bare_aliases` rewrites a bare call to an import's export into
-the qualified name, and keeps a name bare wherever a local of that spelling
-might mean the local. It kept the name bare in every declaration of the
-program when any one of them bound it. A parameter called `run` in one
-module therefore sent every other module's `run` through the loader's
-short-named clone. An err born in that `run` said `born in run` where the
-same program without the other module says `born in refusals/run`, and
-basket, once std/text's `slice run:span` bound the name, read 6,113M
-instructions against 31M, with 4,010 view allocations and 256MB held against
-17 and 71KB. Both reproduce on main with no spans in them.
-
-A declaration that binds an alias's name now keeps the bare spelling and the
-clone it dispatches through, and every other declaration is rewritten.
-`tests/bound_elsewhere.rs` runs `tests/golden/bound_elsewhere` on both
-engines and fails on main with `born in run`. The first build walked each
-declaration's bindings into a set of its own and cost entry and library
-about 2.5%; the binding walker hands each name to a callback now, so one
-walk asks the aliases about every bound name and builds no set.
-
-Rows, against main with #1985 in it: `compile_instructions` 22,693,337 ->
-22,742,937, `entry_instructions` 75,197,395 -> 75,386,824,
-`library_instructions` 74,884,283 -> 75,073,678, `emit_instructions`
-6,061,105 -> 6,063,934, `compile_allocs` 12,160 -> 12,151, `interp_allocs`
-584,659 -> 584,645, and `browser_compile_instructions` 389,899,281 ->
-390,131,214. The floor drops by the cost under the rule for a change that
-makes the language work as specified.
-
 ## 2026-10-19 — a `slice!` handed straight to a door reads the range in place
 
 #1943's last owed item: the emitter fusing `slice! … .> utf8`, `.> append
@@ -2074,3 +2045,50 @@ compiles the runtime, so codegen_instructions_dev 116,430,160 -> 116,461,460
 and codegen_instructions_release 425,484,869 -> 425,504,615, and every
 benchmark binary's machine code grows 2,592 bytes: text 5,321,422 ->
 5,357,710 summed over the fourteen.
+
+## 2026-10-23 — a template joins onto a record field in place
+
+A template whose first piece is a field, `"{st.body}{d}"`, copied the whole
+string on every pass, even where nothing else could see it. The run program's
+restate phase does that to a 64 KiB string 128 times, and the beat carry
+copied the result again. The string-builder analysis now takes a field read as
+the builder when `field_moves` already proves the field alone: the record is
+handed over whole, every mention of it in the arm reads a field, and this
+field is read once. A template's first field joins the set of fields the field
+fixpoint asks about. `k_concat_arr_mut` then writes into the string, and since
+a builder's storage is malloc'd, the carry shares it instead of copying it.
+
+For the restate phase's seed to count as alone, a parameter an arm reads only
+into templates can now be an accumulator. `seed n acc = seed (n - 1)
+"{acc}{acc}"` reads `acc` twice, and a template keeps none of its pieces, so
+nothing is left holding it. The exemption covers only arms whose every mention
+is a template piece.
+
+CI's rows. run_instructions 830,143,044 -> 818,854,757 (-1.36%). The run
+program allocates 221,297,400 -> 212,891,960 bytes and evacuates 7,416,368 ->
+4,591,200, and none of its peaks move. The mem vein's new
+`a_record_field_joined_in_place` makes 10 allocations where main made 2,024,
+and `an_interpolated_state_string_is_not_kept_under_the_mark` allocates
+107,668,139 -> 2,796,683 bytes with its arena peak 3,145,984 -> 1,048,576.
+Its scans rose,
+`an_interpolated_state_string_is_not_kept_under_the_mark_str_scans` 2 -> 11,
+while the bytes they read fell 1,048,677 -> 11, which this entry does not
+account for. On
+the compiler's side compile_instructions 25,221,632 -> 25,204,865,
+entry_instructions 74,568,239 -> 74,522,559, library_instructions 74,230,433
+-> 74,182,975 and emit_instructions 6,449,595 -> 6,459,213; interp_instructions
+rose 385,357,985 -> 385,504,156, which is the interpreter's layout, since the
+analysis does not run there. browser_compile_instructions rose 427,904,481 ->
+433,640,141 (+1.34%). The same route compiled natively moves +0.10% and lowers
+to the same module, and padding the tab's heap before the compile moved the
+row by at most 6,000, so the rise is in the wasm build of the compiler and not
+in allocator layout. I have not found where. The model scores the trade at
++0.04.
+
+The same pull request moves the JSON string kernels out of `text.c` into
+`src/runtime/json.c` (#2059) and removes `k_shareable`, `k_viewreg_add` and
+`k_ten_holds`, which nothing called. On its own the move cost
+codegen_instructions_dev 1,744 and codegen_instructions_release 570 by layout,
+which put welfare under the floor, so it rides here. With both, the dev row
+reads 116,461,460 -> 116,463,204 and the release row 425,504,615 ->
+425,505,262.
