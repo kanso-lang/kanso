@@ -2089,6 +2089,12 @@ reads 263,889,085 and 264,519,748 under them.
 Across the five changes the tab's compile falls from 293,067,500 to 261,513,550
 executed instructions, 10.8%.
 
+**The epoch the meter change owed.** bench/compile_epochs.txt now names
+bda14b8, the first history row counted in executed instructions, with
+0.6758 for browser_compile_instructions and 1.1548 for
+browser_run_instructions. Rescored with it, the history rows for 15d6b27 and
+bda14b8, one tree measured both ways, read 92.9893 each.
+
 One idea measured and dropped: `lines_holding`, the narrowing's search for
 `define `, `musttail call` and `tailcc ` across the whole module, found each
 word by memchr on one of its bytes and compared there. It read 272,919,712

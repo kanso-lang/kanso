@@ -56,3 +56,10 @@ dfd118a compile_peak_bytes 2.1047
 8535884 compile_instructions 4.3612
 8535884 compile_allocs 1.0000
 8535884 compile_peak_bytes 1.0000
+# THE BROWSER'S TWO INSTRUCTION ROWS changed meter at bda14b8 (#2064): they
+# count the wasm instructions a module executes where they read wasmi's fuel,
+# which charges a whole frame when control enters it. The factors are the two
+# readings of 15d6b27's tree, 293,067,500 / 433,668,787 and
+# 34,963,054 / 30,276,840. Nothing about the compiler or the runtime changed.
+bda14b8 browser_compile_instructions 0.6758
+bda14b8 browser_run_instructions 1.1548
