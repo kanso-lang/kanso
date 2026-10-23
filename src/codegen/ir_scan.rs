@@ -102,19 +102,23 @@ fn called_symbols(text: &str) -> crate::hash::Set<&str> {
 fn symbols_before_newline(text: &str) -> crate::hash::Set<&str> {
     // One walk over the bytes, holding the last `@` since the line began. A
     // search for each newline and then for the `@` before it was two calls a
-    // line, 42,784 lines in the tab's compile of its corpus.
+    // line, 42,784 lines in the tab's compile of its corpus. The walk reads
+    // eight bytes a pass for whichever of the two comes next; a byte at a
+    // time it was 5.5M of the tab's 249M compile instructions.
     let mut found = crate::hash::Set::default();
     let mut last_at = None;
-    for (i, &b) in text.as_bytes().iter().enumerate() {
-        match b {
+    let bytes = text.as_bytes();
+    let mut i = crate::compare::either_from(bytes, 0, b'@', b'\n');
+    while i < bytes.len() {
+        match bytes[i] {
             b'@' => last_at = Some(i),
-            b'\n' => {
+            _ => {
                 if let Some(at) = last_at.take() {
                     found.insert(&text[at + 1..i]);
                 }
             }
-            _ => {}
         }
+        i = crate::compare::either_from(bytes, i + 1, b'@', b'\n');
     }
     found
 }

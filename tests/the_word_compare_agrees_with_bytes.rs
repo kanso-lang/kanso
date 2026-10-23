@@ -10,7 +10,7 @@
 //! the other way. Only the sign of the answer is compared, which is all
 //! `memcmp` promises.
 
-use kanso::compare::{byte_from, bytes};
+use kanso::compare::{byte_from, bytes, either_from};
 use std::cmp::Ordering;
 
 /// xorshift64*, seeded, so a failure names a case that can be replayed.
@@ -103,6 +103,30 @@ fn byte_from_agrees_with_position() {
                     byte_from(&text, from, target),
                     want,
                     "target {target:#04x}, case {case}: {text:?} from {from}"
+                );
+            }
+        }
+    }
+}
+
+/// `either_from` against `position` for either of two bytes, over the pairs
+/// the emitter asks about and two high bytes, the texts drawn from both
+/// targets and their one-bit neighbours.
+#[test]
+fn either_from_agrees_with_position() {
+    let mut rng = Rng(0x9e37_79b9_7f4a_7c15);
+    for (a, b) in [(b'@', b'\n'), (0x00, 0xff), (0x80, 0x7f)] {
+        let pool = [a, b, a ^ 1, b ^ 1, a ^ 0x80, b ^ 0x80, b' ', 0x01];
+        for case in 0..100_000 {
+            let len = rng.below(41);
+            let text: Vec<u8> = (0..len).map(|_| pool[rng.below(pool.len() as u64)]).collect();
+            for from in 0..=len {
+                let want =
+                    text[from..].iter().position(|&c| c == a || c == b).map_or(len, |n| from + n);
+                assert_eq!(
+                    either_from(&text, from, a, b),
+                    want,
+                    "{a:#04x} or {b:#04x}, case {case}: {text:?} from {from}"
                 );
             }
         }

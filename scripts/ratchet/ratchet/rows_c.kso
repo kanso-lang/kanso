@@ -3188,6 +3188,16 @@ late_line = row
 
 rows_cq44c = list/concat rows_cq44b [early_piece kept_room]
 
-rows_cq44 = list/concat rows_cq44c [narrowing_word late_line]
+two_byte_borrow = row
+  "a two-byte search that trusts a borrow"
+  true
+  "cargo test --release --test {compare_fuzz}"
+  "specs (unit, golden, differential)"
+  (breaking "a_two_byte_search_that_trusts_a_borrow")
+  no_setup
+
+rows_cq44d = list/concat rows_cq44c [narrowing_word late_line]
+
+rows_cq44 = list/concat rows_cq44d [two_byte_borrow]
 
 rows_c = list/concat rows_cq44 [itself]

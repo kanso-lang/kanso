@@ -2162,6 +2162,16 @@ misses, and holds `lines_holding_at` to `lines_holding` on each; comparing from
 the anchor rather than from the word's start, or reporting a line once per
 anchor in it, each fail it.
 
+**Two bytes at a time.** `symbols_before_newline` walks the whole module for
+each line's last `@`, a byte a pass, and that walk was 5.5M. It now asks
+`compare::either_from` for whichever of `@` and a newline comes next, testing
+each eight-byte word for both.
+
+    browser_compile_instructions  248,961,764 -> 244,730,101
+
+`either_from` has a fuzzer of its own beside `byte_from`'s, for three pairs of
+target bytes, and dropping the second test's `& !` fails it.
+
 **Specs.** The interp corpus cut into pieces every seventh definition translates
 to the same module as the whole text, and letting a piece go before its
 functions are lowered fails it. The lean emit writes the pieces the whole emit

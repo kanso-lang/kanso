@@ -118,3 +118,26 @@ pub fn find(s: &[u8], byte: u8) -> Option<usize> {
     let i = byte_from(s, 0, byte);
     (i < s.len()).then_some(i)
 }
+
+/// `byte_from` for whichever of two bytes comes first: where the first `a` or
+/// `b` at or after `from` is in `s`, or `s.len()`. One word is tested for both,
+/// which costs about twice a single byte's test and half of two searches.
+#[inline]
+pub fn either_from(s: &[u8], mut i: usize, a: u8, b: u8) -> usize {
+    const LO: u64 = 0x0101_0101_0101_0101;
+    const HI: u64 = 0x8080_8080_8080_8080;
+    let (pa, pb) = (LO * a as u64, LO * b as u64);
+    while i + 8 <= s.len() {
+        let w = u64::from_le_bytes(s[i..i + 8].try_into().expect("eight bytes"));
+        let (x, y) = (w ^ pa, w ^ pb);
+        let z = (x.wrapping_sub(LO) & !x | y.wrapping_sub(LO) & !y) & HI;
+        if z != 0 {
+            return i + (z.trailing_zeros() / 8) as usize;
+        }
+        i += 8;
+    }
+    while i < s.len() && s[i] != a && s[i] != b {
+        i += 1;
+    }
+    i
+}
