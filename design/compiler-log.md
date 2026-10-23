@@ -21,40 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-20 — three leads in the decoder, measured and declined
-
-Each was built, measured on jsonbench or the run program, and dropped. They
-are recorded so nobody builds them again without new evidence.
-
-**Deciding a string's closing quote inside `string_at`.** Spans cost jsonbench
-38.6M (833.0M to 871.6M, kanso#1994). Most of it is the string path, 243.3M
-against 204.4M, which goes through one more call level per string: the
-`span_to` twin, the `string_at` twin, then the `string_end` twin, each reached
-by a musttail call. A guard that decided the closing quote in `string_at` read
-1,183.7M, because the guard broke `parsed` being returned by value
-(`sh_rec` 254M). An `if` with a small non-tail call read 879.6M. Both lost to
-the arm dispatch that is there.
-
-**`alwaysinline` on the flattened twins.** On every twin, jsonbench read
-891.3M, the callers growing with what was inlined into them. On `string_at`'s
-twin alone it read 871,576,231, unchanged to the instruction: the twins reach
-each other through musttail calls, and LLVM does not inline across those.
-
-**A short-number path in `number_span`.** On kanso#2002's tree the run program
-decodes 417,483 numbers at 94 instructions a call. Most of large.json's
-numbers are one or two digits, or decimals of seven to nine bytes, with no
-exponent. Walking digits and one point a byte at a time ahead of the
-sixteen-byte walk took every call, but at seven instructions a digit:
-work_runbench read 1,230,763,105 to 1,236,361,572 and the function 39.25M to
-44.85M. Reading each digit run eight bytes at once with `k_nondigits8` and a
-count of trailing zeros cost 93 a call and saved 365,211 on the run program,
-0.03%. 96,000 random strings agreed between native and the interpreter at
-every position, and the harness went red when the fast path dropped the float
-sign. About 45 of the 93 instructions are the call's fixed work: the failure
-and tag checks, the bounds, and RFC 8259's lead rules. Only a builtin that
-scans and converts in one call would remove them, and the conversion it would
-replace is already a word-at-a-time parse.
-
 ## 2026-10-20 — a JSON number skips its tag ladders, and a long slice counts in blocks
 
 Two changes on the run program's hot paths, in one pull request (#2012, part
@@ -2032,3 +1998,35 @@ program against main's 816,905,427 in the container. The renderer's stores now
 went through a pointer into the arena instead of a buffer nothing else can
 alias, and `k_b_append_rendered` rose 1,523,160. The first version, which
 wrote the render call twice, also stopped `render_ryu` being inlined.
+
+## 2026-10-23 — a short float walks down by its zeros
+
+`ryu_short` starts its search at the place count the last float took. When
+the float passes there, it used to try each place below until one failed, so
+a float with the same precision as the one before it paid two tries: one to
+pass and one to fail. Each try multiplies, rounds, converts back and divides.
+On the run program 172,979 of the 191,070 floats it renders take that path.
+
+While the search's bound holds, the interval of decimals that read back as
+the float is narrower than a unit at p places, so it holds at most one
+decimal with p places. A decimal with p - 1 places in it is also one with p
+places, so it is m / 10, and it exists exactly when m ends in a zero. The
+walk down now takes the zeros off m instead of trying: it reaches the same
+place count and the same m with no division of doubles. `k_tenfold` asks
+whether m is a multiple of ten by multiplying by five's inverse modulo 2^64
+and comparing, and the quotient is taken only for a zero that is there.
+
+On this container, the run program from a fixed path:
+
+| tree | runbench |
+| --- | ---: |
+| main | 816,801,133 |
+| `m % 10 == 0`, quotient and remainder together | 816,057,840 |
+| `k_tenfold`, quotient only on a zero | 815,624,925 |
+
+That is −1,176,208 (−0.144%), with output byte-identical to main.
+`tests/every_rendered_float_reads_back_as_itself.rs` lifts the search from
+the runtime and sweeps 5,809,326 doubles with no failures. With the walk
+down removed it reports 975,871 not shortest, the count it gave for the old
+walk's removal. The ratchet row `float_walk` puts the tries back, and the
+mutated tree reads the run program at main's 816,801,133.

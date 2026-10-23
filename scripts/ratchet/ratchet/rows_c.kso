@@ -2983,4 +2983,17 @@ run_through_dispatch = row
 
 rows_cq37 = list/concat rows_cq36 [run_through_dispatch]
 
-rows_c = list/concat rows_cq37 [itself]
+# A float that passes at the guessed place count takes the zeros off its scaled
+# decimal to reach the fewest places, instead of trying each place below. The
+# mutation puts the tries back, and the work vein reads runbench heavier.
+float_walk = row
+  "a float walked down by tries"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_float_walked_down_by_tries")
+  benches
+
+rows_cq38 = list/concat rows_cq37 [float_walk]
+
+rows_c = list/concat rows_cq38 [itself]
