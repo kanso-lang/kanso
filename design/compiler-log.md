@@ -2112,6 +2112,14 @@ again, and the row reads 257,851,861.
 Across the eight changes the tab's compile falls from 293,067,500 to
 256,933,580 executed instructions, 12.3%.
 
+**The native veins.** `is_a_stack_slot`'s byte loop runs natively too, and
+the emitter's own count falls: emit_instructions 6,459,502 -> 6,249,687. Three
+rows move by layout with the new code: compile_instructions 25,204,865 ->
+25,205,087, entry_instructions 74,522,559 -> 74,523,222 and
+library_instructions 74,182,975 -> 74,183,641. Natively the word compare and
+the byte searches are not linked in, and memchr and memcmp stay the C
+library's.
+
 **The epoch the meter change owed.** bench/compile_epochs.txt now names
 bda14b8, the first history row counted in executed instructions, with
 0.6758 for browser_compile_instructions and 1.1548 for

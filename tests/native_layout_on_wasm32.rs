@@ -1,8 +1,8 @@
 //! Native's layout, built for wasm32, answers what native answers.
 //!
 //! The playground runs a program with every value held in a registry the
-//! toolchain keeps, which costs the interpreter corpus 2.39 billion wasm
-//! instructions where native spends 13.8 million x86 ones. The route to
+//! toolchain keeps, which cost the interpreter corpus 2.39 billion units of
+//! wasmi fuel where native spends 13.8 million x86 instructions. The route to
 //! closing that is the one the 2026-10-06 prompt names: values in linear
 //! memory in native's layout, with `runtime.c` compiled to wasm32. This is the
 //! first step of it, and it holds the step to the goldens before anything in
@@ -11,7 +11,7 @@
 //! Each program in the micro corpus is built by `kanso build`, its module is
 //! passed through `codegen::retarget_wasm32`, and clang builds the result for
 //! wasm32 against `runtime.c` built the same way, with wasi-libc under both.
-//! The module runs under wasmi with a WASI host of a dozen calls, and its
+//! The module runs under the WASI host in `tests/support/wasm32.rs`, and its
 //! stdout, stderr and exit code are compared with the program's goldens: the
 //! same bytes the interpreter, native and the page are held to.
 //!
@@ -57,7 +57,9 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
-use wasmi::{Caller, Config, Engine, Extern, Func, Linker, Module, Store, Val};
+
+#[path = "support/wasm32.rs"]
+mod wasm32;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -87,21 +89,6 @@ const HOST: [(&str, &str); 8] = [
 
 const SYSROOT: &str = "/usr";
 const WASI_LIB: &str = "/usr/lib/wasm32-wasi";
-
-/// Whether this host can build for wasm32 at all. The Linux specs job sets
-/// `KANSO_WASM32_REQUIRED` after installing the toolchain, and there a missing
-/// piece is a failure rather than a skip.
-fn toolchain() -> bool {
-    let clang = Command::new("clang").arg("--version").output().is_ok();
-    let ld = Command::new("wasm-ld").arg("--version").output().is_ok();
-    let libc = Path::new(WASI_LIB).join("libc.a").exists();
-    let ok = clang && ld && libc;
-    assert!(
-        ok || std::env::var("KANSO_WASM32_REQUIRED").is_err(),
-        "this job installs the wasm32 toolchain: clang {clang}, wasm-ld {ld}, wasi-libc {libc}"
-    );
-    ok
-}
 
 fn run(cmd: &mut Command, what: &str) {
     let out = cmd.output().unwrap_or_else(|e| panic!("{what}: {e}"));
@@ -174,124 +161,10 @@ fn link(stage: &Path, entry: &str, rt: &(PathBuf, PathBuf)) -> PathBuf {
     wasm
 }
 
-#[derive(Default)]
-struct Host {
-    out: Vec<u8>,
-    err: Vec<u8>,
-    exit: Option<i32>,
-}
-
-fn memory(c: &Caller<'_, Host>) -> wasmi::Memory {
-    match c.get_export("memory") {
-        Some(Extern::Memory(m)) => m,
-        _ => panic!("the module exports its memory"),
-    }
-}
-
-fn word(m: &wasmi::Memory, c: &Caller<'_, Host>, at: usize) -> usize {
-    let mut b = [0u8; 4];
-    m.read(c, at, &mut b).expect("in bounds");
-    u32::from_le_bytes(b) as usize
-}
-
-/// One WASI call. Writes go to the stream they name, the clock reads one fixed
-/// instant (2026-01-01, so a program asking whether time has passed the epoch
-/// is answered) and randomness is zeros, so a run is a function of its program; everything
-/// that would reach a filesystem answers ENOSYS, which `HOST` keeps the
-/// corpus away from.
-fn wasi(name: &str, c: &mut Caller<'_, Host>, args: &[Val]) -> Result<i32, wasmi::Error> {
-    let i = |k: usize| args[k].i32().expect("an i32 argument") as usize;
-    let m = memory(c);
-    Ok(match name {
-        "fd_write" => {
-            let mut total = 0u32;
-            for k in 0..i(2) {
-                let p = word(&m, c, i(1) + k * 8);
-                let n = word(&m, c, i(1) + k * 8 + 4);
-                let mut bytes = vec![0u8; n];
-                m.read(&*c, p, &mut bytes).expect("in bounds");
-                match i(0) {
-                    2 => c.data_mut().err.extend_from_slice(&bytes),
-                    _ => c.data_mut().out.extend_from_slice(&bytes),
-                }
-                total += n as u32;
-            }
-            m.write(&mut *c, i(3), &total.to_le_bytes()).expect("in bounds");
-            0
-        }
-        "args_sizes_get" | "environ_sizes_get" => {
-            m.write(&mut *c, i(0), &0u32.to_le_bytes()).expect("in bounds");
-            m.write(&mut *c, i(1), &0u32.to_le_bytes()).expect("in bounds");
-            0
-        }
-        "args_get" | "environ_get" | "random_get" => 0,
-        "fd_fdstat_get" => {
-            m.write(&mut *c, i(1), &[2u8, 0, 0, 0, 0, 0, 0, 0]).expect("in bounds");
-            0
-        }
-        "clock_time_get" => {
-            let at: u64 = 1_767_225_600_000_000_000;
-            m.write(&mut *c, i(2), &at.to_le_bytes()).expect("in bounds");
-            0
-        }
-        "fd_prestat_get" => 8,
-        "proc_exit" => {
-            c.data_mut().exit = Some(i(0) as i32);
-            return Err(wasmi::Error::new("proc_exit"));
-        }
-        _ => 52,
-    })
-}
-
-struct Ran {
-    out: String,
-    err: String,
-    exit: i32,
-    fuel: u64,
-}
-
-fn execute(wasm: &Path) -> Ran {
-    let mut config = Config::default();
-    config.consume_fuel(true);
-    // wasmi stops at a thousand frames, where a browser gives a page several
-    // times that and native runs on an 8 MB stack: three hundred nested ties
-    // reach past a thousand frames on every engine that runs them.
-    config.set_max_recursion_depth(10_000);
-    let engine = Engine::new(&config);
-    let module = Module::new(&engine, &std::fs::read(wasm).expect("the module reads")[..])
-        .expect("the module parses");
-    let mut store = Store::new(&engine, Host::default());
-    store.set_fuel(u64::MAX / 4).expect("fuel is on");
-    let mut linker = Linker::<Host>::new(&engine);
-    for import in module.imports() {
-        let wasmi::ExternType::Func(ty) = import.ty() else { continue };
-        let name = import.name().to_string();
-        let f = Func::new(&mut store, ty.clone(), move |mut c, args, res| {
-            let r = wasi(&name, &mut c, args)?;
-            if let Some(slot) = res.first_mut() {
-                *slot = Val::I32(r);
-            }
-            Ok(())
-        });
-        linker.define(import.module(), import.name(), f).expect("the import defines");
-    }
-    let instance = linker.instantiate_and_start(&mut store, &module).expect("it instantiates");
-    let start = instance.get_func(&store, "_start").expect("a command exports _start");
-    let before = store.get_fuel().expect("fuel is on");
-    let finished = start.call(&mut store, &[], &mut []);
-    let fuel = before - store.get_fuel().expect("fuel is on");
-    let host = store.data();
-    let exit = match (finished, host.exit) {
-        (_, Some(code)) => code,
-        (Ok(()), None) => 0,
-        (Err(e), None) => panic!("{} trapped: {e}", wasm.display()),
-    };
-    Ran {
-        out: String::from_utf8_lossy(&host.out).into_owned(),
-        err: String::from_utf8_lossy(&host.err).into_owned(),
-        exit,
-        fuel,
-    }
+/// A linked command, run by the shared WASI host.
+fn execute(wasm: &Path) -> wasm32::Ran {
+    let bytes = std::fs::read(wasm).expect("the module reads");
+    wasm32::command(&bytes, &[]).unwrap_or_else(|e| panic!("{}: {e}", wasm.display()))
 }
 
 /// `program`, staged beside its siblings with an entry that imports it, built
@@ -320,7 +193,7 @@ fn stage_and_link(program: &Path, rt: &(PathBuf, PathBuf), work: &Path) -> PathB
 
 #[test]
 fn the_micro_corpus_answers_the_same_on_native_layout_in_wasm32() {
-    if !toolchain() {
+    if !wasm32::toolchain() {
         eprintln!("no wasm32 toolchain here: clang, wasm-ld and wasi-libc are wanted");
         return;
     }
@@ -381,11 +254,10 @@ fn the_micro_corpus_answers_the_same_on_native_layout_in_wasm32() {
 }
 
 /// The interpreted row's corpus, the browser rows' workload, on native's
-/// layout. It prints its answer and the fuel it spent, which is the number the
-/// tab's registry is measured against in design/compiler-log.md.
+/// layout. It prints its answer and the wasm instructions it executed.
 #[test]
 fn the_interp_corpus_answers_on_native_layout_in_wasm32() {
-    if !toolchain() {
+    if !wasm32::toolchain() {
         eprintln!("no wasm32 toolchain here: clang, wasm-ld and wasi-libc are wanted");
         return;
     }
@@ -412,7 +284,7 @@ fn the_interp_corpus_answers_on_native_layout_in_wasm32() {
     let _ = std::fs::remove_dir_all(&work);
     assert_eq!(ran.out, String::from_utf8_lossy(&native.stdout), "the corpus's answer");
     assert_eq!(ran.exit, 0);
-    println!("native layout on wasm32, interp corpus: {} units of wasmi fuel", ran.fuel);
+    println!("native layout on wasm32, interp corpus: {} wasm instructions", ran.executed);
 }
 
 /// Every line `WASM32_LINES` rewrites is one the emitter writes, so a helper
