@@ -21,76 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-19 — a `slice!` handed straight to a door reads the range in place
-
-#1943's last owed item: the emitter fusing `slice! … .> utf8`, `.> append
-acc`, `.> to_int` and `.> to_float` as it fuses the nested spellings (the
-2026-10-14 gavel, corrected the same day to the chain spellings). The decoder
-moved onto spans in #1994 and no longer needs it, so what is left is the
-spelling a program uses for a range it has already bounded.
-
-Under the corpus-first gavel the shape went into the run program first, as a
-phase called `insist`: 5,000 laps reading a year, a month and a word out of one
-line. Measured on main at kanso#1994, it costs 11,955,088 instructions built
-alone, 0.97% of the program, and adds 25 bytes to the peak. Welfare's run
-baselines were re-based by the readings with the phase over without it on that
-compiler, 1,227,450,174 over 1,215,496,727 and 5,063,225 over 5,063,200, so
-adding the phase cost that compiler nothing.
-
-The rewrite runs at the start of the flatten pass. `text/slice! s from to .>
-text/utf8` becomes `if (text/past? s from to) (text/slice! s from to) (effect
-(text/utf8 (builtin_slice s from to)))`, and the emitter fuses the door in the
-third argument. `past?` is std/text's statement of where `slice` answers none,
-and the prune that drops a shipped function nobody names keeps it whenever
-`slice!` is kept. A range that leaves the value is still the `slice!` the
-author wrote, failing on their line. The arguments are read twice, so the
-rewrite takes only names, integers and `+`, `-` and `*` on them.
-
-The first version was a `!` helper in std/text per door. It saved the slice
-but was itself an insisting form, so an err the door raised, `"ka" is not an
-integer`, was pointed at the caller's line where the two steps leave it in
-`text/to_int`. An optimisation should not change what a program reports, so
-the helper went.
-
-Three faults turned up on the way, each with a golden that goes red without
-its fix:
-
-- The `to_int` and `to_float` doors gave an err the call site's origin. The
-  oracle runs the wrapper, so the err is born in `text/to_int`. A rescue on
-  the caller's own line lets through a failure born on that line, so on native
-  alone the err escaped `.?`. The doors now take the wrapper's line, as the
-  `utf8` door did. `a_slice_bang_chain_opens_its_door_in_place` reaches the
-  endpoint on native without it.
-- The `utf8` door stamped no site, so a value it cannot take stopped the
-  program naming whatever line had stamped last (`text/past?`). It stamps the
-  wrapper's line unless the value is known to be bytes.
-  `a_door_a_slice_bang_opens_fails_inside_the_door` pins it.
-- `.> (&text/append acc)` was refused: the formatter called the parentheses
-  redundant, and without them the chain step refuses held arguments. After a
-  chain operator the step is one atom, and the formatter now says so.
-
-The new mem fixture `a_slice_bang_chain_builds_no_slice` reads 45 allocations
-against 95 for the two steps. Built alone, the phase reads 6,081,704 against
-11,955,088. Each step still builds an `effect` box and the closure for the
-next step, which is what a chain costs.
-
-Rows, from CI. The phase's own work moves the run program: work_runbench
-lands on 1,221,576,962 against 1,215,497,872 without it, and its `.text` row,
-text, on 5,132,910 in total. The run vein lands on run_allocs 1,872,053,
-twelve a lap, run_alloc_bytes 303,335,164, run_beat_iters 92,018,
-run_evac_allocs 49,265, run_evac_bytes 14,919,712, run_perm_allocs 101,
-run_perm_live_bytes 15,825, run_perm_peak_bytes 146,913 (the line, 25 bytes),
-run_sh_bytes 4,217,520 and run_utf8_bytes 424,489. The emitted code for the
-other benchmarks, runbench's among them, lands on emitted_other_lines 156,609,
-emitted_other_calls 18,424, emitted_other_branches 17,158 and
-emitted_other_defines 2,169. compile_instructions 25,083,410,
-entry_instructions 76,579,726 and library_instructions 76,283,760 rise for the
-rewrite and `past?`, and browser_run_instructions lands on 37,494,129, 21
-more. emit_instructions 6,095,522, interp_instructions 570,698,408 and the
-tab's compile, 419,334,691, fall, and oneshot and livebench fall by 1,099 and
-7, by mechanisms not isolated. Welfare rises 0.02 and the floor is banked at
-91.28.
-
 ## 2026-10-19 — an insisting form builds no closure, and no step once its box has settled
 
 Since #1975 an insisting form names its caller's line. On native,
@@ -2045,6 +1975,31 @@ compiles the runtime, so codegen_instructions_dev 116,430,160 -> 116,461,460
 and codegen_instructions_release 425,484,869 -> 425,504,615, and every
 benchmark binary's machine code grows 2,592 bytes: text 5,321,422 ->
 5,357,710 summed over the fourteen.
+
+## 2026-10-23 — a literal constant is its value at every mention
+
+A top-level constant is built on first demand behind a cell with a ready flag,
+and every mention called its accessor: test the flag, load the cell, check the
+tag. A constant whose one arm is an integer literal that fits a word does no
+work to build, so a mention of it is now that literal, the same
+`{ i64 0, i64 N }` an integer literal emits. Anything else, a wider literal
+included, still goes through the cell.
+
+The run program's digest phase is where it shows. sha256's `whole` is read
+about a dozen times a round, and a round fell from 295 instructions to 182 in
+the container. The digest loop shrank enough to be inlined into the driver.
+The escape phase went the other way: `span` is a literal constant too, and
+once LLVM could see `filled`'s loop bound it reshaped the loop and spent one
+more instruction a push, 1,552,672 over the run.
+
+CI's rows. run_instructions 830,143,044 -> 828,053,655 (-0.25%),
+work_digestbench 5,210,951 -> 4,150,769 (-20.3%) and work_deepbench
+201,739,409 -> 201,098,912; work_escapebench rose 39,058,532 -> 40,308,322
+(+3.2%) for the reshaped loop. The emitted code falls where constants were
+read: runbench 799 -> 741 defines and 7,539 -> 7,393 calls, digestbench 135 ->
+117 and 935 -> 872. emit_instructions 6,449,595 -> 6,449,884, and
+browser_compile_instructions 427,904,481 -> 427,933,127. A ratchet row sends every mention back
+through the cell; mutated, the run program reads main's count again.
 
 ## 2026-10-23 — a template joins onto a record field in place
 
