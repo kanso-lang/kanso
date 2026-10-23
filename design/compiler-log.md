@@ -1999,7 +1999,7 @@ went through a pointer into the arena instead of a buffer nothing else can
 alias, and `k_b_append_rendered` rose 1,523,160. The first version, which
 wrote the render call twice, also stopped `render_ryu` being inlined.
 
-## 2026-10-23 — three costs out of the tab's compile
+## 2026-10-23 — five costs out of the tab's compile
 
 Counted in executed instructions, the costliest function in the tab's compile
 was `memcmp`: 9.5M of the front end's 68.8M and 17.5M of the emitter's 119.2M
@@ -2057,14 +2057,44 @@ The search was 739,426 instructions of the tab's route natively.
     browser_compile_instructions  268,290,909 -> 266,884,355  (-0.52%)
 
 Nothing pinned the lambda rule, so a spec in src/codegen/narrow.rs now does:
-beside the twin a lambda keeps `tailcc`, and without it the lambda is narrowed. Noting no twin, or collecting no lambdas, each fail it, and the second
+beside the twin a lambda keeps `tailcc`, and without it the lambda is
+narrowed. Noting no twin, or collecting no lambdas, each fail it, and the second
 is the ratchet row "a lambda narrowed beside a closure jump". The row "the whole
 module searched for the closure jump" puts the search back, and the browser row
 reads 268,297,303.
+
+**`@sN` found by its `@`.** `named_strings` looks for every `@sN` in the
+module to decide which interned strings to write, and it searched with
+`find("@s")`. A two-way searcher with a two-byte needle can skip almost
+nothing, so it now finds each `@` by memchr and checks the byte after it.
+
+    browser_compile_instructions  266,884,355 -> 264,519,748  (-0.89%)
+
+**Line ends eight bytes at a time.** The translator ends each line of the
+module with `find('\n')` while it reads the module's heads and with
+`str::lines` while it reads a body. Compiled to wasm each of those pays a
+searcher's setup, a call into memchr and a one-byte compare per line. A function
+in src/ir_wasm.rs, `line_end`, reads eight bytes per pass and finds the newline
+with the has-zero test, and both readers use it.
+
+    browser_compile_instructions  264,519,748 -> 261,513,550  (-1.14%)
+
+A fuzzer beside it checks `line_end` against `position` at every starting point
+of 400,000 random texts built from newlines and the bytes one bit away from one,
+and `Lines` against `str::lines`. Taking the highest set bit, dropping the
+`& !w` that keeps a byte above 0x7f from passing for a zero, or dropping the
+tail loop each fail it. Ratchet rows put each searcher back, and the browser row
+reads 263,889,085 and 264,519,748 under them.
+
+Across the five changes the tab's compile falls from 293,067,500 to 261,513,550
+executed instructions, 10.8%.
 
 One idea measured and dropped: `lines_holding`, the narrowing's search for
 `define `, `musttail call` and `tailcc ` across the whole module, found each
 word by memchr on one of its bytes and compared there. It read 272,919,712
 against 268,290,909. The two-way searcher skips a needle's length at a time
 where the module's text cannot match, and memchr stops at every occurrence of
-the anchor byte.
+the anchor byte. Anchoring each word on its rarest byte in the module, `f` in
+`define `, `m` in `musttail call` and `c` in `tailcc `, read 267,916,152
+against 266,884,355: the searches took 8.3M where the two-way searcher took
+6.8M.

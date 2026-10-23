@@ -3034,4 +3034,48 @@ lambda_narrowed = row
 
 rows_cq40 = list/concat rows_cq39 [twin_search lambda_narrowed]
 
-rows_c = list/concat rows_cq40 [itself]
+# The tab's compiler finds `@sN` by memchr on `@` and ends each IR line eight
+# bytes a pass (2026-10-23); each mutation brings a searcher back, and the
+# browser compile row is the witness. The word compare and the line search each
+# have a fuzzer, and a mutation each that the fuzzer catches.
+string_names = row
+  "a string name found by a two-byte searcher"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_string_name_found_by_a_two_byte_searcher")
+  release
+
+line_search = row
+  "a line found by a searcher in the tab"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_line_found_by_a_searcher_in_the_tab")
+  release
+
+compare_fuzz = "the_word_compare_agrees_with_bytes"
+
+wrong_end = row
+  "a word compare that reads the wrong end"
+  true
+  "cargo test --release --test {compare_fuzz}"
+  "specs (unit, golden, differential)"
+  (breaking "a_word_compare_that_reads_the_wrong_end")
+  no_setup
+
+line_fuzz = "a_line_ends_where_the_first_newline_is"
+
+borrow = row
+  "a line end that trusts a borrow"
+  true
+  "cargo test --release --lib {line_fuzz}"
+  "specs (unit, golden, differential)"
+  (breaking "a_line_end_that_trusts_a_borrow")
+  no_setup
+
+rows_cq41a = list/concat rows_cq40 [string_names line_search]
+
+rows_cq41 = list/concat rows_cq41a [wrong_end borrow]
+
+rows_c = list/concat rows_cq41 [itself]
