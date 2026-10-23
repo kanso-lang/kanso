@@ -105821,3 +105821,87 @@ names ruled on #1983.
 
 Owes, on #1992: `text/to_span` in place of `text/span` wherever #1983's build
 uses it; appendix B.
+
+## 2026-10-18 — std/text answers spans, and the decoder takes them
+
+#1960, under the gavels on #1983 and #1992; the second named the maker
+`text/to_span`, because a function cannot share the type's name. std/text
+declares `span`, with readable fields `whole`, `from` and `to`, and answers
+one from `text/to_span s from to`, `text/span_to cs p a b` and
+`text/span_to_below cs p a b lim`. `text/slice run` is an arm of `slice` that
+takes a span and answers its bytes with no `none`. The type and its functions
+live in `lib/text/span.kso`, so the line numbers err goldens quote from
+text.kso stay where they are. Appendix B has an entry for each, and ch08
+quotes the decoder's new shape.
+
+The slice arm turned up a pass in the wrong place. `builtin_slice_in` was
+renamed to `slice` while the parse was finished, before the check read it, so
+a function answering a measured slice was typed as answering `none`. The
+rename now runs where a checked program is handed to the engines.
+`a_span_runs_to_the_byte_before_a_stop` in the micro corpus is refused
+without the move.
+
+The decoder's five `builtin_slice_in` sites read spans now, and
+`string_scan` is gone. Moved as written, the decoder read 1,645M
+instructions on jsonbench against 833M: every string built a span record,
+195M of it in `k_rec`, and `text/slice run` reached none of the fused doors.
+A new pass, `src/flat.rs`, runs beside the rename. A group whose arms take a
+record at one position, or `none`, and only read its fields or hand it on to
+another such group, gets a twin that takes the fields there. A call handing
+a producer's answer straight to such a group (a producer is a one-arm group
+of guards answering `none` and then a construction, the shape of
+`text/span_to`) becomes a call to a copy of the producer that calls the
+twin. `text/slice run` inside a twin becomes `builtin_slice` on the fields,
+so the fused doors fire again. The twins keep their file and spans, and
+`ast::spoken` takes the `Flat{n}_` mark off their names, so a failure inside
+one names the function the author wrote. The producer's copy enters a twin
+only when the twin's arms cannot miss, so a miss never names the producer's
+line.
+
+A bare construction is not a producer. The first build counted `keep` in
+`a_long_chain_answers_survival_from_its_index` as one, and the loop ran half
+on fields and half on records: 9,993 more allocations and 10,000 more beat
+iterations. That shape is the escape analysis's, which hands a record back by
+value where it can.
+
+The twins' positions were boxed at first, because a group takes words only
+when it is a member of a cycle, and jsonbench read 938M. A group the pass
+made now takes its int fields as words too: 864M with the string sites moved
+and 868M with the number sites, on this container. What is left is the range
+check in `span_to` and `to_span` and the `- 1` and `+ 1` around an inclusive
+`to`. The mem corpus reads the same counters as before the move, and
+`a_span_handed_on_is_never_built` pins that a span handed from `span_to` to a
+carrier builds no record: `sh_rec` 0 and 12 allocations, against 720 bytes
+and 21 without the pass.
+
+Two leaks of an imported type's short name surfaced on the way and landed
+first, as #1993 and #1995. kq's copy of the decoder follows once kq repins.
+
+Rows, from CI, against the tree with #1985 and #1996 in it. The decoder:
+`work_jsonbench` 832,975,500 -> 871,576,578, `work_runbench` 1,189,193,317 ->
+1,215,497,872, `work_oneshot` 13,286,600 -> 13,544,585, `work_livebench`
+1,498,216,646 -> 1,498,473,868, and `work_encodebench` 2,464,675,698 ->
+2,464,674,663. The others move by the size of a std/text with more in it:
+`work_basket` 31,158,162 -> 31,158,240, `work_digestbench` 5,992,785 ->
+5,992,876, `work_indexbench` 2,482,608 -> 2,482,712, `work_pendbench`
+194,087,911 -> 194,087,989, `work_readbench` 4,582,588 -> 4,582,666,
+`work_scanbench` 274,086 -> 274,177 and `work_widebench` 28,628,235 ->
+28,628,313. The twins are more code: `emitted_defines` 111 -> 127,
+`emitted_calls` 1,024 -> 1,216, `emitted_branches` 1,104 -> 1,300,
+`emitted_lines` 10,362 -> 12,289, `emitted_other_defines` 2,089 -> 2,137,
+`emitted_other_calls` 17,648 -> 18,224, `emitted_other_branches` 16,418 ->
+17,006, `emitted_other_lines` 149,547 -> 155,354, `text` 5,011,246 ->
+5,111,966, `emit_instructions` 6,061,105 -> 6,100,683,
+`codegen_instructions_dev` 115,010,801 -> 115,149,899 and
+`codegen_instructions_release` 449,091,786 -> 449,262,284. The front end
+reads 51 more library lines: `compile_instructions` 22,693,337 -> 24,958,388,
+`compile_allocs` 12,151 -> 13,741, `compile_peak_bytes` 552,167 -> 591,860,
+`front_end_visits` 6,363 -> 7,309, `front_end_rounds` 19 -> 17,
+`entry_instructions` 75,197,395 -> 75,588,739 and `library_instructions`
+74,884,283 -> 75,259,150. The interpreter makes one more call per string:
+`interp_instructions` 500,108,350 -> 571,513,912, `interp_allocs` 584,645 ->
+651,909 and `interp_peak_bytes` 590,970 -> 632,433. The tab:
+`browser_compile_instructions` 389,899,281 -> 420,614,367,
+`browser_compile_peak_bytes` 675,444 -> 752,488 and `browser_run_instructions`
+35,216,926 -> 37,494,108. Welfare falls 0.20, to 91.26, and the floor drops by
+exactly that under the rule for building a ruled part of the language.
