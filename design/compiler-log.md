@@ -21,23 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-18 — gavel: the span maker is `text/to_span`
-
-Clay ruled #1992. The 2026-10-17 gavel on #1983 named a type `span` and a
-function `text/span s from to`. A type's name is its constructor, so the
-constructor `span whole from to` and the function share a name and an arity,
-and the checker refuses the pair.
-
-**The ruling.** The function is `text/to_span s from to`, answering a span
-when the range lies inside `s` and `none` otherwise. A `to_` name means the
-answer is a different kind of thing (2026-10-13, #1914), and `list/to_sorted`
-builds a checked `sorted` from a list the same way. The type stays `span`,
-and `span_to`, `span_to_below` and the span arm of `text/slice` keep the
-names ruled on #1983.
-
-Owes, on #1992: `text/to_span` in place of `text/span` wherever #1983's build
-uses it; appendix B.
-
 ## 2026-10-18 — std/text answers spans, and the decoder takes them
 
 #1960, under the gavels on #1983 and #1992; the second named the maker
@@ -2116,3 +2099,22 @@ but the release build rose 4.4%, the dev build 1.0%, the tab compile 0.22% and
 its peak memory 0.7%, which the objective scores as a loss. Defined once and
 called, the run program fell 0.133% and the release build still rose 1.65%,
 clang spending it on the new functions inside the decoder.
+
+## 2026-10-23 — a string index answers its step and its cache hits in the entry
+
+`k_b_at_str`, the proven string index, is called 690,000 times a run by the
+run program's index phase, each call stepping the cursor one character. It
+now steps the cursor and reads the ascii and wide-character caches in its own
+body, and sends the seek, an ascii miss and a wide miss to functions of their
+own. Making every one of those a tail call, so the entry would take no frame,
+did not happen: clang emits plain calls on these paths whatever their
+convention, so `k_b_at_wide_miss` keeps its `preserve_most`.
+
+CI's rows, against main with the frameless empty literals merged.
+run_instructions 835,716,002 -> 834,336,454 (-0.17%), and work_indexbench,
+which is the same walk alone, 1,987,039 -> 1,947,078 (-2.0%); three other
+work rows fell by under 300, and work_oneshot rose 10,335,157 -> 10,335,619,
+which this entry does not account for. Machine code falls, text 5,338,222 ->
+5,321,422. Building compiles the runtime, and both codegen rows fall a
+little: codegen_instructions_dev 116,444,792 -> 116,430,160 and
+codegen_instructions_release 425,503,297 -> 425,484,869.
