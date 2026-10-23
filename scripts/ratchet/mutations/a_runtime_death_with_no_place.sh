@@ -4,10 +4,10 @@
 # it. This mutation stops printing it, so every placed runtime golden loses its
 # `failed in` line on native and the engines disagree.
 set -e
-line='    if (k_site)'
+line='    if (site)'
 [ "$(grep -cxF "$line" src/runtime/core.c)" -eq 1 ] || {
   echo "k_died's print moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i 's/^    if (k_site)$/    if (0 \&\& k_site)/' src/runtime/core.c
+sed -i 's/^    if (site)$/    if (0 \&\& site)/' src/runtime/core.c
 if grep -qxF "$line" src/runtime/core.c; then exit 1; fi
