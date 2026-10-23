@@ -2130,3 +2130,16 @@ bare `switch`, so that test could never pass. The line's first word is now
 the whole test: browser_compile_instructions 256,933,580 -> 256,026,859
 (-0.35%). The ratchet row `switch_line` now puts a substring searcher back
 on every line, and the browser row is its witness, as before.
+
+**CI's rows.** runbench 816,801,024 -> 815,624,816 (-0.144%). The other
+benchmarks that render floats fall with it: encodebench 2,367,625,387 ->
+2,362,394,628, livebench 975,721,913 -> 970,491,700, widebench 28,587,526
+-> 28,539,533 and oneshot 10,291,264 -> 10,278,879. The rest do not move.
+Each binary's text is 208 bytes smaller, since the float renderer is
+inlined into it. codegen_instructions_dev 116,472,553 -> 116,472,194 and
+codegen_instructions_release 425,509,866 -> 425,504,448 compile the smaller
+runtime. emit_instructions moves 6,249,687 -> 6,246,661, compile_instructions
+25,205,087 -> 25,172,884, entry_instructions 74,523,222 -> 74,435,723 and
+library_instructions 74,183,641 -> 74,096,953. Neither change is in the
+front end those three rows count, and the compiler carries the runtime's
+text inside its binary, so I read their moves as the binary's layout.
