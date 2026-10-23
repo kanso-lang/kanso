@@ -3160,6 +3160,14 @@ rows_cq44a = list/concat rows_cq43 [checked_name validated_body at_searcher]
 
 rows_cq44b = list/concat rows_cq44a [joined_module held_left_out]
 
-rows_cq44 = list/concat rows_cq44b [early_piece]
+kept_room = row
+  "the tab's syntax kept with its room"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_tabs_syntax_kept_with_its_room")
+  release
+
+rows_cq44 = list/concat rows_cq44b [early_piece kept_room]
 
 rows_c = list/concat rows_cq44 [itself]

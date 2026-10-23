@@ -871,6 +871,17 @@ fn emit_written_as(
             }
         }
     }
+    // The tab is priced by the most it holds, and that is during emission,
+    // with the syntax alive. A list the parser grew by pushing keeps the room
+    // it doubled into; what the walk kept gives it back here, where a native
+    // build has no reason to pay for the copies.
+    if let (true, Given::Owned(owned)) = (lean, &mut program) {
+        for decl in owned.fns.iter_mut() {
+            decl.body.shrink_to_fit();
+            decl.params.shrink_to_fit();
+        }
+        owned.fns.shrink_to_fit();
+    }
     let names: crate::hash::Set<String> = left_out.iter().map(|(_, d)| d.name.clone()).collect();
     let left_names: Vec<(String, usize)> = match lean {
         true => std::mem::take(&mut left_out)
