@@ -150,36 +150,36 @@ fn narrowed_pieces(mut pieces: Vec<String>, from: usize) -> Vec<String> {
     let mut jumps_to_lambdas = false;
     let mut lambdas: Vec<String> = Vec::new();
     for &ir in &texts {
-    let defines =
-        lines_holding_at(ir, "define ", 2).filter(|&(start, _)| ir[start..].starts_with("define "));
-    let musttails = lines_holding_at(ir, "musttail call", 0);
-    for (start, end) in merged_lines(defines, musttails) {
-        let line = &ir[start..end];
-        if !code(line) {
-            continue;
+        let defines = lines_holding_at(ir, "define ", 2)
+            .filter(|&(start, _)| ir[start..].starts_with("define "));
+        let musttails = lines_holding_at(ir, "musttail call", 0);
+        for (start, end) in merged_lines(defines, musttails) {
+            let line = &ir[start..end];
+            if !code(line) {
+                continue;
+            }
+            if let Some(rest) = line.strip_prefix("define ") {
+                current = symbol_of(rest);
+                if rest.starts_with("tailcc ") {
+                    tailcc_defines.push(line);
+                }
+                jumps_to_lambdas |= rest.starts_with("internal tailcc %KValue @k_tcall");
+                if current.as_deref().is_some_and(|n| {
+                    n.strip_prefix("klam").is_some_and(|d| d.bytes().all(|b| b.is_ascii_digit()))
+                }) {
+                    lambdas.extend(current.clone());
+                }
+            }
+            if line.contains("musttail call") {
+                // both ends of a musttail edge must agree on the convention
+                if let Some(callee) = symbol_of(line) {
+                    keep.insert(callee);
+                }
+                if let Some(name) = current.clone() {
+                    keep.insert(name);
+                }
+            }
         }
-        if let Some(rest) = line.strip_prefix("define ") {
-            current = symbol_of(rest);
-            if rest.starts_with("tailcc ") {
-                tailcc_defines.push(line);
-            }
-            jumps_to_lambdas |= rest.starts_with("internal tailcc %KValue @k_tcall");
-            if current.as_deref().is_some_and(|n| {
-                n.strip_prefix("klam").is_some_and(|d| d.bytes().all(|b| b.is_ascii_digit()))
-            }) {
-                lambdas.extend(current.clone());
-            }
-        }
-        if line.contains("musttail call") {
-            // both ends of a musttail edge must agree on the convention
-            if let Some(callee) = symbol_of(line) {
-                keep.insert(callee);
-            }
-            if let Some(name) = current.clone() {
-                keep.insert(name);
-            }
-        }
-    }
     }
     if jumps_to_lambdas {
         keep.extend(lambdas);
@@ -419,8 +419,24 @@ mod a_line_found_by_one_byte_is_a_line_found_by_the_word {
     #[test]
     fn the_two_searches_agree() {
         let words = [
-            "define ", "define", "tailcc ", "tailcc", "musttail call", "musttail", "call ",
-            "f", "m", "c", "d", "  ", "@g(", "%t1 = ", "x", "\n", "\n", "\n",
+            "define ",
+            "define",
+            "tailcc ",
+            "tailcc",
+            "musttail call",
+            "musttail",
+            "call ",
+            "f",
+            "m",
+            "c",
+            "d",
+            "  ",
+            "@g(",
+            "%t1 = ",
+            "x",
+            "\n",
+            "\n",
+            "\n",
         ];
         let mut seed = 0x9e37_79b9_7f4a_7c15u64;
         let mut next = || {
@@ -431,7 +447,8 @@ mod a_line_found_by_one_byte_is_a_line_found_by_the_word {
         };
         for case in 0..20_000 {
             let n = (next() % 40) as usize;
-            let text: String = (0..n).map(|_| words[(next() % words.len() as u64) as usize]).collect();
+            let text: String =
+                (0..n).map(|_| words[(next() % words.len() as u64) as usize]).collect();
             for (needle, at) in [("define ", 2), ("musttail call", 0), ("tailcc ", 4)] {
                 let want: Vec<_> = lines_holding(&text, needle).collect();
                 let got: Vec<_> = lines_holding_at(&text, needle, at).collect();
