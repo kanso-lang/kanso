@@ -21,34 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-18 — A module's own type beats an imported type's twin
-
-The type-side partner of the entry above. The loader clones each exported
-type under its short name, so a program may write `sorted` for
-`list/sorted`. A module that declared its own `type sorted` kept the twin
-beside its declaration, and the twin answered: the module's constructions
-were refused as foreign, with the import's field count held against them.
-Once a module's types join the merged program, `own_types_beat_twins` drops
-a synthetic short-named twin that shares a name with one of them, and the
-import's type is still reachable by its qualified name. std/text's `span`
-met this in `tests/golden/entryfile`'s diff module, which declares its own
-six-field `span`.
-
-The fixture is `a_type_named_like_an_imported_type_is_the_modules` in the
-micro corpus, refused by both `kanso check` and a run before the change and
-printing `2` on both engines after it. The first build kept a set of the
-module's type names on every compile, 23 allocations in `compile_allocs` and
-`interp_allocs` for a collision almost no program has; the filter now
-allocates only when it finds a twin to drop, and both rows are where they
-were.
-
-Rows, from CI: `compile_instructions` 22,716,927 -> 22,721,761,
-`entry_instructions` 75,265,987 -> 75,287,373, `library_instructions`
-74,952,083 -> 74,973,469, and `browser_compile_instructions` 382,750,920 ->
-382,767,025: each compile asks every type whether it is a beaten twin. The
-floor drops by the cost to 91.52 under the rule for a change that makes the
-language work as specified.
-
 ## 2026-10-18 — gavel: the span maker is `text/to_span`
 
 Clay ruled #1992. The 2026-10-17 gavel on #1983 named a type `span` and a
@@ -2116,3 +2088,20 @@ only in the site constants, and four work rows moved with them:
 work_runbench 836,829,464 -> 836,829,597, work_encodebench 2,367,636,382 ->
 2,367,636,459, work_oneshot 10,346,159 -> 10,346,621 and work_livebench
 980,646,434 -> 980,646,336.
+
+## 2026-10-23 — a string index answers its step and its cache hits in the entry
+
+`k_b_at_str`, the proven string index, is called 690,000 times a run by the
+run program's index phase, each call stepping the cursor one character. It
+now steps the cursor and reads the ascii and wide-character caches in its own
+body, and sends the seek, an ascii miss and a wide miss to functions of their
+own. Making every one of those a tail call, so the entry would take no frame,
+did not happen: clang emits plain calls on these paths whatever their
+convention, so `k_b_at_wide_miss` keeps its `preserve_most`.
+
+CI's rows. run_instructions 836,829,597 -> 835,449,860 (-0.17%), and
+work_indexbench, which is the same walk alone, 1,987,039 -> 1,947,078
+(-2.0%); four other work rows fell by under 700. Machine code falls, text
+5,335,758 -> 5,318,958. Building compiles the runtime, so
+codegen_instructions_dev 116,434,829 -> 116,443,307 and
+codegen_instructions_release 425,464,049 -> 425,497,028.
