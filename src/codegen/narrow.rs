@@ -230,7 +230,10 @@ fn narrowed_in_place(text: String, from: usize) -> String {
             let len = bytes.len();
             bytes.copy_within(kept..len, to);
             bytes.truncate(to + len - kept);
-            String::from_utf8(bytes).expect("each edit replaces a whole line")
+            // SAFETY: as in `paired_appends`: whole lines of a `String` moved,
+            // `&str` lines written in. A debug build still checks.
+            debug_assert!(std::str::from_utf8(&bytes).is_ok(), "each edit replaces a whole line");
+            unsafe { String::from_utf8_unchecked(bytes) }
         }
         false => {
             let mut out = String::with_capacity(text.len());

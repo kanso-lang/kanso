@@ -495,7 +495,12 @@ fn paired_appends(body: String) -> String {
     let len = bytes.len();
     bytes.copy_within(kept..len, to);
     bytes.truncate(to + len - kept);
-    String::from_utf8(bytes).expect("each edit replaces whole lines")
+    // SAFETY: the body was a `String`, every run copied starts and ends at a
+    // line break or the body's ends, and every line written in is a `&str`,
+    // so the bytes are UTF-8. Checking the whole body again cost the tab's
+    // compile a pass over the module; a debug build still checks.
+    debug_assert!(std::str::from_utf8(&bytes).is_ok(), "each edit replaces whole lines");
+    unsafe { String::from_utf8_unchecked(bytes) }
 }
 
 fn ir_bytes(bytes: &[u8]) -> String {

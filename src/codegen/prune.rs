@@ -138,7 +138,11 @@ fn prune_unnamed(
             // time, before the module they are copied into is allocated.
             bytes.truncate(to);
             bytes.shrink_to_fit();
-            String::from_utf8(bytes).expect("every block ends at a line break")
+            // SAFETY: each run kept is a whole block of a `String`, and every
+            // block ends at a line break, so the bytes are UTF-8. A debug
+            // build still checks.
+            debug_assert!(std::str::from_utf8(&bytes).is_ok(), "every block ends at a line break");
+            unsafe { String::from_utf8_unchecked(bytes) }
         })
         .collect()
 }
