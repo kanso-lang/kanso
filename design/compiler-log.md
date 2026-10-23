@@ -2181,6 +2181,12 @@ functions are lowered fails it. The lean emit writes the pieces the whole emit
 writes. Ratchet rows undo each change; the browser rows are the witness for
 six of them.
 
+**CI's rows.** The emitter's own count falls with its scans:
+emit_instructions 6,249,687 -> 5,919,265 (-5.3%). interp_instructions moves
+385,504,156 -> 385,492,276; no change here touches the interpreter's code.
+compile_instructions, entry_instructions, library_instructions and both
+codegen rows read what #2065 left them.
+
 **Declined.** Body pieces of 8, 16 and 32 KiB instead of 64 moved the peak by
 at most 5,564 bytes and cost 0.8M to 1.5M instructions. The same one-byte anchor for
 `paired_appends`'s long needle saved 172,616 instructions and for
