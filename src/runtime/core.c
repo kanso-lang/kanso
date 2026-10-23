@@ -2567,7 +2567,7 @@ static int k_pend_below(KValue v, KMark* m) {
    in the lap. Rewinding there hands that copy back while the node still
    points at it, so such a pop keeps the lap instead and hands it up, as a pop
    with a heap result does, and the enclosing stage revisits the node. */
-static int k_pend_holds_below(KMark* m) {
+static __attribute__((noinline, cold)) int k_pend_holds_below(KMark* m) {
     for (long long i = 0; i < k_pend_n; i++)
         if (k_pend_below(k_pend[i], m)) return 1;
     return 0;
@@ -3280,7 +3280,10 @@ static void k_pend_revisit(KMark* m, KCopy* cp) {
     k_pend_n = w;
 }
 
-void k_beat_iter_carry(void) {
+/* Out of line. Since a plain rewind can turn into a stage, LLVM inlined this
+   into `k_beat_rewind_slow` and `k_cohort_pop` as well, and every binary grew
+   5,664 bytes for a copy and a rewind that gain nothing from being inlined. */
+__attribute__((noinline)) void k_beat_iter_carry(void) {
     if (K_COUNTING) k_stat_beat_iters++;
     if (k_beat_depth <= 0 || k_beat_depth > K_BEAT_MAX) return;
     for (long long i = 0; i < k_carry_n; i++) {
