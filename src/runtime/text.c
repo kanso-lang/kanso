@@ -2918,24 +2918,35 @@ KValue k_b_join(KValue lv, KValue sep) {
         if (!k_not_failure(l->items[i])) return l->items[i];
         if (l->items[i].tag != K_STR) return k_join_wrapped(l, ss, i);
         total += k_as_str(l->items[i])->len;
-        if (i) total += ss->len;
     }
+    if (l->len) total += (l->len - 1) * ss->len;
     char* data = k_alloc(total + 1);
-    long at = 0;
-    for (long long i = 0; i < l->len; i++) {
-        /* Both copies are one byte or none in every shipped caller measured:
-           `join [s s] ""` gives a zero-length separator and `join digits " "`
-           joins one-byte strings with a one-byte separator. Through the call
-           a one-byte separator costs 16.0 instructions and a one-byte item
-           23.6, over 400,019 calls in runbench; storing the byte where the
-           length says one saves 5.5 on an average call. */
+    /* Both copies are one byte or none in every shipped caller measured:
+       `join [s s] ""` gives a zero-length separator and `join digits " "`
+       joins one-byte strings with a one-byte separator. Through the call
+       a one-byte separator costs 16.0 instructions and a one-byte item
+       23.6, over 400,019 calls in runbench; storing the byte where the
+       length says one saves 5.5 on an average call.
+       The list, the separator and each piece's length are read into locals
+       first. A store through `char*` may alias anything, so read through
+       their structs they were loaded again after every copy, and a
+       one-byte separator still walked k_copy_short's whole size ladder. */
+    KValue* items = l->items;
+    long long n = l->len;
+    const char* sd = ss->data;
+    long long sl = ss->len;
+    char sc = sl ? sd[0] : 0;
+    char* w = data;
+    for (long long i = 0; i < n; i++) {
         if (i) {
-            k_copy_short(data + at, ss->data, ss->len);
-            at += ss->len;
+            if (sl == 1) *w = sc;
+            else k_copy_short(w, sd, sl);
+            w += sl;
         }
-        KStr* is = k_as_str(l->items[i]);
-        k_copy_short(data + at, is->data, is->len);
-        at += is->len;
+        KStr* is = k_as_str(items[i]);
+        long long len = is->len;
+        k_copy_short(w, is->data, len);
+        w += len;
     }
     KStr* os = k_alloc(sizeof(KStr));
     os->len = total;
