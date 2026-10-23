@@ -2110,9 +2110,11 @@ own. Making every one of those a tail call, so the entry would take no frame,
 did not happen: clang emits plain calls on these paths whatever their
 convention, so `k_b_at_wide_miss` keeps its `preserve_most`.
 
-CI's rows. run_instructions 836,829,597 -> 835,449,860 (-0.17%), and
-work_indexbench, which is the same walk alone, 1,987,039 -> 1,947,078
-(-2.0%); four other work rows fell by under 700. Machine code falls, text
-5,335,758 -> 5,318,958. Building compiles the runtime, so
-codegen_instructions_dev 116,434,829 -> 116,443,307 and
-codegen_instructions_release 425,464,049 -> 425,497,028.
+CI's rows, against main with the frameless empty literals merged.
+run_instructions 835,716,002 -> 834,336,454 (-0.17%), and work_indexbench,
+which is the same walk alone, 1,987,039 -> 1,947,078 (-2.0%); three other
+work rows fell by under 300, and work_oneshot rose 10,335,157 -> 10,335,619,
+which this entry does not account for. Machine code falls, text 5,338,222 ->
+5,321,422. Building compiles the runtime, and both codegen rows fall a
+little: codegen_instructions_dev 116,444,792 -> 116,430,160 and
+codegen_instructions_release 425,503,297 -> 425,484,869.
