@@ -4106,7 +4106,11 @@ welfare                      77.37         82.09</code></pre>
 
 <p>Indexing a string, <code>s[i]</code>, used to go through the same runtime call as indexing a list or a map, which first asks what kind of container it was handed and what kind of position. Before that call the compiled code also tested whether the container was bytes, which it can read without calling anything. When the checker has already proven that the container is a string and the position an int, those tests can only answer one way. The compiler now calls the string half of the index directly, with the string and the position. The run program does 1.4% less work, all of it in the index phase, which reads 690,000 characters this way.</p>
 
-<h2 id="siteid"><span class="sec-num">236</span>a failure's place stamped as a number</h2>
+<h2 id="joinlocals"><span class="sec-num">236</span>a join that holds its pieces in registers</h2>
+
+<p>Joining a list of strings copies each piece and, between pieces, the separator. The loop that copied them read the list's length, its items and each piece's length through memory again after every copy, because the compiler cannot tell that writing the output bytes leaves those fields alone. A one-byte separator also went through the general short-copy routine, which tests the length against four sizes before storing one byte. The loop now reads those fields once into locals and stores a one-byte separator directly. The run program does 0.6% less work, and the benchmark that joins four thousand short strings two hundred times does 11% less.</p>
+
+<h2 id="siteid"><span class="sec-num">237</span>a failure's place stamped as a number</h2>
 
 <p>Before any call that can stop the program, compiled code records the place a failure will name, so that the message can say which file and line it came from. It recorded the address of that place's text, which takes two instructions: one to work out the address and one to store it. It now records a small number in one instruction, and the program carries a table from numbers to places that is read only when it fails. The table holds offsets into one block of text rather than addresses, since every address in a table is something the loader has to fix up each time the program starts. The run program does 0.26% less work and the encoding benchmark 3.6% less.</p>
 
