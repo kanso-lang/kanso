@@ -5,9 +5,9 @@
 # two_byte_appends_are_one_call, which reads the merge in the emitted code.
 set -e
 line='        let pieces: Vec<String> = pruned.into_iter().map(paired_appends).collect();'
-[ "$(grep -cxF "$line" src/codegen.rs)" -eq 1 ] || {
+[ "$(grep -cxF "$line" src/codegen/module.rs)" -eq 1 ] || {
   echo "the byte pair's merge moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i 's/^        let pieces: Vec<String> = pruned.into_iter().map(paired_appends).collect();$/        let pieces: Vec<String> = pruned;/' src/codegen.rs
-if grep -qxF "$line" src/codegen.rs; then exit 1; fi
+sed -i 's/^        let pieces: Vec<String> = pruned.into_iter().map(paired_appends).collect();$/        let pieces: Vec<String> = pruned;/' src/codegen/module.rs
+if grep -qxF "$line" src/codegen/module.rs; then exit 1; fi

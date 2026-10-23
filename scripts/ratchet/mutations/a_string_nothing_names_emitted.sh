@@ -6,9 +6,9 @@
 # nothing names.
 set -e
 line='        let named = named_strings(&texts, self.strings.len());'
-grep -qF "$line" src/codegen.rs || {
+grep -qF "$line" src/codegen/module.rs || {
   echo "the string filter moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i 's/^        let named = named_strings(&texts, self.strings.len());$/        let named = vec![[true; 2]; self.strings.len()];/' src/codegen.rs
-[ "$(grep -cF '        let named = vec![[true; 2]; self.strings.len()];' src/codegen.rs)" -eq 1 ]
+sed -i 's/^        let named = named_strings(&texts, self.strings.len());$/        let named = vec![[true; 2]; self.strings.len()];/' src/codegen/module.rs
+[ "$(grep -cF '        let named = vec![[true; 2]; self.strings.len()];' src/codegen/module.rs)" -eq 1 ]
