@@ -21,30 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-17 — gavel: the names for spans
-
-Clay ruled #1983, the names the #1960 gavel said would come to him before
-any shipped.
-
-**The ruling.** In std/text:
-
-- `span` is the type, with readable fields `whole` (the string), `from` and
-  `to` (inclusive, the way `text/slice` counts). An empty run has `to` one
-  less than `from`. Only std/text builds one.
-- `text/span s from to` answers a span when the range lies inside `s`, and
-  `none` otherwise.
-- `text/span_to cs p a b` answers the span from `p` up to the byte before the
-  first `a` or `b`, or to the end of `cs`, and `none` only when `p` lies
-  outside `cs`. `text/span_to_below cs p a b lim` also stops at any byte
-  below `lim`. The names say what they answer. `find2` and `find2_below`
-  keep answering a position.
-- `text/slice run`, an arm of `slice` that takes a span, answers the string
-  with no `none`.
-
-Owes, on #1983 and #1960: the five names on every engine; the fused doors
-reading a sliced span; the decoder's four `builtin_slice_in` sites moved
-onto spans; micro goldens; appendix B; kq's decoder following.
-
 ## 2026-10-18 — A run-time failure names the line it happened on
 
 The rest of #1975. Every run-time failure but a stack overflow now prints
@@ -2160,3 +2136,36 @@ release build, which the corpus runs, takes `k_b_at_str` at both walks. With
 the cursor stepping one byte instead of one character the walk splits the
 wide characters and the golden goes red. The ratchet row
 `a_proven_string_index_through_the_tag_tests` takes the arm away.
+
+## 2026-10-23 — join keeps its list and separator in locals
+
+`k_b_join` cost 12,305,923 instructions in the run program, about 61 for each
+of its 200,000 pieces, most of them in the pend phase's `text/join digits " "`.
+The copying loop read the list's length and items, and each piece's length,
+through their structs after every copy, because a store through `char*` may
+alias them; each piece's length was read twice. A one-byte separator went
+through `k_copy_short`'s size ladder, five compares to store one byte. The
+summing loop added the separator's length on every pass behind an `if (i)`.
+
+The list, the separator and each piece's length are now read into locals. A
+one-byte separator is stored from a byte held in a register, and the
+separator's share of the total is added once after the summing loop, as
+`(n - 1) * sl`. `k_b_join` falls to 7,308,590, measured here.
+
+CI's rows. run_instructions 844,029,138 -> 839,032,001 (-0.59%) and
+work_pendbench 176,531,937 -> 156,541,737 (-11.3%). work_basket fell
+31,152,439 -> 31,104,262; it joins too. Five moved by amounts this entry does
+not account for: work_encodebench 2,456,796,006 -> 2,456,797,210,
+work_oneshot 10,361,367 -> 10,361,430, work_indexbench 1,986,925 ->
+1,987,038, work_scanbench 274,277 -> 274,340 and work_livebench 990,759,429 ->
+990,759,737. Machine code grows by 384 bytes in every program: text
+5,332,238 -> 5,337,614. Building the run program compiles the runtime, so
+codegen_instructions_dev 116,162,655 -> 116,163,063 and
+codegen_instructions_release 422,568,857 -> 422,573,245. In the tab,
+browser_run_instructions 30,450,747 -> 30,425,950.
+
+Both engines print the same bytes for an empty list, one item, an empty
+separator, one- and two-byte separators with empty pieces, pieces and a
+separator past sixteen bytes, and multi-byte pieces and separator, whose
+character count is read too. The change is a rewrite of the loop the work
+vein already counts, so the vein is its witness.
