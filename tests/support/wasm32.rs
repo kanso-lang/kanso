@@ -330,6 +330,64 @@ pub struct Ran {
     pub grown: u64,
 }
 
+/// A linker that answers every function `module` imports with `wasi`.
+fn wasi_linker(engine: &Engine, store: &mut Store<Host>, module: &Module) -> Linker<Host> {
+    let mut linker = Linker::<Host>::new(engine);
+    for import in module.imports() {
+        let wasmi::ExternType::Func(ty) = import.ty() else { continue };
+        let name = import.name().to_string();
+        let f = Func::new(&mut *store, ty.clone(), move |mut c, args, res| {
+            let r = wasi(&name, &mut c, args)?;
+            if let Some(slot) = res.first_mut() {
+                *slot = Val::I32(r);
+            }
+            Ok(())
+        });
+        linker.define(import.module(), import.name(), f).expect("the import defines");
+    }
+    linker
+}
+
+/// Runs a WASI command that clang and wasm-ld linked whole, runtime and
+/// program in one module, under the host `execute` gives the pair. A trap
+/// that is not the command exiting is an error.
+pub fn command(module: &[u8], env: &[(&str, &str)]) -> Result<Ran, String> {
+    let mut config = Config::default();
+    config.consume_fuel(true);
+    // the same frame budget `execute` gives, for the same reason
+    config.set_max_recursion_depth(10_000);
+    let engine = Engine::new(&config);
+    let module = Module::new(&engine, &counted(module)[..])
+        .map_err(|e| format!("the module validates: {e}"))?;
+    let env = env.iter().map(|(k, v)| format!("{k}={v}\0").into_bytes()).collect();
+    let mut store = Store::new(&engine, Host { env, ..Host::default() });
+    store.set_fuel(10_000_000_000).expect("fuel is on");
+    let linker = wasi_linker(&engine, &mut store, &module);
+    let instance = linker
+        .instantiate_and_start(&mut store, &module)
+        .map_err(|e| format!("it instantiates: {e}"))?;
+    let memory = instance.get_memory(&store, "memory").expect("a command exports its memory");
+    store.data_mut().memory = Some(memory);
+    let start = instance.get_func(&store, "_start").expect("a command exports _start");
+    let size = memory.size(&store);
+    let finished = start.call(&mut store, &[], &mut []);
+    let executed = executed(&store, &instance);
+    let grown = (memory.size(&store) - size) * 65536;
+    let host = store.data();
+    let exit = match (finished, host.exit) {
+        (_, Some(code)) => code,
+        (Ok(()), None) => 0,
+        (Err(e), None) => return Err(format!("trapped: {e}")),
+    };
+    Ok(Ran {
+        out: String::from_utf8_lossy(&host.out).into_owned(),
+        err: String::from_utf8_lossy(&host.err).into_owned(),
+        exit,
+        executed,
+        grown,
+    })
+}
+
 /// Instantiates the runtime, links `module` into it with `data` bytes and
 /// `table` slots set aside, and runs `_start`, both modules as `counted`
 /// copies. Fuel is only the stop: the heaviest micro program executes 927
@@ -359,19 +417,7 @@ pub fn execute(
     let env = env.iter().map(|(k, v)| format!("{k}={v}\0").into_bytes()).collect();
     let mut store = Store::new(&engine, Host { env, ..Host::default() });
     store.set_fuel(10_000_000_000).expect("fuel is on");
-    let mut linker = Linker::<Host>::new(&engine);
-    for import in rt.imports() {
-        let wasmi::ExternType::Func(ty) = import.ty() else { continue };
-        let name = import.name().to_string();
-        let f = Func::new(&mut store, ty.clone(), move |mut c, args, res| {
-            let r = wasi(&name, &mut c, args)?;
-            if let Some(slot) = res.first_mut() {
-                *slot = Val::I32(r);
-            }
-            Ok(())
-        });
-        linker.define(import.module(), import.name(), f).expect("the import defines");
-    }
+    let linker = wasi_linker(&engine, &mut store, &rt);
     let rti = linker.instantiate_and_start(&mut store, &rt).map_err(|e| format!("runtime: {e}"))?;
     let memory = rti.get_memory(&store, "memory").expect("the runtime exports its memory");
     store.data_mut().memory = Some(memory);
