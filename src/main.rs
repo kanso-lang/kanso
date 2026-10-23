@@ -59,6 +59,21 @@ mod small {
     }
 }
 
+/// The tab's `memcmp`, eight bytes at a time (`kanso::compare`). The one
+/// wasm32 links by default is compiler-builtins' loop of one byte per pass.
+#[cfg(target_arch = "wasm32")]
+#[no_mangle]
+pub unsafe extern "C" fn memcmp(a: *const u8, b: *const u8, n: usize) -> i32 {
+    unsafe { kanso::compare::bytes(a, b, n) }
+}
+
+/// Equality alone, which is what `==` on two slices asks for.
+#[cfg(target_arch = "wasm32")]
+#[no_mangle]
+pub unsafe extern "C" fn bcmp(a: *const u8, b: *const u8, n: usize) -> i32 {
+    unsafe { kanso::compare::bytes(a, b, n) }
+}
+
 /// mimalloc's `mi_option_arena_eager_commit`, by its position in the
 /// `mi_option_t` enum. The Rust bindings stop naming options well before this
 /// one, so the number is written here rather than imported: libmimalloc-sys
@@ -165,7 +180,12 @@ static PEAK_BYTES: AtomicU64 = AtomicU64::new(0);
 unsafe impl std::alloc::GlobalAlloc for Counting {
     unsafe fn alloc(&self, layout: std::alloc::Layout) -> *mut u8 {
         let n = layout.size() as u64;
+        // `compiler_counters` and `interpreter_counters` read these two, and
+        // only the command line prints them; the tab reads the live bytes and
+        // the peak, so its compile keeps no tally it never reads.
+        #[cfg(not(target_arch = "wasm32"))]
         ALLOC_BYTES.fetch_add(n, Ordering::Relaxed);
+        #[cfg(not(target_arch = "wasm32"))]
         ALLOC_CALLS.fetch_add(1, Ordering::Relaxed);
         let live = LIVE_BYTES.fetch_add(n, Ordering::Relaxed) + n;
         PEAK_BYTES.fetch_max(live, Ordering::Relaxed);
@@ -218,8 +238,6 @@ unsafe impl std::alloc::GlobalAlloc for Counting {
     #[cfg(target_arch = "wasm32")]
     unsafe fn realloc(&self, ptr: *mut u8, layout: std::alloc::Layout, new_size: usize) -> *mut u8 {
         let (old, new) = (layout.size() as u64, new_size as u64);
-        ALLOC_BYTES.fetch_add(new, Ordering::Relaxed);
-        ALLOC_CALLS.fetch_add(1, Ordering::Relaxed);
         let live = LIVE_BYTES.load(Ordering::Relaxed);
         PEAK_BYTES.fetch_max(live + new, Ordering::Relaxed);
         LIVE_BYTES.store(live + new - old, Ordering::Relaxed);

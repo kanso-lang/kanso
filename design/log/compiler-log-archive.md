@@ -106254,3 +106254,48 @@ sign. About 45 of the 93 instructions are the call's fixed work: the failure
 and tag checks, the bounds, and RFC 8259's lead rules. Only a builtin that
 scans and converts in one call would remove them, and the conversion it would
 replace is already a word-at-a-time parse.
+
+## 2026-10-20 — a JSON number skips its tag ladders, and a long slice counts in blocks
+
+Two changes on the run program's hot paths, in one pull request (#2012, part
+of #2011).
+
+The decoder reads a number with `number_span` and then `to_int` or `to_float`
+on the span. Both went through the checked builtins, which test the failure
+flag and every tag before the work. Fast twins in `src/codegen/declares.rs`
+now test the tags inline and call raw entries on the bytes:
+`k_b_number_span_raw`, and `k_b_to_int_slice_raw` and `k_b_to_float_slice_raw`,
+which convert the span where it lies. Native and the interpreter agreed on
+54,000 generated number strings at every position, and 100,000 random strings
+matched the RFC 8259 grammar with no mismatch.
+
+`k_slice_skip` counted characters eight bytes at a time. While the target is
+more than sixty-four characters off it now hands whole sixty-four-byte blocks
+to `k_utf8_chars`, and a block that ends inside a character steps back to that
+character's first byte. The bound assumes one byte a character, so on wider
+text the step repeats until the target is close. The micro golden
+`a_long_slice_counts_whole_characters` puts a block's end inside two-, three-
+and four-byte characters; without the step-back it answers three of its lines
+wrongly. A differential fuzz of `text/slice` (24,000 cases, native and
+interpreted, against Python's slicing under kanso's range rules) found no
+mismatch, and 1,533 in 4,000 with the step-back removed. The ratchet mutation
+that disables the skip now makes it return at once.
+
+CI's rows. runbench 1,230,554,702 -> 1,215,752,133; jsonbench 885,497,327 ->
+871,505,027; indexbench 2,482,746 -> 2,326,925; oneshot 13,636,623 ->
+13,543,502; livebench 1,498,605,914 -> 1,498,512,457; encodebench
+2,464,678,788 -> 2,464,678,410. The twins' declarations and the block count
+add about 5.7 KB of machine code to every program: text 5,119,726 ->
+5,201,182 over the corpus, runbench text=725,209 -> 731,497. The three twins
+are defined in every module, so the compile goldens read lines 1,372 -> 1,396
+and module_lines 1,131 -> 1,137, and the decoder's emitted code reads
+emitted_defines 127 -> 130, emitted_calls 1,216 -> 1,222, emitted_branches
+1,300 -> 1,303 and emitted_lines 12,296 -> 12,368; across the other programs,
+emitted_other_defines 2,169 -> 2,178, emitted_other_calls 18,424 -> 18,442,
+emitted_other_branches 17,160 -> 17,169 and emitted_other_lines 157,010 ->
+157,286. codegen_instructions_dev 115,648,918 -> 115,822,000, codegen_instructions_release 453,327,164 ->
+453,660,707, emit_instructions 6,178,365 -> 6,202,944,
+browser_compile_instructions 422,962,643 -> 424,273,317,
+browser_compile_peak_bytes 753,318 -> 758,624 and browser_run_instructions
+37,653,273 -> 37,747,192 rise with the larger declarations. Welfare rises and
+is banked.

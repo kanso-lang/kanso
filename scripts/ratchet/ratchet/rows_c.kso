@@ -2983,6 +2983,126 @@ run_through_dispatch = row
 
 rows_cq37 = list/concat rows_cq36 [run_through_dispatch]
 
+# The tab's compiler exports a memcmp that compares eight bytes a pass
+# (2026-10-23). The mutation renames it, so the wasm build links
+# compiler-builtins' byte loop again and the browser compile row is the
+# witness.
+word_compare = row
+  "a byte loop compares in the tab"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_byte_loop_compares_in_the_tab")
+  release
+
+rows_cq38 = list/concat rows_cq37 [word_compare]
+
+# The tab's translator finds a switch line by its `=` rather than by a
+# substring searcher built for every line (2026-10-23). The mutation builds
+# the searcher again, and the browser compile row is the witness.
+switch_line = row
+  "a searcher built for every line the tab translates"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_searcher_built_for_every_line_the_tab_translates")
+  release
+
+rows_cq39 = list/concat rows_cq38 [switch_line]
+
+# The narrowing reads whether the module defines the closure-jump twin off
+# the define lines it walks (2026-10-23). One mutation searches the whole
+# module for it again, and the browser compile row is the witness; the other
+# stops collecting lambdas, and the narrowing's own spec is.
+twin_search = row
+  "the whole module searched for the closure jump"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_whole_module_searched_for_the_closure_jump")
+  release
+
+lambda_test = "a_lambda_keeps_the_convention_where_a_closure_jump_can_reach_it"
+
+lambda_narrowed = row
+  "a lambda narrowed beside a closure jump"
+  true
+  "cargo test --release --lib {lambda_test}"
+  "specs (unit, golden, differential)"
+  (breaking "a_lambda_narrowed_beside_a_closure_jump")
+  no_setup
+
+rows_cq40 = list/concat rows_cq39 [twin_search lambda_narrowed]
+
+# The tab's compiler finds `@sN` by memchr on `@` and ends each IR line eight
+# bytes a pass (2026-10-23); each mutation brings a searcher back, and the
+# browser compile row is the witness. The word compare and the line search each
+# have a fuzzer, and a mutation each that the fuzzer catches.
+string_names = row
+  "a string name found by a two-byte searcher"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_string_name_found_by_a_two_byte_searcher")
+  release
+
+line_search = row
+  "a line found by a searcher in the tab"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_line_found_by_a_searcher_in_the_tab")
+  release
+
+compare_fuzz = "the_word_compare_agrees_with_bytes"
+
+wrong_end = row
+  "a word compare that reads the wrong end"
+  true
+  "cargo test --release --test {compare_fuzz}"
+  "specs (unit, golden, differential)"
+  (breaking "a_word_compare_that_reads_the_wrong_end")
+  no_setup
+
+line_fuzz = "a_line_ends_where_the_first_newline_is"
+
+borrow = row
+  "a line end that trusts a borrow"
+  true
+  "cargo test --release --lib {line_fuzz}"
+  "specs (unit, golden, differential)"
+  (breaking "a_line_end_that_trusts_a_borrow")
+  no_setup
+
+rows_cq41a = list/concat rows_cq40 [string_names line_search]
+
+rows_cq41 = list/concat rows_cq41a [wrong_end borrow]
+
+# The emitter asks of every line it writes whether it is a stack slot, and
+# finds the line's first space with a byte loop (2026-10-23). The mutation
+# puts `find` back, and the browser compile row is the witness.
+stack_slot = row
+  "a stack slot found by a searcher"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_stack_slot_found_by_a_searcher")
+  release
+
+rows_cq42 = list/concat rows_cq41 [stack_slot]
+
+# The wasm build keeps no allocation tally the tab never reads (2026-10-23).
+# The mutation keeps it again, and the browser compile row is the witness.
+tab_tally = row
+  "a tally the tab never reads"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_tally_the_tab_never_reads")
+  release
+
+rows_cq43 = list/concat rows_cq42 [tab_tally]
+
 # A float that passes at the guessed place count takes the zeros off its scaled
 # decimal to reach the fewest places, instead of trying each place below. The
 # mutation puts the tries back, and the work vein reads runbench heavier.
@@ -2994,6 +3114,6 @@ float_walk = row
   (breaking "a_float_walked_down_by_tries")
   benches
 
-rows_cq38 = list/concat rows_cq37 [float_walk]
+rows_cq44 = list/concat rows_cq43 [float_walk]
 
-rows_c = list/concat rows_cq38 [itself]
+rows_c = list/concat rows_cq44 [itself]
