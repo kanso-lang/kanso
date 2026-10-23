@@ -1999,7 +1999,7 @@ went through a pointer into the arena instead of a buffer nothing else can
 alias, and `k_b_append_rendered` rose 1,523,160. The first version, which
 wrote the render call twice, also stopped `render_ryu` being inlined.
 
-## 2026-10-23 — five costs out of the tab's compile
+## 2026-10-23 — seven costs out of the tab's compile
 
 Counted in executed instructions, the costliest function in the tab's compile
 was `memcmp`: 9.5M of the front end's 68.8M and 17.5M of the emitter's 119.2M
@@ -2086,8 +2086,21 @@ and `Lines` against `str::lines`. Taking the highest set bit, dropping the
 tail loop each fail it. Ratchet rows put each searcher back, and the browser row
 reads 263,889,085 and 264,519,748 under them.
 
-Across the five changes the tab's compile falls from 293,067,500 to 261,513,550
-executed instructions, 10.8%.
+**Short searches as byte loops.** Two questions asked of every line find a
+byte a few places in: the emitter's `is_a_stack_slot` looks for the space that
+ends the line's first word, and the translator's switch check for the `=` that
+names a result. `find` on a char pays a searcher's setup, a call into memchr
+and a one-byte compare before it reads a byte, which is more than the few bytes
+the loop reads.
+
+    browser_compile_instructions  261,513,550 -> 259,644,771  (stack slot)
+                                  259,644,771 -> 258,016,805  (switch)
+
+The ratchet row "a stack slot found by a searcher" puts `find` back and the row
+reads 259,885,584.
+
+Across the seven changes the tab's compile falls from 293,067,500 to
+258,016,805 executed instructions, 12.0%.
 
 **The epoch the meter change owed.** bench/compile_epochs.txt now names
 bda14b8, the first history row counted in executed instructions, with

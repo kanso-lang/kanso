@@ -1220,7 +1220,9 @@ fn body(text: &str, types: &HashMap<String, Ty>) -> Result<Func, String> {
         // on the tab's corpus that setup alone was 5.9M of the 71.0M
         // instructions the translation executed. A body line holds one `=`,
         // the one that names its result, so the words are compared there.
-        let switch = |b: &str| b.find('=').is_some_and(|i| b[i..].starts_with("= switch"));
+        let switch = |b: &str| {
+            b.bytes().position(|c| c == b'=').is_some_and(|i| b[i..].starts_with("= switch"))
+        };
         if body.starts_with("switch") || switch(&body) {
             while !body.trim_end().ends_with(']') {
                 let next = lines.next().ok_or("switch runs off the end")?.trim();

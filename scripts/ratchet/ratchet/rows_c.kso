@@ -3078,4 +3078,17 @@ rows_cq41a = list/concat rows_cq40 [string_names line_search]
 
 rows_cq41 = list/concat rows_cq41a [wrong_end borrow]
 
-rows_c = list/concat rows_cq41 [itself]
+# The emitter asks of every line it writes whether it is a stack slot, and
+# finds the line's first space with a byte loop (2026-10-23). The mutation
+# puts `find` back, and the browser compile row is the witness.
+stack_slot = row
+  "a stack slot found by a searcher"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_stack_slot_found_by_a_searcher")
+  release
+
+rows_cq42 = list/concat rows_cq41 [stack_slot]
+
+rows_c = list/concat rows_cq42 [itself]
