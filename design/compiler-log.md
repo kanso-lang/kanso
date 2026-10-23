@@ -21,35 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-18 — A local binding hides an alias only where it is bound
-
-`canonicalize_bare_aliases` rewrites a bare call to an import's export into
-the qualified name, and keeps a name bare wherever a local of that spelling
-might mean the local. It kept the name bare in every declaration of the
-program when any one of them bound it. A parameter called `run` in one
-module therefore sent every other module's `run` through the loader's
-short-named clone. An err born in that `run` said `born in run` where the
-same program without the other module says `born in refusals/run`, and
-basket, once std/text's `slice run:span` bound the name, read 6,113M
-instructions against 31M, with 4,010 view allocations and 256MB held against
-17 and 71KB. Both reproduce on main with no spans in them.
-
-A declaration that binds an alias's name now keeps the bare spelling and the
-clone it dispatches through, and every other declaration is rewritten.
-`tests/bound_elsewhere.rs` runs `tests/golden/bound_elsewhere` on both
-engines and fails on main with `born in run`. The first build walked each
-declaration's bindings into a set of its own and cost entry and library
-about 2.5%; the binding walker hands each name to a callback now, so one
-walk asks the aliases about every bound name and builds no set.
-
-Rows, against main with #1985 in it: `compile_instructions` 22,693,337 ->
-22,742,937, `entry_instructions` 75,197,395 -> 75,386,824,
-`library_instructions` 74,884,283 -> 75,073,678, `emit_instructions`
-6,061,105 -> 6,063,934, `compile_allocs` 12,160 -> 12,151, `interp_allocs`
-584,659 -> 584,645, and `browser_compile_instructions` 389,899,281 ->
-390,131,214. The floor drops by the cost under the rule for a change that
-makes the language work as specified.
-
 ## 2026-10-19 — a `slice!` handed straight to a door reads the range in place
 
 #1943's last owed item: the emitter fusing `slice! … .> utf8`, `.> append
@@ -2074,3 +2045,28 @@ compiles the runtime, so codegen_instructions_dev 116,430,160 -> 116,461,460
 and codegen_instructions_release 425,484,869 -> 425,504,615, and every
 benchmark binary's machine code grows 2,592 bytes: text 5,321,422 ->
 5,357,710 summed over the fourteen.
+
+## 2026-10-23 — a literal constant is its value at every mention
+
+A top-level constant is built on first demand behind a cell with a ready flag,
+and every mention called its accessor: test the flag, load the cell, check the
+tag. A constant whose one arm is an integer literal that fits a word does no
+work to build, so a mention of it is now that literal, the same
+`{ i64 0, i64 N }` an integer literal emits. Anything else, a wider literal
+included, still goes through the cell.
+
+The run program's digest phase is where it shows. sha256's `whole` is read
+about a dozen times a round, and a round fell from 295 instructions to 182 in
+the container. The digest loop shrank enough to be inlined into the driver.
+The escape phase went the other way: `span` is a literal constant too, and
+once LLVM could see `filled`'s loop bound it reshaped the loop and spent one
+more instruction a push, 1,552,672 over the run.
+
+CI's rows. run_instructions 830,143,044 -> 828,053,655 (-0.25%),
+work_digestbench 5,210,951 -> 4,150,769 (-20.3%) and work_deepbench
+201,739,409 -> 201,098,912; work_escapebench rose 39,058,532 -> 40,308,322
+(+3.2%) for the reshaped loop. The emitted code falls where constants were
+read: runbench 799 -> 741 defines and 7,539 -> 7,393 calls, digestbench 135 ->
+117 and 935 -> 872. emit_instructions 6,449,595 -> 6,449,884, and
+browser_compile_instructions 427,904,481 -> 427,933,127. A ratchet row sends every mention back
+through the cell; mutated, the run program reads main's count again.

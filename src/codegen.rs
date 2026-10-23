@@ -2559,6 +2559,23 @@ impl<'a> Backend<'a> {
         self.group_indices(name, arity).next().is_some()
     }
 
+    /// The value of a constant whose one arm is an integer literal that fits a
+    /// word. A mention of such a constant is that literal: building it does no
+    /// work, so reading its cell, testing the cell's flag and checking the
+    /// tag on every mention bought nothing. sha256's `whole` is read about a
+    /// dozen times a round, and each read was five instructions and a branch.
+    fn literal_word_constant(&self, name: &str) -> Option<i64> {
+        let mut arms = self.group_indices(name, 0);
+        let at = arms.next()?;
+        if arms.next().is_some() {
+            return None;
+        }
+        match self.program.fns[at].body.as_slice() {
+            [Stmt::Expr(Expr::Int(n, _))] => i64::try_from(n).ok(),
+            _ => None,
+        }
+    }
+
     /// Notes a question about a group the walk left out. The answer is wrong
     /// for the program as written, so the module goes back to be emitted again.
     fn asked(&self, name: &str) {

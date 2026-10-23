@@ -2932,4 +2932,17 @@ undo_block_once = row
 
 rows_cq34 = list/concat rows_cq33 [escape_block_once undo_block_once]
 
-rows_c = list/concat rows_cq34 [itself]
+# A mention of a constant whose one arm is an integer literal is that
+# literal. The mutation sends every mention back through the constant's cell;
+# the output is the same and the work rows rise.
+literal_constant = row
+  "a literal constant read through its cell"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_literal_constant_read_through_its_cell")
+  benchmarks
+
+rows_cq35 = list/concat rows_cq34 [literal_constant]
+
+rows_c = list/concat rows_cq35 [itself]
