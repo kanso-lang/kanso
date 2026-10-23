@@ -3101,4 +3101,65 @@ tab_tally = row
 
 rows_cq43 = list/concat rows_cq42 [tab_tally]
 
-rows_c = list/concat rows_cq43 [itself]
+# The tab's compile, second round (2026-10-23): a numbered name read without
+# checking it, a rewritten body not validated again, each `@` found eight bytes
+# a pass, the module handed over in pieces and what the walk left out let go
+# before emitting. Each mutation undoes one, and the browser compile rows are
+# the witness.
+checked_name = row
+  "a numbered name checked on every read"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_numbered_name_checked_on_every_read")
+  release
+
+validated_body = row
+  "a rewritten body validated again"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_rewritten_body_validated_again")
+  release
+
+at_searcher = row
+  "an at sign found by a searcher"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "an_at_sign_found_by_a_searcher")
+  release
+
+joined_module = row
+  "a module joined for the tab"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_module_joined_for_the_tab")
+  release
+
+held_left_out = row
+  "what the tab left out held while it emits"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "what_the_tab_left_out_held_while_it_emits")
+  release
+
+pieces_test = "the_interp_corpus_answers_through_the_translator"
+
+early_piece = row
+  "a piece let go before its functions"
+  true
+  "cargo test --release --test ir_to_wasm {pieces_test}"
+  "specs (unit, golden, differential)"
+  (breaking "a_piece_let_go_before_its_functions")
+  no_setup
+
+rows_cq44a = list/concat rows_cq43 [checked_name validated_body at_searcher]
+
+rows_cq44b = list/concat rows_cq44a [joined_module held_left_out]
+
+rows_cq44 = list/concat rows_cq44b [early_piece]
+
+rows_c = list/concat rows_cq44 [itself]
