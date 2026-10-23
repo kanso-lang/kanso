@@ -21,40 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-20 — three leads in the decoder, measured and declined
-
-Each was built, measured on jsonbench or the run program, and dropped. They
-are recorded so nobody builds them again without new evidence.
-
-**Deciding a string's closing quote inside `string_at`.** Spans cost jsonbench
-38.6M (833.0M to 871.6M, kanso#1994). Most of it is the string path, 243.3M
-against 204.4M, which goes through one more call level per string: the
-`span_to` twin, the `string_at` twin, then the `string_end` twin, each reached
-by a musttail call. A guard that decided the closing quote in `string_at` read
-1,183.7M, because the guard broke `parsed` being returned by value
-(`sh_rec` 254M). An `if` with a small non-tail call read 879.6M. Both lost to
-the arm dispatch that is there.
-
-**`alwaysinline` on the flattened twins.** On every twin, jsonbench read
-891.3M, the callers growing with what was inlined into them. On `string_at`'s
-twin alone it read 871,576,231, unchanged to the instruction: the twins reach
-each other through musttail calls, and LLVM does not inline across those.
-
-**A short-number path in `number_span`.** On kanso#2002's tree the run program
-decodes 417,483 numbers at 94 instructions a call. Most of large.json's
-numbers are one or two digits, or decimals of seven to nine bytes, with no
-exponent. Walking digits and one point a byte at a time ahead of the
-sixteen-byte walk took every call, but at seven instructions a digit:
-work_runbench read 1,230,763,105 to 1,236,361,572 and the function 39.25M to
-44.85M. Reading each digit run eight bytes at once with `k_nondigits8` and a
-count of trailing zeros cost 93 a call and saved 365,211 on the run program,
-0.03%. 96,000 random strings agreed between native and the interpreter at
-every position, and the harness went red when the fast path dropped the float
-sign. About 45 of the 93 instructions are the call's fixed work: the failure
-and tag checks, the bounds, and RFC 8259's lead rules. Only a builtin that
-scans and converts in one call would remove them, and the conversion it would
-replace is already a word-at-a-time parse.
-
 ## 2026-10-20 — a JSON number skips its tag ladders, and a long slice counts in blocks
 
 Two changes on the run program's hot paths, in one pull request (#2012, part
@@ -2032,3 +1998,36 @@ program against main's 816,905,427 in the container. The renderer's stores now
 went through a pointer into the arena instead of a buffer nothing else can
 alias, and `k_b_append_rendered` rose 1,523,160. The first version, which
 wrote the render call twice, also stopped `render_ryu` being inlined.
+
+## 2026-10-23 — the tab compares bytes a word at a time
+
+Counted in executed instructions, the costliest function in the tab's compile
+was `memcmp`: 9.5M of the front end's 68.8M and 17.5M of the emitter's 119.2M
+on `bench/interp_corpus`. The `memcmp` wasm32 links by default is
+compiler-builtins' loop of one byte per pass, and the compiler compares names
+and keys constantly: hash-map probes on `&str` keys, `CharSearcher` checking a
+found byte's neighbours, the inferencer matching names.
+
+`src/compare.rs` compares eight bytes per pass and ends with the eight bytes
+that finish the run, overlapping bytes already found equal, so no length needs
+a loop of single bytes after the words. A run of four to seven bytes is read
+as two four-byte words, and the first byte that differs is found from the
+lowest set bit of the two words' difference. `src/main.rs` exports it as
+`memcmp` and `bcmp` in the wasm build only; native builds keep the C library's.
+
+    browser_compile_instructions  293,067,500 -> 274,134,296  (-6.46%)
+
+The same code written in `main.rs` read 273,195,866, and in the library with a
+plain `#[inline]` 275,072,726, because the call into `kanso::compare::bytes`
+stayed out of line. `#[inline(always)]` takes most of that back. A first version
+that finished with single bytes instead of the overlapping word read
+281,953,624, because most compares are a few bytes long.
+
+`tests/the_word_compare_agrees_with_bytes.rs` holds it to the standard
+library's slice order: 4M random cases in CI, and 50M once with no failure, at
+every length to 48 and every pair of offsets up to seven bytes out of
+alignment, half the differing bytes straddling 0x80. Turning the lowest set bit
+into the highest, dropping the overlapping word, comparing the bytes as signed
+and dropping the second four-byte word each fail it. The ratchet row "a byte
+loop compares in the tab" renames the two exports, and the browser row goes
+back to 293,067,500.

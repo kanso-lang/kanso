@@ -106220,3 +106220,37 @@ own process. The order the link directory lists in moves gold by that much
 from one runner to the next; see "the link directory lists in one order".) The tab's compile, which runs the prune in the wasm build,
 reads browser_compile_instructions 422,962,643, 9,485 fewer, and welfare's
 rise is banked.
+
+## 2026-10-20 — three leads in the decoder, measured and declined
+
+Each was built, measured on jsonbench or the run program, and dropped. They
+are recorded so nobody builds them again without new evidence.
+
+**Deciding a string's closing quote inside `string_at`.** Spans cost jsonbench
+38.6M (833.0M to 871.6M, kanso#1994). Most of it is the string path, 243.3M
+against 204.4M, which goes through one more call level per string: the
+`span_to` twin, the `string_at` twin, then the `string_end` twin, each reached
+by a musttail call. A guard that decided the closing quote in `string_at` read
+1,183.7M, because the guard broke `parsed` being returned by value
+(`sh_rec` 254M). An `if` with a small non-tail call read 879.6M. Both lost to
+the arm dispatch that is there.
+
+**`alwaysinline` on the flattened twins.** On every twin, jsonbench read
+891.3M, the callers growing with what was inlined into them. On `string_at`'s
+twin alone it read 871,576,231, unchanged to the instruction: the twins reach
+each other through musttail calls, and LLVM does not inline across those.
+
+**A short-number path in `number_span`.** On kanso#2002's tree the run program
+decodes 417,483 numbers at 94 instructions a call. Most of large.json's
+numbers are one or two digits, or decimals of seven to nine bytes, with no
+exponent. Walking digits and one point a byte at a time ahead of the
+sixteen-byte walk took every call, but at seven instructions a digit:
+work_runbench read 1,230,763,105 to 1,236,361,572 and the function 39.25M to
+44.85M. Reading each digit run eight bytes at once with `k_nondigits8` and a
+count of trailing zeros cost 93 a call and saved 365,211 on the run program,
+0.03%. 96,000 random strings agreed between native and the interpreter at
+every position, and the harness went red when the fast path dropped the float
+sign. About 45 of the 93 instructions are the call's fixed work: the failure
+and tag checks, the bounds, and RFC 8259's lead rules. Only a builtin that
+scans and converts in one call would remove them, and the conversion it would
+replace is already a word-at-a-time parse.
