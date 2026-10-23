@@ -2932,4 +2932,26 @@ undo_block_once = row
 
 rows_cq34 = list/concat rows_cq33 [escape_block_once undo_block_once]
 
-rows_c = list/concat rows_cq34 [itself]
+# A template whose first piece is a field of a record the arm is finished with
+# joins into that string in place, and a parameter an arm only reads into
+# templates can still be an accumulator. Each mutation takes one away, and the
+# mem fixture `a_record_field_joined_in_place` copies its string every pass.
+field_join = row
+  "a record field joined by copying"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_record_field_joined_by_copying")
+  no_setup
+
+template_hold = row
+  "a template read counted as a hold"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_template_read_counted_as_a_hold")
+  no_setup
+
+rows_cq35 = list/concat rows_cq34 [field_join template_hold]
+
+rows_c = list/concat rows_cq35 [itself]
