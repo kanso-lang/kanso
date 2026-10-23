@@ -3010,4 +3010,28 @@ switch_line = row
 
 rows_cq39 = list/concat rows_cq38 [switch_line]
 
-rows_c = list/concat rows_cq39 [itself]
+# The narrowing reads whether the module defines the closure-jump twin off
+# the define lines it walks (2026-10-23). One mutation searches the whole
+# module for it again, and the browser compile row is the witness; the other
+# stops collecting lambdas, and the narrowing's own spec is.
+twin_search = row
+  "the whole module searched for the closure jump"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_whole_module_searched_for_the_closure_jump")
+  release
+
+lambda_test = "a_lambda_keeps_the_convention_where_a_closure_jump_can_reach_it"
+
+lambda_narrowed = row
+  "a lambda narrowed beside a closure jump"
+  true
+  "cargo test --release --lib {lambda_test}"
+  "specs (unit, golden, differential)"
+  (breaking "a_lambda_narrowed_beside_a_closure_jump")
+  no_setup
+
+rows_cq40 = list/concat rows_cq39 [twin_search lambda_narrowed]
+
+rows_c = list/concat rows_cq40 [itself]

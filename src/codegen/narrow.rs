@@ -104,7 +104,13 @@ fn narrowed_in_place(text: String, from: usize) -> String {
     let defines =
         lines_holding(ir, "define ").filter(|&(start, _)| ir[start..].starts_with("define "));
     let musttails = lines_holding(ir, "musttail call");
-    let jumps_to_lambdas = ir.contains("define internal tailcc %KValue @k_tcall");
+    // `k_tcall{n}` jumps to a lambda through the pointer its closure carries,
+    // an edge this reading cannot see, so every lambda keeps the convention in
+    // a module that defines one. Both are read off the define lines the walk
+    // visits anyway; a search of the whole module for the twin's define was
+    // 739,426 instructions of the tab's compile natively.
+    let mut jumps_to_lambdas = false;
+    let mut lambdas: Vec<String> = Vec::new();
     for (start, end) in merged_lines(defines, musttails) {
         let line = &ir[start..end];
         if !code(line) {
@@ -115,15 +121,11 @@ fn narrowed_in_place(text: String, from: usize) -> String {
             if rest.starts_with("tailcc ") {
                 tailcc_defines.push(line);
             }
-            // `k_tcall{n}` jumps to a lambda through the pointer its closure
-            // carries, an edge this reading cannot see, so every lambda keeps
-            // the convention in a module that has one.
-            if jumps_to_lambdas
-                && current.as_deref().is_some_and(|n| {
-                    n.strip_prefix("klam").is_some_and(|d| d.bytes().all(|b| b.is_ascii_digit()))
-                })
-            {
-                keep.extend(current.clone());
+            jumps_to_lambdas |= rest.starts_with("internal tailcc %KValue @k_tcall");
+            if current.as_deref().is_some_and(|n| {
+                n.strip_prefix("klam").is_some_and(|d| d.bytes().all(|b| b.is_ascii_digit()))
+            }) {
+                lambdas.extend(current.clone());
             }
         }
         if line.contains("musttail call") {
@@ -135,6 +137,9 @@ fn narrowed_in_place(text: String, from: usize) -> String {
                 keep.insert(name);
             }
         }
+    }
+    if jumps_to_lambdas {
+        keep.extend(lambdas);
     }
     // Kept functions whose arguments do not all fit in the eight registers
     // AArch64 passes them in. The count is the same on every host so the ir is
@@ -314,5 +319,28 @@ mod a_trampoline_is_emitted_for_a_call_that_uses_it {
             out.starts_with(&format!("{LOOP}{narrowed}define %KValue @f.c(")),
             "the narrowed module is not the line-by-line rewrite:\n{out}"
         );
+    }
+}
+
+#[cfg(test)]
+mod a_lambda_keeps_the_convention_where_a_closure_jump_can_reach_it {
+    use super::narrow_tailcc;
+
+    /// The twin `k_tcall{n}` jumps through the pointer a closure carries, an
+    /// edge the text cannot show, so every lambda keeps `tailcc` beside it.
+    const TWIN: &str = "define internal tailcc %KValue @k_tcall1(%KValue %f, %KValue %a0) {\nentry:\n  ret %KValue %f\n}\n";
+    const LAMBDA: &str =
+        "define tailcc %KValue @klam3(%KValue %a) {\nentry:\n  ret %KValue %a\n}\n";
+
+    #[test]
+    fn kept_beside_the_twin() {
+        let out = narrow_tailcc(format!("{TWIN}{LAMBDA}"));
+        assert!(out.contains("define tailcc %KValue @klam3("), "the lambda lost tailcc:\n{out}");
+    }
+
+    #[test]
+    fn narrowed_without_it() {
+        let out = narrow_tailcc(LAMBDA.to_string());
+        assert!(out.contains("define %KValue @klam3("), "the lambda kept tailcc:\n{out}");
     }
 }

@@ -1999,7 +1999,7 @@ went through a pointer into the arena instead of a buffer nothing else can
 alias, and `k_b_append_rendered` rose 1,523,160. The first version, which
 wrote the render call twice, also stopped `render_ryu` being inlined.
 
-## 2026-10-23 — the tab compares bytes a word at a time and finds switches by their `=`
+## 2026-10-23 — three costs out of the tab's compile
 
 Counted in executed instructions, the costliest function in the tab's compile
 was `memcmp`: 9.5M of the front end's 68.8M and 17.5M of the emitter's 119.2M
@@ -2046,6 +2046,21 @@ Finding every `=` in the line instead of the first read 270,476,791, because
 the second search runs to the end of the line. The ratchet row "a searcher
 built for every line the tab translates" puts `contains` back and the row reads
 274,134,296 again.
+
+**The closure-jump twin read off the walk.** The narrowing searched the whole
+module for `define internal tailcc %KValue @k_tcall` before it walked the
+module's define lines, so that every lambda could keep `tailcc` where the twin
+jumps through a closure's pointer. The walk visits every define line anyway, so
+it now notes the twin and the lambdas as it passes and keeps the lambdas after.
+The search was 739,426 instructions of the tab's route natively.
+
+    browser_compile_instructions  268,290,909 -> 266,884,355  (-0.52%)
+
+Nothing pinned the lambda rule, so a spec in src/codegen/narrow.rs now does:
+beside the twin a lambda keeps `tailcc`, and without it the lambda is narrowed. Noting no twin, or collecting no lambdas, each fail it, and the second
+is the ratchet row "a lambda narrowed beside a closure jump". The row "the whole
+module searched for the closure jump" puts the search back, and the browser row
+reads 268,297,303.
 
 One idea measured and dropped: `lines_holding`, the narrowing's search for
 `define `, `musttail call` and `tailcc ` across the whole module, found each
