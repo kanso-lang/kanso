@@ -2911,4 +2911,25 @@ site_by_id = row
 
 rows_cq33 = list/concat rows_cq32 [site_by_id]
 
-rows_c = list/concat rows_cq33 [itself]
+# The escape writer and the undo walk answer every escape a sixteen-byte block
+# holds from the block's one mask. Each mutation puts back a block load at
+# every escape; the output is the same and the work rows rise.
+escape_block_once = row
+  "an escaped block classified again at every escape"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "an_escaped_block_classified_at_every_escape")
+  benchmarks
+
+undo_block_once = row
+  "an undone block classified again at every escape"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "an_undone_block_classified_at_every_escape")
+  benchmarks
+
+rows_cq34 = list/concat rows_cq33 [escape_block_once undo_block_once]
+
+rows_c = list/concat rows_cq34 [itself]
