@@ -105551,3 +105551,33 @@ Owes, on #1975: the stamp in codegen and the runtime's print; the
 interpreter printing its span; insisting forms stamping the caller; error
 goldens on every engine for an operator, a builtin and a stack overflow;
 CI's rows and the floor moved by them.
+
+## 2026-10-15 — An operator handed a literal string, list or map is refused at check
+
+The first piece of #1975, and the one that costs nothing at run time. `+`,
+`-`, `*`, `/` and `%` take numbers, and an operator arm routes only a record,
+so a string, a list or a map stops the run on every engine. The check now
+refuses one at the operand, in `wrong_kind_at_an_operator` in
+`src/check/after_infer.rs`, beside the `list/concat` refusal.
+
+It refuses only an operand that cannot hold an err: a literal with nothing
+interpolated, or a call of such literals into a group whose every arm answers
+a string, a list or a map and none fails. The first draft read the callee's
+answer set alone, and `tests/golden/micro/a_merged_err_stays_flat_across_a_hop`
+caught it: `through merged + e3` calls a group whose arms all answer strings,
+but `through` has no err arm, so the err it is handed hops through it and the
+two errs merge at `+`. An operator hands an err on, so anything that might
+carry one is left to the run.
+
+That leaves the ports' case, `twice "x"` where `twice n` is `n * 2`, to the
+run, which is what the rest of #1975 locates. Pinned by
+`tests/golden/errors/an_operator_handed_a_value_it_never_takes`, seen red with
+the call removed; the ratchet row `operator_kind_unchecked` runs the same
+mutation.
+
+The walk costs compile time, which CI measured: `compile_instructions`
+22,699,901 -> 22,715,476, `entry_instructions` 75,214,425 -> 75,262,121,
+`library_instructions` 74,901,006 -> 74,948,228 and
+`browser_compile_instructions` 382,590,239 -> 382,741,447. The run rows did
+not move. This builds a ruled part of the language, so the welfare floor
+moved down by exactly that cost, to 91.52, with this entry as the reason.

@@ -154,8 +154,7 @@ KValue k_b_to_int_slice_raw(const unsigned char* d, long long len, long long fro
     return k_b_to_int(k_b_slice_raw(d, len, from, to), origin);
 }
 
-KValue k_b_to_float_slice_raw(const unsigned char* d, long long len, long long from,
-                              long long to, const char* origin) {
+K_DOORCC KValue k_b_to_float_slice_raw(const unsigned char* d, long long len, long long from, long long to, const char* origin) {
     if (k_span_in(from, to, len))
         return k_to_float_text((const char*)d + (from - 1), to - from + 1, to, origin);
     return k_b_to_float(k_b_slice_raw(d, len, from, to), origin);

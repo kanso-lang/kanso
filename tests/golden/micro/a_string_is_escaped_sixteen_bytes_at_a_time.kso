@@ -1,0 +1,33 @@
+import "std/json"
+
+# The JSON encoder copies a string's bytes sixteen at a time to the next one
+# it has to escape, and the decoder undoes escapes the same way to the next
+# quote or backslash. Each line decodes a document and prints it encoded
+# again, so a string goes through both. The escapes sit just before, on and
+# just after a sixteen-byte boundary, at the front and the back, one after
+# another, and among two-byte characters; the bytes below a space go out as
+# `u` escapes, and a key takes the same road as a value.
+fn again doc
+  shown (json/decode doc)
+
+fn shown e@(err _)
+  "{e.reason.reason} at {e.reason.position}"
+
+fn shown v
+  json/encode v
+
+fn said s
+  print (again s)
+
+pub play = said "\"0123456789abcd\\n\""
+  .> (_ -> said "\"0123456789abcde\\n\"")
+  .> (_ -> said "\"0123456789abcdef\\n\"")
+  .> (_ -> said "\"0123456789abcdefg\\n\"")
+  .> (_ -> said "\"\\n0123456789abcde\\\"0123456789abcdef\\t\"")
+  .> (_ -> said "\"0123456789abcdef0123456789abcde\\\\\"")
+  .> (_ -> said "\"0123456789abcdef\\u001fx\\u0001\"")
+  .> (_ -> said "\"\\n\\t\\r\\b\\f\\\"\\\\\\u0000\\u0007\\u001e\"")
+  .> (_ -> said "\"ééééééééé\\téé\"")
+  .> (_ -> said "\{\"a key that runs past sixteen\\n\": \"v\\u0002\"}")
+  .> (_ -> said "[\"seven..\\nseven..\\nseven..\\nseven..\\n\", \"\"]")
+  .> (_ -> said "\"0123456789abcdef0123456789abcdef\"")

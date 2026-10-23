@@ -1404,8 +1404,9 @@ KValue k_b_length(KValue v) {
 
 /* Sixteen bytes read from p stay inside p's page, so a vector load that runs
    past the end of a short string cannot fault: the page holding a valid byte
-   is mapped whole. The two scanners below use it for a tail shorter than a
-   vector, which they used to walk one byte at a time. On the run program
+   is mapped whole. The two scanners below and the JSON escape writer use it
+   for a tail shorter than a vector, which they used to walk one byte at a
+   time. On the run program
    8,042,860 bytes a run went through those byte loops at eight instructions
    each, because a json key or value is usually shorter than sixteen bytes
    and the vector loop never opened; one load and a mask over the bytes that
@@ -1528,6 +1529,30 @@ static const unsigned char* k_unescaped_d;
 static long long k_unescaped_from, k_unescaped_e;
 static KValue k_unescaped_v;
 
+/* The quotes and backslashes among the sixteen bytes at `d` as a mask, one
+   bit a byte on x86-64 and four on arm64, with the sixteen copied to `o`
+   whole. Only those two targets have it; elsewhere the walk below goes a
+   word at a time. */
+#if defined(__x86_64__)
+#define K_UNDO_LANE 0
+static inline uint64_t k_json_undo_block(char* o, const unsigned char* d) {
+    __m128i x = _mm_loadu_si128((const __m128i*)d);
+    _mm_storeu_si128((__m128i*)o, x);
+    __m128i m = _mm_or_si128(_mm_cmpeq_epi8(x, _mm_set1_epi8('"')),
+                             _mm_cmpeq_epi8(x, _mm_set1_epi8('\\')));
+    return (unsigned)_mm_movemask_epi8(m);
+}
+#elif defined(__aarch64__)
+#define K_UNDO_LANE 2
+static inline uint64_t k_json_undo_block(char* o, const unsigned char* d) {
+    uint8x16_t x = vld1q_u8(d);
+    vst1q_u8((uint8_t*)o, x);
+    uint8x16_t m = vorrq_u8(vceqq_u8(x, vdupq_n_u8('"')), vceqq_u8(x, vdupq_n_u8('\\')));
+    uint8x8_t narrowed = vshrn_n_u16(vreinterpretq_u16_u8(m), 4);
+    return vget_lane_u64(vreinterpret_u64_u8(narrowed), 0);
+}
+#endif
+
 /* The closing quote of a string whose walk stopped at `p`, counted from zero,
    on a byte no backslash escapes. */
 static long long k_json_quote_from(const unsigned char* d, long long len, long long p) {
@@ -1574,6 +1599,24 @@ long long k_json_escaped(const unsigned char* d, long long len, long long from, 
         if (!r) return k_json_quote_after(d, len, p + 1);
         *o++ = r;
         p += 2;
+        /* The run to the next quote or backslash, sixteen bytes a block. On
+           the run program it is about five bytes, so one block nearly always
+           finds its end; the word loop below took one word and most of
+           another. */
+#if defined(__x86_64__) || defined(__aarch64__)
+        while (p + 16 <= len) {
+            if (o + 17 > lim) return k_json_quote_from(d, len, p);
+            uint64_t hit = k_json_undo_block(o, d + p);
+            if (hit) {
+                int k = __builtin_ctzll(hit) >> K_UNDO_LANE;
+                o += k;
+                p += k;
+                goto stop;
+            }
+            o += 16;
+            p += 16;
+        }
+#endif
         while (p + 8 <= len) {
             if (o + 9 > lim) return k_json_quote_from(d, len, p);
             uint64_t w;
@@ -2381,36 +2424,113 @@ static inline uint64_t k_json_specials(uint64_t w) {
 }
 
 /* Writes `len` bytes of `d` escaped for a JSON string into `o` and answers
-   how many it wrote: at most six for each byte in, plus eight of slack,
-   because a run is moved eight bytes at a time, the whole word stored and
+   how many it wrote: at most six for each byte in, plus sixteen of slack,
+   because a run is moved sixteen bytes at a time, the whole block stored and
    the cursor moved past the run alone. The escapes are lib/json's: `\"` and
    `\\`, the one-letter forms for 8, 9, 10, 12 and 13, and a `u` escape with
-   lowercase hex digits for the other bytes below a space. */
+   lowercase hex digits for the other bytes below a space.
+
+   A string the encoder escapes is short and has an escape every seven bytes
+   or so on the run program, so the run before an escape was usually shorter
+   than the eight bytes a word moved, and it went through a byte loop at nine
+   instructions a byte. A block of sixteen covers most of those runs in one
+   load. The last block of a string is read through `k_tail_window`, as the
+   scanners read theirs, and the bytes past the string's end are ignored. */
 static const char k_json_short[256] = {
     [8] = 'b', [9] = 't', [10] = 'n', [12] = 'f', [13] = 'r', ['"'] = '"', ['\\'] = '\\',
 };
+/* The bytes of the sixteen at `d` that a JSON string cannot hold as they
+   stand -- a quote, a backslash, or a byte below a space -- as a mask, with
+   the sixteen copied to `o` whole. A byte is one bit of the mask on x86-64
+   and four on arm64, which is K_JSON_LANE as a shift. */
+#if defined(__x86_64__)
+#define K_JSON_LANE 0
+static inline uint64_t k_json_block(char* o, const unsigned char* d) {
+    __m128i x = _mm_loadu_si128((const __m128i*)d);
+    _mm_storeu_si128((__m128i*)o, x);
+    __m128i q = _mm_cmpeq_epi8(x, _mm_set1_epi8('"'));
+    __m128i b = _mm_cmpeq_epi8(x, _mm_set1_epi8('\\'));
+    __m128i c = _mm_cmpeq_epi8(_mm_min_epu8(x, _mm_set1_epi8(31)), x);
+    return (unsigned)_mm_movemask_epi8(_mm_or_si128(_mm_or_si128(q, b), c));
+}
+#elif defined(__aarch64__)
+#define K_JSON_LANE 2
+static inline uint64_t k_json_block(char* o, const unsigned char* d) {
+    uint8x16_t x = vld1q_u8(d);
+    vst1q_u8((uint8_t*)o, x);
+    uint8x16_t m = vorrq_u8(vorrq_u8(vceqq_u8(x, vdupq_n_u8('"')), vceqq_u8(x, vdupq_n_u8('\\'))),
+                            vcleq_u8(x, vdupq_n_u8(31)));
+    uint8x8_t narrowed = vshrn_n_u16(vreinterpretq_u16_u8(m), 4);
+    return vget_lane_u64(vreinterpret_u64_u8(narrowed), 0);
+}
+#endif
+
+/* The walk without blocks, a word and then a byte at a time, from `i` to the
+   next byte to escape or to `len`, copying as it goes. It answers the
+   position it stopped at and moves `*op` past what it wrote. Out of line: it
+   runs where fewer than sixteen bytes are left and they end too close to a
+   page's end to read as a block, and on a target with no blocks at all, and
+   its word constants kept in registers cost the block loop a frame. */
+static __attribute__((noinline)) long long k_json_walk(char** op, const unsigned char* d,
+                                                       long long i, long long len) {
+    char* o = *op;
+    for (;;) {
+        if (i + 8 <= len) {
+            uint64_t w;
+            memcpy(&w, d + i, 8);
+            uint64_t h = k_json_specials(w);
+            memcpy(o, &w, 8);
+            if (h) {
+                int k = __builtin_ctzll(h) >> 3;
+                o += k;
+                i += k;
+                break;
+            }
+            o += 8;
+            i += 8;
+            continue;
+        }
+        while (i < len && d[i] != 34 && d[i] != 92 && d[i] >= 32) *o++ = (char)d[i++];
+        break;
+    }
+    *op = o;
+    return i;
+}
+
 static long long k_json_escape_into(char* o, const unsigned char* d, long long len) {
     static const char hex[] = "0123456789abcdef";
     char* start = o;
     long long i = 0;
     while (i < len) {
-        while (i + 8 <= len) {
-            uint64_t w;
-            memcpy(&w, d + i, 8);
-            uint64_t hit = k_json_specials(w);
-            memcpy(o, &w, 8);
-            if (hit) {
-                int k = __builtin_ctzll(hit) >> 3;
-                o += k;
-                i += k;
-                goto special;
+#if defined(__x86_64__) || defined(__aarch64__)
+        long long left = len - i;
+        if (left >= 16) {
+            uint64_t hit = k_json_block(o, d + i);
+            if (!hit) {
+                o += 16;
+                i += 16;
+                continue;
             }
-            o += 8;
-            i += 8;
+            int k = __builtin_ctzll(hit) >> K_JSON_LANE;
+            o += k;
+            i += k;
+        } else if (k_tail_window(d + i)) {
+            uint64_t hit = k_json_block(o, d + i) & ((1ULL << (left << K_JSON_LANE)) - 1);
+            if (!hit) {
+                o += left;
+                break;
+            }
+            int k = __builtin_ctzll(hit) >> K_JSON_LANE;
+            o += k;
+            i += k;
+        } else {
+            i = k_json_walk(&o, d, i, len);
+            if (i == len) break;
         }
-        while (i < len && d[i] != 34 && d[i] != 92 && d[i] >= 32) *o++ = (char)d[i++];
+#else
+        i = k_json_walk(&o, d, i, len);
         if (i == len) break;
-    special: {
+#endif
         unsigned char c = d[i++];
         char one = k_json_short[c];
         *o++ = '\\';
@@ -2423,8 +2543,22 @@ static long long k_json_escape_into(char* o, const unsigned char* d, long long l
             o += 5;
         }
     }
-    }
     return o - start;
+}
+
+/* A builder without room takes the escaped bytes through a buffer on the
+   stack. Out of line, because the buffer is most of a frame, and with it
+   inline every string the encoder escaped into a builder with room saved six
+   registers and reserved 792 bytes to reach a path it did not take. */
+static __attribute__((noinline, cold)) KValue k_append_escaped_pieces(KValue acc,
+        const unsigned char* d, long long len, int mutate) {
+    char room[6 * 128 + 16];
+    for (long long at = 0; at < len; at += 128) {
+        long long piece = len - at < 128 ? len - at : 128;
+        long long n = k_json_escape_into(room, d + at, piece);
+        acc = k_b_append_range(acc, k_as_bytes(acc), (const unsigned char*)room, n, mutate);
+    }
+    return acc;
 }
 
 /* `append_escaped acc s`: `acc` with `s` appended as a JSON string holds it.
@@ -2446,7 +2580,7 @@ static KValue k_append_escaped(KValue acc, KValue sv, int mutate) {
     long long acap = a->cap & ~1LL;
     if (acap) {
         KBuf* kb = ((KBuf*)a->data) - 1;
-        if (kb->used == a->len && a->len + 6 * len + 8 <= acap) {
+        if (kb->used == a->len && a->len + 6 * len + 16 <= acap) {
             long long n = k_json_escape_into((char*)a->data + a->len, d, len);
             kb->used = a->len + n;
             if (mutate) {
@@ -2456,13 +2590,7 @@ static KValue k_append_escaped(KValue acc, KValue sv, int mutate) {
             return k_bytes_owned(a->len + n, a->data, a->cap);
         }
     }
-    char room[6 * 128 + 8];
-    for (long long at = 0; at < len; at += 128) {
-        long long piece = len - at < 128 ? len - at : 128;
-        long long n = k_json_escape_into(room, d + at, piece);
-        acc = k_b_append_range(acc, k_as_bytes(acc), (const unsigned char*)room, n, mutate);
-    }
-    return acc;
+    return k_append_escaped_pieces(acc, d, len, mutate);
 }
 
 KValue k_b_append_escaped(KValue acc, KValue sv) { return k_append_escaped(acc, sv, 0); }
@@ -2497,7 +2625,7 @@ static KValue k_append_string(KValue acc, KValue sv, int mutate) {
     long long acap = a->cap & ~1LL;
     if (acap) {
         KBuf* kb = ((KBuf*)a->data) - 1;
-        if (kb->used == a->len && a->len + 6 * len + 10 <= acap) {
+        if (kb->used == a->len && a->len + 6 * len + 18 <= acap) {
             char* o = (char*)a->data + a->len;
             o[0] = '"';
             long long n = k_json_escape_into(o + 1, (const unsigned char*)s->data, len);
@@ -2518,7 +2646,9 @@ static KValue k_append_string(KValue acc, KValue sv, int mutate) {
 
 KValue k_b_append_string(KValue acc, KValue sv) { return k_append_string(acc, sv, 0); }
 
-KValue k_b_append_string_mut(KValue acc, KValue sv) { return k_append_string(acc, sv, 1); }
+K_DOORCC KValue k_b_append_string_mut(KValue acc, KValue sv) {
+    return k_append_string(acc, sv, 1);
+}
 
 KValue k_b_append_key_mut(KValue acc, KValue sv) { return k_append_key(acc, sv, 1); }
 
