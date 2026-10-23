@@ -2122,3 +2122,11 @@ the runtime and sweeps 5,809,326 doubles with no failures. With the walk
 down removed it reports 975,871 not shortest, the count it gave for the old
 walk's removal. The ratchet row `float_walk` puts the tries back, and the
 mutated tree reads the run program at main's 816,801,133.
+
+**A switch line read by its first word.** The tab's translator asked of every
+body line whether it held `= switch`, scanning for the `=` a byte at a time.
+A switch is a terminator and names no result, and the emitter writes it as a
+bare `switch`, so that test could never pass. The line's first word is now
+the whole test: browser_compile_instructions 256,933,580 -> 256,026,859
+(-0.35%). The ratchet row `switch_line` now puts a substring searcher back
+on every line, and the browser row is its witness, as before.
