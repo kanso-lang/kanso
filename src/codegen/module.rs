@@ -130,7 +130,6 @@ impl Written {
                 "@{cell} = internal constant %KValue                  {{ i64 11, i64 ptrtoint (ptr @{cell}_clo to i64) }}"
             );
         }
-        let stamped = stamped_sites(self.sites.len(), &pieces);
         // A string is interned when a function asks for it, and the function
         // may since have been pruned: on the codegen corpus 198 of 270
         // strings and 264 of their literal cells were named by nothing, 36% of
@@ -163,13 +162,13 @@ impl Written {
         out.push('\n');
         let declared = declares.len() + 1;
         let mut table = Count(0);
-        site_table(&mut table, &self.sites, &self.strings, &stamped);
+        site_table(&mut table, &self.sites, &self.strings);
         let size = declared + out.len() + table.0 + pieces.iter().map(String::len).sum::<usize>();
         let mut module = String::with_capacity(size);
         module.push_str(&declares);
         module.push('\n');
         module.push_str(&out);
-        site_table(&mut module, &self.sites, &self.strings, &stamped);
+        site_table(&mut module, &self.sites, &self.strings);
         drop((declares, out));
         for piece in pieces {
             module.push_str(&piece);
@@ -381,22 +380,6 @@ fn type_table(globals: &mut String, symbol: &str, names: &[String], fallback: &s
     );
 }
 
-/// Which site ids the pruned body still stamps, read off its
-/// `store i32 N, ptr @k_site_id` lines; slot 0 is no site.
-fn stamped_sites(ids: usize, pieces: &[String]) -> Vec<bool> {
-    let mut stamped = vec![false; ids + 1];
-    for piece in pieces {
-        for (at, _) in piece.match_indices(", ptr @k_site_id") {
-            let head = &piece[..at];
-            let digits = head.len() - head.trim_end_matches(|c: char| c.is_ascii_digit()).len();
-            if let Ok(id) = head[head.len() - digits..].parse::<usize>() {
-                stamped[id] = true;
-            }
-        }
-    }
-    stamped
-}
-
 /// A sink that keeps only the length of what is written to it.
 struct Count(usize);
 
@@ -410,38 +393,27 @@ impl std::fmt::Write for Count {
 /// `k_site_name`: the literal each site id names, as an offset into one
 /// constant holding every stamped literal's bytes. Offsets rather than
 /// pointers, because a table of pointers in a position-independent binary is
-/// a relocation per slot for the loader to apply at every start. A slot whose
-/// stamp was pruned with its function is left at zero, and its text is not
-/// written. It is written twice, once to count and once into the module,
-/// which is allocated at its final size: a buffer of its own, or the globals
-/// pushed past a doubling, raised the tab compile's peak memory.
-fn site_table(
-    w: &mut impl std::fmt::Write,
-    sites: &[u32],
-    strings: &[(String, Vec<u8>)],
-    stamped: &[bool],
-) {
-    let slots = stamped.iter().rposition(|&s| s).map_or(1, |m| m + 1);
-    let text = |id: usize| &strings[sites[id - 1] as usize].1;
-    let size: usize =
-        1 + (1..slots).filter(|&id| stamped[id]).map(|id| text(id).len()).sum::<usize>();
+/// a relocation per slot for the loader to apply at every start. Every site
+/// the emitter stamped is written, including one whose function the prune
+/// dropped: finding the survivors meant searching the whole body, which cost
+/// more of a build than the few hundred bytes of text it saved. It is written
+/// twice, once to count and once into the module, which is allocated at its
+/// final size: a buffer of its own, or the globals pushed past a doubling,
+/// raised the tab compile's peak memory.
+fn site_table(w: &mut impl std::fmt::Write, sites: &[u32], strings: &[(String, Vec<u8>)]) {
+    let text = |site: &u32| &strings[*site as usize].1;
+    let size: usize = 1 + sites.iter().map(|site| text(site).len()).sum::<usize>();
     let _ = write!(w, "@k_site_text = private unnamed_addr constant [{size} x i8] c\"\\00");
-    for id in (1..slots).filter(|&id| stamped[id]) {
-        ir_bytes_into(w, text(id));
+    for site in sites {
+        ir_bytes_into(w, text(site));
     }
+    let slots = sites.len() + 1;
     let _ =
         write!(w, "\"\n@k_site_name_table = private unnamed_addr constant [{slots} x i32] [i32 0");
     let mut offset = 1;
-    for (id, &on) in stamped.iter().enumerate().take(slots).skip(1) {
-        match on {
-            true => {
-                let _ = write!(w, ", i32 {offset}");
-                offset += text(id).len();
-            }
-            false => {
-                let _ = w.write_str(", i32 0");
-            }
-        }
+    for site in sites {
+        let _ = write!(w, ", i32 {offset}");
+        offset += text(site).len();
     }
     let _ = writeln!(
         w,
