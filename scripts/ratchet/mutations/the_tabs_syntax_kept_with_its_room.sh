@@ -3,9 +3,8 @@
 # parameter lists doubled into (2026-10-23). This mutation skips that, and the
 # browser compile peak is the witness.
 set -e
-f=src/codegen.rs
 target='    if let (true, Given::Owned(owned)) = (lean, &mut program) {'
-n=$(grep -cxF "$target" $f)
+n=$(grep -cxF "$target" src/codegen.rs)
 [ "$n" -eq 1 ] || { echo "the shrink changed shape ($n); rewrite this" >&2; exit 1; }
-sed -i 's/^    if let (true, Given::Owned(owned)) = (lean, \&mut program) {$/    if let (true, Given::Owned(owned)) = (false, \&mut program) {/' $f
-grep -qF '(false, &mut program) {' $f
+sed -i 's/^    if let (true, Given::Owned(owned)) = (lean, \&mut program) {$/    if let (true, Given::Owned(owned)) = (false, \&mut program) {/' src/codegen.rs
+grep -qF '(false, &mut program) {' src/codegen.rs

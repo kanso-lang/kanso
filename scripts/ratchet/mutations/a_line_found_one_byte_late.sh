@@ -3,9 +3,8 @@
 # This mutation compares from the anchor itself, and the spec beside it finds
 # the lines the word search finds no longer match.
 set -e
-f=src/codegen/narrow.rs
 target='        let s = hit - at;'
-n=$(grep -cxF "$target" $f)
+n=$(grep -cxF "$target" src/codegen/narrow.rs)
 [ "$n" -eq 1 ] || { echo "lines_holding_at changed shape ($n); rewrite this" >&2; exit 1; }
-sed -i 's/^        let s = hit - at;$/        let s = hit;/' $f
-grep -qxF '        let s = hit;' $f
+sed -i 's/^        let s = hit - at;$/        let s = hit;/' src/codegen/narrow.rs
+grep -qxF '        let s = hit;' src/codegen/narrow.rs
