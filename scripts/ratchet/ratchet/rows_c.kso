@@ -3334,4 +3334,17 @@ query_leads = row
 
 rows_cq54 = list/concat rows_cq53 [query_leads]
 
-rows_c = list/concat rows_cq54 [itself]
+# The string arm of an index lives in the release build's LTO unit and is
+# inlined into the program's walks over text (2026-10-24). The mutation takes
+# its always_inline away, and the work vein reads runbench heavier.
+index_inline = row
+  "a string index called out of line"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_string_index_called_out_of_line")
+  benches
+
+rows_cq55 = list/concat rows_cq54 [index_inline]
+
+rows_c = list/concat rows_cq55 [itself]

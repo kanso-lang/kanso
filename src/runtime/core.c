@@ -200,11 +200,11 @@ static long long k_stat_str_scan_bytes = 0;
    of from the front of the string. A scan that rewinds between positions
    loses the cursor if the rewind forgets it, and the walk then starts from
    the front at every position: nothing else moves, and this reads nought. */
-static long long k_stat_seek_resumes = 0;
+long long k_stat_seek_resumes = 0;
 /* Indexes answered by stepping the cursor one character on, without the
    general seek: a walk by index takes this path at every character after its
    first. A merge that loses the step reads zero here. */
-static long long k_stat_seek_steps = 0;
+long long k_stat_seek_steps = 0;
 static long long k_stat_carry_dedup = 0;
 static long long k_stat_bytes_malloc = 0;
 /* Where arena bytes go, by value shape. The totals above say how much was
@@ -689,8 +689,8 @@ static long long k_stat_cohort_kept = 0;
    the one thread — and it would need to move into the fibre if that ever
    stopped being true. */
 KStr* k_seek_str = NULL;
-static long long k_seek_char = 0;
-static long k_seek_byte = 0;
+long long k_seek_char = 0;
+long k_seek_byte = 0;
 
 char* k_arena = NULL;
 /* The emitted IR reads and writes this as an i64, which is size_t on a 64-bit

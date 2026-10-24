@@ -2805,8 +2805,21 @@ impl<'a> Backend<'a> {
             let sptr = f.tmp();
             f.line_fmt(format_args!("{sptr} = inttoptr i64 {sp} to ptr"));
             let idx = inline_payload(f, key);
+            // The runtime defines this arm in the release build's LTO unit, and
+            // the link inlines it only when the call's type is the one clang
+            // gave the definition: a C struct comes back as `{ i64, i64 }`,
+            // which LLVM keeps apart from `%KValue`. So the call takes that type
+            // and the two words are put back into a `%KValue` after it.
+            let raw = f.tmp();
+            f.line_fmt(format_args!("{raw} = call {{ i64, i64 }} @k_b_at_str(ptr {sptr}, i64 {idx})"));
+            let tag = f.tmp();
+            f.line_fmt(format_args!("{tag} = extractvalue {{ i64, i64 }} {raw}, 0"));
+            let pay = f.tmp();
+            f.line_fmt(format_args!("{pay} = extractvalue {{ i64, i64 }} {raw}, 1"));
+            let half = f.tmp();
+            f.line_fmt(format_args!("{half} = insertvalue %KValue undef, i64 {tag}, 0"));
             let t = f.tmp();
-            f.line_fmt(format_args!("{t} = call %KValue @k_b_at_str(ptr {sptr}, i64 {idx})"));
+            f.line_fmt(format_args!("{t} = insertvalue %KValue {half}, i64 {pay}, 1"));
             f.record(&t, STR | infer::NONE);
             return t.to_string();
         }

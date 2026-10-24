@@ -1898,11 +1898,14 @@ fn hot_source_of(runtime: &str) -> String {
     let mut out = String::from(concat!(
         "#include <stdint.h>\n",
         "#include <stddef.h>\n",
+        "#include <string.h>\n",
         "#if defined(__aarch64__)\n#include <arm_neon.h>\n",
         "#elif defined(__x86_64__)\n#include <tmmintrin.h>\n#endif\n",
         "#ifdef KANSO_COUNTERS_BUILD\n#define K_COUNTING 1\n#else\n#define K_COUNTING 0\n#endif\n",
     ));
     for (start, end) in [
+        ("typedef struct { long long tag; long long payload; } KValue;", "\n"),
+        ("enum { K_INT, K_FLOAT, ", "\n"),
         ("typedef struct { char* data; int len; int cap; } KStr;", "\n"),
         ("typedef struct KBlock {", "\n"),
         ("typedef struct { KBlock* block;", " KMark;\n"),
@@ -1933,6 +1936,19 @@ fn hot_source_of(runtime: &str) -> String {
         "void k_beat_push_deep(void);\n",
         "void k_beat_rewind_slow(KMark* m);\n",
         "__attribute__((noreturn, noinline)) void k_die(const char* msg);\n",
+        "extern long long k_seek_char;\n",
+        "extern long k_seek_byte;\n",
+        "extern long long k_stat_seek_resumes;\n",
+        "extern long long k_stat_seek_steps;\n",
+        "extern KValue k_ascii_cache[128];\n",
+        "extern char k_ascii_ready[128];\n",
+        "extern KValue k_wide_cache[256];\n",
+        "extern uint32_t k_wide_key[256];\n",
+        "extern unsigned char k_wide_ready[256];\n",
+        "KValue k_none(void);\n",
+        "KValue k_b_at_str_seek(KStr* s, long long want);\n",
+        "KValue k_at_ascii_miss(KStr* s, long at);\n",
+        "__attribute__((preserve_most)) KValue k_b_at_wide_miss(uint32_t q, uint32_t key, unsigned slot, long w);\n",
     ));
     // Each definition is found by its name and taken from the start of the
     // line that names it, attribute and all. The two scanners are matched on
@@ -1940,6 +1956,7 @@ fn hot_source_of(runtime: &str) -> String {
     // that puts them out of line removes that attribute, and a lift keyed on
     // it found nothing and the tree stopped building: the row read UNBUILT
     // on kanso#1585.
+    out.push_str(hot_text(runtime, "static KStr* k_as_str(KValue v) {", "\n"));
     for start in [
         "static inline int k_tail_window(",
         "static inline void k_beat_rewind(KMark* m) {",
@@ -1947,6 +1964,9 @@ fn hot_source_of(runtime: &str) -> String {
         "__attribute__((always_inline)) void k_beat_push(void) {",
         "long long k_b_find2_raw(const unsigned char* d,",
         "long long k_b_find2_below_raw(const unsigned char* d,",
+        "static long k_cp_len(unsigned char b) {",
+        "static inline __attribute__((always_inline)) KValue k_at_char(KStr* s, long at) {",
+        "KValue k_b_at_str(KStr* s, long long want) {",
     ] {
         out.push_str(hot_line_text(runtime, start, "\n}\n"));
     }

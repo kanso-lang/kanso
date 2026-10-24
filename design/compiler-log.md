@@ -21,80 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-21 — a carried record returns in three words
-
-A two-field record whose first field is an int, like the decoder's
-`parsed`, goes back to its caller in registers. It used to take two words:
-the int shifted above the value's tag in the first, the value's payload in
-the second. Every pack checked that the int survived the shift, and every
-unpack branched on a marker for the record built on the heap when it did
-not. On the run program that was 725,703 checked packs and 1,791,207
-unpacks (#2024). The record now takes three words. Both tags share the
-first, the value's payload is the second and the int's word is the third,
-so every int fits, a bignum crosses as its pointer, and nothing spills.
-`k_parsed_spill` and the two readers of a spilled record are gone. A
-failure still travels in the first two words, which read as a `%KValue`.
-
-The first build read the run program 1,100,103,349 -> 1,093,152,335.
-`obj_key_end` grew by 3,136,716: with the int's tag read out of a word,
-LLVM no longer knew it was an int's, and tested it for a thunk on every
-record. An `llvm.assume` that the tag is K_INT or K_BIG gives that back.
-Here the run program read 1,100,103,349 -> 1,085,159,551 (-1.36%), and
-every decoder function in the profile fell.
-
-CI's rows: work_runbench 1,100,104,536 -> 1,085,160,738 (-1.36%),
-work_jsonbench 763,196,627 -> 749,951,027 (-1.74%), work_oneshot
-12,451,007 -> 12,362,488, work_widebench 28,740,070 -> 28,580,079,
-work_livebench 1,370,617,002 -> 1,370,528,510 and work_encodebench
-2,464,677,731 -> 2,464,443,931. Machine code shrinks in every benchmark:
-text runbench 741,161 -> 737,929 and jsonbench 382,825 -> 379,049, the
-rest by 240 to 3,840 bytes. The decoder's emitted code reads calls 1,282 ->
-1,261, branches 1,374 -> 1,332 and lines 13,010 -> 12,909, and the other
-programs that decode JSON fall the same way. codegen_instructions_dev
-116,002,877 -> 115,990,552, codegen_instructions_release 453,797,745 ->
-453,689,156 and emit_instructions 6,233,826 -> 6,232,336. In the tab,
-browser_compile_instructions 413,585,272 -> 412,332,402 and
-browser_compile_peak_bytes 757,553 -> 752,985 fall, and
-browser_run_instructions 34,136,382 -> 34,370,238 rises by 0.69%. The
-tab runs the emitter's IR through its own translator, which drops the
-assume's call but computes the test that feeds it, and returns a struct
-through memory, now three words of it. How the rise divides between those
-has not been measured. The welfare sum rose, and the floor moves 91.78 ->
-91.84.
-
-The x86 rewrite to `preserve_nonecc` flattens a struct parameter into
-words, and it assumed every struct was two. A `%parsed` parameter lost its
-third word, the decoder's tail calls stopped matching, and the run program
-ran out of stack. `flat_words` now gives each type's width, and the other
-counts read from it.
-
-A constant is built once into a cell that holds a `%KValue`, and its
-symbol returns what the cell holds. A constant whose body built a carried
-record still had a builder returning `%parsed`, and callers that asked for
-one: the cell kept the two words as if they were a value, and it read back
-because the shapes matched. Three words do not, and
-`a_constant_naming_a_record_constant` printed 14, the thunk tag, where it
-prints 1. A constant now always returns a `%KValue`, which costs nothing,
-since the cell boxed it anyway, and the sample leaves `ir_verifier`'s list
-of carried samples.
-
-The micro golden `an_int_of_any_width_crosses_in_its_own_word` sends ints
-either side of the old 56-bit line, both ends of the word, a bignum and a
-word that overflows into one through four groups that return the record by
-value. It joins the samples `ir_verifier` requires to stay carried. The
-ratchet's two mutations for the old shape, an unsigned shift back and a
-wide int packed anyway, went with the code they broke. Two new ones drop
-the bignum tag on the way in and on the way back, and the new golden reads
-a pointer as a number under each.
-
-Passing the key's closing `":` down into `escape_onto`, so that each arm
-of its test could append its own tail, was measured and dropped. The run
-program read 1,103,713,022 against 1,085,159,551. The tail arrived as a
-string value, and the emitter's one-word store for a short literal no
-longer applied. Bound to a name instead of written in the arms, the plain
-arm read `acc` twice, the append stopped writing in place, and the run
-program read 1,365,286,224.
-
 ## 2026-10-21 — a position read beside its byte is in range, and a length
 
 The decoder hands a byte on together with the position it was read at:
@@ -2110,3 +2036,30 @@ outright would have saved 1,751,745, the ceiling for this scan in the tab's
 miss check. Building the table inside `queries_named` instead, once per
 block, cost 680,432 more than it saved. The ratchet row `query_leads` admits
 every byte and reads 221,611,521.
+
+## 2026-10-24 — the string index inlined into the walk
+
+The run program's index phase calls `k_b_at_str` 690,000 times from
+`tally_4`, about 48 instructions a call. The release link inlines only what it
+holds as bitcode, and the runtime is machine code there apart from the hot
+unit `hot_source` builds. Linking runbench against the whole runtime as
+bitcode, with the link's own flags, read 811,029,731 against the shipped
+813,607,261, and the index was still a call: the emitted IR called it
+returning `%KValue`, clang gives a C function returning `KValue` the type
+`{ i64, i64 }`, and the inliner does not cross the two. With the call's type
+matched and the definition `always_inline`, the same link read 807,234,717.
+
+The change makes that hold without putting the runtime back in the link.
+`k_b_at_str` is defined in the hot unit, guarded by `K_HOT_ELSEWHERE` in
+`runtime.c` as the scanners are, with `k_at_char`, `k_cp_len` and
+`k_as_str` cut from `runtime.c` beside it. The cursor, the two character
+caches, the two seek counters and the three out-of-line arms it calls now
+have external linkage. The emitter calls it returning `{ i64, i64 }` and
+puts the two words back into a `%KValue`. The translator reads the two types
+as one, and the tab's rows did not move apart from 59 instructions of its
+compile.
+
+In this container runbench fell from 813,607,261 to 809,811,674 instructions
+(-0.47%), with byte-identical output, and `tally_4` no longer calls the
+index. The ratchet row `index_inline` takes the `always_inline` away and
+reads 813,606,898.
