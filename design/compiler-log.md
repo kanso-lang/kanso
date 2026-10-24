@@ -1896,7 +1896,9 @@ goldens:
 - runbench 797,155,036 -> 795,184,707 (-0.25%), jsonbench 560,280,234 ->
   557,386,434 (-0.52%), deepbench 200,299,696 -> 200,095,696, digestbench
   4,152,335 -> 4,122,786 and oneshot 10,133,710 -> 10,114,082. The other
-  work rows fell by 20 to 5,610.
+  work rows fell by 20 to 5,610. Two of them still sit 21 above main, from
+  the string index's rise: `work_escapebench` 40,308,388 and
+  `work_scanbench` 274,349.
 - `codegen_instructions_release` 360,870,405 -> 370,135,769 (+2.6%), for
   the two bodies the link now inlines at every empty list and map.
 - `codegen_instructions_dev` 116,420,279 (+138,664), `emit_instructions`
