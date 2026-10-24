@@ -2110,3 +2110,7 @@ outright would have saved 1,751,745, the ceiling for this scan in the tab's
 miss check. Building the table inside `queries_named` instead, once per
 block, cost 680,432 more than it saved. The ratchet row `query_leads` admits
 every byte and reads 221,611,521.
+
+On CI the dev build's emit fell with the prune's scan, emit_instructions
+5,690,029 -> 5,651,244, and the browser rows of both changes matched this
+container's. Every other row reads what main left it.
