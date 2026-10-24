@@ -1908,5 +1908,8 @@ the goldens:
   `emitted_lines` 14,371 (+3) and `emitted_other_lines` 160,895 (+30).
   `codegen_instructions_dev` 116,426,119 (+5,840) and
   `codegen_instructions_release` 370,142,417 (+6,648) follow them.
-- `emit_instructions`, both tab rows and `text` fell.
+- `emit_instructions` 5,665,979, `browser_compile_instructions`
+  221,423,495, `browser_run_instructions` 33,345,250 and `text` 5,462,380
+  fell from the empty collections' values. All but the tab's run row stay
+  above main, from the two branches below this one.
 - No allocation counter moved. Welfare 93.24 -> 93.27, banked.
