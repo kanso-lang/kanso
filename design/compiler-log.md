@@ -2130,7 +2130,8 @@ body line whether it held `= switch`, scanning for the `=` a byte at a time.
 A switch is a terminator and names no result, and the emitter writes it as a
 bare `switch`, so that test could never pass. The line's first word is now
 the whole test: browser_compile_instructions 256,933,580 -> 256,026,859
-(-0.35%). The ratchet row `switch_line` now puts a substring searcher back
+(-0.35%) on the tree before #2068, and 244,413,637 -> 243,046,113 (-0.56%)
+on the tree after it. The ratchet row `switch_line` now puts a substring searcher back
 on every line, and the browser row is its witness, as before.
 
 **CI's rows.** runbench 816,801,024 -> 815,624,816 (-0.144%). The other
