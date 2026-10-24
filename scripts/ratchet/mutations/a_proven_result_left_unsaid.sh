@@ -8,10 +8,10 @@
 set -e
 f=src/codegen/emit.rs
 grep -q 'fn assume_tag(&self' src/codegen.rs
-line='            if callee_ret == "%KValue" && self.sub_parents.is_empty() {'
+line='        if callee_ret == "%KValue" && self.sub_parents.is_empty() {'
 [ "$(grep -cxF "$line" "$f")" -eq 1 ] || {
   echo "the result assume's test moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i 's/^            if callee_ret == "%KValue" \&\& self.sub_parents.is_empty() {$/            if false \&\& callee_ret == "%KValue" \&\& self.sub_parents.is_empty() {/' "$f"
+sed -i 's/^        if callee_ret == "%KValue" \&\& self.sub_parents.is_empty() {$/        if false \&\& callee_ret == "%KValue" \&\& self.sub_parents.is_empty() {/' "$f"
 if grep -qxF "$line" "$f"; then exit 1; fi

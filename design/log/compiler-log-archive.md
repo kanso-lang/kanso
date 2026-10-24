@@ -106399,3 +106399,14 @@ the escaper's loop gone the encoder's map call lost its region and its fused
 `keys` and `values`. The append-like builtin read 1,416,821,993 before the
 analyses knew its name, because every append in the encoder stopped writing in
 place.
+
+## 2026-10-20 — directive: all development is cloud's
+
+Clay: "all development is for you. the chat session is only for me to talk
+with and make decisions with." Cloud now writes the log, the design notes,
+the page's prose and CLAUDE.md as well as the compiler, and keeps the page
+within `page_drift`'s three entries of the log itself. The chat files, labels
+and closes issues and writes rulings onto them, and logs a ruling's `— gavel:`
+entry itself or leaves it to cloud's next pull request. CLAUDE.md's "Two sessions"
+section states the split. The first page section written under it is §219,
+which covers the four entries from the prune's move to the string builtins.
